@@ -132,8 +132,11 @@ export function SpotlightRow({
   onLeave: () => void;
 }) {
   const single = items.length === 1;
+  // Wider than the grid's cards: one wide card, two side by side (two by two
+  // for four), three across from 1100px.
+  const cls = single ? 'gv-spot-grid gv-spot-single' : items.length === 3 ? 'gv-spot-grid gv-spot-three' : 'gv-spot-grid';
   return (
-    <div className={single ? 'gv-spot-grid gv-spot-single' : 'gv-spot-grid'}>
+    <div className={cls}>
       <style>{SPOT_CSS}</style>
       {items.map(({ conf, spot }) => (
         <SpotlightCard
@@ -157,14 +160,15 @@ export function SpotlightRow({
 const SPOT_CSS = `
 .gv-spot-grid { display: grid; gap: clamp(18px, 2vw, 28px); grid-template-columns: minmax(0, 1fr); }
 @media (min-width: 720px) { .gv-spot-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .gv-spot-grid.gv-spot-single { grid-template-columns: minmax(0, 1fr); } }
-@media (min-width: 1280px) { .gv-spot-grid:not(.gv-spot-single) { grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); } }
+@media (min-width: 1100px) { .gv-spot-grid.gv-spot-three { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 .gv-spot-card { display: flex; flex-direction: column; height: 100%; }
-.gv-spot-photo { aspect-ratio: 16 / 9; border-radius: 22px 22px 0 0; }
+.gv-spot-photo { aspect-ratio: 5 / 2; border-radius: 22px 22px 0 0; }
 @media (min-width: 720px) {
   .gv-spot-card.gv-spot-wide { flex-direction: row; }
-  .gv-spot-wide .gv-spot-photo { aspect-ratio: auto; flex: 0 0 56%; min-height: 300px; border-radius: 22px 0 0 22px; }
-  .gv-spot-wide .gv-spot-logo { left: auto !important; right: -32px; bottom: 24px !important; }
-  .gv-spot-wide .gv-spot-text { padding: 28px 32px 28px 52px !important; justify-content: center; }
+  .gv-spot-wide .gv-spot-photo { aspect-ratio: auto; flex: 0 0 52%; min-height: 220px; border-radius: 22px 0 0 22px; }
+  .gv-spot-wide .gv-spot-logo { left: auto !important; right: -48px; bottom: 24px !important; }
+  .gv-spot-wide .gv-spot-text { padding: 22px 28px 22px 68px !important; justify-content: center; }
+  .gv-spot-wide .gv-spot-head { padding-left: 0 !important; min-height: 0 !important; }
 }
 @media (prefers-reduced-motion: reduce) { .gv-spot-card, .gv-spot-img { transition: none !important; transform: none !important; } }
 `;
@@ -229,18 +233,19 @@ function SpotlightCard({
               />
             ) : (
               <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <LogoDisc src={conf.logo_url} alt={conf.acronym} size={120} fallbackText={initialsOf(conf)} style={{ border: '4px solid #FFFFFF', boxShadow: '0 8px 22px rgba(16,28,21,0.14)' }} />
+                <LogoDisc src={conf.logo_url} alt={conf.acronym} size={112} fallbackText={initialsOf(conf)} style={{ border: '4px solid #FFFFFF', boxShadow: '0 8px 22px rgba(16,28,21,0.14)' }} />
               </div>
             )}
             <span style={{ position: 'absolute', top: 14, right: 14, zIndex: 2 }}><SpotlightTag /></span>
           </div>
           {conf.banner_url && (
-            <div className="gv-spot-logo" style={{ position: 'absolute', left: 18, bottom: -32, zIndex: 3 }}>
-              <LogoDisc src={conf.logo_url} alt={conf.acronym} size={68} fallbackText={initialsOf(conf)} style={{ border: '3px solid #FFFFFF', boxShadow: '0 6px 16px rgba(16,28,21,0.22)' }} />
+            <div className="gv-spot-logo" style={{ position: 'absolute', left: 18, bottom: -48, zIndex: 3 }}>
+              <LogoDisc src={conf.logo_url} alt={conf.acronym} size={96} fallbackText={initialsOf(conf)} style={{ border: '3px solid #FFFFFF', boxShadow: '0 6px 16px rgba(16,28,21,0.22)' }} />
             </div>
           )}
         </div>
-        <div className="gv-spot-text flex flex-col" style={{ flex: '1 1 auto', padding: conf.banner_url ? '44px 20px 20px' : '20px 20px 20px' }}>
+        <div className="gv-spot-text flex flex-col" style={{ flex: '1 1 auto', padding: '10px 18px 16px' }}>
+          <div className="gv-spot-head" style={{ paddingLeft: conf.banner_url ? 110 : 0, minHeight: conf.banner_url ? 42 : undefined }}>
           <h3 className="flex items-center" style={{ margin: 0, gap: 8, fontSize: 'clamp(22px, 2vw, 26px)', fontWeight: 800, lineHeight: 1.12, letterSpacing: '-0.012em', color: INK }}>
             <span style={{ minWidth: 0, overflowWrap: 'anywhere' }}>{label}</span>
             <VerifiedCheck verified={!!conf.is_verified} size={20} title="Verified conference" />
@@ -248,10 +253,11 @@ function SpotlightCard({
           {showFull && (
             <p style={{ margin: '3px 0 0', fontSize: 14, fontWeight: 500, lineHeight: 1.35, color: INK_SOFT, overflowWrap: 'anywhere' }}>{conf.full_name}</p>
           )}
+          </div>
           {spot.description && (
-            <p style={{ margin: '12px 0 0', fontSize: 15, lineHeight: 1.5, color: INK, overflowWrap: 'anywhere' }}>{spot.description}</p>
+            <p style={{ margin: '8px 0 0', fontSize: 15, lineHeight: 1.5, color: INK, overflowWrap: 'anywhere' }}>{spot.description}</p>
           )}
-          <p className="flex items-center flex-wrap" style={{ margin: '12px 0 0', columnGap: 14, rowGap: 6, fontSize: 14, fontWeight: 500, color: '#4A4238' }}>
+          <p className="flex items-center flex-wrap" style={{ margin: '8px 0 0', columnGap: 14, rowGap: 6, fontSize: 14, fontWeight: 500, color: '#4A4238' }}>
             <span className="inline-flex items-center" style={{ gap: 7 }}>
               {countryCode ? <CircleFlag code={countryCode} size={18} decorative /> : <DuoIcon icon={MapPin} size={16} tone="green" />}
               <span style={{ overflowWrap: 'anywhere' }}>{placeLine(conf)}</span>
@@ -261,7 +267,7 @@ function SpotlightCard({
               {datesLine(conf.start_date, conf.end_date)}
             </span>
           </p>
-          <div className="flex items-end justify-between flex-wrap" style={{ marginTop: 'auto', paddingTop: 16, columnGap: 12, rowGap: 6 }}>
+          <div className="flex items-end justify-between flex-wrap" style={{ marginTop: 'auto', paddingTop: 10, columnGap: 12, rowGap: 6 }}>
             <PriceLine price={conf.delegate_price} size={16} />
             <ViewerState applied={applied} member={member} />
           </div>
@@ -301,7 +307,7 @@ export function MonthHeader({ label, count }: { label: string; count: number }) 
   return (
     <div
       className="gv-month-head flex items-baseline flex-wrap"
-      style={{ columnGap: 10, rowGap: 2, padding: '12px 2px 10px', fontFamily: FONT }}
+      style={{ columnGap: 10, rowGap: 2, padding: '8px 2px 6px', fontFamily: FONT }}
     >
       <h2 style={{ margin: 0, fontSize: 'clamp(19px, 1.8vw, 23px)', fontWeight: 800, color: INK, letterSpacing: '-0.01em' }}>{label}</h2>
       <span style={{ fontSize: 14, color: INK_SOFT, fontVariantNumeric: 'tabular-nums' }}>
@@ -316,15 +322,17 @@ export const FEED_CSS = `
    26 Sep 2026: a tinted square-cornered band over the paper grain reads as a
    random rectangle). It is plain type on the page. */
 .gv-month-head { background: transparent; }
-.gv-row { display: grid; grid-template-columns: 84px minmax(0, 1fr); column-gap: 14px; align-items: start; padding: 16px 14px; text-decoration: none; color: inherit; transition: background-color 160ms ease; }
+.gv-row { display: grid; grid-template-columns: 84px minmax(0, 1fr); column-gap: 14px; align-items: start; padding: 12px 14px; text-decoration: none; color: inherit; transition: background-color 160ms ease; }
 .gv-row + .gv-row { border-top: 1px solid rgba(28,20,16,0.08); }
 .gv-row:hover { background-color: rgba(27,56,40,0.03); }
 .gv-row-thumb { width: 84px; height: 84px; }
+.gv-row-logo { transform: scale(0.75); transform-origin: left bottom; }
 .gv-row-date { display: none; }
 .gv-row-side { display: none; }
 @media (min-width: 768px) {
-  .gv-row { grid-template-columns: 60px 148px minmax(0, 1fr) auto; column-gap: 22px; padding: 18px 22px; }
+  .gv-row { grid-template-columns: 60px 148px minmax(0, 1fr) auto; column-gap: 22px; padding: 12px 22px; }
   .gv-row-thumb { width: 148px; height: 99px; }
+  .gv-row-logo { transform: none; }
   .gv-row-side { display: flex; }
   .gv-row-date { display: block; }
   .gv-row-inline { display: none !important; }
@@ -374,13 +382,13 @@ function RowThumb({ conf }: { conf: ExploreConference }) {
           <img src={conf.banner_url} alt="" loading="lazy" decoding="async" className="gv-row-img" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
         ) : (
           <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <LogoDisc src={conf.logo_url} alt={conf.acronym} size={52} fallbackText={initialsOf(conf)} style={{ border: '2px solid #FFFFFF' }} />
+            <LogoDisc src={conf.logo_url} alt={conf.acronym} size={72} fallbackText={initialsOf(conf)} style={{ border: '2px solid #FFFFFF' }} />
           </div>
         )}
       </div>
       {conf.banner_url && (
-        <div style={{ position: 'absolute', left: -6, bottom: -8, zIndex: 1 }}>
-          <LogoDisc src={conf.logo_url} alt={conf.acronym} size={34} fallbackText={initialsOf(conf)} style={{ border: '2px solid #FFFFFF', boxShadow: '0 3px 8px rgba(16,28,21,0.20)' }} />
+        <div className="gv-row-logo" style={{ position: 'absolute', left: -8, bottom: -10, zIndex: 1 }}>
+          <LogoDisc src={conf.logo_url} alt={conf.acronym} size={64} fallbackText={initialsOf(conf)} style={{ border: '2px solid #FFFFFF', boxShadow: '0 3px 8px rgba(16,28,21,0.20)' }} />
         </div>
       )}
     </div>

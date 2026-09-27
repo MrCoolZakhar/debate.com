@@ -46,6 +46,7 @@ import { LogoDisc } from '@/components/LogoDisc';
 import { FlagImg } from '@/components/FlagImg';
 import { DatePicker } from '@/components/DatePicker';
 import { CountryField } from '@/components/CountryField';
+import { GeoGuessNote, useNationalityPrefill } from '@/components/GeoCountryGuess';
 import ApplicationQuestionsStage, { ConferencePlate, SectionStrip, MissingSummary, countQuestions } from '@/components/ApplicationQuestionsStage';
 import { focusQuestion } from '@/components/ApplicationQuestionCard';
 import { buildQuestionPages, leadTitleBlock } from '@/lib/applyQuestionPages';
@@ -1156,6 +1157,15 @@ function ConferenceApplyInner() {
   // then judges them on a date of birth that actually exists. Preview never
   // shows it and never writes.
   const needsBasics = !!user && !previewing && (!myNationality || !myDob);
+  // Nationality guessed from /api/geo (Vercel's IP-country header), exactly as
+  // CompleteBasicsGate does: prefilled only once the profile has been read (the
+  // load writes natInput and would wipe an earlier guess), labelled as a guess,
+  // and saved only when the applicant presses Save and continue.
+  const natGuess = useNationalityPrefill(
+    natInput,
+    setNatInput,
+    needsBasics && !loading && !authLoading && !(myNationality ?? '').trim(),
+  );
   /** One sentence stating the requirement, whichever bounds are set. */
   const ageRequirementText =
     minAgeLimit != null && maxAgeLimit != null
@@ -5753,10 +5763,11 @@ function ConferenceApplyInner() {
               {hasAgeGate ? ` ${conferenceAcronymLabel(conference)} requires delegates to be ${ageRequirementText}.` : ''} Both are saved to your profile, and only your age is ever shown to a conference, never the date.
             </p>
 
-            <label className="block font-semibold text-sm mb-1.5" style={{ color: 'var(--gv-on-surface)', fontFamily: "var(--font-brand), sans-serif" }}>
+            <label htmlFor="apply-basics-nationality" className="block font-semibold text-sm mb-1.5" style={{ color: 'var(--gv-on-surface)', fontFamily: "var(--font-brand), sans-serif" }}>
               Nationality
             </label>
             <CountryField
+              id="apply-basics-nationality"
               value={natInput}
               onChange={(v) => { setNatInput(v); setBasicsError(''); }}
               placeholder="Start typing a country..."
@@ -5766,11 +5777,20 @@ function ConferenceApplyInner() {
                 borderRadius: 12,
                 color: 'var(--gv-on-surface)',
                 fontFamily: "var(--font-brand), sans-serif",
-                fontSize: 14,
+                // 16px: the iOS no-zoom floor.
+                fontSize: 16,
                 paddingTop: 12,
                 paddingBottom: 12,
               }}
+              describedBy="apply-basics-nationality-note"
             />
+            {natGuess ? (
+              <GeoGuessNote id="apply-basics-nationality-note" countryName={natGuess} />
+            ) : (
+              <p id="apply-basics-nationality-note" className="mt-1.5 text-xs" style={{ color: 'var(--gv-muted)', fontFamily: "var(--font-brand), sans-serif" }}>
+                Pick from the list. This is your nationality, not where you study.
+              </p>
+            )}
 
             <label className="block font-semibold text-sm mb-1.5 mt-5" style={{ color: 'var(--gv-on-surface)', fontFamily: "var(--font-brand), sans-serif" }}>
               Date of birth

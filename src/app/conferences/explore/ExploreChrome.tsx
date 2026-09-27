@@ -7,12 +7,15 @@
 // (and so the URL query the page already writes); nothing new is filtered.
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import {
   Search, ChevronLeft, ChevronRight, ChevronDown, Check, X, Globe, MapPin,
   LayoutGrid, Rows3,
 } from 'lucide-react';
 import Portal from '@/components/Portal';
 import { CircleFlag } from '@/components/CircleFlag';
+import { LogoDisc } from '@/components/LogoDisc';
 import { DATE_OPTIONS, ROLE_OPTIONS, parseDateOnly, type DateFilter, type RoleKey } from './exploreFilters';
 
 const FONT = "var(--font-brand), sans-serif";
@@ -98,6 +101,12 @@ const LAYER: React.CSSProperties = {
 
 type Segment = 'where' | 'when' | 'role' | null;
 
+/** A country offered while typing in Where (any country, not only those with
+ *  conferences); picking it adds a ?country= filter. */
+export interface SuggestCountry { id: string; name: string; code?: string; count: number }
+/** A conference whose name, acronym or city matches what is typed. */
+export interface SuggestConference { id: string; slug: string; label: string; sub: string; logo_url: string | null }
+
 const REGION_ORDER = ['africa', 'asia', 'europe', 'north-america', 'south-america', 'oceania'] as const;
 
 function formatShort(iso: string): string {
@@ -113,7 +122,14 @@ export function SearchPill({
   dateFilter, dateFrom, dateTo, onDate, whenLabel, whenOptions,
   roles, onToggleRole, onClearRoles,
   onSubmit,
+  countrySuggestions = [], conferenceSuggestions = [], onPickCountry,
 }: {
+  /** Countries matching the typed text (the page ranks them). */
+  countrySuggestions?: SuggestCountry[];
+  /** Conferences matching the typed text. */
+  conferenceSuggestions?: SuggestConference[];
+  /** Adds the country as a filter; the page clears the typed text. */
+  onPickCountry?: (id: string) => void;
   /** A name for the chosen dates when the page knows one ("This week"). */
   whenLabel?: string | null;
   /** The When menu's choices, when the page has its own (This week, ...).
@@ -131,6 +147,21 @@ export function SearchPill({
   onSubmit: () => void;
 }) {
   const [open, setOpen] = useState<Segment>(null);
+  const [cursor, setCursor] = useState(-1);
+  const router = useRouter();
+  const typed = search.trim().length > 0;
+  const suggestCount = countrySuggestions.length + conferenceSuggestions.length;
+  const active = cursor >= 0 && cursor < suggestCount ? cursor : -1;
+  const pickAt = (i: number) => {
+    if (i < countrySuggestions.length) {
+      onPickCountry?.(countrySuggestions[i].id);
+    } else {
+      const c = conferenceSuggestions[i - countrySuggestions.length];
+      if (c) router.push(`/conferences/${c.slug}`);
+    }
+    setOpen(null);
+    setCursor(-1);
+  };
   const pillRef = useRef<HTMLDivElement>(null);
   const whereRef = useRef<HTMLDivElement>(null);
   const whenRef = useRef<HTMLButtonElement>(null);
@@ -203,11 +234,23 @@ export function SearchPill({
           id="gv-explore-where"
           type="text"
           value={search}
-          onChange={(e) => { onSearch(e.target.value); if (e.target.value) setOpen(null); }}
-          onFocus={() => { if (!search) setOpen('where'); }}
-          onKeyDown={(e) => { if (e.key === 'Enter') { setOpen(null); onSubmit(); } }}
+          onChange={(e) => { onSearch(e.target.value); setOpen('where'); setCursor(-1); }}
+          onFocus={() => setOpen('where')}
+          onKeyDown={(e) => {
+            if (e.key === 'ArrowDown' && typed && suggestCount > 0) { e.preventDefault(); setOpen('where'); setCursor(Math.min(active + 1, suggestCount - 1)); }
+            else if (e.key === 'ArrowUp' && typed && suggestCount > 0) { e.preventDefault(); setCursor(Math.max(active - 1, -1)); }
+            else if (e.key === 'Enter') {
+              if (open === 'where' && typed && active >= 0) { e.preventDefault(); pickAt(active); }
+              else { setOpen(null); onSubmit(); }
+            }
+          }}
           placeholder={whereSummary}
           aria-label="Where: search a conference, city, country or region"
+          role="combobox"
+          aria-autocomplete="list"
+          aria-expanded={open === 'where' && typed && suggestCount > 0}
+          aria-controls="gv-explore-where-list"
+          aria-activedescendant={open === 'where' && typed && active >= 0 ? `gv-explore-where-opt-${active}` : undefined}
           className="w-full focus:outline-none"
           style={{ ...value, border: 'none', background: 'transparent', padding: 0, color: INK, fontSize: 16 }}
         />
@@ -257,7 +300,67 @@ export function SearchPill({
       {open && pos && (
         <Portal>
           <div ref={layerRef} role="dialog" aria-label={open === 'where' ? 'Where' : open === 'when' ? 'When' : 'Role'} style={{ ...LAYER, top: pos.top, left: pos.left, width: pos.width, padding: 18 }}>
-            {open === 'where' && (
+            {open === 'where' && typed && (
+              <div id="gv-explore-where-list" role="listbox" aria-label="Suggestions">
+                {countrySuggestions.length > 0 && (
+                  <>
+                    <p style={{ margin: '0 0 6px', fontSize: 13, fontWeight: 800, color: INK }}>Countries</p>
+                    {countrySuggestions.map((c, i) => (
+                      <button
+                        key={c.id}
+                        id={`gv-explore-where-opt-${i}`}
+                        type="button"
+                        role="option"
+                        aria-selected={i === active}
+                        onMouseDown={(e) => e.preventDefault()}
+                        onMouseEnter={() => setCursor(i)}
+                        onClick={() => pickAt(i)}
+                        className="w-full flex items-center focus:outline-none"
+                        style={{ gap: 12, padding: '7px 10px', borderRadius: 14, border: 'none', cursor: 'pointer', textAlign: 'left', backgroundColor: i === active ? '#EEF3EC' : 'transparent', fontFamily: FONT }}
+                      >
+                        {c.code ? <CircleFlag code={c.code} size={32} decorative /> : <span style={{ ...RIM_DISC, width: 32, height: 32 }}><Globe size={15} aria-hidden /></span>}
+                        <span style={{ flex: 1, minWidth: 0, fontSize: 14.5, fontWeight: 700, color: INK, overflowWrap: 'anywhere' }}>{c.name}</span>
+                        <span style={{ fontSize: 12.5, fontWeight: 600, color: INK_SOFT, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
+                          {c.count > 0 ? `${c.count.toLocaleString()} ${c.count === 1 ? 'conference' : 'conferences'}` : 'None yet'}
+                        </span>
+                      </button>
+                    ))}
+                  </>
+                )}
+                {conferenceSuggestions.length > 0 && (
+                  <>
+                    <p style={{ margin: countrySuggestions.length > 0 ? '12px 0 6px' : '0 0 6px', fontSize: 13, fontWeight: 800, color: INK }}>Conferences</p>
+                    {conferenceSuggestions.map((c, j) => {
+                      const i = countrySuggestions.length + j;
+                      return (
+                        <Link
+                          key={c.id}
+                          id={`gv-explore-where-opt-${i}`}
+                          href={`/conferences/${c.slug}`}
+                          role="option"
+                          aria-selected={i === active}
+                          onMouseDown={(e) => e.preventDefault()}
+                          onMouseEnter={() => setCursor(i)}
+                          onClick={() => { setOpen(null); setCursor(-1); }}
+                          className="w-full flex items-center focus:outline-none"
+                          style={{ gap: 12, padding: '7px 10px', borderRadius: 14, textDecoration: 'none', backgroundColor: i === active ? '#EEF3EC' : 'transparent', fontFamily: FONT }}
+                        >
+                          <LogoDisc src={c.logo_url} alt="" size={32} fallbackText={c.label.slice(0, 3).toUpperCase()} />
+                          <span style={{ flex: 1, minWidth: 0 }}>
+                            <span style={{ display: 'block', fontSize: 14.5, fontWeight: 700, color: INK, overflowWrap: 'anywhere' }}>{c.label}</span>
+                            {c.sub && <span style={{ display: 'block', fontSize: 12.5, color: INK_SOFT, overflowWrap: 'anywhere' }}>{c.sub}</span>}
+                          </span>
+                        </Link>
+                      );
+                    })}
+                  </>
+                )}
+                {suggestCount === 0 && (
+                  <p style={{ margin: 0, fontSize: 14, color: INK_SOFT }}>No country or conference by that name. Press Enter to search every field.</p>
+                )}
+              </div>
+            )}
+            {open === 'where' && !typed && (
               <>
                 {nearCountry && (
                   <>
@@ -788,6 +891,8 @@ export interface PlaceItem {
   icon?: IconType;
   /** A small word above the label ("Near you"). */
   kicker?: string;
+  /** An active chip that a press removes: it shows an X (chosen countries). */
+  removable?: boolean;
   active: boolean;
   onClick: () => void;
 }
@@ -920,7 +1025,7 @@ export function PlaceStrip({ items, trailing }: { items: PlaceItem[]; trailing?:
           type="button"
           aria-pressed={it.active}
           onClick={it.onClick}
-          title={it.kicker ? `${it.kicker}: ${it.label}` : it.label}
+          title={it.active && it.removable ? `Remove ${it.label}` : it.kicker ? `${it.kicker}: ${it.label}` : it.label}
           className="focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] focus-visible:ring-offset-2"
           style={{ ...chipLook(it.active), paddingLeft: 5, gap: 8 }}
         >
@@ -943,6 +1048,7 @@ export function PlaceStrip({ items, trailing }: { items: PlaceItem[]; trailing?:
           {typeof it.count === 'number' && (
             <span style={{ fontSize: 13, fontWeight: 600, color: INK_SOFT, fontVariantNumeric: 'tabular-nums' }}>{it.count.toLocaleString()}</span>
           )}
+          {it.active && it.removable && <X size={15} strokeWidth={2.6} aria-hidden style={{ color: FOREST, marginLeft: -2 }} />}
         </button>
       ))}
       {trailing}

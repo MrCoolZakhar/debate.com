@@ -14,6 +14,11 @@
 //      row of normal cards with the gold ring, then the feed grouped by month
 //      under plain month headers, as a list or the photo-card grid
 // Owner, 26 Sep 2026: the gap before the conferences must be "one tab max".
+// 27 Sep 2026 (owner's list): the Where field suggests every country (and
+// matching conferences) as you type, a pick becomes a removable country chip;
+// Near you is the visitor's IP country (/api/geo); the grid of compact cards
+// is the default, Spotlights first as wider feature cards; no count lines;
+// an "Organise your conference" button beside the title.
 // Every control drives a filter the page already had, and so its existing
 // URL parameter. Nothing new is read or invented.
 
@@ -23,12 +28,24 @@ import Link from 'next/link';
 import {
   Search, CalendarDays, Ticket, Globe, MapPin, Monitor, School, GraduationCap, Heart, DoorOpen, Navigation, Plus,
 } from 'lucide-react';
+
+/** Country names are matched in English, Spanish and French (localised names
+ *  and aliases through countryMatchRank), best rank wins. */
+function bestCountryRank(name: string, q: string): number | null {
+  let best: number | null = null;
+  for (const lang of ['en', 'es', 'fr']) {
+    const r = countryMatchRank(name, q, lang);
+    if (r !== null && (best === null || r < best)) best = r;
+  }
+  return best;
+}
 import SiteNav from '@/components/SiteNav';
 import SiteFooter from '@/components/SiteFooter';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { supabase } from '@/lib/supabase';
 import { getCountryByName, getCountryByCode, UN_COUNTRIES, fold, countryIdentity, countryMatchRank } from '@/lib/countries';
+import { conferenceAcronymLabel } from '@/lib/conferenceLabels';
 import { CircleFlag } from '@/components/CircleFlag';
 import { fetchDelegatePrices, withDelegatePrice } from '@/lib/publicFees';
 import { compareStartDate, hasConcluded } from '@/lib/conferenceDates';
@@ -36,10 +53,10 @@ import { ConferenceCard, ConferenceCardSkeleton } from '../ConferenceCard';
 import { GoldWord } from '@/components/BrandHeading';
 import {
   ChipLayer, ChoiceRow, chipStyle, FilterChip, PlaceStrip, PRIMARY_BUTTON, SCROLL_CSS, SearchPill, SortMenu, ToggleChip, ViewToggle,
-  type DateTab, type ExploreView, type PlaceItem,
+  type DateTab, type ExploreView, type PlaceItem, type SuggestConference, type SuggestCountry,
 } from './ExploreChrome';
 import {
-  FEED_CSS, FeedRows, FeedSkeleton, MonthHeader, groupByMonth,
+  FEED_CSS, FeedRows, FeedSkeleton, MonthHeader, SpotlightRow, groupByMonth,
   type ExploreConference, type SpotlightItem,
 } from './ExploreFeed';
 import { isListedConference } from '@/lib/publicConferences';
@@ -137,7 +154,9 @@ function countryNameFromCode(code: string | null | undefined): string | null {
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
-const VIEW_STORAGE_KEY = 'gavelling-explore-view';
+// v2 (27 Sep 2026): the grid became the default, so a 'list' saved under the
+// old key (often just the old default being clicked) is not carried over.
+const VIEW_STORAGE_KEY = 'gavelling-explore-view-v2';
 type DateSort = 'asc' | 'desc';
 
 /** Shown under Open Applications and Price when the facets read failed. */
@@ -179,7 +198,7 @@ function CountrySearch({ options, chosen, onAdd, idPrefix = 'gv-explore' }: {
     if (!q.trim()) return [];
     return options
       .filter(c => !chosen.has(c.id))
-      .map(c => ({ c, rank: countryMatchRank(c.name, q, 'en') }))
+      .map(c => ({ c, rank: bestCountryRank(c.name, q) }))
       .filter((x): x is { c: CountryFacet; rank: number } => x.rank !== null)
       .sort((a, b) => a.rank - b.rank || b.c.count - a.c.count || a.c.name.localeCompare(b.c.name))
       .slice(0, 6)
@@ -222,7 +241,7 @@ function CountrySearch({ options, chosen, onAdd, idPrefix = 'gv-explore' }: {
         <div id={`${idPrefix}-country-list`} role="listbox" aria-label="Countries" style={{ marginTop: 4 }}>
           {matches.length === 0 ? (
             <p style={{ margin: '4px 10px', fontSize: '11.5px', color: '#6E5F4E', fontFamily: "var(--font-brand), sans-serif" }}>
-              No conferences in a country like that
+              No country by that name
             </p>
           ) : matches.map((c, i) => (
             <button
@@ -321,9 +340,6 @@ export default function ConferencesExploreClient() {
   const [regionTouched, setRegionTouched] = useState<boolean>(
     () => !!searchParams.get('continent') || !!searchParams.get('country'),
   );
-  // Set when geo defaults us into a whole-directory "around you" view because
-  // the visitor's own country has too few conferences to lead with.
-  const [aroundYouDefault, setAroundYouDefault] = useState(false);
   function changeContinent(k: string | null) {
     setContinent(k);
     setRegionTouched(true);
@@ -345,13 +361,13 @@ export default function ConferencesExploreClient() {
   // Date sort, soonest-first by default, one click flips to latest-first.
   const [dateSort, setDateSort] = useState<DateSort>(initialQuery.sort);
 
-  // List (the month feed, default) or grid, restored from localStorage after
-  // mount (SSR-safe).
-  const [view, setView] = useState<ExploreView>('list');
+  // Grid (the compact cards) by default (owner, 27 Sep 2026: "by default in
+  // explore have card view first"). Only a visitor who chose the list keeps
+  // it, restored from localStorage after mount (SSR-safe).
+  const [view, setView] = useState<ExploreView>('grid');
   useEffect(() => {
     try {
-      const stored = window.localStorage.getItem(VIEW_STORAGE_KEY);
-      if (stored === 'grid' || stored === 'list') setView(stored);
+      if (window.localStorage.getItem(VIEW_STORAGE_KEY) === 'list') setView('list');
     } catch { /* private mode etc., keep default */ }
   }, []);
   function changeView(v: ExploreView) {
@@ -422,10 +438,25 @@ export default function ConferencesExploreClient() {
     window.history.replaceState(window.history.state, '', window.location.pathname + next + window.location.hash);
   }, [searchQuery, formatFilter, levelFilter, roleFilter, priceFilter, dateFilter, dateFrom, dateTo, dateSort, continent, countryIds, sponsoredFilter]);
 
-  // Near you (25 Sep 2026): the signed-in person's profile nationality, else
-  // the region named by the browser's locale; hidden when neither says. Filled
-  // in the effect under useAuth below.
+  // Near you (27 Sep 2026, owner: "the country that the IP is geographically"):
+  // the visitor's country from /api/geo (Vercel's IP-country header, read on
+  // our own server, no third party), asked ONCE per page load. Only when that
+  // says nothing (localhost, a missing header) does it fall back to the
+  // signed-in person's profile nationality, then the browser locale's region.
+  // Filled in the effect under useAuth below.
   const [userCountry, setUserCountry] = useState<string | null>(null);
+  // undefined = still asking; null = /api/geo gave no country.
+  const [geoCountry, setGeoCountry] = useState<string | null | undefined>(undefined);
+  useEffect(() => {
+    let cancelled = false;
+    fetch('/api/geo', { cache: 'no-store' })
+      .then(r => (r.ok ? r.json() : null))
+      .then((j: { countryCode?: string | null; country?: string | null } | null) => {
+        if (!cancelled) setGeoCountry(countryNameFromCode(j?.countryCode ?? j?.country ?? null));
+      })
+      .catch(() => { if (!cancelled) setGeoCountry(null); });
+    return () => { cancelled = true; };
+  }, []);
   // Default view once, when geo resolved and the visitor hasn't touched the
   // control. If the visitor's country already has at least 4 conferences we
   // lead with "Conferences in {country}". Otherwise we fall back to an "around
@@ -441,11 +472,8 @@ export default function ConferencesExploreClient() {
     const localCount = conferences.filter(
       c => countryIdentity(c.country) === localId
     ).length;
-    if (localCount >= 4) {
-      setCountryIds([localId]);
-    } else {
-      setAroundYouDefault(true);
-    }
+    // Otherwise the whole directory stays on screen.
+    if (localCount >= 4) setCountryIds([localId]);
   }, [userCountry, loading, regionTouched, conferences]);
 
   // Conference ids the signed-in viewer already applied to, cards show
@@ -478,9 +506,12 @@ export default function ConferencesExploreClient() {
     return () => { cancelled = true; };
   }, [authLoading, user, session]);
 
-  // Near you: profile nationality for a signed-in person (their locale when
-  // it is empty), the locale's region for a visitor.
+  // Near you: the IP country when /api/geo knows it; otherwise the profile
+  // nationality for a signed-in person (their locale when it is empty), the
+  // locale's region for a visitor.
   useEffect(() => {
+    if (geoCountry === undefined) return;
+    if (geoCountry) { setUserCountry(geoCountry); return; }
     if (authLoading) return;
     let cancelled = false;
     const done = (name: string | null) => { if (!cancelled) setUserCountry(name); };
@@ -500,7 +531,7 @@ export default function ConferencesExploreClient() {
       })();
     }
     return () => { cancelled = true; };
-  }, [authLoading, user, session]);
+  }, [geoCountry, authLoading, user, session]);
 
   // Owner check rides on the conference rows themselves (organizer_id).
   const isMember = useCallback(
@@ -514,29 +545,8 @@ export default function ConferencesExploreClient() {
   const nearActive = !!nearId && countryIds.includes(nearId);
   // Only the near-you country is chosen: the "N conferences in {country}" view.
   const countryMode = !!nearId && countryIds.length === 1 && countryIds[0] === nearId && !continentKey;
-  // Whole-directory fallback we auto-selected on first load, shown under the
-  // "Conferences around you" heading. Clears the moment the visitor picks a region.
-  const aroundYouMode = aroundYouDefault && !continentKey && countryIds.length === 0 && !regionTouched;
 
-  // Headline count = every conference on the platform, published or still
-  // being set up, from a definer RPC (RLS hides unpublished rows from anon, and
-  // this returns counts only). It answers "how big is Gavelling", which is a
-  // different question from "how many can I click right now" — the results rule
-  // below the filters answers that one. Falls back to the browsable count if
-  // the RPC is unavailable, so the line is never blank.
-  const [totalConferences, setTotalConferences] = useState<number | null>(null);
-  useEffect(() => {
-    let cancelled = false;
-    supabase.rpc('public_conference_stats').then(({ data }) => {
-      if (cancelled) return;
-      const row = Array.isArray(data) ? data[0] : data;
-      const n = (row as { total_conferences?: number } | null)?.total_conferences;
-      if (typeof n === 'number' && n > 0) setTotalConferences(n);
-    });
-    return () => { cancelled = true; };
-  }, []);
   const upcomingCount = useMemo(() => conferences.filter(c => !hasConcluded(c)).length, [conferences]);
-  const headlineCount = totalConferences ?? (loading ? null : upcomingCount);
 
   // CONTINENT_COUNTRIES resolved to ISO identities once, not per row per render.
   const continentIdentities = useMemo(() => {
@@ -564,7 +574,7 @@ export default function ConferencesExploreClient() {
       // "Tu" (the second character is `ü`), and the same for São Paulo,
       // Bogotá or Zürich in the city field.
       const q = fold(searchQuery);
-      const countryHit = countryMatchRank(c.country, searchQuery, 'en') !== null;
+      const countryHit = bestCountryRank(c.country, searchQuery) !== null;
       if (
         !fold(c.full_name).includes(q) &&
         !fold(c.acronym).includes(q) &&
@@ -619,8 +629,6 @@ export default function ConferencesExploreClient() {
     const known = getCountryByCode(id);
     return { id, name: known?.name ?? id, code: known?.code, count: 0 };
   }), [countryIds, countryFacets]);
-  // The heading's one country (exactly one chosen, and not the near-you view).
-  const selectedCountry = chosenFacets.length === 1 && !countryMode ? chosenFacets[0] : null;
   // The first chosen country leads the spotlight.
   const firstCountry = chosenFacets[0] ?? null;
 
@@ -630,11 +638,65 @@ export default function ConferencesExploreClient() {
     () => (nearId ? chosenFacets.filter(c => c.id !== nearId) : chosenFacets),
     [chosenFacets, nearId],
   );
+  // EVERY country (owner, 27 Sep 2026: "when searching for a country it
+  // doesn't appear"), not only those with conferences today, with how many
+  // upcoming conferences each has. Non-UN places that conferences use are
+  // added from the facets.
+  const allCountries = useMemo<CountryFacet[]>(() => {
+    const counts = new Map<string, number>();
+    for (const c of conferences) {
+      if (!c.country || hasConcluded(c)) continue;
+      const id = countryIdentity(c.country);
+      counts.set(id, (counts.get(id) ?? 0) + 1);
+    }
+    const out = new Map<string, CountryFacet>();
+    for (const c of UN_COUNTRIES) {
+      if (!/^[A-Z]{2}$/.test(c.code) || c.code === 'EU') continue;
+      const id = countryIdentity(c.name);
+      if (!out.has(id)) out.set(id, { id, name: c.name, code: c.code, count: counts.get(id) ?? 0 });
+    }
+    for (const f of countryFacets) if (!out.has(f.id)) out.set(f.id, { ...f, count: counts.get(f.id) ?? f.count });
+    return [...out.values()];
+  }, [conferences, countryFacets]);
   const searchCountries = useMemo(
-    () => (nearId ? countryFacets.filter(c => c.id !== nearId) : countryFacets),
-    [countryFacets, nearId],
+    () => (nearId ? allCountries.filter(c => c.id !== nearId) : allCountries),
+    [allCountries, nearId],
   );
   const countryIdSet = useMemo(() => new Set(countryIds), [countryIds]);
+
+  // What the pill's Where suggests while typing: countries (any, ranked by
+  // name, localised name and alias) and conferences by name, acronym or city.
+  const countrySuggestions = useMemo<SuggestCountry[]>(() => {
+    const q = searchQuery.trim();
+    if (!q) return [];
+    return allCountries
+      .filter(c => !countryIdSet.has(c.id))
+      .map(c => ({ c, rank: bestCountryRank(c.name, q) }))
+      .filter((x): x is { c: CountryFacet; rank: number } => x.rank !== null)
+      .sort((a, b) => a.rank - b.rank || b.c.count - a.c.count || a.c.name.localeCompare(b.c.name))
+      .slice(0, 5)
+      .map(x => x.c);
+  }, [allCountries, countryIdSet, searchQuery]);
+  const conferenceSuggestions = useMemo<SuggestConference[]>(() => {
+    const q = fold(searchQuery);
+    if (q.length < 2) return [];
+    const out: SuggestConference[] = [];
+    for (const c of conferences) {
+      if (hasConcluded(c)) continue;
+      if (!fold(c.full_name).includes(q) && !fold(c.acronym).includes(q) && !fold(c.city).includes(q)) continue;
+      const label = conferenceAcronymLabel(c) || c.full_name;
+      const place = [c.city?.trim(), c.country?.trim()].filter(Boolean).join(', ');
+      const sub = [label !== c.full_name ? c.full_name : '', place].filter(Boolean).join(' · ');
+      out.push({ id: c.id, slug: c.slug, label, sub, logo_url: c.logo_url });
+      if (out.length >= 4) break;
+    }
+    return out;
+  }, [conferences, searchQuery]);
+  function pickCountry(id: string) {
+    setContinent(null);
+    addCountry(id);
+    setSearchQuery('');
+  }
 
   const filtered = useMemo(() => preRegion.filter(c => {
     // Compared by ISO identity, not by string: a row saved under an older
@@ -703,8 +765,9 @@ export default function ConferencesExploreClient() {
     return sorted.filter(c => !ids.has(c.id));
   }, [sorted, spotItems]);
 
-  // Country tab shows up to 4 local conferences prominently.
-  const displayed = countryMode ? feed.slice(0, 4) : feed;
+  // Every result is shown (owner, 27 Sep 2026: "displays too little
+  // conferences"); the near-you view used to stop at four.
+  const displayed = feed;
   const months = useMemo(() => groupByMonth(displayed), [displayed]);
 
   // When a country filter has narrowed the page down, the end of the list is
@@ -746,17 +809,6 @@ export default function ConferencesExploreClient() {
 
   const userCode = userCountry ? getCountryByName(userCountry)?.code : undefined;
 
-  // How many continents the listed conferences span, for the header line.
-  const continentCount = useMemo(() => {
-    const hit = new Set<string>();
-    for (const c of conferences) {
-      if (hasConcluded(c)) continue;
-      const id = countryIdentity(c.country);
-      for (const [key, ids] of Object.entries(continentIdentities)) if (ids.has(id)) { hit.add(key); break; }
-    }
-    return hit.size;
-  }, [conferences, continentIdentities]);
-
   const resultsRef = useRef<HTMLElement>(null);
   function scrollToResults() {
     const el = resultsRef.current;
@@ -767,10 +819,10 @@ export default function ConferencesExploreClient() {
 
   const toggleNear = () => { if (nearId) { if (nearActive) removeCountry(nearId); else addCountry(nearId); } };
 
-  // Grid: one column on a phone, two on a tablet, three at 1024, four at 1280
-  // (CLAUDE.md §8, "The Explore page"). Plain CSS (below).
+  // Grid: one column on a phone, two from 600, three from 960, four from 1280,
+  // five from 1600 (CLAUDE.md §8, "The Explore page"). Plain CSS (below).
   const GRID = 'gv-explore-grid';
-  const GRID_GAP: React.CSSProperties = { columnGap: 'clamp(18px, 1.8vw, 28px)', rowGap: 'clamp(32px, 3vw, 40px)' };
+  const GRID_GAP: React.CSSProperties = { columnGap: 'clamp(14px, 1.3vw, 20px)', rowGap: 'clamp(16px, 1.5vw, 22px)' };
 
   const cardFor = (conf: Conference, spot?: FeaturedRow) => (
     <ConferenceCard
@@ -833,7 +885,7 @@ export default function ConferencesExploreClient() {
     if (userCountry && nearId) {
       items.push({
         key: 'near', label: userCountry, kicker: 'Near you', code: userCode, icon: Navigation, count: userCountryCount,
-        active: nearActive, onClick: toggleNear,
+        active: nearActive, removable: true, onClick: toggleNear,
       });
     }
     for (const k of REGION_ORDER) {
@@ -851,23 +903,13 @@ export default function ConferencesExploreClient() {
       const active = countryIdSet.has(c.id);
       items.push({
         key: `country-${c.id}`, label: c.name, code: c.code, icon: MapPin, count: c.count,
-        active, onClick: () => (active ? removeCountry(c.id) : addCountry(c.id)),
+        active, removable: true, onClick: () => (active ? removeCountry(c.id) : addCountry(c.id)),
       });
     }
     return items;
     // The handlers are plain closures over state already listed here.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [preRegion.length, continentKey, countryIds, userCountry, nearId, userCode, userCountryCount, nearActive, continentCounts, chipCountries, countryFacets, countryIdSet]);
-
-  // The results heading: the count as a big number with the words beside it.
-  const resultNoun = (n: number) => (n === 1 ? 'conference' : 'conferences');
-  const resultsHeading = (() => {
-    if (loading) return null;
-    if (aroundYouMode) return { flag: undefined as string | undefined, n: sorted.length, words: `${resultNoun(sorted.length)} around the world` };
-    if (countryMode) return { flag: userCode, n: sorted.length, words: `${resultNoun(sorted.length)} in ${userCountry}` };
-    if (selectedCountry) return { flag: selectedCountry.code, n: sorted.length, words: `${resultNoun(sorted.length)} in ${selectedCountry.name}` };
-    return { flag: undefined, n: sorted.length, words: `${resultNoun(sorted.length)}${continentLabel && countryIds.length === 0 ? ` in ${continentLabel}` : ''}` };
-  })();
 
   const facetsLoaded = facets.size > 0;
 
@@ -886,13 +928,23 @@ export default function ConferencesExploreClient() {
       <style>{`
         ${SCROLL_CSS}
         ${FEED_CSS}
-        .gv-explore-wrap { width: 100%; max-width: 1280px; margin: 0 auto; padding-left: 16px; padding-right: 16px; }
+        .gv-explore-wrap { width: 100%; max-width: 1720px; margin: 0 auto; padding-left: 16px; padding-right: 16px; }
         @media (min-width: 640px) { .gv-explore-wrap { padding-left: 24px; padding-right: 24px; } }
         @media (min-width: 1024px) { .gv-explore-wrap { padding-left: 40px; padding-right: 40px; } }
         .gv-explore-grid { display: grid; grid-template-columns: minmax(0, 1fr); }
-        @media (min-width: 640px) { .gv-explore-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-        @media (min-width: 1024px) { .gv-explore-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+        @media (min-width: 600px) { .gv-explore-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+        @media (min-width: 960px) { .gv-explore-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
         @media (min-width: 1280px) { .gv-explore-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+        @media (min-width: 1600px) { .gv-explore-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); } }
+        .gv-explore-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+        .gv-explore-cta { display: inline-flex; align-items: center; justify-content: center; gap: 8px; text-decoration: none; white-space: nowrap;
+          padding: 13px 24px; font-size: 16px; box-shadow: 0 6px 16px rgba(27,56,40,0.24); transition: transform 160ms ease, box-shadow 160ms ease; }
+        .gv-explore-cta:hover { transform: translateY(-1px); box-shadow: 0 10px 22px rgba(27,56,40,0.30); }
+        .gv-explore-cta:active { transform: scale(0.98); }
+        .gv-explore-cta-top { display: none; }
+        .gv-explore-cta-bottom { display: flex; width: 100%; margin-top: 10px; }
+        @media (min-width: 640px) { .gv-explore-cta-top { display: inline-flex; } .gv-explore-cta-bottom { display: none; } }
+        @media (prefers-reduced-motion: reduce) { .gv-explore-cta { transition: none; } .gv-explore-cta:hover, .gv-explore-cta:active { transform: none; } }
         .gv-explore-band { display: flex; align-items: center; gap: 10px; overflow-x: auto; scrollbar-width: none; padding: 4px 2px; margin: 0 -2px; }
         .gv-explore-band button { flex-shrink: 0; }
         .gv-place-strip { flex-shrink: 0; }
@@ -906,37 +958,24 @@ export default function ConferencesExploreClient() {
       <div className="relative z-10 flex flex-col min-h-screen">
         <SiteNav hideLanguage />
 
-        {/* ── 1. Hero: title, count line, the search pill ───────────────── */}
-        <header className="gv-explore-wrap" style={{ paddingTop: 'clamp(12px, 1.6vw, 24px)', textAlign: 'center' }}>
-          <h1
-            style={{
-              fontWeight: 800, fontSize: 'clamp(26px, 2.8vw, 38px)', lineHeight: 1.06, letterSpacing: '-0.018em', color: INK, margin: 0,
-            }}
-          >
-            Explore Model UN <GoldWord>Conferences</GoldWord>
-          </h1>
-          <p style={{ margin: '6px 0 0', fontSize: 15, color: INK_SOFT, fontVariantNumeric: 'tabular-nums' }}>
-            {headlineCount === null ? (
-              'Loading the directory'
-            ) : (
-              <>
-                <span style={{ fontWeight: 800, color: INK }}>{headlineCount.toLocaleString()}</span>
-                {` ${headlineCount === 1 ? 'conference' : 'conferences'}`}
-                {continentCount > 0 && (
-                  <>
-                    {' across '}
-                    <span style={{ fontWeight: 800, color: INK }}>{continentCount}</span>
-                    {` ${continentCount === 1 ? 'continent' : 'continents'}`}
-                  </>
-                )}
-                {'. Running one? '}
-                <Link href="/conferences/new" className="focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] rounded" style={{ fontWeight: 700, color: FOREST, textDecoration: 'underline', textUnderlineOffset: 3 }}>
-                  List your conference
-                </Link>
-              </>
-            )}
-          </p>
-          <div style={{ marginTop: 'clamp(12px, 1.4vw, 18px)' }}>
+        {/* ── 1. Header: the title with "Organise your conference" beside it,
+             then the search pill. No count lines (owner, 27 Sep 2026). On
+             phones the button goes full width under the pill. ──────────── */}
+        <header className="gv-explore-wrap" style={{ paddingTop: 'clamp(10px, 1.2vw, 18px)' }}>
+          <div className="gv-explore-head">
+            <h1
+              style={{
+                fontWeight: 800, fontSize: 'clamp(24px, 2.6vw, 36px)', lineHeight: 1.06, letterSpacing: '-0.018em', color: INK, margin: 0,
+              }}
+            >
+              Explore Model UN <GoldWord>Conferences</GoldWord>
+            </h1>
+            <Link href="/conferences/new" className="gv-explore-cta gv-explore-cta-top focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] focus-visible:ring-offset-2" style={PRIMARY_BUTTON}>
+              <Plus size={18} strokeWidth={2.6} aria-hidden />
+              Organise your conference
+            </Link>
+          </div>
+          <div style={{ marginTop: 'clamp(10px, 1.2vw, 14px)' }}>
             <SearchPill
               search={searchQuery} onSearch={setSearchQuery}
               continent={continentKey} continentLabels={CONTINENT_LABELS} onContinent={changeContinent}
@@ -948,15 +987,22 @@ export default function ConferencesExploreClient() {
               whenOptions={dateTabs}
               roles={roleFilter} onToggleRole={toggleRole} onClearRoles={() => setRoleFilter(new Set())}
               onSubmit={scrollToResults}
+              countrySuggestions={countrySuggestions}
+              conferenceSuggestions={conferenceSuggestions}
+              onPickCountry={pickCountry}
             />
           </div>
+          <Link href="/conferences/new" className="gv-explore-cta gv-explore-cta-bottom focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] focus-visible:ring-offset-2" style={PRIMARY_BUTTON}>
+            <Plus size={18} strokeWidth={2.6} aria-hidden />
+            Organise your conference
+          </Link>
         </header>
 
         <main className="flex-1" style={{ paddingBottom: 'clamp(40px, 4vw, 64px)' }}>
           {/* ── 2. One band: the filter chips, then the places ─────────────
                Dates live in ONE place, the search pill's When (on phones,
                where the pill shows only Where, a When chip stands in). */}
-          <div className="gv-explore-wrap" style={{ marginTop: 'clamp(12px, 1.4vw, 18px)' }}>
+          <div className="gv-explore-wrap" style={{ marginTop: 'clamp(8px, 1vw, 12px)' }}>
             <div role="toolbar" aria-label="Filters and places" className="gv-explore-scroll gv-explore-band">
               <span className="contents sm:hidden">
                 <FilterChip
@@ -1036,34 +1082,31 @@ export default function ConferencesExploreClient() {
           </div>
 
           {/* ── 6. The feed ───────────────────────────────────────────────── */}
-          <section ref={resultsRef} className="gv-explore-wrap" aria-label="Conferences" style={{ marginTop: 'clamp(12px, 1.4vw, 18px)' }}>
-            <div className="flex items-center flex-wrap" style={{ gap: '10px 16px', marginBottom: 6 }}>
-              {resultsHeading ? (
-                <p className="inline-flex items-baseline flex-wrap" style={{ margin: 0, gap: 8, color: INK, fontVariantNumeric: 'tabular-nums' }}>
-                  {resultsHeading.flag && <CircleFlag code={resultsHeading.flag} size={22} decorative style={{ alignSelf: 'center' }} />}
-                  <span style={{ fontWeight: 800, fontSize: 'clamp(26px, 2.4vw, 32px)', lineHeight: 1 }}>{resultsHeading.n.toLocaleString()}</span>
-                  <span style={{ fontWeight: 600, fontSize: 16, color: '#4A4238', overflowWrap: 'anywhere' }}>
-                    {resultsHeading.words}
-                    {countryMode && displayed.length < feed.length ? `, the first ${displayed.length} below` : ''}
-                  </span>
-                </p>
-              ) : (
-                <span style={{ fontWeight: 700, fontSize: 15, color: '#6B5F52' }}>Loading conferences</span>
-              )}
-              <div className="flex items-center" style={{ gap: 14, marginLeft: 'auto' }}>
-                <SortMenu sort={dateSort} onChange={setDateSort} />
-                <ViewToggle view={view} onChange={changeView} />
-              </div>
+          <section ref={resultsRef} className="gv-explore-wrap" aria-label="Conferences" style={{ marginTop: 6 }}>
+            {/* Sort and view only; the count lines are gone (owner, 27 Sep 2026). */}
+            <div className="flex items-center justify-end" style={{ gap: 14, marginBottom: 4 }}>
+              {loading && <span className="sr-only" role="status">Loading conferences</span>}
+              <SortMenu sort={dateSort} onChange={setDateSort} />
+              <ViewToggle view={view} onChange={changeView} />
             </div>
 
+            {/* Spotlights first, in their own formation: wider feature cards
+                with the gold edge, glow and tag. Not repeated below. */}
             {!loading && spotItems.length > 0 && (
-              <section aria-label="In the Spotlight" style={{ marginTop: 8 }}>
-                <p style={{ margin: '0 0 8px', fontSize: 15, fontWeight: 800, color: INK }}>
+              <section aria-label="In the Spotlight" style={{ marginBottom: 'clamp(14px, 1.6vw, 20px)' }}>
+                <p style={{ margin: '0 0 8px', fontSize: 16, fontWeight: 800, color: INK }}>
                   In the <GoldWord>Spotlight</GoldWord>
                 </p>
-                <div className={GRID} style={GRID_GAP}>
-                  {spotItems.map(({ conf, spot }) => cardFor(conf, spot))}
-                </div>
+                <SpotlightRow
+                  items={spotItems}
+                  sponsoredIds={sponsoredIds}
+                  appliedIds={appliedIds}
+                  isMember={isMember}
+                  hoveredId={hoveredId}
+                  onHover={setHoveredId}
+                  onLeave={() => setHoveredId(null)}
+                  onOpen={(spot) => recordSpotlightClick(spot.booking_id)}
+                />
               </section>
             )}
 
@@ -1071,8 +1114,8 @@ export default function ConferencesExploreClient() {
               view === 'list' ? (
                 <div aria-busy="true" aria-label="Loading conferences"><FeedSkeleton /></div>
               ) : (
-                <div className={GRID} style={{ ...GRID_GAP, marginTop: 16 }} aria-busy="true" aria-label="Loading conferences">
-                  {Array.from({ length: 8 }).map((_, i) => <ConferenceCardSkeleton key={i} variant="listing" />)}
+                <div className={GRID} style={{ ...GRID_GAP, marginTop: 4 }} aria-busy="true" aria-label="Loading conferences">
+                  {Array.from({ length: 10 }).map((_, i) => <ConferenceCardSkeleton key={i} variant="listing" />)}
                 </div>
               )
             ) : displayed.length === 0 && spotItems.length === 0 ? (
@@ -1100,25 +1143,25 @@ export default function ConferencesExploreClient() {
                   </>
                 )}
               </div>
+            ) : view === 'grid' ? (
+              // The grid: one continuous run of compact cards in date order,
+              // no month breaks, so every row is full.
+              <div className={GRID} style={GRID_GAP}>
+                {displayed.map(conf => cardFor(conf))}
+              </div>
             ) : (
-              <div className="flex flex-col" style={{ gap: 'clamp(14px, 1.6vw, 22px)' }}>
+              <div className="flex flex-col" style={{ gap: 'clamp(8px, 1vw, 14px)' }}>
                 {months.map(g => (
                   <section key={g.key} aria-label={g.label}>
                     <MonthHeader label={g.label} count={g.items.length} />
-                    {view === 'list' ? (
-                      <FeedRows
-                        items={g.items}
-                        facets={facets}
-                        facetsLoaded={facetsLoaded}
-                        sponsoredIds={sponsoredIds}
-                        appliedIds={appliedIds}
-                        isMember={isMember}
-                      />
-                    ) : (
-                      <div className={GRID} style={{ ...GRID_GAP, paddingTop: 6 }}>
-                        {g.items.map(conf => cardFor(conf))}
-                      </div>
-                    )}
+                    <FeedRows
+                      items={g.items}
+                      facets={facets}
+                      facetsLoaded={facetsLoaded}
+                      sponsoredIds={sponsoredIds}
+                      appliedIds={appliedIds}
+                      isMember={isMember}
+                    />
                   </section>
                 ))}
               </div>

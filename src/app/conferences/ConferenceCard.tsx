@@ -19,14 +19,10 @@
 //
 // `compact` (default false) is the same listing, a little denser.
 //
-// `variant="listing"` (Explore only; redesign 26 Sep 2026, owner: "use a
-// similar thing with the cards"): a soft 3D white card on the ivory ground.
-// The cover photo runs flush across the top of the card (4:3, the card's own
-// rounded corners, the photo scales 1.03 on hover) and is the hero of the
-// card; the logo disc overlaps its lower edge; the text sits below. The card
-// lifts 3px on hover. A conference without a banner gets a pale fill with its
-// logo centred large. Spotlight is the gold edge and glow plus the tag;
-// credit sponsored keeps the heart. Every other caller keeps the inset card.
+// `variant="listing"` (Explore only; compact again 27 Sep 2026): rendered by
+// `ListingCard` below. A 104px banner strip, a big 96px logo disc over its
+// lower edge, the name beside the disc, then place, dates and one line of
+// price, format and delegates. Every other caller keeps the inset card.
 //
 // `heroCompact` is the PHOTO-FORWARD hero tier, used ONLY by the Stagefront
 // hero "up next" rail: the banner photo fills the entire 188px card (cover)
@@ -214,6 +210,26 @@ export function ConferenceCard({
   // A bare card with no banner shows its logo large in the middle of the
   // pale fill, so the small disc over the edge would only repeat it.
   const edgeLogo = !bare || hasBanner;
+
+  // Explore's compact listing card (27 Sep 2026) has its own layout below.
+  if (bare) {
+    return (
+      <ListingCard
+        conf={conf}
+        href={href}
+        hovered={hovered}
+        onHover={onHover}
+        onLeave={onLeave}
+        onClick={onClick}
+        spotlight={spotlight}
+        glowShadow={glowShadow}
+        creditSponsored={creditSponsored}
+        applied={applied}
+        member={member}
+        showFlag={showFlag}
+      />
+    );
+  }
 
   // ── Photo-forward hero tier ───────────────────────────────────────────────
   // The banner photo IS the card: full-bleed cover, forest-tinted scrim heavier
@@ -653,6 +669,194 @@ export function ConferenceCard({
   );
 }
 
+// ── Explore's compact listing card (27 Sep 2026) ────────────────────────────
+// Owner: "cards are way too big, revert to similar to how it was before" and
+// "increase logo size by a lot". A short banner strip (104px) across the top,
+// the conference's logo as a BIG round disc (96px) overlapping the strip's
+// lower edge, the acronym large with the full name beneath to the right of the
+// disc (two rows, never cut), then flag + city, the dates, and one line with
+// the price in bold, format and delegates. A soft 3D white card on the ivory.
+const LISTING_BANNER_H = 104;
+const LISTING_LOGO = 96;
+
+function ListingCard({
+  conf, href, hovered, onHover, onLeave, onClick, spotlight, glowShadow, creditSponsored, applied, member, showFlag,
+}: {
+  conf: CardConference;
+  href?: string;
+  hovered: boolean;
+  onHover: () => void;
+  onLeave: () => void;
+  onClick: () => void;
+  spotlight: boolean;
+  glowShadow: string;
+  creditSponsored: boolean;
+  applied: boolean;
+  member: boolean;
+  showFlag: boolean;
+}) {
+  const countryObj = getCountryByName(conf.country);
+  const countryName = countryObj?.name ?? conf.country;
+  const price = conf.delegate_price ?? TBD_PRICE;
+  const headingLabel = conferenceAcronymLabel(conf);
+  const initials = conf.acronym.slice(0, 3).toUpperCase();
+  const showDates = !conf.dates_tbd && !!conf.start_date;
+  const showFullName = !!conf.full_name && conf.full_name.trim() !== headingLabel.trim() && conf.full_name.trim() !== conf.acronym.trim();
+  const formatLabel = conf.format ? (FORMAT_WORDS[conf.format] ?? null) : null;
+  const FormatIcon = conf.format ? FORMAT_GLYPHS[conf.format] : undefined;
+  const [p0, p1] = PALE_COVERS[(() => { let h = 0; for (let i = 0; i < conf.acronym.length; i++) h = (h * 31 + conf.acronym.charCodeAt(i)) >>> 0; return h % PALE_COVERS.length; })()];
+  const logoLeft = 12;
+  const textInset = logoLeft + LISTING_LOGO + 10;
+
+  const article = (
+    <article
+      onClick={href ? undefined : onClick}
+      onKeyDown={href ? undefined : (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick(); } }}
+      role={href ? undefined : 'link'}
+      tabIndex={href ? undefined : 0}
+      onMouseEnter={href ? undefined : onHover}
+      onMouseLeave={href ? undefined : onLeave}
+      className="gv-listing-card cursor-pointer focus:outline-none"
+      style={{
+        position: 'relative', height: '100%', display: 'flex', flexDirection: 'column',
+        backgroundColor: '#FFFFFF', borderRadius: '18px',
+        boxShadow: spotlight ? glowShadow : hovered ? LISTING_SHADOW_HOVER : LISTING_SHADOW,
+        transform: hovered ? 'translateY(-3px)' : undefined,
+        transition: 'box-shadow 240ms ease, transform 260ms cubic-bezier(0.22,1,0.36,1)',
+        fontFamily: "var(--font-brand), sans-serif",
+      }}
+    >
+      <style>{LISTING_CSS}</style>
+      {/* The banner strip: the photo, or a pale wash with the acronym watermark */}
+      <div
+        style={{
+          position: 'relative', height: LISTING_BANNER_H, borderRadius: '18px 18px 0 0', overflow: 'hidden', flexShrink: 0,
+          background: conf.banner_url ? '#EFEBE3' : `linear-gradient(135deg, ${p0} 0%, ${p1} 100%)`,
+        }}
+      >
+        {conf.banner_url ? (
+          <img
+            src={conf.banner_url}
+            alt=""
+            loading="lazy"
+            decoding="async"
+            className="gv-listing-photo"
+            style={{
+              position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover',
+              transform: hovered ? 'scale(1.04)' : 'scale(1)',
+              transition: 'transform 600ms cubic-bezier(0.22,1,0.36,1)',
+            }}
+          />
+        ) : (
+          <span
+            aria-hidden
+            style={{
+              position: 'absolute', right: '12px', bottom: '-6px', fontWeight: 800, fontSize: '46px', lineHeight: 1,
+              color: 'rgba(27,56,40,0.10)', letterSpacing: '0.02em', userSelect: 'none', whiteSpace: 'nowrap',
+            }}
+          >
+            {conf.acronym.slice(0, 6)}
+          </span>
+        )}
+        {spotlight && (
+          <span style={{ position: 'absolute', top: '8px', right: '8px', zIndex: 2 }}>
+            <SpotlightTag size="sm" />
+          </span>
+        )}
+      </div>
+
+      {/* The logo, big and round, over the strip's lower edge */}
+      <div style={{ position: 'absolute', left: logoLeft, top: LISTING_BANNER_H - LISTING_LOGO / 2, zIndex: 2 }}>
+        <LogoDisc
+          src={conf.logo_url}
+          alt={conf.acronym}
+          size={LISTING_LOGO}
+          fallbackText={initials}
+          style={{ border: '3px solid #FFFFFF', boxShadow: '0 6px 16px rgba(16,28,21,0.20)' }}
+        />
+      </div>
+
+      {/* Beside the disc: the acronym large, the full name beneath (never cut) */}
+      <div style={{ padding: `8px 12px 0 ${textInset}px`, minHeight: LISTING_LOGO / 2 + 6 }}>
+        <h3
+          style={{
+            margin: 0, display: 'flex', alignItems: 'center', gap: '5px', minWidth: 0,
+            color: '#1C1410', fontWeight: 800, fontSize: '17px', lineHeight: 1.15, letterSpacing: '-0.01em',
+          }}
+        >
+          <span style={{ minWidth: 0, overflowWrap: 'anywhere' }}>{headingLabel}</span>
+          <VerifiedCheck verified={!!conf.is_verified} size={16} title="Verified conference" />
+        </h3>
+        {showFullName && (
+          <p style={{ margin: '2px 0 0', fontSize: '12px', fontWeight: 500, lineHeight: 1.3, color: '#5C5140', overflowWrap: 'anywhere' }}>
+            {conf.full_name}
+          </p>
+        )}
+      </div>
+
+      <div style={{ display: 'flex', flexDirection: 'column', flex: '1 1 auto', padding: '8px 12px 12px' }}>
+        <p className="flex items-center" style={{ margin: 0, gap: '6px', fontSize: '13px', fontWeight: 500, color: '#4A4238', lineHeight: 1.3 }}>
+          {showFlag && <CircleFlag country={conf.country} size={16} decorative />}
+          <span style={{ minWidth: 0, overflowWrap: 'anywhere' }}>
+            {[conf.city?.trim(), countryName?.trim()].filter(Boolean).join(', ')}
+          </span>
+        </p>
+        <p style={{ margin: '3px 0 0', fontSize: '13px', fontWeight: 500, color: '#5C5140', fontVariantNumeric: 'tabular-nums', lineHeight: 1.3 }}>
+          {showDates ? formatDateRange(conf.start_date, conf.end_date) : 'Dates to be announced'}
+        </p>
+        {/* Price, format and delegates on one line; the viewer's own state at the end */}
+        <div
+          className="flex items-center flex-wrap"
+          style={{ marginTop: 'auto', paddingTop: '8px', columnGap: '12px', rowGap: '3px', fontSize: '12.5px', fontWeight: 500, color: '#5C5140' }}
+        >
+          <span style={{ fontSize: '14px', color: '#1C1410', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
+            {price.kind === 'tbd' ? (
+              <span title="Price to be announced" style={{ fontWeight: 600, color: '#6B5F52', fontSize: '12.5px' }}>Price TBA</span>
+            ) : price.kind === 'free' ? (
+              <span style={{ fontWeight: 800 }}>Free</span>
+            ) : (
+              <span style={{ fontWeight: 800 }}>{currencySymbol(price.currency)}{formatFeeAmountCompact(price.amount)}</span>
+            )}
+          </span>
+          {formatLabel && (
+            <span className="inline-flex items-center" style={{ gap: '4px' }}>
+              {FormatIcon && <FormatIcon size={13} strokeWidth={2} fill="rgba(207,227,211,0.9)" style={{ color: '#2A5A3C', flexShrink: 0 }} aria-hidden />}
+              {formatLabel}
+            </span>
+          )}
+          {conf.expected_delegates > 0 && (
+            <span className="inline-flex items-center" style={{ gap: '4px', fontVariantNumeric: 'tabular-nums' }} title="Expected delegates">
+              <Users size={13} strokeWidth={2} fill="rgba(238,217,138,0.55)" style={{ color: '#2A5A3C', flexShrink: 0 }} aria-hidden />
+              {conf.expected_delegates.toLocaleString()}
+              <span className="sr-only"> delegates</span>
+            </span>
+          )}
+          {(member || applied) && (
+            <span className="inline-flex items-center" style={{ gap: '3px', marginLeft: 'auto', fontSize: '12px', fontWeight: 700, color: '#1B3828' }}>
+              <Check size={13} strokeWidth={2.75} aria-hidden /> {member ? "You're in" : 'Applied'}
+            </span>
+          )}
+        </div>
+        {creditSponsored && <CreditSponsoredMark size="xs" style={{ marginTop: '4px' }} />}
+      </div>
+    </article>
+  );
+
+  if (!href) return article;
+  return (
+    <Link
+      href={href}
+      onClick={onClick}
+      onMouseEnter={onHover}
+      onMouseLeave={onLeave}
+      className="block h-full rounded-[18px] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] focus-visible:ring-offset-2"
+      style={{ textDecoration: 'none', color: 'inherit' }}
+    >
+      {article}
+    </Link>
+  );
+}
+
 /** Gold pill APPLY button for the card foot row, a solid forest APPLIED ✓
  *  badge when the viewer already has an application, or a solid forest VIEW →
  *  pill when the viewer is already part of the conference (member wins over
@@ -744,6 +948,26 @@ function ApplyButton({ applied = false, member = false }: { applied?: boolean; m
  *  disc over its edge, the text rows), for loading grids. */
 export function ConferenceCardSkeleton({ variant = 'card' }: { variant?: 'card' | 'listing' } = {}) {
   const bare = variant === 'listing';
+  if (bare) {
+    const line = (w: string, h: number, mt: number) => (
+      <div className="animate-pulse" style={{ width: w, height: `${h}px`, marginTop: `${mt}px`, borderRadius: '8px', backgroundColor: '#ECE6D9' }} />
+    );
+    return (
+      <div aria-hidden style={{ position: 'relative', backgroundColor: '#FFFFFF', borderRadius: '18px', boxShadow: LISTING_SHADOW }}>
+        <div className="animate-pulse" style={{ height: LISTING_BANNER_H, borderRadius: '18px 18px 0 0', backgroundColor: '#EFEBE3' }} />
+        <div style={{ position: 'absolute', left: 12, top: LISTING_BANNER_H - LISTING_LOGO / 2, width: LISTING_LOGO, height: LISTING_LOGO, borderRadius: '9999px', backgroundColor: '#DDD4C0', border: '3px solid #FFFFFF' }} />
+        <div style={{ padding: `10px 12px 0 ${12 + LISTING_LOGO + 10}px`, minHeight: LISTING_LOGO / 2 + 6 }}>
+          {line('60%', 16, 0)}
+          {line('85%', 10, 6)}
+        </div>
+        <div style={{ padding: '8px 12px 14px' }}>
+          {line('70%', 11, 0)}
+          {line('50%', 11, 7)}
+          {line('80%', 12, 14)}
+        </div>
+      </div>
+    );
+  }
   const bar = (w: string, h: number, mt: number) => (
     <div className="animate-pulse" style={{ width: w, height: `${h}px`, marginTop: `${mt}px`, borderRadius: '8px', backgroundColor: '#ECE6D9' }} />
   );
