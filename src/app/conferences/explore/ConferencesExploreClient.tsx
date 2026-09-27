@@ -616,17 +616,15 @@ export default function ConferencesExploreClient() {
     return copy;
   }, [filtered, dateSort]);
 
-  // The "In the Spotlight" section (27 Sep 2026, owner: "Explore should have a
-  // section for spotlights up top"). First the Country / Region Spotlight of
-  // the place in force (it must pass every filter, the place included), then
-  // the Explore Spotlight bookings, which pass every filter EXCEPT the place.
-  // Why they did not show before: the Explore row was REPLACED by the Country
-  // row as soon as a country was chosen, and the first-load near-you default
-  // chooses one for most visitors, so WORLDMUN, NS and TWMUN (all booked on
-  // 'explore') vanished; and a booking outside that country was filtered out.
+  // The spotlight conferences (27 Sep 2026): first the Country / Region
+  // Spotlight of the place in force, then the Explore Spotlight bookings.
+  // Spotlights get NO special treatment from the filters (owner): each is
+  // looked up in `filtered`, every filter the place included, so a spotlight
+  // a filter excludes is not shown at all. Those that pass go first in the
+  // grid and stay in their date place in the list. (The Explore row is never
+  // REPLACED by the Country row: both are read and merged here.)
   const spotItems = useMemo<SpotlightItem[]>(() => {
-    const inPlace = new Map(filtered.map(c => [c.id, c]));
-    const anyPlace = new Map(preRegion.map(c => [c.id, c]));
+    const inFilter = new Map(filtered.map(c => [c.id, c]));
     const out: SpotlightItem[] = [];
     const seen = new Set<string>();
     const push = (r: FeaturedRow, conf: Conference | undefined) => {
@@ -634,10 +632,10 @@ export default function ConferencesExploreClient() {
       seen.add(conf.id);
       out.push({ conf, spot: r });
     };
-    for (const r of spotlightRows) if (spotTarget) push(r, inPlace.get(r.conference_id));
-    for (const r of exploreSpots) push(r, anyPlace.get(r.conference_id));
+    for (const r of spotlightRows) if (spotTarget) push(r, inFilter.get(r.conference_id));
+    for (const r of exploreSpots) push(r, inFilter.get(r.conference_id));
     return out;
-  }, [filtered, preRegion, spotlightRows, spotTarget, exploreSpots]);
+  }, [filtered, spotlightRows, spotTarget, exploreSpots]);
 
   // One 'view' per session per spotlight booking that is on screen.
   useEffect(() => {

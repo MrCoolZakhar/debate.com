@@ -411,8 +411,6 @@ export default function DelegationPanel({ conferenceId, conferenceSlug, societyI
   useEffect(() => { void loadRoster(); }, [loadRoster]);
 
   const isLeader = !!roster?.is_leader;
-  // Only the head delegate hands over the role or names an advisor.
-  const iAmHead = !!roster?.members.some(m => m.is_me && m.role === 'head-delegate');
   // Leader imports (DelegationImportCard's read), only for a leader.
   const delegationImport = useDelegationImport(isLeader ? societyId : null);
   const importAvailable = isLeader && !!delegationImport.leader?.enabled;
@@ -675,7 +673,8 @@ export default function DelegationPanel({ conferenceId, conferenceSlug, societyI
         covered={coveredIds.has(m.application_id)}
         seatLogo={pool ? seatLogoFor(pool) : null}
         canSeeAllocation={isLeader || m.is_me}
-        leadMenu={iAmHead && societyId ? (
+        // Every leader (faculty advisor or head delegate) gets the menu (27 Sep 2026).
+        leadMenu={isLeader && societyId ? (
           <MemberLeadMenu
             member={{
               application_id: m.application_id, name: m.name, role: m.role, claimed: m.claimed,
