@@ -31,6 +31,7 @@ const STATIC_PAGES: { path: string; lastModified: string; changeFrequency: 'dail
   // /create is the chooser (a committee or a conference) since 25 Sep 2026; the
   // session creator moved to /create/sessions, reached from it by a plain link.
   { path: '/create',            lastModified: '2026-09-25', changeFrequency: 'monthly', priority: 0.8 },
+  { path: '/create/sessions',   lastModified: '2026-09-26', changeFrequency: 'monthly', priority: 0.8 },
   { path: '/join',              lastModified: '2026-09-16', changeFrequency: 'monthly', priority: 0.7 },
   { path: '/conferences/roles', lastModified: '2026-09-08', changeFrequency: 'weekly',  priority: 0.7 },
   { path: '/pricing/credits',   lastModified: '2026-09-24', changeFrequency: 'monthly', priority: 0.7 },
