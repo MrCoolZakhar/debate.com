@@ -45,6 +45,7 @@ import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { getCountryByName, countryToContinent, type Continent } from '@/lib/countries';
 import CancellationsCard from './CancellationsCard';
+import UserOriginCard from './UserOriginCard';
 import { INTENT_OPTIONS } from '@/lib/conferenceIntent';
 import {
   NEU, NEU_GRADIENTS, OUTFIT, EASE, NeuCard, NeuInset, NeuStatTile, NeuIconDisc, NeuRing,
@@ -1031,6 +1032,9 @@ export default function DataTab() {
 
       {/* ── Unlimited cancellations (25 Sep 2026) ───────────────────────── */}
       <CancellationsCard />
+
+      {/* ── Where our users are from (27 Sep 2026) ──────────────────────── */}
+      <UserOriginCard />
 
       {/* ── Health ──────────────────────────────────────────────────────── */}
       <Section
