@@ -133,7 +133,7 @@ export function SpotlightRow({
 }) {
   const single = items.length === 1;
   // Wider than the grid's cards: one wide card, two side by side (two by two
-  // for four), three across from 1100px.
+  // for four), three across from 1024px; one sideways row on phones.
   const cls = single ? 'gv-spot-grid gv-spot-single' : items.length === 3 ? 'gv-spot-grid gv-spot-three' : 'gv-spot-grid';
   return (
     <div className={cls}>
@@ -159,8 +159,16 @@ export function SpotlightRow({
 
 const SPOT_CSS = `
 .gv-spot-grid { display: grid; gap: clamp(18px, 2vw, 28px); grid-template-columns: minmax(0, 1fr); }
+/* Phones: one sideways row of feature cards (the next one peeks in), with room
+   for the gold glow so the scroller never clips it. */
+@media (max-width: 719px) {
+  .gv-spot-grid:not(.gv-spot-single) { grid-template-columns: none; grid-auto-flow: column; grid-auto-columns: 86%; gap: 14px;
+    overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none; padding: 6px 16px 18px; margin: -6px -16px -18px; }
+  .gv-spot-grid:not(.gv-spot-single)::-webkit-scrollbar { display: none; }
+  .gv-spot-grid:not(.gv-spot-single) > * { scroll-snap-align: start; scroll-margin-left: 16px; }
+}
 @media (min-width: 720px) { .gv-spot-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .gv-spot-grid.gv-spot-single { grid-template-columns: minmax(0, 1fr); } }
-@media (min-width: 1100px) { .gv-spot-grid.gv-spot-three { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (min-width: 1024px) { .gv-spot-grid.gv-spot-three { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 .gv-spot-card { display: flex; flex-direction: column; height: 100%; }
 .gv-spot-photo { aspect-ratio: 5 / 2; border-radius: 22px 22px 0 0; }
 @media (min-width: 720px) {

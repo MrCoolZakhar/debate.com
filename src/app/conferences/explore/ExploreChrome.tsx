@@ -184,11 +184,11 @@ export function SearchPill({
     return () => { document.removeEventListener('pointerdown', onDown); document.removeEventListener('keydown', onKey); };
   }, [open]);
 
-  const whereSummary = continent
-    ? continentLabels[continent]
-    : chosenCountryNames.length > 0
-      ? chosenCountryNames.join(', ')
-      : 'Search conferences or places';
+  // The chosen places show as chips under the pill, so the field itself only
+  // invites the next one (several countries can be added one after another).
+  const whereSummary = continent || chosenCountryNames.length > 0
+    ? 'Add another country'
+    : 'Search conferences or places';
   const whenSummary = whenLabel
     ? whenLabel
     : dateFrom || dateTo
@@ -364,7 +364,6 @@ export function SearchPill({
               <>
                 {nearCountry && (
                   <>
-                    <p style={{ margin: '0 0 8px', fontSize: 13, fontWeight: 800, color: INK }}>Near you</p>
                     <button
                       type="button"
                       onClick={() => { onToggleNear(); setOpen(null); }}
@@ -373,7 +372,7 @@ export function SearchPill({
                       style={{ gap: 12, padding: '8px 10px', borderRadius: 14, border: 'none', cursor: 'pointer', textAlign: 'left', backgroundColor: nearActive ? '#EEF3EC' : 'transparent', fontFamily: FONT }}
                     >
                       {nearCode ? <CircleFlag code={nearCode} size={36} decorative /> : <span style={{ ...RIM_DISC, width: 36, height: 36 }}><MapPin size={16} aria-hidden /></span>}
-                      <span style={{ flex: 1, fontSize: 14.5, fontWeight: 700, color: INK, overflowWrap: 'anywhere' }}>{nearCountry}</span>
+                      <span style={{ flex: 1, fontSize: 14.5, fontWeight: 700, color: INK, overflowWrap: 'anywhere' }}><span style={{ fontWeight: 600, color: INK_SOFT }}>Near you: </span>{nearCountry}</span>
                       {nearActive && <Check size={16} strokeWidth={2.6} style={{ color: FOREST }} aria-hidden />}
                     </button>
                   </>

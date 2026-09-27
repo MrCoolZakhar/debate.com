@@ -26,7 +26,7 @@ import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import {
-  Search, CalendarDays, Ticket, Globe, MapPin, Monitor, School, GraduationCap, Heart, DoorOpen, Navigation, Plus,
+  CalendarDays, Ticket, Globe, MapPin, Monitor, School, GraduationCap, Heart, DoorOpen, Plus, X,
 } from 'lucide-react';
 
 /** Country names are matched in English, Spanish and French (localised names
@@ -40,7 +40,6 @@ function bestCountryRank(name: string, q: string): number | null {
   return best;
 }
 import SiteNav from '@/components/SiteNav';
-import SiteFooter from '@/components/SiteFooter';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { supabase } from '@/lib/supabase';
@@ -52,8 +51,8 @@ import { compareStartDate, hasConcluded } from '@/lib/conferenceDates';
 import { ConferenceCard, ConferenceCardSkeleton } from '../ConferenceCard';
 import { GoldWord } from '@/components/BrandHeading';
 import {
-  ChipLayer, ChoiceRow, chipStyle, FilterChip, PlaceStrip, PRIMARY_BUTTON, SCROLL_CSS, SearchPill, SortMenu, ToggleChip, ViewToggle,
-  type DateTab, type ExploreView, type PlaceItem, type SuggestConference, type SuggestCountry,
+  ChoiceRow, FilterChip, PRIMARY_BUTTON, SCROLL_CSS, SearchPill, SortMenu, ToggleChip, ViewToggle,
+  type DateTab, type ExploreView, type SuggestConference, type SuggestCountry,
 } from './ExploreChrome';
 import {
   FEED_CSS, FeedRows, FeedSkeleton, MonthHeader, SpotlightRow, groupByMonth,
@@ -73,9 +72,6 @@ const FONT = "var(--font-brand), sans-serif";
 const INK = '#1C1410';
 const INK_SOFT = '#5C5140';
 const FOREST = '#1B3828';
-const IVORY = '#EDE7D8';
-// The paper grain every public page lays over the ivory (pricing, legal).
-const GRAIN = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='grain'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23grain)' opacity='1'/%3E%3C/svg%3E")`;
 
 // ── Continent maps ─────────────────────────────────────────────────────────────
 
@@ -96,9 +92,6 @@ const CONTINENT_LABELS: Record<string, string> = {
   'asia': 'Asia',
   'oceania': 'Oceania',
 };
-
-// The rail's Region group, in this order (25 Sep 2026). ?continent=<key>.
-const REGION_ORDER = ['africa', 'asia', 'europe', 'north-america', 'south-america', 'oceania'] as const;
 
 // The rail offers two formats and two levels, because that is how people
 // actually choose: can I get there in person, or do I attend from my room?
@@ -182,94 +175,6 @@ function localeCountry(): string | null {
   return null;
 }
 
-/** Type to find a country; each pick becomes a removable chip above it. The
- *  suggestions sit in the rail's own flow (never a floating layer that the
- *  scrolling rail could clip), from the countries that have conferences. */
-function CountrySearch({ options, chosen, onAdd, idPrefix = 'gv-explore' }: {
-  options: CountryFacet[];
-  chosen: ReadonlySet<string>;
-  onAdd: (id: string) => void;
-  /** Unique per mounted panel (the desktop panel and the phone sheet). */
-  idPrefix?: string;
-}) {
-  const [q, setQ] = useState('');
-  const [cursor, setCursor] = useState(0);
-  const matches = useMemo(() => {
-    if (!q.trim()) return [];
-    return options
-      .filter(c => !chosen.has(c.id))
-      .map(c => ({ c, rank: bestCountryRank(c.name, q) }))
-      .filter((x): x is { c: CountryFacet; rank: number } => x.rank !== null)
-      .sort((a, b) => a.rank - b.rank || b.c.count - a.c.count || a.c.name.localeCompare(b.c.name))
-      .slice(0, 6)
-      .map(x => x.c);
-  }, [options, chosen, q]);
-  const active = Math.min(cursor, Math.max(0, matches.length - 1));
-
-  const pick = (id: string) => { onAdd(id); setQ(''); setCursor(0); };
-
-  return (
-    <div>
-      <div className="relative flex items-center">
-        <Search size={14} className="absolute left-2.5 pointer-events-none" style={{ color: '#9A8A78' }} />
-        <input
-          type="text"
-          value={q}
-          onChange={(e) => { setQ(e.target.value); setCursor(0); }}
-          onKeyDown={(e) => {
-            if (e.key === 'ArrowDown') { e.preventDefault(); setCursor(Math.min(active + 1, matches.length - 1)); }
-            else if (e.key === 'ArrowUp') { e.preventDefault(); setCursor(Math.max(active - 1, 0)); }
-            else if (e.key === 'Enter' && matches[active]) { e.preventDefault(); pick(matches[active].id); }
-            else if (e.key === 'Escape') { setQ(''); }
-          }}
-          placeholder="Add a country"
-          aria-label="Add a country"
-          role="combobox"
-          aria-expanded={matches.length > 0}
-          aria-controls={`${idPrefix}-country-list`}
-          aria-activedescendant={matches[active] ? `${idPrefix}-country-${matches[active].id}` : undefined}
-          className="w-full py-2.5 pl-8 pr-3 text-[16px] lg:text-[14px] focus:outline-none"
-          style={{
-            border: '1px solid rgba(28,20,16,0.18)', borderRadius: '12px',
-            backgroundColor: '#FFFFFF', color: '#1C1410', fontFamily: "var(--font-brand), sans-serif",
-          }}
-          onFocus={(e) => { e.currentTarget.style.borderColor = '#1B3828'; }}
-          onBlur={(e) => { e.currentTarget.style.borderColor = 'rgba(28,20,16,0.18)'; }}
-        />
-      </div>
-      {q.trim() && (
-        <div id={`${idPrefix}-country-list`} role="listbox" aria-label="Countries" style={{ marginTop: 4 }}>
-          {matches.length === 0 ? (
-            <p style={{ margin: '4px 10px', fontSize: '11.5px', color: '#6E5F4E', fontFamily: "var(--font-brand), sans-serif" }}>
-              No country by that name
-            </p>
-          ) : matches.map((c, i) => (
-            <button
-              key={c.id}
-              id={`${idPrefix}-country-${c.id}`}
-              type="button"
-              role="option"
-              aria-selected={i === active}
-              onMouseDown={(e) => e.preventDefault()}
-              onClick={() => pick(c.id)}
-              onMouseEnter={() => setCursor(i)}
-              className="w-full flex items-center text-left focus:outline-none"
-              style={{
-                gap: 8, padding: '6px 10px', borderRadius: 9, border: 'none', cursor: 'pointer',
-                backgroundColor: i === active ? 'rgba(27,56,40,0.07)' : 'transparent',
-                fontFamily: "var(--font-brand), sans-serif", fontWeight: 600, fontSize: '12.5px', color: '#1C1410',
-              }}
-            >
-              {c.code ? <CircleFlag code={c.code} size={16} decorative /> : <Globe size={14} style={{ color: '#2A5A3C', flexShrink: 0 }} />}
-              <span className="flex-1 min-w-0" style={{ overflowWrap: 'anywhere' }}>{c.name}</span>
-              <span style={{ fontSize: '11px', fontWeight: 700, color: '#6B5F52', fontVariantNumeric: 'tabular-nums' }}>{c.count}</span>
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
 
 
 // ── Main page ──────────────────────────────────────────────────────────────
@@ -615,11 +520,6 @@ export default function ConferencesExploreClient() {
     return [...byId.values()].sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
   }, [preRegion]);
 
-  const userCountryId = userCountry ? countryIdentity(userCountry) : null;
-  const userCountryCount = useMemo(
-    () => (userCountryId ? countryFacets.find(c => c.id === userCountryId)?.count ?? 0 : 0),
-    [countryFacets, userCountryId],
-  );
 
   // Every chosen country resolved to a name and flag, facet or not (a country
   // from a shared link may have nothing under today's other filters).
@@ -632,12 +532,6 @@ export default function ConferencesExploreClient() {
   // The first chosen country leads the spotlight.
   const firstCountry = chosenFacets[0] ?? null;
 
-  // The near-you country has its own row, so it is not repeated as a chip or
-  // offered in the search.
-  const chipCountries = useMemo(
-    () => (nearId ? chosenFacets.filter(c => c.id !== nearId) : chosenFacets),
-    [chosenFacets, nearId],
-  );
   // EVERY country (owner, 27 Sep 2026: "when searching for a country it
   // doesn't appear"), not only those with conferences today, with how many
   // upcoming conferences each has. Non-UN places that conferences use are
@@ -658,10 +552,6 @@ export default function ConferencesExploreClient() {
     for (const f of countryFacets) if (!out.has(f.id)) out.set(f.id, { ...f, count: counts.get(f.id) ?? f.count });
     return [...out.values()];
   }, [conferences, countryFacets]);
-  const searchCountries = useMemo(
-    () => (nearId ? allCountries.filter(c => c.id !== nearId) : allCountries),
-    [allCountries, nearId],
-  );
   const countryIdSet = useMemo(() => new Set(countryIds), [countryIds]);
 
   // What the pill's Where suggests while typing: countries (any, ranked by
@@ -728,37 +618,43 @@ export default function ConferencesExploreClient() {
     });
     return () => { cancelled = true; };
   }, [spotTarget]);
-  const spotlightRows = useMemo(() => (spotTarget ? (regionSpots.key === spotTarget ? regionSpots.rows : []) : exploreSpots), [spotTarget, regionSpots, exploreSpots]);
-  const spotlightById = useMemo(() => new Map(spotlightRows.map(r => [r.conference_id, r])), [spotlightRows]);
+  const spotlightRows = useMemo(() => (spotTarget && regionSpots.key === spotTarget ? regionSpots.rows : []), [spotTarget, regionSpots]);
 
   const sorted = useMemo(() => {
     const copy = [...filtered];
     // Undated (TBD) conferences sort last in BOTH directions, and a null
     // start_date must never reach .localeCompare — see compareStartDate.
     copy.sort((a, b) => compareStartDate(a.start_date, b.start_date, dateSort === 'asc' ? 'asc' : 'desc'));
-    // Spotlight conferences first, in the row's order; they still had to pass
-    // every filter above, or they are simply not here.
-    if (spotlightById.size === 0) return copy;
-    const first = spotlightRows.map(r => copy.find(c => c.id === r.conference_id)).filter((c): c is Conference => !!c);
-    const firstIds = new Set(first.map(c => c.id));
-    return [...first, ...copy.filter(c => !firstIds.has(c.id))];
-  }, [filtered, dateSort, spotlightRows, spotlightById]);
+    return copy;
+  }, [filtered, dateSort]);
+
+  // The "In the Spotlight" section (27 Sep 2026, owner: "Explore should have a
+  // section for spotlights up top"). First the Country / Region Spotlight of
+  // the place in force (it must pass every filter, the place included), then
+  // the Explore Spotlight bookings, which pass every filter EXCEPT the place.
+  // Why they did not show before: the Explore row was REPLACED by the Country
+  // row as soon as a country was chosen, and the first-load near-you default
+  // chooses one for most visitors, so WORLDMUN, NS and TWMUN (all booked on
+  // 'explore') vanished; and a booking outside that country was filtered out.
+  const spotItems = useMemo<SpotlightItem[]>(() => {
+    const inPlace = new Map(filtered.map(c => [c.id, c]));
+    const anyPlace = new Map(preRegion.map(c => [c.id, c]));
+    const out: SpotlightItem[] = [];
+    const seen = new Set<string>();
+    const push = (r: FeaturedRow, conf: Conference | undefined) => {
+      if (!conf || seen.has(conf.id)) return;
+      seen.add(conf.id);
+      out.push({ conf, spot: r });
+    };
+    for (const r of spotlightRows) if (spotTarget) push(r, inPlace.get(r.conference_id));
+    for (const r of exploreSpots) push(r, anyPlace.get(r.conference_id));
+    return out;
+  }, [filtered, preRegion, spotlightRows, spotTarget, exploreSpots]);
 
   // One 'view' per session per spotlight booking that is on screen.
   useEffect(() => {
-    const shown = new Set(sorted.map(c => c.id));
-    for (const r of spotlightRows) if (shown.has(r.conference_id)) recordSpotlightView(r.booking_id);
-  }, [sorted, spotlightRows]);
-
-  // The Spotlight row: the booked spotlights that passed every filter, in the
-  // row's order. They lead the page in their own row, so the feed below
-  // carries the rest in date order.
-  const spotItems = useMemo<SpotlightItem[]>(() => {
-    const byId = new Map(filtered.map(c => [c.id, c]));
-    return spotlightRows
-      .map(r => { const conf = byId.get(r.conference_id); return conf ? { conf, spot: r } : null; })
-      .filter((x): x is SpotlightItem => !!x);
-  }, [filtered, spotlightRows]);
+    for (const s of spotItems) recordSpotlightView(s.spot.booking_id);
+  }, [spotItems]);
   const feed = useMemo(() => {
     if (spotItems.length === 0) return sorted;
     const ids = new Set(spotItems.map(s => s.conf.id));
@@ -866,116 +762,65 @@ export default function ConferencesExploreClient() {
   const formatSummary = formatFilter === 'in-person' ? 'In person' : formatFilter === 'online' ? 'Online' : null;
   const levelSummary = levelFilter === 'school' ? 'High school' : levelFilter === 'university' ? 'University' : null;
 
-  // Place rail counts come from everything but the place filter itself.
-  const continentCounts = useMemo(() => {
-    const out: Record<string, number> = {};
-    for (const c of preRegion) {
-      const id = countryIdentity(c.country);
-      for (const [key, ids] of Object.entries(continentIdentities)) if (ids.has(id)) { out[key] = (out[key] ?? 0) + 1; break; }
-    }
-    return out;
-  }, [preRegion, continentIdentities]);
-
-  const placeItems: PlaceItem[] = useMemo(() => {
-    const items: PlaceItem[] = [];
-    items.push({
-      key: 'everywhere', label: 'Everywhere', icon: Globe, count: preRegion.length,
-      active: !continentKey && countryIds.length === 0, onClick: clearRegion,
-    });
-    if (userCountry && nearId) {
-      items.push({
-        key: 'near', label: userCountry, kicker: 'Near you', code: userCode, icon: Navigation, count: userCountryCount,
-        active: nearActive, removable: true, onClick: toggleNear,
-      });
-    }
-    for (const k of REGION_ORDER) {
-      items.push({
-        key: `region-${k}`, label: CONTINENT_LABELS[k], icon: Globe, count: continentCounts[k] ?? 0,
-        active: continentKey === k, onClick: () => changeContinent(continentKey === k ? null : k),
-      });
-    }
-    // Chosen countries first, then the countries with the most conferences.
-    const seen = new Set<string>(nearId ? [nearId] : []);
-    const countries = [...chipCountries, ...countryFacets.slice(0, 12)];
-    for (const c of countries) {
-      if (seen.has(c.id)) continue;
-      seen.add(c.id);
-      const active = countryIdSet.has(c.id);
-      items.push({
-        key: `country-${c.id}`, label: c.name, code: c.code, icon: MapPin, count: c.count,
-        active, removable: true, onClick: () => (active ? removeCountry(c.id) : addCountry(c.id)),
-      });
-    }
-    return items;
-    // The handlers are plain closures over state already listed here.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [preRegion.length, continentKey, countryIds, userCountry, nearId, userCode, userCountryCount, nearActive, continentCounts, chipCountries, countryFacets, countryIdSet]);
 
   const facetsLoaded = facets.size > 0;
 
   const sectionGap = 'clamp(26px, 3vw, 40px)';
 
   return (
-    // Explore is back on the brand ground (owner, 26 Sep 2026: the white page
-    // "doesn't fit the brand"): ivory with the site's paper grain. White is
-    // for the cards and panels on top of it.
-    <div className="min-h-screen flex flex-col relative" style={{ backgroundColor: IVORY, overflowX: 'clip', fontFamily: FONT }}>
-      <div
-        className="pointer-events-none fixed inset-0 z-0"
-        aria-hidden
-        style={{ backgroundImage: GRAIN, backgroundRepeat: 'repeat', backgroundSize: '300px 300px', mixBlendMode: 'multiply', opacity: 0.18 }}
-      />
+    // The ivory ground, its paper grain, the server-rendered directory and the
+    // footer belong to page.tsx (so they are in the raw HTML); this is the
+    // interactive top of the page on that ground.
+    <div className="flex flex-col relative" style={{ minHeight: '100vh', fontFamily: FONT }}>
       <style>{`
         ${SCROLL_CSS}
         ${FEED_CSS}
-        .gv-explore-wrap { width: 100%; max-width: 1720px; margin: 0 auto; padding-left: 16px; padding-right: 16px; }
-        @media (min-width: 640px) { .gv-explore-wrap { padding-left: 24px; padding-right: 24px; } }
-        @media (min-width: 1024px) { .gv-explore-wrap { padding-left: 40px; padding-right: 40px; } }
         .gv-explore-grid { display: grid; grid-template-columns: minmax(0, 1fr); }
         @media (min-width: 600px) { .gv-explore-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
         @media (min-width: 960px) { .gv-explore-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
         @media (min-width: 1280px) { .gv-explore-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
         @media (min-width: 1600px) { .gv-explore-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); } }
-        .gv-explore-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
         .gv-explore-cta { display: inline-flex; align-items: center; justify-content: center; gap: 8px; text-decoration: none; white-space: nowrap;
-          padding: 13px 24px; font-size: 16px; box-shadow: 0 6px 16px rgba(27,56,40,0.24); transition: transform 160ms ease, box-shadow 160ms ease; }
+          padding: 10px 18px; font-size: 15px; box-shadow: 0 6px 16px rgba(27,56,40,0.22); transition: transform 160ms ease, box-shadow 160ms ease; }
         .gv-explore-cta:hover { transform: translateY(-1px); box-shadow: 0 10px 22px rgba(27,56,40,0.30); }
         .gv-explore-cta:active { transform: scale(0.98); }
         .gv-explore-cta-top { display: none; }
-        .gv-explore-cta-bottom { display: flex; width: 100%; margin-top: 10px; }
+        .gv-explore-cta-bottom { display: flex; width: 100%; margin-top: 10px; padding: 13px 24px; font-size: 16px; }
         @media (min-width: 640px) { .gv-explore-cta-top { display: inline-flex; } .gv-explore-cta-bottom { display: none; } }
         @media (prefers-reduced-motion: reduce) { .gv-explore-cta { transition: none; } .gv-explore-cta:hover, .gv-explore-cta:active { transform: none; } }
-        .gv-explore-band { display: flex; align-items: center; gap: 10px; overflow-x: auto; scrollbar-width: none; padding: 4px 2px; margin: 0 -2px; }
+        .gv-explore-band { display: flex; align-items: center; justify-content: safe center; gap: 10px; overflow-x: auto; scrollbar-width: none; padding: 4px 2px; margin: 0 -2px; }
         .gv-explore-band button { flex-shrink: 0; }
-        .gv-place-strip { flex-shrink: 0; }
-        .gv-band-rule { flex-shrink: 0; width: 1px; height: 26px; background-color: rgba(28,20,16,0.14); }
-        @media (min-width: 1024px) {
-          .gv-explore-band { overflow: visible; }
-          .gv-place-strip { flex: 1 1 0; min-width: 0; overflow-x: auto; scrollbar-width: none; padding: 4px 2px; }
-        }
+        @media (min-width: 1024px) { .gv-explore-band { overflow: visible; flex-wrap: wrap; } }
+        .gv-place-chips { list-style: none; margin: 10px auto 0; padding: 0; display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 8px; max-width: 880px; }
+        .gv-place-chip { display: inline-flex; align-items: center; gap: 8px; padding: 4px 4px 4px 6px; border-radius: 9999px; background: #FFFFFF;
+          box-shadow: 0 1px 2px rgba(27,56,40,0.08), 0 4px 12px rgba(27,56,40,0.08); border: 1px solid rgba(27,56,40,0.08); font-size: 13.5px; font-weight: 700; color: ${INK}; }
+        .gv-place-chip-x { width: 26px; height: 26px; border-radius: 9999px; border: none; cursor: pointer; display: inline-flex; align-items: center; justify-content: center;
+          background: #F3EFE6; color: ${INK}; transition: background-color 140ms ease; }
+        .gv-place-chip-x:hover { background: #E6DFCF; }
+        .gv-place-clear { background: none; border: none; cursor: pointer; padding: 0 6px; font-family: inherit; font-size: 13.5px; font-weight: 700; color: ${INK}; text-decoration: underline; text-underline-offset: 3px; }
       `}</style>
 
-      <div className="relative z-10 flex flex-col min-h-screen">
+      <div className="flex flex-col flex-1">
         <SiteNav hideLanguage />
 
-        {/* ── 1. Header: the title with "Organise your conference" beside it,
-             then the search pill. No count lines (owner, 27 Sep 2026). On
-             phones the button goes full width under the pill. ──────────── */}
-        <header className="gv-explore-wrap" style={{ paddingTop: 'clamp(10px, 1.2vw, 18px)' }}>
-          <div className="gv-explore-head">
-            <h1
-              style={{
-                fontWeight: 800, fontSize: 'clamp(24px, 2.6vw, 36px)', lineHeight: 1.06, letterSpacing: '-0.018em', color: INK, margin: 0,
-              }}
-            >
-              Explore Model UN <GoldWord>Conferences</GoldWord>
-            </h1>
-            <Link href="/conferences/new" className="gv-explore-cta gv-explore-cta-top focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] focus-visible:ring-offset-2" style={PRIMARY_BUTTON}>
-              <Plus size={18} strokeWidth={2.6} aria-hidden />
-              Organise your conference
-            </Link>
-          </div>
-          <div style={{ marginTop: 'clamp(10px, 1.2vw, 14px)' }}>
+        {/* ── 1. Header: the title centred, the search pill centred under it,
+             and the places chosen through the pill's Where as small removable
+             chips directly under the pill (owner, 27 Sep 2026: "Explore Model
+             UN Conferences should be in the middle"; "in the search you should
+             be able to add multiple countries"). No band behind anything. The
+             "Organise your conference" button sits on the sort / view line
+             below, so it never pulls the title off centre; on phones it goes
+             full width under the pill. ─────────────────────────────────── */}
+        <header className="gv-explore-wrap" style={{ paddingTop: 'clamp(12px, 1.4vw, 22px)', textAlign: 'center' }}>
+          <h1
+            style={{
+              fontWeight: 800, fontSize: 'clamp(24px, 2.6vw, 36px)', lineHeight: 1.06, letterSpacing: '-0.018em', color: INK, margin: 0,
+              textWrap: 'balance',
+            }}
+          >
+            Explore Model UN <GoldWord>Conferences</GoldWord>
+          </h1>
+          <div style={{ marginTop: 'clamp(10px, 1.2vw, 14px)', textAlign: 'left' }}>
             <SearchPill
               search={searchQuery} onSearch={setSearchQuery}
               continent={continentKey} continentLabels={CONTINENT_LABELS} onContinent={changeContinent}
@@ -992,18 +837,46 @@ export default function ConferencesExploreClient() {
               onPickCountry={pickCountry}
             />
           </div>
+          {(continentKey || chosenFacets.length > 0) && (
+            <ul aria-label="Chosen places" className="gv-place-chips">
+              {continentKey && continentLabel && (
+                <li>
+                  <PlaceChip label={continentLabel} icon={<Globe size={15} strokeWidth={2.2} aria-hidden />} onRemove={() => changeContinent(null)} />
+                </li>
+              )}
+              {chosenFacets.map(c => (
+                <li key={c.id}>
+                  <PlaceChip
+                    label={c.name}
+                    kicker={c.id === nearId ? 'Near you' : undefined}
+                    icon={c.code ? <CircleFlag code={c.code} size={20} decorative /> : <MapPin size={15} strokeWidth={2.2} aria-hidden />}
+                    onRemove={() => removeCountry(c.id)}
+                  />
+                </li>
+              ))}
+              {(continentKey ? 1 : 0) + chosenFacets.length > 1 && (
+                <li>
+                  <button type="button" onClick={clearRegion} className="gv-place-clear focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] rounded">
+                    Clear places
+                  </button>
+                </li>
+              )}
+            </ul>
+          )}
           <Link href="/conferences/new" className="gv-explore-cta gv-explore-cta-bottom focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] focus-visible:ring-offset-2" style={PRIMARY_BUTTON}>
             <Plus size={18} strokeWidth={2.6} aria-hidden />
             Organise your conference
           </Link>
         </header>
 
-        <main className="flex-1" style={{ paddingBottom: 'clamp(40px, 4vw, 64px)' }}>
-          {/* ── 2. One band: the filter chips, then the places ─────────────
-               Dates live in ONE place, the search pill's When (on phones,
-               where the pill shows only Where, a When chip stands in). */}
+        <main className="flex-1" style={{ paddingBottom: 'clamp(8px, 1vw, 16px)' }}>
+          {/* ── 2. One band: the filter chips, centred under the pill. Places
+               are no longer here (owner, 27 Sep 2026): they are added only
+               through the pill's Where. Dates live in ONE place, the pill's
+               When (on phones, where the pill shows only Where, a When chip
+               stands in). */}
           <div className="gv-explore-wrap" style={{ marginTop: 'clamp(8px, 1vw, 12px)' }}>
-            <div role="toolbar" aria-label="Filters and places" className="gv-explore-scroll gv-explore-band">
+            <div role="toolbar" aria-label="Filters" className="gv-explore-scroll gv-explore-band">
               <span className="contents sm:hidden">
                 <FilterChip
                   label="When" title="When" icon={CalendarDays}
@@ -1073,30 +946,18 @@ export default function ConferencesExploreClient() {
                   Clear all
                 </button>
               )}
-              <span aria-hidden className="gv-band-rule" />
-              <PlaceStrip
-                items={placeItems}
-                trailing={<AddCountryChip options={searchCountries} chosen={countryIdSet} onAdd={addCountry} />}
-              />
             </div>
           </div>
 
           {/* ── 6. The feed ───────────────────────────────────────────────── */}
           <section ref={resultsRef} className="gv-explore-wrap" aria-label="Conferences" style={{ marginTop: 6 }}>
-            {/* Sort and view only; the count lines are gone (owner, 27 Sep 2026). */}
-            <div className="flex items-center justify-end" style={{ gap: 14, marginBottom: 4 }}>
-              {loading && <span className="sr-only" role="status">Loading conferences</span>}
-              <SortMenu sort={dateSort} onChange={setDateSort} />
-              <ViewToggle view={view} onChange={changeView} />
-            </div>
-
             {/* Spotlights first, in their own formation: wider feature cards
                 with the gold edge, glow and tag. Not repeated below. */}
             {!loading && spotItems.length > 0 && (
-              <section aria-label="In the Spotlight" style={{ marginBottom: 'clamp(14px, 1.6vw, 20px)' }}>
-                <p style={{ margin: '0 0 8px', fontSize: 16, fontWeight: 800, color: INK }}>
+              <section aria-labelledby="gv-explore-spotlight" style={{ marginBottom: 'clamp(22px, 2.4vw, 34px)' }}>
+                <h2 id="gv-explore-spotlight" style={{ margin: '0 0 12px', fontSize: 'clamp(19px, 1.7vw, 24px)', fontWeight: 800, color: INK, letterSpacing: '-0.012em' }}>
                   In the <GoldWord>Spotlight</GoldWord>
-                </p>
+                </h2>
                 <SpotlightRow
                   items={spotItems}
                   sponsoredIds={sponsoredIds}
@@ -1109,6 +970,17 @@ export default function ConferencesExploreClient() {
                 />
               </section>
             )}
+
+            {/* Sort and view only; the count lines are gone (owner, 27 Sep 2026). */}
+            <div className="flex items-center justify-end" style={{ gap: 14, marginBottom: 8 }}>
+              {loading && <span className="sr-only" role="status">Loading conferences</span>}
+              <SortMenu sort={dateSort} onChange={setDateSort} />
+              <ViewToggle view={view} onChange={changeView} />
+              <Link href="/conferences/new" className="gv-explore-cta gv-explore-cta-top focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] focus-visible:ring-offset-2" style={PRIMARY_BUTTON}>
+                <Plus size={17} strokeWidth={2.6} aria-hidden />
+                Organise your conference
+              </Link>
+            </div>
 
             {loading ? (
               view === 'list' ? (
@@ -1199,8 +1071,6 @@ export default function ConferencesExploreClient() {
             </section>
           )}
         </main>
-
-        <SiteFooter />
       </div>
 
       {spotlightDialog && <ConferenceSpotlightDialog rows={spotlightDialog} onClose={() => setSpotlightDialog(null)} />}
@@ -1208,32 +1078,30 @@ export default function ConferencesExploreClient() {
   );
 }
 
-/** The last chip of the place strip: type to add any country with conferences. */
-function AddCountryChip({ options, chosen, onAdd }: {
-  options: CountryFacet[];
-  chosen: ReadonlySet<string>;
-  onAdd: (id: string) => void;
+
+/** A place chosen through the pill's Where: flag (or globe), name, and an X. */
+function PlaceChip({ label, kicker, icon, onRemove }: {
+  label: string;
+  kicker?: string;
+  icon: React.ReactNode;
+  onRemove: () => void;
 }) {
-  const [open, setOpen] = useState(false);
-  const btn = useRef<HTMLButtonElement>(null);
-  const close = useCallback(() => { setOpen(false); btn.current?.focus(); }, []);
   return (
-    <>
+    <span className="gv-place-chip">
+      <span aria-hidden style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 20, height: 20, color: FOREST }}>{icon}</span>
+      <span style={{ overflowWrap: 'anywhere', textAlign: 'left' }}>
+        {kicker && <span style={{ fontWeight: 600, color: INK_SOFT }}>{kicker}: </span>}
+        {label}
+      </span>
       <button
-        ref={btn}
         type="button"
-        aria-haspopup="dialog"
-        aria-expanded={open}
-        onClick={() => setOpen(o => !o)}
-        className="focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] focus-visible:ring-offset-2"
-        style={chipStyle(false)}
+        onClick={onRemove}
+        aria-label={`Remove ${label}`}
+        title={`Remove ${label}`}
+        className="gv-place-chip-x focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]"
       >
-        <Plus size={16} strokeWidth={2.4} aria-hidden />
-        Another country
+        <X size={14} strokeWidth={2.6} aria-hidden />
       </button>
-      <ChipLayer open={open} anchor={btn} onClose={close} title="Add a country">
-        <CountrySearch options={options} chosen={chosen} onAdd={(id) => { onAdd(id); close(); }} idPrefix="gv-explore-add" />
-      </ChipLayer>
-    </>
+    </span>
   );
 }
