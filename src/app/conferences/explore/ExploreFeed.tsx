@@ -9,6 +9,7 @@
 //                    flag + city, open roles, price) or as the photo-card grid
 // Names are never cut: the short form large, the full name beneath, wrapping.
 
+import { useState } from 'react';
 import Link from 'next/link';
 import { DoorOpen, CalendarDays, MapPin, Monitor, Globe, School, GraduationCap, Check, CircleSlash } from 'lucide-react';
 import { LogoDisc } from '@/components/LogoDisc';
@@ -424,7 +425,7 @@ function OpenRoles({ facet, facetsLoaded }: { facet?: ConferenceFacet; facetsLoa
 }
 
 function FeedRow({
-  conf, facet, facetsLoaded, creditSponsored, applied, member,
+  conf, facet, facetsLoaded, creditSponsored, applied, member, spotlight = false,
 }: {
   conf: ExploreConference;
   facet?: ConferenceFacet;
@@ -432,6 +433,7 @@ function FeedRow({
   creditSponsored: boolean;
   applied: boolean;
   member: boolean;
+  spotlight?: boolean;
 }) {
   const label = conferenceAcronymLabel(conf) || conf.full_name;
   const showFull = !!conf.full_name && conf.full_name.trim() !== label.trim();
@@ -448,6 +450,7 @@ function FeedRow({
         <h3 className="flex items-center" style={{ margin: 0, gap: 6, fontSize: 18, fontWeight: 800, lineHeight: 1.2, color: INK, letterSpacing: '-0.005em' }}>
           <span style={{ minWidth: 0, overflowWrap: 'anywhere' }}>{label}</span>
           <VerifiedCheck verified={!!conf.is_verified} size={17} title="Verified conference" />
+          {spotlight && <SpotlightTag size="sm" style={{ marginInlineStart: 4 }} />}
         </h3>
         {showFull && (
           <p style={{ margin: '2px 0 0', fontSize: 13.5, fontWeight: 500, lineHeight: 1.35, color: INK_SOFT, overflowWrap: 'anywhere' }}>{conf.full_name}</p>
@@ -491,7 +494,7 @@ function FeedRow({
 }
 
 export function FeedRows({
-  items, facets, facetsLoaded, sponsoredIds, appliedIds, isMember,
+  items, facets, facetsLoaded, sponsoredIds, appliedIds, isMember, spotlights,
 }: {
   items: ExploreConference[];
   facets: ReadonlyMap<string, ConferenceFacet>;
@@ -499,7 +502,30 @@ export function FeedRows({
   sponsoredIds: ReadonlySet<string>;
   appliedIds: ReadonlySet<string>;
   isMember: (c: ExploreConference) => boolean;
+  /** Spotlight rows (27 Sep 2026): each is its own card with the small
+   *  "Spotlight" tag and the grid card's gold edge and soft glow; opening one
+   *  records the spotlight click. */
+  spotlights?: { spotFor: (c: ExploreConference) => FeaturedRow | undefined; onOpen: (spot: FeaturedRow) => void };
 }) {
+  if (spotlights) {
+    return (
+      <div className="flex flex-col" style={{ gap: 12 }}>
+        {items.map(c => (
+          <SpotlightFeedRow key={c.id} onOpen={() => { const sp = spotlights.spotFor(c); if (sp) spotlights.onOpen(sp); }}>
+            <FeedRow
+              conf={c}
+              facet={facets.get(c.id)}
+              facetsLoaded={facetsLoaded}
+              creditSponsored={sponsoredIds.has(c.id)}
+              applied={appliedIds.has(c.id)}
+              member={isMember(c)}
+              spotlight
+            />
+          </SpotlightFeedRow>
+        ))}
+      </div>
+    );
+  }
   return (
     <div style={{ ...SOFT_CARD }}>
       {items.map(c => (
@@ -513,6 +539,21 @@ export function FeedRows({
           member={isMember(c)}
         />
       ))}
+    </div>
+  );
+}
+
+/** One spotlight row's card: white, the gold edge and soft gold glow. */
+function SpotlightFeedRow({ children, onOpen }: { children: React.ReactNode; onOpen: () => void }) {
+  const [hover, setHover] = useState(false);
+  return (
+    <div
+      onClickCapture={onOpen}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      style={{ borderRadius: 20, background: '#FFFFFF', boxShadow: hover ? SPOTLIGHT_GLOW_HOVER : SPOTLIGHT_GLOW, overflow: 'hidden', transition: 'box-shadow 200ms ease' }}
+    >
+      {children}
     </div>
   );
 }

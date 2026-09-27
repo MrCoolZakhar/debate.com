@@ -122,8 +122,10 @@ export function SearchPill({
   dateFilter, dateFrom, dateTo, onDate, whenLabel, whenOptions,
   roles, onToggleRole, onClearRoles,
   onSubmit,
-  countrySuggestions = [], conferenceSuggestions = [], onPickCountry,
+  countrySuggestions = [], conferenceSuggestions = [], onPickCountry, countryLimitReached = false,
 }: {
+  /** Five countries are chosen: country suggestions show but cannot be added. */
+  countryLimitReached?: boolean;
   /** Countries matching the typed text (the page ranks them). */
   countrySuggestions?: SuggestCountry[];
   /** Conferences matching the typed text. */
@@ -154,6 +156,7 @@ export function SearchPill({
   const active = cursor >= 0 && cursor < suggestCount ? cursor : -1;
   const pickAt = (i: number) => {
     if (i < countrySuggestions.length) {
+      if (countryLimitReached) return;
       onPickCountry?.(countrySuggestions[i].id);
     } else {
       const c = conferenceSuggestions[i - countrySuggestions.length];
@@ -186,7 +189,9 @@ export function SearchPill({
 
   // The chosen places show as chips under the pill, so the field itself only
   // invites the next one (several countries can be added one after another).
-  const whereSummary = continent || chosenCountryNames.length > 0
+  const whereSummary = countryLimitReached
+    ? 'Up to 5 countries'
+    : continent || chosenCountryNames.length > 0
     ? 'Add another country'
     : 'Search conferences or places';
   const whenSummary = whenLabel
@@ -216,7 +221,8 @@ export function SearchPill({
       aria-label="Search conferences"
       className="flex items-center w-full"
       style={{
-        maxWidth: 880, margin: '0 auto', backgroundColor: '#FFFFFF', borderRadius: 9999,
+        // Hugs the left edge of the content (27 Sep 2026), at most 880px wide.
+        maxWidth: 880, margin: 0, backgroundColor: '#FFFFFF', borderRadius: 9999,
         boxShadow: '0 1px 2px rgba(27,56,40,0.08), 0 10px 28px rgba(27,56,40,0.12)',
         border: '1px solid rgba(27,56,40,0.08)', padding: 6,
       }}
@@ -241,6 +247,9 @@ export function SearchPill({
             else if (e.key === 'ArrowUp' && typed && suggestCount > 0) { e.preventDefault(); setCursor(Math.max(active - 1, -1)); }
             else if (e.key === 'Enter') {
               if (open === 'where' && typed && active >= 0) { e.preventDefault(); pickAt(active); }
+              // Enter on typed text with nothing highlighted adds the FIRST
+              // country match; with no country match it is the plain search.
+              else if (typed && countrySuggestions.length > 0 && !countryLimitReached) { e.preventDefault(); pickAt(0); }
               else { setOpen(null); onSubmit(); }
             }
           }}
@@ -287,14 +296,19 @@ export function SearchPill({
         aria-label="Show conferences"
         title="Show conferences"
         className="focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[#1B3828]"
+        // The landing page hero's search button (27 Sep 2026): the pale gold
+        // disc and the dark ink magnifier, lighter gold with a 1px lift on
+        // hover, so the forest Organise button is the one strong green here.
         style={{
-          width: 48, height: 48, borderRadius: 9999, flexShrink: 0, marginLeft: 6,
+          width: 48, height: 48, borderRadius: 9999, flexShrink: 0, marginLeft: 6, padding: 0,
           display: 'inline-flex', alignItems: 'center', justifyContent: 'center', border: 'none', cursor: 'pointer',
-          background: 'linear-gradient(135deg,#1B3828 0%,#2A5A3C 60%,#1E4A31 100%)', color: '#FFFFFF',
-          boxShadow: '0 4px 12px rgba(27,56,40,0.28)',
+          backgroundColor: '#EED98A', color: '#14100B',
+          transition: 'transform 160ms ease, background-color 160ms ease',
         }}
+        onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-1px)'; e.currentTarget.style.backgroundColor = '#F3E3A1'; }}
+        onMouseLeave={(e) => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.backgroundColor = '#EED98A'; }}
       >
-        <Search size={19} strokeWidth={2.6} aria-hidden />
+        <Search size={20} strokeWidth={2.75} aria-hidden />
       </button>
 
       {open && pos && (
@@ -305,6 +319,9 @@ export function SearchPill({
                 {countrySuggestions.length > 0 && (
                   <>
                     <p style={{ margin: '0 0 6px', fontSize: 13, fontWeight: 800, color: INK }}>Countries</p>
+                    {countryLimitReached && (
+                      <p style={{ margin: '0 0 6px', fontSize: 13, color: INK_SOFT }}>Remove a country to add another</p>
+                    )}
                     {countrySuggestions.map((c, i) => (
                       <button
                         key={c.id}
@@ -315,8 +332,9 @@ export function SearchPill({
                         onMouseDown={(e) => e.preventDefault()}
                         onMouseEnter={() => setCursor(i)}
                         onClick={() => pickAt(i)}
+                        aria-disabled={countryLimitReached || undefined}
                         className="w-full flex items-center focus:outline-none"
-                        style={{ gap: 12, padding: '7px 10px', borderRadius: 14, border: 'none', cursor: 'pointer', textAlign: 'left', backgroundColor: i === active ? '#EEF3EC' : 'transparent', fontFamily: FONT }}
+                        style={{ gap: 12, padding: '7px 10px', borderRadius: 14, border: 'none', cursor: countryLimitReached ? 'default' : 'pointer', textAlign: 'left', backgroundColor: i === active && !countryLimitReached ? '#EEF3EC' : 'transparent', fontFamily: FONT, opacity: countryLimitReached ? 0.5 : 1 }}
                       >
                         {c.code ? <CircleFlag code={c.code} size={32} decorative /> : <span style={{ ...RIM_DISC, width: 32, height: 32 }}><Globe size={15} aria-hidden /></span>}
                         <span style={{ flex: 1, minWidth: 0, fontSize: 14.5, fontWeight: 700, color: INK, overflowWrap: 'anywhere' }}>{c.name}</span>
@@ -565,8 +583,9 @@ export type ExploreView = 'grid' | 'list';
 
 export function ViewToggle({ view, onChange }: { view: ExploreView; onChange: (v: ExploreView) => void }) {
   const options: { key: ExploreView; icon: typeof LayoutGrid; label: string }[] = [
-    { key: 'list', icon: Rows3, label: 'List view' },
+    // The grid is the default, so its icon comes first (27 Sep 2026).
     { key: 'grid', icon: LayoutGrid, label: 'Grid view' },
+    { key: 'list', icon: Rows3, label: 'List view' },
   ];
   return (
     <div

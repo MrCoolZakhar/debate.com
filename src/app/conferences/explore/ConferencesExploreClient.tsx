@@ -55,7 +55,7 @@ import {
   type DateTab, type ExploreView, type SuggestConference, type SuggestCountry,
 } from './ExploreChrome';
 import {
-  FEED_CSS, FeedRows, FeedSkeleton, MonthHeader, SpotlightRow, groupByMonth,
+  FEED_CSS, FeedRows, FeedSkeleton, MonthHeader, groupByMonth,
   type ExploreConference, type SpotlightItem,
 } from './ExploreFeed';
 import { isListedConference } from '@/lib/publicConferences';
@@ -129,6 +129,8 @@ interface CountryFacet {
 
 /** A conference is "worth travelling for" at this size. */
 const BIG_CONFERENCE_DELEGATES = 500;
+/** The most countries the Where field adds as pills (27 Sep 2026). */
+const MAX_PLACE_COUNTRIES = 5;
 const BIG_CONFERENCE_LIMIT = 4;
 
 
@@ -247,10 +249,13 @@ export default function ConferencesExploreClient() {
   );
   function changeContinent(k: string | null) {
     setContinent(k);
+    // A region replaces any countries (27 Sep 2026).
+    if (k) setCountryIds([]);
     setRegionTouched(true);
   }
   function addCountry(id: string) {
-    setCountryIds(prev => (prev.includes(id) ? prev : [...prev, id]));
+    // At most MAX_PLACE_COUNTRIES countries (27 Sep 2026).
+    setCountryIds(prev => (prev.includes(id) || prev.length >= MAX_PLACE_COUNTRIES ? prev : [...prev, id]));
     setRegionTouched(true);
   }
   function removeCountry(id: string) {
@@ -344,11 +349,12 @@ export default function ConferencesExploreClient() {
   }, [searchQuery, formatFilter, levelFilter, roleFilter, priceFilter, dateFilter, dateFrom, dateTo, dateSort, continent, countryIds, sponsoredFilter]);
 
   // Near you (27 Sep 2026, owner: "the country that the IP is geographically"):
-  // the visitor's country from /api/geo (Vercel's IP-country header, read on
-  // our own server, no third party), asked ONCE per page load. Only when that
-  // says nothing (localhost, a missing header) does it fall back to the
-  // signed-in person's profile nationality, then the browser locale's region.
-  // Filled in the effect under useAuth below.
+  // where the visitor IS, never where they are from (Peter, in Indonesia, was
+  // shown Slovakia, his nationality). The country comes from /api/geo
+  // (Vercel's IP-country header, read on our own server, no third party),
+  // asked ONCE per page load. Only when that says nothing (localhost, a
+  // missing header) does it fall back to the browser locale's region; with
+  // neither there is no near-you. The profile nationality is never used.
   const [userCountry, setUserCountry] = useState<string | null>(null);
   // undefined = still asking; null = /api/geo gave no country.
   const [geoCountry, setGeoCountry] = useState<string | null | undefined>(undefined);
@@ -411,32 +417,14 @@ export default function ConferencesExploreClient() {
     return () => { cancelled = true; };
   }, [authLoading, user, session]);
 
-  // Near you: the IP country when /api/geo knows it; otherwise the profile
-  // nationality for a signed-in person (their locale when it is empty), the
-  // locale's region for a visitor.
+  // Near you: the IP country when /api/geo knows it, else the browser
+  // locale's region, else none. Deferred a tick (never set in the effect body).
   useEffect(() => {
     if (geoCountry === undefined) return;
-    if (geoCountry) { setUserCountry(geoCountry); return; }
-    if (authLoading) return;
     let cancelled = false;
-    const done = (name: string | null) => { if (!cancelled) setUserCountry(name); };
-    if (!user || !session) {
-      void Promise.resolve().then(() => done(localeCountry()));
-    } else {
-      void (async () => {
-        try {
-          const { data } = await getAuthedClient(session.access_token)
-            .from('profiles').select('nationality').eq('id', user.id).maybeSingle();
-          const raw = (data as { nationality?: string | null } | null)?.nationality?.trim() ?? '';
-          const name = raw ? (getCountryByName(raw)?.name ?? countryNameFromCode(raw)) : null;
-          done(name ?? localeCountry());
-        } catch {
-          done(localeCountry());
-        }
-      })();
-    }
+    void Promise.resolve().then(() => { if (!cancelled) setUserCountry(geoCountry || localeCountry()); });
     return () => { cancelled = true; };
-  }, [geoCountry, authLoading, user, session]);
+  }, [geoCountry]);
 
   // Owner check rides on the conference rows themselves (organizer_id).
   const isMember = useCallback(
@@ -716,7 +704,8 @@ export default function ConferencesExploreClient() {
   const toggleNear = () => { if (nearId) { if (nearActive) removeCountry(nearId); else addCountry(nearId); } };
 
   // Grid: one column on a phone, two from 600, three from 960, four from 1280,
-  // five from 1600 (CLAUDE.md §8, "The Explore page"). Plain CSS (below).
+  // and never more than four (27 Sep 2026: two full rows of four on landing;
+  // CLAUDE.md §8, "The Explore page"). Plain CSS (below).
   const GRID = 'gv-explore-grid';
   const GRID_GAP: React.CSSProperties = { columnGap: 'clamp(14px, 1.3vw, 20px)', rowGap: 'clamp(16px, 1.5vw, 22px)' };
 
@@ -779,24 +768,36 @@ export default function ConferencesExploreClient() {
         @media (min-width: 600px) { .gv-explore-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
         @media (min-width: 960px) { .gv-explore-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
         @media (min-width: 1280px) { .gv-explore-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
-        @media (min-width: 1600px) { .gv-explore-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); } }
         .gv-explore-cta { display: inline-flex; align-items: center; justify-content: center; gap: 8px; text-decoration: none; white-space: nowrap;
           padding: 10px 18px; font-size: 15px; box-shadow: 0 6px 16px rgba(27,56,40,0.22); transition: transform 160ms ease, box-shadow 160ms ease; }
         .gv-explore-cta:hover { transform: translateY(-1px); box-shadow: 0 10px 22px rgba(27,56,40,0.30); }
         .gv-explore-cta:active { transform: scale(0.98); }
         .gv-explore-cta-top { display: none; }
+        .gv-explore-topline { display: flex; align-items: center; gap: 16px; }
+        .gv-explore-topline > .gv-explore-pillwrap { flex: 1 1 auto; min-width: 0; max-width: 880px; }
+        .gv-explore-topline > .gv-explore-cta-top { margin-left: auto; flex-shrink: 0; }
+        .gv-explore-toolbar { display: flex; flex-direction: column; gap: 8px; }
+        .gv-explore-toolbar > .gv-explore-band { flex: 1 1 auto; min-width: 0; }
+        .gv-explore-sortview { display: flex; align-items: center; justify-content: flex-end; gap: 14px; flex-shrink: 0; }
+        @media (min-width: 640px) { .gv-explore-toolbar { flex-direction: row; align-items: center; gap: 16px; } }
         .gv-explore-cta-bottom { display: flex; width: 100%; margin-top: 10px; padding: 13px 24px; font-size: 16px; }
         @media (min-width: 640px) { .gv-explore-cta-top { display: inline-flex; } .gv-explore-cta-bottom { display: none; } }
         @media (prefers-reduced-motion: reduce) { .gv-explore-cta { transition: none; } .gv-explore-cta:hover, .gv-explore-cta:active { transform: none; } }
-        .gv-explore-band { display: flex; align-items: center; justify-content: safe center; gap: 10px; overflow-x: auto; scrollbar-width: none; padding: 4px 2px; margin: 0 -2px; }
+        .gv-explore-band { display: flex; align-items: center; justify-content: flex-start; gap: 10px; overflow-x: auto; scrollbar-width: none; padding: 4px 2px; margin: 0 -2px; }
         .gv-explore-band button { flex-shrink: 0; }
         @media (min-width: 1024px) { .gv-explore-band { overflow: visible; flex-wrap: wrap; } }
-        .gv-place-chips { list-style: none; margin: 10px auto 0; padding: 0; display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 8px; max-width: 880px; }
-        .gv-place-chip { display: inline-flex; align-items: center; gap: 8px; padding: 4px 4px 4px 6px; border-radius: 9999px; background: #FFFFFF;
+        /* The chosen places, left-aligned under the pill's Where (27 Sep 2026).
+           The remove X is a small round button on the pill's top right corner,
+           shown on hover or keyboard focus, always on touch screens. */
+        .gv-place-chips { list-style: none; margin: 12px 0 0; padding: 0 0 0 14px; display: flex; flex-wrap: wrap; justify-content: flex-start; align-items: center; gap: 10px; max-width: 880px; }
+        .gv-place-chip { position: relative; display: inline-flex; align-items: center; gap: 8px; padding: 6px 14px 6px 8px; border-radius: 9999px; background: #FFFFFF;
           box-shadow: 0 1px 2px rgba(27,56,40,0.08), 0 4px 12px rgba(27,56,40,0.08); border: 1px solid rgba(27,56,40,0.08); font-size: 13.5px; font-weight: 700; color: ${INK}; }
-        .gv-place-chip-x { width: 26px; height: 26px; border-radius: 9999px; border: none; cursor: pointer; display: inline-flex; align-items: center; justify-content: center;
-          background: #F3EFE6; color: ${INK}; transition: background-color 140ms ease; }
-        .gv-place-chip-x:hover { background: #E6DFCF; }
+        .gv-place-chip-x { position: absolute; top: -7px; right: -7px; width: 22px; height: 22px; border-radius: 9999px; border: 1.5px solid #FFFFFF; cursor: pointer;
+          display: inline-flex; align-items: center; justify-content: center; background: ${INK}; color: #FFFFFF;
+          box-shadow: 0 2px 6px rgba(28,20,16,0.25); opacity: 0; transform: scale(0.85); transition: opacity 140ms ease, transform 140ms ease; }
+        .gv-place-chip:hover .gv-place-chip-x, .gv-place-chip:focus-within .gv-place-chip-x { opacity: 1; transform: scale(1); }
+        @media (hover: none) { .gv-place-chip-x { opacity: 1; transform: scale(1); } }
+        @media (prefers-reduced-motion: reduce) { .gv-place-chip-x { transition: none; } }
         .gv-place-clear { background: none; border: none; cursor: pointer; padding: 0 6px; font-family: inherit; font-size: 13.5px; font-weight: 700; color: ${INK}; text-decoration: underline; text-underline-offset: 3px; }
       `}</style>
 
@@ -811,31 +812,41 @@ export default function ConferencesExploreClient() {
              "Organise your conference" button sits on the sort / view line
              below, so it never pulls the title off centre; on phones it goes
              full width under the pill. ─────────────────────────────────── */}
-        <header className="gv-explore-wrap" style={{ paddingTop: 'clamp(12px, 1.4vw, 22px)', textAlign: 'center' }}>
+        <header className="gv-explore-wrap" style={{ paddingTop: 'clamp(12px, 1.4vw, 22px)' }}>
+          {/* 27 Sep 2026: the title larger and on the left with the content;
+              the pill hugging the left edge with "Organise your conference"
+              on the same line at the right; the chosen places under the pill. */}
           <h1
             style={{
-              fontWeight: 800, fontSize: 'clamp(24px, 2.6vw, 36px)', lineHeight: 1.06, letterSpacing: '-0.018em', color: INK, margin: 0,
+              fontWeight: 800, fontSize: 'clamp(30px, 3.4vw, 48px)', lineHeight: 1.06, letterSpacing: '-0.02em', color: INK, margin: 0,
               textWrap: 'balance',
             }}
           >
             Explore Model UN <GoldWord>Conferences</GoldWord>
           </h1>
-          <div style={{ marginTop: 'clamp(10px, 1.2vw, 14px)', textAlign: 'left' }}>
+          <div className="gv-explore-topline" style={{ marginTop: 'clamp(12px, 1.4vw, 18px)' }}>
+            <div className="gv-explore-pillwrap">
             <SearchPill
-              search={searchQuery} onSearch={setSearchQuery}
-              continent={continentKey} continentLabels={CONTINENT_LABELS} onContinent={changeContinent}
-              nearCountry={userCountry} nearCode={userCode} nearActive={nearActive} onToggleNear={toggleNear}
-              chosenCountryNames={chosenFacets.map(c => c.name)}
-              dateFilter={dateFilter} dateFrom={dateFrom} dateTo={dateTo}
-              onDate={pickBucket}
-              whenLabel={thisWeek ? 'This week' : null}
-              whenOptions={dateTabs}
-              roles={roleFilter} onToggleRole={toggleRole} onClearRoles={() => setRoleFilter(new Set())}
-              onSubmit={scrollToResults}
-              countrySuggestions={countrySuggestions}
-              conferenceSuggestions={conferenceSuggestions}
-              onPickCountry={pickCountry}
-            />
+                search={searchQuery} onSearch={setSearchQuery}
+                continent={continentKey} continentLabels={CONTINENT_LABELS} onContinent={changeContinent}
+                nearCountry={userCountry} nearCode={userCode} nearActive={nearActive} onToggleNear={toggleNear}
+                chosenCountryNames={chosenFacets.map(c => c.name)}
+                dateFilter={dateFilter} dateFrom={dateFrom} dateTo={dateTo}
+                onDate={pickBucket}
+                whenLabel={thisWeek ? 'This week' : null}
+                whenOptions={dateTabs}
+                roles={roleFilter} onToggleRole={toggleRole} onClearRoles={() => setRoleFilter(new Set())}
+                onSubmit={scrollToResults}
+                countrySuggestions={countrySuggestions}
+                conferenceSuggestions={conferenceSuggestions}
+                onPickCountry={pickCountry}
+                countryLimitReached={!continentKey && countryIds.length >= MAX_PLACE_COUNTRIES}
+              />
+            </div>
+            <Link href="/conferences/new" className="gv-explore-cta gv-explore-cta-top focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] focus-visible:ring-offset-2" style={PRIMARY_BUTTON}>
+              <Plus size={17} strokeWidth={2.6} aria-hidden />
+              Organise your conference
+            </Link>
           </div>
           {(continentKey || chosenFacets.length > 0) && (
             <ul aria-label="Chosen places" className="gv-place-chips">
@@ -854,13 +865,11 @@ export default function ConferencesExploreClient() {
                   />
                 </li>
               ))}
-              {(continentKey ? 1 : 0) + chosenFacets.length > 1 && (
-                <li>
-                  <button type="button" onClick={clearRegion} className="gv-place-clear focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] rounded">
-                    Clear places
-                  </button>
-                </li>
-              )}
+              <li>
+                <button type="button" onClick={clearRegion} className="gv-place-clear focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] rounded">
+                  Clear
+                </button>
+              </li>
             </ul>
           )}
           <Link href="/conferences/new" className="gv-explore-cta gv-explore-cta-bottom focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] focus-visible:ring-offset-2" style={PRIMARY_BUTTON}>
@@ -875,7 +884,7 @@ export default function ConferencesExploreClient() {
                through the pill's Where. Dates live in ONE place, the pill's
                When (on phones, where the pill shows only Where, a When chip
                stands in). */}
-          <div className="gv-explore-wrap" style={{ marginTop: 'clamp(8px, 1vw, 12px)' }}>
+          <div className="gv-explore-wrap gv-explore-toolbar" style={{ marginTop: 'clamp(10px, 1.2vw, 14px)', marginBottom: 10 }}>
             <div role="toolbar" aria-label="Filters" className="gv-explore-scroll gv-explore-band">
               <span className="contents sm:hidden">
                 <FilterChip
@@ -947,41 +956,16 @@ export default function ConferencesExploreClient() {
                 </button>
               )}
             </div>
+            {/* Sort and view, on the chips' line (their own short line on phones) */}
+            <div className="gv-explore-sortview">
+              {loading && <span className="sr-only" role="status">Loading conferences</span>}
+              <SortMenu sort={dateSort} onChange={setDateSort} />
+              <ViewToggle view={view} onChange={changeView} />
+            </div>
           </div>
 
           {/* ── 6. The feed ───────────────────────────────────────────────── */}
           <section ref={resultsRef} className="gv-explore-wrap" aria-label="Conferences" style={{ marginTop: 6 }}>
-            {/* Spotlights first, in their own formation: wider feature cards
-                with the gold edge, glow and tag. Not repeated below. */}
-            {!loading && spotItems.length > 0 && (
-              <section aria-labelledby="gv-explore-spotlight" style={{ marginBottom: 'clamp(22px, 2.4vw, 34px)' }}>
-                <h2 id="gv-explore-spotlight" style={{ margin: '0 0 12px', fontSize: 'clamp(19px, 1.7vw, 24px)', fontWeight: 800, color: INK, letterSpacing: '-0.012em' }}>
-                  In the <GoldWord>Spotlight</GoldWord>
-                </h2>
-                <SpotlightRow
-                  items={spotItems}
-                  sponsoredIds={sponsoredIds}
-                  appliedIds={appliedIds}
-                  isMember={isMember}
-                  hoveredId={hoveredId}
-                  onHover={setHoveredId}
-                  onLeave={() => setHoveredId(null)}
-                  onOpen={(spot) => recordSpotlightClick(spot.booking_id)}
-                />
-              </section>
-            )}
-
-            {/* Sort and view only; the count lines are gone (owner, 27 Sep 2026). */}
-            <div className="flex items-center justify-end" style={{ gap: 14, marginBottom: 8 }}>
-              {loading && <span className="sr-only" role="status">Loading conferences</span>}
-              <SortMenu sort={dateSort} onChange={setDateSort} />
-              <ViewToggle view={view} onChange={changeView} />
-              <Link href="/conferences/new" className="gv-explore-cta gv-explore-cta-top focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] focus-visible:ring-offset-2" style={PRIMARY_BUTTON}>
-                <Plus size={17} strokeWidth={2.6} aria-hidden />
-                Organise your conference
-              </Link>
-            </div>
-
             {loading ? (
               view === 'list' ? (
                 <div aria-busy="true" aria-label="Loading conferences"><FeedSkeleton /></div>
@@ -1016,13 +1000,32 @@ export default function ConferencesExploreClient() {
                 )}
               </div>
             ) : view === 'grid' ? (
-              // The grid: one continuous run of compact cards in date order,
-              // no month breaks, so every row is full.
+              // The grid: the spotlights are its FIRST cards, the same size as
+              // the rest with the gold edge, glow and tag (27 Sep 2026: no big
+              // row pushing results below the fold); then one continuous run
+              // in the current sort, no month breaks, so every row is full.
               <div className={GRID} style={GRID_GAP}>
+                {spotItems.map(s => cardFor(s.conf, s.spot))}
                 {displayed.map(conf => cardFor(conf))}
               </div>
             ) : (
               <div className="flex flex-col" style={{ gap: 'clamp(8px, 1vw, 14px)' }}>
+                {/* Spotlights first, as rows with the tag, gold edge and glow;
+                    no heading above them. */}
+                {spotItems.length > 0 && (
+                  <FeedRows
+                    items={spotItems.map(s => s.conf)}
+                    facets={facets}
+                    facetsLoaded={facetsLoaded}
+                    sponsoredIds={sponsoredIds}
+                    appliedIds={appliedIds}
+                    isMember={isMember}
+                    spotlights={{
+                      spotFor: (c) => spotItems.find(s => s.conf.id === c.id)?.spot,
+                      onOpen: (spot) => recordSpotlightClick(spot.booking_id),
+                    }}
+                  />
+                )}
                 {months.map(g => (
                   <section key={g.key} aria-label={g.label}>
                     <MonthHeader label={g.label} count={g.items.length} />
@@ -1079,7 +1082,8 @@ export default function ConferencesExploreClient() {
 }
 
 
-/** A place chosen through the pill's Where: flag (or globe), name, and an X. */
+/** A place chosen through the pill's Where: flag (or globe), name, and the
+ *  small round X on its top right corner (hover, focus, always on touch). */
 function PlaceChip({ label, kicker, icon, onRemove }: {
   label: string;
   kicker?: string;
@@ -1100,7 +1104,7 @@ function PlaceChip({ label, kicker, icon, onRemove }: {
         title={`Remove ${label}`}
         className="gv-place-chip-x focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]"
       >
-        <X size={14} strokeWidth={2.6} aria-hidden />
+        <X size={12} strokeWidth={3} aria-hidden />
       </button>
     </span>
   );

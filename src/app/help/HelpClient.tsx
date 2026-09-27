@@ -69,17 +69,46 @@ export default function HelpClient() {
     return () => window.removeEventListener('hashchange', readHash);
   }, []);
 
-  // Which section the reader is in, for the rail.
+  // Which section the reader is in, for the rail (27 Sep 2026). Read from the
+  // scroll position, not an IntersectionObserver: on a fast scroll a heading
+  // could pass the observer's band between frames and nothing fired, and the
+  // last, short section's heading never reached the band at the bottom (the
+  // owner scrolled to Pricing and the rail still said Organizers). The active
+  // section is the last one whose heading is at or above 120px from the top;
+  // scrolled to the bottom (within 4px), it is the last section. Throttled to
+  // one read per frame, passive listeners; nothing tracks while searching.
   useEffect(() => {
     if (query) return;
-    const headings = HELP_SECTIONS.map((s) => document.getElementById(s.id)).filter((n): n is HTMLElement => !!n);
-    if (headings.length === 0 || typeof IntersectionObserver === 'undefined') return;
-    const io = new IntersectionObserver((entries) => {
-      const hit = entries.filter((e) => e.isIntersecting).sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top)[0];
-      if (hit) setActive(hit.target.id);
-    }, { rootMargin: '-96px 0px -60% 0px', threshold: 0 });
-    headings.forEach((h) => io.observe(h));
-    return () => io.disconnect();
+    let frame = 0;
+    const read = () => {
+      frame = 0;
+      const ids = HELP_SECTIONS.map((s) => s.id);
+      const doc = document.documentElement;
+      const atBottom = window.innerHeight + window.scrollY >= doc.scrollHeight - 4;
+      let current = ids[0];
+      if (atBottom) {
+        current = ids[ids.length - 1];
+      } else {
+        for (const id of ids) {
+          const el = document.getElementById(id);
+          if (el && el.getBoundingClientRect().top <= 120) current = id;
+        }
+      }
+      setActive((prev) => (prev === current ? prev : current));
+    };
+    const schedule = () => { if (!frame) frame = window.requestAnimationFrame(read); };
+    // Once on mount, and after a hash jump has landed.
+    schedule();
+    const onHash = () => window.requestAnimationFrame(schedule);
+    window.addEventListener('scroll', schedule, { passive: true });
+    window.addEventListener('resize', schedule, { passive: true });
+    window.addEventListener('hashchange', onHash);
+    return () => {
+      if (frame) window.cancelAnimationFrame(frame);
+      window.removeEventListener('scroll', schedule);
+      window.removeEventListener('resize', schedule);
+      window.removeEventListener('hashchange', onHash);
+    };
   }, [query]);
 
   const hits = useMemo(() => searchHelp(query), [query]);
