@@ -239,7 +239,15 @@ function PlanBlock({ sub, detail, portalBusy, resumeBusy, onPortal, onCancel, on
 
   let body: React.ReactNode;
 
-  if (sub.kind === 'past_due' && !onUnlimited) {
+  if (detail.forever) {
+    // Unlimited Forever (ambassadors): no date, no renewal, nothing to cancel.
+    body = (
+      <>
+        {title('Unlimited Forever')}
+        {line('Your Unlimited never ends. Thank you for being part of Gavelling.')}
+      </>
+    );
+  } else if (sub.kind === 'past_due' && !onUnlimited) {
     // The failed renewal, unchanged: the one-time year is the way back.
     body = (
       <>

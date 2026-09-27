@@ -13,6 +13,7 @@
 import { useState } from 'react';
 import { CreditCoin } from '@/components/CreditCoin';
 import { useCredits } from '@/hooks/useCredits';
+import { leaderImportsArePaid } from '@/app/manage/[slug]/import/importQuote';
 import { openCreditsPopup } from '@/lib/purchasePopup';
 import { PurchaseShell, PURCHASE_CSS } from '@/components/purchase/purchaseKit';
 import { GoldWord } from '@/components/BrandHeading';
@@ -40,6 +41,8 @@ export default function DelegationImportPopup({
   // The leader's own credits, the header counter's number (shared reader, so
   // a purchase updates it at once).
   const { balance } = useCredits();
+  // Free leader imports show no credits at all (LEADER_IMPORTS_PAID_LAUNCH).
+  const paid = leaderImportsArePaid(data.charged);
 
   return (
     <PurchaseShell tone="light" label="Import delegates" onClose={onClose} panelClass="gv-dimp" testId="delegation-import">
@@ -61,7 +64,9 @@ export default function DelegationImportPopup({
         </div>
 
         {/* The leader's credits, as the site header shows them: the coin pill.
-            A press opens the credits pop-up in the import context. */}
+            A press opens the credits pop-up in the import context. Only while
+            leader imports are paid. */}
+        {paid && (
         <div className="gv-dimp-credits">
           <span className="gv-dimp-credits-label">Your credits</span>
           <button
@@ -76,6 +81,7 @@ export default function DelegationImportPopup({
             <span aria-hidden className="gv-dimp-coin-plus">+</span>
           </button>
         </div>
+        )}
 
         <div role="tabpanel">
           <DelegationImportCard

@@ -13,6 +13,9 @@
 //
 // Reads:  my_delegation_import(p_society)
 // Writes: leader_import_delegates(p_society, p_rows)   1..200 rows, all or nothing
+// Leader imports are FREE for now (LEADER_IMPORTS_PAID_LAUNCH false, server
+// `charged` false): nothing about credits shows and each delegate is charged
+// at claim. The paid flow below is kept for when both switches are on.
 // Every refusal carries a plain `message`, shown through plainOrFallback. A
 // leader short of credits is sent to the credits pop-up preselected at the
 // shortfall, and the SAME import runs again once, when the purchase completes.
@@ -24,6 +27,7 @@ import {
 import { getFreshAuthedClient } from '@/lib/supabase-auth';
 import { refreshCreditsEverywhere } from '@/hooks/useCredits';
 import { openCreditsPopup } from '@/lib/purchasePopup';
+import { leaderImportsArePaid } from '@/app/manage/[slug]/import/importQuote';
 import { triggerEmailDelivery } from '@/lib/emailDelivery';
 import { friendlyError, plainOrFallback, UserFacingError } from '@/lib/friendlyError';
 import { GoldWord } from '@/components/BrandHeading';
@@ -55,6 +59,8 @@ export interface LeaderImport {
   delegates: number;
   free_spots: number;
   balance: number;
+  /** my_delegation_import's `charged`: the server charges leader imports. */
+  charged: boolean;
   imports: ImportedDelegate[];
 }
 
@@ -117,6 +123,7 @@ export function useDelegationImport(societyId: string | null) {
           delegates: asInt(a.delegates),
           free_spots: asInt(a.free_spots),
           balance: asInt(a.balance),
+          charged: a.charged === true,
           imports: Array.isArray(a.imports) ? (a.imports as ImportedDelegate[]) : [],
         });
         setError(null);
@@ -206,6 +213,10 @@ export default function DelegationImportCard({
   /** Whatever the pay page refreshes after a delegation change. */
   onImported?: () => void;
 }) {
+  // Leader imports are free until LEADER_IMPORTS_PAID_LAUNCH and the server's
+  // store_flags.leader_import_charged are both on; free means no credit line,
+  // no credit pop-up, and each delegate's own credit is taken at claim.
+  const paid = leaderImportsArePaid(data.charged);
   const [rows, setRows] = useState<Row[]>(() => [newRow()]);
   const rowsRef = useRef(rows);
   rowsRef.current = rows;
@@ -368,7 +379,8 @@ export default function DelegationImportCard({
         return;
       }
 
-      if (typeof a.need_credits === 'number' && a.need_credits > 0) {
+      // Only a paid import can be short of credits (LEADER_IMPORTS_PAID_LAUNCH).
+      if (paid && typeof a.need_credits === 'number' && a.need_credits > 0) {
         setTopError(messageOr(a, "It seems you don't have enough credits for this"));
         retryRowsRef.current = list;
         openCreditsPopup({
@@ -393,7 +405,7 @@ export default function DelegationImportCard({
       busyRef.current = false;
       if (aliveRef.current) setBusy(false);
     }
-  }, [societyId, conferenceAcronym, reload, onImported]);
+  }, [societyId, conferenceAcronym, reload, onImported, paid]);
   runRef.current = run;
 
   function submit() {
@@ -432,7 +444,8 @@ export default function DelegationImportCard({
   // short of pledged spots beats short of credits, and while the spots
   // message shows no credit warning does.
   const spotsShort = needSpots || count > data.free_spots;
-  const creditsShort = !spotsShort && count > data.balance;
+  // While leader imports are free there is no credit to be short of.
+  const creditsShort = paid && !spotsShort && count > data.balance;
 
   const showImport = tab !== 'imported';
   const showList = tab !== 'import';
@@ -578,7 +591,11 @@ export default function DelegationImportCard({
         >
           {busy ? 'Importing' : count === 1 ? 'Import 1 delegate' : `Import ${count} delegates`}
         </button>
-        {count > 0 && !spotsShort && (
+        {!paid ? (
+          <p style={{ fontFamily: OUTFIT, fontSize: 13, color: INK_SOFT, margin: 0, maxWidth: 420, lineHeight: 1.45 }}>
+            Free for now. Each delegate uses their own credit when they claim their place, or applies free if the conference sponsors them.
+          </p>
+        ) : count > 0 && !spotsShort && (
           creditsShort ? (
             <p style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 700, color: DANGER, margin: 0 }}>Not enough credits</p>
           ) : (

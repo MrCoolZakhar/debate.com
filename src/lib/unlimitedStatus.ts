@@ -37,18 +37,24 @@ export interface UnlimitedDetail {
   can_resume: boolean;
   lapsed_plan: string | null;
   lapsed_at: string | null;
+  /** Unlimited Forever: an active plan with no period end (the permanent
+   *  'ambassador_permanent_<user_id>' rows). Derived once, here. Never shows
+   *  a date, a renewal, a trial, a cancel or a Get Unlimited. */
+  forever: boolean;
 }
 
 export const NO_PLAN: UnlimitedDetail = {
   status: 'none', plan: null, current_period_end: null, on_stripe: false, renews: false,
-  cancel_at_period_end: false, can_cancel: false, can_resume: false, lapsed_plan: null, lapsed_at: null,
+  cancel_at_period_end: false, can_cancel: false, can_resume: false, lapsed_plan: null, lapsed_at: null, forever: false,
 };
 
 export function parseUnlimitedDetail(data: unknown): UnlimitedDetail {
   const a = (data ?? {}) as Record<string, unknown>;
   const s = a.status;
+  const status: UnlimitedStatus = s === 'trial' || s === 'monthly' || s === 'annual' ? s : 'none';
+  const end = typeof a.current_period_end === 'string' ? a.current_period_end : null;
   return {
-    status: s === 'trial' || s === 'monthly' || s === 'annual' ? s : 'none',
+    status,
     plan: typeof a.plan === 'string' ? a.plan : null,
     current_period_end: typeof a.current_period_end === 'string' ? a.current_period_end : null,
     on_stripe: a.on_stripe === true,
@@ -58,6 +64,7 @@ export function parseUnlimitedDetail(data: unknown): UnlimitedDetail {
     can_resume: a.can_resume === true,
     lapsed_plan: typeof a.lapsed_plan === 'string' ? a.lapsed_plan : null,
     lapsed_at: typeof a.lapsed_at === 'string' ? a.lapsed_at : null,
+    forever: status !== 'none' && status !== 'trial' && end === null,
   };
 }
 
@@ -143,6 +150,11 @@ export function useUnlimitedDetail(): { detail: UnlimitedDetail | null; loading:
 /** null while unknown (signed out, or the first read is in flight). */
 export function useUnlimitedStatus(): UnlimitedStatus | null {
   return useUnlimitedDetail().detail?.status ?? null;
+}
+
+/** True for Unlimited Forever (see UnlimitedDetail.forever). */
+export function isUnlimitedForever(d: UnlimitedDetail | null | undefined): boolean {
+  return !!d?.forever;
 }
 
 export function isUnlimited(s: UnlimitedStatus | null): boolean {

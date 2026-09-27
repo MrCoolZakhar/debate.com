@@ -12,6 +12,7 @@
 //   trial         ends on {date}, renews nothing, nothing to cancel
 //   one-time year "Paid once. Active until {date}. Nothing renews."
 //   past due      the failed renewal, Renew for a year (unchanged flow)
+//   forever       "Unlimited Forever" (no period end, ambassadors): no date, no buttons
 //   nothing       Get Unlimited, or "Come Back to Unlimited" after a lapse
 // Cancel and resume go through the manage-subscription edge function and then
 // RE-READ the status; nothing here trusts local state.
@@ -207,7 +208,15 @@ function PlanBlock({ sub, detail, portalBusy, resumeBusy, onPortal, onCancel, on
 
   let body: React.ReactNode;
 
-  if (sub.kind === 'past_due' && !onUnlimited) {
+  if (detail.forever) {
+    // Unlimited Forever (ambassadors): no date, no renewal, nothing to cancel.
+    body = (
+      <>
+        {title('Unlimited Forever')}
+        {line('Your Unlimited never ends. Thank you for being part of Gavelling.')}
+      </>
+    );
+  } else if (sub.kind === 'past_due' && !onUnlimited) {
     // The failed renewal, unchanged: the one-time year is the way back.
     body = (
       <>

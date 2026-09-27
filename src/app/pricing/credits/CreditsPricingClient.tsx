@@ -14,6 +14,7 @@ import { useAuth } from '@/components/AuthProvider';
 import { useCredits } from '@/hooks/useCredits';
 import { openCreditsPopup } from '@/lib/purchasePopup';
 import { faqForPage } from '@/lib/pricingFaq';
+import { LEADER_IMPORTS_PAID_LAUNCH } from '@/app/manage/[slug]/import/importQuote';
 import FaqList from '@/components/pricing/FaqList';
 import BundlePicker from '@/components/pricing/BundlePicker';
 import { ActionButton, ActionLink, FOCUS_RING, P, PricingStyles, QuestionBox } from '@/components/pricing/pricingKit';
@@ -21,10 +22,12 @@ import { ActionButton, ActionLink, FOCUS_RING, P, PricingStyles, QuestionBox } f
 // What credits do today (26 Sep 2026). A row with a live destination links there.
 // Organiser imports are free for now (IMPORTS_PAID_LAUNCH in
 // manage/[slug]/import/importQuote.ts), so their row says when they come;
-// the delegation leader's import stays live.
+// the delegation leader's import is free for now too (LEADER_IMPORTS_PAID_LAUNCH).
 const USES: { emoji: string; icon: typeof Ticket; title: string; note: string; live: boolean; href?: string; soon?: string }[] = [
   { emoji: 'Shopping bags', icon: Store, title: 'Conference Store', note: 'Spotlights, bulk emails and delegate sponsorship.', live: true, href: '/help#organizers' },
-  { emoji: 'Inbox tray', icon: Inbox, title: 'Import Your Delegates', note: 'Delegation leaders bring their delegates in, 1 credit each.', live: true },
+  LEADER_IMPORTS_PAID_LAUNCH
+    ? { emoji: 'Inbox tray', icon: Inbox, title: 'Import Your Delegates', note: 'Delegation leaders bring their delegates in, 1 credit each.', live: true }
+    : { emoji: 'Inbox tray', icon: Inbox, title: 'Import Your Delegates', note: 'Delegation leaders bring their delegates in, free for now.', live: false, soon: 'Paid imports: coming late 2026' },
   { emoji: 'Card index', icon: Inbox, title: 'Organizer Imports', note: 'Bring a whole roster in from a spreadsheet.', live: false, soon: 'Coming late 2026' },
   { emoji: 'Books', icon: BookOpen, title: 'Premium MUN Guides', note: 'Unlock any premium guide, yours forever.', live: true, href: '/guides' },
   { emoji: 'Briefcase', icon: Briefcase, title: 'The Job Board', note: 'Chair and secretariat roles across conferences.', live: false },

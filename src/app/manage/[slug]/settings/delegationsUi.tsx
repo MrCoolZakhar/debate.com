@@ -24,6 +24,7 @@ import { Emoji3D, NEU } from '@/components/neu';
 import { getFreshAuthedClient } from '@/lib/supabase-auth';
 import { friendlyError } from '@/lib/friendlyError';
 import { notifyErr, clearErr } from '@/lib/appNotify';
+import { LEADER_IMPORTS_PAID_LAUNCH } from '@/app/manage/[slug]/import/importQuote';
 
 const FONT = 'var(--font-brand), sans-serif';
 
@@ -268,11 +269,13 @@ export function DelegationsSettings({
               Let delegation leaders import their delegates
               <Hint
                 label="About delegation imports"
-                text="Faculty advisors and head delegates can add their delegates by name and email, up to the spots they pledged. Each import uses one of the leader's credits, which comes back to them if the delegate is rejected or withdraws, and every imported delegate still waits for your acceptance."
+                text={LEADER_IMPORTS_PAID_LAUNCH
+                  ? "Faculty advisors and head delegates can add their delegates by name and email, up to the spots they pledged. Each import uses one of the leader's credits, which comes back to them if the delegate is rejected or withdraws, and every imported delegate still waits for your acceptance."
+                  : "Faculty advisors and head delegates can add their delegates by name and email, up to the spots they pledged. Importing is free for now: each delegate uses their own credit when they claim their place. Every imported delegate still waits for your acceptance."}
               />
             </p>
             <p className="text-sm" style={{ color: '#5A5046', fontFamily: FONT }}>
-              Each imported delegate uses one of the leader&apos;s own credits
+              {LEADER_IMPORTS_PAID_LAUNCH ? <>Each imported delegate uses one of the leader&apos;s own credits</> : 'Free for now. Each delegate uses their own credit when they claim their place'}
             </p>
           </div>
           <div className="flex items-center gap-2 pt-1">

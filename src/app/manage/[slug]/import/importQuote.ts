@@ -23,13 +23,28 @@ import type { SupabaseClient } from '@supabase/supabase-js';
  * it is free while we grow, and /pricing/credits lists organiser imports as
  * coming. To launch, flip this to true AND store_flags.organizer_import_charged
  * on the server together; the Gavelling Import checkout then comes back
- * exactly as built. (Leader imports on /pay are separate and stay paid.)
+ * exactly as built. (Leader imports have their own switch below.)
  */
 export const IMPORTS_PAID_LAUNCH = false;
 
 /** True only when both the launch switch and the database say imports are charged. */
 export function importsArePaid(quote: { charged: boolean } | null | undefined): boolean {
   return IMPORTS_PAID_LAUNCH && !!quote?.charged;
+}
+
+/**
+ * Leader imports (a faculty advisor or head delegate importing their own
+ * delegates from the delegation card) are free for now too (owner, 27 Sep
+ * 2026). While this is false the Import delegates pop-up shows no credit
+ * line, no credit pill and no credits pop-up; each delegate's own credit is
+ * taken when they claim their place (store_flags.leader_import_charged is
+ * false on the server). To launch, flip this AND the server flag together.
+ */
+export const LEADER_IMPORTS_PAID_LAUNCH = false;
+
+/** True only when both the launch switch and my_delegation_import's `charged` are true. */
+export function leaderImportsArePaid(charged: boolean | null | undefined): boolean {
+  return LEADER_IMPORTS_PAID_LAUNCH && !!charged;
 }
 
 const CHARGED_ROLES = new Set(['delegate', 'head-delegate', 'faculty-advisor', 'observer']);

@@ -74,8 +74,11 @@ export default function UnlimitedPopup({ request }: { request: UnlimitedPopupReq
   // The plan as it was before paying: the poll waits for it to change.
   const planBeforeRef = useRef(detail?.status ?? null);
   if (detail && planBeforeRef.current === null) planBeforeRef.current = detail.status;
-  const resumeMode = !renewOnce && !!detail?.can_resume;
-  const comeBack = !renewOnce && !!detail && detail.status === 'none' && !!detail.lapsed_plan;
+  // Unlimited Forever (no period end, ambassadors): the benefits and one line,
+  // never a purchase, a resume or a date.
+  const forever = !!detail?.forever || sub.forever;
+  const resumeMode = !forever && !renewOnce && !!detail?.can_resume;
+  const comeBack = !forever && !renewOnce && !!detail && detail.status === 'none' && !!detail.lapsed_plan;
   const [resumeBusy, setResumeBusy] = useState(false);
   const [resumeErr, setResumeErr] = useState('');
 
@@ -168,16 +171,23 @@ export default function UnlimitedPopup({ request }: { request: UnlimitedPopupReq
             icon={<Emoji3D name="Infinity" size={44} fallback={InfinityIcon} fallbackColor={GOLD} />}
           />
         )}
-        <div className={resumeMode ? 'gv-buy-benefits-hl' : undefined}>
-          <Eyebrow>{resumeMode ? 'What you keep' : 'What you get'}</Eyebrow>
+        <div className={resumeMode || forever ? 'gv-buy-benefits-hl' : undefined}>
+          <Eyebrow>{resumeMode || forever ? 'What you keep' : 'What you get'}</Eyebrow>
           <BenefitList items={BENEFITS} tone="dark" />
         </div>
       </div>
 
       {/* Resume mode: the title, the line and the button sit in the middle of
           the panel, not stuck to its top (26 Sep 2026). */}
-      <div className="gv-buy-right" style={resumeMode ? { justifyContent: 'center' } : undefined}>
-        {resumeMode ? (
+      <div className="gv-buy-right" style={resumeMode || forever ? { justifyContent: 'center' } : undefined}>
+        {forever ? (
+          <>
+            <h3 className="gv-buy-rtitle">You have Unlimited forever</h3>
+            <p className="gv-buy-note">
+              Your Unlimited never ends. Thank you for being part of Gavelling.
+            </p>
+          </>
+        ) : resumeMode ? (
           <>
             <h3 className="gv-buy-rtitle">Pick Up Where You Left Off</h3>
             <p className="gv-buy-renew">

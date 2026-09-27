@@ -45,6 +45,8 @@ export interface MySubscription {
   cadence: 'monthly' | 'yearly' | null;
   /** when the current period ends (a trial's end, a paid plan's renewal) */
   endsAt: Date | null;
+  /** Unlimited Forever: a live paid plan with no period end (ambassadors). */
+  forever: boolean;
   loading: boolean;
   reload: () => void;
 }
@@ -105,6 +107,7 @@ export function useMySubscription(): MySubscription {
     kind,
     cadence: row ? cadenceOf(row.plan) : null,
     endsAt: row?.current_period_end ? new Date(row.current_period_end) : null,
+    forever: kind === 'paid' && !!row && row.current_period_end === null,
     loading: rows === null && !!userId,
     reload,
   };
