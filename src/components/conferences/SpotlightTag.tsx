@@ -47,7 +47,7 @@ export function CreditSponsoredMark({ tone = 'light', size = 'md', style }: {
   const color = tone === 'dark' ? '#FFD1D8' : '#8B2020';
   return (
     <span
-      title="The conference pays your Gavelling credit. Applying costs you nothing."
+      title="The conference pays your Gavelling credit."
       className="inline-flex items-center gap-1"
       style={{ fontFamily: FONT, fontWeight: xs ? 600 : 700, fontSize: xs ? 10.5 : sm ? 11 : 12, color, whiteSpace: 'nowrap', lineHeight: 1.2, ...style }}
     >
