@@ -652,7 +652,22 @@ export default function ConferencesExploreClient() {
   // Every result is shown (owner, 27 Sep 2026: "displays too little
   // conferences"); the near-you view used to stop at four.
   const displayed = feed;
-  const months = useMemo(() => groupByMonth(displayed), [displayed]);
+  // The list view: every result in the chosen date order, spotlights included
+  // in their own date place (the grid alone puts them first).
+  const listItems = useMemo(() => {
+    const ids = new Set(sorted.map(c => c.id));
+    const extra = spotItems.map(s => s.conf).filter(c => !ids.has(c.id));
+    if (extra.length === 0) return sorted;
+    const all = [...sorted, ...extra];
+    all.sort((a, b) => compareStartDate(a.start_date, b.start_date, dateSort === 'asc' ? 'asc' : 'desc'));
+    return all;
+  }, [sorted, spotItems, dateSort]);
+  const listMonths = useMemo(() => groupByMonth(listItems), [listItems]);
+  const spotById = useMemo(() => new Map(spotItems.map(s => [s.conf.id, s.spot])), [spotItems]);
+  const spotInPlace = useMemo(() => ({
+    spotFor: (c: { id: string }) => spotById.get(c.id),
+    onOpen: (spot: FeaturedRow) => recordSpotlightClick(spot.booking_id),
+  }), [spotById]);
 
   // When a country filter has narrowed the page down, the end of the list is
   // the honest moment to say: there are much bigger rooms elsewhere. Upcoming
@@ -1010,23 +1025,10 @@ export default function ConferencesExploreClient() {
               </div>
             ) : (
               <div className="flex flex-col" style={{ gap: 'clamp(8px, 1vw, 14px)' }}>
-                {/* Spotlights first, as rows with the tag, gold edge and glow;
-                    no heading above them. */}
-                {spotItems.length > 0 && (
-                  <FeedRows
-                    items={spotItems.map(s => s.conf)}
-                    facets={facets}
-                    facetsLoaded={facetsLoaded}
-                    sponsoredIds={sponsoredIds}
-                    appliedIds={appliedIds}
-                    isMember={isMember}
-                    spotlights={{
-                      spotFor: (c) => spotItems.find(s => s.conf.id === c.id)?.spot,
-                      onOpen: (spot) => recordSpotlightClick(spot.booking_id),
-                    }}
-                  />
-                )}
-                {months.map(g => (
+                {/* The list is plain date order (27 Sep 2026): each spotlight
+                    conference sits in its normal date place with the tag, the
+                    gold edge and the glow. Only the grid puts spotlights first. */}
+                {listMonths.map(g => (
                   <section key={g.key} aria-label={g.label}>
                     <MonthHeader label={g.label} count={g.items.length} />
                     <FeedRows
@@ -1036,6 +1038,7 @@ export default function ConferencesExploreClient() {
                       sponsoredIds={sponsoredIds}
                       appliedIds={appliedIds}
                       isMember={isMember}
+                      inPlace={spotInPlace}
                     />
                   </section>
                 ))}
@@ -1076,7 +1079,14 @@ export default function ConferencesExploreClient() {
         </main>
       </div>
 
-      {spotlightDialog && <ConferenceSpotlightDialog rows={spotlightDialog} onClose={() => setSpotlightDialog(null)} />}
+      {spotlightDialog && (
+        <ConferenceSpotlightDialog
+          rows={spotlightDialog}
+          onClose={() => setSpotlightDialog(null)}
+          // The roles open now, from the same facets as "Open for ..."; null until read.
+          openRolesFor={(id) => (facets.size > 0 ? facets.get(id)?.open_roles ?? [] : null)}
+        />
+      )}
     </div>
   );
 }

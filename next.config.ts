@@ -40,12 +40,11 @@ const nextConfig: NextConfig = {
   async redirects() {
     return [
       { source: '/account', destination: '/account/profile', permanent: true },
-      { source: '/account/points', destination: '/account/manage#credits', permanent: true },
-      // Manage account is ONE page since 26 Sep 2026 (/account/manage). The
-      // old /account/manage/credits, /subscription and /promo are NOT
-      // redirected: they render the same page scrolled to their section,
-      // because browsers cached the old 308 /account/manage ->
-      // /account/manage/credits, and a redirect back would loop for them.
+      { source: '/account/points', destination: '/account/manage/credits', permanent: true },
+      // Manage account is THREE pages again (owner, 27 Sep 2026): Credits,
+      // Subscription and Promo code. /account/manage opens Credits, the same
+      // 308 browsers already cached before the one-page version, so nothing loops.
+      { source: '/account/manage', destination: '/account/manage/credits', permanent: true },
       // The conference calendar became My conferences (26 Sep 2026).
       { source: '/account/calendar', destination: '/account/conferences', permanent: false },
       { source: '/account/unlimited', destination: '/pricing/subscription', permanent: true },

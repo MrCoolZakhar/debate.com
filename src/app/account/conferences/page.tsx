@@ -43,9 +43,6 @@ interface CalendarEntry {
   isOrganiser: boolean; // surfaces the "Manage" affordance
   /** Holds a role other than organiser: the card opens the participant page. */
   participant?: boolean;
-  /** A delegation leader (accepted head delegate / faculty advisor with a
-   *  society): the delegation seat portal. Carried over from the old page. */
-  manageDelegationHref?: string;
   /** A rejected application whose role allows resubmission. Carried over. */
   resubmitHref?: string;
 }
@@ -131,7 +128,12 @@ function MyConferencesInner() {
           .contains('chair_user_ids', [user!.id]),
         supabase
           .from('applications')
-          .select(`id, role, status, is_head_delegate, society_id, assigned_country_name, conferences (${CONF}), conference_committees (name)`)
+          // The committee is named through its foreign key (27 Sep 2026): the
+          // delegate_session_reminders table gave applications a SECOND path to
+          // conference_committees, so a bare `conference_committees (name)`
+          // failed with PGRST201 and EVERY application was lost; a faculty
+          // advisor (no allocation, not an organiser) then saw no conference.
+          .select(`id, role, status, is_head_delegate, society_id, assigned_country_name, conferences (${CONF}), conference_committees!applications_assigned_committee_id_fkey (name)`)
           .eq('user_id', user!.id),
         supabase
           .from('conference_allocations')
@@ -217,9 +219,6 @@ function MyConferencesInner() {
         const e = conf?.id ? byConf.get(conf.id) : undefined;
         if (e) {
           e.participant = true;
-          const leads = row.role === 'head-delegate' || row.role === 'faculty-advisor' || !!row.is_head_delegate;
-          const confirmed = !['submitted', 'rejected', 'withdrawn'].includes(row.status);
-          if (leads && confirmed && row.society_id && !e.manageDelegationHref) e.manageDelegationHref = `/delegation/${row.society_id}`;
           if (row.status === 'rejected' && allowResubmit.get(`${conf!.id}:${row.role}`) && !e.resubmitHref) {
             e.resubmitHref = `/conferences/${conf!.slug}/apply?role=${row.role}&edit=1`;
           }
@@ -355,9 +354,8 @@ function MyConferencesInner() {
                       key={e.conference.id}
                       conference={e.conference}
                       roles={e.roles}
-                      href={e.participant ? `/conferences/${e.conference.slug}/role` : `/conferences/${e.conference.slug}`}
-                      manageHref={e.isOrganiser ? `/manage/${e.conference.slug}` : undefined}
-                      manageDelegationHref={e.manageDelegationHref}
+                      href={dashboardLinks(e).href}
+                      otherLinks={dashboardLinks(e).others}
                       resubmitHref={e.resubmitHref}
                     />
                   ))}
@@ -374,9 +372,8 @@ function MyConferencesInner() {
                       key={e.conference.id}
                       conference={e.conference}
                       roles={e.roles}
-                      href={e.participant ? `/conferences/${e.conference.slug}/role` : `/conferences/${e.conference.slug}`}
-                      manageHref={e.isOrganiser ? `/manage/${e.conference.slug}` : undefined}
-                      manageDelegationHref={e.manageDelegationHref}
+                      href={dashboardLinks(e).href}
+                      otherLinks={dashboardLinks(e).others}
                       resubmitHref={e.resubmitHref}
                       muted
                     />
@@ -390,6 +387,33 @@ function MyConferencesInner() {
       </div>
     </div>
   );
+}
+
+// ── Where a card opens (27 Sep 2026) ────────────────────────────────────────
+// Straight to the person's dashboard for their FIRST role here (organiser →
+// /manage/[slug]; chair, delegate, head delegate, faculty advisor, observer →
+// /conferences/[slug]/role/[role]); every other role's dashboard is a small
+// link on the card. Never the deleted /delegation portal.
+
+const ROLE_PATH: Record<string, string> = {
+  delegate: 'delegate', 'head-delegate': 'head-delegate', 'faculty-advisor': 'faculty-advisor',
+  observer: 'observer', chair: 'chair',
+};
+const ROLE_WORD: Record<string, string> = {
+  organiser: 'Manage conference', delegate: 'Delegate dashboard', 'head-delegate': 'Head delegate dashboard',
+  'faculty-advisor': 'Faculty advisor dashboard', observer: 'Observer dashboard', chair: 'Chair dashboard',
+};
+
+function dashboardLinks(e: CalendarEntry): { href: string; others: { label: string; href: string }[] } {
+  const slug = e.conference.slug;
+  const hrefFor = (key: string) => key === 'organiser' ? `/manage/${slug}` : ROLE_PATH[key] ? `/conferences/${slug}/role/${ROLE_PATH[key]}` : null;
+  const keys = Array.from(new Set(e.roles.map(r => r.key))).filter(k => hrefFor(k));
+  if (keys.length === 0) return { href: `/conferences/${slug}`, others: [] };
+  const [firstKey, ...rest] = keys;
+  return {
+    href: hrefFor(firstKey)!,
+    others: rest.map(k => ({ label: ROLE_WORD[k] ?? 'Dashboard', href: hrefFor(k)! })),
+  };
 }
 
 // ── Next up ──────────────────────────────────────────────────────────────────
@@ -412,7 +436,7 @@ function NextUpCard({ entry }: { entry: CalendarEntry }) {
 
   return (
     <Link
-      href={entry.participant ? `/conferences/${c.slug}/role` : entry.isOrganiser ? `/manage/${c.slug}` : `/conferences/${c.slug}`}
+      href={dashboardLinks(entry).href}
       className="gv-acct-card-link block h-full rounded-[22px] p-5 md:p-7 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] focus-visible:ring-offset-2"
       style={{ textDecoration: 'none', color: 'inherit', background: 'linear-gradient(180deg, #FFFFFF 0%, #FDFBF7 100%)', boxShadow: RAISED }}
     >

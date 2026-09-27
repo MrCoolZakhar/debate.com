@@ -494,7 +494,7 @@ function FeedRow({
 }
 
 export function FeedRows({
-  items, facets, facetsLoaded, sponsoredIds, appliedIds, isMember, spotlights,
+  items, facets, facetsLoaded, sponsoredIds, appliedIds, isMember, spotlights, inPlace,
 }: {
   items: ExploreConference[];
   facets: ReadonlyMap<string, ConferenceFacet>;
@@ -506,6 +506,9 @@ export function FeedRows({
    *  "Spotlight" tag and the grid card's gold edge and soft glow; opening one
    *  records the spotlight click. */
   spotlights?: { spotFor: (c: ExploreConference) => FeaturedRow | undefined; onOpen: (spot: FeaturedRow) => void };
+  /** Rows in their normal date place that are spotlights (27 Sep 2026): they
+   *  keep their place in the month and carry the tag, gold edge and glow. */
+  inPlace?: { spotFor: (c: ExploreConference) => FeaturedRow | undefined; onOpen: (spot: FeaturedRow) => void };
 }) {
   if (spotlights) {
     return (
@@ -528,17 +531,37 @@ export function FeedRows({
   }
   return (
     <div style={{ ...SOFT_CARD }}>
-      {items.map(c => (
-        <FeedRow
-          key={c.id}
-          conf={c}
-          facet={facets.get(c.id)}
-          facetsLoaded={facetsLoaded}
-          creditSponsored={sponsoredIds.has(c.id)}
-          applied={appliedIds.has(c.id)}
-          member={isMember(c)}
-        />
-      ))}
+      {items.map(c => {
+        const sp = inPlace?.spotFor(c);
+        if (sp && inPlace) {
+          return (
+            <div key={c.id} style={{ margin: 6 }}>
+              <SpotlightFeedRow onOpen={() => inPlace.onOpen(sp)}>
+                <FeedRow
+                  conf={c}
+                  facet={facets.get(c.id)}
+                  facetsLoaded={facetsLoaded}
+                  creditSponsored={sponsoredIds.has(c.id)}
+                  applied={appliedIds.has(c.id)}
+                  member={isMember(c)}
+                  spotlight
+                />
+              </SpotlightFeedRow>
+            </div>
+          );
+        }
+        return (
+          <FeedRow
+            key={c.id}
+            conf={c}
+            facet={facets.get(c.id)}
+            facetsLoaded={facetsLoaded}
+            creditSponsored={sponsoredIds.has(c.id)}
+            applied={appliedIds.has(c.id)}
+            member={isMember(c)}
+          />
+        );
+      })}
     </div>
   );
 }

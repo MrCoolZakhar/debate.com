@@ -173,8 +173,10 @@ function CountdownChip({ label, tone }: { label: string; tone: PillTone }) {
 // ── Conference card ──────────────────────────────────────────────────────────
 
 export function PersonalConferenceCard({
-  conference, roles, href, manageHref, manageDelegationHref, resubmitHref, muted = false,
+  conference, roles, href, manageHref, manageDelegationHref, resubmitHref, otherLinks, muted = false,
 }: {
+  /** The dashboards of the person's other roles here, as small links (27 Sep 2026). */
+  otherLinks?: { label: string; href: string }[];
   conference: CardConference;
   roles: RoleTag[];
   /** Where the title / card body links. */
@@ -280,6 +282,23 @@ export function PersonalConferenceCard({
           <RoleTagChip key={tag.key} tag={tag} />
         ))}
       </div>
+
+      {/* The other roles' dashboards, as small plain links */}
+      {otherLinks && otherLinks.length > 0 && (
+        <div className="flex flex-wrap gap-x-4 gap-y-1 mt-3">
+          {otherLinks.map(l => (
+            <Link
+              key={l.href}
+              href={l.href}
+              className="inline-flex items-center gap-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] rounded"
+              style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 700, color: NEU.forest, textDecoration: 'underline', textUnderlineOffset: 3 }}
+            >
+              {l.label}
+              <ArrowUpRight size={13} strokeWidth={2.4} aria-hidden />
+            </Link>
+          ))}
+        </div>
+      )}
 
       {/* Organiser affordance */}
       {manageHref && (

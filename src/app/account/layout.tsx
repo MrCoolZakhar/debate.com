@@ -19,7 +19,7 @@ import { AccountStyles, DuoIcon, RAISED, FOREST, DEEP_GOLD, INK, INK_SOFT } from
 // The account area (26 Sep 2026 redesign). ONE sticky side nav on desktop,
 // built as a raised white card: the person at the top (avatar, name that
 // wraps, the plan as a plain word), then the pages with duotone icons, then
-// Manage account with its three parts (anchors on the one page) beneath it, and a quiet
+// Manage account with its three pages beneath it, and a quiet
 // Sign out at the foot. On phones and tablets the same entries are a
 // horizontal row of pills under the site header that scrolls sideways; the
 // site's own bottom tab bar (MobileTabBar, mounted by SiteNav) keeps its
@@ -49,20 +49,20 @@ const PROFILE_LINKS: NavLink[] = [
   { label: 'My conferences', href: '/account/conferences', Icon: CalendarCheck, match: 'prefix' },
 ];
 
-// Manage account is ONE page (26 Sep 2026); its three parts are anchors on it.
+// Manage account is THREE pages again (owner, 27 Sep 2026: credits and
+// Unlimited stay clearly apart); each lights up while it is open.
 const MANAGE_PARENT: NavLink = { label: 'Manage account', href: '/account/manage', Icon: Settings2, match: 'prefix' };
 
 const MANAGE_LINKS: NavLink[] = [
-  { label: 'Credits', href: '/account/manage#credits', Icon: Coins, sub: true },
-  { label: 'Subscription', href: '/account/manage#subscription', Icon: InfinityIcon, sub: true },
-  { label: 'Promo code', href: '/account/manage#promo', Icon: Ticket, sub: true },
+  { label: 'Credits and Usage', href: '/account/manage/credits', Icon: Coins, match: 'prefix', sub: true },
+  { label: 'Subscription', href: '/account/manage/subscription', Icon: InfinityIcon, match: 'prefix', sub: true },
+  { label: 'Promo Code', href: '/account/manage/promo', Icon: Ticket, match: 'prefix', sub: true },
 ];
 
 function isActive(link: NavLink, pathname: string): boolean {
   // Query strings and hashes are not part of `pathname`, so the drafts row
-  // (same page as My conferences, a different anchor) and the Manage account
-  // anchors never light up on their own.
-  if (link.sub || link.badge !== undefined) return false;
+  // (same page as My conferences, a different anchor) never lights up on its own.
+  if (link.badge !== undefined) return false;
   const path = link.href.split(/[?#]/)[0];
   return link.match === 'prefix' ? pathname.startsWith(path) : pathname === path;
 }

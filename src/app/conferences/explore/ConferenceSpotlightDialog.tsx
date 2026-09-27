@@ -12,7 +12,7 @@
 // The purchase pop-up shell (PurchaseShell) is the frame; its CSS is mounted
 // here since PurchasePopupHost only mounts it while a purchase is open.
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { GoldWord } from '@/components/BrandHeading';
 import { LogoDisc } from '@/components/LogoDisc';
@@ -35,9 +35,24 @@ export function claimSpotlightDialog(): boolean {
   }
 }
 
-export default function ConferenceSpotlightDialog({ rows, onClose }: { rows: FeaturedRow[]; onClose: () => void }) {
+/** The open roles' names, in the order Explore's filter lists them. */
+const ROLE_NAMES: Record<string, string> = {
+  delegate: 'Delegate', 'head-delegate': 'Head delegate', 'faculty-advisor': 'Faculty advisor', observer: 'Observer', chair: 'Chair',
+};
+const ROLE_ORDER = ['delegate', 'head-delegate', 'faculty-advisor', 'observer', 'chair'];
+
+export default function ConferenceSpotlightDialog({ rows, onClose, openRolesFor }: {
+  rows: FeaturedRow[];
+  onClose: () => void;
+  /** The roles whose applications are open now (Explore's facets); null
+   *  while unknown. One role: Apply goes straight to it. Several: Apply opens
+   *  a choice in the card. None: no Apply, only View conference (27 Sep 2026). */
+  openRolesFor?: (conferenceId: string) => string[] | null;
+}) {
   // As many as the server returns: the capacity lives in spotlight_placements.
   const shown = rows.filter(r => r.is_spotlight);
+  // The card whose role choice is open.
+  const [choosing, setChoosing] = useState<string | null>(null);
 
   useEffect(() => {
     for (const r of shown) recordSpotlightView(r.booking_id);
@@ -80,13 +95,36 @@ export default function ConferenceSpotlightDialog({ rows, onClose }: { rows: Fea
                   {showFull ? <p className="gv-cs-full">{r.full_name}</p> : null}
                   {r.description ? <p className="gv-cs-desc" title={r.description}>{r.description}</p> : null}
                   <div className="gv-cs-actions">
-                    <Link
-                      href={`/conferences/${r.slug}/apply`}
-                      className="gv-cs-btn gv-cs-primary"
-                      onClick={() => { recordSpotlightClick(r.booking_id); onClose(); }}
-                    >
-                      Apply
-                    </Link>
+                    {(() => {
+                      const known = openRolesFor ? openRolesFor(r.conference_id) : null;
+                      const roles = (known ?? []).filter(k => ROLE_NAMES[k]).sort((a, b) => ROLE_ORDER.indexOf(a) - ROLE_ORDER.indexOf(b));
+                      if (roles.length === 0) return null;
+                      if (roles.length === 1) {
+                        return (
+                          <Link
+                            href={`/conferences/${r.slug}/apply?role=${roles[0]}`}
+                            className="gv-cs-btn gv-cs-primary"
+                            onClick={() => { recordSpotlightClick(r.booking_id); onClose(); }}
+                          >
+                            Apply
+                          </Link>
+                        );
+                      }
+                      return (
+                        <button
+                          type="button"
+                          className="gv-cs-btn gv-cs-primary"
+                          aria-expanded={choosing === r.conference_id}
+                          onClick={() => {
+                            // The click is recorded once, when Apply is pressed.
+                            if (choosing !== r.conference_id) recordSpotlightClick(r.booking_id);
+                            setChoosing(c => (c === r.conference_id ? null : r.conference_id));
+                          }}
+                        >
+                          Apply
+                        </button>
+                      );
+                    })()}
                     <Link
                       href={`/conferences/${r.slug}`}
                       className="gv-cs-btn gv-cs-secondary"
@@ -95,6 +133,19 @@ export default function ConferenceSpotlightDialog({ rows, onClose }: { rows: Fea
                       View conference
                     </Link>
                   </div>
+                  {choosing === r.conference_id && (
+                    <div className="gv-cs-roles" role="group" aria-label={`Apply to ${label} as`}>
+                      <p className="gv-cs-roles-title">Apply as</p>
+                      {(openRolesFor?.(r.conference_id) ?? [])
+                        .filter(k => ROLE_NAMES[k])
+                        .sort((a, b) => ROLE_ORDER.indexOf(a) - ROLE_ORDER.indexOf(b))
+                        .map(k => (
+                          <Link key={k} href={`/conferences/${r.slug}/apply?role=${k}`} className="gv-cs-role" onClick={onClose}>
+                            {ROLE_NAMES[k]}
+                          </Link>
+                        ))}
+                    </div>
+                  )}
                 </div>
               </article>
             );
@@ -106,6 +157,12 @@ export default function ConferenceSpotlightDialog({ rows, onClose }: { rows: Fea
 }
 
 const CSS = `
+.gv-cs-roles{display:flex;flex-direction:column;gap:4px;margin-top:10px;padding:10px;border-radius:12px;background:#FAF8F3;box-shadow:inset 0 0 0 1px rgba(27,56,40,0.10)}
+.gv-cs-roles-title{margin:0 0 2px;font-size:12px;font-weight:800;color:#5A5046}
+.gv-cs-role{display:block;padding:8px 10px;border-radius:9px;font-family:${FONT};font-size:14px;font-weight:700;color:#1C1410;text-decoration:none}
+.gv-cs-role:hover{background:#EEF3EC}
+.gv-cs-role:focus{outline:none}
+.gv-cs-role:focus-visible{outline:2px solid #1B3828;outline-offset:1px}
 /* One screen at 1280x800 and 1440x900 with up to four conferences side by
    side; the panel widens with the count. Phones stack and scroll. */
 .gv-buy-panel.gv-cs{max-width:560px;min-height:0}

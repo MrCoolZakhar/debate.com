@@ -199,7 +199,7 @@ export default function UnlimitedPopup({ request }: { request: UnlimitedPopupReq
             <h3 className="gv-buy-rtitle">You&apos;re already on Unlimited</h3>
             <p className="gv-buy-note">
               Every application is covered. Your plan and its renewal date are in{' '}
-              <Link href="/account/manage#subscription" onClick={closePurchasePopup}>Manage subscription</Link>.
+              <Link href="/account/manage/subscription" onClick={closePurchasePopup}>Manage subscription</Link>.
             </p>
             <SwapLine lead="Looking for credits?" action="Top up here" onClick={() => swapToCredits('header')} />
           </>

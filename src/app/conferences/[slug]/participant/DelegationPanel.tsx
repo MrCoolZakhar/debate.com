@@ -23,11 +23,11 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import Link from 'next/link';
-import { ArrowLeftRight, CheckCircle2, ChevronLeft, ChevronRight, Compass, Hourglass, Link2, Mail, UserPlus, UserX, X } from 'lucide-react';
+import { ArrowLeftRight, CheckCircle2, ChevronLeft, ChevronRight, Compass, Hourglass, Mail, UserPlus, UserX, X } from 'lucide-react';
 import { getFreshAuthedClient } from '@/lib/supabase-auth';
 import { useDelegationImport } from './DelegationImportCard';
 import DelegationImportPopup from './DelegationImportPopup';
+import MemberLeadMenu from './MemberLeadMenu';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { loadSlotArtIndex, artFromIndex, slotArtKey, type SlotArtIndex } from '@/lib/slotGroups';
@@ -126,8 +126,10 @@ const GOLD_EDGE = '#B6871F';
 
 const ROW_GRID = '@[520px]:grid @[520px]:grid-cols-[minmax(0,1.35fr)_minmax(0,1.2fr)_minmax(0,0.85fr)] @[520px]:items-center';
 
-function RosterRow({ member, pool, swapMode, swapSelectable, swapSelected, onToggleSwap, covered, seatLogo, canSeeAllocation }: {
+function RosterRow({ member, pool, swapMode, swapSelectable, swapSelected, onToggleSwap, covered, seatLogo, canSeeAllocation, leadMenu }: {
   member: RosterMember;
+  /** The head delegate's "…" menu for this row (MemberLeadMenu), else nothing. */
+  leadMenu?: React.ReactNode;
   /** The leader's own read of this application (swap, CV link, attending). */
   pool?: PoolMember;
   swapMode: boolean;
@@ -239,6 +241,7 @@ function RosterRow({ member, pool, swapMode, swapSelectable, swapSelected, onTog
         </div>
       </div>
 
+      {!swapMode && leadMenu && <div className="flex-shrink-0 mt-1">{leadMenu}</div>}
       {swapMode && (
         <div
           className="flex items-center justify-center flex-shrink-0 mt-2.5"
@@ -408,6 +411,8 @@ export default function DelegationPanel({ conferenceId, conferenceSlug, societyI
   useEffect(() => { void loadRoster(); }, [loadRoster]);
 
   const isLeader = !!roster?.is_leader;
+  // Only the head delegate hands over the role or names an advisor.
+  const iAmHead = !!roster?.members.some(m => m.is_me && m.role === 'head-delegate');
   // Leader imports (DelegationImportCard's read), only for a leader.
   const delegationImport = useDelegationImport(isLeader ? societyId : null);
   const importAvailable = isLeader && !!delegationImport.leader?.enabled;
@@ -670,6 +675,18 @@ export default function DelegationPanel({ conferenceId, conferenceSlug, societyI
         covered={coveredIds.has(m.application_id)}
         seatLogo={pool ? seatLogoFor(pool) : null}
         canSeeAllocation={isLeader || m.is_me}
+        leadMenu={iAmHead && societyId ? (
+          <MemberLeadMenu
+            member={{
+              application_id: m.application_id, name: m.name, role: m.role, claimed: m.claimed,
+              status: m.status, is_me: m.is_me, seat: m.allocation?.country_name ?? null,
+            }}
+            societyId={societyId}
+            societyName={roster.society_name ?? society?.name ?? 'your delegation'}
+            confirm={confirm}
+            onDone={loadRoster}
+          />
+        ) : undefined}
       />
     );
   };
@@ -682,7 +699,8 @@ export default function DelegationPanel({ conferenceId, conferenceSlug, societyI
   const invitedCount = rosterMembers.filter(m => !m.claimed).length;
 
   // The leader's tools, the same on both views: bring delegates in (while the
-  // conference allows it), and the delegation portal (invite link, pledges).
+  // conference allows it). There is no delegation portal and no invite link
+  // (owner, 27 Sep 2026); the head delegate's tools are on the member rows.
   const leaderActions = isLeader ? (
     <>
       {importAvailable && (
@@ -696,14 +714,6 @@ export default function DelegationPanel({ conferenceId, conferenceSlug, societyI
           Import delegates
         </button>
       )}
-      <Link
-        href={`/delegation/${societyId}`}
-        className="inline-flex items-center gap-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F]"
-        style={{ minHeight: 44, padding: '0 16px', borderRadius: 10, border: '1.5px solid rgba(28,20,16,0.55)', background: '#FFFFFF', color: '#1C1410', fontFamily: OUTFIT, fontSize: 14, fontWeight: 700, textDecoration: 'none' }}
-      >
-        <Link2 size={16} strokeWidth={2.4} aria-hidden />
-        Invitation link
-      </Link>
     </>
   ) : null;
 
