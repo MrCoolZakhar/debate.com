@@ -15,6 +15,23 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 
+/**
+ * Paid organiser imports are PAUSED on purpose (owner, 27 Sep 2026: every
+ * import is an invite and a new account for Gavelling; "Coming late 2026").
+ * All the paid code stays, and none of it shows while this is false: the
+ * import runs after a plain "Import N delegates" confirm, the Store card says
+ * it is free while we grow, and /pricing/credits lists organiser imports as
+ * coming. To launch, flip this to true AND store_flags.organizer_import_charged
+ * on the server together; the Gavelling Import checkout then comes back
+ * exactly as built. (Leader imports on /pay are separate and stay paid.)
+ */
+export const IMPORTS_PAID_LAUNCH = false;
+
+/** True only when both the launch switch and the database say imports are charged. */
+export function importsArePaid(quote: { charged: boolean } | null | undefined): boolean {
+  return IMPORTS_PAID_LAUNCH && !!quote?.charged;
+}
+
 const CHARGED_ROLES = new Set(['delegate', 'head-delegate', 'faculty-advisor', 'observer']);
 
 export function isChargedImportRole(role: string | null | undefined): boolean {

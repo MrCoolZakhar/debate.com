@@ -82,6 +82,9 @@ export const STORE_CSS = `
 .gv-st-flag{position:absolute;top:12px;left:12px;font-size:10.5px;font-weight:800;letter-spacing:0.06em;text-transform:uppercase;padding:4px 9px;border-radius:999px;background:${GOLD};color:${INK};box-shadow:0 2px 6px rgba(0,0,0,0.25)}
 .gv-st-product-hint{position:absolute;top:12px;right:12px;z-index:2}
 
+/* A small "coming" tag on a card (the Bulk Import card while imports are free) */
+.gv-st-soon-tag{display:inline-flex;align-self:flex-start;margin:-4px 0 12px;padding:3px 10px;border-radius:8px;background:rgba(238,217,138,0.35);color:${DEEP_GOLD};font-family:${OUTFIT};font-size:12px;font-weight:700}
+
 /* The two bottom cards' summary buttons (Your Spotlights, Your Purchases) */
 .gv-st-summary{width:100%;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 14px;border:none;border-radius:14px;background:${IVORY};cursor:pointer;text-align:left;font-family:${OUTFIT};transition:background-color 140ms ease}
 .gv-st-summary:hover{background:#F3EEE2}

@@ -12,7 +12,7 @@ import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient, getFreshAuthedClient } from '@/lib/supabase-auth';
 import Link from 'next/link';
 import { openCreditsPopup } from '@/lib/purchasePopup';
-import { isChargedImportRole, isImportCreditsError, readImportQuote, transferIntoConference } from './importQuote';
+import { IMPORTS_PAID_LAUNCH, importsArePaid, isChargedImportRole, isImportCreditsError, readImportQuote, transferIntoConference } from './importQuote';
 import {
   GavellingImportPopup, ImportFlagDialog, hasImportFlags, type ImportFlags, type ImportInvoice,
 } from './ImportCheckout';
@@ -637,6 +637,21 @@ export default function ImportPage() {
     setFlags(null);
     if (!conference || !session) return;
     const importable = classifiedRows.filter(r => r.cls !== 'error');
+    // Imports are free for now (IMPORTS_PAID_LAUNCH, importQuote.ts): a plain
+    // confirm, then the import. No invoice, no credits lines.
+    if (!IMPORTS_PAID_LAUNCH) {
+      const n = importable.length;
+      const { confirmed } = await confirm({
+        title: `Import ${n} ${n === 1 ? 'delegate' : 'delegates'}?`,
+        body: acceptMode === 'submitted'
+          ? 'They arrive as submitted applications, for you to accept in Applications. Rows marked Error are skipped.'
+          : 'They arrive accepted, or assigned when the file gives them a seat. Rows marked Error are skipped.',
+        confirmLabel: `Import ${n} ${n === 1 ? 'delegate' : 'delegates'}`,
+      });
+      if (!confirmed) return;
+      await runImportOnce();
+      return;
+    }
     const chargedRows = importable.filter(r => r.mode === 'create' && isChargedImportRole(r.resolved.role));
     const byRole = new Map<string, number>();
     for (const r of chargedRows) {
@@ -661,6 +676,13 @@ export default function ImportPage() {
     const conf = quote ? Math.min(quote.conference_credits, total) : 0;
     const own = Math.min(Math.max(0, typeof store?.your_credits === 'number' ? store.your_credits : 0), total - conf);
     setCheckoutErr(null);
+    if (!importsArePaid(quote)) {
+      // The launch switch is on but the database does not charge yet: the
+      // same plain path as while paused.
+      setInvoice(null);
+      await runImportOnce();
+      return;
+    }
     setInvoice({
       charged,
       updates: importable.filter(r => r.mode === 'update').length,

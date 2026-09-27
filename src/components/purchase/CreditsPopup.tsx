@@ -38,7 +38,7 @@ import { BenefitList, BrandTitle, ErrorLine, Eyebrow, FOREST, GoldButton, INK, P
 // What they're for (26 Sep 2026): the same three rows in every context, all live.
 const USES: Benefit[] = [
   { emoji: 'Ticket', fallback: Ticket, title: 'Applying to conferences', note: 'One credit per conference, however many times you edit.', live: true },
-  { emoji: 'Shopping bags', fallback: Store, title: 'Conference Store', note: 'Spotlights, bulk emails, delegate sponsorship and imports for your conference.', live: true },
+  { emoji: 'Shopping bags', fallback: Store, title: 'Conference Store', note: 'Spotlights, bulk emails and delegate sponsorship for your conference.', live: true },
   { emoji: 'Books', fallback: BookOpen, title: 'MUN guides', note: 'Unlock any premium guide, yours forever, for 1 credit.', live: true },
 ];
 

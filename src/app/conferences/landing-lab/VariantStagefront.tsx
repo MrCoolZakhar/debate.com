@@ -754,8 +754,20 @@ const DRAG_THRESHOLD = 60;
 const VELOCITY_THRESHOLD = 400;
 
 function RoleCarousel({ slides }: { slides: RoleSlide[] }) {
+  // Always starts on the first slide (no Date, no random), so the server
+  // render and the first client render agree.
   const [active, setActive] = useState(0);
   const total = slides.length;
+  // Until hydration only the active slide is drawn (27 Sep 2026: on a first
+  // load two slides were painted on top of each other, SECRETARIAT over
+  // DELEGATES, because the side slides were in the page before their offset
+  // and opacity were applied). Once mounted, the neighbours join already in
+  // place (initial={false} below), with no animation from the centre.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    const id = requestAnimationFrame(() => setMounted(true));
+    return () => cancelAnimationFrame(id);
+  }, []);
 
   const goToSlide = useCallback((i: number) => setActive(((i % total) + total) % total), [total]);
   const next = useCallback(() => goToSlide(active + 1), [active, goToSlide]);
@@ -795,6 +807,7 @@ function RoleCarousel({ slides }: { slides: RoleSlide[] }) {
           const offset = getOffset(i);
           if (Math.abs(offset) > 2) return null;
           const isActive = offset === 0;
+          if (!mounted && !isActive) return null;
 
           return (
             <motion.div
@@ -807,7 +820,11 @@ function RoleCarousel({ slides }: { slides: RoleSlide[] }) {
                   ? '0 32px 70px rgba(15,26,19,0.38), 0 0 0 1px rgba(250,248,243,0.14)'
                   : '0 18px 40px rgba(15,26,19,0.22), 0 0 0 1px rgba(250,248,243,0.10)',
                 cursor: isActive ? 'grab' : 'pointer',
+                // A slide two places away is fully transparent anyway; hide it
+                // outright so it can never show part-way through a transition.
+                visibility: Math.abs(offset) > 1 ? 'hidden' : 'visible',
               }}
+              initial={false}
               animate={{
                 x: `${offset * 78}%`,
                 scale: isActive ? 1 : 0.82,

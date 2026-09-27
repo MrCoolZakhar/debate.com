@@ -13,7 +13,6 @@ import { useUnlimitedStatus, isUnlimited } from '@/lib/unlimitedStatus';
 import { useDraftCount } from '@/hooks/useDraftCount';
 import { useCredits } from '@/hooks/useCredits';
 import SiteNav from '@/components/SiteNav';
-import SiteFooter from '@/components/SiteFooter';
 import Loader from '@/components/Loader';
 import { AccountStyles, DuoIcon, RAISED, FOREST, DEEP_GOLD, INK, INK_SOFT } from './accountShell';
 
@@ -324,7 +323,8 @@ export default function AccountLayout({ children }: { children: React.ReactNode 
           </div>
         </div>
 
-        <SiteFooter />
+        {/* No site footer on /account (27 Sep 2026): it crowded the left
+            rail; the rail layout ends the page. */}
       </div>
     </div>
   );

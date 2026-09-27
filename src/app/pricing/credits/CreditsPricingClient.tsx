@@ -19,9 +19,13 @@ import BundlePicker from '@/components/pricing/BundlePicker';
 import { ActionButton, ActionLink, FOCUS_RING, P, PricingStyles, QuestionBox } from '@/components/pricing/pricingKit';
 
 // What credits do today (26 Sep 2026). A row with a live destination links there.
-const USES: { emoji: string; icon: typeof Ticket; title: string; note: string; live: boolean; href?: string }[] = [
-  { emoji: 'Shopping bags', icon: Store, title: 'Conference Store', note: 'Spotlights, bulk emails, delegate sponsorship and imports.', live: true, href: '/help#organizers' },
+// Organiser imports are free for now (IMPORTS_PAID_LAUNCH in
+// manage/[slug]/import/importQuote.ts), so their row says when they come;
+// the delegation leader's import stays live.
+const USES: { emoji: string; icon: typeof Ticket; title: string; note: string; live: boolean; href?: string; soon?: string }[] = [
+  { emoji: 'Shopping bags', icon: Store, title: 'Conference Store', note: 'Spotlights, bulk emails and delegate sponsorship.', live: true, href: '/help#organizers' },
   { emoji: 'Inbox tray', icon: Inbox, title: 'Import Your Delegates', note: 'Delegation leaders bring their delegates in, 1 credit each.', live: true },
+  { emoji: 'Card index', icon: Inbox, title: 'Organizer Imports', note: 'Bring a whole roster in from a spreadsheet.', live: false, soon: 'Coming late 2026' },
   { emoji: 'Books', icon: BookOpen, title: 'Premium MUN Guides', note: 'Unlock any premium guide, yours forever.', live: true, href: '/guides' },
   { emoji: 'Briefcase', icon: Briefcase, title: 'The Job Board', note: 'Chair and secretariat roles across conferences.', live: false },
 ];
@@ -135,7 +139,7 @@ export default function CreditsPricingClient() {
                   <h3>{hrefOf(u) ? <Link href={hrefOf(u)!} className={FOCUS_RING}>{u.title}</Link> : u.title}</h3>
                   <p>{u.note}</p>
                 </div>
-                {u.live ? <span className="gv-cr-live">Live</span> : <span className="gv-cr-soon">Soon</span>}
+                {u.live ? <span className="gv-cr-live">Live</span> : <span className="gv-cr-soon">{u.soon ?? 'Soon'}</span>}
               </li>
             ))}
           </ul>

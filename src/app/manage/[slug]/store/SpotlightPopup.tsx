@@ -21,7 +21,7 @@
 // and finishes the SAME booking once after payment.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Check, ChevronLeft, ChevronRight, Compass, Flag, Globe, Home, X } from 'lucide-react';
+import { Check, ChevronLeft, ChevronRight, Compass, ExternalLink, Flag, Globe, Home, X } from 'lucide-react';
 import { GoldWord } from '@/components/BrandHeading';
 import { friendlyError, plainOrFallback } from '@/lib/friendlyError';
 import { notifyOk } from '@/lib/appNotify';
@@ -180,7 +180,16 @@ export default function SpotlightPopup(props: SpotlightPopupProps) {
   // Steps: one per placement (bundle) or one placement (single), then the description.
   const items = useMemo(() => bundle ? bundle.items : [{ placement: props.placement ?? 'homepage', days: 0 }], [bundle, props.placement]);
   const [stepIx, setStepIx] = useState(0);
-  const [placementIx, setPlacementIx] = useState(0); // single mode: which bookmark
+  // Single mode: which bookmark. Starts on the card that was pressed (it
+  // always opened on Homepage before, whatever was clicked), and follows a
+  // reopen with another placement.
+  const ixOf = (pl: Placement | undefined) => Math.max(0, PLACEMENTS.indexOf(pl ?? 'homepage'));
+  const [placementIx, setPlacementIx] = useState(() => ixOf(props.placement));
+  const [seenPlacementProp, setSeenPlacementProp] = useState(props.placement);
+  if (seenPlacementProp !== props.placement) {
+    setSeenPlacementProp(props.placement);
+    setPlacementIx(ixOf(props.placement));
+  }
   const onDescription = stepIx >= items.length;
   const current = bundle ? items[Math.min(stepIx, items.length - 1)] : items[0];
   const placement: Placement = bundle ? current.placement : PLACEMENTS[placementIx];
@@ -459,6 +468,12 @@ export default function SpotlightPopup(props: SpotlightPopupProps) {
   };
 
   const r = reach[placement];
+  // "See where it shows": the page this placement appears on, with the filter
+  // Explore reads today (?continent=<key>, ?country=<name>). New tab.
+  const seeHref = placement === 'homepage' ? '/'
+    : placement === 'explore' ? '/conferences/explore'
+    : placement === 'region' ? (continent ? `/conferences/explore?continent=${encodeURIComponent(continent)}` : '/conferences/explore')
+    : (conference.country?.trim() ? `/conferences/explore?country=${encodeURIComponent(conference.country.trim())}` : '/conferences/explore');
   const s = sell(placement, conference, continent);
   const needsTarget = target === null;
   const bookable = conference.is_public && !conference.dates_tbd && !!conference.start_date && lastDay >= today;
@@ -514,16 +529,29 @@ export default function SpotlightPopup(props: SpotlightPopupProps) {
         <div>
           <Eyebrow>Where it shows</Eyebrow>
           <p className="gv-sp-p">{s.where}</p>
+          {seeHref && (
+            <a href={seeHref} target="_blank" rel="noopener noreferrer" className="gv-sp-see">
+              See where it shows
+              <ExternalLink size={13} strokeWidth={2.4} aria-hidden />
+            </a>
+          )}
         </div>
         <div>
           <Eyebrow>Who sees it</Eyebrow>
           <p className="gv-sp-p">{s.who} You get a report of views and clicks, day by day, in your Store.</p>
         </div>
         <div>
-          <Eyebrow>Expected visits</Eyebrow>
-          {r?.ready && r.views_per_week !== null
-            ? <p className="gv-sp-p"><b className="gv-sp-reach">{Math.round(r.views_per_week).toLocaleString('en-US')}</b> visits a week to this page, over the last 30 days</p>
-            : <p className="gv-sp-p">Views are being counted. Your report will show yours.</p>}
+          {typeof r?.views_per_week === 'number' ? (
+            <>
+              <Eyebrow>Expected visits</Eyebrow>
+              <p className="gv-sp-p">About <b className="gv-sp-reach">{Math.round(r.views_per_week).toLocaleString('en-US')}</b> views a week</p>
+            </>
+          ) : (
+            <>
+              <Eyebrow>Your results</Eyebrow>
+              <p className="gv-sp-p">Track how your spotlight performs at any time in Your Spotlights, at the bottom of your Conference Store.</p>
+            </>
+          )}
         </div>
         <div className="gv-sp-price">
           {bundle ? (
@@ -678,6 +706,10 @@ const SPOT_CSS = `
 .gv-sp-right{padding-bottom:0!important;display:flex;flex-direction:column}
 .gv-sp-steps{flex:1 1 auto;display:flex;flex-direction:column;gap:12px;padding-bottom:16px}
 .gv-sp-p{margin:0;font-size:14px;line-height:1.55;color:${INK_SOFT}}
+.gv-sp-see{display:inline-flex;align-items:center;gap:5px;margin-top:8px;padding:6px 12px;border-radius:9px;background:#FFFFFF;box-shadow:inset 0 0 0 1.5px rgba(27,56,40,0.22);color:#1B3828;font-size:13px;font-weight:700;text-decoration:none}
+.gv-sp-see:hover{box-shadow:inset 0 0 0 1.5px #1B3828}
+.gv-sp-see:focus{outline:none}
+.gv-sp-see:focus-visible{outline:2px solid #1B3828;outline-offset:2px}
 .gv-sp-reach{font-size:22px;font-weight:800;color:${INK};font-variant-numeric:tabular-nums}
 .gv-sp-price{margin-top:auto;padding-top:16px;border-top:1px solid rgba(28,20,16,0.12);display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
 .gv-sp-price-big{font-size:46px;font-weight:800;letter-spacing:-0.03em;line-height:1;font-variant-numeric:tabular-nums;color:${FOREST}}
