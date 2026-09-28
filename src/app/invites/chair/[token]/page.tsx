@@ -100,7 +100,11 @@ export default function ChairInvitePage() {
     // were invited to and has no other way to tell anyone. A failed decline
     // loses nothing, so it stays an inline message.
     if (rpcErr || !result?.ok) {
-      if (accept) {
+      // "This invite was already accepted / declined / revoked." is an expected
+      // outcome (27 Sep 2026: it filled the error reports), shown as written and
+      // never reported.
+      const alreadyAnswered = !rpcErr && /^This invite was already /.test(result?.error ?? '');
+      if (accept && !alreadyAnswered) {
         reportBlocked('accept chair invite', rpcErr ?? new Error(result?.error ?? 'rpc returned ok:false'), {
           conferenceSlug: invite?.slug ?? null,
           inviteStatus: invite?.status ?? null,

@@ -222,9 +222,13 @@ export function friendlyError(error: unknown, fallback: string = DEFAULT_FALLBAC
     return say("We couldn't reach Gavelling. Check your connection and try again.", 'network', true, message, code);
   }
 
-  // c. Session.
-  if (code === 'PGRST301' || /JWT/.test(message)) {
-    return say('Your session has expired. Please refresh the page and sign in again.', 'session', false, message, code);
+  // c. Session. An expired token is refreshed and the call retried once by
+  // getAuthedClient's fetch (src/lib/supabase-auth.ts) before anything gets
+  // here, and that path opens the sign-in pop-up and reports it itself; this is
+  // only reached when the person really is signed out, so it is not reported
+  // again as a fault.
+  if (code === 'PGRST301' || code === 'PGRST303' || /JWT/.test(message)) {
+    return say('Your session has expired. Please sign in again.', 'session', true, message, code);
   }
 
   // d. Permission.

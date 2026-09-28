@@ -19,7 +19,7 @@ import { NEU, OUTFIT } from '@/components/neu';
 import { SeatCircleFlag } from '@/components/CircleFlag';
 import { getCountryDisplayName } from '@/lib/countries';
 import { useAuth } from '@/components/AuthProvider';
-import { getAuthedClient } from '@/lib/supabase-auth';
+import { getFreshAuthedClient } from '@/lib/supabase-auth';
 import { SOFT, RED } from './tokens';
 
 type Status = 'absent' | 'present' | 'present-voting';
@@ -83,7 +83,8 @@ export function SessionAttendance({ sessionId, seats, endedAt = null }: {
   endedAt?: string | null;
 }) {
   const { session } = useAuth();
-  const token = session?.access_token;
+  // Keyed on the user, never the token: the client is fetched fresh at call time.
+  const token = session?.user?.id ?? null;
   const [log, setLog] = useState<LogRow[] | null>(null);
   const [logError, setLogError] = useState('');
   const [reload, setReload] = useState(0);
@@ -96,7 +97,10 @@ export function SessionAttendance({ sessionId, seats, endedAt = null }: {
     if (!sessionId || !token) return;
     let alive = true;
     void (async () => {
-      const { data, error } = await getAuthedClient(token).rpc('delegate_status_history', { p_committee: sessionId });
+      const client = await getFreshAuthedClient();
+      if (!alive) return;
+      if (!client) { setLogError('Your session has expired. Please sign in again.'); return; }
+      const { data, error } = await client.rpc('delegate_status_history', { p_committee: sessionId });
       if (!alive) return;
       const res = data as { ok?: boolean; rows?: Record<string, unknown>[] } | null;
       if (error || !res?.ok) {

@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { RefreshCw, Radio, PauseCircle, Megaphone } from 'lucide-react';
 import { useManage } from '@/app/manage/[slug]/layout';
 import { useAuth } from '@/components/AuthProvider';
-import { getAuthedClient } from '@/lib/supabase-auth';
+import { getFreshAuthedClient, refreshSessionNow } from '@/lib/supabase-auth';
 import { supabase as anonSupabase } from '@/lib/supabase';
 import {
   NeuCard, NeuInset, NeuIconDisc, Emoji3D,
@@ -64,6 +64,12 @@ function Eyebrow({ children, style }: { children: React.ReactNode; style?: React
 export default function LiveStatusPage() {
   const { conference } = useManage();
   const { session: authSession } = useAuth();
+  // Every read and write below gets its client from getFreshAuthedClient() at
+  // call time (27 Sep 2026): a token held in state went stale on a page left
+  // open overnight, and the organiser was told their session had expired about
+  // once an hour. The callbacks key on the USER, never the token, so a token
+  // refresh does not tear down and restart the poll.
+  const authUserId = authSession?.user?.id ?? null;
 
   const [rows, setRows] = useState<LiveCommittee[] | null>(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -106,7 +112,7 @@ export default function LiveStatusPage() {
   const loadStartedRef = useRef(0);
 
   const loadAll = useCallback(async () => {
-    if (!conference || !authSession) return;
+    if (!conference || !authUserId) return;
     // In-flight guard WITH a deadline. Without one, a single request that never
     // settles (a dropped socket mid-flight leaves the promise pending forever)
     // pinned `loadingRef` true and silently killed the 10s poll for the rest of
@@ -119,7 +125,11 @@ export default function LiveStatusPage() {
     // calm, empty floor stamped "Refreshed 2s ago".
     const failures: string[] = [];
     try {
-      const authed = getAuthedClient(authSession.access_token);
+      const authed = await getFreshAuthedClient();
+      if (!authed) {
+        setLoadError('Your session has expired. Please sign in again.');
+        return;
+      }
       const { data: confCommittees, error: confErr } = await authed
         .from('conference_committees')
         // `released_to_chairs_at` and `delegation_size` are new here and are both
@@ -512,7 +522,7 @@ export default function LiveStatusPage() {
       loadingRef.current = false;
       setRefreshing(false);
     }
-  }, [conference?.id, authSession?.access_token]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [conference?.id, authUserId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Broadcasts this conference has sent. Kept out of loadAll so a broadcast
   // send/withdraw can refresh just this slice without re-fetching every
@@ -520,8 +530,9 @@ export default function LiveStatusPage() {
   // no longer on any dais, so the log stops at the ones that still matter plus
   // a short tail of history.
   const loadBroadcasts = useCallback(async () => {
-    if (!conference || !authSession) return;
-    const authed = getAuthedClient(authSession.access_token);
+    if (!conference || !authUserId) return;
+    const authed = await getFreshAuthedClient();
+    if (!authed) return;
     const { data } = await authed
       .from('session_broadcasts')
       .select(BROADCAST_COLUMNS)
@@ -529,21 +540,31 @@ export default function LiveStatusPage() {
       .order('created_at', { ascending: false })
       .limit(120);
     setBroadcasts(((data ?? []) as Record<string, unknown>[]).map(mapBroadcastRow));
-  }, [conference?.id, authSession?.access_token]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [conference?.id, authUserId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Initial load + 10s polling (kept simple + robust for N committees, no per-committee channels)
+  // Initial load + 10s polling (kept simple + robust for N committees, no per-committee channels).
+  // Paused while the tab is hidden: a background tab's timers (the token
+  // refresh included) are throttled, so a hidden poll is what ran into an
+  // expired token. Back on screen, the session is refreshed FIRST and the floor
+  // is read straight away.
   useEffect(() => {
-    loadAll();
-    loadBroadcasts();
-    const poll = setInterval(() => { loadAll(); loadBroadcasts(); }, 10_000);
-    return () => clearInterval(poll);
+    let alive = true;
+    const visible = () => typeof document === 'undefined' || document.visibilityState === 'visible';
+    const tick = () => { if (visible()) { void loadAll(); void loadBroadcasts(); } };
+    tick();
+    const poll = setInterval(tick, 10_000);
+    const onVis = () => {
+      if (!visible()) return;
+      void refreshSessionNow().then(() => { if (alive) tick(); });
+    };
+    document.addEventListener('visibilitychange', onVis);
+    return () => { alive = false; clearInterval(poll); document.removeEventListener('visibilitychange', onVis); };
   }, [loadAll, loadBroadcasts]);
 
 
   // Lazy, once-per-visit load of the conference scoreboard, triggered the first
   // time an organiser opens a Points view.
   const conferenceId = conference?.id;
-  const accessToken = authSession?.access_token;
   //
   // THE IN-FLIGHT LATCH IS A REF, AND THAT IS NOT A STYLE CHOICE.
   //
@@ -575,11 +596,17 @@ export default function LiveStatusPage() {
   // needs the whole-conference payload (it resolves the people behind a seat).
   const wantsScoreboard = !!delegateFor;
   useEffect(() => {
-    if (scoreboardReq.current || !wantsScoreboard || !conferenceId || !accessToken) return;
+    if (scoreboardReq.current || !wantsScoreboard || !conferenceId || !authUserId) return;
     scoreboardReq.current = true;
     setScoreboardLoading(true);
     void (async () => {
-      const authed = getAuthedClient(accessToken);
+      const authed = await getFreshAuthedClient();
+      if (!authed) {
+        scoreboardReq.current = false;
+        setScoreboardError('Your session has expired. Please sign in again.');
+        setScoreboardLoading(false);
+        return;
+      }
       try {
         // `loadAllocationIndex` never throws — it logs and returns an empty
         // index — so a failure to resolve WHO holds a delegation can never take
@@ -601,7 +628,7 @@ export default function LiveStatusPage() {
         setScoreboardLoading(false);
       }
     })();
-  }, [wantsScoreboard, conferenceId, accessToken]);
+  }, [wantsScoreboard, conferenceId, authUserId]);
 
   // ── Derived ──
   const recapData = recapFor ? rows?.find((r) => r.conf.id === recapFor) ?? null : null;

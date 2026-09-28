@@ -16,6 +16,12 @@
 //     attaches the application + allocations to the caller, then we land them
 //     on the conference role view.
 //  4. Invalid / already-claimed tokens show a clean, self-contained card.
+//  5. (27 Sep 2026) A claimant who already holds a place of the same role at
+//     this conference on this account (the organiser imported them under
+//     another email) gets the server's own sentence (reason 'duplicate') and
+//     "Open my dashboard", as a normal outcome: never an error style, never
+//     reported. Any other failure is ONE plain sentence, never a database
+//     message, and is still reported.
 
 import AuthLink from '@/components/auth/AuthLink';
 import { useEffect, useState, useCallback } from 'react';
@@ -33,6 +39,7 @@ import { formatConferenceDates } from '@/lib/conferenceDates';
 
 const MONO_STACK = "var(--font-brand), sans-serif";
 const DANGER = '#8B2020';
+const COULD_NOT_OPEN = 'We could not open this invite. Try again, or ask the person who sent it for a new link.';
 
 interface InviteConference {
   slug: string;
@@ -125,7 +132,9 @@ export default function ImportInvitePage() {
   const token = Array.isArray(params.token) ? params.token[0] : params.token;
   const { user, loading: authLoading } = useAuth();
 
-  const [state, setState] = useState<'loading' | 'invalid' | 'claimed' | 'open'>('loading');
+  const [state, setState] = useState<'loading' | 'invalid' | 'claimed' | 'open' | 'error' | 'duplicate'>('loading');
+  // reason 'duplicate': the server's sentence and where their own place lives.
+  const [duplicate, setDuplicate] = useState<{ message: string; href: string } | null>(null);
   const [invite, setInvite] = useState<ImportInvite | null>(null);
   const [claiming, setClaiming] = useState(false);
   const [claimError, setClaimError] = useState('');
@@ -136,7 +145,13 @@ export default function ImportInvitePage() {
     if (!token) { setState('invalid'); return; }
     const { data, error } = await supabaseAuthClient.rpc('get_import_invite', { p_token: token });
     const result = (data ?? null) as ImportInvite | null;
-    if (error || !result || !result.ok) { setState('invalid'); return; }
+    if (error) {
+      // The lookup itself failed (not "no such invite"): a real fault.
+      reportBlocked('open imported registration', error);
+      setState('error');
+      return;
+    }
+    if (!result || !result.ok) { setState('invalid'); return; }
     setInvite(result);
     setState(result.claimed ? 'claimed' : 'open');
   }, [token]);
@@ -153,20 +168,34 @@ export default function ImportInvitePage() {
     setClaiming(true);
     setClaimError('');
     const { data, error } = await supabaseAuthClient.rpc('claim_import_invite', { p_token: token });
-    const result = (data ?? null) as { ok: boolean; reason?: string; slug?: string } | null;
+    const result = (data ?? null) as { ok: boolean; reason?: string; slug?: string; role?: string; message?: string } | null;
     if (error || !result) {
       setClaiming(false);
       // An imported delegate cannot get into the conference they were
       // registered for, and this page is the only door they have.
       reportBlocked('claim imported registration', error ?? new Error('claim rpc returned no result'));
-      setClaimError('Something went wrong claiming your registration. Please try again.');
+      setClaimError(COULD_NOT_OPEN);
       return;
     }
     if (result.ok && result.slug) {
       router.replace(`/conferences/${result.slug}/role`);
       return;
     }
+    if (result.reason === 'duplicate' && result.slug) {
+      // They already hold this role at this conference on this account. A
+      // normal outcome: the server's sentence, and the way to their own place.
+      setClaiming(false);
+      const role = result.role || invite?.role || 'delegate';
+      const message = typeof result.message === 'string' && result.message.length > 0 && result.message.length <= 240
+        ? result.message
+        : 'You already have a place at this conference on this account, so there is nothing to claim. Open your dashboard to see it.';
+      setDuplicate({ message, href: `/conferences/${result.slug}/role/${role}` });
+      setState('duplicate');
+      return;
+    }
     if (result.reason === 'claimed') {
+      // Claimed by ANOTHER account (the server answers ok for the caller's own
+      // claim). Expected, not reported.
       setClaiming(false);
       setState('claimed');
       return;
@@ -183,7 +212,7 @@ export default function ImportInvitePage() {
     reportBlocked('claim imported registration', new Error(`claim refused: ${result.reason ?? 'no reason'}`), {
       reason: result.reason ?? null,
     });
-    setClaimError('This invitation could not be claimed. Ask your conference organizer to send you a new one.');
+    setClaimError(COULD_NOT_OPEN);
   }
 
   if (state === 'loading') return <Spinner />;
@@ -206,6 +235,47 @@ export default function ImportInvitePage() {
     );
   }
 
+  if (state === 'error') {
+    return (
+      <CardShell>
+        <NeuIconDisc gradient={NEU_GRADIENTS.forest} icon={Landmark} size={52} style={{ marginBottom: 20 }} />
+        <Eyebrow>Imported delegate</Eyebrow>
+        <h1 className="font-black text-xl mt-2 mb-2" style={{ color: NEU.ink, fontFamily: OUTFIT }}>
+          Invitation Not Opened
+        </h1>
+        <p className="text-sm mb-6" style={{ color: NEU.muted, fontFamily: OUTFIT, lineHeight: 1.55 }}>
+          {COULD_NOT_OPEN}
+        </p>
+        <button
+          type="button"
+          onClick={() => { setState('loading'); void resolve(); }}
+          className="inline-flex items-center gap-2 rounded-full py-2.5 px-5 font-bold text-sm focus:outline-none"
+          style={{ ...primaryPillStyle, border: 'none', cursor: 'pointer' }}
+        >
+          Try again
+        </button>
+      </CardShell>
+    );
+  }
+
+  if (state === 'duplicate' && duplicate) {
+    return (
+      <CardShell>
+        <NeuIconDisc gradient={NEU_GRADIENTS.forest} icon={Landmark} size={52} style={{ marginBottom: 20 }} />
+        <Eyebrow>Imported delegate</Eyebrow>
+        <h1 className="font-black text-xl mt-2 mb-2" style={{ color: NEU.ink, fontFamily: OUTFIT }}>
+          You Already Have a Place
+        </h1>
+        <p className="text-sm mb-6" style={{ color: NEU.muted, fontFamily: OUTFIT, lineHeight: 1.55 }}>
+          {duplicate.message}
+        </p>
+        <Link href={duplicate.href} className="inline-flex items-center gap-2 rounded-full py-2.5 px-5 font-bold text-sm focus:outline-none" style={primaryPillStyle}>
+          Open my dashboard
+        </Link>
+      </CardShell>
+    );
+  }
+
   if (state === 'claimed') {
     return (
       <CardShell>
@@ -215,7 +285,7 @@ export default function ImportInvitePage() {
           Already Claimed
         </h1>
         <p className="text-sm mb-6" style={{ color: NEU.muted, fontFamily: OUTFIT, lineHeight: 1.55 }}>
-          This invitation has already been claimed. If that was you, your conference is waiting in My Conferences.
+          This invitation has already been claimed. If you claimed it, your conference is waiting in My conferences. If not, ask the person who sent it for a new link.
         </p>
         <Link href="/account/conferences" className="inline-flex items-center gap-2 rounded-full py-2.5 px-5 font-bold text-sm focus:outline-none" style={primaryPillStyle}>
           Go to my conferences

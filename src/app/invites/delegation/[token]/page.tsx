@@ -27,7 +27,7 @@ import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowRight, CircleCheck, TriangleAlert, Users2 } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
-import { getAuthedClient, supabaseAuthClient } from '@/lib/supabase-auth';
+import { getFreshAuthedClient, supabaseAuthClient } from '@/lib/supabase-auth';
 import { friendlyError, plainOrFallback } from '@/lib/friendlyError';
 import { openAuth } from '@/lib/authModal';
 import SiteNav from '@/components/SiteNav';
@@ -60,6 +60,10 @@ type View =
   | { kind: 'blocked'; r: JoinResult }
   | { kind: 'error'; message: string };
 
+// Any failure that is not a known outcome: one plain sentence, never a database
+// message (27 Sep 2026). friendlyError still reports the fault behind it.
+const COULD_NOT_OPEN = 'We could not open this invite. Try again, or ask the person who sent it for a new link.';
+
 const ROLE_WORD: Record<string, string> = {
   'head-delegate': 'head delegate', 'faculty-advisor': 'faculty advisor', chair: 'chair', observer: 'observer',
 };
@@ -78,7 +82,9 @@ export default function DelegationInvitePage() {
   const { user, session, loading: authLoading } = useAuth();
   const [view, setView] = useState<View>({ kind: 'loading' });
   const [busy, setBusy] = useState(false);
-  const accessToken = session?.access_token ?? null;
+  // Keyed on whether someone is signed in, never on the token: the client is
+  // fetched fresh at call time.
+  const accessToken = session ? 'signed-in' : null;
   const userId = user?.id ?? null;
 
   const run = useCallback(async (confirmMove: boolean) => {
@@ -87,24 +93,26 @@ export default function DelegationInvitePage() {
     if (!userId || !accessToken) {
       const { data, error } = await supabaseAuthClient.rpc('resolve_delegation_invite', { p_token: token });
       const r = data as JoinResult | null;
-      if (error) { setView({ kind: 'error', message: friendlyError(error, 'We could not open this invite. Try again.') }); return; }
+      if (error) { friendlyError(error, COULD_NOT_OPEN); setView({ kind: 'error', message: COULD_NOT_OPEN }); return; }
       if (!r?.ok) { setView({ kind: 'invalid', message: plainOrFallback(r?.error, 'This invite link is not valid.') }); return; }
       setView({ kind: 'signin', r: { ...r, conference_name: r.conference_name } });
       openAuth({ next: `/invites/delegation/${encodeURIComponent(token)}`, apply: true });
       return;
     }
 
-    const { data, error } = await getAuthedClient(accessToken).rpc('delegation_join_via_invite', { p_token: token, p_confirm_move: confirmMove });
-    if (error) { setView({ kind: 'error', message: friendlyError(error, 'We could not open this invite. Try again.') }); return; }
+    const client = await getFreshAuthedClient();
+    if (!client) { setView({ kind: 'error', message: 'Your session has expired. Please sign in again.' }); return; }
+    const { data, error } = await client.rpc('delegation_join_via_invite', { p_token: token, p_confirm_move: confirmMove });
+    if (error) { friendlyError(error, COULD_NOT_OPEN); setView({ kind: 'error', message: COULD_NOT_OPEN }); return; }
     const r = data as JoinResult | null;
-    if (!r) { setView({ kind: 'error', message: 'We could not open this invite. Try again.' }); return; }
+    if (!r) { setView({ kind: 'error', message: COULD_NOT_OPEN }); return; }
     if (r.ok && r.action === 'apply') { router.replace(applyUrl(r, token)); return; }
     if (r.ok && r.action === 'joined') { setView({ kind: 'joined', r }); return; }
     if (r.ok && r.action === 'already') { setView({ kind: 'already', r }); return; }
     if (r.reason === 'invalid') { setView({ kind: 'invalid', message: plainOrFallback(r.error, 'This invite link is not valid.') }); return; }
     if (r.reason === 'confirm_move') { setView({ kind: 'confirm_move', r }); return; }
     if (r.reason === 'leader' || r.reason === 'role') { setView({ kind: 'blocked', r }); return; }
-    setView({ kind: 'error', message: 'We could not open this invite. Try again.' });
+    setView({ kind: 'error', message: COULD_NOT_OPEN });
   }, [token, userId, accessToken, router]);
 
   useEffect(() => {

@@ -42,7 +42,7 @@ import {
   PauseCircle, Globe2, ScrollText, FileText, Hand, ArrowUpRight, Clock,
 } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
-import { getAuthedClient } from '@/lib/supabase-auth';
+import { getFreshAuthedClient, refreshSessionNow } from '@/lib/supabase-auth';
 import { CircleFlag } from '@/components/CircleFlag';
 import { conferenceAcronymLabel } from '@/lib/conferenceLabels';
 import { LogoDisc } from '@/components/LogoDisc';
@@ -622,7 +622,9 @@ export default function LiveCommitteesTab() {
     inFlight.current = true;
     setRefreshing(true);
     try {
-      const supabase = getAuthedClient(session.access_token);
+      // Fresh at call time: a token held in state went stale on a tab left open.
+      const supabase = await getFreshAuthedClient();
+      if (!supabase) { setError('denied'); setRows([]); return; }
       const { data, error: err } = await supabase.rpc('admin_live_committees');
       if (err) {
         const msg = `${err.message ?? ''} ${err.details ?? ''}`.toLowerCase();
@@ -646,7 +648,7 @@ export default function LiveCommitteesTab() {
       inFlight.current = false;
       setRefreshing(false);
     }
-  }, [session]);
+  }, [session?.user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Poll every 30s, paused while the tab is hidden, refreshed on return.
   useEffect(() => {
@@ -656,7 +658,7 @@ export default function LiveCommitteesTab() {
       if (typeof document !== 'undefined' && document.hidden) return;
       void load();
     }, 30_000);
-    const onVisible = () => { if (!document.hidden) void load(); };
+    const onVisible = () => { if (!document.hidden) void refreshSessionNow().then(() => load()); };
     document.addEventListener('visibilitychange', onVisible);
     return () => {
       clearInterval(poll);

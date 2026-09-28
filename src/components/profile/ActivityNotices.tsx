@@ -177,7 +177,10 @@ function InviteRow({ item, sheet, onNavigate }: { item: ActivityItem; sheet: boo
     const result = data as { ok: boolean; error?: string; slug?: string } | null;
     if (rpcErr || !result?.ok) {
       const wrongAccount = !rpcErr && !!result?.error && /Sign in with that email|different account/i.test(result.error);
-      if (accept && !wrongAccount) {
+      // "This invite was already accepted / declined / revoked." is an expected
+      // outcome, not a fault (27 Sep 2026), so it is shown and never reported.
+      const alreadyAnswered = !rpcErr && /^This invite was already /.test(result?.error ?? '');
+      if (accept && !wrongAccount && !alreadyAnswered) {
         reportBlocked(chair ? 'accept chair invite (menu)' : 'accept organizer invite (menu)',
           rpcErr ?? new Error(result?.error ?? 'rpc returned ok:false'), { conference: item.conference });
       }
