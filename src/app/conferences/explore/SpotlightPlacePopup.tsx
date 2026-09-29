@@ -8,7 +8,7 @@
 // per browser session. Bigger and more personal than a card: the banner with
 // the logo over it, the full name (last word in gold italic), dates, place and
 // format, the booking's short description, then the organiser's pitch and up
-// to three highlights. APPLY NOW and VIEW CONFERENCE.
+// to three highlights. Apply now and View conference.
 //
 // The organiser's editor (manage/[slug]/store/SpotlightPopupEditor.tsx)
 // previews this exact component with `preview`, which records nothing and
@@ -155,13 +155,13 @@ export default function SpotlightPlacePopup({ rows, placement, onClose, preview 
                   <div className="gv-sp-actions">
                     {preview ? (
                       <>
-                        <span className="gv-sp-btn gv-sp-primary" aria-disabled="true">APPLY NOW</span>
-                        <span className="gv-sp-btn gv-sp-secondary" aria-disabled="true">VIEW CONFERENCE</span>
+                        <span className="gv-sp-btn gv-sp-primary" aria-disabled="true">Apply now</span>
+                        <span className="gv-sp-btn gv-sp-secondary" aria-disabled="true">View conference</span>
                       </>
                     ) : (
                       <>
-                        <Link href={`/conferences/${r.slug}/apply`} className="gv-sp-btn gv-sp-primary" onClick={click}>APPLY NOW</Link>
-                        <Link href={`/conferences/${r.slug}`} className="gv-sp-btn gv-sp-secondary" onClick={click}>VIEW CONFERENCE</Link>
+                        <Link href={`/conferences/${r.slug}/apply`} className="gv-sp-btn gv-sp-primary" onClick={click}>Apply now</Link>
+                        <Link href={`/conferences/${r.slug}`} className="gv-sp-btn gv-sp-secondary" onClick={click}>View conference</Link>
                       </>
                     )}
                   </div>
@@ -199,7 +199,7 @@ const CSS = `
 .gv-sp-hl li{display:flex;align-items:flex-start;gap:8px;font-size:14px;font-weight:600;line-height:1.4;color:#1C1410;overflow-wrap:anywhere}
 .gv-sp-hl svg{color:#2A5A3C;flex-shrink:0;margin-top:1px}
 .gv-sp-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:auto;padding-top:10px}
-.gv-sp-btn{flex:1 1 150px;display:inline-flex;align-items:center;justify-content:center;min-height:46px;padding:0 16px;border-radius:10px;font-family:${FONT};font-size:14px;font-weight:800;letter-spacing:0.04em;text-decoration:none;white-space:nowrap;transition:background-color 140ms ease,transform 120ms ease}
+.gv-sp-btn{flex:1 1 150px;display:inline-flex;align-items:center;justify-content:center;min-height:46px;padding:0 16px;border-radius:10px;font-family:${FONT};font-size:14px;font-weight:800;text-decoration:none;white-space:nowrap;transition:background-color 140ms ease,transform 120ms ease}
 .gv-sp-btn:active{transform:scale(0.985)}
 .gv-sp-btn:focus{outline:none}
 .gv-sp-btn:focus-visible{outline:2px solid #1B3828;outline-offset:2px}

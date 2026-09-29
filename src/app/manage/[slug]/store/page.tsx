@@ -67,7 +67,7 @@ export default function StorePage() {
   const { conference } = useManage();
   const { data, loading, error, reload } = useStoreData(conference?.id ?? null, conference?.country ?? null);
   const [popup, setPopup] = useState<Popup>(null);
-  // After a Country or Region booking: "ADD YOUR POP-UP" (29 Sep 2026).
+  // After a Country or Region booking: "Add your pop-up" (29 Sep 2026).
   const [popupOffer, setPopupOffer] = useState<{ purchaseId: string; placements: Placement[] } | null>(null);
   const [state, setState] = useState<StoreState | null>(null);
   const shown = state ?? data.state;

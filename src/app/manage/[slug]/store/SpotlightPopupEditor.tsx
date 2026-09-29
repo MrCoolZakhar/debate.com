@@ -124,10 +124,10 @@ export default function SpotlightPopupEditor({ purchase, description, onSaved }:
 
       <div className="gv-spe-actions">
         <button type="button" className="gv-spe-btn gv-spe-secondary" onClick={() => setPreview(true)}>
-          <Eye size={16} aria-hidden /> PREVIEW
+          <Eye size={16} aria-hidden /> Preview
         </button>
         <button type="button" className="gv-spe-btn gv-spe-primary" onClick={() => { void save(); }} disabled={busy}>
-          {busy ? 'SAVING…' : 'SAVE POP-UP'}
+          {busy ? 'Saving…' : 'Save pop-up'}
         </button>
       </div>
 
@@ -169,7 +169,7 @@ const CSS = `
 .gv-spe-input:focus{outline:none;border-color:#1B3828;box-shadow:0 0 0 3px rgba(27,56,40,0.12)}
 .gv-spe-err{margin:4px 0 0;font-size:13px;font-weight:600;color:${DANGER}}
 .gv-spe-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
-.gv-spe-btn{flex:1 1 140px;display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:42px;padding:0 14px;border:none;border-radius:10px;font-family:${FONT};font-size:13.5px;font-weight:800;letter-spacing:0.04em;cursor:pointer}
+.gv-spe-btn{flex:1 1 140px;display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:42px;padding:0 14px;border:none;border-radius:10px;font-family:${FONT};font-size:13.5px;font-weight:800;cursor:pointer}
 .gv-spe-btn:focus{outline:none}
 .gv-spe-btn:focus-visible{outline:2px solid #1B3828;outline-offset:2px}
 .gv-spe-btn:disabled{opacity:0.6;cursor:default}
@@ -178,7 +178,7 @@ const CSS = `
 `;
 
 /** Right after a Country or Region Spotlight (or a bundle holding one) is
- *  booked: "ADD YOUR POP-UP" opens the same editor. Booking is already done;
+ *  booked: "Add your pop-up" opens the same editor. Booking is already done;
  *  this only offers the next step. */
 export function PopupOfferDialog({ purchaseId, placements, onClose, onSaved }: {
   purchaseId: string;
@@ -199,8 +199,8 @@ export function PopupOfferDialog({ purchaseId, placements, onClose, onSaved }: {
             <h2 className="gv-buy-title" style={{ fontSize: 28 }}>Spotlight <GoldWord tone="light">Booked</GoldWord></h2>
             <p className="gv-buy-sub" style={{ margin: 0 }}>Shown when a visitor filters Explore by your country or region on your Spotlight days</p>
             <div className="gv-spe-actions" style={{ marginTop: 6 }}>
-              <button type="button" className="gv-spe-btn gv-spe-primary" onClick={() => setEditing(true)}>ADD YOUR POP-UP</button>
-              <button type="button" className="gv-spe-btn gv-spe-secondary" onClick={onClose}>NOT NOW</button>
+              <button type="button" className="gv-spe-btn gv-spe-primary" onClick={() => setEditing(true)}>Add your pop-up</button>
+              <button type="button" className="gv-spe-btn gv-spe-secondary" onClick={onClose}>Not now</button>
             </div>
             <style>{CSS}</style>
           </>
