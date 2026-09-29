@@ -825,6 +825,7 @@ export default function NewConferencePage() {
             fee_amount: 0,
             auto_accept: false,
             payment_timing: 'anytime' as const,
+            hide_dashboard_until_paid: false,
             custom_questions: [],
           }))
         );

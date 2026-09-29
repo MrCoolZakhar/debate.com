@@ -162,6 +162,8 @@ export interface StatusRowInput {
   hasAllocation: boolean;
   paperDeadline: string | null;
   hasSociety: boolean;
+  /** The role page is locked until payment (hide_dashboard_until_paid). */
+  locked?: boolean;
 }
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -179,7 +181,7 @@ export function nextStepSentence(i: StatusRowInput): string {
     return 'The organisers are reviewing your application. You will get an email when they decide.';
   }
   if (i.status === 'checked-in') return 'You are checked in. Enjoy the conference.';
-  if (owes && i.paymentTiming !== 'anytime') return 'Pay your registration fee to unlock your conference materials.';
+  if (owes && i.locked) return 'Pay your registration fee to unlock your conference materials.';
   switch (i.role) {
     case 'chair':
       return i.status === 'assigned'

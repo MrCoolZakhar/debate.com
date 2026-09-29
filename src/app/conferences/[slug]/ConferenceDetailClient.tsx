@@ -220,6 +220,7 @@ interface RoleConfig {
   allow_partial_payments: boolean;
   fee_phases: FeePhase[] | null;
   allow_resubmission: boolean;
+  hide_dashboard_until_paid?: boolean;
 }
 
 interface MyApplication {
@@ -968,7 +969,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
         .order('name', { ascending: true }),
       supabase
         .from('application_role_configs')
-        .select('role, is_enabled, applications_open_at, applications_close_at, fee_amount, fee_currency, auto_accept, payment_timing, allow_partial_payments, fee_phases, allow_resubmission')
+        .select('role, is_enabled, applications_open_at, applications_close_at, fee_amount, fee_currency, auto_accept, payment_timing, allow_partial_payments, fee_phases, allow_resubmission, hide_dashboard_until_paid')
         .eq('conference_id', conf.id),
     ]);
 
@@ -2194,6 +2195,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                   conferenceId={conference.id}
                   conferenceSlug={conference.slug}
                   conferenceStartDate={conference.start_date}
+                  conferenceName={conference.acronym || conference.full_name}
                   isOrganizer={isOrganizerViewer}
                   myApplications={myApplications}
                   roleConfigs={roleConfigs}

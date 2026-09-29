@@ -72,13 +72,17 @@ interface RoleConfig {
   fee_amount: number;
   fee_currency: string;
   auto_accept: boolean;
-  payment_timing: 'after_application' | 'after_acceptance' | 'anytime';
+  /** 'after_application' was merged into 'anytime' on 29 Sep 2026; a
+   *  database trigger turns any stray one into 'anytime'. */
+  payment_timing: 'after_acceptance' | 'anytime';
   custom_questions: unknown[];
   submission_message: string | null;
   submission_link_label: string | null;
   submission_link_url: string | null;
   fee_phases: FeePhase[] | null;
   allow_resubmission: boolean;
+  /** Locks the role page of accepted, unpaid participants (off by default). */
+  hide_dashboard_until_paid?: boolean;
   preference_mode: string;
   collect_mun_experience: boolean;
 }
@@ -171,11 +175,12 @@ interface IncomingPartnerClaim {
   created_at: string;
 }
 
-const PAYMENT_TIMING_OPTIONS: { value: RoleConfig['payment_timing']; label: string; desc: string }[] = [
-  { value: 'after_application', label: 'After application', desc: 'Payment opens as soon as the application is submitted.' },
-  { value: 'after_acceptance', label: 'After acceptance', desc: 'Payment opens only once the applicant is accepted.' },
-  { value: 'anytime', label: 'Pay at any time', desc: 'Applicants can view everything and pay whenever.' },
-];
+/** A role is free when neither its base fee nor any fee phase charges anything.
+ *  Payment settings are hidden for a free role (they cannot apply). */
+function roleIsFree(config: Pick<RoleConfig, 'fee_amount' | 'fee_phases'>): boolean {
+  if ((Number(config.fee_amount) || 0) > 0) return false;
+  return !(config.fee_phases ?? []).some(p => (Number(p.amount) || 0) > 0);
+}
 
 // What a role may express as preferences on the apply form. Persisted per role
 // on application_role_configs.preference_mode; read by the apply flow to
@@ -1158,6 +1163,7 @@ export default function SettingsPage() {
       fee_currency: conference.fee_currency ?? 'GBP',
       auto_accept: false,
       payment_timing: 'anytime' as const,
+      hide_dashboard_until_paid: false,
       custom_questions: [],
     }));
     await supabase.from('application_role_configs').insert(defaults);
@@ -1287,7 +1293,7 @@ export default function SettingsPage() {
    *  step, so it lights nothing. */
   const STEP_OF_FIELD: Record<string, number> = {
     applications_open_at: 1, applications_close_at: 1, max_accepted: 1,
-    auto_accept: 1, payment_timing: 1, allow_resubmission: 1,
+    auto_accept: 1, payment_timing: 1, allow_resubmission: 1, hide_dashboard_until_paid: 1,
     fee_amount: 2, fee_currency: 2, fee_phases: 2,
     custom_questions: 3,
     submission_message: 4, submission_link_label: 4, submission_link_url: 4,
@@ -3410,76 +3416,75 @@ export default function SettingsPage() {
                             />
                           </div>
                         </div>
-                        {/* Acceptance */}
-                        <div className="mt-4">
-                          <label className="text-xs font-semibold mb-1.5 flex items-center gap-1.5" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>
-                            Acceptance
-                            <InfoHint
-                              label="About acceptance"
-                              text="Auto-accept lets everyone in the moment they submit, which is right for observers, advisors and any role where you are not really choosing. Manual review holds every application as pending until someone on your team decides, which is what you want wherever places are limited or the answers matter."
-                            />
-                          </label>
-                          <div className="flex gap-2">
-                            {([
-                              { value: true, label: 'Auto-accept' },
-                              { value: false, label: 'Manual review' },
-                            ] as const).map(opt => {
-                              const active = config.auto_accept === opt.value;
-                              return (
-                                <button
-                                  key={String(opt.value)}
-                                  type="button"
-                                  onClick={() => saveRoleConfig(role, { auto_accept: opt.value })}
-                                  className="flex-1 py-2.5 rounded-[10px] font-bold text-sm focus:outline-none transition-all gv-lift"
-                                  style={{
-                                    backgroundColor: active ? '#1B3828' : 'transparent',
-                                    color: active ? '#EED98A' : '#1C1410',
-                                    border: active ? '1.5px solid #1B3828' : '1.5px solid #DDD4C0',
-                                    fontFamily: "var(--font-brand), sans-serif",
-                                    letterSpacing: 0,
-                                  }}
-                                >
-                                  {opt.label}
-                                </button>
-                              );
-                            })}
+                        {/* Acceptance, payment and the dashboard lock are
+                            toggles, all off by default (owner, 29 Sep 2026).
+                            'after_application' was merged into 'anytime' on
+                            the server the same day. */}
+                        <div className="mt-4 flex items-center justify-between gap-3">
+                          <div>
+                            <label className="text-xs font-semibold flex items-center gap-1.5" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>
+                              Auto-accept
+                              <InfoHint
+                                label="About acceptance"
+                                text="With this on, everyone is accepted the moment they submit, which is right for observers, advisors and any role where you are not really choosing. With it off, every application waits until someone on your team decides, which is what you want wherever places are limited or the answers matter."
+                              />
+                            </label>
+                            <p className="text-xs mt-0.5" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}>
+                              On: applicants are accepted as soon as they apply. Off: you review each application.
+                            </p>
                           </div>
+                          <PillToggle
+                            value={config.auto_accept === true}
+                            onChange={(v) => saveRoleConfig(role, { auto_accept: v })}
+                            size="md"
+                          />
                         </div>
-                        {/* Payment */}
-                        <div className="mt-4">
-                          <label className="text-xs font-semibold mb-1.5 flex items-center gap-1.5" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>
-                            Payment
-                            <InfoHint
-                              label="About payment timing"
-                              text="When the pay button appears for this role. After application charges on submission, which fills your account early but means refunding anyone you turn down. After acceptance only charges the people you actually took, and is the safer default wherever you review. Pay at any time leaves it entirely up to them."
-                            />
-                          </label>
-                          <div className="flex gap-2">
-                            {PAYMENT_TIMING_OPTIONS.map(opt => {
-                              const active = (config.payment_timing ?? 'anytime') === opt.value;
-                              return (
-                                <button
-                                  key={opt.value}
-                                  type="button"
-                                  onClick={() => saveRoleConfig(role, { payment_timing: opt.value })}
-                                  className="flex-1 py-2.5 rounded-[10px] font-bold text-sm focus:outline-none transition-all gv-lift"
-                                  style={{
-                                    backgroundColor: active ? '#1B3828' : 'transparent',
-                                    color: active ? '#EED98A' : '#1C1410',
-                                    border: active ? '1.5px solid #1B3828' : '1.5px solid #DDD4C0',
-                                    fontFamily: "var(--font-brand), sans-serif",
-                                    letterSpacing: 0,
-                                  }}
-                                >
-                                  {opt.label}
-                                </button>
-                              );
-                            })}
+                        {/* Payment settings only matter when this role
+                            charges something. A free role hides them; the
+                            saved values are never touched, and they come
+                            back the moment a fee is set. */}
+                        {!roleIsFree(config) && (
+                          <>
+                        <div className="mt-4 flex items-center justify-between gap-3">
+                          <div>
+                            <label className="text-xs font-semibold flex items-center gap-1.5" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>
+                              Payment after acceptance
+                              <InfoHint
+                                label="About payment after acceptance"
+                                text="With this on, the pay button appears only once you accept someone, so you only charge the people you actually took. With it off, applicants can pay as soon as they apply."
+                              />
+                            </label>
+                            <p className="text-xs mt-0.5" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}>
+                              On: applicants can pay only once you accept them. Off: they can pay as soon as they apply.
+                            </p>
                           </div>
-                          <p className="text-xs mt-1.5" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}>
-                            {PAYMENT_TIMING_OPTIONS.find(o => o.value === (config.payment_timing ?? 'anytime'))?.desc}
-                          </p>
+                          <PillToggle
+                            value={config.payment_timing === 'after_acceptance'}
+                            onChange={(v) => saveRoleConfig(role, { payment_timing: v ? 'after_acceptance' : 'anytime' })}
+                            size="md"
+                          />
                         </div>
+                        <div className="mt-4 flex items-center justify-between gap-3">
+                          <div>
+                            <label className="text-xs font-semibold flex items-center gap-1.5" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>
+                              Hide dashboard until payment
+                              <InfoHint
+                                label="About hiding the dashboard until payment"
+                                text="Use this if you want payment before anyone sees committees, documents or study guides. Waived and sponsored participants always see everything."
+                              />
+                            </label>
+                            <p className="text-xs mt-0.5" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}>
+                              Accepted participants who have not paid see only their overview and payment until they pay. Off by default.
+                            </p>
+                          </div>
+                          <PillToggle
+                            value={config.hide_dashboard_until_paid === true}
+                            onChange={(v) => saveRoleConfig(role, { hide_dashboard_until_paid: v })}
+                            size="md"
+                          />
+                        </div>
+                          </>
+                        )}
                         {/* Resubmission */}
                         <div className="mt-4 flex items-center justify-between gap-3">
                           <div>

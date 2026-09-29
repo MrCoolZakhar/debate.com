@@ -65,7 +65,7 @@ interface AppPreference {
 
 interface RoleConfigLite {
   role: string;
-  payment_timing: 'after_application' | 'after_acceptance' | 'anytime' | string;
+  payment_timing: 'after_acceptance' | 'anytime' | string; // 'after_application' merged into 'anytime', 29 Sep 2026
   custom_questions: unknown[];
   fee_amount: number | null;
   fee_currency: string | null;

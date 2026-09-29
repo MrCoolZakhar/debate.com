@@ -91,6 +91,8 @@ export interface ParticipantViewProps {
   conferenceId: string;
   conferenceSlug: string;
   conferenceStartDate: string | null;
+  /** The conference's short name, for the locked Overview's sentence. */
+  conferenceName?: string;
   myApplications: ParticipantApplication[];
   roleConfigs: ParticipantRoleConfig[];
   myAllocation: ParticipantAllocation | null;
@@ -136,7 +138,7 @@ export interface ParticipantViewProps {
 }
 
 export default function ParticipantView({
-  conferenceId, conferenceSlug, conferenceStartDate, myApplications, roleConfigs, myAllocation, committees, allocationSwapMode, isOrganizer = false,
+  conferenceId, conferenceSlug, conferenceStartDate, conferenceName, myApplications, roleConfigs, myAllocation, committees, allocationSwapMode, isOrganizer = false,
   initialRole, onResolveRole, onSelectRole, participantDataLoading, justClaimedCount,
   onApplicationWithdrawn,
 }: ParticipantViewProps) {
@@ -251,8 +253,9 @@ export default function ParticipantView({
   const selected = (holdsInitialRole ? myApplications.find(a => a.role === initialRole) : null) ?? pickDefault(myApplications);
   const roleConfig = roleConfigs.find(rc => rc.role === selected.role) ?? null;
   const paymentTiming = roleConfig?.payment_timing ?? 'anytime';
-  // A role charging nothing today can never be 'locked' behind its fee.
-  const gateState = getGateState(paymentTiming, selected.status, selected.payment_status, roleFeeToday(roleConfig));
+  // Locked only when the organiser turned on "Hide dashboard until payment"
+  // and this role charges a fee today (see getGateState).
+  const gateState = getGateState(paymentTiming, selected.status, selected.payment_status, roleFeeToday(roleConfig), roleConfig?.hide_dashboard_until_paid === true);
 
   const feeToday = roleFeeToday(roleConfig);
   const isDelegateRole = DELEGATE_ROLES.has(selected.role);
@@ -390,8 +393,14 @@ export default function ParticipantView({
                   hasAllocation: !!myAllocation,
                   paperDeadline: myAllocation?.conference_committees?.position_paper_deadline ?? null,
                   hasSociety: !!selected.society_id,
+                  locked: gateState === 'locked',
                 }}
               />
+              {gateState === 'locked' && (
+                <p style={{ fontFamily: OUTFIT, fontSize: 14, color: '#5A5046', lineHeight: 1.55, marginTop: 14 }}>
+                  {conferenceName || 'This conference'} shows your full dashboard once your payment is in. Pay in the Payment section to see your committee, documents and more.
+                </p>
+              )}
             </Pane>
 
             {/* The role's own sections. Mounted once; each hides the panes

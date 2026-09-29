@@ -118,7 +118,7 @@ interface RoleConfig {
   fee_currency: string;
   auto_accept: boolean;
   pay_at_application: boolean;
-  payment_timing: 'after_application' | 'after_acceptance' | 'anytime' | string;
+  payment_timing: 'after_acceptance' | 'anytime' | string; // 'after_application' merged into 'anytime', 29 Sep 2026
   custom_questions: unknown[];
   fee_phases: FeePhase[] | null;
   /** Organiser-controlled, per role: what this role may express as

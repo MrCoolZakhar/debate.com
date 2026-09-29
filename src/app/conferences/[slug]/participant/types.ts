@@ -26,6 +26,9 @@ export interface ParticipantRoleConfig {
   allow_partial_payments: boolean;
   fee_phases?: FeePhase[] | null;
   allow_resubmission: boolean;
+  /** Accepted, unpaid participants see only Overview, Payment and Support
+   *  (off by default; see getGateState). Missing = false. */
+  hide_dashboard_until_paid?: boolean;
 }
 
 export interface ParticipantAllocation {

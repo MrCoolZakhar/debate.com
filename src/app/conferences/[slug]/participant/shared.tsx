@@ -43,6 +43,7 @@ export function SectionCard({ children, className = '', id }: { children: React.
 export type GateState = 'full' | 'locked' | 'under_review';
 
 const PAID_STATUSES = new Set(['paid', 'waived']);
+const ACCEPTED_STATUSES = new Set(['accepted', 'assigned', 'checked-in']);
 
 /**
  * `roleFeeToday` is the fee this role charges today (src/lib/freeRegistration.ts,
@@ -62,11 +63,22 @@ export function getGateState(
   applicationStatus: string,
   paymentStatus: string,
   roleFeeToday = -1,
+  hideDashboardUntilPaid = false,
 ): GateState {
+  // (29 Sep 2026, owner) Payment NEVER locks the role page unless the
+  // organiser turned on "Hide dashboard until payment"
+  // (application_role_configs.hide_dashboard_until_paid, off by default).
+  // payment_timing only decides WHEN people can pay. Before this, every role
+  // but 'anytime' hid all sections of an accepted, unpaid participant (97
+  // MUNBU delegates could not find their committee).
   if (paymentTiming === 'after_acceptance' && applicationStatus === 'submitted') return 'under_review';
-  if (paymentTiming === 'anytime') return 'full';
-  if (roleFeeToday === 0) return 'full';
-  return PAID_STATUSES.has(paymentStatus) ? 'full' : 'locked';
+  if (
+    hideDashboardUntilPaid
+    && ACCEPTED_STATUSES.has(applicationStatus)
+    && roleFeeToday > 0
+    && !PAID_STATUSES.has(paymentStatus)
+  ) return 'locked';
+  return 'full';
 }
 
 // ── Role labels ──────────────────────────────────────────────────────────────
