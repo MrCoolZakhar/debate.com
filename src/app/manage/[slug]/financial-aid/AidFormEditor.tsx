@@ -189,7 +189,8 @@ export default function AidFormEditor({ conferenceId, initialEnabled, initialInt
     persistBlocks();
   }
 
-  flushBlocksRef.current = flushBlocks;
+  // Kept current after every render (never written during render).
+  useEffect(() => { flushBlocksRef.current = flushBlocks; });
 
   useEffect(() => {
     return () => { flushBlocksRef.current(); };

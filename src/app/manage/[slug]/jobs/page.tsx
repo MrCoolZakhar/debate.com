@@ -427,6 +427,32 @@ function PostingCard({
 
 // ── Posting modal (create + edit) ──────────────────────────────────────────
 
+/** A row of choices, one selected (module level: a component defined inside
+ *  another is recreated on every render). */
+function ToggleGroup({
+  options, value, onChange,
+}: { options: string[]; value: string; onChange: (v: string) => void }) {
+  return (
+    <div className="flex gap-1 rounded-xl p-1" style={{ backgroundColor: '#F0EDE6' }}>
+      {options.map(opt => (
+        <button
+          key={opt}
+          type="button"
+          onClick={() => onChange(opt)}
+          className="flex-1 py-2 rounded-lg text-xs font-bold transition-all focus:outline-none"
+          style={{
+            fontFamily: "var(--font-brand), sans-serif",
+            backgroundColor: value === opt ? FOREST : 'transparent',
+            color: value === opt ? GOLD : MUTED,
+          }}
+        >
+          {sentenceLabel(opt)}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 function PostingModal({
   conferenceId,
   committees,
@@ -489,30 +515,6 @@ function PostingModal({
     fontFamily: "var(--font-brand), sans-serif",
     letterSpacing: '0.05em',
   };
-
-  function ToggleGroup({
-    options, value, onChange,
-  }: { options: string[]; value: string; onChange: (v: string) => void }) {
-    return (
-      <div className="flex gap-1 rounded-xl p-1" style={{ backgroundColor: '#F0EDE6' }}>
-        {options.map(opt => (
-          <button
-            key={opt}
-            type="button"
-            onClick={() => onChange(opt)}
-            className="flex-1 py-2 rounded-lg text-xs font-bold transition-all focus:outline-none"
-            style={{
-              fontFamily: "var(--font-brand), sans-serif",
-              backgroundColor: value === opt ? FOREST : 'transparent',
-              color: value === opt ? GOLD : MUTED,
-            }}
-          >
-            {sentenceLabel(opt)}
-          </button>
-        ))}
-      </div>
-    );
-  }
 
   return (
     <Portal><div
@@ -784,7 +786,8 @@ export default function JobBoardPage() {
     // posting and its per-posting count on each token refresh.
   }, [conference, accessToken]);
 
-  useEffect(() => { fetchAll(); }, [fetchAll]);
+  // Started a microtask later so no state is set synchronously in the effect.
+  useEffect(() => { void Promise.resolve().then(() => fetchAll()); }, [fetchAll]);
 
   async function handleCreate(data: {
     category: string; role_name: string; committee_id: string | null;

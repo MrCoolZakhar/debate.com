@@ -1122,6 +1122,12 @@ function AddChairModal({ conferenceId, committee, committees, onClose, onDone, o
 
 // ── CommitteesPage ────────────────────────────────────────────────────────────
 
+
+/** True when the instant is still ahead (read at call time, in a save, never in render). */
+function isInFuture(iso: string): boolean {
+  return new Date(iso).getTime() > Date.now();
+}
+
 export default function CommitteesPage() {
   const { conference } = useManage();
   const { session } = useAuth();
@@ -1151,7 +1157,7 @@ export default function CommitteesPage() {
   const [view, setView] = useState<'cards' | 'list'>('cards');
   useEffect(() => {
     const saved = typeof window !== 'undefined' ? window.localStorage.getItem('committees-view') : null;
-    if (saved === 'cards' || saved === 'list') setView(saved);
+    if (saved === 'cards' || saved === 'list') void Promise.resolve().then(() => setView(saved));
   }, []);
   const changeView = useCallback((v: 'cards' | 'list') => {
     setView(v);
@@ -1257,7 +1263,8 @@ export default function CommitteesPage() {
     // is exactly the transition this needs to catch.
   }, [conference, accessToken]);
 
-  useEffect(() => { loadCommittees(); }, [loadCommittees]);
+  // Started a microtask later so no state is set synchronously in the effect.
+  useEffect(() => { void Promise.resolve().then(() => loadCommittees()); }, [loadCommittees]);
 
   const loadReleaseSettings = useCallback(async () => {
     if (!conference || !accessToken) return;
@@ -1278,7 +1285,7 @@ export default function CommitteesPage() {
     // that actually matters and the part that is stable.
   }, [conference, accessToken]);
 
-  useEffect(() => { loadReleaseSettings(); }, [loadReleaseSettings]);
+  useEffect(() => { void Promise.resolve().then(() => loadReleaseSettings()); }, [loadReleaseSettings]);
 
   async function saveSameTime(value: boolean) {
     if (!session || !conference || savingToggle) return;
@@ -1428,7 +1435,7 @@ export default function CommitteesPage() {
 
     setCommittees(prev => prev.map(c => (ids.includes(c.id) ? { ...c, ...patch } : c)));
 
-    const isFuture = isoValue !== null && new Date(isoValue).getTime() > Date.now();
+    const isFuture = isoValue !== null && isInFuture(isoValue);
     // SCHEDULING AN EMAIL THAT IS SWITCHED OFF QUEUES NOTHING, AND USED TO SAY
     // NOTHING (23 Sep 2026). `queueEventEmail` answers 'off' when the
     // conference has a template row for the event with `enabled = false`, and

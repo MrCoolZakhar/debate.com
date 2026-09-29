@@ -989,7 +989,7 @@ export default function DashboardPage() {
   // set on mount, then ticked every minute so relative times stay fresh.
   const [now, setNow] = useState(0);
   useEffect(() => {
-    setNow(Date.now());
+    void Promise.resolve().then(() => setNow(Date.now()));
     const t = setInterval(() => setNow(Date.now()), 60_000);
     return () => clearInterval(t);
   }, []);

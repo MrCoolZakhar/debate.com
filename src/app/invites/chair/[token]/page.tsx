@@ -83,7 +83,7 @@ export default function ChairInvitePage() {
 
   useEffect(() => {
     if (authLoading || !user) return;
-    load();
+    void Promise.resolve().then(() => load());
   }, [authLoading, user, load]);
 
   async function respond(accept: boolean) {

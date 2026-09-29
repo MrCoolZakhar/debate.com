@@ -143,7 +143,8 @@ export default function AidRequestsSection({ conferenceId, conferenceSlug, aidBl
     setLoading(false);
   }, [conferenceId, session]);
 
-  useEffect(() => { loadRequests(); }, [loadRequests]);
+  // Started a microtask later so no state is set synchronously in the effect.
+  useEffect(() => { void Promise.resolve().then(() => loadRequests()); }, [loadRequests]);
 
   function roleFeeFor(role: string): { amount: number; currency: string } {
     const rc = roleFees.find(r => r.role === role);

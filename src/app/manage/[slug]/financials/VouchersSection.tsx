@@ -14,6 +14,7 @@
 
 import { notifyErr, clearErr } from '@/lib/appNotify';
 import { useState, useEffect, useCallback } from 'react';
+import { useNow } from '@/lib/useNow';
 import { Ban, Dices, Plus, Ticket, Trash2 } from 'lucide-react';
 import type { Conference } from '@/app/manage/[slug]/layout';
 import { useAuth } from '@/components/AuthProvider';
@@ -115,6 +116,7 @@ export default function VouchersSection({
    *  the conference currency regardless. */
   displayCurrency?: string;
 }) {
+  const now = useNow();
   const { session, user } = useAuth();
   const { confirm, modal: confirmModal } = useConfirmModal();
 
@@ -141,9 +143,10 @@ export default function VouchersSection({
     });
   }
 
+  const voucherToken = session?.access_token ?? null;
   const loadVouchers = useCallback(async () => {
-    if (!session) return;
-    const supabase = getAuthedClient(session.access_token);
+    if (!voucherToken) return;
+    const supabase = getAuthedClient(voucherToken);
     const { data } = await supabase
       .from('vouchers')
       .select('id, code, kind, amount, currency, max_redemptions, redeemed_count, expires_at, active, created_at')
@@ -152,9 +155,10 @@ export default function VouchersSection({
       .order('created_at', { ascending: false });
     setVouchers((data ?? []) as Voucher[]);
     setLoading(false);
-  }, [conference.id, session?.access_token]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [conference.id, voucherToken]);
 
-  useEffect(() => { loadVouchers(); }, [loadVouchers]);
+  // Started a microtask later so no state is set synchronously in the effect.
+  useEffect(() => { void Promise.resolve().then(() => loadVouchers()); }, [loadVouchers]);
 
   // ── Create, optimistic append (temp row), replace with the real UUID row
   // on success, remove exactly the temp row on failure. The CREATE button is
@@ -447,7 +451,7 @@ export default function VouchersSection({
           <div className="flex flex-col gap-2.5">
             {vouchers.map(v => {
               const rowBusy = busyIds.has(v.id) || v.id.startsWith('temp-');
-              const expired = !!v.expires_at && new Date(v.expires_at).getTime() < Date.now();
+              const expired = !!v.expires_at && new Date(v.expires_at).getTime() < now;
               const exhausted = v.max_redemptions !== null && v.redeemed_count >= v.max_redemptions;
               const live = v.active && !expired && !exhausted;
               return (

@@ -160,7 +160,7 @@ export default function ImportInvitePage() {
     // Wait for auth to settle so the CTA renders the right variant, but the
     // resolve RPC is anon-safe either way.
     if (authLoading) return;
-    resolve();
+    void Promise.resolve().then(() => resolve());
   }, [authLoading, resolve]);
 
   async function handleClaim() {

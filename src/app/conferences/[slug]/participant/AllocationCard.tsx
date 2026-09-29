@@ -8,6 +8,7 @@
 // gate once the committee's live session has opened.
 
 import { useEffect, useState } from 'react';
+import { useNow } from '@/lib/useNow';
 import { Compass, ArrowRight, Copy, Check, Signal } from 'lucide-react';
 import Link from 'next/link';
 import { FlagImg } from '@/components/FlagImg';
@@ -66,6 +67,7 @@ export default function AllocationCard({ committee, myAllocation, conferenceStar
   /** A crest the caller already read (useSeatCrest); undefined = read it here. */
   seatLogo?: string | null;
 }) {
+  const now = useNow();
   // The country half is drawn by the dashboard's Overview now; the committee
   // pane passes showCountry={false} and skips the partner and crest reads.
   const partner = useAllocationPartner(showCountry ? myAllocation : null);
@@ -98,7 +100,7 @@ export default function AllocationCard({ committee, myAllocation, conferenceStar
 
   const sessionCode = myAllocation.conference_committees?.session_code ?? null;
   const releaseMs = effectiveReleaseTime(myAllocation.conference_committees?.released_to_delegates_at ?? null, conferenceStartDate);
-  const released = releaseMs !== null && releaseMs <= Date.now();
+  const released = releaseMs !== null && releaseMs <= now;
 
   return (
     <SectionCard>

@@ -271,7 +271,8 @@ function ChairCommitteeBlock({ conferenceId, conferenceSlug, committee, chairDis
     setLoading(false);
   }, [session, committee.id]);
 
-  useEffect(() => { load(); }, [load]);
+  // Started a microtask later so no state is set synchronously in the effect.
+  useEffect(() => { void Promise.resolve().then(() => load()); }, [load]);
 
   function markBusy(id: string, busy: boolean) {
     setBusyIds(prev => {
@@ -424,7 +425,8 @@ export default function ChairParticipant({ conferenceId, conferenceSlug, section
     setLoading(false);
   }, [user, session, conferenceId]);
 
-  useEffect(() => { load(); }, [load]);
+  // Started a microtask later so no state is set synchronously in the effect.
+  useEffect(() => { void Promise.resolve().then(() => load()); }, [load]);
 
   if (loading) {
     return (

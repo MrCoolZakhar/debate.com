@@ -365,6 +365,9 @@ export default function QuestionBuilder({ value, onChange, hasApplications = fal
   // Which optional fields the organizer has asked to see on a given block.
   const [extras, setExtras] = useState<Record<string, { help?: boolean; placeholder?: boolean }>>({});
   const dragIndexRef = useRef<number | null>(null);
+  // The dragged card's index for DRAWING (the ref serves the handlers; a ref
+  // is never read during render).
+  const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
   // A card is only draggable once the grip is pressed, otherwise selecting text
   // inside its inputs would start a drag instead.
@@ -508,6 +511,7 @@ export default function QuestionBuilder({ value, onChange, hasApplications = fal
   function handleDrop(dropIdx: number) {
     const from = dragIndexRef.current;
     dragIndexRef.current = null;
+    setDragIndex(null);
     setDragOverIndex(null);
     setDragArmedId(null);
     if (from === null || from === dropIdx) return;
@@ -553,7 +557,7 @@ export default function QuestionBuilder({ value, onChange, hasApplications = fal
 
                 return (
                   <div key={block.id}>
-                    {dragOverIndex === idx && dragOverIndex !== dragIndexRef.current && (
+                    {dragOverIndex === idx && dragOverIndex !== dragIndex && (
                       <div className="h-0.5 rounded-full mx-2 mb-2" style={{ backgroundColor: '#1B3828' }} />
                     )}
 
@@ -576,10 +580,10 @@ export default function QuestionBuilder({ value, onChange, hasApplications = fal
                     <div
                       ref={(el) => { cardRefs.current[block.id] = el; }}
                       draggable={dragArmedId === block.id}
-                      onDragStart={() => { dragIndexRef.current = idx; }}
+                      onDragStart={() => { dragIndexRef.current = idx; setDragIndex(idx); }}
                       onDragOver={(e) => { e.preventDefault(); setDragOverIndex(idx); }}
                       onDrop={() => handleDrop(idx)}
-                      onDragEnd={() => { dragIndexRef.current = null; setDragOverIndex(null); setDragArmedId(null); }}
+                      onDragEnd={() => { dragIndexRef.current = null; setDragIndex(null); setDragOverIndex(null); setDragArmedId(null); }}
                       onMouseEnter={() => setHoveredId(block.id)}
                       onMouseLeave={() => setHoveredId(null)}
                       onClick={() => { if (!selected) setSelectedId(block.id); }}

@@ -18,7 +18,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type RefObject } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type CSSProperties, type RefObject } from 'react';
 import { createPortal } from 'react-dom';
 import { ChevronLeft, ChevronRight, Gavel, Globe } from 'lucide-react';
 import { Emoji3D } from '@/components/neu';
@@ -175,6 +175,19 @@ export function CreateOptions({
   );
 }
 
+
+// Popover or bottom sheet: decided by the viewport, re-decided on resize.
+function subscribeNothing(): () => void { return () => {}; }
+function subscribePhone(onChange: () => void): () => void {
+  if (typeof window === 'undefined' || !window.matchMedia) return () => {};
+  const mq = window.matchMedia(PHONE_QUERY);
+  mq.addEventListener('change', onChange);
+  return () => mq.removeEventListener('change', onChange);
+}
+function readPhone(): boolean {
+  return typeof window !== 'undefined' && !!window.matchMedia && window.matchMedia(PHONE_QUERY).matches;
+}
+
 export default function CreateChooser({
   open,
   onClose,
@@ -189,23 +202,14 @@ export default function CreateChooser({
 }) {
   const pathname = usePathname();
   const panelRef = useRef<HTMLDivElement>(null);
-  const [mounted, setMounted] = useState(false);
-  const [phone, setPhone] = useState(false);
+  // Mounted (false on the server) and "is this a phone", read without an
+  // effect: useSyncExternalStore with a server snapshot.
+  const mounted = useSyncExternalStore(subscribeNothing, () => true, () => false);
+  const phone = useSyncExternalStore(subscribePhone, readPhone, () => false);
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
   const L = createChooserLabels(language);
   const rtl = language === 'ar';
 
-  useEffect(() => { setMounted(true); }, []);
-
-  // Popover or bottom sheet: decided by the viewport, re-decided on resize.
-  useEffect(() => {
-    if (typeof window === 'undefined' || !window.matchMedia) return;
-    const mq = window.matchMedia(PHONE_QUERY);
-    const apply = () => setPhone(mq.matches);
-    apply();
-    mq.addEventListener('change', apply);
-    return () => mq.removeEventListener('change', apply);
-  }, []);
 
   // Route change closes it (a Link inside already calls onClose, but Back /
   // Forward and links elsewhere do not).

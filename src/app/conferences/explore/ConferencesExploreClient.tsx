@@ -195,7 +195,8 @@ export default function ConferencesExploreClient() {
   // The on-page search box then owns the value as usual.
   // Every filter is seeded from the URL and written back to it below, so a
   // filtered view can be shared (src/app/conferences/explore/exploreFilters.ts).
-  const initialQuery = useMemo(() => readExploreQuery(searchParams), []); // eslint-disable-line react-hooks/exhaustive-deps
+  // Read once, on the first render (a lazy initial state, the same as the old empty-deps memo).
+  const [initialQuery] = useState(() => readExploreQuery(searchParams));
   const [searchQuery, setSearchQuery] = useState(initialQuery.search);
   const [formatFilter, setFormatFilter] = useState<FormatFilter>(
     initialQuery.format === 'in-person' || initialQuery.format === 'online' ? initialQuery.format : '',
@@ -287,7 +288,7 @@ export default function ConferencesExploreClient() {
   const [view, setView] = useState<ExploreView>('grid');
   useEffect(() => {
     try {
-      if (window.localStorage.getItem(VIEW_STORAGE_KEY) === 'list') setView('list');
+      if (window.localStorage.getItem(VIEW_STORAGE_KEY) === 'list') void Promise.resolve().then(() => setView('list'));
     } catch { /* private mode etc., keep default */ }
   }, []);
   function changeView(v: ExploreView) {
@@ -394,7 +395,7 @@ export default function ConferencesExploreClient() {
       c => countryIdentity(c.country) === localId
     ).length;
     // Otherwise the whole directory stays on screen.
-    if (localCount >= 4) setCountryIds([localId]);
+    if (localCount >= 4) void Promise.resolve().then(() => setCountryIds([localId]));
   }, [userCountry, loading, regionTouched, conferences]);
 
   // Conference ids the signed-in viewer already applied to, cards show
@@ -407,7 +408,7 @@ export default function ConferencesExploreClient() {
   const [memberIds, setMemberIds] = useState<Set<string>>(new Set());
   useEffect(() => {
     if (authLoading) return;
-    if (!user || !session) { setAppliedIds(new Set()); setMemberIds(new Set()); return; }
+    if (!user || !session) { void Promise.resolve().then(() => { setAppliedIds(new Set()); setMemberIds(new Set()); }); return; }
     let cancelled = false;
     (async () => {
       const authed = getAuthedClient(session.access_token);

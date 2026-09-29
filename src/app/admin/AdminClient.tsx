@@ -133,7 +133,7 @@ export default function AdminClient() {
     setAvatars(byConference);
   }, [session]);
 
-  useEffect(() => { if (!authLoading) void load(); }, [authLoading, load]);
+  useEffect(() => { if (!authLoading) void Promise.resolve().then(() => load()); }, [authLoading, load]);
 
   // The tab badge counts current and upcoming conferences only; past ones have
   // their own section inside the tab and are not part of the total.

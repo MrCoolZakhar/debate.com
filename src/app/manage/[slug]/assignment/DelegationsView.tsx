@@ -279,7 +279,8 @@ export default function DelegationsView({ conference, showFlash, initialSocietyI
     // refetch the whole pool on each token refresh.
   }, [conference, accessToken]);
 
-  useEffect(() => { loadData(); }, [loadData]);
+  // Started a microtask later so no state is set synchronously in the effect.
+  useEffect(() => { void Promise.resolve().then(() => loadData()); }, [loadData]);
 
   // Opening a delegation marks its pending swap_request/swap_notice rows
   // seen, optimistic locally, fire-and-forget on the DB.

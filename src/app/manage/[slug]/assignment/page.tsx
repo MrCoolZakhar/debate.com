@@ -955,11 +955,13 @@ function PointsInfo() {
 
   useEffect(() => {
     if (!open) return;
-    place();
+    // Measured on the next frame, from a callback rather than the effect body.
+    const raf = requestAnimationFrame(place);
     const handler = () => place();
     window.addEventListener('scroll', handler, true);
     window.addEventListener('resize', handler);
     return () => {
+      cancelAnimationFrame(raf);
       window.removeEventListener('scroll', handler, true);
       window.removeEventListener('resize', handler);
     };
@@ -2739,11 +2741,13 @@ function RowMenu({ items }: { items: { label: string; icon: React.ReactNode; dan
 
   useEffect(() => {
     if (!open) return;
-    place();
+    // Measured on the next frame, from a callback rather than the effect body.
+    const raf = requestAnimationFrame(place);
     const handler = () => place();
     window.addEventListener('scroll', handler, true);
     window.addEventListener('resize', handler);
     return () => {
+      cancelAnimationFrame(raf);
       window.removeEventListener('scroll', handler, true);
       window.removeEventListener('resize', handler);
     };

@@ -4,6 +4,7 @@
 // source the old documents tab used (study_guides table).
 
 import { useState, useEffect, useCallback } from 'react';
+import { useNow } from '@/lib/useNow';
 import { FileText, Download } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
@@ -24,6 +25,7 @@ function fmtDate(iso: string): string {
 }
 
 export default function StudyGuideCard({ committeeId }: { committeeId: string | null }) {
+  const now = useNow();
   const { session } = useAuth();
   const [guides, setGuides] = useState<StudyGuide[]>([]);
   const [releaseAt, setReleaseAt] = useState<string | null>(null);
@@ -48,9 +50,11 @@ export default function StudyGuideCard({ committeeId }: { committeeId: string | 
     setLoading(false);
   }, [committeeId, session]);
 
-  useEffect(() => { load(); }, [load]);
+  // Started a microtask later so no state is set synchronously in the effect.
+  useEffect(() => { void Promise.resolve().then(() => load()); }, [load]);
 
-  const scheduled = !!releaseAt && new Date(releaseAt).getTime() > Date.now();
+  // useNow ticks every minute, so a scheduled guide flips to released while the page is open.
+  const scheduled = !!releaseAt && new Date(releaseAt).getTime() > now;
 
   return (
     <SectionCard>

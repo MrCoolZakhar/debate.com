@@ -78,7 +78,7 @@ export default function DemoGate() {
   useEffect(() => {
     if (!gated) return;
     if (hasStoredAccess()) {
-      setUnlocked(true);
+      void Promise.resolve().then(() => setUnlocked(true));
       persistAccess(); // re-mirror to whichever store was cleared
     }
   }, [gated]);

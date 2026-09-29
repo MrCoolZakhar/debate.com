@@ -157,7 +157,7 @@ function DraftLandingInner() {
     // The peek is anon-safe either way; waiting for auth only keeps the CTA
     // block from flashing the signed-out variant at a signed-in reader.
     if (authLoading) return;
-    resolve();
+    void Promise.resolve().then(() => resolve());
   }, [authLoading, resolve]);
 
   async function handleDiscard() {

@@ -868,14 +868,15 @@ export default function ManageLayout({ children }: { children: React.ReactNode }
     // Ownership check: organizer_id on the conference OR an owner row in
     // conference_organizers (isConferenceOwner, the client twin of
     // is_conference_owner()). The row is read below when the creator check fails.
-    const owner = isConferenceOwner(user!.id, (confData as any).organizer_id, null);
+    const confRow = confData as unknown as { id: string; organizer_id: string | null } & Record<string, unknown>;
+    const owner = isConferenceOwner(user!.id, confRow.organizer_id, null);
     setIsOwner(owner);
     if (!owner) {
       const { data: orgRow } = await supabase
         .from('conference_organizers')
         .select('user_id, role, permissions')
         .eq('user_id', user!.id)
-        .eq('conference_id', (confData as any).id)
+        .eq('conference_id', confRow.id)
         .maybeSingle();
       if (!orgRow) {
         // Gavelling staff can open any conference's dashboard. The real gate is
@@ -896,14 +897,14 @@ export default function ManageLayout({ children }: { children: React.ReactNode }
         // is_conference_owner() says in the database. Its permissions are
         // usually '{}', so reading them as a section list locked a co-owner
         // out of every section but the dashboard.
-        if (isConferenceOwner(user!.id, (confData as any).organizer_id, (orgRow as any).role)) setIsOwner(true);
+        if (isConferenceOwner(user!.id, confRow.organizer_id, (orgRow as { role?: string | null }).role ?? null)) setIsOwner(true);
         setPermissions((orgRow.permissions ?? {}) as Record<string, boolean>);
       }
     }
 
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const { organizer_id: _oid, ...conf } = confData as any;
-    setConference(conf as Conference);
+    const { organizer_id: _oid, ...conf } = confData as unknown as { organizer_id?: unknown } & Record<string, unknown>;
+    setConference(conf as unknown as Conference);
     setLoadingConf(false);
   }, [session, slug, user, router]);
 
@@ -925,8 +926,8 @@ export default function ManageLayout({ children }: { children: React.ReactNode }
       .single();
     if (!confData) return;
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const { organizer_id: _oid, ...conf } = confData as any;
-    setConference(conf as Conference);
+    const { organizer_id: _oid, ...conf } = confData as unknown as { organizer_id?: unknown } & Record<string, unknown>;
+    setConference(conf as unknown as Conference);
   }, [user, session, slug]);
 
   // ── Verification (the blue checkmark) ──────────────────────────────────

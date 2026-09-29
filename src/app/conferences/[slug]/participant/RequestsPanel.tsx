@@ -257,7 +257,8 @@ export default function RequestsPanel({ conferenceId, applicationId, myApplicati
     setLoading(false);
   }, [conferenceId, session, user, leaderSocietyId]);
 
-  useEffect(() => { loadRequests(); }, [loadRequests]);
+  // Started a microtask later so no state is set synchronously in the effect.
+  useEffect(() => { void Promise.resolve().then(() => loadRequests()); }, [loadRequests]);
 
   // A swap request from DelegationPanel or a question from the form below
   // both land in this same table — refetch so a newly created thread shows
@@ -280,11 +281,17 @@ export default function RequestsPanel({ conferenceId, applicationId, myApplicati
   }, [session]);
 
   useEffect(() => {
-    if (selectedId) loadMessages(selectedId);
+    if (selectedId) void Promise.resolve().then(() => loadMessages(selectedId));
   }, [selectedId, loadMessages]);
 
-  // Changing any filter resets to page one.
-  useEffect(() => { setPage(1); }, [statusFilter, kindFilter, search, dateFrom, dateTo]);
+  // Changing any filter resets to page one (compared during render, the
+  // "previous value in state" pattern, not an effect).
+  const filterKey = `${statusFilter}|${kindFilter}|${search}|${dateFrom}|${dateTo}`;
+  const [seenFilterKey, setSeenFilterKey] = useState(filterKey);
+  if (seenFilterKey !== filterKey) {
+    setSeenFilterKey(filterKey);
+    setPage(1);
+  }
 
   const filteredRequests = useMemo(() => {
     const q = search.trim().toLowerCase();

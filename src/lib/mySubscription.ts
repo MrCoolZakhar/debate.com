@@ -76,6 +76,13 @@ export function useMySubscription(): MySubscription {
   const userId = user?.id ?? null;
   const status = useUnlimitedStatus();
   const [rows, setRows] = useState<SubscriptionRow[] | null>(null);
+  // Signing out forgets the rows, compared during render (the "previous value
+  // in state" pattern) rather than set in the fetch effect.
+  const [rowsFor, setRowsFor] = useState(userId);
+  if (rowsFor !== userId) {
+    setRowsFor(userId);
+    if (!userId) setRows(null);
+  }
   const [tick, setTick] = useState(0);
 
   const reload = useCallback(() => setTick((t) => t + 1), []);
@@ -83,7 +90,7 @@ export function useMySubscription(): MySubscription {
   useEffect(() => onPlanChanged(() => setTick((t) => t + 1)), []);
 
   useEffect(() => {
-    if (!userId) { setRows(null); return; }
+    if (!userId) return;
     let cancelled = false;
     (async () => {
       const client = await getFreshAuthedClient();

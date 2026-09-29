@@ -220,7 +220,8 @@ export default function CustomizationCard({
     }
     persistDraft();
   }
-  flushDraftRef.current = flushDraft;
+  // Kept current after every render (never written during render).
+  useEffect(() => { flushDraftRef.current = flushDraft; });
 
   useEffect(() => {
     return () => { flushDraftRef.current(); };

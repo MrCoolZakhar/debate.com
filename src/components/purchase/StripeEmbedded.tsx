@@ -11,7 +11,7 @@
 // `loadStripe` runs once per page. With no publishable key `getStripe()` is
 // null and the pop-ups use the hosted flow instead (see purchaseCheckout.ts).
 
-import { useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { loadStripe, type Stripe } from '@stripe/stripe-js';
 import { EmbeddedCheckoutProvider, EmbeddedCheckout } from '@stripe/react-stripe-js';
 import { STRIPE_PUBLISHABLE_KEY } from '@/lib/purchaseCheckout';
@@ -30,7 +30,7 @@ export function StripeEmbeddedForm({ clientSecret, onComplete }: { clientSecret:
   // changes, so the callback goes through a ref and the object is stable per
   // secret. A new secret remounts the whole thing (key below).
   const completeRef = useRef(onComplete);
-  completeRef.current = onComplete;
+  useEffect(() => { completeRef.current = onComplete; });
   const options = useMemo(
     () => ({ fetchClientSecret: () => Promise.resolve(clientSecret), onComplete: () => completeRef.current() }),
     [clientSecret],

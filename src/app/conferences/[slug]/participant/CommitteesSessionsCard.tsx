@@ -11,6 +11,7 @@
 // back, so a committee always renders even when its button can't.
 
 import { useEffect, useState } from 'react';
+import { useNow } from '@/lib/useNow';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { supabase as anonSupabase } from '@/lib/supabase';
@@ -29,6 +30,7 @@ export default function CommitteesSessionsCard({ conferenceId, conferenceStartDa
   conferenceId: string;
   conferenceStartDate: string | null;
 }) {
+  const now = useNow();
   const { session } = useAuth();
   const [committees, setCommittees] = useState<SessionCommittee[] | null>(null);
   const [releaseAt, setReleaseAt] = useState<string | null>(null);
@@ -70,7 +72,7 @@ export default function CommitteesSessionsCard({ conferenceId, conferenceStartDa
   if (!committees) return null;
 
   const releaseMs = effectiveReleaseTime(releaseAt, conferenceStartDate);
-  const released = releaseMs !== null && releaseMs <= Date.now();
+  const released = releaseMs !== null && releaseMs <= now;
 
   return (
     <DashCard>

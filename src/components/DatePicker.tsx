@@ -144,22 +144,29 @@ export function DatePicker({
   const menuRef = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState<{ top: number; left: number; maxHeight: number } | null>(null);
 
-  useEffect(() => { if (selected) setView(selected); }, [selected]);
+  // Follow a new value to its month: the "previous value in state" pattern
+  // (compared during render), not an effect.
+  const [seenSelected, setSeenSelected] = useState(selected);
+  if (seenSelected !== selected) {
+    setSeenSelected(selected);
+    if (selected) setView(selected);
+  }
 
   // Opening one picker closes every other. Two calendars floating side by side
   // reads as a glitch, and it is genuinely reachable here: Opens and Closes sit
   // next to each other. They are portalled siblings with no common parent, so a
   // window-level broadcast is the only thing they share.
-  const instanceId = useRef(Math.random().toString(36).slice(2));
+  // Random once per instance (a lazy initial state, not a render-time call).
+  const [instanceId] = useState(() => Math.random().toString(36).slice(2));
   useEffect(() => {
     if (!open) return;
-    window.dispatchEvent(new CustomEvent('gv-datepicker-open', { detail: instanceId.current }));
+    window.dispatchEvent(new CustomEvent('gv-datepicker-open', { detail: instanceId }));
     const onOther = (e: Event) => {
-      if ((e as CustomEvent).detail !== instanceId.current) setOpen(false);
+      if ((e as CustomEvent).detail !== instanceId) setOpen(false);
     };
     window.addEventListener('gv-datepicker-open', onOther);
     return () => window.removeEventListener('gv-datepicker-open', onOther);
-  }, [open]);
+  }, [open, instanceId]);
 
   // The calendar is rendered through a Portal at fixed viewport coordinates so
   // it can never be clipped by an ancestor's overflow (e.g. a scrollable filter
@@ -189,8 +196,12 @@ export function DatePicker({
   }, []);
 
   useEffect(() => {
-    if (!open) { setPos(null); return; }
-    place();
+    // The position is cleared where the picker opens (the trigger's onClick),
+    // so a reopen never draws at the old spot for a frame.
+    if (!open) return;
+    // Measured on the next frame (effects run after paint anyway), so the
+    // position is set from a callback, not synchronously in the effect.
+    const raf = requestAnimationFrame(place);
     function onDown(e: MouseEvent) {
       const t = e.target as Node;
       if (btnRef.current?.contains(t) || menuRef.current?.contains(t)) return;
@@ -200,6 +211,7 @@ export function DatePicker({
     window.addEventListener('resize', place);
     window.addEventListener('scroll', place, true);
     return () => {
+      cancelAnimationFrame(raf);
       document.removeEventListener('mousedown', onDown);
       window.removeEventListener('resize', place);
       window.removeEventListener('scroll', place, true);
@@ -233,7 +245,7 @@ export function DatePicker({
         aria-describedby={describedBy}
         aria-invalid={invalid || undefined}
         disabled={disabled}
-        onClick={() => setOpen((v) => { if (v) setPendingTime(null); return !v; })}
+        onClick={() => { setPos(null); setOpen((v) => { if (v) setPendingTime(null); return !v; }); }}
         className={`w-full flex items-center gap-2.5 text-left focus:outline-none ${variant === 'well' ? '' : 'rounded-xl px-4 py-3'}`}
         style={{
           fontFamily: OUTFIT,

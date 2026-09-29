@@ -124,18 +124,27 @@ export function usePendingInvites(enabled: boolean = true) {
 
   // Reset the cache when the signed-in user changes (declared before the fetch
   // effect so it wins the first commit).
-  useEffect(() => {
-    fetched.current = false;
+  // The counts reset during render (the "previous value in state" pattern);
+  // the fetched flag is a ref, so it resets in an effect, still declared here
+  // so it runs before the fetch effect below.
+  const cacheUserId = user?.id ?? null;
+  const [seenUserId, setSeenUserId] = useState(cacheUserId);
+  if (seenUserId !== cacheUserId) {
+    setSeenUserId(cacheUserId);
     setCount(null);
     setInvites([]);
     setLoading(false);
-  }, [user?.id]);
+  }
+  useEffect(() => {
+    fetched.current = false;
+  }, [cacheUserId]);
 
   useEffect(() => {
     if (!enabled || fetched.current) return;
     if (!user || !session) return;
     fetched.current = true;
-    void refresh();
+    // Started a microtask later so no state is set synchronously in the effect.
+    void Promise.resolve().then(() => refresh());
   }, [enabled, user, session, refresh]);
 
   return { count, invites, loading, refresh };

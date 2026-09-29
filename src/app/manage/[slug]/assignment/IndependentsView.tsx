@@ -246,7 +246,8 @@ export default function IndependentsView({ conference, showFlash }: Independents
     // refetch the whole pool on each token refresh.
   }, [conference, accessToken]);
 
-  useEffect(() => { loadData(); }, [loadData]);
+  // Started a microtask later so no state is set synchronously in the effect.
+  useEffect(() => { void Promise.resolve().then(() => loadData()); }, [loadData]);
 
   // ── Optimistic local patch helpers ─────────────────────────────────────────
   // Mutate exactly the affected card; rollbacks restore the exact snapshot.

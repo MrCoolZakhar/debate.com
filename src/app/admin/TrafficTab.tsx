@@ -64,8 +64,8 @@ export default function TrafficTab() {
   useEffect(() => {
     if (authLoading || !session) return;
     let alive = true;
-    setBusy(true);
     const supabase = getAuthedClient(session.access_token);
+    void Promise.resolve().then(() => { if (alive) setBusy(true); });
     void supabase.rpc('admin_site_traffic', { p_days: days }).then(({ data, error: e }) => {
       if (!alive) return;
       setBusy(false);

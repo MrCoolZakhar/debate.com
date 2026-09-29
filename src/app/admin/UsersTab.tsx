@@ -304,7 +304,7 @@ function Directory() {
 
   useEffect(() => {
     if (authLoading) return;
-    void fetchPage(0);
+    void Promise.resolve().then(() => fetchPage(0));
   }, [authLoading, fetchPage]);
 
   const loadedAll = !!rows && rows.length >= total;

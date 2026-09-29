@@ -317,9 +317,18 @@ function useAnchoredDropdown<T extends HTMLElement>(
       up,
     });
   }, [anchorRef, estHeight]);
+  // Closing forgets the position during render (the "previous value in
+  // state" pattern), so a reopen never draws at the old spot; opening measures
+  // on the next frame, from a callback rather than the effect body.
+  const [seenOpen, setSeenOpen] = useState(open);
+  if (seenOpen !== open) {
+    setSeenOpen(open);
+    if (!open) setPos(null);
+  }
   useEffect(() => {
-    if (!open) { setPos(null); return; }
-    place();
+    if (!open) return;
+    const raf = requestAnimationFrame(place);
+    return () => cancelAnimationFrame(raf);
   }, [open, place]);
   useReposition(open, place);
   return pos;

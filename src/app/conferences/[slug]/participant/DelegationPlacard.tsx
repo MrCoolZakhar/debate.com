@@ -52,7 +52,8 @@ export default function DelegationPlacard({ societyId, paymentStatus, selfPaid, 
     );
   }, [isIndependent, societyId, session]);
 
-  useEffect(() => { load(); }, [load]);
+  // Started a microtask later so no state is set synchronously in the effect.
+  useEffect(() => { void Promise.resolve().then(() => load()); }, [load]);
 
   const chip = derivePaymentChip(paymentStatus, selfPaid, amountPaid);
 

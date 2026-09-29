@@ -68,7 +68,8 @@ export default function CVPrivacyPanel({
 
   useEffect(() => {
     if (!open) return;
-    place();
+    // Measured on the next frame, from a callback rather than the effect body.
+    const raf = requestAnimationFrame(place);
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') { setOpen(false); btnRef.current?.focus(); } };
     const onDown = (e: MouseEvent) => {
       const t = e.target as Node;
@@ -81,6 +82,7 @@ export default function CVPrivacyPanel({
     window.addEventListener('resize', onReflow);
     window.addEventListener('scroll', onReflow, true);
     return () => {
+      cancelAnimationFrame(raf);
       document.removeEventListener('keydown', onKey);
       document.removeEventListener('mousedown', onDown);
       window.removeEventListener('resize', onReflow);

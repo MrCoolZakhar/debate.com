@@ -18,7 +18,7 @@ const PLATFORM_BASE: Record<string, string> = {
  */
 export function normalizeSocialUrl(raw: string | null | undefined, platform?: string): string | null {
   if (!raw) return null;
-  let v = raw.trim();
+  const v = raw.trim();
   if (!v) return null;
 
   // Already absolute — trust it.

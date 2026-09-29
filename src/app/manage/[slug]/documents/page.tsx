@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { useNow } from '@/lib/useNow';
 import { FileText, Upload, X, Check, LayoutGrid, Settings as SettingsIcon, CircleCheck, PencilLine } from 'lucide-react';
 import Link from 'next/link';
 import { useManage } from '@/app/manage/[slug]/layout';
@@ -368,6 +369,8 @@ function SectionIntro({ title, description }: { title: string; description: stri
 // ── DocumentsPage ──────────────────────────────────────────────────────────────
 
 export default function DocumentsPage() {
+  // Released / scheduled checks read this, ticking every minute (react-hooks/purity).
+  const now = useNow();
   const { conference } = useManage();
   const { user, session } = useAuth();
   /** The stable half of `session`. AuthProvider replaces the session OBJECT on
@@ -449,7 +452,7 @@ export default function DocumentsPage() {
   }, [conference, accessToken]);
 
   useEffect(() => {
-    loadCommittees().then(rows => {
+    void Promise.resolve().then(() => loadCommittees()).then(rows => {
       if (rows && !didSetInitialTab.current && rows.length > 0) {
         setSelectedCommitteeId(rows[0].id);
         didSetInitialTab.current = true;
@@ -476,7 +479,8 @@ export default function DocumentsPage() {
     setSettingsLoaded(true);
   }, [conference, accessToken]);
 
-  useEffect(() => { loadConferenceSettings(); }, [loadConferenceSettings]);
+  // Started a microtask later so no state is set synchronously in the effect.
+  useEffect(() => { void Promise.resolve().then(() => loadConferenceSettings()); }, [loadConferenceSettings]);
 
   const loadStudyGuides = useCallback(async () => {
     if (!selectedCommitteeId) return;
@@ -528,10 +532,15 @@ export default function DocumentsPage() {
   }, [selectedCommitteeId, accessToken]);
 
   useEffect(() => {
-    loadStudyGuides();
-    loadPapers();
-    setFilterStatus('ALL');
+    void Promise.resolve().then(() => { void loadStudyGuides(); void loadPapers(); });
   }, [loadStudyGuides, loadPapers]);
+  // A different committee starts on the "All" filter (the "previous value in
+  // state" pattern, compared during render).
+  const [filterFor, setFilterFor] = useState(selectedCommitteeId);
+  if (filterFor !== selectedCommitteeId) {
+    setFilterFor(selectedCommitteeId);
+    setFilterStatus('ALL');
+  }
 
   // ── Actions ──────────────────────────────────────────────────────────────────
 
@@ -801,8 +810,8 @@ export default function DocumentsPage() {
                     <div>
                       {studyGuides.map((guide, i) => {
                         const releaseAt = selectedCommittee?.study_guides_publish_at ?? null;
-                        const released = !guide.is_published && !!releaseAt && new Date(releaseAt).getTime() <= Date.now();
-                        const scheduled = !guide.is_published && !!releaseAt && new Date(releaseAt).getTime() > Date.now();
+                        const released = !guide.is_published && !!releaseAt && new Date(releaseAt).getTime() <= now;
+                        const scheduled = !guide.is_published && !!releaseAt && new Date(releaseAt).getTime() > now;
                         return (
                         <div
                           key={guide.id}
@@ -832,7 +841,7 @@ export default function DocumentsPage() {
                                 )}
                                 <button
                                   onClick={() => handlePublishGuide(guide.id, false)}
-                                  title={releaseAt && new Date(releaseAt).getTime() <= Date.now() ? "Won't hide it, the schedule already released it. Clear the schedule in Settings to fully unpublish." : undefined}
+                                  title={releaseAt && new Date(releaseAt).getTime() <= now ? "Won't hide it, the schedule already released it. Clear the schedule in Settings to fully unpublish." : undefined}
                                   className="focus:outline-none gv-lift"
                                   style={{ border: '1px solid #DDD4C0', borderRadius: 8, padding: '6px 12px', fontSize: 11, fontFamily: OUTFIT, fontWeight: 700, color: '#1C1410', backgroundColor: 'transparent', cursor: 'pointer' }}
                                   onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.04)'; }}

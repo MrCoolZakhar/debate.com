@@ -226,8 +226,8 @@ export default function ActivityTab() {
 
   useEffect(() => {
     if (authLoading) return;
-    setDone(false);
-    void load(null);
+    // A microtask later, so no state is set synchronously in the effect.
+    void Promise.resolve().then(() => { setDone(false); return load(null); });
   }, [authLoading, load]);
 
   function toggle(key: string) {

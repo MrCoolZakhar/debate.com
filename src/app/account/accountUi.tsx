@@ -684,16 +684,23 @@ export function awardTier(name: string): AwardTier {
 // disc — no external artwork (public/awards/ ships no PNGs, so every <img>
 // 404'd). Matching is case-insensitive and works off the award name; the tier
 // (awardTier) still drives the disc colour and glyph tint.
-function awardIcon(name: string): LucideIcon {
+/** The per-award glyphs, one fixed table at module level (a component chosen
+ *  during render must come from a static source). */
+const AWARD_ICONS = {
+  trophy: Trophy, handshake: Handshake, medal: Medal, award: Award, megaphone: Megaphone,
+  scroll: ScrollText, gavel: Gavel, star: Star, users: Users,
+} satisfies Record<string, LucideIcon>;
+
+function awardIconKey(name: string): keyof typeof AWARD_ICONS {
   const n = name.toLowerCase();
-  if (/best delegate/.test(n)) return Trophy;         // gold
-  if (/diplomacy/.test(n)) return Handshake;          // gold
-  if (/outstanding/.test(n)) return Medal;            // silver
-  if (/honou?rable mention/.test(n)) return Award;    // silver (ribbon)
-  if (/verbal commendation/.test(n)) return Megaphone; // bronze
-  if (/position paper/.test(n)) return ScrollText;    // bronze
-  if (/\bchair|\bdais/.test(n)) return Gavel;         // chair honours (Best Chair, Best Dais)
-  return Star;                                        // custom / special (green)
+  if (/best delegate/.test(n)) return 'trophy';        // gold
+  if (/diplomacy/.test(n)) return 'handshake';         // gold
+  if (/outstanding/.test(n)) return 'medal';           // silver
+  if (/honou?rable mention/.test(n)) return 'award';   // silver (ribbon)
+  if (/verbal commendation/.test(n)) return 'megaphone'; // bronze
+  if (/position paper/.test(n)) return 'scroll';       // bronze
+  if (/\bchair|\bdais/.test(n)) return 'gavel';        // chair honours (Best Chair, Best Dais)
+  return 'star';                                       // custom / special (green)
 }
 
 /**
@@ -708,7 +715,7 @@ function awardIcon(name: string): LucideIcon {
 export function AwardArtwork({ name, size = 20, delegation = false }: { name: string; size?: number; delegation?: boolean }) {
   const t: AwardTier = delegation ? 'special' : awardTier(name);
   const tier = AWARD_TIER_STYLE[t];
-  const Icon = delegation ? Users : awardIcon(name);
+  const Icon = AWARD_ICONS[delegation ? 'users' : awardIconKey(name)];
   // "Special" honours use a light glyph on the deep-green disc; the Star (or the
   // delegation Users mark) reads best filled. Metal tiers keep a crisp stroked
   // glyph in the medal colour.

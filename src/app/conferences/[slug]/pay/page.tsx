@@ -599,7 +599,7 @@ function ManualPayAction({
       {externalPaymentUrl && (
         <>
           <p className="mb-2" style={{ fontFamily: OUTFIT, fontSize: 12, color: NEU.muted, lineHeight: 1.6 }}>
-            Pay through the conference's own payment page, then come back and upload your proof.
+            Pay through the conference&apos;s own payment page, then come back and upload your proof.
           </p>
           <a
             href={externalPaymentUrl}

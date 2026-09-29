@@ -44,7 +44,8 @@ function FeaturedSection() {
   const { session } = useAuth();
 
   useEffect(() => {
-    if (!search.trim()) { setSearchResults([]); return; }
+    // An empty box clears the results where it is emptied (onChange), not here.
+    if (!search.trim()) return;
     const timer = setTimeout(async () => {
       setSearchLoading(true);
       const { data } = await supabase
@@ -153,7 +154,7 @@ function FeaturedSection() {
             <input
               type="text"
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={(e) => { setSearch(e.target.value); if (!e.target.value.trim()) setSearchResults([]); }}
               placeholder="Search conferences..."
               style={{
                 width: '100%',
