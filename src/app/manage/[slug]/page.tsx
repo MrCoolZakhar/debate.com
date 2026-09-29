@@ -1,5 +1,6 @@
 'use client';
 
+import EmailIssuesNotice from '@/components/conferences/EmailIssuesNotice';
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { notifyErr, notifyOk } from '@/lib/appNotify';
 import { notify } from '@/lib/sessionNotifications';
@@ -1718,6 +1719,10 @@ export default function DashboardPage() {
           )}
         </div>
       </div>
+
+      {/* Emails the database refused to send because they were empty
+          (29 Sep 2026). Nothing is drawn while there is none. */}
+      <EmailIssuesNotice conferenceId={conference.id} slug={slug} compact />
 
       {/* ── The one-screen grid (src/components/conferences/dashboardLayout.tsx).
           From 1024x600 up it takes exactly the window under the top bar and

@@ -43,6 +43,7 @@ import { formatFee } from '@/lib/utils';
 import { activePhaseFee, type FeePhase } from '@/lib/finance';
 import { getDefaultEventEmail } from '@/lib/defaultEmails';
 import DefaultEmailPreviewModal from '@/components/DefaultEmailPreviewModal';
+import EmailIssuesNotice from '@/components/conferences/EmailIssuesNotice';
 import { markEmailsExplored } from '@/lib/emailsExplored';
 import GuidedWalkthrough, {
   TourGold, TourGreen, OTTER_INTRO, OTTER_OUTRO, type WalkthroughStep,
@@ -564,6 +565,31 @@ const RAISED_DISC: React.CSSProperties = {
  *  actually sent: blocks whose content is all empty read as a draft here and
  *  sent as a draft there, which is a subject with a blank page under it. */
 const templateHasContent = hasDraftContent;
+
+/** An automatic email that is on with nothing written in it sends Gavelling's
+ *  default copy (29 Sep 2026: said plainly, so nobody thinks it sends blank). */
+const DEFAULT_LABEL = "Uses Gavelling's default";
+const TEMPLATE_PAIR_ERROR = "Add both a subject and a message, or clear both to use Gavelling's default.";
+
+/** The default's subject and its opening words, for the row's inline preview. */
+function defaultPreviewText(eventKey: string): { subject: string; opening: string } | null {
+  const d = getDefaultEventEmail(eventKey);
+  if (!d) return null;
+  // Merge fields read as plain words in brackets ({{delegate_name}} → [delegate name]).
+  const plain = (t: string) => t
+    .replace(/\{\{\s*([a-z_]+)\s*\}\}/gi, (_m, k: string) => `[${k.replace(/_/g, ' ')}]`)
+    .replace(/[*_`]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  const words: string[] = [];
+  for (const b of d.blocks) {
+    // The heading repeats the subject; the opening starts at the greeting.
+    if (b.type === 'paragraph' && b.content && b.variant !== 'heading') words.push(plain(b.content));
+    if (words.join(' ').length > 220) break;
+  }
+  const opening = words.join(' ');
+  return { subject: plain(d.subject), opening: opening.length > 220 ? `${opening.slice(0, 217).trimEnd()}...` : opening };
+}
 
 // ── Automatic-emails registry, grouped by lifecycle stage ────────────────────
 // Exhaustive over EventKey on purpose: add a key to EVENT_REGISTRY and this
@@ -1735,6 +1761,9 @@ function CommunicationsPageInner() {
 
   // ── Notifications: PREVIEW DEFAULT modal ──
   const [previewDefaultKey, setPreviewDefaultKey] = useState<string | null>(null);
+  // Half an automatic template (a subject with no message, or the other way
+  // round) is refused on Save with this, in the danger colour; nothing is saved.
+  const [builderPairError, setBuilderPairError] = useState('');
 
   // ── Email theme (conferences.email_theme) ──
   // The CONTROLS moved out (src/components/EmailDesignPanel.tsx) but this
@@ -2642,6 +2671,7 @@ function CommunicationsPageInner() {
     const existing = templatesByEvent.get(ev.key);
     const initialSubject = existing?.subject ?? '';
     const initialBlocks = normalizeBlocks(existing?.body_blocks, existing?.body ?? '');
+    setBuilderPairError('');
     setBuilderEventKey(ev.key);
     setBuilderTemplateId(existing?.id ?? null);
     setBuilderName(ev.label);
@@ -2705,6 +2735,7 @@ function CommunicationsPageInner() {
   }
 
   function closeBuilder() {
+    setBuilderPairError('');
     setBuilderOpen(false);
   }
 
@@ -2724,6 +2755,8 @@ function CommunicationsPageInner() {
       return;
     }
     const ev = searchParams.get('event');
+    // ?view=automatic: the "Check templates" button of an email-issue notice.
+    if (!ev && searchParams.get('view') === 'automatic') { setView('automatic'); return; }
     if (!ev) return;
     const def = EVENT_REGISTRY.find(e => e.key === ev);
     if (def) {
@@ -2735,6 +2768,7 @@ function CommunicationsPageInner() {
   // ── Builder mutations ─────────────────────────────────────────────────────
 
   function handleComposerChange(value: { subject: string; blocks: EmailBlock[] }) {
+    setBuilderPairError('');
     setBuilderSubject(value.subject);
     setBuilderBlocks(value.blocks);
   }
@@ -2749,16 +2783,28 @@ function CommunicationsPageInner() {
     // alone holds ONE empty paragraph, so a blank email saved cleanly and then
     // sent as the organiser's own copy. The test is now whether there are
     // words in it.
-    if (!subject.trim() || !blocksHaveContent(blocks)) {
-      if (!opts.silent) notifyErr('Add a subject and a message. An email with nothing in it is never sent.', 'communications-builder');
+    // Automatic emails (29 Sep 2026, after 64 DIMUN delegates got a blank
+    // study guide email): half a template is refused, because it would send
+    // one half blank; BOTH empty is allowed and means "use Gavelling's
+    // default", stored exactly like turnOnDefaultEmail's stub ('' / '' / []).
+    // A one-off broadcast has no default, so it still needs both.
+    const hasSubject = !!subject.trim();
+    const hasBody = blocksHaveContent(blocks);
+    const useDefault = !isAdHoc && !hasSubject && !hasBody;
+    if (!useDefault && (!hasSubject || !hasBody)) {
+      if (!opts.silent) {
+        if (isAdHoc) notifyErr('Add a subject and a message. An email with nothing in it is never sent.', 'communications-builder');
+        else setBuilderPairError(TEMPLATE_PAIR_ERROR);
+      }
       return null;
     }
+    setBuilderPairError('');
 
     const supabase = getAuthedClient(session.access_token);
     const payload: Record<string, unknown> = {
-      subject,
-      body: flattenBlocksToPlainText(blocks, conference),
-      body_blocks: blocks,
+      subject: useDefault ? '' : subject,
+      body: useDefault ? '' : flattenBlocksToPlainText(blocks, conference),
+      body_blocks: useDefault ? [] : blocks,
       delivery: builderDelivery,
       name,
       updated_at: new Date().toISOString(),
@@ -3981,6 +4027,17 @@ function CommunicationsPageInner() {
         </div>
       )}
 
+      {/* Emails the database refused to send because they were empty
+          (29 Sep 2026). Danger colour, the server's sentence, Check templates
+          opens the Automatic emails view here. */}
+      {!builderOpen && (
+        <EmailIssuesNotice
+          conferenceId={conference.id}
+          slug={conference.slug}
+          onCheckTemplates={() => { setView('automatic'); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+        />
+      )}
+
       {/* The builder's own header carries BACK, the name and SAVE now. Drawing
           them here as well cost ~142px above the paper, which is exactly the
           space the email was being cut off by. */}
@@ -4097,12 +4154,12 @@ function CommunicationsPageInner() {
                         ? { text: eventOnWhenMissing(ev.key) && !template ? 'Turning off…' : 'Turning on…', color: GOLD_INK }
                         : !template
                           ? eventOnWhenMissing(ev.key)
-                            ? { text: 'On: sends our default', color: GOLD_INK }
+                            ? { text: DEFAULT_LABEL, color: GOLD_INK }
                             : { text: 'Not set up', color: SOFT }
                           : template.enabled && hasDraft
                             ? { text: 'On: sends your draft', color: GREEN_INK }
                             : template.enabled
-                              ? { text: 'On: sends our default', color: GOLD_INK }
+                              ? { text: DEFAULT_LABEL, color: GOLD_INK }
                               : { text: 'Off', color: SOFT };
                     return (
                       <div key={ev.key} className="rounded-2xl px-4 py-3" style={PANEL}>
@@ -4160,6 +4217,27 @@ function CommunicationsPageInner() {
                           <p className="text-sm mt-2" style={{ color: '#1C1410', fontFamily: OUTFIT, lineHeight: 1.55, textWrap: 'pretty', maxWidth: 720, paddingLeft: 24 }}>
                             {ev.description}
                           </p>
+                          {/* On with nothing written: show what actually goes
+                              out, so nobody thinks it sends blank. */}
+                          {!ev.functional && state.text === DEFAULT_LABEL && (() => {
+                            const dp = defaultPreviewText(ev.key);
+                            if (!dp) return null;
+                            return (
+                              <div className="rounded-xl px-4 py-3 mt-3" style={{ ...WELL, marginLeft: 24, maxWidth: 620 }}>
+                                <p className="text-xs font-bold" style={{ color: GOLD_INK, fontFamily: OUTFIT }}>
+                                  {DEFAULT_LABEL}
+                                </p>
+                                <p className="text-sm font-semibold mt-1.5" style={{ color: '#1C1410', fontFamily: OUTFIT, overflowWrap: 'anywhere' }}>
+                                  {dp.subject}
+                                </p>
+                                {dp.opening && (
+                                  <p className="text-xs mt-1" style={{ color: SOFT, fontFamily: OUTFIT, lineHeight: 1.5, textWrap: 'pretty' }}>
+                                    {dp.opening}
+                                  </p>
+                                )}
+                              </div>
+                            );
+                          })()}
                           {ev.recurring && template?.enabled && (
                             <div className="rounded-xl p-3 mt-3" style={{ ...WELL, marginLeft: 24, maxWidth: 480 }}>
                               <p className="text-xs font-bold mb-2.5" style={{ color: '#1C1410', fontFamily: OUTFIT, letterSpacing: '0.03em' }}>
@@ -5156,6 +5234,16 @@ function CommunicationsPageInner() {
               </Link>
             </p>
           )}
+          {builderPairError && (
+            <p
+              role="alert"
+              className="flex items-start gap-2 text-sm mb-4"
+              style={{ color: '#8B2020', fontFamily: OUTFIT, fontWeight: 600, maxWidth: 620 }}
+            >
+              <AlertTriangle size={15} style={{ flexShrink: 0, marginTop: 2 }} aria-hidden />
+              {builderPairError}
+            </p>
+          )}
           {builderError && (
             <div
               className="flex flex-wrap items-center gap-2 rounded-xl px-4 py-3 mb-4 text-sm"
@@ -5184,8 +5272,18 @@ function CommunicationsPageInner() {
               style={{ color: SOFT, fontFamily: OUTFIT, maxWidth: 620, textWrap: 'pretty' }}
             >
               <Info size={13} style={{ flexShrink: 0, marginTop: 2 }} />
-              This email is switched on but has nothing written in it, so we send our default copy.
-              Write your own message here and it replaces ours.
+              <span>
+                This email is switched on but has nothing written in it, so it uses Gavelling&apos;s default.
+                Write your own subject and message here and they replace ours.{' '}
+                <button
+                  type="button"
+                  onClick={() => setPreviewDefaultKey(builderEventKey)}
+                  className="focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] rounded"
+                  style={{ background: 'none', border: 'none', padding: 0, color: '#1B3828', fontWeight: 700, textDecoration: 'underline', textUnderlineOffset: 3, cursor: 'pointer', font: 'inherit' }}
+                >
+                  Preview default
+                </button>
+              </span>
             </p>
           )}
 

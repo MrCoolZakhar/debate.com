@@ -1054,8 +1054,13 @@ export default function DocumentsPage() {
                 ) : (
                   <DateTimeField value={sgGlobalPublishAt} onSave={saveGlobalSgPublishAt} placeholder="No scheduled release" />
                 )}
-                <p style={{ fontFamily: OUTFIT, fontSize: 11.5, color: '#9A8A78', marginTop: 12, lineHeight: 1.6 }}>
-                  A guide becomes visible to delegates once it is manually published, or once its committee&apos;s release time passes, whichever comes first. The Publish button on a guide is still there for an early, manual release. Clear a schedule here if you need to pull an already-released draft back out of sight.
+                {/* 29 Sep 2026: a scheduled release now sends the release email
+                    at that time too (before, only a manual publish did). */}
+                <p style={{ fontFamily: OUTFIT, fontSize: 13, color: '#5A5046', marginTop: 12, lineHeight: 1.55 }}>
+                  At this time delegates can see the study guide and get an email that it is out. Publishing a guide by hand releases it straight away.
+                </p>
+                <p style={{ fontFamily: OUTFIT, fontSize: 11.5, color: '#9A8A78', marginTop: 6, lineHeight: 1.6 }}>
+                  Clear a schedule here if you need to pull an already-released draft back out of sight.
                 </p>
               </div>
             </div>
