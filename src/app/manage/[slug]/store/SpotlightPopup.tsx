@@ -169,7 +169,9 @@ export interface SpotlightPopupProps {
   placement?: Placement;
   bundle?: BundleDef;
   onClose: () => void;
-  onBooked: () => void;
+  /** The new purchase and the placements it booked (the Store offers the
+   *  Explore pop-up when one of them is Country or Region). */
+  onBooked: (booked: { purchaseId: string | null; placements: Placement[] }) => void;
 }
 
 export default function SpotlightPopup(props: SpotlightPopupProps) {
@@ -390,12 +392,16 @@ export default function SpotlightPopup(props: SpotlightPopupProps) {
         })
       : rpcCall('book_spotlight', { p_conf: conference.id, p_placement: placement, p_ranges: chosen, p_description: description.trim(), p_hold: holdRef.current[placement] ?? null });
     run(call, {
-      onDone: () => {
+      onDone: (a: StoreAnswer) => {
         bookedRef.current = true;
         // The booking removed its holds itself; nothing to release.
         holdRef.current = {};
         notifyOk(bundle ? `${bundle.name} booked. Your spotlights are on the way.` : `${NAMES[placement]} Spotlight booked for ${weeksLabel(chosenDays)}.`, 'store');
-        onBooked();
+        const pid = (a as { purchase_id?: unknown }).purchase_id;
+        onBooked({
+          purchaseId: typeof pid === 'string' ? pid : null,
+          placements: bundle ? bundle.items.map(it => it.placement) : [placement],
+        });
         onClose();
       },
       onRefused: (message: string, a: StoreAnswer) => {

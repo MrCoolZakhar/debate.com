@@ -62,6 +62,9 @@ import { isListedConference } from '@/lib/publicConferences';
 import { fetchFeatured, recordSpotlightClick, recordSpotlightView, type FeaturedRow } from '@/lib/spotlight';
 import { fetchCreditSponsoredIds } from '@/lib/creditSponsored';
 import ConferenceSpotlightDialog, { claimSpotlightDialog } from './ConferenceSpotlightDialog';
+import SpotlightPlacePopup, { claimPlacePopup, fetchSpotlightPopups, type PlacePopupPlacement, type PlacePopupRow } from './SpotlightPlacePopup';
+
+type PlacePopup = { placement: PlacePopupPlacement; target: string; rows: PlacePopupRow[] };
 import {
   PRICE_OPTIONS, ROLE_OPTIONS, matchesDateBucket, matchesDateRange, matchesPrice, matchesRoles,
   parseDateOnly, parseFacets, readExploreQuery, writeExploreQuery, toDateOnly,
@@ -210,6 +213,13 @@ export default function ConferencesExploreClient() {
   const [exploreSpots, setExploreSpots] = useState<FeaturedRow[]>([]);
   const [regionSpots, setRegionSpots] = useState<{ key: string; rows: FeaturedRow[] }>({ key: '', rows: [] });
   const [spotlightDialog, setSpotlightDialog] = useState<FeaturedRow[] | null>(null);
+  // The Country / Region Spotlight pop-up (29 Sep 2026): once per target per
+  // session. It waits while the Explore Spotlight dialog is open (never two
+  // dialogs at once) and opens the moment that one closes.
+  const [placePopup, setPlacePopup] = useState<PlacePopup | null>(null);
+  const placePendingRef = useRef<PlacePopup | null>(null);
+  const spotlightDialogOpenRef = useRef(false);
+  useEffect(() => { spotlightDialogOpenRef.current = !!spotlightDialog; }, [spotlightDialog]);
   const [dateFilter, setDateFilter] = useState<DateFilter>(initialQuery.when);
   const [dateFrom, setDateFrom] = useState(initialQuery.from);
   const [dateTo, setDateTo] = useState(initialQuery.to);
@@ -604,7 +614,14 @@ export default function ConferencesExploreClient() {
     void fetchFeatured(supabase, placement, target).then(rows => {
       if (!cancelled) setRegionSpots({ key: spotTarget, rows: rows.filter(r => r.is_spotlight) });
     });
-    return () => { cancelled = true; };
+    // The pop-up of that place's Spotlights, once per target per session.
+    void fetchSpotlightPopups(placement, target).then(rows => {
+      if (cancelled || rows.length === 0) return;
+      const next = { placement, target, rows };
+      if (spotlightDialogOpenRef.current) { placePendingRef.current = next; return; }
+      if (claimPlacePopup(placement, target)) setPlacePopup(next);
+    });
+    return () => { cancelled = true; placePendingRef.current = null; };
   }, [spotTarget]);
   const spotlightRows = useMemo(() => (spotTarget && regionSpots.key === spotTarget ? regionSpots.rows : []), [spotTarget, regionSpots]);
 
@@ -1080,9 +1097,22 @@ export default function ConferencesExploreClient() {
       {spotlightDialog && (
         <ConferenceSpotlightDialog
           rows={spotlightDialog}
-          onClose={() => setSpotlightDialog(null)}
+          onClose={() => {
+            setSpotlightDialog(null);
+            const pending = placePendingRef.current;
+            placePendingRef.current = null;
+            if (pending && claimPlacePopup(pending.placement, pending.target)) setPlacePopup(pending);
+          }}
           // The roles open now, from the same facets as "Open for ..."; null until read.
           openRolesFor={(id) => (facets.size > 0 ? facets.get(id)?.open_roles ?? [] : null)}
+        />
+      )}
+
+      {placePopup && !spotlightDialog && (
+        <SpotlightPlacePopup
+          rows={placePopup.rows}
+          placement={placePopup.placement}
+          onClose={() => setPlacePopup(null)}
         />
       )}
     </div>

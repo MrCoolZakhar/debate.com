@@ -25,6 +25,7 @@ These were decided by the owner (Christian) on purpose. If a request would chang
 - Organizer imports are free until the owner switches them on (IMPORTS_PAID_LAUNCH and store_flags.organizer_import_charged).
 - Leader imports are free until the owner switches them on (LEADER_IMPORTS_PAID_LAUNCH and store_flags.leader_import_charged); while free, each delegate's own credit is taken at claim.
 - Payment never locks the role page unless the organizer turns on 'Hide dashboard until payment' (application_role_configs.hide_dashboard_until_paid, off by default). payment_timing only decides when people can pay ('anytime' or 'after_acceptance'); 'after_application' was merged into 'anytime' on 29 Sep. Role settings with two choices are toggles, all off by default; settings that do not apply (payment settings on a free role) are hidden.
+- Country and Region Spotlights: 2 a day each, same price (1 credit a day, 7 a week). Each gets an Explore pop-up with an optional pitch and up to 3 highlights (set_spotlight_popup).
 - Buttons are sentence case, titles are Title Case, no em dashes anywhere users can see.
 - Every database object is changed only through the chat's Supabase work, never from a Claude Code run.
 

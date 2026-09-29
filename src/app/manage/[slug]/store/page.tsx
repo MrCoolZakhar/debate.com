@@ -25,6 +25,7 @@ import {
 } from './storeApi';
 import { Balances, Big, StoreCard, STORE_CSS, TransferDialog, INK_SOFT } from './storeKit';
 import SpotlightPopup from './SpotlightPopup';
+import { PopupOfferDialog } from './SpotlightPopupEditor';
 import SponsorshipPopup from './SponsorshipPopup';
 import EmailsPopup from './EmailsPopup';
 import YourSpotlights from './YourSpotlights';
@@ -66,6 +67,8 @@ export default function StorePage() {
   const { conference } = useManage();
   const { data, loading, error, reload } = useStoreData(conference?.id ?? null, conference?.country ?? null);
   const [popup, setPopup] = useState<Popup>(null);
+  // After a Country or Region booking: "ADD YOUR POP-UP" (29 Sep 2026).
+  const [popupOffer, setPopupOffer] = useState<{ purchaseId: string; placements: Placement[] } | null>(null);
   const [state, setState] = useState<StoreState | null>(null);
   const shown = state ?? data.state;
 
@@ -322,7 +325,20 @@ export default function StorePage() {
           placement={popup.kind === 'spotlight' ? popup.placement : undefined}
           bundle={popup.kind === 'bundle' ? popup.bundle : undefined}
           onClose={() => setPopup(null)}
-          onBooked={() => afterBuy()}
+          onBooked={(b) => {
+            afterBuy();
+            if (b.purchaseId && b.placements.some(p => p === 'country' || p === 'region')) {
+              setPopupOffer({ purchaseId: b.purchaseId, placements: b.placements });
+            }
+          }}
+        />
+      )}
+      {popupOffer && (
+        <PopupOfferDialog
+          purchaseId={popupOffer.purchaseId}
+          placements={popupOffer.placements}
+          onClose={() => setPopupOffer(null)}
+          onSaved={() => afterBuy()}
         />
       )}
       {popup?.kind === 'sponsorship' && shown && (

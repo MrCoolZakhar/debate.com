@@ -72,6 +72,10 @@ export interface SpotlightPurchase {
   cancellable: boolean;
   cancel_until: string | null;
   bookings: SpotlightBooking[] | null;
+  /** The Explore pop-up (29 Sep 2026): a Country or Region booking has one. */
+  has_popup?: boolean;
+  pitch?: string | null;
+  highlights?: string[] | null;
 }
 
 export interface SpotlightStat {

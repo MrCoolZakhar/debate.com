@@ -16,7 +16,11 @@ const FONT = "var(--font-brand), sans-serif";
 export const SPOTLIGHT_GLOW = '0 0 0 2px #EED98A, 0 0 0 3px rgba(182,135,31,0.55), 0 8px 26px rgba(238,217,138,0.45), 0 20px 50px rgba(182,135,31,0.28)';
 export const SPOTLIGHT_GLOW_HOVER = '0 0 0 2px #F3E3A1, 0 0 0 3px rgba(182,135,31,0.7), 0 12px 32px rgba(238,217,138,0.55), 0 26px 60px rgba(182,135,31,0.34)';
 
-export function SpotlightTag({ size = 'md', style }: { size?: 'sm' | 'md'; style?: React.CSSProperties }) {
+export function SpotlightTag({ size = 'md', style, label = 'Spotlight' }: {
+  size?: 'sm' | 'md'; style?: React.CSSProperties;
+  /** "Country Spotlight" / "Region Spotlight" on the Explore place pop-up. */
+  label?: string;
+}) {
   const sm = size === 'sm';
   return (
     <span
@@ -32,7 +36,7 @@ export function SpotlightTag({ size = 'md', style }: { size?: 'sm' | 'md'; style
       }}
     >
       <Sparkles size={sm ? 10 : 12} strokeWidth={2.4} aria-hidden />
-      Spotlight
+      {label}
     </span>
   );
 }

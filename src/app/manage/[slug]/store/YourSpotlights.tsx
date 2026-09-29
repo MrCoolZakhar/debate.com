@@ -20,6 +20,7 @@ import { OUTFIT } from '@/components/neu';
 import { PurchaseShell, PURCHASE_CSS } from '@/components/purchase/purchaseKit';
 import { authedClient, BUNDLES, fmtDay, messageOf, type SpotlightPurchase, type SpotlightStat } from './storeApi';
 import { StoreCard, DEEP_GOLD, FOREST, INK, INK_SOFT, DANGER } from './storeKit';
+import SpotlightPopupEditor from './SpotlightPopupEditor';
 
 const STATUS: Record<SpotlightPurchase['status'], { Icon: typeof Radio; label: string; color: string }> = {
   upcoming: { Icon: CalendarClock, label: 'Upcoming', color: DEEP_GOLD },
@@ -211,6 +212,9 @@ export default function YourSpotlights({ spotlights, stats, onChanged }: {
                     ))}
                   </ul>
                   {chosen.description ? <p className="gv-ysp-desc">&ldquo;{chosen.description}&rdquo;</p> : null}
+                  {chosen.has_popup ? (
+                    <SpotlightPopupEditor key={chosen.purchase_id} purchase={chosen} description={chosen.description} onSaved={onChanged} />
+                  ) : null}
                   <div className="gv-ysp-stats">
                     <div><b>{t.views.toLocaleString('en-US')}</b><span>views</span></div>
                     <div><b>{t.clicks.toLocaleString('en-US')}</b><span>clicks</span></div>
