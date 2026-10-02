@@ -25,7 +25,7 @@ const INK_SOFT = '#5A5046';
 const FOREST = '#1B3828';
 
 export default function DelegationImportPopup({
-  societyId, data, reload, conferenceAcronym, userEmail, onPledgeMore, onImported, onClose,
+  societyId, data, reload, conferenceAcronym, userEmail, onPledgeMore, onAdvisorsMore, onImported, onClose,
 }: {
   societyId: string;
   data: LeaderImport;
@@ -33,6 +33,7 @@ export default function DelegationImportPopup({
   conferenceAcronym: string;
   userEmail: string | null;
   onPledgeMore: () => void;
+  onAdvisorsMore?: () => void;
   onImported?: () => void;
   onClose: () => void;
 }) {
@@ -93,6 +94,7 @@ export default function DelegationImportPopup({
             conferenceAcronym={conferenceAcronym}
             userEmail={userEmail}
             onPledgeMore={onPledgeMore}
+            onAdvisorsMore={onAdvisorsMore}
             onImported={() => { onImported?.(); }}
           />
         </div>

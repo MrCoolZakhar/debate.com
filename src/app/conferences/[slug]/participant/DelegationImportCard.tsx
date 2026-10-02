@@ -51,7 +51,16 @@ export interface ImportedDelegate {
   claimed: boolean;
   credit: 'held' | 'claimed' | 'refunded' | string;
   imported_at: string;
+  /** The role this person was imported as (1 Oct 2026). Missing on old rows = delegate. */
+  role?: ImportRole | string;
 }
+
+/** The roles a leader may import (my_delegation_import's import_roles). */
+export type ImportRole = 'delegate' | 'head-delegate' | 'faculty-advisor';
+export const IMPORT_ROLE_LABEL: Record<ImportRole, string> = {
+  delegate: 'Delegate', 'head-delegate': 'Head Delegate', 'faculty-advisor': 'Faculty Advisor',
+};
+const isImportRole = (r: unknown): r is ImportRole => r === 'delegate' || r === 'head-delegate' || r === 'faculty-advisor';
 
 export interface LeaderImport {
   enabled: boolean;
@@ -61,10 +70,16 @@ export interface LeaderImport {
   balance: number;
   /** my_delegation_import's `charged`: the server charges leader imports. */
   charged: boolean;
+  /** The advisor ticket pool (1 Oct 2026), counted like the delegate pool. */
+  advisor_pledged: number;
+  advisors: number;
+  free_advisor_tickets: number;
+  /** The roles this leader may import here, in order; 'delegate' always. */
+  import_roles: ImportRole[];
   imports: ImportedDelegate[];
 }
 
-type InvalidReason = 'name' | 'email' | 'duplicate' | 'self' | 'already_applied';
+type InvalidReason = 'name' | 'email' | 'duplicate' | 'self' | 'already_applied' | 'role';
 
 interface ImportAnswer {
   ok?: boolean;
@@ -72,6 +87,8 @@ interface ImportAnswer {
   invalid?: { email?: string; name?: string; reason?: InvalidReason }[];
   free_spots?: number;
   need_spots?: number;
+  free_advisor_tickets?: number;
+  need_advisor_tickets?: number;
   need_credits?: number;
   balance?: number;
   imported?: number;
@@ -124,6 +141,13 @@ export function useDelegationImport(societyId: string | null) {
           free_spots: asInt(a.free_spots),
           balance: asInt(a.balance),
           charged: a.charged === true,
+          advisor_pledged: asInt(a.advisor_pledged),
+          advisors: asInt(a.advisors),
+          free_advisor_tickets: asInt(a.free_advisor_tickets),
+          import_roles: (() => {
+            const roles = Array.isArray(a.import_roles) ? (a.import_roles as unknown[]).filter(isImportRole) : [];
+            return roles.includes('delegate') ? roles : ['delegate' as const, ...roles];
+          })(),
           imports: Array.isArray(a.imports) ? (a.imports as ImportedDelegate[]) : [],
         });
         setError(null);
@@ -148,10 +172,12 @@ export function useDelegationImport(societyId: string | null) {
 
 // ── Rows ───────────────────────────────────────────────────────────────────
 
-interface Row { key: number; name: string; email: string }
+interface Row { key: number; name: string; email: string; role: ImportRole }
 
 let rowKey = 0;
-const newRow = (name = '', email = ''): Row => ({ key: ++rowKey, name, email });
+/** Every new row, typed, added or pasted, starts as a Delegate. */
+const newRow = (name = '', email = ''): Row => ({ key: ++rowKey, name, email, role: 'delegate' });
+type SendRow = { name: string; email: string; role: ImportRole };
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const norm = (s: string) => s.trim().toLowerCase();
@@ -174,6 +200,9 @@ function parsePaste(text: string): Row[] {
   return out;
 }
 
+/** Shown under the importer's stats and on the delegation card (leaders). */
+export const LEAD_SWITCH_NOTE = 'Head delegate and delegate are interchangeable. Any head delegate or faculty advisor can switch them at any time from your delegation card.';
+
 function firstName(name: string | undefined | null): string {
   const n = (name ?? '').trim();
   return n ? n.split(/\s+/)[0] : 'This delegate';
@@ -194,7 +223,7 @@ function statusOf(d: ImportedDelegate): { Icon: typeof Mail; label: string; colo
 // ── Card ───────────────────────────────────────────────────────────────────
 
 export default function DelegationImportCard({
-  societyId, data, reload, conferenceAcronym, userEmail, onPledgeMore, onImported, tab = 'both', bare = false,
+  societyId, data, reload, conferenceAcronym, userEmail, onPledgeMore, onAdvisorsMore, onImported, tab = 'both', bare = false,
 }: {
   /** Which part to draw. The delegation card's pop-up keeps ONE instance
    *  mounted and switches this, so typed rows survive a tab switch. */
@@ -210,6 +239,8 @@ export default function DelegationImportCard({
   userEmail: string | null;
   /** Where to add delegation spots (the pay page's Add Delegation Spots). */
   onPledgeMore: () => void;
+  /** Where to add advisor tickets (the pay page's advisor tickets). */
+  onAdvisorsMore?: () => void;
   /** Whatever the pay page refreshes after a delegation change. */
   onImported?: () => void;
 }) {
@@ -228,6 +259,11 @@ export default function DelegationImportCard({
   const [serverErrors, setServerErrors] = useState<Record<number, string>>({});
   const [topError, setTopError] = useState<string | null>(null);
   const [needSpots, setNeedSpots] = useState(false);
+  const [needAdvisors, setNeedAdvisors] = useState(false);
+  // The role picker shows only when a leader role is open here as well.
+  const roleChoices = data.import_roles;
+  const showRolePicker = roleChoices.length > 1;
+  const advisorsOpen = roleChoices.includes('faculty-advisor');
   const [okLine, setOkLine] = useState<string | null>(null);
 
   const [busy, setBusy] = useState(false);
@@ -235,8 +271,8 @@ export default function DelegationImportCard({
   const aliveRef = useRef(true);
   // The rows to import again once the credits pop-up completes. Consumed
   // exactly once, so a second onComplete or a reopened pop-up cannot import twice.
-  const retryRowsRef = useRef<{ name: string; email: string }[] | null>(null);
-  const runRef = useRef<((list: { name: string; email: string }[]) => Promise<void>) | null>(null);
+  const retryRowsRef = useRef<SendRow[] | null>(null);
+  const runRef = useRef<((list: SendRow[]) => Promise<void>) | null>(null);
 
   useEffect(() => {
     aliveRef.current = true;
@@ -265,8 +301,10 @@ export default function DelegationImportCard({
 
   const rowError = (key: number) => serverErrors[key] ?? (showClientErrors ? clientErrors[key] : undefined);
 
-  function edit(key: number, field: 'name' | 'email', value: string) {
-    setRows(prev => prev.map(r => (r.key === key ? { ...r, [field]: value } : r)));
+  function edit(key: number, field: 'name' | 'email' | 'role', value: string) {
+    setRows(prev => prev.map(r => (r.key !== key ? r
+      : field === 'role' ? { ...r, role: isImportRole(value) ? value : 'delegate' }
+      : { ...r, [field]: value })));
     setServerErrors(prev => {
       if (!(key in prev)) return prev;
       const next = { ...prev };
@@ -306,12 +344,13 @@ export default function DelegationImportCard({
     setOkLine(null);
   }
 
-  const run = useCallback(async (list: { name: string; email: string }[]) => {
+  const run = useCallback(async (list: SendRow[]) => {
     if (busyRef.current || list.length === 0) return;
     busyRef.current = true;
     setBusy(true);
     setTopError(null);
     setNeedSpots(false);
+    setNeedAdvisors(false);
     setOkLine(null);
     try {
       const client = await authedClient();
@@ -326,8 +365,8 @@ export default function DelegationImportCard({
       if (a.ok === true) {
         const n = asInt(a.imported, list.length);
         setOkLine(n === 1
-          ? '1 delegate imported. We emailed them an invite'
-          : `${n} delegates imported. We emailed each of them an invite`);
+          ? '1 person imported. We emailed them an invite'
+          : `${n} people imported. We emailed each of them an invite`);
         setRows([newRow()]);
         setServerErrors({});
         setShowClientErrors(false);
@@ -361,6 +400,7 @@ export default function DelegationImportCard({
               case 'already_applied':
                 sentence = `${firstName(inv.name ?? matches[0]?.name)} has already applied to ${conferenceAcronym}`;
                 break;
+              case 'role': sentence = 'This role is not open at this conference'; break;
               default: sentence = 'Check this email address';
             }
             const targets = inv.reason === 'duplicate' ? matches.slice(1) : matches.slice(0, 1);
@@ -373,9 +413,16 @@ export default function DelegationImportCard({
         return;
       }
 
+      // One pool at a time, delegate tickets first (they seat delegates and
+      // head delegates), then advisor tickets. The server's own sentence.
       if (typeof a.need_spots === 'number' && a.need_spots > 0) {
         setNeedSpots(true);
-        setTopError(messageOr(a, 'You need more pledged spots for these delegates'));
+        setTopError(messageOr(a, 'You need more delegate tickets for these people'));
+        return;
+      }
+      if (typeof a.need_advisor_tickets === 'number' && a.need_advisor_tickets > 0) {
+        setNeedAdvisors(true);
+        setTopError(messageOr(a, 'You need more advisor tickets for these faculty advisors'));
         return;
       }
 
@@ -416,9 +463,10 @@ export default function DelegationImportCard({
       const n = Object.keys(clientErrors).length;
       setTopError(`${n} ${n === 1 ? 'row needs' : 'rows need'} fixing before you import`);
       setNeedSpots(false);
+      setNeedAdvisors(false);
       return;
     }
-    void run(filled.map(r => ({ name: r.name.trim(), email: r.email.trim() })));
+    void run(filled.map(r => ({ name: r.name.trim(), email: r.email.trim(), role: showRolePicker ? r.role : 'delegate' })));
   }
 
   const inputStyle = (hasError: boolean): React.CSSProperties => ({
@@ -443,9 +491,15 @@ export default function DelegationImportCard({
   // One message at a time, the most important first (owner, 25 Sep 2026):
   // short of pledged spots beats short of credits, and while the spots
   // message shows no credit warning does.
-  const spotsShort = needSpots || count > data.free_spots;
+  // Delegate tickets seat delegates AND head delegates; advisor tickets seat
+  // faculty advisors (1 Oct 2026). Delegate shortfall first, then advisors,
+  // then credits.
+  const advisorCount = filled.filter(r => showRolePicker && r.role === 'faculty-advisor').length;
+  const seatCount = count - advisorCount;
+  const spotsShort = needSpots || seatCount > data.free_spots;
+  const advisorsShort = !spotsShort && (needAdvisors || advisorCount > data.free_advisor_tickets);
   // While leader imports are free there is no credit to be short of.
-  const creditsShort = paid && !spotsShort && count > data.balance;
+  const creditsShort = paid && !spotsShort && !advisorsShort && count > data.balance;
 
   const showImport = tab !== 'imported';
   const showList = tab !== 'import';
@@ -453,10 +507,16 @@ export default function DelegationImportCard({
   const importPart = (
     <>
       <div className="flex flex-wrap gap-x-7 gap-y-3">
-        <Stat n={data.free_spots} label={data.free_spots === 1 ? 'open pledged spot' : 'open pledged spots'} />
-        <Stat n={data.pledged} label={data.pledged === 1 ? 'total pledged spot' : 'total pledged spots'} />
+        <Stat n={data.free_spots} label={data.free_spots === 1 ? 'open delegate ticket' : 'open delegate tickets'} />
+        <Stat n={data.pledged} label={data.pledged === 1 ? 'total delegate ticket' : 'total delegate tickets'} />
+        {advisorsOpen && (
+          <Stat n={data.free_advisor_tickets} label={data.free_advisor_tickets === 1 ? 'open advisor ticket' : 'open advisor tickets'} />
+        )}
         {/* The leader's credits are the coin pill at the top of the pop-up (26 Sep 2026). */}
       </div>
+      <p style={{ fontFamily: OUTFIT, fontSize: 12, color: INK_SOFT, margin: '10px 0 0 0', lineHeight: 1.5, maxWidth: 520 }}>
+        {LEAD_SWITCH_NOTE}
+      </p>
 
       {/* The list */}
       <div className="mt-6 flex items-center justify-between gap-3">
@@ -509,7 +569,7 @@ export default function DelegationImportCard({
                 {/* Name over email until the row is wide enough for a whole
                     address (firstname.lastname@university.edu.tr) beside a
                     name; the email column is the wider one. */}
-                <div className="gv-imp-row flex-1 min-w-0 grid gap-2">
+                <div className={`${showRolePicker ? 'gv-imp-row gv-imp-row-role' : 'gv-imp-row'} flex-1 min-w-0 grid gap-2`}>
                   <input
                     type="text"
                     value={r.name}
@@ -537,6 +597,19 @@ export default function DelegationImportCard({
                     className={FOCUS}
                     style={inputStyle(!!err)}
                   />
+                  {showRolePicker && (
+                    <select
+                      value={r.role}
+                      onChange={e => edit(r.key, 'role', e.target.value)}
+                      aria-label={`Person ${i + 1} role`}
+                      className={FOCUS}
+                      style={{ ...inputStyle(false), paddingRight: 8, cursor: 'pointer' }}
+                    >
+                      {roleChoices.map(role => (
+                        <option key={role} value={role}>{IMPORT_ROLE_LABEL[role]}</option>
+                      ))}
+                    </select>
+                  )}
                 </div>
                 <button
                   type="button"
@@ -589,7 +662,9 @@ export default function DelegationImportCard({
             opacity: count === 0 ? 0.5 : busy ? 0.85 : 1,
           }}
         >
-          {busy ? 'Importing' : count === 1 ? 'Import 1 delegate' : `Import ${count} delegates`}
+          {busy ? 'Importing' : showRolePicker
+            ? (count === 1 ? 'Import 1 person' : `Import ${count} people`)
+            : (count === 1 ? 'Import 1 delegate' : `Import ${count} delegates`)}
         </button>
         {!paid ? (
           <p style={{ fontFamily: OUTFIT, fontSize: 13, color: INK_SOFT, margin: 0, maxWidth: 420, lineHeight: 1.45 }}>
@@ -619,6 +694,16 @@ export default function DelegationImportCard({
               Add delegation spots
             </button>
           )}
+          {!needSpots && needAdvisors && onAdvisorsMore && (
+            <button
+              type="button"
+              onClick={onAdvisorsMore}
+              className={`mt-3 rounded-xl px-4 font-bold text-sm ${FOCUS}`}
+              style={{ height: 44, backgroundColor: '#FFFFFF', border: `1.5px solid ${INK}`, color: INK, fontFamily: OUTFIT, letterSpacing: '0.01em', cursor: 'pointer' }}
+            >
+              Add advisor tickets
+            </button>
+          )}
         </div>
       )}
       {okLine && (
@@ -642,6 +727,9 @@ export default function DelegationImportCard({
             <div className="min-w-0 flex-1" style={{ minWidth: 180 }}>
               <p style={{ fontFamily: OUTFIT, fontSize: 15.5, fontWeight: 700, color: INK, margin: 0, overflowWrap: 'anywhere', lineHeight: 1.3 }}>
                 {d.name?.trim() || d.email || 'Imported delegate'}
+                <span style={{ fontSize: 12.5, fontWeight: 600, color: INK_SOFT }}>
+                  {' · '}{isImportRole(d.role) ? IMPORT_ROLE_LABEL[d.role] : 'Delegate'}
+                </span>
               </p>
               {d.email && (
                 <p style={{ fontFamily: OUTFIT, fontSize: 12, color: INK_SOFT, margin: '2px 0 0 0', overflowWrap: 'anywhere' }}>{d.email}</p>
@@ -670,7 +758,7 @@ export default function DelegationImportCard({
     </ul>
   );
 
-  const rowCss = <style>{`.gv-imp-row{grid-template-columns:1fr}@media (min-width:640px){.gv-imp-row{grid-template-columns:minmax(0,1fr) minmax(0,1.6fr)}}`}</style>;
+  const rowCss = <style>{`.gv-imp-row{grid-template-columns:1fr}@media (min-width:640px){.gv-imp-row{grid-template-columns:minmax(0,1fr) minmax(0,1.6fr)}.gv-imp-row-role{grid-template-columns:minmax(0,1fr) minmax(0,1.4fr) 150px}}`}</style>;
 
   if (bare) {
     return (

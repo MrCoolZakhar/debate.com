@@ -25,7 +25,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowLeftRight, CheckCircle2, ChevronLeft, ChevronRight, Compass, Hourglass, Mail, UserPlus, UserX, X } from 'lucide-react';
 import { getFreshAuthedClient } from '@/lib/supabase-auth';
-import { useDelegationImport } from './DelegationImportCard';
+import { useDelegationImport, LEAD_SWITCH_NOTE } from './DelegationImportCard';
 import DelegationImportPopup from './DelegationImportPopup';
 import MemberLeadMenu from './MemberLeadMenu';
 import { useAuth } from '@/components/AuthProvider';
@@ -633,6 +633,7 @@ export default function DelegationPanel({ conferenceId, conferenceSlug, societyI
           conferenceAcronym={conferenceAcronym || 'this conference'}
           userEmail={user?.email ?? null}
           onPledgeMore={() => { setImportOpen(false); router.push(`/conferences/${conferenceSlug}/pay?open=spots`); }}
+          onAdvisorsMore={() => { setImportOpen(false); router.push(`/conferences/${conferenceSlug}/pay?open=advisors`); }}
           onImported={() => { void loadRoster(); void load(); }}
           onClose={() => setImportOpen(false)}
         />
@@ -800,6 +801,14 @@ export default function DelegationPanel({ conferenceId, conferenceSlug, societyI
       <RosterGroup title="Head delegates" members={headDelegates} pageSize={3} page={pageOf('hd')} onPage={setPageOf('hd')} renderRow={m => rowFor(m, true)} />
 
       <RosterGroup title="Delegates" members={delegates} pageSize={8} page={pageOf('del')} onPage={setPageOf('del')} empty="No delegates yet." renderRow={m => rowFor(m, true)} />
+
+      {/* Once, near the members and only for leaders: the "…" menu on a
+          member row switches head delegate and delegate (delegation_set_head). */}
+      {isLeader && (
+        <p className="mb-5 px-3" style={{ fontFamily: OUTFIT, fontSize: 12, color: '#6B5F52', lineHeight: 1.5, maxWidth: 560 }}>
+          {LEAD_SWITCH_NOTE}
+        </p>
+      )}
 
       {isLeader && pledgingMembers.length > 0 && (
         <div className="mb-5 pt-4 px-3" style={{ borderTop: '1px solid rgba(27,56,40,0.08)' }}>

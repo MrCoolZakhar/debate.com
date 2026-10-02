@@ -930,19 +930,22 @@ function ConferenceApplyInner() {
   const [selectedSocietyId, setSelectedSocietyId] = useState<string | null>(null);
   const [societyDropdownOpen, setSocietyDropdownOpen] = useState(false);
   const [societyError, setSocietyError] = useState('');
-  // Delegations that ALREADY have a head-delegate / faculty-advisor application
-  // for this conference. HEAD-DELEGATE AND FACULTY-ADVISOR ROLES ONLY: for those
-  // two roles a taken delegation is greyed out and not selectable, because a
-  // second delegation application for the same society would duplicate it.
+  // Delegations that ALREADY have a leader at this conference: a head-delegate
+  // or faculty-advisor application (the conference_taken_society_ids RPC).
   //
-  // NEVER GATE A DELEGATE ON THIS SET. A delegate joining a delegation that
-  // already has a head delegate is the normal case, so for a delegate a taken
-  // delegation is precisely the one they need to pick. Applying this set to
-  // delegates blocked 37 delegations across 5 conferences before it was caught.
-  // Both use sites guard on isInvoicingRole. Keep it that way.
-  //
-  // Populated from the conference_taken_society_ids RPC.
-  const [takenSocietyIds, setTakenSocietyIds] = useState<Set<string>>(new Set());
+  // IT BLOCKS NOBODY (owner, 1 Oct 2026). A delegation can have several head
+  // delegates and several faculty advisors, so a leader picking a led
+  // delegation simply JOINS it: joiningLedDelegation below leaves the ticket
+  // step out (the delegation's tickets were already bought by whoever created
+  // it, and more can be bought from the payments page once accepted) and the
+  // application carries no pledge. It used to grey led delegations out for
+  // both leader roles, so no delegation could ever get a second leader, even
+  // the 20 that had bought extra advisor tickets. A delegate never read this.
+  const [ledSocietyIds, setLedSocietyIds] = useState<Set<string>>(new Set());
+  // The delegation of the application being edited, when that application
+  // bought tickets: its applicant created (or funds) the delegation, so they
+  // are not "joining" it and still see the ticket step.
+  const [ownPledgedSocietyId, setOwnPledgedSocietyId] = useState<string | null>(null);
   // Delegation-invite consume (?delegationInvite=<token>): the resolved society
   // is pre-selected AND bypasses the "already applied" grayout, since the
   // applicant was explicitly invited to join it.
@@ -1271,9 +1274,20 @@ function ConferenceApplyInner() {
   // starts straight at the Independent-vs-Delegation ('society') choice; any
   // fee/voucher detail for non-sponsored conferences is now surfaced minimally
   // on the final 'overview' review instead.
+  // A head delegate or faculty advisor picking a delegation that already has
+  // a leader JOINS it (owner, 1 Oct 2026): no ticket step, no pledge. Their
+  // own ticket follows the delegate rules (a free ticket of their pool covers
+  // them at acceptance, otherwise they pay their own). Never for the
+  // delegation they were invited to, and never for the one their own
+  // edited application bought tickets for. selectedSocietyId is the
+  // delegation by the time the ticket step would come (Continue on the
+  // society step turns a matched name into the selection).
+  const joiningLedDelegation = isInvoicingRole && !isIndependent && !!selectedSocietyId
+    && ledSocietyIds.has(selectedSocietyId) && selectedSocietyId !== invitedSocietyId
+    && selectedSocietyId !== ownPledgedSocietyId;
   const stepSequence: StepKindName[] = [
     ...(showSocietyStep ? (['society'] as const) : []),
-    ...(isInvoicingRole ? (['invoicing'] as const) : []),
+    ...(isInvoicingRole && !joiningLedDelegation ? (['invoicing'] as const) : []),
     ...(showPreferenceStep ? (['preferences'] as const) : []),
     ...(skipExperience ? [] : (['experience'] as const)),
     ...(showMunExperienceStep ? (['munExperience'] as const) : []),
@@ -2237,6 +2251,9 @@ function ConferenceApplyInner() {
       // for one of those roles always has a definitive answer already, so
       // this is a plain boolean, never the "unanswered" null state.
       if (isInvoicingRole) {
+        if (appData.society_id && (appData.pledge_type === 'delegation' || (appData.advisors_pledged ?? 0) > 0)) {
+          setOwnPledgedSocietyId(appData.society_id);
+        }
         setWillPledgeSpots(appData.pledge_type === 'delegation');
         setSpotsPledged(appData.spots_pledged ? appData.spots_pledged : '');
         // No separate pledge_type flag for advisors — a positive count is
@@ -2271,9 +2288,10 @@ function ConferenceApplyInner() {
     }
 
     // Which delegations already have a head-delegate / faculty-advisor
-    // application for this conference — grayed out in the society picker. A
-    // privacy-safe SECURITY DEFINER RPC (returns only non-sensitive society ids;
-    // RLS would otherwise hide other applicants' rows).
+    // application for this conference: a leader picking one JOINS it and skips
+    // the ticket step (joiningLedDelegation). A privacy-safe SECURITY DEFINER
+    // RPC (returns only non-sensitive society ids; RLS would otherwise hide
+    // other applicants' rows).
     supabase
       .rpc('conference_taken_society_ids', { p_conference_id: confData.id })
       .then(({ data, error }) => {
@@ -2281,7 +2299,7 @@ function ConferenceApplyInner() {
         const ids = (data as Array<{ society_id?: string } | string>).map(
           (r) => (typeof r === 'string' ? r : r.society_id ?? ''),
         );
-        setTakenSocietyIds(new Set(ids.filter(Boolean)));
+        setLedSocietyIds(new Set(ids.filter(Boolean)));
       });
 
     // Delegation invite: resolve the token and, when it matches THIS
@@ -2762,17 +2780,6 @@ function ConferenceApplyInner() {
         );
         return;
       }
-      // Block delegations that have already applied to this conference (unless
-      // this applicant was explicitly invited to that one). Resolve the id the
-      // application would attach to: an explicit selection, or the one
-      // delegation the typed name is unmistakably the same as.
-      if (!isObserver && !isIndependent && isInvoicingRole) {
-        const resolvedId = selectedSocietyId ?? adopted?.id ?? null;
-        if (resolvedId && resolvedId !== invitedSocietyId && takenSocietyIds.has(resolvedId)) {
-          setSocietyError('This delegation has already applied. Ask its head delegate or faculty advisor to invite you.');
-          return;
-        }
-      }
       if (creatingDelegation && hasNewDelegationProblems(newDelegation)) {
         setNewDelegationChecked(true);
         return;
@@ -3033,9 +3040,11 @@ function ConferenceApplyInner() {
         insertPayload.voucher_discount = breakdown.voucherDiscount;
       }
       if (isInvoicingRole) {
-        insertPayload.pledge_type = willPledgeSpots ? 'delegation' : null;
-        insertPayload.spots_pledged = willPledgeSpots ? (spotsPledged || 0) : 0;
-        insertPayload.advisors_pledged = willPledgeAdvisors ? (advisorsPledged || 0) : 0;
+        // Joining a led delegation carries no pledge (and a resumed draft's
+        // old answers never reach the row).
+        insertPayload.pledge_type = !joiningLedDelegation && willPledgeSpots ? 'delegation' : null;
+        insertPayload.spots_pledged = !joiningLedDelegation && willPledgeSpots ? (spotsPledged || 0) : 0;
+        insertPayload.advisors_pledged = !joiningLedDelegation && willPledgeAdvisors ? (advisorsPledged || 0) : 0;
       }
       if (showMunExperienceStep) {
         insertPayload.experience_entries = experienceEntries;
@@ -3257,9 +3266,9 @@ function ConferenceApplyInner() {
         custom_answers: customAnswers,
       };
       if (isInvoicingRole) {
-        updates.pledge_type = willPledgeSpots ? 'delegation' : null;
-        updates.spots_pledged = willPledgeSpots ? (spotsPledged || 0) : 0;
-        updates.advisors_pledged = willPledgeAdvisors ? (advisorsPledged || 0) : 0;
+        updates.pledge_type = !joiningLedDelegation && willPledgeSpots ? 'delegation' : null;
+        updates.spots_pledged = !joiningLedDelegation && willPledgeSpots ? (spotsPledged || 0) : 0;
+        updates.advisors_pledged = !joiningLedDelegation && willPledgeAdvisors ? (advisorsPledged || 0) : 0;
       }
       if (showMunExperienceStep) {
         updates.experience_entries = experienceEntries;
@@ -3584,7 +3593,6 @@ function ConferenceApplyInner() {
     }
 
     const showSociety = !isObserver;
-    const takenMsg = 'This delegation has already applied. Ask its head delegate or faculty advisor to invite you.';
     // "Create this delegation" (canOfferCreate, computed with the hooks):
     // a card under the field when nothing matches, a plain button under the
     // field when the suggestions are not theirs, plus a pinned row at the
@@ -3601,17 +3609,17 @@ function ConferenceApplyInner() {
       : null;
     const openCreate = () => { setSocietyDropdownOpen(false); setCreateDelegationOpen(true); };
     // The existing delegation Continue will attach this application to, shown
-    // under the field so the adoption is never silent. Not when it has
-    // already applied (Continue refuses that with its own message).
-    // Suppressed only for the roles Continue still refuses, which is
-    // head-delegate and faculty-advisor. For a DELEGATE an already-applied
-    // delegation is the normal thing to be matched to, and hiding the line
-    // would make that attachment silent, which is the one thing this line
-    // exists to prevent.
-    const adoptionShown = !invitedSocietyId && adoptableSociety
-      && !(isInvoicingRole && takenSocietyIds.has(adoptableSociety.id) && adoptableSociety.id !== invitedSocietyId)
-      ? adoptableSociety
+    // under the field so the adoption is never silent, for every role (a
+    // leader may join a delegation that already has one).
+    const adoptionShown = !invitedSocietyId && adoptableSociety ? adoptableSociety : null;
+    // A leader joining a led delegation is told so under the field: the
+    // picked delegation, or the one a typed name unmistakably matches.
+    const ledTarget = isInvoicingRole && !isIndependent && !invitedSocietyId
+      ? (selectedSocietyId
+          ? societySuggestions.find(x => x.id === selectedSocietyId) ?? (adoptableSociety?.id === selectedSocietyId ? adoptableSociety : null)
+          : adoptableSociety)
       : null;
+    const ledJoinShown = ledTarget && ledSocietyIds.has(ledTarget.id) && ledTarget.id !== ownPledgedSocietyId ? ledTarget : null;
     const pickSociety = (s: Society) => {
       setSocietyInput(s.name);
       setSelectedSocietyId(s.id);
@@ -3747,48 +3755,30 @@ function ConferenceApplyInner() {
                       }}
                     >
                       {societySuggestions.map(s => {
-                        // A delegation that already has a head/advisor application
-                        // for this conference — grayed out and non-selectable.
-                        const taken = isInvoicingRole && takenSocietyIds.has(s.id) && s.id !== invitedSocietyId;
+                        // Every delegation is selectable for every role: a
+                        // leader may join one that already has a leader.
                         return (
                           <button
                             key={s.id}
                             type="button"
-                            disabled={taken}
                             className="w-full flex items-center justify-between gap-2 text-left px-4 py-2.5 text-sm focus:outline-none focus-visible:bg-[color-mix(in_srgb,var(--gv-main)_8%,transparent)]"
                             style={{
-                              color: taken ? '#B4A992' : 'var(--gv-on-surface)',
+                              color: 'var(--gv-on-surface)',
                               fontFamily: "var(--font-brand), sans-serif",
-                              cursor: taken ? 'not-allowed' : 'pointer',
-                              opacity: taken ? 0.7 : 1,
+                              cursor: 'pointer',
                             }}
-                            onMouseEnter={(e) => { if (!taken) (e.currentTarget as HTMLElement).style.backgroundColor = 'color-mix(in srgb, var(--gv-main) 5%, transparent)'; }}
+                            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'color-mix(in srgb, var(--gv-main) 5%, transparent)'; }}
                             onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
-                            onMouseDown={(e) => {
-                              if (taken) {
-                                e.preventDefault();
-                                setSocietyError(takenMsg);
-                                return;
-                              }
-                              pickSociety(s);
-                            }}
+                            onMouseDown={() => pickSociety(s)}
                             // Keyboard (Enter / Space). A mouse pick already
                             // happened on mousedown and unmounted the list.
                             onClick={(e) => {
-                              if (e.detail !== 0 || taken) return;
+                              if (e.detail !== 0) return;
                               pickSociety(s);
                               requestAnimationFrame(() => societyFieldRef.current?.focus({ preventScroll: true }));
                             }}
                           >
                             <span className="min-w-0" style={{ overflowWrap: 'anywhere' }}>{s.name}</span>
-                            {taken && (
-                              <span
-                                className="flex-shrink-0 text-[11px] font-bold"
-                                style={{ color: '#8B2020' }}
-                              >
-                                Already applied
-                              </span>
-                            )}
                           </button>
                         );
                       })}
@@ -3831,6 +3821,18 @@ function ConferenceApplyInner() {
                     <span className="min-w-0" style={{ overflowWrap: 'anywhere' }}>
                       Matched to <span style={{ fontWeight: 800, color: NEU.ink }}>&quot;{adoptionShown.name}&quot;</span>,
                       a delegation already registered here. Continue uses it.
+                    </span>
+                  </p>
+                )}
+                {ledJoinShown && (
+                  <p
+                    role="status"
+                    className="mt-2 flex items-start gap-2"
+                    style={{ fontFamily: OUTFIT, fontWeight: 500, fontSize: 12.5, lineHeight: 1.45, color: NEU.inkSoft }}
+                  >
+                    <Users size={14} strokeWidth={2.6} style={{ color: NEU.green, flexShrink: 0, marginTop: 2 }} />
+                    <span className="min-w-0" style={{ overflowWrap: 'anywhere' }}>
+                      <span style={{ fontWeight: 800, color: NEU.ink }}>{ledJoinShown.name}</span> already has a leader. You will join as another {role === 'head-delegate' ? 'Head Delegate' : 'Faculty Advisor'}, and you can buy more tickets for the delegation from your payments page once you are accepted.
                     </span>
                   </p>
                 )}
