@@ -40,8 +40,9 @@ const CONSTRAINT_MESSAGES: Record<string, string> = {
   conference_committees_total_slots_check: "A committee needs at least one seat.",
   email_templates_recurring_interval_floor: "Reminders can be sent every 3 to 60 days.",
   email_templates_recurring_max_sends_range: "Reminders can be sent between 1 and 10 times.",
-  vouchers_amount_check: "A voucher needs an amount above zero.",
+  vouchers_amount_check: "A discount voucher needs an amount above zero.",
   vouchers_percent_range: "A percentage voucher must be between 1 and 100.",
+  vouchers_referral_zero: "A referral code takes nothing off the price, so its amount is always zero.",
   applications_aid_requested_amount_nonneg: "The amount you request can't be negative.",
   financial_aid_requests_requested_amount_check: "The amount you request can't be negative.",
   // enforce_role_config_timeline(): the application window and the fee

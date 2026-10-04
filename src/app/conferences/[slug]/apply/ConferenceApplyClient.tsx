@@ -1105,7 +1105,7 @@ function ConferenceApplyInner() {
   /** Human copy for validate_voucher's machine reasons. */
   function voucherReasonText(reason: string): string {
     switch (reason) {
-      case 'not_found': return 'That code doesn’t match any voucher for this conference.';
+      case 'not_found': return 'That code doesn’t match any code for this conference.';
       case 'inactive': return 'This voucher is no longer active.';
       case 'expired': return 'This voucher has expired.';
       case 'limit_reached': return 'This voucher has reached its redemption limit.';
@@ -1126,7 +1126,7 @@ function ConferenceApplyInner() {
       p_context: 'conference_signup',
     });
     setVoucherChecking(false);
-    const res = data as { valid: boolean; reason: string | null; voucher_id: string; kind: 'percent' | 'flat'; amount: number; currency: string | null } | null;
+    const res = data as { valid: boolean; reason: string | null; voucher_id: string; kind: 'percent' | 'flat' | 'referral'; amount: number; currency: string | null } | null;
     if (error || !res) {
       setVoucherError('Could not check that code right now. Please try again.');
       return;
@@ -3168,7 +3168,11 @@ function ConferenceApplyInner() {
         // means the organizer sees the voucher columns without a redemption row.
         // RECOVERABLE, as the comment above already says — but it has to be
         // observed to be known about, so report it.
-        if (!resumeAppId && appliedVoucher && breakdown.voucherDiscount > 0) {
+        // A referral code discounts nothing, so `voucherDiscount > 0` would
+        // throw away exactly the row the organiser's Referrals report reads.
+        // It is the ONLY record a referral leaves, so it is redeemed too.
+        if (!resumeAppId && appliedVoucher
+            && (breakdown.voucherDiscount > 0 || appliedVoucher.kind === 'referral')) {
           const { error: voucherError } = await supabase.rpc('redeem_voucher', {
             p_voucher_id: appliedVoucher.voucherId,
             p_context: 'conference_signup',
@@ -3454,18 +3458,22 @@ function ConferenceApplyInner() {
           <div style={{ ...summaryRow, marginBottom: 10 }}>
             <span className="inline-flex items-center gap-1.5" style={{ color: NEU.green, fontWeight: 600 }}>
               <Ticket size={14} strokeWidth={2.2} />
-              Voucher {appliedVoucher.code}
+              {appliedVoucher.kind === 'referral' ? 'Referral code' : 'Voucher'} {appliedVoucher.code}
               <button
                 onClick={() => { setAppliedVoucher(null); setVoucherCode(''); }}
-                aria-label="Remove voucher"
+                aria-label={appliedVoucher.kind === 'referral' ? 'Remove referral code' : 'Remove voucher'}
                 className="focus:outline-none"
                 style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: NEU.muted, display: 'inline-flex', padding: 2 }}
               >
                 <X size={13} strokeWidth={2.4} />
               </button>
             </span>
-            <span style={{ ...amountStyle, color: NEU.green }}>
-              −{formatFee(breakdown.voucherDiscount, breakdown.currency)}
+            {/* A referral takes nothing off, so this says so in words. Never
+                "−$0.00", which reads as a discount that failed. */}
+            <span style={{ ...amountStyle, color: appliedVoucher.kind === 'referral' ? NEU.inkSoft : NEU.green, fontWeight: 600 }}>
+              {appliedVoucher.kind === 'referral'
+                ? 'No change to your fee'
+                : `−${formatFee(breakdown.voucherDiscount, breakdown.currency)}`}
             </span>
           </div>
         ) : !user ? (
@@ -3478,8 +3486,8 @@ function ConferenceApplyInner() {
               type="text"
               value={voucherCode}
               onChange={(e) => { setVoucherCode(e.target.value.toUpperCase()); setVoucherError(''); }}
-              placeholder="Voucher code"
-              aria-label="Voucher code"
+              placeholder="Voucher or referral code"
+              aria-label="Voucher or referral code"
               className="w-full rounded-xl px-3.5 py-2 text-base sm:text-sm focus:outline-none"
               style={{
                 border: '1.5px solid var(--gv-border)',
@@ -3498,8 +3506,8 @@ function ConferenceApplyInner() {
               value={voucherCode}
               onChange={(e) => { setVoucherCode(e.target.value.toUpperCase()); setVoucherError(''); }}
               onKeyDown={(e) => { if (e.key === 'Enter') handleApplyVoucher(); }}
-              placeholder="Voucher code"
-              aria-label="Voucher code"
+              placeholder="Voucher or referral code"
+              aria-label="Voucher or referral code"
               className="flex-1 min-w-0 rounded-xl px-3.5 py-2 text-base sm:text-sm focus:outline-none"
               style={{
                 border: voucherError ? '1.5px solid #8B2020' : '1.5px solid var(--gv-border)',

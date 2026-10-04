@@ -13,9 +13,9 @@
  */
 
 import { notifyErr, clearErr } from '@/lib/appNotify';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNow } from '@/lib/useNow';
-import { Ban, Dices, Plus, Ticket, Trash2 } from 'lucide-react';
+import { Ban, Dices, Plus, Search, Ticket, Trash2 } from 'lucide-react';
 import type { Conference } from '@/app/manage/[slug]/layout';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
@@ -39,10 +39,16 @@ export function convertApprox(amount: number, from: string, to: string): number 
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
+/** 'referral' is an ambassador attribution code: amount 0, currency null,
+ *  discounts nothing (see scratchpad/ambassadors/referral-vouchers.sql).
+ *  Never render it as "0% OFF" — it takes nothing off and nobody should read
+ *  it as money off. */
+type VoucherKind = 'percent' | 'flat' | 'referral';
+
 interface Voucher {
   id: string;
   code: string;
-  kind: 'percent' | 'flat';
+  kind: VoucherKind;
   amount: number;
   currency: string | null;
   max_redemptions: number | null;
@@ -64,8 +70,12 @@ function generateCode(): string {
   return out;
 }
 
+/** 40, not 24: a referral code is FIRSTNAMELASTNAME, and real names run past
+ *  24 characters (MUHAMMADHAKIMBINIRMIEYUHAZNI is 28). The column has no
+ *  length limit, so the editor should not be the thing that truncates a
+ *  person's name. */
 function sanitizeCode(raw: string): string {
-  return raw.toUpperCase().replace(/[^A-Z0-9-]/g, '').slice(0, 24);
+  return raw.toUpperCase().replace(/[^A-Z0-9-]/g, '').slice(0, 40);
 }
 
 function formatExpiry(iso: string): string {
@@ -75,6 +85,7 @@ function formatExpiry(iso: string): string {
 /** Voucher chip label, flat amounts re-display in the chosen currency
  *  (≈-prefixed) when it differs from the voucher's own currency. */
 function discountLabel(v: Voucher, displayCurrency?: string): string {
+  if (v.kind === 'referral') return 'REFERRAL';
   if (v.kind === 'percent') return `${formatFeeAmount(v.amount)}% OFF`;
   const vCur = v.currency ?? '';
   if (displayCurrency && vCur && displayCurrency.toUpperCase() !== vCur.toUpperCase()) {
@@ -126,12 +137,18 @@ export default function VouchersSection({
 
   // Create form state
   const [code, setCode] = useState('');
-  const [kind, setKind] = useState<'percent' | 'flat'>('percent');
+  const [kind, setKind] = useState<VoucherKind>('percent');
   const [amount, setAmount] = useState('');
   const [maxRedemptions, setMaxRedemptions] = useState('');
   const [expiry, setExpiry] = useState('');
   const [active, setActive] = useState(true);
   const [creating, setCreating] = useState(false);
+
+  // A conference can hold a code per ambassador (WorldMUN runs 59), so the
+  // list is searchable and shows the first PAGE_SIZE until asked for more.
+  // Without this it is one unsearchable 59-card column.
+  const [query, setQuery] = useState('');
+  const [showAll, setShowAll] = useState(false);
 
   // Voucher ids with a write in flight, double-click guard for row actions.
   const [busyIds, setBusyIds] = useState<Set<string>>(new Set());
@@ -166,9 +183,13 @@ export default function VouchersSection({
   function handleCreate() {
     if (!session || !user || creating) return;
     const trimmed = sanitizeCode(code.trim());
-    const amt = Number(amount);
+    // A referral code carries no amount at all. The database pins it to 0 and
+    // currency to null (vouchers_referral_zero), so the client must never
+    // send anything else.
+    const isReferral = kind === 'referral';
+    const amt = isReferral ? 0 : Number(amount);
     if (trimmed.length < 3) { setError('Voucher codes need at least 3 characters.'); return; }
-    if (!Number.isFinite(amt) || amt <= 0) { setError('Enter a discount amount greater than zero.'); return; }
+    if (!isReferral && (!Number.isFinite(amt) || amt <= 0)) { setError('Enter a discount amount greater than zero.'); return; }
     if (kind === 'percent' && amt > 100) { setError('Percentage discounts can be at most 100%.'); return; }
     if (vouchers.some(v => v.code === trimmed)) { setError(`Code ${trimmed} already exists on this conference.`); return; }
     const maxRed = maxRedemptions.trim() === '' ? null : Math.floor(Number(maxRedemptions));
@@ -287,8 +308,21 @@ export default function VouchersSection({
 
   const symbol = currencySymbol(conference.fee_currency);
   const codeValid = sanitizeCode(code.trim()).length >= 3;
-  const amountValid = Number(amount) > 0 && (kind !== 'percent' || Number(amount) <= 100);
+  const amountValid = kind === 'referral'
+    || (Number(amount) > 0 && (kind !== 'percent' || Number(amount) <= 100));
   const canCreate = codeValid && amountValid && !creating;
+
+  // Search is a plain substring on the code, which is all a referral row has
+  // to be found by (the code IS the ambassador's name). Case-insensitive, so
+  // typing a name in sentence case still finds it.
+  const PAGE_SIZE = 12;
+  const filtered = useMemo(() => {
+    const q = query.trim().toUpperCase().replace(/\s+/g, '');
+    if (!q) return vouchers;
+    return vouchers.filter(v => v.code.toUpperCase().includes(q));
+  }, [vouchers, query]);
+  const visible = showAll || query.trim() ? filtered : filtered.slice(0, PAGE_SIZE);
+  const hiddenCount = filtered.length - visible.length;
 
   return (
     <section className="mt-8">
@@ -299,8 +333,8 @@ export default function VouchersSection({
           <h2 style={{ fontFamily: OUTFIT, fontWeight: 900, fontSize: 18, color: NEU.ink, lineHeight: 1.15 }}>
             Vouchers
           </h2>
-          <p style={{ fontFamily: OUTFIT, fontSize: 11.5, color: NEU.muted }}>
-            Discount codes participants can apply at signup, scoped to {conference.acronym} only.
+          <p style={{ fontFamily: OUTFIT, fontSize: 11.5, color: NEU.inkSoft }}>
+            Discount codes, and referral codes that take nothing off, scoped to {conference.acronym} only.
           </p>
         </div>
       </div>
@@ -351,18 +385,31 @@ export default function VouchersSection({
 
           {/* Kind toggle */}
           <div>
-            <span style={fieldLabelStyle}>Discount type</span>
-            <div className="flex items-center gap-2" style={{ paddingTop: 3 }}>
+            <span style={fieldLabelStyle}>Code type</span>
+            <div className="flex items-center gap-2 flex-wrap" style={{ paddingTop: 3 }}>
               <NeuPill active={kind === 'percent'} gradient={NEU_GRADIENTS.forest} onClick={() => setKind('percent')}>
                 Percent
               </NeuPill>
               <NeuPill active={kind === 'flat'} gradient={NEU_GRADIENTS.forest} onClick={() => setKind('flat')}>
                 Flat {conference.fee_currency}
               </NeuPill>
+              <NeuPill active={kind === 'referral'} gradient={NEU_GRADIENTS.forest} onClick={() => setKind('referral')}>
+                Referral
+              </NeuPill>
             </div>
           </div>
 
-          {/* Amount */}
+          {/* Amount, or the referral note in its place. A referral code has
+              no amount to ask for, so the field is replaced rather than
+              shown disabled with a zero in it. */}
+          {kind === 'referral' ? (
+            <div>
+              <span style={fieldLabelStyle}>Takes off</span>
+              <p style={{ fontFamily: OUTFIT, fontSize: 12.5, color: NEU.inkSoft, lineHeight: 1.5, paddingTop: 5 }}>
+                Nothing. A referral code only tells you who sent the applicant.
+              </p>
+            </div>
+          ) : (
           <div>
             <label htmlFor="voucher-amount" style={fieldLabelStyle}>
               {kind === 'percent' ? 'Amount (%)' : `Amount (${symbol || conference.fee_currency})`}
@@ -387,6 +434,7 @@ export default function VouchersSection({
               </span>
             </div>
           </div>
+          )}
 
           {/* Max redemptions */}
           <div>
@@ -428,7 +476,7 @@ export default function VouchersSection({
               </div>
             </div>
             <NeuButton icon={Plus} onClick={handleCreate} disabled={!canCreate}>
-              {creating ? 'Creating…' : 'Create voucher'}
+              {creating ? 'Creating…' : kind === 'referral' ? 'Create referral code' : 'Create voucher'}
             </NeuButton>
           </div>
         </div>
@@ -436,6 +484,34 @@ export default function VouchersSection({
 
       {/* ── Voucher list ── */}
       <div className="mt-4">
+        {/* Search, only once there are enough codes for the list to be hard
+            to read. 59 ambassador codes in one column is not a list anyone
+            can find a name in. */}
+        {!loading && vouchers.length > PAGE_SIZE && (
+          <div className="mb-3 flex items-center gap-2">
+            <div className="relative flex-1 min-w-0" style={{ maxWidth: 340 }}>
+              <Search
+                size={14}
+                strokeWidth={2.4}
+                aria-hidden="true"
+                className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"
+                style={{ color: NEU.muted }}
+              />
+              <input
+                type="text"
+                value={query}
+                onChange={e => setQuery(e.target.value)}
+                placeholder="Search codes"
+                aria-label="Search voucher codes"
+                spellCheck={false}
+                style={{ ...inputStyle, paddingLeft: 32, letterSpacing: '0.04em' }}
+              />
+            </div>
+            <span style={{ fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 700, color: NEU.inkSoft, fontVariantNumeric: 'tabular-nums' }}>
+              {filtered.length} of {vouchers.length}
+            </span>
+          </div>
+        )}
         {loading ? (
           <NeuInset small className="animate-pulse" style={{ height: 64 }}><span /></NeuInset>
         ) : vouchers.length === 0 ? (
@@ -447,9 +523,15 @@ export default function VouchersSection({
               Create your first code above, early-bird discounts and partner codes are the usual starting points.
             </p>
           </NeuInset>
+        ) : filtered.length === 0 ? (
+          <NeuInset className="px-6 py-6 text-center">
+            <p style={{ fontFamily: OUTFIT, fontSize: 12.5, color: NEU.inkSoft }}>
+              No code matches {query.trim()}
+            </p>
+          </NeuInset>
         ) : (
           <div className="flex flex-col gap-2.5">
-            {vouchers.map(v => {
+            {visible.map(v => {
               const rowBusy = busyIds.has(v.id) || v.id.startsWith('temp-');
               const expired = !!v.expires_at && new Date(v.expires_at).getTime() < now;
               const exhausted = v.max_redemptions !== null && v.redeemed_count >= v.max_redemptions;
@@ -547,13 +629,27 @@ export default function VouchersSection({
                 </NeuCard>
               );
             })}
+            {hiddenCount > 0 && (
+              <button
+                type="button"
+                onClick={() => setShowAll(true)}
+                className="self-start focus:outline-none"
+                style={{
+                  marginTop: 2, padding: 0, background: 'none', border: 'none', cursor: 'pointer',
+                  fontFamily: OUTFIT, fontSize: 12, fontWeight: 700, color: NEU.forest,
+                  textDecoration: 'underline', textUnderlineOffset: 3,
+                }}
+              >
+                Show all {filtered.length} codes
+              </button>
+            )}
           </div>
         )}
       </div>
 
       {/* Footnote */}
-      <p className="mt-3" style={{ fontFamily: OUTFIT, fontSize: 10.5, color: NEU.muted, lineHeight: 1.6 }}>
-        Discounts apply at signup.
+      <p className="mt-3" style={{ fontFamily: OUTFIT, fontSize: 10.5, color: NEU.inkSoft, lineHeight: 1.6 }}>
+        Discounts apply at signup. A referral code never changes a price, it records who referred the applicant.
       </p>
 
       {confirmModal}

@@ -4,8 +4,10 @@
  * Financials Overview — revenue stat tiles, the delegate estimate block, and
  * the read-only payment pipeline. Neumorphic throughout (neu.tsx
  * primitives). Onboarding (Stripe/manual) lives on the Settings route now;
- * vouchers live there too, beneath it. No payment writes happen on this
- * page, marking paid stays on the Applications page.
+ * vouchers live there too, beneath it. The Referrals section at the foot of
+ * this page reads those codes back (who referred whom, and what came in) and
+ * renders nothing for a conference with no referral codes. No payment writes
+ * happen on this page, marking paid stays on the Applications page.
  */
 
 import { useState } from 'react';
@@ -15,6 +17,7 @@ import {
   PiggyBank, Users,
 } from 'lucide-react';
 import { useManage } from '@/app/manage/[slug]/layout';
+import ReferralsSection from './ReferralsSection';
 import { roundMoney } from '@/lib/finance';
 import {
   NEU, NEU_GRADIENTS, OUTFIT,
@@ -335,6 +338,11 @@ export default function FinancialsOverviewPage() {
           </NeuCard>
         )}
       </section>
+
+      {/* Referrals: which ambassador sent which delegate or delegation, and
+          what came in. Renders nothing until the conference has referral
+          codes, so it is invisible on every other conference. */}
+      <ReferralsSection conference={conference} />
     </>
   );
 }

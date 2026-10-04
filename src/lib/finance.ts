@@ -50,8 +50,12 @@ function roundedRateAmount(amountMajor: number, rate: number, currency: string):
 export interface VoucherInput {
   voucherId: string;
   code: string;
-  kind: 'percent' | 'flat';
-  /** percent: 1–100; flat: amount in the voucher's currency. */
+  /** 'referral' is an ambassador attribution code: it discounts NOTHING and
+   *  exists only so the organiser knows who referred the payer. Its amount is
+   *  pinned to 0 and its currency to null by the vouchers_referral_zero
+   *  constraint, so it can never become a discount. */
+  kind: 'percent' | 'flat' | 'referral';
+  /** percent: 1–100; flat: amount in the voucher's currency; referral: 0. */
   amount: number;
   /** flat vouchers only; null = currency-agnostic. */
   currency?: string | null;
@@ -171,7 +175,13 @@ export function computeCheckout({
   let voucherDiscount = 0;
   let appliedVoucher: VoucherInput | null = null;
   if (voucher && baseFee > 0) {
-    if (voucher.kind === 'percent') {
+    if (voucher.kind === 'referral') {
+      // Explicit, not a fall-through: a referral takes nothing off. It is
+      // still echoed back so the caller can render "Referral code applied"
+      // beside a fee that has not changed. Never give this branch an amount.
+      voucherDiscount = 0;
+      appliedVoucher = voucher;
+    } else if (voucher.kind === 'percent') {
       const pct = Math.min(100, Math.max(0, voucher.amount));
       voucherDiscount = roundMoney(baseFee * (pct / 100));
       appliedVoucher = voucher;

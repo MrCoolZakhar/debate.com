@@ -1771,6 +1771,13 @@ function PayInvoiceAndActions({
   const [voucherCode, setVoucherCode] = useState('');
   const [voucherApplying, setVoucherApplying] = useState(false);
   const [voucherError, setVoucherError] = useState<string | null>(null);
+  // The referral code already on record for this person, read back so a
+  // reload does not forget it. vouchers is organiser-read only, so a
+  // participant cannot turn their own voucher_redemptions row into a code
+  // without my_referral_code() (see referral-vouchers.sql, step 5). The
+  // function does not exist until that migration runs: a missing-function
+  // error means "no referral recorded", which is also the truth then.
+  const [referralCode, setReferralCode] = useState<string | null>(null);
   const [paying, setPaying] = useState(false);
   const [payError, setPayError] = useState<string | null>(null);
   const [stubMessage, setStubMessage] = useState<string | null>(null);
@@ -1781,6 +1788,20 @@ function PayInvoiceAndActions({
   const spotsRowRef = useRef<HTMLDivElement | null>(null);
 
   const [advisorModalOpen, setAdvisorModalOpen] = useState(false);
+
+  // Read back the referral code on record, once per account per conference.
+  useEffect(() => {
+    if (!session) return;
+    let cancelled = false;
+    (async () => {
+      const supabase = getAuthedClient(session.access_token);
+      const { data } = await supabase.rpc('my_referral_code', { p_conference: conference.id });
+      if (cancelled) return;
+      const res = data as { ok?: boolean; code?: string | null } | null;
+      if (res?.ok && res.code) setReferralCode(res.code);
+    })();
+    return () => { cancelled = true; };
+  }, [session?.access_token, conference.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ?open=aid|addons|spots|advisors|credits opens that action's pop-up on
   // load (the delegation card's "Add delegation spots" links to
@@ -1911,11 +1932,51 @@ function PayInvoiceAndActions({
   // — apply_voucher stamps the role_fee invoice and re-nets its amount_cents
   // immediately, so a re-fetch is all that's needed to show the new Total.
   // Unstackable: a new code replaces whatever was applied before.
+  //
+  // A REFERRAL CODE TAKES A DIFFERENT ROUTE, on purpose. It discounts
+  // nothing, so it has no business on an invoice, and apply_voucher would
+  // refuse it outright whenever there is no OPEN role_fee invoice: every
+  // WorldMUN delegate role is payment_timing 'after_acceptance' (no invoice
+  // before acceptance) and a delegation leader pays pledge spots, which
+  // apply_voucher never touches. So the code is checked with
+  // validate_voucher, and a referral is RECORDED with redeem_voucher, which
+  // needs no invoice and works for every role at every stage. Nothing about
+  // the price moves, so there is no re-fetch on that path either.
   async function applyVoucher(code: string) {
     if (voucherApplying || !session) return;
     setVoucherApplying(true);
     setVoucherError(null);
     const supabase = getAuthedClient(session.access_token);
+
+    if (code) {
+      const { data: vData } = await supabase.rpc('validate_voucher', {
+        p_code: code,
+        p_conference_id: conference.id,
+        p_context: 'conference_signup',
+      });
+      const v = vData as { valid?: boolean; reason?: string | null; voucher_id?: string; kind?: string } | null;
+      if (v?.valid && v.kind === 'referral') {
+        const { data: rData, error: rError } = await supabase.rpc('redeem_voucher', {
+          p_voucher_id: v.voucher_id,
+          p_context: 'conference_signup',
+          p_application_id: application.id,
+        });
+        const redeemed = rData as { ok?: boolean; reason?: string } | null;
+        setVoucherApplying(false);
+        // 'already_redeemed' is the happy path on a second press: the code is
+        // on record, which is the whole point, so say so rather than erroring.
+        if (rError || !(redeemed?.ok || redeemed?.reason === 'already_redeemed')) {
+          setVoucherError(friendlyError(rError, 'Could not record that referral code. Please try again.'));
+          return;
+        }
+        setReferralCode(code);
+        setVoucherCode('');
+        return;
+      }
+      // Not a referral (or not valid at all): fall through to the discount
+      // path, which owns every "that code is not valid" message already.
+    }
+
     const { data, error } = await supabase.rpc('apply_voucher', {
       p_application_id: application.id,
       p_code: code,
@@ -2120,19 +2181,32 @@ function PayInvoiceAndActions({
                 {/* Voucher — always available (manual or Stripe), applies
                     upfront via apply_voucher rather than at checkout. */}
                 <div className="mb-4">
-                  {!voucherOpen && voucherDiscountCents === 0 ? (
+                  {referralCode ? (
+                    /* A referral is on record. It changed no price, so it is
+                       stated as a fact and never as money off. No Remove:
+                       taking an ambassador's credit away is the organiser's
+                       call, not the referred person's. */
+                    <div>
+                      <p style={{ fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 700, color: NEU.green }}>
+                        Referral code applied
+                      </p>
+                      <p className="mt-1" style={{ fontFamily: OUTFIT, fontSize: 11.5, color: NEU.inkSoft, overflowWrap: 'anywhere' }}>
+                        {referralCode}. It records who referred you and does not change your fee.
+                      </p>
+                    </div>
+                  ) : !voucherOpen && voucherDiscountCents === 0 ? (
                     <button
                       type="button"
                       onClick={() => setVoucherOpen(true)}
                       className="text-xs font-bold focus:outline-none"
                       style={{ color: NEU.forest, fontFamily: OUTFIT, textDecoration: 'underline', textUnderlineOffset: 3, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
                     >
-                      Have a voucher?
+                      Have a voucher or referral code?
                     </button>
                   ) : (
                     <div>
-                      <label className="block mb-1.5" style={{ fontSize: 11, fontWeight: 700, color: NEU.muted, fontFamily: OUTFIT, letterSpacing: '0.06em' }}>
-                        VOUCHER CODE
+                      <label className="block mb-1.5" style={{ fontSize: 11, fontWeight: 700, color: NEU.inkSoft, fontFamily: OUTFIT, letterSpacing: '0.06em' }}>
+                        VOUCHER OR REFERRAL CODE
                       </label>
                       <div className="flex items-center gap-2">
                         <input
@@ -2179,8 +2253,8 @@ function PayInvoiceAndActions({
                           </button>
                         </div>
                       ) : (
-                        <p className="mt-1.5" style={{ fontFamily: OUTFIT, fontSize: 11, color: NEU.muted }}>
-                          Applied immediately, before you check out.
+                        <p className="mt-1.5" style={{ fontFamily: OUTFIT, fontSize: 11, color: NEU.inkSoft }}>
+                          A voucher comes off before you check out. A referral code records who referred you and changes nothing you pay.
                         </p>
                       )}
                       {voucherError && (
