@@ -37,7 +37,7 @@ import {
   poolForRole, fillFreeSpots, releasePoolSpot, POOL_SPOTS_COLUMN, MemberAvatar, markNotAttending, undoNotAttending,
 } from '@/app/manage/[slug]/assignment/delegationShared';
 import { LevelInsignia, LEVEL_ACCENT } from '@/app/account/accountUi';
-import { type CustomQuestion, type CustomAnswers, normalizeBlocks, questionsOf, displayAnswer } from '@/lib/customQuestions';
+import { type CustomQuestion, type CustomAnswers, normalizeBlocks, questionsOf, displayAnswer, answerIsEmpty } from '@/lib/customQuestions';
 import { useScrollLock } from '@/hooks/useScrollLock';
 import DelegationsBoard, { PeopleDelegationsSwitch } from './DelegationsBoard';
 import { DelegationIdentity, useDelegationSummaries } from './DelegationAvatar';
@@ -3664,6 +3664,43 @@ export default function ApplicationsPage() {
 
   function handleExportCSV() {
     const headers = ['Name', 'Email', 'Date of birth', 'Age', 'Nationality', 'Role', 'Status', 'Payment', 'Experience', 'Society', 'Head Delegate', 'Submitted', 'Checked In', 'Assigned Committee', 'Assigned Country'];
+    // One column per custom application question, so an answer an organiser
+    // could otherwise only read one applicant at a time in the pop-up can be
+    // counted in a spreadsheet (WorldMUN's referral question over 400
+    // applications is the case that found this).
+    //
+    // Columns are deduped by LABEL, because every role config carries its own
+    // question ids while the questions themselves repeat across roles (the
+    // same "School name" is asked of delegates, head delegates and advisors);
+    // a label asked under several ids collects them all and the row takes the
+    // first id that has an answer, which is the applicant's own role's. Order
+    // follows the role configs, questions in form order. Archived questions
+    // are included so an answer already given keeps its heading.
+    const answerCols: Array<{ label: string; ids: string[] }> = [];
+    const colByLabel = new Map<string, { label: string; ids: string[] }>();
+    for (const rc of roleConfigs) {
+      for (const q of questionsOf(normalizeBlocks(rc.custom_questions ?? []), { includeArchived: true })) {
+        const label = q.label.trim();
+        if (!label) continue;
+        const existing = colByLabel.get(label.toLowerCase());
+        if (existing) {
+          if (!existing.ids.includes(q.id)) existing.ids.push(q.id);
+          continue;
+        }
+        const col = { label, ids: [q.id] };
+        colByLabel.set(label.toLowerCase(), col);
+        answerCols.push(col);
+      }
+    }
+    const answerCell = (a: Application, col: { ids: string[] }) => {
+      const answers = a.custom_answers ?? {};
+      for (const id of col.ids) {
+        const v = answers[id];
+        if (v === undefined || answerIsEmpty(v)) continue;
+        return Array.isArray(v) ? v.join('; ') : v;
+      }
+      return '';
+    };
     const rows = applications.map(a => [
       a.profiles?.display_name ?? a.invited_name ?? '',
       a.profiles?.email ?? a.invited_email ?? '',
@@ -3680,8 +3717,9 @@ export default function ApplicationsPage() {
       a.checked_in_at ? formatDate(a.checked_in_at) : '',
       a.assigned_committee?.name ?? '',
       a.assigned_country_name ?? '',
+      ...answerCols.map(col => answerCell(a, col)),
     ]);
-    const csv = [headers, ...rows].map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n');
+    const csv = [[...headers, ...answerCols.map(c => c.label)], ...rows].map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n');
     const blob = new Blob([csv], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
