@@ -460,7 +460,10 @@ export function CardShell({ backdrop, logo, headline, subhead, chips }: CardShel
  * `X-Og-*` headers exist so the two silent failure modes — Outfit not bundled,
  * sharp not installed — are visible from `curl -I` rather than only to the eye.
  */
-export async function renderCard(element: React.ReactElement): Promise<Response> {
+export async function renderCard(
+  element: React.ReactElement,
+  opts: { degraded?: boolean } = {},
+): Promise<Response> {
   const image = new ImageResponse(element, {
     width: CARD_WIDTH,
     height: CARD_HEIGHT,
@@ -474,7 +477,13 @@ export async function renderCard(element: React.ReactElement): Promise<Response>
     headers: {
       'Content-Type': contentType,
       'Content-Length': String(body.byteLength),
-      'Cache-Control': 'public, max-age=31536000, immutable',
+      // A card drawn WITHOUT something it should have had (an organiser image
+      // that timed out, the DB unreachable) must not be pinned for a year at a
+      // URL nothing will ever change: five minutes, then it is drawn again.
+      'Cache-Control': opts.degraded
+        ? 'public, max-age=300, s-maxage=300'
+        : 'public, max-age=31536000, immutable',
+      ...(opts.degraded ? { 'X-Og-Degraded': '1' } : {}),
       'X-Og-Fonts': FONTS_ARE_OUTFIT ? 'outfit' : 'fallback',
       'X-Og-Encoder': contentType === 'image/jpeg' ? 'sharp-jpeg' : 'raw-png',
     },

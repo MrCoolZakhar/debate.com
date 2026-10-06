@@ -30,6 +30,20 @@ const NOINDEX_ROUTES = [
 ];
 
 const nextConfig: NextConfig = {
+  // ── Link previews: metadata in <head> for EVERY visitor (6 Oct 2026) ────────
+  // Next streams `generateMetadata` output for dynamic pages. Unless the user
+  // agent matches its built-in bot list, the og:/twitter: tags are not in
+  // <head>. They arrive tens of kilobytes later inside <body>, after a Suspense
+  // boundary (measured: byte ~41,600 on /conferences/<slug>, after </head> at
+  // ~3,800). Most link-preview fetchers read only <head>, so any WhatsApp
+  // client, desktop app or other app whose user agent is not on Next's list got
+  // no tags and showed a bare URL. Matching every user agent turns streaming off
+  // and puts the tags in <head> for all of them. Cost: a human waits for
+  // generateMetadata (one cached DB read) before the first byte. Static pages
+  // were never affected. Guarded by scripts/check-og-config.mjs (prebuild):
+  // removing or narrowing this regex fails the build.
+  htmlLimitedBots: /.*/,
+
   // ── Moved and index-less addresses, answered by the server ──────────────────
   // These used to be redirect-only page files. Under the CLIENT account layout
   // a server `redirect()` page threw in dev ("'PointsPage' cannot have a

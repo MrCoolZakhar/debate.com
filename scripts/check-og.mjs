@@ -31,6 +31,15 @@ const SITE = 'https://gavelling.com';
 // A WhatsApp scraper UA — the exact client Peter reported the bug from. Some
 // hosts serve crawlers differently, so probe as the crawler, not as curl.
 const UA = 'WhatsApp/2.23.20.0 A';
+// …and as an ordinary browser. Next only puts dynamic pages' og: tags in
+// <head> for user agents on its bot list unless next.config sets
+// `htmlLimitedBots: /.*/`; preview fetchers that are not on that list (WhatsApp
+// Desktop, other apps) then found the tags only inside <body>.
+const BROWSER_UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15';
+/** WhatsApp's practical ceiling for a preview image. */
+const MAX_IMAGE_BYTES = 300 * 1024;
+/** A card slower than this risks WhatsApp sending the link without a picture. */
+const SLOW_IMAGE_MS = 4000;
 
 /**
  * Every route a human might paste into a chat. `expect` is the path og:url and
@@ -57,7 +66,7 @@ const ROUTES = [
   { path: '/conferences/roles' },
   { path: '/conferences/new' },
   { path: '/conferences', redirectsTo: '/' },
-  { path: '/conferences/organise', redirectsTo: '/my-conferences', skipCard: true },
+  { path: '/conferences/organise', redirectsTo: '/account/conferences', skipCard: true },
 ];
 
 const args = process.argv.slice(2);
@@ -86,9 +95,58 @@ const link = (html, rel) => {
 const decodeEntities = (s) =>
   s.replace(/&amp;/g, '&').replace(/&#x27;|&apos;/g, "'").replace(/&quot;/g, '"').replace(/&lt;/g, '<').replace(/&gt;/g, '>');
 
-async function fetchRoute(path) {
-  const res = await fetch(`${BASE}${path}`, { headers: { 'user-agent': UA }, redirect: 'manual' });
+async function fetchRoute(path, ua = UA) {
+  const res = await fetch(`${BASE}${path}`, { headers: { 'user-agent': ua }, redirect: 'manual' });
   return { status: res.status, location: res.headers.get('location'), html: await res.text() };
+}
+
+/** og:image must sit before </head>; null when it does. */
+function tagsOutsideHead(html) {
+  const og = html.search(/<meta[^>]+property="og:image"/i);
+  const headEnd = html.search(/<\/head>/i);
+  if (og < 0) return 'no og:image at all';
+  if (headEnd >= 0 && og > headEnd) return `og:image at byte ${og}, after </head> at ${headEnd}`;
+  return null;
+}
+
+/** A few live conference pages, from the sitemap: the pages people share. */
+async function conferenceRoutes(limit = 3) {
+  try {
+    const xml = await (await fetch(`${BASE}/sitemap.xml`, { headers: { 'user-agent': UA } })).text();
+    const reserved = new Set(['all', 'explore', 'roles', 'new', 'in', 'map']);
+    const paths = [...xml.matchAll(/<loc>https?:\/\/[^<]*?(\/conferences\/[^<\/]+)<\/loc>/g)]
+      .map((m) => m[1])
+      .filter((p) => !reserved.has(p.split('/')[2]));
+    return [...new Set(paths)].slice(0, limit).map((path) => ({ path }));
+  } catch {
+    return [];
+  }
+}
+
+/** Fetch an og:image the way WhatsApp does and judge the bytes. */
+async function checkImage(image) {
+  const problems = [];
+  const url = BASE === SITE ? image : image.replace(SITE, BASE);
+  const started = Date.now();
+  let res;
+  try {
+    res = await fetch(url, { headers: { 'user-agent': UA } });
+  } catch (err) {
+    return { problems: [`fetch failed: ${err.message}`], ms: Date.now() - started };
+  }
+  const bytes = new Uint8Array(await res.arrayBuffer());
+  const ms = Date.now() - started;
+  const type = res.headers.get('content-type') ?? '';
+  if (res.status !== 200) problems.push(`HTTP ${res.status}`);
+  const isJpeg = bytes[0] === 0xff && bytes[1] === 0xd8;
+  const isPng = bytes[0] === 0x89 && bytes[1] === 0x50;
+  if (!isJpeg && !isPng) problems.push('not a JPEG or PNG');
+  if (isJpeg && !type.includes('jpeg')) problems.push(`JPEG bytes served as "${type}"`);
+  if (isPng && !type.includes('png')) problems.push(`PNG bytes served as "${type}" (sharp missing? see X-Og-Encoder)`);
+  if (/\.jpe?g$/i.test(new URL(image).pathname) && !isJpeg) problems.push('URL says .jpg but the bytes are not JPEG');
+  if (bytes.length > MAX_IMAGE_BYTES) problems.push(`${Math.round(bytes.length / 1024)}KB, over WhatsApp's ~300KB`);
+  if (res.headers.get('x-og-degraded')) problems.push('rendered degraded (an asset or the DB timed out)');
+  return { problems, ms, bytes: bytes.length };
 }
 
 async function waitForServer(url, attempts = 60) {
@@ -115,9 +173,19 @@ async function main() {
   }
 
   const failures = [];
+  const warnings = [];
   const rows = [];
+  const images = new Map();
 
-  for (const route of ROUTES) {
+  const confRoutes = await conferenceRoutes();
+  // Conference pages are what organisers paste into WhatsApp. Against
+  // production there must be some; a local server without the database has none.
+  if (!confRoutes.length) {
+    (BASE === SITE ? failures : warnings).push('no conference pages found in the sitemap, so none were checked');
+  }
+  const allRoutes = [...ROUTES, ...confRoutes];
+
+  for (const route of allRoutes) {
     const expectPath = route.redirectsTo ?? route.path;
     const expectUrl = expectPath === '/' ? SITE : `${SITE}${expectPath}`;
     let r;
@@ -170,6 +238,18 @@ async function main() {
     if (canonical && canonical.replace(/\/$/, '') !== expectUrl.replace(/\/$/, ''))
       failures.push(`${where}: canonical is "${canonical}" but should be "${expectUrl}"`);
 
+    // The tags must be in <head> for every client, not only the ones Next
+    // recognises as bots.
+    const asBot = tagsOutsideHead(r.html);
+    if (asBot) failures.push(`${where}: as WhatsApp, ${asBot}`);
+    try {
+      const asBrowser = tagsOutsideHead((await fetchRoute(route.redirectsTo ?? route.path, BROWSER_UA)).html);
+      if (asBrowser) failures.push(`${where}: as a browser, ${asBrowser} (next.config htmlLimitedBots must be /.*/)`);
+    } catch (err) {
+      failures.push(`${where}: browser request failed — ${err.message}`);
+    }
+    if (image && !images.has(image)) images.set(image, where);
+
     rows.push([where, title ? `${title.slice(0, 44)}${title.length > 44 ? '…' : ''}` : '✗ MISSING', image ? image.replace(SITE, '') : '✗ MISSING', url ? url.replace(SITE, '') || '/' : '✗ MISSING']);
   }
 
@@ -180,15 +260,28 @@ async function main() {
   for (const r of rows) console.log(r.map((c, i) => String(c).padEnd(w[i])).join('  '));
   console.log('');
 
+  // The image itself: the half of a preview nothing used to test.
+  for (const [image, where] of images) {
+    const { problems, ms, bytes } = await checkImage(image);
+    for (const p of problems) failures.push(`${where}: og:image ${image.replace(SITE, '')} ${p}`);
+    if (!problems.length && ms > SLOW_IMAGE_MS) {
+      warnings.push(`${where}: og:image took ${ms}ms (cold render?). WhatsApp may send the link without a picture.`);
+    }
+    console.log(`image ${image.replace(SITE, '')}  ${bytes ? `${Math.round(bytes / 1024)}KB` : '-'}  ${ms}ms`);
+  }
+  console.log('');
+
   if (child) { child.kill('SIGTERM'); }
 
+  for (const w of warnings) console.warn(`  ! ${w}`);
+
   if (failures.length) {
-    console.error(`check-og: ${failures.length} failure(s) across ${ROUTES.length} routes on ${BASE}\n`);
+    console.error(`check-og: ${failures.length} failure(s) across ${allRoutes.length} routes on ${BASE}\n`);
     for (const f of failures) console.error(`  ✗ ${f}`);
     console.error('');
     process.exit(1);
   }
-  console.log(`check-og: OK — ${ROUTES.length} routes on ${BASE} all serve a complete card with their own og:url.`);
+  console.log(`check-og: OK — ${allRoutes.length} routes on ${BASE} all serve a complete card in <head>, with their own og:url and a valid image.`);
 }
 
 main().catch((err) => {

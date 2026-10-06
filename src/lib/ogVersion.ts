@@ -16,20 +16,30 @@
  * The only lever that actually works is CHANGING THE URL. `ogVersion()`
  * produces the segment that changes:
  *
- *     /api/og/conference/<slug>/<YYYY-MM-DD>-<hash>.jpg
+ *     /api/og/conference/<slug>/<design>-<hash>.jpg
  *
  * The route IGNORES this segment when it renders. It is pure cache identity.
  *
- * TWO INDEPENDENT TRIGGERS, ON PURPOSE
+ * TWO TRIGGERS, AND NO DATE (6 Oct 2026)
  *
  *  1. **The hash** covers every field the card draws — name, acronym, banner,
  *     logo, city, country, dates. An organiser edit changes the token on the
  *     next scrape, so a re-share picks up the new card immediately. This is the
- *     one that matters.
- *  2. **The date** rotates the token once a day regardless. It is the safety
- *     net for everything the hash cannot see: a card design change we ship, a
- *     banner file replaced at the same storage URL, a scraper that cached a
- *     failed render. Worst case a stale card self-heals within 24h.
+ *     one that matters. (Uploads get a new storage file name, so a replaced
+ *     banner is a new `banner_url` and changes the hash too.)
+ *  2. **`OG_CARD_DESIGN`** is bumped by hand when we ship a change to how the
+ *     card is DRAWN (layout, fonts, colours). Every card URL then changes once.
+ *
+ * Until 6 Oct 2026 the token also carried today's date, as a "self-heals in
+ * 24h" safety net. That net was the bug: it moved every conference's image to
+ * a brand-new, uncached URL every midnight, so the first share of each day hit
+ * a cold render (a serverless cold start, the DB, the organiser's banner and
+ * logo fetched and re-encoded) while the sender's WhatsApp waited for the
+ * picture, and WhatsApp sends the link with no picture when it waits too long.
+ * The failure the date guarded against (a bad render pinned in the cache) is
+ * now handled where it happens: a card drawn without an asset it should have
+ * had, or without the DB, is served with a 5-minute cache instead of a year
+ * (`renderCard(…, { degraded })`), so the next request draws it properly.
  *
  * DO NOT REPLACE THIS WITH `conferences.updated_at`. It looks like the obvious
  * answer and it is measurably useless: across 169 rows the column holds only
@@ -41,6 +51,12 @@
  * `generateMetadata` today, but it is a pure function of a row and there is no
  * reason a client surface should not be able to build the same URL.
  */
+
+/**
+ * Bump when the card's DRAWING changes (src/app/api/og/_shared/card.tsx or a
+ * route's layout). It is the only thing that moves every card URL at once.
+ */
+export const OG_CARD_DESIGN = 'd1';
 
 /** The fields that appear on the card. Structural, so DB rows and hand-built
  *  objects both satisfy it without a cast. */
@@ -86,11 +102,10 @@ function utcToday(now: Date): string {
 }
 
 /**
- * The version token for a conference's share card: `YYYY-MM-DD-<hash>`.
- *
- * `now` is injectable for tests only; callers pass nothing.
+ * The version token for a conference's share card: `<design>-<hash>`. Stable
+ * for as long as nothing on the card changes, so the CDN keeps it warm.
  */
-export function ogVersion(conf: OgVersionInput, now: Date = new Date()): string {
+export function ogVersion(conf: OgVersionInput): string {
   // Newline-joined with an explicit field order. A separator that cannot occur
   // inside the values keeps "AB" + "C" from hashing the same as "A" + "BC".
   const payload = [
@@ -104,7 +119,7 @@ export function ogVersion(conf: OgVersionInput, now: Date = new Date()): string 
     conf.end_date ?? '',
   ].join('\n');
 
-  return `${utcToday(now)}-${shortHash(payload)}`;
+  return `${OG_CARD_DESIGN}-${shortHash(payload)}`;
 }
 
 /**
@@ -152,13 +167,11 @@ export function homeOgImageUrl(origin = 'https://gavelling.com', now: Date = new
 /**
  * The /conferences/new card's URL.
  *
- * Dated like the homepage card, and for the same reason: a scraper holds a
- * URL's bytes effectively forever, so a card that can never change its URL can
- * never change. Nothing on this card is live, so the date is doing version
- * control rather than reporting anything.
+ * Nothing on this card is live, so it is versioned by the card design alone:
+ * one URL that stays warm in the CDN, moved only when `OG_CARD_DESIGN` is.
  */
-export function listConferenceOgImageUrl(origin = 'https://gavelling.com', now: Date = new Date()): string {
-  return `${origin}/api/og/list/${utcToday(now)}.jpg`;
+export function listConferenceOgImageUrl(origin = 'https://gavelling.com'): string {
+  return `${origin}/api/og/list/${OG_CARD_DESIGN}.jpg`;
 }
 
 /**

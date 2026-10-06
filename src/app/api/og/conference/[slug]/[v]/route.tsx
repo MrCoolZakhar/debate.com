@@ -12,7 +12,7 @@
  * already pasted into a group chat kept showing the banner as it was the first
  * time anyone shared it. Changing the bytes at a stable URL does not help;
  * only a new URL does. `ogVersion()` in `src/lib/ogVersion.ts` mints that
- * segment from the row's visible fields plus the date. See that file for why
+ * segment from the row's visible fields plus the card design version (no date since 6 Oct 2026). See that file for why
  * `conferences.updated_at` is not the answer.
  *
  * Because the URL is versioned, the response is safe to mark `immutable` for a
@@ -62,13 +62,15 @@ interface ConfCard {
 const CARD_COLUMNS =
   'full_name, acronym, banner_url, logo_url, city, country, start_date, end_date';
 
-async function loadConference(slug: string): Promise<ConfCard | null> {
+/** `undefined` = the database could not be asked (a hiccup, not an answer). */
+async function loadConference(slug: string): Promise<ConfCard | null | undefined> {
   try {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('conferences')
       .select(CARD_COLUMNS)
       .eq('slug', slug)
       .maybeSingle();
+    if (error) return undefined;
     if (data) return data as ConfCard;
 
     /* A slug that no longer exists is very often one the conference has been
@@ -77,16 +79,37 @@ async function loadConference(slug: string): Promise<ConfCard | null> {
        exact image URL when the link was first pasted and never revalidate, so
        a rename would turn every already-shared preview into the generic card.
        Follow the forwarding address instead. */
-    const { data: alias } = await supabase
+    const { data: alias, error: aliasError } = await supabase
       .from('conference_slug_aliases')
       .select(`conferences(${CARD_COLUMNS})`)
       .eq('slug', slug)
       .maybeSingle();
+    if (aliasError) return undefined;
     const conf = (alias as { conferences?: ConfCard | null } | null)?.conferences;
     return conf ?? null;
   } catch {
-    return null;
+    return undefined;
   }
+}
+
+/* THE TIME BUDGET. A link preview is fetched by the SENDER's phone while they
+   type, and WhatsApp gives up on a slow image and sends the message with no
+   picture. Each organiser asset already has its own 6s fetch timeout; two of
+   them plus the flag plus a cold start could take longer than WhatsApp waits.
+   So all three share one budget: whatever is not ready by then is left off,
+   the card is drawn anyway, and it is marked degraded (short cache) so the
+   next request draws the full card. */
+const ASSET_BUDGET_MS = 2500;
+
+function withinBudget<T>(p: Promise<T | null>, onLate: () => void): Promise<T | null> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const late = new Promise<null>((resolve) => {
+    timer = setTimeout(() => {
+      onLate();
+      resolve(null);
+    }, ASSET_BUDGET_MS);
+  });
+  return Promise.race([p.catch(() => null), late]).finally(() => clearTimeout(timer));
 }
 
 export async function GET(
@@ -100,20 +123,32 @@ export async function GET(
 
   const conf = await loadConference(slug);
   if (!conf) {
+    // `undefined` (DB unreachable) is a hiccup: draw the generic card but let
+    // it expire in minutes. `null` (no such conference) is also short-cached:
+    // a slug can be created after someone pasted it.
     // A generic card, not a 404. A scraper that gets a non-200 for og:image
     // drops the picture from an otherwise valid card and frequently caches
     // that outcome, so an unknown slug must still answer with an image.
-    const res = await renderCard(fallbackCard());
+    const res = await renderCard(fallbackCard(), { degraded: true });
     res.headers.set('X-Og-Version', token);
     res.headers.set('X-Og-Source', 'fallback');
     return res;
   }
 
-  // Both assets in parallel — each is an external fetch plus a sharp decode,
-  // and serialising them roughly doubles a cold render.
-  const [backdrop, logo] = await Promise.all([
-    loadBannerDataUri(conf.banner_url, CARD_WIDTH, CARD_HEIGHT),
-    loadLogo(conf.logo_url, 176),
+  // Every asset in parallel and inside ONE budget (see ASSET_BUDGET_MS) — each
+  // is an external fetch plus a sharp decode, and serialising them roughly
+  // doubles a cold render.
+  let degraded = false;
+  const markLate = () => {
+    degraded = true;
+  };
+  const place = [conf.city?.trim(), conf.country?.trim()].filter(Boolean).join(', ');
+  const [backdrop, logo, flagUri] = await Promise.all([
+    withinBudget(loadBannerDataUri(conf.banner_url, CARD_WIDTH, CARD_HEIGHT), markLate),
+    withinBudget(loadLogo(conf.logo_url, 176), markLate),
+    // Resolved from our own country table, so an unrecognisable "country" (a
+    // crisis committee's invented state, a typo) simply yields no flag.
+    place ? withinBudget(loadFlagDataUri(conf.country), markLate) : Promise.resolve(null),
   ]);
 
   // `conferenceLabels` is the single source of truth for how a conference is
@@ -128,10 +163,7 @@ export async function GET(
   // a distinct question a delegate has ("when is it", "where is it"), and a
   // joined line answers neither at a glance.
   const dates = formatConferenceDates(conf.start_date, conf.end_date, { fallback: '' });
-  const place = [conf.city?.trim(), conf.country?.trim()].filter(Boolean).join(', ');
-  // Resolved from our own country table, so an unrecognisable "country" (a
-  // crisis committee's invented state, a typo) simply yields no flag.
-  const flag = place ? await loadFlagDataUri(conf.country) : null;
+  const flag = place ? flagUri : null;
 
   const chips: CardChip[] = [
     ...(dates ? [{ label: dates }] : []),
@@ -148,6 +180,7 @@ export async function GET(
       subhead={secondary ? clampToTwoLines(secondary, 30, 820) : null}
       chips={chips}
     />,
+    { degraded },
   );
 
   res.headers.set('X-Og-Version', token);

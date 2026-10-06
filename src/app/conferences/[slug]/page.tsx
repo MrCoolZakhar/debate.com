@@ -3,6 +3,7 @@ import { cache } from 'react';
 import { notFound } from 'next/navigation';
 import { absoluteUrl, pageMetadata } from '@/lib/seo';
 import { conferenceOgImageUrl } from '@/lib/ogVersion';
+import { warmOgImage } from '@/lib/ogWarm';
 import { supabase } from '@/lib/supabase';
 import ConferenceDetailClient from './ConferenceDetailClient';
 import ConferenceViewBeacon from '@/components/conferences/ConferenceViewBeacon';
@@ -221,8 +222,8 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
      /api/og/conference/... solves both. It draws a real card (name, acronym,
      dates, place, the organiser's artwork composited at the right ratio),
      re-encodes to a ~50KB JPEG, and carries a version token that changes when
-     any visible field changes AND rotates daily — so a re-share picks up the
-     new card, and a stale one self-heals within 24h. The token is pure cache
+     any visible field changes (never on a timer: see ogVersion.ts) — so a re-share picks up the
+     new card, and a degraded render expires in 5 minutes. The token is pure cache
      identity; the route ignores it.
    
      Kept for conferences that are private: the page is noindex, but a private
@@ -234,6 +235,9 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
      Google's Event rich result wants the event's own picture, not a card with
      our branding across it. */
   const image = conferenceOgImageUrl(slug, conf);
+  // Render the card now, after this response, so the CDN holds it before the
+  // next WhatsApp share asks for it (src/lib/ogWarm.ts).
+  warmOgImage(image);
 
   return pageMetadata({
     // Absolute: the brand is part of the template, so the root `%s | Gavelling`
