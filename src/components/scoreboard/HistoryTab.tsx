@@ -62,6 +62,7 @@ import { describeMotion } from '@/lib/motionLog';
 import { motionNames } from '@/lib/committeeFlags';
 import { eventIcon, TINT } from './SessionScoreboardParts';
 import EditableNote from './EditableNote';
+import { manualAuthorKey } from '@/lib/sessionScoreboard';
 
 const KIND_ICON: Record<SegmentKind, LucideIcon> = {
   'speakers-list': ListOrdered,
@@ -81,10 +82,13 @@ const STATUS_LOOK: Record<Exclude<MotionStatus, 'unknown'>, { icon: LucideIcon; 
   pending: { icon: Hourglass, color: '#8B5A20', key: 'sb_hist_motion_pending' },
 };
 
-export default function HistoryTab({ committee, feedback }: {
+export default function HistoryTab({ committee, feedback, manualAuthors }: {
   committee: Committee;
-  /** The same rows the panel loaded for the Ranking tab. Chair-private. */
+  /** The panel's feedback rows, minus document-introduction notes (`isDocumentNote`),
+   *  which belong to no speech. Chair-private. */
   feedback: FeedbackEntry[];
+  /** Who made each manual award / deduction (`manualAuthorIndex`); optional. */
+  manualAuthors?: Map<string, string>;
 }) {
   const t = useT();
   const { language } = useLanguage();
@@ -125,8 +129,12 @@ export default function HistoryTab({ committee, feedback }: {
     switch (e.type) {
       case 'motion-raised': return t('sb_hist_motion_raised');
       case 'right-of-reply': return t('sb_hist_right_of_reply');
-      case 'manual-award': return t('sb_hist_award');
-      case 'manual-deduct': return t('sb_hist_deduct');
+      case 'manual-award':
+      case 'manual-deduct': {
+        const action = e.type === 'manual-award' ? t('sb_hist_award') : t('sb_hist_deduct');
+        const by = manualAuthors?.get(manualAuthorKey(e.country, e.timestamp, e.type));
+        return by ? t('sb_adjust_by').replace('{action}', action).replace('{name}', by) : action;
+      }
       default: return e.note || e.type;
     }
   };

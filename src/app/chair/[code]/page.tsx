@@ -127,8 +127,11 @@ import {
   grantSpeakerTime as grantSpeakerTimeInDB,
   phaseForCaucus,
   freezeCaucusForBreak,
+  gslDedupeApplies,
   type SessionBroadcast,
+  resumePendingRollCall,
 } from '@/lib/committeeService';
+import { overlayPendingRollCall } from '@/lib/pendingRollCall';
 import { serverNow, serverNowIso } from '@/lib/serverClock';
 import SaveStatusToast from '@/components/notifications/SaveStatusToast';
 import ClockSkewHint from '@/components/ClockSkewHint';
@@ -231,6 +234,9 @@ const localWriteSeq = { current: 0 };
 // RollCallPanel.tsx — both are the backstop for a status write that never lands, and a chair
 // should not see the two surfaces give up at different moments.
 const STATUS_PIN_TTL_MS = 8000;
+// Item 6: how long after a moderated caucus ends a GSL-row removal press is ignored (the
+// sidebar and strip have just swapped from the caucus queue to the GSL under the pointer).
+const LIST_SWAP_GUARD_MS = 1500;
 
 // ── Organiser broadcasts: per-device dismissal memory ─────────────────────────
 // A broadcast lives in the DB until it expires, and the chair page refetches the whole
@@ -743,6 +749,10 @@ function CaucusAddSpeakerInput({ committee, spokenCountries, onAdd, onAddFirst, 
 }
 
 // ── Unmoderated Caucus View ───────────────────────────────────────────────────
+// A Consultation of the Whole caucus also carries `floorRemaining`: the live caucus total
+// stamped when the floor holder was tapped (item 11). Stored in the caucus JSONB beside
+// `floorSince`; readers that do not know it ignore it.
+type CowCaucus = CaucusState & { floorRemaining?: number | null };
 function UnmoderatedCaucusView({ committee, setCommittee, isViewOnly = false, gavelCue }: { committee: Committee; setCommittee: CommitteeSetter; isViewOnly?: boolean; gavelCue?: GavelCue }) {
   const t = useT();
   const { language } = useLanguage();
@@ -808,32 +818,68 @@ function UnmoderatedCaucusView({ committee, setCommittee, isViewOnly = false, ga
     const persisted = caucus.floorSince ? new Date(caucus.floorSince).getTime() : NaN;
     if (Number.isFinite(persisted)) return persisted;
     if (cowSpeakerStartRef.current !== null) return cowSpeakerStartRef.current;
+    // Item 11: only speeches of THIS consultation. The topic alone matched an earlier
+    // consultation with the same (often empty) purpose, so the first holder after a reload
+    // could be timed from a speech logged an hour before. The newest consultation that
+    // passed bounds the search from below.
+    let since = -Infinity;
     let last = NaN;
     for (const m of committee.messages ?? []) {
-      if (m.sender !== '__system__' || m.recipient !== '__log__' || !m.content.includes('|cow:')) continue;
+      if (m.sender !== '__system__' || m.recipient !== '__log__') continue;
+      if (!m.content.includes('|cow:') && !m.content.includes('"motion-passed"')) continue;
       try {
-        const e = JSON.parse(m.content.slice('__log__:'.length)) as { type?: string; context?: string; topic?: string; timestamp?: string };
-        if (e.type !== 'speech' || e.context !== 'unmoderated-caucus' || e.topic !== (caucus.purpose ?? committee.topic)) continue;
+        const e = JSON.parse(m.content.slice('__log__:'.length)) as { type?: string; context?: string; topic?: string; timestamp?: string; motionType?: string };
         const at = e.timestamp ? new Date(e.timestamp).getTime() : NaN;
+        if (e.type === 'motion-passed') {
+          if (e.motionType === 'consultation' && Number.isFinite(at) && at > since) since = at;
+          continue;
+        }
+        if (e.type !== 'speech' || e.context !== 'unmoderated-caucus' || e.topic !== (caucus.purpose ?? committee.topic)) continue;
         if (Number.isFinite(at) && !(at <= last)) last = at;
       } catch { /* not a log row */ }
     }
-    return Number.isFinite(last) ? last : cowMountedAt;
+    return Number.isFinite(last) && last >= since ? last : cowMountedAt;
   };
+  // Item 11: the seconds a Consultation floor holder is credited with. It used to be the WALL
+  // time since the floor changed hands, so a holder left selected while the clock was paused,
+  // or after the room had moved on, was credited with minutes nobody spoke (e.g. "2m 58s by
+  // USA" logged at End). Now: the CAUCUS CLOCK time that ran since the tap (`floorRemaining`,
+  // the live total stamped with the tap, minus the live total now), never more than the wall
+  // time. A tap from a bundle that did not stamp it falls back to the caucus time elapsed
+  // overall, which still excludes a clock that never ran.
+  const cowHolderSeconds = (since: number, now: number): number => {
+    const wall = Math.max(0, Math.round((now - since) / 1000));
+    const live = caucusRemainingNow(caucus, now);
+    const stamped = (caucus as CowCaucus).floorRemaining;
+    const ran = typeof stamped === 'number' && Number.isFinite(stamped)
+      ? stamped - live
+      : (caucus.totalTime ?? 0) - live;
+    return Math.max(0, Math.min(wall, Math.round(ran)));
+  };
+  // A plain unmoderated caucus has NO floor: nothing here may ever run for one. And only the
+  // Moderator sets the floor holder (item 11): every chair device used to be able to tap, and
+  // each tap wrote the whole caucus object from that device's copy (a Commenter's could rewind
+  // the clock anchor) and logged the previous holder from its own idea of when the floor
+  // changed. Commenters see the board read only.
+  const cowCanTap = caucus.isConsultation === true && !isViewOnly;
   const handleCowTap = (countryName: string) => {
+    if (!cowCanTap) return;
     const prev = caucus.currentSpeaker;
     if (prev === countryName) return;
     const now = serverNow();
     if (prev) {
       const since = cowFloorStart();
-      const secs = Math.max(0, Math.round((now - since) / 1000));
+      const secs = cowHolderSeconds(since, now);
       void logTimedSpeech(committee, { country: prev, seconds: secs, context: 'unmoderated-caucus', topic: caucus.purpose ?? committee.topic, turnKey: cowTurnKey(committee.id, prev, since) });
     }
     cowSpeakerStartRef.current = now;
     const spoken = prev && !(caucus.spokenCountries ?? []).includes(prev)
       ? [...(caucus.spokenCountries ?? []), prev]
       : (caucus.spokenCountries ?? []);
-    const updated = { ...caucus, currentSpeaker: countryName, spokenCountries: spoken, floorSince: new Date(now).toISOString() };
+    const updated: CowCaucus = {
+      ...caucus, currentSpeaker: countryName, spokenCountries: spoken,
+      floorSince: new Date(now).toISOString(), floorRemaining: caucusRemainingNow(caucus, now),
+    };
     updateLocal(setCommittee, (c) => (c.caucus ? { ...c, caucus: updated } : c), true);
     updateCaucusInDB(committee.id, updated, committee.code, committee.dbChairJoinSuffix ?? undefined);
     if (cowEnabled) { setCowRemaining(cowDefaultSecs); setCowActive(true); }
@@ -894,7 +940,13 @@ function UnmoderatedCaucusView({ committee, setCommittee, isViewOnly = false, ga
     // caucusRemainingNow is the LIVE derived value, so the elapsed time is already subtracted:
     // never use committee.caucus.remainingTime here, which is the value at the anchor and
     // would hand back every second the caucus had already burnt.
-    const extended = { ...committee.caucus, totalTime: committee.caucus.totalTime + addSecs };
+    const prevStamp = (committee.caucus as CowCaucus).floorRemaining;
+    const extended: CowCaucus = {
+      ...committee.caucus, totalTime: committee.caucus.totalTime + addSecs,
+      // The Consultation floor holder's stamp moves with the clock, or the extension would be
+      // read as time the holder did not speak (item 11).
+      ...(typeof prevStamp === 'number' ? { floorRemaining: prevStamp + addSecs } : {}),
+    };
     const anchored = anchorCaucusClock(extended, caucusRemainingNow(committee.caucus) + addSecs, running);
     updateLocal(setCommittee, (c) => (c.caucus ? { ...c, caucus: anchored } : c), true);
     updateCaucusInDB(committee.id, anchored, committee.code, committee.dbChairJoinSuffix ?? undefined);
@@ -906,9 +958,9 @@ function UnmoderatedCaucusView({ committee, setCommittee, isViewOnly = false, ga
     // Consultation of the Whole: whoever held the floor when the caucus ended spoke too.
     // Only a flag tap used to log, so the last holder's time was dropped. Same clock
     // handleCowTap uses (time since the floor last changed on this device).
-    if (caucus.isConsultation && caucus.currentSpeaker) {
+    if (caucus.isConsultation === true && caucus.currentSpeaker) {
       const since = cowFloorStart();
-      const secs = Math.max(0, Math.round((serverNow() - since) / 1000));
+      const secs = cowHolderSeconds(since, serverNow());
       void logTimedSpeech(committee, { country: caucus.currentSpeaker, seconds: secs, context: 'unmoderated-caucus', topic: caucus.purpose ?? committee.topic, turnKey: cowTurnKey(committee.id, caucus.currentSpeaker, since) });
     }
     // H4 — clear the current_speaker DB ROW, not just local state. getCommitteeByCode loads
@@ -965,7 +1017,7 @@ function UnmoderatedCaucusView({ committee, setCommittee, isViewOnly = false, ga
       {/* Consultation of the Whole — live open-floor delegation board (tap to set speaker; Commenters too) */}
       {caucus.isConsultation && (
         <div className="w-full max-w-xl mb-6">
-          <CowDelegationBoard committee={committee} onTap={handleCowTap} />
+          <CowDelegationBoard committee={committee} onTap={cowCanTap ? handleCowTap : undefined} />
         </div>
       )}
       {!isViewOnly && <div className="flex gap-3 flex-wrap justify-center">
@@ -1856,6 +1908,8 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
   // PER SLICE, coalesced, catch-up on wake / reconnect / online. Held in a ref so automatic
   // Moderator writes can ask whether local state is fresh first (R-6).
   const syncRef = useRef<SessionSync | null>(null);
+  // When this device last saw a moderated caucus end (item 6, see handleRemoveFromSpeakersList).
+  const modCaucusEndedAtRef = useRef(0);
   const [connection, setConnection] = useState<ConnectionState>('reconnecting');
   // Bumped when a catch-up's fetches have all returned, so the automatic-write effects that
   // stood down while it ran get to run again against the fresh state (R-6).
@@ -1865,6 +1919,9 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
   // slider with the pre-click status. Pinned until DB truth agrees, or the TTL expires
   // (backstop for a write that failed outright).
   const pendingStatusWrites = useRef<Record<string, { value: DelegateStatus; at: number }>>({});
+  // Offline resilience: the newest status press per delegate on this device, so the result of
+  // an older (parked, then superseded) write never re-pins or rolls back a newer press.
+  const statusTapRef = useRef<Record<string, number>>({});
   // Set by the loader when it reconstructs the speaker clock from current_speaker.started_at
   // / time_remaining, so the caucus seeding effect knows not to overwrite it (H5).
   const speakerClockHydratedRef = useRef(false);
@@ -1928,7 +1985,12 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
   // delegate's own status change or a co-chair's roll call still lands. Each pin releases the
   // moment DB truth agrees with it — or after the TTL, if the write never landed at all.
   // Pins for ids missing from `fresh` (a deleted delegate) simply age out on the TTL.
-  const applyPinnedStatuses = (fresh: Delegate[]): Delegate[] => {
+  // Offline resilience: every press this device has not managed to save yet (parked, backing
+  // off, queued, or re-issued after a reload: src/lib/pendingRollCall.ts) is laid over the
+  // fetched rows FIRST, for as long as it is pending, not for a fixed time. The pins below
+  // then cover the short gap between a write landing and a refetch that predates it.
+  const applyPinnedStatuses = (incoming: Delegate[]): Delegate[] => {
+    const fresh = OFFLINE_RESILIENCE ? overlayPendingRollCall(committeeCodeRef.current || code, incoming) : incoming;
     const pins = pendingStatusWrites.current;
     if (Object.keys(pins).length === 0) return fresh;
     const now = Date.now();
@@ -1980,6 +2042,17 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
             (m) => m.type !== 'suspend-debate' && m.type !== 'end-debate'
           );
         }
+      }
+      // Offline resilience: roll-call presses left unsaved by a reload while offline (or by
+      // another tab that closed) are re-issued now and shown over the loaded roster.
+      let detachRollCall: (() => void) | undefined;
+      if (found && OFFLINE_RESILIENCE) {
+        detachRollCall = resumePendingRollCall(found.code, found.dbChairJoinSuffix ?? undefined, {
+          onAdopted: () => setCommittee((prev) => prev ? { ...prev, delegates: overlayPendingRollCall(prev.code, prev.delegates) } : prev),
+          onRefused: () => syncRef.current?.mark('delegates', 0),
+        });
+        found.delegates = overlayPendingRollCall(found.code, found.delegates);
+        unsubscribe = detachRollCall;
       }
       setCommittee(found ?? null);
       if (found) {
@@ -2046,6 +2119,18 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
         // R-3: what the window swallows is fetched once more when the window closes.
         const afterWindow = () => Math.max(250, debounceLeft() + 50);
         const STALE_RETRY_MS = 250;
+        // Item 6 (Oct 2026): the sync helpers drop the floor holder from the GSL as a
+        // transient duplicate. That is right only when the floor holder IS a GSL speaker. In a
+        // moderated caucus / Tour de Table it is the caucus speaker, who may also hold a GSL
+        // place (RULE 1), so the GSL is taken exactly as stored there.
+        const listsApplied = (prev: Committee, lists: Parameters<typeof withLists>[1]): Committee => {
+          const next = withLists(prev, lists);
+          return gslDedupeApplies(prev) ? next : { ...next, speakersList: lists.speakersList };
+        };
+        const currentSpeakerApplied = (prev: Committee, cs: Parameters<typeof withCurrentSpeaker>[1], includeRemaining: boolean): Committee => {
+          const next = withCurrentSpeaker(prev, cs, { includeRemaining });
+          return gslDedupeApplies(prev) ? next : { ...next, speakersList: prev.speakersList };
+        };
         // Offline resilience (phase 1): while THIS Moderator device has a write for a slice in
         // flight, queued or parked, a fetched copy of that slice predates it: treat it like the
         // debounce window, and fetch it once more (as a catch-up read) when the write lands.
@@ -2165,14 +2250,24 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                 // RULE 4: within the window the chair's optimistic queue is truth.
                 if (stale || inWindow) return afterWindow();
                 if (heldFor('lists')) return heldRetry();
-                setCommittee((prev) => prev ? withLists(prev, data as Parameters<typeof withLists>[1]) : prev);
+                setCommittee((prev) => prev ? listsApplied(prev, data as Parameters<typeof withLists>[1]) : prev);
                 return;
               }
               case 'currentSpeaker': {
                 const cs = data as Parameters<typeof withCurrentSpeaker>[1];
                 if (isViewOnlyRef.current) {
                   if (stale) return STALE_RETRY_MS;
-                  setCommittee((prev) => prev ? withCurrentSpeaker(prev, cs, { includeRemaining: false }) : prev);
+                  setCommittee((prev) => {
+                    if (!prev) return prev;
+                    // The floor changed hands: re-read the GSL, so a place this device's
+                    // copy no longer shows (dropped as a "duplicate" of a speaker who has
+                    // since left the floor) comes back (item 6). One fetch per change; `mark`
+                    // is idempotent (earliest request wins), so a double-run updater is harmless.
+                    if ((prev.currentSpeaker?.delegateId ?? null) !== (cs.currentSpeaker?.delegateId ?? null)) {
+                      syncRef.current?.mark('lists', COALESCE_MS);
+                    }
+                    return currentSpeakerApplied(prev, cs, false);
+                  });
                   // Anchor base is the row's own time_remaining, NOT the committee speaker
                   // limit: a moderated-caucus speaker is seated with the CAUCUS speaking time,
                   // and a paused-then-resumed speaker carries their true remainder (H5).
@@ -2185,7 +2280,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                 if (stale || inWindow) return afterWindow();
                 if (heldFor('currentSpeaker')) return heldRetry();
                 if (timerRunningRef.current) return;
-                setCommittee((prev) => prev ? withCurrentSpeaker(prev, cs, { includeRemaining: true }) : prev);
+                setCommittee((prev) => prev ? currentSpeakerApplied(prev, cs, true) : prev);
                 seatSpeakerClock(cs.speakerTimeRemaining, cs.speakerStartedAt);
                 return;
               }
@@ -2221,7 +2316,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
           },
         });
         syncRef.current = sync;
-        unsubscribe = () => { pendingGuard?.stop(); sync.stop(); if (syncRef.current === sync) syncRef.current = null; };
+        unsubscribe = () => { detachRollCall?.(); pendingGuard?.stop(); sync.stop(); if (syncRef.current === sync) syncRef.current = null; };
       }
     }
     load();
@@ -2592,6 +2687,15 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
     const isCaucus = phase === 'moderated-caucus' || phase === 'unmoderated-caucus';
     const wasCaucus = prev === 'moderated-caucus' || prev === 'unmoderated-caucus';
     if (prev !== null && isCaucus && !wasCaucus) setTimerRunning(false);
+    // Item 6: a moderated caucus just ended (any path: End, expiry, Next past the total,
+    // another caucus accepted, a suspension, another chair's device). Re-read the GSL once,
+    // so a GSL place any copy of this device hid while its delegation held the caucus floor
+    // is back on screen. Read only; the lists apply still respects the debounce window and
+    // the pending-slice guard (it is simply fetched again when they allow).
+    if (prev === 'moderated-caucus' && phase !== 'moderated-caucus') {
+      syncRef.current?.mark('lists', COALESCE_MS);
+      modCaucusEndedAtRef.current = Date.now();
+    }
   }, [committee?.phase]);
 
   // ── Moderated-caucus EXPIRY — the one-shot, not a countdown ─────────────────
@@ -2932,6 +3036,23 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
 
   // ── Stable callbacks (must be before early returns — Rules of Hooks) ──────────
 
+  // Offline resilience: one status write with its pin. The pin holds while the write is
+  // pending (the overlay in applyPinnedStatuses), is refreshed when it lands (a refetch that
+  // started before the landing must not flash the old value), and only a REAL refusal (the
+  // write resolves false; a network failure parks instead) unpins and reads the roster back.
+  // The result of a press that a newer press superseded is ignored.
+  const writeDelegateStatusPinned = useCallback((delegateId: string, status: DelegateStatus) => {
+    const tap = (statusTapRef.current[delegateId] ?? 0) + 1;
+    statusTapRef.current[delegateId] = tap;
+    pendingStatusWrites.current[delegateId] = { value: status, at: Date.now() };
+    void setDelegateStatusInDB(delegateId, status, committeeCodeRef.current, chairSuffixRef.current).then((ok) => {
+      if (statusTapRef.current[delegateId] !== tap) return;
+      if (ok) { pendingStatusWrites.current[delegateId] = { value: status, at: Date.now() }; return; }
+      if (pendingStatusWrites.current[delegateId]?.value === status) delete pendingStatusWrites.current[delegateId];
+      syncRef.current?.mark('delegates', 0);
+    });
+  }, []);
+
   // Cycle a delegate's roll-call status using a mutable ref so rapid clicks always
   // read the post-previous-click status, not a stale render closure.
   const handleCycleStatus = useCallback((delegateId: string) => {
@@ -2948,7 +3069,8 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
         caucusQueue: (c.caucusQueue ?? []).filter((s) => s.delegateId !== delegateId),
       } : {}),
     }), true);
-    setDelegateStatusInDB(delegateId, next, committeeCodeRef.current, chairSuffixRef.current);
+    if (OFFLINE_RESILIENCE) writeDelegateStatusPinned(delegateId, next);
+    else setDelegateStatusInDB(delegateId, next, committeeCodeRef.current, chairSuffixRef.current);
     if (next === 'absent' && committeePhaseRef.current !== 'pre-session') {
       removeFromSpeakersListInDB(committeeIdRef.current, delegateId, committeeCodeRef.current, chairSuffixRef.current);
       removeFromCaucusListInDB(committeeIdRef.current, delegateId, committeeCodeRef.current, chairSuffixRef.current);
@@ -2970,6 +3092,11 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
 
   const handleRemoveFromSpeakersList = useCallback((delegateId: string) => {
     if (!committee) return;
+    // Item 6: when a moderated caucus ends (often by EXPIRY, with nobody pressing anything)
+    // the sidebar and the top strip swap from the caucus queue to the GSL under the chair's
+    // pointer. A press meant for a caucus row then landed on the same delegation's GSL row
+    // and deleted its GSL place. Presses in the first moments after the swap are ignored.
+    if (Date.now() - modCaucusEndedAtRef.current < LIST_SWAP_GUARD_MS) return;
     updateLocal(setCommittee, (c) => ({ ...c, speakersList: c.speakersList.filter((s) => s.delegateId !== delegateId) }), true);
     removeFromSpeakersListInDB(committee.id, delegateId, committee.code, committee.dbChairJoinSuffix ?? undefined);
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -2992,7 +3119,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
   const handleStatusChange = useCallback((delegateId: string, status: DelegateStatus) => {
     if (!committee) return;
     // Pin this row against any refetch whose snapshot predates the write below.
-    pendingStatusWrites.current[delegateId] = { value: status, at: Date.now() };
+    if (!OFFLINE_RESILIENCE) pendingStatusWrites.current[delegateId] = { value: status, at: Date.now() };
     updateLocal(setCommittee, (c) => ({
       ...c,
       delegates: c.delegates.map((d) => d.id === delegateId ? { ...d, status } : d),
@@ -3001,7 +3128,8 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
         caucusQueue: (c.caucusQueue ?? []).filter((s) => s.delegateId !== delegateId),
       } : {}),
     }), true);
-    void setDelegateStatusInDB(delegateId, status, committee.code, committee.dbChairJoinSuffix ?? undefined).then((ok) => {
+    if (OFFLINE_RESILIENCE) writeDelegateStatusPinned(delegateId, status);
+    else void setDelegateStatusInDB(delegateId, status, committee.code, committee.dbChairJoinSuffix ?? undefined).then((ok) => {
       if (ok) return;
       // Refused (or failed): unpin and read the roster back, so the slider shows the truth.
       if (pendingStatusWrites.current[delegateId]?.value === status) delete pendingStatusWrites.current[delegateId];
@@ -3026,6 +3154,8 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
     const at = Date.now();
     const idSet = new Set(ids);
     ids.forEach((id) => { pendingStatusWrites.current[id] = { value: status, at }; });
+    const taps = new Map<string, number>();
+    if (OFFLINE_RESILIENCE) ids.forEach((id) => { const n = (statusTapRef.current[id] ?? 0) + 1; statusTapRef.current[id] = n; taps.set(id, n); });
     const dropFromLists = status === 'absent' && committee.phase !== 'pre-session';
     updateLocal(setCommittee, (c) => ({
       ...c,
@@ -3037,15 +3167,22 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
     }), true);
     const suffix = committee.dbChairJoinSuffix ?? undefined;
     const allIds = committee.delegates.length === ids.length && committee.delegates.every((d) => idSet.has(d.id));
-    void setDelegateStatusesBulkInDB(committee.id, status, allIds ? null : ids, committee.code, suffix).then((n) => {
-      if (typeof n === 'number') return;
+    // Offline resilience: the ids are always sent, so every row is claimed in the pending
+    // ledger and the bulk can be parked (src/lib/committeeService.ts, setDelegateStatusesBulk).
+    void setDelegateStatusesBulkInDB(committee.id, status, allIds && !OFFLINE_RESILIENCE ? null : ids, committee.code, suffix).then((n) => {
+      // Rows a newer press has taken over since are that press's business.
+      const current = OFFLINE_RESILIENCE ? ids.filter((id) => statusTapRef.current[id] === taps.get(id)) : ids;
+      if (typeof n === 'number') {
+        if (OFFLINE_RESILIENCE) { const now = Date.now(); current.forEach((id) => { pendingStatusWrites.current[id] = { value: status, at: now }; }); }
+        return;
+      }
       if (n === 'unavailable') {
         ids.forEach((id) => setDelegateStatusInDB(id, status, committee.code, suffix));
         return;
       }
       // Refused or failed: unpin and read the roster back rather than showing a roll call
       // that never landed.
-      ids.forEach((id) => { if (pendingStatusWrites.current[id]?.at === at) delete pendingStatusWrites.current[id]; });
+      current.forEach((id) => { if (pendingStatusWrites.current[id]?.at === at) delete pendingStatusWrites.current[id]; });
       syncRef.current?.mark('delegates', 0);
     });
     if (dropFromLists) {
@@ -4564,6 +4701,15 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
   };
 
   const handleApproveJoinRequest = async (motionId: string, delegateId: string, desiredStatus: 'present' | 'present-voting') => {
+    // Offline resilience: the status write may now wait (parked) until the connection is
+    // back, so the seat turns present at once instead of after the await; the request card
+    // goes once the write has landed and the request is deleted, as before.
+    if (OFFLINE_RESILIENCE) {
+      updateLocal(setCommittee, (c) => ({
+        ...c,
+        delegates: c.delegates.map((d) => d.id === delegateId ? { ...d, status: desiredStatus } : d),
+      }));
+    }
     await approveJoinRequest(committee.id, motionId, delegateId, desiredStatus, committee.code, committee.dbChairJoinSuffix ?? undefined);
     updateLocal(setCommittee, (c) => ({
       ...c,
@@ -5572,6 +5718,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
           committee={committee}
           onClose={() => setShowDocuments(false)}
           onIntroChange={setDocIntroActive}
+          feedbackVersion={feedbackVersion}
           onCommitteeUpdate={(updater) => updateLocal(setCommittee, updater, true)}
           isViewOnly={isViewOnly}
           // Carried into /voting/[code] so its "Back to Session" can hand the identity

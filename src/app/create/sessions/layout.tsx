@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { pageMetadata } from '@/lib/seo';
+import { CREATE_SESSION_SCHEMAS, jsonLd } from '@/app/join/sessionsSchema';
 
 // page.tsx in this segment is 'use client' (the whole committee-setup form is
 // interactive), so metadata cannot live there — Next reads it only from a
@@ -33,6 +34,18 @@ export const metadata: Metadata = pageMetadata({
   ],
 });
 
+// JSON-LD (WebApplication, free; BreadcrumbList) in the raw HTML (item 17, Oct
+// 2026). No visible section is added here: this set-up screen is a one-screen
+// console (CLAUDE.md §8), so its h1 stays the page's own screen-reader heading
+// and the form's English labels are the raw text. No FAQPage either, because
+// FAQ structured data must match text visible on the page.
 export default function CreateLayout({ children }: { children: React.ReactNode }) {
-  return children;
+  return (
+    <>
+      {CREATE_SESSION_SCHEMAS.map((schema, i) => (
+        <script key={i} type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLd(schema) }} />
+      ))}
+      {children}
+    </>
+  );
 }

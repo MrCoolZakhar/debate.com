@@ -1,0 +1,83 @@
+// Keys for /create and /join crawlable copy (Oct 2026, the TY7ZZ3 / Asia WorldMUN fixes), kept in their own
+// file so several changes can land without colliding in translations.ts. Spread into
+// each locale there; every key must exist in all four locales.
+//
+// The cj_join_* keys are the "How Joining Works" section under the /join card
+// (src/app/join/JoinGuide.tsx). The ENGLISH values are also the FAQPage JSON-LD
+// of /join (src/app/join/sessionsSchema.ts reads them), so the structured data
+// always matches the text on the page. Every answer was checked against the
+// code on 6 Oct 2026; change an answer only when the product changes.
+export const createJoinTranslations = {
+  en: {
+    cj_join_title_lead: 'How Joining',
+    cj_join_title_accent: 'Works',
+    cj_join_q_account: 'Do I need an account to join?',
+    cj_join_a_account: 'No. For a committee room the session code is enough. At a conference, a seat reserved for you asks you to sign in first, so nobody else can take it.',
+    cj_join_q_code: 'Where do I find the session code?',
+    cj_join_a_code: 'Your chair shares it. It is on the chair\'s screen, usually with a QR code you can scan with your phone.',
+    cj_join_q_chair: 'How do chairs join?',
+    cj_join_a_chair: 'Choose Chair and enter the chair code: the session code followed by four digits. Chairs assigned to a conference committee join from their account without it.',
+    cj_join_q_phone: 'What can delegates do from their phone?',
+    cj_join_a_phone: 'See the speakers list and where they are in it, ask to speak, chat with the room, submit working papers and vote when the chair runs the vote on devices.',
+    cj_join_q_free: 'Is it free?',
+    cj_join_a_free: 'Yes. Running and joining a committee room on Gavelling is free.',
+    cj_join_q_lang: 'Which languages can I use?',
+    cj_join_a_lang: 'English, Spanish, French and Arabic. Pick yours from the language menu at the top of this page.',
+    cj_join_create_lead: 'Chairing your own committee?',
+    cj_join_create_link: 'Create a committee',
+  },
+  es: {
+    cj_join_title_lead: 'Cómo Unirse',
+    cj_join_title_accent: 'Paso a Paso',
+    cj_join_q_account: '¿Necesito una cuenta para unirme?',
+    cj_join_a_account: 'No. Para una sala de comité basta con el código de sesión. En una conferencia, un asiento reservado para ti te pide iniciar sesión primero, para que nadie más lo ocupe.',
+    cj_join_q_code: '¿Dónde encuentro el código de sesión?',
+    cj_join_a_code: 'Te lo da tu presidente. Está en la pantalla del presidente, normalmente con un código QR que puedes escanear con tu teléfono.',
+    cj_join_q_chair: '¿Cómo se unen los presidentes?',
+    cj_join_a_chair: 'Elige Director e introduce el código de presidente: el código de sesión seguido de cuatro dígitos. Los presidentes asignados a un comité de una conferencia entran desde su cuenta sin él.',
+    cj_join_q_phone: '¿Qué pueden hacer los delegados desde su teléfono?',
+    cj_join_a_phone: 'Ver la lista de oradores y su lugar en ella, pedir la palabra, chatear con la sala, enviar documentos de trabajo y votar cuando el presidente abre la votación en los dispositivos.',
+    cj_join_q_free: '¿Es gratis?',
+    cj_join_a_free: 'Sí. Dirigir una sala de comité en Gavelling y unirse a ella es gratis.',
+    cj_join_q_lang: '¿Qué idiomas puedo usar?',
+    cj_join_a_lang: 'Inglés, español, francés y árabe. Elige el tuyo en el menú de idioma en la parte superior de esta página.',
+    cj_join_create_lead: '¿Vas a moderar tu propio comité?',
+    cj_join_create_link: 'Crea un comité',
+  },
+  fr: {
+    cj_join_title_lead: 'Comment Rejoindre',
+    cj_join_title_accent: 'une Session',
+    cj_join_q_account: 'Faut-il un compte pour rejoindre ?',
+    cj_join_a_account: 'Non. Pour une salle de comité, le code de session suffit. Lors d’une conférence, un siège qui vous est réservé vous demande d’abord de vous connecter, pour que personne d’autre ne le prenne.',
+    cj_join_q_code: 'Où trouver le code de session ?',
+    cj_join_a_code: 'Votre président le partage. Il est affiché sur l’écran du président, souvent avec un QR code à scanner avec votre téléphone.',
+    cj_join_q_chair: 'Comment les présidents rejoignent-ils ?',
+    cj_join_a_chair: 'Choisissez Président et saisissez le code président : le code de session suivi de quatre chiffres. Les présidents assignés à un comité de conférence entrent depuis leur compte sans lui.',
+    cj_join_q_phone: 'Que peuvent faire les délégués depuis leur téléphone ?',
+    cj_join_a_phone: 'Voir la liste des orateurs et leur place, demander la parole, discuter avec la salle, soumettre des documents de travail et voter quand le président lance le vote sur les appareils.',
+    cj_join_q_free: 'Est-ce gratuit ?',
+    cj_join_a_free: 'Oui. Animer et rejoindre une salle de comité sur Gavelling est gratuit.',
+    cj_join_q_lang: 'Quelles langues puis-je utiliser ?',
+    cj_join_a_lang: 'Anglais, espagnol, français et arabe. Choisissez la vôtre dans le menu de langue en haut de cette page.',
+    cj_join_create_lead: 'Vous présidez votre propre comité ?',
+    cj_join_create_link: 'Créer un comité',
+  },
+  ar: {
+    cj_join_title_lead: 'كيف تنضم',
+    cj_join_title_accent: 'إلى الجلسة',
+    cj_join_q_account: 'هل أحتاج إلى حساب للانضمام؟',
+    cj_join_a_account: 'لا. لغرفة لجنة يكفي رمز الجلسة. في المؤتمرات، يطلب منك المقعد المحجوز لك تسجيل الدخول أولاً حتى لا يأخذه أحد غيرك.',
+    cj_join_q_code: 'أين أجد رمز الجلسة؟',
+    cj_join_a_code: 'يشاركه رئيس الجلسة. يظهر على شاشة الرئيس، وغالباً مع رمز QR يمكنك مسحه بهاتفك.',
+    cj_join_q_chair: 'كيف ينضم رؤساء الجلسة؟',
+    cj_join_a_chair: 'اختر رئيس وأدخل رمز الرئيس: رمز الجلسة متبوعاً بأربعة أرقام. رؤساء لجان المؤتمرات المعيّنون يدخلون من حسابهم دونه.',
+    cj_join_q_phone: 'ماذا يستطيع المندوبون فعله من هواتفهم؟',
+    cj_join_a_phone: 'رؤية قائمة المتحدثين وموقعهم فيها، وطلب الكلمة، والدردشة مع القاعة، وتقديم أوراق العمل، والتصويت عندما يفتح الرئيس التصويت على الأجهزة.',
+    cj_join_q_free: 'هل هو مجاني؟',
+    cj_join_a_free: 'نعم. إدارة غرفة لجنة على Gavelling والانضمام إليها مجانيان.',
+    cj_join_q_lang: 'ما اللغات المتاحة؟',
+    cj_join_a_lang: 'الإنجليزية والإسبانية والفرنسية والعربية. اختر لغتك من قائمة اللغة أعلى هذه الصفحة.',
+    cj_join_create_lead: 'هل تترأس لجنتك الخاصة؟',
+    cj_join_create_link: 'أنشئ لجنة',
+  },
+};

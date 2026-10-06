@@ -15,8 +15,9 @@
 // here rather than moving into the shared table:
 //   • the forest header bar with Download record (an .xlsx workbook) and ✕, and the strip of session
 //     figures under it;
-//   • the MANUAL plus / minus (`scoreboard/ManualAdjust`) — only the Moderator
-//     awards points, so it rides in the chair's own drill-in
+//   • the MANUAL plus / minus (`scoreboard/ManualAdjust`) — every chair, the
+//     Moderator AND a Commenter, awards points (Oct 2026; never once the session has
+//     ended, and never on the organiser's read-only board), so it rides in the chair's own drill-in
 //     (`scoreboard/DelegateProfile`, handed to the shared table through its
 //     `renderDetail` slot), with the chair's score cell (`renderScore`) and no
 //     notes column (`hideNotesColumn`): chair notes are not counted;
@@ -61,7 +62,7 @@ import HistoryTab from '@/components/scoreboard/HistoryTab';
 import { Committee } from '@/lib/types';
 import { getCountryDisplayName } from '@/lib/countries';
 import { useLanguage, useT } from '@/contexts/LanguageContext';
-import { buildSessionScoreboardRows, sessionPointSlices } from '@/lib/sessionScoreboard';
+import { buildSessionScoreboardRows, sessionPointSlices, manualAuthorIndex, isDocumentNote } from '@/lib/sessionScoreboard';
 import { buildSessionHistory, type HistorySpeech } from '@/lib/sessionHistory';
 import {
   formatSpeakingTime,
@@ -72,9 +73,10 @@ import { NoteEditingProvider } from '@/components/scoreboard/EditableNote';
 import { resolveChairAwardsHref } from '@/lib/sessionAwardsLink';
 import { Trophy, ListOrdered, Grid3x3, History, FileSpreadsheet } from 'lucide-react';
 
-export default function ScoreboardPanel({ committee, onClose, feedbackVersion = 0, isViewOnly = false, chairName = '' }: {
+export default function ScoreboardPanel({ committee, onClose, feedbackVersion = 0, chairName = '' }: {
   committee: Committee; onClose: () => void; feedbackVersion?: number;
-  /** A Commenter reads the board; only the Moderator awards and deducts points. */
+  /** Kept for the callers; no longer read. Since Oct 2026 a Commenter may adjust points
+   *  too, so nothing on this board depends on holding the gavel. */
   isViewOnly?: boolean;
   /** This device's chair name (`?chairName=`). Only comments written under it are editable. */
   chairName?: string;
@@ -220,7 +222,12 @@ export default function ScoreboardPanel({ committee, onClose, feedbackVersion = 
   // The session history, built once: the profile's timeline reads each speech,
   // with its chair notes already placed, from here, so the History tab and the
   // profile can never place a note differently.
-  const history = useMemo(() => buildSessionHistory(committee, feedback), [committee, feedback]);
+  // Notes written on a document introduction never belong to a speech (isDocumentNote):
+  // History only gets the rest, so they stay in the profile's "Other comments".
+  const speechFeedback = useMemo(() => feedback.filter((f) => !isDocumentNote(f)), [feedback]);
+  const history = useMemo(() => buildSessionHistory(committee, speechFeedback), [committee, speechFeedback]);
+  // Who awarded / deducted each manual row (the `by` field on the ledger JSON).
+  const manualAuthors = useMemo(() => manualAuthorIndex(committee), [committee]);
   const speechesByCountry = useMemo(() => {
     const out = new Map<string, HistorySpeech[]>();
     for (const seg of history) for (const sp of seg.speeches) {
@@ -261,14 +268,19 @@ export default function ScoreboardPanel({ committee, onClose, feedbackVersion = 
   );
 
   // Same write as the old Award / Deduct form: one manual ledger row, absolute
-  // value, the reason (now optional) as its note.
+  // value, the reason (now optional) as its note. Any chair may write it (Moderator or
+  // Commenter): both hold the chair suffix the insert goes through. The row also names
+  // the chair (`by`), an extra JSON field every ledger reader ignores; it is built as a
+  // variable rather than a literal because `logEvent`'s parameter type does not list it.
   const applyManual = (country: string, delta: number, reason: string) => {
-    if (!delta) return;
-    logEvent(committee.id, {
+    if (!delta || committee.endedAt) return;
+    const event = {
       country,
-      type: delta < 0 ? 'manual-deduct' : 'manual-award',
+      type: (delta < 0 ? 'manual-deduct' : 'manual-award') as 'manual-deduct' | 'manual-award',
       value: Math.abs(delta), ...(reason ? { note: reason } : {}),
-    }, committee.code, committee.dbChairJoinSuffix ?? undefined);
+      ...(chairName.trim() ? { by: chairName.trim() } : {}),
+    };
+    logEvent(committee.id, event, committee.code, committee.dbChairJoinSuffix ?? undefined);
   };
 
   // The whole session as one Excel workbook (src/lib/sessionRecordExport.ts): History,
@@ -440,7 +452,8 @@ export default function ScoreboardPanel({ committee, onClose, feedbackVersion = 
                       rankTotal={allRows.length}
                       slices={sessionPointSlices(committee, row.ledger, language, t('sb_breakdown_manual'))}
                       speeches={speechesByCountry.get(row.country) ?? []}
-                      extra={isViewOnly ? undefined : (
+                      manualAuthors={manualAuthors}
+                      extra={committee.endedAt ? undefined : (
                         <ManualAdjust key={row.key} onApply={(delta, reason) => applyManual(row.country, delta, reason)} />
                       )}
                     />
@@ -453,7 +466,7 @@ export default function ScoreboardPanel({ committee, onClose, feedbackVersion = 
 
             {tab === 'history' && (
               <div style={{ animation: 'sbFade 160ms ease-out' }}>
-                <HistoryTab committee={committee} feedback={feedback} />
+                <HistoryTab committee={committee} feedback={speechFeedback} manualAuthors={manualAuthors} />
               </div>
             )}
 

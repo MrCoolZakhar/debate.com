@@ -1,0 +1,54 @@
+// Keys for motion cards in MotionsModal (Oct 2026, the TY7ZZ3 / Asia WorldMUN fixes), kept in their own
+// file so several changes can land without colliding in translations.ts. Spread into
+// each locale there; every key must exist in all four locales.
+// Read by src/components/motions/MotionCard.tsx (one card format for every motion type).
+export const motionCardsTranslations = {
+  en: {
+    motion_card_total: 'Total',
+    motion_card_per_speaker: 'Per speaker',
+    motion_card_speakers: 'Speakers',
+    motion_card_order: 'Order',
+    motion_card_topic: 'Topic',
+    motion_card_raised_by: 'Raised by',
+    motion_card_no_proposer: 'No proposer',
+    motion_card_chair: 'Chair',
+    motion_card_rank: 'Rank {n}',
+    motion_card_last_short: 'The last speaker gets {n}s',
+  },
+  es: {
+    motion_card_total: 'Total',
+    motion_card_per_speaker: 'Por orador',
+    motion_card_speakers: 'Oradores',
+    motion_card_order: 'Orden',
+    motion_card_topic: 'Tema',
+    motion_card_raised_by: 'Propuesta por',
+    motion_card_no_proposer: 'Sin proponente',
+    motion_card_chair: 'Presidencia',
+    motion_card_rank: 'Puesto {n}',
+    motion_card_last_short: 'El último orador tiene {n} s',
+  },
+  fr: {
+    motion_card_total: 'Total',
+    motion_card_per_speaker: 'Par orateur',
+    motion_card_speakers: 'Orateurs',
+    motion_card_order: 'Ordre',
+    motion_card_topic: 'Sujet',
+    motion_card_raised_by: 'Proposée par',
+    motion_card_no_proposer: 'Sans proposant',
+    motion_card_chair: 'Présidence',
+    motion_card_rank: 'Rang {n}',
+    motion_card_last_short: 'Le dernier orateur a {n} s',
+  },
+  ar: {
+    motion_card_total: 'المجموع',
+    motion_card_per_speaker: 'لكل متحدث',
+    motion_card_speakers: 'المتحدثون',
+    motion_card_order: 'الترتيب',
+    motion_card_topic: 'الموضوع',
+    motion_card_raised_by: 'مقدَّم من',
+    motion_card_no_proposer: 'بدون مقدِّم',
+    motion_card_chair: 'الرئاسة',
+    motion_card_rank: 'المرتبة {n}',
+    motion_card_last_short: 'يحصل المتحدث الأخير على {n} ث',
+  },
+};

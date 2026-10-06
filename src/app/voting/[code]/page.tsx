@@ -32,7 +32,8 @@ import { chatUnreadTotal, mergeMessagesById } from '@/lib/chatConversations';
 import { loadChatReadCounts, saveChatReadCounts } from '@/lib/chatReadKey';
 import { serverNowIso } from '@/lib/serverClock';
 import { startSessionSync, rowFields } from '@/lib/sessionSync';
-import { getCommitteeByCodeWithRetry, setDelegateStatus as setDelegateStatusInDB, setDelegateStatusesBulk, setDelegateObserver as setDelegateObserverInDB, updateDocumentStatus as updateDocumentStatusInDB, saveCommitteeSettings, endDebate as endDebateInDB } from '@/lib/committeeService';
+import { overlayPendingRollCall } from '@/lib/pendingRollCall';
+import { getCommitteeByCodeWithRetry, resumePendingRollCall, setDelegateStatus as setDelegateStatusInDB, setDelegateStatusesBulk, setDelegateObserver as setDelegateObserverInDB, updateDocumentStatus as updateDocumentStatusInDB, saveCommitteeSettings, endDebate as endDebateInDB } from '@/lib/committeeService';
 import { useSettingsStore, DEFAULT_SETTINGS, impliedSettings, stripNonHydratedSettings, type CommitteeSettings } from '@/lib/settingsStore';
 import { supabase } from '@/lib/supabase';
 import { deriveGavelRole, getGavelDeviceId } from '@/lib/gavelDevice';
@@ -593,6 +594,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
   useEffect(() => {
     let cancelled = false;
     let unsubscribe: (() => void) | null = null;
+    let detachRollCall: (() => void) | undefined;
 
     /** Re-apply verdicts this screen already recorded. `persistResult` writes them
      *  optimistically; a refetch in flight when that write went out still carries
@@ -627,9 +629,13 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
       }
     };
 
+    // Offline resilience: roll-call presses this device has not saved yet (parked, or left by
+    // a reload while offline) are laid over every fetched roster (src/lib/pendingRollCall.ts).
+    // A no-op with the kill switch off.
     const absorb = (found: Committee) => {
-      setCommittee({ ...found, documents: withRecordedDocs(found.documents) });
-      absorbDelegates(found.delegates);
+      const delegates = overlayPendingRollCall(found.code, found.delegates);
+      setCommittee({ ...found, delegates, documents: withRecordedDocs(found.documents) });
+      absorbDelegates(delegates);
     };
 
     // Vote states: the DB wins, except where this device has written a newer seq that has
@@ -708,6 +714,18 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
         // real one — either way every chair holding the printed code is locked out.
         // It is written by the access-granted effect above rather than here, so the
         // standalone chair gate cannot be satisfied by this page's own write.
+        // Re-issue roll-call presses a reload left unsaved, BEFORE the roster is shown, so the
+        // overlay in `absorb` already carries them.
+        detachRollCall = resumePendingRollCall(found.code, found.dbChairJoinSuffix ?? undefined, {
+          onAdopted: () => {
+            const prev = committeeRef.current;
+            if (!prev || cancelled) return;
+            const delegates = overlayPendingRollCall(prev.code, prev.delegates);
+            if (delegates === prev.delegates) return;
+            setCommittee((p) => (p ? { ...p, delegates: overlayPendingRollCall(p.code, p.delegates) } : p));
+            absorbDelegates(delegates);
+          },
+        });
         absorb(found);
         await refetchVotes(found.id);
         if (cancelled) return;
@@ -749,7 +767,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
           switch (slice) {
             case 'row': setCommittee((prev) => (prev ? { ...prev, ...rowFields(data as Committee) } : prev)); return;
             case 'delegates': {
-              const delegates = data as Delegate[];
+              const delegates = overlayPendingRollCall(found.code, data as Delegate[]);
               setCommittee((prev) => (prev ? { ...prev, delegates } : prev));
               absorbDelegates(delegates);
               return;
@@ -764,10 +782,10 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
           }
         },
       });
-      unsubscribe = sync.stop;
+      unsubscribe = () => { detachRollCall?.(); sync.stop(); };
     }
     load();
-    return () => { cancelled = true; unsubscribe?.(); };
+    return () => { cancelled = true; detachRollCall?.(); unsubscribe?.(); };
   }, [code, loadAttempt]);
 
   // ── Observer write reconciliation ──────────────────────────────────────────

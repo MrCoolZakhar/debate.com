@@ -35,6 +35,7 @@ import {
   computeQualityScore,
   computeHeadline,
   getScoringConfig,
+  parseLedgerEvents,
 } from './scoring';
 import type { FeedbackEntry } from './committeeService';
 
@@ -181,4 +182,39 @@ export function sessionPointSlices(
     .filter(([, pts]) => pts !== 0)
     .map(([sourceId, pts]) => ({ sourceId, label: label(sourceId), pts }))
     .sort((a, b) => b.pts - a.pts);
+}
+
+// ── Who adjusted the points (Oct 2026) ─────────────────────────────────────
+// Every chair, Moderator and Commenter alike, may award or deduct points from the
+// scoreboard. The ledger row carries the chair's name as an extra `by` field in its
+// JSON (`ScoreboardPanel.applyManual`); `parseLogEvents` parses the whole object, so
+// the field rides along untouched and every other reader of the ledger ignores it.
+// Rows written before this, or by a chair with no `?chairName=`, have no author.
+// The key matches a ledger row (`LedgerRow`) and a History event alike: both carry
+// the event's own country, timestamp and type.
+export function manualAuthorKey(country: string, timestamp: string | undefined, type: string): string {
+  return `${country}|${timestamp ?? ''}|${type}`;
+}
+
+export function manualAuthorIndex(committee: Committee): Map<string, string> {
+  const out = new Map<string, string>();
+  for (const e of parseLedgerEvents(committee)) {
+    if (e.type !== 'manual-award' && e.type !== 'manual-deduct') continue;
+    const by = (e as { by?: unknown }).by;
+    if (typeof by === 'string' && by.trim()) out.set(manualAuthorKey(e.country, e.timestamp, e.type), by.trim());
+  }
+  return out;
+}
+
+// ── Notes that belong to a paper, not a speech (Oct 2026) ──────────────────
+// A chair note written during a document introduction is a `feedback` row whose
+// `speech_context` names the paper ('document', or a 'document…' / 'doc-…' key).
+// `buildSessionHistory` attaches a note with no matching speech signature to the
+// same delegation's nearest speech within ten minutes, by country alone, so such a
+// note would be filed under a speech it has nothing to do with. The chair's board
+// therefore hands History only the notes that can belong to a speech; the
+// document notes stay in the profile's "Other comments".
+export function isDocumentNote(f: Pick<FeedbackEntry, 'speechContext'>): boolean {
+  const c = (f.speechContext ?? '').trim().toLowerCase();
+  return c.startsWith('doc');
 }

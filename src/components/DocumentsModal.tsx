@@ -7,15 +7,17 @@ import { portalFrame } from '@/components/chat/chatTokens';
 import { useT, useLanguage } from '@/contexts/LanguageContext';
 import { useRouter } from 'next/navigation';
 import {
-  Ban, BadgeCheck, Check, CheckCheck, CircleDot, FileText, Minus, Plus, Presentation, Timer, Vote, X, type LucideIcon,
+  Ban, BadgeCheck, Check, CheckCheck, CircleDot, FileText, Minus, NotebookPen, Plus, Presentation, Timer, Vote, X, type LucideIcon,
 } from 'lucide-react';
 import PdfViewer, { PdfThumb, PDF_ZOOM_STEPS, stepPdfZoom, type PdfZoom } from '@/components/documents/PdfViewer';
 import StageTimerDevice from '@/components/documents/StageTimerDevice';
 import StageSwitcher from '@/components/documents/StageSwitcher';
 import ProceedingsSetup from '@/components/documents/ProceedingsSetup';
+import SponsorNotesView from '@/components/documents/SponsorNotesView';
+import { ADD_TIME_MAX_SECONDS } from '@/components/documents/StageAddTime';
 import { Committee, CommitteeDocument, DocIntroState, DocumentType, DocumentStatus } from '@/lib/types';
 import { requireDocApproval as readRequireDocApproval, updateDocumentFlow, deleteDocumentChecked, introRemainingNow } from '@/lib/documentFlow';
-import { serverNow } from '@/lib/serverClock';
+import { serverNow, serverNowIso } from '@/lib/serverClock';
 import { anchorBox } from '@/components/voting/anchorPosition';
 import { sponsorLabel } from '@/lib/committeeFlags';
 import { docName, docCount, docLimit, docLimitReached } from '@/lib/docNames';
@@ -469,7 +471,7 @@ function SubmitForm({ committee, type, onDone, onDocumentAdded }: {
 }
 
 // ── Doc Card ──────────────────────────────────────────────────────────────────
-function DocCard({ doc, committee, onRemove, onStartPresentation, requireApproval, onApprovalChange, isViewOnly }: {
+function DocCard({ doc, committee, onRemove, onStartPresentation, requireApproval, onApprovalChange, isViewOnly, onTakeNotes }: {
   doc: CommitteeDocument; committee: Committee;
   onRemove: (docId: string) => void;
   onStartPresentation: (doc: CommitteeDocument) => void;
@@ -478,6 +480,8 @@ function DocCard({ doc, committee, onRemove, onStartPresentation, requireApprova
   /** D-10: a Commenter sees the card but gets no approve / reject / introduce / delete.
    *  UI gate only (RULE 15), like every other isViewOnly. */
   isViewOnly: boolean;
+  /** A Commenter's way into the sponsor notes (SponsorNotesView). Omitted for the Moderator. */
+  onTakeNotes?: (doc: CommitteeDocument) => void;
 }) {
   const t = useT();
   const { language } = useLanguage();
@@ -637,6 +641,17 @@ function DocCard({ doc, committee, onRemove, onStartPresentation, requireApprova
             </button>
           )}
 
+          {/* Take notes: a Commenter cannot see the Moderator's introduction (its stage lives in
+              the Moderator's modal only), so this opens the paper with one note field per
+              sponsor. Offered whenever the paper names sponsors. */}
+          {onTakeNotes && doc.sponsors.length > 0 && (
+            <button type="button" onClick={() => onTakeNotes(doc)} title={t('dnotes_take_title')}
+              className="w-full flex items-center justify-center gap-2 bg-[#1B3828] hover:bg-[#2A5A3C] text-white py-2 rounded-lg font-bold text-sm transition-[background-color,transform] duration-150 active:scale-[0.96] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]/40 gv-lift">
+              <NotebookPen size={16} strokeWidth={2.2} aria-hidden />
+              {t('dnotes_take')}
+            </button>
+          )}
+
         </div>
       </div>
     </div>
@@ -649,8 +664,11 @@ function DocCard({ doc, committee, onRemove, onStartPresentation, requireApprova
  *  (17 Sep 2026). The chair page lifts that bar above the introduction while one is open. */
 const CHAIR_TOP_BAR_H = 44;
 
-export default function DocumentsModal({ committee, onClose, onCommitteeUpdate, isViewOnly = false, chairName = '', onIntroChange }: {
+export default function DocumentsModal({ committee, onClose, onCommitteeUpdate, isViewOnly = false, chairName = '', onIntroChange, feedbackVersion }: {
   committee: Committee; onClose: () => void;
+  /** The chair page's counter of `feedback` realtime events, so the sponsor notes pick up
+   *  another chair's note at once. Optional: the notes view also re-reads every 15 s. */
+  feedbackVersion?: number;
   /** Told when the full-screen introduction (setup or a timed stage) opens and closes, so the
    *  chair page can keep its top bar above it. Called with false on unmount. */
   onIntroChange?: (active: boolean) => void;
@@ -679,6 +697,17 @@ export default function DocumentsModal({ committee, onClose, onCommitteeUpdate, 
   const [stage, setStage] = useState<PresentationStage>(null);
   const [timings, setTimings] = useState({ reading: 0, presentation: 0, qa: 0 });
   const [clock, setClock] = useState<{ base: number; startedAt: string | null }>({ base: 0, startedAt: null });
+  /** Seconds added to the CURRENT stage with Add time. Part of the stage's total (so the
+   *  progress bar and Start / Resume read right), cleared on entering a stage and on Reset. */
+  const [stageExtra, setStageExtra] = useState(0);
+  /** The paper a Commenter is taking sponsor notes on (by id, re-read from the committee). */
+  const [notesDocId, setNotesDocId] = useState<string | null>(null);
+  const notesDoc = notesDocId ? ((committee.documents ?? []).find((d) => d.id === notesDocId) ?? null) : null;
+  /** A REAL Commenter: view-only with a name, and another NAME holds the gavel (the same rule
+   *  as the comment dock; a device view-only only because the same name moderates elsewhere
+   *  would write notes under the Moderator's own name). */
+  const gavelName = committee.dbHeadChair || committee.chairNames?.[0] || '';
+  const canTakeNotes = isViewOnly && !!chairName && gavelName !== chairName;
   /** Both belong to the introduction, not to a stage, so moving between Reading, Presentation
    *  and Q&A leaves the paper exactly as the chair set it. Zoom is remembered per device. */
   const [zoom, setZoomState] = useState<PdfZoom>(() => (typeof window === 'undefined' ? 'fit' : readZoom()));
@@ -694,7 +723,7 @@ export default function DocumentsModal({ committee, onClose, onCommitteeUpdate, 
   const [voteTip, setVoteTip] = useState<{ left: number; top: number } | null>(null);
   const voteBtnRef = useRef<HTMLButtonElement>(null);
   const voteTipRef = useRef<HTMLDivElement>(null);
-  const introActive = !!(activeDocSnap && stage);
+  const introActive = !!(activeDocSnap && stage) || !!notesDoc;
   const onIntroChangeRef = useRef(onIntroChange);
   useEffect(() => { onIntroChangeRef.current = onIntroChange; }, [onIntroChange]);
   useEffect(() => { onIntroChangeRef.current?.(introActive); }, [introActive]);
@@ -818,6 +847,7 @@ export default function DocumentsModal({ committee, onClose, onCommitteeUpdate, 
    *  there is no Resume from the card any more, so it is not persisted. */
   const enterStage = (s: TimedStage, tm = timings) => {
     setFinishAsk(false);
+    setStageExtra(0);
     setClock({ base: stageMinutes(s, tm) * 60, startedAt: null });
     setStage(s);
   };
@@ -841,7 +871,7 @@ export default function DocumentsModal({ committee, onClose, onCommitteeUpdate, 
       status: first || activeDoc.type !== 'working-paper' ? 'introduced' : 'passed',
       introState: null,
     });
-    if (first) { setClock({ base: tm[first] * 60, startedAt: null }); setStage(first); }
+    if (first) { setStageExtra(0); setClock({ base: tm[first] * 60, startedAt: null }); setStage(first); }
     else closeFlow();
   };
 
@@ -865,6 +895,28 @@ export default function DocumentsModal({ committee, onClose, onCommitteeUpdate, 
   const handleClockChange = (next: { base: number; startedAt: string | null }) => {
     if (!activeDoc || !stage || stage === 'setup') return;
     setClock(next);
+  };
+
+  /** Add time to the running stage (Moderator). RULE 6b: the clock is an anchor on the database
+   *  clock, so adding time is a NEW anchor: base = the live remaining + the seconds, re-stamped
+   *  with serverNowIso() when it runs, left paused when it is paused. One state change per
+   *  press, nothing per second, and nothing written to the database (the stage clock is this
+   *  screen's state only). A stage already at 0 starts counting again if its clock was running. */
+  const handleAddTime = (seconds: number) => {
+    if (!activeDoc || !stage || stage === 'setup' || isViewOnly || !(seconds > 0)) return;
+    const live = introRemainingNow(clock, serverNow());
+    const base = Math.min(live + seconds, ADD_TIME_MAX_SECONDS + 59);
+    const added = base - live;
+    if (added <= 0) return;
+    setClock({ base, startedAt: clock.startedAt ? serverNowIso() : null });
+    setStageExtra((e) => e + added);
+  };
+
+  /** Reset: back to the stage's own time, paused, and the added time forgotten. */
+  const handleResetStage = () => {
+    if (!stage || stage === 'setup') return;
+    setStageExtra(0);
+    setClock({ base: timings[stage] * 60, startedAt: null });
   };
 
   const handleSkipToVote = () => {
@@ -895,6 +947,22 @@ export default function DocumentsModal({ committee, onClose, onCommitteeUpdate, 
   // is over the introduction (Chat, Settings, Scoreboard handle their own Escape) or inside a
   // field.
   const introStage = activeDoc ? stage : null;
+  // The notes view: Escape outside a field goes back to the documents list (drafts are saved
+  // by the view on unmount). Never while a dialog is over it.
+  const notesOpen = !!notesDoc;
+  useEffect(() => {
+    if (!notesOpen) return;
+    const onKey = (e: globalThis.KeyboardEvent) => {
+      if (e.key !== 'Escape' || e.defaultPrevented) return;
+      const el = e.target as HTMLElement | null;
+      if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || el.isContentEditable)) return;
+      if (document.querySelector('[aria-modal="true"]')) return;
+      e.preventDefault();
+      setNotesDocId(null);
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [notesOpen]);
   useEffect(() => {
     if (!introStage) return;
     const onKey = (e: globalThis.KeyboardEvent) => {
@@ -1034,10 +1102,12 @@ export default function DocumentsModal({ committee, onClose, onCommitteeUpdate, 
           {(timerOpen || paperEmpty) && (
             <StageTimerDevice label={stageLabel}
               centred={paperEmpty}
-              totalSeconds={timings[stage] * 60}
+              totalSeconds={timings[stage] * 60 + stageExtra}
               sponsors={activeDoc.sponsors}
               sponsorsWord={sponsorLabel(committee, t('documents_sponsors_label_card'))}
               clock={clock} onClockChange={handleClockChange}
+              onAddTime={isViewOnly ? undefined : handleAddTime}
+              onReset={handleResetStage}
               onComplete={() => advanceFromStage(stage)}
               onBack={() => backFromStage(stage)}
               onHide={paperEmpty ? undefined : () => setTimerOpen(false)}
@@ -1045,6 +1115,28 @@ export default function DocumentsModal({ committee, onClose, onCommitteeUpdate, 
           )}
         </div>
     </>));
+  }
+
+  // A Commenter's sponsor notes (Oct 2026): the paper on top, one note field per sponsor below.
+  if (notesDoc) {
+    const paperEmpty = !notesDoc.fileUrl && !notesDoc.content;
+    return introFrame('#EDE7D8', (
+      <SponsorNotesView
+        committee={committee}
+        doc={notesDoc}
+        chairName={chairName}
+        readOnly={!!committee.endedAt}
+        feedbackVersion={feedbackVersion}
+        onBack={() => setNotesDocId(null)}
+        paper={paperEmpty
+          ? (
+            <div className="absolute inset-0 flex items-center justify-center px-8">
+              <p className="max-w-sm text-center text-sm" style={{ color: '#6A5A4A', textWrap: 'pretty' }}>{t('documents_no_content')}</p>
+            </div>
+          )
+          : <IntroDocument doc={notesDoc} zoom={zoom} onZoomChange={setZoom} />}
+      />
+    ));
   }
 
   // Timing setup screen: the order of proceedings (17 Sep 2026).
@@ -1108,7 +1200,8 @@ export default function DocumentsModal({ committee, onClose, onCommitteeUpdate, 
                     onRemove={handleRemove}
                     onStartPresentation={handleStartPresentation}
                     requireApproval={requireDocApproval} onApprovalChange={handleApprovalChange}
-                    isViewOnly={isViewOnly} />
+                    isViewOnly={isViewOnly}
+                    onTakeNotes={canTakeNotes ? (d) => setNotesDocId(d.id) : undefined} />
                 ))
               )}
               {!isViewOnly && (

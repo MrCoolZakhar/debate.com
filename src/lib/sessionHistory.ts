@@ -193,7 +193,10 @@ function attachNotes(speeches: HistorySpeech[], feedback: FeedbackEntry[]): void
   const notes = feedback
     // A note on a right of reply is attached to the reply (`attachReplyNotes`), never to a
     // speech of the same delegation.
-    .filter((f) => f.level === 'speech' && f.content.trim() && f.speechContext !== RTR_CONTEXT)
+    // A document-introduction note (context starting 'doc') belongs to a paper, never to a
+    // speech of its sponsor.
+    .filter((f) => f.level === 'speech' && f.content.trim() && f.speechContext !== RTR_CONTEXT
+      && !(f.speechContext ?? '').trim().toLowerCase().startsWith('doc'))
     .sort((a, b) => (a.createdAt || '').localeCompare(b.createdAt || ''));
 
   for (const f of notes) {

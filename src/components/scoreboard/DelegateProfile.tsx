@@ -47,7 +47,7 @@ import { SOFT, RED, CARD_BORDER_COLOR } from '@/components/scoreboardTokens';
 import { SeatCircleFlag } from '@/components/CircleFlag';
 import { getCountryDisplayName } from '@/lib/countries';
 import { formatSpeakingTime, type ScoreboardDelegateRow } from '@/lib/conferenceScoreboard';
-import type { PointSlice } from '@/lib/sessionScoreboard';
+import { manualAuthorKey, type PointSlice } from '@/lib/sessionScoreboard';
 import { speechKey, type HistorySpeech, type HistoryNote } from '@/lib/sessionHistory';
 import { useLanguage, useT } from '@/contexts/LanguageContext';
 import { eventIcon } from './SessionScoreboardParts';
@@ -80,7 +80,7 @@ type TimelineItem =
   | { kind: 'speech'; at: string; speech: HistorySpeech; pts: number | null }
   | { kind: 'event'; at: string; row: ScoreboardDelegateRow['ledger'][number] };
 
-export default function DelegateProfile({ row, rank, rankTotal, slices, speeches, extra }: {
+export default function DelegateProfile({ row, rank, rankTotal, slices, speeches, manualAuthors, extra }: {
   row: ScoreboardDelegateRow;
   /** 1-based place by score among `rankTotal` delegations (ties share a place). */
   rank: number;
@@ -89,7 +89,11 @@ export default function DelegateProfile({ row, rank, rankTotal, slices, speeches
   slices: PointSlice[];
   /** This delegation's speeches from `buildSessionHistory`, notes already attached. */
   speeches: HistorySpeech[];
-  /** The Moderator's plus / minus. Absent for a Commenter. */
+  /** Who made each manual award / deduction (`manualAuthorIndex`). Optional: the
+   *  organiser board passes none and shows the rows without an author. */
+  manualAuthors?: Map<string, string>;
+  /** The chairs' plus / minus (Moderator and Commenter). Absent on the organiser board
+   *  and once the session has ended. */
   extra?: React.ReactNode;
 }) {
   const t = useT();
@@ -152,7 +156,9 @@ export default function DelegateProfile({ row, rank, rankTotal, slices, speeches
 
   const eventTitle = (r: ScoreboardDelegateRow['ledger'][number]): string => {
     if (r.type === 'manual-award' || r.type === 'manual-deduct') {
-      const base = r.type === 'manual-award' ? t('sb_hist_award') : t('sb_hist_deduct');
+      const action = r.type === 'manual-award' ? t('sb_hist_award') : t('sb_hist_deduct');
+      const by = manualAuthors?.get(manualAuthorKey(r.country, r.timestamp, r.type));
+      const base = by ? t('sb_adjust_by').replace('{action}', action).replace('{name}', by) : action;
       return r.detail ? `${r.detail} · ${base}` : base.charAt(0).toLocaleUpperCase(language) + base.slice(1);
     }
     if (r.type === 'wp' || r.type === 'dr' || r.type === 'drPassed' || r.type === 'motion-raised' || r.type === 'motion-passed') return r.detail ? `${r.label} · ${r.detail}` : r.label;

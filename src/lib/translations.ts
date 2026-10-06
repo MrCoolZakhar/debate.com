@@ -1,6 +1,12 @@
 import { advisorBoardTranslations } from './translationsAdvisorBoard';
 import { advisorRoomTranslations } from './translationsAdvisorRoom';
 import { advisorConfTranslations } from './translationsAdvisorConf';
+import { commentDockTranslations } from './translationsCommentDock';
+import { docIntroTranslations } from './translationsDocIntro';
+import { motionCardsTranslations } from './translationsMotionCards';
+import { scoreAdjustTranslations } from './translationsScoreAdjust';
+import { floorToolsTranslations } from './translationsFloorTools';
+import { createJoinTranslations } from './translationsCreateJoin';
 
 export type Language = 'en' | 'es' | 'fr' | 'ar';
 
@@ -9,6 +15,12 @@ export const translations = {
     ...advisorBoardTranslations.en,
     ...advisorRoomTranslations.en,
     ...advisorConfTranslations.en,
+    ...commentDockTranslations.en,
+    ...docIntroTranslations.en,
+    ...motionCardsTranslations.en,
+    ...scoreAdjustTranslations.en,
+    ...floorToolsTranslations.en,
+    ...createJoinTranslations.en,
     // --- session surfaces, added 17 Sep 2026 (tutorial + translations pass) ---
     session_loading: 'LOADING…',
     session_signin_title: 'Sign in to join this session',
@@ -1687,6 +1699,12 @@ export const translations = {
     ...advisorBoardTranslations.es,
     ...advisorRoomTranslations.es,
     ...advisorConfTranslations.es,
+    ...commentDockTranslations.es,
+    ...docIntroTranslations.es,
+    ...motionCardsTranslations.es,
+    ...scoreAdjustTranslations.es,
+    ...floorToolsTranslations.es,
+    ...createJoinTranslations.es,
     // --- session surfaces, added 17 Sep 2026 (tutorial + translations pass) ---
     session_loading: 'CARGANDO…',
     session_signin_title: 'Inicia sesión para entrar a esta sesión',
@@ -3362,6 +3380,12 @@ export const translations = {
     ...advisorBoardTranslations.fr,
     ...advisorRoomTranslations.fr,
     ...advisorConfTranslations.fr,
+    ...commentDockTranslations.fr,
+    ...docIntroTranslations.fr,
+    ...motionCardsTranslations.fr,
+    ...scoreAdjustTranslations.fr,
+    ...floorToolsTranslations.fr,
+    ...createJoinTranslations.fr,
     // --- session surfaces, added 17 Sep 2026 (tutorial + translations pass) ---
     session_loading: 'CHARGEMENT…',
     session_signin_title: 'Connectez-vous pour rejoindre cette session',
@@ -5037,6 +5061,12 @@ export const translations = {
     ...advisorBoardTranslations.ar,
     ...advisorRoomTranslations.ar,
     ...advisorConfTranslations.ar,
+    ...commentDockTranslations.ar,
+    ...docIntroTranslations.ar,
+    ...motionCardsTranslations.ar,
+    ...scoreAdjustTranslations.ar,
+    ...floorToolsTranslations.ar,
+    ...createJoinTranslations.ar,
     // --- session surfaces, added 17 Sep 2026 (tutorial + translations pass) ---
     session_loading: 'جارٍ التحميل…',
     session_signin_title: 'سجّل الدخول للانضمام إلى هذه الجلسة',

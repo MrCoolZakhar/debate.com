@@ -547,6 +547,7 @@ export const COMMENT_LEVEL_LABEL: Record<FeedbackLevel, string> = {
   speech: 'Speech note',
   session: 'Session recap',
   conference: 'Conference recap',
+  document: 'Document note',
 };
 
 /** The label a note's speaking context reads as. English defaults, for the same

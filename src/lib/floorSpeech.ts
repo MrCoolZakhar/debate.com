@@ -154,6 +154,10 @@ export async function logTimedSpeech(
 ): Promise<boolean> {
   const seconds = Math.max(0, Math.round(e.seconds));
   if (!e.country || seconds <= 0) return false;
+  // The only timed speech in an unmoderated caucus is a Consultation of the Whole floor holder
+  // (item 11): a plain unmoderated caucus has no floor and must never credit anyone.
+  if (e.context === 'unmoderated-caucus'
+    && (committee.caucus?.isConsultation !== true || !e.turnKey.includes('|cow:'))) return false;
   const now = serverNow();
   if (alreadyLogged(committee, e.turnKey)) return true;
   loggedTurnKeys.add(e.turnKey);
@@ -169,6 +173,13 @@ export async function logFloorSpeech(committee: Committee, clock?: FloorClock, p
   const speaker = committee.currentSpeaker;
   if (!speaker?.country) return false;
   if (isRoomOrderSpeaker(committee)) return false;
+  // An unmoderated caucus / Consultation of the Whole has NO current_speaker floor (item 11).
+  // The GSL speaker it interrupted was logged at accept, from the committee as it was BEFORE
+  // the accept (phase speakers-list). A current speaker seen while the room is in an
+  // unmoderated caucus is a stale row (a clear that had not landed yet, read back by a
+  // catch-up), and logging it would credit wall time nobody spoke. The Consultation floor
+  // holder is logged by `logTimedSpeech` (cowTurnKey), never here.
+  if (committee.phase === 'unmoderated-caucus') return false;
   // Offline resilience: was (or becomes, while the read waits) a current_speaker write of this
   // room stalled? Then the persisted anchor may not hold what the Moderator pressed: a Start
   // parked offline lands a minute later and a read-back behind it would log the whole slot.

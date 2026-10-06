@@ -80,7 +80,7 @@ const PRIVATE_ROUTES = [
 ];
 
 // Pages that MUST stay indexable even though their parameterised forms are not.
-const MUST_INDEX = ['/', '/join', '/create', '/blog', '/conferences/explore'];
+const MUST_INDEX = ['/', '/join', '/create', '/create/sessions', '/blog', '/conferences/explore'];
 
 // Indexable pages that are deliberately NOT in the sitemap (no warning):
 // personal CVs (people, not landing pages) and per-conference reviews tabs

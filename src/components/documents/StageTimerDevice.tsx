@@ -36,6 +36,7 @@ import { SeatCircleFlag } from '@/components/CircleFlag';
 import { getCountryDisplayName } from '@/lib/countries';
 import { serverNow, serverNowIso } from '@/lib/serverClock';
 import { introRemainingNow } from '@/lib/documentFlow';
+import { AddTimeChips, AddTimeKey } from '@/components/documents/StageAddTime';
 
 type Box = { x: number; y: number; w: number; h: number };
 type Edge = 'n' | 's' | 'e' | 'w' | 'ne' | 'nw' | 'se' | 'sw';
@@ -140,7 +141,7 @@ function Key({ size, width, primary = false, label, onClick, children, text, tex
 
 export default function StageTimerDevice({
   label, totalSeconds, sponsors, sponsorsWord, clock, onClockChange, onComplete, onBack, onHide, onTimings,
-  centred = false,
+  centred = false, onAddTime, onReset,
 }: {
   label: string; totalSeconds: number;
   /** The paper's sponsors (country names), drawn as round flags in the header. */
@@ -157,6 +158,12 @@ export default function StageTimerDevice({
   /** Fill the introduction's floor instead of floating over the paper (a paper with no file and
    *  no text). Not movable, not resizable, not remembered, cannot be hidden. */
   centred?: boolean;
+  /** Add seconds to this stage (Moderator only; the modal re-anchors the clock). Omitted = no
+   *  add-time controls. Shown as +30 s / +1 min / Custom keys when the card has room, else as
+   *  one ClockPlus key in the header that opens the same choices. */
+  onAddTime?: (seconds: number) => void;
+  /** Reset to the stage's own time. Defaults to `totalSeconds`, paused. */
+  onReset?: () => void;
 }) {
   const t = useT();
   const { language } = useLanguage();
@@ -276,23 +283,28 @@ export default function StageTimerDevice({
   };
   const digitsRef = useRef<HTMLSpanElement>(null);
   const labelsRef = useRef<HTMLSpanElement>(null);
-  const [metrics, setMetrics] = useState<{ digits: number; label: number } | null>(null);
-  const labelKey = `${labels.start}|${labels.resume}|${labels.pause}|${labels.cont}`;
+  const [metrics, setMetrics] = useState<{ digits: number; label: number; chips: number } | null>(null);
+  const chipLabels = [t('dtime_30'), t('dtime_60'), t('dtime_custom')];
+  const chipsRef = useRef<HTMLSpanElement>(null);
+  const labelKey = `${labels.start}|${labels.resume}|${labels.pause}|${labels.cont}|${chipLabels.join('|')}`;
   useLayoutEffect(() => {
     const measure = () => {
       const d = digitsRef.current?.getBoundingClientRect().width ?? 0;
       const spans = labelsRef.current ? Array.from(labelsRef.current.children) as HTMLElement[] : [];
       const l = Math.max(0, ...spans.map((el) => el.getBoundingClientRect().width));
+      const chipSpans = chipsRef.current ? Array.from(chipsRef.current.children) as HTMLElement[] : [];
+      const c = chipSpans.reduce((sum, el) => sum + el.getBoundingClientRect().width, 0);
       const scale = space().scale || 1;
       if (d > 0) setMetrics((m) => {
-        const next = { digits: d / scale, label: l / scale };
-        return m && Math.abs(m.digits - next.digits) < 0.5 && Math.abs(m.label - next.label) < 0.5 ? m : next;
+        const next = { digits: d / scale, label: l / scale, chips: c / scale };
+        return m && Math.abs(m.digits - next.digits) < 0.5 && Math.abs(m.label - next.label) < 0.5 && Math.abs(m.chips - next.chips) < 0.5 ? m : next;
       });
     };
     measure();
     const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(measure) : null;
     if (digitsRef.current) ro?.observe(digitsRef.current);
     labelsRef.current?.childNodes.forEach((n) => ro?.observe(n as Element));
+    chipsRef.current?.childNodes.forEach((n) => ro?.observe(n as Element));
     let alive = true;
     void document.fonts?.ready.then(() => { if (alive) measure(); });
     return () => { alive = false; ro?.disconnect(); };
@@ -300,6 +312,8 @@ export default function StageTimerDevice({
   // Fallbacks until measured: Outfit's tabular "88:88" is about 2.6 em wide.
   const digitsPerPx = (metrics?.digits ?? 262) / MEASURE_PX;
   const labelPerPx = (metrics?.label ?? 330) / MEASURE_PX;
+  // The three add-time labels together, at 1 px ("+30 s" "+1 min" "Custom" is about 9 em).
+  const chipsPerPx = (metrics?.chips ?? 900) / MEASURE_PX;
 
   // ── Layout from the box (or, centred, from the floor it was given) ──
   const w = centred ? Math.max(DEVICE_MIN_W, Math.min(area?.w ?? DEF_W, CENTRED_MAX_W)) : (box?.w ?? DEF_W);
@@ -346,7 +360,17 @@ export default function StageTimerDevice({
     const avail = row ? innerW - keysWidth(c) - gap : innerW - keysWidth(c);
     if (row ? avail / digitsPerPx >= rowDigitsMin : avail >= 0) { chosen = c; break; }
   }
-  const digitsH = row ? rowH : h - 2 * pad - headH - keySize - barH - 3 * gap;
+  const stackedDigitsH = h - 2 * pad - headH - keySize - barH - 3 * gap;
+  // Add time as its own row of keys (+30 s, +1 min, Custom) only in a stacked card with room to
+  // spare: the row must fit the width by measurement and leave the clock at least 56 px tall.
+  // Otherwise it folds into ONE header key (ClockPlus) that opens the same choices in a popover,
+  // so adding time is reachable at every size, down to 176 x 64.
+  const chipH = Math.round(clampN(keySize * 0.62, 24, centred ? 44 : 34));
+  const chipText = Math.round(clampN(chipH * 0.42, 11, centred ? 17 : 14) * 2) / 2;
+  const chipsW = Math.ceil(chipsPerPx * chipText + 3 * 2 * Math.round(chipH * 0.45) + Math.round(chipH * 0.55) + 3 * keyGap + 4);
+  const showChips = !!onAddTime && !row && chipsW <= innerW && stackedDigitsH - chipH - gap >= 56;
+  const headAddKey = !!onAddTime && !showChips;
+  const digitsH = row ? rowH : stackedDigitsH - (showChips ? chipH + gap : 0);
   const digitsFont = Math.max(12, Math.floor(row
     ? Math.min(rowDigitsCap, (innerW - keysWidth(chosen) - gap) / digitsPerPx)
     : Math.min(digitsH * 1.1, (innerW * 0.92) / digitsPerPx, centred ? 460 : 220)));
@@ -357,7 +381,7 @@ export default function StageTimerDevice({
   const flagSize = Math.round(clampN(headH * 0.92, 16, 28));
   const flagStep = Math.round(flagSize * 0.74);
   // Header keys at the inline end: Timings (when offered) and Hide (floating only).
-  const headKeys = (onTimings ? 1 : 0) + (centred || !onHide ? 0 : 1);
+  const headKeys = (onTimings ? 1 : 0) + (centred || !onHide ? 0 : 1) + (headAddKey ? 1 : 0);
   const flagRoom = innerW - hideW * headKeys - 96 - 8;
   let flagSlots = headH >= 16 && flagRoom >= flagSize ? Math.floor((flagRoom - flagSize) / flagStep) + 1 : 0;
   flagSlots = Math.min(flagSlots, 5);
@@ -373,7 +397,8 @@ export default function StageTimerDevice({
   };
 
   const digitColor = done ? DONE : running || !started ? INK : INK_SOFT;
-  const fraction = totalSeconds > 0 ? remaining / totalSeconds : 0;
+  const fraction = totalSeconds > 0 ? Math.min(1, remaining / totalSeconds) : 0;
+  const [addOpen, setAddOpen] = useState(false);
 
   const keys = (
     <div className="flex items-center shrink-0" style={{ gap: keyGap }}>
@@ -383,7 +408,7 @@ export default function StageTimerDevice({
         </Key>
       )}
       {chosen.reset && (
-        <Key size={keySize} width={keySize} textSize={textSize} label={t('documents_timer_reset_title')} onClick={() => onClockChange({ base: totalSeconds, startedAt: null })}>
+        <Key size={keySize} width={keySize} textSize={textSize} label={t('documents_timer_reset_title')} onClick={() => (onReset ? onReset() : onClockChange({ base: totalSeconds, startedAt: null }))}>
           <RotateCcw size={iconPx - 2} strokeWidth={2.2} aria-hidden />
         </Key>
       )}
@@ -468,6 +493,11 @@ export default function StageTimerDevice({
             <span key={i} className="inline-block font-semibold" style={{ fontSize: MEASURE_PX, fontFamily: OUTFIT }}>{l}</span>
           ))}
         </span>
+        <span ref={chipsRef}>
+          {chipLabels.map((l, i) => (
+            <span key={i} className="inline-block font-semibold" style={{ fontSize: MEASURE_PX, fontFamily: OUTFIT }}>{l}</span>
+          ))}
+        </span>
       </span>
 
       {/* Header: status dot, stage, sponsors, hide. Focus the label and use the Arrow keys to move the timer. */}
@@ -509,6 +539,9 @@ export default function StageTimerDevice({
             )}
           </span>
         )}
+        {headAddKey && onAddTime && (
+          <AddTimeKey size={hideW} iconPx={clampN(headH * 0.6, 12, 16)} onAdd={onAddTime} open={addOpen} onOpenChange={setAddOpen} />
+        )}
         {onTimings && (
           <button type="button" data-device-key onClick={onTimings}
             aria-label={t('documents_switch_timings_title')} title={t('documents_switch_timings_title')}
@@ -542,6 +575,9 @@ export default function StageTimerDevice({
         <>
           {digits}
           {bar}
+          {showChips && onAddTime && (
+            <AddTimeChips height={chipH} textSize={chipText} gap={keyGap} onAdd={onAddTime} popoverOpen={addOpen} onPopoverChange={setAddOpen} />
+          )}
           <div className="flex justify-center shrink-0">{keys}</div>
         </>
       )}

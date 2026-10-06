@@ -1540,7 +1540,7 @@ export default function JoinPage() {
         <h1 style={{ fontFamily: OUTFIT, fontSize: 22, fontWeight: 800, color: C.ink, margin: 0 }}>Join a MUN session</h1>
         <p style={{ fontFamily: OUTFIT, fontSize: 14, lineHeight: 1.55, color: C.inkSoft, maxWidth: '34em', margin: 0 }}>
           Enter the session code your chair shares to join a Model UN committee on Gavelling. Delegates pick
-          their seat and follow the speakers list, raise motions, submit papers and vote from their own phone.
+          their seat and follow the speakers list, ask to speak, chat, submit papers and vote from their own phone.
           Chairs use the chair code to run the room, and faculty advisors can follow their students.
         </p>
       </div>

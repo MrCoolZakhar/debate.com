@@ -272,7 +272,8 @@ export function DelegateDetail({ row, summary = false, extra, labels = DEFAULT_S
   const levelLabel = (c: ScoreboardComment) =>
     c.level === 'session' ? labels.commentLevelSession
       : c.level === 'conference' ? labels.commentLevelConference
-        : labels.commentLevelSpeech;
+        : c.level === 'document' ? COMMENT_LEVEL_LABEL.document
+          : labels.commentLevelSpeech;
 
   // A speech note leads with WHERE it was given; anything else leads with what
   // kind of note it is. An unknown context falls back to the stored value rather

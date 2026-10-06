@@ -61,6 +61,7 @@ const ROUTES = [
   { path: '/privacy' },
   { path: '/terms' },
   { path: '/create' },
+  { path: '/create/sessions' },
   { path: '/join' },
   { path: '/conferences/explore' },
   { path: '/conferences/roles' },

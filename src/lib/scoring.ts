@@ -28,6 +28,8 @@ export interface LedgerEvent {
   outcome?: string;
   /** motion-edited: the id this motion had before the edit or Undo re-raised it. */
   prevMotionId?: string;
+  /** manual-award / manual-deduct: the chair who made the adjustment (display only). */
+  by?: string;
 }
 
 export interface LedgerRow {

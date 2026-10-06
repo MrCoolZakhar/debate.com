@@ -1,5 +1,7 @@
 import type { Metadata } from 'next';
 import { pageMetadata } from '@/lib/seo';
+import JoinGuide from './JoinGuide';
+import { JOIN_SCHEMAS, jsonLd } from './sessionsSchema';
 
 // page.tsx in this segment is 'use client' (code entry, chair password, role
 // picker), so metadata cannot live there — Next reads it only from a Server
@@ -17,7 +19,7 @@ import { pageMetadata } from '@/lib/seo';
 export const metadata: Metadata = pageMetadata({
   title: 'Join a MUN Session',
   description:
-    'Enter your session code to join your Model UN committee as a delegate, chair or faculty advisor. See the speakers list, raise motions and vote from your own device.',
+    'Enter your session code to join your Model UN committee as a delegate, chair or faculty advisor. Follow the speakers list, ask to speak, chat and vote from your own phone. Free.',
   path: '/join',
   keywords: [
     'join MUN committee',
@@ -28,6 +30,19 @@ export const metadata: Metadata = pageMetadata({
   ],
 });
 
+// The page itself (a client component) renders the h1: in the raw HTML it is the
+// Suspense fallback's h1 and sentence (useSearchParams keeps the form
+// client-side). Below it, JoinGuide adds a short visible "How Joining Works"
+// section, and the JSON-LD (WebApplication, FAQPage built from that section's
+// English text, BreadcrumbList) is in the raw HTML too (item 17, Oct 2026).
 export default function JoinLayout({ children }: { children: React.ReactNode }) {
-  return children;
+  return (
+    <>
+      {JOIN_SCHEMAS.map((schema, i) => (
+        <script key={i} type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLd(schema) }} />
+      ))}
+      {children}
+      <JoinGuide />
+    </>
+  );
 }

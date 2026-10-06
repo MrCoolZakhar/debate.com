@@ -7,10 +7,7 @@ import GrowDialog from '@/components/GrowDialog';
 import { portalFrame } from '@/components/chat/chatTokens';
 import { useT, useLanguage } from '@/contexts/LanguageContext';
 import { Committee, PendingMotion, PendingMotionType } from '@/lib/types';
-import { getCountryByName, getCountryDisplayName, compareCountryNames, matchesCountryQuery, startsWithCountryQuery } from '@/lib/countries';
-import { SeatFlag } from '@/components/SeatFlag';
-
-const SQUARE_FLAGS = new Set(['CH', 'NP']);
+import { getCountryDisplayName, compareCountryNames, matchesCountryQuery, startsWithCountryQuery } from '@/lib/countries';
 import { Emoji } from '@/components/Emoji';
 import { useSettingsStore, DEFAULT_MOTION_NAMES, MotionNames } from '@/lib/settingsStore';
 import { logFloorSpeech, creditRoomOrderTour, type FloorClock } from '@/lib/floorSpeech';
@@ -32,7 +29,8 @@ import {
 import { logMotionRaised, logMotionPassed, logMotionFailed, logMotionEdited } from '@/lib/motionLog';
 import { OFFLINE_RESILIENCE } from '@/lib/offlineResilience';
 import { serverNow, serverNowIso } from '@/lib/serverClock';
-import { UnknownSeatIcon } from '@/components/UnknownSeatIcon';
+import { MotionSummary, MotionRankBadge, MOTION_SOFT } from '@/components/motions/MotionCard';
+import { SeatCircleFlag } from '@/components/CircleFlag';
 
 type ModalView = 'list' | 'raise' | 'vote';
 type TypeMeta = Record<PendingMotionType, { icon: string; label: string; sub: string }>;
@@ -82,9 +80,6 @@ const customNamePlaceholder = (language: string) =>
   : language === 'fr' ? "ex. Point d'ordre sur l'ordre du vote"
   : language === 'es' ? 'ej. Cuestión de orden sobre el orden de votación'
   : 'e.g. Point of order on the voting order';
-
-const noProposerLabel = (language: string) =>
-  language === 'ar' ? 'بدون مقدِّم' : language === 'fr' ? 'Sans proposant' : language === 'es' ? 'Sin proponente' : 'No proposer';
 
 /** Accepting a Custom motion only takes it off the floor, so the button says so. */
 const clearFromFloorLabel = (language: string) =>
@@ -136,18 +131,20 @@ function DisruptivenessBadge({ type }: { type: PendingMotionType }) {
     unmoderated: t('motions_badge_disruptive'), moderated: t('motions_badge_least'),
     custom: '',
   };
+  // Every text at least 4.5:1 on its tint over the ivory row (Oct 2026: gold #B6871F / #B8844A
+  // text was ~3:1, and the moderated badge drew gold on pale green).
   const colors: Record<PendingMotionType, string> = {
-    'end-debate': 'bg-[#8B2020]/20 text-[#8B2020] border-[#8B2020]/40',
-    'suspend-debate': 'bg-[#B8844A]/15 text-[#B8844A] border-orange-800/40',
-    consultation: 'bg-[#8B2020]/20 text-[#8B2020] border-[#8B2020]/40',
-    tour: 'bg-[#B8844A]/15 text-[#B8844A] border-orange-800/40',
-    unmoderated: 'bg-[#B6871F]/10 text-[#B6871F] border-[#B6871F]/30',
-    moderated: 'bg-[#1B3828]/30 text-[#EED98A] border-[#1B3828]/40',
-    custom: 'bg-[#9A8A78]/12 text-[#6A5A4A] border-[#C5B9A8]',
+    'end-debate': 'bg-[#8B2020]/10 text-[#7A1C1C] border-[#8B2020]/40',
+    'suspend-debate': 'bg-[#B8844A]/15 text-[#6B3E10] border-[#B8844A]/50',
+    consultation: 'bg-[#8B2020]/10 text-[#7A1C1C] border-[#8B2020]/40',
+    tour: 'bg-[#B8844A]/15 text-[#6B3E10] border-[#B8844A]/50',
+    unmoderated: 'bg-[#B6871F]/12 text-[#6B4C0E] border-[#B6871F]/40',
+    moderated: 'bg-[#1B3828]/10 text-[#1B3828] border-[#1B3828]/30',
+    custom: 'bg-[#9A8A78]/12 text-[#4A3C30] border-[#9A8A78]',
   };
   // A Custom motion carries no badge: it has no place in the disruptiveness ranking.
   if (!labels[type]) return null;
-  return <span className={`text-xs px-2 py-0.5 rounded-full border font-medium ${colors[type]}`}>{labels[type]}</span>;
+  return <span className={`inline-block text-[13px] px-2.5 py-0.5 rounded-full border font-bold ${colors[type]}`}>{labels[type]}</span>;
 }
 
 /** Informational "i" affordance. Opens on HOVER and on FOCUS (never on click),
@@ -312,7 +309,7 @@ function ProposerInput({ candidates, value, onChange, blockedCountries, optional
         <div className="flex items-center gap-3 bg-[#1B3828]/10 border-2 border-[#3D7A52]/40 rounded-xl px-4 py-3">
           {value === CHAIR_KEY
             ? <span className="text-lg leading-none">🪑</span>
-            : <SeatFlag country={value} style={{ width: 28, height: 20, borderRadius: '6px', border: '1.5px solid rgba(28,20,16,0.10)', objectFit: 'cover' }} className="inline-block" fallback={null} />}
+            : <SeatCircleFlag country={value} size={28} decorative fallback="initials" />}
           <span className="text-sm text-[#1C1410] flex-1 font-semibold">{dName(value)}</span>
           <button onClick={() => { setOpen(true); setQuery(''); onChange(''); inputRef.current?.focus(); }} className="text-xs font-bold transition-colors focus:outline-none" style={{ color: '#2A5A3C' }}>{t('motions_change')}</button>
         </div>
@@ -350,7 +347,7 @@ function ProposerInput({ candidates, value, onChange, blockedCountries, optional
                   }`}>
                   {isChair
                     ? <span className="text-base leading-none">🪑</span>
-                    : <SeatFlag country={country} size={20} className="object-contain inline-block" fallback={<UnknownSeatIcon size={20} />} />}
+                    : <SeatCircleFlag country={country} size={24} decorative fallback="initials" />}
                   <span className="text-sm flex-1">{dName(country)}</span>
                   {isBlocked
                     ? <span className="text-xs text-[#B8844A] shrink-0 font-semibold">{t('motions_motion_on_floor')}</span>
@@ -504,8 +501,9 @@ function RaiseMotionForm({ committee, typeMeta, onBack, onRaised, editingMotion,
 
         {type && (
           <>
-            {/* Tour de Table & Consultation, optional topic at the very top */}
-            {(type === 'tour' || type === 'consultation') && (
+            {/* Tour de Table, Consultation and Unmoderated: optional topic at the very top. The
+                unmoderated accept already stores motion.topic as caucus.purpose. */}
+            {(type === 'tour' || type === 'consultation' || type === 'unmoderated') && (
               <div>
                 <label className="block text-lg font-semibold text-[#6A5A4A] mb-2">
                   {t('motions_topic_label')} <span className="text-[#9A8A78] text-sm font-normal">({t('motions_optional')})</span>
@@ -836,7 +834,7 @@ function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBa
             {t('motions_raise_motion_btn')}
           </button>
         )}
-        <button onClick={onAllDone} className="mt-4 text-sm text-[#B6871F] hover:text-[#EED98A]">{t('motions_back')}</button>
+        <button onClick={onAllDone} className="mt-4 text-sm font-bold underline underline-offset-2 text-[#6B4C0E] hover:text-[#1B3828]">{t('motions_back')}</button>
       </div>
     );
   }
@@ -854,14 +852,7 @@ function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBa
       return null;
     }
     const { needed, fraction } = requiredVotes(m.type, present);
-    const totalMins = Math.floor(m.totalTime / 60);
-    const totalSecs = m.totalTime % 60;
-    const speakMins = Math.floor(m.speakingTime / 60);
-    const speakSecs = m.speakingTime % 60;
-    const fmtTime = (mins: number, secs: number) =>
-      mins > 0 ? (secs > 0 ? `${mins}m ${secs}s` : `${mins}m`) : `${secs}s`;
     const isPrimary = idx === 0;
-    const f = m.proposedBy ? getCountryByName(m.proposedBy) : null;
     const isCustom = m.type === 'custom';
     // A Custom motion titles itself with its own free-text name.
     const cardLabel = motionDisplayLabel(m, typeMeta, language);
@@ -888,114 +879,40 @@ function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBa
         onDragEnd={() => { dragIndexRef.current = null; }}
         className={`relative bg-transparent rounded-2xl flex flex-col cursor-grab ${
           large
-            ? `p-6 space-y-3 flex-1 min-w-0 border-2 ${isPrimary ? 'border-[#1B3828]' : 'border-[#DDD4C0]'}`
-            : 'p-3 space-y-1 border border-[#DDD4C0]'
+            ? `p-6 space-y-4 flex-1 min-w-0 border-2 ${isPrimary ? 'border-[#1B3828]' : 'border-[#C5B9A8]'}`
+            : 'p-3.5 space-y-2 border border-[#C5B9A8] bg-white/50'
         }`}
       >
-        {/* Position badge, straddles the top-right border corner */}
-        <div
-          className="absolute top-0 right-0 translate-x-1/2 -translate-y-1/2 w-6 h-6 rounded-full flex items-center justify-center text-xs font-black z-10 pointer-events-none select-none"
-          style={{ backgroundColor: '#1B3828', color: '#EED98A' }}
-        >
-          {idx + 1}
-        </div>
-        {/* Header: icon + type label + flag in top-right */}
-        <div className="flex items-center gap-2">
-          <span className={`font-black text-[#1C1410] flex-1 min-w-0 ${large ? 'text-3xl' : 'text-lg'} flex items-center gap-1.5`}>
-            <span className="min-w-0 break-words">{cardLabel}</span>
-            {!isPrimary && !isViewOnly && (
-              <button
-                onClick={(e) => { e.stopPropagation(); if (!acceptBlocked) onEdit(m.id); }}
-                disabled={acceptBlocked}
-                title={acceptBlocked ? t('motions_saving') : t('motions_edit_label')}
-                className={`opacity-40 hover:opacity-80 transition-opacity focus:outline-none shrink-0 ${acceptBlocked ? 'cursor-not-allowed' : ''}`}
-              >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931z" stroke="#4A4A4A" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
-                  <path d="M19.5 7.125L16.5 4.125" stroke="#4A4A4A" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
-                </svg>
-              </button>
-            )}
-          </span>
-          {m.proposedBy === CHAIR_KEY
-            ? <span className={`shrink-0 ${large ? 'text-3xl' : 'text-xl'}`}>🪑</span>
-            : <SeatFlag country={m.proposedBy} style={{ width: large ? 56 : 32, height: large ? 40 : 24, borderRadius: '8px', border: f && SQUARE_FLAGS.has(f.code) ? 'none' : '1.5px solid rgba(28,20,16,0.10)', objectFit: 'cover' }} className="inline-block" fallback={null} />}
-        </div>
-
-        {/* Custom motion with no proposer: say so, since there is no flag */}
-        {isCustom && !m.proposedBy && (
-          <span className={`${large ? 'text-sm' : 'text-xs'} font-semibold`} style={{ color: '#9A8A78' }}>{noProposerLabel(language)}</span>
-        )}
-
-        {/* Topic inline — a Custom motion's `topic` IS its title, already rendered above */}
-        {m.topic && !isCustom && (
-          <p className={`${large ? 'text-2xl' : 'text-base'} font-semibold`} style={{ color: '#1C1410' }}>
-            <span className="font-bold" style={{ color: '#1B3828' }}>{t('motions_topic_inline')} </span>{m.topic}
-          </p>
-        )}
-
-        {/* Timings, emphasised */}
-        {m.type !== 'tour' && m.totalTime > 0 && (
-          <div className="flex flex-col gap-0.5">
-            {large ? (
-              <>
-                <p className="text-sm" style={{ color: '#1C1410' }}>
-                  <span className="font-semibold" style={{ color: '#1B3828' }}>{t('motions_total_time_display')} </span>
-                  <span className="font-black">{fmtTime(totalMins, totalSecs)}</span>
-                </p>
-                {m.type === 'moderated' && m.speakingTime > 0 && (
-                  <p className="text-sm" style={{ color: '#1C1410' }}>
-                    <span className="font-semibold" style={{ color: '#1B3828' }}>{t('motions_speaker_time_display')} </span>
-                    <span className="font-black">{fmtTime(speakMins, speakSecs)}</span>
-                  </p>
-                )}
-                {m.type === 'moderated' && m.speakingTime > 0 && m.totalTime > 0 && (
-                  <p className="text-sm" style={{ color: '#1C1410' }}>
-                    <span className="font-semibold" style={{ color: '#1B3828' }}>{t('motions_total_speakers_display')} </span>
-                    <span className="font-black">{caucusQueueCapacity(m.totalTime, m.speakingTime, 0, 0)} {caucusQueueCapacity(m.totalTime, m.speakingTime, 0, 0) === 1 ? t('motions_speaker_singular') : t('motions_speaker_plural')}{m.totalTime % m.speakingTime !== 0 ? ' ⚠' : ''}</span>
-                  </p>
-                )}
-              </>
-            ) : (
-              <>
-                {/* Small cards: merge total + speaker time onto one line */}
-                <p className="text-xs" style={{ color: '#1C1410' }}>
-                  <span className="font-semibold" style={{ color: '#1B3828' }}>{t('motions_total_time_display')} </span>
-                  <span className="font-black">{fmtTime(totalMins, totalSecs)}</span>
-                  {m.type === 'moderated' && m.speakingTime > 0 && (
-                    <>
-                      <span className="mx-1 opacity-40">·</span>
-                      <span className="font-semibold" style={{ color: '#1B3828' }}>{t('motions_speaker_time_display')} </span>
-                      <span className="font-black">{fmtTime(speakMins, speakSecs)}</span>
-                    </>
-                  )}
-                </p>
-                {m.type === 'moderated' && m.speakingTime > 0 && m.totalTime > 0 && (
-                  <p className="text-xs" style={{ color: '#1C1410' }}>
-                    <span className="font-semibold" style={{ color: '#1B3828' }}>{t('motions_total_speakers_display')} </span>
-                    <span className="font-black">{caucusQueueCapacity(m.totalTime, m.speakingTime, 0, 0)} {caucusQueueCapacity(m.totalTime, m.speakingTime, 0, 0) === 1 ? t('motions_speaker_singular') : t('motions_speaker_plural')}{m.totalTime % m.speakingTime !== 0 ? ' ⚠' : ''}</span>
-                  </p>
-                )}
-              </>
-            )}
-          </div>
-        )}
-        {m.type === 'tour' && (
-          <div className="flex items-center gap-2">
-            <span className={`font-black ${large ? 'text-base text-[#1C1410]' : 'text-xs text-[#6A5A4A]'}`}>
-              {fmtTime(0, m.speakingTime)} {t('motions_per_delegate')}
-            </span>
-            <span className={`${large ? 'text-sm' : 'text-xs'} text-[#9A8A78]`}>
-              {m.tourOrder === 'desc' ? 'Z→A' : m.tourOrder === 'custom' ? t('motions_tour_order_custom') : 'A→Z'}
-            </span>
-          </div>
-        )}
+        {/* Rank, straddles the top-right border corner */}
+        <MotionRankBadge n={idx + 1} large={large} />
+        {/* One format for every motion type (src/components/motions/MotionCard.tsx): name,
+            topic, who raised it (round flag + name), then the times in fixed slots. */}
+        <MotionSummary
+          motion={m}
+          label={cardLabel}
+          size={large ? 'primary' : 'queue'}
+          language={language}
+          titleAddon={!isPrimary && !isViewOnly ? (
+            <button
+              onClick={(e) => { e.stopPropagation(); if (!acceptBlocked) onEdit(m.id); }}
+              disabled={acceptBlocked}
+              title={acceptBlocked ? t('motions_saving') : t('motions_edit_label')}
+              aria-label={t('motions_edit_label')}
+              className={`mt-0.5 opacity-70 hover:opacity-100 transition-opacity focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] rounded shrink-0 ms-auto ${acceptBlocked ? 'cursor-not-allowed opacity-40' : ''}`}
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931z" stroke={MOTION_SOFT} strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"/>
+                <path d="M19.5 7.125L16.5 4.125" stroke={MOTION_SOFT} strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            </button>
+          ) : undefined}
+        />
 
         {/* Required votes, primary card only */}
         {isPrimary && (
-          <div className="flex items-center gap-2 bg-[#FAF8F3] border border-[#DDD4C0] rounded-xl px-3 py-1.5">
-            <span className="text-xs font-semibold" style={{ color: '#1B3828' }}>{fraction === 'Simple majority' ? t('motions_simple_majority') : t('motions_supermajority')}</span>
-            <span className="text-xs font-bold ms-auto" style={{ color: '#1C1410' }}>{t('motions_needs_votes', { needed, present })}</span>
+          <div className="flex items-center gap-2 bg-white/70 border border-[#C5B9A8] rounded-xl px-3.5 py-2">
+            <span className="text-[15px] font-bold" style={{ color: '#1B3828' }}>{fraction === 'Simple majority' ? t('motions_simple_majority') : t('motions_supermajority')}</span>
+            <span className="text-[15px] font-black ms-auto tabular-nums" style={{ color: '#1C1410' }}>{t('motions_needs_votes', { needed, present })}</span>
           </div>
         )}
 
@@ -1005,18 +922,18 @@ function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBa
             <button onClick={() => { if (!acceptBlocked) onAccepted(m); }}
               disabled={acceptBlocked}
               title={acceptBlocked ? t('motions_saving') : undefined}
-              className={`gv-lift flex-1 bg-[#2A5A3C] hover:bg-[#3D7A52] text-white py-2.5 rounded-xl font-bold text-sm transition-colors focus:outline-none ${acceptBlocked ? 'opacity-40 cursor-not-allowed' : ''}`} style={{ fontFamily: "var(--font-brand), sans-serif", letterSpacing: '0.05em' }}>
+              className={`gv-lift flex-1 bg-[#2A5A3C] hover:bg-[#3D7A52] text-white py-3 rounded-xl font-bold text-[15px] transition-colors focus:outline-none ${acceptBlocked ? 'opacity-40 cursor-not-allowed' : ''}`} style={{ fontFamily: "var(--font-brand), sans-serif", letterSpacing: '0.05em' }}>
               {isCustom ? clearFromFloorLabel(language) : t('motions_accept_btn')}
             </button>
             <button onClick={() => { if (!acceptBlocked) onRemove(m.id); }}
               disabled={acceptBlocked}
-              className={`gv-lift flex-1 bg-[#DDD4C0] hover:bg-red-950/40 hover:text-[#8B2020] text-[#6A5A4A] border border-[#DDD4C0] hover:border-[#8B2020]/40 py-2.5 rounded-xl font-bold text-sm transition-colors focus:outline-none ${acceptBlocked ? 'opacity-40 cursor-not-allowed' : ''}`} style={{ fontFamily: "var(--font-brand), sans-serif", letterSpacing: '0.05em' }}>
+              className={`gv-lift flex-1 bg-[#DDD4C0] hover:bg-red-950/40 hover:text-[#8B2020] text-[#3F332A] border border-[#DDD4C0] hover:border-[#8B2020]/40 py-3 rounded-xl font-bold text-[15px] transition-colors focus:outline-none ${acceptBlocked ? 'opacity-40 cursor-not-allowed' : ''}`} style={{ fontFamily: "var(--font-brand), sans-serif", letterSpacing: '0.05em' }}>
               {t('motions_reject_btn')}
             </button>
             <button onClick={(e) => { e.stopPropagation(); if (!acceptBlocked) onEdit(m.id); }}
               disabled={acceptBlocked}
               title={acceptBlocked ? t('motions_saving') : t('motions_edit_label')}
-              className="disabled:opacity-40 disabled:cursor-not-allowed bg-[#B6871F]/20 hover:bg-[#B6871F]/40 border border-[#B6871F]/50 hover:border-[#B6871F] text-[#B6871F] py-2.5 px-4 rounded-xl font-bold text-sm transition-colors shrink-0 focus:outline-none gv-lift" style={{ fontFamily: "var(--font-brand), sans-serif" }}>
+              className="disabled:opacity-40 disabled:cursor-not-allowed bg-[#B6871F]/20 hover:bg-[#B6871F]/30 border border-[#B6871F]/50 hover:border-[#B6871F] text-[#6B4C0E] py-3 px-4 rounded-xl font-bold text-[15px] transition-colors shrink-0 focus:outline-none gv-lift" style={{ fontFamily: "var(--font-brand), sans-serif" }}>
               {t('motions_edit_label')}
             </button>
           </div>
@@ -1025,11 +942,11 @@ function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBa
           // A Commenter sees the dais's decision buttons, disabled; a press explains the gavel.
           <div className="flex gap-2 mt-auto">
             <button type="button" aria-disabled onClick={onCommenterAttempt} title={t('commenter_only_hint')}
-              className="flex-1 bg-[#2A5A3C] text-white py-2.5 rounded-xl font-bold text-sm opacity-40 cursor-not-allowed focus:outline-none" style={{ fontFamily: "var(--font-brand), sans-serif", letterSpacing: '0.05em' }}>
+              className="flex-1 bg-[#2A5A3C] text-white py-3 rounded-xl font-bold text-[15px] opacity-40 cursor-not-allowed focus:outline-none" style={{ fontFamily: "var(--font-brand), sans-serif", letterSpacing: '0.05em' }}>
               {isCustom ? clearFromFloorLabel(language) : t('motions_accept_btn')}
             </button>
             <button type="button" aria-disabled onClick={onCommenterAttempt} title={t('commenter_only_hint')}
-              className="flex-1 bg-[#DDD4C0] text-[#6A5A4A] border border-[#DDD4C0] py-2.5 rounded-xl font-bold text-sm opacity-40 cursor-not-allowed focus:outline-none" style={{ fontFamily: "var(--font-brand), sans-serif", letterSpacing: '0.05em' }}>
+              className="flex-1 bg-[#DDD4C0] text-[#6A5A4A] border border-[#DDD4C0] py-3 rounded-xl font-bold text-[15px] opacity-40 cursor-not-allowed focus:outline-none" style={{ fontFamily: "var(--font-brand), sans-serif", letterSpacing: '0.05em' }}>
               {t('motions_reject_btn')}
             </button>
           </div>
@@ -1043,14 +960,14 @@ function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBa
       <div className="flex items-center gap-2.5 shrink-0">
         <h2 className="text-3xl font-black" style={{ color: '#1B3828' }}>{t('motions_vote_heading')}</h2>
         <InfoHint label={t('motions_drag_hint_label')} text={t('motions_drag_hint')} />
-        <span className="ms-auto text-xs font-bold tabular-nums" style={{ color: floorFull ? '#8B2020' : '#9A8A78' }}>
+        <span className="ms-auto text-[17px] font-black tabular-nums" style={{ color: floorFull ? '#8B2020' : '#1B3828' }}>
           {order.length}/{MAX_FLOOR_MOTIONS}
         </span>
       </div>
       <div className="flex flex-1 min-h-0">
         {/* Left column, primary motion being voted on */}
         {/* pt-3 pe-4: give room for the badge that translates outside the card's top-right corner */}
-        <div className="flex-1 flex flex-col min-w-0 overflow-y-auto pt-3 pe-4">
+        <div className="flex-1 flex flex-col min-w-0 overflow-y-auto pt-5 pe-5">
           {renderCard(primary, true, 0)}
         </div>
         {/* Vertical divider between column 1 and column 2 */}
@@ -1069,14 +986,14 @@ function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBa
         {/* Right column, queued motions + Raise a Motion button. Past RANKED_VISIBLE motions
             the queued cards scroll inside this same column (hidden scrollbar, edge fades), so
             the modal never grows a side column or widens. Order, ranks and actions unchanged. */}
-        <div className="w-72 shrink-0 flex flex-col min-h-0">
+        <div className="w-80 shrink-0 flex flex-col min-h-0">
           <div className="relative flex-1 min-h-0 flex flex-col">
             <div
               ref={overflowRef}
               onScroll={measureOverflow}
               tabIndex={scrolls ? 0 : undefined}
               aria-label={scrolls ? (extrasCount > 0 ? t('motions_more_on_floor', { count: extrasCount }) : t('motions_vote_heading')) : undefined}
-              className="flex-1 min-h-0 pt-3 pe-4 overflow-y-auto overscroll-contain pb-2 focus:outline-none [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+              className="flex-1 min-h-0 pt-4 pe-4 overflow-y-auto overscroll-contain pb-2 focus:outline-none [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
             >
               {rest.map((m, i) => (
                 <React.Fragment key={m.id}>
@@ -1104,7 +1021,7 @@ function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBa
                   style={{ opacity: overflowFade.top ? 1 : 0, background: 'linear-gradient(#FAF8F3, rgba(250,248,243,0))' }} />
                 <div aria-hidden className="pointer-events-none absolute inset-x-0 bottom-0 h-10 flex items-end justify-center pb-1 transition-opacity duration-150"
                   style={{ opacity: overflowFade.bottom ? 1 : 0, background: 'linear-gradient(rgba(250,248,243,0), #FAF8F3 70%)' }}>
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M6 9l6 6 6-6" stroke="#6A5A4A" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M6 9l6 6 6-6" stroke="#5A4A3C" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"/></svg>
                 </div>
               </>
             )}
@@ -1121,7 +1038,7 @@ function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBa
                 {t('motions_raise_motion_btn')}
               </button>
               {floorFull && (
-                <p role="status" className="mt-2 text-xs font-semibold text-center" style={{ color: '#8B2020' }}>
+                <p role="status" className="mt-2 text-[13px] font-semibold text-center" style={{ color: '#8B2020' }}>
                   {t('motions_floor_full', { n: MAX_FLOOR_MOTIONS })}
                 </p>
               )}
@@ -1498,9 +1415,15 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
     const specialBlocked = isTempMotionId(specialVoteMotion.id) || pendingIds.has(specialVoteMotion.id);
     return (
       <Portal><div className="fixed inset-0 z-[60] bg-[#F6F1E9] flex flex-col items-center justify-center text-center px-8">
-        <p className="text-xs font-mono tracking-widest text-[#9A8A78] mb-6">
-          {(typeMeta[specialVoteMotion.type]?.label ?? specialVoteMotion.type).toUpperCase()} · {specialVoteMotion.proposedBy === CHAIR_KEY ? chairDisplayName(language) : getCountryDisplayName(specialVoteMotion.proposedBy, language)}
-        </p>
+        <div className="flex items-center gap-3 mb-6 max-w-2xl">
+          {specialVoteMotion.proposedBy && specialVoteMotion.proposedBy !== CHAIR_KEY && (
+            <SeatCircleFlag country={specialVoteMotion.proposedBy} size={40} decorative fallback="initials" />
+          )}
+          <p className="text-[18px] font-bold text-start [overflow-wrap:anywhere]" style={{ color: MOTION_SOFT }}>
+            <span style={{ color: '#1C1410', fontWeight: 900 }}>{typeMeta[specialVoteMotion.type]?.label ?? specialVoteMotion.type}</span>
+            {specialVoteMotion.proposedBy ? <> · {specialVoteMotion.proposedBy === CHAIR_KEY ? chairDisplayName(language) : getCountryDisplayName(specialVoteMotion.proposedBy, language)}</> : null}
+          </p>
+        </div>
         <h1 className={`text-4xl font-black tracking-wide ${isSuspend ? 'mb-4' : 'mb-14'}`} style={{ color: '#1B3828', fontFamily: "var(--font-brand), sans-serif" }}>{t('motions_does_pass')}</h1>
         {/* How long a suspended room is kept (src/lib/roomRetention.ts), said BEFORE the
             chair suspends: a standalone room with no resume is deleted after that. */}
@@ -1625,7 +1548,7 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
     >
       {(requestClose) => (<>
         <div className="flex items-center justify-end px-7 pt-6 pb-0 shrink-0">
-          <button onClick={requestClose} aria-label={t('sb_close')} className="text-[#9A8A78] hover:text-[#1C1410] transition-colors text-xl leading-none focus:outline-none">✕</button>
+          <button onClick={requestClose} aria-label={t('sb_close')} className="text-[#5A4A3C] hover:text-[#1C1410] transition-colors text-xl leading-none focus:outline-none">✕</button>
         </div>
         <div className="flex-1 min-h-0 pt-2 flex flex-col">
           {view === 'raise' && (
@@ -1662,68 +1585,32 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
                 <div className="text-center py-8">
                   <div className="mb-3"><Emoji size="2.5rem">📋</Emoji></div>
                   <p className="text-[#6A5A4A]">{t('motions_no_raised')}</p>
-                  <p className="text-sm text-[#9A8A78] mt-1">{t('motions_floor_open')}</p>
+                  <p className="text-sm mt-1" style={{ color: MOTION_SOFT }}>{t('motions_floor_open')}</p>
                 </div>
               ) : (
                 <div className="space-y-2">
-                  <p className="text-xs text-[#9A8A78] font-mono">{t('motions_ranked')}</p>
+                  <p className="text-[13px] font-semibold" style={{ color: MOTION_SOFT }}>{t('motions_ranked')}</p>
                   {pending.map((m, i) => {
                     const meta = typeMeta[m.type];
                     if (!meta) return null;
-                    const mins = Math.floor(m.totalTime / 60);
-                    const secs = m.totalTime % 60;
                     const rowIsCustom = m.type === 'custom';
                     return (
-                      <div key={m.id} className="rounded-xl px-4 py-4" style={rowIsCustom
-                        ? { backgroundColor: '#F3EFE4', border: '1px dashed #C5B9A8' }
-                        : { backgroundColor: '#EDE7D8', border: '1px solid #DDD4C0' }}>
+                      <div key={m.id} className="relative rounded-xl ps-4 pe-3 py-4" style={rowIsCustom
+                        ? { backgroundColor: '#F3EFE4', border: '1px dashed #9A8A78' }
+                        : { backgroundColor: '#EDE7D8', border: '1px solid #C5B9A8' }}>
                         <div className="flex items-start gap-3">
-                          <span className="text-xs text-[#9A8A78] font-mono w-4 mt-1">{i + 1}</span>
-                          <Emoji size="1.5rem">{meta.icon}</Emoji>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <span className="text-base font-black text-[#1C1410] break-words min-w-0">{motionDisplayLabel(m, typeMeta, language)}</span>
-                              <DisruptivenessBadge type={m.type} />
-                            </div>
-                            {(m.proposedBy || !rowIsCustom) && (
-                              <div className="flex items-center gap-1.5 mt-1">
-                                {m.proposedBy === CHAIR_KEY
-                                  ? <span className="text-base leading-none">🪑</span>
-                                  : <SeatFlag country={m.proposedBy} size={20} className="object-contain inline-block" fallback={<UnknownSeatIcon size={20} />} />}
-                                <span className="text-sm font-semibold text-[#1C1410]">{m.proposedBy === CHAIR_KEY ? chairDisplayName(language) : getCountryDisplayName(m.proposedBy, language)}</span>
-                              </div>
-                            )}
-                            {rowIsCustom && !m.proposedBy && (
-                              <p className="text-sm font-semibold mt-1" style={{ color: '#9A8A78' }}>{noProposerLabel(language)}</p>
-                            )}
-                            {m.topic && !rowIsCustom && <p className="text-sm text-[#6A5A4A] mt-1 font-medium">&ldquo;{m.topic}&rdquo;</p>}
-                            <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-                              {m.type !== 'tour' && m.totalTime > 0 && (
-                                <span className="text-xs font-bold text-[#1B3828] bg-[#FAF8F3] border border-[#DDD4C0] px-2 py-0.5 rounded-md">
-                                  {mins > 0 ? `${mins}m` : ''}{secs > 0 ? ` ${secs}s` : ''} {t('motions_total_label')}
-                                </span>
-                              )}
-                              {m.type === 'moderated' && m.speakingTime > 0 && (
-                                <span className="text-xs font-bold text-[#2A5A3C] bg-[#FAF8F3] border border-[#DDD4C0] px-2 py-0.5 rounded-md">
-                                  {m.speakingTime}{t('motions_s_per_speaker')}
-                                </span>
-                              )}
-                              {m.type === 'tour' && (
-                                <>
-                                  <span className="text-xs font-bold text-[#1B3828] bg-[#FAF8F3] border border-[#DDD4C0] px-2 py-0.5 rounded-md">
-                                    {m.speakingTime}{t('motions_s_per_delegate')}
-                                  </span>
-                                  <span className="text-xs font-bold text-[#6A5A4A] bg-[#FAF8F3] border border-[#DDD4C0] px-2 py-0.5 rounded-md">
-                                    {m.tourOrder === 'desc' ? 'Z→A' : 'A→Z'}
-                                  </span>
-                                </>
-                              )}
-                            </div>
+                          <span aria-label={t('motion_card_rank', { n: i + 1 })}
+                            className="shrink-0 w-8 h-8 rounded-full flex items-center justify-center tabular-nums text-[15px] font-black"
+                            style={{ backgroundColor: '#1B3828', color: '#EED98A' }}>{i + 1}</span>
+                          <div className="flex-1 min-w-0 space-y-2">
+                            <DisruptivenessBadge type={m.type} />
+                            <MotionSummary motion={m} label={motionDisplayLabel(m, typeMeta, language)} size="list" language={language} />
                           </div>
                           <button onClick={() => { if (!isTempMotionId(m.id)) handleRemove(m.id); }}
                             disabled={isTempMotionId(m.id)}
-                            title={isTempMotionId(m.id) ? t('motions_saving') : undefined}
-                            className="text-[#9A8A78] hover:text-[#8B2020] disabled:opacity-40 disabled:cursor-not-allowed text-sm transition-colors mt-0.5">✕</button>
+                            title={isTempMotionId(m.id) ? t('motions_saving') : t('motions_reject_btn')}
+                            aria-label={t('motions_reject_btn')}
+                            className="shrink-0 w-9 h-9 rounded-full inline-flex items-center justify-center text-[#5A4A3C] hover:text-[#8B2020] hover:bg-[#8B2020]/10 disabled:opacity-40 disabled:cursor-not-allowed text-base transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]">✕</button>
                         </div>
                       </div>
                     );

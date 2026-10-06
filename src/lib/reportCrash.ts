@@ -94,6 +94,104 @@ export function recoverFromStaleDeploy(error: unknown): boolean {
   return true;
 }
 
+// ── Noise: never reported (6 Oct 2026) ───────────────────────────────────────
+//
+// The owner: "error messages are sometimes random ... really look at behind
+// what error messages we get and if they are really necessary." Fourteen days
+// of user_error_reports and crash_alerts said: the network dropping ("Load
+// failed", "Failed to fetch", "Failed to send a request to the Edge
+// Function"), a JWT that expired under a page left open, a deploy replacing
+// the chunks a tab still held, and translators / extensions racing React's
+// DOM. None of those is a fault in Gavelling, and several of them still
+// reached the inbox (a reportBlocked of "Load failed" always pages). So the
+// browser stops sending them at all, in ONE place: `send()` asks isNoiseError
+// for every kind of report.
+//
+// The one exception is a crash of the ROOT layout (the document rendered
+// nothing): a blank page is worth knowing about even when the cause is the
+// network or a stale chunk, so only the pure browser noise (DOM races,
+// ResizeObserver, extensions, opaque cross-origin) is dropped there.
+
+// Not here on purpose: "Failed to send a request to the Edge Function" / FunctionsFetchError.
+// While the browser is online that is also what a down or broken edge function (checkout)
+// looks like, so it is still reported; offline is dropped above by navigator.onLine.
+const NETWORK_RE =
+  /Failed to fetch|NetworkError|Network request failed|Load failed|network ?error|ERR_INTERNET_DISCONNECTED|ERR_NETWORK_CHANGED|ERR_NETWORK_IO_SUSPENDED|ERR_CONNECTION_(RESET|CLOSED|REFUSED|TIMED_OUT|ABORTED)|ERR_NAME_NOT_RESOLVED|ERR_TIMED_OUT|AuthRetryableFetchError|The network connection was lost|The Internet connection appears to be offline|\btimed out\b|TimeoutError|ETIMEDOUT|ECONNRESET/i;
+
+const ABORT_RE =
+  /AbortError|The user aborted a request|signal is aborted|The operation was aborted|Request aborted|aborted without reason|Fetch is aborted/i;
+
+const BROWSER_NOISE_RE =
+  /ResizeObserver loop (limit exceeded|completed with undelivered notifications)|Failed to execute '(removeChild|insertBefore|appendChild|replaceChild)' on 'Node'|is not a child of this node|The object can not be found here|The node to be removed is not a child|NotFoundError: The object|^Script error\.?$|Converting circular structure to JSON[\s\S]*__reactFiber/i;
+
+const EXTENSION_STACK_RE =
+  /(chrome|moz|safari-web|ms-browser|chrome-untrusted)-extension:\/\//i;
+
+/** A JWT that expired. The authed client (supabase-auth.ts) refreshes the
+ *  session and retries silently; only a refresh that FAILED is worth a record,
+ *  and supabase-auth reports that one itself (branch 'session_expired'). */
+const JWT_EXPIRED_RE = /PGRST303|jwt expired|"exp" claim timestamp check failed/i;
+
+function textOf(error: unknown): string {
+  if (error == null) return '';
+  if (typeof error === 'string') return error;
+  const e = error as { name?: unknown; message?: unknown; stack?: unknown; code?: unknown };
+  const bits: string[] = [];
+  if (typeof e.name === 'string') bits.push(e.name);
+  if (typeof e.message === 'string') bits.push(e.message);
+  if (typeof e.code === 'string') bits.push(e.code);
+  if (typeof e.stack === 'string') bits.push(e.stack);
+  if (bits.length) return bits.join('\n');
+  try { return String(error); } catch { return ''; }
+}
+
+/**
+ * True when a report would only describe the visitor's browser or connection,
+ * never a fault in Gavelling: offline, network failures and timeouts (ours from
+ * resilientFetch included, which are named AbortError), aborted requests, a JWT
+ * expiry the silent refresh handles, stale-deploy chunk failures (the reload in
+ * recoverFromStaleDeploy handles them), ResizeObserver loop messages, React
+ * losing a DOM race to a translator or an extension, and anything thrown from an
+ * extension's own script.
+ *
+ * Pass the caught error and any other text you have (the raw message, a stack).
+ */
+export function isNoiseError(error: unknown, ...extra: Array<string | null | undefined>): boolean {
+  try {
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) return true;
+    const hay = [textOf(error), ...extra.filter((s): s is string => typeof s === 'string')].join('\n');
+    if (!hay.trim()) return false;
+    return (
+      NETWORK_RE.test(hay) ||
+      ABORT_RE.test(hay) ||
+      BROWSER_NOISE_RE.test(hay) ||
+      STALE_DEPLOY_RE.test(hay) ||
+      JWT_EXPIRED_RE.test(hay) ||
+      EXTENSION_STACK_RE.test(hay)
+    );
+  } catch {
+    return false; // when in doubt, report
+  }
+}
+
+/** The subset that is noise even for a root-layout crash (see above). */
+function isBrowserNoise(...parts: Array<string | null | undefined>): boolean {
+  const hay = parts.filter((s): s is string => typeof s === 'string').join('\n');
+  return BROWSER_NOISE_RE.test(hay) || EXTENSION_STACK_RE.test(hay);
+}
+
+/** A refusal that is a rule working exactly as designed: our own RAISE
+ *  (SQLSTATE P0001), a malformed id from a link (22P02, e.g. an invite URL cut
+ *  short by an email client), and the plain sentences our payment and invite
+ *  RPCs answer with. Recorded on the server as expected, never emailed. */
+const EXPECTED_REFUSAL_RE =
+  /already (been )?accepted|already has a payment awaiting review|is not payable|already paid in full|invalid input syntax for type uuid/i;
+
+function isExpectedRefusal(code: string | null, detail: string): boolean {
+  if (code === 'P0001' || code === '22P02') return true;
+  return EXPECTED_REFUSAL_RE.test(detail);
+}
+
 /**
  * Which boundary caught the throw. The server treats these very differently:
  *
@@ -132,6 +230,25 @@ type Report = {
   visitor?: string | null;
 };
 
+/** The one noise gate every report passes through (see isNoiseError). */
+function isDroppedAsNoise(report: Report): boolean {
+  try {
+    // A blank document is worth knowing about whatever caused it.
+    if (report.kind === 'render' && report.boundary === 'root') {
+      return isBrowserNoise(report.message, report.stack);
+    }
+    // supabase-auth's own report: the silent refresh FAILED, so the JWT text
+    // in it is the point, not noise. Only drop it when the visitor is offline
+    // (the refresh failed because nothing could get out).
+    if (report.branch === 'session_expired') {
+      return typeof navigator !== 'undefined' && navigator.onLine === false;
+    }
+    return isNoiseError(null, report.message, report.raw, report.stack);
+  } catch {
+    return false;
+  }
+}
+
 /**
  * The single network path. Everything below funnels through here so there is
  * exactly one place that can fail, and it swallows everything.
@@ -144,6 +261,7 @@ function send(report: Report): void {
   // Don't page anyone for an error on localhost.
   if (process.env.NODE_ENV !== 'production') return;
   if (!process.env.NEXT_PUBLIC_SUPABASE_URL) return;
+  if (isDroppedAsNoise(report)) return;
 
   try {
     const headers: Record<string, string> = { 'Content-Type': 'application/json' };
@@ -226,6 +344,29 @@ export function reportBlocked(
       try { bits.push(`context: ${JSON.stringify(context)}`); } catch { /* unserialisable — skip */ }
     }
     stack = bits.length ? bits.join('\n') : null;
+  }
+
+  // A rule refusing someone exactly as designed (our own RAISE, a malformed
+  // id from a link, "this invite was already accepted") is not an outage.
+  // It is still recorded, as an expected person report, so the server keeps
+  // the baseline; it is never emailed. 6 Oct 2026: these were most of the
+  // "blocked" emails of the previous fortnight.
+  const code = err?.code != null ? String(err.code) : null;
+  if (isExpectedRefusal(code, detail)) {
+    send({
+      message: detail,
+      stack,
+      digest: null,
+      url: window.location.href,
+      kind: 'user_error',
+      action,
+      raw: detail,
+      shown: null,
+      code,
+      branch: 'expected_refusal',
+      expected: true,
+    });
+    return;
   }
 
   send({

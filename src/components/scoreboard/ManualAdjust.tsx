@@ -3,7 +3,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // src/components/scoreboard/ManualAdjust.tsx
 //
-// THE MODERATOR'S PLUS / MINUS. One line at the foot of a delegation's profile:
+// THE CHAIRS' PLUS / MINUS. One line at the foot of a delegation's profile:
 // a minus button, the pending change, a plus button, an optional reason, Apply.
 //
 // It replaced a boxed form (Award / Deduct toggle, an amount field, a required
@@ -14,8 +14,10 @@
 // only relaxation is that the reason is optional now; without one the ledger
 // row keeps the scoring layer's own label for a bare award or deduction.
 //
-// Mounted only for the Moderator (`ScoreboardPanel` passes it as the profile's
-// `extra` when `!isViewOnly`). A UI gate, not a permission (AGENTS.md rule 15).
+// Mounted for every chair, Moderator and Commenter (Oct 2026): `ScoreboardPanel`
+// passes it as the profile's `extra` while the session has not ended. The organiser
+// board never passes it. A UI gate, not a permission (AGENTS.md rule 15). The ledger
+// row also names the chair (`by`), shown as "Points awarded by Aida".
 // Keyed by the row in the caller, so a half-set change never follows the chair
 // to another delegation.
 // ─────────────────────────────────────────────────────────────────────────────

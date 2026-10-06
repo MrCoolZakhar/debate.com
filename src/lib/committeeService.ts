@@ -9,6 +9,7 @@ import { parseIntroState } from './documentFlow';
 import { serverNow, serverNowIso } from './serverClock';
 import { runWrite, rowsOf, cancelPendingRetries, cancelWritesIssuedBefore, issueMark, failedFrom, issueChainTicket, runWithChainTicket, type WriteResult, type AttemptResult } from './writeStatus';
 import { OFFLINE_RESILIENCE, beginPendingWrite, newRowId } from './offlineResilience';
+import { claimRollCall, ownsRollCall, settleRollCall, attachPendingRollCall, type PendingRollCallItem } from './pendingRollCall';
 import { sessionReadClient } from './sessionClient';
 
 /** Session slice reads and the read-backs inside session writes: the timeout client while
@@ -190,6 +191,15 @@ export function freezeCaucusForBreak(
 /** The phase a stored caucus belongs to. */
 export function phaseForCaucus(caucus: CaucusState): SessionPhase {
   return caucus.type === 'moderated' ? 'moderated-caucus' : 'unmoderated-caucus';
+}
+
+/** May the floor holder be dropped from the GSL as a "transient duplicate"? Only when the
+ *  floor holder is a GSL speaker, i.e. no moderated caucus / Tour de Table is in play. In a
+ *  moderated caucus the current_speaker row is the CAUCUS speaker, who may legitimately also
+ *  hold a GSL place (RULE 1): hiding it made that place vanish for the caucus and, since
+ *  nothing re-reads the GSL when a caucus ends, after it too (item 6, Oct 2026). */
+export function gslDedupeApplies(c: { phase: SessionPhase; caucus: CaucusState | null | undefined }): boolean {
+  return c.phase !== 'moderated-caucus' && c.caucus?.type !== 'moderated';
 }
 
 /** The caucus with BOTH of its clocks read live and the total paused at that value. Used
@@ -432,7 +442,13 @@ async function loadCommitteeByCode(code: string, strict: boolean): Promise<Commi
 
   // The current speaker must never also appear as a GSL queue entry (can happen after
   // a suspend/resume cycle). GSL list only — caucusQueue is left untouched.
-  const gslDeduped = currentSpeaker
+  // ONLY when the floor holder is a GSL speaker. In a moderated caucus / Tour de Table the
+  // current_speaker row holds the CAUCUS speaker, and a delegation that speaks in the caucus
+  // is routinely ALSO waiting on the GSL (RULE 1: two separate lists). Filtering them here hid
+  // their GSL place for the whole caucus and, because nothing re-reads the GSL when a caucus
+  // ends, they were still missing from the GSL afterwards ("GSL speaker removed after the
+  // mod", item 6, Oct 2026). `gslDedupeApplies` is the one rule (also used by the chair page).
+  const gslDeduped = currentSpeaker && gslDedupeApplies({ phase: committeeRow.phase as SessionPhase, caucus: (committeeRow.caucus as CaucusState | null) ?? null })
     ? speakersList.filter((s) => s.delegateId !== currentSpeaker.delegateId)
     : speakersList;
 
@@ -496,6 +512,36 @@ export async function patchCommitteeSettings(committeeId: string, patch: Record<
   noteFlushedSettings(committeeId, patch);
   // In flight = pending on the row slice (offline resilience: no sync fetch lands over it).
   const releasePending = beginPendingWrite([`${committeeId}:settings`]);
+  if (OFFLINE_RESILIENCE && chairSuffix) {
+    // Offline resilience (4 Oct 2026): a key-level patch is idempotent, so it is retried and
+    // PARKED like the other idempotent writes instead of failing on one dropped request. Each
+    // key is owned by the newest patch that carries it: an attempt sends only the keys this
+    // patch still owns (a later patch of the same key takes it over, a later patch of OTHER
+    // keys does not), and a patch that owns nothing any more ends without a request. The
+    // runWrite key is unique per call for that reason (a shared key would let a newer patch
+    // of other keys supersede this one). Resolves false only on a refusal.
+    const token = ++settingsPatchSeq;
+    const keys = Object.keys(patch);
+    keys.forEach((k) => settingsKeyOwner.set(`${committeeId}:${k}`, token));
+    const owned = () => keys.filter((k) => settingsKeyOwner.get(`${committeeId}:${k}`) === token);
+    try {
+      const r = await runWrite(`${committeeId}:settings-patch:${token}`, async () => {
+        const mine = owned();
+        if (mine.length === 0) return 'skipped';
+        const part: Record<string, unknown> = {};
+        mine.forEach((k) => { part[k] = patch[k]; });
+        noteFlushedSettings(committeeId, part);   // a parked patch lands late: its echo is still ours
+        const { data, error } = await sessionClient(code, chairSuffix)
+          .rpc('patch_committee_settings', { p_committee: committeeId, p_patch: part });
+        if (error) return failedFrom(error, 'Error patching committee settings:');
+        return data === true ? 'ok' : 'failed';
+      }, { retry: true });
+      return r !== 'failed';
+    } finally {
+      owned().forEach((k) => settingsKeyOwner.delete(`${committeeId}:${k}`));
+      releasePending();
+    }
+  }
   try {
     const { data, error } = await sessionClient(code, chairSuffix)
       .rpc('patch_committee_settings', { p_committee: committeeId, p_patch: patch });
@@ -503,6 +549,10 @@ export async function patchCommitteeSettings(committeeId: string, patch: Record<
     return data === true;
   } finally { releasePending(); }
 }
+
+/** Offline resilience: which patch (by token) owns each `${committeeId}:${key}`. */
+const settingsKeyOwner = new Map<string, number>();
+let settingsPatchSeq = 0;
 
 export async function saveCommitteeSettings(committeeId: string, settings: object, code: string, chairSuffix?: string): Promise<boolean> {
   const patch: Record<string, unknown> = { ...(settings as Record<string, unknown>) };
@@ -647,7 +697,33 @@ export async function beginSessionAfterRollCall(
 // Returns whether the write actually landed. Every caller that only wants fire-and-forget
 // can keep ignoring the value; the delegate page uses it to refund the rate-limit slot and
 // roll its optimistic status back when the write is rejected (e.g. by RLS).
+//
+// Offline resilience (4 Oct 2026): a CHAIR's write (a chair suffix is passed) is retried and
+// PARKED like the other idempotent session writes: setting a status (or a placard) to a
+// value is idempotent, and on venue Wi-Fi a roll call that gave up after one attempt was
+// read back from the server and "disappeared". The press is recorded in pendingRollCall.ts
+// (shown over every refetch, kept across a reload), the newest press per row wins (an older
+// write that no longer owns its row ends 'skipped' without sending), and every chair status
+// and placard write of the committee rides ONE chain (`rollCallChain`), so a single tap, a
+// bulk roll call and a placard reach the server in the order they were pressed. Only a real
+// refusal resolves false. A delegate's own write (no suffix) and the kill switch off keep the
+// behaviour before: one attempt, per-row chain.
+const rollCallParkable = (chairSuffix?: string) => OFFLINE_RESILIENCE && !!chairSuffix;
+const rollCallChain = (code: string) => `roll-call:${(code || '').toUpperCase()}`;
+
 export async function setDelegateStatus(delegateId: string, status: DelegateStatus, code: string, chairSuffix?: string): Promise<boolean> {
+  if (rollCallParkable(chairSuffix)) {
+    const seq = claimRollCall(code, delegateId, 'status', status);
+    const r = await chained(rollCallChain(code), () => runWrite(`delegate:${delegateId}:status`, async () => {
+      if (!ownsRollCall(code, delegateId, 'status', seq)) return 'skipped';   // a newer press owns the row
+      const { data, error } = await sessionClient(code, chairSuffix).from('delegates')
+        .update({ status }).eq('id', delegateId).select('id');
+      if (error) { return failedFrom(error, 'Error setting delegate status:'); }
+      return rowsOf(data) > 0 ? 'ok' : 'failed';
+    }, { retry: true }), 'failed' as WriteResult);
+    if (r !== 'skipped') settleRollCall(code, delegateId, 'status', seq);
+    return r !== 'failed';
+  }
   // Zero rows is a rejection here (the id exists), not a no-op. Not auto-retried: a status
   // tap is superseded by the next tap within seconds, and the delegate page rolls back.
   // Chained per delegate (the same chain as the observer placard): rapid taps A → P → PV
@@ -664,22 +740,51 @@ export async function setDelegateStatus(delegateId: string, status: DelegateStat
 
 /** One write chain per delegate row, shared by its status and observer writes, so a toggle
  *  and the Present-and-Voting → Present drop it causes (or two quick toggles) reach the
- *  server in the order they were issued. */
+ *  server in the order they were issued. (A chair's parkable writes use `rollCallChain`.) */
 function delegateWriteChain(delegateId: string): string {
   return `delegate-row:${delegateId}`;
 }
 
 /** Hand out or take back an observer placard. Resolves whether it LANDED (RULE 5: supabase-js
  *  resolves with `error: null` on an RLS refusal and on a zero-row update, so the rows are
- *  counted). Not auto-retried: the next tap supersedes it, and callers roll back on false. */
+ *  counted). With a chair suffix and the switch on it is retried and parked like a status
+ *  (above): the promise stays pending while parked and resolves false only on a refusal.
+ *  Otherwise one attempt; callers roll back on false. */
 export async function setDelegateObserver(delegateId: string, isObserver: boolean, code: string, chairSuffix?: string): Promise<boolean> {
-  const r = await chained(delegateWriteChain(delegateId), () => runWrite(`delegate:${delegateId}:observer`, async () => {
+  const parkable = rollCallParkable(chairSuffix);
+  const seq = parkable ? claimRollCall(code, delegateId, 'observer', isObserver) : 0;
+  const r = await chained(parkable ? rollCallChain(code) : delegateWriteChain(delegateId), () => runWrite(`delegate:${delegateId}:observer`, async () => {
+    if (parkable && !ownsRollCall(code, delegateId, 'observer', seq)) return 'skipped';
     const { data, error } = await sessionClient(code, chairSuffix).from('delegates')
       .update({ is_observer: isObserver }).eq('id', delegateId).select('id');
     if (error) { return failedFrom(error, 'Error setting delegate observer:'); }
     return rowsOf(data) > 0 ? 'ok' : 'failed';
-  }, { retry: false }), 'failed' as WriteResult);
+  }, { retry: parkable }), 'failed' as WriteResult);
+  if (parkable && r !== 'skipped') settleRollCall(code, delegateId, 'observer', seq);
   return r !== 'failed';
+}
+
+/**
+ * Re-issue the roll-call presses this browser left unsaved for `code` (a reload while
+ * offline, or another tab that closed with presses parked), through the ordinary parkable
+ * writers. Chair and voting pages call it once the committee is loaded; `onAdopted` runs
+ * when presses were taken over (lay them over the roster), `onRefused` when one of them was
+ * refused by the server (read the roster back). No-op with the switch off or without a
+ * chair suffix. Returns a detach function.
+ */
+export function resumePendingRollCall(
+  code: string, chairSuffix: string | undefined,
+  hooks: { onAdopted?: () => void; onRefused?: () => void } = {},
+): () => void {
+  if (!rollCallParkable(chairSuffix)) return () => {};
+  return attachPendingRollCall(code, (items: PendingRollCallItem[]) => {
+    for (const it of items) {
+      const p = it.field === 'status'
+        ? setDelegateStatus(it.delegateId, it.value as DelegateStatus, code, chairSuffix)
+        : setDelegateObserver(it.delegateId, it.value as boolean, code, chairSuffix);
+      void p.then((ok) => { if (!ok) hooks.onRefused?.(); });
+    }
+  }, hooks.onAdopted);
 }
 
 export async function batchSetDelegateStatuses(
@@ -795,7 +900,12 @@ export async function addToSpeakersList(committeeId: string, delegateId: string,
 
 async function removeFromQueue(committeeId: string, delegateId: string, listType: SpeakerListType, code: string, chairSuffix?: string): Promise<boolean> {
   // Ordered on the list chain like the add, so an add-then-remove cannot land reversed.
-  // Not auto-retried: a refused delete is reported; a row already gone is a success.
+  // A refused delete is reported; a row already gone is a success ('skipped').
+  // Offline resilience (4 Oct 2026): deleting (committee, delegate, list) is idempotent, so it
+  // is retried and PARKED (the switch off: one attempt, as before). A removal that gave up on
+  // one dropped request used to come back on the next lists refetch (an absent delegate back
+  // on the GSL); parked, the lists slice is held until it lands, and a later add of the same
+  // delegate waits behind it on the chain, so the order still holds.
   // Room-Order placeholders ("room-order-3") were never stored (uuid column): nothing to do.
   if (!UUID_RE.test(delegateId)) return true;
   const r = await chained(listChainKey(committeeId, listType), () => runWrite(
@@ -806,7 +916,7 @@ async function removeFromQueue(committeeId: string, delegateId: string, listType
       return deleteOutcome(data, error, `removing from ${listType} list`, () => readDb().from('speakers_list').select('id')
         .eq('committee_id', committeeId).eq('delegate_id', delegateId).eq('list_type', listType).limit(1));
     },
-    { retry: false },
+    { retry: OFFLINE_RESILIENCE },
   ), 'failed' as WriteResult);
   return r !== 'failed';
 }
@@ -1412,6 +1522,45 @@ export async function setDelegateStatusesBulk(
   committeeId: string, status: DelegateStatus, ids: string[] | null,
   code: string, chairSuffix?: string,
 ): Promise<number | 'unavailable' | null> {
+  // Offline resilience: with explicit ids, a chair suffix and the switch on, the bulk is a
+  // parkable write like a single status (see setDelegateStatus). Each row is claimed in the
+  // pending ledger; every attempt sends only the rows this bulk still owns (a later single
+  // tap or bulk takes its rows over), and a bulk that owns nothing any more ends without a
+  // request. It rides the same roll-call chain as the single writes, so "All present" then
+  // a tap (or the reverse) lands in the order pressed.
+  if (rollCallParkable(chairSuffix) && ids && ids.length > 0) {
+    const seqs = new Map<string, number>();
+    const at = Date.now();
+    ids.forEach((id) => seqs.set(id, claimRollCall(code, id, 'status', status, at)));
+    const owned = () => ids.filter((id) => ownsRollCall(code, id, 'status', seqs.get(id)!));
+    let unavailable = false;
+    let changed = 0;
+    let sent: string[] = [];
+    const r = await chained(rollCallChain(code), () => runWrite(`delegate:bulk:${committeeId}:${seqs.get(ids[0])}`, async () => {
+      const mine = owned();
+      if (mine.length === 0) return 'skipped';
+      const { data, error } = await sessionClient(code, chairSuffix).rpc('set_delegate_statuses', {
+        p_committee: committeeId, p_status: status, p_ids: mine,
+      });
+      if (error) {
+        if (error.code === 'PGRST202') { unavailable = true; return 'skipped'; }
+        return failedFrom(error, 'Error setting delegate statuses (bulk):');
+      }
+      sent = mine;
+      changed = typeof data === 'number' ? data : 0;
+      return 'ok';
+    }, { retry: true }), 'failed' as WriteResult);
+    if (unavailable) {
+      // The RPC does not exist: row by row, for the rows this bulk still owns. Each single
+      // write claims its row anew (superseding this bulk), so nothing is left pending here.
+      const rows = owned();
+      const results = await Promise.all(rows.map((id) => setDelegateStatus(id, status, code, chairSuffix)));
+      return results.every(Boolean) ? rows.length : null;
+    }
+    if (r === 'ok') { sent.forEach((id) => settleRollCall(code, id, 'status', seqs.get(id)!)); return changed; }
+    if (r === 'failed') { ids.forEach((id) => settleRollCall(code, id, 'status', seqs.get(id)!)); return null; }
+    return 0;   // every row was taken over by a newer press
+  }
   const { data, error } = await sessionClient(code, chairSuffix).rpc('set_delegate_statuses', {
     p_committee: committeeId, p_status: status, p_ids: ids,
   });
@@ -1749,6 +1898,8 @@ export async function logEvent(committeeId: string, e: {
   // Motion events only (src/lib/motionLog.ts).
   motionId?: string; motionType?: string; totalTime?: number; speakingTime?: number;
   tourOrder?: string; outcome?: string; prevMotionId?: string;
+  /** Manual adjustments: the chair who made it (display only). */
+  by?: string;
 }, code: string, chairSuffix?: string): Promise<void> {
   const payload = JSON.stringify({ ...e, timestamp: serverNowIso() });   // database clock (T-1)
   const row = {
@@ -1796,7 +1947,8 @@ export async function insertLogRows(
 // FEEDBACK
 // ============================================================
 
-export type FeedbackLevel = 'speech' | 'session' | 'conference';
+// 'document': a chair note on a sponsor during a document introduction (DocumentsModal).
+export type FeedbackLevel = 'speech' | 'session' | 'conference' | 'document';
 
 export interface FeedbackEntry {
   id: string;
@@ -2227,6 +2379,18 @@ export async function updateCommitteeAgendaInDB(
   // `set_committee_agenda` writes `topic` and merges `agendaTopicIndex` into the blob in one
   // statement, with no read first, so it cannot wipe chairJoinSuffix and cannot race another
   // chair's settings write. It returns false when RLS refused the update.
+  // Offline resilience (4 Oct 2026): idempotent, so retried and PARKED on the topic key (the
+  // row slice is held while it waits); false only on a refusal. The picker keeps its busy
+  // flag while it is parked, so a second pick waits for the first to land.
+  if (OFFLINE_RESILIENCE) {
+    const r = await runWrite([`${committeeId}:topic`], async () => {
+      const { data, error } = await sessionClient(code, chairSuffix)
+        .rpc('set_committee_agenda', { p_committee: committeeId, p_index: topicIndex, p_topic: topic });
+      if (error) return failedFrom(error, 'Error setting agenda:');
+      return data === true ? 'ok' : 'failed';
+    }, { retry: true });
+    return r !== 'failed';
+  }
   const { data, error } = await sessionClient(code, chairSuffix)
     .rpc('set_committee_agenda', { p_committee: committeeId, p_index: topicIndex, p_topic: topic });
   if (error) {
@@ -2245,8 +2409,11 @@ export const COMMITTEE_TOPIC_MAX = 150;
 // still equals one of the conference topics; a custom wording is replaced by the topic the
 // stored index points at on the organiser's next save.) Conditional on `ended_at is null`,
 // counted with `.select('id')` because an RLS refusal resolves with error null and zero rows.
-// Not retried: the caller rolls its optimistic topic back on false, so a retry landing later
-// would contradict the screen.
+// Offline resilience (4 Oct 2026): setting the topic to a text is idempotent, so it is retried
+// and PARKED (with the switch off: one attempt, as before). The caller rolls its optimistic
+// topic back on false, which now means a real refusal only, never a dropped request; a newer
+// topic supersedes a parked older one (same key), and while it waits the row slice is held,
+// so a refetch cannot put the old topic back.
 export async function updateCommitteeTopicInDB(committeeId: string, topic: string, code: string, chairSuffix?: string): Promise<boolean> {
   const next = topic.trim().slice(0, COMMITTEE_TOPIC_MAX);
   if (!next) return false;
@@ -2255,7 +2422,7 @@ export async function updateCommitteeTopicInDB(committeeId: string, topic: strin
       .update({ topic: next }).eq('id', committeeId).is('ended_at', null).select('id');
     if (error) { return failedFrom(error, 'Error updating topic:'); }
     return rowsOf(data) > 0 ? 'ok' : 'failed';
-  }, { retry: false, rerunnable: false });
+  }, OFFLINE_RESILIENCE ? { retry: true } : { retry: false, rerunnable: false });
   return r !== 'failed';
 }
 

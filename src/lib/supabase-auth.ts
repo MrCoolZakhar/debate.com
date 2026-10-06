@@ -29,7 +29,10 @@ import { createClient as _createSupabaseClient } from '@supabase/supabase-js';
 //    shows nothing and reports nothing.
 // 3. Only when that refresh fails (the person really is signed out) is the
 //    sign-in pop-up opened with "Your session has expired. Please sign in
-//    again." and one error report sent, at most once a minute.
+//    again." and one error report sent, at most once a minute. The report is
+//    marked expected (recorded, never emailed): being asked to sign in again
+//    is the rule working, not a fault. A refresh that TIMED OUT, or a browser
+//    that is offline, announces nothing at all (6 Oct 2026).
 //
 // Plus a safety net: on window focus and on the tab becoming visible, the SDK
 // is asked for its session, which refreshes an expired token before the page's
@@ -53,6 +56,10 @@ if (isBrowser) {
 }
 
 let refreshing: Promise<string | null> | null = null;
+/** True when the last refreshOnce gave up on its 8 s timeout rather than being
+ *  told there is no session. A hung auth lock or a dead connection is not the
+ *  person being signed out, so it never opens the sign-in pop-up (6 Oct 2026). */
+let lastRefreshTimedOut = false;
 
 /** Refresh the session once for every caller that asks at the same moment.
  *  Resolves to the new access token, or null when there is no session any more.
@@ -60,7 +67,8 @@ let refreshing: Promise<string | null> | null = null;
 function refreshOnce(): Promise<string | null> {
   if (refreshing) return refreshing;
   refreshing = (async () => {
-    const timeout = new Promise<null>((resolve) => setTimeout(() => resolve(null), 8000));
+    let timedOut = false;
+    const timeout = new Promise<null>((resolve) => setTimeout(() => { timedOut = true; resolve(null); }, 8000));
     const attempt = (async () => {
       try {
         const { data } = await supabaseAuthClient.auth.refreshSession();
@@ -77,6 +85,7 @@ function refreshOnce(): Promise<string | null> {
       }
     })();
     const token = await Promise.race([attempt, timeout]);
+    lastRefreshTimedOut = !token && timedOut;
     if (token) latestToken = token;
     return token;
   })().finally(() => {
@@ -130,13 +139,16 @@ let expiredAnnouncedAt = 0;
 /** The refresh failed: the person really is signed out. Tell them once, with
  *  the sign-in pop-up, and report it once. */
 function announceExpired(raw: string) {
+  // Offline, or the refresh never answered: nothing says the session is gone.
+  if (lastRefreshTimedOut) return;
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) return;
   if (Date.now() - expiredAnnouncedAt < 60_000) return;
   expiredAnnouncedAt = Date.now();
   void import('./authModal').then((m) => {
     if (!m.isAuthModalOpen()) m.openAuth({ notice: SESSION_EXPIRED_MESSAGE });
   }).catch(() => {});
   void import('./reportCrash').then((m) => {
-    m.reportUserError({ shown: SESSION_EXPIRED_MESSAGE, raw, code: 'PGRST303', branch: 'session_expired', expected: false });
+    m.reportUserError({ shown: SESSION_EXPIRED_MESSAGE, raw, code: 'PGRST303', branch: 'session_expired', expected: true });
   }).catch(() => {});
 }
 
