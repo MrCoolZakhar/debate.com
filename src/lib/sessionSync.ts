@@ -38,6 +38,7 @@ import {
   type CommitteeTable,
   type CommitteeChangePayload,
   type RealtimeStatus,
+  gslDedupeApplies,
 } from './committeeService';
 import { OFFLINE_RESILIENCE } from './offlineResilience';
 import { nudgeParkedWrites } from './writeStatus';
@@ -402,8 +403,9 @@ export function withCurrentSpeaker(prev: Committee, cs: SliceData['currentSpeake
     speakerSeatedAt: cs.speakerSeatedAt,
     ...(opts.includeRemaining ? { speakerTimeRemaining: cs.speakerTimeRemaining } : {}),
     // Drop the new speaker from the local GSL to avoid a transient duplicate before the
-    // speakers_list delete event arrives (mirrors getCommitteeByCode).
-    speakersList: cs.currentSpeaker
+    // speakers_list delete event arrives (mirrors getCommitteeByCode). Only outside a
+    // moderated caucus: a caucus speaker may still hold a GSL place, which must stay listed.
+    speakersList: cs.currentSpeaker && gslDedupeApplies(prev)
       ? prev.speakersList.filter((s) => s.delegateId !== cs.currentSpeaker!.delegateId)
       : prev.speakersList,
   };
@@ -421,7 +423,7 @@ export function withCurrentSpeaker(prev: Committee, cs: SliceData['currentSpeake
 export function withLists(prev: Committee, lists: SliceData['lists']): Committee {
   return {
     ...prev,
-    speakersList: prev.currentSpeaker
+    speakersList: prev.currentSpeaker && gslDedupeApplies(prev)
       ? lists.speakersList.filter((s) => s.delegateId !== prev.currentSpeaker!.delegateId)
       : lists.speakersList,
     caucusQueue: lists.caucusQueue,

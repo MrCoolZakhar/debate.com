@@ -52,7 +52,7 @@ export type WriteStatusState = {
   parked: boolean;
 };
 
-type FailedEntry = { retryable: boolean; rerun: (() => Promise<unknown>) | null };
+type FailedEntry = { retryable: boolean; rerun: (() => Promise<unknown>) | null; scopes: string[] };
 
 const generations = new Map<string, number>();
 /** Writes (by per-call id, not key) between a failed attempt and their next retry. Two
@@ -138,11 +138,16 @@ function waitForParkWake(): Promise<void> {
  * log inserts (`keepOnRoleLoss`) are exempt: they record what already happened. No-op with
  * the switch off.
  */
-export function dropParkedWrites(committeeId: string): void {
+export function dropParkedWrites(committeeId: string, code?: string): void {
   if (!OFFLINE_RESILIENCE || !committeeId) return;
   dropSeqByCommittee.set(committeeId, issueSeq);
-  for (const fk of Array.from(failedWrites.keys())) {
-    if (fk.split('+').some((p) => committeeOfKey(p) === committeeId)) failedWrites.delete(fk);
+  // Writes whose keys do not start with the committee id (the roll call: `delegate:<id>:...`)
+  // carry a `scope` naming the session code instead (see rollCallScope).
+  const codeScope = code ? rollCallScope(code) : null;
+  if (codeScope) dropSeqByCommittee.set(codeScope, issueSeq);
+  for (const [fk, f] of Array.from(failedWrites.entries())) {
+    if (fk.split('+').some((p) => committeeOfKey(p) === committeeId)
+      || (codeScope && f.scopes.includes(codeScope))) failedWrites.delete(fk);
   }
   nudgeParkedWrites();
   emit();
@@ -271,6 +276,14 @@ export interface RunWriteOptions {
   survivesLifecycle?: boolean;
   /** Exempt from dropParkedWrites (append-only log rows: they record what already happened). */
   keepOnRoleLoss?: boolean;
+  /** Extra owner for dropParkedWrites when the keys do not start with the committee id (the
+   *  roll call's `delegate:<id>:status` keys): `rollCallScope(code)`. */
+  scope?: string;
+}
+
+/** The role-loss scope of a session's roll-call writes (their keys carry no committee id). */
+export function rollCallScope(code: string): string {
+  return `code=${(code || '').toUpperCase()}`;
 }
 
 /** `${committeeId}:...` keys belong to a committee; other keys (delegate:, motion:) do not. */
@@ -306,8 +319,9 @@ export async function runWrite(
   const cancelled = () => !opts.survivesLifecycle && (
     list.some((k, i) => (cancelledUpTo.get(k) ?? 0) >= mine[i]) || parkCancelled());
   const committees = list.map(committeeOfKey).filter((c): c is string => !!c);
+  const owners = opts.scope ? [...committees, opts.scope] : committees;
   const dropped = () => OFFLINE_RESILIENCE && !opts.keepOnRoleLoss
-    && committees.some((c) => (dropSeqByCommittee.get(c) ?? 0) >= issuedAt);
+    && owners.some((c) => (dropSeqByCommittee.get(c) ?? 0) >= issuedAt);
   const rerunnable = opts.rerunnable ?? opts.retry;
   const releasePending = beginPendingWrite(list);
   // The committee whose current_speaker this write touches (key `${id}:speaker...`), or null.
@@ -418,6 +432,7 @@ export async function runWrite(
       failedWrites.set(primary, {
         retryable: rerunnable,
         rerun: rerunnable ? () => runWrite(list, attempt, opts) : null,
+        scopes: opts.scope ? [opts.scope] : [],
       });
       changed = true;
     } else if (result === 'ok') {

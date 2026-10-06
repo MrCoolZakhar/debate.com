@@ -14,6 +14,9 @@ import { moderatorNameOf, notifyCommenterOnly } from '@/lib/commenterNotice';
 import DraggablePopover from '@/components/DraggablePopover';
 import SpeakerStrip, { type StripHeader } from '@/components/SpeakerStrip';
 import CommenterFloor from '@/components/CommenterFloor';
+import CommenterClock from '@/components/CommenterClock';
+import CaucusProposer from '@/components/CaucusProposer';
+import { clampGavelSeconds } from '@/lib/gavelSound';
 import SessionCodePresenter from '@/components/SessionCodePresenter';
 import { RollCallWithJoin } from '@/components/RollCallJoinPanel';
 import FloorEmblemBackdrop from '@/components/FloorEmblemBackdrop';
@@ -25,7 +28,8 @@ import { CaucusState, Committee, Delegate, DelegateStatus } from '@/lib/types';
 import RollCallPanel, { FlagCircle, recognisedStatus } from '@/components/RollCallPanel';
 import MotionsModal from '@/components/MotionsModal';
 import MotionFlightNotice from '@/components/MotionFlightNotice';
-import { logFloorSpeech, logTimedSpeech, cowTurnKey, floorSpeechSeconds, creditRoomOrderTour } from '@/lib/floorSpeech';
+import { logFloorSpeech, logTimedSpeech, cowTurnKey, floorSpeechSeconds, creditRoomOrderTour, logYield } from '@/lib/floorSpeech';
+import YieldPopover from '@/components/YieldPopover';
 import DocumentsModal from '@/components/DocumentsModal';
 import { getCountryByName, getCountryDisplayName, matchesCountryQuery, startsWithCountryQuery } from '@/lib/countries';
 import { SeatFlag, SeatArtProvider } from '@/components/SeatFlag';
@@ -216,8 +220,9 @@ function abbrevCountry(name: string): string {
 }
 
 type CommitteeSetter = React.Dispatch<React.SetStateAction<Committee | null>>;
-/** The two floating floor panels. Independent: both may be open at once. */
-type FloorPopover = 'extraTime' | 'rightToReply';
+/** The floating floor panels. Independent: several may be open at once. `yield` (Oct 2026)
+ *  is the GSL Yield panel (src/components/YieldPopover.tsx). */
+type FloorPopover = 'extraTime' | 'rightToReply' | 'yield';
 type FloorPopovers = Record<FloorPopover, boolean>;
 
 const localUpdateTime = { current: 0 };
@@ -507,7 +512,7 @@ const FLOOR_NAME_REM = '2.16rem';
 const FLOOR_DISC_PX = 173;
 const FLOOR_FLAG_SHADOW = '0 0 0 4px #F0EBDD, 0 2px 6px rgba(27,56,40,0.12), 0 12px 28px rgba(27,56,40,0.20)';
 
-function DraggableSpeakersQueue({ list, onReorder, onRemove, onRemoveCurrent, lastSpeakerDelegateId, currentSpeakerDelegateId, onDeckDelegateId, header, isRoomOrderTdT, onLockedAttempt }: {
+function DraggableSpeakersQueue({ list, onReorder, onRemove, onRemoveCurrent, lastSpeakerDelegateId, currentSpeakerDelegateId, onDeckDelegateId, header, isRoomOrderTdT }: {
   list: { delegateId: string; country: string }[];
   onReorder?: (newList: { delegateId: string; country: string }[]) => void;
   onRemove?: (delegateId: string) => void;
@@ -518,8 +523,6 @@ function DraggableSpeakersQueue({ list, onReorder, onRemove, onRemoveCurrent, la
   onDeckDelegateId?: string | null;
   header?: StripHeader | null;
   isRoomOrderTdT?: boolean;
-  /** A Commenter pressing a flag: the "only the Moderator" notice. */
-  onLockedAttempt?: () => void;
 }) {
   // Pointer-driven drag (mouse, pen, touch), drop bar, the X on the floor speaker:
   // src/components/SpeakerStrip.tsx.
@@ -535,7 +538,6 @@ function DraggableSpeakersQueue({ list, onReorder, onRemove, onRemoveCurrent, la
       onDeckDelegateId={onDeckDelegateId}
       header={header}
       isRoomOrderTdT={isRoomOrderTdT}
-      onLockedAttempt={onLockedAttempt}
       formatName={(country) => abbrevCountry(getCountryDisplayName(country, language))}
     />
   );
@@ -706,8 +708,10 @@ function CaucusAddSpeakerInput({ committee, spokenCountries, onAdd, onAddFirst, 
             }
             const isFirst = d === topNotOnList;
             return (
-              <button key={d.id} onMouseDown={(e) => { e.preventDefault(); commit(d); }}
-                className={`w-full flex items-center gap-3 px-4 py-2.5 text-start transition-colors ${isFirst ? 'bg-[#1B3828]/20 text-[#1C1410]' : 'text-[#1C1410] hover:bg-[#DDD4C0]'}`}>
+              // A div, not a <button>: it holds the add first / add last buttons (a button in
+              // a button is invalid HTML). Keyboard picks go through the input's Enter.
+              <div key={d.id} role="option" aria-selected={isFirst} onMouseDown={(e) => { e.preventDefault(); commit(d); }}
+                className={`w-full flex items-center gap-3 px-4 py-2.5 text-start transition-colors cursor-pointer ${isFirst ? 'bg-[#1B3828]/20 text-[#1C1410]' : 'text-[#1C1410] hover:bg-[#DDD4C0]'}`}>
                 <span className="shrink-0 w-6 h-6 inline-flex items-center justify-center">
                   <SeatFlag country={d.country} size={20} className="object-contain" fallback={<UnknownSeatIcon size={20} />} />
                 </span>
@@ -731,7 +735,7 @@ function CaucusAddSpeakerInput({ committee, spokenCountries, onAdd, onAddFirst, 
                     <span className="text-xs text-[#9A8A78]">{t('gsl_enter_hint')}</span>
                   </div>
                 )}
-              </button>
+              </div>
             );
           })}
         </div>
@@ -749,10 +753,8 @@ function CaucusAddSpeakerInput({ committee, spokenCountries, onAdd, onAddFirst, 
 }
 
 // ── Unmoderated Caucus View ───────────────────────────────────────────────────
-// A Consultation of the Whole caucus also carries `floorRemaining`: the live caucus total
-// stamped when the floor holder was tapped (item 11). Stored in the caucus JSONB beside
-// `floorSince`; readers that do not know it ignore it.
-type CowCaucus = CaucusState & { floorRemaining?: number | null };
+// A Consultation of the Whole caucus also carries `floorRemaining` (CaucusState): the live
+// caucus total stamped when the floor holder was tapped (item 11).
 function UnmoderatedCaucusView({ committee, setCommittee, isViewOnly = false, gavelCue }: { committee: Committee; setCommittee: CommitteeSetter; isViewOnly?: boolean; gavelCue?: GavelCue }) {
   const t = useT();
   const { language } = useLanguage();
@@ -850,7 +852,7 @@ function UnmoderatedCaucusView({ committee, setCommittee, isViewOnly = false, ga
   const cowHolderSeconds = (since: number, now: number): number => {
     const wall = Math.max(0, Math.round((now - since) / 1000));
     const live = caucusRemainingNow(caucus, now);
-    const stamped = (caucus as CowCaucus).floorRemaining;
+    const stamped = caucus.floorRemaining;
     const ran = typeof stamped === 'number' && Number.isFinite(stamped)
       ? stamped - live
       : (caucus.totalTime ?? 0) - live;
@@ -876,7 +878,7 @@ function UnmoderatedCaucusView({ committee, setCommittee, isViewOnly = false, ga
     const spoken = prev && !(caucus.spokenCountries ?? []).includes(prev)
       ? [...(caucus.spokenCountries ?? []), prev]
       : (caucus.spokenCountries ?? []);
-    const updated: CowCaucus = {
+    const updated: CaucusState = {
       ...caucus, currentSpeaker: countryName, spokenCountries: spoken,
       floorSince: new Date(now).toISOString(), floorRemaining: caucusRemainingNow(caucus, now),
     };
@@ -940,8 +942,8 @@ function UnmoderatedCaucusView({ committee, setCommittee, isViewOnly = false, ga
     // caucusRemainingNow is the LIVE derived value, so the elapsed time is already subtracted:
     // never use committee.caucus.remainingTime here, which is the value at the anchor and
     // would hand back every second the caucus had already burnt.
-    const prevStamp = (committee.caucus as CowCaucus).floorRemaining;
-    const extended: CowCaucus = {
+    const prevStamp = committee.caucus.floorRemaining;
+    const extended: CaucusState = {
       ...committee.caucus, totalTime: committee.caucus.totalTime + addSecs,
       // The Consultation floor holder's stamp moves with the clock, or the extension would be
       // read as time the holder did not speak (item 11).
@@ -1005,10 +1007,16 @@ function UnmoderatedCaucusView({ committee, setCommittee, isViewOnly = false, ga
             {caucus.purpose}
           </span>
         )}
+        {/* Who raised it (Oct 2026, owner): a round flag + the name, wrapping, never cut. */}
+        {caucus.proposedBy && <CaucusProposer proposedBy={caucus.proposedBy} size={26} fontSize={15} className="flex-wrap" />}
       </div>
       {/* liveTotal, not caucus.remainingTime — the stored field is the value at the anchor,
           so rendering it raw is a clock that only moves when the chair writes. */}
-      <div className={`floor-emblem-anchor text-9xl font-black font-mono tabular-nums mb-8 ${liveTotal <= 30 ? 'text-red-500' : 'text-[#1C1410]'}`}>
+      {/* A Commenter's gavel cue (Oct 2026): below the committee's gavel mark the running
+          countdown pulses gently (no pulse under reduced motion). No audio on this device. */}
+      <style>{`@keyframes uc-gavel-pulse{0%,100%{opacity:1}50%{opacity:.6}}.uc-pulse{animation:uc-gavel-pulse 1s ease-in-out infinite}@media (prefers-reduced-motion: reduce){.uc-pulse{animation:none}}`}</style>
+      <div className={`floor-emblem-anchor text-9xl font-black font-mono tabular-nums mb-8 ${liveTotal <= 30 ? 'text-red-500' : 'text-[#1C1410]'} ${
+        isViewOnly && !!unmodAnchor && liveTotal > 0 && liveTotal <= clampGavelSeconds(committee.dbSettings?.gavelSoundAtSeconds) ? 'uc-pulse' : ''}`}>
         {formatTime(liveTotal)}
       </div>
       <div className="w-full max-w-sm h-2 bg-[#DDD4C0] rounded-full overflow-hidden mb-8">
@@ -1144,8 +1152,12 @@ function ModeratedCaucusMain({
   openPopovers, setPopover, extraTimeAdded,
   handleToggleTimer, handleRestartTime, handleNextCaucusSpeaker, handleEndCaucus, handleStartOnDeck,
   sessionEnded, isViewOnly = false, onRecognise, commenterLock = null, onRemoveFloorSpeaker,
+  speakerAnchor = null,
 }: {
   committee: Committee; setCommittee: CommitteeSetter;
+  /** The seated speaker's persisted clock anchor (current_speaker.time_remaining +
+   *  started_at), for the Commenter's floor clock (CommenterClock). */
+  speakerAnchor?: { base: number; startedAt: string | null } | null;
   /** Take the delegation holding the caucus floor off it (the page's
    *  `handleRemoveCurrentSpeaker`: pause at the live value, log the speech, conditional clear,
    *  the total re-anchored paused with nobody on its floor). Omitted = no removal here. */
@@ -1307,6 +1319,8 @@ function ModeratedCaucusMain({
     icon: <Users size={18} strokeWidth={2.4} aria-hidden />,
     label: committee.caucus?.motionLabel ?? caucusTitle,
     detail: caucusTopic || null,
+    // Who raised it, as a round flag + name on the same line (Oct 2026, owner).
+    trailing: caucus.proposedBy ? <CaucusProposer proposedBy={caucus.proposedBy} size={24} fontSize={14} /> : null,
   };
   // Not drawn for a Commenter (see gslControls): the dock leaves no room for the row.
   const caucusControls = !sessionEnded && !isViewOnly ? (
@@ -1347,7 +1361,18 @@ function ModeratedCaucusMain({
           floorLabel={floorCountry ? (caucusHasSpeaker ? t('view_is_speaking') : t('gsl_on_deck')) : null}
           upcoming={queue.filter((s) => s.delegateId !== onDeck?.delegateId && s.country !== committee.caucus?.currentSpeaker)}
           formatName={(c) => (isRoomOrderTdT ? c : getCountryDisplayName(c, language))}
-          onLockedAttempt={commenterLock?.onAttempt}
+          // The speaker's time, derived from the persisted anchor against the database clock
+          // (CommenterClock). On deck nothing runs: the slot Start will give them.
+          clock={floorCountry && !sessionEnded ? (
+            <CommenterClock
+              base={caucusHasSpeaker ? (speakerAnchor?.base ?? speakerTimeRemaining) : onDeckSlot}
+              startedAt={caucusHasSpeaker ? (speakerAnchor?.startedAt ?? null) : null}
+              showPaused={caucusHasSpeaker}
+              gavelAt={clampGavelSeconds(committee.dbSettings?.gavelSoundAtSeconds)}
+              onPress={commenterLock?.onAttempt}
+              pressTitle={commenterLock?.reason}
+            />
+          ) : null}
           emptyHint={<p className="text-center text-sm font-semibold" style={{ color: '#6A5A4A' }}>{t('gsl_no_speakers_queued')}</p>}
         />
         {!sessionEnded && !isTdT && (
@@ -1391,7 +1416,6 @@ function ModeratedCaucusMain({
               onRemove={isViewOnly ? undefined : handleCaucusRemoveFromQueue}
               onRemoveCurrent={isViewOnly || sessionEnded || !caucusFloorEntry || !onRemoveFloorSpeaker ? undefined : onRemoveFloorSpeaker}
               isRoomOrderTdT={isRoomOrderTdT}
-              onLockedAttempt={commenterLock?.onAttempt}
             />
           </div>
           {/* ZONE 2 — Flag + name + timer + progress: compresses as viewport shrinks */}
@@ -1806,7 +1830,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
   // Add time and Right of Reply are INDEPENDENT floating panels (owner, 15 Sep 2026): the
   // chair may keep both open at once. Each has its own flag; nothing else closes one when
   // the other opens.
-  const [openPopovers, setOpenPopovers] = useState<FloorPopovers>({ extraTime: false, rightToReply: false });
+  const [openPopovers, setOpenPopovers] = useState<FloorPopovers>({ extraTime: false, rightToReply: false, yield: false });
   const setPopover = useCallback((which: FloorPopover, open: boolean | 'toggle') => {
     setOpenPopovers((p) => {
       const next = open === 'toggle' ? !p[which] : open;
@@ -1852,9 +1876,14 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
      then the literal truth. ALWAYS seat both together — a base without its anchor (or
      vice versa) is the desync. Reader only: never touches `committee`, never sets
      localUpdateTime (RULE 3 / RULE 4). */
+  // The same anchor as STATE, for the Commenter's floor clock (CommenterClock), which
+  // re-derives from it against the database clock on its own repaint interval. Set only here,
+  // i.e. only when the anchor is seated (a press or a current_speaker event), never per tick.
+  const [speakerAnchor, setSpeakerAnchor] = useState<{ base: number; startedAt: string | null }>({ base: 90, startedAt: null });
   const seatSpeakerClock = useCallback((base: number, startedAt: string | null) => {
     const safeBase = Number.isFinite(base) ? Math.max(0, Math.round(base)) : 0;
     speakerAnchorRef.current = { base: safeBase, startedAt: startedAt ?? null };
+    setSpeakerAnchor({ base: safeBase, startedAt: startedAt ?? null });
     setSpeakerTimeRemaining(speakerRemainingNow(safeBase, startedAt ?? null));
     setSpeakerClockEpoch((n) => n + 1);
   }, []);
@@ -2145,7 +2174,14 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
           slices: ALL_SYNC_SLICES,
           getLocalWriteSeq: () => localWriteSeq.current,
           onConnection: setConnection,
-          onCatchUp: (phase) => { if (phase === 'done') setCatchUpTick((n) => n + 1); },
+          onCatchUp: (phase) => {
+            if (phase !== 'done') return;
+            setCatchUpTick((n) => n + 1);
+            // feedback rows are never refetched by the sync itself (its events only bump this
+            // counter), so a note written by another chair while this device was offline would
+            // stay unseen: after a successful catch-up, ask the dock and the scoreboard to re-read.
+            setFeedbackVersion((v) => v + 1);
+          },
           onEvent: (table) => {
             // Broadcasts first, and outside the debounce entirely. They are organiser-owned:
             // this device never writes the table, so there is no optimistic state to protect,
@@ -2492,12 +2528,12 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
     const lost = roleFlip.lost;
     // Offline resilience: whatever this device still had parked, backing off or queued for
     // the room is no longer its to write (the gavel moved, or it was kicked). Log rows exempt.
-    if (lost && OFFLINE_RESILIENCE && committee?.id) dropParkedWrites(committee.id);
+    if (lost && OFFLINE_RESILIENCE && committee?.id) dropParkedWrites(committee.id, committee.code);
 
     // Stop owning the clock, and close anything that only makes sense while acting.
     setTimerRunning(false);
     if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null; }
-    setOpenPopovers({ extraTime: false, rightToReply: false });
+    setOpenPopovers({ extraTime: false, rightToReply: false, yield: false });
     setRtrOpen(false);
     setRtrTimerActive(false);
     setCaucusLoading(false);
@@ -2924,6 +2960,8 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
     prevFloorCloseRef.current = floorCloseKey;
     if (prev === null || prev === floorCloseKey) return;
     setPopover('extraTime', false);
+    // Yield closes with the motion too; unmounting drops its local recipient timer.
+    setPopover('yield', false);
     if (!rtrOpen && !openPopovers.rightToReply) return;
     setPopover('rightToReply', false);
     setRtrOpen(false);
@@ -2944,12 +2982,16 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
   // A change made HERE lands in the store first and the echo writes the same value back.
   const dbGavelOn = committee?.dbSettings?.gavelSoundEnabled;
   const dbGavelAt = committee?.dbSettings?.gavelSoundAtSeconds;
+  // Auto start (Oct 2026) follows the ROW the same way: another chair's switch reaches this
+  // device's store, and the press-time read below (`autoStartOn`) sees it.
+  const dbAutoStart = committee?.dbSettings?.autoStartSpeakerTimer;
   const gavelCode = committee?.code;
   useEffect(() => {
     if (!gavelCode) return;
     if (typeof dbGavelOn === 'boolean') updateSetting(gavelCode, 'gavelSoundEnabled', dbGavelOn);
     if (typeof dbGavelAt === 'number') updateSetting(gavelCode, 'gavelSoundAtSeconds', dbGavelAt);
-  }, [gavelCode, dbGavelOn, dbGavelAt, updateSetting]);
+    if (typeof dbAutoStart === 'boolean') updateSetting(gavelCode, 'autoStartSpeakerTimer', dbAutoStart);
+  }, [gavelCode, dbGavelOn, dbGavelAt, dbAutoStart, updateSetting]);
   const gavelSettings = committee ? getSettings(committee.code) : null;
   // Name AND device (src/lib/gavelDevice.ts): a same-name phone must never knock too.
   const gavelCue: GavelCue = {
@@ -4065,7 +4107,16 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
 
   // ── Optimistic action handlers ──────────────────────────────────────────────
 
-  const handleNextSpeaker = async () => {
+  // Auto start (Oct 2026, Settings → Access → Speaker clock): read at PRESS time, from the
+  // store, which follows the row (`dbAutoStart` above). Never below quorum, suspended or
+  // ended: the clock then stays paused exactly as before.
+  const autoStartOn = () => getSettings(committee.code).autoStartSpeakerTimer === true
+    && !belowQuorum && !sessionEnded && !sessionSuspended && !committee.endedAt && !committee.suspendedAt;
+
+  // `yieldBonus` (Yield to the next speaker, Oct 2026): the yielding speaker's remaining
+  // seconds are added to the next speaker's slot (time_granted = limit + bonus, T-3), and the
+  // clock runs on if it was running. `run` forces the clock to start (auto start / yield).
+  const handleNextSpeaker = async (opts?: { yieldBonus?: number; run?: boolean }) => {
     setTimerRunning(false);
     // G-3: pause in ONE write, at the live value, so the anchor read below sees where the
     // clock really stopped.
@@ -4084,20 +4135,30 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
         extraSecs: extraTimeAddedSecsRef.current,
       });
     }
-    extraTimeAddedSecsRef.current = 0;
+    const bonus = Math.max(0, Math.round(opts?.yieldBonus ?? 0));
+    // The legacy local fallback (`slot + extraSecs - live`) counts a yielded bonus like +time.
+    extraTimeAddedSecsRef.current = bonus;
+    setExtraTimeAdded(bonus > 0);
 
     const removeDelegateId = committee.speakersList[0]?.delegateId ?? null;
     const [next, ...rest] = committee.speakersList;
-    const timeToUse = speakerTimeLimit;
-
-    // nextSpeakerInDB writes { time_remaining: timeToUse, started_at: null } — seat the
-    // local anchor to exactly that so this device and every reader agree immediately.
-    seatSpeakerClock(timeToUse, null);
-
-    localUpdateTime.current = Date.now();
+    const timeToUse = speakerTimeLimit + bonus;
 
     // S7: the seat nonce, identical in local state and in the row, names this floor turn.
     const seatedAt = serverNowIso();
+    // Auto start: seat AND start in the SAME current_speaker update, with one stamp (the seat
+    // nonce doubles as the clock anchor, like handleStartOnDeck), so nothing can land between.
+    const run = !!next && timeToUse > 0 && (opts?.run === true || autoStartOn());
+    const startedAt = run ? seatedAt : null;
+
+    // nextSpeakerInDB writes { time_remaining: timeToUse, started_at } — seat the local anchor
+    // to exactly that so this device and every reader agree immediately. A fresh seat bumps
+    // the gavel knock's anchor epoch, so an auto-started clock never knocks on the jump.
+    seatSpeakerClock(timeToUse, startedAt);
+    if (run) setTimerRunning(true);
+
+    localUpdateTime.current = Date.now();
+
     updateLocal(setCommittee, (c) => ({
       ...c,
       currentSpeaker: next ?? null,
@@ -4115,6 +4176,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
       committee.code,
       committee.dbChairJoinSuffix ?? undefined,
       seatedAt,
+      startedAt,
     );
     localUpdateTime.current = Date.now();
   };
@@ -4196,6 +4258,48 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
     updateLocal(setCommittee, (c) => ({ ...c, currentSpeaker: null, speakerSeatedAt: null, speakerTimeRemaining: timeToUse }));
     await nextSpeakerInDB(committee.id, timeToUse, null, null, null, committee.code, committee.dbChairJoinSuffix ?? undefined);
     localUpdateTime.current = Date.now();
+  };
+
+  // ── Yield (Oct 2026, Asia WorldMUN item 18) ──────────────────────────────────
+  // The GSL speaker on the floor gives their REMAINING time away (never more). Moderator,
+  // GSL, a seated speaker with time left, not ended or suspended. Both ways log the
+  // yielder's speech once (logFloorSpeech, their own seconds, turnKey) and ONE `yield`
+  // ledger row (logYield: scores nothing, History reads "France yielded 0:42 to Brazil").
+  const yieldLive = () => speakerRemainingNow(speakerAnchorRef.current.base, speakerAnchorRef.current.startedAt);
+  const canYieldNow = (): boolean => !!committee && !isViewOnly && gavelRoleOf(committee).isModerator
+    && committee.phase === 'speakers-list' && !!committee.currentSpeaker
+    && !sessionEnded && !sessionSuspended && !committee.endedAt && !committee.suspendedAt
+    && yieldLive() > 0;
+  // To the next GSL delegation: their slot is the speaker time limit PLUS the remaining
+  // seconds, seated in ONE current_speaker write (handleNextSpeaker: pause at the live value,
+  // log, then nextSpeaker with time_granted = the extended slot, T-3), running on if the clock
+  // was running (or by auto start), never below quorum.
+  const handleYieldToNext = () => {
+    if (!canYieldNow() || !committee.currentSpeaker) return;
+    const next = committee.speakersList[0];
+    if (!next) return;
+    const live = Math.round(yieldLive());
+    const clock = { base: speakerAnchorRef.current.base, startedAt: speakerAnchorRef.current.startedAt, extraSecs: extraTimeAddedSecsRef.current };
+    void logYield(committee, { to: next.country, seconds: live, mode: 'next', clock });
+    setPopover('yield', false);
+    void handleNextSpeaker({ yieldBonus: live, run: timerRunning && !belowQuorum });
+  };
+  // To another delegation: the yielder's turn ends exactly like Finish (pause at the live
+  // value, log, clear the floor; the next GSL delegation goes on deck), and the Yield panel
+  // times the recipient locally for exactly the remaining seconds (like Right of Reply).
+  // Answers those seconds, or null when nothing was yielded.
+  const handleYieldToOther = (country: string): number | null => {
+    if (!canYieldNow() || !committee.currentSpeaker) return null;
+    if (!country || country === committee.currentSpeaker.country) return null;
+    const live = Math.round(yieldLive());
+    if (live <= 0) return null;
+    const clock = { base: speakerAnchorRef.current.base, startedAt: speakerAnchorRef.current.startedAt, extraSecs: extraTimeAddedSecsRef.current };
+    setTimerRunning(false);
+    // G-3: pause in ONE write at the live value, so the speech read sees where it stopped.
+    pauseSpeakerTimerInDB(committeeIdRef.current, live, committeeCodeRef.current, chairSuffixRef.current);
+    void logYield(committee, { to: country, seconds: live, mode: 'other', clock });
+    void handleYieldFloor();
+    return live;
   };
 
   // Extra time RE-ANCHORS, and is now PERSISTED.
@@ -4398,8 +4502,19 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
     // one speech per delegation on its roster snapshot (idempotent, no-op for other caucuses).
     if (newRemaining <= 0 || (!next && !!prevCountry)) void creditRoomOrderTour(committee);
 
-    // nextSpeakerInDB below writes { time_remaining: speakTime, started_at: null }.
-    seatSpeakerClock(speakTime, null);
+    // S7: one seat nonce for local state and the row. Also the clock anchor when auto start
+    // is on (Oct 2026): the next speaker is seated with BOTH clocks running from this stamp,
+    // in the same current_speaker update and the same caucus write (like
+    // handleStartCaucusOnDeck). A Room Order placeholder's current_speaker write fails as it
+    // always has (uuid column); its clocks still run locally and in the caucus JSONB, which is
+    // exactly what pressing Start does for one.
+    const seatedAt = serverNowIso();
+    const run = !!next && newRemaining > 0 && speakTime > 0 && autoStartOn();
+    const startedAt = run ? seatedAt : null;
+
+    // nextSpeakerInDB below writes { time_remaining: speakTime, started_at }.
+    seatSpeakerClock(speakTime, newRemaining > 0 ? startedAt : null);
+    if (run) setTimerRunning(true);
     localUpdateTime.current = Date.now();
 
     if (newRemaining <= 0) {
@@ -4426,11 +4541,10 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
       // Advancing stops the clock (setTimerRunning(false) at the top of this handler), so the
       // total-clock anchor is released and newRemaining is the literal truth for every reader
       // until the chair presses play again. This is the per-speaker re-anchor point (H2).
-      totalStartedAt: null,
+      // With auto start the total is re-anchored RUNNING from the same stamp as the speaker.
+      totalStartedAt: startedAt,
     };
 
-    // S7: one seat nonce for local state and the row.
-    const seatedAt = serverNowIso();
     // Pure state update — no DB calls inside
     updateLocal(setCommittee, (c) => ({
       ...c,
@@ -4457,6 +4571,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
       committee.code,
       committee.dbChairJoinSuffix ?? undefined,
       seatedAt,
+      startedAt,
     );
     localUpdateTime.current = Date.now();
   };
@@ -4913,6 +5028,14 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
       addTimeActive={openPopovers.extraTime}
       onRightOfReply={gslHasSpeaker || onDeck ? undefined : toggleGslRtr}
       rightOfReplyActive={openPopovers.rightToReply}
+      yieldControl={{
+        onClick: () => setPopover('yield', 'toggle'),
+        active: openPopovers.yield,
+        // Opening is never blocked while the panel is open (it may be timing a recipient).
+        blockedReason: openPopovers.yield ? null
+          : !gslHasSpeaker ? t('speaker_ctl_need_speaker')
+          : speakerTimeRemaining <= 0 ? t('speaker_ctl_yield_no_time') : null,
+      }}
       tutorialTargets
     />
   ) : null;
@@ -5407,11 +5530,14 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                         <>
                           <p className="text-xs font-mono tracking-widest mb-3 font-bold" style={{ color: '#1B3828' }}>{t('caucus_starting_tdt')}</p>
                           <h1 className="text-5xl font-black mb-2" style={{ color: '#1B3828' }}>{t('caucus_tdt_title')}</h1>
-                          <p className="text-[#6A5A4A] text-sm mb-6">
+                          <p className={`text-[#6A5A4A] text-sm ${committee.caucus.proposedBy ? 'mb-3' : 'mb-6'}`}>
                             {committee.caucus.purpose?.includes('Room Order')
                               ? t('caucus_tdt_room_order')
                               : committee.caucus.purpose?.includes('Z→A') ? t('caucus_tdt_z_to_a') : t('caucus_tdt_a_to_z')}
                           </p>
+                          {committee.caucus.proposedBy && (
+                            <div className="flex justify-center mb-6"><CaucusProposer proposedBy={committee.caucus.proposedBy} size={26} fontSize={15} /></div>
+                          )}
                           <div className="flex justify-center gap-8 mb-8">
                             <div className="text-center">
                               <div className="text-2xl font-black text-[#1C1410]">
@@ -5439,7 +5565,10 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                         <>
                           <p className="text-xs font-mono tracking-widest mb-3 font-bold" style={{ color: '#1B3828' }}>{t('caucus_starting_moderated')}</p>
                           <h1 className="text-5xl font-black mb-2" style={{ color: '#1B3828' }}>{committee.caucus.purpose || t('caucus_moderated_title')}</h1>
-                          <p className="text-[#6A5A4A] text-sm mb-6">{committee.topic}</p>
+                          <p className={`text-[#6A5A4A] text-sm ${committee.caucus.proposedBy ? 'mb-3' : 'mb-6'}`}>{committee.topic}</p>
+                          {committee.caucus.proposedBy && (
+                            <div className="flex justify-center mb-6"><CaucusProposer proposedBy={committee.caucus.proposedBy} size={26} fontSize={15} /></div>
+                          )}
                           <div className="flex justify-center gap-8 mb-8">
                             <div className="text-center">
                               <div className="text-2xl font-black text-[#1C1410]">{formatTime(committee.caucus.totalTime)}</div>
@@ -5485,6 +5614,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                     commenterLock={commenterLock}
                     onRecognise={recogniseAbsentDelegate}
                     onRemoveFloorSpeaker={stableRemoveFloorSpeaker}
+                    speakerAnchor={speakerAnchor}
                   />
                 )
               )}
@@ -5508,7 +5638,12 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                         </div>
                         <div className="w-px bg-[#DDD4C0]" />
                         <div className="text-center">
-                          <div className="text-2xl font-black text-[#1C1410]">{committee.caucus.proposedBy}</div>
+                          {/* Round flag + localized name, never the raw stored string (Oct 2026). */}
+                          <div className="flex justify-center min-h-8 items-center">
+                            {committee.caucus.proposedBy
+                              ? <CaucusProposer proposedBy={committee.caucus.proposedBy} size={28} fontSize={20} hideLabel />
+                              : <span className="text-2xl font-black text-[#1C1410]">-</span>}
+                          </div>
                           <div className="text-xs text-[#9A8A78] mt-1">{t('caucus_proposed_by')}</div>
                         </div>
                       </div>
@@ -5544,7 +5679,18 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                       floorLabel={gslFloor ? (committee.currentSpeaker ? t('view_is_speaking') : t('gsl_on_deck')) : null}
                       upcoming={committee.speakersList.filter((s) => s.delegateId !== gslFloor?.delegateId)}
                       formatName={(c) => getCountryDisplayName(c, language)}
-                      onLockedAttempt={commenterLock?.onAttempt}
+                      // The speaker's time from the persisted anchor (CommenterClock). On deck:
+                      // the speaking time Start will give them, not running.
+                      clock={gslFloor && !sessionEnded ? (
+                        <CommenterClock
+                          base={committee.currentSpeaker ? speakerAnchor.base : speakerTimeLimit}
+                          startedAt={committee.currentSpeaker ? speakerAnchor.startedAt : null}
+                          showPaused={!!committee.currentSpeaker}
+                          gavelAt={clampGavelSeconds(committee.dbSettings?.gavelSoundAtSeconds)}
+                          onPress={commenterLock?.onAttempt}
+                          pressTitle={commenterLock?.reason}
+                        />
+                      ) : null}
                       emptyHint={<p className="text-center text-sm font-semibold" style={{ color: '#6A5A4A' }}>{t('gsl_no_speakers_queued')}</p>}
                     />
                   ) : gslFloor ? (
@@ -5559,7 +5705,6 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                           onReorder={isViewOnly ? undefined : (newList) => handleReorderSpeakersList(newList.filter((s) => s.delegateId !== committee.currentSpeaker?.delegateId))}
                           onRemove={isViewOnly ? undefined : handleRemoveFromSpeakersList}
                           onRemoveCurrent={isViewOnly || sessionEnded || !committee.currentSpeaker ? undefined : () => handleRemoveCurrentSpeaker()}
-                          onLockedAttempt={commenterLock?.onAttempt}
                         />
                       </div>
                       {/* ZONE 2 — Flag + name + timer + progress: compresses as viewport shrinks */}
@@ -5574,8 +5719,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                         />
                         <h1 className="font-black text-[#1C1410] text-center" style={{ fontSize: FLOOR_NAME_REM, margin: '8px 0' }}>{getCountryDisplayName(gslFloor.country, language)}</h1>
                         {isViewOnly ? (
-                          <div className={`font-bold text-[#6A5A4A] text-center ${commenterLock ? 'cursor-not-allowed' : ''}`} style={{ fontSize: '1.5rem', marginBottom: '8px' }}
-                            title={commenterLock?.reason} onClick={commenterLock?.onAttempt}>
+                          <div className="font-bold text-[#6A5A4A] text-center" style={{ fontSize: '1.5rem', marginBottom: '8px' }}>
                             {committee.currentSpeaker ? t('view_is_speaking') : t('gsl_on_deck')}
                           </div>
                         ) : (
@@ -5817,6 +5961,26 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
         <TutorialOverlay
           committee={committee}
           onEnd={() => setShowTutorial(false)}
+        />
+      )}
+      {/* YIELD (Oct 2026): GSL only, Moderator only. src/components/YieldPopover.tsx. */}
+      {!isViewOnly && !sessionEnded && openPopovers.yield && (
+        <YieldPopover
+          yielder={committee.phase === 'speakers-list' ? (committee.currentSpeaker?.country ?? null) : null}
+          remaining={speakerTimeRemaining}
+          nextCountry={committee.speakersList[0]?.country ?? null}
+          canYield={canYieldNow()}
+          onYieldToNext={handleYieldToNext}
+          onYieldToOther={handleYieldToOther}
+          renderCountryInput={(value, onChange) => (
+            <RtrCountryInput
+              committee={{ ...committee, delegates: committee.delegates.filter((d) => d.country !== committee.currentSpeaker?.country) }}
+              value={value}
+              onChange={onChange}
+            />
+          )}
+          gavelCue={gavelCue}
+          onClose={() => setPopover('yield', false)}
         />
       )}
       {/* RTR OVERLAY: a movable panel through Portal (DraggablePopover), completely outside

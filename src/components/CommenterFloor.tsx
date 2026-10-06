@@ -15,8 +15,9 @@
 //
 // Read-only by construction. No reorder, no removal, no clock, no writes — every prop is a
 // value the chair page already has, and nothing here calls setCommittee, updateLocal or the
-// database (RULES 3 to 5). A Commenter who presses something gets the ordinary
-// "Moderator only" notice through `onLockedAttempt`, exactly as on the strip.
+// database (RULES 3 to 5). Tapping the floor, a flag or a name raises NO notice (Oct 2026,
+// owner: the "only the Moderator" notice is for actions, not for reading). The one control
+// here is the speaker's clock (CommenterClock, `clock`), whose press does raise it.
 //
 // THE QUEUE IS HORIZONTAL (18 Sep 2026, owner): a row of round flags, numbered, names beneath,
 // scrolling sideways with edge fades, so the floor keeps its height.
@@ -45,8 +46,8 @@ export default function CommenterFloor({
   floorNumber,
   upcoming,
   formatName,
-  onLockedAttempt,
   emptyHint,
+  clock,
 }: {
   header?: StripHeader | null;
   /** The delegation on the floor: seated, or on deck. Null = nobody, and nobody queued. */
@@ -57,11 +58,17 @@ export default function CommenterFloor({
   floorNumber?: string | null;
   upcoming: CommenterFloorEntry[];
   formatName: (country: string) => string;
+  /** Kept for callers; no longer used (a tap on the floor is reading, not acting). */
   onLockedAttempt?: () => void;
+  /** The speaker's remaining time (CommenterClock), drawn under the floor label. */
+  clock?: ReactNode;
   /** Shown in place of the whole row when there is nobody on the floor and nobody queued. */
   emptyHint?: ReactNode;
 }) {
   const t = useT();
+  // With the clock under the name (Oct 2026) the flag gives up 32px, so the row keeps the
+  // height it had before (measured 305px at 1280x800) and the comment dock is not squeezed.
+  const flagPx = clock ? FLOOR_PX - 32 : FLOOR_PX;
 
   // Edge fades on the horizontal queue: a mask on whichever side has more to scroll to.
   // RTL scrollLeft is 0 at the start and negative towards the end, so work in magnitudes.
@@ -98,43 +105,52 @@ export default function CommenterFloor({
         <span className="font-black">{header.label}</span>
         {header.detail && <span className="font-normal">{' - '}{header.detail}</span>}
       </span>
+      {header.trailing && <span className="shrink-0 max-w-[50%] flex items-center gap-2"><span aria-hidden style={{ color: '#9A8A78' }}>·</span>{header.trailing}</span>}
     </div>
   ) : null;
+
+  // One entry per delegation: a stale realtime row can briefly list a delegation twice (or
+  // still list the one on the floor), and two cells with one key break the row.
+  const seen = new Set<string>();
+  const queue = upcoming.filter((u) => {
+    const kId = `id:${u.delegateId}`;
+    const kC = `c:${u.country.trim().toLowerCase()}`;
+    if (seen.has(kId) || seen.has(kC)) return false;
+    seen.add(kId); seen.add(kC);
+    return true;
+  });
 
   return (
     <div className="relative flex-1 min-h-0 flex flex-col overflow-hidden pt-4">
       {marker}
       {floorCountry ? (
-        <div
-          className="flex-1 min-h-0 flex items-center gap-6 px-6 pb-3"
-          onClick={onLockedAttempt}
-          title={onLockedAttempt ? t('commenter_only_hint') : undefined}
-        >
+        <div className="flex-1 min-h-0 flex items-center gap-6 px-6 pb-3">
           {/* ── The floor, inline-start ── */}
           <div className="shrink-0 flex flex-col items-center" style={{ maxWidth: FLOOR_PX + 48 }}>
             {floorNumber ? (
               <div
                 className="floor-emblem-anchor rounded-full bg-[#DDD4C0] shrink-0 flex items-center justify-center"
-                style={{ width: FLOOR_PX, height: FLOOR_PX }}
+                style={{ width: flagPx, height: flagPx }}
               >
                 <span className="font-black" style={{ color: '#1B3828', fontSize: '4rem' }}>{floorNumber}</span>
               </div>
             ) : (
               <SeatCircleFlag
                 country={floorCountry}
-                size={FLOOR_PX}
+                size={flagPx}
                 decorative
                 loading="eager"
                 className="floor-emblem-anchor"
                 style={{ boxShadow: '0 0 0 4px #F0EBDD, 0 2px 6px rgba(27,56,40,0.12), 0 12px 28px rgba(27,56,40,0.20)' }}
               />
             )}
-            <h1 className="font-black text-[#1C1410] text-center leading-tight" style={{ fontSize: '1.6rem', margin: '10px 0 2px' }}>
+            <h1 className="font-black text-[#1C1410] text-center leading-tight [overflow-wrap:anywhere]" style={{ fontSize: clock ? '1.45rem' : '1.6rem', margin: clock ? '8px 0 2px' : '10px 0 2px' }}>
               {formatName(floorCountry)}
             </h1>
             {floorLabel && (
               <p className="text-center font-bold" style={{ color: '#8B5A20', fontSize: '0.95rem' }}>{floorLabel}</p>
             )}
+            {clock && <div className="mt-1">{clock}</div>}
           </div>
 
           {/* ── The queue, inline-end, as ONE HORIZONTAL ROW (owner, 18 Sep 2026: "the
@@ -147,7 +163,7 @@ export default function CommenterFloor({
             <p className="shrink-0 text-[10px] font-black uppercase tracking-widest pb-2" style={{ color: '#9A8A78' }}>
               {t('gsl_up_next')}
             </p>
-            {upcoming.length === 0 ? (
+            {queue.length === 0 ? (
               <p className="text-sm font-semibold" style={{ color: '#9A8A78' }}>{t('gsl_no_speakers_queued')}</p>
             ) : (
               <ol
@@ -159,7 +175,7 @@ export default function CommenterFloor({
                 style={{ scrollbarWidth: 'none' }}
               >
                 <style>{`.cf-queue::-webkit-scrollbar{display:none}`}</style>
-                {upcoming.map((s, i) => (
+                {queue.map((s, i) => (
                   <li key={s.delegateId} className="shrink-0 flex flex-col items-center gap-1.5" style={{ width: QUEUE_CELL_PX }}>
                     <span className="relative inline-flex">
                       <SeatCircleFlag
@@ -177,9 +193,10 @@ export default function CommenterFloor({
                       </span>
                     </span>
                     <span
-                      className="w-full text-center font-semibold leading-tight"
-                      style={{ color: '#1C1410', fontSize: '0.85rem', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}
-                      title={formatName(s.country)}
+                      // Never clamped: a name is never cut off (CLAUDE.md §8). It wraps in its
+                      // cell, breaking inside a long word if it must.
+                      className="w-full text-center font-semibold leading-tight [overflow-wrap:anywhere]"
+                      style={{ color: '#1C1410', fontSize: '0.85rem' }}
                     >
                       <span className="sr-only">{`${i + 1}. `}</span>
                       {formatName(s.country)}

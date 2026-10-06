@@ -900,12 +900,11 @@ function RollCallPanelInner({
           const canRecognise = !!onAddToList && !isRollCallPhase && !showStatusSliders && !isReadOnly && !committee.endedAt;
 
           const handleRowClick = () => {
-            if (isViewOnly) {
-              // A row press that would act for the Moderator (add / remove / recognise, or a
-              // status slider, which is inert and lets the press through to the row).
-              if (!isReadOnly && !committee.endedAt && (onAddToList || isRollCallPhase || showStatusSliders)) onCommenterAttempt?.();
-              return;
-            }
+            // A Commenter's press on a ROW does nothing and says nothing (Oct 2026, owner: the
+            // "only the Moderator" notice must come from an action, not from any click). Rows are
+            // read and scrolled; the notice is raised only by the controls themselves (the status
+            // slider and observer toggle below, the bulk buttons, Begin Session).
+            if (isViewOnly) return;
             if (drag || justDraggedRef.current) return;
             if (!onAddToList) return;
             // The speaker holding the floor: a click takes them OFF it (the parent logs the
@@ -1003,7 +1002,8 @@ function RollCallPanelInner({
                   if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleRowClick(); }
                 } : undefined}
                 className={`group/seat flex items-center ${bigRoll ? 'gap-3.5 px-3 rounded-2xl' : sliderMode ? 'gap-2 px-2.5 rounded-xl' : 'rounded-xl'} focus:outline-none focus-visible:ring-2 focus-visible:ring-[#EED98A]/80 transition-[background-color,box-shadow] duration-150 motion-reduce:transition-none bg-[var(--row-bg)] hover:bg-[var(--row-bg-hover)] ${
-                  (!isRollCallPhase && !showStatusSliders && onAddToList && (!isAbsent || (canRecognise && !isViewOnly))) || isRollCallPhase || showStatusSliders
+                  isViewOnly ? ''
+                  : (!isRollCallPhase && !showStatusSliders && onAddToList && (!isAbsent || canRecognise)) || isRollCallPhase || showStatusSliders
                     ? 'cursor-pointer'
                     : isAbsent && !isRollCallPhase && !showStatusSliders
                     ? 'cursor-not-allowed'
@@ -1128,7 +1128,14 @@ function RollCallPanelInner({
                   </button>
                 )}
                 {sliderMode && (
-                  <div onClick={(e) => e.stopPropagation()} className={`shrink-0 flex items-center ${bigRoll ? 'gap-2.5' : 'gap-1'} ${(isReadOnly || isViewOnly) ? 'pointer-events-none opacity-50' : ''}`}>
+                  <div
+                    // A Commenter: the slider and the megaphone are inert (their own pointer events
+                    // are off), and a press on them raises the "only the Moderator" notice here. It
+                    // never falls through to the row, which says nothing for a Commenter.
+                    onClick={(e) => { e.stopPropagation(); if (isViewOnly && !isReadOnly && !committee.endedAt) onCommenterAttempt?.(); }}
+                    title={isViewOnly && !isReadOnly && onCommenterAttempt ? t('commenter_only_hint') : undefined}
+                    className={`shrink-0 flex items-center ${bigRoll ? 'gap-2.5' : 'gap-1'} ${isReadOnly ? 'pointer-events-none opacity-50' : isViewOnly ? 'opacity-50 cursor-not-allowed [&_*]:pointer-events-none' : ''}`}
+                  >
                     {/* Observer toggle: the megaphone right next to the slider, on every row while
                         taking roll. Gold = observer, faint = not, and an observer says so in the
                         word underneath (16 Sep 2026: the only place the word "observer" appears,

@@ -24,6 +24,7 @@ import React from 'react';
 import {
   Mic, Clock, Gavel, CornerUpLeft, FileText, MessageSquareQuote, Coins, Star,
   Award, ScrollText, CheckCircle2, UserCheck, Sparkles, Users, type LucideIcon,
+  Forward,
 } from 'lucide-react';
 import { NEU, NeuInset, OUTFIT } from '@/components/neu';
 import { SOFT, CARD_BORDER_COLOR } from '@/components/scoreboardTokens';
@@ -132,6 +133,7 @@ export function eventIcon(type: string): LucideIcon {
     case 'motion-passed': return Gavel;
     case 'motion': return Gavel;
     case 'right-of-reply': return CornerUpLeft;
+    case 'yield': return Forward;
     case 'manual-award': return Award;
     case 'manual-deduct': return Award;
     case 'wp': return FileText;

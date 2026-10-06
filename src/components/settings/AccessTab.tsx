@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Ban, BellRing, Check, Copy, Eye, Gavel, KeyRound, Lock, MessageCircle, MessageSquareText, Smartphone, Volume2, Users } from 'lucide-react';
+import { Ban, BellRing, Check, Timer, Copy, Eye, Gavel, KeyRound, Lock, MessageCircle, MessageSquareText, Smartphone, Volume2, Users } from 'lucide-react';
 import { clampGavelSeconds, primeGavelAudio, playGavelKnock, GAVEL_MIN_SECONDS, GAVEL_MAX_SECONDS, GAVEL_DEFAULT_SECONDS } from '@/lib/gavelSound';
 import { getCountryByName, getCountryDisplayName } from '@/lib/countries';
 import { SeatFlag } from '@/components/SeatFlag';
@@ -324,6 +324,13 @@ export default function AccessTab({ committee, s, upd, isViewOnly, myChairName, 
                 />
               )} />
           )}
+        </Section>
+
+        {/* Auto start (Oct 2026): Next seats the next speaker with the clock already running,
+            in the same single current_speaker write. A key-level patch through `upd` (rule 12). */}
+        <Section icon={Timer} title={t('stg_speaker_clock')} delay={160}>
+          <SettingRow first dense labelId="stg-auto-start" label={t('stg_auto_start_label')} hint={t('stg_auto_start_note')}
+            control={<GavelSwitch size="sm" icon={Timer} labelledBy="stg-auto-start" checked={s.autoStartSpeakerTimer === true} onChange={(v) => upd('autoStartSpeakerTimer', v)} />} />
         </Section>
       </div>
     </div>

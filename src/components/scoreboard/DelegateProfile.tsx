@@ -52,6 +52,7 @@ import { speechKey, type HistorySpeech, type HistoryNote } from '@/lib/sessionHi
 import { useLanguage, useT } from '@/contexts/LanguageContext';
 import { eventIcon } from './SessionScoreboardParts';
 import EditableNote from './EditableNote';
+import { motionNames } from '@/lib/committeeFlags';
 
 const fmt = (tpl: string, vars: Record<string, string | number>): string =>
   tpl.replace(/\{(\w+)\}/g, (m, k) => (k in vars ? String(vars[k]) : m));
@@ -80,7 +81,7 @@ type TimelineItem =
   | { kind: 'speech'; at: string; speech: HistorySpeech; pts: number | null }
   | { kind: 'event'; at: string; row: ScoreboardDelegateRow['ledger'][number] };
 
-export default function DelegateProfile({ row, rank, rankTotal, slices, speeches, manualAuthors, extra }: {
+export default function DelegateProfile({ row, rank, rankTotal, slices, speeches, manualAuthors, extra, consultationName }: {
   row: ScoreboardDelegateRow;
   /** 1-based place by score among `rankTotal` delegations (ties share a place). */
   rank: number;
@@ -95,6 +96,9 @@ export default function DelegateProfile({ row, rank, rankTotal, slices, speeches
   /** The chairs' plus / minus (Moderator and Commenter). Absent on the organiser board
    *  and once the session has ended. */
   extra?: React.ReactNode;
+  /** The committee's own name for a Consultation of the Whole (`motionNames(...).consultation`).
+   *  Optional: without it the localized default name is used. */
+  consultationName?: string;
 }) {
   const t = useT();
   const { language } = useLanguage();
@@ -109,7 +113,9 @@ export default function DelegateProfile({ row, rank, rankTotal, slices, speeches
     switch (c) {
       case 'speakers-list': return t('sb_hist_seg_gsl');
       case 'moderated-caucus': return t('sb_hist_seg_moderated');
-      case 'unmoderated-caucus': return t('sb_hist_seg_unmoderated');
+      // A speech is only ever logged with this context in a Consultation of the Whole (an
+      // ordinary unmoderated caucus has no floor), so it is labelled as one.
+      case 'unmoderated-caucus': return consultationName || motionNames(null, language).consultation;
       case 'tour-de-table': return t('sb_hist_seg_tour');
       default: return c;
     }

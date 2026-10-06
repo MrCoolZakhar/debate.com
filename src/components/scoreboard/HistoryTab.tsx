@@ -129,6 +129,11 @@ export default function HistoryTab({ committee, feedback, manualAuthors }: {
     switch (e.type) {
       case 'motion-raised': return t('sb_hist_motion_raised');
       case 'right-of-reply': return t('sb_hist_right_of_reply');
+      case 'yield': {
+        const s = Math.max(0, Math.round(e.seconds ?? 0));
+        const time = `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+        return t('sb_hist_yield').replace('{time}', time).replace('{to}', getCountryDisplayName(e.to ?? '', language));
+      }
       case 'manual-award':
       case 'manual-deduct': {
         const action = e.type === 'manual-award' ? t('sb_hist_award') : t('sb_hist_deduct');

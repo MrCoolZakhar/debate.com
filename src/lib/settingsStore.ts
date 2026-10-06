@@ -153,6 +153,10 @@ export interface CommitteeSettings {
   // reader of the timer values: no DB write, no committee update (RULES 3 and 4).
   gavelSoundEnabled: boolean;    // default true
   gavelSoundAtSeconds: number;   // default 15
+  // Next (GSL), caucus Next and a Tour de Table advance seat the next speaker WITH their clock
+  // running, in the same single current_speaker write (Oct 2026, Asia WorldMUN item 15).
+  // Never below quorum, suspended or ended. Read on the chair page from the row (dbSettings).
+  autoStartSpeakerTimer: boolean;   // default false
   // Scoring & ranking
   scoring: ScoringConfig;
   // Tab 3 — Access & Identity
@@ -210,6 +214,7 @@ export const DEFAULT_SETTINGS: CommitteeSettings = {
   gslRequireNextSpeaker: false,
   gavelSoundEnabled: true,
   gavelSoundAtSeconds: 15,
+  autoStartSpeakerTimer: false,
   scoring: DEFAULT_SCORING,
   sponsorLabel: '',
   lockDelegateRollCall: false,

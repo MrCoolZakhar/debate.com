@@ -52,6 +52,9 @@ export type StripHeader = {
   /** Drawn right after the label as " - detail" in regular weight (the caucus topic,
    *  owner 17 Sep 2026). Omitted on the GSL. */
   detail?: string | null;
+  /** On the same line after the name: who raised the caucus (CaucusProposer, Oct 2026).
+   *  Never truncated: the motion name gives way first. */
+  trailing?: ReactNode;
 };
 
 type Drag = {
@@ -75,7 +78,6 @@ export default function SpeakerStrip({
   onDeckDelegateId,
   header,
   isRoomOrderTdT,
-  onLockedAttempt,
   formatName,
 }: {
   list: Entry[];
@@ -95,7 +97,10 @@ export default function SpeakerStrip({
   /** The mode marker above the flags. Rendered even with an empty list. */
   header?: StripHeader | null;
   isRoomOrderTdT?: boolean;
-  /** A Commenter: pressing a flag (to drag or remove) raises the "only the Moderator" notice. */
+  /**
+   * Kept for callers; no longer used (Oct 2026, owner: a Commenter tapping a flag is reading,
+   * not acting, so it raises no "only the Moderator" notice).
+   */
   onLockedAttempt?: () => void;
   formatName: (country: string) => string;
 }) {
@@ -245,6 +250,7 @@ export default function SpeakerStrip({
             <span className="font-black">{header.label}</span>
             {header.detail && <span className="font-normal">{' - '}{header.detail}</span>}
           </span>
+          {header.trailing && <span className="shrink-0 max-w-[50%] flex items-center gap-2"><span aria-hidden style={{ color: '#9A8A78' }}>·</span>{header.trailing}</span>}
         </div>
       )}
       <div
@@ -272,8 +278,6 @@ export default function SpeakerStrip({
               }}
               onDragStart={(e) => e.preventDefault()}
               onPointerDown={movable ? (e) => onPointerDown(e, s.delegateId) : undefined}
-              onClick={onLockedAttempt ? () => onLockedAttempt() : undefined}
-              title={onLockedAttempt ? t('commenter_only_hint') : undefined}
             >
               {barBeforeId === s.delegateId && (
                 <span aria-hidden className="absolute rounded-full" style={{ insetInlineStart: -8, top: -2, height: 52, width: 4, backgroundColor: '#B6871F', boxShadow: '0 0 0 3px rgba(182,135,31,0.22)' }} />

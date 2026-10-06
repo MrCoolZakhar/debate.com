@@ -287,3 +287,59 @@ export async function creditRoomOrderTour(committee: Committee | null | undefine
   }
   return true;
 }
+
+/**
+ * Turn key of a YIELD (Oct 2026): the yielding speaker's own turn key with a `|yield`
+ * suffix. Never equal to the speech's key (the speech is still logged once, under its own
+ * key), and the same for every trigger of one yield, so it is written once.
+ */
+export function yieldTurnKey(
+  committeeId: string,
+  country: string,
+  anchor: { base: number; startedAt: string | null; seatedAt?: string | null },
+): string {
+  return `${floorTurnKey(committeeId, country, anchor)}|yield`;
+}
+
+/**
+ * Log a GSL speaker yielding their remaining time (Oct 2026): ONE `yield` ledger row,
+ * `{ country: from, to, seconds, mode }`. It scores nothing (scoring ignores the type), so
+ * neither side earns or loses points for it; the yielder's own speech is logged separately
+ * by `logFloorSpeech` with the seconds they actually spoke. History reads it as
+ * "France yielded 0:42 to Brazil". `mode`: 'next' = added to the next GSL speaker's slot,
+ * 'other' = timed for another delegation in the Yield panel. Idempotent by `yieldTurnKey`.
+ * Call BEFORE the floor is cleared or advanced (it names the yielder's turn).
+ */
+export async function logYield(
+  committee: Committee,
+  e: { to: string; seconds: number; mode: 'next' | 'other'; clock: FloorClock },
+): Promise<boolean> {
+  const from = committee.currentSpeaker?.country;
+  const seconds = Math.max(0, Math.round(e.seconds));
+  if (!from || !e.to || seconds <= 0) return false;
+  const turnKey = yieldTurnKey(committee.id, from, {
+    base: e.clock.base, startedAt: e.clock.startedAt, seatedAt: committee.speakerSeatedAt ?? null,
+  });
+  if (alreadyLogged(committee, turnKey)) return true;
+  loggedTurnKeys.add(turnKey);
+  const row = {
+    committee_id: committee.id, sender: '__system__', is_private: true, recipient: '__log__',
+    content: `__log__:${JSON.stringify({
+      country: from, type: 'yield', to: e.to, seconds, mode: e.mode,
+      context: 'speakers-list', topic: committee.topic, turnKey,
+      timestamp: new Date(serverNow()).toISOString(),
+    })}`,
+  };
+  if (OFFLINE_RESILIENCE) {
+    const ok = await insertLogRows(committee.id, [row], committee.code, committee.dbChairJoinSuffix ?? undefined, 'logging yield');
+    if (!ok) loggedTurnKeys.delete(turnKey);
+    return ok;
+  }
+  const { error } = await sessionClient(committee.code, committee.dbChairJoinSuffix ?? undefined).from('messages').insert(row);
+  if (error) {
+    console.error('Error logging yield:', error);
+    loggedTurnKeys.delete(turnKey);
+    return false;
+  }
+  return true;
+}

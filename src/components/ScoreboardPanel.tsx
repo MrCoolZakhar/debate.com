@@ -61,6 +61,7 @@ import ManualAdjust from '@/components/scoreboard/ManualAdjust';
 import HistoryTab from '@/components/scoreboard/HistoryTab';
 import { Committee } from '@/lib/types';
 import { getCountryDisplayName } from '@/lib/countries';
+import { motionNames } from '@/lib/committeeFlags';
 import { useLanguage, useT } from '@/contexts/LanguageContext';
 import { buildSessionScoreboardRows, sessionPointSlices, manualAuthorIndex, isDocumentNote } from '@/lib/sessionScoreboard';
 import { buildSessionHistory, type HistorySpeech } from '@/lib/sessionHistory';
@@ -453,6 +454,7 @@ export default function ScoreboardPanel({ committee, onClose, feedbackVersion = 
                       slices={sessionPointSlices(committee, row.ledger, language, t('sb_breakdown_manual'))}
                       speeches={speechesByCountry.get(row.country) ?? []}
                       manualAuthors={manualAuthors}
+                      consultationName={motionNames(committee, language).consultation}
                       extra={committee.endedAt ? undefined : (
                         <ManualAdjust key={row.key} onApply={(delta, reason) => applyManual(row.country, delta, reason)} />
                       )}

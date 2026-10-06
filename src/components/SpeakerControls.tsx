@@ -33,7 +33,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import type { CSSProperties, ReactNode } from 'react';
-import { ClockPlus, Pause, Play, RotateCcw, SkipForward, MessageSquareReply, Flag } from 'lucide-react';
+import { ClockPlus, Pause, Play, RotateCcw, SkipForward, MessageSquareReply, Flag, Forward } from 'lucide-react';
 import { useT } from '@/contexts/LanguageContext';
 
 const OUTFIT = "var(--font-brand), sans-serif";
@@ -51,6 +51,8 @@ export const SPEAKER_TONES = {
   time: { bg: '#D4EAFB', hover: '#C2E0F7', fg: '#0A3350' },
   // Soft apricot; deep rust on it is ~6:1.
   reply: { bg: '#FAD0A4', hover: '#F6C18C', fg: '#7A3A0C' },
+  // Yield (Oct 2026): a soft sage; deep green on it is ~8:1.
+  yield: { bg: '#D3E8DC', hover: '#C1DECC', fg: '#124A34' },
 } satisfies Record<string, Tone>;
 const TONES = SPEAKER_TONES;
 
@@ -65,6 +67,8 @@ const TONES = SPEAKER_TONES;
 export const POPOVER_TONES = {
   time: { surface: '#D9E8F4', headerBg: '#0E3A57', headerFg: '#DCEBF8', ink: '#0A3350', accent: 'rgba(14,58,87,0.45)', btn: '#0E3A57', btnHover: '#16506F', btnFg: '#EAF4FC', chip: '#C6DCEE', chipOn: '#0E3A57' },
   reply: { surface: '#FCE3C8', headerBg: '#AD4F18', headerFg: '#FFF6EC', ink: '#5A2A08', accent: 'rgba(173,79,24,0.45)', btn: '#AD4F18', btnHover: '#964313', btnFg: '#FFF6EC', chip: '#F7CFA2', chipOn: '#AD4F18' },
+  // Yield (Oct 2026): header #1F5A43 / #ECF7F1 ≈ 8.3:1, body #0F3B2C on #DCEEE4 ≈ 11:1.
+  yield: { surface: '#DCEEE4', headerBg: '#1F5A43', headerFg: '#ECF7F1', ink: '#0F3B2C', accent: 'rgba(31,90,67,0.45)', btn: '#1F5A43', btnHover: '#174A37', btnFg: '#ECF7F1', chip: '#C3E0D0', chipOn: '#1F5A43' },
 } as const;
 
 /**
@@ -263,6 +267,7 @@ export default function SpeakerControls({
   addTimeActive = false,
   onRightOfReply,
   rightOfReplyActive = false,
+  yieldControl,
   tutorialTargets = false,
 }: {
   /** Somebody holds the floor. Restart and Add time need one (they write `current_speaker`). */
@@ -296,6 +301,11 @@ export default function SpeakerControls({
    */
   onRightOfReply?: () => void;
   rightOfReplyActive?: boolean;
+  /**
+   * Yield (GSL only, Oct 2026): opens the Yield panel. `blockedReason` non-null = drawn in
+   * place, unavailable, saying why (nobody seated, no time left). Omitted = not drawn.
+   */
+  yieldControl?: { onClick: () => void; active: boolean; blockedReason?: string | null };
   /** The GSL instance carries the onboarding tutorial's data-tutorial targets. */
   tutorialTargets?: boolean;
 }) {
@@ -347,6 +357,20 @@ export default function SpeakerControls({
       >
         <ClockPlus size={20} strokeWidth={2.4} aria-hidden />
       </ControlButton>
+      {yieldControl && (
+        <ControlButton
+          tone={TONES.yield}
+          label={t('speaker_ctl_yield')}
+          title={t('speaker_ctl_yield_title')}
+          blockedReason={yieldControl.blockedReason ?? null}
+          onClick={yieldControl.onClick}
+          active={yieldControl.active}
+          anchor="yield"
+          stacked={t('speaker_ctl_yield_short')}
+        >
+          <Forward size={18} strokeWidth={2.4} aria-hidden className="rtl:-scale-x-100" />
+        </ControlButton>
+      )}
       {onRightOfReply && (
         <RtrButton onClick={onRightOfReply} active={rightOfReplyActive} tutorial={tutorialTargets ? 'rtr-button' : undefined} />
       )}

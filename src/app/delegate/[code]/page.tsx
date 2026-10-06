@@ -29,6 +29,7 @@ import { chatUnreadTotal, mergeMessagesById } from '@/lib/chatConversations';
 import { loadChatReadCounts, saveChatReadCounts } from '@/lib/chatReadKey';
 import { startSessionSync, rowFields, withCurrentSpeaker, withLists, type ConnectionState } from '@/lib/sessionSync';
 import ConnectionPill from '@/components/ConnectionPill';
+import CaucusProposer from '@/components/CaucusProposer';
 import {
   getCommitteeByCodeWithRetry,
   // Explicitly sanctioned on this surface: a pure reader over the committee row,
@@ -828,7 +829,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
   const seatLost = accessState === 'taken' || accessState === 'kicked' || accessState === 'elsewhere'
     || accessState === 'denied' || accessState === 'signin';
   // The live room subscription, so losing the seat can stop it from outside the loader.
-  const syncRef = useRef<{ stop: () => void } | null>(null);
+  const syncRef = useRef<{ stop: () => void; mark: (slice: 'lists') => void } | null>(null);
 
   const [committee, setCommittee] = useState<Committee | null>(null);
   /* Latest committee, for callbacks that fire on a delay. The delayed denial
@@ -1010,6 +1011,18 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
   useEffect(() => {
     if (seatLost) { syncRef.current?.stop(); syncRef.current = null; }
   }, [seatLost]);
+
+  // The floor changed hands: re-read the speakers lists. A delegation that spoke in a
+  // moderated caucus may still hold its GSL place, and the GSL the room returns to after a
+  // caucus is only exact once read again (Oct 2026).
+  const floorDelegateId = committee?.currentSpeaker?.delegateId ?? null;
+  const floorSeenRef = useRef<string | null | undefined>(undefined);
+  useEffect(() => {
+    if (floorSeenRef.current === undefined) { floorSeenRef.current = floorDelegateId; return; }
+    if (floorSeenRef.current === floorDelegateId) return;
+    floorSeenRef.current = floorDelegateId;
+    syncRef.current?.mark('lists');
+  }, [floorDelegateId]);
 
   // Seat guard. Runs independently of the committee load. claim_delegate_seat is the one
   // authority for who may sit here (src/lib/seatClaims.ts):
@@ -2412,9 +2425,16 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
                     color: DG.forest, overflow: 'hidden', textOverflow: 'ellipsis',
                     display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical',
                   }}
+                  title={committee.caucus.purpose}
                 >
                   {committee.caucus.purpose}
                 </p>
+              )}
+              {/* Who raised the caucus: round flag + name, wraps, never cut (Oct 2026). */}
+              {caucusLive && committee.caucus?.proposedBy && (
+                <div style={{ marginTop: 3 }}>
+                  <CaucusProposer proposedBy={committee.caucus.proposedBy} size={20} fontSize={13} className="flex-wrap" />
+                </div>
               )}
             </div>
 

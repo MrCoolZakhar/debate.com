@@ -44,6 +44,7 @@ const SEGMENT_LABEL: Record<SegmentKind, string> = {
 
 const EVENT_LABEL: Record<string, string> = {
   'right-of-reply': 'Right of reply',
+  yield: 'Yield',
   'manual-award': 'Points awarded',
   'manual-deduct': 'Points deducted',
   'wp-sponsor': 'Working paper sponsor',

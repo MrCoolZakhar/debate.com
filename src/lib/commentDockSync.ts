@@ -373,6 +373,9 @@ export class NoteSync {
       console.error('Dock note save failed:', err);
     }
     e.inflight = false;
+    // rekey() may have moved this entry while the write was in flight: follow it, or the
+    // follow-up write, the retry and the indicator would all target the old key.
+    for (const [k, x] of this.entries) { if (x === e) { key = k; break; } }
     if (this.disposed && !ok) return;
     if (ok) {
       e.failures = 0;

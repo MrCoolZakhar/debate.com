@@ -7,7 +7,7 @@ import { supabase } from './supabase';
 import { sessionClient } from './sessionClient';
 import { parseIntroState } from './documentFlow';
 import { serverNow, serverNowIso } from './serverClock';
-import { runWrite, rowsOf, cancelPendingRetries, cancelWritesIssuedBefore, issueMark, failedFrom, issueChainTicket, runWithChainTicket, type WriteResult, type AttemptResult } from './writeStatus';
+import { runWrite, rowsOf, cancelPendingRetries, cancelWritesIssuedBefore, issueMark, failedFrom, issueChainTicket, runWithChainTicket, rollCallScope, type WriteResult, type AttemptResult } from './writeStatus';
 import { OFFLINE_RESILIENCE, beginPendingWrite, newRowId } from './offlineResilience';
 import { claimRollCall, ownsRollCall, settleRollCall, attachPendingRollCall, type PendingRollCallItem } from './pendingRollCall';
 import { sessionReadClient } from './sessionClient';
@@ -720,8 +720,11 @@ export async function setDelegateStatus(delegateId: string, status: DelegateStat
         .update({ status }).eq('id', delegateId).select('id');
       if (error) { return failedFrom(error, 'Error setting delegate status:'); }
       return rowsOf(data) > 0 ? 'ok' : 'failed';
-    }, { retry: true }), 'failed' as WriteResult);
-    if (r !== 'skipped') settleRollCall(code, delegateId, 'status', seq);
+    }, { retry: true, scope: rollCallScope(code) }), 'failed' as WriteResult);
+    // Always settle: settleRollCall forgets the press only while it is still the newest one,
+    // so a press a newer one owns is untouched, and a press that ended 'skipped' because this
+    // device lost the gavel (dropParkedWrites) is not re-issued from localStorage later.
+    settleRollCall(code, delegateId, 'status', seq);
     return r !== 'failed';
   }
   // Zero rows is a rejection here (the id exists), not a no-op. Not auto-retried: a status
@@ -759,8 +762,9 @@ export async function setDelegateObserver(delegateId: string, isObserver: boolea
       .update({ is_observer: isObserver }).eq('id', delegateId).select('id');
     if (error) { return failedFrom(error, 'Error setting delegate observer:'); }
     return rowsOf(data) > 0 ? 'ok' : 'failed';
-  }, { retry: parkable }), 'failed' as WriteResult);
-  if (parkable && r !== 'skipped') settleRollCall(code, delegateId, 'observer', seq);
+  }, { retry: parkable, scope: parkable ? rollCallScope(code) : undefined }), 'failed' as WriteResult);
+  // Always settle (see setDelegateStatus): guarded by the press's own seq.
+  if (parkable) settleRollCall(code, delegateId, 'observer', seq);
   return r !== 'failed';
 }
 
@@ -1549,7 +1553,7 @@ export async function setDelegateStatusesBulk(
       sent = mine;
       changed = typeof data === 'number' ? data : 0;
       return 'ok';
-    }, { retry: true }), 'failed' as WriteResult);
+    }, { retry: true, scope: rollCallScope(code) }), 'failed' as WriteResult);
     if (unavailable) {
       // The RPC does not exist: row by row, for the rows this bulk still owns. Each single
       // write claims its row anew (superseding this bulk), so nothing is left pending here.
@@ -1559,7 +1563,11 @@ export async function setDelegateStatusesBulk(
     }
     if (r === 'ok') { sent.forEach((id) => settleRollCall(code, id, 'status', seqs.get(id)!)); return changed; }
     if (r === 'failed') { ids.forEach((id) => settleRollCall(code, id, 'status', seqs.get(id)!)); return null; }
-    return 0;   // every row was taken over by a newer press
+    // 'skipped': every row was taken over by a newer press (settle is then a no-op per row),
+    // or this device lost the gavel (dropParkedWrites): forget the presses so they are not
+    // re-issued from localStorage.
+    ids.forEach((id) => settleRollCall(code, id, 'status', seqs.get(id)!));
+    return 0;
   }
   const { data, error } = await sessionClient(code, chairSuffix).rpc('set_delegate_statuses', {
     p_committee: committeeId, p_status: status, p_ids: ids,
@@ -1887,7 +1895,9 @@ export type LedgerEventType =
   | 'speech' | 'motion-raised' | 'right-of-reply'
   | 'manual-award' | 'manual-deduct' | 'custom'
   // Motion lifecycle (src/lib/motionLog.ts). Only motion-passed scores (motionPassed).
-  | 'motion-passed' | 'motion-failed' | 'motion-edited';
+  | 'motion-passed' | 'motion-failed' | 'motion-edited'
+  // A GSL speaker yielding their remaining time (floorSpeech.ts `logYield`). Scores nothing.
+  | 'yield';
 
 // Generalised event writer — every point-earning action becomes a logged event on the
 // same messages + `__log__:` channel that speaking time already uses, so points are
@@ -2381,9 +2391,11 @@ export async function updateCommitteeAgendaInDB(
   // chair's settings write. It returns false when RLS refused the update.
   // Offline resilience (4 Oct 2026): idempotent, so retried and PARKED on the topic key (the
   // row slice is held while it waits); false only on a refusal. The picker keeps its busy
-  // flag while it is parked, so a second pick waits for the first to land.
+  // flag while it is parked, so a second pick waits for the first to land. Its OWN key
+  // (`:agenda`, Oct 2026): sharing `:topic` with updateCommitteeTopicInDB let a later topic
+  // edit supersede a parked agenda pick, which then never landed.
   if (OFFLINE_RESILIENCE) {
-    const r = await runWrite([`${committeeId}:topic`], async () => {
+    const r = await runWrite([`${committeeId}:agenda`], async () => {
       const { data, error } = await sessionClient(code, chairSuffix)
         .rpc('set_committee_agenda', { p_committee: committeeId, p_index: topicIndex, p_topic: topic });
       if (error) return failedFrom(error, 'Error setting agenda:');

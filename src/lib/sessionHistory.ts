@@ -103,6 +103,9 @@ export interface HistoryEvent {
   motion?: HistoryMotion;
   /** Rights of reply only: chair notes written on the reply (context 'right-of-reply'). */
   notes?: HistoryNote[];
+  /** Yields only (type 'yield', Oct 2026): who received the time, and how many seconds. */
+  to?: string;
+  seconds?: number;
 }
 
 export type SegmentKind =
@@ -135,6 +138,10 @@ const SEGMENT_KINDS: SegmentKind[] = [
 // ('consultation' is never a speech context; only a consultation motion opens one.)
 
 function kindOf(context: string | undefined): SegmentKind {
+  // A speech is logged with `unmoderated-caucus` only in a Consultation of the Whole (an
+  // ordinary unmoderated caucus has no floor), so a segment it opens is a consultation and
+  // reads with the committee's consultation name.
+  if (context === 'unmoderated-caucus') return 'consultation';
   const c = (context ?? 'speakers-list') as SegmentKind;
   return SEGMENT_KINDS.includes(c) ? c : 'other';
 }
@@ -415,6 +422,16 @@ export function buildSessionHistory(committee: Committee, feedback: FeedbackEntr
         id: `ev-${n++}`, type, country: e.country, timestamp: stamp,
         value: e.value, note: e.note,
       };
+      if (type === 'yield') {
+        // "France yielded 0:42 to Brazil". The note is the English fallback a surface shows
+        // when it does not know the type yet; `to` / `seconds` are there to localise it
+        // (`sb_hist_yield`, {time} {to}).
+        const to = (e as { to?: unknown }).to;
+        row.to = typeof to === 'string' ? to : '';
+        row.seconds = Math.max(0, Math.round(e.seconds ?? 0));
+        const secs = row.seconds;
+        row.note = `yielded ${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}${row.to ? ` to ${row.to}` : ''}`;
+      }
       if (type === 'right-of-reply') replies.push(row);
       place(row);
     }

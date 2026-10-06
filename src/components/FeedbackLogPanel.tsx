@@ -758,7 +758,8 @@ export default function FeedbackLogPanel({ committee, chairName, currentCountry,
     if (item.context === RTR_CONTEXT) return t('sb_hist_right_of_reply');
     if (item.context === 'speakers-list') return t('fb_tag_gsl');
     if (item.context === ctx && caucus?.motionLabel) return caucus.motionLabel;
-    return item.context === 'unmoderated-caucus' ? t('fb_tag_unmod') : t('fb_tag_caucus');
+    // Only a Consultation of the Whole floor holder logs this context.
+    return item.context === 'unmoderated-caucus' ? motionNames(committee, language).consultation : t('fb_tag_caucus');
   };
   const maxScale = Math.max(RATING_MIN + 1, cfg.factorScaleMax);
 

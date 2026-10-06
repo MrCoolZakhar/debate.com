@@ -41,6 +41,7 @@ import { IconStat, STAT_ICONS, TINT } from '@/components/scoreboard/SessionScore
 import DelegateProfile from '@/components/scoreboard/DelegateProfile';
 import HistoryTab from '@/components/scoreboard/HistoryTab';
 import { getCountryDisplayName } from '@/lib/countries';
+import { motionNames } from '@/lib/committeeFlags';
 import { useT } from '@/contexts/LanguageContext';
 import { buildSessionScoreboardRows, sessionPointSlices } from '@/lib/sessionScoreboard';
 import { buildSessionHistory, type HistorySpeech } from '@/lib/sessionHistory';
@@ -268,6 +269,7 @@ export function SessionScoreboardBoard({ committee, feedback, tabs = ['ranking',
                   rankTotal={allRows.length}
                   slices={sessionPointSlices(committee, row.ledger, 'en', t('sb_breakdown_manual'))}
                   speeches={speechesByCountry.get(row.country) ?? []}
+                  consultationName={motionNames(committee, 'en').consultation}
                 />
               )}
               labels={labels}

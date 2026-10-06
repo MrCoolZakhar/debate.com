@@ -130,7 +130,7 @@ export function sliceOfWriteKey(key: string): { committeeId: string; slice: Guar
   const committeeId = key.slice(0, i);
   if (committeeId === 'delegate' || committeeId === 'motion' || committeeId === 'delegate-row') return null;
   const rest = key.slice(i + 1);
-  if (rest === 'phase' || rest === 'caucus' || rest === 'lifecycle' || rest === 'topic'
+  if (rest === 'phase' || rest === 'caucus' || rest === 'lifecycle' || rest === 'topic' || rest === 'agenda'
     || rest === 'speaker-limit' || rest === 'settings') return { committeeId, slice: 'row' };
   if (rest.startsWith('list:')) return { committeeId, slice: 'lists' };
   if (rest === 'speaker' || rest.startsWith('speaker:') || rest === 'current_speaker') return { committeeId, slice: 'currentSpeaker' };
