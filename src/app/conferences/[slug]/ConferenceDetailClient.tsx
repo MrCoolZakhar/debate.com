@@ -55,6 +55,12 @@ import {
 import { useScrollLock } from '@/hooks/useScrollLock';
 import { themeCssVars, type ConferenceTheme } from '@/lib/theme';
 import { friendlyError } from '@/lib/friendlyError';
+import { reportCrash } from '@/lib/reportCrash';
+
+/** How long the conference page may show nothing but its loader before it offers a
+ *  way out. Long enough for a slow phone on venue Wi-Fi, short enough that nobody
+ *  sits looking at a spinner wondering whether it is broken. */
+const LOAD_WATCHDOG_MS = 12_000;
 import { useServerNow } from '@/lib/applicationWindow';
 
 const GRAIN = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='grain'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23grain)' opacity='1'/%3E%3C/svg%3E")`;
@@ -545,6 +551,21 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
   const [myApplications, setMyApplications] = useState<MyApplication[]>([]);
   const [loading, setLoading] = useState(!initialConference);
   const [notFound, setNotFound] = useState(false);
+  /**
+   * THIS PAGE MUST NEVER SIT ON ITS LOADER FOREVER (7 Oct 2026, owner: a conference page
+   * "is not loading").
+   *
+   * `fetchAll` is a long sequence of awaits with no try/catch, called from an effect with
+   * no `.catch`. One rejected await left `loading` and `participantDataLoading` true for
+   * good: a full-screen spinner, no error boundary (an unhandled rejection is not a render
+   * error, so nothing was reported either) and nothing the reader could do but guess. An
+   * await that never SETTLES did the same, which is reachable whenever a token refresh
+   * hangs on a page a signed-in viewer opens.
+   *
+   * So there are now two guards: the catch below, and a watchdog that gives up on the
+   * spinner. Both end in the same recoverable screen with Try again.
+   */
+  const [loadError, setLoadError] = useState('');
   const [myAllocation, setMyAllocation] = useState<ParticipantAllocation | null>(null);
   // Distinct from `loading`: the conference/committees essentials resolve
   // (and clear `loading`) before this signed-in viewer's own applications and
@@ -890,9 +911,34 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
 
   useEffect(() => {
     if (authLoading) return;
-    fetchAll();
+    setLoadError('');
+    fetchAll().catch((e) => {
+      // Never leave the spinner up: clear both flags, say something a person can
+      // read (never a raw error), and REPORT it, so the next time this happens
+      // there is a record instead of a blank page.
+      setLoading(false);
+      setParticipantDataLoading(false);
+      setLoadError(friendlyError(e, 'Something went wrong while loading it.'));
+      reportCrash(e instanceof Error ? e : new Error(String(e)), 'route');
+    });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slug, authLoading, user?.id]);
+
+  // The watchdog for the OTHER failure: an await that never settles (a hung token
+  // refresh, a dropped connection mid-sequence) rejects nothing, so the catch above
+  // never runs. After LOAD_WATCHDOG_MS of nothing, offer the reader a way out
+  // rather than a spinner with no end. It only ever ADDS the retry screen; a load
+  // that finishes late still renders normally, because `conference` arriving clears
+  // the error.
+  useEffect(() => {
+    if (authLoading || !loading) return;
+    const id = setTimeout(() => {
+      setLoadError((prev) => prev || 'This is taking longer than it should.');
+    }, LOAD_WATCHDOG_MS);
+    return () => clearTimeout(id);
+  }, [authLoading, loading, slug, user?.id]);
+
+  useEffect(() => { if (conference) setLoadError(''); }, [conference]);
 
   async function fetchAll(opts?: { silent?: boolean }) {
     if (!opts?.silent) setLoading(true);
@@ -1375,10 +1421,45 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
     return () => { cancelled = true; };
   }, [sponsoredConfId]);
 
-  if ((authLoading && !conference) || loading) {
+  // `loadError && !conference` belongs in THIS guard, not the 404 below: the catch
+  // clears `loading`, so without it a failed load fell through to "Conference Not
+  // Found", which is a lie about a conference that exists. A genuine 404 still
+  // reaches the next branch, because `notFound` is set with no loadError.
+  if ((authLoading && !conference) || loading || (loadError && !conference)) {
     return (
       <div className="min-h-screen flex items-center justify-center" style={{ ...themeVars, backgroundColor: 'var(--gv-bg)' }}>
-        <Loader size={72} label="Loading conference" />
+        {loadError ? (
+          // The load failed, or took so long that the watchdog gave up. A readable
+          // sentence and one button, never a spinner with no end (CLAUDE.md §8).
+          <div className="flex flex-col items-center text-center px-6" style={{ maxWidth: 420 }}>
+            <h1 className="font-black text-xl mb-2" style={{ color: 'var(--gv-on-bg)', fontFamily: "var(--font-brand), sans-serif" }}>
+              We couldn&apos;t load this conference
+            </h1>
+            <p className="text-sm mb-6" style={{ color: 'var(--gv-muted)', fontFamily: "var(--font-brand), sans-serif" }}>
+              {loadError} If it keeps happening, signing out and back in usually clears it.
+            </p>
+            <button
+              type="button"
+              onClick={() => {
+                setLoadError('');
+                setLoading(true);
+                setParticipantDataLoading(true);
+                fetchAll().catch((e) => {
+                  setLoading(false);
+                  setParticipantDataLoading(false);
+                  setLoadError(friendlyError(e, 'Something went wrong while loading it.'));
+                  reportCrash(e instanceof Error ? e : new Error(String(e)), 'route');
+                });
+              }}
+              className="rounded-xl py-2.5 px-6 font-bold text-sm focus:outline-none"
+              style={{ backgroundColor: 'var(--gv-main)', color: 'var(--gv-on-main)', fontFamily: "var(--font-brand), sans-serif" }}
+            >
+              Try again
+            </button>
+          </div>
+        ) : (
+          <Loader size={72} label="Loading conference" />
+        )}
       </div>
     );
   }
