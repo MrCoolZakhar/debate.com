@@ -851,6 +851,11 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
 
   const committeeIdRef = useRef('');
   const wasEverSuspended = useRef(false);
+  // A room that ENDED and was then restarted (owner, 7 Oct 2026: 24 h to undo an accidental
+  // End Debate) comes back in `pre-session`, exactly like a resumed suspension, so the phone
+  // must show the waiting screen rather than drop straight onto a live board. This ref is the
+  // end's half of `wasEverSuspended`.
+  const wasEverEnded = useRef(false);
   // Live / Reconnecting / Offline, fed by the session sync (R-4). Refetch sequencing now
   // lives in src/lib/sessionSync.ts, one counter PER SLICE (R-2): the old single counter
   // let a delegates refetch cancel the committees refetch that carried a new caucus.
@@ -931,7 +936,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
       setCommittee(found);
       setLoading(false);
       if (found) {
-        if (found.endedAt) setSessionEnded(true);
+        if (found.endedAt) { wasEverEnded.current = true; setSessionEnded(true); }
         else if (found.suspendedAt) { wasEverSuspended.current = true; setSessionSuspended(true); }
         committeeIdRef.current = found.id;
         // One pipeline for every event (src/lib/sessionSync.ts). Each event refetches ONLY its
@@ -958,13 +963,16 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
               // Session-state transitions (suspend / end / resume) only ever land on this row.
               const updated = data as Committee;
               if (updated.endedAt) {
+                wasEverEnded.current = true;
                 setSessionEnded(true);
                 setSessionSuspended(false);
               } else if (updated.suspendedAt) {
                 wasEverSuspended.current = true;
                 setSessionSuspended(true);
                 setSessionEnded(false);
-              } else if (updated.phase === 'pre-session' && wasEverSuspended.current) {
+              } else if (updated.phase === 'pre-session' && (wasEverSuspended.current || wasEverEnded.current)) {
+                // A break OR a restarted end: the dais is taking roll, so the phone waits
+                // instead of showing a live board nobody is running yet.
                 setSessionSuspended(true);
                 setSessionEnded(false);
               } else {
@@ -1219,15 +1227,35 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
     return () => window.removeEventListener('keydown', handler);
   }, [sessionEnded, sessionSuspended, router]);
 
+  /**
+   * The lifecycle mirror. It used to be SET-ONLY, so a stamp that went back to null (a
+   * restarted end, owner 7 Oct 2026; a rolled-back break) left this phone on the ended
+   * screen unless the clearing happened to arrive through `apply('row')`. It now follows
+   * the same rules as that branch, including the pre-session waiting screen, and clears
+   * only on a real transition so an ordinary phase change writes nothing.
+   */
+  const prevLifecycleRef = useRef<{ endedAt: string | null; suspendedAt: string | null }>({ endedAt: null, suspendedAt: null });
   useEffect(() => {
-    if (committee?.endedAt) {
+    const prev = prevLifecycleRef.current;
+    const endedAt = committee?.endedAt ?? null;
+    const suspendedAt = committee?.suspendedAt ?? null;
+    prevLifecycleRef.current = { endedAt, suspendedAt };
+    if (endedAt) {
+      wasEverEnded.current = true;
       setSessionEnded(true);
       setSessionSuspended(false);
-    } else if (committee?.suspendedAt) {
+    } else if (suspendedAt) {
+      wasEverSuspended.current = true;
       setSessionSuspended(true);
       setSessionEnded(false);
+    } else if (committee?.phase === 'pre-session' && (wasEverSuspended.current || wasEverEnded.current)) {
+      setSessionSuspended(true);
+      setSessionEnded(false);
+    } else if (prev.endedAt || prev.suspendedAt) {
+      setSessionEnded(false);
+      setSessionSuspended(false);
     }
-  }, [committee?.endedAt, committee?.suspendedAt]);
+  }, [committee?.endedAt, committee?.suspendedAt, committee?.phase]);
 
   useEffect(() => {
     if (!committee?.expiresAt) { setHoursRemaining(null); return; }
@@ -1882,7 +1910,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
     ? <DelegateIdleWarning deadline={idle.deadline} onStillHere={idle.stillHere} onExpire={idle.check} />
     : null;
 
-  if (sessionSuspended && (committee.suspendedAt || wasEverSuspended.current)) {
+  if (sessionSuspended && (committee.suspendedAt || wasEverSuspended.current || wasEverEnded.current)) {
     return (
       <div className="min-h-dvh flex flex-col items-center justify-center text-center px-6" style={{ background: DG.ivory }}>
         <DelegateStyles />

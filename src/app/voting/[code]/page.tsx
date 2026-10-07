@@ -862,9 +862,18 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
   // effect is keyed on whether the room is closed, so the moment the room resumes (the row
   // arrives with suspended_at cleared and a live phase) the entry is attempted again.
   const roomClosed = !!committee?.suspendedAt || committee?.phase === 'adjourned';
+  // A room taking roll is not a room voting (owner, 7 Oct 2026: a restarted end lands in
+  // `pre-session`). Its own dep, so the entry is attempted again the moment debate starts.
+  const roomTakingRoll = committee?.phase === 'pre-session';
   useEffect(() => {
     if (!accessGranted || !committee || isViewOnly || enteredVotingRef.current) return;
     if (committee.endedAt) return;
+    // A room restarted from the chair's End View (owner, 7 Oct 2026) lands in `pre-session`,
+    // which flips `roomClosed` back to false and re-runs this effect. Entering voting then
+    // would write `phase = 'voting'` straight over the roll call the dais was just sent to.
+    // Stand down until Begin Session opens debate, when `roomTakingRoll` flips and the entry
+    // is attempted again.
+    if (roomTakingRoll) return;
     enteredVotingRef.current = true;
     const id = committee.id;
     // Stamp BEFORE entering: a chair tab on this device that sees the phase flip to
@@ -882,7 +891,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
     });
   // Keyed on identity and on the room opening or closing, not on every refetched committee object.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [accessGranted, committee?.id, committee?.endedAt, isViewOnly, roomClosed]);
+  }, [accessGranted, committee?.id, committee?.endedAt, isViewOnly, roomClosed, roomTakingRoll]);
 
   // ── Never leave the room stuck in `voting` (src/lib/votingPhaseUnload.ts) ────
   // While this page is open as the Moderator it stamps a per-device "voting tab alive"

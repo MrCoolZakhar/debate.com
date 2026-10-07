@@ -1,6 +1,6 @@
 'use client';
 
-import { roomKeptUntil, formatKeptUntil } from '@/lib/roomRetention';
+import { roomKeptUntil, formatKeptUntil, ENDED_KEEP_HOURS } from '@/lib/roomRetention';
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import Portal from '@/components/Portal';
 import GrowDialog from '@/components/GrowDialog';
@@ -1499,8 +1499,11 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
                 void suspendDebateInDB(committee.id, committee.code, committee.dbChairJoinSuffix ?? undefined).then(rollback);
               } else {
                 const nowMs = serverNow();
-                // Mirrors endDebate()'s own +1h. If one is ever changed, change all three.
-                const expires = new Date(nowMs + 1 * 60 * 60 * 1000);
+                // Mirrors endDebate()'s own keep window (ENDED_KEEP_HOURS,
+                // src/lib/roomRetention.ts), read from there rather than typed, so the
+                // three mirrors cannot drift. An ended room is kept 24 h and can be
+                // restarted from the chair's End View for just as long (owner, 7 Oct 2026).
+                const expires = new Date(nowMs + ENDED_KEEP_HOURS * 60 * 60 * 1000);
                 onCommitteeUpdate?.((c) => ({ ...c, endedAt: new Date(nowMs).toISOString(), expiresAt: expires.toISOString(), phase: 'adjourned' as const }));
                 void endDebateInDB(committee.id, committee.code, committee.dbChairJoinSuffix ?? undefined).then(rollback);
               }

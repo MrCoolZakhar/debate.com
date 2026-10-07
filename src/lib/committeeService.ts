@@ -17,6 +17,9 @@ import { sessionReadClient } from './sessionClient';
  *  The initial load, the message history, the join lookup and realtime stay on `supabase`. */
 const readDb = () => (OFFLINE_RESILIENCE ? sessionReadClient() : supabase);
 import { noteFlushedSettings } from './settingsEcho';
+// The one home for how long a room is kept (roomRetention.ts): End Debate's
+// expires_at and the reopen window must stay the same number.
+import { ENDED_KEEP_HOURS, REOPEN_WINDOW_HOURS } from './roomRetention';
 import {
   Committee,
   Delegate,
@@ -2269,8 +2272,12 @@ export async function suspendDebate(committeeId: string, code: string, chairSuff
  * optimistic End View. Idempotent (audit V-8): `.is('ended_at', null)` means a second
  * device never rewrites `ended_at` or restarts the deletion countdown. Both clocks are
  * frozen like a suspension (C-1, G-4), timestamps come from the database clock (T-1).
- * The +1 h `expires_at` is mirrored optimistically by MotionsModal and the chair page's
- * organiser-broadcast path: if one is ever changed, change all three.
+ *
+ * `expires_at` is ENDED_KEEP_HOURS (24 h), not the one hour it used to be: a committee
+ * ended by accident must still be there to reopen (owner, 7 Oct 2026, see
+ * `reopenEndedSession` below and roomRetention.ts). It is mirrored optimistically by
+ * MotionsModal and the chair page's organiser-broadcast path: if one is ever changed,
+ * change all three.
  */
 export async function endDebate(committeeId: string, code: string, chairSuffix?: string): Promise<boolean> {
   let ended = false;
@@ -2287,7 +2294,7 @@ export async function endDebate(committeeId: string, code: string, chairSuffix?:
     const { data, error } = await sessionClient(code, chairSuffix).from('committees')
       .update({
         ended_at: new Date(nowMs).toISOString(),
-        expires_at: new Date(nowMs + 1 * 60 * 60 * 1000).toISOString(),
+        expires_at: new Date(nowMs + ENDED_KEEP_HOURS * 60 * 60 * 1000).toISOString(),
         phase: 'adjourned',
         caucus,
       })
@@ -2302,6 +2309,78 @@ export async function endDebate(committeeId: string, code: string, chairSuffix?:
   if (ended) cancelWritesIssuedBefore(breakKeys, breakMark);   // D1b: only after it landed
   if (ended) void pauseSpeakerClockLive(committeeId, code, chairSuffix);
   return r !== 'failed' && ended;
+}
+
+/**
+ * Reopen a committee that ended, up to REOPEN_WINDOW_HOURS (24 h) after the gavel.
+ *
+ * Owner, 7 Oct 2026: "when someone ends debate, going onto the same session within 24
+ * hours, it still allows them back in to restart it. This happened in some committees
+ * where they accidentally ended it." End Debate used to be final, so one mis-press cost a
+ * committee its room.
+ *
+ * It lands the room in `pre-session`, exactly where a resumed suspension lands: the dais
+ * takes roll again and Begin Session restores a paused caucus through
+ * `beginSessionAfterRollCall` (C-1), so a reopened room can never come back with a
+ * running clock or a phantom speaker. `suspended_at` and `resuming_chair` are cleared
+ * with it, so a room that was suspended and then ended reopens clean rather than back
+ * into a half-held resume latch.
+ *
+ * ONE statement, so the phase can never be written without the end being lifted:
+ * `setPhase` is conditional on `ended_at is null`, which is exactly what this is undoing.
+ *
+ * Conditional on the row still being ended AND inside the window, with the cutoff taken
+ * from the DATABASE clock (RULE 6b), so a device whose clock is hours off cannot reopen a
+ * committee that ended last week. Honest limit: the comparison is a PostgREST filter
+ * built from this device's corrected clock, not a server-side `now()`, because a
+ * server-side check would mean a new database function (and those are the owner's to
+ * apply); the correction makes it accurate to the second in practice.
+ *
+ * Resolves true only when THIS call reopened the room, or it is already open again.
+ * Zero rows means the window has passed (or another device got there first and the room
+ * is live again, which the caller re-reads anyway).
+ *
+ * Retried, but NEVER parked (`rerunnable: false`, like `suspendDebate` and `endDebate`).
+ * Three attempts are safe to repeat, because once the room is open `ended_at` is null and a
+ * further attempt matches nothing. Parking is not: a parked write keeps its promise
+ * PENDING, so the caller's rollback would never run, the chair would be left looking at a
+ * room the database still has ended, with no failure to show, and the reopen could land
+ * minutes later out of context (S3). Failing after the attempts is the honest answer: the
+ * End View comes back and says so. It carries the lifecycle key, so a genuine End Debate
+ * issued after it supersedes it rather than racing it.
+ */
+export async function reopenEndedSession(
+  committeeId: string,
+  code: string,
+  chairSuffix?: string,
+): Promise<boolean> {
+  let open = false;
+  const cutoffIso = new Date(serverNow() - REOPEN_WINDOW_HOURS * 60 * 60 * 1000).toISOString();
+  const r = await runWrite(lifecycleKey(committeeId), async () => {
+    const { data, error } = await sessionClient(code, chairSuffix).from('committees')
+      .update({
+        ended_at: null,
+        expires_at: null,
+        suspended_at: null,
+        resuming_chair: null,
+        phase: 'pre-session',
+      })
+      .eq('id', committeeId)
+      .not('ended_at', 'is', null)
+      .gte('ended_at', cutoffIso)
+      .select('id');
+    if (error) { return failedFrom(error, 'Error reopening the session:'); }
+    if (rowsOf(data) === 0) {
+      // Either the window has passed, or it is already open. Read the row back rather
+      // than guessing: supabase-js cannot tell a refusal from a no-match (RULE 5).
+      const row = await getCommitteeRowById(committeeId);
+      if (row && !row.endedAt) { open = true; return 'skipped'; }
+      return 'failed';
+    }
+    open = true;
+    return 'ok';
+  }, { retry: true, rerunnable: false });
+  return r !== 'failed' && open;
 }
 
 // ============================================================

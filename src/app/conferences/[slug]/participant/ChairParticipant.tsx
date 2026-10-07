@@ -6,10 +6,11 @@
 // committee" RLS, row-level, so session_code etc. only comes back for
 // committees they actually chair) and stacks a full block per committee.
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Copy, Check, Gavel, Radio, Signal, Users } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
+import { friendlyError } from '@/lib/friendlyError';
 import { MonogramMedallion } from '@/components/CommitteeEditorModal';
 import { getSiteUrl } from '@/lib/emailBlocks';
 import PositionPaperRoster, { type RosterAllocation, type RosterPaper } from '@/components/PositionPaperRoster';
@@ -18,7 +19,7 @@ import StudyGuideCard from './StudyGuideCard';
 import AwardsCard, { type AwardsCardConference } from './AwardsCard';
 import Loader from '@/components/Loader';
 import { SectionCard, OUTFIT, capitalize, effectiveReleaseTime } from './shared';
-import { DashCard, CardHeading, CommitteeEmblem, TwoRowName, ForestLink, IconWord, BigCount, Pane, committeeShort, FOREST, INK, INK_SOFT } from './dashboardKit';
+import { DashCard, CardHeading, CommitteeEmblem, TwoRowName, ForestLink, IconWord, BigCount, Pane, committeeShort, FOREST, FOREST_GRADIENT, INK, INK_SOFT } from './dashboardKit';
 
 const DIFFICULTY_STYLES: Record<string, { color: string }> = {
   beginner: { color: '#2A5A3C' },
@@ -131,19 +132,93 @@ function chairHref(committee: ChairCommittee, chairDisplayName: string): string 
   return `${getSiteUrl()}/chair/${committee.session_code}?chairName=${encodeURIComponent(chairDisplayName)}`;
 }
 
-function SessionCard({ committee, chairDisplayName, conferenceStartDate, showCommittee }: {
+function SessionCard({ committee, chairDisplayName, conferenceStartDate, showCommittee, onSessionCreated }: {
   committee: ChairCommittee;
   chairDisplayName: string;
   conferenceStartDate: string | null;
   showCommittee: boolean;
+  /**
+   * Whether THIS viewer may actually create the room. See the comment on
+   * `handleCreateSession`: minting ends in an UPDATE of
+  /** Re-reads this committee so the new code and session_id land on screen. */
+  onSessionCreated: () => void;
 }) {
+  const { session } = useAuth();
   const [copied, setCopied] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [createError, setCreateError] = useState('');
+  // ONE PRESS, ONE ROOM. `mintConferenceSession`'s retry handles a code
+  // collision between two DIFFERENT mints; it does nothing about two
+  // concurrent mints of the SAME committee, which would leave this committee
+  // with two live rooms and the link pointing at whichever wrote last. A ref,
+  // not the `creating` state, because state is a render behind a fast
+  // double-click.
+  const mintingRef = useRef(false);
 
   function handleCopy() {
     if (!committee.session_code) return;
     navigator.clipboard.writeText(committee.session_code);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  }
+
+  // The dais asks for its own room (owner, 7 Oct 2026: "committees should only
+  // be started when chairs want it to"). Mints through the shared helper, so
+  // this is the same four writes, the same seating from
+  // committee_country_slots and the same conference link as the organiser's
+  // button; `onSessionCreated` then re-reads the row and the card turns into
+  // the ordinary code + "Join as chair" it has always been.
+  //
+  // ── IT GOES THROUGH AN RPC, NOT FOUR CLIENT WRITES ───────────────────────
+  //
+  // The last write of a mint is
+  // `update conference_committees set session_id, session_code`, and
+  // `conference_committees` has exactly ONE non-SELECT policy:
+  // `Organizers manage committees USING is_conference_organizer(conference_id)`.
+  // A chair sits in `chair_user_ids`, which grants SELECT only, so from the
+  // browser that UPDATE matches zero rows for any chair who is not also an
+  // organiser — and PostgREST reports a zero-row UPDATE as success, never as an
+  // error. The room would be created and seated, the chair handed a working
+  // code, and nothing on the conference side would point at it: the live wall,
+  // the cross-committee scoreboard and awards all join through
+  // `conference_committees.session_id`. An orphan from birth.
+  //
+  // So the mint happens in ONE transaction server-side:
+  // `start_my_chair_session(p_committee)` (SECURITY DEFINER, authenticated
+  // only, applied 7 Oct 2026) checks `auth.uid() = any(chair_user_ids)` or the
+  // organising team, takes the committee's own advisory lock, and writes the
+  // same four things as `mintConferenceSession` — so a room can never exist
+  // unlinked and two chairs pressing at the same instant get ONE room. It is
+  // idempotent: a second press returns the code that already exists.
+  //
+  // Every chair of the committee can press it; there is no organiser gate any
+  // more. The server decides, and `message` is written for the chair to read.
+  function handleCreateSession() {
+    if (!session || mintingRef.current || committee.session_code) return;
+    mintingRef.current = true;
+    setCreating(true);
+    setCreateError('');
+    (async () => {
+      try {
+        const { data, error } = await getAuthedClient(session.access_token)
+          .rpc('start_my_chair_session', { p_committee: committee.id });
+        const answer = (data ?? null) as { ok?: boolean; code?: string; message?: string } | null;
+        if (error || !answer?.ok || !answer.code) {
+          // The RPC writes a plain sentence for every refusal it knows about;
+          // anything else goes through friendlyError (never a raw error).
+          setCreateError(
+            answer?.message
+            ?? (error
+              ? `Your session couldn't be started: ${friendlyError(error, 'the request was rejected')}`
+              : "Your session couldn't be started. Please try again, or ask the organizing team."),
+          );
+          return;
+        }
+        onSessionCreated();
+      } catch (e) {
+        setCreateError(`Your session couldn't be started: ${friendlyError(e, 'the request was rejected')}`);
+      }
+    })().finally(() => { mintingRef.current = false; setCreating(false); });
   }
 
   const released = sessionReleased(committee, conferenceStartDate);
@@ -156,9 +231,38 @@ function SessionCard({ committee, chairDisplayName, conferenceStartDate, showCom
           Your committee&apos;s session will be shared by the organizing team.
         </p>
       ) : !committee.session_code ? (
-        <p className="text-sm" style={{ color: INK_SOFT, fontFamily: OUTFIT, margin: 0 }}>
-          Your session hasn&apos;t been created yet. Check back soon.
-        </p>
+        /* This used to dead-end on "Your session hasn't been created yet.
+           Check back soon.", because the organiser committees page minted a
+           room for every committee the moment it loaded. That is gone (735 of
+           those rooms were never used by anyone), so the dais asks for its own
+           room here instead. */
+        <div>
+          <p className="text-sm" style={{ color: INK_SOFT, fontFamily: OUTFIT, margin: '0 0 14px 0' }}>
+            Your committee room has not been started yet. Start it when you are ready to chair, and you will get the code your delegates join with.
+          </p>
+          {(
+          <button
+            type="button"
+            onClick={handleCreateSession}
+            disabled={creating}
+            aria-busy={creating || undefined}
+            className="focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[#B6871F]"
+            style={{
+              minHeight: 44, padding: '0 18px', borderRadius: 10, fontFamily: OUTFIT,
+              fontSize: 14, fontWeight: 700, border: 'none',
+              display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+              background: FOREST_GRADIENT, color: '#FFFFFF',
+              boxShadow: '0 6px 16px -8px rgba(27,56,40,0.55)',
+              cursor: creating ? 'default' : 'pointer', opacity: creating ? 0.7 : 1,
+            }}
+          >
+            <Radio size={16} aria-hidden /> {creating ? 'Starting your room…' : 'Start your committee room'}
+          </button>
+          )}
+          {createError && (
+            <p role="alert" style={{ fontFamily: OUTFIT, fontSize: 13, color: '#8B2020', margin: '12px 0 0 0' }}>{createError}</p>
+          )}
+        </div>
       ) : (
         <div className="flex items-center justify-between gap-4 flex-wrap">
           <div>
@@ -231,13 +335,15 @@ function AssignmentTile({ committee, chairDisplayName, conferenceStartDate, dele
 
 // ── One committee's full block ──────────────────────────────────────────────
 
-function ChairCommitteeBlock({ conferenceId, conferenceSlug, committee, chairDisplayName, conference, section, showCommittee }: {
+function ChairCommitteeBlock({ conferenceId, conferenceSlug, committee, chairDisplayName, conference, section, showCommittee, onSessionCreated }: {
   conferenceId: string;
   conferenceSlug: string;
   committee: ChairCommittee;
   chairDisplayName: string;
   conference: ChairConference;
   section: string;
+  /** Passed to SessionCard: re-reads this committee after the chair starts it. */
+  onSessionCreated: () => void;
   /** More than one committee: name it on the cards that do not already. */
   showCommittee: boolean;
 }) {
@@ -379,7 +485,7 @@ function ChairCommitteeBlock({ conferenceId, conferenceSlug, committee, chairDis
       </Pane>
 
       <Pane show={section === 'session'}>
-        <SessionCard committee={committee} chairDisplayName={chairDisplayName} conferenceStartDate={conferenceStartDate} showCommittee={showCommittee} />
+        <SessionCard committee={committee} chairDisplayName={chairDisplayName} conferenceStartDate={conferenceStartDate} showCommittee={showCommittee} onSessionCreated={onSessionCreated} />
       </Pane>
 
       <Pane show={section === 'documents'}>
@@ -428,6 +534,25 @@ export default function ChairParticipant({ conferenceId, conferenceSlug, section
   // Started a microtask later so no state is set synchronously in the effect.
   useEffect(() => { void Promise.resolve().then(() => load()); }, [load]);
 
+  // A chair started their own room (SessionCard). Re-reads JUST that row, so
+  // `session_id` lands too (the awards card gates on it) without `load()` and
+  // its full-card loading flash. It is only ever called from that press: this
+  // component mints nothing on mount, by design (owner, 7 Oct 2026).
+  const refreshCommittee = useCallback(async (committeeId: string) => {
+    if (!session) return;
+    const supabase = getAuthedClient(session.access_token);
+    const { data } = await supabase
+      .from('conference_committees')
+      .select('session_id, session_code')
+      .eq('id', committeeId)
+      .maybeSingle();
+    const row = (data ?? null) as { session_id: string | null; session_code: string | null } | null;
+    if (!row) return;
+    setCommittees(prev => prev.map(c => (
+      c.id === committeeId ? { ...c, session_id: row.session_id, session_code: row.session_code } : c
+    )));
+  }, [session]);
+
   if (loading) {
     return (
       <SectionCard>
@@ -462,6 +587,7 @@ export default function ChairParticipant({ conferenceId, conferenceSlug, section
           conference={conference}
           section={section}
           showCommittee={committees.length > 1}
+          onSessionCreated={() => { void refreshCommittee(c.id); }}
         />
       ))}
     </div>

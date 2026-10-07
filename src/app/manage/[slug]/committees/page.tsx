@@ -3,7 +3,7 @@
 import { CircleFlag } from '@/components/CircleFlag';
 import { committeeLanguageFlag } from '@/lib/committeeLanguage';
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Plus, X, Copy, Check, Building2, CalendarClock, Clock, Trash2, ArrowDown, ArrowUp, ArrowUpDown, Send, LayoutGrid, LayoutList, Settings, UserRound, Languages } from 'lucide-react';
+import { Plus, X, Copy, Check, Building2, CalendarClock, Clock, Trash2, ArrowDown, ArrowUp, ArrowUpDown, Send, LayoutGrid, LayoutList, Settings, UserRound, Languages, Radio } from 'lucide-react';
 import { useManage } from '@/app/manage/[slug]/layout';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { useAuth } from '@/components/AuthProvider';
@@ -36,9 +36,9 @@ import {
   MonogramMedallion,
   medallionTone,
   ModalOverlay,
-  mintConferenceSession,
   sessionCommitteeClient,
 } from '@/components/CommitteeEditorModal';
+import { mintSessionForCommittee } from '@/lib/mintSessionForCommittee';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -289,32 +289,47 @@ function ReleaseTimePicker({ value, onSave, placeholder, disabled }: {
   );
 }
 
-// What stands where GENERATE CODE used to. The page mints the code itself (see
-// the auto-mint effect), so this is a read-out, never a control: the organiser
-// has nothing to press and no decision to make. `failed` is the only state
-// worth words, because the room really is missing until the page is reloaded.
-function SessionCodePending({ failed, block = false }: { failed: boolean; block?: boolean }) {
+// What stands where the "Creating code…" read-out used to, which in turn
+// stood where GENERATE CODE used to. It is a real control again, on purpose
+// (owner, 7 Oct 2026: "committees should only be started when chairs want it
+// to"): a live room is four writes and a code handed to a dais, so it happens
+// when somebody asks for it and never as a side effect of opening a page. See
+// the block comment above `handleCreateSessionCode` for the 735 unused rooms
+// that made this a rule.
+function CreateSessionCodeButton({ busy, failed, block = false, onCreate }: {
+  busy: boolean;
+  failed: boolean;
+  block?: boolean;
+  onCreate: () => void;
+}) {
   return (
-    <span
-      role="status"
+    <button
+      type="button"
+      onClick={onCreate}
+      disabled={busy}
+      aria-busy={busy || undefined}
       title={failed
-        ? 'The join code could not be created. Reload the page to try again.'
-        : 'A join code is being created for this committee.'}
+        ? 'The session could not be created. Press to try again.'
+        : 'Creates this committee\u2019s live session room and its join code.'}
       className={block
-        ? 'w-full inline-flex items-center justify-center rounded-[10px]'
-        : 'inline-flex items-center flex-shrink-0'}
+        ? 'w-full inline-flex items-center justify-center gap-1.5 rounded-[10px] focus:outline-none'
+        : 'inline-flex items-center gap-1.5 flex-shrink-0 focus:outline-none'}
       style={{
         minHeight: block ? 34 : undefined,
-        padding: block ? undefined : '6px 13px',
+        padding: block ? '0 10px' : '6px 12px',
         borderRadius: block ? 10 : 9999,
-        border: `1.5px dashed ${failed ? 'rgba(139,32,32,0.35)' : 'rgba(27,56,40,0.28)'}`,
-        color: failed ? '#8B2020' : NEU.muted,
-        backgroundColor: 'transparent',
+        border: 'none',
+        backgroundColor: NEU.surface,
+        boxShadow: busy ? 'none' : NEU.outSm,
+        color: failed ? '#8B2020' : NEU.forest,
         fontFamily: OUTFIT, fontSize: 11, fontWeight: 800,
+        cursor: busy ? 'default' : 'pointer',
+        opacity: busy ? 0.6 : 1,
       }}
     >
-      {failed ? 'Code not ready' : 'Creating code…'}
-    </span>
+      <Radio size={11} strokeWidth={2.5} aria-hidden style={{ flexShrink: 0 }} />
+      {busy ? 'Creating…' : failed ? 'Try again' : 'Create session code'}
+    </button>
   );
 }
 
@@ -1620,93 +1635,95 @@ export default function CommitteesPage() {
     })().finally(() => setSendingAllToParticipants(false));
   }
 
-  // ── SESSION CODES MINT THEMSELVES (owner, 23 Sep 2026) ────────────────────
+  // ── A LIVE ROOM IS ONLY EVER CREATED BY A PRESS (owner, 7 Oct 2026) ───────
   //
-  // Every codeless card used to carry a GENERATE CODE button. It was a chore
-  // with exactly one right answer, and forgetting it is expensive: the chair
-  // reminder emails (`queue_chair_session_reminders`, cron
-  // `chair-session-reminders`) select `where cc.session_code is not null`, so a
-  // committee nobody pressed the button on silently loses BOTH of its
-  // pre-conference chair emails. 402 of 975 production committees are in that
-  // state.
+  // Owner's instruction: "committees should only be started when chairs want
+  // it to."
   //
-  // WHEN: on arrival at this page, for the conference being opened. Not on
-  // publish and not on first need, because both put the mint somewhere the
-  // organiser cannot see it land, and the room has to exist before the day-
-  // before reminder runs, not at the moment a chair opens the join page. The
-  // committee editor already mints on create; this covers every other route in
-  // (import, older committees, a delete that unlinked the room).
+  // WHAT USED TO BE HERE: an effect that ran on arrival at this page and
+  // minted a room for EVERY codeless committee, in a loop, triggered by
+  // nothing but `loadCommittees` landing. It was added on 23 Sep 2026 to stop
+  // committees silently missing their chair reminder emails
+  // (`queue_chair_session_reminders`, cron `chair-session-reminders`, selects
+  // `where cc.session_code is not null`), and it did fix that — by starting
+  // rooms nobody had asked for. One conference minted thirteen rooms in a
+  // minute, and 735 rooms across production were created by a page load and
+  // never used by anyone.
   //
-  // NEVER REGENERATES, NEVER TOUCHES A LIVE ROOM: a committee with a
-  // `session_id` or a `session_code` is skipped outright, so nothing that has
-  // been handed out or started is disturbed. Each id is attempted at most once
-  // per page load, so a failure waits for a reload instead of looping.
-  const autoMintTried = useRef<Set<string>>(new Set());
+  // WHAT REPLACES IT: real presses, in three places, all going through the one
+  // shared helper `mintSessionForCommittee` (src/lib/mintSessionForCommittee.ts).
+  //   - this page, per committee: the "Create session code" button that stands
+  //     where the old "Creating code…" read-out was;
+  //   - this page, once: "Create codes for every committee", so a secretariat
+  //     with thirty committees presses once rather than thirty times;
+  //   - the chair's own role page (participant/ChairParticipant.tsx), which is
+  //     the owner's actual request: the dais asks for its own room.
+  //
+  // DO NOT PUT THE EFFECT BACK. Nothing may mint on mount, on a load, on
+  // publish, or from any effect. The chair reminder emails are the known cost
+  // of this rule: a committee with no code still gets none, and whether to
+  // create the room is now the organiser's or the chair's decision, not ours.
+  //
+  // NEVER REGENERATES, NEVER TOUCHES A LIVE ROOM: every path below is offered
+  // only for, and refuses to run on anything but, a committee with no
+  // `session_id` and no `session_code`, so nothing handed out or already
+  // started can be disturbed.
   const [mintFailedIds, setMintFailedIds] = useState<Set<string>>(new Set());
+  const codelessCount = committees.filter(c => !c.session_id && !c.session_code).length;
 
-  // Seats the new room from the committee's own country slots, the way the
-  // editor does on create, so a chair never gavels into an empty committee.
-  // The slots are read only for a committee that has no room at all.
-  const mintSessionFor = useCallback(async (
-    supabase: ReturnType<typeof getAuthedClient>,
-    c: CommitteeRow,
-  ): Promise<{ ok: boolean; problems: string[] }> => {
-    const { data: slotRows } = await supabase
-      .from('committee_country_slots')
-      .select('country_name, logo_url, is_observer')
-      .eq('conference_committee_id', c.id)
-      .order('country_name', { ascending: true });
-    const slots = (slotRows ?? []) as { country_name: string; logo_url: string | null; is_observer: boolean | null }[];
-    // A session that mints but does not link is worse than no session: the code
-    // would be handed out and joined, while the live wall, the scoreboard and
-    // awards would never find the room. Report it instead of swallowing it.
-    const problems: string[] = [];
-    const code = await mintConferenceSession(
-      supabase, c.id, c.name, (c.topics ?? [])[0] ?? '',
-      slots.map(s => ({ name: s.country_name, logoUrl: s.logo_url })),
-      slots.filter(s => s.is_observer).map(s => s.country_name),
-      (msg) => { problems.push(msg); },
-    );
-    // NOTE: deliberately does NOT patch `committees` with the new code. That
-    // would change the array this effect depends on, re-run it, and its
-    // cleanup would cancel the loop after the FIRST committee — leaving every
-    // other codeless committee unminted until a reload. The one
-    // `loadCommittees` at the end shows every new code at once instead.
-    return { ok: !!code && problems.length === 0, problems };
-  }, []);
+  // One committee, one press. `mint-<id>` keys the busy set, so only that
+  // committee's own button is disabled while its four writes run.
+  function handleCreateSessionCode(c: CommitteeRow) {
+    const key = `mint-${c.id}`;
+    if (!accessToken || busyIds.has(key) || c.session_id || c.session_code) return;
+    markBusy(key, true);
+    setActionError('');
+    (async () => {
+      const { ok, problems } = await mintSessionForCommittee(getAuthedClient(accessToken), c);
+      setMintFailedIds(prev => {
+        const next = new Set(prev);
+        if (ok) next.delete(c.id); else next.add(c.id);
+        return next;
+      });
+      if (ok) showFlash(`"${c.name}" now has a session code.`);
+      else setActionError(problems.length > 0
+        ? `The session for "${c.name}" was not fully set up (${problems.join('; ')}). Do not hand that code out yet.`
+        : `A session code could not be created for "${c.name}". Try again.`);
+      loadCommittees({ silent: true });
+    })().finally(() => markBusy(key, false));
+  }
 
-  useEffect(() => {
-    if (!accessToken || committees.length === 0) return;
-    const pending = committees.filter(c => !c.session_id && !c.session_code && !autoMintTried.current.has(c.id));
+  // Every codeless committee in one press. Sequential on purpose: each mint is
+  // four writes, and a burst of thirty in parallel is how a code-collision
+  // retry turns into a stampede.
+  function handleCreateAllSessionCodes() {
+    const key = 'mint-all';
+    if (!accessToken || busyIds.has(key)) return;
+    const pending = committees.filter(c => !c.session_id && !c.session_code);
     if (pending.length === 0) return;
-    let cancelled = false;
+    markBusy(key, true);
+    setActionError('');
     (async () => {
       const supabase = getAuthedClient(accessToken);
       const broken: string[] = [];
-      // Sequential on purpose: each mint is four writes, and a burst of thirty
-      // in parallel is how a code collision retry turns into a stampede.
+      let created = 0;
       for (const c of pending) {
-        // Claimed one at a time, right before the attempt: if this run is
-        // cancelled part way (an unmount, or anything else replacing the
-        // committee list), the committees it never reached are still eligible
-        // for the next run rather than being marked done and skipped.
-        if (autoMintTried.current.has(c.id)) continue;
-        autoMintTried.current.add(c.id);
-        const { ok, problems } = await mintSessionFor(supabase, c);
-        if (cancelled) return;
-        if (!ok) {
+        const { ok, problems } = await mintSessionForCommittee(supabase, c);
+        if (ok) {
+          created++;
+        } else {
           setMintFailedIds(prev => new Set(prev).add(c.id));
           broken.push(problems.length > 0 ? `"${c.name}" (${problems.join('; ')})` : `"${c.name}"`);
         }
       }
-      if (cancelled) return;
       if (broken.length > 0) {
-        setActionError(`A join code could not be set up for ${broken.join(', ')}. Reload the page to try again, and do not hand those codes out yet.`);
+        setActionError(`A session code could not be created for ${broken.join(', ')}. Press the button on those committees to try again, and do not hand those codes out yet.`);
+      } else {
+        showFlash(created === 1 ? 'One session code created.' : `${created} session codes created.`);
       }
       loadCommittees({ silent: true });
-    })();
-    return () => { cancelled = true; };
-  }, [committees, accessToken, mintSessionFor, loadCommittees, setActionError]);
+    })().finally(() => markBusy(key, false));
+  }
 
   function handleCopyCode(code: string) {
     navigator.clipboard.writeText(code);
@@ -2148,6 +2165,39 @@ export default function CommitteesPage() {
               <Settings size={12} strokeWidth={2.5} />
               Settings
             </NeuPill>
+
+            {/* One press for every committee that has no room yet. Shown only
+                while at least one is codeless, because the page no longer
+                mints anything by itself (owner, 7 Oct 2026) and a secretariat
+                with thirty committees must not have to press thirty buttons.
+                It runs the SAME per-committee helper, sequentially, on exactly
+                the codeless committees. */}
+            {codelessCount > 0 && (
+              <button
+                type="button"
+                onClick={handleCreateAllSessionCodes}
+                disabled={busyIds.has('mint-all')}
+                aria-busy={busyIds.has('mint-all') || undefined}
+                title="Creates the live session room and join code for every committee that has none yet."
+                className="gv-lift ms-auto inline-flex items-center gap-2 rounded-xl focus:outline-none"
+                style={{
+                  padding: '9px 16px',
+                  backgroundColor: NEU.forest,
+                  color: '#EED98A',
+                  border: 'none',
+                  fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 700,
+                  cursor: busyIds.has('mint-all') ? 'default' : 'pointer',
+                  opacity: busyIds.has('mint-all') ? 0.7 : 1,
+                }}
+              >
+                <Radio size={14} strokeWidth={2.4} aria-hidden />
+                {busyIds.has('mint-all')
+                  ? 'Creating codes…'
+                  : codelessCount === 1
+                    ? 'Create the missing session code'
+                    : `Create codes for ${codelessCount} committees`}
+              </button>
+            )}
           </div>
 
           {/* Session release settings — neumorphic, matching Financials'
@@ -2418,7 +2468,11 @@ export default function CommitteesPage() {
                         )}
                       </button>
                     ) : (
-                      <SessionCodePending failed={mintFailedIds.has(c.id)} />
+                      <CreateSessionCodeButton
+                        busy={busyIds.has(`mint-${c.id}`) || busyIds.has('mint-all')}
+                        failed={mintFailedIds.has(c.id)}
+                        onCreate={() => handleCreateSessionCode(c)}
+                      />
                     )}
                     <ChairCodeChip layout="row" code={chairCodeFor(c)} copiedCode={copiedCode} onCopy={handleCopyCode} />
 
@@ -2696,7 +2750,12 @@ export default function CommitteesPage() {
                               )}
                             </button>
                           ) : (
-                            <SessionCodePending block failed={mintFailedIds.has(c.id)} />
+                            <CreateSessionCodeButton
+                              block
+                              busy={busyIds.has(`mint-${c.id}`) || busyIds.has('mint-all')}
+                              failed={mintFailedIds.has(c.id)}
+                              onCreate={() => handleCreateSessionCode(c)}
+                            />
                           )}
                           <ChairCodeChip layout="card" code={chairCodeFor(c)} copiedCode={copiedCode} onCopy={handleCopyCode} />
 

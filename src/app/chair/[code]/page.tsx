@@ -21,7 +21,7 @@ import SessionCodePresenter from '@/components/SessionCodePresenter';
 import { RollCallWithJoin } from '@/components/RollCallJoinPanel';
 import FloorEmblemBackdrop from '@/components/FloorEmblemBackdrop';
 import ConferencePromoDialog from '@/components/ConferencePromoDialog';
-import { Ban, ClockPlus, FileSpreadsheet, ListOrdered, Maximize2, MessageCircle, MessageSquareReply, Settings, Trophy, Users } from 'lucide-react';
+import { Ban, ClockPlus, FileSpreadsheet, ListOrdered, Maximize2, MessageCircle, MessageSquareReply, RotateCcw, Settings, Trophy, Users } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { CaucusState, Committee, Delegate, DelegateStatus } from '@/lib/types';
@@ -65,7 +65,7 @@ import TutorialOverlay from '@/components/TutorialOverlay';
 import { useAgendaPicker } from '@/components/AgendaPicker';
 import { useSettingsSync } from '@/lib/useSettingsSync';
 import { loadVoteStates, isVoteOpen, setVotingPhase } from '@/lib/voteState';
-import { roomKeptUntil, formatKeptUntil } from '@/lib/roomRetention';
+import { roomKeptUntil, formatKeptUntil, canReopenEndedRoom, ENDED_KEEP_HOURS } from '@/lib/roomRetention';
 import { votingTabAliveRecently } from '@/lib/votingPhaseUnload';
 import { VotingInProgressCard } from '@/components/VotingInProgressCard';
 import { useGavelCue, type GavelCue } from '@/lib/useGavelCue';
@@ -126,6 +126,7 @@ import {
   getActiveBroadcasts,
   suspendDebate as suspendDebateInDB,
   endDebate as endDebateInDB,
+  reopenEndedSession,
   setPhaseAndCaucus as setPhaseAndCaucusInDB,
   pauseSpeakerTimer as pauseSpeakerTimerInDB,
   grantSpeakerTime as grantSpeakerTimeInDB,
@@ -1636,7 +1637,72 @@ function DownloadRecordButton({ committee }: { committee: Committee }) {
   );
 }
 
-function SessionEndedContent({ committee, hoursRemaining }: { committee: Committee; hoursRemaining: number | null }) {
+/**
+ * "Restart the session" on the End View (owner, 7 Oct 2026: committees ended by accident).
+ *
+ * Offered to ANY chair device, not only the Moderator: the join page forces every chair
+ * on an ended room down the Commenter path, so the person who has to undo the accident
+ * arrives view-only. `isViewOnly` is never a permission (AGENTS.md rule 15) and the chair
+ * suffix is the real credential.
+ *
+ * Asks first, in the page's own inline idiom (no new modal): a restart is a write that
+ * throws the room back to roll call, and pressing it by accident is the same accident
+ * again. Presentation only; the write belongs to the page (`onRestart`).
+ */
+function RestartSessionControl({ onRestart, error }: { onRestart: () => void; error: string | null }) {
+  const t = useT();
+  const [asking, setAsking] = useState(false);
+  if (!asking) {
+    return (
+      <div className="flex flex-col items-center gap-2 mt-6">
+        <button
+          type="button"
+          onClick={() => setAsking(true)}
+          className="inline-flex items-center gap-2.5 px-6 py-3.5 rounded-2xl text-base font-black focus:outline-none gv-lift-dark"
+          style={{ backgroundColor: '#1B3828', color: '#EED98A', fontFamily: 'var(--font-brand), sans-serif' }}
+        >
+          <RotateCcw size={20} strokeWidth={2.3} aria-hidden="true" />
+          {t('session_restart_btn')}
+        </button>
+        {error && <p className="text-sm max-w-md" role="alert" style={{ color: '#8B2020' }}>{error}</p>}
+      </div>
+    );
+  }
+  return (
+    <div className="mt-6 w-full max-w-md rounded-2xl px-5 py-4"
+      style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0', boxShadow: '0 6px 18px rgba(28,20,16,0.06)' }}>
+      <p className="text-sm mb-3" style={{ color: '#1C1410' }}>{t('session_restart_ask')}</p>
+      <div className="flex items-center justify-center gap-2.5">
+        <button
+          type="button"
+          autoFocus
+          onClick={() => { setAsking(false); onRestart(); }}
+          className="px-5 py-2.5 rounded-xl text-sm font-black focus:outline-none gv-lift-dark"
+          style={{ backgroundColor: '#1B3828', color: '#EED98A', fontFamily: 'var(--font-brand), sans-serif' }}
+        >
+          {t('session_restart_yes')}
+        </button>
+        <button
+          type="button"
+          onClick={() => setAsking(false)}
+          className="px-4 py-2.5 rounded-xl text-sm font-bold focus:outline-none"
+          style={{ backgroundColor: 'transparent', color: '#6A5A4A', border: '1px solid #DDD4C0' }}
+        >
+          {t('session_restart_no')}
+        </button>
+      </div>
+      {error && <p className="text-sm mt-3" role="alert" style={{ color: '#8B2020' }}>{error}</p>}
+    </div>
+  );
+}
+
+function SessionEndedContent({ committee, hoursRemaining, canRestart, onRestart, restartError }: {
+  committee: Committee;
+  hoursRemaining: number | null;
+  canRestart: boolean;
+  onRestart: () => void;
+  restartError: string | null;
+}) {
   const { language } = useLanguage();
   const t = useT();
   const isConferenceSession = committee.sessionOrigin === 'conference';
@@ -1648,6 +1714,9 @@ function SessionEndedContent({ committee, hoursRemaining }: { committee: Committ
       <p className="text-lg mb-8" style={{ color: '#9A8A78' }}>{committee.topic}</p>
       {/* The record, before the room is deleted (src/lib/sessionRecordExport.ts). */}
       <DownloadRecordButton committee={committee} />
+      {/* Within REOPEN_WINDOW_HOURS of the gavel, the end can be undone. Past the window
+          nothing is drawn here: a dead button would be a promise the write cannot keep. */}
+      {canRestart && <RestartSessionControl onRestart={onRestart} error={restartError} />}
       {/* A conference room is never deleted; a standalone one goes at expires_at. */}
       {!isConferenceSession && keptUntil && (
         <p className="text-base mt-5" style={{ color: '#6A5A4A' }}>
@@ -1770,6 +1839,12 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
   const [suspendTab, setSuspendTab] = useState<'suspend' | 'session'>('suspend');
   const [endedTab, setEndedTab] = useState<'ended' | 'session'>('ended');
   const [hoursRemaining, setHoursRemaining] = useState<number | null>(null);
+  // The End View's restart affordance (owner, 7 Oct 2026). `canRestart` is re-derived on the
+  // same one-minute cadence as `hoursRemaining`, never per second, so the button leaves by
+  // itself when the 24 h window closes. RULES 3 and 4 are untouched: no committee state, no
+  // updateLocal, no write.
+  const [canRestart, setCanRestart] = useState(false);
+  const [restartError, setRestartError] = useState<string | null>(null);
   const [timerRunning, setTimerRunning] = useState(false);
   const [showTutorial, setShowTutorial] = useState(false);
   const [showRollCall, setShowRollCall] = useState(true);
@@ -2054,6 +2129,9 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
       setLoadFailed(false);
       const found = result.status === 'ok' ? result.committee : null;
       if (found) {
+        // Set-only on purpose, and both flags start false: a row whose `ended_at` is null
+        // (a room restarted within the 24 h window, owner 7 Oct 2026) renders no overlay at
+        // all and opens straight on its `pre-session` roll call.
         if (found.suspendedAt) {
           setSessionSuspended(true);
         } else if (found.endedAt) {
@@ -2118,7 +2196,10 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
         if (found.dbChairJoinSuffix) {
           updateSetting(found.code, 'chairJoinSuffix', found.dbChairJoinSuffix);
         }
-        if (!found.endedAt) {
+        // Written while the room is live AND while an ended room can still be restarted
+        // (owner, 7 Oct 2026): the blob is what brings a chair who ended the committee by
+        // accident back to it. Past the window the canRestart effect forgets it.
+        if (!found.endedAt || canReopenEndedRoom(found, serverNow())) {
           const foundSettings = getSettings(found.code);
           localStorage.setItem('gavelling-rejoin', JSON.stringify({
             code: found.code,
@@ -2224,13 +2305,31 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                 const updated = data as Committee;
                 if (stale) {
                   // Only what no click on this device can have changed: the roster of chair
-                  // names, and the end of the session (endedAt is permanent). The gavel,
-                  // the resume latch, phase and caucus all wait for the fresh fetch.
-                  setCommittee((prev) => prev ? {
-                    ...prev,
-                    chairNames: updated.chairNames,
-                    ...(updated.endedAt ? { endedAt: updated.endedAt, expiresAt: updated.expiresAt } : {}),
-                  } : prev);
+                  // names, and the end of the session. The gavel, the resume latch, phase
+                  // and caucus all wait for the fresh fetch.
+                  // `endedAt` is NO LONGER permanent (owner, 7 Oct 2026: an ended room can
+                  // be restarted for 24 h), but an UN-END still must not cross in THIS
+                  // branch. Stale means a click on this device landed after the fetch
+                  // started, and ending the session is exactly such a click: a fetch issued
+                  // before it answers `ended_at: null`, which as a "transition" would clear
+                  // the stamp, drop the End View through prevLifecycleRef, and flash the live
+                  // room back at the chair who just ended it until the retry below. So the
+                  // rule here is the branch's own rule, unchanged: only what no click on
+                  // this device can have caused. A real un-end reaches this device through
+                  // the fresh branch after STALE_RETRY_MS, or through the in-window branch,
+                  // which knows whether a lifecycle write of ours is in flight.
+                  setCommittee((prev) => {
+                    if (!prev) return prev;
+                    let next: Committee = { ...prev, chairNames: updated.chairNames };
+                    if (updated.endedAt && updated.endedAt !== prev.endedAt) {
+                      next = { ...next, endedAt: updated.endedAt, expiresAt: updated.expiresAt };
+                    }
+                    return next;
+                  });
+                  // The overlay follows `committee.endedAt` through the prevLifecycleRef
+                  // effect, which drops it when the stamp goes back to null, so the clearing
+                  // needs no flag write here (and a stale "not ended" cannot flash the live
+                  // room over this device's own End Debate before the retry below).
                   if (updated.endedAt) { setSessionEnded(true); setSessionSuspended(false); }
                   return STALE_RETRY_MS;
                 }
@@ -2250,10 +2349,31 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                       chairNames: updated.chairNames,
                       resumingChair: updated.resumingChair,
                     };
-                    if (updated.endedAt) next = { ...next, endedAt: updated.endedAt, expiresAt: updated.expiresAt };
+                    // `endedAt` is not permanent any more (owner, 7 Oct 2026: 24 h to
+                    // restart), so a restart on another device has to reach this co-chair's
+                    // End View without waiting for a full fetch. An end always crosses. An
+                    // un-end crosses only while NO lifecycle write of ours is in flight
+                    // (`rowHeld`): our own End Debate bumps localWriteSeq before its write is
+                    // issued, so a fetch that starts in between is not stale and still reads
+                    // `ended_at: null` from a row the write has not reached yet — carrying
+                    // that would clear the stamp and flash the live room back at the chair
+                    // who just ended the session. While the write is pending the slice is
+                    // held and refetched the moment it settles, by which time the row agrees.
+                    // An un-end carries the phase with it, since the restart writes
+                    // `pre-session` in the same statement.
+                    const endedChanged = (updated.endedAt ?? null) !== (prev.endedAt ?? null);
+                    if (endedChanged && (updated.endedAt || !rowHeld)) {
+                      next = { ...next, endedAt: updated.endedAt, expiresAt: updated.expiresAt };
+                      if (!updated.endedAt) next = { ...next, phase: updated.phase };
+                    }
                     if (updated.suspendedAt !== prev.suspendedAt) next = { ...next, suspendedAt: updated.suspendedAt, resumingChair: updated.resumingChair, phase: updated.phase };
                     return next;
                   });
+                  // As in the stale branch: an un-end drops the overlay through the
+                  // prevLifecycleRef effect (which watches `committee.endedAt`), so no flag
+                  // is cleared here. Doing it from the event would let a row read taken
+                  // while this device's own End Debate was still in flight flash the live
+                  // room back for a moment.
                   if (updated.endedAt) { setSessionEnded(true); setSessionSuspended(false); }
                   else if (updated.suspendedAt) { setSessionSuspended(true); }
                   else { setSessionSuspended(false); }
@@ -3377,7 +3497,10 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
     if (endedAt) {
       setSessionEnded(true);
       setSessionSuspended(false);
-      localStorage.removeItem('gavelling-rejoin');
+      // The rejoin blob is NOT forgotten here any more (owner, 7 Oct 2026). It is the one
+      // thing that brings a chair who ended the room by accident back to it, and the room
+      // can be restarted for 24 hours. The canRestart effect below forgets it once the
+      // window has passed.
     } else if (suspendedAt) {
       setSessionSuspended(true);
       setSessionEnded(false);
@@ -3491,6 +3614,83 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
     const id = setInterval(calc, 60_000);
     return () => clearInterval(id);
   }, [committee?.expiresAt]);
+
+  /**
+   * Is the end still undoable? `canReopenEndedRoom` compares `ended_at` against the
+   * DATABASE clock (RULE 6b), re-checked once a minute like the hours above, so the
+   * Restart button leaves on its own when the window closes and is never a dead control.
+   *
+   * It is also where the rejoin blob is forgotten: while the room can still be restarted,
+   * that blob is exactly how the chair gets back to it, so it is kept until the window has
+   * passed (`gavelling-rejoin`, read by LiveRoomsGate on /sessions).
+   */
+  const committeeEndedAt = committee?.endedAt ?? null;
+  useEffect(() => {
+    if (!committeeEndedAt) { setCanRestart(false); setRestartError(null); return; }
+    // `canReopenEndedRoom` reads only `endedAt`, so the stamp is all this needs; keying the
+    // effect on the stamp rather than the committee object keeps it off every refetch.
+    const row = { endedAt: committeeEndedAt } as Committee;
+    function check() {
+      const ok = canReopenEndedRoom(row, serverNow());
+      setCanRestart(ok);
+      if (!ok) { try { localStorage.removeItem('gavelling-rejoin'); } catch { /* ignore */ } }
+    }
+    check();
+    const id = setInterval(check, 60_000);
+    return () => clearInterval(id);
+  }, [committeeEndedAt]);
+
+  /**
+   * Undo an End Debate (owner, 7 Oct 2026: "when someone ends debate, going onto the same
+   * session within 24 hours, it still allows them back in to restart it").
+   *
+   * Optimistic first, then checked (RULE 5): the overlay drops at once, and if the write
+   * did not land BOTH the row fields and the two overlay flags go back exactly as the
+   * organiser-broadcast path rolls a failed break back, with a translated sentence (never a
+   * raw error). The room lands in `pre-session`, where a resumed suspension lands too, so
+   * Begin Session restores a paused caucus through `beginSessionAfterRollCall` (C-1).
+   *
+   * Offered to any chair device, Commenter included (AGENTS.md rule 15): the join page
+   * forces every chair on an ended room down the Commenter path, so a view-only gate would
+   * hide the control from the only person who can undo the accident. After it lands, this
+   * device takes the gavel when the gavel is free or already names this chair, so the chair
+   * who restarted is not stranded as a Commenter in a live room. One attempt, silent on
+   * failure: "Take the gavel" is still in the top bar.
+   */
+  const handleRestartSession = useCallback(() => {
+    if (!committee || !committee.endedAt) return;
+    const id = committee.id;
+    const suffix = committee.dbChairJoinSuffix ?? undefined;
+    const before = {
+      phase: committee.phase,
+      endedAt: committee.endedAt ?? null,
+      expiresAt: committee.expiresAt ?? null,
+      suspendedAt: committee.suspendedAt ?? null,
+      resumingChair: committee.resumingChair ?? null,
+    };
+    // Decided at PRESS time, not inside a setCommittee updater (React may run one twice,
+    // and a write from inside one is forbidden): while the room is ended nothing can move
+    // the gavel, so the row as it stands now is the row the claim would see.
+    const takeGavel = !!myChairName && (!committee.dbHeadChair || committee.dbHeadChair === myChairName);
+    const forGavel = committee;
+    setRestartError(null);
+    updateLocal(setCommittee, (c) => ({
+      ...c, endedAt: null, expiresAt: null, suspendedAt: null, resumingChair: null, phase: 'pre-session' as const,
+    }), true);
+    setSessionEnded(false);
+    setSessionSuspended(false);
+    void reopenEndedSession(id, committee.code, suffix).then((ok) => {
+      if (!ok) {
+        updateLocal(setCommittee, (c) => (c.id === id ? { ...c, ...before } : c), true);
+        setSessionEnded(!!before.endedAt);
+        setSessionSuspended(!!before.suspendedAt && !before.endedAt);
+        setRestartError(t('session_restart_failed'));
+        return;
+      }
+      if (takeGavel) claimGavelForThisDevice(forGavel, myChairName);
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [committee?.id, committee?.code, committee?.dbChairJoinSuffix, committee?.endedAt, committee?.expiresAt, committee?.suspendedAt, committee?.resumingChair, committee?.phase, committee?.dbHeadChair, myChairName, claimGavelForThisDevice, t]);
 
   // Read-state (per conversation) is owned here and mutated by ChatPanel via
   // onReadCountsChange while the panel is open; the header badge below reads the same
@@ -3777,8 +3977,9 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
       void suspendDebateInDB(committee.id, code, suffix).then((ok) => { if (!ok) rollback(); });
     } else {
       const nowMs = serverNow();   // database clock (T-1)
-      // Mirrors endDebate()'s own +1h. If one is ever changed, change both.
-      const expires = new Date(nowMs + 1 * 60 * 60 * 1000);
+      // Mirrors endDebate()'s own keep window (ENDED_KEEP_HOURS, src/lib/roomRetention.ts),
+      // read from there rather than typed, so the three mirrors cannot drift.
+      const expires = new Date(nowMs + ENDED_KEEP_HOURS * 60 * 60 * 1000);
       updateLocal(setCommittee, (c) => ({ ...c, endedAt: new Date(nowMs).toISOString(), expiresAt: expires.toISOString(), phase: 'adjourned' as const }), true);
       setSessionEnded(true);
       setSessionSuspended(false);
@@ -5408,7 +5609,13 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
           via `gslActionsRef` (see the effect that raises the card). The join-request
           "Waiting Room" bar directly above is a DIFFERENT motion type and stays. */}
       {sessionEnded && endedTab === 'ended' ? (
-        <SessionEndedContent committee={committee} hoursRemaining={hoursRemaining} />
+        <SessionEndedContent
+          committee={committee}
+          hoursRemaining={hoursRemaining}
+          canRestart={canRestart}
+          onRestart={handleRestartSession}
+          restartError={restartError}
+        />
       ) : (!sessionEnded && sessionSuspended && suspendTab === 'suspend') ? (
         <div className="flex-1 flex flex-col items-center justify-center text-center px-8">
           {(() => {

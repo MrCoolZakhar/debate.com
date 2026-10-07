@@ -52,6 +52,8 @@ export interface StandaloneItem {
   chairName: string;
   name: string;
   topic: string | null;
+  /** The room ENDED but can still be restarted (owner, 7 Oct 2026). The card says so. */
+  ended?: boolean;
 }
 
 export type PromptItem = LiveEntry | StandaloneItem;
@@ -575,6 +577,9 @@ function SingleCard({ item, t, primaryRef, onGo, onClose, onForget }: ViewProps 
     const { primary, secondary } = committeeNames(item.name, null);
     code = item.code.toUpperCase();
     topic = item.topic;
+    // Honest about what Rejoin does on a room that was ended: it opens the End View, where
+    // "Restart the session" is (owner, 7 Oct 2026).
+    if (item.ended) note = t('srp_rejoin_ended_note');
     hero = (
       <div className="srp-hero">
         <Emblem src={emblemFor(item)} label={primary} size={104} />

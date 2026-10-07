@@ -42,6 +42,8 @@ import { useAuth } from '@/components/AuthProvider';
 import { useBasicsGateBlocking } from '@/lib/basicsGateState';
 import { supabase } from '@/lib/supabase';
 import { chairIdentity, entrySessionCodes, resolveEntryHref, useLiveRooms } from '@/lib/liveRooms';
+import { REOPEN_WINDOW_HOURS } from '@/lib/roomRetention';
+import { serverNow } from '@/lib/serverClock';
 import LiveRoomsDialog, { PROMPT_ATTR, itemHref, type PromptItem, type StandaloneItem } from './LiveRoomsDialog';
 
 const EXCLUDED_PREFIXES = [
@@ -61,7 +63,12 @@ export function isLiveRoomsExcludedPath(pathname: string | null): boolean {
 const REJOIN_KEY = 'gavelling-rejoin';
 const REJOIN_LEGACY_KEY = 'gavelling_active_session';
 const REJOIN_DISMISSED_KEY = 'gavelling-rejoin-dismissed';
-const REJOIN_MAX_AGE_MS = 18 * 60 * 60 * 1000;
+// The blob is offered for as long as the room can still be entered. An ended room can be
+// restarted for REOPEN_WINDOW_HOURS (owner, 7 Oct 2026: committees ended by accident), and a
+// live one is kept at least that long, so the two windows are the same number by design.
+// It was 18 h, which was SHORTER than the restart window: the rejoin card went away six
+// hours before the room did.
+const REJOIN_MAX_AGE_MS = REOPEN_WINDOW_HOURS * 60 * 60 * 1000;
 
 interface StoredRejoin { code: string; chairName: string; committeeTitle: string }
 
@@ -97,8 +104,21 @@ function readStoredRejoin(): StoredRejoin | null {
   }
 }
 
-/** 'gone' = deleted or ended (forget it); null = the read failed (offer it as before). */
-async function checkStandaloneRoom(code: string): Promise<{ name: string | null; topic: string | null } | 'gone' | null> {
+/**
+ * 'gone' = deleted, or ended too long ago to restart (forget it); null = the read failed
+ * (offer it as before).
+ *
+ * An ended room INSIDE the restart window is still offered, with `ended: true` (owner,
+ * 7 Oct 2026: "when someone ends debate, going onto the same session within 24 hours, it
+ * still allows them back in to restart it"). That is precisely the case this card exists
+ * for, and it used to be the one case it refused. The window is compared against the
+ * DATABASE clock (`serverNow()`, RULE 6b): `ended_at` is a timestamp the database wrote, and
+ * a laptop hours out of step must not decide that a restartable room is gone. `serverNow()`
+ * is a plain read (the last measured offset, kept in localStorage), so it starts no request.
+ */
+async function checkStandaloneRoom(
+  code: string,
+): Promise<{ name: string | null; topic: string | null; ended: boolean } | 'gone' | null> {
   try {
     const { data, error } = await supabase
       .from('committees')
@@ -108,8 +128,13 @@ async function checkStandaloneRoom(code: string): Promise<{ name: string | null;
     if (error) return null;
     if (!data) return 'gone';
     const row = data as { name: string | null; topic: string | null; ended_at: string | null };
-    if (row.ended_at) return 'gone';
-    return { name: row.name, topic: row.topic };
+    if (row.ended_at) {
+      const ended = new Date(row.ended_at).getTime();
+      const open = Number.isFinite(ended) && serverNow() < ended + REOPEN_WINDOW_HOURS * 60 * 60 * 1000;
+      if (!open) return 'gone';
+      return { name: row.name, topic: row.topic, ended: true };
+    }
+    return { name: row.name, topic: row.topic, ended: false };
   } catch {
     return null;
   }
@@ -172,6 +197,9 @@ export default function LiveRoomsGate() {
         chairName: stored.chairName,
         topic: res?.topic && res.topic.trim() && res.topic !== 'TBD' ? res.topic : null,
         name: res?.name?.trim() || stored.committeeTitle,
+        // The card says what pressing it does: the room is closed and opening it is where
+        // the restart button lives (`srp_rejoin_ended_note`).
+        ended: res?.ended ?? false,
       });
     });
     return () => { cancelled = true; };

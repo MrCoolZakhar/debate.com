@@ -8,15 +8,19 @@
  * IdentityStep.tsx); the rest are one question per screen. The submit logic
  * writes exactly the same columns as before and redirects to /manage/{slug}.
  * Description and socials are collected in their own skippable step; the
- * remaining optional fields (visibility, previous editions) are deferred to
- * Settings after creation.
+ * remaining optional fields (previous editions, the finer public-page
+ * details) are deferred to Settings after creation.
+ *
+ * The conference is PUBLISHED on create, as a second write after the insert
+ * (see handleCreate's "PUBLISH ON CREATE" block), and visibility is editable
+ * from Settings → Privacy afterwards.
  *
  * Progress lives in component state only, a refresh restarts the wizard.
  */
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { AlertTriangle, Mail, Pencil, Check, Camera, ThumbsUp, Music2, MessageCircle, Globe, Plus, ClipboardList, CreditCard, Building2, Megaphone, Trash2, type LucideIcon } from 'lucide-react';
+import { AlertTriangle, Mail, Pencil, Check, Camera, ThumbsUp, Music2, MessageCircle, Globe, Plus, ClipboardList, CreditCard, Building2, Megaphone, Trash2, Gift, Link2, Clock3, type LucideIcon } from 'lucide-react';
 import SiteNav from '@/components/SiteNav';
 import Loader from '@/components/Loader';
 import { useAuth } from '@/components/AuthProvider';
@@ -59,12 +63,13 @@ const ROLE_DEFAULTS = ['delegate', 'chair', 'head-delegate', 'faculty-advisor', 
 
 // ── Step model ─────────────────────────────────────────────────────────────
 
-const TOTAL_STEPS = 9;
+const TOTAL_STEPS = 10;
 const REVIEW_STEP = TOTAL_STEPS;
 // 1 your conference: name + acronym (REQUIRED), logo, banner, dates (all three
 // optional, as they were as separate steps) · 2 format · 3 level · 4 where
 // · 5 delegates (REQUIRED) · 6 committees (REQUIRED) · 7 description + socials
-// (skippable) · 8 what they will use Gavelling for (REQUIRED) · 9 review.
+// (skippable) · 8 how delegates pay (REQUIRED) · 9 what they will use
+// Gavelling for (REQUIRED) · 10 review.
 //
 // Step 1 used to be four screens (name, then logo, banner and dates as steps
 // 5, 8 and 9 of 12). Owner, 24 Sep 2026: "make the first wizard have more
@@ -78,7 +83,9 @@ const REVIEW_STEP = TOTAL_STEPS;
 // before a conference exists: the conference and the delegate role config are
 // created at a fee of 0 and applications closed, prices are set in Settings →
 // Financials, and every public surface shows "TBD" until delegate applications
-// are open (displayDelegatePrice in src/lib/publicFees.ts).
+// are open (displayDelegatePrice in src/lib/publicFees.ts). Step 8 asks the
+// payment METHOD, never an amount, and that distinction is the whole reason it
+// can be asked here at all.
 //
 // Every optional field stays exactly as editable from Settings afterwards as
 // it already was.
@@ -90,7 +97,28 @@ const REVIEW_STEP = TOTAL_STEPS;
 // (169 → 83). It goes straight after the head count, because "how many
 // delegates" and "which rooms do they sit in" are one thought.
 
-// STEP 8, "What will you use Gavelling for?", is asked BEFORE the insert and
+// STEP 8, "How do delegates pay?", is asked BEFORE the insert and is REQUIRED
+// (owner, 7 Oct 2026). 181 of 302 non-demo conferences had no payment_method
+// at all, and a conference with none can never open an application: the
+// role-config trigger coerces is_enabled back to false until
+// conference_payments_ready() is true. Three answers, and all three are real
+// answers, including "later":
+//   free  → payment_method 'manual' + a fixed note saying it is free
+//   link  → payment_method 'manual' + the one thing they typed, as
+//           external_payment_url when it reads as a link, else as
+//           external_payment_note
+//   later → NOTHING is written, exactly the behaviour before this step existed
+// It rides along in `insertRow` (`...paymentColumns`) like every other answer,
+// so there is no second write to fail. It asks no price: the amount is set in
+// Settings → Financials, where it always was.
+//
+// The two CHECKs this can reach are both enforced here first, so the
+// all-or-nothing insert can never be refused over it:
+// conferences_external_payment_url_https (a stored link starts with https://,
+// which paymentLinkValue guarantees) and conferences_external_payment_note_len
+// (500 characters, which the field's maxLength guarantees).
+
+// STEP 9, "What will you use Gavelling for?", is asked BEFORE the insert and
 // is REQUIRED.
 //
 // It used to be a bonus screen shown after the row was already real, recorded
@@ -114,6 +142,45 @@ const INTENT_FALLBACK_ICONS: Record<string, LucideIcon> = {
   chairs: Globe,
   marketing: Megaphone,
 };
+
+// ── Step 8, how delegates pay ──────────────────────────────────────────────
+
+/** 'free' and 'link' both store payment_method 'manual' (the one method that
+ *  needs no onboarding); 'later' stores nothing at all. */
+type PayChoice = 'free' | 'link' | 'later' | '';
+
+/** What a free conference puts on file. `conference_payments_ready()` is
+ *  satisfied by either external field, so a note is enough, and the public
+ *  pay page shows this sentence as the payment instructions. */
+const FREE_PAYMENT_NOTE = 'This conference is free.';
+
+/** conferences_external_payment_note_len. Enforced on the field so the
+ *  all-or-nothing insert can never be refused over a long note. */
+const PAYMENT_NOTE_MAX = 500;
+
+/**
+ * One typed answer, two possible columns. A value that reads as a web address
+ * becomes `external_payment_url`; anything else is written verbatim as
+ * `external_payment_note`.
+ *
+ * Deliberately NOT normalizeSocialUrl: that one prefixes https:// to whatever
+ * it is handed, so "Bank transfer on arrival" would have become a link. The
+ * test here is strict (no whitespace, a dot, a letters-only last label) and
+ * falls back to the note, which is the safe side of the fence: a note is shown
+ * as written and a mistaken one is fixed in Financials.
+ *
+ * A link is always stored as https://, because conferences_external_payment_url_https
+ * refuses anything else and Financial Settings validates the same way.
+ */
+function paymentLinkValue(raw: string): { url: string | null; note: string | null } {
+  const v = raw.trim();
+  if (!v) return { url: null, note: null };
+  const asUrl = /^https?:\/\//i.test(v) ? v.replace(/^https?:\/\//i, '') : v;
+  const looksLikeLink =
+    !/\s/.test(asUrl) && /^[a-z0-9][a-z0-9.-]*\.[a-z]{2,}(?:[/?#].*)?$/i.test(asUrl);
+  if (looksLikeLink) return { url: 'https://' + asUrl.replace(/^\/+/, ''), note: null };
+  return { url: null, note: v.slice(0, PAYMENT_NOTE_MAX) };
+}
 
 // Bundled banner artwork, mirrors settings' BANNER_PRESETS so the organiser
 // can set a banner during creation exactly as they would afterwards.
@@ -576,7 +643,14 @@ export default function NewConferencePage() {
   const [bannerUploading, setBannerUploading] = useState(false);
   const [bannerError, setBannerError] = useState('');
 
-  // What they came here to do (step 8). Required, and written as part of the
+  // How delegates pay (step 8). Required, and written as part of the
+  // conferences insert. `payLink` is the one field the 'link' answer asks for
+  // and holds either a web address or written instructions; paymentLinkValue
+  // decides which column it lands in.
+  const [payChoice, setPayChoice] = useState<PayChoice>('');
+  const [payLink, setPayLink] = useState('');
+
+  // What they came here to do (step 9). Required, and written as part of the
   // conferences insert — there is no second write and nothing to fail.
   const [intentKeys, setIntentKeys] = useState<string[]>([]);
 
@@ -613,6 +687,35 @@ export default function NewConferencePage() {
       })),
     [],
   );
+
+  // ── How delegates pay (step 8) ───────────────────────────────────────────
+
+  /**
+   * The payment columns `insertRow` spreads. An EMPTY object for 'later' and
+   * for a 'link' answer with nothing typed, so the insert writes no payment
+   * column at all and the conference starts exactly as it did before this step
+   * existed. Computed here, not inside handleCreate, so the review row and the
+   * insert can never disagree about what will be stored.
+   */
+  const paymentColumns = useMemo((): {
+    payment_method?: 'manual';
+    external_payment_url?: string | null;
+    external_payment_note?: string | null;
+  } => {
+    if (payChoice === 'free') {
+      return { payment_method: 'manual', external_payment_url: null, external_payment_note: FREE_PAYMENT_NOTE };
+    }
+    if (payChoice === 'link') {
+      const { url, note } = paymentLinkValue(payLink);
+      if (!url && !note) return {};
+      return { payment_method: 'manual', external_payment_url: url, external_payment_note: note };
+    }
+    return {};
+  }, [payChoice, payLink]);
+
+  /** "Later" is a real answer; a 'link' with an empty field is not. */
+  const paymentAnswered =
+    payChoice === 'free' || payChoice === 'later' || (payChoice === 'link' && !!payLink.trim());
 
   // ── Committees (step 6) ──────────────────────────────────────────────────
   function removeCommittee(key: string) {
@@ -772,7 +875,10 @@ export default function NewConferencePage() {
             // `expectedDelegates > 0` and offers SET AN EXPECTED HEAD COUNT,
             // and admin's isShortOnSeats() skips it.
             expected_delegates: expectedDelegates ? parseInt(expectedDelegates) : 0,
-            // What they came here to do, step 8. Part of the insert, so it can
+            // How delegates pay, step 8. An EMPTY spread for "I'll set this up
+            // later", so that answer writes no payment column at all.
+            ...paymentColumns,
+            // What they came here to do, step 9. Part of the insert, so it can
             // never be a follow-up write that fails after the conference is real.
             intent: intentPayload(intentKeys),
             // No price is asked while creating (see the step model): the
@@ -817,10 +923,12 @@ export default function NewConferencePage() {
           ROLE_DEFAULTS.map(role => ({
             conference_id: conferenceId,
             role,
-            // Applications now start closed by design: a brand new conference
-            // has no payment_method yet (not set above), so it can never be
-            // ready, and the INSERT trigger would coerce this to false anyway.
-            // They open once financial setup is done, from Settings.
+            // Applications still start CLOSED by design, even now that step 8
+            // can put a payment method on file: when applications open, and at
+            // what price, is a decision the organiser makes in Settings once
+            // the committees and the fee stages are how they want them. Step 8
+            // only removes the blocker (`conference_payments_ready`) that used
+            // to make opening them impossible; it does not open them.
             is_enabled: false,
             fee_amount: 0,
             auto_accept: false,
@@ -942,6 +1050,65 @@ export default function NewConferencePage() {
         }
       }
 
+      // ── PUBLISH ON CREATE (owner, 7 Oct 2026) ──────────────────────────
+      //
+      // "So many conferences get left in the draft even though they are fully
+      // ready to be published": 216 of 302 non-demo conferences had NEVER been
+      // published, 95 of them made in the last 30 days, and 32 were already
+      // collecting applications while invisible to every applicant. A
+      // conference is therefore live the moment it is created, and Settings →
+      // Privacy takes it back to private in one switch (that direction is
+      // never gated).
+      //
+      // WHY THIS IS A SECOND WRITE and not `is_public: true` in the insert.
+      // The insert above is all-or-nothing: any refusal aborts the whole
+      // creation and the organiser loses every step they filled in. Two
+      // database rules can refuse a publish — conferences_tbd_not_public and,
+      // until the owner drops it, the publish payment gate — and the
+      // `expected_delegates` note further up is the scar from exactly this
+      // failure mode. As a separate write a refusal costs nothing: the
+      // conference is already saved, it simply stays a draft, and the
+      // dashboard checklist's own "Publish your conference" row says what to
+      // do next.
+      //
+      // IT IS ATTEMPTED, never preconditioned on conferencePaymentsReady():
+      // the owner is dropping the publish gate separately, so an attempt that
+      // merely fails today starts succeeding the moment that SQL lands, with
+      // no code change. The ONE thing worth not attempting is TBD dates:
+      // conferences_tbd_not_public is a permanent rule, not a gate, so a
+      // conference with no start date is left private on purpose.
+      //
+      // Awaited (one fast write) but it can never block the redirect: every
+      // path below falls through to router.push.
+      if (!datesTbd && startDate.trim()) {
+        try {
+          const { data: publishedRows, error: publishError } = await supabase
+            .from('conferences')
+            .update({ is_public: true, status: 'public' })
+            .eq('id', conferenceId)
+            .select('id');
+          if (publishError || !publishedRows || publishedRows.length === 0) {
+            // Refused (a gate, or RLS). Not an error the organiser needs: they
+            // have a conference, and it is a draft they can publish from the
+            // dashboard. Never surfaced, never retried.
+            console.warn(
+              'Conference created but left as a draft:',
+              publishError?.message ?? 'the publish write changed no row',
+            );
+          } else {
+            // Fire-and-forget, exactly as the dashboard's PublishModal does:
+            // ping IndexNow so the new public page gets crawled right away.
+            void fetch('/api/indexnow', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ slug }),
+            }).catch(() => {});
+          }
+        } catch (publishErr) {
+          console.warn('Conference created but left as a draft:', publishErr);
+        }
+      }
+
       // Created, intent and all. Straight to the dashboard — `submitting` stays
       // true through the navigation so the button cannot fire a second time
       // while the route loads.
@@ -998,6 +1165,17 @@ export default function NewConferencePage() {
     ? committees.map((c) => committeeDisplayName(c.name, c.abbreviation)).join(', ')
     : 'None yet';
 
+  // Reads back what will actually be stored, not what was tapped: a 'link'
+  // answer says which of the two columns the typed value landed in.
+  const paymentSummary =
+    payChoice === 'free' ? 'Free'
+    : payChoice === 'later' ? 'Set up later'
+    : payChoice === 'link'
+      ? (paymentColumns.external_payment_url ? 'Payment link added'
+        : paymentColumns.external_payment_note ? 'Payment instructions added'
+        : 'Nothing added yet')
+      : 'Not answered';
+
   // Titles rather than the admin's SHOUTING short codes: this row sits beside
   // "Committees" and "Logo" in a sentence-case list.
   const intentSummary = intentKeys.length
@@ -1015,15 +1193,17 @@ export default function NewConferencePage() {
   // The logo, banner, description and socials steps are skippable and none of
   // them gates creation. Everything else does: the head count is a real
   // positive number, at least one committee exists (one is the minimum a
-  // conference needs to be applied to at all), and the intent question has an
-  // answer. Each of those three has a step with no skip link, so a review
-  // screen that could not submit would mean an editable row is empty — hence a
-  // ReviewRow for every one of them.
+  // conference needs to be applied to at all), the payment question has an
+  // answer ("later" counts), and the intent question has an answer. Each of
+  // those four has a step with no skip link, so a review screen that could not
+  // submit would mean an editable row is empty — hence a ReviewRow for every
+  // one of them.
   const readyToCreate =
     fullName.trim() && acronym.trim() && !acronymProblem(acronym) && contactEmail.trim() &&
     studentLevel && country && city.trim() && format &&
     parseInt(expectedDelegates) > 0 &&
     committees.length > 0 &&
+    paymentAnswered &&
     intentKeys.length > 0;
 
   // Loading / auth spinner
@@ -1361,10 +1541,68 @@ export default function NewConferencePage() {
               </WizardShell>
             )}
 
-            {/* ── Step 8, what they will use Gavelling for (REQUIRED) ─── */}
+            {/* ── Step 8, how delegates pay (REQUIRED) ───────────────── */}
             {step === 8 && (
               <WizardShell
                 step={8} total={TOTAL_STEPS}
+                title="How do delegates pay?"
+                sub="Applications cannot open until this is set up. You can change it later in Financials."
+                onBack={back}
+              >
+                <CardSelect
+                  options={[
+                    { key: 'free', label: "It's free", sub: 'No delegate fee at all', icon: <Gift size={40} strokeWidth={1.7} style={{ color: NEU.forest }} /> },
+                    { key: 'link', label: 'A payment link or instructions', sub: 'Paste a link, or write how to pay', icon: <Link2 size={40} strokeWidth={1.7} style={{ color: NEU.forest }} /> },
+                    { key: 'later', label: "I'll set this up later", sub: 'Applications stay closed until you do', icon: <Clock3 size={40} strokeWidth={1.7} style={{ color: NEU.forest }} /> },
+                  ]}
+                  value={payChoice || null}
+                  onChange={(k) => { setPayChoice(k as PayChoice); setStepError(''); }}
+                  columns={3}
+                  size="lg"
+                  // Short headings on big cards: let them wrap, and drop to
+                  // fewer columns on a phone rather than squeezing three.
+                  wrapText
+                  minColumnWidth={190}
+                />
+
+                {/* The one field the middle answer asks for. A web address goes
+                    to external_payment_url, anything else to
+                    external_payment_note; paymentLinkValue decides. */}
+                {payChoice === 'link' && (
+                  <div style={{ marginTop: 18 }}>
+                    <FieldLabel>Payment link or instructions</FieldLabel>
+                    <textarea
+                      value={payLink}
+                      onChange={(e) => { setPayLink(e.target.value); setStepError(''); }}
+                      placeholder="yourmun.org/pay, or how to pay: bank transfer, cash on arrival, anything"
+                      rows={2}
+                      maxLength={PAYMENT_NOTE_MAX}
+                      style={{ ...bigInputStyle, resize: 'vertical', lineHeight: 1.55, minHeight: 68, fontSize: 14 }}
+                      onFocus={focusForest}
+                      onBlur={blurClear}
+                    />
+                    <p style={{ fontFamily: OUTFIT, fontSize: 12, color: NEU.inkSoft, lineHeight: 1.5, marginTop: 7 }}>
+                      Delegates see this on their payment page
+                    </p>
+                  </div>
+                )}
+
+                {stepError && <ErrorNote>{stepError}</ErrorNote>}
+                <ContinueButton
+                  disabled={!paymentAnswered}
+                  onClick={() => (paymentAnswered
+                    ? advance(8)
+                    : setStepError(payChoice === 'link'
+                      ? 'Add a payment link, or write how delegates pay.'
+                      : 'Pick how delegates pay.'))}
+                />
+              </WizardShell>
+            )}
+
+            {/* ── Step 9, what they will use Gavelling for (REQUIRED) ─── */}
+            {step === 9 && (
+              <WizardShell
+                step={9} total={TOTAL_STEPS}
                 title="What will you use Gavelling for?"
                 sub="Pick everything that applies. Your dashboard will put those first. Nothing is switched off by this."
                 onBack={back}
@@ -1433,12 +1671,12 @@ export default function NewConferencePage() {
                 <ContinueButton
                   label="Continue to review"
                   disabled={intentKeys.length === 0}
-                  onClick={() => (intentKeys.length > 0 ? advance(8) : setStepError('Pick at least one.'))}
+                  onClick={() => (intentKeys.length > 0 ? advance(9) : setStepError('Pick at least one.'))}
                 />
               </WizardShell>
             )}
 
-            {/* ── Step 9, review + create ────────────────────────────── */}
+            {/* ── Step 10, review + create ───────────────────────────── */}
             {step === REVIEW_STEP && (
               <WizardShell
                 step={REVIEW_STEP} total={TOTAL_STEPS}
@@ -1462,7 +1700,8 @@ export default function NewConferencePage() {
                   />
                   <ReviewRow label="Description" value={description.trim() ? 'Added' : 'Skipped'} onEdit={() => editFromReview(7)} />
                   <ReviewRow label="Social links" value={socialsSummary || 'Skipped'} onEdit={() => editFromReview(7)} />
-                  <ReviewRow label="Using Gavelling for" value={intentSummary} onEdit={() => editFromReview(8)} />
+                  <ReviewRow label="Delegate payments" value={paymentSummary} onEdit={() => editFromReview(8)} />
+                  <ReviewRow label="Using Gavelling for" value={intentSummary} onEdit={() => editFromReview(9)} />
                 </div>
 
                 {/* Contact email, required by the directory, prefilled from your profile */}
@@ -1484,14 +1723,18 @@ export default function NewConferencePage() {
                   </div>
                 </div>
 
+                {/* What happens the moment they tap Create (owner, 7 Oct 2026).
+                    Two states, because a conference with dates to be decided
+                    cannot be published at all (conferences_tbd_not_public). */}
                 <p
                   style={{
                     fontFamily: OUTFIT, fontSize: 12.5, color: NEU.muted, lineHeight: 1.6,
                     textAlign: 'center', marginTop: 22, padding: '0 12px',
                   }}
                 >
-                  Visibility, previous editions and finer details:
-                  you can set everything else later in Settings. Your conference starts private.
+                  {datesTbd || !startDate.trim()
+                    ? 'Your conference stays private until you add its dates, and everything else is editable in Settings'
+                    : 'Your conference goes live on gavelling.com as soon as you create it, and you can make it private any time in Settings'}
                 </p>
 
                 {error && (

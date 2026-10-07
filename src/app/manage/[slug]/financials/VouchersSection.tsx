@@ -45,6 +45,30 @@ export function convertApprox(amount: number, from: string, to: string): number 
  *  it as money off. */
 type VoucherKind = 'percent' | 'flat' | 'referral';
 
+/**
+ * Referral codes are OFF until the database accepts them.
+ *
+ * The migration that makes them possible has not been applied: `vouchers_kind_check`
+ * still allows only 'percent' and 'flat', and `vouchers_amount_check` still demands
+ * `amount > 0`, so every insert of a referral row is refused — and
+ * `vouchers_kind_check` has no sentence in CONSTRAINT_MESSAGES, so the organiser
+ * would get the generic fallback from a button that can never work. Offering a
+ * control that always fails is worse than not offering it.
+ *
+ * To switch them on, do BOTH, in this order:
+ *   1. apply scratchpad/ambassadors/referral-vouchers.sql (widen
+ *      vouchers_kind_check, relax vouchers_amount_check, add
+ *      vouchers_referral_zero, the signup-once index, my_referral_code)
+ *   2. flip this to true.
+ * Everything else below (the Referral pill, the REFERRAL chip, the 40-character
+ * code cap, the Referrals card, the /pay and apply paths) is already built and
+ * stays on disk, so flipping it is the whole change.
+ *
+ * Reading referral rows is NOT gated: a row that exists always renders as a
+ * referral code, so a flag left false can never hide live data.
+ */
+const REFERRAL_CODES_LIVE = false;
+
 interface Voucher {
   id: string;
   code: string;
@@ -187,6 +211,10 @@ export default function VouchersSection({
     // currency to null (vouchers_referral_zero), so the client must never
     // send anything else.
     const isReferral = kind === 'referral';
+    // Backstop for the switch above: the pill is not rendered, so `kind` can
+    // never be 'referral' here, but a refused insert is the one thing this
+    // must not do.
+    if (isReferral && !REFERRAL_CODES_LIVE) return;
     const amt = isReferral ? 0 : Number(amount);
     if (trimmed.length < 3) { setError('Voucher codes need at least 3 characters.'); return; }
     if (!isReferral && (!Number.isFinite(amt) || amt <= 0)) { setError('Enter a discount amount greater than zero.'); return; }
@@ -334,7 +362,9 @@ export default function VouchersSection({
             Vouchers
           </h2>
           <p style={{ fontFamily: OUTFIT, fontSize: 11.5, color: NEU.inkSoft }}>
-            Discount codes, and referral codes that take nothing off, scoped to {conference.acronym} only.
+            {REFERRAL_CODES_LIVE
+              ? `Discount codes, and referral codes that take nothing off, scoped to ${conference.acronym} only.`
+              : `Discount codes scoped to ${conference.acronym} only.`}
           </p>
         </div>
       </div>
@@ -393,9 +423,11 @@ export default function VouchersSection({
               <NeuPill active={kind === 'flat'} gradient={NEU_GRADIENTS.forest} onClick={() => setKind('flat')}>
                 Flat {conference.fee_currency}
               </NeuPill>
-              <NeuPill active={kind === 'referral'} gradient={NEU_GRADIENTS.forest} onClick={() => setKind('referral')}>
-                Referral
-              </NeuPill>
+              {REFERRAL_CODES_LIVE && (
+                <NeuPill active={kind === 'referral'} gradient={NEU_GRADIENTS.forest} onClick={() => setKind('referral')}>
+                  Referral
+                </NeuPill>
+              )}
             </div>
           </div>
 
@@ -649,7 +681,8 @@ export default function VouchersSection({
 
       {/* Footnote */}
       <p className="mt-3" style={{ fontFamily: OUTFIT, fontSize: 10.5, color: NEU.inkSoft, lineHeight: 1.6 }}>
-        Discounts apply at signup. A referral code never changes a price, it records who referred the applicant.
+        Discounts apply at signup.
+        {REFERRAL_CODES_LIVE && ' A referral code never changes a price, it records who referred the applicant.'}
       </p>
 
       {confirmModal}

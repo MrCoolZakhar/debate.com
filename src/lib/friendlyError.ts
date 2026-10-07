@@ -41,6 +41,10 @@ const CONSTRAINT_MESSAGES: Record<string, string> = {
   email_templates_recurring_interval_floor: "Reminders can be sent every 3 to 60 days.",
   email_templates_recurring_max_sends_range: "Reminders can be sent between 1 and 10 times.",
   vouchers_amount_check: "A discount voucher needs an amount above zero.",
+  // Reachable only if a referral code is created before the referral migration
+  // is applied (REFERRAL_CODES_LIVE in financials/VouchersSection.tsx keeps
+  // that off). Without this the organiser would read a raw Postgres string.
+  vouchers_kind_check: "That voucher type is not available yet. Use a percent or a flat discount.",
   vouchers_percent_range: "A percentage voucher must be between 1 and 100.",
   vouchers_referral_zero: "A referral code takes nothing off the price, so its amount is always zero.",
   applications_aid_requested_amount_nonneg: "The amount you request can't be negative.",
