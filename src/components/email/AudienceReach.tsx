@@ -855,7 +855,7 @@ export default function AudienceReach({
                           className="flex-shrink-0"
                           style={{ color: SOFT, transform: isOpen ? 'rotate(180deg)' : 'none', transitionProperty: 'transform', transitionDuration: '220ms', transitionTimingFunction: EASE }}
                         />
-                        <span className="truncate" style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 800, color: INK }}>{g.label}</span>
+                        <span className="min-w-0 [overflow-wrap:anywhere]" style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 800, color: INK }}>{g.label}</span>
                         <span className="flex-shrink-0" style={{ fontFamily: OUTFIT, fontSize: 12, color: SOFT, fontVariantNumeric: 'tabular-nums' }}>
                           {g.members.length}
                         </span>
@@ -893,7 +893,7 @@ export default function AudienceReach({
                                     </span>
                                   )}
                                   <span className="min-w-0">
-                                    <span className="block truncate" style={{ fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 700, color: p.optedOut ? SOFT : INK }}>
+                                    <span className="block [overflow-wrap:anywhere]" style={{ fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 700, color: p.optedOut ? SOFT : INK }}>
                                       {p.name}
                                       {!p.registered && (
                                         <span className="ml-1.5" style={{ fontSize: 9, fontWeight: 800, padding: '1px 6px', borderRadius: 999, backgroundColor: 'rgba(154,138,120,0.16)', color: SOFT }}>
@@ -912,7 +912,7 @@ export default function AudienceReach({
                                         </span>
                                       )}
                                     </span>
-                                    <span className="block truncate" style={{ fontFamily: OUTFIT, fontSize: 10.5, color: SOFT }}>
+                                    <span className="block [overflow-wrap:anywhere]" style={{ fontFamily: OUTFIT, fontSize: 10.5, color: SOFT }}>
                                       {p.sub}
                                     </span>
                                   </span>

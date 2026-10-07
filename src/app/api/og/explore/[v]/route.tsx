@@ -145,7 +145,7 @@ export async function GET(
             opacity: 0.86,
             marginBottom: 34,
             // Two explicit lines rather than a measure, since Satori has no
-            // text-wrap: balance. No comma on purpose: Outfit's comma renders
+            // text-wrap: balance. No comma on purpose: the comma rendered
             // with a visible gap after it in Satori ("country,  date").
             flexDirection: 'column',
             alignItems: 'center',

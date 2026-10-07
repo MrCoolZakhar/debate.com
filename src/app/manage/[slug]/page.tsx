@@ -248,7 +248,7 @@ function ShareModal({
         </p>
         <div className="flex items-center gap-2 mb-5">
           <NeuInset className="flex-1 min-w-0" style={{ padding: '9px 12px', borderRadius: 12 }}>
-            <p className="truncate" title={publicUrl} style={{ fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 600, color: NEU.ink }}>
+            <p className="[overflow-wrap:anywhere]" title={publicUrl} style={{ fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 600, color: NEU.ink, lineHeight: 1.35 }}>
               {publicUrl}
             </p>
           </NeuInset>
@@ -517,7 +517,7 @@ function ActivityLine({ ev, now }: { ev: ActivityEvent; now: number }) {
   return (
     <div className="flex items-center gap-2.5 flex-shrink-0">
       <NeuIconDisc gradient={meta.gradient} icon={meta.icon} size={26} />
-      <p className="flex-1 min-w-0 truncate" title={labelText} style={{ fontFamily: OUTFIT, fontSize: 12.5, color: NEU.muted }}>
+      <p className="flex-1 min-w-0 [overflow-wrap:anywhere]" title={labelText} style={{ fontFamily: OUTFIT, fontSize: 12.5, color: NEU.muted, lineHeight: 1.3 }}>
         {label}
       </p>
       {/* Who did it. Only rendered for organiser actions on someone ELSE's
@@ -1843,7 +1843,7 @@ export default function DashboardPage() {
         <div className="gv-dash-dial gv-dash-cell">
         <NeuCard className="flex flex-col" style={{ padding: '13px 16px 12px', border: BENTO_BORDER, height: '100%' }}>
           <div className="flex items-center justify-between gap-3 flex-shrink-0" style={{ marginBottom: 6, minHeight: 28 }}>
-            <h2 className="truncate" style={{ fontFamily: OUTFIT, fontSize: 15, fontWeight: 900, color: NEU.ink }}>
+            <h2 className="min-w-0" style={{ fontFamily: OUTFIT, fontSize: 15, fontWeight: 900, color: NEU.ink, lineHeight: 1.2 }}>
               Applicants Against Target
             </h2>
             <UnallocatedBadge count={unallocated} href={`/manage/${slug}/assignment`} />
@@ -1858,7 +1858,7 @@ export default function DashboardPage() {
             />
           </div>
           <div className="flex items-center justify-between gap-3 flex-shrink-0" style={{ marginTop: 6 }}>
-            <span className="truncate" style={{ fontFamily: OUTFIT, fontSize: 11, color: NEU.muted, fontVariantNumeric: 'tabular-nums' }}>
+            <span className="min-w-0" style={{ fontFamily: OUTFIT, fontSize: 11, color: NEU.muted, fontVariantNumeric: 'tabular-nums' }}>
               {societies} delegation{societies === 1 ? '' : 's'} · {committeeCount} committee{committeeCount === 1 ? '' : 's'}
             </span>
             <Link

@@ -346,7 +346,7 @@ export function ConferenceCard({
             display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0,
           }}
         >
-          <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{headingLabel}</span>
+          <span style={{ minWidth: 0, overflowWrap: 'anywhere' }}>{headingLabel}</span>
           <VerifiedCheck verified={!!conf.is_verified} size={21} title="Verified conference" />
         </h3>
         <div className="flex items-end justify-between gap-3" style={{ marginTop: '7px' }}>
@@ -357,7 +357,7 @@ export function ConferenceCard({
               <span
                 style={{
                   fontFamily: "var(--font-brand), sans-serif", fontWeight: 500, fontSize: '11.5px',
-                  color: 'rgba(237,231,216,0.92)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                  color: 'rgba(237,231,216,0.92)', minWidth: 0, overflowWrap: 'anywhere',
                 }}
               >
                 {conf.city}, {countryCode}

@@ -172,7 +172,7 @@ function FullListPopup({
                   {i + 1}
                 </span>
                 <FlagCircle country={s.country} size="xs" />
-                <span className="text-sm text-[#1C1410] flex-1 truncate">{getCountryDisplayName(s.country, language)}</span>
+                <span className="text-sm text-[#1C1410] flex-1 min-w-0 leading-tight [overflow-wrap:anywhere]">{getCountryDisplayName(s.country, language)}</span>
                 {onRemove && (
                   <button
                     onClick={() => onRemove(s.delegateId)}
@@ -823,9 +823,9 @@ function RollCallPanelInner({
       <div className={`${isRollCallPhase ? 'px-5' : 'px-4'} ${hideIdentity ? 'pt-2.5' : 'pt-4'} pb-2.5 shrink-0 relative z-10`}>
         {!hideIdentity && (
           <>
-            <p className="text-lg font-black leading-tight truncate mb-0.5" style={{ color: '#EED98A' }}>{getCommitteeDisplayName(committee.name, language)}</p>
+            <p className="text-lg font-black leading-tight [overflow-wrap:anywhere] mb-0.5" style={{ color: '#EED98A' }}>{getCommitteeDisplayName(committee.name, language)}</p>
             {committee.topic && (
-              <p className="text-xs leading-snug line-clamp-2 mb-2" style={{ color: 'rgba(238,217,138,0.85)' }}>
+              <p className="text-xs leading-snug line-clamp-2 mb-2" title={committee.topic} style={{ color: 'rgba(238,217,138,0.85)' }}>
                 <span className="font-semibold">{t('rollcall_topic')} </span>{committee.topic}
               </p>
             )}
@@ -1077,7 +1077,7 @@ function RollCallPanelInner({
                 </div>
                 <div className="flex-1 min-w-0 flex flex-col">
                   <span
-                    className="truncate"
+                    className="[overflow-wrap:anywhere]"
                     style={{
                       fontSize: isUpNext ? qr(19.5) : bigRoll ? 21 : sliderMode ? 15.5 : qr(17),
                       fontWeight: isUpNext ? 800 : 600,

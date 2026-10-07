@@ -153,7 +153,7 @@ function Sponsors({ sponsors, word, pal }: { sponsors: string[]; word: string; p
           </span>
         )}
       </div>
-      <p className="text-[13.5px] leading-snug line-clamp-2" style={{ color: pal.soft }} title={names}>
+      <p className="text-[13.5px] leading-snug [overflow-wrap:anywhere]" style={{ color: pal.soft }} title={names}>
         <span style={{ color: pal.muted }}>{word}: </span>{names}
       </p>
     </div>
@@ -187,7 +187,7 @@ function DocCard({ doc, stage, vote, typeName, sponsorWord, index, onOpen }: {
       style={{ animationDelay: `${Math.min(index, 8) * 60}ms`, backgroundColor: pal.bg, ['--gv-ring' as string]: live ? 'rgba(182,135,31,0.55)' : pal.ring }}
     >
       <div className="flex items-center justify-between gap-3">
-        <span className="text-[13px] font-semibold tabular-nums px-2 py-1 rounded-md truncate" style={{ backgroundColor: pal.codeBg, color: pal.codeFg }} title={typeName}>
+        <span className="text-[13px] font-semibold tabular-nums px-2 py-1 rounded-md min-w-0 [overflow-wrap:anywhere]" style={{ backgroundColor: pal.codeBg, color: pal.codeFg }} title={typeName}>
           {doc.docCode || typeName}
         </span>
         <StagePill stage={stage} />
@@ -195,7 +195,7 @@ function DocCard({ doc, stage, vote, typeName, sponsorWord, index, onOpen }: {
       <div className="flex items-start gap-4 min-w-0">
         <PaperPreview doc={doc} />
         <div className="flex-1 min-w-0 flex flex-col gap-3">
-          <h3 className="text-[18px] leading-[1.28] font-bold line-clamp-3 [text-wrap:balance]" style={{ color: pal.ink, letterSpacing: '-0.006em' }}>
+          <h3 className="text-[18px] leading-[1.28] font-bold [overflow-wrap:anywhere] [text-wrap:balance]" style={{ color: pal.ink, letterSpacing: '-0.006em' }}>
             {doc.title || doc.docCode}
           </h3>
           <Sponsors sponsors={doc.sponsors} word={sponsorWord} pal={pal} />

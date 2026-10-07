@@ -1478,7 +1478,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
             className="rounded-xl py-2.5 px-6 font-bold text-sm focus:outline-none"
             style={{ backgroundColor: 'var(--gv-main)', color: 'var(--gv-on-main)', textDecoration: 'none', fontFamily: "var(--font-brand), sans-serif" }}
           >
-            EXPLORE CONFERENCES →
+            Explore conferences
           </Link>
         </div>
       </div>

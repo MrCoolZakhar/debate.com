@@ -265,7 +265,7 @@ export default function CommitteeIdentityBadge({
     // under the 3-line clamp. A span with role=button rather than a <button>: a button is
     // laid out as an inline-block and would break the text onto its own line.
     topicNode = (
-      <p className="line-clamp-3 mt-0.5" style={topicStyle}>
+      <p className="line-clamp-3 mt-0.5" title={topic ?? undefined} style={topicStyle}>
         {labelNode}
         <span
           role="button"
@@ -328,14 +328,14 @@ export default function CommitteeIdentityBadge({
         <CommitteeEmblem src={logoSrc} monogram={monogram} alt={secondary ?? primary} />
         <div className="min-w-0 flex-1 flex flex-col gap-1" style={{ minHeight: EMBLEM, justifyContent: 'center', paddingInlineEnd: onCollapse ? 18 : 0 }}>
           <h2
-            className={longPrimary ? 'line-clamp-2' : 'truncate'}
+            className="[overflow-wrap:anywhere]"
             // A `title` only when the label stands alone: with the full name ALSO
             // rendered beneath, it would make a screen reader announce it twice.
             title={secondary ? undefined : primary}
             style={{
               fontFamily: OUTFIT,
               fontWeight: 900,
-              fontSize: longPrimary ? 20 : 27,
+              fontSize: primary.length > 34 ? 16 : longPrimary ? 20 : 27,
               lineHeight: 1.05,
               letterSpacing: longPrimary ? '-0.005em' : '0.005em',
               color: NEU.gold,
@@ -347,8 +347,7 @@ export default function CommitteeIdentityBadge({
           </h2>
           {secondary && (
             <p
-              className="line-clamp-2"
-              title={secondary}
+              className="[overflow-wrap:anywhere]"
               style={{ fontFamily: OUTFIT, fontSize: 12, fontWeight: 500, lineHeight: 1.25, color: 'rgba(237,231,216,0.78)', margin: 0, textWrap: 'balance' }}
             >
               {secondary}

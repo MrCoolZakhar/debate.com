@@ -171,7 +171,7 @@ export function TimelineEntry({
   const editable = !!onEdit;
   const railDate = entry.event_date
     ? new Date(`${entry.event_date}T00:00:00`).toLocaleDateString('en', { month: 'long', year: 'numeric' })
-    : '–';
+    : 'No date';
 
   // Faculty advisors represent a DELEGATION, so their awards render as
   // delegation awards (green disc + Users glyph via AwardChip's `delegation`

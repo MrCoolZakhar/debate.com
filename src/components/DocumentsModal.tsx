@@ -411,7 +411,7 @@ function SubmitForm({ committee, type, onDone, onDocumentAdded }: {
         </label>
         {fileName ? (
           <div className="flex items-center gap-2 bg-[#FAF8F3] border border-[#DDD4C0] rounded-xl px-4 py-3">
-            <span className="text-sm text-[#1C1410] flex-1 truncate flex items-center gap-2">
+            <span className="text-sm text-[#1C1410] flex-1 min-w-0 truncate flex items-center gap-2" title={fileName ?? undefined}>
               {isUploading
                 ? <><div className="w-3.5 h-3.5 border-2 border-[#1B3828] border-t-transparent rounded-full animate-spin shrink-0" /> {t('documents_uploading')}</>
                 : <>📎 {fileName}</>

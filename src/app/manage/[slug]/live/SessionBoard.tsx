@@ -321,7 +321,7 @@ export function SessionScoreboardBoard({ committee, feedback, tabs = ['ranking',
                     <td style={TD}>{r.draftResolutions}</td>
                     <td style={{ ...TD, color: r.manual < 0 ? RED : SOFT }}>{r.manual}</td>
                     <td style={{ ...TD, color: NEU.ink }}>{r.objective}</td>
-                    <td style={{ ...TD, color: r.quality != null ? NEU.ink : SOFT }}>{r.quality != null ? r.quality : '–'}</td>
+                    <td style={{ ...TD, color: r.quality != null ? NEU.ink : SOFT }}>{r.quality != null ? r.quality : 'None'}</td>
                     <td style={{ ...TD, color: NEU.forest, fontWeight: 900 }}>{r.headline}</td>
                   </tr>
                 ))}

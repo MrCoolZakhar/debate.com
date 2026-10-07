@@ -289,7 +289,7 @@ export function RightsQueue({ speakers, currentIndex, hideTally, currentMovable 
               <SeatCircleFlag country={v.country} size={30} decorative ring={!isCurrent} />
               {/* Name over its status, so a long name never truncates to make room for the label. */}
               <span className="flex-1 min-w-0 flex flex-col">
-                <span className="truncate text-[15px] font-medium leading-tight" style={{ color: isCurrent ? '#FFFFFF' : '#1C1410' }}>{name}</span>
+                <span className="[overflow-wrap:anywhere] text-[15px] font-medium leading-tight" style={{ color: isCurrent ? '#FFFFFF' : '#1C1410' }}>{name}</span>
                 <span className="truncate text-[12px] font-medium leading-tight mt-0.5" style={{
                   color: isCurrent ? '#EED98A' : hideTally ? '#6A5A4A' : v.choice === 'for-rights' ? '#2F6B45' : '#8B2020',
                 }}>

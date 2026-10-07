@@ -1973,7 +1973,7 @@ export default function EmailComposer({
         }}
       >
         <UserRound size={13} strokeWidth={2.4} style={{ color: SOFT, flexShrink: 0 }} />
-        <span className="truncate">As {asCandidate?.label ?? 'nobody in particular'}</span>
+        <span className="min-w-0 text-left [overflow-wrap:anywhere]">As {asCandidate?.label ?? 'nobody in particular'}</span>
         <ChevronDown size={12} strokeWidth={2.6} style={{ color: SOFT, flexShrink: 0 }} />
       </button>
       <PopoverLayer anchorRef={asBtnRef} open={asOpen} onClose={closeAsPicker} width={260} maxHeight={310} align="end">
@@ -2000,7 +2000,7 @@ export default function EmailComposer({
                 key={c.id}
                 type="button"
                 onClick={() => { setAsId(c.id); setAsOpen(false); }}
-                className="w-full text-left truncate focus:outline-none"
+                className="w-full text-left [overflow-wrap:anywhere] focus:outline-none"
                 style={{ padding: '9px 13px', minHeight: 38, fontFamily: OUTFIT, fontSize: 12.5, color: INK, fontWeight: asId === c.id ? 800 : 500, background: 'transparent', border: 'none', cursor: 'pointer' }}
               >
                 {c.label}
@@ -2079,7 +2079,7 @@ export default function EmailComposer({
           fallbackText={conference.acronym.slice(0, 2)}
         />
         <div className="min-w-0 flex-1" style={{ minWidth: 200 }}>
-          <p className="truncate" style={{ fontFamily: OUTFIT, fontSize: 10.5, fontWeight: 800, letterSpacing: '0.1em', color: SOFT }}>
+          <p className="[overflow-wrap:anywhere]" style={{ fontFamily: OUTFIT, fontSize: 10.5, fontWeight: 800, letterSpacing: '0.1em', color: SOFT }}>
             {confShortName.toUpperCase()} · {conference.contact_email}
           </p>
           <input

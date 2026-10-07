@@ -909,7 +909,7 @@ function committeeFull(c: { name: string; abbreviation: string | null } | null |
  *  "Disarmament and International Security Committee" → "DISEC" + full name.
  *  Short names (or ones with no distinct abbreviation) stay as-is, name only. */
 function committeeDisplay(c: { name: string; abbreviation: string | null } | null | undefined): { primary: string; secondary: string | null } {
-  if (!c) return { primary: '–', secondary: null };
+  if (!c) return { primary: 'No committee', secondary: null };
   const hasAbbr = !!c.abbreviation && c.abbreviation.toUpperCase() !== c.name.toUpperCase();
   const isLong = c.name.length > 16 || c.name.trim().split(/\s+/).length >= 3;
   if (hasAbbr && isLong) return { primary: c.abbreviation!, secondary: c.name };
@@ -1083,7 +1083,7 @@ function InfoHint({ label, text }: { label: string; text: string }) {
 
 /** Committee shorthand, abbreviation when set, else a monogram of the name. */
 function committeeAbbr(c: { name: string; abbreviation: string | null } | null | undefined): string {
-  if (!c) return '–';
+  if (!c) return '?';
   if (c.abbreviation) return c.abbreviation;
   const mono = c.name
     .split(/\s+/)
@@ -4498,7 +4498,7 @@ export default function ApplicationsPage() {
                                   style={{ fontFamily: OUTFIT, fontSize: 12, fontWeight: 700, color: NEU.ink, backgroundColor: NEU.base, boxShadow: NEU.inSm, borderRadius: 999, padding: '4px 10px', fontVariantNumeric: 'tabular-nums' }}
                                 >
                                   <span style={{ color: NEU.deepGold, fontWeight: 900 }}>{p.preference_order}.</span>
-                                  <span className="[overflow-wrap:anywhere]">{committeeAbbr(p.conference_committees)}</span>
+                                  <span className="[overflow-wrap:anywhere]" style={p.conference_committees ? undefined : { color: NEU.inkSoft, fontWeight: 600 }}>{p.conference_committees ? committeeAbbr(p.conference_committees) : 'No committee'}</span>
                                   {app.role !== 'chair' && <CountryFlag name={p.country_name} code={p.country_code} size={15} />}
                                 </span>
                               ))}
@@ -4523,7 +4523,7 @@ export default function ApplicationsPage() {
                         )}
                       </span>
                     ) : (
-                      <span style={{ fontFamily: OUTFIT, fontSize: 12.5, fontStyle: 'italic', color: NEU.inkSoft, minHeight: MID_BLOCK_H, display: 'flex', alignItems: 'center' }}>–</span>
+                      <span style={{ fontFamily: OUTFIT, fontSize: 12.5, fontStyle: 'italic', color: NEU.inkSoft, minHeight: MID_BLOCK_H, display: 'flex', alignItems: 'center' }}>No allocation</span>
                     )}
 
                     {app.status === 'rejected' && app.organizer_note && (

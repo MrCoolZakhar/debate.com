@@ -357,7 +357,7 @@ function AddSpeakerInput({ committee, onAdd, onRecognise }: { committee: Committ
           onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); commit(topNotOnList); } if (e.key === 'Escape') setQuery(''); }}
           placeholder={t('gsl_add_to_list')} autoFocus
           className="flex-1 min-w-[7rem] bg-transparent px-4 py-2.5 text-[#1C1410] placeholder-[#9A8A78] focus:outline-none text-sm" />
-        {topNotOnList && query && <span className="text-xs text-[#9A8A78] px-2 truncate max-w-[120px]">↵ {getCountryDisplayName(topNotOnList.country, language)}</span>}
+        {topNotOnList && query && <span className="text-xs text-[#9A8A78] px-2 max-w-[140px] leading-tight [overflow-wrap:anywhere]">↵ {getCountryDisplayName(topNotOnList.country, language)}</span>}
       </div>
       {query && matches.length > 0 && (
         <div data-tutorial="speakers-autocomplete" className="absolute bottom-full left-0 right-0 mb-1 bg-[#FAF8F3] border border-[#DDD4C0] rounded-xl overflow-hidden shadow-xl z-10 max-h-48 overflow-y-auto">
@@ -466,7 +466,7 @@ function RtrCountryInput({
           className="flex-1 bg-transparent px-3 py-1.5 text-[#1C1410] text-xs placeholder-[#9A8A78] focus:outline-none"
         />
         {topMatch && query && !value && query.toLowerCase() !== topMatch.country.toLowerCase() && (
-          <span className="text-[10px] text-[#9A8A78] px-2 truncate max-w-[90px]">↵ {getCountryDisplayName(topMatch.country, language)}</span>
+          <span className="text-[10px] text-[#9A8A78] px-2 max-w-[110px] leading-tight [overflow-wrap:anywhere]">↵ {getCountryDisplayName(topMatch.country, language)}</span>
         )}
       </div>
       {listShown && (
@@ -587,7 +587,7 @@ function CaucusQueueSidebar({ committee, onRemove, onReorder, lastSpeakerDelegat
                 <span className="shrink-0 w-6 h-6 inline-flex items-center justify-center">
                   <SeatFlag country={s.country} size={20} className="object-contain" fallback={<UnknownSeatIcon size={20} />} />
               </span>
-                <span className="flex-1 text-sm text-[#1C1410] line-clamp-2 break-words whitespace-normal leading-tight">{getCountryDisplayName(s.country, language)}</span>
+                <span className="flex-1 text-sm text-[#1C1410] [overflow-wrap:anywhere] whitespace-normal leading-tight">{getCountryDisplayName(s.country, language)}</span>
                 {lastSpeakerDelegateId && s.delegateId === lastSpeakerDelegateId && (
                   <span className="text-xs font-bold text-[#9A8A78] bg-[#DDD4C0] px-1.5 py-0.5 rounded shrink-0">Last</span>
                 )}
@@ -688,7 +688,7 @@ function CaucusAddSpeakerInput({ committee, spokenCountries, onAdd, onAddFirst, 
             {t('caucus_queue_full_title')}
           </span>
         )}
-        {!isFull && topNotOnList && query && <span className="text-xs text-[#9A8A78] px-3 truncate max-w-[120px]">↵ {getCountryDisplayName(topNotOnList.country, language)}</span>}
+        {!isFull && topNotOnList && query && <span className="text-xs text-[#9A8A78] px-3 max-w-[140px] leading-tight [overflow-wrap:anywhere]">↵ {getCountryDisplayName(topNotOnList.country, language)}</span>}
       </div>
       {!isFull && query && matches.length > 0 && (
         <div className="absolute bottom-full left-0 right-0 mb-1 bg-[#FAF8F3] border border-[#DDD4C0] rounded-xl overflow-hidden shadow-xl z-10 max-h-48 overflow-y-auto">
@@ -5430,11 +5430,15 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
           </nav>
         ) : agenda.canSwitch ? (
           <button type="button" onClick={agenda.openPicker} title={t('agenda_change_title')}
-            className="text-[#6A5A4A] text-sm hidden sm:block truncate flex-1 min-w-0 px-2 text-start rounded cursor-pointer transition-colors hover:text-[#1B3828] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F]/60">
-            {getCommitteeDisplayName(committee.name, language)}: <span className="underline decoration-dotted underline-offset-2">{committee.topic}</span>
+            className="text-[#6A5A4A] text-sm hidden sm:flex items-center gap-1 flex-1 min-w-0 px-2 text-start rounded cursor-pointer transition-colors hover:text-[#1B3828] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F]/60">
+            <span className="shrink min-w-[6rem] max-w-[55%] leading-[1.15] [overflow-wrap:anywhere]">{getCommitteeDisplayName(committee.name, language)}:</span>
+            <span className="min-w-0 flex-1 truncate underline decoration-dotted underline-offset-2" title={committee.topic}>{committee.topic}</span>
           </button>
         ) : (
-          <span className="text-[#6A5A4A] text-sm hidden sm:block truncate flex-1 min-w-0 px-2">{getCommitteeDisplayName(committee.name, language)}: {committee.topic}</span>
+          <span className="text-[#6A5A4A] text-sm hidden sm:flex items-center gap-1 flex-1 min-w-0 px-2">
+            <span className="shrink min-w-[6rem] max-w-[55%] leading-[1.15] [overflow-wrap:anywhere]">{getCommitteeDisplayName(committee.name, language)}:</span>
+            <span className="min-w-0 flex-1 truncate" title={committee.topic}>{committee.topic}</span>
+          </span>
         )}
 
         {/* The icon cluster: always in row one, at the inline end. */}

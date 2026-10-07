@@ -1544,7 +1544,7 @@ function Console({
                 : 'Nothing sent yet'}
             </span>
             <span className="uppercase flex-shrink-0" style={{ color: attempted > 0 ? CONSOLE_INK[meterTone] : SOFT }}>
-              {attempted > 0 ? `${pct}%` : '–'}
+              {attempted > 0 ? `${pct}%` : ''}
             </span>
           </div>
         </div>
@@ -2499,7 +2499,7 @@ function CommunicationsPageInner() {
         return {
           id: a.id,
           name: a.profiles?.display_name ?? a.invited_name ?? 'Unknown',
-          sub: detail || (a.profiles?.email ?? a.invited_email ?? '–'),
+          sub: detail || (a.profiles?.email ?? a.invited_email ?? 'No email'),
           avatarUrl: a.profiles?.avatar_url ?? null,
           userId: a.user_id,
           registered: !!a.profiles,
@@ -2524,7 +2524,7 @@ function CommunicationsPageInner() {
     () => manualMatches.map(a => ({
       id: a.id,
       name: a.profiles?.display_name ?? a.invited_name ?? 'Unknown',
-      sub: a.profiles?.email ?? a.invited_email ?? '–',
+      sub: a.profiles?.email ?? a.invited_email ?? 'No email',
     })),
     [manualMatches]
   );
@@ -3574,7 +3574,7 @@ function CommunicationsPageInner() {
                   <span className="block text-xs font-semibold [overflow-wrap:anywhere]" style={{ color: '#1C1410', fontFamily: OUTFIT }}>{name}</span>
                 )}
                 <span className="block [overflow-wrap:anywhere]" style={{ fontSize: name ? 10.5 : 12, color: name ? SOFT : '#1C1410', fontFamily: OUTFIT }}>
-                  {r.recipient_email ?? '–'}
+                  {r.recipient_email ?? 'No email'}
                 </span>
               </span>
             </span>
@@ -4191,7 +4191,7 @@ function CommunicationsPageInner() {
                                   </span>
                                 )}
                               </span>
-                              <span className="block text-xs mt-0.5 truncate" style={{ fontFamily: OUTFIT }}>
+                              <span className="block text-xs mt-0.5" style={{ fontFamily: OUTFIT }}>
                                 <span style={{ color: state.color, fontWeight: 700 }}>{state.text}</span>
                                 {fired > 0 && (
                                   <span style={{ color: SOFT, fontVariantNumeric: 'tabular-nums' }}>
@@ -4497,10 +4497,10 @@ function CommunicationsPageInner() {
                         SWAP DETAILS
                       </p>
                       <p className="text-sm" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
-                        {selectedRequest.metadata.member_a ?? 'Member A'}: {selectedRequest.metadata.before?.a ?? '–'} → {selectedRequest.metadata.after?.a ?? '–'}
+                        {selectedRequest.metadata.member_a ?? 'Member A'}: {selectedRequest.metadata.before?.a ?? 'Not set'} → {selectedRequest.metadata.after?.a ?? 'Not set'}
                       </p>
                       <p className="text-sm mt-1" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
-                        {selectedRequest.metadata.member_b ?? 'Member B'}: {selectedRequest.metadata.before?.b ?? '–'} → {selectedRequest.metadata.after?.b ?? '–'}
+                        {selectedRequest.metadata.member_b ?? 'Member B'}: {selectedRequest.metadata.before?.b ?? 'Not set'} → {selectedRequest.metadata.after?.b ?? 'Not set'}
                       </p>
                       {selectedRequest.kind === 'swap_request' && selectedRequest.status === 'open' && (
                         <div className="flex gap-2 mt-3">
@@ -4763,7 +4763,7 @@ function CommunicationsPageInner() {
                                     style={{ width: 3, background: `linear-gradient(180deg, ${NEU_GRADIENTS.gold[1]}, ${NEU_GRADIENTS.gold[0]})` }}
                                   />
                                 )}
-                                <span className="truncate" style={{ fontFamily: OUTFIT, fontSize: 12.5, fontWeight: ghostUnread ? 800 : 600, color: '#1C1410' }}>
+                                <span className="truncate" title={r.subject} style={{ fontFamily: OUTFIT, fontSize: 12.5, fontWeight: ghostUnread ? 800 : 600, color: '#1C1410' }}>
                                   {r.subject}
                                 </span>
                                 <span className="truncate flex-shrink-0" title={ghostName} style={{ maxWidth: '45%', fontFamily: OUTFIT, fontSize: 11, fontWeight: 700, color: SOFT }}>

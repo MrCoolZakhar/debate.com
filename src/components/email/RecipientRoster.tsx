@@ -132,7 +132,7 @@ export default function RecipientRoster({
                   style={{ width: 24, height: 24, borderRadius: 999, backgroundColor: 'rgba(27,56,40,0.07)' }}
                 />
               )}
-              <span className="min-w-0 flex-1 truncate" title={g.label} style={{ fontFamily: OUTFIT, fontSize: 12, fontWeight: 800, color: INK }}>
+              <span className="min-w-0 flex-1 [overflow-wrap:anywhere]" title={g.label} style={{ fontFamily: OUTFIT, fontSize: 12, fontWeight: 800, color: INK }}>
                 {g.label}
               </span>
               <span className="flex-shrink-0" style={{ fontFamily: OUTFIT, fontSize: 11, fontWeight: 700, color: SOFT, fontVariantNumeric: 'tabular-nums' }}>
@@ -183,11 +183,11 @@ export default function RecipientRoster({
                             third line, where they are next to the delegation
                             they qualify anyway. */}
                         <span className="min-w-0">
-                          <span className="block truncate" title={p.name} style={{ fontFamily: OUTFIT, fontSize: 12, fontWeight: 800, color: p.optedOut ? SOFT : INK }}>
+                          <span className="block [overflow-wrap:anywhere]" title={p.name} style={{ fontFamily: OUTFIT, fontSize: 12, fontWeight: 800, color: p.optedOut ? SOFT : INK }}>
                             {p.name}
                           </span>
                           {email && (
-                            <span className="block truncate" title={email} style={{ fontFamily: OUTFIT, fontSize: 10.5, color: SOFT }}>
+                            <span className="block [overflow-wrap:anywhere]" title={email} style={{ fontFamily: OUTFIT, fontSize: 10.5, color: SOFT }}>
                               {email}
                             </span>
                           )}
@@ -220,7 +220,7 @@ export default function RecipientRoster({
                               </span>
                             )}
                             {detail && detail !== email && (
-                              <span className="truncate" title={detail} style={{ fontFamily: OUTFIT, fontSize: 10.5, color: SOFT }}>
+                              <span className="min-w-0 [overflow-wrap:anywhere]" title={detail} style={{ fontFamily: OUTFIT, fontSize: 10.5, color: SOFT }}>
                                 {detail}
                               </span>
                             )}

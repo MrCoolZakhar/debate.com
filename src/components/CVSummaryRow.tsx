@@ -70,7 +70,7 @@ export function CVSummaryRow({
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 flex-wrap">
           <span
-            className="truncate"
+            className="min-w-0 [overflow-wrap:anywhere]"
             style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 15, color: NEU.ink, letterSpacing: '-0.01em' }}
           >
             {entry.conference_name}
@@ -89,7 +89,7 @@ export function CVSummaryRow({
         </div>
         {detail && (
           <span
-            className="block truncate"
+            className="block [overflow-wrap:anywhere]"
             // The only place the saved allocation / committee is read back,
             // so it has to be legible: NEU.muted is 2.78:1 on the card surface.
             style={{ fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 500, color: NEU.inkSoft, marginTop: 2 }}

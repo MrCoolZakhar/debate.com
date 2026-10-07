@@ -78,7 +78,7 @@ export default function DelegationImportPopup({
             onClick={() => openCreditsPopup({ context: 'pay', purpose: 'import', onComplete: () => { void reload(); } })}
           >
             <CreditCoin size={16} />
-            <span style={{ fontVariantNumeric: 'tabular-nums' }}>{balance ?? '–'}</span>
+            <span style={{ fontVariantNumeric: 'tabular-nums' }}>{balance ?? '…'}</span>
             <span aria-hidden className="gv-dimp-coin-plus">+</span>
           </button>
         </div>

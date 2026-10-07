@@ -56,7 +56,7 @@
  * Bump when the card's DRAWING changes (src/app/api/og/_shared/card.tsx or a
  * route's layout). It is the only thing that moves every card URL at once.
  */
-export const OG_CARD_DESIGN = 'd1';
+export const OG_CARD_DESIGN = 'd2'; // d2 (7 Oct 2026): the cards are drawn in Inter, no longer Outfit.
 
 /** The fields that appear on the card. Structural, so DB rows and hand-built
  *  objects both satisfy it without a cast. */

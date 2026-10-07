@@ -78,7 +78,7 @@ const pkg = JSON.parse(read('package.json'));
 if (!pkg.dependencies?.sharp) fail('package.json: `sharp` must be in dependencies (it encodes the share cards).');
 
 // 5. Assets.
-for (const f of ['Outfit-Regular.ttf', 'Outfit-Medium.ttf', 'Outfit-Bold.ttf', 'Outfit-ExtraBold.ttf']) {
+for (const f of ['Inter-Regular.ttf', 'Inter-Medium.ttf', 'Inter-Bold.ttf', 'Inter-ExtraBold.ttf', 'Inter-Regular-LatinExt.ttf', 'Inter-Medium-LatinExt.ttf', 'Inter-Bold-LatinExt.ttf', 'Inter-ExtraBold-LatinExt.ttf']) {
   if (!existsSync(join(root, 'src/app/api/og/_shared', f))) fail(`src/app/api/og/_shared/${f} is missing (card fonts).`);
 }
 const seo = read('src/lib/seo.ts');

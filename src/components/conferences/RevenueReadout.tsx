@@ -27,7 +27,7 @@ export default function RevenueReadout({
 }: {
   fee: number;
   currency: string;
-  /** null while loading (or if the read failed): dashes, never a guess. */
+  /** null while loading (or if the read failed): an ellipsis, never a guess. */
   money: ConferenceMoney | null;
   /** The Financials overview. The one link this strip carries. */
   href: string;
@@ -44,7 +44,7 @@ export default function RevenueReadout({
     <span className="inline-flex items-baseline gap-1 min-w-0" title={hint}>
       <span style={{ fontSize: 11, fontWeight: 600, color: NEU.inkSoft }}>{label}</span>
       <span style={{ fontSize: 13.5, fontWeight: 900, color, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
-        {value === null ? '–' : formatFee(value, cur)}
+        {value === null ? '…' : formatFee(value, cur)}
       </span>
     </span>
   );

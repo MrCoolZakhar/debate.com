@@ -445,7 +445,7 @@ function ReminderBanner({ reminder, more, onOpen, onDismiss }: { reminder: Activ
             <Mic size={18} strokeWidth={2.4} aria-hidden />
           </span>
           <span className="min-w-0 flex-1">
-            <span className="block truncate" style={{ fontSize: 15.5, fontWeight: 800 }}>{text}</span>
+            <span className="block [overflow-wrap:anywhere]" style={{ fontSize: 15.5, fontWeight: 800, lineHeight: 1.25 }}>{text}</span>
             {more > 0 && <span className="block" style={{ fontSize: 12, fontWeight: 600, color: 'rgba(250,248,243,0.75)' }}>{t('adv_banner_more', { n: more })}</span>}
           </span>
         </button>
@@ -468,7 +468,7 @@ function RoomRow({ code, name, room, gone, following, onEdit }: {
     <div className="flex items-center gap-3 rounded-2xl px-4 py-3" style={{ backgroundColor: C.cream, boxShadow: SHADOW.card }}>
       <DoorOpen size={20} aria-hidden className="shrink-0" style={{ color: live ? C.forest : C.inkSoft }} />
       <div className="min-w-0 flex-1">
-        <div className="truncate" style={{ fontSize: 15, fontWeight: 800, color: C.ink }}>{name || code}</div>
+        <div className="[overflow-wrap:anywhere]" style={{ fontSize: 15, fontWeight: 800, color: C.ink, lineHeight: 1.25 }}>{name || code}</div>
         <div className="truncate" style={{ fontSize: 12.5, fontWeight: 500, color: C.inkSoft }}>
           <span style={{ fontWeight: 700, letterSpacing: '0.1em', color: C.forestSoft }}>{code}</span>
           {' · '}{status}
@@ -553,11 +553,11 @@ function RoomGroupHeader({ id, code, name, abbreviation, room, mode, caucusLabel
   const live = inSession(mode);
   return (
     <div className="mb-2 px-1">
-      <h2 id={id} className="truncate" style={{ fontSize: 21, fontWeight: 800, color: C.ink, letterSpacing: '-0.015em', lineHeight: 1.15 }} title={full}>
+      <h2 id={id} className="[overflow-wrap:anywhere]" style={{ fontSize: 21, fontWeight: 800, color: C.ink, letterSpacing: '-0.015em', lineHeight: 1.15 }} title={full}>
         {short || code || t('adv_mode_not_open')}
       </h2>
       {full && full !== short && (
-        <p className="truncate" style={{ fontSize: 12.5, fontWeight: 500, color: C.inkSoft, lineHeight: 1.3 }}>{full}</p>
+        <p className="[overflow-wrap:anywhere]" style={{ fontSize: 12.5, fontWeight: 500, color: C.inkSoft, lineHeight: 1.3 }}>{full}</p>
       )}
       <p className="mt-1 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1" style={{ fontSize: 13, fontWeight: 700, color: live ? C.forestSoft : C.inkSoft }}>
         <span>{live ? modeLabel(t, { mode, caucusLabel }) : t(MODE_KEY[mode])}</span>
@@ -567,7 +567,7 @@ function RoomGroupHeader({ id, code, name, abbreviation, room, mode, caucusLabel
             <Mic size={14} strokeWidth={2.4} aria-hidden style={{ color: C.forest }} />
             <span className="sr-only">{t('adv_floor_now')}</span>
             <CircleFlag country={floor.country} size={18} decorative />
-            <span className="truncate">{getCountryDisplayName(floor.country, language)}</span>
+            <span className="min-w-0 [overflow-wrap:anywhere]">{getCountryDisplayName(floor.country, language)}</span>
             {floor.clock && <span style={{ color: C.inkSoft, fontVariantNumeric: 'tabular-nums' }}>{clock(secs)}</span>}
           </span>
         )}

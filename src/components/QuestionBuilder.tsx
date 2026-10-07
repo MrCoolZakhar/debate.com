@@ -260,7 +260,7 @@ function ArchivedRow({ block, onRestore, onDeleteForever }: {
       className="flex items-center gap-2.5 rounded-xl px-3.5 py-2.5"
       style={{ backgroundColor: 'rgba(154,138,120,0.07)', border: '1px solid #EDE7D9' }}
     >
-      <span className="flex-1 min-w-0 truncate text-xs" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}>
+      <span className="flex-1 min-w-0 truncate text-xs" title={block.label || undefined} style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}>
         {block.label || 'Untitled question'}
       </span>
       <button

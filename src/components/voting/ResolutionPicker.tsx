@@ -187,7 +187,7 @@ function Sponsors({ sponsors, word, pal = LIGHT }: { sponsors: string[]; word: s
       </div>
       {/* The label runs inline with the names instead of sitting above them as a
           letterspaced caps rubric. Same information, one line, no shouting. */}
-      <p className="text-[13.5px] leading-snug line-clamp-2" style={{ color: pal.soft }} title={names}>
+      <p className="text-[13.5px] leading-snug [overflow-wrap:anywhere]" style={{ color: pal.soft }}>
         <span style={{ color: pal.muted }}>{word}: </span>{names}
       </p>
     </div>
@@ -279,7 +279,7 @@ function Card({ doc, state, index, props }: { doc: CommitteeDocument; state: Pic
       <div className="flex items-start gap-4 min-w-0">
         <PaperPreview doc={doc} />
         <div className="flex-1 min-w-0 flex flex-col gap-3">
-          <h2 className="text-[19px] leading-[1.28] font-bold line-clamp-3 [text-wrap:balance]" style={{ color: pal.ink, letterSpacing: '-0.006em' }}>
+          <h2 className="text-[19px] leading-[1.28] font-bold line-clamp-3 [text-wrap:balance]" title={doc.title || doc.docCode} style={{ color: pal.ink, letterSpacing: '-0.006em' }}>
             {doc.title || doc.docCode}
           </h2>
           <Sponsors sponsors={doc.sponsors} word={sponsorWord} pal={pal} />

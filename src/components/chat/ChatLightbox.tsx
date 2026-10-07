@@ -423,9 +423,9 @@ function Viewer({
       {/* Top bar */}
       <div className="shrink-0 flex items-center gap-2 px-3" style={{ paddingTop: 'max(10px, env(safe-area-inset-top))', paddingBottom: 10 }}>
         <div className="min-w-0 flex-1">
-          <p className="truncate" style={{ fontFamily: OUTFIT, fontSize: 15, fontWeight: 700, color: '#FFFDF8' }}>{item.name}</p>
+          <p className="truncate" title={item.name} style={{ fontFamily: OUTFIT, fontSize: 15, fontWeight: 700, color: '#FFFDF8' }}>{item.name}</p>
           {item.caption && (
-            <p className="truncate" style={{ fontFamily: OUTFIT, fontSize: 12.5, color: 'rgba(255,253,248,0.66)', fontVariantNumeric: 'tabular-nums' }}>
+            <p className="[overflow-wrap:anywhere]" style={{ fontFamily: OUTFIT, fontSize: 12.5, color: 'rgba(255,253,248,0.66)', fontVariantNumeric: 'tabular-nums' }}>
               {item.caption}
             </p>
           )}

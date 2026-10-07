@@ -1,0 +1,24 @@
+/* Shared look for the newsletter art. Gavelling tokens (src/components/neu.tsx). */
+/* Fonts are vendored (Google Fonts, OFL, latin subset) so a render never depends on the network. */
+@font-face{font-family:'Inter';font-style:normal;font-weight:100 900;font-display:block;src:url(fonts/inter-latin.woff2) format('woff2')}
+@font-face{font-family:'Playfair Display';font-style:italic;font-weight:700;font-display:block;src:url(fonts/playfair-italic-latin.woff2) format('woff2')}
+:root{
+  --ivory:#EDE7D8; --surface:#F0EBDD; --forest:#1B3828; --forest2:#2A5A3C;
+  --gold:#EED98A; --deepgold:#B6871F; --ink:#1C1410; --inksoft:#4A4238; --muted:#6E6052;
+  --shadow:0 1px 2px rgba(27,56,40,.06),0 10px 24px rgba(27,56,40,.08),0 30px 60px rgba(27,56,40,.10);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:1120px;overflow:hidden}
+body{
+  font-family:'Inter',sans-serif;color:var(--ink);background-color:var(--ivory);
+  -webkit-font-smoothing:antialiased;font-feature-settings:'tnum' 0;
+  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='240' height='240'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 .35  0 0 0 0 .30  0 0 0 0 .22  0 0 0 .07 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+}
+.stage{position:relative;width:1120px;padding:64px 72px}
+.card{background:#fff;border-radius:28px;box-shadow:var(--shadow)}
+.eyebrow{font-size:22px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--deepgold)}
+.title{font-size:56px;font-weight:800;letter-spacing:-.02em;line-height:1.05;color:var(--ink)}
+.accent{font-family:'Playfair Display',serif;font-style:italic;font-weight:700;color:var(--deepgold);letter-spacing:0}
+.flag{border-radius:50%;display:block;object-fit:cover;box-shadow:0 2px 4px rgba(27,56,40,.12),0 8px 18px rgba(27,56,40,.14)}
+.tnum{font-variant-numeric:tabular-nums}
+.mark{position:absolute;opacity:.07;pointer-events:none}

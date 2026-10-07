@@ -182,11 +182,11 @@ export default function NewGroupSheet({
             >
               <ChatAvatar kind={c.isChair ? 'chair' : 'delegate'} name={c.key} size={40} />
               <span className="flex-1 min-w-0">
-                <span className="block truncate" style={{ fontFamily: OUTFIT, fontSize: 15.5, fontWeight: 600, color: NEU.ink }}>
+                <span className="block [overflow-wrap:anywhere]" style={{ fontFamily: OUTFIT, fontSize: 15.5, fontWeight: 600, color: NEU.ink, lineHeight: 1.25 }}>
                   {c.label}{c.isChair ? ` ${t('chat_chair_badge')}` : ''}
                 </span>
                 {c.sublabel && (
-                  <span className="block truncate" style={{ fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 500, color: NEU.inkSoft }}>
+                  <span className="block [overflow-wrap:anywhere]" style={{ fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 500, color: NEU.inkSoft, lineHeight: 1.3 }}>
                     {c.sublabel}
                   </span>
                 )}

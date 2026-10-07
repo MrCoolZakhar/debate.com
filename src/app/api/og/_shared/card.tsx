@@ -32,7 +32,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { ImageResponse } from 'next/og';
-import { CARD_FONTS, FONTS_ARE_OUTFIT, FONT_FAMILY } from './fonts';
+import { CARD_FONTS, FONTS_ARE_INTER, FONT_FAMILY } from './fonts';
 import { encodeCard } from './remoteImage';
 
 /** Open Graph's canonical 1.91:1. Every scraper crops to something near it. */
@@ -110,13 +110,14 @@ export function acronymFontSize(label: string): number {
 /**
  * Truncate to roughly two rendered lines, breaking on a word boundary.
  *
- * Outfit's average advance is a little over half its em, so at `fontSize` the
- * text block fits about `width / (fontSize * 0.52)` characters per line. That
+ * Inter's average advance is a little over half its em (0.50 regular, 0.52
+ * extra bold on real conference names; measured 7 Oct 2026), so at `fontSize`
+ * the text block fits about `width / (fontSize * 0.55)` characters per line. That
  * approximation is generous enough to never overflow into a third line and
  * tight enough not to cut names that would have fitted.
  */
 export function clampToTwoLines(text: string, fontSize: number, width: number): string {
-  const perLine = Math.floor(width / (fontSize * 0.52));
+  const perLine = Math.floor(width / (fontSize * 0.55));
   const budget = perLine * 2;
   const clean = text.replace(/\s+/g, ' ').trim();
   if (clean.length <= budget) return clean;
@@ -182,6 +183,7 @@ function Chip({ label, flag }: { label: string; flag?: string | null }) {
       style={{
         display: 'flex',
         alignItems: 'center',
+        minWidth: 0,
         borderRadius: 999,
         padding: flag ? '12px 28px 12px 20px' : '13px 28px',
         backgroundColor: 'rgba(238,217,138,0.13)',
@@ -197,11 +199,14 @@ function Chip({ label, flag }: { label: string; flag?: string | null }) {
           src={flag}
           width={30}
           height={30}
-          style={{ objectFit: 'contain', marginRight: 13 }}
+          style={{ objectFit: 'contain', marginRight: 13, flexShrink: 0 }}
           alt=""
         />
       ) : null}
-      {label}
+      {/* Its own box with a fixed measure, so a long place wraps to a second
+          line inside the pill. 420 + the date pill (~260) stays inside the
+          790px the chips row may take, clear of the brand row. */}
+      <div style={{ display: 'flex', maxWidth: flag ? 420 : 300, lineHeight: 1.2 }}>{label}</div>
     </div>
   );
 }
@@ -216,7 +221,7 @@ function Chip({ label, flag }: { label: string; flag?: string | null }) {
  *  as an accident. */
 function BrandRow() {
   return (
-    <div style={{ display: 'flex', alignItems: 'center' }}>
+    <div style={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>
       {MARK_DATA_URI ? (
         <div
           style={{
@@ -431,9 +436,12 @@ export function CardShell({ backdrop, logo, headline, subhead, chips }: CardShel
               marginTop: 30,
             }}
           >
-            <div style={{ display: 'flex', alignItems: 'center' }}>
+            {/* The chips stop 24px short of the brand row (content width minus
+                the ~240px brand row): a long place wraps inside its pill
+                instead of running into GAVELLING. The brand row never shrinks. */}
+            <div style={{ display: 'flex', alignItems: 'center', flexShrink: 1, minWidth: 0, maxWidth: 790, marginRight: 24 }}>
               {chips.map((c, i) => (
-                <div key={c.label} style={{ display: 'flex', marginLeft: i === 0 ? 0 : 14 }}>
+                <div key={c.label} style={{ display: 'flex', flexShrink: i === 0 ? 0 : 1, minWidth: 0, marginLeft: i === 0 ? 0 : 14 }}>
                   <Chip label={c.label} flag={c.flag} />
                 </div>
               ))}
@@ -457,7 +465,7 @@ export function CardShell({ backdrop, logo, headline, subhead, chips }: CardShel
  * produces a NEW URL rather than new bytes at the old one. If that token is
  * ever dropped from the route, this header has to go with it.
  *
- * `X-Og-*` headers exist so the two silent failure modes — Outfit not bundled,
+ * `X-Og-*` headers exist so the two silent failure modes — Inter not bundled,
  * sharp not installed — are visible from `curl -I` rather than only to the eye.
  */
 export async function renderCard(
@@ -484,7 +492,7 @@ export async function renderCard(
         ? 'public, max-age=300, s-maxage=300'
         : 'public, max-age=31536000, immutable',
       ...(opts.degraded ? { 'X-Og-Degraded': '1' } : {}),
-      'X-Og-Fonts': FONTS_ARE_OUTFIT ? 'outfit' : 'fallback',
+      'X-Og-Fonts': FONTS_ARE_INTER ? 'inter' : 'fallback',
       'X-Og-Encoder': contentType === 'image/jpeg' ? 'sharp-jpeg' : 'raw-png',
     },
   });

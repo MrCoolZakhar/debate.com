@@ -617,7 +617,7 @@ export function ScoreboardTable({
                   : <SeatFlag country={r.country} size={px} />}
               </span>
               <span style={{ flex: '1 1 0', minWidth: 0 }}>
-                <span style={{ display: 'block', fontFamily: OUTFIT, fontWeight: 600, fontSize: 13.5, color: NEU.ink, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                <span style={{ display: 'block', fontFamily: OUTFIT, fontWeight: 600, fontSize: 13.5, color: NEU.ink, lineHeight: 1.25, overflowWrap: 'anywhere' }}>
                   <span className="md:hidden" style={{ color: SOFT, fontVariantNumeric: 'tabular-nums', fontWeight: 700 }}>
                     {sortKey === 'name' ? '' : `${i + 1}. `}
                   </span>
@@ -635,7 +635,7 @@ export function ScoreboardTable({
                 {showCommitteeColumn && (
                   <span
                     className="block md:hidden"
-                    style={{ fontFamily: OUTFIT, fontSize: 10.5, color: SOFT, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                    style={{ fontFamily: OUTFIT, fontSize: 10.5, color: SOFT, lineHeight: 1.25, overflowWrap: 'anywhere' }}
                     title={r.committeeName}
                   >
                     {committeeDisplayName(r.committeeName, r.committeeAbbrev)}
@@ -678,7 +678,7 @@ export function ScoreboardTable({
               {showCommitteeColumn && (
                 <span
                   className="hidden md:inline-block"
-                  style={{ width: 120, flexShrink: 0, fontFamily: OUTFIT, fontSize: 11.5, color: SOFT, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                  style={{ width: 120, flexShrink: 0, fontFamily: OUTFIT, fontSize: 11.5, color: SOFT, lineHeight: 1.25, overflowWrap: 'anywhere' }}
                   title={r.committeeName}
                 >
                   {committeeDisplayName(r.committeeName, r.committeeAbbrev)}

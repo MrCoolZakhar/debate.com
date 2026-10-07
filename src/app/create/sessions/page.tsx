@@ -207,7 +207,7 @@ function CommitteeNameInput({ id, value, onChange, onPresetSelect }: {
               key={p.name}
               onMouseDown={(e) => { e.preventDefault(); onPresetSelect(p); setOpen(false); }}
               type="button"
-              className={`w-full flex items-center gap-3 px-3 h-11 rounded-xl text-start transition-colors text-[#1C1410] focus:outline-none ${
+              className={`w-full flex items-center gap-3 px-3 min-h-11 py-1.5 rounded-xl text-start transition-colors text-[#1C1410] focus:outline-none ${
                 i === 0 ? '' : 'hover:bg-[#1B3828]/[0.05]'
               }`}
               style={i === 0 ? { backgroundColor: 'rgba(27,56,40,0.07)' } : {}}
@@ -217,7 +217,7 @@ function CommitteeNameInput({ id, value, onChange, onPresetSelect }: {
               ) : (
                 <div className="w-[22px] h-[22px] rounded-md shrink-0" style={{ backgroundColor: 'rgba(27,56,40,0.08)' }} />
               )}
-              <span className="text-[15px] font-semibold flex-1 truncate">{getPresetDisplayName(p.name, language)}</span>
+              <span className="text-[15px] font-semibold flex-1 min-w-0 leading-tight [overflow-wrap:anywhere]">{getPresetDisplayName(p.name, language)}</span>
               <span className="text-[11px] font-extrabold tracking-[0.04em] shrink-0" style={{ color: '#1B3828' }}>{(language === 'es' || language === 'fr') ? (getPresetAcronym(p.name, language) || p.acronym) : p.acronym}</span>
               {i === 0 && <CornerDownLeft size={14} strokeWidth={2.2} className="shrink-0 rtl:-scale-x-100" style={{ color: '#8A7C6B' }} />}
             </button>
@@ -574,21 +574,21 @@ function CreatePageInner() {
                   style={{ backgroundColor: C.surface, boxShadow: '0 12px 32px rgba(27,56,40,0.18), 0 2px 8px rgba(27,56,40,0.08), inset 0 0 0 1px rgba(27,56,40,0.10)' }}>
                   {available.slice(0, 5).map((c, i) => (
                     <button key={c.code} type="button" onMouseDown={(e) => { e.preventDefault(); addDelegate(c.name); setSearch(''); }}
-                      className={`flex h-11 w-full items-center gap-3 rounded-xl px-3 text-start text-[#1C1410] transition-colors focus:outline-none ${i === 0 ? '' : 'hover:bg-[#1B3828]/[0.05]'}`}
+                      className={`flex min-h-11 py-1.5 w-full items-center gap-3 rounded-xl px-3 text-start text-[#1C1410] transition-colors focus:outline-none ${i === 0 ? '' : 'hover:bg-[#1B3828]/[0.05]'}`}
                       style={i === 0 ? { backgroundColor: 'rgba(27,56,40,0.07)' } : {}}>
                       <CircleFlag code={c.code} size={26} decorative />
-                      <span className="flex-1 truncate text-[15px] font-semibold">{getCountryDisplayName(c.name, language)}</span>
+                      <span className="flex-1 min-w-0 leading-tight [overflow-wrap:anywhere] text-[15px] font-semibold">{getCountryDisplayName(c.name, language)}</span>
                       {i === 0 && <CornerDownLeft size={14} strokeWidth={2.2} className="shrink-0 rtl:-scale-x-100" style={{ color: C.inkSoft }} />}
                     </button>
                   ))}
                   {/* "Add as custom" only when the text is not already an exact country: rank 0 covers accents, aliases and the localised name. */}
                   {search.trim() && !delegates.includes(search.trim()) && !available.some((c) => countryMatchRank(c.name, search, language) === 0) && (
                     <button type="button" onMouseDown={(e) => { e.preventDefault(); addDelegate(search.trim()); setSearch(''); }}
-                      className="flex h-11 w-full items-center gap-3 rounded-xl px-3 text-start text-[#1C1410] transition-colors hover:bg-[#1B3828]/[0.05] focus:outline-none">
+                      className="flex min-h-11 py-1.5 w-full items-center gap-3 rounded-xl px-3 text-start text-[#1C1410] transition-colors hover:bg-[#1B3828]/[0.05] focus:outline-none">
                       <span className="flex shrink-0 items-center justify-center rounded-full" style={{ width: 26, height: 26, backgroundColor: 'rgba(27,56,40,0.08)', color: C.forest }}>
                         <UserRound size={15} strokeWidth={2} />
                       </span>
-                      <span className="flex-1 truncate text-[15px] font-semibold">{search.trim()}</span>
+                      <span className="flex-1 min-w-0 leading-tight [overflow-wrap:anywhere] text-[15px] font-semibold">{search.trim()}</span>
                       <span className="shrink-0 text-[12px] font-bold" style={{ color: C.forest }}>{t('create_custom_add')}</span>
                     </button>
                   )}
@@ -741,7 +741,7 @@ function CreatePageInner() {
                             onBlur={() => commitRename(editDraft)}
                           />
                         ) : (
-                          <span className="min-w-0 truncate text-[14.5px] font-semibold leading-tight" style={{ color: C.ink }} title={display}>{display}</span>
+                          <span className="min-w-0 [overflow-wrap:anywhere] text-[14.5px] font-semibold leading-tight" style={{ color: C.ink }} title={display}>{display}</span>
                         )}
                       </div>
                       {/* Observer status is the megaphone itself (CLAUDE.md §8: never an "Observer" pill). */}
@@ -807,7 +807,7 @@ function CreatePageInner() {
                       ? <CircleFlag code={found.code} size={26} decorative />
                       : <span className="flex items-center justify-center shrink-0 rounded-full" style={{ width: 26, height: 26, backgroundColor: 'rgba(27,56,40,0.08)', color: C.forest }}><UserRound size={15} strokeWidth={2} /></span>}
                     {found ? (
-                      <span className="text-[14px] flex-1 truncate font-semibold" style={{ color: C.ink }}>{getCountryDisplayName(r.name, language)}</span>
+                      <span className="text-[14px] flex-1 min-w-0 leading-tight [overflow-wrap:anywhere] font-semibold" style={{ color: C.ink }}>{getCountryDisplayName(r.name, language)}</span>
                     ) : (
                       <input value={r.name} onChange={(e) => updateReviewName(idx, e.target.value)}
                         className="text-base sm:text-[14px] flex-1 min-w-0 bg-white rounded-lg px-2.5 h-9 text-[#1C1410] shadow-[inset_0_0_0_1px_rgba(27,56,40,0.18)] focus:outline-none focus:shadow-[inset_0_0_0_2px_#1B3828]" />

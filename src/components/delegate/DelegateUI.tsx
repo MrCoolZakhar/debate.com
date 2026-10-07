@@ -1178,8 +1178,8 @@ export function QueueRow({
       <span
         style={{
           flex: 1, minWidth: 0, fontFamily: OUTFIT,
-          fontSize: compact ? 12.5 : 13.5, fontWeight: 700, color: DG.forest,
-          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+          fontSize: (compact ? 12.5 : 13.5) - (name.length > 24 ? 1.5 : 0), fontWeight: 700, color: DG.forest,
+          lineHeight: 1.15, overflowWrap: 'break-word', hyphens: 'auto',
         }}
       >
         {name}

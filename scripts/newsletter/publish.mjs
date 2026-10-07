@@ -1,0 +1,101 @@
+#!/usr/bin/env node
+// Prints the SQL that registers one newsletter edition as an email campaign.
+// It connects to NOTHING and sends nothing: paste its output into the chat's
+// Supabase work (CLAUDE.md: database objects are changed only there).
+//
+//   python3 scripts/newsletter/build.py scripts/newsletter/editions/v2-05.json
+//   node scripts/newsletter/publish.mjs v2-05 [campaign-slug] > /tmp/v2-05.sql
+//
+// Reads  out/<edition>.html, out/<edition>.txt  (build.py's output)
+//        editions/<edition>.json (or <edition>.json)  for subject and `links`
+// Writes one INSERT into public.email_campaigns (scratch-email-campaigns.sql).
+// Re-running it for the same slug replaces the copy ONLY while the campaign
+// has not been started, so a send in progress never changes under its readers.
+//
+// The link contract: tracked links are https://gavelling.com/r/{{CLICK_TOKEN}}/<key>
+// with <key> a key of the edition's `links` map; {{UNSUBSCRIBE_URL}} must be
+// present in both parts. Both placeholders are filled per recipient by
+// queue_email_campaign(). Every destination must be on https://gavelling.com
+// (the /r route refuses anything else and sends the reader home).
+import { readFileSync, existsSync } from 'node:fs';
+import { join, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const HERE = dirname(fileURLToPath(import.meta.url));
+const FROM_NAME = 'Peter from Gavelling';
+const REPLY_TO = 'wearegavelling@gmail.com';
+
+const [edition, slugArg] = process.argv.slice(2);
+if (!edition) die('Usage: node scripts/newsletter/publish.mjs <edition> [campaign-slug]');
+const slug = (slugArg || edition).toLowerCase();
+if (!/^[a-z0-9][a-z0-9-]{0,59}$/.test(slug)) die(`Campaign slug "${slug}" must be lowercase letters, digits and dashes.`);
+
+function die(msg) { console.error(msg); process.exit(1); }
+function firstExisting(paths) { return paths.find(p => existsSync(p)); }
+
+const jsonPath = firstExisting([join(HERE, 'editions', `${edition}.json`), join(HERE, `${edition}.json`)]);
+const htmlPath = firstExisting([join(HERE, 'out', `${edition}.html`), join(HERE, 'out', edition, `${edition}.html`), join(HERE, 'out', edition, 'email.html')]);
+const textPath = firstExisting([join(HERE, 'out', `${edition}.txt`), join(HERE, 'out', edition, `${edition}.txt`), join(HERE, 'out', edition, 'email.txt')]);
+if (!jsonPath) die(`No edition JSON for "${edition}" in editions/ or scripts/newsletter/.`);
+if (!htmlPath || !textPath) die(`No built email for "${edition}". Run build.py first (expected out/${edition}.html and .txt).`);
+
+const ed = JSON.parse(readFileSync(jsonPath, 'utf8'));
+const html = readFileSync(htmlPath, 'utf8');
+const text = readFileSync(textPath, 'utf8');
+const subject = String(ed.subject || '').trim();
+if (!subject) die('The edition has no subject.');
+
+// Links: key -> https://gavelling.com URL, plus 'home' (where an unknown key lands).
+const links = { ...(ed.links || {}) };
+if (!links.home) links.home = 'https://gavelling.com/';
+const problems = [];
+for (const [k, v] of Object.entries(links)) {
+  if (!/^[a-z0-9-]{1,40}$/.test(k)) problems.push(`link key "${k}" must match ^[a-z0-9-]{1,40}$`);
+  let ok = false;
+  try { const u = new URL(String(v)); ok = u.protocol === 'https:' && u.hostname === 'gavelling.com'; } catch { /* not a URL */ }
+  if (!ok) problems.push(`link "${k}" -> ${v} is not an https://gavelling.com URL (the /r route would send readers home)`);
+}
+
+const used = new Set();
+for (const body of [html, text]) {
+  for (const m of body.matchAll(/\/r\/\{\{CLICK_TOKEN\}\}\/([^"'\s<>)]+)/g)) used.add(m[1]);
+}
+for (const k of used) if (!(k in links)) problems.push(`the email links to /r/{{CLICK_TOKEN}}/${k} but "${k}" is not in links`);
+if (!html.includes('{{UNSUBSCRIBE_URL}}')) problems.push('the HTML has no {{UNSUBSCRIBE_URL}}');
+if (!text.includes('{{UNSUBSCRIBE_URL}}')) problems.push('the text part has no {{UNSUBSCRIBE_URL}}');
+if (/[—–]/.test(subject)) problems.push('the subject has an em or en dash');
+if (problems.length) die('Not publishable:\n  - ' + problems.join('\n  - '));
+
+const unused = Object.keys(links).filter(k => k !== 'home' && !used.has(k));
+const untracked = [...html.matchAll(/href="(https:\/\/gavelling\.com[^"]*)"/g)].map(m => m[1]).filter(u => !u.includes('/r/{{CLICK_TOKEN}}/'));
+if (!used.size) console.error('Warning: no tracked /r/{{CLICK_TOKEN}}/<key> links in the email, so no clicks will be counted.');
+if (unused.length) console.error(`Note: links never used in the email: ${unused.join(', ')}`);
+if (untracked.length) console.error(`Note: ${untracked.length} gavelling.com link(s) are not tracked: ${[...new Set(untracked)].join(', ')}`);
+
+// Dollar-quote with a tag that cannot occur in the content.
+function dq(s) {
+  let tag = 'nl';
+  while (s.includes(`$${tag}$`)) tag += 'x';
+  return `$${tag}$${s}$${tag}$`;
+}
+
+process.stdout.write(`-- Newsletter ${edition} as campaign "${slug}". Generated by scripts/newsletter/publish.mjs.
+-- Registers the copy only. Nothing is sent until started_at is set AND the
+-- email-campaigns cron runs (see scratch-email-campaigns.sql).
+insert into public.email_campaigns (slug, subject, from_name, reply_to, body_html, body_text, links)
+values (
+  ${dq(slug)},
+  ${dq(subject)},
+  ${dq(FROM_NAME)},
+  ${dq(REPLY_TO)},
+  ${dq(html)},
+  ${dq(text)},
+  ${dq(JSON.stringify(links))}::jsonb
+)
+on conflict (slug) do update
+   set subject = excluded.subject, from_name = excluded.from_name, reply_to = excluded.reply_to,
+       body_html = excluded.body_html, body_text = excluded.body_text, links = excluded.links
+ where public.email_campaigns.started_at is null;
+
+select public.queue_email_campaign(${dq(slug)});   -- preview: inserts nothing
+`);

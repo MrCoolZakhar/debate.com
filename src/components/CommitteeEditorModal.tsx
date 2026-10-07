@@ -551,7 +551,7 @@ function ChairsDock({ conferenceId, committeeId, committeeName, embedded = false
               ) : (
                 <span className="flex items-center justify-center flex-shrink-0" style={{ width: 28, height: 28, borderRadius: '9999px', backgroundColor: '#1B3828', color: '#EED98A', fontSize: 11, fontWeight: 700, fontFamily: OUTFIT }}>{c.name.charAt(0)}</span>
               )}
-              <span className="text-[12.5px] truncate min-w-0 flex-1" style={{ color: '#1C1410', fontFamily: OUTFIT }}>{c.name}</span>
+              <span className="text-[12.5px] [overflow-wrap:anywhere] min-w-0 flex-1" style={{ color: '#1C1410', fontFamily: OUTFIT }}>{c.name}</span>
               {chairIds.length === chairs.length && (
                 <ChairTitleSelect
                   value={c.title}
@@ -586,7 +586,7 @@ function ChairsDock({ conferenceId, committeeId, committeeName, embedded = false
                     <span aria-hidden className="absolute inset-0 pointer-events-none" style={{ borderRadius: 9999, border: '1.5px dashed #B6871F' }} />
                   </span>
                   <span className="min-w-0 flex-1">
-                    <span className="text-[12px] truncate" style={{ display: 'block', color: '#1C1410', fontFamily: OUTFIT, fontWeight: 600 }} title={inv.email}>{label}</span>
+                    <span className="text-[12px] [overflow-wrap:anywhere]" style={{ display: 'block', color: '#1C1410', fontFamily: OUTFIT, fontWeight: 600 }} title={inv.email}>{label}</span>
                     <span style={{ display: 'block', fontFamily: OUTFIT, fontSize: 8.5, fontWeight: 800, letterSpacing: '0.12em', color: '#7A5A10' }}>PENDING</span>
                   </span>
                   <ChairTitleSelect
@@ -690,7 +690,7 @@ function ChairsDock({ conferenceId, committeeId, committeeName, embedded = false
                       ) : (
                         <span className="flex items-center justify-center flex-shrink-0" style={{ width: 22, height: 22, borderRadius: '9999px', backgroundColor: '#1B3828', color: '#EED98A', fontSize: 10, fontWeight: 700, fontFamily: OUTFIT }}>{(app.profiles?.display_name ?? '?').charAt(0)}</span>
                       )}
-                      <span className="text-[11.5px] truncate flex-1 min-w-0" style={{ color: '#1C1410', fontFamily: OUTFIT }}>{app.profiles?.display_name ?? 'Unknown'}</span>
+                      <span className="text-[11.5px] [overflow-wrap:anywhere] flex-1 min-w-0" style={{ color: '#1C1410', fontFamily: OUTFIT }}>{app.profiles?.display_name ?? 'Unknown'}</span>
                       <UserPlus size={12} style={{ color: '#1B3828', flexShrink: 0 }} />
                     </button>
                   ))}

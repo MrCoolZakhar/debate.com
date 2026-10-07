@@ -280,7 +280,7 @@ export default function PositionPaperCard({ conferenceId, conferenceSlug, myAllo
             <FileText size={16} style={{ color: '#1B3828' }} />
           </div>
           <div className="flex-1 min-w-0">
-            <p className="truncate" title={myPositionPaper.file_name} style={{ fontFamily: OUTFIT, fontWeight: 600, fontSize: 13, color: '#1C1410', margin: 0 }}>{myPositionPaper.file_name}</p>
+            <p className="[overflow-wrap:anywhere]" title={myPositionPaper.file_name} style={{ fontFamily: OUTFIT, fontWeight: 600, fontSize: 13, color: '#1C1410', margin: 0 }}>{myPositionPaper.file_name}</p>
             <p style={{ fontFamily: OUTFIT, fontSize: 11, color: '#9A8A78', margin: '2px 0 0 0' }}>
               Submitted {fmtDate(myPositionPaper.submitted_at)}
               {myPositionPaper.user_id !== user?.id && (
@@ -452,7 +452,7 @@ export default function PositionPaperCard({ conferenceId, conferenceSlug, myAllo
                 <div style={{ borderRadius: 12, padding: '10px 14px', backgroundColor: 'rgba(61,122,82,0.06)', boxShadow: NEU.inSm, display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
                   <FileText size={15} style={{ color: '#2A5A3C', flexShrink: 0 }} />
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <p title={ppFile.name} style={{ fontSize: 13, color: '#1C1410', fontFamily: OUTFIT, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ppFile.name}</p>
+                    <p title={ppFile.name} style={{ fontSize: 13, color: '#1C1410', fontFamily: OUTFIT, fontWeight: 600, overflowWrap: 'anywhere' }}>{ppFile.name}</p>
                   </div>
                   <button
                     onClick={() => ppFileInputRef.current?.click()}

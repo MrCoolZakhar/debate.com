@@ -5,6 +5,7 @@ import { commentDockTranslations } from './translationsCommentDock';
 import { docIntroTranslations } from './translationsDocIntro';
 import { motionCardsTranslations } from './translationsMotionCards';
 import { scoreAdjustTranslations } from './translationsScoreAdjust';
+import { placeholderTranslations } from './translationsPlaceholders';
 import { floorToolsTranslations } from './translationsFloorTools';
 import { createJoinTranslations } from './translationsCreateJoin';
 import { restartTranslations } from './translationsRestart';
@@ -23,6 +24,7 @@ export const translations = {
     ...floorToolsTranslations.en,
     ...createJoinTranslations.en,
     ...restartTranslations.en,
+    ...placeholderTranslations.en,
     // --- session surfaces, added 17 Sep 2026 (tutorial + translations pass) ---
     session_loading: 'LOADING…',
     session_signin_title: 'Sign in to join this session',
@@ -1708,6 +1710,7 @@ export const translations = {
     ...floorToolsTranslations.es,
     ...createJoinTranslations.es,
     ...restartTranslations.es,
+    ...placeholderTranslations.es,
     // --- session surfaces, added 17 Sep 2026 (tutorial + translations pass) ---
     session_loading: 'CARGANDO…',
     session_signin_title: 'Inicia sesión para entrar a esta sesión',
@@ -3390,6 +3393,7 @@ export const translations = {
     ...floorToolsTranslations.fr,
     ...createJoinTranslations.fr,
     ...restartTranslations.fr,
+    ...placeholderTranslations.fr,
     // --- session surfaces, added 17 Sep 2026 (tutorial + translations pass) ---
     session_loading: 'CHARGEMENT…',
     session_signin_title: 'Connectez-vous pour rejoindre cette session',
@@ -5072,6 +5076,7 @@ export const translations = {
     ...floorToolsTranslations.ar,
     ...createJoinTranslations.ar,
     ...restartTranslations.ar,
+    ...placeholderTranslations.ar,
     // --- session surfaces, added 17 Sep 2026 (tutorial + translations pass) ---
     session_loading: 'جارٍ التحميل…',
     session_signin_title: 'سجّل الدخول للانضمام إلى هذه الجلسة',

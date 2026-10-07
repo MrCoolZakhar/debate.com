@@ -1,0 +1,30 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="size" content="1120x660">
+<link rel="stylesheet" href="_base.css">
+<style>
+.stage{height:660px;padding:60px 56px}
+.title{font-size:54px;margin-top:12px}
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:24px;margin-top:40px}
+.g{overflow:hidden;position:relative}
+.ph{height:200px;position:relative;overflow:hidden}
+.bd{padding:22px 24px 28px}
+.k{font-size:21px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+.t{font-size:28px;font-weight:700;line-height:1.25;margin-top:8px;color:var(--ink)}
+.prem{box-shadow:0 0 0 3px var(--gold),var(--shadow)}
+.lock{position:absolute;inset:0;display:grid;place-items:center;background:rgba(255,255,255,.35);backdrop-filter:blur(6px)}
+.lock span{width:96px;height:96px;border-radius:50%;background:rgba(255,255,255,.9);display:grid;place-items:center;box-shadow:0 6px 18px rgba(27,56,40,.2)}
+.pk{color:var(--deepgold)}
+</style></head><body>
+<div class="stage">
+  <div class="eyebrow">Guides</div>
+  <div class="title">Read up before <span class="accent">committee</span></div>
+  <div class="grid">
+    <div class="card g"><div class="ph" style="background:radial-gradient(circle at 25% 30%,#9CC3A8,transparent 55%),linear-gradient(135deg,#2A5A3C,#1B3828)"></div>
+      <div class="bd"><div class="k">Free guide</div><div class="t">The General Speakers' List, explained</div></div></div>
+    <div class="card g"><div class="ph" style="background:radial-gradient(circle at 70% 35%,#F7EFCF,transparent 55%),linear-gradient(135deg,#E7D9A8,#C9A64A)"></div>
+      <div class="bd"><div class="k">Free guide</div><div class="t">MUN motions: types and voting rules</div></div></div>
+    <div class="card g prem"><div class="ph" style="background:radial-gradient(circle at 30% 70%,#EED98A,transparent 50%),linear-gradient(135deg,#1B3828,#3D7A52)">
+        <div class="lock"><span><svg width="46" height="46" viewBox="0 0 24 24" fill="none" stroke="#1B3828" stroke-width="2.4" stroke-linecap="round"><rect x="5" y="11" width="14" height="10" rx="2.5" fill="#EED98A"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg></span></div></div>
+      <div class="bd"><div class="k pk">Premium</div><div class="t">The Sponsorship Playbook</div></div></div>
+  </div>
+</div>
+</body></html>

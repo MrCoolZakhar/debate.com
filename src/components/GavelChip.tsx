@@ -269,7 +269,7 @@ export default function GavelChip({
             ) : showOffline ? (
               <>{t('gavel_chair_offline')} <span className="font-black">{t('gavel_take_over')}</span></>
             ) : (
-              <>{t('gavel_chairing_label')} <span className="font-black">{headChairName ?? '–'}</span></>
+              <>{t('gavel_chairing_label')} <span className="font-black">{headChairName ?? t('gavel_nobody')}</span></>
             )}
           </span>
           <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -353,7 +353,7 @@ export default function GavelChip({
                       : { backgroundColor: 'transparent' }}
                   >
                     {isHolder ? <GavelGlyph size={13} color={NEU.deepGold} /> : <Dot online={online} />}
-                    <span className="text-xs truncate" style={{ color: NEU.ink, fontWeight: isHolder ? 800 : 600 }}>
+                    <span className="text-xs min-w-0 [overflow-wrap:anywhere]" style={{ color: NEU.ink, fontWeight: isHolder ? 800 : 600 }}>
                       {name}{isMe ? ` ${t('gavel_you')}` : ''}
                     </span>
                     {isHolder && !(heldElsewhere && isMe) && (

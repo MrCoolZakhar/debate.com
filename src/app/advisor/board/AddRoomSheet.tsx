@@ -259,7 +259,7 @@ function PickRow({
       >
         <CircleFlag country={country} logoUrl={logoUrl} size={36} decorative />
         <span className="min-w-0 flex-1">
-          <span className="block truncate" style={{ fontSize: 15.5, fontWeight: 700, color: C.ink }}>{display}</span>
+          <span className="block [overflow-wrap:anywhere]" style={{ fontSize: 15.5, fontWeight: 700, color: C.ink, lineHeight: 1.25 }}>{display}</span>
           {(observer || note) && (
             <span className="flex items-center gap-1" style={{ fontSize: 12.5, fontWeight: 600, color: C.inkSoft }}>
               {observer && <><Megaphone size={12} aria-hidden /> {t('adv_observer')}</>}

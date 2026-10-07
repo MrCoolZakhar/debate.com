@@ -269,7 +269,7 @@ export function RoleBookmarks({ roles, active, statusOf, onPick }: {
                 aria-hidden
                 style={{ width: 6, height: 6, borderRadius: 999, flexShrink: 0, backgroundColor: STATUS_STYLE[st].dot, opacity: open ? 1 : 0.6 }}
               />
-              <span className="truncate">{roleLabel(role)}</span>
+              <span className="min-w-0 [overflow-wrap:anywhere]" style={{ lineHeight: 1.2 }}>{roleLabel(role)}</span>
             </span>
           </button>
         );

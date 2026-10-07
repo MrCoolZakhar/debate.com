@@ -904,11 +904,11 @@ function JoinPageInner() {
                           <CircleFlag code={allocatedCountry.code} country={allocatedCountry.name} size={48} decorative />
                           <div className="min-w-0">
                             <Chip tone="green" icon={<BadgeCheck size={12} strokeWidth={2.6} />}>{returnSeat ? t('join_recommended') : t('join_conf_verified')}</Chip>
-                            <p className="mt-1.5 truncate" style={{ fontFamily: OUTFIT, fontSize: 18, fontWeight: 800, color: C.ink, letterSpacing: '-0.01em' }}>
+                            <p className="mt-1.5 [overflow-wrap:anywhere]" style={{ fontFamily: OUTFIT, fontSize: 18, fontWeight: 800, color: C.ink, letterSpacing: '-0.01em', lineHeight: 1.2 }}>
                               {getCountryDisplayName(allocatedCountry.name, language)}
                             </p>
                             {conferenceCommittee?.name && (
-                              <p className="truncate" style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 700, color: C.forest }}>
+                              <p className="mt-0.5 [overflow-wrap:anywhere]" style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 700, color: C.forest, lineHeight: 1.3 }}>
                                 {conferenceCommittee.name}
                               </p>
                             )}
@@ -1211,7 +1211,7 @@ function JoinPageInner() {
                 disabled={joinDisabled}
                 icon={<ArrowRight size={18} strokeWidth={2.6} className="rtl:-scale-x-100" />}
               >
-                <span className="truncate">{joinLabel}</span>
+                <span className="min-w-0 text-center leading-[1.15] [overflow-wrap:anywhere]">{joinLabel}</span>
               </PrimaryAction>
             </div>
 
@@ -1366,7 +1366,7 @@ function ReservedHintPanel({ country, hint, t, onClaim }: {
       <div className="flex items-start gap-3">
         <CircleFlag country={country} size={34} decorative />
         <div className="min-w-0 flex-1">
-          <p className="truncate" style={{ fontFamily: OUTFIT, fontSize: 14.5, fontWeight: 800, color: C.ink }}>{country}</p>
+          <p className="[overflow-wrap:anywhere]" style={{ fontFamily: OUTFIT, fontSize: 14.5, fontWeight: 800, color: C.ink, lineHeight: 1.25 }}>{country}</p>
           {hint === undefined ? (
             <p className="mt-1 inline-flex items-center gap-1.5" style={{ fontFamily: OUTFIT, fontSize: 12.5, color: C.inkSoft }}>
               <Loader2 size={13} className="animate-spin" /> {t('join_reserved_loading')}
@@ -1385,7 +1385,7 @@ function ReservedHintPanel({ country, hint, t, onClaim }: {
                     >
                       {h.initial ?? <Mail size={12} strokeWidth={2.6} />}
                     </span>
-                    <span className="min-w-0 truncate" style={{ fontFamily: OUTFIT, fontSize: 13.5, fontWeight: 700, color: C.forest }}>
+                    <span className="min-w-0 [overflow-wrap:anywhere]" style={{ fontFamily: OUTFIT, fontSize: 13.5, fontWeight: 700, color: C.forest, lineHeight: 1.3 }}>
                       {h.email ? t('join_reserved_held_for', { email: h.email }) : t('join_reserved_held_unknown')}
                     </span>
                   </li>
@@ -1475,7 +1475,7 @@ function NoticeCard({ tone, icon, title, body, meta, action, foot }: {
         <div className="min-w-0 flex-1">
           <p style={{ fontFamily: OUTFIT, fontSize: 14.5, fontWeight: 800, color: danger ? C.danger : C.ink }}>{title}</p>
           <p className="mt-1" style={{ fontFamily: OUTFIT, fontSize: 13, lineHeight: 1.55, color: C.inkSoft, textWrap: 'pretty' }}>{body}</p>
-          {meta && <p className="mt-2 truncate" style={{ fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 600, color: C.inkSoft }}>{meta}</p>}
+          {meta && <p className="mt-2 [overflow-wrap:anywhere]" style={{ fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 600, color: C.inkSoft }}>{meta}</p>}
           {action && <div className="mt-3">{action}</div>}
           {foot && <p className="mt-3" style={{ fontFamily: OUTFIT, fontSize: 12, lineHeight: 1.5, color: C.muted }}>{foot}</p>}
         </div>

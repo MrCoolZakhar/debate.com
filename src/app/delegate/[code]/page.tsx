@@ -590,7 +590,7 @@ function DelegateDocumentsTab({ committee, country }: { committee: Committee; co
           <label className="text-xs font-bold mb-1.5 block" style={{ color: '#1B3828', fontFamily: "var(--font-brand), sans-serif" }}>{t('delegate_doc_attachment_label')} <span className="font-normal" style={{ color: '#9A8A78' }}>{t('delegate_doc_attachment_optional')}</span></label>
           {fileName || uploading ? (
             <div className="flex items-center gap-2 bg-[#FAF8F3] border border-[#DDD4C0] rounded-xl px-3 py-3">
-              <span className="text-sm text-[#1C1410] flex-1 truncate flex items-center gap-2">
+              <span className="text-sm text-[#1C1410] flex-1 min-w-0 truncate flex items-center gap-2" title={fileName || undefined}>
                 {uploading
                   ? <><span className="w-3.5 h-3.5 border-2 border-[#1B3828] border-t-transparent rounded-full animate-spin shrink-0" /> {fileName}</>
                   : <>📎 {fileName}</>}
@@ -1779,13 +1779,12 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
   const header = (
     <header
       className="dgv-hdr sticky top-0 z-30 flex items-center gap-2 px-3 sm:px-5"
-      style={{ height: 56, background: DG.cream, borderBottom: `1px solid ${DG.hairline}` }}
+      style={{ minHeight: 56, paddingBlock: 4, background: DG.cream, borderBottom: `1px solid ${DG.hairline}` }}
     >
       <SessionsHeaderLogo height={24} />
       <div className="min-w-0 flex-1 text-start">
         <div
-          className="truncate"
-          style={{ fontFamily: OUTFIT, fontSize: 14, fontWeight: 800, color: DG.forest, lineHeight: 1.15 }}
+          style={{ fontFamily: OUTFIT, fontSize: getCommitteeDisplayName(committee.name, language).length > 40 ? 12.5 : 14, fontWeight: 800, color: DG.forest, lineHeight: 1.12, overflowWrap: 'anywhere' }}
         >
           {getCommitteeDisplayName(committee.name, language)}
         </div>
@@ -2086,7 +2085,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
                 ring={DG.ivory}
                 logoUrl={committee.delegates.find((d) => d.country === committee.caucus!.currentSpeaker)?.logoUrl ?? null}
               />
-              <span style={{ minWidth: 0, flex: 1, fontFamily: OUTFIT, fontSize: 13, fontWeight: 800, color: committee.caucus.currentSpeaker === country ? DG.deepGold : DG.forest, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              <span style={{ minWidth: 0, flex: 1, fontFamily: OUTFIT, fontSize: 13, fontWeight: 800, color: committee.caucus.currentSpeaker === country ? DG.deepGold : DG.forest, lineHeight: 1.15, overflowWrap: 'anywhere' }}>
                 {getCountryDisplayName(committee.caucus.currentSpeaker, language)}
                 {committee.caucus.currentSpeaker === country && t('delegate_you_suffix')}
               </span>
@@ -2337,7 +2336,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
                   style={{
                     fontFamily: OUTFIT, fontSize: 'clamp(13px, 4.2vw, 19px)', fontWeight: 900,
                     color: DG.ink, textAlign: 'center', lineHeight: 1.1, maxWidth: '100%',
-                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                    overflowWrap: 'anywhere', textWrap: 'balance',
                   }}
                 >
                   {myName}

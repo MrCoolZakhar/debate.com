@@ -4925,7 +4925,7 @@ export default function AssignmentPage() {
                       <div className="flex items-center gap-1.5 mt-2 min-w-0" style={{ flexWrap: 'nowrap', overflow: 'hidden' }}>
                         <span className="inline-flex items-center gap-1.5 min-w-0" style={{ fontSize: 10, fontWeight: 800, color: NEU.forest, fontFamily: MONO }}>
                           <LogoDisc bare src={sug.committee.logo_url} size={18} fallbackText={committeeLabels(sug.committee).big} alt="" />
-                          <span className="truncate" title={sug.committee.name}>{committeeLabels(sug.committee).big}</span>
+                          <span className="min-w-0 [overflow-wrap:anywhere]" style={{ lineHeight: 1.2 }} title={sug.committee.name}>{committeeLabels(sug.committee).big}</span>
                         </span>
                         <span className="flex items-center gap-1.5 flex-shrink-0">
                           {(() => {

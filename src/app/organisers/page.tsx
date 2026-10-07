@@ -198,8 +198,8 @@ export default async function OrganisersPage() {
                       <img src={c.logo_url!} alt="" width={44} height={44} loading="lazy" decoding="async" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                     </span>
                     <span className="min-w-0">
-                      <span className="block truncate" style={{ fontWeight: 800, fontSize: 14.5, color: INK }}>{conferenceTitle(c)}</span>
-                      <span className="block truncate" style={{ fontSize: 12.5, color: INK_70 }}>{[c.city, c.country].filter(Boolean).join(', ')}</span>
+                      <span className="block [overflow-wrap:anywhere]" style={{ fontWeight: 800, fontSize: 14.5, color: INK }}>{conferenceTitle(c)}</span>
+                      <span className="block [overflow-wrap:anywhere]" style={{ fontSize: 12.5, color: INK_70 }}>{[c.city, c.country].filter(Boolean).join(', ')}</span>
                     </span>
                   </Link>
                 </li>

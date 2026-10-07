@@ -78,6 +78,7 @@ export default function BlogCard({
           </span>
           <h3
             className="m-0 line-clamp-3 font-extrabold"
+            title={post.title}
             style={{ color: C.forest, fontSize: '14.5px', lineHeight: 1.28, letterSpacing: '-0.005em' }}
           >
             {post.title}

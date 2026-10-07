@@ -320,7 +320,7 @@ function ProposerInput({ candidates, value, onChange, blockedCountries, optional
             onKeyDown={(e) => { if (e.key === 'Enter' && top) { e.preventDefault(); commit(top); } if (e.key === 'Escape') { setQuery(''); setOpen(false); } }}
             placeholder={optional ? optionalProposerPlaceholder(language) : t('motions_proposer_placeholder')}
             className="flex-1 bg-transparent px-4 py-3 text-[#1C1410] placeholder-[#9A8A78] focus:outline-none text-sm" />
-          {top && query && <span className="text-xs text-[#9A8A78] px-3 truncate max-w-[120px]">↵ {dName(top)}</span>}
+          {top && query && <span className="text-xs text-[#9A8A78] px-3 max-w-[140px] leading-tight [overflow-wrap:anywhere]">↵ {dName(top)}</span>}
         </div>
       )}
       {open && (query || showChair) && matches.length > 0 && pos && (

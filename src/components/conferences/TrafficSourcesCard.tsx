@@ -52,7 +52,7 @@ const SOURCE_COLOR: Record<Row, string> = {
 const DAY_MS = 86_400_000;
 const dayNum = (iso: string) => Math.floor(Date.parse(iso + 'T00:00:00Z') / DAY_MS);
 const fmtPct = (num: number, den: number) =>
-  den > 0 ? `${(Math.round((num / den) * 1000) / 10).toLocaleString('en-GB', { maximumFractionDigits: 1 })}%` : '–';
+  den > 0 ? `${(Math.round((num / den) * 1000) / 10).toLocaleString('en-GB', { maximumFractionDigits: 1 })}%` : 'None';
 const fmtInt = (n: number) => n.toLocaleString('en-GB');
 
 function Sparkline({ series, color }: { series: { day: number; v: number }[]; color: string }) {
@@ -223,9 +223,9 @@ export function TrafficSourcesView({ summary, inDialog = false }: { summary: Tra
                     <div style={{ height: '100%', width: `${(r.views / model.maxViews) * 100}%`, minWidth: r.views ? 4 : 0, borderRadius: 999, background: SOURCE_COLOR[r.key] }} />
                   </div>}
                 </div>
-                <span role="cell" style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 700, color: NEU.ink, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{r.key === 'unknown' ? '–' : fmtInt(r.views)}</span>
+                <span role="cell" style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 700, color: NEU.ink, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{r.key === 'unknown' ? '' : fmtInt(r.views)}</span>
                 <span role="cell" style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 700, color: NEU.ink, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{fmtInt(r.apps)}</span>
-                <span role="cell" style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 600, color: NEU.inkSoft, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{r.key === 'unknown' ? '–' : fmtPct(r.apps, r.views)}</span>
+                <span role="cell" style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 600, color: NEU.inkSoft, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{r.key === 'unknown' ? '' : fmtPct(r.apps, r.views)}</span>
               </div>
             ))}
           </div>

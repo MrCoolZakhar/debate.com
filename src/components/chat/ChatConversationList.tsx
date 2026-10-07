@@ -161,12 +161,12 @@ const Row = memo(function Row({ row, active, onSelect, t, locale }: {
         <span className="flex items-baseline justify-between gap-2">
           {/* The delegation is the identity and keeps its weight; the person sitting in it is
               a quieter second half of the same line, and gives up room first. */}
-          <span className="min-w-0 flex items-baseline gap-1.5">
-            <span className="truncate shrink-0 max-w-full" style={{ fontFamily: OUTFIT, fontSize: 15.5, fontWeight: showBadge ? 800 : 650, color: NEU.ink }}>
+          <span className="min-w-0 flex flex-wrap items-baseline gap-x-1.5">
+            <span className="min-w-0 [overflow-wrap:anywhere]" style={{ fontFamily: OUTFIT, fontSize: 15.5, fontWeight: showBadge ? 800 : 650, color: NEU.ink }}>
               {row.label}
             </span>
             {row.personLabel && (
-              <span className="truncate" style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 500, color: NEU.inkSoft }}>
+              <span className="min-w-0 [overflow-wrap:anywhere]" style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 500, color: NEU.inkSoft }}>
                 {row.personLabel}
               </span>
             )}

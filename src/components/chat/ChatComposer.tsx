@@ -120,7 +120,7 @@ const ChatComposer = forwardRef<HTMLTextAreaElement, {
                 )}
               </span>
               <span className="min-w-0 flex-1">
-                <span className="block truncate" style={{ fontFamily: OUTFIT, fontSize: 14, fontWeight: 650, color: NEU.ink }}>{draft.name}</span>
+                <span className="block truncate" title={draft.name} style={{ fontFamily: OUTFIT, fontSize: 14, fontWeight: 650, color: NEU.ink }}>{draft.name}</span>
                 <span
                   className="block"
                   aria-live="polite"

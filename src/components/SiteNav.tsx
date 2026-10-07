@@ -426,7 +426,7 @@ export default function SiteNav(props: SiteNavProps = {}) {
               onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
             >
               <CreditCoin size={16} />
-              <span style={{ fontVariantNumeric: 'tabular-nums' }}>{creditsLoading || creditBalance === null ? '–' : creditBalance}</span>
+              <span style={{ fontVariantNumeric: 'tabular-nums' }}>{creditsLoading || creditBalance === null ? '…' : creditBalance}</span>
               {/* The + badge: 18px gold disc with an ivory ring, overlapping the
                   pill's top-right edge. Purely a signifier. */}
               <span
@@ -646,7 +646,7 @@ export default function SiteNav(props: SiteNavProps = {}) {
               >
                 <CreditCoin size={16} />
                 <span style={{ fontSize: '13px', fontWeight: 800, color: '#1B3828', fontFamily: "var(--font-brand), sans-serif", fontVariantNumeric: 'tabular-nums' }}>
-                  {creditsLoading || creditBalance === null ? '–' : creditBalance}
+                  {creditsLoading || creditBalance === null ? '…' : creditBalance}
                 </span>
                 <span style={{ marginLeft: 'auto', fontSize: '14px', fontWeight: 700, color: '#1B3828', fontFamily: "var(--font-brand), sans-serif" }}>
                   Buy credits

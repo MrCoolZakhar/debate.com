@@ -245,7 +245,7 @@ export default function SpeakerStrip({
           {header.icon && <span aria-hidden className="shrink-0 inline-flex">{header.icon}</span>}
           <span
             className="min-w-0 truncate text-[15px] tracking-tight"
-            title={header.detail ? `${header.label} - ${header.detail}` : undefined}
+            title={header.detail ? `${header.label} - ${header.detail}` : header.label}
           >
             <span className="font-black">{header.label}</span>
             {header.detail && <span className="font-normal">{' - '}{header.detail}</span>}
@@ -306,7 +306,7 @@ export default function SpeakerStrip({
                 />
               )}
               {!isRoomOrderTdT && (
-                <span className="line-clamp-2 break-words whitespace-normal leading-tight text-xs font-semibold text-center" style={{ color: '#1C1410', maxWidth: nameMax }}>{name}</span>
+                <span className="break-words [hyphens:auto] whitespace-normal leading-[1.12] font-semibold text-center" title={name} style={{ color: '#1C1410', maxWidth: nameMax, fontSize: name.length > 30 ? 10 : name.length > 18 ? 11 : 12 }}>{name}</span>
               )}
               {isCurrent && <span className="text-sm font-semibold" style={{ color: '#8B5A20' }}>{t('gsl_speaking')}</span>}
               {isOnDeck && <span className="text-xs font-semibold" style={{ color: '#8B5A20' }}>{t('gsl_on_deck')}</span>}

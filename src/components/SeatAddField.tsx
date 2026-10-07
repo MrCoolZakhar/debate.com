@@ -251,9 +251,9 @@ export default function SeatAddField({
                     ? <SeatCircleFlag country={opt.name} size={26} decorative ring="rgba(28,20,16,0.14)" />
                     : <span className="shrink-0"><UnknownSeatIcon size={26} /></span>}
                   <span className="flex-1 min-w-0 flex flex-col">
-                    <span className="truncate text-[14px] font-semibold" style={{ color: '#1C1410' }}>{label}</span>
+                    <span className="text-[14px] font-semibold leading-tight [overflow-wrap:anywhere]" style={{ color: '#1C1410' }}>{label}</span>
                     {opt.kind === 'custom' && (
-                      <span className="truncate text-[11px]" style={{ color: '#6A5A4A' }}>{t('rollcall_add_seat_custom', { name: opt.name })}</span>
+                      <span className="text-[11px] leading-tight [overflow-wrap:anywhere]" style={{ color: '#6A5A4A' }}>{t('rollcall_add_seat_custom', { name: opt.name })}</span>
                     )}
                   </span>
                   <button

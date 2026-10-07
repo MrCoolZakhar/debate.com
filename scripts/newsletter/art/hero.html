@@ -1,0 +1,47 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="size" content="1120x760">
+<link rel="stylesheet" href="_base.css">
+<style>
+.stage{height:760px;display:flex;align-items:center;gap:36px;padding:60px 40px 60px 64px}
+.left{width:420px;flex:none}
+.left .title{font-size:66px;line-height:1.05;white-space:nowrap}
+.left p{margin-top:26px;font-size:27px;line-height:1.4;color:var(--inksoft)}
+.notes{position:relative;flex:1;height:650px}
+.note{position:absolute;width:548px;padding:26px 30px;display:flex;gap:22px;align-items:flex-start}
+.av{width:64px;height:64px;border-radius:50%;flex:none;display:grid;place-items:center;font-weight:700;font-size:24px}
+.q{font-size:27px;line-height:1.35;font-weight:500;color:var(--ink)}
+.who{font-size:22px;color:var(--muted);margin-top:6px}
+.done{display:flex;align-items:center;gap:12px;margin-top:14px;font-size:23px;font-weight:700;color:var(--forest)}
+.tick{width:36px;height:36px;border-radius:50%;background:var(--gold);display:grid;place-items:center;box-shadow:inset 0 1px 0 rgba(255,255,255,.7),0 2px 6px rgba(182,135,31,.35)}
+.n1{top:0;left:6px;transform:rotate(-2.2deg)}
+.n2{top:222px;left:22px;transform:rotate(1.4deg);z-index:2}
+.n3{top:444px;left:4px;transform:rotate(-1deg)}
+</style></head><body>
+<div class="stage">
+  <img class="mark" src="../../../public/gavel-mark.png" style="width:560px;right:-120px;bottom:-150px">
+  <div class="left">
+    <div class="eyebrow">Version 2.05</div>
+    <div class="title" style="margin-top:18px">You asked.<br>We <span class="accent">built it.</span></div>
+    <p>Six things from your messages, now live.</p>
+  </div>
+  <div class="notes">
+    <div class="note card n1">
+      <div class="av" style="background:#DCE8DF;color:var(--forest)">MA</div>
+      <div><div class="q">“Can I follow my delegates in every room at once?”</div>
+        <div class="who">A faculty advisor</div>
+        <div class="done"><span class="tick"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#1B3828" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span>Built</div></div>
+    </div>
+    <div class="note card n2">
+      <div class="av" style="background:#F6EBC4;color:#7A5812">JK</div>
+      <div><div class="q">“Let delegates yield their time to the next speaker.”</div>
+        <div class="who">A chair</div>
+        <div class="done"><span class="tick"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#1B3828" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span>Built</div></div>
+    </div>
+    <div class="note card n3">
+      <div class="av" style="background:#E3E9F1;color:#2F6076">SR</div>
+      <div><div class="q">“Show who is Chair and who is Vice Chair on the dais.”</div>
+        <div class="who">An organiser</div>
+        <div class="done"><span class="tick"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#1B3828" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span>Built</div></div>
+    </div>
+  </div>
+</div>
+</body></html>

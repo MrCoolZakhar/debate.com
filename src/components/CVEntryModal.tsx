@@ -259,7 +259,7 @@ function CommitteeAutocomplete({
               >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={p.logoPath} alt="" width={20} height={20} className="rounded-sm shrink-0 object-contain" onError={(e) => { (e.currentTarget as HTMLImageElement).style.visibility = 'hidden'; }} />
-                <span className="flex-1 min-w-0 truncate text-sm" style={{ color: '#1C1410', fontFamily: OUTFIT, fontWeight: 500 }}>{p.name}</span>
+                <span className="flex-1 min-w-0 [overflow-wrap:anywhere] text-sm" style={{ color: '#1C1410', fontFamily: OUTFIT, fontWeight: 500 }}>{p.name}</span>
                 <span style={{ color: '#1B3828', fontFamily: MONO, fontSize: '10px', fontWeight: 700 }}>{p.acronym}</span>
               </button>
             ))}
@@ -1006,7 +1006,7 @@ export function CVEntryModal({
           </span>
           <div className="min-w-0">
             <Eyebrow className="mb-1">{existing ? 'Edit Entry' : 'Add Conference'}</Eyebrow>
-            <h2 className="font-black text-lg leading-tight truncate" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
+            <h2 className="font-black text-lg leading-tight [overflow-wrap:anywhere]" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
               {existing ? existing.conference_name : 'New CV entry'}
             </h2>
           </div>
@@ -1156,7 +1156,7 @@ export function CVEntryModal({
                           {monogramFor(s.name)}
                         </span>
                       )}
-                      <span className="flex-1 min-w-0 truncate text-sm" style={{ color: '#1C1410', fontFamily: OUTFIT, fontWeight: 500 }}>
+                      <span className="flex-1 min-w-0 [overflow-wrap:anywhere] text-sm" style={{ color: '#1C1410', fontFamily: OUTFIT, fontWeight: 500 }}>
                         {s.name}
                         {s.acronym && (
                           <span style={{ color: '#9A8A78', fontFamily: MONO, fontSize: '10px', marginLeft: '8px' }}>{s.acronym}</span>
