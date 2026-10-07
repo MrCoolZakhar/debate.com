@@ -134,8 +134,16 @@ service role / cron:
   with an account, opted-out or failed addresses, and anyone emailed in the last 7 days
   (`claim_reminder_log`). Skips test / demo conferences (`conference_is_test(slug, full_name,
   is_demo)`, the SQL twin of `isTestConference` in `src/lib/publicConferences.ts`: change both) and
-  dead drafts (never published, `is_public` false AND `published_at` null, and already started; note
-  this also skips a real conference run privately, e.g. MUJMUN 13.0, 36 people).
+  dead drafts. Two skips (the second added 7 Oct 2026), both needing the conference to have
+  STARTED and to have seated nobody: the original (never published, `is_public` false AND
+  `published_at` null; note it also skips a real conference run privately, e.g. MUJMUN 13.0, 36
+  people), and ABANDONED (never opened applications and never had one registered applicant).
+  The second exists because publishing on create made "never published" meaningless: an
+  abandoned conference now carries `is_public` true and a `published_at`, and its imported
+  applicants would have started qualifying for "Your place is waiting". It was applied by
+  patching `pg_get_functiondef()` so the rest of the 150-line body is byte-identical, and
+  proved in a rolled-back transaction: an abandoned published conference with one unclaimed
+  import sends 0, the same conference with applications open sends 1.
   **Scheduled 24 Sep 2026: cron `claim-reminders` 11:30 UTC daily.** Preview: 165 (69 upcoming, 96 past) on 23 Sep 2026; 137 (69 upcoming, 68 past) after the 24 Sep changes.
 - **"Failed address" means the ADDRESS failed, never its batch (24 Sep 2026).** Every sender
   (payment, claim, prereg) asks `email_address_failed(email)`: true when the address is unsendable on
