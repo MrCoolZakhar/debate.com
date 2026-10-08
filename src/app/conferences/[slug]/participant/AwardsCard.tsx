@@ -731,9 +731,11 @@ export default function AwardsCard({ conferenceId, conferenceSlug, committee, co
                       <div className="mt-2 flex items-center gap-2.5 flex-wrap">
                         <FlagImg code={existing.country_code ?? ''} size={18} logoUrl={seatLogoFor(existing.country_code)} label={existing.country_name ?? undefined} />
                         <span style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 700, color: '#1C1410' }}>{existing.country_name}</span>
-                        {existing.recipient_name && (
-                          <span style={{ fontFamily: OUTFIT, fontSize: 12.5, color: '#6B5F52' }}>{existing.recipient_name}</span>
-                        )}
+                        {(() => {
+                          // The seat's CURRENT names (profile first), not the copy saved on the nomination.
+                          const who = delegations.find(d => d.code === existing.country_code)?.recipientName ?? existing.recipient_name;
+                          return who ? <span style={{ fontFamily: OUTFIT, fontSize: 12.5, color: '#6B5F52' }}>{who}</span> : null;
+                        })()}
                         {existing.rationale && (
                           <span className="w-full" style={{ fontFamily: OUTFIT, fontSize: 12, color: '#9A8A78', fontStyle: 'italic' }}>{existing.rationale}</span>
                         )}

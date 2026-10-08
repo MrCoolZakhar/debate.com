@@ -1392,6 +1392,8 @@ interface ImportedDelegateRow {
   role: string;
   status: string;
   user_id: string | null;
+  /** The account's CURRENT name once the invite is claimed. */
+  profiles?: { display_name: string | null } | null;
 }
 
 const STATUS_LABEL: Record<string, string> = {
@@ -1429,12 +1431,12 @@ function ImportedDelegatesTab({ conference, session, confirm, fixApplicationId }
     const supabase = getAuthedClient(accessToken);
     const { data } = await supabase
       .from('applications')
-      .select('id, invited_name, invited_email, role, status, user_id')
+      .select('id, invited_name, invited_email, role, status, user_id, profiles (display_name)')
       .eq('conference_id', conference.id)
       .not('invited_email', 'is', null)
       .order('user_id', { ascending: true, nullsFirst: true })
       .order('invited_name', { ascending: true });
-    setRows((data ?? []) as ImportedDelegateRow[]);
+    setRows((data ?? []) as unknown as ImportedDelegateRow[]);
   }, [conference.id, accessToken]);
 
   useEffect(() => { load(); }, [load]);
@@ -1560,7 +1562,7 @@ function ImportedDelegatesTab({ conference, session, confirm, fixApplicationId }
                 const isFixTarget = r.id === fixApplicationId;
                 return (
                   <tr id={`imported-row-${r.id}`} key={r.id} style={{ borderTop: '1px solid #F0EDE6', backgroundColor: isFixTarget ? 'rgba(238,217,138,0.30)' : '#FAF8F3' }}>
-                    <td className="px-3 py-2.5 text-xs font-semibold" style={{ color: '#1C1410', fontFamily: OUTFIT }}>{r.invited_name || 'None'}</td>
+                    <td className="px-3 py-2.5 text-xs font-semibold" style={{ color: '#1C1410', fontFamily: OUTFIT }}>{r.profiles?.display_name?.trim() || r.invited_name || 'None'}</td>
                     <td className="px-3 py-2.5 text-xs" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
                       {claimed ? (
                         r.invited_email

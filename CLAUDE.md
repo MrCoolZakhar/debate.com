@@ -184,6 +184,16 @@ service role / cron:
   and expertise (`CVEntryModal` locks the same fields). `publish_conference_awards` overwrites an
   upgraded entry's awards with exactly the person's published awards at that conference, and its
   committee / allocation / conference name with the official ones.
+- **A renamed profile shows everywhere (8 Oct 2026, migration `live_profile_names`).** For anyone
+  with an account, `profiles.display_name` (live) wins over every stored copy; a stored name
+  (`applications.invited_name`, chair invites, `conference_awards.recipient_name`) is only the
+  fallback for people with no account. `conference_purchases`, `session_reserved_seat_hint` and
+  `create_chair_invite` read the profile first; award screens overlay live names from
+  `award_recipient_live_names(p_conference)` (`withLiveRecipientNames` in `awardsService.ts`; the stored
+  `recipient_name` stays as history); the trigger `profiles_live_name_mirrors` (after a name or avatar
+  change) rewrites the two pure mirrors, `conference_committees.display_chairs` (only where it is
+  index-aligned with `chair_user_ids`) and `conference_reviews.display_name`, and never blocks a profile
+  save. Emails already sent keep the old name.
 - **`profiles` column grants (24 Sep 2026).** `authenticated` may UPDATE only display_name,
   nationality, date_of_birth, avatar_url, bio, mun_experience_level, education_level,
   mun_countries, conference_countries, the five notify_email_* switches, welcome_token_seen and
