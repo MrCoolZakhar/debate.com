@@ -17,7 +17,8 @@ import { PURCHASE_CSS } from '@/components/purchase/purchaseKit';
 import { friendlyError } from '@/lib/friendlyError';
 import { STORE_CSS } from '../../store/storeKit';
 import { DASH_CSS, READ_ONLY_LINE } from '../dashboardKit';
-import { cents } from '../financialsApi';
+import { cents, readDashboard, type FinancialsDashboard } from '../financialsApi';
+import { InfoHint } from '../../settings/applicationsUi';
 import { useFinancialsCurrency } from '../shared';
 import MarkPaidDialog from '../MarkPaidDialog';
 import MarkUnpaidDialog from '../MarkUnpaidDialog';
@@ -38,6 +39,9 @@ export default function FinancialsInvoicesPage() {
   const pathname = usePathname();
   const params = useSearchParams();
   const [people, setPeople] = useState<PersonRow[] | null>(null);
+  // The header numbers come from financials_dashboard, never from adding rows,
+  // so this page and the dashboard always agree (prompt 99).
+  const [head, setHead] = useState<FinancialsDashboard | null>(null);
   const [error, setError] = useState('');
   const [attempt, setAttempt] = useState(0);
   const [selected, setSelected] = useState<Set<string>>(() => new Set());
@@ -52,6 +56,8 @@ export default function FinancialsInvoicesPage() {
     readPeople(conferenceId)
       .then(p => { if (!alive) return; setPeople(p); setError(''); })
       .catch(e => { if (alive) setError(friendlyError(e, 'The people billed could not be read. Try again in a moment.')); });
+    // The header is a nicety: if it cannot be read, the line is simply left out.
+    readDashboard(conferenceId).then(d => { if (alive) setHead(d); }).catch(() => { if (alive) setHead(null); });
     return () => { alive = false; };
   }, [conferenceId, attempt]);
 
@@ -88,9 +94,6 @@ export default function FinancialsInvoicesPage() {
   const money = (c: number, cur: string | null) =>
     !cur || cur.toUpperCase() === currency.toUpperCase() ? disp((c || 0) / 100) : cents(c, cur);
 
-  const sameCur = all.filter(p => !p.currency || p.currency.toUpperCase() === currency.toUpperCase());
-  const totalOwed = sameCur.reduce((s, p) => s + (p.closed ? 0 : p.owed_cents), 0);
-  const totalPaid = sameCur.reduce((s, p) => s + p.paid_cents, 0);
 
   const chosen = all.filter(p => selected.has(p.application_id));
   const payable = chosen.filter(p => p.open_invoice_ids.length > 0);
@@ -115,9 +118,22 @@ export default function FinancialsInvoicesPage() {
       <style>{INV_CSS}</style>
       {(step || personId) ? <style>{PURCHASE_CSS}</style> : null}
 
-      {people && (
-        <p className="gv-st-quiet" style={{ margin: '-14px 0 18px', fontSize: 14.5, fontVariantNumeric: 'tabular-nums' }}>
-          {all.length} {all.length === 1 ? 'person' : 'people'} billed · {money(totalOwed, null)} outstanding · {money(totalPaid, null)} paid
+      {head && (
+        <p className="gv-st-quiet" style={{ margin: '-14px 0 18px', fontSize: 14.5, fontVariantNumeric: 'tabular-nums', display: 'flex', flexWrap: 'wrap', alignItems: 'center', columnGap: 6, rowGap: 2 }}>
+          <span>{head.people_billed} {head.people_billed === 1 ? 'person' : 'people'} billed</span>
+          <span aria-hidden>·</span>
+          <span style={{ color: '#1C1410', fontWeight: 700 }}>{disp(head.outstanding.total_cents / 100)} outstanding</span>
+          {head.outstanding.unclaimed_cents > 0 && (
+            <>
+              <span aria-hidden>·</span>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, opacity: 0.8 }}>
+                {disp(head.outstanding.unclaimed_cents / 100)} not claimed yet
+                <InfoHint label="About not claimed yet" text="People you imported who have not made their Gavelling account yet. They can pay once they sign up" size={14} />
+              </span>
+            </>
+          )}
+          <span aria-hidden>·</span>
+          <span>{disp(head.received.total_cents / 100)} paid</span>
         </p>
       )}
       {financialsReadOnly && <p className="gv-st-quiet" style={{ marginBottom: 14 }}>{READ_ONLY_LINE}</p>}

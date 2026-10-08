@@ -26,6 +26,7 @@ import {
   NeuCard, NeuInset, NeuPill, NeuButton, NeuIconDisc, NeuProgress,
 } from '@/components/neu';
 import { DatePicker } from '@/components/DatePicker';
+import { formatMoney } from './shared';
 
 /** Approximate conversion between two known currencies (via finance.ts's
  *  canonical USD_FX table, no local copy); null when either rate is
@@ -114,9 +115,9 @@ function discountLabel(v: Voucher, displayCurrency?: string): string {
   const vCur = v.currency ?? '';
   if (displayCurrency && vCur && displayCurrency.toUpperCase() !== vCur.toUpperCase()) {
     const conv = convertApprox(v.amount, vCur, displayCurrency);
-    if (conv !== null) return `≈ ${currencySymbol(displayCurrency)}${formatFeeAmount(conv)} OFF`;
+    if (conv !== null) return `≈ ${formatMoney(conv, displayCurrency)} OFF`;
   }
-  return `${currencySymbol(vCur)}${formatFeeAmount(v.amount)} OFF`;
+  return `${formatMoney(v.amount, vCur || 'USD')} OFF`;
 }
 
 // Neumorphic input well, pressed-in, transparent field inside.

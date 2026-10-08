@@ -54,7 +54,7 @@ import ApplicationSourceMark, { ApplicationSourceChip } from '@/components/confe
 // Advisor/Secretariat/Other), so a chair/secretariat application's listed
 // conferences read consistently with how the applicant's own CV describes them.
 import { ENTRY_TYPE_MAP, type EntryType } from '@/components/CVEntryModal';
-import { friendlyError, UserFacingError } from '@/lib/friendlyError';
+import { friendlyError, plainOrFallback, UserFacingError } from '@/lib/friendlyError';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -3115,7 +3115,7 @@ export default function ApplicationsPage() {
     setActionError('');
     markBusy(app.id, true);
     // Optimistic: exactly what undoNotAttending writes for this row.
-    applyRow(app.id, { attending: true, payment_status: 'unpaid' });
+    applyRow(app.id, { attending: true });
 
     (async () => {
       const supabase = getAuthedClient(session.access_token);
@@ -3332,15 +3332,20 @@ export default function ApplicationsPage() {
     markBusy(app.id, true);
     applyRow(app.id, { payment_status: 'unpaid' });
 
+    // remove_fee_waiver is the only way to take a waiver off (prompt 99): it
+    // reopens their Registration invoice at today's price on the server.
     (async () => {
-      const supabase = getAuthedClient(session.access_token);
-      const { error } = await supabase.from('applications').update({ payment_status: 'unpaid' }).eq('id', app.id);
+      const supabase = await getFreshAuthedClient();
+      if (!supabase) throw new UserFacingError('Your session has expired. Please sign in again.');
+      const { data, error } = await supabase.rpc('remove_fee_waiver', { p_application_id: app.id });
       if (error) throw error;
+      const r = (data ?? null) as { ok?: boolean; error?: string } | null;
+      if (!r || r.ok !== true) throw new UserFacingError(plainOrFallback(r?.error, 'Could not remove the waiver. The change was reverted. Please try again.'));
     })()
       .then(scheduleReconcile)
-      .catch(() => {
+      .catch((e) => {
         restoreRow(prevRow);
-        setActionError('Could not remove the waiver. The change was reverted. Please try again.');
+        setActionError(friendlyError(e, 'Could not remove the waiver. The change was reverted. Please try again.'));
       })
       .finally(() => markBusy(app.id, false));
   }

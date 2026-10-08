@@ -376,7 +376,7 @@ export default function IndependentsView({ conference, showFlash }: Independents
 
     // Optimistic: exactly what undoNotAttending writes for this row.
     const snapshot = independents.find(m => m.id === app.id) ?? app;
-    patchIndependent(app.id, { attending: true, payment_status: 'unpaid' });
+    patchIndependent(app.id, { attending: true });
 
     (async () => {
       const result = await undoNotAttending(supabase, conference.id, app);
