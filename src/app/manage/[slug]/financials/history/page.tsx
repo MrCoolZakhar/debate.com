@@ -8,12 +8,12 @@
  */
 
 import { useEffect, useState } from 'react';
-import { CreditCard, MinusCircle, PenLine, Receipt, Undo2, type LucideIcon } from 'lucide-react';
+import { CreditCard, MinusCircle, PenLine, Undo2, type LucideIcon } from 'lucide-react';
 import { useManage } from '@/app/manage/[slug]/layout';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { invoiceLabel, centsToFee } from '@/lib/invoices';
-import { NEU, NEU_GRADIENTS, OUTFIT, NeuCard, NeuInset, NeuIconDisc } from '@/components/neu';
+import { NEU, OUTFIT, NeuCard, NeuInset } from '@/components/neu';
 import { inputStyle, mutedCaption, chipStyle, formatRowDate, roleLabel, methodIcon, sentenceCase } from '../shared';
 
 interface PaymentInvoice {
@@ -104,18 +104,7 @@ export default function FinancialsHistoryPage() {
 
   return (
     <section>
-      <div className="flex items-center gap-3 mb-3">
-        <NeuIconDisc gradient={NEU_GRADIENTS.forest} icon={Receipt} emoji="Receipt" size={36} />
-        <div>
-          <h2 style={{ fontFamily: OUTFIT, fontWeight: 900, fontSize: 18, color: NEU.ink, lineHeight: 1.15 }}>
-            Transaction History
-          </h2>
-          <p style={mutedCaption}>
-            Every payment recorded against this conference&apos;s invoices, newest first. The money log.
-          </p>
-        </div>
-      </div>
-
+      {/* The title ("Transactions") and its caption come from the Financials layout. */}
       {rows.length > 0 && (
         <div className="flex flex-wrap items-center gap-3 mb-4">
           <select value={typeFilter} onChange={e => setTypeFilter(e.target.value)} style={{ ...inputStyle, width: 'auto', cursor: 'pointer' }}>

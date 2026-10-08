@@ -30,11 +30,14 @@ import { getCountryByName, UN_COUNTRIES } from '@/lib/countries';
 import { ageAt } from '@/lib/age';
 import { checkInApplication, undoCheckIn } from '@/lib/checkIn';
 import { isPaymentsLive } from '@/lib/payments';
+import MarkPaidDialog from '../financials/MarkPaidDialog';
+import MarkUnpaidDialog from '../financials/MarkUnpaidDialog';
+import { cents as centsLabel } from '../financials/financialsApi';
 import {
   NEU, NEU_GRADIENTS, OUTFIT, NeuCard, NeuStatTile, NeuIconDisc,
 } from '@/components/neu';
 import {
-  poolForRole, fillFreeSpots, releasePoolSpot, POOL_SPOTS_COLUMN, MemberAvatar, markNotAttending, undoNotAttending,
+  poolForRole, fillFreeSpots, releasePoolSpot, MemberAvatar, markNotAttending, undoNotAttending,
 } from '@/app/manage/[slug]/assignment/delegationShared';
 import { LevelInsignia, LEVEL_ACCENT } from '@/app/account/accountUi';
 import { type CustomQuestion, type CustomAnswers, normalizeBlocks, questionsOf, displayAnswer, answerIsEmpty } from '@/lib/customQuestions';
@@ -1779,6 +1782,11 @@ export default function ApplicationsPage() {
   const [bulkRunning, setBulkRunning] = useState<{ done: number; total: number } | null>(null);
   const { draftNotices, pushDraftNotice, dismissDraftNotice } = useDraftNotices();
   const { confirm, modal: confirmModal } = useConfirmModal();
+  // Mark paid / unpaid go through the Financials dialogs and their RPCs only
+  // (mark_invoices_paid / mark_invoices_unpaid, prompt 93): this page never
+  // writes payment_status, the pool or the receipt email itself any more.
+  const [markPaidFor, setMarkPaidFor] = useState<{ ids: string[]; totalLabel: string; extraLine?: string; clear: boolean } | null>(null);
+  const [markUnpaidFor, setMarkUnpaidFor] = useState<{ ids: string[] } | null>(null);
   // Stale-response guard for background refetches.
   const loadSeq = useRef(0);
   /* ── The optimistic-patch ledger ────────────────────────────────────────
@@ -3187,160 +3195,102 @@ export default function ApplicationsPage() {
       .finally(() => markBusy(appId, false));
   }
 
-  // Returns the settled promise so runBulk can chunk instead of fanning out.
-  function handleMarkPaid(app: Application): Promise<void> {
-    if (!session || !conference || paymentsLive) return Promise.resolve();
-    if (busyIds.has(app.id)) { noteBusyClick(); return Promise.resolve(); }
-    const prevRow = applications.find(a => a.id === app.id) ?? app;
-
+  // Mark paid, single or bulk (prompt 93). Reads the open invoices of the
+  // chosen applications, leaves out any with a proof in review (those are
+  // decided in Financials, Things to do), and opens ONE MarkPaidDialog for all
+  // of them. The dialog calls mark_invoices_paid, which records the payment
+  // lines, settles the items (the delegation pool and coverage follow on the
+  // server), sends each payer one itemised receipt, and the server sends
+  // Payment received itself. Then the rows are read again; no optimistic badge.
+  async function openMarkPaid(apps: Application[], clear: boolean): Promise<void> {
+    if (!session || !conference || paymentsLive || apps.length === 0) return;
     setActionError('');
-    markBusy(app.id, true);
-    // Optimistic: the PAID badge appears immediately.
-    applyRow(app.id, { payment_status: 'paid', self_paid: true });
-
-    const supabase = getAuthedClient(session.access_token);
-    // PRIMARY: the payment mark itself. Invoice settlement, spot accounting
-    // and the receipt email all follow with the row already unlocked.
-    const primary = (async () => {
-      const { error } = await supabase.from('applications').update({ payment_status: 'paid', self_paid: true }).eq('id', app.id);
-      if (error) throw error;
-    })();
-
-    primary.catch(() => {}).then(() => markBusy(app.id, false));
-
-    return primary
-      .then(async () => {
-        // Settle their invoices too. This is NOT optional bookkeeping: the accept
-        // gate reads INVOICES (gates_acceptance, unsettled), never
-        // applications.payment_status, so marking someone paid without settling
-        // left them permanently un-acceptable — the organiser saw a green PAID
-        // badge next to "A required fee is unpaid", with ACCEPT greyed out and no
-        // way forward. It also left the ledger claiming nothing was collected.
-        //
-        // mark_invoice_paid is the same RPC the financials page uses: it writes
-        // the payment + batch rows, settles the invoice and runs
-        // settle_invoice_effects, so manual payments land identically wherever
-        // they are recorded.
-        //
-        // The read and the RPC are both checked explicitly: supabase-js
-        // resolves on a PostgREST error, so the catch below only ever sees a
-        // thrown network fault. Without this check a failed settlement was the
-        // exact symptom described above, silently.
-        try {
-          let settleFailure: string | null = null;
-          const { data: openInvoices, error: invoiceReadError } = await supabase
-            .from('invoices')
-            .select('id')
-            .eq('application_id', app.id)
-            .not('status', 'in', '(settled,waived,void)');
-          if (invoiceReadError) settleFailure = friendlyError(invoiceReadError, 'Please try again.');
-          for (const inv of (openInvoices ?? []) as { id: string }[]) {
-            if (settleFailure) break;
-            const { error: settleError } = await supabase.rpc('mark_invoice_paid', { p_invoice_id: inv.id });
-            if (settleError) settleFailure = friendlyError(settleError, 'Please try again.');
-          }
-          if (settleFailure) {
-            setActionError(`Marked paid, but their invoice could not be settled (${settleFailure}). They may still be blocked from acceptance. Settle it in Financials, under Invoices.`);
-          }
-        } catch {
-          setActionError('Marked paid, but their invoice could not be settled. They may still be blocked from acceptance. Settle it in Financials, under Invoices.');
+    try {
+      const supabase = getAuthedClient(session.access_token);
+      const { data: invs, error: invErr } = await supabase
+        .from('invoices')
+        .select('id, amount_cents, amount_paid_cents, currency')
+        .in('application_id', apps.map(a => a.id))
+        .not('status', 'in', '(settled,waived,void)');
+      if (invErr) throw invErr;
+      const open = ((invs ?? []) as { id: string; amount_cents: number; amount_paid_cents: number; currency: string }[])
+        .filter(i => i.amount_cents - (i.amount_paid_cents ?? 0) > 0);
+      let inReview = new Set<string>();
+      if (open.length > 0) {
+        const { data: pend, error: pendErr } = await supabase
+          .from('payments')
+          .select('invoice_id, batch_id')
+          .in('invoice_id', open.map(i => i.id))
+          .eq('status', 'pending')
+          .eq('method', 'manual');
+        if (pendErr) throw pendErr;
+        const rows = (pend ?? []) as { invoice_id: string; batch_id: string | null }[];
+        const batchIds = Array.from(new Set(rows.map(r => r.batch_id).filter((b): b is string => !!b)));
+        if (batchIds.length > 0) {
+          const { data: batches, error: bErr } = await supabase
+            .from('payment_batches').select('id').in('id', batchIds).eq('status', 'pending');
+          if (bErr) throw bErr;
+          const pendingBatches = new Set(((batches ?? []) as { id: string }[]).map(b => b.id));
+          inReview = new Set(rows.filter(r => r.batch_id && pendingBatches.has(r.batch_id)).map(r => r.invoice_id));
         }
-
-        // Secondary effects, a failure here must NOT roll back the payment mark.
-        try {
-          const pool = poolForRole(app.role);
-          if (app.society_id && pool) {
-            const spotsColumn = POOL_SPOTS_COLUMN[pool];
-            const { data: soc } = await supabase.from('societies').select(spotsColumn).eq('id', app.society_id).single();
-            const current = (soc as Record<string, number> | null)?.[spotsColumn] ?? 0;
-            await supabase.from('societies').update({ [spotsColumn]: current + 1 }).eq('id', app.society_id);
-            await fillFreeSpots(supabase, conference.id, app.society_id, pool);
-          }
-
-          const result = await queueEventEmail(supabase, conference.id, 'payment_received', [app.id]);
-          notifyIfNeeded(result, pushDraftNotice);
-        } catch {
-          setActionError('Marked paid, but a follow-up step (spot update / email) failed. Refresh to verify.');
-        }
-
-        // fillFreeSpots may have promoted OTHER members to paid, reconcile.
-        scheduleReconcile();
-      })
-      .catch(() => {
-        restoreRow(prevRow);
-        setActionError('Could not mark the application paid. The change was reverted. Please try again.');
+      }
+      const markable = open.filter(i => !inReview.has(i.id));
+      if (markable.length === 0) {
+        setActionError(inReview.size > 0
+          ? 'Their payment proof is waiting for review. Accept or deny it in Financials, under Things to do.'
+          : 'There is nothing left to mark paid for this selection.');
+        return;
+      }
+      const total = markable.reduce((s, i) => s + (i.amount_cents - (i.amount_paid_cents ?? 0)), 0);
+      const left = inReview.size;
+      setMarkPaidFor({
+        ids: markable.map(i => i.id),
+        totalLabel: centsLabel(total, markable[0].currency),
+        extraLine: left > 0 ? `${left} item${left === 1 ? ' has' : 's have'} a proof in review, so ${left === 1 ? 'it is' : 'they are'} left out. Review ${left === 1 ? 'it' : 'them'} in Financials, under Things to do.` : undefined,
+        clear,
       });
+    } catch (e) {
+      setActionError(friendlyError(e, 'Their invoices could not be read. Try again in a moment.'));
+    }
   }
 
+  function handleMarkPaid(app: Application): Promise<void> {
+    if (busyIds.has(app.id)) { noteBusyClick(); return Promise.resolve(); }
+    return openMarkPaid([app], false);
+  }
+
+  // Mark unpaid (prompt 93): the application's manually paid items go back to
+  // owed through mark_invoices_unpaid, after the same confirm as before plus
+  // an optional note. Card-paid items are left out (they are refunded, never
+  // marked unpaid); the pool and coverage undo themselves on the server.
   async function handleMarkUnpaid(app: Application) {
     if (!session || paymentsLive) return;
     if (busyIds.has(app.id)) { noteBusyClick(); return; }
-    const { confirmed } = await confirm({
-      title: 'Mark this application unpaid?',
-      body: 'If their payment opened a delegation spot, one spot will be removed.',
-      confirmLabel: 'Mark unpaid',
-      danger: true,
-    });
-    if (!confirmed) return;
-    const prevRow = applications.find(a => a.id === app.id) ?? app;
-
     setActionError('');
-    markBusy(app.id, true);
-    applyRow(app.id, { payment_status: 'unpaid', self_paid: false });
-
-    (async () => {
+    try {
       const supabase = getAuthedClient(session.access_token);
-      const { error } = await supabase.from('applications').update({ payment_status: 'unpaid', self_paid: false }).eq('id', app.id);
-      if (error) throw error;
-
-      // Mirror of handleMarkPaid: reopen anything we settled on their behalf,
-      // so the ledger tracks the payment mark in BOTH directions. Without this
-      // the reverse inconsistency appears — an application reading unpaid while
-      // its invoice still claims the money arrived.
-      // Same explicit checking as handleMarkPaid, and for the same reason: an
-      // RPC that fails on the server resolves here, so the catch is not enough.
-      try {
-        let reopenFailure: string | null = null;
-        const { data: settled, error: settledReadError } = await supabase
-          .from('invoices')
-          .select('id')
-          .eq('application_id', app.id)
-          .eq('status', 'settled');
-        if (settledReadError) reopenFailure = friendlyError(settledReadError, 'Please try again.');
-        for (const inv of (settled ?? []) as { id: string }[]) {
-          if (reopenFailure) break;
-          const { error: reopenError } = await supabase.rpc('mark_invoice_unpaid', { p_invoice_id: inv.id });
-          if (reopenError) reopenFailure = friendlyError(reopenError, 'Please try again.');
-        }
-        if (reopenFailure) {
-          setActionError(`Marked unpaid, but their invoice still shows as settled (${reopenFailure}). Reopen it in Financials, under Invoices.`);
-        }
-      } catch {
-        setActionError('Marked unpaid, but their invoice still shows as settled. Reopen it in Financials, under Invoices.');
+      const { data: invs, error: invErr } = await supabase
+        .from('invoices').select('id').eq('application_id', app.id).in('status', ['settled', 'partial']);
+      if (invErr) throw invErr;
+      const ids = ((invs ?? []) as { id: string }[]).map(i => i.id);
+      if (ids.length === 0) { setActionError('Nothing was marked paid for this application.'); return; }
+      const { data: pays, error: payErr } = await supabase
+        .from('payments').select('invoice_id, method, amount_cents')
+        .in('invoice_id', ids).eq('status', 'succeeded').gt('amount_cents', 0);
+      if (payErr) throw payErr;
+      const rows = (pays ?? []) as { invoice_id: string; method: string | null; amount_cents: number }[];
+      const card = new Set(rows.filter(r => r.method === 'stripe').map(r => r.invoice_id));
+      const manual = ids.filter(id => !card.has(id) && rows.some(r => r.invoice_id === id && r.method === 'manual'));
+      if (manual.length === 0) {
+        setActionError(card.size > 0
+          ? 'Card payments can only be refunded. Refund them in Financials, under Invoices.'
+          : 'Nothing was marked paid for this application.');
+        return;
       }
-
-      try {
-        const pool = poolForRole(app.role);
-        // Only a SELF-FUNDED paid spot ever added to the pool (handleMarkPaid,
-        // settle_invoice_effects), so only that one comes off. A member the
-        // delegation covered used an existing spot; taking one away here
-        // quietly shrank every delegation whose covered member was unmarked.
-        if (app.society_id && pool && prevRow.payment_status === 'paid' && prevRow.self_paid) {
-          const spotsColumn = POOL_SPOTS_COLUMN[pool];
-          const { data: soc } = await supabase.from('societies').select(spotsColumn).eq('id', app.society_id).single();
-          const current = (soc as Record<string, number> | null)?.[spotsColumn] ?? 0;
-          await supabase.from('societies').update({ [spotsColumn]: Math.max(0, current - 1) }).eq('id', app.society_id);
-        }
-      } catch {
-        setActionError('Marked unpaid, but the delegation spot count could not be updated. Refresh to verify.');
-      }
-    })()
-      .then(scheduleReconcile)
-      .catch(() => {
-        restoreRow(prevRow);
-        setActionError('Could not mark the application unpaid. The change was reverted. Please try again.');
-      })
-      .finally(() => markBusy(app.id, false));
+      setMarkUnpaidFor({ ids: manual });
+    } catch (e) {
+      setActionError(friendlyError(e, 'Their invoices could not be read. Try again in a moment.'));
+    }
   }
 
   // Re-send the pay-now email as a reminder (#8). payment_available IS the
@@ -5085,7 +5035,7 @@ export default function ApplicationsPage() {
             )}
             {bulkPayable.length > 0 && (
               <button
-                onClick={() => runBulk(bulkPayable, { title: `Mark ${bulkPayable.length} as paid?`, body: 'Each will be marked paid (self-funded); delegation spot accounting runs per applicant.', confirmLabel: 'Mark all paid' }, a => handleMarkPaid(a))}
+                onClick={() => { void openMarkPaid(bulkPayable, true); }}
                 className="inline-flex items-center gap-1.5 focus:outline-none"
                 style={{
                   padding: '8px 15px', borderRadius: 999, border: 'none', cursor: 'pointer',
@@ -5835,6 +5785,25 @@ export default function ApplicationsPage() {
       })()}
 
       {confirmModal}
+      {markPaidFor && conference && (
+        <MarkPaidDialog
+          conferenceId={conference.id}
+          invoiceIds={markPaidFor.ids}
+          totalLabel={markPaidFor.totalLabel}
+          extraLine={markPaidFor.extraLine}
+          onClose={() => setMarkPaidFor(null)}
+          onDone={() => { if (markPaidFor.clear) clearSelection(); setMarkPaidFor(null); scheduleReconcile(); }}
+        />
+      )}
+      {markUnpaidFor && (
+        <MarkUnpaidDialog
+          invoiceIds={markUnpaidFor.ids}
+          title="Mark this application unpaid?"
+          body="If their payment opened a delegation spot, one spot will be removed."
+          onClose={() => setMarkUnpaidFor(null)}
+          onDone={() => { setMarkUnpaidFor(null); scheduleReconcile(); }}
+        />
+      )}
     </div>
   );
 }

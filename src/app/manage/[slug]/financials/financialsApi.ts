@@ -227,3 +227,48 @@ export function cents(value: number | null | undefined, currency: string): strin
 export function notifyMoneyTodoChanged() {
   if (typeof window !== 'undefined') window.dispatchEvent(new Event('gv-financials-todo-changed'));
 }
+
+// ── Marking paid and unpaid (prompt 93) ────────────────────────────────────
+// The ONE way an organizer records money that came in outside Gavelling, and
+// takes it back: used by the Invoices page and the Applications page alike.
+// mark_invoices_paid writes a manual payment line per item, settles it (the
+// delegation pool and coverage follow on the server) and emails each payer one
+// itemized receipt. mark_invoices_unpaid adds a minus line per manual payment
+// and reopens the items; it refuses card-paid items. Nothing on the client
+// writes applications.payment_status.
+
+export type ManualMethod = 'bank_transfer' | 'cash' | 'other';
+
+export function markInvoicesPaid(invoiceIds: string[], method: ManualMethod, note: string, proofPath: string | null) {
+  return rpcWrite('mark_invoices_paid', {
+    p_invoice_ids: invoiceIds, p_method: method, p_note: note.trim() || null, p_proof_path: proofPath,
+  }, 'These could not be marked paid. Try again in a moment.');
+}
+
+export function markInvoicesUnpaid(invoiceIds: string[], note: string) {
+  return rpcWrite('mark_invoices_unpaid', { p_invoice_ids: invoiceIds, p_note: note.trim() || null },
+    'These could not be marked unpaid. Try again in a moment.');
+}
+
+/** Uploads a proof attached while marking paid to payment-proofs/<conference>/marked/. */
+export async function uploadMarkedProof(conferenceId: string, file: File): Promise<{ path: string } | { error: string }> {
+  const fallback = 'The proof could not be uploaded. Try again, or mark them paid without it.';
+  try {
+    const c = await client();
+    const safe = file.name.replace(/[^A-Za-z0-9._-]+/g, '-').slice(-80) || 'proof';
+    const path = `${conferenceId}/marked/${Date.now()}-${safe}`;
+    const { error } = await c.storage.from('payment-proofs').upload(path, file, { upsert: false, contentType: file.type || undefined });
+    if (error) return { error: friendlyError(error, fallback) };
+    return { path };
+  } catch (e) {
+    return { error: friendlyError(e, fallback) };
+  }
+}
+
+/** An image or a PDF, up to 10 MB: the one rule for every proof an organizer attaches. */
+export function proofFileProblem(f: File): string | null {
+  const ok = f.type.startsWith('image/') || f.type === 'application/pdf' || /\.pdf$/i.test(f.name);
+  if (!ok) return 'Attach an image or a PDF.';
+  if (f.size > 10 * 1024 * 1024) return 'That file is over 10 MB. Attach a smaller one.';
+  return null;
+}
