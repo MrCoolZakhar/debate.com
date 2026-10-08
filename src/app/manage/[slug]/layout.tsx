@@ -190,9 +190,11 @@ export interface NavBadges {
   assignment: number;
   communications: number;
   financialAid: number;
+  /** Proofs waiting plus open money to-dos (money_things_to_do_count). */
+  financials: number;
 }
 
-const NO_BADGES: NavBadges = { applications: 0, assignment: 0, communications: 0, financialAid: 0 };
+const NO_BADGES: NavBadges = { applications: 0, assignment: 0, communications: 0, financialAid: 0, financials: 0 };
 
 interface NavItem {
   icon: LucideIcon;
@@ -241,7 +243,7 @@ const NAV_SECTIONS = (slug: string, badges: NavBadges = NO_BADGES): NavSection[]
   {
     header: 'FINANCIAL',
     items: [
-      { icon: CreditCard,     label: 'Financials',    href: `/manage/${slug}/financials`,    external: false, badge: 0 },
+      { icon: CreditCard,     label: 'Financials',    href: `/manage/${slug}/financials`,    external: false, badge: badges.financials },
       { icon: HeartHandshake, label: 'Financial Aid', href: `/manage/${slug}/financial-aid`, external: false, badge: badges.financialAid },
     ],
   },
@@ -740,7 +742,7 @@ export default function ManageLayout({ children }: { children: React.ReactNode }
    *  delegates with no committee yet, pending financial aid requests. Their own
    *  state, refreshed on navigation, so a stale count never outlives the page
    *  the organiser just cleared. */
-  const [workBadges, setWorkBadges] = useState({ applications: 0, assignment: 0, financialAid: 0 });
+  const [workBadges, setWorkBadges] = useState({ applications: 0, assignment: 0, financialAid: 0, financials: 0 });
 
   // Nav badge: threads WAITING ON A REPLY (waitingOnReply.ts, the same
   // definition the Communications inbox rows use). Open, not a swap notice,
@@ -790,7 +792,7 @@ export default function ManageLayout({ children }: { children: React.ReactNode }
   const loadWorkBadges = useCallback(async () => {
     if (!conferenceId || !accessToken) return;
     const supabase = getAuthedClient(accessToken);
-    const [pendingApps, unallocated, pendingAid] = await Promise.all([
+    const [pendingApps, unallocated, pendingAid, moneyTodo] = await Promise.all([
       supabase.from('applications').select('id', { count: 'exact', head: true })
         .eq('conference_id', conferenceId).eq('status', 'submitted'),
       supabase.from('applications').select('id', { count: 'exact', head: true })
@@ -798,12 +800,15 @@ export default function ManageLayout({ children }: { children: React.ReactNode }
         .in('role', ['delegate', 'head-delegate']).eq('attending', true),
       supabase.from('financial_aid_requests').select('id', { count: 'exact', head: true })
         .eq('conference_id', conferenceId).eq('status', 'pending'),
+      // Financials: proofs waiting plus open money to-dos (1 Oct 2026).
+      supabase.rpc('money_things_to_do_count', { p_conference_id: conferenceId }),
     ]);
     // A failed read leaves that badge at zero rather than inventing a number.
     setWorkBadges({
       applications: pendingApps.count ?? 0,
       assignment: unallocated.count ?? 0,
       financialAid: pendingAid.count ?? 0,
+      financials: !moneyTodo.error && typeof moneyTodo.data === 'number' ? moneyTodo.data : 0,
     });
   }, [conferenceId, accessToken]);
 
@@ -823,6 +828,13 @@ export default function ManageLayout({ children }: { children: React.ReactNode }
     window.addEventListener('gv-inbox-read-changed', onInboxReadChanged);
     return () => window.removeEventListener('gv-inbox-read-changed', onInboxReadChanged);
   }, [loadInboxBadge]);
+
+  // The Financials Things to do pop-up nudges the rail after each action.
+  useEffect(() => {
+    function onMoneyTodoChanged() { void loadWorkBadges(); }
+    window.addEventListener('gv-financials-todo-changed', onMoneyTodoChanged);
+    return () => window.removeEventListener('gv-financials-todo-changed', onMoneyTodoChanged);
+  }, [loadWorkBadges]);
 
   // Auth gate
   useEffect(() => {

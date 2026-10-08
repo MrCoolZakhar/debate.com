@@ -1,131 +1,70 @@
 'use client';
 
 /**
- * Shell for every route under /manage/[slug]/financials: header + the
- * display-currency switcher (via FinancialsCurrencyProvider, see shared.tsx)
- * + a sub-nav of real routes (Overview / History / Invoices / Settings).
+ * Shell for every route under /manage/[slug]/financials (1 Oct 2026, prompt 92).
+ * The tabs are gone: the dashboard (the base route) draws its own header with
+ * the key numbers and the display-currency picker, and History, Invoices and
+ * Settings are reached from its cards. Those three get a small "Back to
+ * Financials" link, the title and the same picker here. The display currency
+ * lives in FinancialsCurrencyProvider (shared.tsx) for all of them.
  */
 
-import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { History, LayoutGrid, Receipt, Settings as SettingsIcon } from 'lucide-react';
+import { ArrowLeft } from 'lucide-react';
 import { useManage } from '@/app/manage/[slug]/layout';
-import {
-  NEU, NEU_GRADIENTS, OUTFIT, EASE, type NeuGradient,
-} from '@/components/neu';
+import { NEU, OUTFIT } from '@/components/neu';
+import { GoldWord } from '@/components/BrandHeading';
 import { CurrencyPicker } from '@/components/CurrencyPicker';
 import { FinancialsCurrencyProvider, useFinancialsCurrency, mutedCaption } from './shared';
 
-// Local mirror of NeuPill's visual treatment, but rendered as a real <Link>
-// so the sub-nav is genuine navigation (usePathname-driven active state),
-// not tab-switch state.
-function grad(g: NeuGradient) {
-  return `linear-gradient(135deg, ${g[0]}, ${g[1]})`;
-}
-
-function NavPill({ href, active, icon: Icon, children }: {
-  href: string;
-  active: boolean;
-  icon: React.ComponentType<{ size?: number; strokeWidth?: number }>;
-  children: React.ReactNode;
-}) {
-  const [hovered, setHovered] = useState(false);
-  const gradient = NEU_GRADIENTS.forest;
-  return (
-    <Link
-      href={href}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-      className="inline-flex items-center gap-1.5 focus:outline-none"
-      style={{
-        padding: '4px 12px',
-        borderRadius: 999,
-        fontFamily: OUTFIT,
-        fontSize: 11,
-        fontWeight: 800,
-        backgroundColor: active ? undefined : NEU.surface,
-        background: active ? grad(gradient) : undefined,
-        color: active ? '#FFFFFF' : hovered ? NEU.forest : NEU.ink,
-        boxShadow: active ? `0 3px 8px ${gradient[0]}55, ${NEU.outSm}` : hovered ? NEU.outSmHover : NEU.outSm,
-        transition: `box-shadow 200ms ${EASE}, color 200ms ${EASE}`,
-        textDecoration: 'none',
-      }}
-    >
-      <Icon size={12} strokeWidth={2.5} />
-      {children}
-    </Link>
-  );
-}
-
-function FinancialsHeader({ acronym }: { acronym: string }) {
+function SubPageHeader({ slug }: { slug: string }) {
   const { currency, displayCurrency, setDisplayCurrency, currencyOptions, converted } = useFinancialsCurrency();
   return (
-    <div className="flex items-start justify-between gap-4 flex-wrap mb-5">
-      <div>
-        <p
-          className="mb-1"
-          style={{ fontFamily: OUTFIT, fontSize: 11, fontWeight: 800, letterSpacing: '0.14em', color: NEU.deepGold, textTransform: 'uppercase' }}
-        >
-          {acronym} · Financials
-        </p>
-        <div className="flex items-center gap-3 flex-wrap">
-          <h1 style={{ fontFamily: OUTFIT, fontWeight: 900, fontSize: 26, color: NEU.ink, letterSpacing: '-0.01em' }}>
-            Financials
-          </h1>
-          {/* Display-currency switcher. Was a horizontally scrolling row of
-              every FX-backed code, which on a phone meant swiping a hidden
-              strip to find one. Now the shared searchable picker, limited to
-              the same `currencyOptions` set, and inert when the conference
-              currency is the only one we hold a rate for. */}
-          <CurrencyPicker
-            value={displayCurrency}
-            onChange={setDisplayCurrency}
-            options={currencyOptions}
-            variant="pill"
-            showName
-            disabled={currencyOptions.length <= 1}
-            ariaLabel="Display currency"
-          />
-        </div>
-        {converted && (
-          <p className="mt-1" style={mutedCaption}>
-            Approximate conversion: payments settle in {currency}.
-          </p>
-        )}
+    <div className="mb-6">
+      <Link
+        href={`/manage/${slug}/financials`}
+        className="inline-flex items-center gap-1.5 mb-3 focus:outline-none focus-visible:underline"
+        style={{ fontFamily: OUTFIT, fontSize: 13.5, fontWeight: 700, color: NEU.forest, textDecoration: 'underline', textUnderlineOffset: 3 }}
+      >
+        <ArrowLeft size={15} strokeWidth={2.4} aria-hidden />
+        Back to Financials
+      </Link>
+      <div className="flex items-center justify-between gap-4 flex-wrap">
+        <h1 style={{ fontFamily: OUTFIT, fontWeight: 900, fontSize: 30, color: NEU.ink, letterSpacing: '-0.02em', margin: 0 }}>
+          <GoldWord tone="light">Financials</GoldWord>
+        </h1>
+        <CurrencyPicker
+          value={displayCurrency}
+          onChange={setDisplayCurrency}
+          options={currencyOptions}
+          variant="pill"
+          showName
+          disabled={currencyOptions.length <= 1}
+          ariaLabel="Display currency"
+        />
       </div>
-    </div>
-  );
-}
-
-function FinancialsSubNav({ slug }: { slug: string }) {
-  const pathname = usePathname();
-  const base = `/manage/${slug}/financials`;
-  const isOverview = pathname === base;
-  const isHistory = pathname?.startsWith(`${base}/history`) ?? false;
-  const isInvoices = pathname?.startsWith(`${base}/invoices`) ?? false;
-  const isSettings = pathname?.startsWith(`${base}/settings`) ?? false;
-
-  return (
-    <div className="flex items-center gap-2 mb-6 flex-wrap">
-      <NavPill href={base} active={isOverview} icon={LayoutGrid}>Overview</NavPill>
-      <NavPill href={`${base}/history`} active={isHistory} icon={History}>History</NavPill>
-      <NavPill href={`${base}/invoices`} active={isInvoices} icon={Receipt}>Invoices</NavPill>
-      <NavPill href={`${base}/settings`} active={isSettings} icon={SettingsIcon}>Settings</NavPill>
+      {converted && (
+        <p className="mt-1" style={mutedCaption}>
+          Approximate conversion: payments settle in {currency}
+        </p>
+      )}
     </div>
   );
 }
 
 export default function FinancialsLayout({ children }: { children: React.ReactNode }) {
   const { conference } = useManage();
+  const pathname = usePathname();
   if (!conference) return null;
+  const base = `/manage/${conference.slug}/financials`;
+  const isDashboard = pathname === base || pathname === `${base}/`;
 
   return (
     <FinancialsCurrencyProvider conference={conference}>
       <div className="px-6 md:px-10 py-8">
         <div style={{ maxWidth: 1020, margin: '0 auto' }}>
-          <FinancialsHeader acronym={conference.acronym} />
-          <FinancialsSubNav slug={conference.slug} />
+          {!isDashboard && <SubPageHeader slug={conference.slug} />}
           {children}
         </div>
       </div>
