@@ -15,12 +15,11 @@ import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { useConfirmModal } from '@/components/ConfirmModal';
 import { CurrencyPicker } from '@/components/CurrencyPicker';
-import { formatFee } from '@/lib/finance';
 import { PillToggle } from '@/app/account/accountUi';
 import {
   NEU, NEU_GRADIENTS, OUTFIT, NeuCard, NeuButton, NeuIconDisc,
 } from '@/components/neu';
-import { inputStyle, fieldLabelStyle } from './shared';
+import { inputStyle, fieldLabelStyle, formatMoney } from './shared';
 
 const TARGET_OPTIONS = [
   { value: 'per_delegate', label: 'Every delegate' },
@@ -47,7 +46,13 @@ interface Addon {
   created_at: string;
 }
 
-export default function AddonsSection({ conference }: { conference: Conference }) {
+export default function AddonsSection({ conference, bare = false, renderStats }: {
+  conference: Conference;
+  /** Inside a pop-up (prompt 94): no section header and no top margin. */
+  bare?: boolean;
+  /** Extra numbers drawn under each add-on (bought, not paid yet, revenue). */
+  renderStats?: (addonId: string) => React.ReactNode;
+}) {
   const { session } = useAuth();
   const { confirm, modal: confirmModal } = useConfirmModal();
 
@@ -187,18 +192,20 @@ export default function AddonsSection({ conference }: { conference: Conference }
   const canCreate = label.trim().length > 0 && Number(amount) > 0 && !creating;
 
   return (
-    <section className="mt-8">
+    <section className={bare ? undefined : 'mt-8'}>
+      {!bare && (
       <div className="flex items-center gap-3 mb-4">
-        <NeuIconDisc gradient={NEU_GRADIENTS.sage} icon={Package} emoji="Package" size={36} />
-        <div>
-          <h2 style={{ fontFamily: OUTFIT, fontWeight: 900, fontSize: 18, color: NEU.ink, lineHeight: 1.15 }}>
-            Add-ons
-          </h2>
-          <p style={{ fontFamily: OUTFIT, fontSize: 11.5, color: NEU.muted }}>
-            Optional extras applicants can pay for from their invoices. Never required, never gates acceptance.
-          </p>
+          <NeuIconDisc gradient={NEU_GRADIENTS.sage} icon={Package} emoji="Package" size={36} />
+          <div>
+            <h2 style={{ fontFamily: OUTFIT, fontWeight: 900, fontSize: 18, color: NEU.ink, lineHeight: 1.15 }}>
+              Add-ons
+            </h2>
+            <p style={{ fontFamily: OUTFIT, fontSize: 11.5, color: NEU.muted }}>
+              Optional extras applicants can pay for from their invoices. Never required, never gates acceptance.
+            </p>
+          </div>
         </div>
-      </div>
+      )}
 
       {error && (
         <p className="text-xs font-semibold mb-3" style={{ color: '#8B2020', fontFamily: OUTFIT }}>{error}</p>
@@ -308,9 +315,10 @@ export default function AddonsSection({ conference }: { conference: Conference }
                     <p style={{ fontFamily: OUTFIT, fontSize: 11, color: NEU.muted }}>
                       {targetLabel(a.applies_to)}
                     </p>
+                    {renderStats ? renderStats(a.id) : null}
                   </div>
                   <span style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 800, color: NEU.ink, fontVariantNumeric: 'tabular-nums' }}>
-                    {formatFee(a.amount_cents / 100, a.currency)}
+                    {formatMoney(a.amount_cents / 100, a.currency)}
                   </span>
                   <PillToggle value={a.active} onChange={() => handleToggleActive(a)} size="sm" />
                   <button

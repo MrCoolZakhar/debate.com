@@ -33,7 +33,11 @@ interface SurchargeRow {
   gates_acceptance: boolean;
 }
 
-export default function ApplicationFeeSection({ conference }: { conference: Conference }) {
+export default function ApplicationFeeSection({ conference, bare = false }: {
+  conference: Conference;
+  /** Inside a pop-up (prompt 94): no section header and no top margin. */
+  bare?: boolean;
+}) {
   const { session } = useAuth();
   const [existing, setExisting] = useState<SurchargeRow | null>(null);
   const [loading, setLoading] = useState(true);
@@ -119,18 +123,20 @@ export default function ApplicationFeeSection({ conference }: { conference: Conf
   }
 
   return (
-    <section className="mt-8">
+    <section className={bare ? undefined : 'mt-8'}>
+      {!bare && (
       <div className="flex items-center gap-3 mb-4">
-        <NeuIconDisc gradient={NEU_GRADIENTS.amber} icon={ShieldAlert} emoji="Locked" size={36} />
-        <div>
-          <h2 style={{ fontFamily: OUTFIT, fontWeight: 900, fontSize: 18, color: NEU.ink, lineHeight: 1.15 }}>
-            Conference Registration Fee
-          </h2>
-          <p style={{ fontFamily: OUTFIT, fontSize: 11.5, color: NEU.muted }}>
-            A registration charge collected alongside conference fees. Set whether it must be paid before you can accept an applicant.
-          </p>
+          <NeuIconDisc gradient={NEU_GRADIENTS.amber} icon={ShieldAlert} emoji="Locked" size={36} />
+          <div>
+            <h2 style={{ fontFamily: OUTFIT, fontWeight: 900, fontSize: 18, color: NEU.ink, lineHeight: 1.15 }}>
+              Conference Registration Fee
+            </h2>
+            <p style={{ fontFamily: OUTFIT, fontSize: 11.5, color: NEU.muted }}>
+              A registration charge collected alongside conference fees. Set whether it must be paid before you can accept an applicant.
+            </p>
+          </div>
         </div>
-      </div>
+      )}
 
       {error && (
         <p className="text-xs font-semibold mb-3" style={{ color: '#8B2020', fontFamily: OUTFIT }}>{error}</p>

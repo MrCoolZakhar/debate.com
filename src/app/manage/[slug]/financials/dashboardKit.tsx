@@ -82,6 +82,9 @@ export const DASH_CSS = `
 .gv-fd-minus{color:${DANGER}}
 .gv-fd-note{margin:0;font-size:13px;line-height:1.5;color:${INK_SOFT}}
 .gv-fd-links{display:flex;gap:18px;flex-wrap:wrap}
+/* A footer that stays at the bottom of a pop-up while the content above scrolls. */
+.gv-fd-footbar{position:sticky;bottom:0;z-index:2;display:flex;gap:10px;flex-wrap:wrap;margin:6px -28px -26px;padding:14px 28px calc(16px + env(safe-area-inset-bottom,0px));background:#F6F3EC;box-shadow:0 -1px 0 ${LINE}}
+@media (max-width:480px){.gv-fd-footbar .gv-st-btn{flex:1 1 140px}}
 
 /* Fields in the pop-ups */
 .gv-fd-label{display:block;margin:0 0 6px;font-size:13.5px;font-weight:700;color:${INK}}

@@ -13,6 +13,7 @@
 import { getFreshAuthedClient } from '@/lib/supabase-auth';
 import { friendlyError, plainOrFallback, UserFacingError } from '@/lib/friendlyError';
 import { extractFunctionErrorMessage } from '@/lib/payments';
+import { formatCents } from './shared';
 
 export type MoneyKind = 'role_fee' | 'pledge_spot' | 'advisor_spot' | 'app_fee' | 'addon' | 'surcharge';
 export const KIND_ORDER: MoneyKind[] = ['role_fee', 'pledge_spot', 'advisor_spot', 'app_fee', 'addon', 'surcharge'];
@@ -93,8 +94,6 @@ export interface ThingsToDo { proofs: ProofThing[]; todos: TodoThing[] }
 
 /** A refundable item, as the refund dialog takes it (kept general for Invoices). */
 export interface RefundItem { invoice_id: string; label: string; amount_cents: number; paid_by_card: boolean }
-
-const n = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : 0);
 
 async function client() {
   const c = await getFreshAuthedClient();
@@ -215,12 +214,7 @@ export async function uploadRefundProof(conferenceId: string, file: File): Promi
 
 /** Minor units as money in a currency, for amounts that are not converted. */
 export function cents(value: number | null | undefined, currency: string): string {
-  const amount = n(value) / 100;
-  try {
-    return new Intl.NumberFormat('en-US', { style: 'currency', currency: currency || 'USD' }).format(amount);
-  } catch {
-    return `${currency} ${amount.toFixed(2)}`;
-  }
+  return formatCents(value, currency);
 }
 
 /** Tells the rail badge to re-read after a money action. */
@@ -271,4 +265,30 @@ export function proofFileProblem(f: File): string | null {
   if (!ok) return 'Attach an image or a PDF.';
   if (f.size > 10 * 1024 * 1024) return 'That file is over 10 MB. Attach a smaller one.';
   return null;
+}
+
+// ── Refunding the difference after a move to a cheaper ticket (prompt 94) ──
+// The server keeps the ticket paid and drops its price to the new role's,
+// refunds only the difference, emails the payer and closes the to-do.
+
+/** Card-paid ticket: refund-items with { todoId, difference: true }. */
+export async function refundDifferenceByCard(todoId: string): Promise<WriteResult> {
+  const fallback = 'The refund could not be sent. Try again in a moment.';
+  try {
+    const c = await client();
+    const { data, error } = await c.functions.invoke('refund-items', { body: { todoId, difference: true } });
+    if (error) return { ok: false, error: plainOrFallback(await extractFunctionErrorMessage(error), fallback) };
+    const a = (data ?? null) as Record<string, unknown> | null;
+    if (!a || a.ok !== true) return { ok: false, error: plainOrFallback(a?.error, fallback) };
+    return { ok: true, data: a };
+  } catch (e) {
+    return { ok: false, error: friendlyError(e, fallback) };
+  }
+}
+
+/** Any other way the ticket was paid: the organizer sent it, now records it. */
+export function recordRefundDifference(todoId: string, method: ManualMethod, proofPath: string | null, note: string) {
+  return rpcWrite('record_refund_difference', {
+    p_todo_id: todoId, p_method: method, p_proof_path: proofPath, p_note: note.trim() || null,
+  }, 'The refund could not be recorded. Try again in a moment.');
 }

@@ -346,6 +346,35 @@ export function useInvoiceTotals() {
   return { totals, loading };
 }
 
+// ── formatMoney: the ONE way Financials writes an amount (prompt 94) ─────────
+// Thousands separators in the reader's own locale ("₹5,17,000", "$1,970"),
+// the currency's symbol, and decimals only when the amount has them (a
+// zero-decimal currency never shows any). `amount` is MAJOR units.
+const moneyFormatters = new Map<string, Intl.NumberFormat>();
+export function formatMoney(amount: number, currency: string): string {
+  const cur = (currency || 'USD').toUpperCase();
+  const whole = Math.abs(amount - Math.round(amount)) < 0.005;
+  const key = `${cur}:${whole ? 0 : 1}`;
+  let f = moneyFormatters.get(key);
+  if (!f) {
+    try {
+      f = new Intl.NumberFormat(undefined, whole
+        ? { style: 'currency', currency: cur, maximumFractionDigits: 0, minimumFractionDigits: 0 }
+        : { style: 'currency', currency: cur });
+    } catch {
+      return formatFee(amount, cur);
+    }
+    moneyFormatters.set(key, f);
+  }
+  return f.format(amount);
+}
+
+/** Minor units (cents) to formatMoney. */
+export function formatCents(value: number | null | undefined, currency: string): string {
+  const v = typeof value === 'number' && Number.isFinite(value) ? value : 0;
+  return formatMoney(v / 100, currency);
+}
+
 // ── FinancialsCurrencyContext ────────────────────────────────────────────────
 // All figures can be re-displayed in another currency via the header
 // switcher, a static approximate FX table (see VouchersSection.tsx, which
@@ -400,9 +429,9 @@ export function FinancialsCurrencyProvider({ conference, children }: { conferenc
     : [currency];
 
   function disp(n: number): string {
-    if (!converted) return formatFee(n, currency);
+    if (!converted) return formatMoney(n, currency);
     const c = convertApprox(n, currency, displayCurrency);
-    return c === null ? formatFee(n, currency) : `≈ ${formatFee(c, displayCurrency)}`;
+    return c === null ? formatMoney(n, currency) : `≈ ${formatMoney(c, displayCurrency)}`;
   }
 
   const value: FinancialsCurrencyContextValue = {

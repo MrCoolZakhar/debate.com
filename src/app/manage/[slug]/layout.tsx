@@ -65,6 +65,17 @@ export interface Conference {
   payment_method: string | null;
   external_payment_url: string | null;
   external_payment_note: string | null;
+  /** Which manual way to pay (prompt 94): a link, a QR code or bank details. */
+  manual_kind: 'link' | 'qr' | 'bank' | null;
+  /** A path in the public conference-assets bucket (manual_kind 'qr'). */
+  payment_qr_path: string | null;
+  bank_details: { account_name?: string; account_number?: string; swift?: string; bank_name?: string; reference?: string } | null;
+  /** Stripe's own list of what it still needs (account.updated); may be null. */
+  connect_requirements: {
+    currently_due?: string[]; past_due?: string[]; eventually_due?: string[];
+    disabled_reason?: string | null; current_deadline?: number | string | null;
+    charges_enabled?: boolean; payouts_enabled?: boolean; details_submitted?: boolean;
+  } | null;
   payment_gate_exempt: boolean;
   /** Card payments charged on Gavelling's own Stripe account (no Connect
    *  needed). conference_payments_ready() treats it as ready. */
@@ -165,7 +176,7 @@ const CONFERENCE_COLUMNS = [
   'contact_email', 'student_level', 'description',
   'instagram_url', 'facebook_url', 'tiktok_url', 'whatsapp_url', 'website_url',
   'stripe_account_id', 'connect_onboarding_status', 'payout_country', 'payment_method',
-  'external_payment_url', 'external_payment_note', 'payment_gate_exempt', 'platform_collects', 'organizer_id',
+  'external_payment_url', 'external_payment_note', 'manual_kind', 'payment_qr_path', 'bank_details', 'connect_requirements', 'payment_gate_exempt', 'platform_collects', 'organizer_id',
   'predecessor_conference_id', 'predecessor_approved', 'min_age', 'max_age',
   'allocation_swap_mode', 'allow_delegation_import', 'allocation_email_auto', 'email_theme',
   'financial_aid_enabled', 'aid_questions', 'aid_intro',

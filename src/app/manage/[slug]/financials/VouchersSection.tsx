@@ -145,8 +145,11 @@ const fieldLabelStyle: React.CSSProperties = {
 export default function VouchersSection({
   conference,
   displayCurrency,
+  bare = false,
 }: {
   conference: Conference;
+  /** Inside a pop-up (prompt 94): no section header and no top margin. */
+  bare?: boolean;
   /** Display-only currency for flat amounts in the list, creation stays in
    *  the conference currency regardless. */
   displayCurrency?: string;
@@ -353,21 +356,23 @@ export default function VouchersSection({
   const hiddenCount = filtered.length - visible.length;
 
   return (
-    <section className="mt-8">
+    <section className={bare ? undefined : 'mt-8'}>
       {/* Section header */}
+      {!bare && (
       <div className="flex items-center gap-3 mb-4">
-        <NeuIconDisc gradient={NEU_GRADIENTS.gold} icon={Ticket} emoji="Ticket" size={36} />
-        <div>
-          <h2 style={{ fontFamily: OUTFIT, fontWeight: 900, fontSize: 18, color: NEU.ink, lineHeight: 1.15 }}>
-            Vouchers
-          </h2>
-          <p style={{ fontFamily: OUTFIT, fontSize: 11.5, color: NEU.inkSoft }}>
-            {REFERRAL_CODES_LIVE
-              ? `Discount codes, and referral codes that take nothing off, scoped to ${conference.acronym} only.`
-              : `Discount codes scoped to ${conference.acronym} only.`}
-          </p>
+          <NeuIconDisc gradient={NEU_GRADIENTS.gold} icon={Ticket} emoji="Ticket" size={36} />
+          <div>
+            <h2 style={{ fontFamily: OUTFIT, fontWeight: 900, fontSize: 18, color: NEU.ink, lineHeight: 1.15 }}>
+              Vouchers
+            </h2>
+            <p style={{ fontFamily: OUTFIT, fontSize: 11.5, color: NEU.inkSoft }}>
+              {REFERRAL_CODES_LIVE
+                ? `Discount codes, and referral codes that take nothing off, scoped to ${conference.acronym} only.`
+                : `Discount codes scoped to ${conference.acronym} only.`}
+            </p>
+          </div>
         </div>
-      </div>
+      )}
 
       {error && (
         <p className="text-xs font-semibold mb-3" style={{ color: '#8B2020', fontFamily: OUTFIT }}>

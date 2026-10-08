@@ -12,9 +12,9 @@
  * section stays at the foot (it renders nothing without referral codes).
  */
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { CheckCircle2 } from 'lucide-react';
 import { useManage } from '@/app/manage/[slug]/layout';
 import { OUTFIT, NEU } from '@/components/neu';
@@ -33,6 +33,9 @@ import {
   PaymentMethodCard, RegistrationFeeCard, AddonsCard, VouchersCard,
 } from './dashboardKit';
 import MoneyPopup from './MoneyPopup';
+import PaymentFlow from './onboarding/PaymentFlow';
+import { FeePopup, AddonsPopup, VouchersPopup } from './onboarding/SettingsPopups';
+import { sessionDel, sessionGet, sessionSet, welcomeMarkerKey, welcomeSeenKey } from './onboarding/paymentApi';
 import ThingsToDoPopup from './ThingsToDoPopup';
 
 const TODO_WORDS: Record<'proof' | TodoKind, [string, string]> = {
@@ -55,8 +58,15 @@ function todoLine(t: ThingsToDo | null): string {
 }
 
 export default function FinancialsDashboardPage() {
-  const { conference, financialsReadOnly } = useManage();
+  const { conference, financialsReadOnly, refreshConferenceQuiet } = useManage();
   const router = useRouter();
+  const pathname = usePathname();
+  const params = useSearchParams();
+  // The payment flow (welcome or Payment method) and the three settings pop-ups.
+  const [flow, setFlow] = useState<{ mode: 'welcome' | 'payment'; start?: 4 } | null>(null);
+  const [setting, setSetting] = useState<'fee' | 'addons' | 'vouchers' | null>(null);
+  const openParamDone = useRef(false);
+  const autoWelcomeDone = useRef(false);
   const { currency, displayCurrency, setDisplayCurrency, currencyOptions, converted, disp } = useFinancialsCurrency();
   const [data, setData] = useState<FinancialsDashboard | null>(null);
   const [things, setThings] = useState<ThingsToDo | null>(null);
@@ -81,12 +91,40 @@ export default function FinancialsDashboardPage() {
   }, [conferenceId, attempt]);
 
   const reload = useCallback(() => setAttempt(a => a + 1), []);
+  /** After anything in the payment flow or a settings pop-up was saved. */
+  const afterChange = useCallback(() => { refreshConferenceQuiet(); reload(); }, [refreshConferenceQuiet, reload]);
+
+  // ?open=payment | fee | addons | vouchers | welcome4 opens that pop-up once, then leaves the URL.
+  const openParam = params.get('open');
+  useEffect(() => {
+    if (!conferenceId || openParamDone.current || !openParam) return;
+    openParamDone.current = true;
+    const which = openParam;
+    if (which === 'welcome4') sessionDel(welcomeMarkerKey(conferenceId));
+    // Opened on a microtask: the effect only reacts to the URL, it never sets state in its own body.
+    void Promise.resolve().then(() => {
+      if (which === 'payment') setFlow({ mode: 'payment' });
+      else if (which === 'welcome4') setFlow({ mode: 'welcome', start: 4 });
+      else if (which === 'fee' || which === 'addons' || which === 'vouchers') setSetting(which);
+    });
+    router.replace(pathname, { scroll: false });
+  }, [conferenceId, openParam, pathname, router]);
+
+  // "Welcome to Financials" opens by itself once per browser session while nothing is set up.
+  const needsSetup = !!data && data.settings.payment_method === null && !data.settings.platform_collects;
+  useEffect(() => {
+    if (!conferenceId || !needsSetup || autoWelcomeDone.current || openParam) return;
+    autoWelcomeDone.current = true;
+    const key = welcomeSeenKey(conferenceId);
+    if (sessionGet(key)) return;
+    sessionSet(key, '1');
+    void Promise.resolve().then(() => setFlow({ mode: 'welcome' }));
+  }, [conferenceId, needsSetup, openParam]);
 
   if (!conference) return null;
 
   const slug = conference.slug;
   const m = (c: number) => disp((c || 0) / 100);
-  const openSettings = () => router.push(`/manage/${slug}/financials/settings`);
 
   const r = data?.received;
   const o = data?.outstanding;
@@ -98,7 +136,7 @@ export default function FinancialsDashboardPage() {
     <div className="gv-st">
       <style>{STORE_CSS}</style>
       <style>{DASH_CSS}</style>
-      {popup ? <style>{PURCHASE_CSS}</style> : null}
+      {popup || flow || setting ? <style>{PURCHASE_CSS}</style> : null}
 
       {/* Header: the title left, the key numbers and the picker right, like the Store */}
       <div className="flex items-start justify-between gap-4 flex-wrap mb-6">
@@ -148,6 +186,17 @@ export default function FinancialsDashboardPage() {
         <DashboardPlaceholder />
       ) : (
         <div className="flex flex-col gap-4">
+          {needsSetup ? (
+            <section className="gv-st-card" aria-label="Welcome to Financials" style={{ padding: '34px 30px' }}>
+              <h2 style={{ margin: 0, fontSize: 'clamp(26px, 3vw, 36px)', fontWeight: 900, letterSpacing: '-0.02em', color: '#1C1410' }}>
+                Welcome to <GoldWord tone="light">Financials</GoldWord>
+              </h2>
+              <p className="gv-st-quiet" style={{ marginTop: 8, fontSize: 16 }}>Set up how people pay you. It takes about two minutes</p>
+              <div style={{ marginTop: 20 }}>
+                <button type="button" className="gv-st-btn gv-st-forest" onClick={() => setFlow({ mode: 'welcome' })}>Get started</button>
+              </div>
+            </section>
+          ) : (
           <div className="gv-fd-grid">
             {/* Money */}
             <DashCard
@@ -163,6 +212,7 @@ export default function FinancialsDashboardPage() {
               )}
               <div className="gv-fd-foot">
                 <button type="button" className="gv-st-btn gv-st-outline" onClick={() => setPopup('money')}>See the breakdown</button>
+                <Link href={`/manage/${slug}/financials/history`} className="gv-st-btn gv-st-outline">Transactions</Link>
               </div>
             </DashCard>
 
@@ -191,6 +241,7 @@ export default function FinancialsDashboardPage() {
               )}
             </DashCard>
           </div>
+          )}
 
           <div className="gv-fd-two">
             <DashCard
@@ -216,15 +267,28 @@ export default function FinancialsDashboardPage() {
           </div>
 
           <div className="gv-fd-four">
-            <PaymentMethodCard s={data.settings} onOpen={openSettings} readOnly={financialsReadOnly} />
-            <RegistrationFeeCard s={data.settings} onOpen={openSettings} readOnly={financialsReadOnly} formatCents={cents} />
-            <AddonsCard s={data.settings} onOpen={openSettings} readOnly={financialsReadOnly} />
-            <VouchersCard s={data.settings} onOpen={openSettings} readOnly={financialsReadOnly} />
+            <PaymentMethodCard s={data.settings} onOpen={() => setFlow(needsSetup ? { mode: 'welcome' } : { mode: 'payment' })} readOnly={financialsReadOnly} />
+            <RegistrationFeeCard s={data.settings} onOpen={() => setSetting('fee')} readOnly={financialsReadOnly} formatCents={cents} />
+            <AddonsCard s={data.settings} onOpen={() => setSetting('addons')} readOnly={financialsReadOnly} />
+            <VouchersCard s={data.settings} onOpen={() => setSetting('vouchers')} readOnly={financialsReadOnly} />
           </div>
         </div>
       )}
 
       {popup === 'money' && data && <MoneyPopup d={data} slug={slug} onClose={() => setPopup(null)} />}
+      {flow && (
+        <PaymentFlow
+          conference={conference}
+          mode={flow.mode}
+          startStep={flow.start}
+          readOnly={financialsReadOnly}
+          onClose={() => { setFlow(null); afterChange(); }}
+          onChanged={afterChange}
+        />
+      )}
+      {setting === 'fee' && <FeePopup conference={conference} readOnly={financialsReadOnly} onClose={() => { setSetting(null); afterChange(); }} />}
+      {setting === 'addons' && <AddonsPopup conference={conference} readOnly={financialsReadOnly} onClose={() => { setSetting(null); afterChange(); }} />}
+      {setting === 'vouchers' && <VouchersPopup conference={conference} readOnly={financialsReadOnly} onClose={() => { setSetting(null); afterChange(); }} />}
       {popup === 'todo' && (
         <ThingsToDoPopup
           conferenceId={conference.id}

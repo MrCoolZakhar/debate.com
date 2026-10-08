@@ -12,8 +12,9 @@ import { CheckCircle2, CreditCard, ExternalLink, Landmark } from 'lucide-react';
 import { PurchaseShell } from '@/components/purchase/purchaseKit';
 import PdfViewer, { type PdfZoom } from '@/components/documents/PdfViewer';
 import { friendlyError } from '@/lib/friendlyError';
+import { notifyOk } from '@/lib/appNotify';
 import {
-  cents, closeMoneyTodo, matchStripeRefund, notifyMoneyTodoChanged, readThingsToDo, reviewProof, signedProofUrl,
+  cents, closeMoneyTodo, recordRefundDifference, refundDifferenceByCard, uploadRefundProof, proofFileProblem, type ManualMethod, matchStripeRefund, notifyMoneyTodoChanged, readThingsToDo, reviewProof, signedProofUrl,
   type ProofThing, type RefundItem, type TodoThing,
 } from './financialsApi';
 import { READ_ONLY_LINE, Row, formatDate } from './dashboardKit';
@@ -83,7 +84,7 @@ export default function ThingsToDoPopup({ conferenceId, readOnly, onClose }: {
             <div key={current.key}>
               {current.type === 'proof'
                 ? <ProofStep p={current.p} readOnly={readOnly} onDone={done} onSkip={skip} />
-                : <TodoStep t={current.t} readOnly={readOnly} onDone={done} onSkip={skip}
+                : <TodoStep t={current.t} conferenceId={conferenceId} readOnly={readOnly} onDone={done} onSkip={skip}
                     onRefund={(items) => setRefund({ items, currency: current.t.currency ?? 'USD', todoId: current.t.id })} />}
             </div>
           )}
@@ -282,8 +283,8 @@ const DISPUTE_REASON: Record<string, string> = {
 
 function str(v: unknown): string { return typeof v === 'string' ? v : ''; }
 
-function TodoStep({ t, readOnly, onDone, onSkip, onRefund }: {
-  t: TodoThing; readOnly: boolean; onDone: () => void; onSkip: () => void; onRefund: (items: RefundItem[]) => void;
+function TodoStep({ t, conferenceId, readOnly, onDone, onSkip, onRefund }: {
+  t: TodoThing; conferenceId: string; readOnly: boolean; onDone: () => void; onSkip: () => void; onRefund: (items: RefundItem[]) => void;
 }) {
   const cur = t.currency ?? 'USD';
   const [mode, setMode] = useState<'none' | 'decline' | 'sorted'>('none');
@@ -460,27 +461,142 @@ function TodoStep({ t, readOnly, onDone, onSkip, onRefund }: {
             </p>
             {t.note && <p className="gv-fd-note" style={{ marginTop: 8, overflowWrap: 'anywhere' }}>{t.note}</p>}
             {items.length > 0 && <div className="gv-fd-rows" style={{ marginTop: 14 }}>{itemRowsWithPay}</div>}
-            {/* Refunds are whole items, and this item is the whole paid ticket: say so,
-                so nobody returns the full ticket when only the difference is due. */}
-            {!readOnly && refundable.reduce((s, i) => s + i.amount_cents, 0) > Math.abs(t.amount_cents ?? 0) && (
-              <p className="gv-fd-warn" style={{ marginTop: 12 }}>
-                Refund sends back the whole ticket, not only the difference. To return just {cents(Math.abs(t.amount_cents ?? 0), cur)}, send it yourself and mark this as sorted
-              </p>
+            {mode !== 'sorted' && !readOnly && (
+              <RefundDifference
+                todoId={t.id}
+                conferenceId={conferenceId}
+                amountLabel={cents(Math.abs(t.amount_cents ?? 0), cur)}
+                byCard={items.some(i => i.paid_by_card)}
+                onDone={onDone}
+              />
             )}
             {mode === 'sorted' && !readOnly && (
               <ReasonField id={`gv-fd-due-${t.id}`} label="Note (optional)" value={text} onChange={setText} />
             )}
             {err && <p className="gv-st-err" role="alert">{err}</p>}
-            <Actions readOnly={readOnly} onSkip={onSkip}>
-              {mode !== 'sorted' && (
-                <button type="button" className="gv-st-btn gv-st-forest" onClick={() => onRefund(refundable)} disabled={refundable.length === 0}>Refund</button>
-              )}
-              {sortedButton}
-            </Actions>
+            <Actions readOnly={readOnly} onSkip={onSkip}>{sortedButton}</Actions>
           </>
         );
     }
   })();
 
   return <div style={{ maxWidth: 640 }}>{body}</div>;
+}
+
+// ── Refund the difference (prompt 94) ──────────────────────────────────────
+// A move to a cheaper ticket: only the difference goes back, the ticket stays
+// paid at the new price, the payer is emailed and the to-do closes, all on
+// the server. By card it goes through refund-items; any other way, the
+// organizer sends it themselves and records it here.
+
+const DIFF_METHODS: { v: ManualMethod; label: string }[] = [
+  { v: 'bank_transfer', label: 'Bank transfer' },
+  { v: 'cash', label: 'Cash' },
+  { v: 'other', label: 'Other' },
+];
+
+function RefundDifference({ todoId, conferenceId, amountLabel, byCard, onDone }: {
+  todoId: string; conferenceId: string; amountLabel: string; byCard: boolean; onDone: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [method, setMethod] = useState<ManualMethod | null>(null);
+  const [file, setFile] = useState<File | null>(null);
+  const [note, setNote] = useState('');
+  const [askNoProof, setAskNoProof] = useState(false);
+  const [err, setErr] = useState('');
+  const [methodErr, setMethodErr] = useState('');
+  const fileRef = useRef<HTMLInputElement | null>(null);
+  const { busy, run } = useBusy();
+
+  const go = (anyway: boolean) => run(async () => {
+    setErr('');
+    if (byCard) {
+      const r = await refundDifferenceByCard(todoId);
+      if (!r.ok) { setErr(r.error); return; }
+      notifyOk(`${amountLabel} is on its way back to their card`, 'financials');
+      onDone();
+      return;
+    }
+    if (!method) { setMethodErr('Choose how you sent the money back.'); return; }
+    if (!file && !anyway) { setAskNoProof(true); return; }
+    let path: string | null = null;
+    if (file) {
+      const up = await uploadRefundProof(conferenceId, file);
+      if ('error' in up) { setErr(up.error); return; }
+      path = up.path;
+    }
+    const r = await recordRefundDifference(todoId, method, path, note);
+    if (!r.ok) {
+      if (r.field === 'method') setMethodErr(r.error); else setErr(r.error);
+      setAskNoProof(false);
+      return;
+    }
+    notifyOk(`Refund of ${amountLabel} recorded`, 'financials');
+    onDone();
+  });
+
+  if (!open) {
+    return (
+      <div style={{ marginTop: 16 }}>
+        <button type="button" className="gv-st-btn gv-st-forest" onClick={() => setOpen(true)}>
+          Refund the difference ({amountLabel})
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ marginTop: 16, padding: 16, borderRadius: 14, background: '#FFFFFF', display: 'flex', flexDirection: 'column', gap: 14 }}>
+      {byCard ? (
+        <p style={{ margin: 0, fontSize: 15, lineHeight: 1.5 }}>This sends {amountLabel} back to their card through Stripe</p>
+      ) : (
+        <>
+          <p className="gv-fd-note">Send {amountLabel} back yourself first, then record it here</p>
+          <div>
+            <span className="gv-fd-label" id={`gv-rd-how-${todoId}`}>How did you send it?</span>
+            <div className="gv-fd-seg" role="radiogroup" aria-labelledby={`gv-rd-how-${todoId}`}>
+              {DIFF_METHODS.map(m => (
+                <button key={m.v} type="button" role="radio" aria-checked={method === m.v} disabled={busy}
+                  onClick={() => { setMethod(m.v); setMethodErr(''); }}>{m.label}</button>
+              ))}
+            </div>
+            {methodErr && <p className="gv-st-err" role="alert">{methodErr}</p>}
+          </div>
+          <div>
+            <span className="gv-fd-label">Proof of the refund (optional)</span>
+            <input ref={fileRef} type="file" accept="image/*,application/pdf" className="sr-only"
+              onChange={e => {
+                const f = e.target.files?.[0] ?? null;
+                if (!f) { setFile(null); return; }
+                const problem = proofFileProblem(f);
+                if (problem) { setErr(problem); return; }
+                setErr(''); setFile(f); setAskNoProof(false);
+              }} />
+            {file ? (
+              <div className="flex items-center gap-2 flex-wrap" style={{ fontSize: 14 }}>
+                <span style={{ fontWeight: 700, overflowWrap: 'anywhere' }}>{file.name}</span>
+                <button type="button" className="gv-st-link" disabled={busy} onClick={() => { setFile(null); if (fileRef.current) fileRef.current.value = ''; }}>Remove</button>
+              </div>
+            ) : (
+              <button type="button" className="gv-st-btn gv-st-outline" disabled={busy} onClick={() => fileRef.current?.click()}>Attach a file</button>
+            )}
+          </div>
+          <div>
+            <label className="gv-fd-label" htmlFor={`gv-rd-note-${todoId}`}>Note (optional)</label>
+            <textarea id={`gv-rd-note-${todoId}`} className="gv-fd-text" style={{ minHeight: 64 }} maxLength={500} value={note} disabled={busy} onChange={e => setNote(e.target.value)} />
+          </div>
+          {askNoProof && !file && (
+            <p className="gv-fd-warn" role="alert">No proof attached. Record the refund anyway?</p>
+          )}
+        </>
+      )}
+      {err && <p className="gv-st-err" role="alert">{err}</p>}
+      <div className="flex items-center gap-3 flex-wrap">
+        <button type="button" className="gv-st-btn gv-st-forest" disabled={busy} onClick={() => { void go(askNoProof); }}>
+          {busy ? 'Refunding' : byCard ? `Refund ${amountLabel}` : askNoProof && !file ? 'Record without proof' : 'Record refund'}
+        </button>
+        <button type="button" className="gv-st-btn gv-st-outline" disabled={busy} onClick={() => { setOpen(false); setAskNoProof(false); setErr(''); }}>Back</button>
+      </div>
+    </div>
+  );
 }

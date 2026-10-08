@@ -26,7 +26,11 @@ export default function MoneyPopup({ d, slug, onClose }: { d: FinancialsDashboar
   const owedKinds = kindRows(o.by_kind ?? {});
   const notCharged = [
     nc.covered_people > 0 && <Row key="cov" label="Covered by their delegation" amount={`${nc.covered_people} ${nc.covered_people === 1 ? 'person' : 'people'}`} />,
-    nc.waived_items > 0 && <Row key="waived" label="Waived" sub={`${nc.waived_items} item${nc.waived_items === 1 ? '' : 's'}`} amount={m(nc.waived_cents)} />,
+    // A waived item's price is set to 0 when it is waived, so waived_cents is
+    // often 0: then the count alone says it, never a misleading "$0".
+    nc.waived_items > 0 && (nc.waived_cents > 0
+      ? <Row key="waived" label="Waived" sub={`${nc.waived_items} item${nc.waived_items === 1 ? '' : 's'}`} amount={m(nc.waived_cents)} />
+      : <Row key="waived" label="Waived" amount={`${nc.waived_items} item${nc.waived_items === 1 ? '' : 's'}`} />),
     nc.aid_cents > 0 && <Row key="aid" label="Financial aid" sub={`For ${nc.aid_people} ${nc.aid_people === 1 ? 'person' : 'people'}`} amount={m(nc.aid_cents)} />,
   ].filter(Boolean);
 
@@ -76,9 +80,9 @@ export default function MoneyPopup({ d, slug, onClose }: { d: FinancialsDashboar
           </div>
         )}
 
-        <div className="gv-fd-links">
-          <Link href={`/manage/${slug}/financials/invoices`} className="gv-st-link" onClick={onClose}>Open invoices</Link>
-          <Link href={`/manage/${slug}/financials/history`} className="gv-st-link" onClick={onClose}>All transactions</Link>
+        <div className="gv-fd-footbar">
+          <Link href={`/manage/${slug}/financials/invoices`} className="gv-st-btn gv-st-outline" onClick={onClose}>Open invoices</Link>
+          <Link href={`/manage/${slug}/financials/history`} className="gv-st-btn gv-st-outline" onClick={onClose}>All transactions</Link>
         </div>
       </div>
     </PurchaseShell>

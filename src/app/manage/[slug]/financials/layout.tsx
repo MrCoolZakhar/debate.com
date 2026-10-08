@@ -72,7 +72,8 @@ export default function FinancialsLayout({ children }: { children: React.ReactNo
   return (
     <FinancialsCurrencyProvider conference={conference}>
       <div className="px-6 md:px-10 py-8">
-        <div style={{ maxWidth: 1020, margin: '0 auto' }}>
+        {/* Full width of the manage content area, like the Store (owner, 8 Oct 2026). */}
+        <div>
           {!isDashboard && <SubPageHeader slug={conference.slug} section={section} />}
           {children}
         </div>
