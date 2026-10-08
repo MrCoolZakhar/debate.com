@@ -67,7 +67,7 @@ type VoucherKind = 'percent' | 'flat' | 'referral';
  * Reading referral rows is NOT gated: a row that exists always renders as a
  * referral code, so a flag left false can never hide live data.
  */
-const REFERRAL_CODES_LIVE = false;
+const REFERRAL_CODES_LIVE = true;
 
 interface Voucher {
   id: string;

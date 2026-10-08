@@ -2,7 +2,7 @@
 -- Email campaigns: a paced newsletter to every account, with a conversion
 -- read-out (who clicked, and whether recipients then actually used Gavelling).
 --
--- DRAFT. NOT APPLIED. Written 7 Oct 2026 by a Claude Code run, which may not
+-- APPLIED 8 Oct 2026 (migration email_campaigns_tracking_and_pacing), at the owner's request. Previously: DRAFT. Written 7 Oct 2026 by a Claude Code run, which may not
 -- change the database (CLAUDE.md, Owner Decisions). Paste the whole file into
 -- the chat's Supabase work as ONE statement block; it is wrapped in
 -- begin / commit.
@@ -46,7 +46,9 @@ create table if not exists public.email_campaigns (
   id           uuid primary key default gen_random_uuid(),
   slug         text not null unique check (slug ~ '^[a-z0-9][a-z0-9-]{0,59}$'),
   subject      text not null check (btrim(subject) <> ''),
-  from_name    text not null default 'Peter from Gavelling',
+  from_name    text not null default 'Peter at Gavelling',
+  -- must be on mail.gavelling.com (send-emails ignores any other sender)
+  from_address text not null default 'peter@mail.gavelling.com' check (from_address like '%@mail.gavelling.com'),
   reply_to     text default 'wearegavelling@gmail.com',
   body_html    text not null check (btrim(body_html) <> ''),
   body_text    text not null check (btrim(body_text) <> ''),
@@ -216,11 +218,11 @@ begin
   for rec in select * from public._email_campaign_candidates(c.id) limit v_budget loop
     v_token := replace(gen_random_uuid()::text, '-', '');
     v_unsub := public.unsubscribe_token_for(rec.email);
-    insert into email_outbox (recipient_email, subject, body, body_html, status, from_name, reply_to)
+    insert into email_outbox (recipient_email, subject, body, body_html, status, from_name, from_address, reply_to)
     values (rec.email, c.subject,
             public._email_campaign_fill(c.body_text, v_token, v_unsub),
             public._email_campaign_fill(c.body_html, v_token, v_unsub),
-            'pending', c.from_name, c.reply_to)
+            'pending', c.from_name, c.from_address, c.reply_to)
     returning id into v_outbox;
     insert into email_campaign_recipients (campaign_id, user_id, email, click_token, outbox_id)
     values (c.id, rec.user_id, rec.email, v_token, v_outbox);
@@ -280,11 +282,11 @@ begin
   if not found then return jsonb_build_object('ok', false, 'reason', 'not_found'); end if;
   if v_email !~ '^[^@\s]+@[^@\s]+\.[^@\s]+$' then return jsonb_build_object('ok', false, 'reason', 'bad_email'); end if;
   v_unsub := public.unsubscribe_token_for(v_email);
-  insert into email_outbox (recipient_email, subject, body, body_html, status, from_name, reply_to)
+  insert into email_outbox (recipient_email, subject, body, body_html, status, from_name, from_address, reply_to)
   values (v_email, '[Test] ' || c.subject,
           public._email_campaign_fill(c.body_text, v_token, v_unsub),
           public._email_campaign_fill(c.body_html, v_token, v_unsub),
-          'pending', c.from_name, c.reply_to)
+          'pending', c.from_name, c.from_address, c.reply_to)
   returning id into v_outbox;
   insert into email_campaign_recipients (campaign_id, user_id, email, click_token, outbox_id, is_test)
   values (c.id, null, v_email, v_token, v_outbox, true);
