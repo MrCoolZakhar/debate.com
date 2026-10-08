@@ -16,7 +16,7 @@ import { useManage } from '@/app/manage/[slug]/layout';
 import { NEU, OUTFIT } from '@/components/neu';
 import { GoldWord } from '@/components/BrandHeading';
 import { CurrencyPicker } from '@/components/CurrencyPicker';
-import { FinancialsCurrencyProvider, useFinancialsCurrency, mutedCaption } from './shared';
+import { FinancialsCurrencyProvider, useFinancialsCurrency, mutedCaption, conversionLine } from './shared';
 
 // Each sub-page names itself; the caption is one quiet line under the title.
 const SUB_PAGES: Record<string, { title: string; caption?: string }> = {
@@ -27,7 +27,7 @@ const SUB_PAGES: Record<string, { title: string; caption?: string }> = {
 
 function SubPageHeader({ slug, section }: { slug: string; section: string }) {
   const sub = SUB_PAGES[section] ?? { title: 'Financials' };
-  const { currency, displayCurrency, setDisplayCurrency, currencyOptions, converted } = useFinancialsCurrency();
+  const { currency, displayCurrency, setDisplayCurrency, currencyOptions, converted, ratesAsOf } = useFinancialsCurrency();
   return (
     <div className="mb-6">
       <Link
@@ -55,7 +55,7 @@ function SubPageHeader({ slug, section }: { slug: string; section: string }) {
       {sub.caption && <p className="mt-1" style={{ ...mutedCaption, fontSize: 14 }}>{sub.caption}</p>}
       {converted && (
         <p className="mt-1" style={mutedCaption}>
-          Approximate conversion: payments settle in {currency}
+          {conversionLine(currency, ratesAsOf)}
         </p>
       )}
     </div>

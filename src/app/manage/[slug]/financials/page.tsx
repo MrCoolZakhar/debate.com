@@ -24,12 +24,12 @@ import { PURCHASE_CSS } from '@/components/purchase/purchaseKit';
 import { friendlyError } from '@/lib/friendlyError';
 import { STORE_CSS, Big } from '../store/storeKit';
 import ReferralsSection from './ReferralsSection';
-import { useFinancialsCurrency } from './shared';
+import { conversionLine, useFinancialsCurrency } from './shared';
 import {
   cents, readDashboard, readThingsToDo, type FinancialsDashboard, type ThingsToDo, type TodoKind,
 } from './financialsApi';
 import {
-  DASH_CSS, DashCard, DashboardPlaceholder, GENERATE_INVOICES_READY, READ_ONLY_LINE,
+  DASH_CSS, DashCard, DashboardPlaceholder, FitBig, GENERATE_INVOICES_READY, READ_ONLY_LINE, moneyFontSize,
   PaymentMethodCard, RegistrationFeeCard, AddonsCard, VouchersCard,
 } from './dashboardKit';
 import MoneyPopup from './MoneyPopup';
@@ -67,7 +67,7 @@ export default function FinancialsDashboardPage() {
   const [setting, setSetting] = useState<'fee' | 'addons' | 'vouchers' | null>(null);
   const openParamDone = useRef(false);
   const autoWelcomeDone = useRef(false);
-  const { currency, displayCurrency, setDisplayCurrency, currencyOptions, converted, disp } = useFinancialsCurrency();
+  const { currency, displayCurrency, setDisplayCurrency, currencyOptions, converted, disp, ratesAsOf } = useFinancialsCurrency();
   const [data, setData] = useState<FinancialsDashboard | null>(null);
   const [things, setThings] = useState<ThingsToDo | null>(null);
   const [error, setError] = useState('');
@@ -148,11 +148,11 @@ export default function FinancialsDashboardPage() {
             {r && o && (
               <>
                 <div className="gv-fd-head-cell">
-                  <span className="gv-fd-head-big">{m(r.total_cents)}</span>
+                  <span className="gv-fd-head-big" style={{ whiteSpace: 'nowrap', fontSize: moneyFontSize(m(r.total_cents), 26) }}>{m(r.total_cents)}</span>
                   <span className="gv-fd-head-cap">Received</span>
                 </div>
                 <div className="gv-fd-head-cell">
-                  <span className="gv-fd-head-big gv-fd-owed">{m(o.total_cents)}</span>
+                  <span className="gv-fd-head-big gv-fd-owed" style={{ whiteSpace: 'nowrap', fontSize: moneyFontSize(m(o.total_cents), 26) }}>{m(o.total_cents)}</span>
                   <span className="gv-fd-head-cap">Outstanding</span>
                 </div>
               </>
@@ -169,7 +169,7 @@ export default function FinancialsDashboardPage() {
               />
             </div>
           </div>
-          {converted && <p className="gv-fd-other">Approximate conversion: payments settle in {currency}</p>}
+          {converted && <p className="gv-fd-other">{conversionLine(currency, ratesAsOf)}</p>}
           {data && data.other_currencies.length > 0 && (
             <p className="gv-fd-other">Some payments are in {data.other_currencies.join(', ')}. They are not included here</p>
           )}
@@ -204,8 +204,8 @@ export default function FinancialsDashboardPage() {
               hint="Everything paid to your conference and everything still owed. Received is after refunds. Outstanding counts only people you have accepted."
             >
               <div className="gv-fd-pair">
-                <Big n={m(r.total_cents)} cap={`Received · ${payments} payment${payments === 1 ? '' : 's'}`} />
-                <Big n={m(o.total_cents)} cap={`Outstanding · ${o.items} item${o.items === 1 ? '' : 's'} from ${o.people} ${o.people === 1 ? 'person' : 'people'}`} />
+                <FitBig n={m(r.total_cents)} cap={`Received · ${payments} payment${payments === 1 ? '' : 's'}`} />
+                <FitBig n={m(o.total_cents)} cap={`Outstanding · ${o.items} item${o.items === 1 ? '' : 's'} from ${o.people} ${o.people === 1 ? 'person' : 'people'}`} />
               </div>
               {data.in_review.count > 0 && (
                 <p className="gv-fd-review">{m(data.in_review.total_cents)} waiting for your review</p>

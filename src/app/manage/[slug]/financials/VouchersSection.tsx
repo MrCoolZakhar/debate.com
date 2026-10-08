@@ -20,7 +20,8 @@ import type { Conference } from '@/app/manage/[slug]/layout';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { useConfirmModal } from '@/components/ConfirmModal';
-import { currencySymbol, formatFeeAmount, roundMoney, USD_FX } from '@/lib/finance';
+import { currencySymbol, formatFeeAmount } from '@/lib/finance';
+import { convertApprox } from '@/lib/fxRates';
 import {
   NEU, NEU_GRADIENTS, OUTFIT, EASE,
   NeuCard, NeuInset, NeuPill, NeuButton, NeuIconDisc, NeuProgress,
@@ -28,15 +29,7 @@ import {
 import { DatePicker } from '@/components/DatePicker';
 import { formatMoney } from './shared';
 
-/** Approximate conversion between two known currencies (via finance.ts's
- *  canonical USD_FX table, no local copy); null when either rate is
- *  missing (callers then fall back to the original amount). */
-export function convertApprox(amount: number, from: string, to: string): number | null {
-  const rf = USD_FX[from.toUpperCase()];
-  const rt = USD_FX[to.toUpperCase()];
-  if (!rf || !rt) return null;
-  return roundMoney((amount / rf) * rt);
-}
+// convertApprox lives in src/lib/fxRates.ts (the day's rates, prompt 100).
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -115,7 +108,7 @@ function discountLabel(v: Voucher, displayCurrency?: string): string {
   const vCur = v.currency ?? '';
   if (displayCurrency && vCur && displayCurrency.toUpperCase() !== vCur.toUpperCase()) {
     const conv = convertApprox(v.amount, vCur, displayCurrency);
-    if (conv !== null) return `≈ ${formatMoney(conv, displayCurrency)} OFF`;
+    if (conv !== null) return `≈\u00A0${formatMoney(conv, displayCurrency)} OFF`;
   }
   return `${formatMoney(v.amount, vCur || 'USD')} OFF`;
 }

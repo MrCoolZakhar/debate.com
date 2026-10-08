@@ -241,6 +241,27 @@ export function Row({ label, sub, amount, minus, total }: {
   );
 }
 
+/**
+ * A big amount's font size so it stays on ONE line (prompt 100): the base size
+ * up to 11 characters, then smaller in step with its length, never below 60%
+ * of the base. "≈ TRY 82,457.14" shrinks instead of wrapping or being cut.
+ */
+export function moneyFontSize(text: string, base: number): number {
+  const len = text.length;
+  if (len <= 11) return base;
+  return Math.max(Math.round(base * 0.6), Math.round((base * 11) / len));
+}
+
+/** The Store's Big (same classes), on one line and sized to fit by moneyFontSize. */
+export function FitBig({ n, cap }: { n: string; cap: string }) {
+  return (
+    <div style={{ minWidth: 0 }}>
+      <span className="gv-st-big" style={{ whiteSpace: 'nowrap', fontSize: moneyFontSize(n, 34) }}>{n}</span>
+      <span className="gv-st-big-cap">{cap}</span>
+    </div>
+  );
+}
+
 export function formatDate(iso: string | null | undefined): string {
   if (!iso) return '';
   const d = new Date(iso);
