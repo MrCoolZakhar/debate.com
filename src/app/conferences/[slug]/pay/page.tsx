@@ -22,13 +22,12 @@ import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { activePhaseFee } from '@/lib/finance';
 import type { InvoiceRow } from '@/lib/invoices';
-import { PurchaseShell, PURCHASE_CSS } from '@/components/purchase/purchaseKit';
 import { themeCssVars } from '@/lib/theme';
 import { friendlyError } from '@/lib/friendlyError';
 import { GoldWord } from '@/components/BrandHeading';
 import { statusPriority } from '../participant/shared';
 import {
-  ManualPayAction, PaymentsNotSetUp, ProofUploadModal,
+  PaymentsNotSetUp,
   type ActiveAddon, type AidRequestRow, type PayConference, type PayRoleConfig,
 } from './payPanels';
 import { PAY_CSS, INK, INK_SOFT } from './payKit';
@@ -41,6 +40,10 @@ import ReceiptsList, { ReceiptPopup } from './ReceiptsList';
 import ActionsColumn from './ActionsColumn';
 import VoucherPanel from './VoucherPanel';
 import { useSettleWait, SLOW_LINE, WAITING_LINE } from './settleWait';
+import { cancelStartedPayment, proofLink, readStarted, startManualPayment, type StartedInfo, type StartedPayment } from './manualApi';
+import ManualPayPopup, { type ManualMode } from './ManualPayPopup';
+import StartedPayments from './StartedPayments';
+import { LockPopup, NotReceivedPopup, RefundRequestPopup } from './SmallPopups';
 
 const INVOICE_SELECT = 'id, conference_id, kind, label, amount_cents, amount_paid_cents, currency, status, gates_acceptance, payable_before_acceptance, application_id, society_id, config_id, aid_applied_cents, quantity, created_at';
 
@@ -63,8 +66,15 @@ export default function PayPage() {
 
   const [selected, setSelected] = useState<Set<string>>(() => new Set());
   const [notice, setNotice] = useState('');
-  const [paying, setPaying] = useState<'card' | 'manual' | null>(null);
-  const [proofIds, setProofIds] = useState<string[] | null>(null);
+  const [paying, setPaying] = useState<'card' | null>(null);
+  // Manual conferences (prompt 96): started payments, the pay / proof pop-up, locks, refunds.
+  const [started, setStarted] = useState<StartedInfo | null>(null);
+  const [manualPop, setManualPop] = useState<{ batchId: string; totalCents: number; currency: string; mode: ManualMode } | null>(null);
+  const [lockFor, setLockFor] = useState<{ batchId: string; mine: boolean } | null>(null);
+  const [highlight, setHighlight] = useState<string | null>(null);
+  const [refundAsk, setRefundAsk] = useState<{ preselect: string | null } | null>(null);
+  const [notReceived, setNotReceived] = useState<PayItem | null>(null);
+  const [startBusy, setStartBusy] = useState(false);
   const [receiptKey, setReceiptKey] = useState<string | null>(null);
   const [returnWait, setReturnWait] = useState(false);
 
@@ -109,13 +119,15 @@ export default function PayPage() {
       if (cancelled) return;
 
       try {
-        const [o, rc, ad] = await Promise.all([
+        const [o, st, rc, ad] = await Promise.all([
           readPayOverview(conf.id),
+          readStarted(conf.id).catch(() => ({ manual: false, payments: [], locked: {} }) as StartedInfo),
           supabase.from('application_role_configs').select('role, fee_amount, fee_currency, fee_phases, payment_timing, is_enabled').eq('conference_id', conf.id),
           supabase.from('addons').select('id, label, description, amount_cents, currency').eq('conference_id', conf.id).eq('active', true),
         ]);
         if (cancelled) return;
         setOverview(o);
+        setStarted(st);
         setLoadError('');
         setRoleConfigs((rc.data as RoleConfigRow[]) ?? []);
         setAddons((ad.data as ActiveAddon[]) ?? []);
@@ -164,7 +176,7 @@ export default function PayPage() {
   }, [wait, reload]);
 
   const items = useMemo(() => overview?.items ?? [], [overview]);
-  const tickable = items.filter(canTick);
+  const tickable = items.filter(i => canTick(i, started?.locked));
   const chosen = items.filter(i => selected.has(i.invoice_id));
   const chosenCur = chosen[0]?.currency ?? overview?.conference.currency ?? 'USD';
   const chosenTotal = chosen.reduce((s, i) => s + i.due_cents, 0);
@@ -239,6 +251,47 @@ export default function PayPage() {
   };
 
   const receipt = receiptKey ? overview.payments.find(p => p.key === receiptKey) ?? null : null;
+  const manual = c.method === 'manual';
+
+  // Manual: start (or resume) a payment for these items, then the proof pop-up.
+  const startManual = async (ids: string[], mode: ManualMode) => {
+    if (startBusy || ids.length === 0) return;
+    setStartBusy(true); setNotice('');
+    const r = await startManualPayment(ids);
+    setStartBusy(false);
+    if (!r.ok) {
+      if (r.code === 'item_in_started_payment' && r.startedBatchId) {
+        const mine = !!started?.payments.some(p => p.batch_id === r.startedBatchId);
+        setLockFor({ batchId: r.startedBatchId, mine });
+      } else setNotice(r.error);
+      return;
+    }
+    setManualPop({ batchId: r.batchId, totalCents: r.totalCents, currency: r.currency, mode });
+    setSelected(new Set());
+    reload();
+  };
+
+  const openLock = (invoiceId: string) => {
+    const l = started?.locked[invoiceId];
+    if (l) setLockFor({ batchId: l.batch_id, mine: l.mine });
+  };
+
+  const viewProof = async (path: string) => {
+    const w = window.open('', '_blank');
+    if (w) w.opener = null;
+    const url = await proofLink(path);
+    if (!url) { w?.close(); setNotice('The proof could not be opened. Try again in a moment.'); return; }
+    if (w) w.location.href = url; else window.open(url, '_blank', 'noopener');
+  };
+
+  const onCancelStarted = async (p: StartedPayment): Promise<string | null> => {
+    const r = await cancelStartedPayment(p.batch_id);
+    if (!r.ok) return r.error;
+    reload();
+    return null;
+  };
+
+  const refundable = items.filter(i => i.state === 'paid' && i.can_request_refund);
 
   return (
     <Frame theme={conference.theme} slug={slug}>
@@ -263,6 +316,11 @@ export default function PayPage() {
             onToggle={toggle}
             onReceipt={setReceiptKey}
             onRemove={onRemove}
+            locked={started?.locked}
+            onLock={openLock}
+            onRequestRefund={(it) => setRefundAsk({ preselect: it.invoice_id })}
+            onNotReceived={setNotReceived}
+            onViewProof={(path) => { void viewProof(path); }}
             below={(it) => (it.kind === 'role_fee' && it.owner_is_me && primary && (it.state === 'unpaid' || it.state === 'rejected'))
               ? <VoucherPanel conferenceId={c.id} applicationId={primary.application_id} discountCents={discount} currency={it.currency} onChanged={reload} />
               : null}
@@ -274,9 +332,31 @@ export default function PayPage() {
               allTicked={chosen.length > 0 && chosen.length >= tickable.filter(i => i.currency === chosenCur).length}
               onSelectAll={selectAll}
               onClear={() => { setSelected(new Set()); setNotice(''); }}
-              onPay={() => setPaying(c.method === 'manual' ? 'manual' : 'card')}
-              busy={paying !== null}
+              onPay={() => { if (manual) void startManual(chosen.map(i => i.invoice_id), 'pay'); else setPaying('card'); }}
+              busy={paying !== null || startBusy}
               notice={notice}
+              extra={manual ? (
+                <button type="button" className="gv-pay-btn gv-pay-outline" disabled={startBusy}
+                  title="Already paid? Tick the items you paid for, then upload your proof"
+                  onClick={() => {
+                    if (chosen.length === 0) { setNotice('Tick the items you paid for first'); return; }
+                    void startManual(chosen.map(i => i.invoice_id), 'upload');
+                  }}>
+                  Upload proof
+                </button>
+              ) : undefined}
+            />
+          )}
+          {canPay && manual && started && (
+            <StartedPayments
+              payments={started.payments}
+              highlight={highlight}
+              onUpload={(p) => setManualPop({ batchId: p.batch_id, totalCents: p.total_cents, currency: p.currency, mode: 'upload' })}
+              onDetails={(p) => setManualPop({ batchId: p.batch_id, totalCents: p.total_cents, currency: p.currency, mode: 'details' })}
+              onCancel={onCancelStarted}
+              onViewProof={(path) => { void viewProof(path); }}
+              onReplace={(p) => setManualPop({ batchId: p.batch_id, totalCents: p.total_cents, currency: p.currency, mode: 'replace' })}
+              onRestart={(p) => { void startManual(p.items.map(i => i.invoice_id), 'upload'); }}
             />
           )}
           <ReceiptsList payments={overview.payments} onOpen={setReceiptKey} />
@@ -313,31 +393,35 @@ export default function PayPage() {
         />
       )}
 
-      {paying === 'manual' && (
-        <>
-          <style>{PURCHASE_CSS}</style>
-          <PurchaseShell tone="light" label={`Pay ${money(chosenTotal, chosenCur)}`} onClose={() => setPaying(null)} panelClass="gv-pay-mid" testId="pay-manual">
-            <div style={{ padding: '28px 26px 26px', display: 'flex', flexDirection: 'column', gap: 14, width: '100%' }}>
-              <h2 style={{ margin: 0, paddingRight: 40, fontSize: 26, fontWeight: 800, letterSpacing: '-0.02em' }}>Pay {money(chosenTotal, chosenCur)}</h2>
-              <ManualPayAction
-                awaitingReview={false}
-                externalPaymentUrl={conference.external_payment_url}
-                externalPaymentNote={conference.external_payment_note}
-                onUploadProof={() => { setProofIds(chosen.map(i => i.invoice_id)); setPaying(null); }}
-              />
-            </div>
-          </PurchaseShell>
-        </>
+      {manualPop && (
+        <ManualPayPopup
+          conference={c}
+          batchId={manualPop.batchId}
+          totalCents={manualPop.totalCents}
+          currency={manualPop.currency}
+          mode={manualPop.mode}
+          onClose={() => { setManualPop(null); reload(); }}
+          onDone={() => { setManualPop(null); reload(); }}
+        />
       )}
-
-      <ProofUploadModal
-        open={proofIds !== null}
-        onClose={() => setProofIds(null)}
-        invoiceIds={proofIds ?? []}
-        conferenceId={c.id}
-        accessToken={session?.access_token}
-        onSubmitted={() => { setProofIds(null); setSelected(new Set()); reload(); }}
-      />
+      {lockFor && (
+        <LockPopup
+          mine={lockFor.mine}
+          onClose={() => setLockFor(null)}
+          onGo={() => {
+            const id = lockFor.batchId;
+            setLockFor(null);
+            setHighlight(id);
+            setTimeout(() => setHighlight(h => (h === id ? null : h)), 3500);
+          }}
+        />
+      )}
+      {refundAsk && refundable.length > 0 && (
+        <RefundRequestPopup items={refundable} preselect={refundAsk.preselect} onClose={() => setRefundAsk(null)} onDone={() => { setRefundAsk(null); reload(); }} />
+      )}
+      {notReceived && (
+        <NotReceivedPopup item={notReceived} onClose={() => setNotReceived(null)} onDone={() => { setNotReceived(null); reload(); }} />
+      )}
 
       {receipt && <ReceiptPopup payment={receipt} conferenceName={c.full_name} onClose={() => setReceiptKey(null)} />}
     </Frame>

@@ -6,7 +6,7 @@
 
 import { CreditCard } from 'lucide-react';
 
-export default function PayBar({ count, totalLabel, allTicked, onSelectAll, onClear, onPay, busy, notice }: {
+export default function PayBar({ count, totalLabel, allTicked, onSelectAll, onClear, onPay, busy, notice, extra }: {
   count: number;
   totalLabel: string;
   allTicked: boolean;
@@ -16,6 +16,8 @@ export default function PayBar({ count, totalLabel, allTicked, onSelectAll, onCl
   busy: boolean;
   /** One quiet line, e.g. why an item could not be ticked. */
   notice?: string;
+  /** A second action beside Pay (manual conferences: Upload proof). */
+  extra?: React.ReactNode;
 }) {
   return (
     <div className="gv-pay-bar" role="region" aria-label="Pay for the selected items">
@@ -25,6 +27,7 @@ export default function PayBar({ count, totalLabel, allTicked, onSelectAll, onCl
       </span>
       {!allTicked && <button type="button" className="gv-pay-link" onClick={onSelectAll}>Select all</button>}
       {count > 0 && <button type="button" className="gv-pay-link" onClick={onClear}>Clear</button>}
+      {extra}
       <button type="button" className="gv-pay-btn gv-pay-forest" disabled={count === 0 || busy} onClick={onPay}>
         <CreditCard size={17} strokeWidth={2.2} aria-hidden /> {count > 0 ? `Pay ${totalLabel}` : 'Pay'}
       </button>

@@ -8,7 +8,7 @@
 
 import { useRef, useState } from 'react';
 import {
-  Ban, CircleCheck, Clock, Gift, HandCoins, Hourglass, Lock, RotateCcw, ShieldAlert, Undo2, X, XCircle,
+  Ban, CircleCheck, Clock, ExternalLink, Gift, HandCoins, Hourglass, Lock, MoreHorizontal, RotateCcw, ShieldAlert, Undo2, X, XCircle,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { DANGER, DEEP_GOLD, GREEN, INK_SOFT } from './payKit';
@@ -16,19 +16,26 @@ import { money, shortDate, type PayItem } from './payApi';
 
 export const PAYABLE_STATES = new Set(['unpaid', 'rejected', 'refunded']);
 
-export function canTick(it: PayItem): boolean {
-  return it.payable && PAYABLE_STATES.has(it.state) && it.due_cents > 0;
+export function canTick(it: PayItem, locked?: Record<string, unknown>): boolean {
+  return it.payable && PAYABLE_STATES.has(it.state) && it.due_cents > 0 && !(locked && locked[it.invoice_id]);
 }
 
-function stateLine(it: PayItem): { icon: LucideIcon; text: string; color: string; title?: string } | null {
+function refundVia(method: string | null | undefined): string {
+  if (!method || method === 'stripe' || method === 'card') return 'card';
+  if (method === 'bank_transfer') return 'bank transfer';
+  if (method === 'cash') return 'cash';
+  return 'other';
+}
+
+function stateLine(it: PayItem): { icon: LucideIcon; text: string; color: string } | null {
   switch (it.state) {
     case 'unpaid': return null;
-    case 'started': return { icon: Lock, text: 'Waiting for your proof', color: DEEP_GOLD, title: 'You started paying this. Upload your proof to finish' };
+    case 'started': return { icon: Lock, text: 'In a started payment', color: DEEP_GOLD };
     case 'in_review': return { icon: Hourglass, text: 'Waiting for the organizer to review', color: DEEP_GOLD };
     case 'paid': return { icon: CircleCheck, text: 'Paid', color: GREEN };
     case 'rejected': return { icon: XCircle, text: 'Proof not accepted', color: DANGER };
-    case 'refunded': return { icon: Undo2, text: it.refund?.at ? `Refunded on ${shortDate(it.refund.at)}` : 'Refunded', color: INK_SOFT };
-    case 'disputed': return { icon: ShieldAlert, text: 'Disputed with your card company', color: DANGER };
+    case 'refunded': return { icon: Undo2, text: it.refund?.at ? `Refunded on ${shortDate(it.refund.at)} via ${refundVia(it.refund.method)}` : 'Refunded', color: INK_SOFT };
+    case 'disputed': return { icon: ShieldAlert, text: 'Your card company is looking into this payment. The organizers will be in touch', color: DANGER };
     case 'refund_requested': return { icon: RotateCcw, text: 'Refund requested', color: INK_SOFT };
     case 'covered': return { icon: Gift, text: 'Covered by your delegation', color: GREEN };
     case 'waived': return { icon: Ban, text: 'Fee waived', color: GREEN };
@@ -44,8 +51,14 @@ function amountFor(it: PayItem): string | null {
   return money(it.due_cents, it.currency);
 }
 
-export default function ItemList({ items, selected, onToggle, onReceipt, onRemove, below }: {
+export default function ItemList({ items, selected, onToggle, onReceipt, onRemove, below, locked, onLock, onRequestRefund, onNotReceived, onViewProof }: {
   items: PayItem[];
+  /** Items held by a started payment (my_started_payments.locked). */
+  locked?: Record<string, { batch_id: string; status: string; mine: boolean }>;
+  onLock?: (invoiceId: string) => void;
+  onRequestRefund?: (it: PayItem) => void;
+  onNotReceived?: (it: PayItem) => void;
+  onViewProof?: (path: string) => void;
   selected: Set<string>;
   onToggle: (it: PayItem) => void;
   onReceipt: (paymentKey: string) => void;
@@ -55,6 +68,7 @@ export default function ItemList({ items, selected, onToggle, onReceipt, onRemov
   below?: (it: PayItem) => React.ReactNode;
 }) {
   const [confirming, setConfirming] = useState<string | null>(null);
+  const [menu, setMenu] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
   const busyRef = useRef(false);
@@ -79,8 +93,11 @@ export default function ItemList({ items, selected, onToggle, onReceipt, onRemov
   return (
     <div className="gv-pay-items" role="list" aria-label="Your items">
       {items.map(it => {
-        const tick = canTick(it);
-        const st = stateLine(it);
+        const lock = locked?.[it.invoice_id];
+        const tick = canTick(it, locked);
+        const st = lock && it.state !== 'in_review' && it.state !== 'paid'
+          ? { icon: Lock, text: 'In a started payment', color: DEEP_GOLD }
+          : stateLine(it);
         const amt = amountFor(it);
         const Icon = st?.icon;
         const isConfirming = confirming === it.invoice_id;
@@ -95,8 +112,13 @@ export default function ItemList({ items, selected, onToggle, onReceipt, onRemov
             <div style={{ minWidth: 0 }}>
               <p className="gv-pay-name">{it.label}</p>
               {it.for_name && <p className="gv-pay-for">for {it.for_name}</p>}
-              {st && Icon && (
-                <p className="gv-pay-state" style={{ color: st.color }} title={st.title}>
+              {st && Icon && (st.text === 'In a started payment' && onLock ? (
+                <button type="button" className="gv-pay-state" onClick={() => onLock(it.invoice_id)}
+                  style={{ color: st.color, background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontFamily: 'inherit', textDecoration: 'underline', textUnderlineOffset: 3 }}>
+                  <Icon size={15} strokeWidth={2.4} aria-hidden /> {st.text}
+                </button>
+              ) : (
+                <p className="gv-pay-state" style={{ color: st.color }}>
                   <Icon size={15} strokeWidth={2.4} aria-hidden /> {st.text}
                   {it.state === 'paid' && it.payment_key && (
                     <button type="button" className="gv-pay-link" style={{ marginLeft: 8, fontSize: 13 }} onClick={() => onReceipt(it.payment_key!)}>
@@ -104,6 +126,21 @@ export default function ItemList({ items, selected, onToggle, onReceipt, onRemov
                     </button>
                   )}
                 </p>
+              ))}
+              {it.state === 'refunded' && it.refund && (
+                <>
+                  {it.refund.note && <p className="gv-pay-sub">{it.refund.note}</p>}
+                  <p className="gv-pay-sub" style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }}>
+                    {it.refund.proof_path && onViewProof && (
+                      <button type="button" className="gv-pay-link" style={{ fontSize: 13 }} onClick={() => onViewProof(it.refund!.proof_path!)}>
+                        <ExternalLink size={13} strokeWidth={2.4} style={{ display: 'inline', verticalAlign: '-2px' }} aria-hidden /> View proof
+                      </button>
+                    )}
+                    {refundVia(it.refund.method) !== 'card' && (it.not_received_reported
+                      ? <span>You told the organizers you haven&apos;t received it</span>
+                      : onNotReceived && <button type="button" className="gv-pay-link" style={{ fontSize: 13 }} onClick={() => onNotReceived(it)}>I haven&apos;t received it</button>)}
+                  </p>
+                </>
               )}
               {it.state === 'rejected' && it.rejected?.reason && (
                 <p className="gv-pay-sub">{it.rejected.reason}</p>
@@ -121,7 +158,23 @@ export default function ItemList({ items, selected, onToggle, onReceipt, onRemov
               {below?.(it)}
             </div>
             <span className="gv-pay-amt" style={{ color: it.state === 'paid' ? GREEN : undefined }}>{amt}</span>
-            <span>
+            <span style={{ position: 'relative' }}>
+              {it.state === 'paid' && it.can_request_refund && onRequestRefund && (
+                <>
+                  <button type="button" className="gv-pay-x" aria-label={`More for ${it.label}`} aria-expanded={menu === it.invoice_id}
+                    onClick={() => setMenu(menu === it.invoice_id ? null : it.invoice_id)}>
+                    <MoreHorizontal size={18} strokeWidth={2.4} />
+                  </button>
+                  {menu === it.invoice_id && (
+                    <span role="menu" style={{ position: 'absolute', right: 0, top: 46, zIndex: 20, minWidth: 190, padding: 6, borderRadius: 12, background: '#FFFFFF', boxShadow: '0 12px 30px -10px rgba(27,56,40,0.45), 0 0 0 1px rgba(27,56,40,0.08)' }}>
+                      <button type="button" role="menuitem" onClick={() => { setMenu(null); onRequestRefund(it); }}
+                        style={{ display: 'block', width: '100%', textAlign: 'left', padding: '10px 12px', border: 'none', borderRadius: 8, background: 'none', cursor: 'pointer', fontFamily: 'inherit', fontSize: 14, fontWeight: 600, color: '#1C1410' }}>
+                        Request a refund
+                      </button>
+                    </span>
+                  )}
+                </>
+              )}
               {it.removable && (
                 <button type="button" className="gv-pay-x" aria-label={`Remove ${it.label}`} title="Remove"
                   onClick={() => { setErr(''); setConfirming(isConfirming ? null : it.invoice_id); }}>
