@@ -573,6 +573,8 @@ its toggle writes an explicit OFF row (`turnOffDefaultEmail`). Nothing was backf
 count toward the "Explore emails" checkmark stage), rows that exist with `enabled = false` are
 honoured, and only future events send.
 
+**Money emails (prompt 97, owner 7 Oct 2026).** Payment received is sent ONLY by the server, whenever someone who pays for themselves goes from unpaid to paid (card, approved proof or marked paid), with the conference's own template (on unless turned off); nothing on the client queues it, and people covered by a delegation ticket get Gavelling's fixed "Your spot is covered" email instead. Four emails are fixed server emails that ALWAYS send and are not template events: the itemised payment receipt (one per payment), the refund confirmation, "Proof not accepted" with the organizer's reason, and "Your spot is covered"; Communications lists them under "Always On" at the top of Automatic emails (`communications/alwaysOnEmails.ts`, display rows only). `aid_approved`, `aid_denied`, `fee_waived`, `spot_received` and `spot_lost` joined `ESSENTIAL_DEFAULT_ON_EVENTS` (default on with our copy, an explicit OFF honoured), and `spot_lost` now sends immediately.
+
 **Double delegations (24 Sep 2026).** The allocation email adds a "Your co-delegate" facts row (name +
 email, or "Not assigned yet") for a seat of capacity 2 (`allocation_co_delegates`, organisers +
 service role). When a partner is announced AFTER the first holder was told, the AFTER UPDATE trigger

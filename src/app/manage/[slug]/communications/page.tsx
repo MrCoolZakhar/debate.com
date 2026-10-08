@@ -8,6 +8,7 @@ import {
   BadgeCheck, MessageSquare, CalendarDays, ArrowRight, Compass, Wrench,
   Zap, Clock, BookOpen, KeyRound, PenLine, Plus, Inbox, Users, CheckCircle2,
   CreditCard, Globe, FileText, Mic, HelpCircle, Info, Repeat, CircleDot, CheckCheck, XCircle, CircleDashed,
+  Lock,
 } from 'lucide-react';
 import { useManage } from '@/app/manage/[slug]/layout';
 import { getAuthedClient, getFreshAuthedClient } from '@/lib/supabase-auth';
@@ -20,6 +21,7 @@ import {
   type EmailTokenContext, type EmailTokenKey,
 } from '@/lib/emailTokens';
 import { TOKEN_IDENTITY } from '@/components/email/tokenKit';
+import { ALWAYS_ON_EMAILS, ALWAYS_ON_LINE } from './alwaysOnEmails';
 import { EVENT_REGISTRY, queueEventEmail, getEventLabel, notifyIfNeeded, turnOnDefaultEmail, turnOffDefaultEmail, eventOnWhenMissing, newTemplateStartsEnabled, hasDraftContent, type EventDef, type EventKey } from '@/lib/emailEvents';
 import { EASE, NEU, NEU_GRADIENTS, Emoji3D, NeuIconDisc, type NeuGradient } from '@/components/neu';
 import {
@@ -4101,6 +4103,37 @@ function CommunicationsPageInner() {
                   {enabledCount} ON{autoDefaultCount > 0 ? ` · ${autoDefaultCount} SENDING OUR DEFAULT COPY` : ''}
                 </p>
               </div>
+            </div>
+          </div>
+
+          {/* Always On: the money emails Gavelling writes itself (prompt 97). Display only. */}
+          <div className="mb-9">
+            <div className="flex items-center gap-3 mb-3">
+              <NeuIconDisc gradient={NEU_GRADIENTS.forest} emoji="Locked" icon={Lock} size={46} />
+              <div className="min-w-0">
+                <h3 className="font-black" style={{ color: NEU.ink, fontFamily: OUTFIT, fontSize: 26, lineHeight: 1.1, letterSpacing: '-0.02em', textWrap: 'balance' }}>
+                  Always On
+                </h3>
+                <p style={{ color: SOFT, fontFamily: OUTFIT, fontSize: 12.5, lineHeight: 1.4, marginBlockStart: 2, textWrap: 'pretty' }}>
+                  {ALWAYS_ON_LINE}
+                </p>
+              </div>
+            </div>
+            <div className="flex flex-col gap-2">
+              {ALWAYS_ON_EMAILS.map(e => (
+                <div key={e.key} className="rounded-2xl px-4 py-3" style={PANEL}>
+                  <div className="flex items-start gap-2.5">
+                    <Lock size={14} className="flex-shrink-0" style={{ color: GREEN_INK, marginTop: 3 }} aria-hidden />
+                    <span className="min-w-0">
+                      <span className="block font-semibold text-sm [overflow-wrap:anywhere]" style={{ color: '#1C1410', fontFamily: OUTFIT }}>{e.label}</span>
+                      <span className="block text-xs mt-0.5" style={{ fontFamily: OUTFIT }}>
+                        <span style={{ color: GREEN_INK, fontWeight: 700 }}>Always sends</span>
+                        <span style={{ color: SOFT }}> · {e.description}</span>
+                      </span>
+                    </span>
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
 

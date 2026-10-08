@@ -41,19 +41,19 @@ export const EVENT_REGISTRY = [
   { key: 'application_accepted', label: 'Application Accepted', description: 'Sent when an application is accepted.', defaultDelivery: 'immediate' },
   { key: 'application_rejected', label: 'Application Rejected', description: 'Sent when an application is rejected.', defaultDelivery: 'immediate' },
   { key: 'payment_available', label: 'Payment Available', description: "Sent when payment opens up for a delegate. Companion to Application Accepted: on acceptance, this is suppressed for anyone who was actually emailed Application Accepted for the same action. It only sends alone when that email resolved to nothing (off or unconfigured) for them.", defaultDelivery: 'immediate', recurring: true },
-  { key: 'payment_received', label: 'Payment Received', description: "Sent when a delegate is marked paid.", defaultDelivery: 'immediate' },
-  { key: 'fee_waived', label: 'Fee Waived', description: "Sent when a delegate's fee is waived.", defaultDelivery: 'immediate' },
-  { key: 'aid_approved', label: 'Financial Aid Approved', description: "Sent when a delegate's financial aid request is approved.", defaultDelivery: 'immediate' },
-  { key: 'aid_denied', label: 'Financial Aid Denied', description: "Sent when a delegate's financial aid request is denied.", defaultDelivery: 'immediate' },
+  { key: 'payment_received', label: 'Payment Received', description: "Sent when someone who pays for themselves goes from unpaid to paid, by card or by a proof you approve. People covered by their delegation get the 'Your spot is covered' email instead. The payment receipt is separate and always goes out.", defaultDelivery: 'immediate' },
+  { key: 'fee_waived', label: 'Fee Waived', description: "Sent when financial aid you approve covers someone's whole fee. Free roles such as chairs never get it.", defaultDelivery: 'immediate' },
+  { key: 'aid_approved', label: 'Financial Aid Approved', description: "Sent when you approve a financial aid request, with the amount.", defaultDelivery: 'immediate' },
+  { key: 'aid_denied', label: 'Financial Aid Denied', description: "Sent when you decline a financial aid request.", defaultDelivery: 'immediate' },
   { key: 'allocation_assigned', label: 'Allocation Assigned', description: 'Sent when a delegate is allocated a committee and country.', defaultDelivery: 'immediate' },
   { key: 'co_delegate_assigned', label: 'Co-delegate assigned', description: "Double delegations only. Sent to a delegate who was already told their seat when their co-delegate's allocation is announced later, naming the co-delegate and their email address so the two can prepare together. Once per pair. If both are announced together, each allocation email already names the other and this does not send.", defaultDelivery: 'immediate' },
   { key: 'allocation_changed', label: 'Allocation Changed', description: "Sent when a delegate's allocation changes.", defaultDelivery: 'immediate' },
   { key: 'allocation_removed', label: 'Allocation Removed', description: "Sent when a delegate's allocation is removed.", defaultDelivery: 'manual' },
-  { key: 'pledge_received', label: 'Pledge Received', description: 'Sent when a pledge is marked received.', defaultDelivery: 'immediate' },
+  { key: 'pledge_received', label: 'Pledge Received', description: 'Sent to a delegation leader when you confirm their delegation tickets are paid.', defaultDelivery: 'immediate' },
   { key: 'added_to_delegation', label: 'Added to Delegation', description: 'Sent when a delegate joins a delegation.', defaultDelivery: 'immediate' },
   { key: 'removed_from_delegation', label: 'Removed from Delegation', description: 'Sent when a delegate leaves a delegation.', defaultDelivery: 'manual' },
-  { key: 'spot_received', label: 'Spot Received', description: 'Sent when a delegate is given a paid spot.', defaultDelivery: 'immediate' },
-  { key: 'spot_lost', label: 'Spot Lost', description: 'Sent when a delegate loses their paid spot.', defaultDelivery: 'manual' },
+  { key: 'spot_received', label: 'Spot Received', description: "Coming soon. Today Gavelling sends its own 'Your spot is covered' email when a delegation ticket covers someone.", defaultDelivery: 'immediate' },
+  { key: 'spot_lost', label: 'Spot Lost', description: 'Coming soon. Sent when someone loses the place a delegation ticket covered, for example after a refund.', defaultDelivery: 'immediate' },
   { key: 'not_attending', label: 'Marked Not Attending', description: 'Sent when a delegate is marked not attending.', defaultDelivery: 'manual' },
   { key: 'attendance_restored', label: 'Attendance Restored', description: "Sent when a delegate's attendance is restored.", defaultDelivery: 'immediate' },
   { key: 'documents_published', label: 'Study guide released', description: "Sent automatically to a committee's delegates when its study guide release time passes.", defaultDelivery: 'immediate' },
@@ -262,11 +262,23 @@ export const DEFAULT_ENABLED_EVENTS = new Set<string>(['session_join_invite', 's
 // • Only FUTURE events send. Nothing here queues anyone already waiting:
 //   queueEventEmail only ever addresses the ids its caller passes at the
 //   moment of the action, and no cron sends these events.
+//
+// Owner, 7 Oct 2026 (Financials rebuild): the money answers join them. Aid
+// approved, aid denied, fee waived, spot received and spot lost are answers
+// people are waiting on, so they send by default with our copy, and an
+// organiser can still turn each one off (an explicit OFF row is honoured).
+// Payment received is sent ONLY by the server now, whenever someone who pays
+// for themselves goes from unpaid to paid; nothing on the client queues it.
+// The itemised receipt, the refund email, "Proof not accepted" and "Your spot
+// is covered" are fixed server emails that always send and are not template
+// events at all (Communications lists them under Always On).
 export const ESSENTIAL_DEFAULT_ON_EVENTS = new Set<string>([
   'application_received', 'application_accepted', 'application_rejected',
   'allocation_assigned', 'payment_received',
   // The double-delegation partner notice (see queueCoDelegateAssigned).
   'co_delegate_assigned',
+  // Money answers (owner, 7 Oct 2026).
+  'aid_approved', 'aid_denied', 'fee_waived', 'spot_received', 'spot_lost',
 ]);
 
 /** Whether an event with NO template row still sends (our default copy). */
