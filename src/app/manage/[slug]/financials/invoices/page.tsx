@@ -213,6 +213,7 @@ export default function FinancialsInvoicesPage() {
         <PersonPopup
           applicationId={personId}
           conferenceId={conference.id}
+          slug={conference.slug}
           readOnly={financialsReadOnly}
           onClose={() => setPersonId(null)}
           onChanged={reload}

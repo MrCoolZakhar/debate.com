@@ -2,10 +2,10 @@
 
 // ReceiptsList and ReceiptPopup — every payment as a receipt (prompt 95):
 // the date, how it was paid, the total and what was refunded; opening one
-// shows each item and the total they add up to. Prompt 98 adds the PDF
-// download to the receipt (see RECEIPT_PDF_SLOT below).
+// shows each item and the total they add up to. Since prompt 98 the receipt
+// offers "Download receipt (PDF)" once the conference has its invoice details.
 
-import { ChevronRight, CreditCard, Landmark, ReceiptText } from 'lucide-react';
+import { ChevronRight, CreditCard, Download, Landmark, ReceiptText } from 'lucide-react';
 import { PurchaseShell, PURCHASE_CSS } from '@/components/purchase/purchaseKit';
 import { DANGER, GREEN, INK_SOFT } from './payKit';
 import { money, shortDate, type PayPayment } from './payApi';
@@ -43,7 +43,11 @@ export default function ReceiptsList({ payments, onOpen }: { payments: PayPaymen
   );
 }
 
-export function ReceiptPopup({ payment, conferenceName, onClose }: { payment: PayPayment; conferenceName: string; onClose: () => void }) {
+export function ReceiptPopup({ payment, conferenceName, onClose, pdf }: {
+  payment: PayPayment; conferenceName: string; onClose: () => void;
+  /** Only when the conference has set up its invoice details (prompt 98). */
+  pdf?: { busy: boolean; error: string; onDownload: () => void } | null;
+}) {
   const sum = payment.items.reduce((s, i) => s + i.amount_cents, 0);
   return (
     <>
@@ -70,7 +74,16 @@ export function ReceiptPopup({ payment, conferenceName, onClose }: { payment: Pa
           {payment.returned_cents > 0 && (
             <p style={{ margin: 0, fontSize: 14, color: DANGER }}>{money(payment.returned_cents, payment.currency)} of this was refunded</p>
           )}
-          {/* RECEIPT_PDF_SLOT: prompt 98 adds "Download PDF" here. */}
+          {pdf && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <div>
+                <button type="button" className="gv-pay-btn gv-pay-forest" disabled={pdf.busy} onClick={pdf.onDownload}>
+                  <Download size={16} strokeWidth={2.4} aria-hidden /> {pdf.busy ? 'Making the PDF' : 'Download receipt (PDF)'}
+                </button>
+              </div>
+              {pdf.error && <p className="gv-pay-err" role="alert">{pdf.error}</p>}
+            </div>
+          )}
         </div>
       </PurchaseShell>
     </>

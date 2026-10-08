@@ -248,7 +248,7 @@ export function formatDate(iso: string | null | undefined): string {
   return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
-/** Prompt 98 switches this on, when generating an invoice or receipt is built.
+/** On since prompt 98: the Generate invoices card opens Invoices and Receipts.
  *  Lives here rather than in page.tsx because a Next page may only export its
  *  default and route config. */
-export const GENERATE_INVOICES_READY = false;
+export const GENERATE_INVOICES_READY = true;

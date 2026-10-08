@@ -11,7 +11,7 @@
 // inside Gavelling (CardPayPopup); manual conferences keep the proof upload
 // (payPanels.tsx) until prompt 96 replaces it.
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
@@ -44,6 +44,8 @@ import { cancelStartedPayment, proofLink, readStarted, startManualPayment, type 
 import ManualPayPopup, { type ManualMode } from './ManualPayPopup';
 import StartedPayments from './StartedPayments';
 import { LockPopup, NotReceivedPopup, RefundRequestPopup } from './SmallPopups';
+import { readMyDocs, receiptFor, type MyDocs } from './payDocsApi';
+import { DocViewPopup, DocumentsSection, MakeDocPopup, PAYDOCS_CSS, downloadById, type MakePreset } from './PayDocuments';
 
 const INVOICE_SELECT = 'id, conference_id, kind, label, amount_cents, amount_paid_cents, currency, status, gates_acceptance, payable_before_acceptance, application_id, society_id, config_id, aid_applied_cents, quantity, created_at';
 
@@ -77,6 +79,14 @@ export default function PayPage() {
   const [startBusy, setStartBusy] = useState(false);
   const [receiptKey, setReceiptKey] = useState<string | null>(null);
   const [returnWait, setReturnWait] = useState(false);
+  // Invoices and receipts (prompt 98): nothing shows until the conference has its invoice details.
+  const [myDocs, setMyDocs] = useState<MyDocs | null>(null);
+  const [docsAttempt, setDocsAttempt] = useState(0);
+  const [makeDoc, setMakeDoc] = useState<{ preset: MakePreset | null } | null>(null);
+  const [viewDoc, setViewDoc] = useState<string | null>(null);
+  const [docBusy, setDocBusy] = useState<string | null>(null);
+  const [receiptPdfErr, setReceiptPdfErr] = useState('');
+  const [docListErr, setDocListErr] = useState('');
 
   // ?payment=success&session_id: back from 3-D Secure, wait for the webhook.
   useEffect(() => {
@@ -152,6 +162,25 @@ export default function PayPage() {
   }, [slug, authLoading, user?.id, session?.access_token, attempt]);
 
   const reload = useCallback(() => setAttempt(a => a + 1), []);
+
+  const docsConfId = conference?.id ?? null;
+  useEffect(() => {
+    if (!docsConfId || !user) return;
+    let alive = true;
+    // A failed read only hides the documents; paying is never blocked by it.
+    readMyDocs(docsConfId).then(d => { if (alive) setMyDocs(d); }).catch(() => { if (alive) setMyDocs(null); });
+    return () => { alive = false; };
+  }, [docsConfId, user, docsAttempt, attempt]);
+
+  // ?doc=<id> (the "Send to payer" email's link) opens that document once.
+  const docParamDone = useRef(false);
+  useEffect(() => {
+    if (docParamDone.current || typeof window === 'undefined') return;
+    const id = new URLSearchParams(window.location.search).get('doc');
+    if (!id) return;
+    docParamDone.current = true;
+    void Promise.resolve().then(() => setViewDoc(id));
+  }, []);
 
   const wait = useSettleWait(returnWait && !!conference, async () => {
     if (!conference) return false;
@@ -293,6 +322,32 @@ export default function PayPage() {
 
   const refundable = items.filter(i => i.state === 'paid' && i.can_request_refund);
 
+  const docsReady = !!myDocs?.settings_ready;
+  const openForInvoice = items.filter(i => i.due_cents > 0 && i.state !== 'covered' && i.state !== 'waived');
+  const downloadDoc = async (id: string, onError: (msg: string) => void) => {
+    if (docBusy) return;
+    setDocBusy(id);
+    const problem = await downloadById(id);
+    setDocBusy(null);
+    if (problem) onError(problem);
+  };
+  const receiptPdf = () => {
+    if (!receipt || !myDocs) return;
+    setReceiptPdfErr('');
+    const existing = receiptFor(myDocs.documents, receipt.key);
+    if (existing) { void downloadDoc(existing.document_id, setReceiptPdfErr); return; }
+    setReceiptKey(null);
+    setMakeDoc({ preset: { kind: 'receipt', keys: [receipt.key] } });
+  };
+  const closeViewDoc = () => {
+    setViewDoc(null);
+    const url = new URL(window.location.href);
+    if (url.searchParams.has('doc')) {
+      url.searchParams.delete('doc');
+      window.history.replaceState(window.history.state, '', url.pathname + (url.search || '') + url.hash);
+    }
+  };
+
   return (
     <Frame theme={conference.theme} slug={slug}>
       <h1 style={{ margin: 0, fontSize: 'clamp(28px, 3vw, 36px)', fontWeight: 900, letterSpacing: '-0.02em', color: INK }}>
@@ -359,7 +414,18 @@ export default function PayPage() {
               onRestart={(p) => { void startManual(p.items.map(i => i.invoice_id), 'upload'); }}
             />
           )}
-          <ReceiptsList payments={overview.payments} onOpen={setReceiptKey} />
+          <ReceiptsList payments={overview.payments} onOpen={key => { setReceiptPdfErr(''); setReceiptKey(key); }} />
+          {docsReady && myDocs && (
+            <DocumentsSection
+              docs={myDocs.documents}
+              canMake={overview.payments.length > 0 || openForInvoice.length > 0}
+              onMake={() => setMakeDoc({ preset: null })}
+              onOpen={setViewDoc}
+              onDownload={id => { setDocListErr(''); void downloadDoc(id, setDocListErr); }}
+              downloading={docBusy}
+              error={docListErr}
+            />
+          )}
         </div>
 
         {primary && (
@@ -423,7 +489,27 @@ export default function PayPage() {
         <NotReceivedPopup item={notReceived} onClose={() => setNotReceived(null)} onDone={() => { setNotReceived(null); reload(); }} />
       )}
 
-      {receipt && <ReceiptPopup payment={receipt} conferenceName={c.full_name} onClose={() => setReceiptKey(null)} />}
+      {receipt && (
+        <ReceiptPopup
+          payment={receipt}
+          conferenceName={c.full_name}
+          onClose={() => setReceiptKey(null)}
+          pdf={docsReady ? { busy: docBusy !== null, error: receiptPdfErr, onDownload: receiptPdf } : null}
+        />
+      )}
+      {(makeDoc || viewDoc) && <style>{PAYDOCS_CSS}</style>}
+      {makeDoc && docsReady && myDocs && (
+        <MakeDocPopup
+          conferenceId={c.id}
+          payments={overview.payments}
+          openItems={openForInvoice}
+          billing={myDocs.billing}
+          preset={makeDoc.preset}
+          onClose={() => setMakeDoc(null)}
+          onMade={() => setDocsAttempt(a => a + 1)}
+        />
+      )}
+      {viewDoc && <DocViewPopup documentId={viewDoc} onClose={closeViewDoc} />}
     </Frame>
   );
 }

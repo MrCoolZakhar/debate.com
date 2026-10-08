@@ -22,6 +22,7 @@ import { FinancialsCurrencyProvider, useFinancialsCurrency, mutedCaption } from 
 const SUB_PAGES: Record<string, { title: string; caption?: string }> = {
   invoices: { title: 'Invoices' },
   history: { title: 'Transactions', caption: 'Every payment, refund and correction, newest first' },
+  documents: { title: 'Invoices and Receipts', caption: 'Formal invoices and receipts in your conference\'s name' },
 };
 
 function SubPageHeader({ slug, section }: { slug: string; section: string }) {

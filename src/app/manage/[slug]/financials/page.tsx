@@ -5,7 +5,7 @@
  * Conference Store's manner:
  *   header   Received and Outstanding, the display-currency picker
  *   row 1    Money (breakdown pop-up) and Things to do (the anchor)
- *   row 2    Invoices, Generate invoices (off until GENERATE_INVOICES_READY)
+ *   row 2    Invoices, Generate invoices (opens Invoices and Receipts)
  *   row 3    four settings cards (payment method, registration fee, add-ons, vouchers)
  * Every number is from financials_dashboard, read on mount and again after any
  * action. The things-to-do line is from money_things_to_do. The Referrals
@@ -260,8 +260,14 @@ export default function FinancialsDashboardPage() {
               hint="Schools and sponsors often need a formal invoice or receipt. This makes one under your conference's name, ready to send."
             >
               <div className="gv-fd-foot">
-                <button type="button" className="gv-st-btn gv-st-outline" disabled={!GENERATE_INVOICES_READY || financialsReadOnly}>Generate invoices</button>
-                {!GENERATE_INVOICES_READY && <span className="gv-st-quiet">Available soon</span>}
+                {GENERATE_INVOICES_READY ? (
+                  <Link href={`/manage/${slug}/financials/documents`} className="gv-st-btn gv-st-outline">Generate invoices</Link>
+                ) : (
+                  <>
+                    <button type="button" className="gv-st-btn gv-st-outline" disabled>Generate invoices</button>
+                    <span className="gv-st-quiet">Available soon</span>
+                  </>
+                )}
               </div>
             </DashCard>
           </div>

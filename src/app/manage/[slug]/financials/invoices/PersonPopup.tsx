@@ -6,7 +6,8 @@
 // (mark paid, mark unpaid, refund) re-reads this person AND the list behind;
 // nothing on screen is patched by hand.
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import Link from 'next/link';
 import {
   ChevronDown, ChevronRight, Clock, CreditCard, ExternalLink, Hourglass, Landmark, Lock, Undo2,
 } from 'lucide-react';
@@ -17,6 +18,9 @@ import { READ_ONLY_LINE, formatDate } from '../dashboardKit';
 import MarkPaidDialog from '../MarkPaidDialog';
 import MarkUnpaidDialog from '../MarkUnpaidDialog';
 import RefundDialog from '../RefundDialog';
+import DocumentEditor from '../documents/DocumentEditor';
+import { DOCS_CSS } from '../documents/docsKit';
+import { createDocument } from '../documents/documentsApi';
 import { readPerson, roleWord, type AuditRow, type PersonDetail, type PersonInvoice, type PersonPayment } from './invoicesApi';
 
 const SOFT_GREEN = '#2A5A3C';
@@ -85,9 +89,11 @@ type Sub =
   | { kind: 'unpaid'; ids: string[]; label: string }
   | { kind: 'refund'; items: RefundItem[]; currency: string };
 
-export default function PersonPopup({ applicationId, conferenceId, readOnly, onClose, onChanged }: {
+export default function PersonPopup({ applicationId, conferenceId, slug, readOnly, onClose, onChanged }: {
   applicationId: string;
   conferenceId: string;
+  /** For the "Add your invoice details" link when a conference has none yet. */
+  slug?: string;
   readOnly: boolean;
   onClose: () => void;
   /** Re-read the list behind after any landed action. */
@@ -102,6 +108,11 @@ export default function PersonPopup({ applicationId, conferenceId, readOnly, onC
   const [showAudit, setShowAudit] = useState(false);
   const [sub, setSub] = useState<Sub | null>(null);
   const [proofErr, setProofErr] = useState('');
+  // "Make an invoice" for the ticked open items (prompt 98).
+  const [invBusy, setInvBusy] = useState(false);
+  const [invErr, setInvErr] = useState<{ text: string; noSettings?: boolean } | null>(null);
+  const [docId, setDocId] = useState<string | null>(null);
+  const invBusyRef = useRef(false);
 
   useEffect(() => {
     let alive = true;
@@ -124,6 +135,18 @@ export default function PersonPopup({ applicationId, conferenceId, readOnly, onC
   const paid = (detail?.payments ?? []).reduce((s, x) => s + x.total_cents, 0) - returned;
   const tickedLines = outstanding.filter(i => ticked.has(i.invoice_id));
   const tickedTotal = tickedLines.reduce((s, i) => s + i.due_cents, 0);
+
+  const makeInvoice = async () => {
+    if (invBusyRef.current || tickedLines.length === 0) return;
+    invBusyRef.current = true; setInvBusy(true); setInvErr(null);
+    const r = await createDocument(conferenceId, 'invoice', applicationId, null, tickedLines.map(i => i.invoice_id));
+    invBusyRef.current = false; setInvBusy(false);
+    if (!r.ok) {
+      setInvErr(r.code === 'no_settings' ? { text: 'Add your invoice details first. They go at the top of every invoice', noSettings: true } : { text: r.error });
+      return;
+    }
+    setDocId(r.data.document_id);
+  };
 
   const viewProof = async (path: string) => {
     setProofErr('');
@@ -207,12 +230,23 @@ export default function PersonPopup({ applicationId, conferenceId, readOnly, onC
                         onClick={() => setSub({ kind: 'paid', ids: tickedLines.map(i => i.invoice_id), total: tickedTotal, currency })}>
                         {tickedLines.length > 0 ? `Mark ${tickedLines.length} paid` : 'Mark paid'}
                       </button>
+                      <button type="button" className="gv-st-btn gv-st-outline" disabled={tickedLines.length === 0 || invBusy}
+                        title={tickedLines.length === 0 ? 'Tick the items to put on the invoice' : undefined}
+                        onClick={() => { void makeInvoice(); }}>
+                        {invBusy ? 'Making the invoice' : 'Make an invoice'}
+                      </button>
                       {outstanding.some(i => !i.in_review) && (
                         <button type="button" className="gv-st-link" onClick={() => setTicked(new Set(outstanding.filter(i => !i.in_review).map(i => i.invoice_id)))}>
                           Select all
                         </button>
                       )}
                     </div>
+                  )}
+                  {invErr && (
+                    <p className="gv-st-err" role="alert" style={{ marginTop: 8 }}>
+                      {invErr.text}
+                      {invErr.noSettings && slug ? <> <Link className="gv-st-link" href={`/manage/${slug}/financials/documents`}>Add invoice details</Link></> : null}
+                    </p>
                   )}
                 </section>
               )}
@@ -357,6 +391,12 @@ export default function PersonPopup({ applicationId, conferenceId, readOnly, onC
         </div>
       </PurchaseShell>
 
+      {docId && (
+        <>
+          <style>{DOCS_CSS}</style>
+          <DocumentEditor documentId={docId} payerName={p?.name ?? null} readOnly={readOnly} onClose={() => setDocId(null)} />
+        </>
+      )}
       {sub?.kind === 'paid' && (
         <MarkPaidDialog
           conferenceId={conferenceId}
