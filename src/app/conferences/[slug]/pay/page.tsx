@@ -1,257 +1,50 @@
 'use client';
 
-// Participant payment page, neumorphic (src/components/neu.tsx), reached
-// from the "YOUR APPLICATION" card's PAY AND REQUEST AID button once an
-// application is submitted (payable pre-acceptance for the app fee — see
-// ConferenceDetailClient). LEFT column is the real invoices list synced from
-// sync_participant_invoices (role_fee/app_fee/addon/pledge_spot). role_fee
-// keeps its own rich voucher panel (its dedicated PAY button still goes
-// through the invoiceId checkout, the only path that applies a
-// freshly-typed voucher code) and, when waived (covered by the delegation),
-// renders as a covered notice with no pay affordance; role_fee is ALSO
-// selectable for the combined "Pay Selected" flow, which charges via
-// create-checkout's invoiceIds path — that path recomputes role_fee's
-// aid/voucher server-side at charge time (v16), so a combined payment never
-// overcharges an aid/voucher recipient, it just can't pick up a voucher
-// typed but never submitted through the panel's own button. app_fee/addon/
-// pledge_spot are generic cards, each individually payable via the
-// invoiceId path (payInvoiceCheckout) or selectable into the combined
-// batch — pledge_spot cards are owned by the delegation leader (own
-// application_id), materialized by add_pledged_spots. RIGHT column action
-// buttons are always visible now — unavailable ones dim and explain why on
-// click, instead of disappearing. "Add Delegation Spots" lets a leader
-// pledge more spots (add_pledged_spots), which materialize as new
-// pledge_spot invoices in the list above rather than being paid inline.
+// /conferences/[slug]/pay — Conference Payments (rebuilt in prompt 95).
+// One screen answers "what do I owe, for what, and how do I pay it":
+//   BalanceHeader   To pay (by type), Paid, Waiting for review
+//   ItemList        every item with its state in words; tick to pay, X to remove
+//   PayBar          the ticked items and one Pay button, pinned to the bottom
+//   ReceiptsList    every payment as a receipt
+//   ActionsColumn   only the actions that apply (aid, add-ons, tickets, credits)
+// Everything shown comes from my_pay_overview (payApi.ts). Card payments run
+// inside Gavelling (CardPayPopup); manual conferences keep the proof upload
+// (payPanels.tsx) until prompt 96 replaces it.
 
-import AuthLink from '@/components/auth/AuthLink';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import {
-  ArrowLeft, CheckCircle2, ChevronDown, ChevronUp, CircleDashed, Clock, Coins, CreditCard, GraduationCap, HandCoins, ImageUp,
-  Lock, Mail, Minus, MinusCircle, Plus, Receipt, ShoppingBag, Users2, Wallet, X, XCircle,
-} from 'lucide-react';
-import type { LucideIcon } from 'lucide-react';
+import { ArrowLeft } from 'lucide-react';
+import AuthLink from '@/components/auth/AuthLink';
 import SiteNav from '@/components/SiteNav';
 import Loader from '@/components/Loader';
-import Portal from '@/components/Portal';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
-import { formatFee } from '@/lib/utils';
-import { activePhaseFee, type FeePhase } from '@/lib/finance';
-import { payInvoiceCheckout, payInvoicesCheckout } from '@/lib/payments';
-import { openCreditsPopup } from '@/lib/purchasePopup';
-import { reportBlocked } from '@/lib/reportCrash';
-import { normalizeBlocks, type FormBlock } from '@/lib/customQuestions';
+import { activePhaseFee } from '@/lib/finance';
+import type { InvoiceRow } from '@/lib/invoices';
+import { PurchaseShell, PURCHASE_CSS } from '@/components/purchase/purchaseKit';
+import { themeCssVars } from '@/lib/theme';
+import { friendlyError } from '@/lib/friendlyError';
+import { GoldWord } from '@/components/BrandHeading';
+import { statusPriority } from '../participant/shared';
 import {
-  type InvoiceRow, invoiceLabel, invoiceDueCents, centsToFee, isInvoicePayable, isInvoiceSettled,
-} from '@/lib/invoices';
-import { ModalOverlay, MODAL_PANEL_MAX_HEIGHT } from '@/components/CommitteeEditorModal';
-import {
-  NEU, NEU_GRADIENTS, OUTFIT, EASE, NeuCard, NeuIconDisc, type NeuGradient,
-} from '@/components/neu';
-import { themeCssVars, type ConferenceTheme } from '@/lib/theme';
-import { getGateState, roleLabel, statusPriority } from '../participant/shared';
-import { friendlyError, plainOrFallback } from '@/lib/friendlyError';
-import AidRequestModal from '../participant/AidRequestModal';
-import DelegationCreditsCard from '../participant/DelegationCreditsCard';
-import PledgeInvoicingCard from '../participant/PledgeInvoicingCard';
-import PayActionPopup from '../participant/PayActionPopup';
-import { safeStorageKey } from '@/lib/storageKey';
+  ManualPayAction, PaymentsNotSetUp, ProofUploadModal,
+  type ActiveAddon, type AidRequestRow, type PayConference, type PayRoleConfig,
+} from './payPanels';
+import { PAY_CSS, INK, INK_SOFT } from './payKit';
+import { money, readPayOverview, removeAddon, removePledgedTicket, type PayItem, type PayOverview } from './payApi';
+import BalanceHeader from './BalanceHeader';
+import ItemList, { canTick } from './ItemList';
+import PayBar from './PayBar';
+import CardPayPopup from './CardPayPopup';
+import ReceiptsList, { ReceiptPopup } from './ReceiptsList';
+import ActionsColumn from './ActionsColumn';
+import VoucherPanel from './VoucherPanel';
+import { useSettleWait, SLOW_LINE, WAITING_LINE } from './settleWait';
 
-// ── Types ──────────────────────────────────────────────────────────────────
+const INVOICE_SELECT = 'id, conference_id, kind, label, amount_cents, amount_paid_cents, currency, status, gates_acceptance, payable_before_acceptance, application_id, society_id, config_id, aid_applied_cents, quantity, created_at';
 
-interface PayConference {
-  id: string;
-  full_name: string;
-  acronym: string | null;
-  fee_currency: string;
-  contact_email: string | null;
-  payment_method: string | null;
-  connect_onboarding_status: string;
-  /** Gavelling's own Stripe account collects card payments (no Connect). */
-  platform_collects: boolean | null;
-  external_payment_url: string | null;
-  external_payment_note: string | null;
-  financial_aid_enabled: boolean;
-  aid_questions: unknown[];
-  aid_intro: string | null;
-  theme: ConferenceTheme | null;
-}
-
-interface PayApplication {
-  id: string;
-  role: string;
-  status: string;
-  payment_status: string;
-  amount_paid: number;
-  society_id: string | null;
-  pledge_type: 'delegation' | null;
-  spots_pledged: number | null;
-  pledge_confirmed_at: string | null;
-}
-
-interface PayRoleConfig {
-  role: string;
-  fee_amount: number | null;
-  fee_currency: string | null;
-  fee_phases: FeePhase[] | null;
-  payment_timing: string;
-}
-
-interface AidRequestRow {
-  status: 'pending' | 'approved' | 'denied';
-  granted_amount: number | null;
-}
-
-interface ActiveAddon {
-  id: string;
-  label: string;
-  description: string | null;
-  amount_cents: number;
-  currency: string;
-}
-
-// ── Payment batches (Payments history + awaiting-review tracking) ──────────
-
-interface PaymentBatchLineItem {
-  id: string;
-  invoice_id: string;
-  amount_cents: number;
-  currency: string;
-  invoice: { kind: string; label: string | null } | { kind: string; label: string | null }[] | null;
-}
-
-interface PaymentBatchRow {
-  id: string;
-  method: 'stripe' | 'manual' | 'organizer';
-  status: 'pending' | 'paid' | 'rejected';
-  total_cents: number;
-  currency: string;
-  proof_path: string | null;
-  proof_uploaded_at: string | null;
-  paid_at: string | null;
-  created_at: string;
-  payments: PaymentBatchLineItem[];
-}
-
-type Badge = 'PAID' | 'WAIVED' | 'PARTIAL' | 'UNPAID' | 'REFUNDED';
-
-// State marks are an icon plus a plain word (CLAUDE.md §8): no pill, no capitals.
-const BADGE_STYLES: Record<Badge, { color: string; icon: LucideIcon; word: string }> = {
-  PAID: { color: '#2A5A3C', icon: CheckCircle2, word: 'Paid' },
-  WAIVED: { color: '#6B5E4E', icon: MinusCircle, word: 'Waived' },
-  PARTIAL: { color: '#8A6614', icon: CircleDashed, word: 'Partial' },
-  UNPAID: { color: '#8B2020', icon: XCircle, word: 'Unpaid' },
-  REFUNDED: { color: '#6B5E4E', icon: MinusCircle, word: 'Refunded' },
-};
-
-function deriveBadge(paymentStatus: string, amountPaid: number): Badge {
-  if (paymentStatus === 'paid') return 'PAID';
-  if (paymentStatus === 'waived') return 'WAIVED';
-  if (paymentStatus === 'refunded') return 'REFUNDED';
-  return amountPaid > 0 ? 'PARTIAL' : 'UNPAID';
-}
-
-function invoiceBadge(inv: InvoiceRow): Badge {
-  if (inv.status === 'settled') return 'PAID';
-  if (inv.status === 'waived') return 'WAIVED';
-  if (inv.status === 'partial') return 'PARTIAL';
-  return 'UNPAID';
-}
-
-// ── Small shared pieces ──────────────────────────────────────────────────────
-
-function BadgePill({ badge }: { badge: Badge }) {
-  const b = BADGE_STYLES[badge];
-  const Icon = b.icon;
-  return (
-    <span
-      className="inline-flex items-center gap-1 flex-shrink-0"
-      style={{ color: b.color, fontSize: 12.5, fontFamily: OUTFIT, fontWeight: 700 }}
-    >
-      <Icon size={15} strokeWidth={2.2} aria-hidden />
-      {b.word}
-    </span>
-  );
-}
-
-const NOTE_TONES = {
-  amber: { color: '#B8844A', bg: 'rgba(184,132,74,0.1)', border: 'rgba(184,132,74,0.24)' },
-  green: { color: '#2A5A3C', bg: 'rgba(61,122,82,0.1)', border: 'rgba(61,122,82,0.24)' },
-  muted: { color: '#6E5F4E', bg: 'rgba(154,138,120,0.1)', border: 'rgba(154,138,120,0.24)' },
-  red: { color: '#8B2020', bg: 'rgba(139,32,32,0.08)', border: 'rgba(139,32,32,0.22)' },
-} as const;
-
-function Note({ tone, children }: { tone: keyof typeof NOTE_TONES; children: React.ReactNode }) {
-  const t = NOTE_TONES[tone];
-  return (
-    <p
-      className="text-[13px] rounded-xl px-4 py-3"
-      style={{ color: t.color, fontFamily: OUTFIT, backgroundColor: t.bg, border: `1px solid ${t.border}`, lineHeight: 1.6 }}
-    >
-      {children}
-    </p>
-  );
-}
-
-// Shown wherever a delegate reaches a payable invoice but the organizer's
-// financial setup isn't ready yet — grandfathered conferences may never
-// finish this, so the copy points the delegate at the organizer rather than
-// asking them to wait for something that might not arrive.
-function PaymentsNotSetUp({ contactEmail }: { contactEmail: string | null }) {
-  return (
-    <div className="rounded-xl px-4 py-3" style={{ backgroundColor: 'rgba(184,132,74,0.1)', border: '1px solid rgba(184,132,74,0.24)' }}>
-      <p style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 700, color: '#B8844A' }}>This conference has not set up payments yet</p>
-      <p style={{ fontFamily: OUTFIT, fontSize: 12, color: NEU.muted, marginTop: 4, lineHeight: 1.6 }}>
-        The organizing team has not finished their payment setup, so there is nothing to pay here yet. Contact them and they can sort it out.
-      </p>
-      {contactEmail && (
-        <a
-          href={`mailto:${contactEmail}`}
-          className="inline-block mt-2"
-          style={{ fontFamily: OUTFIT, fontSize: 12, fontWeight: 700, color: '#B8844A', textDecoration: 'underline', textUnderlineOffset: 3 }}
-        >
-          {contactEmail}
-        </a>
-      )}
-    </div>
-  );
-}
-
-type ActionIcon = React.ComponentType<{ size?: number; strokeWidth?: number; style?: React.CSSProperties }>;
-
-function ActionRow({
-  icon: Icon, gradient, title, subtitle, dimmed = false, onClick,
-}: {
-  icon: ActionIcon;
-  gradient: NeuGradient;
-  title: string;
-  subtitle?: string;
-  /** Visually dimmed (unavailable), but still clickable — the click shows an
-   *  explanatory message instead of opening the feature. Right-column
-   *  buttons are never hidden, only dimmed. */
-  dimmed?: boolean;
-  onClick?: () => void;
-}) {
-  return (
-    <NeuCard
-      hover
-      onClick={onClick}
-      style={{ padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 14, opacity: dimmed ? 0.55 : 1 }}
-    >
-      <NeuIconDisc gradient={gradient} icon={Icon} size={38} />
-      <div className="flex-1 min-w-0">
-        <p style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 13.5, color: NEU.ink, margin: 0 }}>{title}</p>
-        {subtitle && (
-          <p style={{ fontFamily: OUTFIT, fontSize: 11, color: NEU.muted, margin: '2px 0 0 0' }}>{subtitle}</p>
-        )}
-      </div>
-    </NeuCard>
-  );
-}
-
-// ── Page ───────────────────────────────────────────────────────────────────
+type RoleConfigRow = PayRoleConfig & { is_enabled: boolean | null };
 
 export default function PayPage() {
   const params = useParams<{ slug: string }>();
@@ -260,136 +53,35 @@ export default function PayPage() {
 
   const [loading, setLoading] = useState(true);
   const [conference, setConference] = useState<PayConference | null>(null);
-  const [application, setApplication] = useState<PayApplication | null>(null);
-  // The user's own application with delegation-leader capabilities (adding
-  // spots, buying credits, delegation-wide invoices), independent of which
-  // application won the status-priority pick for `application` (primary) —
-  // a user can hold both a delegate application AND a head-delegate/advisor
-  // application at the same conference, and primary can land on either one.
-  const [leaderApp, setLeaderApp] = useState<PayApplication | null>(null);
-  const [allApps, setAllApps] = useState<PayApplication[]>([]);
-  const [roleConfigs, setRoleConfigs] = useState<PayRoleConfig[]>([]);
+  const [overview, setOverview] = useState<PayOverview | null>(null);
+  const [loadError, setLoadError] = useState('');
+  const [roleConfigs, setRoleConfigs] = useState<RoleConfigRow[]>([]);
+  const [addons, setAddons] = useState<ActiveAddon[]>([]);
   const [aidRequest, setAidRequest] = useState<AidRequestRow | null>(null);
-  const [invoices, setInvoices] = useState<InvoiceRow[]>([]);
-  const [configDescriptions, setConfigDescriptions] = useState<Record<string, string>>({});
-  const [activeAddons, setActiveAddons] = useState<ActiveAddon[]>([]);
-  const [paymentBatches, setPaymentBatches] = useState<PaymentBatchRow[]>([]);
+  const [addonInvoices, setAddonInvoices] = useState<InvoiceRow[]>([]);
+  const [attempt, setAttempt] = useState(0);
 
-  async function fetchAidRequest(applicationId: string, accessToken: string): Promise<AidRequestRow | null> {
-    const { data } = await getAuthedClient(accessToken)
-      .from('financial_aid_requests')
-      .select('status, granted_amount')
-      .eq('application_id', applicationId)
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    return (data as AidRequestRow | null) ?? null;
-  }
+  const [selected, setSelected] = useState<Set<string>>(() => new Set());
+  const [notice, setNotice] = useState('');
+  const [paying, setPaying] = useState<'card' | 'manual' | null>(null);
+  const [proofIds, setProofIds] = useState<string[] | null>(null);
+  const [receiptKey, setReceiptKey] = useState<string | null>(null);
+  const [returnWait, setReturnWait] = useState(false);
 
-  const INVOICE_SELECT = 'id, conference_id, kind, label, amount_cents, amount_paid_cents, currency, status, gates_acceptance, payable_before_acceptance, application_id, society_id, config_id, aid_applied_cents, quantity, created_at';
-
-  async function fetchInvoices(
-    apps: PayApplication[],
-    primary: PayApplication,
-    leader: PayApplication | null,
-    conferenceId: string,
-    accessToken: string
-  ): Promise<InvoiceRow[]> {
-    const supabase = getAuthedClient(accessToken);
-    // sync_participant_invoices creates whatever this application newly owes
-    // (registration once payable, the conference application fee, active
-    // add-ons) — safe to call every load, it's a no-op once rows exist.
-    // Also synced for leaderApp when it differs from primary, so a dual-role
-    // user's pledge_spot invoices (owed by their leader application) still
-    // materialize even when a different application won the primary pick.
-    await supabase.rpc('sync_participant_invoices', { p_application_id: primary.id });
-    if (leader && leader.id !== primary.id) {
-      await supabase.rpc('sync_participant_invoices', { p_application_id: leader.id });
-    }
-
-    // Two independent queries — every one of the user's applications at this
-    // conference, plus the delegation's society-owned invoices when they
-    // lead one — merged and deduped by id, since a pledge_spot invoice on
-    // the leader's own application_id matches both queries at once.
-    const [byAppRes, bySocietyRes] = await Promise.all([
-      supabase
-        .from('invoices')
-        .select(INVOICE_SELECT)
-        .eq('conference_id', conferenceId)
-        .in('application_id', apps.map(a => a.id))
-        .neq('status', 'void')
-        .order('created_at', { ascending: true }),
-      leader?.society_id
-        ? supabase
-            .from('invoices')
-            .select(INVOICE_SELECT)
-            .eq('conference_id', conferenceId)
-            .eq('society_id', leader.society_id)
-            .neq('status', 'void')
-            .order('created_at', { ascending: true })
-        : Promise.resolve({ data: [] as InvoiceRow[] }),
-    ]);
-
-    const merged = new Map<string, InvoiceRow>();
-    for (const row of ((byAppRes.data ?? []) as InvoiceRow[])) merged.set(row.id, row);
-    for (const row of ((bySocietyRes.data ?? []) as InvoiceRow[])) merged.set(row.id, row);
-    return Array.from(merged.values()).sort((a, b) => a.created_at.localeCompare(b.created_at));
-  }
-
-  async function fetchConfigDescriptions(accessToken: string, invs: InvoiceRow[]): Promise<Record<string, string>> {
-    const supabase = getAuthedClient(accessToken);
-    // Descriptions live on the config row (application_surcharges / addons),
-    // not on the invoice itself — batch-fetch by kind.
-    const surchargeIds = Array.from(new Set(invs.filter(i => i.kind === 'app_fee' && i.config_id).map(i => i.config_id!)));
-    const addonIds = Array.from(new Set(invs.filter(i => i.kind === 'addon' && i.config_id).map(i => i.config_id!)));
-    const [surchargeRes, addonRes] = await Promise.all([
-      surchargeIds.length > 0
-        ? supabase.from('application_surcharges').select('id, description').in('id', surchargeIds)
-        : Promise.resolve({ data: [] }),
-      addonIds.length > 0
-        ? supabase.from('addons').select('id, description').in('id', addonIds)
-        : Promise.resolve({ data: [] }),
-    ]);
-    const descMap: Record<string, string> = {};
-    for (const row of ((surchargeRes.data ?? []) as { id: string; description: string | null }[])) {
-      if (row.description) descMap[row.id] = row.description;
-    }
-    for (const row of ((addonRes.data ?? []) as { id: string; description: string | null }[])) {
-      if (row.description) descMap[row.id] = row.description;
-    }
-    return descMap;
-  }
-
-  // Filters on payer_user_id EXPLICITLY rather than relying on RLS to do it.
-  // is_conference_organizer() includes a platform-admin bypass and also
-  // returns true for an organizer of THIS conference, so a caller who is
-  // both an organizer and an applicant would otherwise see the entire
-  // conference's payment history rendered as their own on this page. Every
-  // method (stripe/manual/organizer), newest first. Feeds both the Payments
-  // tab and the awaiting-review set that hides an invoice's pay affordance
-  // while its manual proof is under review.
-  async function fetchPaymentBatches(conferenceId: string, userId: string, accessToken: string): Promise<PaymentBatchRow[]> {
-    const supabase = getAuthedClient(accessToken);
-    const { data } = await supabase
-      .from('payment_batches')
-      .select(`
-        id, method, status, total_cents, currency, proof_path, proof_uploaded_at, paid_at, created_at,
-        payments (id, invoice_id, amount_cents, currency, invoice:invoices (kind, label))
-      `)
-      .eq('conference_id', conferenceId)
-      .eq('payer_user_id', userId)
-      .order('created_at', { ascending: false });
-    return (data ?? []) as unknown as PaymentBatchRow[];
-  }
+  // ?payment=success&session_id: back from 3-D Secure, wait for the webhook.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const q = new URLSearchParams(window.location.search);
+    if (q.get('payment') !== 'success') return;
+    void Promise.resolve().then(() => setReturnWait(true));
+  }, []);
 
   useEffect(() => {
     if (authLoading) return;
-    if (!user || !session) { setLoading(false); return; }
+    if (!user || !session) { void Promise.resolve().then(() => setLoading(false)); return; }
     let cancelled = false;
     (async () => {
-      setLoading(true);
       const supabase = getAuthedClient(session.access_token);
-
       const { data: confData } = await supabase
         .from('conferences')
         .select(`
@@ -404,2191 +96,265 @@ export default function PayPage() {
       const conf = confData as PayConference;
       setConference(conf);
 
+      // Same sync as before: whatever this person newly owes is created first.
       const { data: appsData } = await supabase
-        .from('applications')
-        .select('id, role, status, payment_status, amount_paid, society_id, pledge_type, spots_pledged, pledge_confirmed_at')
-        .eq('conference_id', conf.id)
-        .eq('user_id', user.id);
+        .from('applications').select('id, role, status, society_id')
+        .eq('conference_id', conf.id).eq('user_id', user.id);
+      const apps = (appsData ?? []) as { id: string; role: string; status: string; society_id: string | null }[];
+      // No application here: nothing to read, the "No application on file" card says so.
+      if (apps.length === 0) { setOverview(null); setLoading(false); return; }
+      for (const a of apps.filter(x => x.status !== 'rejected' && x.status !== 'withdrawn')) {
+        await supabase.rpc('sync_participant_invoices', { p_application_id: a.id });
+      }
       if (cancelled) return;
-      const apps = (appsData ?? []) as PayApplication[];
-      const primary = apps.length > 0
-        ? [...apps].sort((a, b) => statusPriority(a.status) - statusPriority(b.status))[0]
-        : null;
-      // Any non-rejected/withdrawn application of this user's that actually
-      // leads a delegation — separate from `primary`, since primary is
-      // picked by status priority alone and can land on a non-leader
-      // application even when the user also holds a leader one.
-      const leader = apps.find(a =>
-        a.status !== 'rejected' && a.status !== 'withdrawn'
-        && (a.role === 'head-delegate' || a.role === 'faculty-advisor')
-        && !!a.society_id
-      ) ?? null;
-      setApplication(primary);
-      setLeaderApp(leader);
-      setAllApps(apps);
 
-      const [roleConfigsRes, addonsRes] = await Promise.all([
-        supabase
-          .from('application_role_configs')
-          .select('role, fee_amount, fee_currency, fee_phases, payment_timing')
-          .eq('conference_id', conf.id),
-        supabase
-          .from('addons')
-          .select('id, label, description, amount_cents, currency')
-          .eq('conference_id', conf.id)
-          .eq('active', true),
-      ]);
-      if (cancelled) return;
-      setRoleConfigs((roleConfigsRes.data as PayRoleConfig[]) ?? []);
-      setActiveAddons((addonsRes.data as ActiveAddon[]) ?? []);
-
-      if (primary) {
-        const [aid, invs, batches] = await Promise.all([
-          fetchAidRequest(primary.id, session.access_token),
-          fetchInvoices(apps, primary, leader, conf.id, session.access_token),
-          fetchPaymentBatches(conf.id, user.id, session.access_token),
+      try {
+        const [o, rc, ad] = await Promise.all([
+          readPayOverview(conf.id),
+          supabase.from('application_role_configs').select('role, fee_amount, fee_currency, fee_phases, payment_timing, is_enabled').eq('conference_id', conf.id),
+          supabase.from('addons').select('id, label, description, amount_cents, currency').eq('conference_id', conf.id).eq('active', true),
         ]);
         if (cancelled) return;
-        setAidRequest(aid);
-        setInvoices(invs);
-        setPaymentBatches(batches);
-        setConfigDescriptions(await fetchConfigDescriptions(session.access_token, invs));
+        setOverview(o);
+        setLoadError('');
+        setRoleConfigs((rc.data as RoleConfigRow[]) ?? []);
+        setAddons((ad.data as ActiveAddon[]) ?? []);
+        const primary = [...o.me].sort((a, b) => statusPriority(a.status) - statusPriority(b.status))[0];
+        if (primary) {
+          const [aidRes, invRes] = await Promise.all([
+            supabase.from('financial_aid_requests').select('status, granted_amount')
+              .eq('application_id', primary.application_id).order('created_at', { ascending: false }).limit(1).maybeSingle(),
+            supabase.from('invoices').select(INVOICE_SELECT).eq('application_id', primary.application_id).neq('status', 'void'),
+          ]);
+          if (cancelled) return;
+          setAidRequest((aidRes.data as AidRequestRow | null) ?? null);
+          setAddonInvoices((invRes.data as InvoiceRow[]) ?? []);
+        }
+      } catch (e) {
+        if (!cancelled) setLoadError(friendlyError(e, 'Your payments could not be read. Try again in a moment.'));
       }
-
-      setLoading(false);
+      if (!cancelled) setLoading(false);
     })();
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [slug, authLoading, user?.id, session?.access_token]);
+  }, [slug, authLoading, user?.id, session?.access_token, attempt]);
 
-  async function refetchAid() {
-    if (!application || !session) return;
-    setAidRequest(await fetchAidRequest(application.id, session.access_token));
-  }
+  const reload = useCallback(() => setAttempt(a => a + 1), []);
 
-  // Refetches both invoices and payment batches together — every mutation
-  // that changes one (a spot/ticket pledge, a voucher, a submitted proof)
-  // can affect the other's derived view (awaiting-review chips, new invoice
-  // rows), so callers never have to remember to refresh both separately.
-  async function refetchInvoices() {
-    if (!application || !conference || !session || !user) return;
-    const [invs, batches] = await Promise.all([
-      fetchInvoices(allApps, application, leaderApp, conference.id, session.access_token),
-      fetchPaymentBatches(conference.id, user.id, session.access_token),
-    ]);
-    setInvoices(invs);
-    setPaymentBatches(batches);
-    setConfigDescriptions(await fetchConfigDescriptions(session.access_token, invs));
-  }
-
-  function removeInvoiceLocally(invoiceId: string) {
-    setInvoices(prev => prev.filter(i => i.id !== invoiceId));
-  }
-
-  return (
-    <div className="min-h-screen flex flex-col" style={{ ...themeCssVars(conference?.theme ?? {}), backgroundColor: NEU.base }}>
-      <SiteNav />
-      {/* The PAY button is the last thing in this column, so on a phone with a
-          home indicator it ends up against the gesture bar. The inset is 0 on
-          every other device, so desktop keeps its 40px. */}
-      <div className="flex-1 w-full max-w-[900px] mx-auto px-6 pt-10 pb-[calc(2.5rem+env(safe-area-inset-bottom))]">
-        <Link
-          href={`/conferences/${slug}/role`}
-          className="inline-flex items-center gap-1.5 mb-6 focus:outline-none"
-          style={{ fontFamily: OUTFIT, fontSize: 12, fontWeight: 700, color: NEU.muted, textDecoration: 'none' }}
-        >
-          <ArrowLeft size={14} strokeWidth={2.4} />
-          Back to conference
-        </Link>
-
-        {authLoading || loading ? (
-          <div className="flex items-center justify-center py-24">
-            <Loader size={72} label="Loading payment details" />
-          </div>
-        ) : !user ? (
-          <NeuCard style={{ padding: '32px', textAlign: 'center' }}>
-            <p style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 15, color: NEU.ink }}>Sign in to continue</p>
-            <p style={{ fontFamily: OUTFIT, fontSize: 12.5, color: NEU.muted, marginTop: 6 }}>
-              You need to be signed in to pay or request financial aid.
-            </p>
-            <AuthLink
-              next={`/conferences/${slug}/pay`}
-              className="inline-flex items-center justify-center rounded-xl px-5 py-2.5 mt-4 font-bold text-sm focus:outline-none"
-              style={{ backgroundColor: NEU.forest, color: NEU.gold, fontFamily: OUTFIT, textDecoration: 'none' }}
-            >
-              Sign in
-            </AuthLink>
-          </NeuCard>
-        ) : !conference ? (
-          <NeuCard style={{ padding: '32px', textAlign: 'center' }}>
-            <p style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 15, color: NEU.ink }}>Conference not found</p>
-          </NeuCard>
-        ) : !application ? (
-          <NeuCard style={{ padding: '32px', textAlign: 'center' }}>
-            <p style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 15, color: NEU.ink }}>No application on file</p>
-            <p style={{ fontFamily: OUTFIT, fontSize: 12.5, color: NEU.muted, marginTop: 6 }}>
-              You need an application to this conference before you can pay.
-            </p>
-          </NeuCard>
-        ) : application.status === 'rejected' || application.status === 'withdrawn' ? (
-          <NeuCard style={{ padding: '32px', textAlign: 'center' }}>
-            <p style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 15, color: NEU.ink }}>Nothing to pay</p>
-            <p style={{ fontFamily: OUTFIT, fontSize: 12.5, color: NEU.muted, marginTop: 6 }}>
-              This application isn&apos;t eligible for payment.
-            </p>
-          </NeuCard>
-        ) : (
-          <>
-            <p style={{ fontFamily: OUTFIT, fontWeight: 900, fontSize: 22, color: NEU.ink, margin: '0 0 2px 0' }}>
-              Conference Payments
-            </p>
-            <p style={{ fontFamily: OUTFIT, fontSize: 12.5, color: NEU.muted, margin: '0 0 24px 0' }}>
-              {conference.full_name}
-            </p>
-            <PayInvoiceAndActions
-              conference={conference}
-              application={application}
-              leaderApp={leaderApp}
-              allApps={allApps}
-              roleConfig={roleConfigs.find(rc => rc.role === application.role) ?? null}
-              delegateRoleConfig={roleConfigs.find(rc => rc.role === 'delegate') ?? null}
-              advisorRoleConfig={roleConfigs.find(rc => rc.role === 'faculty-advisor') ?? null}
-              aidRequest={aidRequest}
-              onAidSubmitted={refetchAid}
-              invoices={invoices}
-              configDescriptions={configDescriptions}
-              activeAddons={activeAddons}
-              paymentBatches={paymentBatches}
-              onInvoicesChanged={refetchInvoices}
-              onInvoiceRemoved={removeInvoiceLocally}
-            />
-          </>
-        )}
-      </div>
-    </div>
-  );
-}
-
-// ── Manual payment action, shared by every manual-mode pay surface ─────────
-// A manual-mode invoice (or the combined selected batch) either already has
-// a proof under review — a quiet status chip, nothing to click — or it
-// doesn't, in which case "I HAVE PAID, UPLOAD PROOF" is the one primary
-// action; the organizing team's own payment page (when they've set one) is
-// secondary guidance above it, not the dead end it used to be.
-
-function ManualPayAction({
-  awaitingReview, externalPaymentUrl, externalPaymentNote, onUploadProof,
-}: {
-  awaitingReview: boolean;
-  externalPaymentUrl: string | null;
-  externalPaymentNote: string | null;
-  onUploadProof: () => void;
-}) {
-  if (awaitingReview) {
-    return (
-      <div className="flex items-center gap-2.5 rounded-xl px-4 py-3" style={{ backgroundColor: 'rgba(184,132,74,0.1)', border: '1px solid rgba(184,132,74,0.24)' }}>
-        <Clock size={15} style={{ color: '#B8844A', flexShrink: 0 }} />
-        <p style={{ fontFamily: OUTFIT, fontSize: 12.5, color: '#8A6614', fontWeight: 700, margin: 0 }}>
-          Proof submitted, awaiting review
-        </p>
-      </div>
-    );
-  }
-  return (
-    <>
-      {externalPaymentUrl && (
-        <>
-          <p className="mb-2" style={{ fontFamily: OUTFIT, fontSize: 12, color: NEU.muted, lineHeight: 1.6 }}>
-            Pay through the conference&apos;s own payment page, then come back and upload your proof.
-          </p>
-          <a
-            href={externalPaymentUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="w-full flex items-center justify-center gap-2 rounded-xl py-2.5 mb-3 font-bold text-sm focus:outline-none"
-            style={{ border: '1.5px solid var(--gv-border)', color: NEU.ink, fontFamily: OUTFIT, textDecoration: 'none' }}
-          >
-            Go to payment page
-          </a>
-        </>
-      )}
-      {externalPaymentNote && (
-        <p className="mb-3" style={{ fontFamily: OUTFIT, fontSize: 12, color: NEU.muted, lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>
-          {externalPaymentNote}
-        </p>
-      )}
-      <button
-        onClick={onUploadProof}
-        className="w-full flex items-center justify-center gap-2 rounded-xl py-3 font-bold text-sm focus:outline-none"
-        style={{ backgroundColor: NEU.forest, color: NEU.gold, fontFamily: OUTFIT, border: 'none', cursor: 'pointer' }}
-      >
-        <ImageUp size={15} />
-        I have paid, upload proof
-      </button>
-    </>
-  );
-}
-
-// ── Remove pledge action, a quiet text trigger + portaled confirm popover ──
-// Undoes a misclick (pledged 9 spots instead of 8) before any money moves.
-// Portaled at fixed viewport coordinates from the trigger's own rect so the
-// card's rounded-corner overflow:hidden can never clip it (mirrors
-// PaymentMenu's pattern in manage/[slug]/applications/page.tsx).
-
-function RemovePledgeAction({
-  message, onConfirm,
-}: {
-  message: string;
-  onConfirm: () => Promise<{ ok: boolean; error?: string }>;
-}) {
-  const [open, setOpen] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
-  const btnRef = useRef<HTMLButtonElement | null>(null);
-  const popRef = useRef<HTMLDivElement | null>(null);
-  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
-
-  const POP_W = 252;
-
-  const place = useCallback(() => {
-    const b = btnRef.current;
-    if (!b) return;
-    const r = b.getBoundingClientRect();
-    const left = Math.max(8, Math.min(r.right - POP_W, window.innerWidth - POP_W - 8));
-    // FLIP ABOVE when there is no room below. `left` was clamped both ways but
-    // `top` never was, and the panel is `position: fixed` on a page whose
-    // scroll CLOSES it (onScroll below) — so a pledge row in the lower third
-    // of a phone screen opened its Cancel / Remove buttons off the bottom with
-    // no way to reach them. The height is measured once the panel exists (the
-    // rAF re-place below); the first pass uses a conservative estimate.
-    const h = popRef.current?.offsetHeight ?? 150;
-    const roomBelow = window.innerHeight - r.bottom - 8;
-    const top = h <= roomBelow ? r.bottom + 6 : Math.max(8, r.top - 6 - h);
-    setPos({ top, left });
-  }, []);
-
-  useEffect(() => {
-    if (!open) return;
-    place();
-    // Second pass with the panel's real height, now that it is in the DOM.
-    const raf = requestAnimationFrame(place);
-    const onDoc = (e: MouseEvent) => {
-      const t = e.target as Node;
-      if (btnRef.current?.contains(t) || popRef.current?.contains(t)) return;
-      setOpen(false);
-    };
-    const onScroll = () => setOpen(false);
-    document.addEventListener('mousedown', onDoc);
-    window.addEventListener('resize', place);
-    window.addEventListener('scroll', onScroll, true);
-    return () => {
-      cancelAnimationFrame(raf);
-      document.removeEventListener('mousedown', onDoc);
-      window.removeEventListener('resize', place);
-      window.removeEventListener('scroll', onScroll, true);
-    };
-  }, [open, place]);
-
-  async function handleConfirm() {
-    if (busy) return;
-    setBusy(true);
-    setError('');
-    const result = await onConfirm();
-    if (!result.ok) {
-      setBusy(false);
-      setError(plainOrFallback(result.error, 'Could not remove this. Please try again.'));
-      return;
-    }
-    setBusy(false);
-    setOpen(false);
-  }
-
-  return (
-    <span onClick={(e) => e.stopPropagation()}>
-      <button
-        ref={btnRef}
-        type="button"
-        onClick={() => { setError(''); setOpen(o => !o); }}
-        className="text-xs font-semibold focus:outline-none hover:underline flex-shrink-0"
-        style={{ color: 'var(--gv-muted)', fontFamily: OUTFIT, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
-      >
-        Remove
-      </button>
-      {open && pos && (
-        <Portal>
-          <div
-            ref={popRef}
-            className="rounded-xl p-3.5"
-            style={{
-              position: 'fixed', top: pos.top, left: pos.left, zIndex: 9999, width: POP_W,
-              backgroundColor: 'var(--gv-surface)', border: '1px solid var(--gv-border)', boxShadow: NEU.out,
-              animation: `neuPopIn 160ms ${EASE}`,
-            }}
-          >
-            <style>{'@keyframes neuPopIn { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: translateY(0); } }'}</style>
-            <p style={{ fontFamily: OUTFIT, fontSize: 12.5, color: 'var(--gv-on-surface)', lineHeight: 1.5, margin: 0 }}>{message}</p>
-            {error && (
-              <p className="mt-2" style={{ fontFamily: OUTFIT, fontSize: 11.5, color: '#8B2020', lineHeight: 1.45 }}>{error}</p>
-            )}
-            <div className="flex gap-2 mt-3">
-              <button
-                onClick={() => setOpen(false)}
-                disabled={busy}
-                className="flex-1 rounded-lg py-1.5 text-xs font-bold focus:outline-none"
-                style={{ border: '1px solid var(--gv-border)', color: 'var(--gv-on-surface)', backgroundColor: 'transparent', fontFamily: OUTFIT, cursor: busy ? 'default' : 'pointer' }}
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleConfirm}
-                disabled={busy}
-                className="flex-1 rounded-lg py-1.5 text-xs font-bold focus:outline-none"
-                style={{ border: 'none', color: '#FFFFFF', backgroundColor: busy ? '#C89494' : '#8B2020', fontFamily: OUTFIT, cursor: busy ? 'default' : 'pointer' }}
-              >
-                {busy ? '…' : 'Remove'}
-              </button>
-            </div>
-          </div>
-        </Portal>
-      )}
-    </span>
-  );
-}
-
-// ── Generic invoice card (app_fee / addon) ──────────────────────────────────
-
-function GenericInvoiceCard({
-  inv, application, description, paymentsEnabled, manualActive, externalPaymentUrl, externalPaymentNote, contactEmail,
-  awaitingReview, onUploadProof, canRemovePledge, onRemovePledge, expanded, onToggleExpand, selected, onToggleSelect, onPay, paying, payError, labelOverride,
-}: {
-  inv: InvoiceRow;
-  /** The invoice's OWNING application (whichever of the user's applications
-   *  this row's application_id points at) — not necessarily the page's
-   *  primary application, so payability (accepted/assigned/etc.) is judged
-   *  against the right application's own status. */
-  application: PayApplication;
-  description?: string;
-  paymentsEnabled: boolean;
-  manualActive: boolean;
-  externalPaymentUrl: string | null;
-  externalPaymentNote: string | null;
-  contactEmail: string | null;
-  /** This invoice belongs to a currently-pending manual payment batch. */
-  awaitingReview: boolean;
-  onUploadProof: () => void;
-  /** True for an open, unpaid, aid-free pledge_spot/advisor_spot invoice —
-   *  undoes a misclick (pledged 9 instead of 8) before any money moves. */
-  canRemovePledge: boolean;
-  onRemovePledge: () => Promise<{ ok: boolean; error?: string }>;
-  expanded: boolean;
-  onToggleExpand: () => void;
-  selected: boolean;
-  onToggleSelect: () => void;
-  onPay: () => void;
-  paying: boolean;
-  payError: string | null;
-  /** Overrides invoiceLabel(inv) — used for another application's role_fee
-   *  invoice, labeled "{Role label} fee" so it reads distinctly from
-   *  role_fee's generic "Registration" fallback. */
-  labelOverride?: string;
-}) {
-  const payable = isInvoicePayable(inv, application.status);
-  const settled = isInvoiceSettled(inv);
-  const due = invoiceDueCents(inv);
-  const badge = invoiceBadge(inv);
-  const label = (labelOverride ?? invoiceLabel(inv)) + (inv.quantity > 1 ? ` ×${inv.quantity}` : '');
-
-  if (!payable) {
-    return (
-      <NeuCard style={{ padding: '16px 18px', display: 'flex', alignItems: 'center', gap: 14, opacity: 0.6 }}>
-        <NeuIconDisc gradient={NEU_GRADIENTS.sage} icon={Lock} size={38} />
-        <div className="flex-1 min-w-0">
-          <p style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 14, color: NEU.ink, margin: 0 }}>{label}</p>
-          <p style={{ fontFamily: OUTFIT, fontSize: 11, color: NEU.muted, margin: '2px 0 0 0' }}>
-            Payment becomes available once your application is accepted.
-          </p>
-        </div>
-        <span style={{ fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 700, color: NEU.muted, fontVariantNumeric: 'tabular-nums' }}>
-          {centsToFee(inv.amount_cents, inv.currency)}
-        </span>
-      </NeuCard>
-    );
-  }
-
-  return (
-    <NeuCard style={{ padding: 0, overflow: 'hidden' }}>
-      <div className="w-full flex items-center gap-3" style={{ padding: '16px 18px' }}>
-        {!settled && !awaitingReview && (
-          /* 44px tap target around the 16px box, the pattern the add-on list
-             already uses: the negative margins keep the row's geometry. */
-          <span className="flex items-center justify-center flex-shrink-0" style={{ width: 44, height: 44, margin: '-14px -14px -14px -14px' }}>
-          <input
-            type="checkbox"
-            checked={selected}
-            onChange={onToggleSelect}
-            className="flex-shrink-0"
-            style={{ width: 16, height: 16, accentColor: NEU.forest, cursor: 'pointer' }}
-            aria-label={`Select ${label}`}
-          />
-          </span>
-        )}
-        <button
-          type="button"
-          onClick={onToggleExpand}
-          className="flex-1 flex items-center justify-between gap-3 min-w-0 focus:outline-none"
-          style={{ background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left', padding: 0 }}
-        >
-          <div className="flex items-center gap-3 min-w-0">
-            <NeuIconDisc gradient={inv.kind === 'addon' ? NEU_GRADIENTS.sage : NEU_GRADIENTS.forest} icon={Receipt} size={38} />
-            <div className="min-w-0">
-              <div className="flex items-center gap-2 flex-wrap">
-                <p style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 14, color: NEU.ink, margin: 0 }}>
-                  {label}
-                </p>
-                {inv.kind === 'addon' && (
-                  <span
-                    className="inline-flex items-center gap-1 flex-shrink-0"
-                    style={{ color: '#6B5E4E', fontSize: 12, fontFamily: OUTFIT, fontWeight: 600 }}
-                  >
-                    <Plus size={14} strokeWidth={2.2} aria-hidden />
-                    Optional
-                  </span>
-                )}
-              </div>
-              <p style={{ fontFamily: OUTFIT, fontSize: 11.5, color: NEU.muted, margin: '2px 0 0 0' }}>
-                {centsToFee(inv.amount_cents, inv.currency)}
-                {inv.status === 'partial' && ` · balance due ${centsToFee(due, inv.currency)}`}
-              </p>
-            </div>
-          </div>
-          <div className="flex items-center gap-3 flex-shrink-0">
-            <BadgePill badge={badge} />
-            {expanded ? <ChevronUp size={16} style={{ color: NEU.muted }} /> : <ChevronDown size={16} style={{ color: NEU.muted }} />}
-          </div>
-        </button>
-        {canRemovePledge && (
-          <RemovePledgeAction
-            message={inv.kind === 'advisor_spot' ? 'Remove this advisor ticket? Its invoice will be cancelled.' : 'Remove this spot? Its invoice will be cancelled.'}
-            onConfirm={onRemovePledge}
-          />
-        )}
-      </div>
-
-      {expanded && (
-        <div style={{ padding: '0 18px 18px 18px', borderTop: '1px solid color-mix(in srgb, var(--gv-main) 8%, transparent)' }}>
-          <div className="pt-4">
-            {description && (
-              <p style={{ fontFamily: OUTFIT, fontSize: 12.5, color: NEU.muted, lineHeight: 1.6, marginBottom: 14 }}>
-                {description}
-              </p>
-            )}
-
-            {settled ? (
-              <Note tone="green">{inv.status === 'waived' ? 'Waived.' : 'Paid in full. Thank you!'}</Note>
-            ) : manualActive ? (
-              <ManualPayAction
-                awaitingReview={awaitingReview}
-                externalPaymentUrl={externalPaymentUrl}
-                externalPaymentNote={externalPaymentNote}
-                onUploadProof={onUploadProof}
-              />
-            ) : !paymentsEnabled ? (
-              <PaymentsNotSetUp contactEmail={contactEmail} />
-            ) : (
-              <>
-                {payError && (
-                  <div className="mb-3"><Note tone="red">{payError}</Note></div>
-                )}
-                <button
-                  onClick={onPay}
-                  disabled={paying}
-                  className="w-full flex items-center justify-center gap-2 rounded-xl py-3 font-bold text-sm focus:outline-none transition-colors"
-                  style={{
-                    backgroundColor: paying ? 'var(--gv-border)' : NEU.forest,
-                    color: paying ? 'var(--gv-muted)' : NEU.gold,
-                    fontFamily: OUTFIT, border: 'none', cursor: paying ? 'default' : 'pointer',
-                  }}
-                >
-                  <CreditCard size={15} />
-                  {paying ? 'Opening checkout…' : `Pay ${centsToFee(due, inv.currency)}`}
-                </button>
-              </>
-            )}
-          </div>
-        </div>
-      )}
-    </NeuCard>
-  );
-}
-
-// ── Buy Add-ons modal ────────────────────────────────────────────────────────
-// Opt-in selection: checkbox + quantity stepper per active addon, pre-filled
-// from the applicant's existing UNPAID addon invoices. Already-purchased
-// (settled) addons show read-only. Save reconciles via set_addon_selection —
-// paid invoices are never touched by that RPC, so purchased rows are simply
-// excluded from the payload entirely.
-
-interface AddonSelection {
-  checked: boolean;
-  quantity: number;
-}
-
-function AddonsModal({
-  open, onClose, addons, invoices, applicationId, accessToken, onSaved,
-}: {
-  open: boolean;
-  onClose: () => void;
-  addons: ActiveAddon[];
-  invoices: InvoiceRow[];
-  applicationId: string;
-  accessToken: string | undefined;
-  onSaved: () => void;
-}) {
-  const [selections, setSelections] = useState<Record<string, AddonSelection>>({});
-  const [purchased, setPurchased] = useState<Set<string>>(new Set());
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState('');
-  // Re-seeds from `invoices` every time the modal opens — a state-adjustment-
-  // during-render (compared against a `prevOpen` snapshot) rather than a
-  // useEffect, same fix as AidRequestModal's page reset: this modal stays
-  // mounted across opens (the caller just flips `open`), so an effect here
-  // would fire a render late and cascade.
-  const [prevOpen, setPrevOpen] = useState(open);
-  if (open !== prevOpen) {
-    setPrevOpen(open);
-    if (open) {
-      setError('');
-      const nextSelections: Record<string, AddonSelection> = {};
-      const nextPurchased = new Set<string>();
-      for (const addon of addons) {
-        const existing = invoices.find(inv => inv.kind === 'addon' && inv.config_id === addon.id);
-        if (existing && isInvoiceSettled(existing)) {
-          nextPurchased.add(addon.id);
-          nextSelections[addon.id] = { checked: true, quantity: existing.quantity || 1 };
-        } else {
-          nextSelections[addon.id] = { checked: !!existing, quantity: existing?.quantity || 1 };
-        }
-      }
-      setSelections(nextSelections);
-      setPurchased(nextPurchased);
-    }
-  }
-
-  if (!open) return null;
-
-  function toggleChecked(addonId: string) {
-    if (purchased.has(addonId)) return;
-    setSelections(prev => ({ ...prev, [addonId]: { ...prev[addonId], checked: !prev[addonId]?.checked } }));
-  }
-
-  function setQuantity(addonId: string, quantity: number) {
-    if (purchased.has(addonId)) return;
-    setSelections(prev => ({ ...prev, [addonId]: { ...prev[addonId], quantity: Math.max(1, quantity) } }));
-  }
-
-  async function handleSave() {
-    if (saving || !accessToken) return;
-    setSaving(true);
-    setError('');
-    const supabase = getAuthedClient(accessToken);
-    const p_selections = Object.entries(selections)
-      .filter(([addonId, sel]) => sel.checked && !purchased.has(addonId))
-      .map(([addonId, sel]) => ({ addon_id: addonId, quantity: sel.quantity }));
-    const { data, error: rpcError } = await supabase.rpc('set_addon_selection', {
-      p_application_id: applicationId,
-      p_selections,
-    });
-    const result = data as { ok?: boolean; error?: string } | null;
-    setSaving(false);
-    if (rpcError || !result?.ok) {
-      setError((result?.error ? plainOrFallback(result.error, 'Could not save your add-ons. Please try again.') : friendlyError(rpcError, 'Could not save your add-ons. Please try again.')));
-      return;
-    }
-    onSaved();
-    onClose();
-  }
-
-  return (
-    <PayActionPopup
-      title="Buy Add-ons"
-      line="Optional extras this conference offers. They are added to what you pay."
-      onClose={() => { if (!saving) onClose(); }}
-      testId="pay-addons"
-    >
-
-        {addons.length === 0 ? (
-          <p style={{ fontFamily: OUTFIT, fontSize: 13, color: '#6E5F4E' }}>
-            This conference hasn&apos;t added any add-ons yet.
-          </p>
-        ) : (
-          <div className="flex flex-col gap-3">
-            {addons.map(addon => {
-              const sel = selections[addon.id] ?? { checked: false, quantity: 1 };
-              const isPurchased = purchased.has(addon.id);
-              const inputId = `addon-${addon.id}`;
-              return (
-                <div
-                  key={addon.id}
-                  className="rounded-xl px-4 py-3"
-                  style={{ border: '1px solid var(--gv-border)', backgroundColor: sel.checked || isPurchased ? 'color-mix(in srgb, var(--gv-main) 3%, transparent)' : '#FFFFFF' }}
-                >
-                  <div className="flex items-start gap-3">
-                    {/* 44px tap target around the 18px box. The name/price/description
-                        below carry the <label htmlFor>, so tapping any of them toggles
-                        the add-on and the checkbox finally has an accessible name.
-                        The quantity stepper deliberately sits OUTSIDE that label —
-                        a button inside a label also fires the label's toggle. */}
-                    <span
-                      className="flex items-center justify-center flex-shrink-0"
-                      style={{ width: 44, height: 44, marginTop: -12, marginBottom: -12, marginLeft: -14, marginRight: -14 }}
-                    >
-                      <input
-                        id={inputId}
-                        type="checkbox"
-                        checked={sel.checked}
-                        disabled={isPurchased}
-                        onChange={() => toggleChecked(addon.id)}
-                        style={{ width: 18, height: 18, accentColor: 'var(--gv-main)', cursor: isPurchased ? 'default' : 'pointer' }}
-                      />
-                    </span>
-                    <div className="flex-1 min-w-0">
-                      <label htmlFor={inputId} className="block" style={{ cursor: isPurchased ? 'default' : 'pointer' }}>
-                        <div className="flex items-center justify-between gap-2">
-                          <p style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 13.5, color: 'var(--gv-on-surface)' }}>{addon.label}</p>
-                          <span style={{ fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 700, color: 'var(--gv-on-surface)', fontVariantNumeric: 'tabular-nums', flexShrink: 0 }}>
-                            {centsToFee(addon.amount_cents, addon.currency)}
-                            <span style={{ color: 'var(--gv-muted)', fontWeight: 600 }}> ea.</span>
-                          </span>
-                        </div>
-                        {addon.description && (
-                          <p className="mt-0.5" style={{ fontFamily: OUTFIT, fontSize: 11.5, color: 'var(--gv-muted)', lineHeight: 1.5 }}>
-                            {addon.description}
-                          </p>
-                        )}
-                      </label>
-
-                      {isPurchased ? (
-                        <p className="mt-2 inline-flex items-center gap-1" style={{ fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 800, color: '#2A5A3C' }}>
-                          Purchased ✓
-                        </p>
-                      ) : sel.checked && (
-                        <div className="mt-2.5 flex items-center gap-2.5">
-                          <span style={{ fontFamily: OUTFIT, fontSize: 10.5, fontWeight: 700, color: 'var(--gv-muted)', letterSpacing: '0.06em' }}>
-                            QTY
-                          </span>
-                          {/* 44px tap targets: these were 24px, below the minimum for
-                              a finger, on the one flow that takes money. */}
-                          <div className="inline-flex items-center gap-1">
-                            <button
-                              type="button"
-                              aria-label={`Fewer ${addon.label}`}
-                              onClick={() => setQuantity(addon.id, sel.quantity - 1)}
-                              disabled={sel.quantity <= 1}
-                              className="flex items-center justify-center rounded-full focus:outline-none"
-                              style={{ width: 44, height: 44, border: 'none', background: 'none', color: sel.quantity <= 1 ? 'var(--gv-border)' : 'var(--gv-main)', cursor: sel.quantity <= 1 ? 'default' : 'pointer' }}
-                            >
-                              <span className="flex items-center justify-center rounded-full" style={{ width: 28, height: 28, border: '1px solid var(--gv-border)', backgroundColor: 'var(--gv-surface)' }}>
-                                <Minus size={14} />
-                              </span>
-                            </button>
-                            <span style={{ fontFamily: OUTFIT, fontSize: 14, fontWeight: 800, color: 'var(--gv-on-surface)', minWidth: 20, textAlign: 'center', fontVariantNumeric: 'tabular-nums' }}>
-                              {sel.quantity}
-                            </span>
-                            <button
-                              type="button"
-                              aria-label={`More ${addon.label}`}
-                              onClick={() => setQuantity(addon.id, sel.quantity + 1)}
-                              className="flex items-center justify-center rounded-full focus:outline-none"
-                              style={{ width: 44, height: 44, border: 'none', background: 'none', color: 'var(--gv-main)', cursor: 'pointer' }}
-                            >
-                              <span className="flex items-center justify-center rounded-full" style={{ width: 28, height: 28, border: '1px solid var(--gv-border)', backgroundColor: 'var(--gv-surface)' }}>
-                                <Plus size={14} />
-                              </span>
-                            </button>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-
-        {error && (
-          <div><Note tone="red">{error}</Note></div>
-        )}
-
-        <div className="flex gap-3">
-          <button
-            onClick={() => { if (!saving) onClose(); }}
-            disabled={saving}
-            className="flex-1 rounded-xl py-2.5 font-bold text-sm focus:outline-none transition-colors"
-            style={{ border: '1.5px solid var(--gv-border)', color: 'var(--gv-on-surface)', backgroundColor: 'transparent', fontFamily: OUTFIT, cursor: saving ? 'default' : 'pointer' }}
-          >
-            Cancel
-          </button>
-          {addons.length > 0 && (
-            <button
-              onClick={handleSave}
-              disabled={saving}
-              className="flex-1 rounded-xl py-2.5 font-bold text-sm focus:outline-none transition-colors"
-              style={{
-                backgroundColor: saving ? 'var(--gv-border)' : 'var(--gv-main)',
-                color: saving ? 'var(--gv-muted)' : 'var(--gv-on-main)',
-                fontFamily: OUTFIT, cursor: saving ? 'default' : 'pointer',
-              }}
-            >
-              {saving ? 'Saving…' : 'Save'}
-            </button>
-          )}
-        </div>
-    </PayActionPopup>
-  );
-}
-
-// ── Add delegation spots ─────────────────────────────────────────────────────
-// Pledges MORE spots for the leader's delegation via add_pledged_spots, which
-// materializes each new spot as an owed pledge_spot invoice — no payment
-// happens here, the new invoices just appear in the list above (genericInvoices)
-// once onAdded triggers a refetch.
-
-function AddSpotsPanel({
-  applicationId, accessToken, onAdded,
-}: {
-  applicationId: string;
-  accessToken: string | undefined;
-  onAdded: () => void;
-}) {
-  // Held as '' while the field is momentarily empty. Clamping to 1 on every
-  // keystroke meant backspace-then-type produced "15" when the delegate meant
-  // "5": they cleared the field, it snapped back to 1, and their digit landed
-  // after it. Normalised on blur instead.
-  const [count, setCount] = useState<number | ''>(1);
-  const countNum = count === '' ? 0 : count;
-  const [adding, setAdding] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [justAdded, setJustAdded] = useState<number | null>(null);
-
-  async function handleAdd() {
-    if (adding || !accessToken || countNum < 1) return;
-    setAdding(true);
-    setError(null);
-    setJustAdded(null);
-    const supabase = getAuthedClient(accessToken);
-    const { data, error: rpcError } = await supabase.rpc('add_pledged_spots', {
-      p_application_id: applicationId,
-      p_count: countNum,
-    });
-    const result = data as { ok?: boolean; spots_pledged?: number; error?: string } | null;
-    setAdding(false);
-    if (rpcError || !result?.ok) {
-      setError((result?.error ? plainOrFallback(result.error, 'Could not add spots. Please try again.') : friendlyError(rpcError, 'Could not add spots. Please try again.')));
-      return;
-    }
-    setJustAdded(countNum);
-    setCount(1);
-    onAdded();
-  }
-
-  return (
-    <NeuCard style={{ padding: '16px 18px', display: 'flex', flexDirection: 'column', gap: 10 }}>
-      <div className="flex items-center gap-3">
-        <NeuIconDisc gradient={NEU_GRADIENTS.forest} icon={Users2} size={36} />
-        <p style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 13, color: NEU.ink, margin: 0 }}>Add Delegation Spots</p>
-      </div>
-      <p style={{ fontFamily: OUTFIT, fontSize: 11.5, color: NEU.muted, margin: 0, lineHeight: 1.5 }}>
-        Pledge more spots for your delegation. Each becomes a payable invoice above.
-      </p>
-      <div className="flex items-center gap-2">
-        <input
-          type="number"
-          min={1}
-          value={count}
-          onChange={e => {
-            const raw = e.target.value;
-            if (raw === '') { setCount(''); return; }
-            const n = parseInt(raw, 10);
-            setCount(Number.isNaN(n) ? '' : Math.max(1, n));
-          }}
-          onBlur={() => { if (count === '') setCount(1); }}
-          aria-label="Number of spots to pledge"
-          className="rounded-xl text-base sm:text-sm text-center focus:outline-none"
-          style={{ width: 64, height: 44, border: 'none', backgroundColor: NEU.base, boxShadow: NEU.inSm, color: NEU.ink, fontFamily: OUTFIT, fontWeight: 700 }}
-        />
-        <button
-          type="button"
-          onClick={handleAdd}
-          disabled={adding || countNum < 1}
-          className="flex-1 rounded-xl text-xs font-bold focus:outline-none"
-          style={{
-            border: 'none', minHeight: 44,
-            backgroundColor: adding || countNum < 1 ? 'var(--gv-border)' : NEU.forest,
-            color: adding || countNum < 1 ? 'var(--gv-muted)' : NEU.gold,
-            fontFamily: OUTFIT, cursor: adding || countNum < 1 ? 'default' : 'pointer',
-          }}
-        >
-          {adding ? 'Adding…' : 'Add'}
-        </button>
-      </div>
-      {justAdded && !error && (
-        <Note tone="green">{`Added ${justAdded} spot${justAdded === 1 ? '' : 's'}. Check the invoices above.`}</Note>
-      )}
-      {error && <Note tone="red">{error}</Note>}
-    </NeuCard>
-  );
-}
-
-// ── Buy Advisor Tickets modal ────────────────────────────────────────────────
-// Priced server-side at the faculty-advisor role's active phase fee, pooled
-// per delegation exactly like delegate spots. add_pledged_advisor_spots
-// materializes each ticket as an owed advisor_spot invoice — nothing is
-// charged here, the new invoices just appear in the generic list once
-// onAdded triggers a refetch.
-
-function AdvisorTicketsModal({
-  open, onClose, applicationId, accessToken, advisorRoleConfig, onAdded,
-}: {
-  open: boolean;
-  onClose: () => void;
-  applicationId: string;
-  accessToken: string | undefined;
-  advisorRoleConfig: PayRoleConfig | null;
-  onAdded: () => void;
-}) {
-  // '' while the field is momentarily empty — see AddSpotsPanel above.
-  const [count, setCount] = useState<number | ''>(1);
-  const countNum = count === '' ? 0 : count;
-  const [adding, setAdding] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  // Resets every time the modal opens — state-adjustment-during-render, same
-  // fix as AddonsModal (this modal stays mounted across opens, the caller
-  // just flips `open`).
-  const [prevOpen, setPrevOpen] = useState(open);
-  if (open !== prevOpen) {
-    setPrevOpen(open);
-    if (open) { setCount(1); setError(null); }
-  }
-
-  if (!open) return null;
-
-  const currency = advisorRoleConfig?.fee_currency ?? 'USD';
-  const { amount: fee, phase } = activePhaseFee({
-    fee_amount: advisorRoleConfig?.fee_amount ?? 0,
-    fee_phases: advisorRoleConfig?.fee_phases ?? null,
+  const wait = useSettleWait(returnWait && !!conference, async () => {
+    if (!conference) return false;
+    const o = await readPayOverview(conference.id);
+    setOverview(o);
+    const recent = Date.now() - 15 * 60 * 1000;
+    const nothingPending = !o.items.some(i => i.state === 'unpaid' && selected.has(i.invoice_id));
+    return nothingPending && o.payments.some(p => p.how === 'card' && new Date(p.at).getTime() >= recent);
   });
-
-  async function handleAdd() {
-    if (adding || !accessToken || countNum < 1) return;
-    setAdding(true);
-    setError(null);
-    const supabase = getAuthedClient(accessToken);
-    const { data, error: rpcError } = await supabase.rpc('add_pledged_advisor_spots', {
-      p_application_id: applicationId,
-      p_count: countNum,
+  useEffect(() => {
+    if (wait !== 'done' && wait !== 'gave_up') return;
+    void Promise.resolve().then(() => {
+      setReturnWait(false);
+      setSelected(new Set());
+      reload();
+      const url = new URL(window.location.href);
+      if (url.searchParams.has('payment')) {
+        url.searchParams.delete('payment'); url.searchParams.delete('session_id');
+        window.history.replaceState(window.history.state, '', url.pathname + (url.search || '') + url.hash);
+      }
     });
-    const result = data as { ok?: boolean; error?: string } | null;
-    setAdding(false);
-    if (rpcError || !result?.ok) {
-      setError((result?.error ? plainOrFallback(result.error, 'Could not add advisor tickets. Please try again.') : friendlyError(rpcError, 'Could not add advisor tickets. Please try again.')));
+  }, [wait, reload]);
+
+  const items = useMemo(() => overview?.items ?? [], [overview]);
+  const tickable = items.filter(canTick);
+  const chosen = items.filter(i => selected.has(i.invoice_id));
+  const chosenCur = chosen[0]?.currency ?? overview?.conference.currency ?? 'USD';
+  const chosenTotal = chosen.reduce((s, i) => s + i.due_cents, 0);
+
+  const toggle = (it: PayItem) => {
+    setNotice('');
+    const next = new Set(selected);
+    if (next.has(it.invoice_id)) { next.delete(it.invoice_id); setSelected(next); return; }
+    if (chosen.length > 0 && it.currency.toUpperCase() !== chosenCur.toUpperCase()) {
+      setNotice('Items in different currencies are paid separately');
       return;
     }
-    onAdded();
-    onClose();
-  }
+    next.add(it.invoice_id);
+    setSelected(next);
+  };
+  const selectAll = () => {
+    setNotice('');
+    const cur = (chosen[0] ?? tickable[0])?.currency;
+    const same = tickable.filter(i => i.currency === cur);
+    if (same.length < tickable.length) setNotice('Items in different currencies are paid separately');
+    setSelected(new Set(same.map(i => i.invoice_id)));
+  };
 
-  return (
-    <PayActionPopup
-      title="Buy Advisor Tickets"
-      line="Tickets for the faculty advisors travelling with your delegation."
-      onClose={() => { if (!adding) onClose(); }}
-      testId="pay-advisors"
-    >
-
-        <div className="flex items-center gap-3" style={{ padding: '12px 14px', borderRadius: 14, backgroundColor: NEU.base, boxShadow: NEU.inSm }}>
-          <NeuIconDisc gradient={NEU_GRADIENTS.amber} icon={GraduationCap} size={38} />
-          <div className="flex-1 min-w-0">
-            <p style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 14, color: NEU.ink, margin: 0 }}>
-              {fee > 0 ? `${centsToFee(Math.round(fee * 100), currency)} each` : 'Free'}
-            </p>
-            {phase && (
-              <p style={{ fontFamily: OUTFIT, fontSize: 10.5, fontWeight: 700, color: NEU.deepGold, letterSpacing: '0.04em', margin: '2px 0 0 0' }}>
-                {phase.label.toUpperCase()} PRICING
-              </p>
-            )}
+  if (!conference || !overview) {
+    return (
+      <Frame theme={conference?.theme} slug={slug}>
+        {authLoading || loading ? (
+          <div className="flex items-center justify-center py-24"><Loader size={72} label="Loading payment details" /></div>
+        ) : !user ? (
+          <div className="gv-pay-card" style={{ padding: 32, textAlign: 'center' }}>
+            <p style={{ margin: 0, fontWeight: 800, fontSize: 16 }}>Sign in to continue</p>
+            <p className="gv-pay-quiet" style={{ marginTop: 6 }}>You need to be signed in to pay or request financial aid</p>
+            <AuthLink next={`/conferences/${slug}/pay`} className="gv-pay-btn gv-pay-forest" style={{ marginTop: 16 }}>Sign in</AuthLink>
           </div>
-        </div>
-
-        <p style={{ fontFamily: OUTFIT, fontSize: 11.5, color: 'var(--gv-muted)', lineHeight: 1.5, margin: 0 }}>
-          Tickets stay with your delegation once purchased, pooled the same way as delegate spots.
-        </p>
-
-        <div>
-          <label className="block mb-1.5" style={{ fontSize: 11, fontWeight: 700, color: 'var(--gv-muted)', fontFamily: OUTFIT, letterSpacing: '0.06em' }}>
-            HOW MANY TICKETS
-          </label>
-          <div className="flex items-center gap-1">
-            <button
-              type="button"
-              aria-label="Fewer advisor tickets"
-              onClick={() => setCount(c => Math.max(1, (c === '' ? 1 : c) - 1))}
-              disabled={countNum <= 1}
-              className="flex items-center justify-center rounded-full focus:outline-none"
-              style={{ width: 44, height: 44, border: 'none', background: 'none', color: countNum <= 1 ? 'var(--gv-border)' : 'var(--gv-main)', cursor: countNum <= 1 ? 'default' : 'pointer' }}
-            >
-              <span className="flex items-center justify-center rounded-full" style={{ width: 32, height: 32, border: '1px solid var(--gv-border)', backgroundColor: 'var(--gv-surface)' }}>
-                <Minus size={14} />
-              </span>
-            </button>
-            <input
-              type="number"
-              min={1}
-              value={count}
-              onChange={e => {
-                const raw = e.target.value;
-                if (raw === '') { setCount(''); return; }
-                const n = parseInt(raw, 10);
-                setCount(Number.isNaN(n) ? '' : Math.max(1, n));
-              }}
-              onBlur={() => { if (count === '') setCount(1); }}
-              aria-label="Number of advisor tickets"
-              className="rounded-xl text-base sm:text-sm text-center focus:outline-none"
-              style={{ width: 64, height: 44, border: 'none', backgroundColor: NEU.base, boxShadow: NEU.inSm, color: NEU.ink, fontFamily: OUTFIT, fontWeight: 700 }}
-            />
-            <button
-              type="button"
-              aria-label="More advisor tickets"
-              onClick={() => setCount(c => (c === '' ? 1 : c + 1))}
-              className="flex items-center justify-center rounded-full focus:outline-none"
-              style={{ width: 44, height: 44, border: 'none', background: 'none', color: 'var(--gv-main)', cursor: 'pointer' }}
-            >
-              <span className="flex items-center justify-center rounded-full" style={{ width: 32, height: 32, border: '1px solid var(--gv-border)', backgroundColor: 'var(--gv-surface)' }}>
-                <Plus size={14} />
-              </span>
-            </button>
-            {fee > 0 && (
-              <span style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 800, color: NEU.ink, marginLeft: 'auto' }}>
-                {centsToFee(Math.round(fee * countNum * 100), currency)}
-              </span>
-            )}
-          </div>
-        </div>
-
-        {error && <Note tone="red">{error}</Note>}
-
-        <div className="flex gap-3">
-          <button
-            onClick={() => { if (!adding) onClose(); }}
-            disabled={adding}
-            className="flex-1 rounded-xl py-2.5 font-bold text-sm focus:outline-none transition-colors"
-            style={{ border: '1.5px solid var(--gv-border)', color: 'var(--gv-on-surface)', backgroundColor: 'transparent', fontFamily: OUTFIT, cursor: adding ? 'default' : 'pointer' }}
-          >
-            Cancel
-          </button>
-          <button
-            onClick={handleAdd}
-            disabled={adding}
-            className="flex-1 rounded-xl py-2.5 font-bold text-sm focus:outline-none transition-colors"
-            style={{
-              backgroundColor: adding ? 'var(--gv-border)' : 'var(--gv-main)',
-              color: adding ? 'var(--gv-muted)' : 'var(--gv-on-main)',
-              fontFamily: OUTFIT, cursor: adding ? 'default' : 'pointer',
-            }}
-          >
-            {adding ? 'Adding…' : 'Add tickets'}
-          </button>
-        </div>
-    </PayActionPopup>
-  );
-}
-
-// ── Manual payment proof modal ───────────────────────────────────────────────
-// Opens once a participant on a manual-mode conference says they've already
-// paid, for one invoice's own pay path or the combined selected batch alike.
-// Uploads a proof image to the private payment-proofs bucket at
-// {conferenceId}/{uuid}-{filename}, then creates a pending payment_batches
-// row covering every invoice id passed in — create_manual_payment_batch
-// validates the caller may pay them and rejects any invoice already
-// awaiting review, surfaced here verbatim.
-
-function ProofUploadModal({
-  open, onClose, invoiceIds, conferenceId, accessToken, onSubmitted,
-}: {
-  open: boolean;
-  onClose: () => void;
-  invoiceIds: string[];
-  conferenceId: string;
-  accessToken: string | undefined;
-  onSubmitted: () => void;
-}) {
-  const [file, setFile] = useState<File | null>(null);
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState('');
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
-  const [prevOpen, setPrevOpen] = useState(open);
-  if (open !== prevOpen) {
-    setPrevOpen(open);
-    if (open) { setFile(null); setPreviewUrl(null); setError(''); }
-  }
-
-  if (!open) return null;
-
-  function handlePick(f: File | null) {
-    if (!f) return;
-    if (!f.type.startsWith('image/')) { setError('Please choose an image file.'); return; }
-    if (f.size > 10 * 1024 * 1024) { setError('Image must be under 10MB.'); return; }
-    setError('');
-    setFile(f);
-    setPreviewUrl(URL.createObjectURL(f));
-  }
-
-  async function handleSubmit() {
-    if (submitting || !accessToken || !file || invoiceIds.length === 0) return;
-    setSubmitting(true);
-    setError('');
-    const supabase = getAuthedClient(accessToken);
-    const path = safeStorageKey(conferenceId, crypto.randomUUID(), file.name);
-    const { error: uploadError } = await supabase.storage
-      .from('payment-proofs')
-      .upload(path, file, { contentType: file.type });
-    if (uploadError) {
-      setSubmitting(false);
-      // The payer is holding a receipt for money they have already sent and
-      // cannot hand it over. Nothing about this reaches an error boundary.
-      reportBlocked('upload payment proof', uploadError, { conferenceId, invoiceCount: invoiceIds.length });
-      // The raw message here is a storage-layer string — "Invalid key: <uuid>/
-      // <uuid>-Screenshot ....png" — which tells a payer nothing they can act
-      // on and reads like their receipt was rejected. The detail still goes to
-      // reportBlocked above, where someone can actually use it.
-      setError('Could not upload your proof. Please try again, or send it to the organisers directly.');
-      return;
-    }
-    const { data, error: rpcError } = await supabase.rpc('create_manual_payment_batch', {
-      p_invoice_ids: invoiceIds,
-      p_proof_path: path,
-    });
-    const result = data as { ok?: boolean; error?: string } | null;
-    setSubmitting(false);
-    if (rpcError || !result?.ok) {
-      // The proof is in storage but no batch row covers it, so the money is
-      // gone and no organizer will ever see a payment to confirm. ONE report
-      // for the whole batch — create_manual_payment_batch is a single RPC
-      // covering every invoice id, so this can never fire per invoice.
-      reportBlocked(
-        'confirm manual payment',
-        rpcError ?? new Error(result?.error ?? 'rpc returned ok:false'),
-        { conferenceId, invoiceCount: invoiceIds.length },
-      );
-      setError((result?.error ? plainOrFallback(result.error, 'Could not submit your payment. Please try again.') : friendlyError(rpcError, 'Could not submit your payment. Please try again.')));
-      return;
-    }
-    onSubmitted();
-  }
-
-  return (
-    <ModalOverlay onClose={() => { if (!submitting) onClose(); }}>
-      <div
-        className="rounded-2xl p-6 flex flex-col gap-4"
-        style={{ backgroundColor: 'var(--gv-surface)', border: '1px solid var(--gv-border)', width: 420, maxWidth: 'calc(100vw - 32px)', maxHeight: MODAL_PANEL_MAX_HEIGHT, overflowY: 'auto' }}
-      >
-        <div className="flex items-center justify-between gap-3">
-          <p className="font-black text-lg" style={{ color: 'var(--gv-on-surface)', fontFamily: OUTFIT }}>Upload Payment Proof</p>
-          <button
-            onClick={() => { if (!submitting) onClose(); }}
-            className="flex-shrink-0 focus:outline-none"
-            style={{ color: 'var(--gv-muted)', border: 'none', background: 'none', cursor: submitting ? 'default' : 'pointer' }}
-          >
-            <X size={18} />
-          </button>
-        </div>
-
-        <p style={{ fontFamily: OUTFIT, fontSize: 12.5, color: '#6E5F4E', lineHeight: 1.6 }}>
-          Upload a screenshot or photo of your payment, a receipt or a transfer confirmation works well.
-          The organizing team reviews it before your invoice is marked paid.
-        </p>
-
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept="image/*"
-          onChange={e => handlePick(e.target.files?.[0] ?? null)}
-          className="hidden"
-        />
-
-        {previewUrl ? (
-          <div className="relative rounded-xl overflow-hidden" style={{ border: '1px solid var(--gv-border)' }}>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={previewUrl}
-              alt="Payment proof preview"
-              className="w-full block"
-              style={{ maxHeight: 280, objectFit: 'contain', backgroundColor: '#F0EDE6' }}
-            />
-            <button
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-              className="absolute bottom-2 right-2 rounded-lg px-3 py-1.5 text-xs font-bold focus:outline-none"
-              style={{ backgroundColor: 'color-mix(in srgb, var(--gv-on-bg) 72%, transparent)', color: 'var(--gv-surface)', fontFamily: OUTFIT, border: 'none', cursor: 'pointer' }}
-            >
-              Change
-            </button>
+        ) : loadError ? (
+          <div className="gv-pay-card" style={{ padding: 28 }}>
+            <p className="gv-pay-err" role="alert">{loadError}</p>
+            <button type="button" className="gv-pay-link" style={{ marginTop: 10 }} onClick={() => { setLoading(true); setLoadError(''); reload(); }}>Try again</button>
           </div>
         ) : (
-          <button
-            type="button"
-            onClick={() => fileInputRef.current?.click()}
-            className="rounded-xl py-8 flex flex-col items-center gap-2 focus:outline-none"
-            style={{ border: '1.5px dashed var(--gv-border)', backgroundColor: 'transparent', cursor: 'pointer' }}
-          >
-            <ImageUp size={22} style={{ color: 'var(--gv-muted)' }} />
-            <span style={{ fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 700, color: '#6E5F4E' }}>Choose an image</span>
-            <span style={{ fontFamily: OUTFIT, fontSize: 10.5, color: 'var(--gv-muted)' }}>JPG or PNG, up to 10MB</span>
-          </button>
+          <div className="gv-pay-card" style={{ padding: 32, textAlign: 'center' }}>
+            <p style={{ margin: 0, fontWeight: 800, fontSize: 16 }}>{conference ? 'No application on file' : 'Conference not found'}</p>
+            {conference && <p className="gv-pay-quiet" style={{ marginTop: 6 }}>You need an application to this conference before you can pay</p>}
+          </div>
         )}
-
-        {error && <Note tone="red">{error}</Note>}
-
-        <div className="flex gap-3">
-          <button
-            onClick={() => { if (!submitting) onClose(); }}
-            disabled={submitting}
-            className="flex-1 rounded-xl py-2.5 font-bold text-sm focus:outline-none transition-colors"
-            style={{ border: '1.5px solid var(--gv-border)', color: 'var(--gv-on-surface)', backgroundColor: 'transparent', fontFamily: OUTFIT, cursor: submitting ? 'default' : 'pointer' }}
-          >
-            Cancel
-          </button>
-          <button
-            onClick={handleSubmit}
-            disabled={submitting || !file}
-            className="flex-1 rounded-xl py-2.5 font-bold text-sm focus:outline-none transition-colors"
-            style={{
-              backgroundColor: submitting || !file ? 'var(--gv-border)' : 'var(--gv-main)',
-              color: submitting || !file ? 'var(--gv-muted)' : 'var(--gv-on-main)',
-              fontFamily: OUTFIT, cursor: submitting || !file ? 'default' : 'pointer',
-            }}
-          >
-            {submitting ? 'Submitting…' : 'Submit'}
-          </button>
-        </div>
-      </div>
-    </ModalOverlay>
-  );
-}
-
-// ── Payments panel (participant's own payment_batches history) ─────────────
-// The Payments tab: every payment_batches row for this conference the caller
-// can see (RLS scopes it to their own), newest first. Settled invoices move
-// here entirely once paid — this is the one place their record lives on.
-
-const BATCH_METHOD_LABEL: Record<string, string> = {
-  stripe: 'Card via Stripe',
-  manual: 'Manual with proof',
-  organizer: 'Recorded by organizers',
-};
-
-const BATCH_STATUS_STYLES: Record<string, { color: string; label: string; icon: LucideIcon }> = {
-  pending: { color: '#8A6614', label: 'Awaiting review', icon: Clock },
-  paid: { color: '#2A5A3C', label: 'Paid', icon: CheckCircle2 },
-  rejected: { color: '#8B2020', label: 'Rejected', icon: XCircle },
-};
-
-function BatchStatusPill({ status }: { status: string }) {
-  const s = BATCH_STATUS_STYLES[status] ?? BATCH_STATUS_STYLES.pending;
-  const Icon = s.icon;
-  return (
-    <span
-      className="inline-flex items-center gap-1 flex-shrink-0"
-      style={{ color: s.color, fontSize: 12.5, fontFamily: OUTFIT, fontWeight: 700 }}
-    >
-      <Icon size={15} strokeWidth={2.2} aria-hidden />
-      {s.label}
-    </span>
-  );
-}
-
-function PaymentsPanel({
-  batches, expandedIds, onToggleExpand,
-}: {
-  batches: PaymentBatchRow[];
-  expandedIds: Set<string>;
-  onToggleExpand: (id: string) => void;
-}) {
-  if (batches.length === 0) {
-    return (
-      <NeuCard style={{ padding: '24px', textAlign: 'center' }}>
-        <p style={{ fontFamily: OUTFIT, fontSize: 12.5, color: NEU.muted }}>
-          No payments recorded yet.
-        </p>
-      </NeuCard>
+      </Frame>
     );
   }
 
-  return (
-    <div className="flex flex-col gap-3">
-      {batches.map(batch => {
-        const expanded = expandedIds.has(batch.id);
-        const items = batch.payments ?? [];
-        return (
-          <NeuCard key={batch.id} style={{ padding: 0, overflow: 'hidden' }}>
-            <button
-              type="button"
-              onClick={() => onToggleExpand(batch.id)}
-              className="w-full flex items-center gap-3 focus:outline-none"
-              style={{ padding: '16px 18px', background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left' }}
-            >
-              <NeuIconDisc
-                gradient={batch.method === 'stripe' ? NEU_GRADIENTS.forest : NEU_GRADIENTS.amber}
-                icon={batch.method === 'stripe' ? CreditCard : Receipt}
-                size={38}
-              />
-              <div className="flex-1 min-w-0">
-                <p style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 13.5, color: NEU.ink, margin: 0 }}>
-                  {BATCH_METHOD_LABEL[batch.method] ?? batch.method}
-                </p>
-                <p style={{ fontFamily: OUTFIT, fontSize: 11, color: NEU.muted, margin: '2px 0 0 0' }}>
-                  {new Date(batch.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
-                </p>
-              </div>
-              <span style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 900, color: NEU.ink, fontVariantNumeric: 'tabular-nums', flexShrink: 0 }}>
-                {centsToFee(batch.total_cents, batch.currency)}
-              </span>
-              <BatchStatusPill status={batch.status} />
-              {expanded ? <ChevronUp size={16} style={{ color: NEU.muted, flexShrink: 0 }} /> : <ChevronDown size={16} style={{ color: NEU.muted, flexShrink: 0 }} />}
-            </button>
+  const c = overview.conference;
+  const primary = [...overview.me].sort((a, b) => statusPriority(a.status) - statusPriority(b.status))[0] ?? null;
+  const leaderMe = overview.me.find(m => m.is_leader && m.society_id) ?? null;
+  const roleCfg = (role: string) => roleConfigs.find(r => r.role === role) ?? null;
+  const canPay = c.ready && !!c.method;
 
-            {expanded && (
-              <div style={{ padding: '0 18px 16px 18px', borderTop: '1px solid color-mix(in srgb, var(--gv-main) 8%, transparent)' }}>
-                <div className="pt-3 flex flex-col gap-2">
-                  {items.map(item => {
-                    const inv = Array.isArray(item.invoice) ? item.invoice[0] : item.invoice;
-                    return (
-                      <div key={item.id} className="flex items-center justify-between gap-3">
-                        <span style={{ fontFamily: OUTFIT, fontSize: 12.5, color: NEU.ink }}>
-                          {inv ? invoiceLabel(inv) : 'Invoice'}
-                        </span>
-                        <span style={{ fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 700, color: NEU.ink, fontVariantNumeric: 'tabular-nums' }}>
-                          {centsToFee(item.amount_cents, item.currency)}
-                        </span>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-          </NeuCard>
-        );
-      })}
-    </div>
-  );
-}
+  // The voucher discount on the person's own ticket, as the old page worked it out.
+  const ownTicket = items.find(i => i.kind === 'role_fee' && i.owner_is_me);
+  const primaryCfg = primary ? roleCfg(primary.role) : null;
+  const { amount: phaseFee } = activePhaseFee({ fee_amount: primaryCfg?.fee_amount ?? 0, fee_phases: primaryCfg?.fee_phases ?? null });
+  const granted = aidRequest?.status === 'approved' ? (aidRequest.granted_amount ?? 0) : 0;
+  const preVoucher = Math.round(Math.max(0, (phaseFee ?? 0) - granted) * 100);
+  const discount = ownTicket && ownTicket.paid_cents === 0 ? Math.max(0, preVoucher - ownTicket.amount_cents) : 0;
 
-// ── Invoice + actions (only mounted once real data is loaded, so its money
-// math hooks initialize against real values) ────────────────────────────────
+  const onRemove = async (it: PayItem): Promise<string | null> => {
+    const r = it.kind === 'addon'
+      ? (primary ? await removeAddon(primary.application_id, it.invoice_id) : { ok: false as const, error: 'This add-on could not be removed.' })
+      : await removePledgedTicket(it.invoice_id);
+    if (!r.ok) return r.error;
+    setSelected(prev => { const n = new Set(prev); n.delete(it.invoice_id); return n; });
+    reload();
+    return null;
+  };
 
-function PayInvoiceAndActions({
-  conference, application, leaderApp, allApps, roleConfig, delegateRoleConfig, advisorRoleConfig, aidRequest, onAidSubmitted, invoices, configDescriptions,
-  activeAddons, paymentBatches, onInvoicesChanged, onInvoiceRemoved,
-}: {
-  conference: PayConference;
-  application: PayApplication;
-  leaderApp: PayApplication | null;
-  /** Every application the signed-in user holds at this conference — used
-   *  strictly to look up the OWNING application of another application's
-   *  role_fee invoice (role label + status), never to source a field of the
-   *  primary role-fee card itself. */
-  allApps: PayApplication[];
-  roleConfig: PayRoleConfig | null;
-  delegateRoleConfig: PayRoleConfig | null;
-  advisorRoleConfig: PayRoleConfig | null;
-  aidRequest: AidRequestRow | null;
-  onAidSubmitted: () => void;
-  invoices: InvoiceRow[];
-  configDescriptions: Record<string, string>;
-  activeAddons: ActiveAddon[];
-  paymentBatches: PaymentBatchRow[];
-  onInvoicesChanged: () => void;
-  /** Removes one invoice from local state immediately (a removed pledge
-   *  should vanish from the list right away, not wait on a round trip). */
-  onInvoiceRemoved: (invoiceId: string) => void;
-}) {
-  const { session } = useAuth();
-  const aidBlocks: FormBlock[] = normalizeBlocks(conference.aid_questions);
-  const currency = roleConfig?.fee_currency ?? conference.fee_currency;
-  const { amount: resolvedFee, phase } = activePhaseFee({ fee_amount: roleConfig?.fee_amount ?? 0, fee_phases: roleConfig?.fee_phases ?? null });
-  const fee = resolvedFee ?? 0;
-  const grantedAmount = aidRequest?.status === 'approved' ? (aidRequest.granted_amount ?? 0) : 0;
-
-  // The registration invoice, when it exists — its amount_cents is now ALWAYS
-  // the net owed (fee − aid − voucher), auto-saved server-side the moment a
-  // voucher is applied/removed (apply_voucher), so it's the source of truth
-  // for Total/due rather than a live fee-minus-aid computation. Before it
-  // exists (not yet payable/synced), fall back to fee − aid with no voucher.
-  // Bound to primary specifically (application_id match) — invoices now also
-  // covers a dual-role leaderApp's own rows, which can include its own
-  // role_fee invoice, so kind alone is no longer a unique-enough filter.
-  const roleFeeInvoice = invoices.find(inv => inv.kind === 'role_fee' && inv.application_id === application.id);
-  // Every OTHER application's own role_fee invoice never feeds a single
-  // field of the primary card above — it renders as its own card in the
-  // generic list instead (see genericInvoices below), keyed by its actual
-  // owning application so its role label and payability are its own.
-  const appById = new Map(allApps.map(a => [a.id, a] as const));
-  const preVoucherCents = Math.round(Math.max(0, fee - grantedAmount) * 100);
-  const netCents = roleFeeInvoice ? roleFeeInvoice.amount_cents : preVoucherCents;
-  const dueCents = roleFeeInvoice ? invoiceDueCents(roleFeeInvoice) : Math.max(0, netCents - Math.round(application.amount_paid * 100));
-  const voucherDiscountCents = Math.max(0, preVoucherCents - netCents);
-  const badge = roleFeeInvoice ? invoiceBadge(roleFeeInvoice) : deriveBadge(application.payment_status, application.amount_paid);
-  const owesSomething = badge === 'UNPAID' || badge === 'PARTIAL';
-  // Every invoice id currently sitting in a pending (awaiting-review) manual
-  // payment batch — hides the pay affordance and selection checkbox in favor
-  // of a quiet status chip, everywhere an invoice can render.
-  const pendingProofInvoiceIds = new Set(
-    paymentBatches.filter(b => b.status === 'pending').flatMap(b => b.payments.map(p => p.invoice_id))
-  );
-  const roleFeeAwaitingReview = !!roleFeeInvoice && pendingProofInvoiceIds.has(roleFeeInvoice.id);
-  const roleFeeSelectable = !!roleFeeInvoice && !isInvoiceSettled(roleFeeInvoice) && dueCents > 0 && !roleFeeAwaitingReview;
-  const isCovered = roleFeeInvoice?.status === 'waived';
-  // `fee` is already today's phase-resolved role fee — hand it over so a
-  // free role can never come back 'locked' (see getGateState).
-  const gateState = getGateState(roleConfig?.payment_timing ?? 'anytime', application.status, application.payment_status, fee);
-  const payableNow = gateState !== 'under_review';
-  // platform_collects mirrors conference_payments_ready(): card payments are
-  // charged on Gavelling's own Stripe account, so Connect status is moot.
-  const paymentsEnabled = !!conference.platform_collects
-    || (conference.payment_method === 'stripe' && conference.connect_onboarding_status === 'complete');
-  const externalPaymentUrl = conference.payment_method === 'manual' ? conference.external_payment_url : null;
-  const manualActive = conference.payment_method === 'manual';
-  // Gated on leaderApp, not primary — a dual-role user's primary application
-  // can be a plain delegate app even while they lead a delegation through a
-  // separate head-delegate/advisor application.
-  const canBuyDelegationStuff = leaderApp !== null;
-
-  const [invoiceOpen, setInvoiceOpen] = useState(false);
-  const [voucherOpen, setVoucherOpen] = useState(false);
-  const [voucherCode, setVoucherCode] = useState('');
-  const [voucherApplying, setVoucherApplying] = useState(false);
-  const [voucherError, setVoucherError] = useState<string | null>(null);
-  // The referral code already on record for this person, read back so a
-  // reload does not forget it. vouchers is organiser-read only, so a
-  // participant cannot turn their own voucher_redemptions row into a code
-  // without my_referral_code() (see referral-vouchers.sql, step 5). The
-  // function does not exist until that migration runs: a missing-function
-  // error means "no referral recorded", which is also the truth then.
-  const [referralCode, setReferralCode] = useState<string | null>(null);
-  const [paying, setPaying] = useState(false);
-  const [payError, setPayError] = useState<string | null>(null);
-  const [stubMessage, setStubMessage] = useState<string | null>(null);
-  const [aidModalOpen, setAidModalOpen] = useState(false);
-  const [addonsModalOpen, setAddonsModalOpen] = useState(false);
-  const [creditsOpen, setCreditsOpen] = useState(false);
-  const [spotsOpen, setSpotsOpen] = useState(false);
-  const spotsRowRef = useRef<HTMLDivElement | null>(null);
-
-  const [advisorModalOpen, setAdvisorModalOpen] = useState(false);
-
-  // Read back the referral code on record, once per account per conference.
-  useEffect(() => {
-    if (!session) return;
-    let cancelled = false;
-    (async () => {
-      const supabase = getAuthedClient(session.access_token);
-      const { data } = await supabase.rpc('my_referral_code', { p_conference: conference.id });
-      if (cancelled) return;
-      const res = data as { ok?: boolean; code?: string | null } | null;
-      if (res?.ok && res.code) setReferralCode(res.code);
-    })();
-    return () => { cancelled = true; };
-  }, [session?.access_token, conference.id]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // ?open=aid|addons|spots|advisors|credits opens that action's pop-up on
-  // load (the delegation card's "Add delegation spots" links to
-  // ?open=spots), then drops the value so a refresh does not reopen it.
-  const openedFromUrlRef = useRef(false);
-  useEffect(() => {
-    if (openedFromUrlRef.current || typeof window === 'undefined') return;
-    const url = new URL(window.location.href);
-    const which = url.searchParams.get('open');
-    if (!which) return;
-    // Opened from a timer (not synchronously in the effect), and the guard is
-    // set inside it, so React's double-run of effects in dev cannot swallow it.
-    const t = setTimeout(() => {
-      if (openedFromUrlRef.current) return;
-      openedFromUrlRef.current = true;
-      if (which === 'aid' && conference.financial_aid_enabled && !aidRequest) setAidModalOpen(true);
-      else if (which === 'addons' && activeAddons.length > 0) setAddonsModalOpen(true);
-      else if (which === 'spots' && canBuyDelegationStuff) setSpotsOpen(true);
-      else if (which === 'advisors' && canBuyDelegationStuff) setAdvisorModalOpen(true);
-      else if (which === 'credits') {
-        if (canBuyDelegationStuff) setCreditsOpen(true); else openCreditsPopup({ context: 'pay' });
-      }
-      url.searchParams.delete('open');
-      window.history.replaceState(window.history.state, '', url.pathname + (url.search || '') + url.hash);
-    }, 0);
-    return () => clearTimeout(t);
-  }, [conference.financial_aid_enabled, aidRequest, activeAddons.length, canBuyDelegationStuff]);
-  // Left column: Current Invoices (what's owed or awaiting review) vs
-  // Payments (the full payment_batches history, every method). Settled
-  // invoices never appear in the invoices list any more — once paid, they
-  // only live in Payments.
-  const [leftTab, setLeftTab] = useState<'invoices' | 'payments'>('invoices');
-  const [expandedBatchIds, setExpandedBatchIds] = useState<Set<string>>(new Set());
-  // Set (not null) to open the proof-upload modal for exactly these invoice
-  // ids — a single invoice's own pay path, or the combined selected batch.
-  const [proofModalIds, setProofModalIds] = useState<string[] | null>(null);
-
-  // Generic invoice cards — app_fee, addon, pledge_spot (owed delegation
-  // spots, materialized by add_pledged_spots), advisor_spot (owed advisor
-  // tickets, materialized by add_pledged_advisor_spots), plus any OTHER
-  // application's role_fee invoice (the primary card above only ever shows
-  // its own). All are individually payable or selectable into the combined
-  // "Pay Selected" batch. Settled invoices are excluded — they've moved to
-  // the Payments tab, they don't linger here.
-  const genericInvoices = invoices.filter(inv =>
-    inv.status !== 'settled'
-    && (inv.kind === 'app_fee' || inv.kind === 'addon' || inv.kind === 'pledge_spot' || inv.kind === 'advisor_spot'
-      || (inv.kind === 'role_fee' && inv.application_id !== application.id))
-  );
-  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [genericPayingId, setGenericPayingId] = useState<string | null>(null);
-  const [genericPayError, setGenericPayError] = useState<Record<string, string>>({});
-  const [selectedPaying, setSelectedPaying] = useState(false);
-  const [selectedPayError, setSelectedPayError] = useState<string | null>(null);
-
-  function toggleExpandedBatch(id: string) {
-    setExpandedBatchIds(prev => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id); else next.add(id);
-      return next;
-    });
-  }
-
-  async function handleProofSubmitted() {
-    setProofModalIds(null);
-    await onInvoicesChanged();
-  }
-
-  // Undoes a misclick (pledged 9 spots instead of 8) before any money moves.
-  // Removes the row from local state immediately on success, then refetches
-  // so the count/list stay reconciled against the server.
-  async function handleRemovePledge(invoiceId: string): Promise<{ ok: boolean; error?: string }> {
-    if (!session) return { ok: false, error: 'Session expired. Please sign in again.' };
-    const supabase = getAuthedClient(session.access_token);
-    const { data, error } = await supabase.rpc('remove_pledged_spot_invoice', { p_invoice_id: invoiceId });
-    const result = data as { ok?: boolean; error?: string } | null;
-    if (error || !result?.ok) {
-      return { ok: false, error: (result?.error ? plainOrFallback(result.error, 'Could not remove this. Please try again.') : friendlyError(error, 'Could not remove this. Please try again.')) };
-    }
-    onInvoiceRemoved(invoiceId);
-    onInvoicesChanged();
-    return { ok: true };
-  }
-
-  function toggleExpanded(id: string) {
-    setExpandedIds(prev => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id); else next.add(id);
-      return next;
-    });
-  }
-
-  function toggleSelected(id: string) {
-    setSelectedIds(prev => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id); else next.add(id);
-      return next;
-    });
-  }
-
-  // Registration is paid in full, net of aid/voucher — no partial-amount
-  // selector. Vouchers apply upfront (apply_voucher, below) and re-net the
-  // invoice immediately, so by the time this fires the invoice's own
-  // amount_cents is already correct — same invoiceId checkout path as any
-  // other card.
-  async function handlePay() {
-    if (paying || dueCents <= 0 || !session || !roleFeeInvoice) return;
-    setPaying(true);
-    setPayError(null);
-    const result = await payInvoiceCheckout({ invoiceId: roleFeeInvoice.id, accessToken: session.access_token });
-    if (result.status === 'redirect' && result.redirectUrl) {
-      window.location.assign(result.redirectUrl);
-      return;
-    }
-    setPaying(false);
-    if (result.status === 'error') {
-      // Checkout never opened — the delegate cannot pay their registration at
-      // all, and only an inline message says so.
-      reportBlocked('start card payment', new Error(result.message ?? 'checkout returned no url'), {
-        kind: 'role_fee', invoiceId: roleFeeInvoice.id,
-      });
-      setPayError(plainOrFallback(result.message, "We couldn't open the payment page. Please try again."));
-    }
-  }
-
-  // Applies (or, with an empty code, removes) a registration voucher upfront
-  // — apply_voucher stamps the role_fee invoice and re-nets its amount_cents
-  // immediately, so a re-fetch is all that's needed to show the new Total.
-  // Unstackable: a new code replaces whatever was applied before.
-  //
-  // A REFERRAL CODE TAKES A DIFFERENT ROUTE, on purpose. It discounts
-  // nothing, so it has no business on an invoice, and apply_voucher would
-  // refuse it outright whenever there is no OPEN role_fee invoice: every
-  // WorldMUN delegate role is payment_timing 'after_acceptance' (no invoice
-  // before acceptance) and a delegation leader pays pledge spots, which
-  // apply_voucher never touches. So the code is checked with
-  // validate_voucher, and a referral is RECORDED with redeem_voucher, which
-  // needs no invoice and works for every role at every stage. Nothing about
-  // the price moves, so there is no re-fetch on that path either.
-  async function applyVoucher(code: string) {
-    if (voucherApplying || !session) return;
-    setVoucherApplying(true);
-    setVoucherError(null);
-    const supabase = getAuthedClient(session.access_token);
-
-    if (code) {
-      const { data: vData } = await supabase.rpc('validate_voucher', {
-        p_code: code,
-        p_conference_id: conference.id,
-        p_context: 'conference_signup',
-      });
-      const v = vData as { valid?: boolean; reason?: string | null; voucher_id?: string; kind?: string } | null;
-      if (v?.valid && v.kind === 'referral') {
-        const { data: rData, error: rError } = await supabase.rpc('redeem_voucher', {
-          p_voucher_id: v.voucher_id,
-          p_context: 'conference_signup',
-          p_application_id: application.id,
-        });
-        const redeemed = rData as { ok?: boolean; reason?: string } | null;
-        setVoucherApplying(false);
-        // 'already_redeemed' is the happy path on a second press: the code is
-        // on record, which is the whole point, so say so rather than erroring.
-        if (rError || !(redeemed?.ok || redeemed?.reason === 'already_redeemed')) {
-          setVoucherError(friendlyError(rError, 'Could not record that referral code. Please try again.'));
-          return;
-        }
-        setReferralCode(code);
-        setVoucherCode('');
-        return;
-      }
-      // Not a referral (or not valid at all): fall through to the discount
-      // path, which owns every "that code is not valid" message already.
-    }
-
-    const { data, error } = await supabase.rpc('apply_voucher', {
-      p_application_id: application.id,
-      p_code: code,
-    });
-    const result = data as { ok?: boolean; error?: string } | null;
-    setVoucherApplying(false);
-    if (error || !result?.ok) {
-      setVoucherError((result?.error ? plainOrFallback(result.error, 'Could not apply that code. Please try again.') : friendlyError(error, 'Could not apply that code. Please try again.')));
-      return;
-    }
-    if (!code) setVoucherCode('');
-    await onInvoicesChanged();
-  }
-
-  // Any generic (app_fee/addon) invoice pays through create-checkout's
-  // invoiceId path — its amount_cents is already final (config-set).
-  async function handlePayInvoice(invoiceId: string) {
-    if (genericPayingId || !session) return;
-    setGenericPayingId(invoiceId);
-    setGenericPayError(prev => ({ ...prev, [invoiceId]: '' }));
-    const result = await payInvoiceCheckout({ invoiceId, accessToken: session.access_token });
-    if (result.status === 'redirect' && result.redirectUrl) {
-      window.location.assign(result.redirectUrl);
-      return;
-    }
-    setGenericPayingId(null);
-    if (result.status === 'error') {
-      reportBlocked('start card payment', new Error(result.message ?? 'checkout returned no url'), {
-        kind: 'invoice', invoiceId,
-      });
-      setGenericPayError(prev => ({ ...prev, [invoiceId]: plainOrFallback(result.message, "We couldn't open the payment page. Please try again.") }));
-    }
-  }
-
-  // Selected invoices, including the registration invoice when checked — the
-  // Total row and combined payment both work off this same set.
-  const selectedInvoices = invoices.filter(inv => selectedIds.has(inv.id) && !isInvoiceSettled(inv));
-  const selectedTotalCents = selectedInvoices.reduce((sum, inv) => sum + invoiceDueCents(inv), 0);
-
-  // Pays every selected, still-owed invoice in ONE Stripe Checkout session.
-  // Every invoice's amount_cents (role_fee included, now that apply_voucher
-  // keeps it net) is already correct — no server-side recompute needed.
-  async function handlePaySelected() {
-    if (selectedPaying || !session || selectedInvoices.length === 0) return;
-    setSelectedPaying(true);
-    setSelectedPayError(null);
-    const result = await payInvoicesCheckout({
-      invoiceIds: selectedInvoices.map(inv => inv.id),
-      accessToken: session.access_token,
-    });
-    if (result.status === 'redirect' && result.redirectUrl) {
-      window.location.assign(result.redirectUrl);
-      return;
-    }
-    setSelectedPaying(false);
-    if (result.status === 'error') {
-      // ONE Checkout session covers every selected invoice, so this is one
-      // report for the whole basket, never one per invoice.
-      reportBlocked('start card payment', new Error(result.message ?? 'checkout returned no url'), {
-        kind: 'invoices', invoiceCount: selectedInvoices.length,
-      });
-      setSelectedPayError(plainOrFallback(result.message, "We couldn't open the payment page. Please try again."));
-    }
-  }
+  const receipt = receiptKey ? overview.payments.find(p => p.key === receiptKey) ?? null : null;
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-[1fr_300px] gap-6 items-start">
-      {/* LEFT — Current Invoices / Payments */}
-      <div className="flex flex-col gap-3">
-        <div className="flex items-center gap-2 mb-1">
-          <button
-            type="button"
-            onClick={() => setLeftTab('invoices')}
-            className="rounded-full px-4 py-1.5 text-xs font-bold focus:outline-none transition-colors"
-            style={{
-              border: leftTab === 'invoices' ? `1.5px solid ${NEU.forest}` : '1.5px solid var(--gv-border)',
-              backgroundColor: leftTab === 'invoices' ? 'color-mix(in srgb, var(--gv-main) 6%, transparent)' : 'transparent',
-              color: leftTab === 'invoices' ? NEU.forest : NEU.muted,
-              fontFamily: OUTFIT, cursor: 'pointer',
-            }}
-          >
-            Current invoices
-          </button>
-          <button
-            type="button"
-            onClick={() => setLeftTab('payments')}
-            className="rounded-full px-4 py-1.5 text-xs font-bold focus:outline-none transition-colors"
-            style={{
-              border: leftTab === 'payments' ? `1.5px solid ${NEU.forest}` : '1.5px solid var(--gv-border)',
-              backgroundColor: leftTab === 'payments' ? 'color-mix(in srgb, var(--gv-main) 6%, transparent)' : 'transparent',
-              color: leftTab === 'payments' ? NEU.forest : NEU.muted,
-              fontFamily: OUTFIT, cursor: 'pointer',
-            }}
-          >
-            Payments{paymentBatches.length > 0 ? ` (${paymentBatches.length})` : ''}
-          </button>
+    <Frame theme={conference.theme} slug={slug}>
+      <h1 style={{ margin: 0, fontSize: 'clamp(28px, 3vw, 36px)', fontWeight: 900, letterSpacing: '-0.02em', color: INK }}>
+        Conference <GoldWord tone="light">Payments</GoldWord>
+      </h1>
+      <p style={{ margin: '4px 0 22px', fontSize: 15, color: INK_SOFT, overflowWrap: 'anywhere' }}>{c.full_name}</p>
+
+      {(wait === 'waiting' || wait === 'slow') && (
+        <div className="gv-pay-card" role="status" style={{ marginBottom: 16, padding: '14px 18px', fontSize: 15, fontWeight: 700 }}>
+          {wait === 'slow' ? SLOW_LINE : WAITING_LINE}
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_320px] gap-6 items-start">
+        <div className="flex flex-col gap-5" style={{ minWidth: 0 }}>
+          <BalanceHeader o={overview} />
+          {!canPay && <PaymentsNotSetUp contactEmail={c.contact_email} />}
+          <ItemList
+            items={items}
+            selected={selected}
+            onToggle={toggle}
+            onReceipt={setReceiptKey}
+            onRemove={onRemove}
+            below={(it) => (it.kind === 'role_fee' && it.owner_is_me && primary && (it.state === 'unpaid' || it.state === 'rejected'))
+              ? <VoucherPanel conferenceId={c.id} applicationId={primary.application_id} discountCents={discount} currency={it.currency} onChanged={reload} />
+              : null}
+          />
+          {canPay && tickable.length > 0 && (
+            <PayBar
+              count={chosen.length}
+              totalLabel={money(chosenTotal, chosenCur)}
+              allTicked={chosen.length > 0 && chosen.length >= tickable.filter(i => i.currency === chosenCur).length}
+              onSelectAll={selectAll}
+              onClear={() => { setSelected(new Set()); setNotice(''); }}
+              onPay={() => setPaying(c.method === 'manual' ? 'manual' : 'card')}
+              busy={paying !== null}
+              notice={notice}
+            />
+          )}
+          <ReceiptsList payments={overview.payments} onOpen={setReceiptKey} />
         </div>
 
-        {leftTab === 'payments' ? (
-          <PaymentsPanel
-            batches={paymentBatches}
-            expandedIds={expandedBatchIds}
-            onToggleExpand={toggleExpandedBatch}
+        {primary && (
+          <ActionsColumn
+            conference={conference}
+            aidOpen={c.aid_open}
+            primaryAppId={primary.application_id}
+            leader={leaderMe ? { id: leaderMe.application_id, society_id: leaderMe.society_id as string } : null}
+            addons={addons}
+            addonInvoices={addonInvoices}
+            delegateConfig={roleCfg('delegate')}
+            advisorConfig={roleCfg('faculty-advisor')}
+            delegateOpen={!!roleCfg('delegate')?.is_enabled}
+            advisorOpen={!!roleCfg('faculty-advisor')?.is_enabled}
+            aidRequest={aidRequest}
+            currency={c.currency}
+            onChanged={reload}
+            onAidSubmitted={reload}
           />
-        ) : (
+        )}
+      </div>
+
+      {paying === 'card' && (
+        <CardPayPopup
+          conferenceId={c.id}
+          conferenceName={c.full_name}
+          invoiceIds={chosen.map(i => i.invoice_id)}
+          totalLabel={money(chosenTotal, chosenCur)}
+          onClose={(stillWaiting) => { setPaying(null); if (stillWaiting) setReturnWait(true); else reload(); }}
+          onSettled={() => { setPaying(null); setSelected(new Set()); reload(); }}
+        />
+      )}
+
+      {paying === 'manual' && (
         <>
-        {/* Registration fee — its own panel. Paid in full, net of aid/voucher
-            (no partial amounts); the voucher box applies upfront via
-            apply_voucher rather than at checkout. Header checkbox lets it
-            join the combined "Pay Selected" batch too. Hidden once actually
-            settled (paid) — that history now lives in the Payments tab;
-            waived stays visible since there's nothing to reconcile there. */}
-        {fee > 0 && roleFeeInvoice?.status !== 'settled' && (
-          <NeuCard style={{ padding: 0, overflow: 'hidden' }}>
-            <div className="w-full flex items-center gap-3" style={{ padding: '18px 20px' }}>
-              {roleFeeSelectable && (
-                /* 44px tap target around the 16px box, as in the add-on list. */
-                <span className="flex items-center justify-center flex-shrink-0" style={{ width: 44, height: 44, margin: '-14px' }}>
-                  <input
-                    type="checkbox"
-                    checked={selectedIds.has(roleFeeInvoice!.id)}
-                    onChange={() => toggleSelected(roleFeeInvoice!.id)}
-                    className="flex-shrink-0"
-                    style={{ width: 16, height: 16, accentColor: NEU.forest, cursor: 'pointer' }}
-                    aria-label="Select registration fee"
-                  />
-                </span>
-              )}
-              <button
-                type="button"
-                onClick={() => setInvoiceOpen(v => !v)}
-                className="flex-1 flex items-center justify-between gap-3 min-w-0 focus:outline-none"
-                style={{ background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left', padding: 0 }}
-              >
-                <div className="flex items-center gap-3 min-w-0">
-                  <NeuIconDisc gradient={NEU_GRADIENTS.forest} icon={Wallet} size={40} />
-                  <div className="min-w-0">
-                    <p style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 14.5, color: NEU.ink, margin: 0 }}>
-                      {roleLabel(application.role)} fee
-                    </p>
-                    <p style={{ fontFamily: OUTFIT, fontSize: 11.5, color: NEU.muted, margin: '2px 0 0 0' }}>
-                      {isCovered
-                        ? `${invoiceLabel(roleFeeInvoice!)} · ${centsToFee(0, currency)}`
-                        : fee > 0 ? `${formatFee(fee, currency)} · balance due ${centsToFee(dueCents, currency)}` : 'Free'}
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-3 flex-shrink-0">
-                  <BadgePill badge={badge} />
-                  {invoiceOpen ? <ChevronUp size={16} style={{ color: NEU.muted }} /> : <ChevronDown size={16} style={{ color: NEU.muted }} />}
-                </div>
-              </button>
-            </div>
-
-            {invoiceOpen && (
-              <div style={{ padding: '0 20px 20px 20px', borderTop: '1px solid color-mix(in srgb, var(--gv-main) 8%, transparent)' }}>
-                {isCovered ? (
-                  <div className="pt-4">
-                    <div className="flex items-center justify-between pb-4">
-                      <span style={{ fontFamily: OUTFIT, fontSize: 13, color: NEU.ink, fontWeight: 800 }}>{invoiceLabel(roleFeeInvoice!)}</span>
-                      <span style={{ fontFamily: OUTFIT, fontSize: 13, color: NEU.ink, fontWeight: 800 }}>{centsToFee(0, currency)}</span>
-                    </div>
-                    <Note tone="green">Nothing to pay. This spot is covered.</Note>
-                  </div>
-                ) : (
-                <>
-                <div className="pt-4 flex flex-col gap-1.5 mb-4">
-                  <div className="flex items-center justify-between">
-                    <span style={{ fontFamily: OUTFIT, fontSize: 12.5, color: NEU.muted }}>Fee</span>
-                    <span style={{ fontFamily: OUTFIT, fontSize: 12.5, color: NEU.ink, fontWeight: 600 }}>{formatFee(fee, currency)}</span>
-                  </div>
-                  {grantedAmount > 0 && (
-                    <div className="flex items-center justify-between">
-                      <span style={{ fontFamily: OUTFIT, fontSize: 12.5, color: NEU.muted }}>− Financial aid</span>
-                      <span style={{ fontFamily: OUTFIT, fontSize: 12.5, color: NEU.green, fontWeight: 600 }}>−{formatFee(grantedAmount, currency)}</span>
-                    </div>
-                  )}
-                  {voucherDiscountCents > 0 && (
-                    <div className="flex items-center justify-between">
-                      <span style={{ fontFamily: OUTFIT, fontSize: 12.5, color: NEU.muted }}>− Voucher</span>
-                      <span style={{ fontFamily: OUTFIT, fontSize: 12.5, color: NEU.green, fontWeight: 600 }}>−{centsToFee(voucherDiscountCents, currency)}</span>
-                    </div>
-                  )}
-                  <div className="flex items-center justify-between pt-1.5 mt-0.5" style={{ borderTop: '1px dashed color-mix(in srgb, var(--gv-main) 16%, transparent)' }}>
-                    <span style={{ fontFamily: OUTFIT, fontSize: 13, color: NEU.ink, fontWeight: 800 }}>Total</span>
-                    <span style={{ fontFamily: OUTFIT, fontSize: 13, color: NEU.ink, fontWeight: 800 }}>{centsToFee(netCents, currency)}</span>
-                  </div>
-                  {fee > 0 && phase && (
-                    <p style={{ fontFamily: OUTFIT, fontSize: 10.5, fontWeight: 700, color: NEU.deepGold, letterSpacing: '0.04em', margin: '2px 0 0 0' }}>
-                      {phase.label.toUpperCase()} PRICING
-                    </p>
-                  )}
-                </div>
-
-                {aidRequest?.status === 'pending' && (
-                  <div className="mb-3"><Note tone="amber">Your financial aid request is under review.</Note></div>
-                )}
-                {aidRequest?.status === 'denied' && (
-                  <div className="mb-3"><Note tone="muted">Your financial aid request was not approved. The standard fee applies.</Note></div>
-                )}
-
-                {/* Voucher — always available (manual or Stripe), applies
-                    upfront via apply_voucher rather than at checkout. */}
-                <div className="mb-4">
-                  {referralCode ? (
-                    /* A referral is on record. It changed no price, so it is
-                       stated as a fact and never as money off. No Remove:
-                       taking an ambassador's credit away is the organiser's
-                       call, not the referred person's. */
-                    <div>
-                      <p style={{ fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 700, color: NEU.green }}>
-                        Referral code applied
-                      </p>
-                      <p className="mt-1" style={{ fontFamily: OUTFIT, fontSize: 11.5, color: NEU.inkSoft, overflowWrap: 'anywhere' }}>
-                        {referralCode}. It records who referred you and does not change your fee.
-                      </p>
-                    </div>
-                  ) : !voucherOpen && voucherDiscountCents === 0 ? (
-                    <button
-                      type="button"
-                      onClick={() => setVoucherOpen(true)}
-                      className="text-xs font-bold focus:outline-none"
-                      style={{ color: NEU.forest, fontFamily: OUTFIT, textDecoration: 'underline', textUnderlineOffset: 3, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
-                    >
-                      Have a voucher or referral code?
-                    </button>
-                  ) : (
-                    <div>
-                      <label className="block mb-1.5" style={{ fontSize: 11, fontWeight: 700, color: NEU.inkSoft, fontFamily: OUTFIT, letterSpacing: '0.06em' }}>
-                        VOUCHER OR REFERRAL CODE
-                      </label>
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="text"
-                          value={voucherCode}
-                          /* Uppercase the STATE, not just the pixels. apply_voucher
-                             matches `code = trim(p_code)`, which is case sensitive,
-                             and vouchers are stored uppercase — a CSS-only
-                             `uppercase` class showed the applicant EARLYBIRD10 and
-                             then sent "earlybird10", which is never a match.
-                             Same handling as /apply. */
-                          onChange={e => setVoucherCode(e.target.value.toUpperCase())}
-                          placeholder="e.g. EARLYBIRD10"
-                          className="flex-1 min-w-0 rounded-xl px-3.5 py-2.5 text-base sm:text-sm uppercase focus:outline-none"
-                          style={{ border: 'none', backgroundColor: NEU.base, boxShadow: NEU.inSm, color: NEU.ink, fontFamily: OUTFIT }}
-                        />
-                        <button
-                          type="button"
-                          onClick={() => applyVoucher(voucherCode.trim().toUpperCase())}
-                          disabled={voucherApplying || !voucherCode.trim()}
-                          className="rounded-xl px-4 py-2.5 text-xs font-bold focus:outline-none"
-                          style={{
-                            border: 'none', backgroundColor: voucherApplying || !voucherCode.trim() ? 'var(--gv-border)' : NEU.forest,
-                            color: voucherApplying || !voucherCode.trim() ? 'var(--gv-muted)' : NEU.gold,
-                            fontFamily: OUTFIT, whiteSpace: 'nowrap', cursor: voucherApplying || !voucherCode.trim() ? 'default' : 'pointer',
-                          }}
-                        >
-                          {voucherApplying ? '…' : 'Apply'}
-                        </button>
-                      </div>
-                      {voucherDiscountCents > 0 ? (
-                        <div className="flex items-center justify-between mt-1.5">
-                          <span style={{ fontFamily: OUTFIT, fontSize: 11, color: NEU.green, fontWeight: 700 }}>
-                            Voucher applied: −{centsToFee(voucherDiscountCents, currency)}
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() => applyVoucher('')}
-                            disabled={voucherApplying}
-                            className="text-xs font-bold focus:outline-none"
-                            style={{ color: '#8B2020', fontFamily: OUTFIT, textDecoration: 'underline', textUnderlineOffset: 3, background: 'none', border: 'none', cursor: voucherApplying ? 'default' : 'pointer', padding: 0 }}
-                          >
-                            Remove
-                          </button>
-                        </div>
-                      ) : (
-                        <p className="mt-1.5" style={{ fontFamily: OUTFIT, fontSize: 11, color: NEU.inkSoft }}>
-                          A voucher comes off before you check out. A referral code records who referred you and changes nothing you pay.
-                        </p>
-                      )}
-                      {voucherError && (
-                        <p className="mt-1.5" style={{ fontFamily: OUTFIT, fontSize: 11, color: '#8B2020' }}>{voucherError}</p>
-                      )}
-                    </div>
-                  )}
-                </div>
-
-                {!payableNow ? (
-                  <Note tone="amber">Payment becomes available once your application is accepted.</Note>
-                ) : fee === 0 ? (
-                  <p style={{ fontFamily: OUTFIT, fontSize: 12.5, color: NEU.muted }}>
-                    There&apos;s no fee for this role, nothing to pay.
-                  </p>
-                ) : owesSomething && manualActive ? (
-                  <ManualPayAction
-                    awaitingReview={roleFeeAwaitingReview}
-                    externalPaymentUrl={externalPaymentUrl}
-                    externalPaymentNote={conference.external_payment_note}
-                    onUploadProof={() => setProofModalIds([roleFeeInvoice!.id])}
-                  />
-                ) : owesSomething && !paymentsEnabled ? (
-                  <PaymentsNotSetUp contactEmail={conference.contact_email} />
-                ) : owesSomething ? (
-                  <>
-                    {payError && (
-                      <div className="mb-3"><Note tone="red">{payError}</Note></div>
-                    )}
-
-                    <button
-                      onClick={handlePay}
-                      disabled={paying}
-                      className="w-full flex items-center justify-center gap-2 rounded-xl py-3 font-bold text-sm focus:outline-none transition-colors"
-                      style={{
-                        backgroundColor: paying ? 'var(--gv-border)' : NEU.forest,
-                        color: paying ? 'var(--gv-muted)' : NEU.gold,
-                        fontFamily: OUTFIT, border: 'none', cursor: paying ? 'default' : 'pointer',
-                      }}
-                    >
-                      <CreditCard size={15} />
-                      {paying ? 'Opening checkout…' : `Pay ${centsToFee(dueCents, currency)}`}
-                    </button>
-                  </>
-                ) : (
-                  <Note tone="green">Paid in full. Thank you!</Note>
-                )}
-                </>
-                )}
-              </div>
-            )}
-          </NeuCard>
-        )}
-
-        {/* Conference application fee + add-ons + any other application's
-            role_fee — generic invoice cards */}
-        {genericInvoices.map(inv => {
-          const owner = inv.kind === 'role_fee' ? (appById.get(inv.application_id ?? '') ?? application) : application;
-          return (
-            <GenericInvoiceCard
-              key={inv.id}
-              inv={inv}
-              application={owner}
-              labelOverride={inv.kind === 'role_fee' ? `${roleLabel(owner.role)} fee` : undefined}
-              description={inv.config_id ? configDescriptions[inv.config_id] : undefined}
-              paymentsEnabled={paymentsEnabled}
-              manualActive={manualActive}
-              externalPaymentUrl={externalPaymentUrl}
-              externalPaymentNote={conference.external_payment_note}
-              contactEmail={conference.contact_email}
-              awaitingReview={pendingProofInvoiceIds.has(inv.id)}
-              onUploadProof={() => setProofModalIds([inv.id])}
-              canRemovePledge={
-                (inv.kind === 'pledge_spot' || inv.kind === 'advisor_spot')
-                && inv.status === 'open' && inv.aid_applied_cents === 0 && !pendingProofInvoiceIds.has(inv.id)
-              }
-              onRemovePledge={() => handleRemovePledge(inv.id)}
-              expanded={expandedIds.has(inv.id)}
-              onToggleExpand={() => toggleExpanded(inv.id)}
-              selected={selectedIds.has(inv.id)}
-              onToggleSelect={() => toggleSelected(inv.id)}
-              onPay={() => handlePayInvoice(inv.id)}
-              paying={genericPayingId === inv.id}
-              payError={genericPayError[inv.id] || null}
-            />
-          );
-        })}
-
-        {fee <= 0 && genericInvoices.length === 0 && (
-          <NeuCard style={{ padding: '24px', textAlign: 'center' }}>
-            <p style={{ fontFamily: OUTFIT, fontSize: 12.5, color: NEU.muted }}>
-              Nothing to pay right now.
-            </p>
-          </NeuCard>
-        )}
-
-        {/* Total + Pay Selected — below the list, only while something's picked */}
-        {selectedInvoices.length > 0 && (
-          <div className="flex flex-col gap-3 pt-1">
-            <div className="flex items-center justify-between px-1">
-              <span style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 800, color: NEU.ink }}>
-                Total ({selectedInvoices.length} selected)
-              </span>
-              <span style={{ fontFamily: OUTFIT, fontSize: 15, fontWeight: 900, color: NEU.ink, fontVariantNumeric: 'tabular-nums' }}>
-                {centsToFee(selectedTotalCents, currency)}
-              </span>
-            </div>
-
-            {manualActive ? (
+          <style>{PURCHASE_CSS}</style>
+          <PurchaseShell tone="light" label={`Pay ${money(chosenTotal, chosenCur)}`} onClose={() => setPaying(null)} panelClass="gv-pay-mid" testId="pay-manual">
+            <div style={{ padding: '28px 26px 26px', display: 'flex', flexDirection: 'column', gap: 14, width: '100%' }}>
+              <h2 style={{ margin: 0, paddingRight: 40, fontSize: 26, fontWeight: 800, letterSpacing: '-0.02em' }}>Pay {money(chosenTotal, chosenCur)}</h2>
               <ManualPayAction
                 awaitingReview={false}
-                externalPaymentUrl={externalPaymentUrl}
+                externalPaymentUrl={conference.external_payment_url}
                 externalPaymentNote={conference.external_payment_note}
-                onUploadProof={() => setProofModalIds(selectedInvoices.map(inv => inv.id))}
+                onUploadProof={() => { setProofIds(chosen.map(i => i.invoice_id)); setPaying(null); }}
               />
-            ) : !paymentsEnabled ? (
-              <PaymentsNotSetUp contactEmail={conference.contact_email} />
-            ) : (
-              <>
-                {selectedPayError && <Note tone="red">{selectedPayError}</Note>}
-                <button
-                  onClick={handlePaySelected}
-                  disabled={selectedPaying}
-                  className="w-full flex items-center justify-center gap-2 rounded-xl py-3 font-bold text-sm focus:outline-none transition-colors"
-                  style={{
-                    backgroundColor: selectedPaying ? 'var(--gv-border)' : NEU.forest,
-                    color: selectedPaying ? 'var(--gv-muted)' : NEU.gold,
-                    fontFamily: OUTFIT, border: 'none', cursor: selectedPaying ? 'default' : 'pointer',
-                  }}
-                >
-                  <CreditCard size={15} />
-                  {selectedPaying ? 'Opening checkout…' : `Pay selected (${selectedInvoices.length})`}
-                </button>
-              </>
-            )}
-          </div>
-        )}
-        </>
-        )}
-      </div>
-
-      {/* RIGHT — action buttons, always visible; unavailable ones dim and
-          explain why on click instead of disappearing. */}
-      <div className="flex flex-col gap-3">
-        {conference.financial_aid_enabled && (
-          !aidRequest ? (
-            <ActionRow
-              icon={HandCoins}
-              gradient={NEU_GRADIENTS.amber}
-              title="Apply for Financial Aid"
-              subtitle="Request a reduced fee"
-              onClick={() => setAidModalOpen(true)}
-            />
-          ) : (
-            <NeuCard style={{ padding: '16px 18px', display: 'flex', flexDirection: 'column', gap: 10 }}>
-              <div className="flex items-center gap-3">
-                <NeuIconDisc gradient={NEU_GRADIENTS.amber} icon={HandCoins} size={36} />
-                <p style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 13, color: NEU.ink, margin: 0 }}>Financial Aid</p>
-              </div>
-              {aidRequest.status === 'pending' && <Note tone="amber">Your request is under review.</Note>}
-              {aidRequest.status === 'approved' && (
-                <Note tone="green">Approved. {formatFee(aidRequest.granted_amount ?? 0, currency)} applied.</Note>
-              )}
-              {aidRequest.status === 'denied' && <Note tone="muted">Not approved this time.</Note>}
-            </NeuCard>
-          )
-        )}
-
-        <ActionRow
-          icon={ShoppingBag}
-          gradient={NEU_GRADIENTS.sage}
-          title="Buy Add-ons"
-          subtitle={activeAddons.length > 0 ? 'Optional extras' : 'None available'}
-          dimmed={activeAddons.length === 0}
-          onClick={() => {
-            if (activeAddons.length === 0) { setStubMessage("This conference hasn't added any add-ons yet."); return; }
-            setAddonsModalOpen(true);
-          }}
-        />
-
-        <div ref={spotsRowRef} style={{ scrollMarginTop: 96 }}>
-        <ActionRow
-          icon={Users2}
-          gradient={NEU_GRADIENTS.forest}
-          title="Add Delegation Spots"
-          subtitle={canBuyDelegationStuff ? 'Pledge more spots' : 'Delegation leaders only'}
-          dimmed={!canBuyDelegationStuff}
-          onClick={() => {
-            if (!canBuyDelegationStuff) { setStubMessage('Only delegation leaders can add spots or credits.'); return; }
-            setSpotsOpen(true);
-          }}
-        />
-        </div>
-        {canBuyDelegationStuff && leaderApp && spotsOpen && (
-          <PayActionPopup
-            title="Add Delegation Spots"
-            line="Pledge more places for your delegation. Each spot is a delegate place you pay for."
-            onClose={() => setSpotsOpen(false)}
-            width={640}
-            testId="pay-spots"
-          >
-            <AddSpotsPanel
-              applicationId={leaderApp.id}
-              accessToken={session?.access_token}
-              onAdded={onInvoicesChanged}
-            />
-            <PledgeInvoicingCard
-              applicationId={leaderApp.id}
-              societyId={leaderApp.society_id as string}
-              currency={delegateRoleConfig?.fee_currency ?? currency}
-              financialAidEnabled={conference.financial_aid_enabled}
-              aidBlocks={aidBlocks}
-              aidIntro={conference.aid_intro}
-            />
-          </PayActionPopup>
-        )}
-
-        <ActionRow
-          icon={GraduationCap}
-          gradient={NEU_GRADIENTS.amber}
-          title="Buy Advisor Tickets"
-          subtitle={canBuyDelegationStuff ? 'Pledge tickets for your advisors' : 'Delegation leaders only'}
-          dimmed={!canBuyDelegationStuff}
-          onClick={() => {
-            if (!canBuyDelegationStuff) { setStubMessage('Only delegation leaders can add spots or tickets.'); return; }
-            setAdvisorModalOpen(true);
-          }}
-        />
-
-        {canBuyDelegationStuff && leaderApp ? (
-          // A delegation leader funds the pool their delegates apply from.
-          <ActionRow
-            icon={Coins}
-            gradient={NEU_GRADIENTS.gold}
-            title="Pay for Your Delegates"
-            subtitle="Add credits your delegates apply with"
-            onClick={() => setCreditsOpen(true)}
-          />
-        ) : (
-          // Everyone else buys credits for themselves, straight in the pop-up.
-          <ActionRow
-            icon={Coins}
-            gradient={NEU_GRADIENTS.gold}
-            title="Buy Credits"
-            subtitle="Credits for your own applications"
-            onClick={() => openCreditsPopup({ context: 'pay' })}
-          />
-        )}
-        {canBuyDelegationStuff && leaderApp && creditsOpen && (
-          <PayActionPopup
-            title="Pay for Your Delegates"
-            line="Add credits to your delegation so your delegates can apply without using their own."
-            onClose={() => setCreditsOpen(false)}
-            testId="pay-credits"
-          >
-            <DelegationCreditsCard societyId={leaderApp.society_id as string} />
-          </PayActionPopup>
-        )}
-
-      </div>
-
-      {stubMessage && (
-        <ModalOverlay onClose={() => setStubMessage(null)}>
-          <div className="rounded-2xl p-6 flex flex-col gap-4" style={{ backgroundColor: 'var(--gv-surface)', border: '1px solid var(--gv-border)', width: 380, maxWidth: 'calc(100vw - 32px)', maxHeight: MODAL_PANEL_MAX_HEIGHT, overflowY: 'auto' }}>
-            <div
-              className="flex items-center justify-center flex-shrink-0"
-              style={{ width: 44, height: 44, borderRadius: '9999px', backgroundColor: 'rgba(184,132,74,0.14)', border: '1px solid rgba(184,132,74,0.3)' }}
-            >
-              <CreditCard size={19} style={{ color: '#B8844A' }} />
             </div>
-            <p className="text-sm" style={{ color: 'var(--gv-on-surface)', fontFamily: OUTFIT, lineHeight: 1.6 }}>
-              {stubMessage}
-            </p>
-            {conference.contact_email && (
-              <a
-                href={`mailto:${conference.contact_email}`}
-                className="flex items-center gap-2 rounded-xl px-3.5 py-2.5 text-sm font-semibold focus:outline-none"
-                style={{ border: '1px solid var(--gv-border)', color: 'var(--gv-main)', backgroundColor: 'color-mix(in srgb, var(--gv-main) 4%, transparent)', fontFamily: OUTFIT, textDecoration: 'none' }}
-              >
-                <Mail size={14} className="flex-shrink-0" />
-                <span className="min-w-0" style={{ overflowWrap: 'anywhere' }}>{conference.contact_email}</span>
-              </a>
-            )}
-            <button
-              onClick={() => setStubMessage(null)}
-              className="rounded-xl py-2.5 font-bold text-sm focus:outline-none"
-              style={{ backgroundColor: 'var(--gv-main)', color: 'var(--gv-on-main)', fontFamily: OUTFIT }}
-            >
-              Got it
-            </button>
-          </div>
-        </ModalOverlay>
-      )}
-
-      <AidRequestModal
-        applicationId={application.id}
-        conferenceId={conference.id}
-        aidBlocks={aidBlocks}
-        aidIntro={conference.aid_intro}
-        currency={currency}
-        open={aidModalOpen}
-        onClose={() => setAidModalOpen(false)}
-        onSubmitted={onAidSubmitted}
-      />
-
-      <AddonsModal
-        open={addonsModalOpen}
-        onClose={() => setAddonsModalOpen(false)}
-        addons={activeAddons}
-        invoices={invoices}
-        applicationId={application.id}
-        accessToken={session?.access_token}
-        onSaved={onInvoicesChanged}
-      />
-
-      {canBuyDelegationStuff && leaderApp && (
-        <AdvisorTicketsModal
-          open={advisorModalOpen}
-          onClose={() => setAdvisorModalOpen(false)}
-          applicationId={leaderApp.id}
-          accessToken={session?.access_token}
-          advisorRoleConfig={advisorRoleConfig}
-          onAdded={onInvoicesChanged}
-        />
+          </PurchaseShell>
+        </>
       )}
 
       <ProofUploadModal
-        open={proofModalIds !== null}
-        onClose={() => setProofModalIds(null)}
-        invoiceIds={proofModalIds ?? []}
-        conferenceId={conference.id}
+        open={proofIds !== null}
+        onClose={() => setProofIds(null)}
+        invoiceIds={proofIds ?? []}
+        conferenceId={c.id}
         accessToken={session?.access_token}
-        onSubmitted={handleProofSubmitted}
+        onSubmitted={() => { setProofIds(null); setSelected(new Set()); reload(); }}
       />
+
+      {receipt && <ReceiptPopup payment={receipt} conferenceName={c.full_name} onClose={() => setReceiptKey(null)} />}
+    </Frame>
+  );
+}
+
+function Frame({ theme, slug, children }: { theme: PayConference['theme'] | undefined; slug: string; children: React.ReactNode }) {
+  return (
+    <div className="gv-pay min-h-screen flex flex-col" style={{ ...themeCssVars(theme ?? {}), backgroundColor: '#EDE7D8' }}>
+      <style>{PAY_CSS}</style>
+      <SiteNav />
+      <div className="flex-1 w-full max-w-[1120px] mx-auto px-4 sm:px-6 pt-8 pb-[calc(2.5rem+env(safe-area-inset-bottom))]">
+        <Link href={`/conferences/${slug}/role`} className="gv-pay-link" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, marginBottom: 18, fontSize: 13.5 }}>
+          <ArrowLeft size={15} strokeWidth={2.4} aria-hidden /> Back to conference
+        </Link>
+        {children}
+      </div>
     </div>
   );
 }

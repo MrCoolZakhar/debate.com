@@ -24,6 +24,18 @@ export function getStripe(): Promise<Stripe | null> | null {
   return stripePromise;
 }
 
+// A conference's card payments are direct charges on ITS Stripe account, so
+// Embedded Checkout must load Stripe for that account (prompt 95, /pay).
+// One cached instance per account; `null` account = Gavelling's own (getStripe).
+const accountStripe = new Map<string, Promise<Stripe | null>>();
+export function getStripeForAccount(account: string | null): Promise<Stripe | null> | null {
+  if (!STRIPE_PUBLISHABLE_KEY) return null;
+  if (!account) return getStripe();
+  let p = accountStripe.get(account);
+  if (!p) { p = loadStripe(STRIPE_PUBLISHABLE_KEY, { stripeAccount: account }); accountStripe.set(account, p); }
+  return p;
+}
+
 export function StripeEmbeddedForm({ clientSecret, onComplete }: { clientSecret: string; onComplete: () => void }) {
   const stripe = getStripe();
   // The provider reads `options` once at mount and warns if the object

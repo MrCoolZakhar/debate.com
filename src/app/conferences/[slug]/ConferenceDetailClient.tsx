@@ -2542,7 +2542,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                         // Financial aid is a real second thing this button
                         // leads to, so it only earns a place in the label when
                         // the conference actually runs an aid programme.
-                        const payLabel = conference.financial_aid_enabled ? 'Pay and request aid' : 'Pay';
+                        const payLabel = conference.financial_aid_enabled ? 'Payments and aid' : 'Payments';
                         return (
                           <>
                             <p style={{ fontFamily: "var(--font-brand), sans-serif", fontWeight: 700, fontSize: '9px', letterSpacing: '0.14em', color: 'var(--gv-on-main)', margin: '0 0 8px 0' }}>
