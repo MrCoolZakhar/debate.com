@@ -81,7 +81,27 @@ export const PAY_CSS = `
 .gv-pay-action b{display:block;font-size:14.5px;font-weight:800}
 .gv-pay-action small{display:block;margin-top:2px;font-size:12.5px;color:${INK_SOFT}}
 
+/* Layout (prompt 101): a sticky rail with the two tabs, the middle, the right column */
+.gv-pay-layout{display:grid;grid-template-columns:minmax(0,1fr);gap:18px 24px;align-items:start}
+.gv-pay-rail{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.gv-pay-tab{display:flex;align-items:center;justify-content:center;gap:10px;min-height:46px;padding:0 16px;border:none;border-radius:14px;background:#FFFFFF;font-family:${OUTFIT};font-size:15px;font-weight:700;color:${INK_SOFT};cursor:pointer;box-shadow:0 1px 0 rgba(27,56,40,0.08),0 10px 24px -22px rgba(27,56,40,0.5);text-align:left}
+.gv-pay-tab:hover{color:${INK}}
+.gv-pay-tab[aria-current="page"]{background:${FOREST};color:${GOLD}}
+.gv-pay-tab:focus{outline:none}
+.gv-pay-tab:focus-visible{outline:2px solid ${FOREST};outline-offset:2px}
+.gv-pay-tab-n{font-size:15px;font-weight:800;font-variant-numeric:tabular-nums}
+@media (min-width:1024px){
+  .gv-pay-layout{grid-template-columns:180px minmax(0,1fr) 300px}
+  .gv-pay-rail{position:sticky;top:96px;grid-template-columns:minmax(0,1fr);gap:6px}
+  .gv-pay-tab{justify-content:space-between}
+}
+
 /* Pop-ups on PurchaseShell */
+/* Small pop-ups (lock, QR, bank details, cancel): as tall as their content, never the
+   purchase pop-up's 560px minimum; a bottom sheet on phones instead of a full screen. */
+.gv-buy-panel.gv-pay-small{max-width:440px;min-height:0}
+.gv-buy-panel.gv-pay-small .gv-buy-body{flex-direction:column}
+@media (max-width:743px){.gv-buy-panel.gv-pay-small{height:auto;max-height:92dvh;margin-top:auto;border-radius:22px 22px 0 0}}
 .gv-buy-panel.gv-pay-pop{max-width:640px}
 .gv-buy-panel.gv-pay-mid{max-width:560px}
 .gv-pay-rows{display:flex;flex-direction:column;border-radius:14px;background:#FFFFFF;padding:4px 14px}

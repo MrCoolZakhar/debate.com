@@ -1,8 +1,10 @@
 // payApi.ts — the /pay page's reads and writes (prompt 95).
 //
-// my_pay_overview is the ONE read of what the signed-in person pays: their
-// own items plus their delegation's tickets and registration fee when they
-// lead it, each with a state in words, the payments as receipts, and totals.
+// my_pay_overview is the ONE read of what the signed-in person pays: the items
+// on their OWN applications only (since 8 Oct 2026 a delegation's tickets and
+// registration fee belong to the leader who bought them), each with a state in
+// words, the payments as receipts, totals, and for leaders `delegation`: what
+// every leader of the delegation has requested.
 // Card payments run inside Gavelling through create-checkout's embedded path;
 // the Stripe webhook settles the items a few seconds after the payment, so
 // the page waits for it (see useSettleWait in CardPayPopup).
@@ -48,6 +50,17 @@ export interface PayPayment {
   items: { invoice_id: string; label: string; amount_cents: number }[];
 }
 
+/** One delegation the caller leads (prompt 101): what every leader has requested, and who is in it now. */
+export interface PayDelegation {
+  society_id: string;
+  name: string | null;
+  delegate_tickets: number;
+  advisor_tickets: number;
+  delegates: number;
+  advisors: number;
+  leaders: { name: string | null; role: string; is_me: boolean; delegate_tickets: number; advisor_tickets: number }[];
+}
+
 export interface PayOverview {
   conference: {
     id: string; slug: string; acronym: string | null; full_name: string; currency: string;
@@ -60,6 +73,8 @@ export interface PayOverview {
   items: PayItem[];
   payments: PayPayment[];
   totals: { owed_cents: number; paid_cents: number; in_review_cents: number };
+  /** null, or one entry per delegation the caller leads. */
+  delegation: PayDelegation[] | null;
 }
 
 export async function readPayOverview(conferenceId: string): Promise<PayOverview> {
@@ -75,6 +90,7 @@ export async function readPayOverview(conferenceId: string): Promise<PayOverview
     items: Array.isArray(a.items) ? (a.items as PayItem[]) : [],
     payments: Array.isArray(a.payments) ? (a.payments as PayPayment[]) : [],
     totals: (a.totals as PayOverview['totals']) ?? { owed_cents: 0, paid_cents: 0, in_review_cents: 0 },
+    delegation: Array.isArray(a.delegation) ? (a.delegation as PayDelegation[]) : null,
   };
 }
 

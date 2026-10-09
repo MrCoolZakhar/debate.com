@@ -25,8 +25,8 @@ import {
   AddSpotsPanel, AddonsModal, AdvisorTicketsModal,
   type ActiveAddon, type AidRequestRow, type PayConference, type PayRoleConfig,
 } from './payPanels';
-import { money } from './payApi';
-import { GREEN, INK_SOFT } from './payKit';
+import { money, type PayDelegation } from './payApi';
+import { GREEN, INK, INK_SOFT, LINE } from './payKit';
 
 function Action({ icon: Icon, title, line, onClick }: { icon: LucideIcon; title: string; line: string; onClick: () => void }) {
   return (
@@ -37,9 +37,51 @@ function Action({ icon: Icon, title, line, onClick }: { icon: LucideIcon; title:
   );
 }
 
+/**
+ * What the delegation's leaders have requested so far (prompt 101), at the top
+ * of the ticket pop-ups: a big number with the words beside it, one row per
+ * leader who requested any (the caller as "You"), and how many are in the
+ * delegation now. Names wrap; never cut off.
+ */
+function TicketsRequested({ d, kind }: { d: PayDelegation | null; kind: 'delegate' | 'advisor' }) {
+  if (!d) return null;
+  const total = kind === 'delegate' ? d.delegate_tickets : d.advisor_tickets;
+  const people = kind === 'delegate' ? d.delegates : d.advisors;
+  const rows = d.leaders
+    .map(l => ({ name: l.is_me ? 'You' : (l.name || 'A leader'), n: kind === 'delegate' ? l.delegate_tickets : l.advisor_tickets }))
+    .filter(r => r.n > 0);
+  return (
+    <div className="gv-pay-card" style={{ padding: '14px 16px', boxShadow: `inset 0 0 0 1px ${LINE}` }}>
+      {total > 0 ? (
+        <>
+          <p style={{ margin: 0, display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 30, fontWeight: 900, letterSpacing: '-0.02em', lineHeight: 1, fontVariantNumeric: 'tabular-nums', color: INK }}>{total}</span>
+            <span style={{ fontSize: 14.5, fontWeight: 700, color: INK }}>{kind === 'delegate' ? 'delegate' : 'advisor'} ticket{total === 1 ? '' : 's'} requested</span>
+          </p>
+          {rows.length > 0 && (
+            <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column' }}>
+              {rows.map((r, i) => (
+                <div key={i} style={{ display: 'flex', justifyContent: 'space-between', gap: 12, padding: '6px 0', borderTop: `1px solid ${LINE}`, fontSize: 14 }}>
+                  <span style={{ minWidth: 0, overflowWrap: 'anywhere' }}>{r.name}</span>
+                  <b style={{ fontVariantNumeric: 'tabular-nums' }}>{r.n}</b>
+                </div>
+              ))}
+            </div>
+          )}
+        </>
+      ) : (
+        <p style={{ margin: 0, fontSize: 14.5, fontWeight: 700, color: INK }}>No tickets requested yet</p>
+      )}
+      <p style={{ margin: '8px 0 0', fontSize: 13.5, color: INK_SOFT }}>
+        {people} {kind === 'delegate' ? (people === 1 ? 'delegate' : 'delegates') : (people === 1 ? 'advisor' : 'advisors')} in your delegation so far
+      </p>
+    </div>
+  );
+}
+
 export default function ActionsColumn({
   conference, aidOpen, primaryAppId, leader, addons, addonInvoices, delegateConfig, advisorConfig,
-  delegateOpen, advisorOpen, aidRequest, currency, onChanged, onAidSubmitted,
+  delegateOpen, advisorOpen, aidRequest, currency, onChanged, onAidSubmitted, delegation,
 }: {
   conference: PayConference;
   aidOpen: boolean;
@@ -56,6 +98,8 @@ export default function ActionsColumn({
   currency: string;
   onChanged: () => void;
   onAidSubmitted: () => void;
+  /** my_pay_overview's `delegation`: what the leaders of each delegation the caller leads have requested. */
+  delegation: PayDelegation[] | null;
 }) {
   const { session } = useAuth();
   const aidBlocks: FormBlock[] = normalizeBlocks(conference.aid_questions);
@@ -69,6 +113,7 @@ export default function ActionsColumn({
   const showAddons = addons.length > 0;
   const showSpots = !!leader && delegateOpen;
   const showAdvisors = !!leader && advisorOpen;
+  const myDelegation = (leader && delegation?.find(d => d.society_id === leader.society_id)) || null;
 
   // ?open=aid|addons|spots|advisors|credits opens that pop-up on load, then leaves the URL.
   const openedFromUrl = useRef(false);
@@ -138,6 +183,7 @@ export default function ActionsColumn({
           width={640}
           testId="pay-spots"
         >
+          <TicketsRequested d={myDelegation} kind="delegate" />
           <AddSpotsPanel applicationId={leader.id} accessToken={session?.access_token} onAdded={onChanged} />
           <PledgeInvoicingCard
             applicationId={leader.id}
@@ -157,6 +203,7 @@ export default function ActionsColumn({
           accessToken={session?.access_token}
           advisorRoleConfig={advisorConfig}
           onAdded={onChanged}
+          summary={<TicketsRequested d={myDelegation} kind="advisor" />}
         />
       )}
       {leader && credits && (

@@ -1,10 +1,11 @@
 'use client';
 
-// ItemList — every item this person pays, one line each (prompt 95). Each line
-// says its state in words with an icon; an item that can be paid now has a
-// checkbox (whole items only), one the person added themselves (a delegate or
-// advisor ticket, an add-on) has an X to remove it. Nothing says owed once the
-// money has arrived.
+// ItemList — the payer's own items, one line each (prompt 95; since prompt 101
+// my_pay_overview returns only items on the payer's own applications, and the
+// page draws one list per tab). Each line says its state in words with an
+// icon; an item that can be paid now has a checkbox (whole items only), one
+// the payer added themselves (a delegate or advisor ticket, an add-on) has an
+// X to remove it. Nothing says owed once the money has arrived.
 
 import { useRef, useState } from 'react';
 import {

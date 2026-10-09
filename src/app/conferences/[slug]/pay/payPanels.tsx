@@ -545,7 +545,7 @@ export function AddSpotsPanel({
 // onAdded triggers a refetch.
 
 export function AdvisorTicketsModal({
-  open, onClose, applicationId, accessToken, advisorRoleConfig, onAdded,
+  open, onClose, applicationId, accessToken, advisorRoleConfig, onAdded, summary,
 }: {
   open: boolean;
   onClose: () => void;
@@ -553,6 +553,8 @@ export function AdvisorTicketsModal({
   accessToken: string | undefined;
   advisorRoleConfig: PayRoleConfig | null;
   onAdded: () => void;
+  /** Drawn at the top: the advisor tickets the delegation's leaders have requested (prompt 101). */
+  summary?: React.ReactNode;
 }) {
   // '' while the field is momentarily empty — see AddSpotsPanel above.
   const [count, setCount] = useState<number | ''>(1);
@@ -603,6 +605,7 @@ export function AdvisorTicketsModal({
       onClose={() => { if (!adding) onClose(); }}
       testId="pay-advisors"
     >
+        {summary}
 
         <div className="flex items-center gap-3" style={{ padding: '12px 14px', borderRadius: 14, backgroundColor: NEU.base, boxShadow: NEU.inSm }}>
           <NeuIconDisc gradient={NEU_GRADIENTS.amber} icon={GraduationCap} size={38} />

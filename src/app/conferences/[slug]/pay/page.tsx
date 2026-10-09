@@ -1,7 +1,13 @@
 'use client';
 
 // /conferences/[slug]/pay — Conference Payments (rebuilt in prompt 95).
-// One screen answers "what do I owe, for what, and how do I pay it":
+// One screen answers "what do I owe, for what, and how do I pay it". Since
+// prompt 101 a sticky rail splits it into two tabs (?tab=completed):
+//   Outstanding  the item list and the pay bar (unpaid, rejected, refunded,
+//                and started / in review as locked lines)
+//   Completed    started payments, paid (receipts and paid items), not charged
+//                (waived, covered), and invoices and receipts
+// The items are the payer's OWN only (my_pay_overview, 8 Oct 2026).
 //   BalanceHeader   To pay (by type), Paid, Waiting for review
 //   ItemList        every item with its state in words; tick to pay, X to remove
 //   PayBar          the ticked items and one Pay button, pinned to the bottom
@@ -40,12 +46,16 @@ import ReceiptsList, { ReceiptPopup } from './ReceiptsList';
 import ActionsColumn from './ActionsColumn';
 import VoucherPanel from './VoucherPanel';
 import { useSettleWait, SLOW_LINE, WAITING_LINE } from './settleWait';
-import { cancelStartedPayment, proofLink, readStarted, startManualPayment, type StartedInfo, type StartedPayment } from './manualApi';
-import ManualPayPopup, { type ManualMode } from './ManualPayPopup';
+import { proofLink, readStarted, startManualPayment, type StartedInfo, type StartedPayment } from './manualApi';
+import ManualPayPopup, { PaymentWayPopup, type ManualMode } from './ManualPayPopup';
 import StartedPayments from './StartedPayments';
-import { LockPopup, NotReceivedPopup, RefundRequestPopup } from './SmallPopups';
+import { CancelStartedPopup, LockPopup, NotReceivedPopup, RefundRequestPopup } from './SmallPopups';
 import { readMyDocs, receiptFor, type MyDocs } from './payDocsApi';
 import { DocViewPopup, DocumentsSection, MakeDocPopup, PAYDOCS_CSS, downloadById, type MakePreset } from './PayDocuments';
+
+// What each tab holds (prompt 101).
+const OUTSTANDING_STATES = new Set(['unpaid', 'rejected', 'refunded', 'started', 'in_review']);
+const PAID_STATES = new Set(['paid', 'refund_requested', 'disputed']);
 
 const INVOICE_SELECT = 'id, conference_id, kind, label, amount_cents, amount_paid_cents, currency, status, gates_acceptance, payable_before_acceptance, application_id, society_id, config_id, aid_applied_cents, quantity, created_at';
 
@@ -71,7 +81,11 @@ export default function PayPage() {
   const [paying, setPaying] = useState<'card' | null>(null);
   // Manual conferences (prompt 96): started payments, the pay / proof pop-up, locks, refunds.
   const [started, setStarted] = useState<StartedInfo | null>(null);
-  const [manualPop, setManualPop] = useState<{ batchId: string; totalCents: number; currency: string; mode: ManualMode } | null>(null);
+  const [manualPop, setManualPop] = useState<{ batchId: string; totalCents: number; currency: string; mode: ManualMode; tabOpened?: boolean } | null>(null);
+  const [wayPop, setWayPop] = useState<{ kind: 'qr' | 'bank'; totalCents: number; currency: string } | null>(null);
+  const [cancelFor, setCancelFor] = useState<string | null>(null);
+  // Outstanding or Completed (prompt 101), kept in the URL as ?tab=completed.
+  const [tab, setTabState] = useState<'outstanding' | 'completed'>('outstanding');
   const [lockFor, setLockFor] = useState<{ batchId: string; mine: boolean } | null>(null);
   const [highlight, setHighlight] = useState<string | null>(null);
   const [refundAsk, setRefundAsk] = useState<{ preselect: string | null } | null>(null);
@@ -163,6 +177,17 @@ export default function PayPage() {
 
   const reload = useCallback(() => setAttempt(a => a + 1), []);
 
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (new URLSearchParams(window.location.search).get('tab') === 'completed') void Promise.resolve().then(() => setTabState('completed'));
+  }, []);
+  const setTab = useCallback((t: 'outstanding' | 'completed') => {
+    setTabState(t);
+    const url = new URL(window.location.href);
+    if (t === 'completed') url.searchParams.set('tab', 'completed'); else url.searchParams.delete('tab');
+    window.history.replaceState(window.history.state, '', url.pathname + (url.search || '') + url.hash);
+  }, []);
+
   const docsConfId = conference?.id ?? null;
   useEffect(() => {
     if (!docsConfId || !user) return;
@@ -205,7 +230,8 @@ export default function PayPage() {
   }, [wait, reload]);
 
   const items = useMemo(() => overview?.items ?? [], [overview]);
-  const tickable = items.filter(i => canTick(i, started?.locked));
+  const outstandingItems = items.filter(i => OUTSTANDING_STATES.has(i.state));
+  const tickable = outstandingItems.filter(i => canTick(i, started?.locked));
   const chosen = items.filter(i => selected.has(i.invoice_id));
   const chosenCur = chosen[0]?.currency ?? overview?.conference.currency ?? 'USD';
   const chosenTotal = chosen.reduce((s, i) => s + i.due_cents, 0);
@@ -283,21 +309,48 @@ export default function PayPage() {
   const manual = c.method === 'manual';
 
   // Manual: start (or resume) a payment for these items, then the proof pop-up.
-  const startManual = async (ids: string[], mode: ManualMode) => {
-    if (startBusy || ids.length === 0) return;
+  // `tab` is the payment page's tab, opened by the Pay click itself (prompt
+  // 101): it is closed when the start fails and sent to /pay/go when it lands.
+  const startManual = async (ids: string[], mode: ManualMode, tab?: Window | null) => {
+    if (startBusy || ids.length === 0) { tab?.close(); return; }
     setStartBusy(true); setNotice('');
     const r = await startManualPayment(ids);
     setStartBusy(false);
     if (!r.ok) {
+      tab?.close();
       if (r.code === 'item_in_started_payment' && r.startedBatchId) {
         const mine = !!started?.payments.some(p => p.batch_id === r.startedBatchId);
         setLockFor({ batchId: r.startedBatchId, mine });
       } else setNotice(r.error);
       return;
     }
-    setManualPop({ batchId: r.batchId, totalCents: r.totalCents, currency: r.currency, mode });
+    if (tab) tab.location.href = `/conferences/${slug}/pay/go`;
+    setManualPop({ batchId: r.batchId, totalCents: r.totalCents, currency: r.currency, mode, tabOpened: tab !== undefined ? !!tab : undefined });
     setSelected(new Set());
     reload();
+  };
+
+  // The Pay click. A manual conference with a payment link opens the tab FIRST,
+  // inside the click: a tab opened later (after an await, or by a timer) is blocked.
+  const onPay = () => {
+    const ids = chosen.map(i => i.invoice_id);
+    if (!manual) { setPaying('card'); return; }
+    if (c.manual_kind === 'link' && c.payment_url && ids.length > 0 && !startBusy) {
+      const t = window.open('', '_blank');
+      if (t) t.opener = null;
+      void startManual(ids, 'pay', t);
+      return;
+    }
+    void startManual(ids, 'pay');
+  };
+
+  // A started payment's way to pay: the link opens straight away (inside the
+  // click); a QR or bank details open their own small pop-up.
+  const kind = c.manual_kind ?? 'link';
+  const wayLabel = kind === 'qr' ? 'Open payment QR' : kind === 'bank' ? 'View bank details' : (c.payment_url ? 'Open payment page' : null);
+  const openWay = (p: StartedPayment) => {
+    if (kind === 'link') { if (c.payment_url) window.open(c.payment_url, '_blank', 'noopener,noreferrer'); return; }
+    setWayPop({ kind, totalCents: p.total_cents, currency: p.currency });
   };
 
   const openLock = (invoiceId: string) => {
@@ -313,14 +366,10 @@ export default function PayPage() {
     if (w) w.location.href = url; else window.open(url, '_blank', 'noopener');
   };
 
-  const onCancelStarted = async (p: StartedPayment): Promise<string | null> => {
-    const r = await cancelStartedPayment(p.batch_id);
-    if (!r.ok) return r.error;
-    reload();
-    return null;
-  };
-
   const refundable = items.filter(i => i.state === 'paid' && i.can_request_refund);
+  const paidItems = items.filter(i => PAID_STATES.has(i.state));
+  const notCharged = items.filter(i => i.state === 'waived' || i.state === 'covered');
+  const toPayCount = items.filter(i => (i.state === 'unpaid' || i.state === 'rejected' || i.state === 'refunded') && i.due_cents > 0).length;
 
   const docsReady = !!myDocs?.settings_ready;
   const openForInvoice = items.filter(i => i.due_cents > 0 && i.state !== 'covered' && i.state !== 'waived');
@@ -361,70 +410,113 @@ export default function PayPage() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_320px] gap-6 items-start">
+      <div className="gv-pay-layout">
+        <nav className="gv-pay-rail" aria-label="Payments">
+          <button type="button" className="gv-pay-tab" aria-current={tab === 'outstanding' ? 'page' : undefined} onClick={() => setTab('outstanding')}>
+            <span>Outstanding</span>
+            {toPayCount > 0 && <span className="gv-pay-tab-n" aria-label={`${toPayCount} to pay`}>{toPayCount}</span>}
+          </button>
+          <button type="button" className="gv-pay-tab" aria-current={tab === 'completed' ? 'page' : undefined} onClick={() => setTab('completed')}>
+            <span>Completed</span>
+          </button>
+        </nav>
+
         <div className="flex flex-col gap-5" style={{ minWidth: 0 }}>
           <BalanceHeader o={overview} />
           {!canPay && <PaymentsNotSetUp contactEmail={c.contact_email} />}
-          <ItemList
-            items={items}
-            selected={selected}
-            onToggle={toggle}
-            onReceipt={setReceiptKey}
-            onRemove={onRemove}
-            locked={started?.locked}
-            onLock={openLock}
-            onRequestRefund={(it) => setRefundAsk({ preselect: it.invoice_id })}
-            onNotReceived={setNotReceived}
-            onViewProof={(path) => { void viewProof(path); }}
-            below={(it) => (it.kind === 'role_fee' && it.owner_is_me && primary && (it.state === 'unpaid' || it.state === 'rejected'))
-              ? <VoucherPanel conferenceId={c.id} applicationId={primary.application_id} discountCents={discount} currency={it.currency} onChanged={reload} />
-              : null}
-          />
-          {canPay && tickable.length > 0 && (
-            <PayBar
-              count={chosen.length}
-              totalLabel={money(chosenTotal, chosenCur)}
-              allTicked={chosen.length > 0 && chosen.length >= tickable.filter(i => i.currency === chosenCur).length}
-              onSelectAll={selectAll}
-              onClear={() => { setSelected(new Set()); setNotice(''); }}
-              onPay={() => { if (manual) void startManual(chosen.map(i => i.invoice_id), 'pay'); else setPaying('card'); }}
-              busy={paying !== null || startBusy}
-              notice={notice}
-              extra={manual ? (
-                <button type="button" className="gv-pay-btn gv-pay-outline" disabled={startBusy}
-                  title="Already paid? Tick the items you paid for, then upload your proof"
-                  onClick={() => {
-                    if (chosen.length === 0) { setNotice('Tick the items you paid for first'); return; }
-                    void startManual(chosen.map(i => i.invoice_id), 'upload');
-                  }}>
-                  Upload proof
-                </button>
-              ) : undefined}
-            />
-          )}
-          {canPay && manual && started && (
-            <StartedPayments
-              payments={started.payments}
-              highlight={highlight}
-              onUpload={(p) => setManualPop({ batchId: p.batch_id, totalCents: p.total_cents, currency: p.currency, mode: 'upload' })}
-              onDetails={(p) => setManualPop({ batchId: p.batch_id, totalCents: p.total_cents, currency: p.currency, mode: 'details' })}
-              onCancel={onCancelStarted}
-              onViewProof={(path) => { void viewProof(path); }}
-              onReplace={(p) => setManualPop({ batchId: p.batch_id, totalCents: p.total_cents, currency: p.currency, mode: 'replace' })}
-              onRestart={(p) => { void startManual(p.items.map(i => i.invoice_id), 'upload'); }}
-            />
-          )}
-          <ReceiptsList payments={overview.payments} onOpen={key => { setReceiptPdfErr(''); setReceiptKey(key); }} />
-          {docsReady && myDocs && (
-            <DocumentsSection
-              docs={myDocs.documents}
-              canMake={overview.payments.length > 0 || openForInvoice.length > 0}
-              onMake={() => setMakeDoc({ preset: null })}
-              onOpen={setViewDoc}
-              onDownload={id => { setDocListErr(''); void downloadDoc(id, setDocListErr); }}
-              downloading={docBusy}
-              error={docListErr}
-            />
+
+          {tab === 'outstanding' ? (
+            <>
+              <ItemList
+                items={outstandingItems}
+                selected={selected}
+                onToggle={toggle}
+                onReceipt={setReceiptKey}
+                onRemove={onRemove}
+                locked={started?.locked}
+                onLock={openLock}
+                onRequestRefund={(it) => setRefundAsk({ preselect: it.invoice_id })}
+                onNotReceived={setNotReceived}
+                onViewProof={(path) => { void viewProof(path); }}
+                below={(it) => (it.kind === 'role_fee' && it.owner_is_me && primary && (it.state === 'unpaid' || it.state === 'rejected'))
+                  ? <VoucherPanel conferenceId={c.id} applicationId={primary.application_id} discountCents={discount} currency={it.currency} onChanged={reload} />
+                  : null}
+              />
+              {canPay && tickable.length > 0 && (
+                <PayBar
+                  count={chosen.length}
+                  totalLabel={money(chosenTotal, chosenCur)}
+                  allTicked={chosen.length > 0 && chosen.length >= tickable.filter(i => i.currency === chosenCur).length}
+                  onSelectAll={selectAll}
+                  onClear={() => { setSelected(new Set()); setNotice(''); }}
+                  onPay={onPay}
+                  busy={paying !== null || startBusy}
+                  notice={notice}
+                  extra={manual ? (
+                    <button type="button" className="gv-pay-btn gv-pay-outline" disabled={startBusy}
+                      title="Already paid? Tick the items you paid for, then upload your proof"
+                      onClick={() => {
+                        if (chosen.length === 0) { setNotice('Tick the items you paid for first'); return; }
+                        void startManual(chosen.map(i => i.invoice_id), 'upload');
+                      }}>
+                      Upload proof
+                    </button>
+                  ) : undefined}
+                />
+              )}
+            </>
+          ) : (
+            <>
+              {canPay && manual && started && (
+                <StartedPayments
+                  payments={started.payments}
+                  highlight={highlight}
+                  wayLabel={wayLabel}
+                  onUpload={(p) => setManualPop({ batchId: p.batch_id, totalCents: p.total_cents, currency: p.currency, mode: 'upload' })}
+                  onOpenWay={openWay}
+                  onCancel={(p) => setCancelFor(p.batch_id)}
+                  onViewProof={(path) => { void viewProof(path); }}
+                  onReplace={(p) => setManualPop({ batchId: p.batch_id, totalCents: p.total_cents, currency: p.currency, mode: 'replace' })}
+                  onRestart={(p) => { void startManual(p.items.map(i => i.invoice_id), 'upload'); }}
+                />
+              )}
+              <ReceiptsList payments={overview.payments} onOpen={key => { setReceiptPdfErr(''); setReceiptKey(key); }} />
+              {paidItems.length > 0 && (
+                <ItemList
+                  items={paidItems}
+                  selected={selected}
+                  onToggle={toggle}
+                  onReceipt={setReceiptKey}
+                  onRemove={onRemove}
+                  onRequestRefund={(it) => setRefundAsk({ preselect: it.invoice_id })}
+                  onNotReceived={setNotReceived}
+                  onViewProof={(path) => { void viewProof(path); }}
+                />
+              )}
+              {notCharged.length > 0 && (
+                <section aria-labelledby="gv-pay-notcharged">
+                  <p className="gv-pay-sect" id="gv-pay-notcharged">Not Charged</p>
+                  <ItemList items={notCharged} selected={selected} onToggle={toggle} onReceipt={setReceiptKey} onRemove={onRemove} />
+                </section>
+              )}
+              {docsReady && myDocs && (
+                <DocumentsSection
+                  docs={myDocs.documents}
+                  canMake={overview.payments.length > 0 || openForInvoice.length > 0}
+                  onMake={() => setMakeDoc({ preset: null })}
+                  onOpen={setViewDoc}
+                  onDownload={id => { setDocListErr(''); void downloadDoc(id, setDocListErr); }}
+                  downloading={docBusy}
+                  error={docListErr}
+                />
+              )}
+              {!(manual && started && started.payments.length > 0) && overview.payments.length === 0 && paidItems.length === 0
+                && notCharged.length === 0 && !(docsReady && myDocs && myDocs.documents.length > 0) && (
+                <div className="gv-pay-card" style={{ textAlign: 'center', padding: '28px 20px' }}>
+                  <p style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>No payments yet</p>
+                </div>
+              )}
+            </>
           )}
         </div>
 
@@ -444,6 +536,7 @@ export default function PayPage() {
             currency={c.currency}
             onChanged={reload}
             onAidSubmitted={reload}
+            delegation={overview.delegation}
           />
         )}
       </div>
@@ -466,10 +559,13 @@ export default function PayPage() {
           totalCents={manualPop.totalCents}
           currency={manualPop.currency}
           mode={manualPop.mode}
+          tabOpened={manualPop.tabOpened}
           onClose={() => { setManualPop(null); reload(); }}
-          onDone={() => { setManualPop(null); reload(); }}
+          onDone={() => { setManualPop(null); setTab('completed'); reload(); }}
         />
       )}
+      {wayPop && <PaymentWayPopup conference={c} kind={wayPop.kind} totalCents={wayPop.totalCents} currency={wayPop.currency} onClose={() => setWayPop(null)} />}
+      {cancelFor && <CancelStartedPopup batchId={cancelFor} onClose={() => setCancelFor(null)} onDone={() => { setCancelFor(null); reload(); }} />}
       {lockFor && (
         <LockPopup
           mine={lockFor.mine}
@@ -477,6 +573,7 @@ export default function PayPage() {
           onGo={() => {
             const id = lockFor.batchId;
             setLockFor(null);
+            setTab('completed');
             setHighlight(id);
             setTimeout(() => setHighlight(h => (h === id ? null : h)), 3500);
           }}
@@ -519,7 +616,7 @@ function Frame({ theme, slug, children }: { theme: PayConference['theme'] | unde
     <div className="gv-pay min-h-screen flex flex-col" style={{ ...themeCssVars(theme ?? {}), backgroundColor: '#EDE7D8' }}>
       <style>{PAY_CSS}</style>
       <SiteNav />
-      <div className="flex-1 w-full max-w-[1120px] mx-auto px-4 sm:px-6 pt-8 pb-[calc(2.5rem+env(safe-area-inset-bottom))]">
+      <div className="flex-1 w-full max-w-[1240px] mx-auto px-4 sm:px-6 pt-8 pb-[calc(2.5rem+env(safe-area-inset-bottom))]">
         <Link href={`/conferences/${slug}/role`} className="gv-pay-link" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, marginBottom: 18, fontSize: 13.5 }}>
           <ArrowLeft size={15} strokeWidth={2.4} aria-hidden /> Back to conference
         </Link>

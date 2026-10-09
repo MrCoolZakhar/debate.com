@@ -2,34 +2,35 @@
 
 // StartedPayments — a manual conference's started payments on /pay (prompt 96),
 // newest first. Each shows its items, total, date and what to do next:
-//   awaiting_proof  how long is left, Upload proof, Open payment page, and a red Cancel
+//   awaiting_proof  how long is left, Upload proof, the way to pay by the conference's
+//                   manual kind (Open payment page / Open payment QR / View bank
+//                   details, prompt 101), and a red Cancel that opens its own pop-up
 //   pending         Waiting for the organizer to review, View proof, Replace proof
 //   rejected        Proof not accepted with the organizer's reason, Upload a new proof
 // `highlight` scrolls one into view and rings it (from an item's lock).
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 import { Clock, Hourglass, XCircle } from 'lucide-react';
 import { useNow } from '@/lib/useNow';
 import { DANGER, DEEP_GOLD, INK_SOFT } from './payKit';
 import { money, shortDate } from './payApi';
 import { timeLeft, type StartedPayment } from './manualApi';
 
-export default function StartedPayments({ payments, highlight, onUpload, onDetails, onCancel, onViewProof, onReplace, onRestart }: {
+export default function StartedPayments({ payments, highlight, wayLabel, onUpload, onOpenWay, onCancel, onViewProof, onReplace, onRestart }: {
   payments: StartedPayment[];
   highlight: string | null;
+  /** "Open payment page", "Open payment QR" or "View bank details"; null hides the button. */
+  wayLabel: string | null;
   onUpload: (p: StartedPayment) => void;
-  onDetails: (p: StartedPayment) => void;
-  /** Resolves with the sentence to show when it could not be cancelled. */
-  onCancel: (p: StartedPayment) => Promise<string | null>;
+  /** Runs inside the click, so a payment link can open a new tab. */
+  onOpenWay: (p: StartedPayment) => void;
+  /** Opens the "Cancel This Payment?" pop-up. */
+  onCancel: (p: StartedPayment) => void;
   onViewProof: (path: string) => void;
   onReplace: (p: StartedPayment) => void;
   onRestart: (p: StartedPayment) => void;
 }) {
   const now = useNow(60_000);
-  const [confirming, setConfirming] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState('');
-  const busyRef = useRef(false);
   const refs = useRef(new Map<string, HTMLDivElement>());
 
   useEffect(() => {
@@ -38,15 +39,6 @@ export default function StartedPayments({ payments, highlight, onUpload, onDetai
   }, [highlight]);
 
   if (payments.length === 0) return null;
-
-  const cancel = async (p: StartedPayment) => {
-    if (busyRef.current) return;
-    busyRef.current = true; setBusy(true); setErr('');
-    const problem = await onCancel(p);
-    busyRef.current = false; setBusy(false);
-    if (problem) { setErr(problem); return; }
-    setConfirming(null);
-  };
 
   return (
     <section aria-labelledby="gv-pay-started" id="started-payments">
@@ -92,9 +84,9 @@ export default function StartedPayments({ payments, highlight, onUpload, onDetai
                 {p.status === 'awaiting_proof' && (
                   <>
                     <button type="button" className="gv-pay-btn gv-pay-forest" onClick={() => onUpload(p)}>Upload proof</button>
-                    <button type="button" className="gv-pay-btn gv-pay-outline" onClick={() => onDetails(p)}>Open payment page</button>
+                    {wayLabel && <button type="button" className="gv-pay-btn gv-pay-outline" onClick={() => onOpenWay(p)}>{wayLabel}</button>}
                     <button type="button" className="gv-pay-btn" style={{ background: DANGER, color: '#FFFFFF' }}
-                      onClick={() => { setErr(''); setConfirming(confirming === p.batch_id ? null : p.batch_id); }}>Cancel</button>
+                      onClick={() => onCancel(p)}>Cancel</button>
                   </>
                 )}
                 {p.status === 'pending' && (
@@ -108,18 +100,6 @@ export default function StartedPayments({ payments, highlight, onUpload, onDetai
                 )}
               </div>
 
-              {confirming === p.batch_id && (
-                <div className="gv-pay-confirm" role="alertdialog" aria-label="Cancel this payment" style={{ margin: '12px 0 0' }}>
-                  <p style={{ margin: 0, fontSize: 14.5 }}>Cancel this payment? The items go back to your list</p>
-                  {err && <p className="gv-pay-err" role="alert">{err}</p>}
-                  <div className="flex items-center gap-3 flex-wrap">
-                    <button type="button" className="gv-pay-btn" style={{ background: DANGER, color: '#FFFFFF', minHeight: 40 }} disabled={busy} onClick={() => { void cancel(p); }}>
-                      {busy ? 'Cancelling' : 'Cancel payment'}
-                    </button>
-                    <button type="button" className="gv-pay-btn gv-pay-outline" style={{ minHeight: 40 }} disabled={busy} onClick={() => setConfirming(null)}>Keep it</button>
-                  </div>
-                </div>
-              )}
             </div>
           );
         })}

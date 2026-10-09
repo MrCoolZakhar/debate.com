@@ -4,6 +4,7 @@
 //   RefundRequestPopup   ask for a refund of paid items (whole items, a reason required)
 //   NotReceivedPopup     "I haven't received it" for a manual refund, an optional note
 //   LockPopup            why an item in a started payment cannot be ticked
+//   CancelStartedPopup   "Cancel This Payment?" for a started payment (prompt 101)
 
 import { useRef, useState } from 'react';
 import { Lock } from 'lucide-react';
@@ -11,15 +12,19 @@ import { PurchaseShell, PURCHASE_CSS } from '@/components/purchase/purchaseKit';
 import { notifyOk } from '@/lib/appNotify';
 import { DANGER, INK_SOFT } from './payKit';
 import { money, type PayItem } from './payApi';
-import { reportRefundNotReceived, requestRefund } from './manualApi';
+import { cancelStartedPayment, reportRefundNotReceived, requestRefund } from './manualApi';
 
 const REASON_MAX = 500;
 
-function Shell({ label, children, onClose, busyRef }: { label: string; children: React.ReactNode; onClose: () => void; busyRef?: React.RefObject<boolean> }) {
+function Shell({ label, children, onClose, busyRef, small }: {
+  label: string; children: React.ReactNode; onClose: () => void; busyRef?: React.RefObject<boolean>;
+  /** As tall as its content, at most 440px wide (gv-pay-small in payKit). */
+  small?: boolean;
+}) {
   return (
     <>
       <style>{PURCHASE_CSS}</style>
-      <PurchaseShell tone="light" label={label} onClose={() => { if (!busyRef?.current) onClose(); }} panelClass="gv-pay-mid" testId="pay-small">
+      <PurchaseShell tone="light" label={label} onClose={() => { if (!busyRef?.current) onClose(); }} panelClass={small ? 'gv-pay-small' : 'gv-pay-mid'} testId="pay-small">
         <div style={{ padding: '28px 26px 26px', display: 'flex', flexDirection: 'column', gap: 16, width: '100%' }}>{children}</div>
       </PurchaseShell>
     </>
@@ -113,19 +118,46 @@ export function NotReceivedPopup({ item, onClose, onDone }: { item: PayItem; onC
 
 export function LockPopup({ mine, onGo, onClose }: { mine: boolean; onGo: () => void; onClose: () => void }) {
   return (
-    <Shell label="In a started payment" onClose={onClose}>
+    <Shell label="In a started payment" onClose={onClose} small>
       <span style={{ width: 44, height: 44, borderRadius: 12, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(238,217,138,0.45)', color: '#1B3828' }} aria-hidden>
         <Lock size={22} strokeWidth={2.2} />
       </span>
       <h2 style={{ margin: 0, paddingRight: 40, fontSize: 24, fontWeight: 800, letterSpacing: '-0.02em' }}>In a Started Payment</h2>
       <p style={{ margin: 0, fontSize: 15.5, lineHeight: 1.55 }}>
-        {mine
-          ? 'This item is already in one of your started payments. Complete that one or cancel it to continue.'
-          : 'Another leader of your delegation started a payment for this item. They can finish it or cancel it.'}
+        This item is already in one of your started payments. Complete that one or cancel it to continue.
       </p>
       <div className="flex items-center gap-3 flex-wrap">
         {mine && <button type="button" className="gv-pay-btn gv-pay-forest" onClick={onGo}>Go to that payment</button>}
         <button type="button" className="gv-pay-btn gv-pay-outline" onClick={onClose}>Close</button>
+      </div>
+    </Shell>
+  );
+}
+
+export function CancelStartedPopup({ batchId, onClose, onDone }: { batchId: string; onClose: () => void; onDone: () => void }) {
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+  const busyRef = useRef(false);
+
+  const cancel = async () => {
+    if (busyRef.current) return;
+    busyRef.current = true; setBusy(true); setErr('');
+    const r = await cancelStartedPayment(batchId);
+    busyRef.current = false; setBusy(false);
+    if (!r.ok) { setErr(r.error); return; }
+    onDone();
+  };
+
+  return (
+    <Shell label="Cancel this payment" onClose={onClose} busyRef={busyRef} small>
+      <h2 style={{ margin: 0, paddingRight: 40, fontSize: 24, fontWeight: 800, letterSpacing: '-0.02em' }}>Cancel This Payment?</h2>
+      <p style={{ margin: 0, fontSize: 15.5, lineHeight: 1.55 }}>The items go back to your list</p>
+      {err && <p role="alert" style={{ margin: 0, fontSize: 14, color: DANGER }}>{err}</p>}
+      <div className="flex items-center gap-3 flex-wrap">
+        <button type="button" className="gv-pay-btn" style={{ background: DANGER, color: '#FFFFFF' }} disabled={busy} onClick={() => { void cancel(); }}>
+          {busy ? 'Cancelling' : 'Cancel payment'}
+        </button>
+        <button type="button" className="gv-pay-btn gv-pay-outline" disabled={busy} onClick={onClose}>Keep it</button>
       </div>
     </Shell>
   );
