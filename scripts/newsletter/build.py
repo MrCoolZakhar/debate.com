@@ -31,6 +31,9 @@ LOGO = "https://gavelling.com/gavelling-lockup.png"
 TRACK = "https://gavelling.com/r/{{CLICK_TOKEN}}/"
 HERE = os.path.dirname(os.path.abspath(__file__))
 TEAM_INBOX = "wearegavelling@gmail.com"
+# Off-site links go direct: the /r route only ever redirects to gavelling.com.
+INSTAGRAM = "https://www.instagram.com/wearegavelling/"
+LINKEDIN = "https://www.linkedin.com/company/gavelling/"
 
 INK, SOFT, MUTED, GOLD, DEEP_GOLD, FOREST = "#1C1410", "#4A4238", "#8C7E6E", "#8A6414", "#B6871F", "#1B3828"
 FONT = "Arial,Helvetica,sans-serif"
@@ -52,7 +55,7 @@ def check_links(ed, page, text):
     problems = [f"link key '{k}' is used but missing from links" for k in sorted(used - set(links))]
     problems += [f"links['{k}'] is not an https URL" for k, v in links.items() if not str(v).startswith("https://")]
     for href in re.findall(r'href="([^"]+)"', page):
-        if not (href.startswith(TRACK) or href.startswith("mailto:") or href == "{{UNSUBSCRIBE_URL}}"):
+        if not (href.startswith(TRACK) or href.startswith("mailto:") or href in ("{{UNSUBSCRIBE_URL}}", INSTAGRAM, LINKEDIN)):
             problems.append(f"untracked link: {href}")
     if problems:
         sys.exit("Link check failed:\n  - " + "\n  - ".join(problems))
@@ -145,7 +148,7 @@ def build(ed, slug):
 
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:34px 0 0;border-top:1px solid #ECE5D6;"><tr>
   <td style="padding:18px 0 0;font-family:{FONT};font-size:12px;line-height:1.6;color:{MUTED};">
-    <a href="{track('instagram')}" style="color:{MUTED};font-weight:bold;">Instagram</a>&nbsp;&nbsp;&middot;&nbsp;&nbsp;<a href="{track('linkedin')}" style="color:{MUTED};font-weight:bold;">LinkedIn</a>&nbsp;&nbsp;&middot;&nbsp;&nbsp;<a href="{track('home')}" style="color:{MUTED};font-weight:bold;">gavelling.com</a><br>
+    <a href="{INSTAGRAM}" style="color:{MUTED};font-weight:bold;">Instagram</a>&nbsp;&nbsp;&middot;&nbsp;&nbsp;<a href="{LINKEDIN}" style="color:{MUTED};font-weight:bold;">LinkedIn</a>&nbsp;&nbsp;&middot;&nbsp;&nbsp;<a href="{track('home')}" style="color:{MUTED};font-weight:bold;">gavelling.com</a><br>
     You are receiving this because you have a Gavelling account. <a href="{{{{UNSUBSCRIBE_URL}}}}" style="color:{MUTED};">Unsubscribe</a>
   </td></tr></table>
 

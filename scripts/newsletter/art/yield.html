@@ -1,55 +1,14 @@
-<!doctype html><html><head><meta charset="utf-8"><meta name="size" content="1120x760">
+<!doctype html><html><head><meta charset="utf-8"><meta name="size" content="1120x820">
 <link rel="stylesheet" href="_base.css">
-<style>
-.stage{height:760px;padding:56px 64px;display:flex;gap:36px;align-items:center}
-.spk{width:430px;flex:none;padding:44px 40px 40px;text-align:center}
-.spk .flag{margin:0 auto}
-.spk .nm{font-size:40px;font-weight:800;margin-top:22px}
-.spk .st{font-size:23px;color:var(--muted);margin-top:4px}
-.clock{font-size:96px;font-weight:700;color:var(--forest);margin-top:18px;letter-spacing:-.02em;line-height:1}
-.bar{height:12px;border-radius:6px;background:#EAE3D2;margin-top:26px;overflow:hidden}
-.bar i{display:block;height:100%;width:47%;background:linear-gradient(90deg,#1B3828,#2A5A3C);border-radius:6px}
-.lim{display:flex;justify-content:space-between;font-size:22px;color:var(--muted);margin-top:10px}
-.pan{flex:1;overflow:hidden;border-radius:26px}
-.ph{background:#DCE7DA;padding:22px 30px;display:flex;align-items:center;gap:14px;font-size:26px;font-weight:700;color:var(--forest)}
-.pb{background:#fff;padding:28px 30px 32px}
-.from{font-size:23px;color:var(--muted)}
-.give{font-size:44px;font-weight:800;margin:4px 0 22px;letter-spacing:-.01em}
-.opt{border-radius:18px;padding:20px 22px;display:flex;align-items:center;gap:18px;border:2px solid #ECE5D6}
-.opt+.opt{margin-top:14px}
-.opt.on{border-color:var(--forest);background:#F4F8F3}
-.radio{width:30px;height:30px;border-radius:50%;border:3px solid #B9AE99;flex:none}
-.on .radio{border-color:var(--forest);box-shadow:inset 0 0 0 6px #fff;background:var(--forest)}
-.ot{font-size:27px;font-weight:700}
-.os{font-size:22px;color:var(--muted);margin-top:3px}
-.btn{margin-top:24px;height:66px;border-radius:12px;background:linear-gradient(90deg,#1B3828,#2A5A3C);color:#fff;font-size:26px;font-weight:700;display:flex;align-items:center;justify-content:center;gap:12px;box-shadow:0 6px 16px rgba(27,56,40,.25)}
+<style>.stage{height:820px;padding:52px 56px}.title{font-size:52px}
+.floor{position:absolute;left:56px;top:190px;width:470px}
+.panel{position:absolute;left:470px;top:250px;width:580px;border-radius:44px;overflow:hidden;box-shadow:0 24px 50px rgba(27,56,40,.28),0 0 0 6px #fff}
+.panel img{display:block;width:100%}
 </style></head><body>
 <div class="stage">
-  <div class="card spk">
-    <img class="flag" src="../../../public/flags/1x1/jp.svg" width="176" height="176">
-    <div class="nm">Japan</div>
-    <div class="st">General Speakers' List</div>
-    <div class="clock tnum">0:42</div>
-    <div class="bar"><i></i></div>
-    <div class="lim tnum"><span>Speaking time</span><span>1:30</span></div>
-  </div>
-  <div class="card pan">
-    <div class="ph"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#1B3828" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 17l5-5-5-5"/><path d="M4 18v-2a4 4 0 0 1 4-4h12"/></svg>Yield</div>
-    <div class="pb">
-      <div class="from">Japan yields</div>
-      <div class="give">Give <span class="tnum">0:42</span> to</div>
-      <div class="opt on">
-        <div class="radio"></div>
-        <img class="flag" src="../../../public/flags/1x1/br.svg" width="56" height="56">
-        <div><div class="ot">Next speaker</div><div class="os">Brazil gets its time plus 0:42</div></div>
-      </div>
-      <div class="opt">
-        <div class="radio"></div>
-        <div style="width:56px;height:56px;border-radius:50%;background:#F0EBDD;display:grid;place-items:center;flex:none"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#4A4238" stroke-width="2.4" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg></div>
-        <div><div class="ot">Another delegation</div><div class="os">Timed like a reply</div></div>
-      </div>
-      <div class="btn">Yield <span class="tnum">0:42</span></div>
-    </div>
-  </div>
+  <div class="eyebrow">For chairs</div>
+  <div class="title" style="margin-top:12px">Yields, done <span class="accent">properly</span></div>
+  <div class="shot floor"><img src="shots/yield-floor.jpg"></div>
+  <div class="panel"><img src="shots/yield-panel.png"></div>
 </div>
 </body></html>

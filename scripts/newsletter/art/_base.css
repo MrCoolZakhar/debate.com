@@ -22,3 +22,9 @@ body{
 .flag{border-radius:50%;display:block;object-fit:cover;box-shadow:0 2px 4px rgba(27,56,40,.12),0 8px 18px rgba(27,56,40,.14)}
 .tnum{font-variant-numeric:tabular-nums}
 .mark{position:absolute;opacity:.07;pointer-events:none}
+/* Real screenshots in a frame (v2-05c). */
+.shot{background:#fff;border-radius:28px;box-shadow:var(--shadow);padding:14px}
+.shot img{display:block;width:100%;border-radius:16px}
+.ring{position:absolute;border:5px solid #D9B44A;border-radius:999px;box-shadow:0 0 0 8px rgba(238,217,138,.35)}
+.tag{display:inline-flex;align-items:center;gap:10px;background:var(--gold);color:var(--forest);font-weight:700;font-size:24px;padding:10px 20px;border-radius:999px;box-shadow:0 6px 16px rgba(182,135,31,.25)}
+.head{display:flex;align-items:flex-end;justify-content:space-between;gap:24px}

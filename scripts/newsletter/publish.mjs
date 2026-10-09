@@ -22,7 +22,7 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const FROM_NAME = 'Peter from Gavelling';
+const FROM_NAME = 'Peter at Gavelling';
 const REPLY_TO = 'wearegavelling@gmail.com';
 
 const [edition, slugArg] = process.argv.slice(2);

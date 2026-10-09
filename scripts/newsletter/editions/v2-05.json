@@ -1,6 +1,6 @@
 {
   "edition": "v2.05",
-  "image_folder": "v2-05b",
+  "image_folder": "v2-05c",
   "subject": "Yes, we heard you. Again.",
   "preheader": "Follow your delegates across every room, and five more things you asked for.",
   "eyebrow": "Gavelling v2.05",
@@ -9,7 +9,7 @@
   "intro": "You told us what was missing. Here is what we built this week.",
   "hero": {
     "image": "hero.jpg",
-    "alt": "Three requests from chairs, advisors and organisers, each marked built"
+    "alt": "Gavelling on a laptop running a committee and on a phone in a delegate's hand, beside the words You asked. We built it."
   },
   "features": [
     {
@@ -17,7 +17,7 @@
       "title": "Follow every delegate, in every room",
       "text": "Add the rooms your delegates are in and get one list of who speaks next across all of them, with roughly how long until each of yours is up. No more running between committees hoping you made it in time.",
       "image": "advisor.jpg",
-      "alt": "The advisor board: four delegates across DISEC and UNHRC in speaking order, with how long until each speaks",
+      "alt": "The advisor board: Japan speaking now in DISEC, then Brazil and Spain next, with India, Indonesia and Germany a few speakers away, across DISEC and UNHRC",
       "link_label": "Open the advisor board",
       "link_key": "advisor"
     },
@@ -26,14 +26,14 @@
       "title": "Pick the topic, then start",
       "text": "Chairing a committee with two or three topics? Choose which one opens debate the moment you start, and switch later with one click. Delegates see the change straight away.",
       "image": "topic.jpg",
-      "alt": "Which topic opens debate? Two DISEC topics, numbered 1 and 2"
+      "alt": "The topic picker: Which topic opens debate? Three DISEC topics numbered 1 to 3, and the Switch topic button under the committee name"
     },
     {
       "audience": "For chairs",
       "title": "Yields, done properly",
       "text": "When a delegate yields, give their remaining time to the next speaker or to any delegation you choose. Gavelling adds it to the next speaker's clock, or times it for the delegation you pick.",
       "image": "yield.jpg",
-      "alt": "Japan has 0:42 left and yields it to the next speaker, Brazil",
+      "alt": "The chair's floor with Japan on 0:41, and the Yield panel offering that time to Brazil, the next speaker, or to another delegation",
       "link_label": "Start a session",
       "link_key": "sessions"
     },
@@ -42,7 +42,7 @@
       "title": "Titles on the dais",
       "text": "Invite your chairs as Chair, Vice Chair, Co-Chair or Rapporteur, so delegates always know who is leading the room.",
       "image": "chair-roles.jpg",
-      "alt": "The UNHRC dais: Peter Zakhar, Chair; Sofia Marin, Vice Chair; Jonas Weber, Rapporteur",
+      "alt": "An ECOSOC committee card showing its dais: Sofia Marin, Vice Chair; Peter Zakhar, Chair; Jonas Weber, Rapporteur",
       "link_label": "Invite your chairs",
       "link_key": "chairs"
     },
@@ -50,8 +50,8 @@
       "audience": "For chairs",
       "title": "Your chairing awards, on your CV",
       "text": "Add Best Chair, Best Dais or Outstanding Chair to your MUN CV, or write in your own. The work you do on the dais finally counts too.",
-      "image": "awards.jpg",
-      "alt": "An MUN CV entry for a chair at Northbridge MUN 2026 with the Best Chair award",
+      "image": "awards-hult.jpg",
+      "alt": "A MUN CV entry for Hult Model United Nations 2024, Bicameral Crisis, with the Best Chair award",
       "link_label": "Update your MUN CV",
       "link_key": "cv"
     },
@@ -60,7 +60,7 @@
       "title": "84 free guides, and 7 premium ones",
       "text": "From your first conference to a position paper chairs remember, plus premium playbooks like how to fund a conference or delegation through sponsorship.",
       "image": "blog.jpg",
-      "alt": "Three guides, one of them premium",
+      "alt": "The MUN Guides page: three premium playbooks with Unlock with Unlimited, and three free guides below",
       "link_label": "Read the guides",
       "link_key": "guides"
     }
@@ -73,8 +73,6 @@
     "sessions": "https://gavelling.com/sessions",
     "chairs": "https://gavelling.com/account/conferences",
     "cv": "https://gavelling.com/account/cv",
-    "guides": "https://gavelling.com/blog",
-    "instagram": "https://www.instagram.com/wearegavelling/",
-    "linkedin": "https://www.linkedin.com/company/gavelling/"
+    "guides": "https://gavelling.com/blog"
   }
 }
