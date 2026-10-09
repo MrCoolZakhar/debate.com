@@ -4,10 +4,10 @@ import { useState, useEffect, useCallback, useMemo, useRef, Fragment } from 'rea
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import {
-  SlidersHorizontal, Building2, Users2, ShieldCheck, X, Lock, Copy, AlertTriangle, Check,
+  Building2, X, Lock, Copy, AlertTriangle, Check,
   Plus, Crown, Mail as MailIcon, ChevronDown, Info, ArrowLeft,
-  Settings2, Globe, Eye, EyeOff, ArrowUp, ArrowDown, Trash2, Briefcase, Trophy,
-  ClipboardList, CreditCard, Megaphone, Star, UsersRound, CheckCircle2, Clock, XCircle, MinusCircle, type LucideIcon,
+  Settings2, Globe, Eye, EyeOff, ArrowUp, ArrowDown, Trash2, Briefcase,
+  ClipboardList, CreditCard, Megaphone, Star, CheckCircle2, Clock, XCircle, MinusCircle, type LucideIcon,
 } from 'lucide-react';
 import { useManage, type Conference } from '@/app/manage/[slug]/layout';
 
@@ -55,6 +55,8 @@ import { normaliseRoleTimeline, linkNeighbourPhase } from '@/lib/roleTimeline';
 import { useConferenceTimezone, timelineNotice, TimelineNotice, TimelineWarning } from './timelineUi';
 import { INTENT_OPTIONS, getConferenceIntent, intentPayload } from '@/lib/conferenceIntent';
 import ProfileLink from '@/components/ProfileLink';
+import { useNow } from '@/lib/useNow';
+import { SettingsHome, SectionTop, ConferencePreview, sectionMeta, type SettingsSnapshot } from './settingsHome';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -280,12 +282,12 @@ function StepHeader({ n, label, sub, complete, open, onClick, status = 'idle', h
           {label}
           {hint && <InfoHint label={`About ${label}`} text={hint} />}
         </span>
-        <span className="block text-xs" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}>
+        <span className="block text-xs" style={{ color: '#6E6152', fontFamily: "var(--font-brand), sans-serif" }}>
           {sub}
         </span>
       </span>
       {status === 'saving' && (
-        <span className="text-xs flex-shrink-0" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}>
+        <span className="text-xs flex-shrink-0" style={{ color: '#6E6152', fontFamily: "var(--font-brand), sans-serif" }}>
           Saving...
         </span>
       )}
@@ -297,7 +299,7 @@ function StepHeader({ n, label, sub, complete, open, onClick, status = 'idle', h
       <ChevronDown
         size={18}
         strokeWidth={2.2}
-        style={{ color: '#9A8A78', flexShrink: 0, transform: open ? 'none' : 'rotate(-90deg)', transition: 'transform 200ms ease' }}
+        style={{ color: '#6E6152', flexShrink: 0, transform: open ? 'none' : 'rotate(-90deg)', transition: 'transform 200ms ease' }}
       />
     </button>
   );
@@ -531,7 +533,7 @@ function CopyFormMenu({ roles, onPick }: { roles: string[]; onPick: (role: strin
               boxShadow: '0 12px 32px rgba(27,56,40,0.18)', padding: 6,
             }}
           >
-            <p className="px-2.5 pt-1 pb-1.5 text-[10px] font-bold" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif", letterSpacing: '0.1em' }}>
+            <p className="px-2.5 pt-1 pb-1.5 text-[10px] font-bold" style={{ color: '#6E6152', fontFamily: "var(--font-brand), sans-serif", letterSpacing: '0.1em' }}>
               COPY TO
             </p>
             {roles.map(role => (
@@ -586,12 +588,31 @@ export default function SettingsPage() {
   // secretariat accept redirect uses (?tab=team&highlight=<organizer id>) —
   // same tab as 'organizers', named the way a person reading the URL would
   // expect rather than the internal section key.
-  const initialTab = ((): SettingsTab => {
-    const t = searchParams.get('tab') ?? searchParams.get('section');
-    if (t === 'team') return 'organizers';
-    return t === 'delegations' || t === 'conference' || t === 'organizers' || t === 'privacy' || t === 'awards' ? t : 'applications';
+  // The section shown is read from the URL every render, so the back button,
+  // the "All settings" link and every deep link agree. No ?tab= (and nothing
+  // else that targets a section) opens the settings HOME: the organiser's
+  // questions with a live preview (settingsHome.tsx, Oct 2026 redesign).
+  // Old tab names keep working exactly: applications, delegations,
+  // conference, organizers (alias team), privacy, awards.
+  const tabParam = searchParams.get('tab') ?? searchParams.get('section');
+  const activeTab: SettingsTab = (() => {
+    if (tabParam === 'team') return 'organizers';
+    if (tabParam === 'delegations' || tabParam === 'conference' || tabParam === 'organizers' || tabParam === 'privacy' || tabParam === 'awards' || tabParam === 'applications') return tabParam;
+    if (searchParams.get('focus')) return 'conference';
+    if (searchParams.get('highlight')) return 'organizers';
+    return 'applications';
   })();
-  const [activeTab, setActiveTab] = useState<SettingsTab>(initialTab);
+  /** A render-time clock for the home's sentences ("open now", "until 3 Apr"). */
+  const nowMs = useNow();
+  const showHome = !tabParam && !searchParams.get('role') && !searchParams.get('focus') && !searchParams.get('highlight');
+  function openSection(next: SettingsTab | null) {
+    const params = new URLSearchParams(searchParams.toString());
+    for (const k of ['tab', 'section', 'focus', 'highlight']) params.delete(k);
+    if (next !== 'applications') params.delete('role');
+    if (next) params.set('tab', next);
+    const qs = params.toString();
+    router.push(`${window.location.pathname}${qs ? `?${qs}` : ''}`);
+  }
   // Which role's configuration the Applications section is showing. Derived
   // from ?role= rather than held in state, so a deep link lands on the right
   // role and the back button walks back through them.
@@ -3006,7 +3027,8 @@ export default function SettingsPage() {
     backgroundColor: '#FFFDF9',
     border: '1.5px solid #D8CDB6',
     borderRadius: '16px',
-    padding: '24px',
+    // Roomy on a desktop, tighter on a phone so the fields keep their width.
+    padding: 'clamp(16px, 3.5vw, 24px)',
     marginBottom: '20px',
     boxShadow: '0 1px 2px rgba(27,56,40,0.04)',
   };
@@ -3024,112 +3046,52 @@ export default function SettingsPage() {
   //     reads them as one answer and writes to every role at once. When the
   //     roles disagree, it says so instead of picking a winner.
 
-  // ── Section rail definition ──────────────────────────────────────────────
-  // Mirrors the manage layout rail's language: lucide icon + Outfit label +
-  // forest active state. Drives the same `activeTab` state the content blocks
-  // already switch on, no logic change, purely the switcher's new skin.
-  const SECTIONS: {
-    key: SettingsTab;
-    label: string;
-    hint: string;
-    icon: typeof SlidersHorizontal;
-  }[] = [
-    { key: 'applications', label: 'Applications', hint: 'Roles, windows & questions', icon: SlidersHorizontal },
-    { key: 'delegations',  label: 'Delegations',  hint: 'Swaps & leader imports',     icon: UsersRound },
-    { key: 'conference',   label: 'Conference',   hint: 'Identity, media & fee',      icon: Building2 },
-    { key: 'organizers',   label: 'Organizers',   hint: 'Team & permissions',         icon: Users2 },
-    { key: 'privacy',      label: 'Privacy',       hint: 'Publishing & lineage',       icon: ShieldCheck },
-    { key: 'awards',       label: 'Awards',        hint: 'Coming soon',                icon: Trophy },
-  ];
-  const activeSection = SECTIONS.find(s => s.key === activeTab) ?? SECTIONS[0];
+  // ── The redesigned shell (Oct 2026) ─────────────────────────────────────
+  // Settings opens on the organiser's questions (SettingsHome); a question
+  // opens its section, which is the old tab's content, unchanged. Everything
+  // the cards say is derived from state this page already loads.
+  const settingsSnap: SettingsSnapshot = {
+    conference: view,
+    roles: roleConfigs,
+    organizerCount: organizers.length,
+    pendingInviteCount: pendingInvites.length,
+    now: nowMs,
+  };
+  // The live preview sits beside "What is your conference?" on wide screens,
+  // so an edit to the page shows on the card the moment it saves.
+  const sidePreview = activeTab === 'conference';
+
+  if (showHome) {
+    return (
+      <div className="px-4 sm:px-6 md:px-10 py-8" style={{ maxWidth: '1240px' }}>
+        <SettingsHome
+          snap={settingsSnap}
+          onOpen={(key) => openSection(key)}
+          onCopyLink={handleCopyConferenceLink}
+          copied={confLinkCopied}
+        />
+        {confirmModal}
+      </div>
+    );
+  }
 
   return (
     // The team tree is the one tab that earns the extra width: it lays its
     // members out in a grid, so a wider panel means fewer wrapped rows and a
     // shallower, more legible hierarchy. Every other tab is a reading column
-    // and stays at 1080.
-    <div className="px-4 sm:px-6 md:px-10 py-8" style={{ maxWidth: activeTab === 'organizers' ? '1400px' : '1080px' }}>
-      {/* Header */}
-      <p className="text-xs mb-2" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif", fontWeight: 700, letterSpacing: '0.12em' }}>
-        {view.acronym} / Settings
-      </p>
-      <h1 className="font-black text-2xl mb-7" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>
-        Settings
-      </h1>
+    // and stays at 1080 (1440 with the live preview beside it).
+    <div className="px-4 sm:px-6 md:px-10 py-8" style={{ maxWidth: activeTab === 'organizers' ? '1400px' : sidePreview ? '1440px' : '1080px' }}>
+      <SectionTop
+        active={activeTab}
+        snap={settingsSnap}
+        onOpen={(key) => openSection(key)}
+        onHome={() => openSection(null)}
+      />
 
-      {/* Rail + floating panel shell */}
-      <div className="flex flex-col md:flex-row md:items-start" style={{ gap: '24px' }}>
-
-        {/* ── Section rail (desktop: vertical glass rail; mobile: horizontal scroller) ── */}
-        <nav
-          aria-label="Settings sections"
-          className="md:flex-shrink-0 md:sticky min-w-0 w-full md:w-[220px]"
-          style={{ top: '24px' }}
-        >
-          <div
-            className="flex md:flex-col overflow-x-auto md:overflow-visible"
-            style={{
-              gap: '6px',
-              padding: '10px',
-              borderRadius: '20px',
-              backgroundColor: 'rgba(250,248,243,0.72)',
-              backdropFilter: 'blur(16px) saturate(1.3)',
-              WebkitBackdropFilter: 'blur(16px) saturate(1.3)',
-              border: '1.5px solid rgba(216,205,182,0.9)',
-              boxShadow: '0 10px 34px rgba(27,56,40,0.10), 0 1px 3px rgba(27,56,40,0.05)',
-              scrollbarWidth: 'none',
-            }}
-          >
-            {SECTIONS.map(section => {
-              const active = activeTab === section.key;
-              const Icon = section.icon;
-              return (
-                <button
-                  key={section.key}
-                  onClick={() => setActiveTab(section.key)}
-                  className="flex items-center flex-shrink-0 md:w-full text-left focus:outline-none transition-colors"
-                  style={{
-                    gap: '11px',
-                    padding: '10px 13px',
-                    borderRadius: '13px',
-                    backgroundColor: active ? '#1B3828' : 'transparent',
-                    color: active ? '#EED98A' : '#7A6E5E',
-                    boxShadow: active ? '0 5px 16px rgba(27,56,40,0.26)' : 'none',
-                    cursor: 'pointer',
-                    whiteSpace: 'nowrap',
-                  }}
-                  onMouseEnter={(e) => { if (!active) { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.06)'; (e.currentTarget as HTMLElement).style.color = '#1C1410'; } }}
-                  onMouseLeave={(e) => { if (!active) { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; (e.currentTarget as HTMLElement).style.color = '#7A6E5E'; } }}
-                >
-                  <span
-                    className="flex items-center justify-center flex-shrink-0"
-                    style={{
-                      width: '30px', height: '30px', borderRadius: '9px',
-                      backgroundColor: active ? 'rgba(238,217,138,0.16)' : 'rgba(27,56,40,0.06)',
-                      border: active ? '1px solid rgba(238,217,138,0.28)' : '1px solid rgba(27,56,40,0.08)',
-                    }}
-                  >
-                    <Icon size={16} strokeWidth={2.1} style={{ color: active ? '#EED98A' : '#6E5F4E' }} />
-                  </span>
-                  <span className="hidden md:flex flex-col min-w-0">
-                    <span style={{ fontFamily: "var(--font-brand), sans-serif", fontSize: '13.5px', fontWeight: 700, letterSpacing: '0.01em' }}>
-                      {section.label}
-                    </span>
-                    <span style={{ fontFamily: "var(--font-brand), sans-serif", fontSize: '11px', fontWeight: 500, color: active ? 'rgba(238,217,138,0.72)' : '#9A8A78', marginTop: '1px' }}>
-                      {section.hint}
-                    </span>
-                  </span>
-                  <span className="md:hidden" style={{ fontFamily: "var(--font-brand), sans-serif", fontSize: '13px', fontWeight: 700 }}>
-                    {section.label}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-        </nav>
-
-        {/* ── Floating elevated content panel ── */}
+      <div className="flex items-start" style={{ gap: '28px' }}>
+        {/* ── The section's content ── */}
         <section
+          aria-label={sectionMeta(activeTab).question}
           className="flex-1 min-w-0"
           style={activeTab === 'organizers'
             // The team is a gallery of faces, and a gallery wants a wall, not a
@@ -3138,35 +3100,12 @@ export default function SettingsPage() {
             ? { borderRadius: 0, backgroundColor: 'transparent', border: 'none', boxShadow: 'none', padding: 0 }
             : {
               borderRadius: '22px',
-              backgroundColor: 'rgba(250,248,243,0.9)',
-              backdropFilter: 'blur(14px) saturate(1.25)',
-              WebkitBackdropFilter: 'blur(14px) saturate(1.25)',
-              border: '1.5px solid #D8CDB6',
-              boxShadow: '0 1px 3px rgba(27,56,40,0.06), 0 20px 60px rgba(27,56,40,0.12)',
-              padding: '22px 22px 24px',
+              backgroundColor: '#FFFFFF',
+              border: '1px solid rgba(27,56,40,0.07)',
+              boxShadow: '0 1px 2px rgba(27,56,40,0.06), 0 14px 40px rgba(27,56,40,0.09)',
+              padding: 'clamp(14px, 3vw, 24px)',
             }}
         >
-          {/* Panel header, echoes the active rail item, gives the panel a protagonist */}
-          <div className="flex items-center gap-3 mb-6 pb-5" style={{ borderBottom: '1.5px solid rgba(216,205,182,0.9)' }}>
-            <span
-              className="flex items-center justify-center flex-shrink-0"
-              style={{
-                width: '42px', height: '42px', borderRadius: '13px',
-                background: 'linear-gradient(140deg, #16301F, #2A5A3C)',
-                boxShadow: '0 6px 16px rgba(27,56,40,0.28)',
-              }}
-            >
-              <activeSection.icon size={20} strokeWidth={2.1} style={{ color: '#EED98A' }} />
-            </span>
-            <div className="min-w-0">
-              <h2 className="font-black text-lg leading-tight" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>
-                {activeSection.label}
-              </h2>
-              <p className="text-xs" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}>
-                {activeSection.hint}
-              </p>
-            </div>
-          </div>
 
       {/* ── Grandfathered warning — payment_gate_exempt conferences the gate
           let through on purpose, but that still can't actually get paid.
@@ -3296,11 +3235,18 @@ export default function SettingsPage() {
                       <Eye size={13} strokeWidth={2.4} />
                       Preview application
                     </a>
-                    <PillToggle
-                      value={enabled}
-                      onChange={(v) => saveRoleConfig(role, { is_enabled: v })}
-                      size="md"
-                    />
+                    {/* The switch says what it does, so nobody has to guess
+                        that this is the role's on/off (12-year-old test). */}
+                    <span className="inline-flex items-center gap-2 sm:ml-1">
+                      <span style={{ fontFamily: "var(--font-brand), sans-serif", fontSize: '13px', fontWeight: 600, color: enabled ? '#1B3828' : '#5C4F42' }}>
+                        {enabled ? 'Taking applications' : 'Not taking applications'}
+                      </span>
+                      <PillToggle
+                        value={enabled}
+                        onChange={(v) => saveRoleConfig(role, { is_enabled: v })}
+                        size="md"
+                      />
+                    </span>
                   </div>
                 </div>
 
@@ -3329,7 +3275,7 @@ export default function SettingsPage() {
                             datetime mode, not a native control: the same
                             calendar the fee phases already use, plus the hour
                             the window actually turns over. */}
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-3">
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-3">
                           <div>
                             <label className="text-xs font-semibold mb-1.5 flex items-center gap-1.5" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>
                               Opens
@@ -3373,12 +3319,12 @@ export default function SettingsPage() {
                                 This window closes at or before it opens, so nobody can apply. Move one of the two.
                               </p>
                             ) : (
-                              <p className="text-xs" suppressHydrationWarning style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}>
+                              <p className="text-xs" suppressHydrationWarning style={{ color: '#6E6152', fontFamily: "var(--font-brand), sans-serif" }}>
                                 Times are in {localZoneLabel()}. Applicants see these in their own timezone.
                               </p>
                             )}
                             {(config.fee_phases ?? []).some(p => p.start_date && p.end_date) && (
-                              <p className="text-xs mt-1" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}>
+                              <p className="text-xs mt-1" style={{ color: '#6E6152', fontFamily: "var(--font-brand), sans-serif" }}>
                                 With fee phases, applications open when the first price starts and close when the last price ends. Changing one moves the other.
                               </p>
                             )}
@@ -3429,7 +3375,7 @@ export default function SettingsPage() {
                                 text="With this on, everyone is accepted the moment they submit, which is right for observers, advisors and any role where you are not really choosing. With it off, every application waits until someone on your team decides, which is what you want wherever places are limited or the answers matter."
                               />
                             </label>
-                            <p className="text-xs mt-0.5" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}>
+                            <p className="text-xs mt-0.5" style={{ color: '#6E6152', fontFamily: "var(--font-brand), sans-serif" }}>
                               On: applicants are accepted as soon as they apply. Off: you review each application.
                             </p>
                           </div>
@@ -3454,7 +3400,7 @@ export default function SettingsPage() {
                                 text="With this on, the pay button appears only once you accept someone, so you only charge the people you actually took. With it off, applicants can pay as soon as they apply."
                               />
                             </label>
-                            <p className="text-xs mt-0.5" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}>
+                            <p className="text-xs mt-0.5" style={{ color: '#6E6152', fontFamily: "var(--font-brand), sans-serif" }}>
                               On: applicants can pay only once you accept them. Off: they can pay as soon as they apply.
                             </p>
                           </div>
@@ -3473,7 +3419,7 @@ export default function SettingsPage() {
                                 text="Use this if you want payment before anyone sees committees, documents or study guides. Waived and sponsored participants always see everything."
                               />
                             </label>
-                            <p className="text-xs mt-0.5" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}>
+                            <p className="text-xs mt-0.5" style={{ color: '#6E6152', fontFamily: "var(--font-brand), sans-serif" }}>
                               Accepted participants who have not paid see only their overview and payment until they pay. Off by default.
                             </p>
                           </div>
@@ -3495,7 +3441,7 @@ export default function SettingsPage() {
                                 text="With this on, an applicant you have denied can reopen their form, change their answers and send it back for another look. Useful when denials are usually about a missing detail rather than a real no. With it off, a denial is final and they cannot apply again for this role."
                               />
                             </label>
-                            <p className="text-xs mt-0.5" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}>
+                            <p className="text-xs mt-0.5" style={{ color: '#6E6152', fontFamily: "var(--font-brand), sans-serif" }}>
                               Let denied applicants edit and resubmit.
                             </p>
                           </div>
@@ -3517,7 +3463,7 @@ export default function SettingsPage() {
                                 <label className="text-xs font-semibold flex items-center gap-1.5" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>
                                   Ask for their committee preference
                                 </label>
-                                <p className="text-xs mt-0.5" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}>
+                                <p className="text-xs mt-0.5" style={{ color: '#6E6152', fontFamily: "var(--font-brand), sans-serif" }}>
                                   Chairs rank which committee they would like to chair, and you assign from their ranking.
                                 </p>
                               </div>
@@ -3536,7 +3482,7 @@ export default function SettingsPage() {
                                   text="What a delegate is asked to rank on the application form, and therefore what your allocation has to work with. Ranking committee-and-country pairs gives the fullest picture and the best automatic allocation, but it is also the longest form to fill in. Committees only, or countries only, are shorter. None skips the step entirely and leaves every seat for you to assign by hand."
                                 />
                               </label>
-                              <p className="text-xs mt-0.5 mb-2" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}>
+                              <p className="text-xs mt-0.5 mb-2" style={{ color: '#6E6152', fontFamily: "var(--font-brand), sans-serif" }}>
                                 Choose what delegates rank when they apply. The application form shows only the pickers you enable here.
                               </p>
                               <div className="grid grid-cols-1" style={{ gap: 8 }}>
@@ -3571,7 +3517,7 @@ export default function SettingsPage() {
                                   );
                                 })}
                               </div>
-                              <p className="text-xs mt-1.5" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}>
+                              <p className="text-xs mt-1.5" style={{ color: '#6E6152', fontFamily: "var(--font-brand), sans-serif" }}>
                                 {PREF_MODE_OPTIONS.find(o => o.value === (config.preference_mode ?? 'none'))?.desc}
                               </p>
                             </div>
@@ -3591,7 +3537,7 @@ export default function SettingsPage() {
                                   text="Delegates and head delegates are not affected by this setting, on or off: their experience level feeds committee allocation directly, so it is never collected this way for them."
                                 />
                               </label>
-                              <p className="text-xs mt-0.5" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}>
+                              <p className="text-xs mt-0.5" style={{ color: '#6E6152', fontFamily: "var(--font-brand), sans-serif" }}>
                                 Applicants list the conferences they have chaired or staffed, and can import them from their Gavelling MUN CV.
                               </p>
                             </div>
@@ -3615,7 +3561,7 @@ export default function SettingsPage() {
                     />
                     {openStep === 2 && (
                       <div className="mt-5">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-3">
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-3">
                           <div>
                             <label className="block text-xs font-semibold mb-1" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>Fee</label>
                             <div className="flex gap-2">
@@ -3688,7 +3634,7 @@ export default function SettingsPage() {
                                 </div>
                               </div>
                               {phases.length === 0 ? (
-                                <p className="text-xs" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif", lineHeight: 1.55 }}>
+                                <p className="text-xs" style={{ color: '#6E6152', fontFamily: "var(--font-brand), sans-serif", lineHeight: 1.55 }}>
                                   Optional: charge different amounts by date, e.g. an Early Bird rate. When no phase covers today, the flat fee above applies.
                                 </p>
                               ) : (
@@ -3699,9 +3645,11 @@ export default function SettingsPage() {
                                     return (
                                       <Fragment key={`${pi}-${phases.length}-${configVersion}`}>
                                       <div
-                                        className="grid gap-2 items-center mb-2 rounded-[10px] px-2.5 py-2"
+                                        // .gvs-phase-row (settingsHome.tsx) lays the five
+                                        // fields out in one row only when there is room for
+                                        // the dates; narrower, they stack in two rows.
+                                        className="gvs-phase-row grid gap-2 items-center mb-2 rounded-[10px] px-2.5 py-2"
                                         style={{
-                                          gridTemplateColumns: 'minmax(0,1.1fr) minmax(0,1.25fr) minmax(0,1.25fr) minmax(0,0.7fr) 24px',
                                           backgroundColor: isActive ? 'rgba(27,56,40,0.06)' : 'rgba(27,56,40,0.02)',
                                           border: invalid
                                             ? '1.5px solid rgba(139,32,32,0.45)'
@@ -3779,7 +3727,7 @@ export default function SettingsPage() {
                                       </Fragment>
                                     );
                                   })}
-                                  <p className="text-xs mt-1" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}>
+                                  <p className="text-xs mt-1" style={{ color: '#6E6152', fontFamily: "var(--font-brand), sans-serif" }}>
                                     Dates are inclusive and each price starts the day after the previous one ends. Applications open when the first price starts and close when the last one ends.
                                   </p>
                                   {timelineMsg?.role === role && timelineMsg.where === 'phases' && (
@@ -3858,7 +3806,7 @@ export default function SettingsPage() {
                           />
                           <p
                             className="text-xs mt-1"
-                            style={{ textAlign: 'right', fontFamily: "var(--font-brand), sans-serif", fontSize: 11.5, fontWeight: 600, color: '#9A8A78', fontVariantNumeric: 'tabular-nums' }}
+                            style={{ textAlign: 'right', fontFamily: "var(--font-brand), sans-serif", fontSize: 11.5, fontWeight: 600, color: '#6E6152', fontVariantNumeric: 'tabular-nums' }}
                           >
                             {submissionMessageInput.length} / 280
                           </p>
@@ -3903,7 +3851,7 @@ export default function SettingsPage() {
                             />
                           </div>
                         </div>
-                        <p className="text-xs" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}>
+                        <p className="text-xs" style={{ color: '#6E6152', fontFamily: "var(--font-brand), sans-serif" }}>
                           Add both to show a button, or leave both empty for a message with no button. The link must start with https://
                         </p>
                         {submissionLinkError && (
@@ -3961,7 +3909,7 @@ export default function SettingsPage() {
                     <p className="font-black text-lg mb-2" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif", maxWidth: '420px' }}>
                       Application opening is not available until Financial Onboarding is completed.
                     </p>
-                    <p className="text-sm mb-6" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif", maxWidth: '440px', lineHeight: 1.6 }}>
+                    <p className="text-sm mb-6" style={{ color: '#6E6152', fontFamily: "var(--font-brand), sans-serif", maxWidth: '440px', lineHeight: 1.6 }}>
                       {paymentGateMessage(conference)}
                     </p>
                     <button
@@ -4040,243 +3988,10 @@ export default function SettingsPage() {
             </div>
           </div>
 
-          {/* Section 1: Customizability. CustomizationCard paints its own
-              card chrome (it receives cardStyle as a prop), so it renders
-              flat here, followed by the three public-visibility switches. */}
-          <div style={cardStyle}>
-            <StepHeader
-              n={1} label="Customizability" sub="Your colours and what visitors can see."
-              complete={Object.keys(conference.theme ?? {}).length > 0} open={openConfSection === 1} status={visibilityStatus}
-              onClick={() => setOpenConfSection(openConfSection === 1 ? 0 : 1)}
-            />
-            {openConfSection === 1 && (
-              <div className="mt-5">
-                <CustomizationCard
-                  conferenceId={conference.id}
-                  conferenceSlug={conference.slug}
-                  initialDraft={conference.theme_draft ?? {}}
-                  initialPublished={conference.theme ?? {}}
-                  cardStyle={{ padding: 0, margin: 0, border: 'none', boxShadow: 'none', backgroundColor: 'transparent', borderRadius: 0 }}
-                />
-                <div className="my-5" style={{ borderTop: '1px solid #F0EDE6' }} />
-                <div className="flex flex-col gap-3">
-                <div
-                  className="flex items-center justify-between p-4 rounded-xl"
-                  style={{ backgroundColor: 'rgba(27,56,40,0.03)', border: '1px solid rgba(27,56,40,0.08)' }}
-                >
-                  <div>
-                    <p className="font-semibold text-sm" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>Show member counts</p>
-                    <p className="text-xs mt-0.5" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}>How many delegates are in each committee.</p>
-                  </div>
-                  <span className="flex items-center gap-2 flex-shrink-0">
-                    {visibilitySavingKey === 'show_committee_counts' && (
-                      <div className="w-4 h-4 rounded-full border-2 border-t-transparent animate-spin" style={{ borderColor: '#1B3828', borderTopColor: 'transparent' }} />
-                    )}
-                    <PillToggle
-                      value={showCommitteeCounts}
-                      onChange={(v) => saveVisibility('show_committee_counts', v, setShowCommitteeCounts)}
-                      size="md"
-                      disabled={visibilitySavingKey !== null}
-                    />
-                  </span>
-                </div>
-                <div
-                  className="flex items-center justify-between p-4 rounded-xl"
-                  style={{ backgroundColor: 'rgba(27,56,40,0.03)', border: '1px solid rgba(27,56,40,0.08)' }}
-                >
-                  <div>
-                    <p className="font-semibold text-sm" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>Show taken countries</p>
-                    <p className="text-xs mt-0.5" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}>Which country slots are already allocated.</p>
-                  </div>
-                  <span className="flex items-center gap-2 flex-shrink-0">
-                    {visibilitySavingKey === 'show_taken_countries' && (
-                      <div className="w-4 h-4 rounded-full border-2 border-t-transparent animate-spin" style={{ borderColor: '#1B3828', borderTopColor: 'transparent' }} />
-                    )}
-                    <PillToggle
-                      value={showTakenCountries}
-                      onChange={(v) => saveVisibility('show_taken_countries', v, setShowTakenCountries)}
-                      size="md"
-                      disabled={visibilitySavingKey !== null}
-                    />
-                  </span>
-                </div>
-                <div
-                  className="flex items-center justify-between p-4 rounded-xl"
-                  style={{ backgroundColor: 'rgba(27,56,40,0.03)', border: '1px solid rgba(27,56,40,0.08)' }}
-                >
-                  <div>
-                    <p className="font-semibold text-sm" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>Show the committee list</p>
-                    <p className="text-xs mt-0.5" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}>Turn this off if your committees are not announced yet.</p>
-                  </div>
-                  <span className="flex items-center gap-2 flex-shrink-0">
-                    {visibilitySavingKey === 'show_committees' && (
-                      <div className="w-4 h-4 rounded-full border-2 border-t-transparent animate-spin" style={{ borderColor: '#1B3828', borderTopColor: 'transparent' }} />
-                    )}
-                    <PillToggle
-                      value={showCommittees}
-                      onChange={(v) => saveVisibility('show_committees', v, setShowCommittees)}
-                      size="md"
-                      disabled={visibilitySavingKey !== null}
-                    />
-                  </span>
-                </div>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Section 2: Conference banner and logo. The two things a visitor
-              actually sees, stacked banner first then logo with a divider,
-              no longer buried under six fields of logistics nobody opens
-              twice. */}
-          {/* Banner card */}
-          <div style={cardStyle}>
-            <StepHeader
-              n={2} label="Conference Banner and Logo" sub="The images at the top of your page."
-              complete={!!conference.banner_url && !!conference.logo_url} open={openConfSection === 2}
-              onClick={() => setOpenConfSection(openConfSection === 2 ? 0 : 2)}
-            />
-            {openConfSection === 2 && (
-            <div className="mt-5">
-            <p className="font-semibold text-base mb-1" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>Conference Banner</p>
-            <p className="text-sm mb-4" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}>Recommended: 1200x630px. JPG, PNG or WebP. Max 5MB.</p>
-            <div
-              style={{
-                border: '1.5px dashed #DDD4C0', borderRadius: 14, overflow: 'hidden',
-                backgroundColor: '#FAF8F3', minHeight: 140,
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                position: 'relative', cursor: 'pointer',
-              }}
-              onClick={() => { if (!bannerUploading) document.getElementById('settings-banner-upload')?.click(); }}
-              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#1B3828'; }}
-              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#DDD4C0'; }}
-            >
-              {view.banner_url ? (
-                <>
-                  <img src={view.banner_url} alt="Banner" style={{ width: '100%', height: '160px', objectFit: 'cover', display: 'block' }} />
-                  <button
-                    onClick={(e) => { e.stopPropagation(); document.getElementById('settings-banner-upload')?.click(); }}
-                    style={{
-                      position: 'absolute', top: 8, right: 8,
-                      backgroundColor: 'rgba(27,56,40,0.85)', color: '#EDE7D8',
-                      border: 'none', borderRadius: 8, padding: '4px 10px',
-                      fontSize: 11, fontFamily: "var(--font-brand), sans-serif", fontWeight: 700, cursor: 'pointer',
-                    }}
-                  >
-                    {bannerUploading ? 'Uploading…' : 'Change'}
-                  </button>
-                </>
-              ) : bannerUploading ? (
-                <div style={{ textAlign: 'center', padding: 24 }}>
-                  <div className="w-6 h-6 rounded-full border-2 border-t-transparent animate-spin mx-auto mb-2" style={{ borderColor: '#1B3828', borderTopColor: 'transparent' }} />
-                  <p style={{ fontSize: 12, color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}>Uploading...</p>
-                </div>
-              ) : (
-                <div style={{ textAlign: 'center', padding: 24 }}>
-                  <p style={{ fontSize: 13, fontWeight: 700, color: '#1C1410', fontFamily: "var(--font-brand), sans-serif", marginBottom: 4 }}>Click to upload banner</p>
-                  <p style={{ fontSize: 11, color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}>Recommended: 1200x630px</p>
-                </div>
-              )}
-              <input
-                id="settings-banner-upload"
-                type="file"
-                accept="image/jpeg,image/png,image/webp"
-                style={{ display: 'none' }}
-                onChange={(e) => { const f = e.target.files?.[0]; if (f) handleBannerUpload(f); e.target.value = ''; }}
-              />
-            </div>
-
-            {/* Preset picker, one click sets banner_url to a bundled photo */}
-            <div style={{ marginTop: 14 }}>
-              <p style={{ fontFamily: "var(--font-brand), sans-serif", fontSize: 12, fontWeight: 600, letterSpacing: '0.01em', color: '#7A6E5E', margin: '0 0 8px 0' }}>
-                Or pick a preset
-              </p>
-              <div className="flex flex-wrap gap-2">
-                {BANNER_PRESETS.map(p => {
-                  const selected = view.banner_url === p;
-                  return (
-                    <button
-                      key={p}
-                      type="button"
-                      onClick={() => handleBannerPreset(p)}
-                      disabled={bannerUploading}
-                      aria-label={'Use preset banner ' + p}
-                      style={{
-                        width: 84, height: 48, padding: 0, borderRadius: 10, overflow: 'hidden',
-                        cursor: bannerUploading ? 'wait' : 'pointer',
-                        border: selected ? '2px solid #B6871F' : '1.5px solid #DDD4C0',
-                        boxShadow: selected ? '0 0 0 3px rgba(238,217,138,0.55)' : 'none',
-                        opacity: bannerUploading && !selected ? 0.6 : 1,
-                        transition: 'border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease',
-                        backgroundColor: '#EDE7D8',
-                      }}
-                      onMouseEnter={(e) => { if (!selected) (e.currentTarget as HTMLElement).style.transform = 'translateY(-2px)'; }}
-                      onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.transform = 'translateY(0)'; }}
-                    >
-                      <img src={p} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            <div className="my-5" style={{ borderTop: '1px solid #F0EDE6' }} />
-
-            <p className="font-semibold text-base mb-1" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>Conference Logo</p>
-            <p className="text-sm mb-4" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}>Square, transparent PNG recommended. Shown on your public page, directory cards and search. Max 5MB.</p>
-            <div className="flex items-center gap-5">
-              <div
-                style={{
-                  width: 96, height: 96, borderRadius: 20, flexShrink: 0,
-                  border: '1.5px dashed #DDD4C0', backgroundColor: '#FFFFFF',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  overflow: 'hidden', cursor: 'pointer', position: 'relative',
-                }}
-                onClick={() => { if (!logoUploading) document.getElementById('settings-logo-upload')?.click(); }}
-                onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#1B3828'; }}
-                onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#DDD4C0'; }}
-              >
-                {logoUploading ? (
-                  <div className="w-5 h-5 rounded-full border-2 animate-spin" style={{ borderColor: '#1B3828', borderTopColor: 'transparent' }} />
-                ) : view.logo_url ? (
-                  <LogoDisc src={view.logo_url} alt="Logo" size={80} fallbackText={view.acronym?.slice(0, 3)} />
-                ) : (
-                  <span style={{ fontSize: 11, color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif", textAlign: 'center', padding: '0 8px' }}>Click to upload</span>
-                )}
-              </div>
-              <div>
-                <button
-                  onClick={() => { if (!logoUploading) document.getElementById('settings-logo-upload')?.click(); }}
-                  className="rounded-xl py-2 px-4 font-bold text-xs tracking-widest transition-colors focus:outline-none gv-lift"
-                  style={{ backgroundColor: '#1B3828', color: '#EED98A', fontFamily: "var(--font-brand), sans-serif", letterSpacing: 0 }}
-                  onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
-                  onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
-                >
-                  {logoUploading ? 'Uploading…' : view.logo_url ? 'Replace logo' : 'Upload logo'}
-                </button>
-              </div>
-              <input
-                id="settings-logo-upload"
-                type="file"
-                accept="image/jpeg,image/png,image/webp"
-                style={{ display: 'none' }}
-                onChange={(e) => {
-                  const f = e.target.files?.[0];
-                  e.target.value = '';
-                  if (!f) return;
-                  if (f.size > 5 * 1024 * 1024) { alert('Logo must be under 5MB.'); return; }
-                  setLogoCropFile(f);
-                }}
-              />
-            </div>
-            </div>
-            )}
-          </div>
-
           {/* Conference Details card */}
           <div style={cardStyle}>
             <StepHeader
-              n={3} label="Conference Details" sub="Name, dates, location, description and age range."
+              n={1} label="Name, Dates and Place" sub="What it is called, when and where it happens."
               complete={!!(view.full_name?.trim() && view.city?.trim() && view.country?.trim() && view.description?.trim() && !view.dates_tbd && view.start_date && view.end_date)} open={openConfSection === 3}
               status={detailsSaving ? 'saving' : detailsSaved ? 'saved' : 'idle'}
               onClick={() => setOpenConfSection(openConfSection === 3 ? 0 : 3)}
@@ -4284,7 +3999,7 @@ export default function SettingsPage() {
             {openConfSection === 3 && (
             <div className="mt-5">
             <p className="font-semibold text-base mb-1" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>Conference Details</p>
-            <p className="text-sm mb-4" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}>Core information shown on your public conference page and directory listing.</p>
+            <p className="text-sm mb-4" style={{ color: '#6E6152', fontFamily: "var(--font-brand), sans-serif" }}>Core information shown on your public conference page and directory listing.</p>
 
             <div className="mb-4">
               <label className="block text-xs font-semibold mb-1" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>Full name</label>
@@ -4317,7 +4032,7 @@ export default function SettingsPage() {
               {acronymError ? (
                 <p className="text-xs mt-1" style={{ color: '#8B2020', fontFamily: "var(--font-brand), sans-serif" }}>{acronymError}</p>
               ) : (
-                <p className="text-xs mt-1" suppressHydrationWarning style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}>
+                <p className="text-xs mt-1" suppressHydrationWarning style={{ color: '#6E6152', fontFamily: "var(--font-brand), sans-serif" }}>
                   Shown as <strong style={{ color: '#1C1410' }}>{conferenceAcronymLabel({ acronym, start_date: startDate || conference.start_date })}</strong>
                 </p>
               )}
@@ -4448,7 +4163,7 @@ export default function SettingsPage() {
                   <span className="block text-sm font-semibold" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>
                     Dates are to be decided (TBD)
                   </span>
-                  <span className="block text-xs mt-0.5" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}>
+                  <span className="block text-xs mt-0.5" style={{ color: '#6E6152', fontFamily: "var(--font-brand), sans-serif" }}>
                     A TBD conference stays private (no public link) until you add dates. Applications can still open.
                   </span>
                 </span>
@@ -4499,7 +4214,7 @@ export default function SettingsPage() {
 
             <div className="mb-5">
               <p className="font-semibold text-base mb-1" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>Description</p>
-              <p className="text-sm mb-4" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}>Shown on your public conference page.</p>
+              <p className="text-sm mb-4" style={{ color: '#6E6152', fontFamily: "var(--font-brand), sans-serif" }}>Shown on your public conference page.</p>
               <textarea
                 rows={6}
                 value={description}
@@ -4510,7 +4225,7 @@ export default function SettingsPage() {
                 onFocus={(e) => { e.currentTarget.style.borderColor = '#1B3828'; }}
                 onBlur={(e) => { e.currentTarget.style.borderColor = '#DDD4C0'; }}
               />
-              <div style={{ textAlign: 'right', marginTop: 6, fontFamily: "var(--font-brand), sans-serif", fontSize: 11.5, fontWeight: 600, color: '#9A8A78', fontVariantNumeric: 'tabular-nums' }}>
+              <div style={{ textAlign: 'right', marginTop: 6, fontFamily: "var(--font-brand), sans-serif", fontSize: 11.5, fontWeight: 600, color: '#6E6152', fontVariantNumeric: 'tabular-nums' }}>
                 {description.length} / 1500
               </div>
             </div>
@@ -4524,7 +4239,7 @@ export default function SettingsPage() {
                 text="Both bounds are inclusive and both are measured on your conference's start date, not on the day someone applies, so a delegate who turns sixteen the week before still counts as sixteen. Leave either end empty for no limit at that end. Applicants outside the range are told before they fill anything in, rather than after."
               />
             </p>
-            <p className="text-sm mb-4" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}>
+            <p className="text-sm mb-4" style={{ color: '#6E6152', fontFamily: "var(--font-brand), sans-serif" }}>
               Checked against each applicant&apos;s date of birth, on the day your conference starts. Leave either box empty for no limit.
             </p>
             <div className="flex items-end flex-wrap" style={{ gap: 14 }}>
@@ -4585,6 +4300,239 @@ export default function SettingsPage() {
             )}
           </div>
 
+          {/* Section 2: Conference banner and logo. The two things a visitor
+              actually sees, stacked banner first then logo with a divider,
+              no longer buried under six fields of logistics nobody opens
+              twice. */}
+          {/* Banner card */}
+          <div style={cardStyle}>
+            <StepHeader
+              n={2} label="Logo and Banner" sub="The pictures at the top of your page."
+              complete={!!conference.banner_url && !!conference.logo_url} open={openConfSection === 2}
+              onClick={() => setOpenConfSection(openConfSection === 2 ? 0 : 2)}
+            />
+            {openConfSection === 2 && (
+            <div className="mt-5">
+            <p className="font-semibold text-base mb-1" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>Conference Banner</p>
+            <p className="text-sm mb-4" style={{ color: '#6E6152', fontFamily: "var(--font-brand), sans-serif" }}>Recommended: 1200x630px. JPG, PNG or WebP. Max 5MB.</p>
+            <div
+              style={{
+                border: '1.5px dashed #DDD4C0', borderRadius: 14, overflow: 'hidden',
+                backgroundColor: '#FAF8F3', minHeight: 140,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                position: 'relative', cursor: 'pointer',
+              }}
+              onClick={() => { if (!bannerUploading) document.getElementById('settings-banner-upload')?.click(); }}
+              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#1B3828'; }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#DDD4C0'; }}
+            >
+              {view.banner_url ? (
+                <>
+                  <img src={view.banner_url} alt="Banner" style={{ width: '100%', height: '160px', objectFit: 'cover', display: 'block' }} />
+                  <button
+                    onClick={(e) => { e.stopPropagation(); document.getElementById('settings-banner-upload')?.click(); }}
+                    style={{
+                      position: 'absolute', top: 8, right: 8,
+                      backgroundColor: 'rgba(27,56,40,0.85)', color: '#EDE7D8',
+                      border: 'none', borderRadius: 8, padding: '4px 10px',
+                      fontSize: 11, fontFamily: "var(--font-brand), sans-serif", fontWeight: 700, cursor: 'pointer',
+                    }}
+                  >
+                    {bannerUploading ? 'Uploading…' : 'Change'}
+                  </button>
+                </>
+              ) : bannerUploading ? (
+                <div style={{ textAlign: 'center', padding: 24 }}>
+                  <div className="w-6 h-6 rounded-full border-2 border-t-transparent animate-spin mx-auto mb-2" style={{ borderColor: '#1B3828', borderTopColor: 'transparent' }} />
+                  <p style={{ fontSize: 12, color: '#6E6152', fontFamily: "var(--font-brand), sans-serif" }}>Uploading...</p>
+                </div>
+              ) : (
+                <div style={{ textAlign: 'center', padding: 24 }}>
+                  <p style={{ fontSize: 13, fontWeight: 700, color: '#1C1410', fontFamily: "var(--font-brand), sans-serif", marginBottom: 4 }}>Click to upload banner</p>
+                  <p style={{ fontSize: 11, color: '#6E6152', fontFamily: "var(--font-brand), sans-serif" }}>Recommended: 1200x630px</p>
+                </div>
+              )}
+              <input
+                id="settings-banner-upload"
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                style={{ display: 'none' }}
+                onChange={(e) => { const f = e.target.files?.[0]; if (f) handleBannerUpload(f); e.target.value = ''; }}
+              />
+            </div>
+
+            {/* Preset picker, one click sets banner_url to a bundled photo */}
+            <div style={{ marginTop: 14 }}>
+              <p style={{ fontFamily: "var(--font-brand), sans-serif", fontSize: 12, fontWeight: 600, letterSpacing: '0.01em', color: '#7A6E5E', margin: '0 0 8px 0' }}>
+                Or pick a preset
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {BANNER_PRESETS.map(p => {
+                  const selected = view.banner_url === p;
+                  return (
+                    <button
+                      key={p}
+                      type="button"
+                      onClick={() => handleBannerPreset(p)}
+                      disabled={bannerUploading}
+                      aria-label={'Use preset banner ' + p}
+                      style={{
+                        width: 84, height: 48, padding: 0, borderRadius: 10, overflow: 'hidden',
+                        cursor: bannerUploading ? 'wait' : 'pointer',
+                        border: selected ? '2px solid #B6871F' : '1.5px solid #DDD4C0',
+                        boxShadow: selected ? '0 0 0 3px rgba(238,217,138,0.55)' : 'none',
+                        opacity: bannerUploading && !selected ? 0.6 : 1,
+                        transition: 'border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease',
+                        backgroundColor: '#EDE7D8',
+                      }}
+                      onMouseEnter={(e) => { if (!selected) (e.currentTarget as HTMLElement).style.transform = 'translateY(-2px)'; }}
+                      onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.transform = 'translateY(0)'; }}
+                    >
+                      <img src={p} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="my-5" style={{ borderTop: '1px solid #F0EDE6' }} />
+
+            <p className="font-semibold text-base mb-1" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>Conference Logo</p>
+            <p className="text-sm mb-4" style={{ color: '#6E6152', fontFamily: "var(--font-brand), sans-serif" }}>Square, transparent PNG recommended. Shown on your public page, directory cards and search. Max 5MB.</p>
+            <div className="flex items-center gap-5">
+              <div
+                style={{
+                  width: 96, height: 96, borderRadius: 20, flexShrink: 0,
+                  border: '1.5px dashed #DDD4C0', backgroundColor: '#FFFFFF',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  overflow: 'hidden', cursor: 'pointer', position: 'relative',
+                }}
+                onClick={() => { if (!logoUploading) document.getElementById('settings-logo-upload')?.click(); }}
+                onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#1B3828'; }}
+                onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#DDD4C0'; }}
+              >
+                {logoUploading ? (
+                  <div className="w-5 h-5 rounded-full border-2 animate-spin" style={{ borderColor: '#1B3828', borderTopColor: 'transparent' }} />
+                ) : view.logo_url ? (
+                  <LogoDisc src={view.logo_url} alt="Logo" size={80} fallbackText={view.acronym?.slice(0, 3)} />
+                ) : (
+                  <span style={{ fontSize: 11, color: '#6E6152', fontFamily: "var(--font-brand), sans-serif", textAlign: 'center', padding: '0 8px' }}>Click to upload</span>
+                )}
+              </div>
+              <div>
+                <button
+                  onClick={() => { if (!logoUploading) document.getElementById('settings-logo-upload')?.click(); }}
+                  className="rounded-xl py-2 px-4 font-bold text-xs tracking-widest transition-colors focus:outline-none gv-lift"
+                  style={{ backgroundColor: '#1B3828', color: '#EED98A', fontFamily: "var(--font-brand), sans-serif", letterSpacing: 0 }}
+                  onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
+                  onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
+                >
+                  {logoUploading ? 'Uploading…' : view.logo_url ? 'Replace logo' : 'Upload logo'}
+                </button>
+              </div>
+              <input
+                id="settings-logo-upload"
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                style={{ display: 'none' }}
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  e.target.value = '';
+                  if (!f) return;
+                  if (f.size > 5 * 1024 * 1024) { alert('Logo must be under 5MB.'); return; }
+                  setLogoCropFile(f);
+                }}
+              />
+            </div>
+            </div>
+            )}
+          </div>
+
+          {/* Section 1: Customizability. CustomizationCard paints its own
+              card chrome (it receives cardStyle as a prop), so it renders
+              flat here, followed by the three public-visibility switches. */}
+          <div style={cardStyle}>
+            <StepHeader
+              n={3} label="Colours and What Visitors See" sub="Your colours, and what your page shows."
+              complete={Object.keys(conference.theme ?? {}).length > 0} open={openConfSection === 1} status={visibilityStatus}
+              onClick={() => setOpenConfSection(openConfSection === 1 ? 0 : 1)}
+            />
+            {openConfSection === 1 && (
+              <div className="mt-5">
+                <CustomizationCard
+                  conferenceId={conference.id}
+                  conferenceSlug={conference.slug}
+                  initialDraft={conference.theme_draft ?? {}}
+                  initialPublished={conference.theme ?? {}}
+                  cardStyle={{ padding: 0, margin: 0, border: 'none', boxShadow: 'none', backgroundColor: 'transparent', borderRadius: 0 }}
+                />
+                <div className="my-5" style={{ borderTop: '1px solid #F0EDE6' }} />
+                <div className="flex flex-col gap-3">
+                <div
+                  className="flex items-center justify-between p-4 rounded-xl"
+                  style={{ backgroundColor: 'rgba(27,56,40,0.03)', border: '1px solid rgba(27,56,40,0.08)' }}
+                >
+                  <div>
+                    <p className="font-semibold text-sm" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>Show member counts</p>
+                    <p className="text-xs mt-0.5" style={{ color: '#6E6152', fontFamily: "var(--font-brand), sans-serif" }}>How many delegates are in each committee.</p>
+                  </div>
+                  <span className="flex items-center gap-2 flex-shrink-0">
+                    {visibilitySavingKey === 'show_committee_counts' && (
+                      <div className="w-4 h-4 rounded-full border-2 border-t-transparent animate-spin" style={{ borderColor: '#1B3828', borderTopColor: 'transparent' }} />
+                    )}
+                    <PillToggle
+                      value={showCommitteeCounts}
+                      onChange={(v) => saveVisibility('show_committee_counts', v, setShowCommitteeCounts)}
+                      size="md"
+                      disabled={visibilitySavingKey !== null}
+                    />
+                  </span>
+                </div>
+                <div
+                  className="flex items-center justify-between p-4 rounded-xl"
+                  style={{ backgroundColor: 'rgba(27,56,40,0.03)', border: '1px solid rgba(27,56,40,0.08)' }}
+                >
+                  <div>
+                    <p className="font-semibold text-sm" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>Show taken countries</p>
+                    <p className="text-xs mt-0.5" style={{ color: '#6E6152', fontFamily: "var(--font-brand), sans-serif" }}>Which country slots are already allocated.</p>
+                  </div>
+                  <span className="flex items-center gap-2 flex-shrink-0">
+                    {visibilitySavingKey === 'show_taken_countries' && (
+                      <div className="w-4 h-4 rounded-full border-2 border-t-transparent animate-spin" style={{ borderColor: '#1B3828', borderTopColor: 'transparent' }} />
+                    )}
+                    <PillToggle
+                      value={showTakenCountries}
+                      onChange={(v) => saveVisibility('show_taken_countries', v, setShowTakenCountries)}
+                      size="md"
+                      disabled={visibilitySavingKey !== null}
+                    />
+                  </span>
+                </div>
+                <div
+                  className="flex items-center justify-between p-4 rounded-xl"
+                  style={{ backgroundColor: 'rgba(27,56,40,0.03)', border: '1px solid rgba(27,56,40,0.08)' }}
+                >
+                  <div>
+                    <p className="font-semibold text-sm" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>Show the committee list</p>
+                    <p className="text-xs mt-0.5" style={{ color: '#6E6152', fontFamily: "var(--font-brand), sans-serif" }}>Turn this off if your committees are not announced yet.</p>
+                  </div>
+                  <span className="flex items-center gap-2 flex-shrink-0">
+                    {visibilitySavingKey === 'show_committees' && (
+                      <div className="w-4 h-4 rounded-full border-2 border-t-transparent animate-spin" style={{ borderColor: '#1B3828', borderTopColor: 'transparent' }} />
+                    )}
+                    <PillToggle
+                      value={showCommittees}
+                      onChange={(v) => saveVisibility('show_committees', v, setShowCommittees)}
+                      size="md"
+                      disabled={visibilitySavingKey !== null}
+                    />
+                  </span>
+                </div>
+                </div>
+              </div>
+            )}
+          </div>
+
           {/* Section 4: Partners and sponsors. Moved here from the Privacy
               tab: partners are conference identity, not a privacy setting. */}
           <div style={cardStyle}>
@@ -4598,7 +4546,7 @@ export default function SettingsPage() {
         <p className="font-semibold text-base mb-1" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>
           Partners
         </p>
-        <p className="text-sm mb-5" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}>
+        <p className="text-sm mb-5" style={{ color: '#6E6152', fontFamily: "var(--font-brand), sans-serif" }}>
           Showcase partner conferences and sponsoring companies on your public page. A conference link only appears
           once that conference&apos;s team approves it; a company you add yourself appears straight away.
         </p>
@@ -4678,7 +4626,7 @@ export default function SettingsPage() {
                     }}
                   />
                 </label>
-                <p className="text-xs mt-1.5" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}>
+                <p className="text-xs mt-1.5" style={{ color: '#6E6152', fontFamily: "var(--font-brand), sans-serif" }}>
                   PNG or JPG, under 5MB. Optional.
                 </p>
               </div>
@@ -4778,7 +4726,7 @@ export default function SettingsPage() {
                     <span className="block font-bold text-sm [overflow-wrap:anywhere]" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>
                       {conferenceAcronymLabel(c)}
                     </span>
-                    <span className="block text-xs [overflow-wrap:anywhere]" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}>
+                    <span className="block text-xs [overflow-wrap:anywhere]" style={{ color: '#6E6152', fontFamily: "var(--font-brand), sans-serif" }}>
                       {[c.city, c.country].filter(Boolean).join(', ') || c.full_name}
                     </span>
                   </span>
@@ -4797,7 +4745,7 @@ export default function SettingsPage() {
           Linked partners
         </p>
         {partners.length === 0 ? (
-          <p className="text-sm" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}>
+          <p className="text-sm" style={{ color: '#6E6152', fontFamily: "var(--font-brand), sans-serif" }}>
             No partners added yet.
           </p>
         ) : (
@@ -4832,7 +4780,7 @@ export default function SettingsPage() {
                       {partnerLabel(link)}{!isCompany && year ? ` ${year}` : ''}
                     </p>
                     {subLine && (
-                      <p className="text-xs [overflow-wrap:anywhere]" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}>
+                      <p className="text-xs [overflow-wrap:anywhere]" style={{ color: '#6E6152', fontFamily: "var(--font-brand), sans-serif" }}>
                         {subLine}
                       </p>
                     )}
@@ -4879,7 +4827,7 @@ export default function SettingsPage() {
                       disabled={idx === 0}
                       aria-label="Move partner up"
                       className="text-xs focus:outline-none px-1 transition-colors"
-                      style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif", background: 'transparent', border: 'none', cursor: idx === 0 ? 'default' : 'pointer', opacity: idx === 0 ? 0.3 : 1 }}
+                      style={{ color: '#6E6152', fontFamily: "var(--font-brand), sans-serif", background: 'transparent', border: 'none', cursor: idx === 0 ? 'default' : 'pointer', opacity: idx === 0 ? 0.3 : 1 }}
                       onMouseEnter={(e) => { if (idx !== 0) (e.currentTarget as HTMLElement).style.color = '#1B3828'; }}
                       onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = '#9A8A78'; }}
                     >
@@ -4890,7 +4838,7 @@ export default function SettingsPage() {
                       disabled={idx === partners.length - 1}
                       aria-label="Move partner down"
                       className="text-xs focus:outline-none px-1 transition-colors"
-                      style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif", background: 'transparent', border: 'none', cursor: idx === partners.length - 1 ? 'default' : 'pointer', opacity: idx === partners.length - 1 ? 0.3 : 1 }}
+                      style={{ color: '#6E6152', fontFamily: "var(--font-brand), sans-serif", background: 'transparent', border: 'none', cursor: idx === partners.length - 1 ? 'default' : 'pointer', opacity: idx === partners.length - 1 ? 0.3 : 1 }}
                       onMouseEnter={(e) => { if (idx !== partners.length - 1) (e.currentTarget as HTMLElement).style.color = '#1B3828'; }}
                       onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = '#9A8A78'; }}
                     >
@@ -4911,7 +4859,7 @@ export default function SettingsPage() {
 
                 {isCompany && (
                   <div className="mt-2" style={{ paddingLeft: '52px' }}>
-                    <label className="block text-[10px] font-bold mb-1" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif", letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+                    <label className="block text-[10px] font-bold mb-1" style={{ color: '#6E6152', fontFamily: "var(--font-brand), sans-serif", letterSpacing: '0.06em', textTransform: 'uppercase' }}>
                       Website
                     </label>
                     <input
@@ -4969,7 +4917,7 @@ export default function SettingsPage() {
                       <p className="font-semibold text-sm [overflow-wrap:anywhere]" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>
                         {claim.requester_full_name}
                       </p>
-                      <p className="text-xs [overflow-wrap:anywhere]" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}>
+                      <p className="text-xs [overflow-wrap:anywhere]" style={{ color: '#6E6152', fontFamily: "var(--font-brand), sans-serif" }}>
                         {cityLine ? cityLine + ', ' : ''}wants to list {view.acronym} as a partner conference
                       </p>
                     </div>
@@ -5022,7 +4970,7 @@ export default function SettingsPage() {
               conference, then the five URL fields. */}
           <div style={cardStyle}>
             <StepHeader
-              n={5} label="Social Media and Communication" sub="How applicants find you and reach you."
+              n={5} label="Contact and Social Links" sub="How applicants reach you."
               complete={!!(view.instagram_url?.trim() || view.facebook_url?.trim() || view.tiktok_url?.trim() || view.whatsapp_url?.trim() || view.website_url?.trim() || view.contact_email?.trim())} open={openConfSection === 5}
               status={visualSaving ? 'saving' : visualSaved ? 'saved' : 'idle'}
               onClick={() => setOpenConfSection(openConfSection === 5 ? 0 : 5)}
@@ -5688,8 +5636,8 @@ export default function SettingsPage() {
         <p className="font-semibold text-base mb-1" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>
           Privacy & Publishing
         </p>
-        <p className="text-sm mb-6" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}>
-          Control who can see your view.
+        <p className="text-sm mb-6" style={{ color: '#6E6152', fontFamily: "var(--font-brand), sans-serif" }}>
+          Who can find your conference.
         </p>
 
         {/* Public toggle */}
@@ -5699,7 +5647,7 @@ export default function SettingsPage() {
         >
           <div>
             <p className="font-semibold text-sm" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>Public listing</p>
-            <p className="text-xs mt-0.5" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}>
+            <p className="text-xs mt-0.5" style={{ color: '#6E6152', fontFamily: "var(--font-brand), sans-serif" }}>
               Your conference appears on gavelling.com/conferences
             </p>
           </div>
@@ -5739,7 +5687,7 @@ export default function SettingsPage() {
             Danger Zone
           </p>
           <button
-            onClick={() => { if (!isOwner) { notifyErr('Only the conference owner can delete this view.', 'settings-delete'); return; } clearErr('settings-delete'); setConfirmingDelete(true); }}
+            onClick={() => { if (!isOwner) { notifyErr('Only the conference owner can delete this conference.', 'settings-delete'); return; } clearErr('settings-delete'); setConfirmingDelete(true); }}
             className="w-full rounded-xl py-2.5 font-semibold text-sm focus:outline-none transition-colors gv-lift"
             style={{ border: '1px solid rgba(139,32,32,0.3)', color: '#8B2020', backgroundColor: 'transparent', fontFamily: "var(--font-brand), sans-serif" }}
             onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(139,32,32,0.05)'; }}
@@ -5774,7 +5722,7 @@ export default function SettingsPage() {
         <p className="font-semibold text-base mb-1" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>
           Lineage
         </p>
-        <p className="text-sm mb-6" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}>
+        <p className="text-sm mb-6" style={{ color: '#6E6152', fontFamily: "var(--font-brand), sans-serif" }}>
           Link editions of the same conference across years. Links only count once the previous edition&apos;s owner approves them.
         </p>
 
@@ -5794,9 +5742,9 @@ export default function SettingsPage() {
               <p className="font-semibold text-sm [overflow-wrap:anywhere]" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>
                 {predecessorInfo?.full_name ?? 'A private conference'}
               </p>
-              <p className="text-xs" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}>
+              <p className="text-xs" style={{ color: '#6E6152', fontFamily: "var(--font-brand), sans-serif" }}>
                 {view.predecessor_approved
-                  ? 'Confirmed as the previous edition of this view.'
+                  ? 'Confirmed as the previous edition of this conference.'
                   : 'Waiting for its Main Organiser to confirm the link.'}
               </p>
             </div>
@@ -5815,7 +5763,7 @@ export default function SettingsPage() {
             </button>
           </div>
         ) : (
-          <p className="text-sm mb-6" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}>
+          <p className="text-sm mb-6" style={{ color: '#6E6152', fontFamily: "var(--font-brand), sans-serif" }}>
             No previous edition linked. You can link one when creating your next edition on Gavelling.
           </p>
         )}
@@ -5828,7 +5776,7 @@ export default function SettingsPage() {
           Incoming claims
         </p>
         {incomingClaims.length === 0 ? (
-          <p className="text-sm" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}>
+          <p className="text-sm" style={{ color: '#6E6152', fontFamily: "var(--font-brand), sans-serif" }}>
             No conferences currently claim {view.acronym} as their previous edition.
           </p>
         ) : (
@@ -5849,7 +5797,7 @@ export default function SettingsPage() {
                     <p className="font-semibold text-sm [overflow-wrap:anywhere]" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>
                       {claim.full_name}
                     </p>
-                    <p className="text-xs" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}>
+                    <p className="text-xs" style={{ color: '#6E6152', fontFamily: "var(--font-brand), sans-serif" }}>
                       claims to be the next edition of {view.acronym}
                     </p>
                   </div>
@@ -5913,7 +5861,14 @@ export default function SettingsPage() {
           (/manage/[slug]/import) is unchanged. */}
       </>}
 
+      {activeTab === 'awards' && <AwardsComingSoon />}
         </section>
+
+        {sidePreview && (
+          <aside className="hidden min-[1440px]:block flex-shrink-0 sticky" style={{ width: '300px', top: '24px' }} aria-label="Preview of your conference card">
+            <ConferencePreview snap={settingsSnap} onCopyLink={handleCopyConferenceLink} copied={confLinkCopied} />
+          </aside>
+        )}
       </div>
 
       {/* Drag-to-fit crop step, flattens the chosen framing into a square
@@ -6644,7 +6599,6 @@ export default function SettingsPage() {
           settings/awardsUi.tsx. To re-enable it, change the import at the top
           of this file back to `import { AwardsSettings } from './awardsUi'`
           and render `<AwardsSettings conference={conference} />` here. */}
-      {activeTab === 'awards' && <AwardsComingSoon />}
 
       {confirmModal}
     </div>

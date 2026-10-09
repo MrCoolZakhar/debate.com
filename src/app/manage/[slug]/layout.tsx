@@ -6,7 +6,7 @@ import Link from 'next/link';
 import BrandLogo from '@/components/BrandLogo';
 import {
   LayoutDashboard, Building2, Users, MapPin, FileText,
-  Mail, CreditCard, Settings, Briefcase, Menu, X, Radio, Upload, HeartHandshake, Store, Clock,
+  Mail, CreditCard, Settings, Briefcase, Menu, X, Radio, Upload, Store, Clock,
   type LucideIcon,
 } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
@@ -254,14 +254,11 @@ const NAV_SECTIONS = (slug: string, badges: NavBadges = NO_BADGES): NavSection[]
   {
     header: 'FINANCIAL',
     items: [
-      { icon: CreditCard,     label: 'Financials',    href: `/manage/${slug}/financials`,    external: false, badge: badges.financials },
-      { icon: HeartHandshake, label: 'Financial Aid', href: `/manage/${slug}/financial-aid`, external: false, badge: badges.financialAid },
-    ],
-  },
-  {
-    header: 'STORE',
-    items: [
-      { icon: Store, label: 'Store', href: `/manage/${slug}/store`, external: false, badge: 0 },
+      // Financial aid is a sub-page of Financials (/financials/aid) since 9 Oct
+      // 2026, so its pending requests count on the Financials badge. The Store
+      // sits directly under Financials (owner, same day).
+      { icon: CreditCard, label: 'Financials', href: `/manage/${slug}/financials`, external: false, badge: badges.financials + badges.financialAid },
+      { icon: Store,      label: 'Store',      href: `/manage/${slug}/store`,      external: false, badge: 0 },
     ],
   },
   // POST CONFERENCE / Awards used to sit here. Awards are now a tab inside

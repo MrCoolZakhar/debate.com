@@ -4,7 +4,7 @@ import { openAuth } from '@/lib/authModal';
 import { Fragment, useEffect, useState, useRef, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Globe, MessageCircle, Music, Users, GraduationCap, Monitor, Mail, Landmark, ChevronDown, ChevronLeft, ChevronRight, Check, Circle, X, Plus, ArrowUp, ArrowDown, ArrowUpDown, Star, LayoutDashboard, ArrowRight, UserRound, Gavel, Eye, ScrollText, CreditCard, Languages, Cake, Clock, CheckCircle2, Hourglass, XCircle, MinusCircle } from 'lucide-react';
+import { Globe, MessageCircle, Music, Users, GraduationCap, Monitor, Mail, Landmark, ChevronDown, ChevronLeft, ChevronRight, Check, Circle, X, Plus, ArrowUp, ArrowDown, ArrowUpDown, Star, LayoutDashboard, UserRound, Gavel, ScrollText, CreditCard, Languages, Cake, Clock, CheckCircle2, Hourglass, XCircle, MinusCircle } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { committeeLanguageCode, committeeLanguageFlag } from '@/lib/committeeLanguage';
 import { CircleFlag } from '@/components/CircleFlag';
@@ -62,6 +62,7 @@ import { reportCrash } from '@/lib/reportCrash';
  *  sits looking at a spinner wondering whether it is broken. */
 const LOAD_WATCHDOG_MS = 12_000;
 import { useServerNow } from '@/lib/applicationWindow';
+import { RoleApplyCards, type RoleTile } from './RoleApplyCards';
 
 const GRAIN = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='grain'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23grain)' opacity='1'/%3E%3C/svg%3E")`;
 
@@ -340,31 +341,6 @@ const APP_STATUS_MARK: Record<string, { word: string; icon: LucideIcon }> = {
 };
 function appStatusMark(status: string): { word: string; icon: LucideIcon } {
   return APP_STATUS_MARK[status] ?? { word: status.charAt(0).toUpperCase() + status.slice(1).replace(/-/g, ' '), icon: Clock };
-}
-
-/** Big gold role glyph shown beside each role in the APPLY NOW picker.
- *  Delegate = a plain user; chair = a user holding a gavel (user + gavel
- *  badge); head-delegate = a group; observer = an eye; faculty advisor = a
- *  graduation cap. Purely decorative, in the conference gold. */
-function RoleApplyGlyph({ role, size = 30 }: { role: string; size?: number }) {
-  const GOLD = 'var(--gv-on-main)';
-  if (role === 'chair') {
-    return (
-      <span className="relative inline-flex flex-shrink-0" style={{ width: size, height: size }} aria-hidden>
-        <UserRound size={size} strokeWidth={2.1} style={{ color: GOLD }} />
-        <Gavel
-          size={Math.round(size * 0.56)}
-          strokeWidth={2.4}
-          style={{ color: GOLD, position: 'absolute', right: -5, bottom: -4, filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.35))' }}
-        />
-      </span>
-    );
-  }
-  const Icon = role === 'head-delegate' ? Users
-    : role === 'observer' ? Eye
-    : role === 'faculty-advisor' ? GraduationCap
-    : UserRound; // delegate
-  return <Icon size={size} strokeWidth={2.1} style={{ color: GOLD, flexShrink: 0 }} aria-hidden />;
 }
 
 function StarRow({ rating, size = 13 }: { rating: number; size?: number }) {
@@ -881,7 +857,6 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
   }, [committees, sortKey, sortDir, activeTab, loading, authLoading]);
   // Role-aware sidebar: organizer detection + one-button apply role picker
   const [organizerRole, setOrganizerRole] = useState<string | null>(null);
-  const [rolePickerOpen, setRolePickerOpen] = useState(false);
   // Reviews
   const [reviews, setReviews] = useState<ConferenceReview[]>([]);
   const [predReviews, setPredReviews] = useState<ConferenceReview[]>([]);
@@ -2622,117 +2597,74 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                           </>
                         );
                       })()
-                    ) : !user ? (
-                      /* 4, Signed out: one elegant APPLY NOW routing through sign-in */
-                      <>
-                        <div className="flex items-center justify-between gap-2 mb-1">
-                          <p className="font-bold text-base" style={{ color: 'var(--gv-on-main)', fontFamily: "var(--font-brand), sans-serif", margin: 0 }}>Ready to take the floor?</p>
-                          {(conference.min_age != null || conference.max_age != null) && <MinAgeChip minAge={conference.min_age} maxAge={conference.max_age} />}
-                        </div>
-                        <p className="text-xs mb-4" style={{ color: 'color-mix(in srgb, var(--gv-on-main) 70%, transparent)', fontFamily: "var(--font-brand), sans-serif", lineHeight: 1.6 }}>
-                          {enabledRoles.length > 0 && !hasOpenRoles
-                            ? 'Applications are currently closed.'
-                            : 'Sign in with a free account to start your application.'}
-                        </p>
-                        <button
-                          onClick={() => openAuth()}
-                          className="w-full rounded-xl py-3 font-bold text-sm focus:outline-none"
-                          style={{ backgroundColor: 'var(--gv-accent)', color: 'var(--gv-on-accent)', fontFamily: "var(--font-brand), sans-serif", boxShadow: '0 4px 16px rgba(0,0,0,0.2)', border: 'none', cursor: 'pointer', transition: `background-color 200ms ${EASE}, transform 160ms ${EASE}` }}
-                          onMouseEnter={(e) => { const el = (e.currentTarget as HTMLElement); el.style.backgroundColor = 'white'; el.style.color = 'var(--gv-main)'; }}
-                          onMouseLeave={(e) => { const el = (e.currentTarget as HTMLElement); el.style.backgroundColor = 'var(--gv-accent)'; el.style.color = 'var(--gv-on-accent)'; }}
-                          onPointerDown={(e) => { (e.currentTarget as HTMLElement).style.transform = 'scale(0.96)'; }}
-                          onPointerUp={(e) => { (e.currentTarget as HTMLElement).style.transform = 'scale(1)'; }}
-                          onPointerLeave={(e) => { (e.currentTarget as HTMLElement).style.transform = 'scale(1)'; }}
-                        >
-                          Apply now →
-                        </button>
-                      </>
                     ) : enabledRoles.length === 0 ? (
-                      <>
-                        <p className="font-bold text-base" style={{ color: 'var(--gv-on-main)', fontFamily: "var(--font-brand), sans-serif" }}>No open applications</p>
-                        <p className="text-xs mt-1" style={{ color: 'color-mix(in srgb, var(--gv-on-main) 70%, transparent)', fontFamily: "var(--font-brand), sans-serif" }}>
-                          Check back when applications open.
-                        </p>
-                      </>
+                      !user ? (
+                        /* 4, Signed out, nothing set up yet: one Apply now through sign-in */
+                        <>
+                          <div className="flex items-center justify-between gap-2 mb-1">
+                            <p className="font-bold text-base" style={{ color: 'var(--gv-on-main)', fontFamily: "var(--font-brand), sans-serif", margin: 0 }}>Ready to take the floor?</p>
+                            {(conference.min_age != null || conference.max_age != null) && <MinAgeChip minAge={conference.min_age} maxAge={conference.max_age} />}
+                          </div>
+                          <p className="text-xs mb-4" style={{ color: 'color-mix(in srgb, var(--gv-on-main) 70%, transparent)', fontFamily: "var(--font-brand), sans-serif", lineHeight: 1.6 }}>
+                            Sign in with a free account to start your application.
+                          </p>
+                          <button
+                            onClick={() => openAuth()}
+                            className="w-full rounded-xl py-3 font-bold text-sm focus:outline-none"
+                            style={{ backgroundColor: 'var(--gv-accent)', color: 'var(--gv-on-accent)', fontFamily: "var(--font-brand), sans-serif", boxShadow: '0 4px 16px rgba(0,0,0,0.2)', border: 'none', cursor: 'pointer', transition: `background-color 200ms ${EASE}, transform 160ms ${EASE}` }}
+                            onMouseEnter={(e) => { const el = (e.currentTarget as HTMLElement); el.style.backgroundColor = 'white'; el.style.color = 'var(--gv-main)'; }}
+                            onMouseLeave={(e) => { const el = (e.currentTarget as HTMLElement); el.style.backgroundColor = 'var(--gv-accent)'; el.style.color = 'var(--gv-on-accent)'; }}
+                          >
+                            Apply now
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          <p className="font-bold text-base" style={{ color: 'var(--gv-on-main)', fontFamily: "var(--font-brand), sans-serif" }}>No open applications</p>
+                          <p className="text-xs mt-1" style={{ color: 'color-mix(in srgb, var(--gv-on-main) 70%, transparent)', fontFamily: "var(--font-brand), sans-serif" }}>
+                            Check back when applications open.
+                          </p>
+                        </>
+                      )
                     ) : (
-                      /* 3, Signed in, no involvement: one APPLY NOW revealing a role picker */
+                      /* 3 and 4, no involvement yet: one tile per role. Signed
+                         in, an open tile goes to /apply; signed out it opens
+                         sign-in and comes back to that role's form. */
                       <>
-                        <div className="flex items-center justify-between gap-2 mb-1">
-                          <p className="font-bold text-base" style={{ color: 'var(--gv-on-main)', fontFamily: "var(--font-brand), sans-serif", margin: 0 }}>Apply to this Conference</p>
+                        <div className="flex items-start justify-between gap-2">
+                          <p className="font-bold" style={{ color: 'var(--gv-on-main)', fontFamily: "var(--font-brand), sans-serif", margin: 0, fontSize: 19, lineHeight: 1.2 }}>
+                            {hasOpenRoles ? 'Choose how you apply' : 'Applications are closed'}
+                          </p>
                           {(conference.min_age != null || conference.max_age != null) && <MinAgeChip minAge={conference.min_age} maxAge={conference.max_age} />}
                         </div>
-                        <p className="text-xs mb-4" style={{ color: 'color-mix(in srgb, var(--gv-on-main) 70%, transparent)', fontFamily: "var(--font-brand), sans-serif", lineHeight: 1.6 }}>
-                          {hasOpenRoles ? 'Applications are open.' : 'Applications are currently closed.'}
+                        <p className="text-xs" style={{ color: 'color-mix(in srgb, var(--gv-on-main) 72%, transparent)', fontFamily: "var(--font-brand), sans-serif", lineHeight: 1.55, margin: '6px 0 0 0' }}>
+                          {!hasOpenRoles
+                            ? 'Check back when applications open.'
+                            : user
+                              ? 'Pick a role to start your application.'
+                              : 'Pick a role. You will sign in with a free account first.'}
                         </p>
-                        <button
-                          onClick={() => setRolePickerOpen(v => !v)}
-                          aria-expanded={rolePickerOpen}
-                          className="w-full flex items-center justify-center gap-2 rounded-xl py-3 font-bold text-sm focus:outline-none"
-                          style={{ backgroundColor: 'var(--gv-accent)', color: 'var(--gv-on-accent)', fontFamily: "var(--font-brand), sans-serif", boxShadow: '0 4px 16px rgba(0,0,0,0.2)', border: 'none', cursor: 'pointer', transition: `background-color 200ms ${EASE}, transform 160ms ${EASE}` }}
-                          onMouseEnter={(e) => { const el = (e.currentTarget as HTMLElement); el.style.backgroundColor = 'white'; el.style.color = 'var(--gv-main)'; }}
-                          onMouseLeave={(e) => { const el = (e.currentTarget as HTMLElement); el.style.backgroundColor = 'var(--gv-accent)'; el.style.color = 'var(--gv-on-accent)'; }}
-                          onPointerDown={(e) => { (e.currentTarget as HTMLElement).style.transform = 'scale(0.96)'; }}
-                          onPointerUp={(e) => { (e.currentTarget as HTMLElement).style.transform = 'scale(1)'; }}
-                          onPointerLeave={(e) => { (e.currentTarget as HTMLElement).style.transform = 'scale(1)'; }}
-                        >
-                          Apply now
-                          <ChevronDown
-                            size={15}
-                            strokeWidth={2.4}
-                            style={{ transform: rolePickerOpen ? 'rotate(180deg)' : 'rotate(0)', transition: 'transform 240ms ease' }}
-                          />
-                        </button>
-                        {rolePickerOpen && (
-                          <div className="mt-3 flex flex-col gap-1.5">
-                            <p style={{ fontFamily: "var(--font-brand), sans-serif", fontWeight: 700, fontSize: '8.5px', letterSpacing: '0.14em', color: 'color-mix(in srgb, var(--gv-on-main) 75%, transparent)', margin: '4px 0 2px 0' }}>
-                              CHOOSE YOUR ROLE
-                            </p>
-                            {enabledRoles.map(r => {
-                              const windowStatus = getRoleWindowStatus(r);
-                              const open = windowStatus === 'open' || windowStatus === 'open-always';
-                              // The current stage's price (or the stage that applies
-                              // at opening), same rule as the headline: publicFees.
-                              const fee = delegatePriceLabel(displayRolePrice(r, conference.fee_currency, now));
-                              const reason = windowStatus === 'closed'
-                                ? 'Applications closed'
-                                : windowStatus === 'opens-soon' && r.applications_open_at
-                                  ? `Opens ${fmtWindowDate(r.applications_open_at)}`
-                                  : 'Not yet open';
-                              return (
-                                <button
-                                  key={r.role}
-                                  disabled={!open}
-                                  onClick={() => { if (open) router.push(`/conferences/${slug}/apply?role=${r.role}`); }}
-                                  className="w-full flex items-center justify-between gap-3 rounded-xl px-3.5 py-3 text-left transition-colors focus:outline-none"
-                                  style={{
-                                    backgroundColor: open ? 'rgba(238,217,138,0.08)' : 'rgba(237,231,216,0.04)',
-                                    border: open ? '1px solid rgba(238,217,138,0.22)' : '1px solid rgba(237,231,216,0.08)',
-                                    cursor: open ? 'pointer' : 'default',
-                                    opacity: open ? 1 : 0.55,
-                                  }}
-                                  onMouseEnter={(e) => { if (open) { const el = e.currentTarget as HTMLElement; el.style.backgroundColor = 'rgba(238,217,138,0.16)'; el.style.borderColor = 'rgba(238,217,138,0.45)'; } }}
-                                  onMouseLeave={(e) => { if (open) { const el = e.currentTarget as HTMLElement; el.style.backgroundColor = 'rgba(238,217,138,0.08)'; el.style.borderColor = 'rgba(238,217,138,0.22)'; } }}
-                                >
-                                  <span className="flex items-center gap-3 min-w-0">
-                                    <RoleApplyGlyph role={r.role} size={30} />
-                                    <span className="min-w-0">
-                                      <span className="block text-[13px] font-bold [overflow-wrap:anywhere]" style={{ color: 'var(--gv-on-main)', fontFamily: "var(--font-brand), sans-serif" }}>
-                                        {roleLabel(r.role)}
-                                      </span>
-                                      <span
-                                        className="block mt-0.5"
-                                        style={{ fontFamily: "var(--font-brand), sans-serif", fontWeight: 600, fontVariantNumeric: 'tabular-nums', fontSize: '10px', letterSpacing: '0.08em', color: open ? 'var(--gv-on-main)' : 'color-mix(in srgb, var(--gv-on-main) 55%, transparent)' }}
-                                      >
-                                        {open ? fee : reason}
-                                      </span>
-                                    </span>
-                                  </span>
-                                  {open && <ArrowRight size={15} strokeWidth={2.2} style={{ color: 'var(--gv-on-main)', flexShrink: 0 }} />}
-                                </button>
-                              );
-                            })}
-                          </div>
-                        )}
+                        <RoleApplyCards
+                          tiles={enabledRoles.map((r): RoleTile => {
+                            const windowStatus = getRoleWindowStatus(r);
+                            return {
+                              role: r.role,
+                              label: roleLabel(r.role),
+                              state: windowStatus === 'closed' ? 'closed' : windowStatus === 'opens-soon' ? 'opens-soon' : 'open',
+                              // The current stage's price (or the stage that
+                              // applies at opening), same rule as the headline.
+                              price: delegatePriceLabel(displayRolePrice(r, conference.fee_currency, now)),
+                              opensLabel: windowStatus === 'opens-soon' && r.applications_open_at
+                                ? `Opens ${fmtWindowDate(r.applications_open_at)}`
+                                : null,
+                            };
+                          })}
+                          onPick={(role) => {
+                            const href = `/conferences/${slug}/apply?role=${role}`;
+                            if (user) router.push(href);
+                            else openAuth({ next: href });
+                          }}
+                        />
                       </>
                     )}
                   </div>

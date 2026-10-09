@@ -20,7 +20,6 @@ import {
   EMAIL_TOKEN_KEYS, EMAIL_TOKEN_LABELS,
   type EmailTokenContext, type EmailTokenKey,
 } from '@/lib/emailTokens';
-import { TOKEN_IDENTITY } from '@/components/email/tokenKit';
 import { ALWAYS_ON_EMAILS, ALWAYS_ON_LINE } from './alwaysOnEmails';
 import { EVENT_REGISTRY, queueEventEmail, getEventLabel, notifyIfNeeded, turnOnDefaultEmail, turnOffDefaultEmail, eventOnWhenMissing, newTemplateStartsEnabled, hasDraftContent, type EventDef, type EventKey } from '@/lib/emailEvents';
 import { EASE, NEU, NEU_GRADIENTS, Emoji3D, NeuIconDisc, type NeuGradient } from '@/components/neu';
@@ -55,6 +54,19 @@ import Portal from '@/components/Portal';
 import { friendlyError, plainOrFallback, UserFacingError } from '@/lib/friendlyError';
 import { formatConferenceDates } from '@/lib/conferenceDates';
 import { waitingSince, waitAgeLabel } from './waitingOnReply';
+import CommsHome from './CommsHome';
+import AutomaticEmailsList, { type AutoGroup } from './AutomaticEmailsList';
+import AnnounceView from './AnnounceView';
+import { BackLink, CommsTitle, CARD as COMMS_CARD } from './commsKit';
+
+/** The five screens of the redesign (9 Oct 2026): a home that asks what you
+ *  want to do, and one screen per answer. */
+type CommsView = 'home' | 'inbox' | 'sent' | 'automatic' | 'announce';
+
+/** The Communications tour is switched off (owner, 9 Oct 2026: "the tutorial
+ *  is random so remove it for now"). Its steps and GuidedWalkthrough stay on
+ *  disk; flip this to bring it back. */
+const COMMS_TOUR_LIVE = false;
 
 /** THE GOLD THAT CAN CARRY TEXT — and this page's replacement for `AMBER_INK`.
  *
@@ -501,9 +513,10 @@ const BORDER = '#DDD4C0';
  *  ivory surface, measured hairline, lifted forest shadow. The builder now
  *  uses it too (the old CARD_STYLE surface went with the sidebar). */
 const PANEL: React.CSSProperties = {
-  backgroundColor: '#F0EBDD',
-  border: CARD_BORDER,
-  boxShadow: LIFTED_SHADOW,
+  // Redesign (9 Oct 2026): white card with the soft forest shadow, the same
+  // surface as commsKit's CARD, so every row on the page is one material.
+  backgroundColor: '#FFFFFF',
+  boxShadow: '0 0 0 1px rgba(27,56,40,0.07), 0 2px 4px rgba(27,56,40,0.05), 0 10px 26px -10px rgba(27,56,40,0.22)',
 };
 
 /** `PANEL` with a gold wash, and its green sibling.
@@ -1140,21 +1153,16 @@ function NewEmailModal({
             <X size={16} />
           </button>
 
-          <p style={{ color: GOLD_INK, fontFamily: OUTFIT, fontSize: 11, fontWeight: 800, letterSpacing: '0.12em' }}>
-            NEW EMAIL
-          </p>
           <h2
-            className="font-black"
-            style={{ color: '#1C1410', fontFamily: OUTFIT, fontSize: 22, letterSpacing: '-0.015em', lineHeight: 1.15, marginBlockStart: 3, textWrap: 'balance' }}
+            style={{ color: '#1C1410', fontFamily: OUTFIT, fontSize: 24, fontWeight: 800, letterSpacing: '-0.015em', lineHeight: 1.15, textWrap: 'balance' }}
           >
             What are you sending?
           </h2>
-          <p className="text-sm" style={{ color: SOFT, fontFamily: OUTFIT, marginBlockStart: 5, textWrap: 'pretty', maxWidth: 500 }}>
-            Start from one of these and edit anything, or write your own. Either way you land in
-            the same editor, with a live preview and the audience picker.
+          <p style={{ color: '#5A4A3C', fontFamily: OUTFIT, fontSize: 15, marginBlockStart: 4, textWrap: 'pretty' }}>
+            Pick a starting point. You can change every word.
           </p>
 
-          <div className="grid gap-2.5 sm:grid-cols-2" style={{ marginBlockStart: 18 }}>
+          <div className="grid gap-3 sm:grid-cols-2" style={{ marginBlockStart: 18 }}>
             {AD_HOC_SEEDS.map(seed => {
               const reachOf = seed.id in reach ? reach[seed.id] : null;
               return (
@@ -1162,119 +1170,38 @@ function NewEmailModal({
                 key={seed.id}
                 type="button"
                 onClick={() => onPick(seed)}
-                className="relative rounded-2xl p-3.5 text-left flex flex-col focus:outline-none active:scale-[0.98]"
+                className="gv-seed rounded-2xl p-4 text-left flex items-start gap-3 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]"
                 style={{
-                  ...WELL,
-                  /* `relative` anchors the reach circle; the trailing inset keeps
-                     the title out from under it, since a two line title would
-                     otherwise run beneath the badge. */
-                  paddingInlineEnd: 66,
-                  border: 'none', cursor: 'pointer',
-                  transitionProperty: 'box-shadow, transform',
-                  transitionDuration: '180ms', transitionTimingFunction: EASE,
-                }}
-                onMouseEnter={e => {
-                  (e.currentTarget as HTMLElement).style.boxShadow =
-                    'inset 3px 3px 9px rgba(27,56,40,0.18), inset -3px -3px 9px rgba(255,255,255,0.7)';
-                }}
-                onMouseLeave={e => {
-                  (e.currentTarget as HTMLElement).style.boxShadow = WELL.boxShadow as string;
+                  backgroundColor: '#FFFFFF', border: '2px solid rgba(27,56,40,0.10)', cursor: 'pointer',
+                  transitionProperty: 'border-color, transform', transitionDuration: '160ms', transitionTimingFunction: EASE,
                 }}
               >
-                <span className="flex items-start gap-3">
-                  <span
-                    className="flex items-center justify-center rounded-2xl flex-shrink-0"
-                    style={{ ...RAISED_DISC, width: 52, height: 52, fontSize: 27, lineHeight: 1 }}
-                    aria-hidden
-                  >
-                    <Emoji3D name={seed.emoji} size={30} fallback={FileText} fallbackColor="#1B3828" />
-                  </span>
-                  <span className="min-w-0 flex-1 block">
-                    {/* 27px, exactly double the 13.5 this shipped with. The
-                        card's job is "find my template in under a second" and
-                        the template's NAME is the only thing that does that
-                        job, so it is now unmistakably the loudest thing on
-                        the card rather than the same weight as its blurb. */}
-                    <span
-                      className="block font-black"
-                      style={{
-                        color: '#1C1410', fontFamily: OUTFIT, fontSize: 27,
-                        lineHeight: 1.08, letterSpacing: '-0.025em',
-                        textWrap: 'balance', overflowWrap: 'anywhere',
-                      }}
-                    >
-                      {seed.title}
-                    </span>
-                    <span
-                      className="block"
-                      style={{ color: SOFT, fontFamily: OUTFIT, fontSize: 12, lineHeight: 1.4, marginBlockStart: 5, textWrap: 'pretty' }}
-                    >
-                      {seed.blurb}
-                    </span>
-                  </span>
-                </span>
-
-                {/* HOW MANY PEOPLE, in the corner. It answers "is this aimed
-                    at anybody" at a glance, which was the most expensive thing
-                    about this modal: you used to pick a template, load the
-                    builder and read the audience bar only to find it was aimed
-                    at nobody. Absolute, so it never pushes the copy around. */}
                 <span
-                  className="absolute inline-flex flex-col items-center justify-center rounded-full"
-                  title={reachOf === null
-                    ? 'Audience is set in the editor'
-                    : `${seed.audienceLabel}: ${reachOf.toLocaleString()} ${reachOf === 1 ? 'person' : 'people'}`}
-                  style={{
-                    top: 12, insetInlineEnd: 12, width: 46, height: 46,
-                    backgroundColor: reachOf === 0 ? 'rgba(154,138,120,0.16)' : 'rgba(182,135,31,0.15)',
-                    border: `1px solid ${reachOf === 0 ? 'rgba(154,138,120,0.32)' : 'rgba(182,135,31,0.32)'}`,
-                    color: reachOf === 0 ? SOFT : GOLD_INK,
-                    fontFamily: OUTFIT, fontVariantNumeric: 'tabular-nums',
-                  }}
+                  className="flex items-center justify-center rounded-xl flex-shrink-0"
+                  style={{ width: 44, height: 44, backgroundColor: 'rgba(238,217,138,0.5)' }}
+                  aria-hidden
                 >
-                  <Users size={12} strokeWidth={2.6} aria-hidden />
-                  <span style={{ fontSize: reachOf !== null && reachOf > 999 ? 10.5 : 13, fontWeight: 900, lineHeight: 1.05 }}>
-                    {reachOf === null ? '?' : reachOf.toLocaleString()}
-                  </span>
+                  <Emoji3D name={seed.emoji} size={26} fallback={FileText} fallbackColor="#1B3828" />
                 </span>
-
-                {/* Badges, not form labels: the same identity the builder rail
-                    and the in-text pill use, so a token looks like itself
-                    everywhere it appears. Icon first, what it does underneath. */}
-                <span className="flex flex-wrap gap-1.5" style={{ marginBlockStart: 10 }}>
-                  {seed.tokens.map(tk => {
-                    const id = TOKEN_IDENTITY[tk];
-                    const TokenIcon = id.icon;
-                    return (
-                      <span
-                        key={tk}
-                        title={id.becomes}
-                        className="inline-flex flex-col items-center justify-center rounded-xl"
-                        style={{
-                          minWidth: 62, padding: '7px 6px 6px', gap: 3,
-                          backgroundColor: 'rgba(238,217,138,0.26)',
-                          border: '1px solid rgba(182,135,31,0.28)',
-                          color: GOLD_INK,
-                        }}
-                      >
-                        <TokenIcon size={15} strokeWidth={2.2} aria-hidden />
-                        <span
-                          className="block text-center"
-                          style={{
-                            fontSize: 9, fontWeight: 800, fontFamily: OUTFIT,
-                            letterSpacing: '0.02em', lineHeight: 1.15,
-                          }}
-                        >
-                          {id.short}
-                        </span>
-                      </span>
-                    );
-                  })}
+                <span className="min-w-0 flex-1 block">
+                  <span className="block" style={{ color: '#1C1410', fontFamily: OUTFIT, fontSize: 16, fontWeight: 700, lineHeight: 1.25, overflowWrap: 'anywhere' }}>
+                    {seed.title}
+                  </span>
+                  <span className="block" style={{ color: '#5A4A3C', fontFamily: OUTFIT, fontSize: 13.5, lineHeight: 1.4, marginBlockStart: 3, textWrap: 'pretty' }}>
+                    {seed.blurb}
+                  </span>
+                  {reachOf !== null && (
+                    <span className="flex items-center gap-1.5" style={{ marginBlockStart: 6, color: reachOf === 0 ? '#5A4A3C' : '#1B3828', fontFamily: OUTFIT, fontSize: 13, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
+                      <Users size={14} aria-hidden />
+                      {reachOf === 0 ? 'Nobody yet' : `Goes to ${reachOf.toLocaleString()} ${reachOf === 1 ? 'person' : 'people'}`}
+                    </span>
+                  )}
                 </span>
               </button>
               );
             })}
           </div>
+          <style>{`.gv-seed:hover{border-color:rgba(27,56,40,0.45)!important;transform:translateY(-1px)}@media (prefers-reduced-motion: reduce){.gv-seed{transition:none!important}.gv-seed:hover{transform:none}}`}</style>
 
           {/* The one custom button, under a rule so it reads as the other
               branch rather than a fifth template. */}
@@ -1282,10 +1209,10 @@ function NewEmailModal({
             className="flex flex-wrap items-center justify-between gap-3"
             style={{ marginBlockStart: 18, paddingBlockStart: 15, borderTop: '1px solid rgba(27,56,40,0.11)' }}
           >
-            <p className="text-xs" style={{ color: SOFT, fontFamily: OUTFIT, textWrap: 'pretty', flex: '1 1 200px' }}>
-              Nothing here fits? Start from an empty page.
+            <p style={{ color: '#5A4A3C', fontFamily: OUTFIT, fontSize: 14, textWrap: 'pretty', flex: '1 1 200px' }}>
+              Nothing here fits? Start with a blank email.
             </p>
-            <PrimaryBtn icon={PenLine} onClick={onCustom}>Write a custom email</PrimaryBtn>
+            <PrimaryBtn icon={PenLine} onClick={onCustom}>Write my own</PrimaryBtn>
           </div>
         </div>
       </div>
@@ -1684,7 +1611,7 @@ function CommunicationsPageInner() {
   // The landing is one screen (Coming up · Sent · Inbox); 'automatic' is the
   // registry of self-sending emails, one click off the landing. Below 1024px
   // the inbox column collapses into its own tab.
-  const [view, setView] = useState<'landing' | 'automatic'>('landing');
+  const [view, setView] = useState<CommsView>('home');
   const [historyExpandedId, setHistoryExpandedId] = useState<string | null>(null);
   const [recipientsExpandedId, setRecipientsExpandedId] = useState<string | null>(null);
   const [autoExpandedKey, setAutoExpandedKey] = useState<string | null>(null);
@@ -2752,13 +2679,16 @@ function CommunicationsPageInner() {
     setDeepLinkHandled(true);
     const inboxId = searchParams.get('inbox');
     if (inboxId) {
-      setView('landing');
+      setView('inbox');
       setSelectedRequestId(inboxId);
       return;
     }
     const ev = searchParams.get('event');
     // ?view=automatic: the "Check templates" button of an email-issue notice.
     if (!ev && searchParams.get('view') === 'automatic') { setView('automatic'); return; }
+    // ?view=inbox | sent | announce: the three other screens of the redesign.
+    const v = searchParams.get('view');
+    if (!ev && (v === 'inbox' || v === 'sent' || v === 'announce')) { setView(v); return; }
     if (!ev) return;
     const def = EVENT_REGISTRY.find(e => e.key === ev);
     if (def) {
@@ -3182,7 +3112,7 @@ function CommunicationsPageInner() {
       id: 'coming-up',
       targets: ['comms-coming-up'],
       radius: 16,
-      before: () => { setView('landing'); setSelectedRequestId(null); },
+      before: () => { setView('home'); setSelectedRequestId(null); },
       text: (
         <>
           <TourGold>Coming up</TourGold> is what the system is about to do: emails draining,
@@ -3195,7 +3125,7 @@ function CommunicationsPageInner() {
       id: 'sent-feed',
       targets: ['comms-sent-feed'],
       radius: 16,
-      before: () => { setView('landing'); },
+      before: () => { setView('home'); },
       text: (
         <>
           <TourGreen>Sent</TourGreen> is the full record, emails you wrote yourself AND the
@@ -3211,7 +3141,7 @@ function CommunicationsPageInner() {
       id: 'inbox',
       targets: ['comms-inbox'],
       radius: 16,
-      before: () => { setView('landing'); setSelectedRequestId(null); setInboxExpanded(false); },
+      before: () => { setView('home'); setSelectedRequestId(null); setInboxExpanded(false); },
       text: (
         <>
           <TourGold>Inbox</TourGold> is the other direction: questions and allocation swap
@@ -3239,7 +3169,7 @@ function CommunicationsPageInner() {
     {
       id: 'outro',
       image: OTTER_OUTRO,
-      before: () => { setView('landing'); },
+      before: () => { setView('home'); },
       text: (
         <>
           That is the whole system. Turn a couple of <TourGreen>automatic emails</TourGreen> on
@@ -3256,6 +3186,7 @@ function CommunicationsPageInner() {
   // is written in `closeTour` (i.e. on finish OR skip), never on open, so a
   // mis-click cannot burn it.
   useEffect(() => {
+    if (!COMMS_TOUR_LIVE) return;
     if (loading || builderOpen || tourOpen) return;
     try {
       if (window.localStorage.getItem(COMMS_TOUR_SEEN_KEY) === '1') return;
@@ -3365,7 +3296,7 @@ function CommunicationsPageInner() {
     setInboxStatusFilter(new Set(['open']));
     setSelectedRequestId(null);
     setInboxExpanded(true);
-    document.getElementById('comms-inbox-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    setView('inbox');
   }
 
   const consoleModel: ConsoleModel = (() => {
@@ -3986,48 +3917,104 @@ function CommunicationsPageInner() {
     });
   }
 
+  /** Threads waiting on a reply: open, not a swap notice, newest message from
+   *  the participant. The same rule as the rail badge (waitingOnReply.ts). */
+  const waitingCount = inboxRequests.filter(r => r.status === 'open' && r.kind !== 'swap_notice' && waitingSince(r, inboxMessagesByRequest.get(r.id) ?? []) !== null).length;
+
+  /** The repeat settings of a reminder email, drawn under its switch. */
+  function renderReminder(template: EmailTemplate) {
+    return (
+      <div className="rounded-xl p-3 mt-3" style={{ ...WELL, maxWidth: 480 }}>
+        <p className="text-xs font-bold mb-2.5" style={{ color: '#1C1410', fontFamily: OUTFIT, letterSpacing: '0.03em' }}>
+          Reminders
+        </p>
+        <div className="flex items-center justify-between gap-3 mb-3">
+          <span className="text-xs font-semibold" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
+            Repeat this reminder
+          </span>
+          <PillToggle
+            value={template.recurring_enabled}
+            onChange={() => handleUpdateRecurring(template, { recurring_enabled: !template.recurring_enabled })}
+          />
+        </div>
+        <div className="flex flex-wrap gap-4 mb-3">
+          <div>
+            <label className="block text-xs font-semibold mb-1" style={{ color: template.recurring_enabled ? '#1C1410' : SOFT, fontFamily: OUTFIT }}>
+              Days between reminders
+            </label>
+            <input
+              type="number"
+              min={3}
+              max={60}
+              disabled={!template.recurring_enabled}
+              value={template.recurring_interval_days ?? 3}
+              onChange={(e) => {
+                const raw = e.target.value === '' ? null : Number(e.target.value);
+                setTemplates(ts => ts.map(t => (t.id === template.id ? { ...t, recurring_interval_days: raw } : t)));
+              }}
+              onBlur={(e) => {
+                const clamped = Math.min(60, Math.max(3, Math.round(Number(e.target.value)) || 3));
+                handleUpdateRecurring(template, { recurring_interval_days: clamped });
+              }}
+              className="rounded-xl px-3 py-1.5 text-sm focus:outline-none"
+              style={{ border: CARD_BORDER, backgroundColor: template.recurring_enabled ? '#FFFFFF' : '#F0EBDD', color: '#1C1410', fontFamily: OUTFIT, width: 84 }}
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-semibold mb-1" style={{ color: template.recurring_enabled ? '#1C1410' : SOFT, fontFamily: OUTFIT }}>
+              Stop after this many
+            </label>
+            <input
+              type="number"
+              min={1}
+              max={10}
+              disabled={!template.recurring_enabled}
+              value={template.recurring_max_sends ?? 3}
+              onChange={(e) => {
+                const raw = e.target.value === '' ? null : Number(e.target.value);
+                setTemplates(ts => ts.map(t => (t.id === template.id ? { ...t, recurring_max_sends: raw } : t)));
+              }}
+              onBlur={(e) => {
+                const clamped = Math.min(10, Math.max(1, Math.round(Number(e.target.value)) || 3));
+                handleUpdateRecurring(template, { recurring_max_sends: clamped });
+              }}
+              className="rounded-xl px-3 py-1.5 text-sm focus:outline-none"
+              style={{ border: CARD_BORDER, backgroundColor: template.recurring_enabled ? '#FFFFFF' : '#F0EBDD', color: '#1C1410', fontFamily: OUTFIT, width: 84 }}
+            />
+          </div>
+        </div>
+        <p className="text-xs" style={{ color: SOFT, fontFamily: OUTFIT }}>
+          Reminders stop on their own when there is nothing left to do, and when the conference starts.
+        </p>
+      </div>
+    );
+  }
+
+  const automaticGroups: AutoGroup[] = STAGE_ORDER.map(stage => ({
+    title: stage,
+    rows: (EVENT_REGISTRY as readonly EventDef[])
+      .filter(e => EVENT_STAGE[e.key as EventKey] === stage)
+      .map(ev => {
+        const template = templatesByEvent.get(ev.key);
+        const on = ev.functional ? true : template ? template.enabled : eventOnWhenMissing(ev.key);
+        return {
+          key: ev.key,
+          label: ev.label,
+          description: ev.description,
+          alwaysOn: !!ev.functional,
+          on,
+          toggling: togglingEventKeys.has(ev.key),
+          ownWording: templateHasContent(template),
+          reminder: ev.recurring && template?.enabled ? <div className="mt-3">{renderReminder(template)}</div> : undefined,
+        };
+      }),
+  })).filter(g => g.rows.length > 0);
+
   // ── Render ────────────────────────────────────────────────────────────────
 
   return (
     <div className="px-6 md:px-10 py-8">
 
-      {/* ── Header ── */}
-      {!builderOpen && (
-        <div className="mb-6 flex items-start justify-between gap-4">
-          <div className="min-w-0">
-            <p className="text-xs mb-1" style={{ color: SOFT, fontFamily: OUTFIT, fontWeight: 700, letterSpacing: '0.12em' }}>
-              {conference.acronym} / Communications
-            </p>
-            <h1 className="font-black text-2xl" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
-              Communications
-            </h1>
-          </div>
-          {/* NEW EMAIL lives HERE, not in the console and not in the Sent
-              band's header. It is a property of the page rather than of any
-              one console state, and putting it beside a state action made two
-              gradient buttons of equal weight sit side by side saying
-              unrelated things. One primary per screen region. */}
-          <div className="flex-shrink-0 flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setTourOpen(true)}
-              className="flex items-center gap-1.5 rounded-xl px-3 focus:outline-none transition-colors"
-              style={{
-                fontFamily: OUTFIT, fontSize: 12, fontWeight: 800,
-                color: '#1B3828', backgroundColor: 'transparent', border: `1px solid ${BORDER}`,
-                cursor: 'pointer', minHeight: 40,
-              }}
-              onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.05)'; }}
-              onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
-            >
-              <Compass size={13} /> <span className="hidden sm:inline">Take the tour</span><span className="sm:hidden">Tour</span>
-            </button>
-            {view === 'landing' && (
-              <PrimaryBtn icon={Plus} onClick={openPicker}>New email</PrimaryBtn>
-            )}
-          </div>
-        </div>
-      )}
 
       {/* Emails the database refused to send because they were empty
           (29 Sep 2026). Danger colour, the server's sentence, Check templates
@@ -4068,284 +4055,23 @@ function CommunicationsPageInner() {
         </div>
       )}
 
-      {/* ═══ AUTOMATIC EMAILS — the registry, grouped by lifecycle stage ═══ */}
+      {/* ═══ AUTOMATIC EMAILS: a plain list of switches (AutomaticEmailsList) ═══ */}
       {!builderOpen && !loading && view === 'automatic' && (
-        <section data-tutorial="comms-automatic">
-          <button
-            onClick={() => setView('landing')}
-            className="text-xs font-bold mb-4 focus:outline-none"
-            style={{ color: SOFT, fontFamily: OUTFIT, letterSpacing: '0.06em', background: 'none', border: 'none', cursor: 'pointer', padding: '6px 0' }}
-            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = '#1C1410'; }}
-            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = SOFT; }}
-          >
-            ← BACK TO COMMUNICATIONS
-          </button>
-
-          <div className="rounded-3xl p-5 sm:p-6 mb-7" style={GOLD_PANEL}>
-            <div className="flex items-start gap-4">
-              <NeuIconDisc gradient={NEU_GRADIENTS.gold} emoji="Bellhop bell" icon={Bell} size={56} />
-              <div className="min-w-0 flex-1">
-                <h2
-                  className="font-black"
-                  style={{
-                    color: NEU.ink, fontFamily: OUTFIT, fontSize: 'clamp(24px, 3vw, 32px)',
-                    lineHeight: 1.08, letterSpacing: '-0.022em', textWrap: 'balance',
-                  }}
-                >
-                  Automatic Emails
-                </h2>
-                <p className="text-sm" style={{ color: SOFT, fontFamily: OUTFIT, textWrap: 'pretty', maxWidth: 640, marginBlockStart: 5, lineHeight: 1.5 }}>
-                  Each one is tied to a moment in the conference and sends itself the second that
-                  moment happens. Turned on without a draft it sends our default copy; draft your
-                  own and that sends instead.
-                </p>
-                <p className="text-xs font-bold" style={{ color: GOLD_INK, fontFamily: OUTFIT, fontVariantNumeric: 'tabular-nums', letterSpacing: '0.05em', marginBlockStart: 8 }}>
-                  {enabledCount} ON{autoDefaultCount > 0 ? ` · ${autoDefaultCount} SENDING OUR DEFAULT COPY` : ''}
-                </p>
-              </div>
-            </div>
-          </div>
-
-          {/* Always On: the money emails Gavelling writes itself (prompt 97). Display only. */}
-          <div className="mb-9">
-            <div className="flex items-center gap-3 mb-3">
-              <NeuIconDisc gradient={NEU_GRADIENTS.forest} emoji="Locked" icon={Lock} size={46} />
-              <div className="min-w-0">
-                <h3 className="font-black" style={{ color: NEU.ink, fontFamily: OUTFIT, fontSize: 26, lineHeight: 1.1, letterSpacing: '-0.02em', textWrap: 'balance' }}>
-                  Always On
-                </h3>
-                <p style={{ color: SOFT, fontFamily: OUTFIT, fontSize: 12.5, lineHeight: 1.4, marginBlockStart: 2, textWrap: 'pretty' }}>
-                  {ALWAYS_ON_LINE}
-                </p>
-              </div>
-            </div>
-            <div className="flex flex-col gap-2">
-              {ALWAYS_ON_EMAILS.map(e => (
-                <div key={e.key} className="rounded-2xl px-4 py-3" style={PANEL}>
-                  <div className="flex items-start gap-2.5">
-                    <Lock size={14} className="flex-shrink-0" style={{ color: GREEN_INK, marginTop: 3 }} aria-hidden />
-                    <span className="min-w-0">
-                      <span className="block font-semibold text-sm [overflow-wrap:anywhere]" style={{ color: '#1C1410', fontFamily: OUTFIT }}>{e.label}</span>
-                      <span className="block text-xs mt-0.5" style={{ fontFamily: OUTFIT }}>
-                        <span style={{ color: GREEN_INK, fontWeight: 700 }}>Always sends</span>
-                        <span style={{ color: SOFT }}> · {e.description}</span>
-                      </span>
-                    </span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {STAGE_ORDER.map(stage => {
-            const evs = (EVENT_REGISTRY as readonly EventDef[]).filter(e => EVENT_STAGE[e.key as EventKey] === stage);
-            if (evs.length === 0) return null;
-            const meta = STAGE_META[stage];
-            const onCount = evs.filter(e => { const t = templatesByEvent.get(e.key); return e.functional || (t ? t.enabled : eventOnWhenMissing(e.key)); }).length;
-            return (
-              <div key={stage} className="mb-9">
-                <div className="flex items-center gap-3 mb-3">
-                  <NeuIconDisc gradient={meta.gradient} emoji={meta.emoji} icon={meta.icon} size={46} />
-                  <div className="min-w-0">
-                    <h3
-                      className="font-black"
-                      style={{
-                        color: NEU.ink, fontFamily: OUTFIT, fontSize: 26,
-                        lineHeight: 1.1, letterSpacing: '-0.02em',
-                        textWrap: 'balance', overflowWrap: 'anywhere',
-                      }}
-                    >
-                      {stage}
-                    </h3>
-                    <p
-                      style={{
-                        color: SOFT, fontFamily: OUTFIT, fontSize: 12.5,
-                        lineHeight: 1.4, marginBlockStart: 2, textWrap: 'pretty',
-                        fontVariantNumeric: 'tabular-nums',
-                      }}
-                    >
-                      {meta.blurb}
-                      <span style={{ color: onCount > 0 ? GREEN_INK : SOFT, fontWeight: 800 }}>
-                        {' '}{onCount} of {evs.length} on
-                      </span>
-                    </p>
-                  </div>
-                </div>
-                <div className="flex flex-col gap-2">
-                  {evs.map((ev: EventDef) => {
-                    const template = templatesByEvent.get(ev.key);
-                    const hasDraft = templateHasContent(template);
-                    const togglingStub = togglingEventKeys.has(ev.key);
-                    const fired = fireCountByEvent.get(ev.key) ?? 0;
-                    const expanded = expandedEventKeys.has(ev.key);
-                    // ONE primary state, in words. The toggle stays because it IS
-                    // the TURN ON semantic (an enabled empty row sends the default;
-                    // stub rows are never deleted or auto-filled).
-                    const state = ev.functional
-                      ? { text: 'Always sends', color: GREEN_INK }
-                      : togglingStub
-                        ? { text: eventOnWhenMissing(ev.key) && !template ? 'Turning off…' : 'Turning on…', color: GOLD_INK }
-                        : !template
-                          ? eventOnWhenMissing(ev.key)
-                            ? { text: DEFAULT_LABEL, color: GOLD_INK }
-                            : { text: 'Not set up', color: SOFT }
-                          : template.enabled && hasDraft
-                            ? { text: 'On: sends your draft', color: GREEN_INK }
-                            : template.enabled
-                              ? { text: DEFAULT_LABEL, color: GOLD_INK }
-                              : { text: 'Off', color: SOFT };
-                    return (
-                      <div key={ev.key} className="rounded-2xl px-4 py-3" style={PANEL}>
-                        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-                          <button
-                            type="button"
-                            onClick={() => setExpandedEventKeys(s => toggleInSet(s, ev.key))}
-                            aria-expanded={expanded}
-                            className="flex items-center gap-2.5 min-w-0 flex-1 text-left focus:outline-none"
-                            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px 0', minWidth: 200 }}
-                          >
-                            <ChevronDown
-                              size={14}
-                              className="flex-shrink-0"
-                              style={{ color: SOFT, transform: expanded ? 'rotate(180deg)' : 'rotate(0)', transitionProperty: 'transform', transitionDuration: '200ms', transitionTimingFunction: EASE }}
-                            />
-                            <span className="min-w-0">
-                              <span className="flex items-center gap-1.5 min-w-0">
-                                <span className="font-semibold text-sm [overflow-wrap:anywhere]" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
-                                  {ev.label}
-                                </span>
-                                {ev.recurring && (
-                                  <span
-                                    className="inline-flex items-center gap-1 flex-shrink-0"
-                                    style={{ fontSize: 12, fontWeight: 700, fontFamily: OUTFIT, color: GOLD_INK }}
-                                  >
-                                    <Bell size={14} strokeWidth={2.2} aria-hidden />
-                                    Reminder
-                                  </span>
-                                )}
-                              </span>
-                              <span className="block text-xs mt-0.5" style={{ fontFamily: OUTFIT }}>
-                                <span style={{ color: state.color, fontWeight: 700 }}>{state.text}</span>
-                                {fired > 0 && (
-                                  <span style={{ color: SOFT, fontVariantNumeric: 'tabular-nums' }}>
-                                    {' '}· Sent {fired} time{fired === 1 ? '' : 's'}
-                                  </span>
-                                )}
-                              </span>
-                            </span>
-                          </button>
-                          <div className="flex items-center gap-2 flex-shrink-0" onClick={e => e.stopPropagation()}>
-                            {!ev.functional && (
-                              <PillToggle
-                                value={template ? template.enabled : eventOnWhenMissing(ev.key)}
-                                onChange={togglingStub ? () => {} : () => handleToggleEnabled(ev, template)}
-                              />
-                            )}
-                            <GhostBtn onClick={() => setPreviewDefaultKey(ev.key)}>Preview default</GhostBtn>
-                            <GhostBtn onClick={() => openBuilderForEvent(ev)}>{hasDraft ? 'Edit' : 'Draft'}</GhostBtn>
-                          </div>
-                        </div>
-                        {expanded && (
-                          <>
-                          <p className="text-sm mt-2" style={{ color: '#1C1410', fontFamily: OUTFIT, lineHeight: 1.55, textWrap: 'pretty', maxWidth: 720, paddingLeft: 24 }}>
-                            {ev.description}
-                          </p>
-                          {/* On with nothing written: show what actually goes
-                              out, so nobody thinks it sends blank. */}
-                          {!ev.functional && state.text === DEFAULT_LABEL && (() => {
-                            const dp = defaultPreviewText(ev.key);
-                            if (!dp) return null;
-                            return (
-                              <div className="rounded-xl px-4 py-3 mt-3" style={{ ...WELL, marginLeft: 24, maxWidth: 620 }}>
-                                <p className="text-xs font-bold" style={{ color: GOLD_INK, fontFamily: OUTFIT }}>
-                                  {DEFAULT_LABEL}
-                                </p>
-                                <p className="text-sm font-semibold mt-1.5" style={{ color: '#1C1410', fontFamily: OUTFIT, overflowWrap: 'anywhere' }}>
-                                  {dp.subject}
-                                </p>
-                                {dp.opening && (
-                                  <p className="text-xs mt-1" style={{ color: SOFT, fontFamily: OUTFIT, lineHeight: 1.5, textWrap: 'pretty' }}>
-                                    {dp.opening}
-                                  </p>
-                                )}
-                              </div>
-                            );
-                          })()}
-                          {ev.recurring && template?.enabled && (
-                            <div className="rounded-xl p-3 mt-3" style={{ ...WELL, marginLeft: 24, maxWidth: 480 }}>
-                              <p className="text-xs font-bold mb-2.5" style={{ color: '#1C1410', fontFamily: OUTFIT, letterSpacing: '0.03em' }}>
-                                Reminders
-                              </p>
-                              <div className="flex items-center justify-between gap-3 mb-3">
-                                <span className="text-xs font-semibold" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
-                                  Repeat this reminder
-                                </span>
-                                <PillToggle
-                                  value={template.recurring_enabled}
-                                  onChange={() => handleUpdateRecurring(template, { recurring_enabled: !template.recurring_enabled })}
-                                />
-                              </div>
-                              <div className="flex flex-wrap gap-4 mb-3">
-                                <div>
-                                  <label className="block text-xs font-semibold mb-1" style={{ color: template.recurring_enabled ? '#1C1410' : SOFT, fontFamily: OUTFIT }}>
-                                    Days between reminders
-                                  </label>
-                                  <input
-                                    type="number"
-                                    min={3}
-                                    max={60}
-                                    disabled={!template.recurring_enabled}
-                                    value={template.recurring_interval_days ?? 3}
-                                    onChange={(e) => {
-                                      const raw = e.target.value === '' ? null : Number(e.target.value);
-                                      setTemplates(ts => ts.map(t => (t.id === template.id ? { ...t, recurring_interval_days: raw } : t)));
-                                    }}
-                                    onBlur={(e) => {
-                                      const clamped = Math.min(60, Math.max(3, Math.round(Number(e.target.value)) || 3));
-                                      handleUpdateRecurring(template, { recurring_interval_days: clamped });
-                                    }}
-                                    className="rounded-xl px-3 py-1.5 text-sm focus:outline-none"
-                                    style={{ border: CARD_BORDER, backgroundColor: template.recurring_enabled ? '#FFFFFF' : '#F0EBDD', color: '#1C1410', fontFamily: OUTFIT, width: 84 }}
-                                  />
-                                </div>
-                                <div>
-                                  <label className="block text-xs font-semibold mb-1" style={{ color: template.recurring_enabled ? '#1C1410' : SOFT, fontFamily: OUTFIT }}>
-                                    Stop after this many
-                                  </label>
-                                  <input
-                                    type="number"
-                                    min={1}
-                                    max={10}
-                                    disabled={!template.recurring_enabled}
-                                    value={template.recurring_max_sends ?? 3}
-                                    onChange={(e) => {
-                                      const raw = e.target.value === '' ? null : Number(e.target.value);
-                                      setTemplates(ts => ts.map(t => (t.id === template.id ? { ...t, recurring_max_sends: raw } : t)));
-                                    }}
-                                    onBlur={(e) => {
-                                      const clamped = Math.min(10, Math.max(1, Math.round(Number(e.target.value)) || 3));
-                                      handleUpdateRecurring(template, { recurring_max_sends: clamped });
-                                    }}
-                                    className="rounded-xl px-3 py-1.5 text-sm focus:outline-none"
-                                    style={{ border: CARD_BORDER, backgroundColor: template.recurring_enabled ? '#FFFFFF' : '#F0EBDD', color: '#1C1410', fontFamily: OUTFIT, width: 84 }}
-                                  />
-                                </div>
-                              </div>
-                              <p className="text-xs" style={{ color: SOFT, fontFamily: OUTFIT }}>
-                                Reminders stop on their own when there is nothing left to do, and when the conference starts.
-                              </p>
-                            </div>
-                          )}
-                          </>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            );
-          })}
-        </section>
+        <AutomaticEmailsList
+          groups={automaticGroups}
+          alwaysOnNames={ALWAYS_ON_EMAILS.map(e => e.label)}
+          onBack={() => setView('home')}
+          onToggle={(key) => {
+            const ev = EVENT_REGISTRY.find(e => e.key === key);
+            if (!ev || togglingEventKeys.has(key)) return;
+            handleToggleEnabled(ev, templatesByEvent.get(key));
+          }}
+          onPreview={(key) => setPreviewDefaultKey(key)}
+          onEdit={(key) => {
+            const ev = EVENT_REGISTRY.find(e => e.key === key);
+            if (ev) openBuilderForEvent(ev);
+          }}
+        />
       )}
 
       {/* The new-email picker is a MODAL now, not a view: it overlays the
@@ -4360,112 +4086,35 @@ function CommunicationsPageInner() {
         />
       )}
 
-      {/* ═══ LANDING ═══ */}
-      {/* ═══ LANDING ═══ */}
-      {!builderOpen && !loading && view === 'landing' && (
-        <>
-          {/* ── The figures ──
-              First on the page now, and first on purpose. Every other band
-              here is a verdict about one state; this is the only one true in
-              all of them. It also replaces the old opening move, which was a
-              full-width card shouting about mail that never arrived before
-              the page had said anything else at all. Pressed wells, tabular
-              figures, three of the five are jumps. */}
-          <div className="flex flex-wrap gap-2.5 mb-7">
-            <StatWell label="Delivered" value={deliveredTotal.toLocaleString()} ink={deliveredTotal > 0 ? GREEN_INK : '#1C1410'} emoji="Check mark button" icon={CheckCircle2} />
-            <StatWell
-              label="Failed"
-              value={failedTotal.toLocaleString()}
-              emoji="Warning"
-              icon={AlertTriangle}
-              ink={failedTotal > 0 ? RED : '#1C1410'}
-            />
-            <StatWell
-              label="Automatic on"
-              value={enabledCount + alwaysOnCount}
-              emoji="Bellhop bell"
-              icon={Bell}
-              onClick={() => setView('automatic')}
-              title="Open the automatic-emails registry"
-            />
-            <StatWell
-              label="Unanswered"
-              value={neverAnsweredCount}
-              emoji="Speech balloon"
-              icon={MessageSquare}
-              ink={neverAnsweredCount > 0 ? GOLD_INK : '#1C1410'}
-              onClick={jumpToInbox}
-              title="Jump to the inbox"
-            />
-            <StatWell
-              label="Your emails"
-              value={adhocTemplates.length}
-              emoji="Memo"
-              icon={PenLine}
-              onClick={adhocTemplates.length > 0 ? () => setWorklistOpen(true) : openPicker}
-              title={adhocTemplates.length > 0 ? 'Show your saved emails' : 'Start an email'}
-            />
-          </div>
+      {/* ═══ HOME: what do you want to do? ═══ */}
+      {!builderOpen && !loading && view === 'home' && (
+        <CommsHome
+          conferenceName={conference.acronym || conference.full_name}
+          waitingCount={waitingCount}
+          failedCount={failedTotal}
+          savedCount={adhocTemplates.length}
+          sessionCodesHint={sessionCodesNudge && railCardVisible('session-codes') ? `The conference starts ${daysToStart === 0 ? 'today' : `in ${daysToStart} day${daysToStart === 1 ? '' : 's'}`} and delegates do not have their session codes yet.` : null}
+          onSessionCodes={() => {
+            const def = EVENT_REGISTRY.find(e => e.key === 'session_join_invite');
+            if (def) { setView('automatic'); openBuilderForEvent(def); }
+          }}
+          onDismissSessionCodes={() => dismissRailCard('session-codes')}
+          onWrite={openPicker}
+          onInbox={() => { setSelectedRequestId(null); setView('inbox'); }}
+          onAutomatic={() => setView('automatic')}
+          onSent={() => setView('sent')}
+          onAnnounce={() => setView('announce')}
+        />
+      )}
 
-          {/* ══════════════════════════════════════════════════════════════
-              THE INBOX BAND — a receding stack, not a column.
-
-              This used to be the third track of a three-column grid, which
-              gave the shortest-lived job on the page the same 400px box as
-              the two longest ones. It is a band across the top now, because
-              of the one number that matters here: 43% of production threads
-              never got a single organiser reply. Answering people is the
-              first thing this page should say, and it costs about a fifth of
-              the height it used to.
-
-              WHAT IS CRISP AND WHAT IS NOT
-                • At most TWO unread threads render at full size, as the same
-                  row you get everywhere else, fully interactive.
-                • Behind them, up to three more recede: smaller, dimmer,
-                  blurred, overlapping. Those are `aria-hidden` and
-                  `pointer-events: none` — a blurred row must never eat a
-                  click aimed at the crisp one above it, and nothing a person
-                  is expected to READ is ever blurred. Everything they say is
-                  repeated verbatim, crisp, in the list one click away.
-                • ALL N THREADS opens that list (search, filters, paging) in
-                  place, which is the route to an older or already-read
-                  thread. SHOW LESS in the heading closes it again.
-
-              ZERO UNREAD
-                The band does not vanish (the inbox would be unreachable from
-                the top of the page, and the ?inbox= deep link would land on
-                nothing) and it does not keep a full-height stack of already
-                read threads alive either. It collapses to one line that says
-                so, with the way in still on it.
-
-              375px
-                Identical, minus nothing: the crisp rows are the same rows
-                the one-column layout already used, and the ghosts only ever
-                scale DOWN from the row width, so the stack cannot overflow
-                sideways at any width.
-          ══════════════════════════════════════════════════════════════ */}
-          <div id="comms-inbox-panel" className="gv-inbox-band mb-7">
-            <style>{`@media (prefers-reduced-motion: reduce){.gv-inbox-band,.gv-inbox-band *{transition:none !important}}`}</style>
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0 flex-1">
-                <ColumnHeading
-                  emoji="Inbox tray"
-                  icon={Inbox}
-                  gradient={NEU_GRADIENTS.sage}
-                  title="Inbox"
-                  sub="Questions and swap requests waiting on a reply."
-                  count={inboxUnreadThreadCount}
-                />
-              </div>
-              {inboxExpanded && !selectedRequest && (
-                <div className="flex-shrink-0" style={{ marginBlockStart: 5 }}>
-                  <GhostBtn onClick={() => setInboxExpanded(false)}>Show less</GhostBtn>
-                </div>
-              )}
-            </div>
-            <section className="rounded-2xl p-4" style={PANEL} data-tutorial="comms-inbox">
-              {selectedRequest ? (
-                <>
+      {/* ═══ INBOX: questions and swap requests ═══ */}
+      {!builderOpen && !loading && view === 'inbox' && (
+        <div>
+          <BackLink onClick={() => { setSelectedRequestId(null); setView('home'); }} />
+          <CommsTitle lead="Questions From" gold="Participants" sub="Reply here. They see your answer in Gavelling and get an email." />
+          <section id="comms-inbox-panel" className="rounded-2xl p-4 sm:p-5" style={{ ...COMMS_CARD, maxWidth: 900 }}>
+            {selectedRequest ? (
+              <>
                   <button
                     onClick={() => setSelectedRequestId(null)}
                     className="text-xs font-bold mb-3 focus:outline-none"
@@ -4473,7 +4122,7 @@ function CommunicationsPageInner() {
                     onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = '#1C1410'; }}
                     onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = SOFT; }}
                   >
-                    ← BACK TO INBOX
+                    ← All questions
                   </button>
 
                   <div className="flex items-start justify-between gap-3 mb-1">
@@ -4527,7 +4176,7 @@ function CommunicationsPageInner() {
                   {(selectedRequest.kind === 'swap_request' || selectedRequest.kind === 'swap_notice') && (
                     <div className="rounded-xl p-3.5 mt-4" style={{ backgroundColor: '#FAF8F3', border: '1px solid rgba(27,56,40,0.09)' }}>
                       <p className="text-xs font-bold mb-1.5" style={{ color: GOLD_INK, fontFamily: OUTFIT, letterSpacing: '0.08em' }}>
-                        SWAP DETAILS
+                        Swap details
                       </p>
                       <p className="text-sm" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
                         {selectedRequest.metadata.member_a ?? 'Member A'}: {selectedRequest.metadata.before?.a ?? 'Not set'} → {selectedRequest.metadata.after?.a ?? 'Not set'}
@@ -4576,7 +4225,7 @@ function CommunicationsPageInner() {
                           {!mine && (
                             <span className="mb-1" style={{ fontSize: 10, fontWeight: 700, color: GOLD_INK, fontFamily: OUTFIT, letterSpacing: '0.06em' }}>
                               <ProfileLink userId={m.sender_user_id} name={senderName}>
-                                {senderName.toUpperCase()}
+                                {senderName}
                               </ProfileLink>
                             </span>
                           )}
@@ -4632,9 +4281,9 @@ function CommunicationsPageInner() {
                       onCancel={() => setCloseConfirmOpen(false)}
                     />
                   )}
-                </>
-              ) : inboxExpanded ? (
-                <>
+              </>
+            ) : (
+              <>
                   <div className="flex flex-wrap items-center gap-2 mb-3">
                     <input
                       value={inboxSearch}
@@ -4693,7 +4342,7 @@ function CommunicationsPageInner() {
 
                   {filteredInboxRequests.length === 0 ? (
                     <p className="text-sm py-6 text-center" style={{ color: SOFT, fontFamily: OUTFIT }}>
-                      No threads match these filters.
+                      {inboxRequests.length === 0 ? 'No questions yet. When a participant asks something, it shows up here.' : 'Nothing matches. Clear the search or the filters.'}
                     </p>
                   ) : (
                     <div className="flex flex-col gap-2">
@@ -4718,7 +4367,7 @@ function CommunicationsPageInner() {
                         <ChevronLeft size={14} />
                       </button>
                       <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.04em', color: SOFT, fontFamily: OUTFIT, fontVariantNumeric: 'tabular-nums' }}>
-                        PAGE {inboxPage} OF {inboxTotalPages}
+                        Page {inboxPage} of {inboxTotalPages}
                       </span>
                       <button
                         onClick={() => setInboxPage(p => Math.min(inboxTotalPages, p + 1))}
@@ -4736,329 +4385,18 @@ function CommunicationsPageInner() {
                       </button>
                     </div>
                   )}
-                </>
-              ) : (
-                <>
-                  {stackLive.length === 0 ? (
-                    /* Caught up. One line, and it still carries the way in. */
-                    <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
-                      <p className="text-sm" style={{ color: '#1C1410', fontFamily: OUTFIT, textWrap: 'pretty', margin: 0 }}>
-                        <span style={{ fontWeight: 800 }}>Nothing is waiting on a reply.</span>{' '}
-                        <span style={{ color: SOFT }}>
-                          {inboxRequests.length === 0
-                            ? 'Questions and swap requests from participants land here.'
-                            : `All ${inboxRequests.length} thread${inboxRequests.length === 1 ? '' : 's'} read.`}
-                        </span>
-                      </p>
-                      {inboxRequests.length > 0 && (
-                        <GhostBtn onClick={() => setInboxExpanded(true)}>Open the inbox</GhostBtn>
-                      )}
-                    </div>
-                  ) : (
-                    <>
-                      {/* The one or two live rows. Same component as the list,
-                          so a thread reads identically wherever you meet it. */}
-                      <div className="flex flex-col gap-2">
-                        {stackLive.map(r => threadRow(r))}
-                      </div>
+              </>
+            )}
+          </section>
+        </div>
+      )}
 
-                      {/* The pile behind them. Decoration: hidden from the
-                          accessibility tree and deaf to the pointer. */}
-                      {stackGhosts.length > 0 && (
-                        <div aria-hidden className="relative" style={{ pointerEvents: 'none', marginBlockStart: 4 }}>
-                          {stackGhosts.map((r, i) => {
-                            const dist = i + 1;
-                            const ghostName = inboxProfiles.get(r.user_id)?.display_name ?? 'Unknown';
-                            const ghostUnread = unreadCountOf(r) > 0;
-                            return (
-                              <div
-                                key={r.id}
-                                className="flex items-center gap-2 rounded-xl overflow-hidden"
-                                style={{
-                                  position: 'relative',
-                                  zIndex: STACK_SCALE.length - i,
-                                  marginBlockStart: i === 0 ? 0 : -22,
-                                  height: 34, padding: '0 12px 0 14px',
-                                  backgroundColor: ghostUnread ? 'rgba(238,217,138,0.16)' : '#FAF8F3',
-                                  border: ghostUnread ? '1px solid rgba(182,135,31,0.45)' : '1px solid rgba(27,56,40,0.09)',
-                                  transform: `scale(${STACK_SCALE[dist]})`,
-                                  transformOrigin: 'top center',
-                                  opacity: STACK_OPACITY[dist],
-                                  filter: `blur(${STACK_BLUR[dist]}px)`,
-                                  transitionProperty: 'transform, opacity, filter',
-                                  transitionDuration: '260ms',
-                                  transitionTimingFunction: EASE,
-                                }}
-                              >
-                                {ghostUnread && (
-                                  <span
-                                    className="absolute inset-y-0 left-0"
-                                    style={{ width: 3, background: `linear-gradient(180deg, ${NEU_GRADIENTS.gold[1]}, ${NEU_GRADIENTS.gold[0]})` }}
-                                  />
-                                )}
-                                <span className="truncate" title={r.subject} style={{ fontFamily: OUTFIT, fontSize: 12.5, fontWeight: ghostUnread ? 800 : 600, color: '#1C1410' }}>
-                                  {r.subject}
-                                </span>
-                                <span className="truncate flex-shrink-0" title={ghostName} style={{ maxWidth: '45%', fontFamily: OUTFIT, fontSize: 11, fontWeight: 700, color: SOFT }}>
-                                  {ghostName}
-                                </span>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      )}
-
-                      {/* The route to everything else, including the unread
-                          this band deliberately did not open with. */}
-                      <button
-                        type="button"
-                        onClick={() => setInboxExpanded(true)}
-                        className="w-full rounded-xl text-xs font-bold focus:outline-none active:scale-[0.99]"
-                        style={{
-                          marginBlockStart: 10, minHeight: 40, border: CARD_BORDER,
-                          backgroundColor: 'transparent', color: '#1C1410', fontFamily: OUTFIT,
-                          cursor: 'pointer', fontVariantNumeric: 'tabular-nums',
-                          transitionProperty: 'background-color, transform', transitionDuration: '180ms', transitionTimingFunction: EASE,
-                        }}
-                        onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.05)'; }}
-                        onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
-                      >
-                        All {inboxRequests.length} thread{inboxRequests.length === 1 ? '' : 's'}
-                        {stackUnread.length > stackLive.length ? `, ${stackUnread.length - stackLive.length} more unread` : ''}
-                      </button>
-                    </>
-                  )}
-                </>
-              )}
-            </section>
-          </div>
-
-          {/* ══════════════════════════════════════════════════════════════
-              THE TWO SECTIONS.
-
-              Issues and Going out soon. Equal citizens, side by side,
-              because they are the two different questions somebody opens
-              this page to ask once they have answered their post: what is
-              broken, and what is about to leave. The third question, who is
-              waiting on me, is the band above — it outranks both of these,
-              which is exactly why it is no longer sitting beside them
-              pretending to be a peer.
-
-              THE LADDER
-                >=1024 (lg)  two equal columns.
-                <1024        one column, same order.
-
-              items-stretch plus a flex-1 band inside each column, per the
-              card-grid contract, or the surplus height on the short
-              column pools at the bottom as a dead strip.
-          ══════════════════════════════════════════════════════════════ */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 xl:gap-6 items-stretch mb-9">
-
-            {/* 1 · ISSUES, the console. Same panel, same states, same words;
-                it is a column now instead of a banner. */}
-            <div className="flex flex-col min-w-0">
-              <ColumnHeading
-                emoji={CONSOLE_EMOJI[consoleModel.tone]}
-                icon={consoleModel.icon}
-                gradient={consoleModel.tone === 'calm' ? NEU_GRADIENTS.green : consoleModel.tone === 'idle' ? NEU_GRADIENTS.sage : NEU_GRADIENTS.gold}
-                title="Issues"
-                sub="What needs a look before anything else."
-              />
-            <Console
-              model={consoleModel}
-              delivered={deliveredTotal}
-              attempted={attemptedTotal}
-              meterTone={failedTotal > 0 ? 'alert' : drainingCount > 0 ? 'live' : attemptedTotal > 0 ? 'calm' : 'idle'}
-            />
-            </div>
-
-            {/* 2 · GOING OUT SOON, everything the system is about to do, and
-                the door into the automatic emails that do it. */}
-            <div className="flex flex-col min-w-0" data-tutorial="comms-coming-up">
-              <ColumnHeading
-                emoji="Alarm clock"
-                icon={Clock}
-                gradient={NEU_GRADIENTS.forest}
-                title="Going out soon"
-                sub="Queued, scheduled, and the emails that send themselves."
-              />
-              <div className="flex flex-col gap-3 flex-1">
-                {railHasCards ? (
-                  // A COLUMN, not a wrapping row. The cards are full width now,
-                  // so `flex-wrap` gave every one of them its own line anyway
-                  // and only added a second gap on top of the parent's.
-                  <div className="flex flex-col gap-3">
-                    {drainingCount > 0 && consoleModel.promoted !== 'draining' && (
-                      <RailCard
-                        icon={Zap}
-                        emoji="Envelope with arrow"
-                        live
-                        title={`${drainingCount} email${drainingCount === 1 ? '' : 's'} sending now`}
-                        sub="Queued and being delivered. Large sends take a few minutes to drain."
-                      />
-                    )}
-                    {scheduledRows.length > 0 && earliestScheduled && (
-                      <RailCard
-                        icon={Clock}
-                        emoji="Alarm clock"
-                        title={`${scheduledRows.length} email${scheduledRows.length === 1 ? '' : 's'} scheduled`}
-                        sub={`First goes out ${formatSentAt(earliestScheduled)}.`}
-                      />
-                    )}
-                    {neverAnsweredCount > 0 && railCardVisible('unanswered') && consoleModel.promoted !== 'unanswered' && (
-                      <RailCard
-                        icon={MessageSquare}
-                        emoji="Speech balloon"
-                        gold={goldUnanswered}
-                        title={`${neverAnsweredCount} thread${neverAnsweredCount === 1 ? '' : 's'} never answered`}
-                        sub={digestOn
-                          ? 'A reminder digest keeps nudging your team while these wait.'
-                          : 'Still waiting on a first reply from your team.'}
-                        actionLabel="Answer them"
-                        onAction={jumpToInbox}
-                        onDismiss={() => dismissRailCard('unanswered')}
-                      />
-                    )}
-                    {draftRemindersDue > 0 && railCardVisible('draft-reminders') && (
-                      <RailCard
-                        icon={PenLine}
-                        emoji="Memo"
-                        title={`${draftRemindersDue} unfinished application${draftRemindersDue === 1 ? '' : 's'} can be nudged`}
-                        sub="Started over three days ago and never submitted."
-                        actionLabel="Send reminders"
-                        onAction={() => router.push(`/manage/${conference.slug}/applications`)}
-                        onDismiss={() => dismissRailCard('draft-reminders')}
-                      />
-                    )}
-                    {upcomingGuideReleases.length > 0 && (
-                      <RailCard
-                        icon={BookOpen}
-                        emoji="Books"
-                        title={`${upcomingGuideReleases.length} study guide${upcomingGuideReleases.length === 1 ? '' : 's'} scheduled to release`}
-                        sub={`Next on ${formatDate(upcomingGuideReleases[0].study_guides_publish_at!)}, delegates are emailed automatically.`}
-                        actionLabel="View committees"
-                        onAction={() => router.push(`/manage/${conference.slug}/committees`)}
-                      />
-                    )}
-                    {sessionCodesNudge && railCardVisible('session-codes') && consoleModel.promoted !== 'session-codes' && (
-                      <RailCard
-                        icon={KeyRound}
-                        emoji="Key"
-                        gold={goldSessionCodes}
-                        title="Session codes haven't gone out"
-                        sub={`The conference starts ${daysToStart === 0 ? 'today' : `in ${daysToStart} day${daysToStart === 1 ? '' : 's'}`} and allocated delegates have no join invite yet.`}
-                        actionLabel="Send join invites"
-                        onAction={() => {
-                          const def = EVENT_REGISTRY.find(e => e.key === 'session_join_invite');
-                          if (def) { setView('automatic'); openBuilderForEvent(def); }
-                        }}
-                        onDismiss={() => dismissRailCard('session-codes')}
-                      />
-                    )}
-                    {/* Only when it is a RECOMMENDATION. The plain "N automatic
-                        emails are on" fact moved into the stat strip above, which
-                        is already a jump to the registry — a card that repeated it
-                        unconditionally was the reason this rail was never empty
-                        and therefore never meant anything. */}
-                    {autoDefaultCount > 0 && (
-                      <RailCard
-                        icon={Bell}
-                        emoji="Bellhop bell"
-                        gold={goldDefaults}
-                        title={`${autoDefaultCount} automatic email${autoDefaultCount === 1 ? '' : 's'} still send our copy`}
-                        sub="They work as they are, but your own wording will sound like your conference."
-                        actionLabel="Review them"
-                        onAction={() => setView('automatic')}
-                      />
-                    )}
-                  </div>
-                ) : (
-                  // Nothing pending: one quiet line, never dead space. The
-                  // "Automatic emails: N on" link that used to ride on the end
-                  // of it is gone, because the card directly below now says
-                  // exactly that, permanently, and better.
-                  <p className="text-sm" style={{ color: SOFT, fontFamily: OUTFIT, textWrap: 'pretty' }}>
-                    Nothing queued and nothing scheduled. The emails below keep watching anyway.
-                  </p>
-                )}
-
-                {/* THE DOOR INTO THE AUTOMATIC EMAILS. Permanent, and last in
-                    the column, because unlike everything above it this is not
-                    a thing that happened. It is the standing machinery, and
-                    it answers "what does Gavelling send without me". It used
-                    to be reachable only from a stat well and a rail card that
-                    appeared solely when something was wrong with it. */}
-                <button
-                  type="button"
-                  onClick={() => setView('automatic')}
-                  className="w-full text-left rounded-2xl px-4 py-3.5 flex items-center gap-3 focus:outline-none active:scale-[0.99] mt-auto"
-                  style={{
-                    ...GOLD_PANEL, cursor: 'pointer',
-                    transitionProperty: 'box-shadow, transform',
-                    transitionDuration: '200ms', transitionTimingFunction: EASE,
-                  }}
-                  onMouseEnter={e => { (e.currentTarget as HTMLElement).style.boxShadow = HOVER_SHADOW; }}
-                  onMouseLeave={e => { (e.currentTarget as HTMLElement).style.boxShadow = LIFTED_SHADOW; }}
-                >
-                  <NeuIconDisc gradient={NEU_GRADIENTS.gold} emoji="Bellhop bell" icon={Bell} size={44} />
-                  <span className="min-w-0 flex-1 block">
-                    <span
-                      className="block font-black"
-                      style={{ color: NEU.ink, fontFamily: OUTFIT, fontSize: 17, lineHeight: 1.15, letterSpacing: '-0.015em', textWrap: 'balance' }}
-                    >
-                      Automatic Emails
-                    </span>
-                    <span
-                      className="block"
-                      style={{ color: SOFT, fontFamily: OUTFIT, fontSize: 12, lineHeight: 1.4, marginBlockStart: 2, textWrap: 'pretty', fontVariantNumeric: 'tabular-nums' }}
-                    >
-                      {/* No "…and N still send our copy" here. That is a
-                          RECOMMENDATION, it has its own rail card directly
-                          above with its own action, and this card is a route,
-                          not a second voice saying the same sentence. */}
-                      {enabledCount + alwaysOnCount} send themselves the moment something happens.
-                    </span>
-                  </span>
-                  <ArrowRight size={15} strokeWidth={2.5} className="flex-shrink-0" style={{ color: GOLD_INK }} />
-                </button>
-              </div>
-            </div>
-          </div>
-
-          {/* ── SENT ── The record, and the longest thing on the page, so it
-              takes the full width underneath the two sections instead of
-              half of it beside them. */}
-          <section data-tutorial="comms-sent-feed">
-            {/* The failed / sending pills that used to sit here are gone:
-                the console states whichever of them is true, in words, at
-                the top of the page, and the stat strip carries the figure.
-                NEW EMAIL went the same way — it now rides with the console
-                instead of being the third thing on this row. */}
-            <div className="flex items-center gap-3 mb-5">
-              <NeuIconDisc gradient={NEU_GRADIENTS.forest} emoji="Outbox tray" icon={Send} size={44} />
-              <div className="min-w-0 flex-1">
-                <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-                  <h2
-                    className="font-black"
-                    style={{ color: NEU.ink, fontFamily: OUTFIT, fontSize: 22, lineHeight: 1.1, letterSpacing: '-0.022em' }}
-                  >
-                    Sent
-                  </h2>
-                  {attemptedTotal > 0 && (
-                    <span
-                      className="font-bold uppercase"
-                      style={{ color: SOFT, fontFamily: OUTFIT, fontSize: 11, letterSpacing: '0.08em', fontVariantNumeric: 'tabular-nums' }}
-                    >
-                      {attemptedTotal.toLocaleString()} email{attemptedTotal === 1 ? '' : 's'}
-                    </span>
-                  )}
-                </div>
-                <p style={{ color: SOFT, fontFamily: OUTFIT, fontSize: 12.5, lineHeight: 1.4, marginBlockStart: 2, textWrap: 'pretty' }}>
-                  Everything this conference has sent: broadcasts you wrote, and the automatic
-                  emails the platform sent for you.
-                </p>
-              </div>
-            </div>
+      {/* ═══ SENT: everything that went out, and saved emails ═══ */}
+      {!builderOpen && !loading && view === 'sent' && (
+        <div>
+          <BackLink onClick={() => setView('home')} />
+          <CommsTitle lead="Emails You've" gold="Sent" sub="Emails you wrote and the automatic ones. Open one to see who got it." />
+          <section style={{ maxWidth: 900 }}>
 
             {/* In-the-works strip: drafts + ready-to-send, tucked above the feed. */}
             {adhocTemplates.length > 0 && (
@@ -5252,7 +4590,18 @@ function CommunicationsPageInner() {
               </div>
             )}
           </section>
-        </>
+        </div>
+      )}
+
+      {/* ═══ ANNOUNCE: paid announcements to Gavelling users ═══ */}
+      {!builderOpen && !loading && view === 'announce' && (
+        <AnnounceView
+          conferenceId={conference.id}
+          conferenceName={conference.full_name}
+          acronym={conference.acronym}
+          logoUrl={conference.logo_url ?? null}
+          onBack={() => setView('home')}
+        />
       )}
 
       {/* ═══════════════════════════════════════════════════════════════════════
@@ -5539,7 +4888,7 @@ function CommunicationsPageInner() {
         />
       )}
 
-      {tourOpen && !builderOpen && (
+      {COMMS_TOUR_LIVE && tourOpen && !builderOpen && (
         <GuidedWalkthrough
           steps={tourSteps}
           onClose={closeTour}

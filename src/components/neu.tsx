@@ -159,9 +159,13 @@ export function Emoji3D({
   fallback: Fallback,
   fallbackColor = '#FFFFFF',
   style,
+  toned = false,
 }: {
   /** Fluent emoji asset folder name, sentence case, e.g. "Money bag", "Globe showing europe-africa". */
   name: string;
+  /** People emoji with skin tones ("Teacher", "Office worker") keep their
+   *  art in a Default/ subfolder; true draws that default (yellow) tone. */
+  toned?: boolean;
   size?: number;
   fallback?: LucideIcon;
   fallbackColor?: string;
@@ -177,7 +181,9 @@ export function Emoji3D({
   return (
     /* eslint-disable-next-line @next/next/no-img-element */
     <img
-      src={`${EMOJI_CDN}/${encodeURIComponent(name)}/3D/${file}_3d.png`}
+      src={toned
+        ? `${EMOJI_CDN}/${encodeURIComponent(name)}/Default/3D/${file}_3d_default.png`
+        : `${EMOJI_CDN}/${encodeURIComponent(name)}/3D/${file}_3d.png`}
       alt=""
       aria-hidden
       width={size}

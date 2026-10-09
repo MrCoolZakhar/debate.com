@@ -647,7 +647,7 @@ export function Segmented<T extends string | boolean>({
 }) {
   return (
     <div
-      className={columns ? 'grid' : 'flex'}
+      className={columns ? 'grid' : 'flex flex-wrap'}
       style={columns ? { gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`, gap: 8 } : { gap: 8 }}
     >
       {options.map(opt => {
@@ -660,6 +660,11 @@ export function Segmented<T extends string | boolean>({
             onClick={() => onChange(opt.value)}
             className={`${columns ? '' : 'flex-1'} rounded-xl focus:outline-none`}
             style={{
+              // Never wider than its box: a long label wraps inside the button
+              // instead of running out of it (text overflow audit, Oct 2026).
+              minWidth: columns ? 0 : 'min(100%, 104px)',
+              overflowWrap: 'anywhere',
+              lineHeight: 1.25,
               padding: '10px 12px',
               backgroundColor: active ? '#1B3828' : 'transparent',
               color: active ? NEU.gold : NEU.ink,

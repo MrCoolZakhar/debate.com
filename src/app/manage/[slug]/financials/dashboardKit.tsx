@@ -7,19 +7,29 @@
 // cards are separate components with an `onOpen` prop, so prompt 94 only swaps
 // the handler for a pop-up.
 
-import { CreditCard, Gift, ReceiptText, Ticket } from 'lucide-react';
-import { OUTFIT } from '@/components/neu';
+import { CreditCard, Gift, ReceiptText, Ticket, type LucideIcon } from 'lucide-react';
+import { OUTFIT, Emoji3D } from '@/components/neu';
 import { InfoHint } from '../settings/applicationsUi';
 import { INK, INK_SOFT, FOREST, GOLD, DEEP_GOLD, IVORY, LINE, DANGER } from '../store/storeKit';
 import type { FinancialsDashboard } from './financialsApi';
 
 export { INK, INK_SOFT, FOREST, GOLD, DEEP_GOLD, IVORY, LINE, DANGER };
 
+/** The two tints behind a card's icon (9 Oct 2026, "missing icons and colours"):
+ *  a pale forest for money and people, a pale gold for paperwork and settings. */
+export const TINT_GREEN = 'linear-gradient(150deg, rgba(61,122,82,0.20), rgba(61,122,82,0.08))';
+export const TINT_GOLD = 'linear-gradient(150deg, rgba(238,217,138,0.70), rgba(238,217,138,0.30))';
+/** Outstanding money: the manage layout's gold ink, 5.3:1 on white. */
+export const OWED = '#7A5A10';
+
 export const READ_ONLY_LINE = 'You can view Financials but not change them';
 
 export const DASH_CSS = `
 .gv-fd-grid{display:grid;grid-template-columns:minmax(0,1fr);gap:16px}
 .gv-fd-two{display:grid;grid-template-columns:minmax(0,1fr);gap:16px}
+.gv-fd-three{display:grid;grid-template-columns:minmax(0,1fr);gap:16px}
+@media (min-width:700px){.gv-fd-three{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (min-width:1100px){.gv-fd-three{grid-template-columns:repeat(3,minmax(0,1fr))}}
 .gv-fd-four{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
 @media (min-width:860px){
   .gv-fd-grid{grid-template-columns:minmax(0,1.15fr) minmax(0,1fr)}
@@ -38,6 +48,20 @@ export const DASH_CSS = `
 @media (max-width:639px){.gv-fd-head-cell{align-items:flex-start}.gv-fd-other{text-align:left}}
 
 .gv-fd-card{display:flex;flex-direction:column}
+/* The icon disc beside a card's title, and a soft wash of the same tint in the card's top corner */
+.gv-fd-disc{width:44px;height:44px;border-radius:14px;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;box-shadow:inset 0 1px 0 rgba(255,255,255,0.75),0 6px 14px -10px rgba(27,56,40,0.45)}
+.gv-fd-card .gv-st-card-head.gv-fd-head{gap:12px;margin-bottom:10px}
+.gv-fd-wash-green{background:radial-gradient(120% 90% at 100% 0%,rgba(61,122,82,0.07) 0%,rgba(61,122,82,0) 55%),#FFFFFF!important}
+.gv-fd-wash-gold{background:radial-gradient(120% 90% at 100% 0%,rgba(238,217,138,0.22) 0%,rgba(238,217,138,0) 55%),#FFFFFF!important}
+.gv-fd-in{color:${FOREST}}
+.gv-fd-owe{color:${OWED}!important}
+.gv-fd-dot{display:inline-block;width:8px;height:8px;border-radius:999px;margin-right:6px;vertical-align:1px}
+/* Welcome to Financials: words left, a photo right (above on phones) */
+.gv-fd-welcome{display:grid;grid-template-columns:minmax(0,1fr);overflow:hidden;padding:0!important}
+.gv-fd-welcome-photo{position:relative;min-height:150px;background:#E4DCCA}
+.gv-fd-welcome-photo img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.gv-fd-welcome-body{padding:30px 28px}
+@media (min-width:760px){.gv-fd-welcome{grid-template-columns:minmax(0,1.2fr) minmax(0,1fr)}.gv-fd-welcome-photo{order:2;min-height:240px}}
 .gv-fd-card .gv-fd-foot{margin-top:auto;padding-top:16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
 .gv-fd-pair{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
 .gv-fd-review{margin:14px 0 0;font-size:13.5px;font-weight:600;color:${DEEP_GOLD}}
@@ -48,12 +72,12 @@ export const DASH_CSS = `
 .gv-fd-todo-word{margin-left:10px;font-size:19px;font-weight:800;color:${INK}}
 .gv-fd-todo-line{margin:10px 0 0;font-size:14px;line-height:1.5;color:${INK_SOFT}}
 .gv-fd-clear{display:flex;align-items:center;gap:12px;margin-top:6px}
-.gv-fd-clear-disc{width:44px;height:44px;border-radius:999px;display:inline-flex;align-items:center;justify-content:center;background:rgba(27,56,40,0.08);color:${FOREST};flex-shrink:0}
+.gv-fd-clear-disc{width:52px;height:52px;border-radius:16px;display:inline-flex;align-items:center;justify-content:center;background:${TINT_GREEN};color:${FOREST};flex-shrink:0}
 .gv-fd-clear-text{font-size:18px;font-weight:800;color:${INK}}
 
 /* Small settings cards */
 .gv-fd-set{padding:16px 16px 14px!important}
-.gv-fd-set-icon{width:34px;height:34px;border-radius:10px;display:inline-flex;align-items:center;justify-content:center;background:rgba(238,217,138,0.4);color:${FOREST};margin-bottom:10px}
+.gv-fd-set-icon{width:42px;height:42px;border-radius:13px;display:inline-flex;align-items:center;justify-content:center;color:${FOREST};margin-bottom:10px;box-shadow:inset 0 1px 0 rgba(255,255,255,0.75),0 6px 14px -10px rgba(27,56,40,0.45)}
 .gv-fd-set-fact{margin:2px 0 0;font-size:15px;font-weight:800;line-height:1.3;color:${INK};overflow-wrap:anywhere}
 .gv-fd-set-sub{margin:3px 0 0;font-size:12.5px;line-height:1.45;color:${INK_SOFT}}
 .gv-fd-set .gv-st-btn{min-height:38px;padding:0 14px;font-size:13px}
@@ -101,18 +125,34 @@ export const DASH_CSS = `
 `;
 
 /** A dashboard card: the Store's white card with the title, an "i" hint, and an optional line. */
-export function DashCard({ title, hint, line, children, className, style }: {
+export function DashCard({ title, hint, line, children, className, style, icon }: {
   title: string; hint: string; line?: string; children: React.ReactNode; className?: string; style?: React.CSSProperties;
+  /** A Fluent 3D emoji in a tinted disc before the title, with a lucide fallback,
+   *  and the same tint washed faintly into the card's top corner. */
+  icon?: CardIcon;
 }) {
+  const wash = icon ? (icon.tint === TINT_GOLD ? ' gv-fd-wash-gold' : ' gv-fd-wash-green') : '';
   return (
-    <section className={`gv-st-card gv-fd-card${className ? ` ${className}` : ''}`} aria-label={title} style={style}>
-      <div className="gv-st-card-head">
+    <section className={`gv-st-card gv-fd-card${wash}${className ? ` ${className}` : ''}`} aria-label={title} style={style}>
+      <div className={`gv-st-card-head${icon ? ' gv-fd-head' : ''}`}>
+        {icon ? <IconDisc icon={icon} /> : null}
         <h2 className="gv-st-card-title">{title}</h2>
         <InfoHint label={`About ${title}`} text={hint} size={16} />
       </div>
       {line ? <p className="gv-st-card-line">{line}</p> : null}
       {children}
     </section>
+  );
+}
+
+export type CardIcon = { emoji: string; lucide: LucideIcon; tint: string };
+
+/** The tinted disc with a Fluent 3D emoji (lucide in forest if the image fails). */
+export function IconDisc({ icon, size = 44 }: { icon: CardIcon; size?: number }) {
+  return (
+    <span className="gv-fd-disc" aria-hidden style={{ background: icon.tint, width: size, height: size, borderRadius: Math.round(size * 0.32) }}>
+      <Emoji3D name={icon.emoji} size={Math.round(size * 0.62)} fallback={icon.lucide} fallbackColor={FOREST} />
+    </span>
   );
 }
 
@@ -145,11 +185,13 @@ export function DashboardPlaceholder() {
 type S = FinancialsDashboard['settings'];
 
 function SettingCard({ title, hint, icon, fact, sub, onOpen, readOnly }: {
-  title: string; hint: string; icon: React.ReactNode; fact: string; sub?: string; onOpen: () => void; readOnly: boolean;
+  title: string; hint: string; icon: CardIcon; fact: string; sub?: string; onOpen: () => void; readOnly: boolean;
 }) {
   return (
     <section className="gv-st-card gv-fd-card gv-fd-set" aria-label={title}>
-      <span className="gv-fd-set-icon" aria-hidden>{icon}</span>
+      <span className="gv-fd-set-icon" aria-hidden style={{ background: icon.tint }}>
+        <Emoji3D name={icon.emoji} size={26} fallback={icon.lucide} fallbackColor={FOREST} />
+      </span>
       <div className="gv-st-card-head">
         <h3 className="gv-st-card-title" style={{ fontSize: 15 }}>{title}</h3>
         <InfoHint label={`About ${title}`} text={hint} size={15} />
@@ -179,7 +221,7 @@ export function PaymentMethodCard({ s, onOpen, readOnly }: { s: S; onOpen: () =>
   }
   return (
     <SettingCard
-      title="Payment Method" icon={<CreditCard size={18} strokeWidth={2.2} />}
+      title="Payment Method" icon={{ emoji: 'Credit card', lucide: CreditCard, tint: TINT_GREEN }}
       hint="How participants pay you. Card payments go straight to your own Stripe account. Manual payments are bank transfers or cash, and the payer uploads a proof for you to check."
       fact={fact} sub={sub} onOpen={onOpen} readOnly={readOnly}
     />
@@ -194,7 +236,7 @@ export function RegistrationFeeCard({ s, onOpen, readOnly, formatCents }: {
   const per = f?.applies_to === 'delegation' ? 'per delegation' : 'per delegate';
   return (
     <SettingCard
-      title="Registration Fee" icon={<ReceiptText size={18} strokeWidth={2.2} />}
+      title="Registration Fee" icon={{ emoji: 'Receipt', lucide: ReceiptText, tint: TINT_GOLD }}
       hint="A fee charged once on top of the ticket, for example to cover a deposit. Leave it off if your ticket price already covers everything."
       fact={on ? formatCents(f!.amount_cents, f!.currency) : 'None'}
       sub={on ? (f!.label ? `${f!.label}, ${per}` : per) : undefined}
@@ -207,7 +249,7 @@ export function AddonsCard({ s, onOpen, readOnly }: { s: S; onOpen: () => void; 
   const any = s.addons_active > 0 || s.addons_sold > 0;
   return (
     <SettingCard
-      title="Add-ons" icon={<Gift size={18} strokeWidth={2.2} />}
+      title="Add-ons" icon={{ emoji: 'Wrapped gift', lucide: Gift, tint: TINT_GOLD }}
       hint="Extras people can buy with their ticket, like a social night or merchandise. Each one is billed as its own item."
       fact={any ? `${s.addons_active} on sale` : 'None yet'}
       sub={any ? `${s.addons_sold} bought` : undefined}
@@ -220,7 +262,7 @@ export function VouchersCard({ s, onOpen, readOnly }: { s: S; onOpen: () => void
   const any = s.vouchers_active > 0 || s.vouchers_used > 0;
   return (
     <SettingCard
-      title="Vouchers" icon={<Ticket size={18} strokeWidth={2.2} />}
+      title="Vouchers" icon={{ emoji: 'Ticket', lucide: Ticket, tint: TINT_GREEN }}
       hint="Discount codes you hand out, for partner schools or early supporters. A code takes money off the ticket when someone applies."
       fact={any ? `${s.vouchers_active} active code${s.vouchers_active === 1 ? '' : 's'}` : 'None yet'}
       sub={any ? `Used ${s.vouchers_used} time${s.vouchers_used === 1 ? '' : 's'}` : undefined}
@@ -253,11 +295,14 @@ export function moneyFontSize(text: string, base: number): number {
 }
 
 /** The Store's Big (same classes), on one line and sized to fit by moneyFontSize. */
-export function FitBig({ n, cap }: { n: string; cap: string }) {
+export function FitBig({ n, cap, tone }: { n: string; cap: string; tone?: 'in' | 'owed' }) {
   return (
     <div style={{ minWidth: 0 }}>
-      <span className="gv-st-big" style={{ whiteSpace: 'nowrap', fontSize: moneyFontSize(n, 34) }}>{n}</span>
-      <span className="gv-st-big-cap">{cap}</span>
+      <span className={`gv-st-big${tone === 'owed' ? ' gv-fd-owe' : ''}`} style={{ whiteSpace: 'nowrap', fontSize: moneyFontSize(n, 34) }}>{n}</span>
+      <span className="gv-st-big-cap">
+        {tone ? <span className="gv-fd-dot" aria-hidden style={{ background: tone === 'owed' ? '#D9B44A' : '#3D7A52' }} /> : null}
+        {cap}
+      </span>
     </div>
   );
 }

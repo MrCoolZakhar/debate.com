@@ -275,7 +275,7 @@ export default function PaymentTab({
             {aid.statement || 'No statement given.'}
           </p>
           <p className="mt-2" style={{ fontFamily: OUTFIT, fontSize: 12, color: C.inkSoft }}>
-            Decide on it in <Link href={`/manage/${conferenceSlug}/financial-aid`} style={{ color: C.forest, fontWeight: 800, textDecoration: 'underline', textUnderlineOffset: 2 }}>Financial aid</Link>.
+            Decide on it in <Link href={`/manage/${conferenceSlug}/financials/aid`} style={{ color: C.forest, fontWeight: 800, textDecoration: 'underline', textUnderlineOffset: 2 }}>Financial aid</Link>.
           </p>
         </section>
       )}

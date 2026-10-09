@@ -5,7 +5,7 @@
  * Conference Store's manner:
  *   header   Received and Outstanding, the display-currency picker
  *   row 1    Money (breakdown pop-up) and Things to do (the anchor)
- *   row 2    Invoices, Generate invoices (opens Invoices and Receipts)
+ *   row 2    Invoices, Generate invoices (opens Invoices and Receipts), Financial aid
  *   row 3    four settings cards (payment method, registration fee, add-ons, vouchers)
  * Every number is from financials_dashboard, read on mount and again after any
  * action. The things-to-do line is from money_things_to_do. The Referrals
@@ -15,7 +15,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { CheckCircle2 } from 'lucide-react';
+import { Bell, CheckCircle2, FilePlus2, PiggyBank, ReceiptText } from 'lucide-react';
+import { Emoji3D } from '@/components/neu';
 import { useManage } from '@/app/manage/[slug]/layout';
 import { OUTFIT, NEU } from '@/components/neu';
 import { GoldWord } from '@/components/BrandHeading';
@@ -30,8 +31,9 @@ import {
 } from './financialsApi';
 import {
   DASH_CSS, DashCard, DashboardPlaceholder, FitBig, GENERATE_INVOICES_READY, READ_ONLY_LINE, moneyFontSize,
-  PaymentMethodCard, RegistrationFeeCard, AddonsCard, VouchersCard,
+  PaymentMethodCard, RegistrationFeeCard, AddonsCard, VouchersCard, IconDisc, TINT_GOLD, TINT_GREEN,
 } from './dashboardKit';
+import AidCard from './AidCard';
 import MoneyPopup from './MoneyPopup';
 import PaymentFlow from './onboarding/PaymentFlow';
 import { FeePopup, AddonsPopup, VouchersPopup } from './onboarding/SettingsPopups';
@@ -140,9 +142,12 @@ export default function FinancialsDashboardPage() {
 
       {/* Header: the title left, the key numbers and the picker right, like the Store */}
       <div className="flex items-start justify-between gap-4 flex-wrap mb-6">
-        <h1 style={{ fontFamily: OUTFIT, fontWeight: 900, fontSize: 30, color: NEU.ink, letterSpacing: '-0.02em', margin: 0 }}>
-          <GoldWord tone="light">Financials</GoldWord>
-        </h1>
+        <div className="flex items-center gap-3.5 min-w-0">
+          <IconDisc icon={{ emoji: 'Money bag', lucide: PiggyBank, tint: TINT_GREEN }} size={52} />
+          <h1 style={{ fontFamily: OUTFIT, fontWeight: 900, fontSize: 30, color: NEU.ink, letterSpacing: '-0.02em', margin: 0 }}>
+            <GoldWord tone="light">Financials</GoldWord>
+          </h1>
+        </div>
         <div>
           <div className="gv-fd-head-nums">
             {r && o && (
@@ -152,7 +157,7 @@ export default function FinancialsDashboardPage() {
                   <span className="gv-fd-head-cap">Received</span>
                 </div>
                 <div className="gv-fd-head-cell">
-                  <span className="gv-fd-head-big gv-fd-owed" style={{ whiteSpace: 'nowrap', fontSize: moneyFontSize(m(o.total_cents), 26) }}>{m(o.total_cents)}</span>
+                  <span className="gv-fd-head-big gv-fd-owed gv-fd-owe" style={{ whiteSpace: 'nowrap', fontSize: moneyFontSize(m(o.total_cents), 26) }}>{m(o.total_cents)}</span>
                   <span className="gv-fd-head-cap">Outstanding</span>
                 </div>
               </>
@@ -187,13 +192,20 @@ export default function FinancialsDashboardPage() {
       ) : (
         <div className="flex flex-col gap-4">
           {needsSetup ? (
-            <section className="gv-st-card" aria-label="Welcome to Financials" style={{ padding: '34px 30px' }}>
-              <h2 style={{ margin: 0, fontSize: 'clamp(26px, 3vw, 36px)', fontWeight: 900, letterSpacing: '-0.02em', color: '#1C1410' }}>
-                Welcome to <GoldWord tone="light">Financials</GoldWord>
-              </h2>
-              <p className="gv-st-quiet" style={{ marginTop: 8, fontSize: 16 }}>Set up how people pay you. It takes about two minutes</p>
-              <div style={{ marginTop: 20 }}>
-                <button type="button" className="gv-st-btn gv-st-forest" onClick={() => setFlow({ mode: 'welcome' })}>Get started</button>
+            <section className="gv-st-card gv-fd-welcome" aria-label="Welcome to Financials">
+              <div className="gv-fd-welcome-photo">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src="/landing/organiser-desk.jpg" alt="" aria-hidden loading="lazy" />
+              </div>
+              <div className="gv-fd-welcome-body">
+                <IconDisc icon={{ emoji: 'Money bag', lucide: PiggyBank, tint: TINT_GREEN }} size={56} />
+                <h2 style={{ margin: '16px 0 0', fontSize: 'clamp(26px, 3vw, 36px)', fontWeight: 900, letterSpacing: '-0.02em', color: '#1C1410' }}>
+                  Welcome to <GoldWord tone="light">Financials</GoldWord>
+                </h2>
+                <p className="gv-st-quiet" style={{ marginTop: 8, fontSize: 16 }}>Set up how people pay you. It takes about two minutes</p>
+                <div style={{ marginTop: 20 }}>
+                  <button type="button" className="gv-st-btn gv-st-forest" onClick={() => setFlow({ mode: 'welcome' })}>Get started</button>
+                </div>
               </div>
             </section>
           ) : (
@@ -201,11 +213,12 @@ export default function FinancialsDashboardPage() {
             {/* Money */}
             <DashCard
               title="Money"
+              icon={{ emoji: 'Money bag', lucide: PiggyBank, tint: TINT_GREEN }}
               hint="Everything paid to your conference and everything still owed. Received is after refunds. Outstanding counts only people you have accepted."
             >
               <div className="gv-fd-pair">
-                <FitBig n={m(r.total_cents)} cap={`Received · ${payments} payment${payments === 1 ? '' : 's'}`} />
-                <FitBig n={m(o.total_cents)} cap={`Outstanding · ${o.items} item${o.items === 1 ? '' : 's'} from ${o.people} ${o.people === 1 ? 'person' : 'people'}`} />
+                <FitBig tone="in" n={m(r.total_cents)} cap={`Received · ${payments} payment${payments === 1 ? '' : 's'}`} />
+                <FitBig tone="owed" n={m(o.total_cents)} cap={`Outstanding · ${o.items} item${o.items === 1 ? '' : 's'} from ${o.people} ${o.people === 1 ? 'person' : 'people'}`} />
               </div>
               {data.in_review.count > 0 && (
                 <p className="gv-fd-review">{m(data.in_review.total_cents)} waiting for your review</p>
@@ -219,6 +232,7 @@ export default function FinancialsDashboardPage() {
             {/* Things to do: the anchor */}
             <DashCard
               title="Things to Do"
+              icon={{ emoji: 'Bell', lucide: Bell, tint: TINT_GOLD }}
               className={todoCount > 0 ? 'gv-fd-todo' : undefined}
               hint="Payments and refunds waiting on you: proofs to accept or deny, refund requests, and card refunds or disputes from Stripe. People are waiting until you answer."
             >
@@ -235,7 +249,7 @@ export default function FinancialsDashboardPage() {
                 </>
               ) : (
                 <div className="gv-fd-clear">
-                  <span className="gv-fd-clear-disc" aria-hidden><CheckCircle2 size={22} strokeWidth={2.2} /></span>
+                  <span className="gv-fd-clear-disc" aria-hidden><Emoji3D name="Check mark button" size={30} fallback={CheckCircle2} fallbackColor="#1B3828" /></span>
                   <span className="gv-fd-clear-text">You&apos;re all caught up</span>
                 </div>
               )}
@@ -243,9 +257,10 @@ export default function FinancialsDashboardPage() {
           </div>
           )}
 
-          <div className="gv-fd-two">
+          <div className="gv-fd-three">
             <DashCard
               title="Invoices"
+              icon={{ emoji: 'Receipt', lucide: ReceiptText, tint: TINT_GOLD }}
               hint="Every item each person was billed: tickets, registration fees and add-ons, with what is paid, owed, waived or refunded."
             >
               <Big n={data.people_billed} cap={data.people_billed === 1 ? 'person billed' : 'people billed'} />
@@ -256,6 +271,7 @@ export default function FinancialsDashboardPage() {
 
             <DashCard
               title="Generate Invoices"
+              icon={{ emoji: 'Page facing up', lucide: FilePlus2, tint: TINT_GOLD }}
               line="Make an invoice or receipt for any payment, in your conference's name"
               hint="Schools and sponsors often need a formal invoice or receipt. This makes one under your conference's name, ready to send."
             >
@@ -270,6 +286,9 @@ export default function FinancialsDashboardPage() {
                 )}
               </div>
             </DashCard>
+
+            {/* Financial aid, moved off the rail into Financials (9 Oct 2026) */}
+            <AidCard conferenceId={conference.id} slug={slug} enabled={!!conference.financial_aid_enabled} />
           </div>
 
           <div className="gv-fd-four">

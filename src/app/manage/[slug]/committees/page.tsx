@@ -2376,10 +2376,15 @@ export default function CommitteesPage() {
                       <img
                         src={c.logo_url}
                         alt={c.abbreviation ?? c.name}
-                        style={{ width: 46, height: 46, objectFit: 'contain', flexShrink: 0, filter: 'drop-shadow(0 5px 10px rgba(27,56,40,0.24))' }}
+                        style={{ width: 55, height: 55, margin: '-4.5px 0', objectFit: 'contain', flexShrink: 0, filter: 'drop-shadow(0 5px 10px rgba(27,56,40,0.24))' }}
                       />
                     ) : (
-                      <MonogramMedallion text={c.abbreviation || c.name} tone={medallionTone(c.committee_type)} size={46} />
+                      /* 46 → 55 (+20%, owner, 9 Oct 2026). The negative block
+                         margin keeps the row's layout box at 46px, so the row
+                         is exactly as tall as before. */
+                      <span style={{ display: 'inline-flex', flexShrink: 0, margin: '-4.5px 0' }}>
+                        <MonogramMedallion text={c.abbreviation || c.name} tone={medallionTone(c.committee_type)} size={55} />
+                      </span>
                     )}
 
                     {/* Name + meta */}
@@ -2589,22 +2594,35 @@ export default function CommitteesPage() {
                       <DifficultyTile level={c.difficulty} size="sm" />
                     </div>
 
-                    {/* Emblem — 84px → 60px. The public card's emblem is the
+                    {/* Emblem — 84px → 60px → 72px. The public card's emblem is the
                         largest thing on it because that card is a poster; this
                         one is a control panel, so the emblem identifies and
-                        then gets out of the way. */}
+                        then gets out of the way.
+
+                        72px since 9 Oct 2026 (owner: "make the logo of the
+                        committee 20% bigger, do not change size of
+                        rectangle"). The extra 12px are taken back by a -12px
+                        top margin, so the emblem rises into the empty middle
+                        of the difficulty strip above it and the card keeps its
+                        height. Horizontally that is clear even at the 242px
+                        five-across card: the emblem spans 71..143 of the 214px
+                        content box, the right-aligned tile ("Intermediate",
+                        the widest label, ~66px) starts at ~148. The monogram
+                        follows: 56 → 67, -11px. */}
                     {c.logo_url ? (
                       /* eslint-disable-next-line @next/next/no-img-element */
                       <img
                         src={c.logo_url}
                         alt={c.abbreviation ?? c.name}
                         style={{
-                          width: '60px', height: '60px', objectFit: 'contain', flexShrink: 0,
+                          width: '72px', height: '72px', marginTop: -12, objectFit: 'contain', flexShrink: 0,
                           filter: 'drop-shadow(0 6px 12px rgba(27,56,40,0.24))',
                         }}
                       />
                     ) : (
-                      <MonogramMedallion text={c.abbreviation || c.name} tone={medallionTone(c.committee_type)} size={56} />
+                      <span style={{ display: 'inline-flex', flexShrink: 0, marginTop: -11 }}>
+                        <MonogramMedallion text={c.abbreviation || c.name} tone={medallionTone(c.committee_type)} size={67} />
+                      </span>
                     )}
 
                     {/* Abbreviation eyebrow (when art carries the emblem, the
