@@ -35,7 +35,7 @@ interface TutorialStep {
 // This component keeps its copy inline (rather than in translations.ts) so a step's
 // text lives next to the step it belongs to. `pick` is just a typed lookup with an
 // English fallback, so a missing locale degrades instead of rendering `undefined`.
-function pick<T>(language: string, m: { en: T; es: T; fr: T; ar: T }): T {
+function pick<T>(language: string, m: { en: T; es: T; fr: T; ar: T; pt: T }): T {
   return (m as unknown as Record<string, T>)[language] ?? m.en;
 }
 
@@ -67,6 +67,7 @@ function getSteps(language: string, docs: DocLabels): TutorialStep[] {
         ar: <>مرحباً بك في <strong>قاعة لجنتك</strong>. {GR('المتحدثون')}، {GR('المؤقّتات')}، {GR('التصويت')}، {GR('الاقتراحات')}، {GR('المحادثة')}، {GR('المستندات')}، كل ذلك في مكان واحد، مُصمَّم لإدارة <strong>جلسة المحاكاة الكاملة</strong> من أول ضربة مطرقة إلى آخرها.</>,
         fr: <>Bienvenue dans votre <strong>salle de comité</strong>. {GR('Orateurs')}, {GR('chronomètres')}, {GR('votes')}, {GR('motions')}, {GR('chat')}, {GR('documents')}, tout en un seul endroit, conçu pour gérer votre <strong>session MUN complète</strong> du premier coup de maillet au dernier.</>,
         es: <>Bienvenido a tu <strong>sala de comité</strong>. {GR('Oradores')}, {GR('cronómetros')}, {GR('votos')}, {GR('mociones')}, {GR('chat')}, {GR('documentos')}, todo en un solo lugar para dirigir tu <strong>sesión completa de MUN</strong>.</>,
+        pt: <>Boas-vindas à sua <strong>sala de comitê</strong>. {GR('Oradores')}, {GR('cronômetros')}, {GR('votações')}, {GR('moções')}, {GR('chat')}, {GR('documentos')}, tudo em um só lugar, feito para conduzir a sua <strong>sessão de MUN inteira</strong>, da primeira batida do martelo à última.</>,
         en: <>Welcome to your <strong>committee room</strong>. {GR('Speakers')}, {GR('timers')}, {GR('voting')}, {GR('motions')}, {GR('chat')}, {GR('documents')}, all bundled in one place, built to run your <strong>entire MUN session</strong> from the first gavel to the last.</>,
       }),
     },
@@ -78,6 +79,7 @@ function getSteps(language: string, docs: DocLabels): TutorialStep[] {
         ar: <>هذا الشريط هو وسيلتك <strong>لإضافة المندوبين</strong> إلى قائمة المتحدثين. اكتب اسم أي {G('دولة')} ثم اضغط {G('Enter')}.</>,
         fr: <>Cette barre vous permet d&apos;<strong>ajouter des délégués</strong> à la liste des orateurs. Tapez n&apos;importe quel {G('nom de pays')} et appuyez sur {G('Entrée')}.</>,
         es: <>Esta barra sirve para <strong>agregar delegados</strong> a la lista de oradores. Escribe cualquier {G('nombre de país')} y presiona {G('Enter')}.</>,
+        pt: <>Esta barra serve para <strong>adicionar delegações</strong> à lista de oradores. Digite o {G('nome de qualquer país')} e pressione {G('Enter')}.</>,
         en: <>This bar is how you <strong>add delegates</strong> to the speakers list. Type any {G('country name')} and press {G('Enter')}.</>,
       }),
     },
@@ -90,6 +92,7 @@ function getSteps(language: string, docs: DocLabels): TutorialStep[] {
         ar: <>أضف <strong>3 دول</strong> إلى القائمة: استخدم {G('شريط البحث')} أو انقر على المندوبين في {G('اللوحة الجانبية')}. كلاهما يعمل!</>,
         fr: <>Ajoutez <strong>3 pays</strong> à la liste : utilisez la {G('barre de recherche')} ou cliquez sur des délégués dans le {G('panneau latéral')}. Les deux fonctionnent !</>,
         es: <>Agrega <strong>3 países</strong> a la lista: usa la {G('barra de búsqueda')} o haz clic en delegados del {G('panel lateral')}. ¡Ambos funcionan!</>,
+        pt: <>Adicione <strong>3 países quaisquer</strong> à lista de oradores: use a {G('barra de busca')} abaixo ou clique nas delegações da {G('barra lateral')}. As duas formas funcionam!</>,
         en: <>Add <strong>any 3 countries</strong> to the speakers list: use the {G('input bar')} below or click delegates in the {G('sidebar')}. Both work!</>,
       }),
       actionDone: (c) => c.speakersList.length >= 3,
@@ -102,6 +105,7 @@ function getSteps(language: string, docs: DocLabels): TutorialStep[] {
         ar: <>صاحب المركز الأول في القائمة <strong>واقف على المنصّة</strong> بالفعل، ومؤقّته مضبوط وينتظر. اضغط {G('بدء')} لتمنحه الكلمة وتشغّل المؤقّت.</>,
         fr: <>Le premier de la liste est <strong>déjà à la tribune</strong>, chronomètre réglé, en attente. Appuyez sur {G('DÉMARRER')} pour lui donner la parole et lancer le chronomètre.</>,
         es: <>El primero de la lista <strong>ya está en la tribuna</strong>, con su cronómetro listo y esperando. Pulsa {G('INICIAR')} para darle la palabra y arrancar el reloj.</>,
+        pt: <>A primeira da lista <strong>já está pronta para falar</strong>, com o cronômetro ajustado e esperando. Pressione {G('INICIAR')} para dar a palavra e disparar o cronômetro.</>,
         en: <>The top of the list is <strong>already standing on the floor</strong>, clock set and waiting. Press {G('START')} to give them the floor and run the timer.</>,
       }),
       actionDone: (c) => !!c.currentSpeaker,
@@ -114,6 +118,7 @@ function getSteps(language: string, docs: DocLabels): TutorialStep[] {
         ar: <>يبدأ <strong>مؤقّت الكلام</strong> بالعد التنازلي للمندوب الحالي. يتحوّل إلى {G('الكهرماني')} في آخر 10 ثوانٍ. و{GR('انقر على المؤقّت نفسه')} لتشغيله أو إيقافه مؤقتاً، تماماً كزر البدء.</>,
         fr: <>Le <strong>chronomètre</strong> décompte pour le délégué actuel. Il passe à l&apos;{G('ambre')} dans les 10 dernières secondes. {GR('Cliquez sur le chronomètre lui-même')} pour le lancer ou le mettre en pause, comme avec le bouton.</>,
         es: <>El <strong>cronómetro</strong> cuenta regresivamente para el delegado actual. Se vuelve {G('ámbar')} en los últimos 10 segundos. {GR('Haz clic en el propio cronómetro')} para iniciarlo o pausarlo, igual que con el botón.</>,
+        pt: <>O <strong>cronômetro de discurso</strong> faz a contagem regressiva da delegação com a palavra. Ele fica {G('âmbar')} nos últimos 10 segundos. {GR('Clique no próprio cronômetro')} para iniciá-lo ou pausá-lo, exatamente como no botão.</>,
         en: <>The <strong>speaking timer</strong> counts down for the current delegate. It turns {G('amber')} for the last 10 seconds. {GR('Click the clock itself')} to start or pause it, exactly like the button.</>,
       }),
     },
@@ -125,6 +130,7 @@ function getSteps(language: string, docs: DocLabels): TutorialStep[] {
         ar: <>تحتاج إلى منح وقت إضافي؟ زر {G('إضافة وقت')} (أيقونة الساعة) يضيف {G('15 / 30 / 60')} ثانية أو أي مقدار تكتبه. ويعمل أيضاً <strong>قبل الضغط على بدء</strong>، فتُجلس أول متحدث بمدّة أطول. أمّا {G('↺')} في الصف نفسه فيعيد المؤقّت إلى مدّة الكلام الكاملة.</>,
         fr: <>Besoin d&apos;accorder plus de temps ? {G('Ajouter du temps')} (l&apos;icône horloge) ajoute {G('15 / 30 / 60')} secondes, ou le montant de votre choix. Cela marche aussi <strong>avant d&apos;appuyer sur Démarrer</strong>, pour installer le premier orateur avec un temps plus long. Le {G('↺')} de la même rangée remet le chronomètre au temps de parole complet.</>,
         es: <>¿Necesitas dar más tiempo? {G('Añadir tiempo')} (el icono de reloj) agrega {G('15 / 30 / 60')} segundos, o los que escribas. También funciona <strong>antes de pulsar Iniciar</strong>, así sientas al primer orador con más tiempo. El {G('↺')} de la misma fila devuelve el cronómetro al tiempo completo.</>,
+        pt: <>Precisa conceder mais tempo? {G('Adicionar tempo')} (o ícone de relógio) soma {G('15 / 30 / 60')} segundos, ou o valor que você digitar. Também funciona <strong>antes de pressionar Iniciar</strong>, para a primeira delegação começar com mais tempo. O {G('↺')} na mesma fileira reinicia o cronômetro com o tempo de discurso completo.</>,
         en: <>Need to grant more time? {G('Add time')} (the clock icon) adds {G('15 / 30 / 60')} seconds, or any amount you type. It also works <strong>before you press Start</strong>, so you can seat the first speaker with a longer slot. The {G('↺')} in the same row restarts the clock at the full speaking time.</>,
       }),
     },
@@ -136,6 +142,7 @@ function getSteps(language: string, docs: DocLabels): TutorialStep[] {
         ar: <>يمنح {GR('حق الرد')} مندوباً مؤقّتاً منفصلاً للردّ. إنه <strong>لا يمسّ قائمة المتحدثين</strong> إطلاقاً، لذا لا يفقد أحد مكانه في الطابور.</>,
         fr: <>{GR('Droit de Réponse')} donne à un délégué un chronomètre séparé pour répondre. Il <strong>ne touche jamais à la liste des orateurs</strong>, donc personne ne perd sa place.</>,
         es: <>{GR('Derecho a Réplica')} le da al delegado un cronómetro aparte para responder. <strong>Nunca toca la lista de oradores</strong>, así que nadie pierde su lugar.</>,
+        pt: <>O {GR('Direito de Réplica')} dá a uma delegação citada um cronômetro separado para responder. Ele <strong>nunca mexe na lista de oradores</strong>, então ninguém perde o lugar na fila.</>,
         en: <>{GR('Right to Reply')} gives an accused delegate a separate timer to answer. It <strong>never touches the speakers list</strong>, so nobody loses their place in the queue.</>,
       }),
     },
@@ -147,6 +154,7 @@ function getSteps(language: string, docs: DocLabels): TutorialStep[] {
         ar: <>{G('تدقيق الحضور')}: انقر هنا لتحديد كل مندوب على أنه <strong>غائب</strong> أو <strong>حاضر</strong> أو <strong>حاضر ومصوّت</strong>. يمكنك تحديث الحضور في أي وقت أثناء الجلسة.</>,
         fr: <>{G('Appel')} : cliquer ici pour marquer chaque délégué comme <strong>Absent</strong>, <strong>Présent</strong> ou <strong>Présent et Votant</strong>. Mettre à jour l&apos;assiduité à tout moment pendant la session.</>,
         es: <>{G('Lista de Asistencia')}: marca a cada delegado como <strong>Ausente</strong>, <strong>Presente</strong> o <strong>Presente y Votante</strong>. Puedes actualizar la asistencia en cualquier momento.</>,
+        pt: <>{G('Chamada')}: clique aqui para marcar cada delegação como <strong>Ausente</strong>, <strong>Presente</strong> ou <strong>Presente e votante</strong>. Você pode atualizar a presença a qualquer momento da sessão.</>,
         en: <>{G('Roll Call')}: click here to mark each delegate as <strong>Absent</strong>, <strong>Present</strong>, or <strong>Present & Voting</strong>. You can update attendance at any point during the session.</>,
       }),
     },
@@ -158,6 +166,7 @@ function getSteps(language: string, docs: DocLabels): TutorialStep[] {
         ar: <>هل ينقص أحدهم من قائمة المقاعد؟ الصندوق الصغير {G('إضافة مقعد')} بجانب مؤشّرات النِّصاب يقبل اسم أي {G('دولة')} أو أي اسم تكتبه. يضيفه {G('Enter')} <strong>حاضراً</strong> فوراً، و{G('Shift + Enter')} يضيفه <strong>مراقباً</strong>.</>,
         fr: <>Quelqu&apos;un manque à la liste ? La petite case {G('Ajouter un siège')}, à côté des indicateurs de quorum, accepte n&apos;importe quel {G('pays')} ou n&apos;importe quel nom que vous tapez. {G('Entrée')} l&apos;installe <strong>présent</strong> tout de suite, {G('Maj + Entrée')} l&apos;installe comme <strong>observateur</strong>.</>,
         es: <>¿Falta alguien en la lista? La cajita {G('Añadir un asiento')}, junto a los indicadores de cuórum, acepta cualquier {G('país')} o cualquier nombre que escribas. {G('Enter')} lo sienta <strong>presente</strong> al instante, y {G('Shift + Enter')} lo sienta como <strong>observador</strong>.</>,
+        pt: <>Falta alguém na lista? A caixinha {G('Adicionar assento')}, ao lado dos indicadores de quórum, aceita qualquer {G('país')} ou qualquer nome que você digitar. {G('Enter')} adiciona a delegação como <strong>presente</strong> na hora, e {G('Shift + Enter')} a adiciona como <strong>observadora</strong>.</>,
         en: <>Somebody missing from the roster? The small {G('Add a seat')} box beside the quorum tabs takes any {G('country')} or any name you type. {G('Enter')} seats them <strong>present</strong> straight away; {G('Shift + Enter')} seats them as an <strong>observer</strong>.</>,
       }),
     },
@@ -169,6 +178,7 @@ function getSteps(language: string, docs: DocLabels): TutorialStep[] {
         ar: <>{G('الاقتراحات')}: عندما يرفع مندوب لافتته، <strong>تُدخل الاقتراح أنت</strong> هنا وتختار مَن اقترحه: <strong>حوار منهجي</strong> أو <strong>حرّ</strong> أو <strong>جولة متحدثين</strong> أو <strong>مشاورات الهيئة</strong>. ومن هنا أيضاً {GR('تعليق')} أو {GR('إنهاء النقاش')}.</>,
         fr: <>{G('Motions')} : quand un délégué lève sa pancarte, <strong>c&apos;est vous qui saisissez la motion</strong> ici et choisissez qui la propose : <strong>Caucus modéré</strong>, <strong>non modéré</strong>, <strong>Tour de table</strong> ou <strong>Consultation de l&apos;assemblée</strong>. C&apos;est aussi d&apos;ici qu&apos;on {GR('suspend')} ou {GR('clôture le débat')}.</>,
         es: <>{G('Mociones')}: cuando un delegado levanta su placa, <strong>tú registras la moción</strong> aquí y eliges quién la propone: <strong>Cáucus Moderado</strong>, <strong>No Moderado</strong>, <strong>Round Robin</strong> o <strong>Consulta de Gabinete</strong>. También {GR('suspendes')} o {GR('cierras el debate')} desde aquí.</>,
+        pt: <>{G('Moções')}: quando uma delegação levanta a placa, <strong>é você quem registra a moção</strong> aqui e escolhe quem a propôs: <strong>Debate Moderado</strong>, <strong>Debate Não Moderado</strong>, <strong>Tour de Table</strong> ou <strong>Consulta Plenária</strong>. O {GR('adiamento')} e o {GR('encerramento do debate')} também ficam aqui.</>,
         en: <>{G('Motions')}: when a delegate raises their placard, <strong>you key the motion in</strong> here and pick who proposed it: <strong>Moderated Caucus</strong>, <strong>Unmoderated</strong>, <strong>Tour de Table</strong>, or <strong>Consultation of the Whole</strong>. {GR('Suspend')} and {GR('close debate')} live here too.</>,
       }),
     },
@@ -180,6 +190,7 @@ function getSteps(language: string, docs: DocLabels): TutorialStep[] {
         ar: <>{G('المستندات')}: تصل هنا <strong>{docs.wpPlural}</strong> و<strong>{docs.drPlural}</strong> التي يقدّمها المندوبون. اضغط <strong>تقديم</strong> لتشغيل مراحل {GR('القراءة')} و{GR('العرض')} و{GR('الأسئلة')} على شاشتك؛ تُعتمد {docs.wpSingular} تلقائياً بعدها، أمّا {docs.drSingular} فينتقل إلى {GR('صفحة التصويت')}، حيث تُجري تدقيق الحضور ثم تصوّت من المنصّة أو تدع الوفود تصوّت من <strong>هواتفها</strong>.</>,
         fr: <>{G('Documents')} : les <strong>{docs.wpPlural}</strong> et <strong>{docs.drPlural}</strong> soumis par les délégués arrivent ici. <strong>Introduire</strong> lance les étapes {GR('Lecture')}, {GR('Présentation')} et {GR('Q&R')} sur votre écran ; {docs.wpSingular} est adopté automatiquement ensuite, {docs.drSingular} part vers la {GR('page de vote')}, où vous faites l&apos;appel puis votez depuis la tribune ou laissez les délégations voter sur <strong>leur téléphone</strong>.</>,
         es: <>{G('Documentos')}: aquí llegan <strong>{docs.wpPlural}</strong> y <strong>{docs.drPlural}</strong> que envían los delegados. <strong>Introducir</strong> lanza las etapas de {GR('Lectura')}, {GR('Presentación')} y {GR('Preguntas')} en tu pantalla; {docs.wpSingular} se aprueba automáticamente al terminar, y {docs.drSingular} pasa a la {GR('página de votación')}, donde pasas lista y votas desde la mesa o dejas que las delegaciones voten desde <strong>su teléfono</strong>.</>,
+        pt: <>{G('Documentos')}: aqui chegam <strong>{docs.wpPlural}</strong> e <strong>{docs.drPlural}</strong> enviados pelas delegações. <strong>Introduzir</strong> conduz as etapas de {GR('Leitura')}, {GR('Apresentação')} e {GR('Perguntas')} na sua tela; depois, cada {docs.wpSingular} vai direto à aprovação, e cada {docs.drSingular} segue para a {GR('página de votação')}, onde você faz a chamada e vota pela Mesa ou deixa as delegações votarem no <strong>próprio celular</strong>.</>,
         en: <>{G('Documents')}: <strong>{docs.wpPlural}</strong> and <strong>{docs.drPlural}</strong> submitted by delegates land here. <strong>Introduce</strong> runs the {GR('Reading')}, {GR('Presentation')} and {GR('Q&A')} stages on your screen; a {docs.wpSingular} auto-passes afterwards, a {docs.drSingular} goes to the {GR('voting page')}, where you take the roll and then vote from the dais or let delegations vote on <strong>their own phones</strong>.</>,
       }),
     },
@@ -191,6 +202,7 @@ function getSteps(language: string, docs: DocLabels): TutorialStep[] {
         ar: <>{G('المحادثة')}: راسل <strong>جميع المندوبين</strong> دفعة واحدة أو أرسل رسائل خاصة فردية. نوصي بإبقائها مفتوحة على <strong>جهازك الشخصي</strong> بدلاً من شاشة اللجنة الرئيسية.</>,
         fr: <>{G('Chat')} : envoyez un message à <strong>tous les délégués</strong> ou des messages privés individuels. Nous recommandons de le garder ouvert sur votre <strong>appareil personnel</strong> plutôt que sur l&apos;écran principal du comité.</>,
         es: <>{G('Chat')}: envía mensajes a <strong>todos los delegados</strong> o DM individuales. Recomendamos tenerlo abierto en tu <strong>dispositivo personal</strong>.</>,
+        pt: <>{G('Chat')}: envie mensagens a <strong>todas as delegações</strong> de uma vez ou mensagens privadas individuais. Recomendamos deixá-lo aberto no seu <strong>dispositivo pessoal</strong>, e não na tela principal do comitê.</>,
         en: <>{G('Chat')}: message <strong>all delegates</strong> at once or DM individuals. We recommend keeping this open on your <strong>personal device</strong> rather than the main committee screen.</>,
       }),
     },
@@ -202,6 +214,7 @@ function getSteps(language: string, docs: DocLabels): TutorialStep[] {
         ar: <>{G('الإعدادات')} خمس تبويبات: {GR('الوصول')} (رمزا الجلسة والرئاسة، وهيئة الرئاسة، وما يُسمح للمندوبين بفعله)، و{GR('الاقتراحات')} (تفعيل الاقتراحات وترتيبها وإعادة تسميتها، واعتماد المستندات وأسماؤها)، و{GR('التصويت')} (النِّصاب والأغلبيات وحق النقض)، و{GR('النقاط')}، و{GR('الأشخاص')} (كل المتصلين الآن، مع إمكانية إخراج من جلس على مقعد خطأ).</>,
         fr: <>{G('Paramètres')}, cinq onglets : {GR('Accès')} (codes de session et de présidence, le présidium, ce que les délégués peuvent faire), {GR('Motions')} (activer, réordonner et renommer les motions, approbation et noms des documents), {GR('Vote')} (quorum, majorités, veto), {GR('Points')} et {GR('Personnes')} (tout le monde connecté en ce moment, et le retrait de qui occupe le mauvais siège).</>,
         es: <>{G('Configuración')}, cinco pestañas: {GR('Acceso')} (códigos de sesión y de presidencia, la mesa, y qué pueden hacer los delegados), {GR('Mociones')} (activar, reordenar y renombrar mociones, aprobación y nombres de documentos), {GR('Votación')} (cuórum, mayorías, veto), {GR('Puntos')} y {GR('Personas')} (todos los conectados ahora mismo, y sacar a quien esté en el asiento equivocado).</>,
+        pt: <>{G('Configurações')} tem cinco abas: {GR('Acesso')} (códigos da sessão e da Mesa, quem está na Mesa, o que as delegações podem fazer), {GR('Moções')} (ativar, reordenar e renomear moções, aprovação e nomes dos documentos), {GR('Votação')} (quórum, maiorias, veto), {GR('Pontos')} e {GR('Pessoas')} (todos que estão conectados agora, e a opção de remover quem estiver no assento errado).</>,
         en: <>{G('Settings')} has five tabs: {GR('Access')} (session and chair codes, the dais, what delegates may do), {GR('Motions')} (enable, reorder and rename motions, document approval and names), {GR('Voting')} (quorum, majorities, veto), {GR('Points')}, and {GR('People')} (everyone connected right now, and removing anyone on the wrong seat).</>,
       }),
     },
@@ -218,6 +231,7 @@ function getSteps(language: string, docs: DocLabels): TutorialStep[] {
         ar: <>هذا <strong>رمز جلستك</strong>. {GR('انقر عليه')} لعرضه مع {G('رمز QR')} على الشاشة كاملةً أمام القاعة، أو لنسخه. يُدخله المندوبون في {G('gavelling.com')} للانضمام في الوقت الفعلي. أمّا الرؤساء الذين ينضمون إلى المنصة فيحتاجون رمز الرئاسة الأطول من {GR('الإعدادات ← الوصول')}.</>,
         fr: <>Votre <strong>code de session</strong>. {GR('Cliquez dessus')} pour l&apos;afficher en plein écran avec un {G('QR code')} devant toute la salle, ou pour le copier. Les délégués l&apos;entrent sur {G('gavelling.com')} pour rejoindre en temps réel. Les présidents qui rejoignent le présidium ont besoin du code président plus long, dans {GR('Paramètres → Accès')}.</>,
         es: <>Tu <strong>código de sesión</strong>. {GR('Haz clic')} para mostrarlo a pantalla completa con un {G('código QR')} para toda la sala, o para copiarlo. Los delegados lo ingresan en {G('gavelling.com')} para unirse en tiempo real. Las presidencias que se unen a la mesa necesitan el código de presidencia más largo, en {GR('Configuración → Acceso')}.</>,
+        pt: <>O seu <strong>código da sessão</strong>. {GR('Clique nele')} para mostrar o código e um {G('QR code')} em tela cheia para a sala toda, ou para copiá-lo. As delegações o digitam em {G('gavelling.com')} para entrar em tempo real. Os membros da Mesa precisam do código da Mesa, mais longo, que fica em {GR('Configurações → Acesso')}.</>,
         en: <>Your <strong>session code</strong>. {GR('Click it')} to put the code and a {G('QR code')} on the screen for the whole room, or to copy it. Delegates enter it at {G('gavelling.com')} to join in real time. Chairs joining the dais need the longer chair code instead, found in {GR('Settings → Access')}.</>,
       }),
     },
@@ -228,6 +242,7 @@ function getSteps(language: string, docs: DocLabels): TutorialStep[] {
         ar: <>استمتع بالاستكشاف! وزوّدنا دائماً بـ {G('ملاحظاتك')}، فهكذا يتحسّن Gavelling. راسلنا على إنستغرام {GR('@wearegavelling')} في أي وقت 🎉</>,
         fr: <>Amusez-vous à explorer ! Et donnez-nous toujours votre {G('avis')}, c&apos;est comme ça que Gavelling s&apos;améliore. Écrivez-nous sur IG {GR('@wearegavelling')} à tout moment 🎉</>,
         es: <>¡Diviértete explorando! Y siempre {G('danos tu opinión')}, así mejora Gavelling. Escríbenos en IG {GR('@wearegavelling')} cuando quieras 🎉</>,
+        pt: <>Divirta-se explorando! E sempre {G('mande sua opinião')}, é assim que o Gavelling melhora. Fale com a gente no Instagram {GR('@wearegavelling')} quando quiser 🎉</>,
         en: <>Have fun exploring! And always {G('give us feedback')}, it&apos;s how Gavelling gets better. Text us on IG {GR('@wearegavelling')} any time 🎉</>,
       }),
     },
@@ -753,11 +768,11 @@ function TutorialNav({
   isAction: boolean; isLast: boolean; language: string;
 }) {
   const label = isLast
-    ? pick(language, { en: 'Finish', es: 'Terminar', fr: 'Terminer', ar: 'إنهاء' })
+    ? pick(language, { en: 'Finish', es: 'Terminar', fr: 'Terminer', ar: 'إنهاء', pt: 'Concluir' })
     : isAction
-      ? pick(language, { en: 'Skip', es: 'Omitir', fr: 'Passer', ar: 'تخطٍّ' })
-      : pick(language, { en: 'Next', es: 'Siguiente', fr: 'Suivant', ar: 'التالي' });
-  const backLabel = pick(language, { en: 'Back', es: 'Atrás', fr: 'Retour', ar: 'رجوع' });
+      ? pick(language, { en: 'Skip', es: 'Omitir', fr: 'Passer', ar: 'تخطٍّ', pt: 'Pular' })
+      : pick(language, { en: 'Next', es: 'Siguiente', fr: 'Suivant', ar: 'التالي', pt: 'Próximo' });
+  const backLabel = pick(language, { en: 'Back', es: 'Atrás', fr: 'Retour', ar: 'رجوع', pt: 'Voltar' });
 
   const btn: React.CSSProperties = {
     padding: '5px 12px', borderRadius: 8, fontWeight: 700, fontSize: 12,
@@ -989,6 +1004,33 @@ const SB_COPY = {
     mockNext: 'حافظ على تماسك الكتلة طوال الحوار الحر.',
     mockPlaceholder: 'ملاحظة خاصة…',
     pts: 'نقطة',
+  },
+  pt: {
+    title: 'Placar',
+    kicker: 'O troféu na sua barra superior',
+    lead: 'Todas as delegações, classificadas ao vivo. Abra quando quiser pelo ícone do troféu, entre em uma delegação para ver de onde veio cada ponto, ou use Baixar registro para levar o registro completo.',
+    earnHead: 'Os pontos entram sozinhos',
+    earnFoot: 'O tempo de fala conta a cada 10 segundos completos, além do próprio discurso. Você também pode dar ou tirar pontos à mão na ficha de uma delegação; o motivo é opcional, e o que você escrever fica no registro.',
+    awardsFoot: 'Em uma conferência, este registro é a sua evidência para as premiações: a lista de premiados é decidida na página da sua conferência.',
+    earnEmpty: 'Todas as fontes de pontos estão desativadas neste comitê, então a classificação é só pela qualidade.',
+    tuneHead: 'Ajuste os números ao seu comitê',
+    tuneWhere: 'Configurações → Pontos',
+    tune1: 'Mude qualquer valor de pontos, ou desative uma fonte por completo.',
+    tune2: 'Renomeie, adicione ou remova os critérios de qualidade que os Comentaristas avaliam, e defina a escala de notas.',
+    tune3: 'A mistura da classificação decide quanto essas notas de qualidade pesam no número principal.',
+    blendInfo: 'A pontuação principal mistura o total objetivo de pontos com a nota de qualidade de 0 a 100 dada pelos Comentaristas. Em 0% a classificação é só por pontos; em 100%, só por qualidade.',
+    blendNow: (n: number) => n === 0
+      ? 'Agora em 0%. As notas de qualidade são registradas, mas não mexem na classificação.'
+      : `Agora em ${n}%. As notas de qualidade valem ${n}% da pontuação principal.`,
+    coHead: 'Os Comentaristas escrevem o feedback',
+    coBody: 'Um membro da Mesa é o Moderador e fica com o martelo (por padrão, quem criou o comitê; qualquer membro da Mesa pode pegá-lo pelo selo do martelo, no canto superior direito da sessão). Os demais membros da Mesa com o mesmo código são Comentaristas, e a coluna central deles vira o painel de feedback abaixo.',
+    coBody2: 'Eles escrevem uma anotação privada sobre a delegação com a palavra e a avaliam nos seus critérios de qualidade. As anotações aparecem sob esse discurso no placar e no registro baixado; as notas alimentam a pontuação de qualidade.',
+    mockCap: 'O que um Comentarista vê',
+    mockLive: 'Com a palavra',
+    mockNote: 'Bom enquadramento, citou o protocolo de 2019 diretamente.',
+    mockNext: 'Manteve o bloco unido durante o debate não moderado.',
+    mockPlaceholder: 'Anotação privada…',
+    pts: 'pts',
   },
 };
 

@@ -70,24 +70,26 @@ function sanitiseCustomName(raw: string): string {
 }
 
 const customFallbackLabel = (language: string) =>
-  language === 'ar' ? 'اقتراح مخصص' : language === 'fr' ? 'Motion personnalisée' : language === 'es' ? 'Moción personalizada' : 'Custom motion';
+  language === 'ar' ? 'اقتراح مخصص' : language === 'fr' ? 'Motion personnalisée' : language === 'pt' ? 'Moção personalizada' : language === 'es' ? 'Moción personalizada' : 'Custom motion';
 
 const customNameLabel = (language: string) =>
-  language === 'ar' ? 'اسم الاقتراح' : language === 'fr' ? 'Nom de la motion' : language === 'es' ? 'Nombre de la moción' : 'Motion name';
+  language === 'ar' ? 'اسم الاقتراح' : language === 'fr' ? 'Nom de la motion' : language === 'pt' ? 'Nome da moção' : language === 'es' ? 'Nombre de la moción' : 'Motion name';
 
 const customNamePlaceholder = (language: string) =>
   language === 'ar' ? 'مثال: نقطة نظام بشأن ترتيب التصويت'
   : language === 'fr' ? "ex. Point d'ordre sur l'ordre du vote"
+  : language === 'pt' ? 'ex.: Questão de ordem sobre a ordem de votação'
   : language === 'es' ? 'ej. Cuestión de orden sobre el orden de votación'
   : 'e.g. Point of order on the voting order';
 
 /** Accepting a Custom motion only takes it off the floor, so the button says so. */
 const clearFromFloorLabel = (language: string) =>
-  language === 'ar' ? 'قبول وإزالة' : language === 'fr' ? 'Accepter et retirer' : language === 'es' ? 'Aceptar y retirar' : 'Accept & clear';
+  language === 'ar' ? 'قبول وإزالة' : language === 'fr' ? 'Accepter et retirer' : language === 'pt' ? 'Aceitar e retirar' : language === 'es' ? 'Aceptar y retirar' : 'Accept & clear';
 
 const blankNameHint = (language: string, fallback: string) =>
   language === 'ar' ? `إذا تُرك فارغًا سيظهر باسم "${fallback}".`
   : language === 'fr' ? `Laissé vide, il s'affichera comme « ${fallback} ».`
+  : language === 'pt' ? `Se ficar em branco, aparecerá como "${fallback}".`
   : language === 'es' ? `Si se deja en blanco, se mostrará como "${fallback}".`
   : `Left blank, it shows as "${fallback}".`;
 
@@ -225,7 +227,7 @@ function InfoHint({ label, text }: { label: string; text: string }) {
 }
 
 const CHAIR_KEY = '__chair__';
-const chairDisplayName = (language: string) => language === 'ar' ? 'الرئيس' : language === 'fr' ? 'Président' : language === 'es' ? 'Presidente' : 'Chair';
+const chairDisplayName = (language: string) => language === 'ar' ? 'الرئيس' : language === 'fr' ? 'Président' : language === 'pt' ? 'Mesa' : language === 'es' ? 'Presidente' : 'Chair';
 
 function ProposerInput({ candidates, value, onChange, blockedCountries, optional = false }: {
   candidates: string[]; value: string; onChange: (v: string) => void; blockedCountries?: Set<string>;
@@ -363,7 +365,7 @@ function ProposerInput({ candidates, value, onChange, blockedCountries, optional
 }
 
 const optionalProposerPlaceholder = (language: string) =>
-  language === 'ar' ? 'اختياري: اتركه فارغًا' : language === 'fr' ? 'Facultatif : laisser vide' : language === 'es' ? 'Opcional: dejar en blanco' : 'Optional: leave blank';
+  language === 'ar' ? 'اختياري: اتركه فارغًا' : language === 'fr' ? 'Facultatif : laisser vide' : language === 'pt' ? 'Opcional: deixe em branco' : language === 'es' ? 'Opcional: dejar en blanco' : 'Optional: leave blank';
 
 // ── Raise Motion Form ─────────────────────────────────────────────────────────
 function RaiseMotionForm({ committee, typeMeta, onBack, onRaised, editingMotion, belowQuorum = false, isViewOnly = false, floorFull = false }: {
@@ -636,7 +638,7 @@ function RaiseMotionForm({ committee, typeMeta, onBack, onRaised, editingMotion,
                 <div>
                   <label className="block text-lg font-semibold text-[#6A5A4A] mb-2">{t('motions_topic_label')} <span className="text-[#8B2020]">*</span></label>
                   <input type="text" value={topic} onChange={(e) => setTopic(e.target.value)}
-                    placeholder={language === 'ar' ? 'مثال: الاستجابة الإنسانية في مناطق النزاع' : language === 'fr' ? 'ex. Réponse humanitaire dans les zones de conflit' : language === 'es' ? 'ej. Respuesta humanitaria en zonas de conflicto' : 'e.g. Humanitarian response in conflict zones'}
+                    placeholder={language === 'ar' ? 'مثال: الاستجابة الإنسانية في مناطق النزاع' : language === 'fr' ? 'ex. Réponse humanitaire dans les zones de conflit' : language === 'pt' ? 'ex.: Resposta humanitária em zonas de conflito' : language === 'es' ? 'ej. Respuesta humanitaria en zonas de conflicto' : 'e.g. Humanitarian response in conflict zones'}
                     className="w-full bg-[#FAF8F3] border-2 border-[#DDD4C0] rounded-xl px-4 py-4 text-[#1C1410] placeholder-[#9A8A78] focus:outline-none focus:border-[#1B3828] transition-colors" />
                 </div>
                 <div>
@@ -1100,6 +1102,15 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
     custom: 'Personalizada',
     suspendDebate: 'Suspender Debate',
     endDebate: 'Cerrar Debate',
+  } : language === 'pt' ? {
+    // Keep in step with MOTION_NAMES_LOCALIZED.pt in src/lib/committeeFlags.ts.
+    moderated: 'Debate Moderado',
+    unmoderated: 'Debate Não Moderado',
+    consultation: 'Consulta Plenária',
+    tour: 'Tour de Table',
+    custom: 'Personalizada',
+    suspendDebate: 'Adiamento do Debate',
+    endDebate: 'Encerramento do Debate',
   } : DEFAULT_MOTION_NAMES;
   const committeeSettings = getSettings(committee.code);
   const storedNames = committeeSettings.motionNames;

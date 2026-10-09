@@ -102,7 +102,26 @@ const PRESET_ACRONYM_FR: Record<string, string> = {
   'ASEAN': 'ASEAN',
 };
 
+// Brazilian usage (PiraMUN guide: CSNU, AGNU, OMC). OTAN, not NATO, in Portuguese.
+const PRESET_ACRONYM_PT: Record<string, string> = {
+  'UN Security Council': 'CSNU',
+  'UN Environment Programme': 'PNUMA',
+  'World Health Organization': 'OMS',
+  'International Monetary Fund': 'FMI',
+  'World Bank': 'BM',
+  'UN General Assembly': 'AGNU',
+  'UN Human Rights Council': 'CDH',
+  'Economic and Social Council': 'ECOSOC',
+  'NATO': 'OTAN',
+  'G20': 'G20',
+  'European Union': 'UE',
+  'African Union': 'UA',
+  'Arab League': 'LEA',
+  'ASEAN': 'ASEAN',
+};
+
 function getPresetAcronym(name: string, lang: string): string {
+  if (lang === 'pt') return PRESET_ACRONYM_PT[name] ?? '';
   if (lang === 'fr') return PRESET_ACRONYM_FR[name] ?? '';
   if (lang === 'es') return PRESET_ACRONYM_ES[name] ?? '';
   return '';
@@ -197,7 +216,7 @@ function CommitteeNameInput({ id, value, onChange, onPresetSelect }: {
           }
           if (e.key === 'Escape') setOpen(false);
         }}
-        placeholder={language === 'ar' ? 'مثال: مجلس حقوق الإنسان' : language === 'fr' ? 'ex. Conseil des droits de l\'homme ou CDH' : language === 'es' ? 'ej. Consejo de Seguridad o CSNU' : 'e.g. Human Rights Council or HRC'}
+        placeholder={language === 'ar' ? 'مثال: مجلس حقوق الإنسان' : language === 'fr' ? 'ex. Conseil des droits de l\'homme ou CDH' : language === 'pt' ? 'ex.: Conselho de Direitos Humanos ou CDH' : language === 'es' ? 'ej. Consejo de Seguridad o CSNU' : 'e.g. Human Rights Council or HRC'}
         className={INPUT_CLS}
       />
       {open && matches.length > 0 && (
@@ -218,7 +237,7 @@ function CommitteeNameInput({ id, value, onChange, onPresetSelect }: {
                 <div className="w-[22px] h-[22px] rounded-md shrink-0" style={{ backgroundColor: 'rgba(27,56,40,0.08)' }} />
               )}
               <span className="text-[15px] font-semibold flex-1 min-w-0 leading-tight [overflow-wrap:anywhere]">{getPresetDisplayName(p.name, language)}</span>
-              <span className="text-[11px] font-extrabold tracking-[0.04em] shrink-0" style={{ color: '#1B3828' }}>{(language === 'es' || language === 'fr') ? (getPresetAcronym(p.name, language) || p.acronym) : p.acronym}</span>
+              <span className="text-[11px] font-extrabold tracking-[0.04em] shrink-0" style={{ color: '#1B3828' }}>{(language === 'es' || language === 'fr' || language === 'pt') ? (getPresetAcronym(p.name, language) || p.acronym) : p.acronym}</span>
               {i === 0 && <CornerDownLeft size={14} strokeWidth={2.2} className="shrink-0 rtl:-scale-x-100" style={{ color: '#8A7C6B' }} />}
             </button>
           ))}
@@ -340,7 +359,7 @@ function CreatePageInner() {
       review.push({ name, isCountry: !!found });
     }
     if (review.length === 0) {
-      setPasteError(language === 'ar' ? 'لا جديد لإضافته' : language === 'fr' ? 'Rien de nouveau à ajouter' : language === 'es' ? 'Nada nuevo que agregar' : 'Nothing new to add');
+      setPasteError(language === 'ar' ? 'لا جديد لإضافته' : language === 'fr' ? 'Rien de nouveau à ajouter' : language === 'pt' ? 'Nada de novo para adicionar' : language === 'es' ? 'Nada nuevo que agregar' : 'Nothing new to add');
       return;
     }
     setPasteError('');
@@ -389,13 +408,13 @@ function CreatePageInner() {
         <>
           <div className="fixed inset-0 z-40" onClick={() => setShowLangMenu(false)} />
           <div role="menu" className="absolute end-0 top-full mt-2 z-50 rounded-2xl overflow-hidden p-1" style={{ backgroundColor: C.surface, boxShadow: `${SHADOW.card}, inset 0 0 0 1px rgba(27,56,40,0.08)`, minWidth: '160px' }}>
-            {([['en', t('settings_english')], ['es', t('settings_spanish')], ['fr', t('settings_french')], ['ar', 'العربية']] as [string, string][]).map(([code, label]) => (
+            {([['en', t('settings_english')], ['es', t('settings_spanish')], ['fr', t('settings_french')], ['pt', t('settings_portuguese')], ['ar', 'العربية']] as [string, string][]).map(([code, label]) => (
               <button
                 key={code}
                 type="button"
                 role="menuitemradio"
                 aria-checked={language === code}
-                onClick={() => { setLanguage(code as 'en' | 'es' | 'fr' | 'ar'); setShowLangMenu(false); }}
+                onClick={() => { setLanguage(code as 'en' | 'es' | 'fr' | 'ar' | 'pt'); setShowLangMenu(false); }}
                 className="w-full flex items-center gap-2.5 h-10 px-3 rounded-xl text-start transition-colors hover:bg-[#1B3828]/[0.05] focus:outline-none"
                 style={{ fontFamily: OUTFIT, color: language === code ? C.forest : C.inkSoft, fontWeight: language === code ? 800 : 600, fontSize: '13px', backgroundColor: language === code ? 'rgba(27,56,40,0.07)' : undefined }}
               >
@@ -520,7 +539,7 @@ function CreatePageInner() {
             <div className="min-w-0">
               <SmallLabel htmlFor="create-topic">{t('create_topic')}</SmallLabel>
               <input id="create-topic" type="text" value={topic} onChange={(e) => setTopic(e.target.value)}
-                placeholder={language === 'ar' ? 'مثال: الحق في التعليم' : language === 'fr' ? "ex. Le droit à l'éducation" : language === 'es' ? 'ej. El derecho a la educación' : 'e.g. The right to education'}
+                placeholder={language === 'ar' ? 'مثال: الحق في التعليم' : language === 'fr' ? "ex. Le droit à l'éducation" : language === 'pt' ? 'ex.: O direito à educação' : language === 'es' ? 'ej. El derecho a la educación' : 'e.g. The right to education'}
                 className={INPUT_CLS} />
             </div>
             <div className="min-w-0 sm:col-span-2">
@@ -536,7 +555,7 @@ function CreatePageInner() {
                 onRemove={(i) => setChairs((p) => p.filter((_, j) => j !== i))}
                 onPopLast={() => { const last = chairs[chairs.length - 1]; setChairs((p) => p.slice(0, -1)); setChairDraft(last ?? ''); }}
                 max={MAX_CHAIRS}
-                placeholder={language === 'ar' ? 'اسمك' : language === 'fr' ? 'Votre nom' : language === 'es' ? 'Tu nombre' : 'Your name'}
+                placeholder={language === 'ar' ? 'اسمك' : language === 'fr' ? 'Votre nom' : language === 'pt' ? 'Seu nome' : language === 'es' ? 'Tu nombre' : 'Your name'}
                 morePlaceholder={t('create_chair_more')}
                 addLabel={t('create_chair_add')}
                 removeLabel={(name) => t('create_chair_remove', { name })}

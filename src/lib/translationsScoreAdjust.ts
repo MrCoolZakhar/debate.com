@@ -16,4 +16,10 @@ export const scoreAdjustTranslations = {
   ar: {
     sb_adjust_by: '{action} بواسطة {name}',
   },
+  // pt-BR: scaffold, values still English. Translate per .claude/pt-glossary.md.
+  pt: {
+    // A manual award or deduction with its author: "{action}" is sb_hist_award /
+    // sb_hist_deduct ("points awarded"), "{name}" the chair's name.
+    sb_adjust_by: '{action} por {name}',
+  },
 };

@@ -29,11 +29,11 @@ import {
   CalendarDays, Ticket, Globe, MapPin, Monitor, School, GraduationCap, Heart, DoorOpen, Plus, X,
 } from 'lucide-react';
 
-/** Country names are matched in English, Spanish and French (localised names
+/** Country names are matched in English, Spanish, French and Portuguese (localised names
  *  and aliases through countryMatchRank), best rank wins. */
 function bestCountryRank(name: string, q: string): number | null {
   let best: number | null = null;
-  for (const lang of ['en', 'es', 'fr']) {
+  for (const lang of ['en', 'es', 'fr', 'pt']) {
     const r = countryMatchRank(name, q, lang);
     if (r !== null && (best === null || r < best)) best = r;
   }

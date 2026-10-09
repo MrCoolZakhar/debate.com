@@ -9,8 +9,11 @@ import { placeholderTranslations } from './translationsPlaceholders';
 import { floorToolsTranslations } from './translationsFloorTools';
 import { createJoinTranslations } from './translationsCreateJoin';
 import { restartTranslations } from './translationsRestart';
+import { ptTranslationsA } from './translationsPtA';
+import { ptTranslationsB } from './translationsPtB';
+import { ptTranslationsC } from './translationsPtC';
 
-export type Language = 'en' | 'es' | 'fr' | 'ar';
+export type Language = 'en' | 'es' | 'fr' | 'ar' | 'pt';
 
 export const translations = {
   en: {
@@ -554,11 +557,12 @@ export const translations = {
     settings_english: 'English',
     settings_spanish: 'Español',
     settings_french: 'Français',
+    settings_portuguese: 'Português',
     lang_request_open: "Request a language",
     lang_request_title: "Request a language",
     lang_request_intro: "We are always working on getting committees in more languages. If you'd like to see your language, just attach an ROP document and help us build it!",
     lang_request_language: "Language",
-    lang_request_language_ph: "e.g. Portuguese",
+    lang_request_language_ph: "e.g. German",
     lang_request_email: "Your email",
     lang_request_email_ph: "you@example.com",
     lang_request_file: "Rules of Procedure document",
@@ -2238,11 +2242,12 @@ export const translations = {
     settings_english: 'English',
     settings_spanish: 'Español',
     settings_french: 'Français',
+    settings_portuguese: 'Português',
     lang_request_open: "Solicitar un idioma",
     lang_request_title: "Solicitar un idioma",
     lang_request_intro: "Siempre estamos trabajando para ofrecer comités en más idiomas. Si quieres ver tu idioma, adjunta un documento de reglas de procedimiento y ayúdanos a construirlo.",
     lang_request_language: "Idioma",
-    lang_request_language_ph: "ej. Portugués",
+    lang_request_language_ph: "ej. Alemán",
     lang_request_email: "Tu correo electrónico",
     lang_request_email_ph: "tu@ejemplo.com",
     lang_request_file: "Documento de reglas de procedimiento",
@@ -3921,11 +3926,12 @@ export const translations = {
     settings_english: 'English',
     settings_spanish: 'Español',
     settings_french: 'Français',
+    settings_portuguese: 'Português',
     lang_request_open: "Demander une langue",
     lang_request_title: "Demander une langue",
     lang_request_intro: "Nous travaillons sans cesse à proposer les comités dans plus de langues. Si vous souhaitez voir la vôtre, joignez simplement un document de règles de procédure et aidez-nous à la créer !",
     lang_request_language: "Langue",
-    lang_request_language_ph: "ex. Portugais",
+    lang_request_language_ph: "ex. Allemand",
     lang_request_email: "Votre e-mail",
     lang_request_email_ph: "vous@exemple.com",
     lang_request_file: "Document de règles de procédure",
@@ -5604,11 +5610,12 @@ export const translations = {
     settings_english: 'English',
     settings_spanish: 'Español',
     settings_french: 'Français',
+    settings_portuguese: 'Português',
     lang_request_open: "طلب لغة",
     lang_request_title: "طلب لغة",
     lang_request_intro: "نعمل دائماً على توفير اللجان بمزيد من اللغات. إذا كنت ترغب في رؤية لغتك، فأرفق وثيقة النظام الداخلي وساعدنا في بنائها!",
     lang_request_language: "اللغة",
-    lang_request_language_ph: "مثال: البرتغالية",
+    lang_request_language_ph: "مثال: الألمانية",
     lang_request_email: "بريدك الإلكتروني",
     lang_request_email_ph: "you@example.com",
     lang_request_file: "وثيقة النظام الداخلي",
@@ -6747,6 +6754,25 @@ export const translations = {
     srp_role_word_organiser: "المنظم",
     promo_conf_close: 'إغلاق',
     promo_conf_new_tab: 'يُفتح في علامة تبويب جديدة',
+  },
+  // Brazilian Portuguese (pt-BR), sessions only. The main dictionary lives in three files
+  // (translationsPtA/B/C.ts) so it can be translated in parallel; see .claude/pt-glossary.md.
+  // Any key still missing falls back to English in t() (LanguageContext).
+  pt: {
+    ...advisorBoardTranslations.pt,
+    ...advisorRoomTranslations.pt,
+    ...advisorConfTranslations.pt,
+    ...commentDockTranslations.pt,
+    ...docIntroTranslations.pt,
+    ...motionCardsTranslations.pt,
+    ...scoreAdjustTranslations.pt,
+    ...floorToolsTranslations.pt,
+    ...createJoinTranslations.pt,
+    ...restartTranslations.pt,
+    ...placeholderTranslations.pt,
+    ...ptTranslationsA,
+    ...ptTranslationsB,
+    ...ptTranslationsC,
   },
 } as const;
 

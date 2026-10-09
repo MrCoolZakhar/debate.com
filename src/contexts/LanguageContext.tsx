@@ -31,7 +31,7 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     try {
       const saved = localStorage.getItem('gavelling-language') as Language | null;
-      if (saved === 'en' || saved === 'es' || saved === 'fr' || saved === 'ar') setLanguageState(saved);
+      if (saved === 'en' || saved === 'es' || saved === 'fr' || saved === 'ar' || saved === 'pt') setLanguageState(saved);
     } catch {}
   }, []);
 
@@ -40,7 +40,8 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
   // localStorage (there is no URL/cookie locale routing).
   useEffect(() => {
     if (typeof document === 'undefined') return;
-    document.documentElement.lang = language;
+    // Portuguese is Brazilian Portuguese (pt-BR); every other code is its own tag.
+    document.documentElement.lang = language === 'pt' ? 'pt-BR' : language;
     document.documentElement.dir = language === 'ar' ? 'rtl' : 'ltr';
   }, [language]);
 

@@ -462,7 +462,7 @@ function RtrCountryInput({
             }
             if (e.key === 'Escape') { setQuery(''); onChange(''); }
           }}
-          placeholder={language === 'ar' ? 'أدخل اسم الدولة...' : language === 'fr' ? 'Ajouter un pays...' : language === 'es' ? 'Agregar país...' : 'Type country...'}
+          placeholder={language === 'ar' ? 'أدخل اسم الدولة...' : language === 'fr' ? 'Ajouter un pays...' : language === 'pt' ? 'Adicionar país...' : language === 'es' ? 'Agregar país...' : 'Type country...'}
           className="flex-1 bg-transparent px-3 py-1.5 text-[#1C1410] text-xs placeholder-[#9A8A78] focus:outline-none"
         />
         {topMatch && query && !value && query.toLowerCase() !== topMatch.country.toLowerCase() && (
@@ -759,7 +759,7 @@ function CaucusAddSpeakerInput({ committee, spokenCountries, onAdd, onAddFirst, 
 function UnmoderatedCaucusView({ committee, setCommittee, isViewOnly = false, gavelCue }: { committee: Committee; setCommittee: CommitteeSetter; isViewOnly?: boolean; gavelCue?: GavelCue }) {
   const t = useT();
   const { language } = useLanguage();
-  const unmoderatedName = language === 'ar' ? 'حوار حر' : language === 'fr' ? 'Caucus non modéré' : language === 'es' ? 'Cáucus No Moderado' : 'Unmoderated Caucus';
+  const unmoderatedName = language === 'ar' ? 'حوار حر' : language === 'fr' ? 'Caucus non modéré' : language === 'pt' ? 'Debate Não Moderado' : language === 'es' ? 'Cáucus No Moderado' : 'Unmoderated Caucus';
   // Resume the countdown on mount when the stored caucus carries a live anchor — i.e. the
   // clock was running when this chair refreshed or rejoined (H2). Lazy initial state, so it
   // reads the anchor before the chair-level resolver effect consumes it. No anchor (paused
@@ -1191,7 +1191,7 @@ function ModeratedCaucusMain({
   const speakerTime = caucus.speakingTime;
   const isTdT = caucus.purpose?.startsWith('Tour de Table') ?? false;
   const isRoomOrderTdT = isTdT && (caucus.purpose?.includes('Room Order') ?? false);
-  const caucusTitle = isTdT ? (language === 'ar' ? 'جولة المتحدثين' : 'TOUR DE TABLE') : (language === 'ar' ? 'حوار منهجي' : language === 'fr' ? 'CAUCUS MODÉRÉ' : language === 'es' ? 'CÁUCUS MODERADO' : 'MODERATED CAUCUS');
+  const caucusTitle = isTdT ? (language === 'ar' ? 'جولة المتحدثين' : 'TOUR DE TABLE') : (language === 'ar' ? 'حوار منهجي' : language === 'fr' ? 'CAUCUS MODÉRÉ' : language === 'pt' ? 'DEBATE MODERADO' : language === 'es' ? 'CÁUCUS MODERADO' : 'MODERATED CAUCUS');
   const spokenCountries = caucus.spokenCountries ?? [];
 
   // Extend-time UI state
@@ -5575,7 +5575,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
       {(() => {
         const joinReqs = (committee.pendingMotions ?? []).filter((m) => m.type === ('join-request' as string));
         if (joinReqs.length === 0) return null;
-        const wrLabel = language === 'ar' ? 'غرفة الانتظار' : language === 'fr' ? "Salle d'attente" : language === 'es' ? 'Sala de Espera' : 'Waiting Room';
+        const wrLabel = language === 'ar' ? 'غرفة الانتظار' : language === 'fr' ? "Salle d'attente" : language === 'pt' ? 'Sala de Espera' : language === 'es' ? 'Sala de Espera' : 'Waiting Room';
         return (
           <div className="shrink-0 border-b border-[#1B3828]/40 px-4 py-2 flex flex-wrap items-center gap-3" style={{ backgroundColor: '#F3EEE2' }}>
             <span className="shrink-0 inline-flex items-center gap-1.5 text-xs font-black uppercase tracking-wide px-2.5 py-1 rounded-full" style={{ backgroundColor: '#1B3828', color: '#EED98A' }}>
@@ -5834,10 +5834,10 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                   <div className="flex-1 flex flex-col items-center justify-center text-center px-8">
                     <div className="bg-[#EDE7D8] border border-[#DDD4C0]/40 rounded-3xl px-12 py-10 max-w-lg w-full shadow-2xl">
                       <p className="text-xs font-mono tracking-widest mb-3 font-bold" style={{ color: '#1B3828' }}>
-                        {t('caucus_unmod_starting').replace('{name}', (committee.caucus.motionLabel ?? (language === 'ar' ? 'حوار حر' : language === 'fr' ? 'CAUCUS NON MODÉRÉ' : language === 'es' ? 'CÁUCUS NO MODERADO' : 'UNMODERATED CAUCUS')).toUpperCase())}
+                        {t('caucus_unmod_starting').replace('{name}', (committee.caucus.motionLabel ?? (language === 'ar' ? 'حوار حر' : language === 'fr' ? 'CAUCUS NON MODÉRÉ' : language === 'pt' ? 'DEBATE NÃO MODERADO' : language === 'es' ? 'CÁUCUS NO MODERADO' : 'UNMODERATED CAUCUS')).toUpperCase())}
                       </p>
                       <h1 className="text-5xl font-black mb-2" style={{ color: '#1B3828' }}>
-                        {committee.caucus.motionLabel ?? (language === 'ar' ? 'حوار حر' : language === 'fr' ? 'Caucus non modéré' : language === 'es' ? 'Cáucus No Moderado' : 'Unmoderated Caucus')}
+                        {committee.caucus.motionLabel ?? (language === 'ar' ? 'حوار حر' : language === 'fr' ? 'Caucus non modéré' : language === 'pt' ? 'Debate Não Moderado' : language === 'es' ? 'Cáucus No Moderado' : 'Unmoderated Caucus')}
                       </h1>
                       {committee.caucus.purpose && (
                         <p className="text-[#6A5A4A] text-sm mb-6">{committee.caucus.purpose}</p>
@@ -6138,7 +6138,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                 value={extraTimeSecs}
                 onChange={(e) => setExtraTimeSecs(e.target.value)}
                 onKeyDown={(e) => { if (e.key === 'Enter') { const n = parseInt(extraTimeSecs); if (n > 0) { handleAddExtraTime(n); } } }}
-                placeholder={language === 'ar' ? 'ثوانٍ مخصصة...' : language === 'fr' ? 'Sec. personnalisées...' : language === 'es' ? 'Tiempo personalizado...' : 'Custom sec...'}
+                placeholder={language === 'ar' ? 'ثوانٍ مخصصة...' : language === 'fr' ? 'Sec. personnalisées...' : language === 'pt' ? 'Segundos personalizados...' : language === 'es' ? 'Tiempo personalizado...' : 'Custom sec...'}
                 style={{ MozAppearance: 'textfield', color: POPOVER_TONES.time.ink } as React.CSSProperties}
                 className="flex-1 min-w-0 bg-white/70 border border-[#0E3A57]/25 rounded-lg px-2 py-2 text-xs font-semibold placeholder-[#0A3350]/55 focus:outline-none focus:border-[#0E3A57] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
               />

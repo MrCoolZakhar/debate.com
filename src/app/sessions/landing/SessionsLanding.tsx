@@ -31,7 +31,7 @@ import RoleCards from './RoleCards';
 import ConferenceBridge from './ConferenceBridge';
 import { BRAND, INK, INK_SOFT, FOREST, GOLD, GOLD_TEXT, HAIR, IVORY, CREAM, WHITE, CTA_GRADIENT } from './tokens';
 
-type Lang = 'en' | 'es' | 'fr' | 'ar';
+type Lang = 'en' | 'es' | 'fr' | 'ar' | 'pt';
 
 /** The headline sits on one line in every language, on its own row across
  *  the whole hero. Only the SIZE is per language (the words come from t()):
@@ -49,13 +49,16 @@ const HEADLINE_SIZE: Record<Lang, { lg: string; sm: string }> = {
   es: { lg: 'clamp(44px, 4.7vw, 74px)', sm: 'clamp(30px, 8.4vw, 60px)' },
   fr: { lg: 'clamp(44px, 4.9vw, 80px)', sm: 'clamp(32px, 8.8vw, 60px)' },
   ar: { lg: 'clamp(46px, 5.2vw, 84px)', sm: 'clamp(34px, 9.4vw, 64px)' },
+  // pt: sized for a headline about as long as the Spanish one ("MUN do jeito certo.").
+  // Re-measure once the dictionary agent has written sl_h1_lead / sl_h1_accent.
+  pt: { lg: 'clamp(42px, 4.5vw, 70px)', sm: 'clamp(30px, 8vw, 58px)' },
 };
 
 export default function SessionsLanding() {
   const router = useRouter();
   const t = useT();
   const { language } = useLanguage();
-  const lang = (['en', 'es', 'fr', 'ar'].includes(language) ? language : 'en') as Lang;
+  const lang = (['en', 'es', 'fr', 'ar', 'pt'].includes(language) ? language : 'en') as Lang;
   const size = HEADLINE_SIZE[lang];
   const [joinCode, setJoinCode] = useState('');
   const [showDeletedNotice, setShowDeletedNotice] = useState(false);

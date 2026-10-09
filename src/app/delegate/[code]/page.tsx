@@ -312,7 +312,7 @@ function SponsorsInput({
       {/* Selected sponsors tags */}
       <div className="flex flex-wrap gap-1.5 mb-2 min-h-[24px]">
         <span className="inline-flex items-center gap-1 text-xs bg-[#1B3828]/20 border border-[#1B3828]/30 text-[#6A5A4A] rounded-full px-2.5 py-0.5 font-medium">
-          {<SeatMark country={myCountry} />} {getCountryDisplayName(myCountry, language)} <span className="text-[#9A8A78] ms-0.5">{language === 'ar' ? '(أنت)' : language === 'fr' ? '(vous)' : language === 'es' ? '(tú)' : '(you)'}</span>
+          {<SeatMark country={myCountry} />} {getCountryDisplayName(myCountry, language)} <span className="text-[#9A8A78] ms-0.5">{language === 'ar' ? '(أنت)' : language === 'fr' ? '(vous)' : language === 'pt' ? '(você)' : language === 'es' ? '(tú)' : '(you)'}</span>
         </span>
         {value.map((c) => (
           <span key={c} className="inline-flex items-center gap-1 text-xs bg-[#FAF8F3] border border-[#DDD4C0] text-[#6A5A4A] rounded-full px-2.5 py-0.5">
@@ -1824,13 +1824,13 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
                 boxShadow: '0 18px 40px rgba(27,56,40,0.24)',
               }}
             >
-              {([['en', t('settings_english')], ['es', t('settings_spanish')], ['fr', t('settings_french')], ['ar', 'العربية']] as [string, string][]).map(([lc, label], i) => {
+              {([['en', t('settings_english')], ['es', t('settings_spanish')], ['fr', t('settings_french')], ['pt', t('settings_portuguese')], ['ar', 'العربية']] as [string, string][]).map(([lc, label], i) => {
                 const on = language === lc;
                 return (
                   <button
                     key={lc}
                     type="button"
-                    onClick={() => { setLanguage(lc as 'en' | 'es' | 'fr' | 'ar'); setLangOpen(false); }}
+                    onClick={() => { setLanguage(lc as 'en' | 'es' | 'fr' | 'ar' | 'pt'); setLangOpen(false); }}
                     className="dgv-focus w-full flex items-center gap-2.5 px-4 text-start"
                     style={{
                       minHeight: 44, border: 'none', cursor: 'pointer',
@@ -1928,7 +1928,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
 
   // ── Waiting Room — chair-approval gate (blocks the session until admitted) ──
   if (requireChairApproval && isAbsent && !sessionEnded) {
-    const waitingHeading = language === 'ar' ? 'غرفة الانتظار' : language === 'fr' ? "Salle d'attente" : language === 'es' ? 'Sala de Espera' : 'Waiting Room';
+    const waitingHeading = language === 'ar' ? 'غرفة الانتظار' : language === 'fr' ? "Salle d'attente" : language === 'pt' ? 'Sala de Espera' : language === 'es' ? 'Sala de Espera' : 'Waiting Room';
     return (
       <div className="min-h-dvh flex flex-col items-center justify-center text-center px-6 py-10" style={{ background: DG.ivory }}>
         <DelegateStyles />

@@ -32,15 +32,15 @@ import { useMyActivity, useOpenSeenState, markActivitySeen, isVisibleActivity } 
 // Session goes to the sessions landing, List your / Conference straight into
 // creating a conference. The /create chooser is still reachable from those.
 const NAV_LINKS_CONFIG: ReadonlyArray<{
-  en: string; es: string; fr: string; ar: string;
-  kicker?: { en: string; es: string; fr: string; ar: string };
+  en: string; es: string; fr: string; ar: string; pt: string;
+  kicker?: { en: string; es: string; fr: string; ar: string; pt: string };
   href: string;
 }> = [
-  { en: 'Session', es: 'Sesión', fr: 'Session', ar: 'جلسة', kicker: { en: 'Start', es: 'Iniciar', fr: 'Lancer', ar: 'ابدأ' }, href: '/sessions' },
-  { en: 'Conference', es: 'Conferencia', fr: 'Conférence', ar: 'مؤتمر', kicker: { en: 'List your', es: 'Publica tu', fr: 'Publiez votre', ar: 'أضف' }, href: '/conferences/new' },
-  { en: 'Explore',  es: 'Explorar', fr: 'Explorer', ar: 'استكشف',   href: '/conferences/explore' },
-  { en: 'Pricing',  es: 'Precios',  fr: 'Tarifs',   ar: 'الأسعار',  href: '/pricing/credits' },
-  { en: 'Help',     es: 'Ayuda',    fr: 'Aide',     ar: 'المساعدة', href: '/help' },
+  { en: 'Session', es: 'Sesión', fr: 'Session', ar: 'جلسة', pt: 'Sessão', kicker: { en: 'Start', es: 'Iniciar', fr: 'Lancer', ar: 'ابدأ', pt: 'Iniciar' }, href: '/sessions' },
+  { en: 'Conference', es: 'Conferencia', fr: 'Conférence', ar: 'مؤتمر', pt: 'Conferência', kicker: { en: 'List your', es: 'Publica tu', fr: 'Publiez votre', ar: 'أضف', pt: 'Publique sua' }, href: '/conferences/new' },
+  { en: 'Explore',  es: 'Explorar', fr: 'Explorer', ar: 'استكشف', pt: 'Explorar', href: '/conferences/explore' },
+  { en: 'Pricing',  es: 'Precios',  fr: 'Tarifs',   ar: 'الأسعار', pt: 'Preços', href: '/pricing/credits' },
+  { en: 'Help',     es: 'Ayuda',    fr: 'Aide',     ar: 'المساعدة', pt: 'Ajuda', href: '/help' },
 ];
 
 /** SESSIONS lights on every sessions path (isSessionsPath), CREATE on the
@@ -351,7 +351,7 @@ export default function SiteNav(props: SiteNavProps = {}) {
                   zIndex: 50,
                 }}
               >
-                {(['en', 'es', 'fr', 'ar'] as const).map((lang) => (
+                {(['en', 'es', 'fr', 'pt', 'ar'] as const).map((lang) => (
                   <button
                     key={lang}
                     onClick={() => { setLanguage(lang); setShowLangMenu(false); }}
@@ -368,7 +368,7 @@ export default function SiteNav(props: SiteNavProps = {}) {
                     onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.06)'; }}
                     onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
                   >
-                    {lang === 'en' ? t('settings_english') : lang === 'es' ? t('settings_spanish') : lang === 'fr' ? t('settings_french') : 'العربية'}
+                    {lang === 'en' ? t('settings_english') : lang === 'es' ? t('settings_spanish') : lang === 'fr' ? t('settings_french') : lang === 'pt' ? t('settings_portuguese') : 'العربية'}
                     {language === lang && <span className="ml-1" style={{ color: '#B6871F' }}>✓</span>}
                   </button>
                 ))}
@@ -578,7 +578,7 @@ export default function SiteNav(props: SiteNavProps = {}) {
 
               {/* Mobile language toggle */}
               <div className="flex gap-2 px-2 pb-1">
-                {(['en', 'es', 'fr', 'ar'] as const).map((lang) => (
+                {(['en', 'es', 'fr', 'pt', 'ar'] as const).map((lang) => (
                   <button
                     key={lang}
                     onClick={() => setLanguage(lang)}
@@ -592,7 +592,7 @@ export default function SiteNav(props: SiteNavProps = {}) {
                       cursor: 'pointer',
                     }}
                   >
-                    {lang === 'en' ? `EN: ${t('settings_english')}` : lang === 'es' ? `ES: ${t('settings_spanish')}` : lang === 'fr' ? `FR: ${t('settings_french')}` : 'AR: العربية'}
+                    {lang === 'en' ? `EN: ${t('settings_english')}` : lang === 'es' ? `ES: ${t('settings_spanish')}` : lang === 'fr' ? `FR: ${t('settings_french')}` : lang === 'pt' ? `PT: ${t('settings_portuguese')}` : 'AR: العربية'}
                   </button>
                 ))}
               </div>

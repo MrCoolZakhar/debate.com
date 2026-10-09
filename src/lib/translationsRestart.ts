@@ -45,4 +45,16 @@ export const restartTranslations = {
     session_restart_failed: 'تعذّر إعادة تشغيل الجلسة: لم يصل التغيير إلى الخادم. تحقّق من اتصالك ثم اضغط إعادة تشغيل الجلسة مجدداً.',
     srp_rejoin_ended_note: 'أُنهيت هذه اللجنة. بفتحها يظهر لك زر إعادة التشغيل.',
   },
+  // pt-BR: scaffold, values still English. Translate per .claude/pt-glossary.md.
+  pt: {
+    // The End View's restart control, shown only inside the 24 h window.
+    session_restart_btn: 'Reiniciar a sessão',
+    // Asked before it is written: an accidental restart is also an accident.
+    session_restart_ask: 'Reiniciar este comitê? Ele volta para a chamada e o registro é mantido',
+    session_restart_yes: 'Reiniciar',
+    session_restart_no: 'Manter encerrado',
+    session_restart_failed: 'Não foi possível reiniciar a sessão. A mudança não chegou ao servidor. Verifique sua conexão e pressione Reiniciar a sessão de novo.',
+    // The rejoin card, when the room it offers is one that ended but can still be restarted.
+    srp_rejoin_ended_note: 'Este comitê foi encerrado. Ao abri-lo, você verá o botão de reiniciar.',
+  },
 };

@@ -59,6 +59,13 @@ const FACTOR_NAMES_LOCALIZED: Record<string, Record<string, string>> = {
     collaboration: 'التعاون',
     content: 'المحتوى والبحث',
   },
+  // pt-BR: PiraMUN's award criteria name Oratória and Persuasão e diplomacia.
+  pt: {
+    diplomacy: 'Diplomacia',
+    speaking: 'Oratória',
+    collaboration: 'Colaboração',
+    content: 'Conteúdo e pesquisa',
+  },
 };
 
 const SOURCE_NAMES_LOCALIZED: Record<string, Record<string, string>> = {
@@ -97,6 +104,20 @@ const SOURCE_NAMES_LOCALIZED: Record<string, Record<string, string>> = {
     wpSponsor: 'ورقة عمل',
     drSponsor: 'مشروع قرار',
     drPassed: 'قرار مُعتمد',
+  },
+  // pt-BR, PiraMUN terminology (.claude/pt-glossary.md): Lista de Oradores, direito de
+  // réplica, documento de trabalho, proposta de resolução. P / PV = Presente / Presente e votante.
+  pt: {
+    attendance: 'Presença (P/PV)',
+    gslSpeech: 'Discurso na Lista de Oradores',
+    caucusSpeech: 'Discurso em debate moderado',
+    speakingTimePer10s: 'Tempo de fala /10s',
+    motionRaised: 'Moção proposta',
+    motionPassed: 'Moção aprovada',
+    rightOfReply: 'Direito de réplica',
+    wpSponsor: 'Documento de trabalho',
+    drSponsor: 'Proposta de resolução',
+    drPassed: 'Resolução aprovada',
   },
 };
 

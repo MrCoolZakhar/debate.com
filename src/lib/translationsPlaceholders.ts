@@ -31,4 +31,15 @@ export const placeholderTranslations = {
     gavel_nobody: 'لا أحد بعد',
     voting_rc_needed_none: 'لا يوجد',
   },
+  // pt-BR: scaffold, values still English. Translate per .claude/pt-glossary.md.
+  pt: {
+    // A quality factor a Commenter has not rated yet (the comment dock).
+    fb_not_rated: 'Sem avaliação',
+    // The scoreboard Matrix's quality column for a delegation with no ratings.
+    sb_quality_none: 'Nenhuma',
+    // The GavelChip label when nobody holds the gavel ("Moderator: Nobody yet").
+    gavel_nobody: 'Ninguém ainda',
+    // The voting roll call's "To pass" figure while nobody is marked present.
+    voting_rc_needed_none: 'Nenhum',
+  },
 };

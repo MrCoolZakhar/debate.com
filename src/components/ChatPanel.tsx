@@ -38,7 +38,7 @@ import { delegationNameLabel, useSessionDelegationNames } from '@/lib/sessionDel
 import NewGroupSheet, { type GroupCandidate } from './chat/NewGroupSheet';
 import { CHAT, type ChatThreadEvent } from './chat/chatTokens';
 
-const LOCALES: Record<string, string> = { en: 'en-GB', es: 'es-ES', fr: 'fr-FR', ar: 'ar' };
+const LOCALES: Record<string, string> = { en: 'en-GB', es: 'es-ES', fr: 'fr-FR', ar: 'ar', pt: 'pt-BR' };
 
 /* Two panes (list + thread) when the PANEL is at least this wide, one pane with a back button
    below it. Measured on the panel itself, not the viewport: the same component lives in a

@@ -53,4 +53,17 @@ export const advisorConfTranslations = {
     advconf_live_rooms_one: 'لجنة واحدة مباشرة',
     advconf_live_rooms_many: '{n} لجان مباشرة',
   },
+  // pt-BR: scaffold, values still English. Translate per .claude/pt-glossary.md.
+  pt: {
+    advconf_live_title: '{name}, acompanhe a sua delegação.',
+    advconf_live_title_anon: 'Acompanhe a sua delegação.',
+    advconf_live_open: 'Acompanhar a delegação',
+    advconf_live_students_label: 'dos seus alunos em salas ao vivo',
+    advconf_live_rooms_label: 'comitês ao vivo',
+    advconf_live_note: 'Onde cada aluno está na lista de oradores, em uma só tela.',
+    advconf_live_students_one: '1 aluno ao vivo',
+    advconf_live_students_many: '{n} alunos ao vivo',
+    advconf_live_rooms_one: '1 comitê ao vivo',
+    advconf_live_rooms_many: '{n} comitês ao vivo',
+  },
 } as const;
