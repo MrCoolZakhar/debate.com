@@ -54,7 +54,9 @@ import { formatConferenceDates } from '@/lib/conferenceDates';
 import { waitingSince } from './waitingOnReply';
 import MessagesHeader, { FindDelegatesCard, type MessagesTab } from './MessagesHeader';
 import InboxSplit, { type SplitThread, type SplitDetail } from './InboxSplit';
-import AutomaticEmailsList, { type AutoGroup } from './AutomaticEmailsList';
+import AutomaticEmailsList, { type AutoGroup, type AutoRow } from './AutomaticEmailsList';
+import { JOURNEY, EVENT_JOURNEY, EVENT_COPY, REMINDER_OF } from './automaticEmails';
+import { OnOffSwitch } from './commsKit';
 import AnnounceView from './AnnounceView';
 
 /** The screens of the page. Since 10 Oct 2026 ("Your messages", the owner's
@@ -606,105 +608,9 @@ function defaultPreviewText(eventKey: string): { subject: string; opening: strin
   return { subject: plain(d.subject), opening: opening.length > 220 ? `${opening.slice(0, 217).trimEnd()}...` : opening };
 }
 
-// ── Automatic-emails registry, grouped by lifecycle stage ────────────────────
-// Exhaustive over EventKey on purpose: add a key to EVENT_REGISTRY and this
-// refuses to compile until the new event has a stage — the same contract
-// NOTIFICATION_CATEGORY enforces.
-
-const STAGE_ORDER = ['Applying', 'Payment', 'Allocation', 'Delegations', 'Session', 'Team & questions'] as const;
-type Stage = typeof STAGE_ORDER[number];
-
-const EVENT_STAGE: Record<EventKey, Stage> = {
-  application_received: 'Applying',
-  draft_reminder: 'Applying',
-  application_accepted: 'Applying',
-  application_rejected: 'Applying',
-  aid_approved: 'Applying',
-  aid_denied: 'Applying',
-  import_join_invite: 'Applying',
-  payment_available: 'Payment',
-  payment_received: 'Payment',
-  fee_waived: 'Payment',
-  pledge_received: 'Payment',
-  allocation_assigned: 'Allocation',
-  co_delegate_assigned: 'Allocation',
-  allocation_changed: 'Allocation',
-  allocation_removed: 'Allocation',
-  delegation_swap: 'Allocation',
-  added_to_delegation: 'Delegations',
-  removed_from_delegation: 'Delegations',
-  spot_received: 'Delegations',
-  spot_lost: 'Delegations',
-  not_attending: 'Delegations',
-  attendance_restored: 'Delegations',
-  documents_published: 'Session',
-  position_paper_due: 'Session',
-  session_chair_invite: 'Session',
-  session_join_invite: 'Session',
-  awards_open: 'Session',
-  award_received: 'Session',
-  chair_assigned: 'Team & questions',
-  committee_chair_invite: 'Team & questions',
-  organizer_invite: 'Team & questions',
-  request_reply: 'Team & questions',
-  request_received: 'Team & questions',
-  // The reminders sit with the invite they chase.
-  chair_invite_reminder_1: 'Team & questions',
-  chair_invite_reminder_2: 'Team & questions',
-  chair_invite_reminder_3: 'Team & questions',
-  organizer_invite_reminder_1: 'Team & questions',
-  organizer_invite_reminder_2: 'Team & questions',
-  organizer_invite_reminder_3: 'Team & questions',
-  import_claim_reminder_1: 'Applying',
-  import_claim_reminder_2: 'Applying',
-  import_claim_reminder_3: 'Applying',
-};
-
-/** What each stage IS, said in one line, plus the art that carries it.
- *
- *  The registry is the surface that tells an organiser what Gavelling sends on
- *  their behalf, and it used to open on six 11px letterspaced captions that
- *  read like fieldset labels in a settings screen. A stage is a moment in the
- *  conference, not a form section, so it now gets the weight of a heading: a
- *  44px 3D emoji disc, a 26px title and a sentence saying what the moment is.
- *
- *  Every disc passes a lucide `fallback`: the Fluent art is a CDN image and
- *  must degrade to a glyph rather than to a hole. Gold discs carry forest ink
- *  (white on gold is unreadable), which `NeuIconDisc` handles via `darkStop`.
- *
- *  CHECK A NEW NAME AGAINST THE CDN BEFORE YOU COMMIT IT. Fluent files every
- *  emoji that has skin-tone variants under a per-tone subfolder, so the flat
- *  path `Emoji3D` builds 404s and the disc quietly drops to lucide. Both
- *  "People holding hands" and "Person raising hand" do exactly that, and both
- *  are still passed from several other surfaces in this repo, and neither has
- *  once rendered as 3D art. One request settles it:
- *    cdn.jsdelivr.net/gh/microsoft/fluentui-emoji@main/assets/<Name>/3D/<name>_3d.png */
-const STAGE_META: Record<Stage, { emoji: string; icon: typeof Bell; gradient: NeuGradient; blurb: string }> = {
-  Applying: {
-    emoji: 'Page facing up', icon: FileText, gradient: NEU_GRADIENTS.forest,
-    blurb: 'From the moment an application lands to the moment you answer it.',
-  },
-  Payment: {
-    emoji: 'Money bag', icon: CreditCard, gradient: NEU_GRADIENTS.gold,
-    blurb: 'Fees becoming due, clearing, and being waived.',
-  },
-  Allocation: {
-    emoji: 'Ballot box with ballot', icon: Globe, gradient: NEU_GRADIENTS.sage,
-    blurb: 'Countries and committees going out, changing, and coming back.',
-  },
-  Delegations: {
-    emoji: 'Busts in silhouette', icon: Users, gradient: NEU_GRADIENTS.green,
-    blurb: 'Delegations gaining and losing members and places.',
-  },
-  Session: {
-    emoji: 'Studio microphone', icon: Mic, gradient: NEU_GRADIENTS.forest,
-    blurb: 'Everything the days of the conference itself need.',
-  },
-  'Team & questions': {
-    emoji: 'Red question mark', icon: HelpCircle, gradient: NEU_GRADIENTS.gold,
-    blurb: 'Your own team, and the questions people send you.',
-  },
-};
+// ── Automatic-emails registry: grouped by the participant's journey in
+// ./automaticEmails.ts (exhaustive over EventKey, the same compile-time
+// contract the old lifecycle stages had). ──────────────────────────────────
 
 /** 24h snooze for dismissable rail cards, per conference, client-local. */
 function railDismissKey(conferenceId: string) {
@@ -845,27 +751,6 @@ function outboxStatusColor(status: string) {
 }
 
 // ── Small shared bits ─────────────────────────────────────────────────────────
-
-function PillToggle({ value, onChange }: { value: boolean; onChange: () => void }) {
-  return (
-    <button
-      type="button"
-      onClick={onChange}
-      className="relative flex-shrink-0 focus:outline-none"
-      style={{
-        width: 34, height: 19, borderRadius: 9999,
-        backgroundColor: value ? '#1B3828' : '#DDD4C0',
-        transition: 'background-color 200ms ease',
-        border: 'none', cursor: 'pointer',
-      }}
-    >
-      <span
-        className="absolute rounded-full transition-all duration-200"
-        style={{ width: 15, height: 15, backgroundColor: 'white', top: 2, left: value ? 17 : 2, boxShadow: '0 1px 4px rgba(0,0,0,0.2)' }}
-      />
-    </button>
-  );
-}
 
 /** The title above one of the three sections.
  *
@@ -1690,6 +1575,12 @@ function CommunicationsPageInner() {
 
   // ── Notifications: PREVIEW DEFAULT modal ──
   const [previewDefaultKey, setPreviewDefaultKey] = useState<string | null>(null);
+  // The builder's "Preview default" link shows OUR copy even when the
+  // organiser has their own; the Automatic emails list shows what sends.
+  const [previewForceDefault, setPreviewForceDefault] = useState(false);
+  // The builder opened on our default wording (nothing of theirs yet), so an
+  // untouched Save must not store our copy as theirs.
+  const [builderFromDefault, setBuilderFromDefault] = useState(false);
   // Half an automatic template (a subject with no message, or the other way
   // round) is refused on Save with this, in the danger colour; nothing is saved.
   const [builderPairError, setBuilderPairError] = useState('');
@@ -2597,8 +2488,14 @@ function CommunicationsPageInner() {
 
   const openBuilderForEvent = useCallback((ev: EventDef) => {
     const existing = templatesByEvent.get(ev.key);
-    const initialSubject = existing?.subject ?? '';
-    const initialBlocks = normalizeBlocks(existing?.body_blocks, existing?.body ?? '');
+    // Nothing of their own yet: start from our default wording, so "Edit"
+    // changes the email they already send instead of opening a blank page
+    // (and "See it for real" previews something). Nothing is saved until
+    // they change it (the autosave's not-an-edit guard below).
+    const def = hasDraftContent(existing) ? null : getDefaultEventEmail(ev.key);
+    const initialSubject = def ? def.subject : existing?.subject ?? '';
+    const initialBlocks = def ? def.blocks.map(b => ({ ...b })) : normalizeBlocks(existing?.body_blocks, existing?.body ?? '');
+    setBuilderFromDefault(!!def);
     setBuilderPairError('');
     setBuilderEventKey(ev.key);
     setBuilderTemplateId(existing?.id ?? null);
@@ -2616,6 +2513,7 @@ function CommunicationsPageInner() {
   }, [templatesByEvent]);
 
   function openBuilderForAdHoc(template?: EmailTemplate) {
+    setBuilderFromDefault(false);
     const initialSubject = template?.subject ?? '';
     const initialBlocks = normalizeBlocks(template?.body_blocks, template?.body ?? '');
     setBuilderEventKey(null);
@@ -2638,6 +2536,7 @@ function CommunicationsPageInner() {
    *  openBuilderForAdHoc uses, just fed static content instead of a DB row.
    *  Nothing persists until the first edit/save (the normal autosave flow). */
   function openBuilderForSeed(content: SeedContent) {
+    setBuilderFromDefault(false);
     const initialBlocks = content.blocks.map(b => ({ ...b }));
     setBuilderEventKey(null);
     setBuilderTemplateId(null);
@@ -2784,10 +2683,16 @@ function CommunicationsPageInner() {
   }, [builderSubject, builderBlocks, builderOpen]);
 
   async function handleSaveAndClose() {
+    // Opened on our default wording and left as it was: save it exactly as a
+    // blank builder always saved (both empty = "use Gavelling's default",
+    // keeping the delivery choice), never our copy stored as theirs.
+    const untouchedDefault = builderFromDefault && JSON.stringify({ subject: builderSubject, blocks: builderBlocks }) === builderInitialRef.current;
     setSavingTemplate(true);
     setBuilderError('');
     clearErr('communications-builder');
-    const id = await persistTemplate(builderSubject, builderBlocks, { silent: false });
+    const id = untouchedDefault
+      ? await persistTemplate('', [], { silent: false })
+      : await persistTemplate(builderSubject, builderBlocks, { silent: false });
     setSavingTemplate(false);
     if (id) {
       showFlash('ok', 'Template saved.');
@@ -3788,32 +3693,32 @@ function CommunicationsPageInner() {
    *  the participant. The same rule as the rail badge (waitingOnReply.ts). */
   const waitingCount = inboxRequests.filter(r => r.status === 'open' && r.kind !== 'swap_notice' && waitingSince(r, inboxMessagesByRequest.get(r.id) ?? []) !== null).length;
 
-  /** The repeat settings of a reminder email, drawn under its switch. */
+  /** The repeat settings of a reminder email, one line under its switch,
+   *  shown only while the email is on. Same writes as before
+   *  (handleUpdateRecurring, clamped on blur). */
   function renderReminder(template: EmailTemplate) {
+    const numberStyle = {
+      border: CARD_BORDER, backgroundColor: '#FFFFFF', color: '#1C1410', fontFamily: OUTFIT,
+      width: 64, minHeight: 40, fontSize: 16, textAlign: 'center' as const,
+    };
     return (
-      <div className="rounded-xl p-3 mt-3" style={{ ...WELL, maxWidth: 480 }}>
-        <p className="text-xs font-bold mb-2.5" style={{ color: '#1C1410', fontFamily: OUTFIT, letterSpacing: '0.03em' }}>
-          Reminders
-        </p>
-        <div className="flex items-center justify-between gap-3 mb-3">
-          <span className="text-xs font-semibold" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
-            Repeat this reminder
-          </span>
-          <PillToggle
-            value={template.recurring_enabled}
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2 mt-2.5" style={{ fontFamily: OUTFIT, fontSize: 14, color: '#1C1410' }}>
+        <span className="inline-flex items-center gap-2">
+          <OnOffSwitch
+            on={template.recurring_enabled}
             onChange={() => handleUpdateRecurring(template, { recurring_enabled: !template.recurring_enabled })}
+            label={`Repeat this reminder: ${template.recurring_enabled ? 'on' : 'off'}`}
           />
-        </div>
-        <div className="flex flex-wrap gap-4 mb-3">
-          <div>
-            <label className="block text-xs font-semibold mb-1" style={{ color: template.recurring_enabled ? '#1C1410' : SOFT, fontFamily: OUTFIT }}>
-              Days between reminders
-            </label>
+          <span aria-hidden style={{ fontWeight: 600 }}>Repeat it</span>
+        </span>
+        {template.recurring_enabled && (
+          <>
+            <span>every</span>
             <input
               type="number"
               min={3}
               max={60}
-              disabled={!template.recurring_enabled}
+              aria-label="Days between reminders"
               value={template.recurring_interval_days ?? 3}
               onChange={(e) => {
                 const raw = e.target.value === '' ? null : Number(e.target.value);
@@ -3823,19 +3728,15 @@ function CommunicationsPageInner() {
                 const clamped = Math.min(60, Math.max(3, Math.round(Number(e.target.value)) || 3));
                 handleUpdateRecurring(template, { recurring_interval_days: clamped });
               }}
-              className="rounded-xl px-3 py-1.5 text-sm focus:outline-none"
-              style={{ border: CARD_BORDER, backgroundColor: template.recurring_enabled ? '#FFFFFF' : '#F0EBDD', color: '#1C1410', fontFamily: OUTFIT, width: 84 }}
+              className="rounded-xl px-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]"
+              style={numberStyle}
             />
-          </div>
-          <div>
-            <label className="block text-xs font-semibold mb-1" style={{ color: template.recurring_enabled ? '#1C1410' : SOFT, fontFamily: OUTFIT }}>
-              Stop after this many
-            </label>
+            <span>days, up to</span>
             <input
               type="number"
               min={1}
               max={10}
-              disabled={!template.recurring_enabled}
+              aria-label="Most reminders to send"
               value={template.recurring_max_sends ?? 3}
               onChange={(e) => {
                 const raw = e.target.value === '' ? null : Number(e.target.value);
@@ -3845,14 +3746,12 @@ function CommunicationsPageInner() {
                 const clamped = Math.min(10, Math.max(1, Math.round(Number(e.target.value)) || 3));
                 handleUpdateRecurring(template, { recurring_max_sends: clamped });
               }}
-              className="rounded-xl px-3 py-1.5 text-sm focus:outline-none"
-              style={{ border: CARD_BORDER, backgroundColor: template.recurring_enabled ? '#FFFFFF' : '#F0EBDD', color: '#1C1410', fontFamily: OUTFIT, width: 84 }}
+              className="rounded-xl px-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]"
+              style={numberStyle}
             />
-          </div>
-        </div>
-        <p className="text-xs" style={{ color: SOFT, fontFamily: OUTFIT }}>
-          Reminders stop on their own when there is nothing left to do, and when the conference starts.
-        </p>
+            <span>times</span>
+          </>
+        )}
       </div>
     );
   }
@@ -3916,24 +3815,32 @@ function CommunicationsPageInner() {
   })() : null;
   const messagesTab: MessagesTab = view === 'sent' ? 'sent' : view === 'automatic' ? 'automatic' : 'questions';
 
-  const automaticGroups: AutoGroup[] = STAGE_ORDER.map(stage => ({
-    title: stage,
+  // Grouped by the participant's journey (automaticEmails.ts). The always-on
+  // reminders that chase an invite are folded into that invite's row.
+  const automaticRow = (ev: EventDef): AutoRow => {
+    const template = templatesByEvent.get(ev.key);
+    const on = ev.functional ? true : template ? template.enabled : eventOnWhenMissing(ev.key);
+    const copy = EVENT_COPY[ev.key as EventKey];
+    const followUps = (EVENT_REGISTRY as readonly EventDef[])
+      .filter(r => REMINDER_OF[r.key as EventKey] === ev.key)
+      .map(r => ({ key: r.key, label: EVENT_COPY[r.key as EventKey]?.name ?? r.label }));
+    return {
+      key: ev.key,
+      label: copy?.name ?? ev.label,
+      when: copy?.when ?? ev.description,
+      alwaysOn: !!ev.functional,
+      on,
+      toggling: togglingEventKeys.has(ev.key),
+      ownWording: templateHasContent(template),
+      reminder: ev.recurring && template?.enabled ? renderReminder(template) : undefined,
+      followUps: followUps.length ? followUps : undefined,
+    };
+  };
+  const automaticGroups: AutoGroup[] = JOURNEY.map(title => ({
+    title,
     rows: (EVENT_REGISTRY as readonly EventDef[])
-      .filter(e => EVENT_STAGE[e.key as EventKey] === stage)
-      .map(ev => {
-        const template = templatesByEvent.get(ev.key);
-        const on = ev.functional ? true : template ? template.enabled : eventOnWhenMissing(ev.key);
-        return {
-          key: ev.key,
-          label: ev.label,
-          description: ev.description,
-          alwaysOn: !!ev.functional,
-          on,
-          toggling: togglingEventKeys.has(ev.key),
-          ownWording: templateHasContent(template),
-          reminder: ev.recurring && template?.enabled ? <div className="mt-3">{renderReminder(template)}</div> : undefined,
-        };
-      }),
+      .filter(e => EVENT_JOURNEY[e.key as EventKey] === title && !REMINDER_OF[e.key as EventKey])
+      .map(automaticRow),
   })).filter(g => g.rows.length > 0);
 
   // ── Render ────────────────────────────────────────────────────────────────
@@ -4012,7 +3919,7 @@ function CommunicationsPageInner() {
             if (!ev || togglingEventKeys.has(key)) return;
             handleToggleEnabled(ev, templatesByEvent.get(key));
           }}
-          onPreview={(key) => setPreviewDefaultKey(key)}
+          onPreview={(key) => { setPreviewForceDefault(false); setPreviewDefaultKey(key); }}
           onEdit={(key) => {
             const ev = EVENT_REGISTRY.find(e => e.key === key);
             if (ev) openBuilderForEvent(ev);
@@ -4327,7 +4234,16 @@ function CommunicationsPageInner() {
               empty editor has no way of knowing that. Quiet, permanent while
               it is true, and never shown for an event that is off or for a
               one-off broadcast, which has no default to fall back to. */}
-          {builderEventKey !== null && templatesByEvent.get(builderEventKey)?.enabled && !blocksHaveContent(builderBlocks) && (
+          {builderEventKey !== null && builderFromDefault && JSON.stringify({ subject: builderSubject, blocks: builderBlocks }) === builderInitialRef.current && (
+            <p
+              className="flex items-start gap-2 text-sm leading-relaxed mb-4"
+              style={{ color: SOFT, fontFamily: OUTFIT, maxWidth: 620, textWrap: 'pretty' }}
+            >
+              <Info size={14} style={{ flexShrink: 0, marginTop: 3 }} />
+              <span>This is our wording. Change anything and your version is sent instead.</span>
+            </p>
+          )}
+          {builderEventKey !== null && !builderFromDefault && templatesByEvent.get(builderEventKey)?.enabled && !blocksHaveContent(builderBlocks) && (
             <p
               className="flex items-start gap-2 text-xs leading-relaxed mb-4"
               style={{ color: SOFT, fontFamily: OUTFIT, maxWidth: 620, textWrap: 'pretty' }}
@@ -4338,7 +4254,7 @@ function CommunicationsPageInner() {
                 Write your own subject and message here and they replace ours.{' '}
                 <button
                   type="button"
-                  onClick={() => setPreviewDefaultKey(builderEventKey)}
+                  onClick={() => { setPreviewForceDefault(true); setPreviewDefaultKey(builderEventKey); }}
                   className="focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] rounded"
                   style={{ background: 'none', border: 'none', padding: 0, color: '#1B3828', fontWeight: 700, textDecoration: 'underline', textUnderlineOffset: 3, cursor: 'pointer', font: 'inherit' }}
                 >
@@ -4434,6 +4350,7 @@ function CommunicationsPageInner() {
               recipients={{ groups: reachGroups, reachCount: finalRecipients.length }}
               conference={conference}
               conferenceId={conference.id}
+              eventKey={builderEventKey}
               initialSubject={builderSubject}
               initialBlocks={builderBlocks}
               previewCandidates={previewCandidates}
@@ -4556,7 +4473,15 @@ function CommunicationsPageInner() {
       {previewDefaultKey && (
         <DefaultEmailPreviewModal
           eventKey={previewDefaultKey}
-          eventLabel={getEventLabel(previewDefaultKey)}
+          eventLabel={EVENT_COPY[previewDefaultKey as EventKey]?.name ?? getEventLabel(previewDefaultKey)}
+          template={templatesByEvent.get(previewDefaultKey) ?? null}
+          functional={!!(EVENT_REGISTRY as readonly EventDef[]).find(e => e.key === previewDefaultKey)?.functional}
+          forceDefault={previewForceDefault}
+          onEdit={(EVENT_REGISTRY as readonly EventDef[]).some(e => e.key === previewDefaultKey && !e.functional) && !(builderOpen && builderEventKey === previewDefaultKey) ? () => {
+            const ev = EVENT_REGISTRY.find(e => e.key === previewDefaultKey);
+            setPreviewDefaultKey(null);
+            if (ev) openBuilderForEvent(ev);
+          } : undefined}
           conference={conference}
           conferenceId={conference.id}
           previewCandidates={previewCandidates}

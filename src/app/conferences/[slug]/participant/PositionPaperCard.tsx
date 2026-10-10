@@ -72,10 +72,14 @@ function storagePathFromUrl(url: string): string | null {
   return i === -1 ? null : url.slice(i + marker.length);
 }
 
-export default function PositionPaperCard({ conferenceId, conferenceSlug, myAllocation }: {
+export default function PositionPaperCard({ conferenceId, conferenceSlug, myAllocation, onPaperState }: {
   conferenceId: string;
   conferenceSlug: string;
   myAllocation: ParticipantAllocation | null;
+  /** Told what this card already read (no extra query), so the phone
+   *  dashboard's "next step" never asks for a paper that is already in, or
+   *  for one the committee is not taking. Null while the read is pending. */
+  onPaperState?: (state: { enabled: boolean; submitted: boolean } | null) => void;
 }) {
   const { user, session } = useAuth();
   const router = useRouter();
@@ -96,6 +100,11 @@ export default function PositionPaperCard({ conferenceId, conferenceSlug, myAllo
   // "NOT SUBMITTED" to a delegate whose paper was on file, whenever the read
   // was refused (an expired token on a tab left open). 'error' shows a retry.
   const [paperLoad, setPaperLoad] = useState<'loading' | 'ok' | 'error'>('loading');
+
+  const paperSubmitted = !!myPositionPaper && myPositionPaper.status !== 'rejected';
+  useEffect(() => {
+    onPaperState?.(paperLoad === 'ok' ? { enabled: ppEnabled, submitted: paperSubmitted } : null);
+  }, [onPaperState, paperLoad, ppEnabled, paperSubmitted]);
 
   // The session captured in React state goes stale on a tab left open (its
   // access_token expires; supabase-js refreshes its own copy). Ask the auth

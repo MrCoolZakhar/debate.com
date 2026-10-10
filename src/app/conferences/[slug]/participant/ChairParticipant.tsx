@@ -7,7 +7,7 @@
 // committees they actually chair) and stacks a full block per committee.
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Copy, Check, Gavel, Radio, Signal, Users } from 'lucide-react';
+import { Copy, Check, FileText, Gavel, Landmark, Radio, Signal, Users } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { friendlyError } from '@/lib/friendlyError';
@@ -19,7 +19,7 @@ import StudyGuideCard from './StudyGuideCard';
 import AwardsCard, { type AwardsCardConference } from './AwardsCard';
 import Loader from '@/components/Loader';
 import { SectionCard, OUTFIT, capitalize, effectiveReleaseTime } from './shared';
-import { DashCard, CardHeading, CommitteeEmblem, TwoRowName, ForestLink, IconWord, BigCount, Pane, committeeShort, FOREST, FOREST_GRADIENT, INK, INK_SOFT } from './dashboardKit';
+import { DashCard, CardHeading, CommitteeEmblem, TwoRowName, ForestLink, IconWord, BigCount, Pane, committeeShort, useDashStacked, useReportNextStep, type NextStep, FOREST, FOREST_GRADIENT, INK, INK_SOFT } from './dashboardKit';
 
 const DIFFICULTY_STYLES: Record<string, { color: string }> = {
   beginner: { color: '#2A5A3C' },
@@ -66,7 +66,12 @@ interface RosterAllocationRow {
 
 // ── Committee header card (item 1), mirrors the public committee card ─────
 
-function CommitteeHeaderCard({ committee }: { committee: ChairCommittee }) {
+function CommitteeHeaderCard({ committee, headerFromXlOnly = false }: {
+  committee: ChairCommittee;
+  /** The phone page shows the emblem and name in Your assignment just above,
+   *  so below xl this card starts at the difficulty and the topics. */
+  headerFromXlOnly?: boolean;
+}) {
   const diff = committee.difficulty?.toLowerCase() ?? '';
   const diffStyle = DIFFICULTY_STYLES[diff] ?? DIFFICULTY_STYLES.intermediate;
   const isCrisis = committee.committee_type === 'crisis';
@@ -75,6 +80,7 @@ function CommitteeHeaderCard({ committee }: { committee: ChairCommittee }) {
   return (
     <SectionCard>
       <div className="flex flex-col items-center text-center">
+        <div className={headerFromXlOnly ? 'hidden xl:flex flex-col items-center' : 'flex flex-col items-center'}>
         {committee.logo_url ? (
           <img
             src={committee.logo_url}
@@ -87,6 +93,7 @@ function CommitteeHeaderCard({ committee }: { committee: ChairCommittee }) {
         <h3 className="font-bold text-[17px] leading-snug mt-4" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
           {committee.name}
         </h3>
+        </div>
         <div className="flex items-center gap-2 mt-1.5">
           {committee.difficulty && (
             <span className="inline-flex items-center gap-1" style={{ color: diffStyle.color, fontSize: '12px', fontFamily: OUTFIT, fontWeight: 700 }}>
@@ -132,8 +139,11 @@ function chairHref(committee: ChairCommittee, chairDisplayName: string): string 
   return `${getSiteUrl()}/chair/${committee.session_code}?chairName=${encodeURIComponent(chairDisplayName)}`;
 }
 
-function SessionCard({ committee, chairDisplayName, conferenceStartDate, showCommittee, onSessionCreated }: {
+function SessionCard({ committee, chairDisplayName, conferenceStartDate, showCommittee, onSessionCreated, joinFromXlOnly = false }: {
   committee: ChairCommittee;
+  /** The phone page's next-step card already offers "Join as chair" for this
+   *  room, so this button shows from xl only (the code and Copy stay). */
+  joinFromXlOnly?: boolean;
   chairDisplayName: string;
   conferenceStartDate: string | null;
   showCommittee: boolean;
@@ -225,7 +235,7 @@ function SessionCard({ committee, chairDisplayName, conferenceStartDate, showCom
 
   return (
     <DashCard>
-      <CardHeading label={showCommittee ? committeeShort(committee.name, committee.abbreviation) : undefined} title="Your session" />
+      <CardHeading label={showCommittee ? committeeShort(committee.name, committee.abbreviation) : undefined} title="Your session" stackedHide />
       {!released ? (
         <p className="text-sm" style={{ color: INK_SOFT, fontFamily: OUTFIT, margin: 0 }}>
           Your committee&apos;s session will be shared by the organizing team.
@@ -282,9 +292,11 @@ function SessionCard({ committee, chairDisplayName, conferenceStartDate, showCom
               </button>
             </div>
           </div>
-          <ForestLink href={chairHref(committee, chairDisplayName)} external>
-            <Radio size={16} aria-hidden /> Join as chair
-          </ForestLink>
+          <span className={joinFromXlOnly ? 'hidden xl:inline-flex' : 'inline-flex'}>
+            <ForestLink href={chairHref(committee, chairDisplayName)} external>
+              <Radio size={16} aria-hidden /> Join as chair
+            </ForestLink>
+          </span>
         </div>
       )}
     </DashCard>
@@ -303,9 +315,12 @@ function AssignmentTile({ committee, chairDisplayName, conferenceStartDate, dele
 }) {
   const coChairs = Math.max(0, (committee.chair_user_ids?.length ?? 1) - 1);
   const released = sessionReleased(committee, conferenceStartDate) && !!committee.session_code;
+  // On the phone page the room's own card (and the next step) carry "Join as
+  // chair", so this one is the desktop Overview's only.
+  const stacked = useDashStacked();
   return (
     <DashCard className="@container">
-      <CardHeading title="Your assignment" />
+      <CardHeading title="Your assignment" stackedHide />
       <div className="flex items-center gap-4 mb-5">
         <CommitteeEmblem logoUrl={committee.logo_url} name={committee.name} abbreviation={committee.abbreviation} isCrisis={committee.committee_type === 'crisis'} size={64} />
         <TwoRowName short={committeeShort(committee.name, committee.abbreviation)} full={committee.name} size={21} />
@@ -323,7 +338,7 @@ function AssignmentTile({ committee, chairDisplayName, conferenceStartDate, dele
         {!loading && <BigCount n={papers} word={papers === 1 ? 'paper in' : 'papers in'} />}
       </div>
       {released && (
-        <div className="mt-5 flex justify-end">
+        <div className={`${stacked ? 'hidden xl:flex' : 'flex'} mt-5 justify-end`}>
           <ForestLink href={chairHref(committee, chairDisplayName)} external>
             <Radio size={16} aria-hidden /> Join as chair
           </ForestLink>
@@ -335,8 +350,10 @@ function AssignmentTile({ committee, chairDisplayName, conferenceStartDate, dele
 
 // ── One committee's full block ──────────────────────────────────────────────
 
-function ChairCommitteeBlock({ conferenceId, conferenceSlug, committee, chairDisplayName, conference, section, showCommittee, onSessionCreated }: {
+function ChairCommitteeBlock({ conferenceId, conferenceSlug, committee, chairDisplayName, conference, section, showCommittee, onSessionCreated, joinInNextStep }: {
   conferenceId: string;
+  /** This room's "Join as chair" is the phone page's next step. */
+  joinInNextStep: boolean;
   conferenceSlug: string;
   committee: ChairCommittee;
   chairDisplayName: string;
@@ -415,10 +432,17 @@ function ChairCommitteeBlock({ conferenceId, conferenceSlug, committee, chairDis
   const submittedPapers = papers.length;
 
   // Every part stays mounted (Pane), so a half-made awards slate or a paper
-  // decision in flight survives switching sections.
+  // decision in flight survives switching sections. On the phone page (below
+  // xl) they stack in this order, each under its heading: the committee, the
+  // room, the delegates and their papers (with awards), the study guide. The
+  // Committee section is two panes so the room can sit between its header and
+  // its papers; from xl they show together exactly as before.
+  const stacked = useDashStacked();
+  const short = committeeShort(committee.name, committee.abbreviation);
+  const heading = (base: string) => (showCommittee ? `${base}: ${short}` : base);
   return (
     <>
-      <Pane show={section === 'overview'}>
+      <Pane show={section === 'overview'} title={heading('Your Committee')} icon={Landmark}>
         <AssignmentTile
           committee={committee}
           chairDisplayName={chairDisplayName}
@@ -430,12 +454,19 @@ function ChairCommitteeBlock({ conferenceId, conferenceSlug, committee, chairDis
       </Pane>
 
       <Pane show={section === 'committee'}>
-        <CommitteeHeaderCard committee={committee} />
+        <CommitteeHeaderCard committee={committee} headerFromXlOnly={stacked} />
+      </Pane>
 
+      <Pane show={section === 'session'} title={heading('Your Room')} icon={Radio} anchor={`you-session-${committee.id}`}>
+        <SessionCard committee={committee} chairDisplayName={chairDisplayName} conferenceStartDate={conferenceStartDate} showCommittee={showCommittee} onSessionCreated={onSessionCreated} joinFromXlOnly={stacked && joinInNextStep} />
+      </Pane>
+
+      <Pane show={section === 'committee'} title={heading('Delegates and Papers')} icon={Users}>
         <DashCard className="@container">
           <CardHeading
             label={showCommittee ? committeeShort(committee.name, committee.abbreviation) : undefined}
             title="Delegates and position papers"
+            stackedHide
             aside={!loading ? (
               <span style={{ fontFamily: OUTFIT, fontSize: 13, color: INK_SOFT, fontVariantNumeric: 'tabular-nums' }}>
                 <b style={{ color: INK, fontSize: 17 }}>{submittedPapers}</b> of {allocations.length} papers in
@@ -484,11 +515,7 @@ function ChairCommitteeBlock({ conferenceId, conferenceSlug, committee, chairDis
         )}
       </Pane>
 
-      <Pane show={section === 'session'}>
-        <SessionCard committee={committee} chairDisplayName={chairDisplayName} conferenceStartDate={conferenceStartDate} showCommittee={showCommittee} onSessionCreated={onSessionCreated} />
-      </Pane>
-
-      <Pane show={section === 'documents'}>
+      <Pane show={section === 'documents'} title={heading('Documents')} icon={FileText}>
         <StudyGuideCard committeeId={committee.id} />
       </Pane>
     </>
@@ -553,6 +580,37 @@ export default function ChairParticipant({ conferenceId, conferenceSlug, section
     )));
   }, [session]);
 
+  // The phone page's next step: the first room that can be joined, else the
+  // first that can be started, else what happens next.
+  const stacked = useDashStacked();
+  const chairName = profile?.display_name ?? 'Chair';
+  const multi = committees.length > 1;
+  const joinable = committees.find(c => sessionReleased(c, conference.start_date) && !!c.session_code) ?? null;
+  const startable = joinable ? null : committees.find(c => sessionReleased(c, conference.start_date) && !c.session_code) ?? null;
+  let step: NextStep | null = null;
+  if (!loading) {
+    if (committees.length === 0) {
+      step = { kind: 'done', line: 'The organisers will assign your committee next. You will get an email when they do.' };
+    } else if (joinable) {
+      step = {
+        kind: 'action',
+        line: multi ? `Your ${committeeShort(joinable.name, joinable.abbreviation)} room is ready.` : 'Your committee room is ready.',
+        action: { label: 'Join as chair', href: chairHref(joinable, chairName), external: true },
+      };
+    } else if (startable) {
+      step = {
+        kind: 'action',
+        line: multi
+          ? `Start your ${committeeShort(startable.name, startable.abbreviation)} room when you are ready to chair.`
+          : 'Start your committee room when you are ready to chair.',
+        action: { label: 'Go to your room', scrollTo: `you-session-${startable.id}` },
+      };
+    } else {
+      step = { kind: 'done', line: 'Read your delegates’ position papers before the conference. Your room opens on the day.' };
+    }
+  }
+  useReportNextStep(stacked ? step : null);
+
   if (loading) {
     return (
       <SectionCard>
@@ -564,8 +622,9 @@ export default function ChairParticipant({ conferenceId, conferenceSlug, section
   }
 
   if (committees.length === 0) {
+    // On the phone page the next step already says this.
     return (
-      <DashCard>
+      <DashCard className={stacked ? 'hidden xl:block' : ''}>
         <CardHeading title="Your assignment" />
         <p className="inline-flex items-center gap-2" style={{ color: INK_SOFT, fontFamily: OUTFIT, fontSize: 14, margin: 0 }}>
           <Gavel size={16} strokeWidth={2.2} aria-hidden />
@@ -587,6 +646,7 @@ export default function ChairParticipant({ conferenceId, conferenceSlug, section
           conference={conference}
           section={section}
           showCommittee={committees.length > 1}
+          joinInNextStep={joinable?.id === c.id}
           onSessionCreated={() => { void refreshCommittee(c.id); }}
         />
       ))}

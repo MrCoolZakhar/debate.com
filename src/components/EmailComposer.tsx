@@ -179,6 +179,12 @@ interface EmailComposerProps {
    *  the test send, because a test to the organiser fills every field with a
    *  stand-in and would otherwise look fine. The real send skips them. */
   unresolvedRecipients?: { affected: number; total: number; fields: { label: string; count: number }[] };
+
+  /** The automatic email being written, when it is one (EVENT_REGISTRY key).
+   *  "See it for real" and the test send then render exactly like the real
+   *  send (queueEventEmail): the transactional card with this event's status
+   *  icon and layout. Absent for a one-off broadcast, which is unchanged. */
+  eventKey?: string | null;
 }
 
 type LocalBlock = EmailBlock & { _id: string };
@@ -584,8 +590,10 @@ type PaletteTab = 'blocks' | 'details' | 'files' | 'starters' | 'design' | 'peop
 export default function EmailComposer({
   conference, conferenceId, initialSubject, initialBlocks, previewCandidates, onChange, unresolvedRecipients,
   testSendContext, accessToken, organizerEmail, reachSlot,
-  backSlot, actionsSlot, name, onNameChange, design, recipients,
+  backSlot, actionsSlot, name, onNameChange, design, recipients, eventKey,
 }: EmailComposerProps) {
+  /** How "See it for real" and the test send render: like the real send. */
+  const renderAs = eventKey ? { variant: 'transactional' as const, event: eventKey, isDefault: false } : {};
   const [subject, setSubject] = useState(initialSubject);
   const [blocks, setBlocks] = useState<LocalBlock[]>(() => withIds(initialBlocks));
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -984,7 +992,12 @@ export default function EmailComposer({
     return previewCandidates.filter(c => c.label.toLowerCase().includes(q)).slice(0, 8);
   }, [previewCandidates, asQuery]);
 
-  const previewCtx = asCandidate?.ctx ?? {};
+  // Nobody picked: the conference's own name and dates are still known, so
+  // only the per-person fields read as highlighted blanks.
+  const previewCtx: EmailTokenContext = asCandidate?.ctx ?? {
+    conference_name: testSendContext.conference_name ?? null,
+    conference_dates: testSendContext.conference_dates ?? null,
+  };
 
   // Re-rendering the iframe srcDoc on every keystroke flashes it white; a
   // short debounce keeps it instant without the churn.
@@ -1003,11 +1016,11 @@ export default function EmailComposer({
   );
 
   const previewHtml = useMemo(
-    () => renderEmailHtml({ blocks: stripIds(debouncedBlocks), conference: previewConference, ctx: previewCtx }),
+    () => renderEmailHtml({ blocks: stripIds(debouncedBlocks), conference: previewConference, ctx: previewCtx, ...renderAs }),
     // previewCtx is derived from asCandidate; depending on the candidate keeps
     // this from re-rendering on every parent render.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [debouncedBlocks, previewConference, asCandidate]
+    [debouncedBlocks, previewConference, asCandidate, eventKey]
   );
 
   async function handleSendTest() {
@@ -1024,7 +1037,7 @@ export default function EmailComposer({
       recipient_email: organizerEmail,
       subject: '[TEST] ' + resolveTokens(subject, ctx),
       body: resolveTokens(flattenBlocksToPlainText(liveBlocks, previewConference), ctx),
-      body_html: renderEmailHtml({ blocks: liveBlocks, conference: previewConference, ctx }),
+      body_html: renderEmailHtml({ blocks: liveBlocks, conference: previewConference, ctx, ...renderAs }),
       status: 'pending',
     });
     setSendingTest(false);

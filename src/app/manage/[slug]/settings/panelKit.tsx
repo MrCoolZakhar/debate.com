@@ -355,3 +355,45 @@ export function Notice({ tone = 'gold', children, role }: { tone?: 'gold' | 'dan
     </div>
   );
 }
+
+// ── Which roles the front page lists ─────────────────────────────────────────
+
+/** Always listed under Who Can Apply, set up or not (owner, Oct 2026: "by
+ *  default only have delegates and head delegates"). */
+export const ALWAYS_LISTED_ROLES: readonly string[] = ['head-delegate', 'delegate'];
+
+/**
+ * Has the organiser set this role up?
+ *
+ * Every conference has a row for all seven roles from the moment it exists
+ * (the database trigger `handle_new_conference` inserts them, all switched off,
+ * fee 0, everything else at its column default; the creation wizard and
+ * Settings' ensureRoleConfigs only ever fill in a missing set). So "a row
+ * exists" means nothing, and set up is read from the row itself:
+ *
+ *   - it is switched on, or
+ *   - anyone has applied for it (submitted or further), or
+ *   - any field differs from the default a fresh row carries: a window, a
+ *     limit, a price or prices by date, auto-accept, payment timing, the
+ *     dashboard lock, resubmission, preferences, MUN experience, questions,
+ *     or an after-applying message.
+ *
+ * The currency is deliberately ignored: a fresh row already carries the
+ * conference's currency. This decides only what the UI LISTS. A role that is
+ * on or has applicants is never hidden, and nothing here writes.
+ */
+export function roleIsSetUp(cfg: RoleSetupConfig, appliedCount: number | undefined): boolean {
+  if (cfg.is_enabled) return true;
+  if ((appliedCount ?? 0) > 0) return true;
+  if (cfg.applications_open_at || cfg.applications_close_at) return true;
+  if (cfg.max_accepted != null) return true;
+  if ((Number(cfg.fee_amount) || 0) > 0) return true;
+  if ((cfg.fee_phases ?? []).length > 0) return true;
+  if (cfg.auto_accept || cfg.allow_resubmission || cfg.hide_dashboard_until_paid) return true;
+  if (cfg.payment_timing && cfg.payment_timing !== 'anytime') return true;
+  if (cfg.preference_mode && cfg.preference_mode !== 'none') return true;
+  if (cfg.collect_mun_experience) return true;
+  if (Array.isArray(cfg.custom_questions) && cfg.custom_questions.length > 0) return true;
+  if ((cfg.submission_message ?? '').trim()) return true;
+  return false;
+}

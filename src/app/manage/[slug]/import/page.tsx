@@ -2,32 +2,28 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
-import {
-  Download, Upload as UploadIcon, ArrowLeft, Check,
-  AlertTriangle, Mail, Loader2, CircleCheck, CircleX, CheckCircle2, XCircle,
-  FileSpreadsheet, Users, Link2, UserCheck, ArrowRight, Pencil, X,
-} from 'lucide-react';
+import { Check, AlertTriangle, Mail, Loader2, CheckCircle2, UserCheck, ArrowLeft, Pencil, X } from 'lucide-react';
 import { useManage, type Conference } from '@/app/manage/[slug]/layout';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient, getFreshAuthedClient } from '@/lib/supabase-auth';
-import Link from 'next/link';
 import { openCreditsPopup } from '@/lib/purchasePopup';
 import { IMPORTS_PAID_LAUNCH, importsArePaid, isChargedImportRole, isImportCreditsError, readImportQuote, transferIntoConference } from './importQuote';
-import {
-  GavellingImportPopup, ImportFlagDialog, hasImportFlags, type ImportFlags, type ImportInvoice,
-} from './ImportCheckout';
+import { GavellingImportPopup, type ImportInvoice } from './ImportCheckout';
 import { useConfirmModal, type ConfirmModalConfig, type ConfirmModalResult } from '@/components/ConfirmModal';
-import { FlagImg } from '@/components/FlagImg';
+import { GoldWord } from '@/components/BrandHeading';
 import { NEU, NEU_GRADIENTS, NeuCard, NeuIconDisc } from '@/components/neu';
 import {
-  buildImportTemplateCSV, parseImportFile, classifyImportRows, summarizeRows,
+  buildImportTemplateCSV, parseImportFile, classifyImportRows,
   type ClassifiedImportRow, type CommitteeLite, type ImportableRole, type RosterSlot,
-  type ExistingApplication,
+  type ExistingApplication, type ParsedImportRow,
 } from '@/lib/applicantImport';
 import { queueImportJoinInviteEmails } from '@/lib/emailEvents';
 import { friendlyError } from '@/lib/friendlyError';
+import {
+  AMBER, BigCount, GREEN, IMPORT_CSS, ImportDropZone, ImportReview, OUTFIT, RED, roleLabel,
+  type ImportFilter, type ResultRow,
+} from './importView';
 
-const OUTFIT = "var(--font-brand), sans-serif";
 
 // ── Pool accounting (mirrors applications/page.tsx) ─────────────────────────
 
@@ -42,41 +38,6 @@ function poolForRole(role: ImportableRole): Pool | null {
   return null;
 }
 
-function roleLabel(role: string) {
-  const map: Record<string, string> = {
-    delegate: 'Delegate', 'head-delegate': 'Head Delegate',
-    'faculty-advisor': 'Faculty Advisor', observer: 'Observer',
-  };
-  return map[role] ?? role;
-}
-
-// Delegates (and head delegates) who will hold no allocation after this import,
-// split by why, so the preview can warn before anything is written. KenyaMUN
-// (18 Sep 2026) imported 286 delegates with no allocation because the
-// committee column did not match, and nothing on screen said so loudly.
-function countWithoutAllocation(rows: ClassifiedImportRow[]) {
-  let total = 0, unresolvedCommittee = 0, unresolvedCountry = 0, noCommittee = 0;
-  for (const r of rows) {
-    if (r.cls === 'error') continue;
-    if (r.resolved.role !== 'delegate' && r.resolved.role !== 'head-delegate') continue;
-    if (r.allocatedAfterImport) continue;
-    total++;
-    if (r.raw.committee.trim() && !r.resolved.committeeLabel) unresolvedCommittee++;
-    else if (!r.raw.committee.trim() || !r.raw.country.trim()) noCommittee++;
-    else unresolvedCountry++;
-  }
-  return { total, unresolvedCommittee, unresolvedCountry, noCommittee };
-}
-
-// ── Row outcome (post-execute) ──────────────────────────────────────────────
-
-type RowOutcome = 'imported' | 'imported-no-allocation' | 'updated' | 'unchanged' | 'skipped';
-
-interface ResultRow {
-  row: ClassifiedImportRow;
-  outcome: RowOutcome;
-  note: string | null;
-}
 
 // ── Pre-amendment repair ─────────────────────────────────────────────────────
 // Imports run before conference_allocations.user_id became nullable could only
@@ -158,28 +119,6 @@ async function loadContext(supabase: ReturnType<typeof getAuthedClient>, confere
   return { committees: (committees ?? []) as CommitteeLite[], existingByEmailRole, existingAllocations, committeeSlots };
 }
 
-// ── Row classification pill ──────────────────────────────────────────────────
-
-const CLASS_STYLES: Record<string, { bg: string; color: string; border: string; label: string }> = {
-  valid:   { bg: 'rgba(61,122,82,0.14)',  color: '#2A5A3C', border: 'rgba(61,122,82,0.4)',  label: 'Valid' },
-  warning: { bg: 'rgba(184,132,74,0.16)', color: '#9A6B2F', border: 'rgba(184,132,74,0.42)', label: 'Warning' },
-  error:   { bg: 'rgba(139,32,32,0.1)',   color: '#8B2020', border: 'rgba(139,32,32,0.3)',   label: 'Error' },
-};
-
-function ClassPill({ cls }: { cls: string }) {
-  const s = CLASS_STYLES[cls] ?? CLASS_STYLES.warning;
-  const Icon = cls === 'valid' ? CheckCircle2 : cls === 'error' ? XCircle : AlertTriangle;
-  return (
-    <span
-      className="inline-flex items-center gap-1 flex-shrink-0"
-      style={{ fontSize: 12, fontWeight: 700, color: s.color, fontFamily: OUTFIT, whiteSpace: 'nowrap' }}
-    >
-      <Icon size={14} strokeWidth={2.4} aria-hidden="true" />
-      {s.label}
-    </span>
-  );
-}
-
 // ── Page ─────────────────────────────────────────────────────────────────────
 
 type Phase = 'upload' | 'parsing' | 'preview' | 'importing' | 'results';
@@ -214,8 +153,15 @@ export default function ImportPage() {
   const [acceptMode, setAcceptMode] = useState<'accepted' | 'submitted'>('accepted');
   const [fileError, setFileError] = useState<string | null>(null);
   const [fileName, setFileName] = useState<string | null>(null);
-  const [dragOver, setDragOver] = useState(false);
   const [classifiedRows, setClassifiedRows] = useState<ClassifiedImportRow[]>([]);
+  // The parsed rows and the context they were checked against, kept so an
+  // inline fix re-runs the SAME classifier over the whole file (in-file
+  // duplicates and seat order depend on every row).
+  const [rawRows, setRawRows] = useState<ParsedImportRow[]>([]);
+  const [dbContext, setDbContext] = useState<DbContext | null>(null);
+  const [filter, setFilter] = useState<ImportFilter>('all');
+  // The small inline "import anyway?" for files with rows to flag.
+  const [confirming, setConfirming] = useState(false);
   // Kept alongside classifiedRows purely so the preview table can tell a
   // double-delegation committee's allocations apart from a single's (same
   // seat=1 value on both) without a second query.
@@ -337,8 +283,15 @@ export default function ImportPage() {
       const supabase = getAuthedClient(session.access_token);
       const ctx = await loadContext(supabase, conference.id);
       const classified = classifyImportRows(rows, ctx);
+      setRawRows(rows);
+      setDbContext(ctx);
       setClassifiedRows(classified);
       setContextCommittees(ctx.committees);
+      setResultRows([]);
+      setImportBlocked(null);
+      setLastInviteQueued(null);
+      setFilter('all');
+      setConfirming(false);
       setPhase('preview');
     } catch {
       setFileError('Could not read that file. Make sure it\'s a valid .csv or .xlsx.');
@@ -352,15 +305,23 @@ export default function ImportPage() {
     e.target.value = '';
   }
 
-  function handleDrop(e: React.DragEvent) {
-    e.preventDefault();
-    setDragOver(false);
-    const file = e.dataTransfer.files?.[0];
-    if (file) handleFile(file);
+  /** An inline fix: replace one parsed row and classify the whole file again. */
+  function applyRowFix(rowNumber: number, patch: Partial<ParsedImportRow>) {
+    if (!dbContext) return;
+    const next = rawRows.map(r => (r.rowNumber === rowNumber ? { ...r, ...patch } : r));
+    setRawRows(next);
+    setClassifiedRows(classifyImportRows(next, dbContext));
+    setConfirming(false);
   }
 
   function resetToUpload() {
     setPhase('upload');
+    setRawRows([]);
+    setDbContext(null);
+    setFilter('all');
+    setConfirming(false);
+    setImportBlocked(null);
+    setLastInviteQueued(null);
     setClassifiedRows([]);
     setContextCommittees([]);
     setResultRows([]);
@@ -610,45 +571,33 @@ export default function ImportPage() {
     }
   }
 
-  // Step 1, the flag (only when there is something to flag), then step 2,
-  // Gavelling Import: the invoice and the one button. Credits come from
-  // Conference Credits first, then the organiser's own (moved in with
-  // store_transfer_in), then a purchase of exactly what is still missing.
-  const [flags, setFlags] = useState<ImportFlags | null>(null);
+  // One button, and every import is confirmed in place first (coordinator,
+  // 10 Oct 2026: an import queues invite emails, so one press must never send
+  // them). The first press turns the bottom bar into "This sends an invite
+  // email to N people. Import now?", folding in any flagged rows (without a
+  // seat, skipped, with a note); the second press runs it. With paid imports
+  // launched (IMPORTS_PAID_LAUNCH) the Gavelling Import checkout follows: the
+  // invoice and the one button. Credits come from Conference Credits first,
+  // then the organiser's own (moved in with store_transfer_in), then a
+  // purchase of exactly what is still missing.
   const [invoice, setInvoice] = useState<ImportInvoice | null>(null);
   const [checkoutBusy, setCheckoutBusy] = useState(false);
   const [checkoutErr, setCheckoutErr] = useState<string | null>(null);
 
   function handleImportClick() {
     const importableCount = classifiedRows.filter(r => r.cls !== 'error').length;
-    if (importableCount === 0 || !conference || !session) return;
-    const noAlloc = countWithoutAllocation(classifiedRows);
-    const f: ImportFlags = {
-      noAlloc: noAlloc.total,
-      unresolvedCommittee: noAlloc.unresolvedCommittee,
-      warnings: classifiedRows.filter(r => r.cls === 'warning').length,
-      errors: classifiedRows.filter(r => r.cls === 'error').length,
-    };
-    if (hasImportFlags(f)) { setFlags(f); return; }
+    if (importableCount === 0 || !conference || !session || importingRef.current) return;
+    if (!confirming) { setConfirming(true); return; }
+    setConfirming(false);
     void openCheckout();
   }
 
   async function openCheckout() {
-    setFlags(null);
     if (!conference || !session) return;
     const importable = classifiedRows.filter(r => r.cls !== 'error');
-    // Imports are free for now (IMPORTS_PAID_LAUNCH, importQuote.ts): a plain
-    // confirm, then the import. No invoice, no credits lines.
+    // Imports are free for now (IMPORTS_PAID_LAUNCH, importQuote.ts): no
+    // invoice, no credits lines, straight to the import.
     if (!IMPORTS_PAID_LAUNCH) {
-      const n = importable.length;
-      const { confirmed } = await confirm({
-        title: `Import ${n} ${n === 1 ? 'delegate' : 'delegates'}?`,
-        body: acceptMode === 'submitted'
-          ? 'They arrive as submitted applications, for you to accept in Applications. Rows marked Error are skipped.'
-          : 'They arrive accepted, or assigned when the file gives them a seat. Rows marked Error are skipped.',
-        confirmLabel: `Import ${n} ${n === 1 ? 'delegate' : 'delegates'}`,
-      });
-      if (!confirmed) return;
       await runImportOnce();
       return;
     }
@@ -776,604 +725,104 @@ export default function ImportPage() {
 
   if (!conference) return null;
 
-  const summary = summarizeRows(classifiedRows);
-  const importableCount = summary.valid + summary.warning;
-  const noAllocation = countWithoutAllocation(classifiedRows);
-  // Error rows whose problem is the email address itself, so the summary can
-  // reassure the organizer they are fixable here rather than a dead end.
-  const emailErrorCount = classifiedRows.filter(r => r.reasons.some(m => m.startsWith('Invalid email address'))).length;
-
-  const importedCount = resultRows.filter(r => r.outcome === 'imported').length;
-  const importedNoAllocCount = resultRows.filter(r => r.outcome === 'imported-no-allocation').length;
-  const skippedCount = resultRows.filter(r => r.outcome === 'skipped').length;
-
   const isLanding = phase === 'upload' || phase === 'parsing';
+  const people = (n: number) => `${n} ${n === 1 ? 'person' : 'people'}`;
+
+  const invitesLine = unclaimedCount > 0 ? (
+    <div className="gv-imp-slim" style={{ backgroundColor: 'rgba(238,217,138,0.22)' }}>
+      <Mail size={16} style={{ color: AMBER, flexShrink: 0 }} aria-hidden />
+      <p style={{ flex: 1, margin: 0, color: '#5A4210', minWidth: 180 }}>
+        {people(unclaimedCount)} {unclaimedCount === 1 ? "hasn't" : "haven't"} joined yet
+      </p>
+      <button type="button" onClick={handleSendInvites} disabled={sendingInvites} className="gv-imp-link">
+        {sendingInvites ? 'Sending…' : 'Send the invite again'}
+      </button>
+    </div>
+  ) : null;
 
   return (
-    <div className="px-6 md:px-10 py-6 md:py-8">
-      <div className="mx-auto" style={{ maxWidth: isLanding && activeTab === 'import' ? 960 : 1080 }}>
-      <ImportTabSwitcher active={activeTab} onChange={setActiveTab} />
-
-      {activeTab === 'imported' ? (
-        <ImportedDelegatesTab conference={conference} session={session} confirm={confirm} fixApplicationId={fixApplicationId} />
-      ) : (
-      <>
-      {/* Header (non-landing only; the landing header lives in the left column) */}
-      {!isLanding && (
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <p className="text-xs mb-1" style={{ color: NEU.muted, fontFamily: OUTFIT, fontWeight: 700, letterSpacing: '0.12em' }}>
-              {conference.acronym} / Import
+    <div className="px-4 sm:px-6 md:px-10 py-6 md:py-9">
+      <style>{IMPORT_CSS}</style>
+      <div className="mx-auto" style={{ maxWidth: 960 }}>
+        <header className="flex flex-wrap items-end justify-between gap-x-6 gap-y-2 mb-6">
+          <div style={{ minWidth: 0 }}>
+            <h1 className="gv-imp-title">
+              {activeTab === 'imported' ? 'Imported' : 'Import'} <GoldWord>People</GoldWord>
+            </h1>
+            <p className="gv-imp-lead">
+              {activeTab === 'imported' ? 'Everyone you brought in, and who has joined' : 'From a spreadsheet. Everyone gets an invite by email'}
             </p>
-            <h1 className="font-black text-2xl" style={{ color: NEU.ink, fontFamily: OUTFIT }}>Import Applicants</h1>
           </div>
-          {phase === 'preview' && (
-            <button
-              onClick={resetToUpload}
-              className="flex items-center gap-2 rounded-xl py-2 px-4 text-xs font-bold focus:outline-none transition-colors"
-              style={{ border: '1px solid #DDD4C0', color: '#1C1410', backgroundColor: 'transparent', fontFamily: OUTFIT }}
-            >
-              <ArrowLeft size={13} />
-              Start over
-            </button>
-          )}
-        </div>
-      )}
-
-      {/* Repair banner, pre-amendment imports with no allocation row */}
-      {orphanRows.length > 0 && (
-        <div
-          className="flex items-center gap-3 rounded-xl px-4 py-3 mb-6"
-          style={{ backgroundColor: 'rgba(139,32,32,0.06)', border: '1px solid rgba(139,32,32,0.25)' }}
-        >
-          <AlertTriangle size={15} style={{ color: '#8B2020', flexShrink: 0 }} />
-          <p className="flex-1 text-sm" style={{ color: '#8B2020', fontFamily: OUTFIT }}>
-            {orphanRows.length} imported application{orphanRows.length === 1 ? '' : 's'} {orphanRows.length === 1 ? 'is' : 'are'} assigned a committee and country with no allocation row.
-          </p>
-          <button
-            onClick={handleRepairAllocations}
-            disabled={repairing}
-            className="inline-flex items-center gap-1.5 rounded-lg py-1.5 px-4 text-xs font-bold focus:outline-none flex-shrink-0"
-            style={{ backgroundColor: repairing ? '#DDD4C0' : '#8B2020', color: repairing ? '#9A8A78' : '#FFFFFF', fontFamily: OUTFIT, cursor: repairing ? 'not-allowed' : 'pointer' }}
-          >
-            {repairing ? <Loader2 size={13} className="animate-spin" /> : <AlertTriangle size={13} />}
-            REPAIR {orphanRows.length} ALLOCATION{orphanRows.length === 1 ? '' : 'S'}
+          <button type="button" className="gv-imp-link" onClick={() => setActiveTab(activeTab === 'imported' ? 'import' : 'imported')}>
+            {activeTab === 'imported' ? <><ArrowLeft size={15} aria-hidden /> Back to import</> : 'See imported people'}
           </button>
-        </div>
-      )}
+        </header>
 
-      {/* Persistent unclaimed-invites banner */}
-      {unclaimedCount > 0 && phase !== 'results' && (
-        <div
-          className="flex items-center gap-3 rounded-xl px-4 py-3 mb-6"
-          style={{ backgroundColor: 'rgba(238,217,138,0.22)', border: '1px solid rgba(182,135,31,0.35)' }}
-        >
-          <Mail size={15} style={{ color: '#8A6614', flexShrink: 0 }} />
-          <p className="flex-1 text-sm" style={{ color: '#6B4F12', fontFamily: OUTFIT }}>
-            {unclaimedCount} imported applicant{unclaimedCount === 1 ? '' : 's'} {unclaimedCount === 1 ? 'hasn\'t' : 'haven\'t'} claimed their account yet.
-          </p>
-          <button
-            onClick={handleSendInvites}
-            disabled={sendingInvites}
-            className="inline-flex items-center gap-1.5 rounded-lg py-1.5 px-4 text-xs font-bold focus:outline-none flex-shrink-0"
-            style={{ backgroundColor: sendingInvites ? '#DDD4C0' : '#1B3828', color: sendingInvites ? '#9A8A78' : '#EED98A', fontFamily: OUTFIT, cursor: sendingInvites ? 'not-allowed' : 'pointer' }}
-          >
-            {sendingInvites ? <Loader2 size={13} className="animate-spin" /> : <Mail size={13} />}
-            SEND GAVELLING INVITES ({unclaimedCount})
-          </button>
-        </div>
-      )}
-      {lastInviteQueued !== null && (
-        <p className="text-xs mb-4" style={{ color: '#2A5A3C', fontFamily: OUTFIT }}>
-          Queued {lastInviteQueued} invite{lastInviteQueued === 1 ? '' : 's'}.
-        </p>
-      )}
+        <input ref={fileInputRef} type="file" accept=".csv,.xlsx" className="hidden" onChange={handleFileInputChange} />
 
-      {/* Accept-gate choice, visible for as long as it still matters — up to
-          and including the preview, never once the import has actually run. */}
-      {(isLanding || phase === 'preview') && (
-        <AcceptModeChooser mode={acceptMode} onChange={setAcceptMode} count={phase === 'preview' ? importableCount : null} />
-      )}
-
-      {/* ── UPLOAD / PARSING ─────────────────────────────────────────────── */}
-      {isLanding && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
-          {/* LEFT — what this does + reassurances */}
-          <div className="flex flex-col">
-            <NeuIconDisc gradient={NEU_GRADIENTS.forest} icon={UploadIcon} size={56} style={{ marginBottom: 16 }} />
-            <p className="text-xs mb-2" style={{ color: NEU.muted, fontFamily: OUTFIT, fontWeight: 700, letterSpacing: '0.14em' }}>
-              {conference.acronym} / IMPORT
-            </p>
-            <h1 className="font-black text-3xl" style={{ color: NEU.ink, fontFamily: OUTFIT, letterSpacing: '-0.01em' }}>Import Your Roster</h1>
-            <p className="mt-3" style={{ color: '#6B5F52', fontFamily: OUTFIT, fontSize: 14, lineHeight: 1.65 }}>
-              Bring your whole roster into Gavelling in one step. Upload a CSV or spreadsheet and we create an application for every
-              participant, match them to their delegation, and place them on a committee and country whenever you name one.
-            </p>
-            <div className="flex flex-col gap-3 mt-6">
-              <div className="flex items-center gap-3">
-                <NeuIconDisc gradient={NEU_GRADIENTS.sage} icon={Link2} size={34} />
-                <p className="text-xs" style={{ color: '#6B5F52', fontFamily: OUTFIT, lineHeight: 1.5 }}>
-                  Participants are matched by email and attach automatically when they sign up.
-                </p>
-              </div>
-              <div className="flex items-center gap-3">
-                <NeuIconDisc gradient={NEU_GRADIENTS.amber} icon={Mail} size={34} />
-                <p className="text-xs" style={{ color: '#6B5F52', fontFamily: OUTFIT, lineHeight: 1.5 }}>
-                  Everyone you import gets a personal invitation link by email, automatically. Their registration attaches the moment they claim it.
-                </p>
-              </div>
-            </div>
-          </div>
-
-          {/* RIGHT — the two upload steps */}
-          <div className="flex flex-col gap-4">
-            {/* Step 1 — template */}
-            <NeuCard style={{ padding: 20 }}>
-              <div className="flex items-center justify-between gap-4">
-                <div className="flex items-center gap-3 min-w-0">
-                  <NeuIconDisc gradient={NEU_GRADIENTS.gold} icon={FileSpreadsheet} iconColor={NEU.forest} size={40} />
-                  <div className="min-w-0">
-                    <p className="font-bold text-sm" style={{ color: NEU.ink, fontFamily: OUTFIT }}>Step 1 &middot; Download the template</p>
-                    <p className="text-xs mt-0.5" style={{ color: NEU.muted, fontFamily: OUTFIT }}>Fill it in with your participants, then upload it.</p>
-                  </div>
-                </div>
-                <button
-                  onClick={handleDownloadTemplate}
-                  className="inline-flex items-center gap-1.5 rounded-lg py-2 px-3.5 text-xs font-bold focus:outline-none flex-shrink-0"
-                  style={{ border: '1px solid #DDD4C0', color: NEU.ink, backgroundColor: 'transparent', fontFamily: OUTFIT }}
-                >
-                  <Download size={13} />
-                  CSV
-                </button>
-              </div>
-              <div className="mt-4 pt-4" style={{ borderTop: '1px solid rgba(27,56,40,0.08)' }}>
-                <p className="text-xs font-bold mb-2" style={{ color: '#6B5F52', fontFamily: OUTFIT, letterSpacing: '0.1em' }}>COLUMNS</p>
-                <div className="flex flex-col gap-1" style={{ fontSize: 12, color: '#4A4238', fontFamily: OUTFIT, lineHeight: 1.5 }}>
-                  <p><strong style={{ color: NEU.ink }}>email<Req />, name<Req /></strong>: the person&apos;s address and full name.</p>
-                  <p><strong style={{ color: NEU.ink }}>role<Req /></strong>: delegate, head delegate, faculty advisor, or observer. Chairs use the invite flow in Committees.</p>
-                  <p><strong style={{ color: NEU.ink }}>delegation</strong>: society or school name. Blank means independent.</p>
-                  <p><strong style={{ color: NEU.ink }}>payment</strong>: paid, unpaid, or waived. Blank means unpaid.</p>
-                  <p><strong style={{ color: NEU.ink }}>committee</strong>: an existing committee&apos;s name or abbreviation.</p>
-                  <p><strong style={{ color: NEU.ink }}>country</strong>: a name from the committee&apos;s roster, a country (France) or, for crisis committees, a character (Fidel Castro).</p>
-                  <p><strong style={{ color: NEU.ink }}>seat</strong>: optional. In a double-delegation committee, list the country once per delegate and the seats fill in order. France twice gives you seats 1 and 2. Only set this if you want to pin who sits in which seat.</p>
-                  <p style={{ marginTop: 4, fontWeight: 700, color: '#8B2020' }}>* Required</p>
-                </div>
-              </div>
-            </NeuCard>
-
-            {/* Step 2 — upload */}
-            <NeuCard style={{ padding: 20 }}>
-              <div className="flex items-center gap-3 mb-3.5">
-                <NeuIconDisc gradient={NEU_GRADIENTS.forest} icon={Users} size={40} />
-                <div>
-                  <p className="font-bold text-sm" style={{ color: NEU.ink, fontFamily: OUTFIT }}>Step 2 &middot; Upload your file</p>
-                  <p className="text-xs mt-0.5" style={{ color: NEU.muted, fontFamily: OUTFIT }}>We validate every row before anything is created.</p>
-                </div>
-              </div>
-              <div
-                onDragOver={e => { e.preventDefault(); setDragOver(true); }}
-                onDragLeave={() => setDragOver(false)}
-                onDrop={handleDrop}
-                onClick={() => fileInputRef.current?.click()}
-                className="flex flex-col items-center justify-center gap-2.5 cursor-pointer"
-                style={{
-                  padding: '30px 24px',
-                  borderRadius: 16,
-                  border: `1.5px dashed ${dragOver ? NEU.forest : 'rgba(27,56,40,0.22)'}`,
-                  backgroundColor: NEU.base,
-                  boxShadow: NEU.inSm,
-                  transition: 'border-color 200ms cubic-bezier(0.22,1,0.36,1)',
-                }}
-              >
-                <input ref={fileInputRef} type="file" accept=".csv,.xlsx" className="hidden" onChange={handleFileInputChange} />
-                {phase === 'parsing' ? (
-                  <>
-                    <Loader2 size={28} className="animate-spin" style={{ color: NEU.forest }} />
-                    <p className="text-sm font-semibold" style={{ color: NEU.ink, fontFamily: OUTFIT }}>Reading {fileName}…</p>
-                  </>
-                ) : (
-                  <>
-                    <NeuIconDisc gradient={NEU_GRADIENTS.sage} icon={UploadIcon} size={44} />
-                    <p className="text-sm font-semibold mt-1 text-center" style={{ color: NEU.ink, fontFamily: OUTFIT }}>Drop a .csv or .xlsx file here, or click to browse</p>
-                    <p className="text-xs text-center" style={{ color: NEU.muted, fontFamily: OUTFIT }}>Nothing is written until you confirm the import.</p>
-                  </>
-                )}
-              </div>
-              {fileError && (
-                <div className="flex items-center gap-2 mt-3 rounded-xl px-4 py-2.5" style={{ backgroundColor: 'rgba(139,32,32,0.08)', border: '1px solid rgba(139,32,32,0.25)' }}>
-                  <AlertTriangle size={14} style={{ color: '#8B2020', flexShrink: 0 }} />
-                  <p className="text-xs" style={{ color: '#8B2020', fontFamily: OUTFIT }}>{fileError}</p>
+        {activeTab === 'imported' ? (
+          <ImportedDelegatesTab conference={conference} session={session} confirm={confirm} fixApplicationId={fixApplicationId} />
+        ) : isLanding ? (
+          <>
+            <ImportDropZone
+              parsing={phase === 'parsing'}
+              fileName={fileName}
+              fileError={fileError}
+              onChoose={() => fileInputRef.current?.click()}
+              onFile={file => { void handleFile(file); }}
+              onTemplate={handleDownloadTemplate}
+            />
+            <div className="flex flex-col gap-3 mt-8">
+              {invitesLine}
+              {lastInviteQueued !== null && <p className="gv-imp-ok">Invites sent to {people(lastInviteQueued)}</p>}
+              {orphanRows.length > 0 && (
+                <div className="gv-imp-slim" style={{ backgroundColor: 'rgba(139,32,32,0.07)' }}>
+                  <AlertTriangle size={16} style={{ color: RED, flexShrink: 0 }} aria-hidden />
+                  <p style={{ flex: 1, margin: 0, color: RED, minWidth: 180 }}>
+                    {orphanRows.length} imported {orphanRows.length === 1 ? 'seat needs' : 'seats need'} repairing
+                  </p>
+                  <button type="button" onClick={handleRepairAllocations} disabled={repairing} className="gv-imp-link" style={{ color: RED }}>
+                    {repairing ? 'Repairing…' : 'Repair'}
+                  </button>
                 </div>
               )}
-            </NeuCard>
-          </div>
-        </div>
-      )}
-
-      {/* ── PREVIEW (dry-run) ────────────────────────────────────────────── */}
-      {phase === 'preview' && (
-        <>
-          {/* Summary bar */}
-          <div className="flex flex-wrap gap-3 mb-5">
-            <SummaryStat label="Valid" value={summary.valid} tone="valid" />
-            <SummaryStat label="Warnings" value={summary.warning} tone="warning" />
-            <SummaryStat label="Errors" value={summary.error} tone="error" />
-          </div>
-
-          {emailErrorCount > 0 && (
-            <p className="text-sm mb-5" style={{ color: '#8B2020', fontFamily: OUTFIT, lineHeight: 1.55 }}>
-              {emailErrorCount === 1
-                ? '1 row has an email address that cannot receive mail.'
-                : `${emailErrorCount} rows have email addresses that cannot receive mail.`}{' '}
-              You can correct these addresses here in the import editor at any time, before or after importing.
-            </p>
-          )}
-
-          <RowTable rows={classifiedRows} committees={contextCommittees} />
-
-          {noAllocation.total > 0 && (
-            <div
-              role="alert"
-              className="flex items-start gap-3 rounded-xl px-4 py-3.5 mt-6"
-              style={{ backgroundColor: 'rgba(139,32,32,0.08)', border: '1.5px solid rgba(139,32,32,0.45)' }}
-            >
-              <AlertTriangle size={18} style={{ color: '#8B2020', flexShrink: 0, marginTop: 1 }} />
-              <div className="flex flex-col gap-1">
-                <p className="text-sm font-bold" style={{ color: '#8B2020', fontFamily: OUTFIT }}>
-                  {noAllocation.total} {noAllocation.total === 1 ? 'delegate' : 'delegates'} will be imported without a committee and country.
-                </p>
-                <p className="text-xs" style={{ color: '#6B2A1E', fontFamily: OUTFIT, lineHeight: 1.55 }}>
-                  {noAllocation.unresolvedCommittee > 0 && `${noAllocation.unresolvedCommittee} name a committee that did not match any of yours. `}
-                  {noAllocation.unresolvedCountry > 0 && `${noAllocation.unresolvedCountry} have a committee but a country that could not be placed. `}
-                  {noAllocation.noCommittee > 0 && `${noAllocation.noCommittee} have no committee or country in the file. `}
-                  Their Notes column says why. Emails that mention a country or committee will have nothing to show for them until they are assigned.
-                </p>
-              </div>
             </div>
-          )}
+          </>
+        ) : (
+          <ImportReview
+            phase={phase === 'importing' ? 'importing' : phase === 'results' ? 'results' : 'preview'}
+            fileName={fileName}
+            rows={classifiedRows}
+            committees={contextCommittees}
+            results={resultRows}
+            filter={filter}
+            onFilter={setFilter}
+            confirming={confirming}
+            onCancelConfirm={() => setConfirming(false)}
+            accepted={acceptMode === 'accepted'}
+            onAccepted={on => setAcceptMode(on ? 'accepted' : 'submitted')}
+            onImport={handleImportClick}
+            onChooseFile={() => fileInputRef.current?.click()}
+            onFixRow={applyRowFix}
+            onReset={resetToUpload}
+            importBlocked={importBlocked}
+            invitesQueued={lastInviteQueued}
+            applicationsHref={`/manage/${conference.slug}/applications`}
+            storeHref={`/manage/${conference.slug}/store`}
+            footer={invitesLine}
+          />
+        )}
 
-          <div className="flex items-center gap-3 mt-6">
-            <button
-              onClick={handleImportClick}
-              disabled={importableCount === 0}
-              className="inline-flex items-center gap-2 rounded-xl py-2.5 px-6 text-sm font-bold focus:outline-none"
-              style={{
-                backgroundColor: importableCount === 0 ? '#DDD4C0' : '#1B3828',
-                color: importableCount === 0 ? '#9A8A78' : '#EED98A',
-                fontFamily: OUTFIT, cursor: importableCount === 0 ? 'not-allowed' : 'pointer',
-              }}
-            >
-              <Check size={15} />
-              Import {importableCount} row{importableCount === 1 ? '' : 's'}
-            </button>
-          </div>
-        </>
-      )}
-
-      {/* ── IMPORTING ────────────────────────────────────────────────────── */}
-      {phase === 'importing' && (
-        <div className="flex flex-col items-center justify-center gap-3 py-20">
-          <Loader2 size={28} className="animate-spin" style={{ color: '#1B3828' }} />
-          <p className="text-sm font-semibold" style={{ color: '#1C1410', fontFamily: OUTFIT }}>Importing…</p>
-        </div>
-      )}
-
-      {/* ── RESULTS ──────────────────────────────────────────────────────── */}
-      {phase === 'results' && (
-        <>
-          {importBlocked && (
-            <div
-              role="alert"
-              className="flex flex-wrap items-center gap-3 rounded-xl px-4 py-3.5 mb-5"
-              style={{ backgroundColor: 'rgba(139,32,32,0.08)', border: '1.5px solid rgba(139,32,32,0.45)' }}
-            >
-              <AlertTriangle size={18} style={{ color: '#8B2020', flexShrink: 0 }} />
-              <p className="flex-1 text-sm" style={{ color: '#8B2020', fontFamily: OUTFIT, lineHeight: 1.5, margin: 0, minWidth: 200 }}>{importBlocked}</p>
-              <Link
-                href={`/manage/${conference.slug}/store`}
-                className="inline-flex items-center rounded-xl py-2 px-4 text-sm font-bold focus:outline-none"
-                style={{ backgroundColor: '#1B3828', color: '#EED98A', fontFamily: OUTFIT, textDecoration: 'none' }}
-              >
-                Go to Store
-              </Link>
-            </div>
-          )}
-          <div className="flex flex-wrap gap-3 mb-5">
-            <SummaryStat label="Imported" value={importedCount} tone="valid" />
-            <SummaryStat label="Imported, no allocation" value={importedNoAllocCount} tone="warning" />
-            <SummaryStat label="Skipped" value={skippedCount} tone="error" />
-          </div>
-
-          {unclaimedCount > 0 && (
-            <div
-              className="flex items-center gap-3 rounded-xl px-4 py-3 mb-5"
-              style={{ backgroundColor: 'rgba(238,217,138,0.22)', border: '1px solid rgba(182,135,31,0.35)' }}
-            >
-              <Mail size={15} style={{ color: '#8A6614', flexShrink: 0 }} />
-              <p className="flex-1 text-sm" style={{ color: '#6B4F12', fontFamily: OUTFIT }}>
-                {unclaimedCount} of the imported applicants don&apos;t have a Gavelling account yet.
-              </p>
-              <button
-                onClick={handleSendInvites}
-                disabled={sendingInvites}
-                className="inline-flex items-center gap-1.5 rounded-lg py-1.5 px-4 text-xs font-bold focus:outline-none flex-shrink-0"
-                style={{ backgroundColor: sendingInvites ? '#DDD4C0' : '#1B3828', color: sendingInvites ? '#9A8A78' : '#EED98A', fontFamily: OUTFIT, cursor: sendingInvites ? 'not-allowed' : 'pointer' }}
-              >
-                {sendingInvites ? <Loader2 size={13} className="animate-spin" /> : <Mail size={13} />}
-                SEND GAVELLING INVITES ({unclaimedCount})
-              </button>
-            </div>
-          )}
-
-          <ResultTable rows={resultRows} />
-
-          <div className="flex items-center gap-3 mt-6">
-            <button
-              onClick={resetToUpload}
-              className="inline-flex items-center gap-2 rounded-xl py-2.5 px-6 text-sm font-bold focus:outline-none"
-              style={{ border: '1px solid #DDD4C0', color: '#1C1410', backgroundColor: 'transparent', fontFamily: OUTFIT }}
-            >
-              <UploadIcon size={14} />
-              Import another file
-            </button>
-            <button
-              onClick={() => setActiveTab('imported')}
-              className="inline-flex items-center gap-2 rounded-xl py-2.5 px-6 text-sm font-bold focus:outline-none"
-              style={{ backgroundColor: '#1B3828', color: '#EED98A', fontFamily: OUTFIT }}
-            >
-              <UserCheck size={14} />
-              View imported delegates
-              <ArrowRight size={13} />
-            </button>
-          </div>
-        </>
-      )}
-      </>
-      )}
-
-      {confirmModal}
-      {flags && (
-        <ImportFlagDialog flags={flags} onCancel={() => setFlags(null)} onContinue={() => { void openCheckout(); }} />
-      )}
-      {invoice && (
-        <GavellingImportPopup
-          invoice={invoice}
-          busy={checkoutBusy}
-          err={checkoutErr}
-          onClose={() => { if (!checkoutBusy) setInvoice(null); }}
-          onPay={() => { void handleCheckoutPay(); }}
-        />
-      )}
-      </div>
-    </div>
-  );
-}
-
-// ── Tab switcher ─────────────────────────────────────────────────────────────
-
-/** The red asterisk on a required column. */
-function Req() {
-  return <span aria-label="required" style={{ color: '#8B2020', fontWeight: 800, marginLeft: 1 }}>*</span>;
-}
-
-function ImportTabSwitcher({ active, onChange }: { active: Tab; onChange: (t: Tab) => void }) {
-  return (
-    <div className="inline-flex p-1.5 mb-6" style={{ borderRadius: 999, gap: 4, backgroundColor: NEU.base, boxShadow: NEU.inSm }}>
-      {(['import', 'imported'] as const).map(t => {
-        const isActive = active === t;
-        return (
-          <button
-            key={t}
-            onClick={() => onChange(t)}
-            className="focus:outline-none"
-            style={{
-              padding: '7px 18px',
-              borderRadius: 999,
-              fontSize: 11,
-              fontFamily: OUTFIT,
-              fontWeight: 800,
-              border: 'none',
-              backgroundColor: isActive ? '#1B3828' : 'transparent',
-              boxShadow: isActive ? '0 3px 8px rgba(27,56,40,0.26)' : 'none',
-              color: isActive ? '#EED98A' : NEU.muted,
-              cursor: 'pointer',
-              transition: 'color 200ms, box-shadow 200ms',
-            }}
-          >
-            {t === 'import' ? 'Import' : 'Imported delegates'}
-          </button>
-        );
-      })}
-    </div>
-  );
-}
-
-// ── Accept-gate chooser ──────────────────────────────────────────────────────
-// Only newly created rows (toCreate) are governed by this choice — a
-// re-imported row (toUpdate) already has a status and this never touches it.
-
-function AcceptModeChooser({ mode, onChange, count }: {
-  mode: 'accepted' | 'submitted';
-  onChange: (m: 'accepted' | 'submitted') => void;
-  count: number | null;
-}) {
-  const options: { value: 'accepted' | 'submitted'; label: string; help: string }[] = [
-    { value: 'accepted', label: 'These people are already accepted', help: 'Imports new rows as accepted, or assigned when the spreadsheet gives them an allocation.' },
-    { value: 'submitted', label: 'Put them through the normal flow', help: 'Imports new rows as submitted, so the organizer accepts them in Applications like anyone else.' },
-  ];
-  const statusLine = mode === 'accepted'
-    ? (count === null
-        ? 'New rows will be imported as accepted, or assigned when the spreadsheet gives them an allocation.'
-        : `${count} ${count === 1 ? 'person' : 'people'} will be imported as accepted.`)
-    : (count === null
-        ? 'New rows will be imported as submitted, so you can accept them in Applications.'
-        : `${count} ${count === 1 ? 'person' : 'people'} will be imported as submitted, so you can accept them in Applications.`);
-  return (
-    <div className="mb-6">
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        {options.map(o => {
-          const selected = mode === o.value;
-          return (
-            <div
-              key={o.value}
-              onClick={() => onChange(o.value)}
-              role="radio"
-              aria-checked={selected}
-              tabIndex={0}
-              onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onChange(o.value); } }}
-              className="cursor-pointer rounded-xl px-4 py-3"
-              style={{
-                border: selected ? '1.5px solid #1B3828' : '1px solid #DDD4C0',
-                backgroundColor: selected ? 'rgba(27,56,40,0.06)' : NEU.base,
-                boxShadow: selected ? 'none' : NEU.inSm,
-                transition: 'border-color 200ms, background-color 200ms',
-              }}
-            >
-              <p className="text-sm font-bold" style={{ color: selected ? '#1B3828' : NEU.ink, fontFamily: OUTFIT }}>{o.label}</p>
-              <p className="text-xs mt-0.5" style={{ color: NEU.muted, fontFamily: OUTFIT, lineHeight: 1.45 }}>{o.help}</p>
-            </div>
-          );
-        })}
-      </div>
-      <p className="text-xs mt-2.5" style={{ color: '#6B5F52', fontFamily: OUTFIT }}>{statusLine}</p>
-    </div>
-  );
-}
-
-// ── Small pieces ─────────────────────────────────────────────────────────────
-
-function SummaryStat({ label, value, tone }: { label: string; value: number; tone: 'valid' | 'warning' | 'error' }) {
-  const s = CLASS_STYLES[tone];
-  return (
-    <div className="rounded-xl px-4 py-2.5 text-center" style={{ backgroundColor: s.bg, border: `1px solid ${s.border}` }}>
-      <p className="font-black text-lg" style={{ color: s.color, fontFamily: OUTFIT, fontVariantNumeric: 'tabular-nums' }}>{value}</p>
-      <p style={{ fontSize: 10, color: s.color, fontFamily: OUTFIT, fontWeight: 700, letterSpacing: '0.1em' }}>{label.toUpperCase()}</p>
-    </div>
-  );
-}
-
-function RowTable({ rows, committees }: { rows: ClassifiedImportRow[]; committees: CommitteeLite[] }) {
-  const doubleCommitteeIds = new Set(committees.filter(c => c.delegation_size === 2).map(c => c.id));
-  return (
-    <div className="rounded-2xl overflow-hidden" style={{ border: '1px solid #DDD4C0' }}>
-      <div className="overflow-x-auto" style={{ maxHeight: 520, overflowY: 'auto' }}>
-        <table className="w-full" style={{ borderCollapse: 'collapse' }}>
-          <thead>
-            <tr style={{ backgroundColor: '#F0EDE6' }}>
-              {['#', 'Status', 'Email', 'Name', 'Role', 'Delegation', 'Payment', 'Committee / Country', 'Notes'].map(h => (
-                <th key={h} className="text-left px-3 py-2.5" style={{ fontSize: 10, color: '#6B5F52', fontFamily: OUTFIT, fontWeight: 800, letterSpacing: '0.08em', whiteSpace: 'nowrap' }}>
-                  {h}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map(r => {
-              // Both single- and double-delegation committees resolve a seat
-              // (singles always at 1), so only show it when it's actually
-              // meaningful — a double-delegation committee.
-              const showSeat = !!r.resolved.committeeId && doubleCommitteeIds.has(r.resolved.committeeId) && r.resolved.seat != null;
-              return (
-              <tr key={r.rowNumber} style={{ borderTop: '1px solid #F0EDE6', backgroundColor: '#FAF8F3' }}>
-                <td className="px-3 py-2.5 text-xs" style={{ color: '#9A8A78', fontFamily: OUTFIT, fontVariantNumeric: 'tabular-nums' }}>{r.rowNumber}</td>
-                <td className="px-3 py-2.5"><ClassPill cls={r.cls} /></td>
-                <td className="px-3 py-2.5 text-xs [overflow-wrap:anywhere]" style={{ color: '#1C1410', fontFamily: OUTFIT }}>{r.raw.email || 'None'}</td>
-                <td className="px-3 py-2.5 text-xs" style={{ color: '#1C1410', fontFamily: OUTFIT }}>{r.raw.name || 'None'}</td>
-                <td className="px-3 py-2.5 text-xs" style={{ color: '#1C1410', fontFamily: OUTFIT }}>{r.resolved.role ? roleLabel(r.resolved.role) : (r.raw.role || 'None')}</td>
-                <td className="px-3 py-2.5 text-xs" style={{ color: '#1C1410', fontFamily: OUTFIT }}>{r.resolved.societyName ?? <em style={{ color: '#9A8A78' }}>Independent</em>}</td>
-                <td className="px-3 py-2.5 text-xs capitalize" style={{ color: '#1C1410', fontFamily: OUTFIT }}>{r.resolved.paymentStatus}</td>
-                <td className="px-3 py-2.5 text-xs" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
-                  {r.resolved.committeeId && r.resolved.countryCode ? (
-                    <span className="inline-flex items-center gap-1.5">
-                      <span className="font-semibold">{r.resolved.committeeLabel}</span>
-                      <FlagImg code={r.resolved.countryCode} size={13} />
-                      {r.resolved.countryName}
-                      {showSeat && <span style={{ color: '#9A8A78' }}>&middot; Seat {r.resolved.seat}</span>}
-                    </span>
-                  ) : r.resolved.committeeLabel ? (
-                    // The committee matched, the country did not place (see Notes).
-                    <span>
-                      <span className="font-semibold">{r.resolved.committeeLabel}</span>
-                      {r.allocatedAfterImport
-                        ? <span style={{ color: '#9A8A78' }}>, keeps current allocation</span>
-                        : <span style={{ color: '#9A6B2F' }}>{r.raw.country ? `, ${r.raw.country.trim()} (not placed)` : ', no country'}</span>}
-                    </span>
-                  ) : r.raw.committee ? (
-                    <span className="inline-flex items-center gap-1" style={{ color: '#8B2020' }}>
-                      <AlertTriangle size={11} style={{ flexShrink: 0 }} />
-                      {r.raw.committee}{r.raw.country ? `, ${r.raw.country}` : ''}
-                    </span>
-                  ) : 'None'}
-                  {r.resolved.committeeLabel && (r.resolved.committeeMatchedVia === 'parenthetical' || r.resolved.committeeMatchedVia === 'normalised') && (
-                    <span className="block mt-0.5" style={{ fontSize: 10.5, color: '#9A8A78' }} title={r.raw.committee}>
-                      matched from &ldquo;{r.raw.committee.trim().length > 42 ? `${r.raw.committee.trim().slice(0, 40)}…` : r.raw.committee.trim()}&rdquo;
-                    </span>
-                  )}
-                </td>
-                <td className="px-3 py-2.5" style={{ maxWidth: 280 }}>
-                  {r.reasons.length > 0 ? (
-                    <ul className="flex flex-col gap-0.5">
-                      {r.reasons.map((m, i) => (
-                        <li key={i} className="text-xs" style={{ color: r.cls === 'error' ? '#8B2020' : '#9A6B2F', fontFamily: OUTFIT }}>{m}</li>
-                      ))}
-                    </ul>
-                  ) : <span className="text-xs" style={{ color: '#9A8A78' }}>None</span>}
-                </td>
-              </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
-}
-
-const OUTCOME_STYLES: Record<RowOutcome, { icon: typeof CircleCheck; color: string; label: string }> = {
-  'imported': { icon: CircleCheck, color: '#2A5A3C', label: 'Imported' },
-  'imported-no-allocation': { icon: AlertTriangle, color: '#9A6B2F', label: 'Imported, no allocation' },
-  // A person who was already here and got filled in by this run.
-  'updated': { icon: UserCheck, color: '#1B3828', label: 'Updated' },
-  'unchanged': { icon: Check, color: '#9A8A78', label: 'Already up to date' },
-  'skipped': { icon: CircleX, color: '#8B2020', label: 'Skipped' },
-};
-
-function ResultTable({ rows }: { rows: ResultRow[] }) {
-  return (
-    <div className="rounded-2xl overflow-hidden" style={{ border: '1px solid #DDD4C0' }}>
-      <div className="overflow-x-auto" style={{ maxHeight: 520, overflowY: 'auto' }}>
-        <table className="w-full" style={{ borderCollapse: 'collapse' }}>
-          <thead>
-            <tr style={{ backgroundColor: '#F0EDE6' }}>
-              {['#', 'Outcome', 'Email', 'Name', 'Role', 'Note'].map(h => (
-                <th key={h} className="text-left px-3 py-2.5" style={{ fontSize: 10, color: '#6B5F52', fontFamily: OUTFIT, fontWeight: 800, letterSpacing: '0.08em', whiteSpace: 'nowrap' }}>
-                  {h}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map(r => {
-              const s = OUTCOME_STYLES[r.outcome];
-              const Icon = s.icon;
-              return (
-                <tr key={r.row.rowNumber} style={{ borderTop: '1px solid #F0EDE6', backgroundColor: '#FAF8F3' }}>
-                  <td className="px-3 py-2.5 text-xs" style={{ color: '#9A8A78', fontFamily: OUTFIT, fontVariantNumeric: 'tabular-nums' }}>{r.row.rowNumber}</td>
-                  <td className="px-3 py-2.5">
-                    <span className="inline-flex items-center gap-1.5 text-xs font-bold" style={{ color: s.color, fontFamily: OUTFIT }}>
-                      <Icon size={13} />
-                      {s.label}
-                    </span>
-                  </td>
-                  <td className="px-3 py-2.5 text-xs [overflow-wrap:anywhere]" style={{ color: '#1C1410', fontFamily: OUTFIT }}>{r.row.raw.email || 'None'}</td>
-                  <td className="px-3 py-2.5 text-xs" style={{ color: '#1C1410', fontFamily: OUTFIT }}>{r.row.raw.name || 'None'}</td>
-                  <td className="px-3 py-2.5 text-xs" style={{ color: '#1C1410', fontFamily: OUTFIT }}>{r.row.resolved.role ? roleLabel(r.row.resolved.role) : (r.row.raw.role || 'None')}</td>
-                  <td className="px-3 py-2.5 text-xs" style={{ color: '#9A8A78', fontFamily: OUTFIT, maxWidth: 320 }}>{r.note ?? 'None'}</td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+        {confirmModal}
+        {invoice && (
+          <GavellingImportPopup
+            invoice={invoice}
+            busy={checkoutBusy}
+            err={checkoutErr}
+            onClose={() => { if (!checkoutBusy) setInvoice(null); }}
+            onPay={() => { void handleCheckoutPay(); }}
+          />
+        )}
       </div>
     </div>
   );
@@ -1526,9 +975,9 @@ function ImportedDelegatesTab({ conference, session, confirm, fixApplicationId }
 
   return (
     <>
-      <div className="flex flex-wrap gap-3 mb-5">
-        <SummaryStat label="Imported" value={rows.length} tone="valid" />
-        <SummaryStat label="Unclaimed" value={unclaimed} tone="warning" />
+      <div className="gv-imp-summary">
+        <BigCount n={rows.length} word="imported" color={GREEN} />
+        {unclaimed > 0 && <BigCount n={unclaimed} word="not joined yet" color={AMBER} />}
       </div>
       {unsendableCount > 0 && (
         <div
@@ -1588,7 +1037,7 @@ function ImportedDelegatesTab({ conference, session, confirm, fixApplicationId }
                             className="inline-flex items-center gap-1 rounded-lg py-1 px-2 text-xs font-bold focus:outline-none"
                             style={{ border: '1px solid #DDD4C0', color: '#2A5A3C', backgroundColor: 'transparent', fontFamily: OUTFIT, cursor: savingId === r.id ? 'not-allowed' : 'pointer' }}
                           >
-                            {savingId === r.id ? <Loader2 size={11} className="animate-spin" /> : <Check size={11} />} SAVE
+                            {savingId === r.id ? <Loader2 size={11} className="animate-spin" /> : <Check size={11} />} Save
                           </button>
                           <button
                             onClick={() => { setEditingId(null); setRowError(null); }}
@@ -1597,7 +1046,7 @@ function ImportedDelegatesTab({ conference, session, confirm, fixApplicationId }
                             className="inline-flex items-center gap-1 rounded-lg py-1 px-2 text-xs font-bold focus:outline-none"
                             style={{ border: '1px solid #DDD4C0', color: '#1C1410', backgroundColor: 'transparent', fontFamily: OUTFIT, cursor: savingId === r.id ? 'not-allowed' : 'pointer' }}
                           >
-                            <X size={11} /> CANCEL
+                            <X size={11} /> Cancel
                           </button>
                         </span>
                       ) : (

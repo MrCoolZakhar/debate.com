@@ -58,7 +58,7 @@ export function useSeatCrest(myAllocation: ParticipantAllocation | null): string
   return seatLogo;
 }
 
-export default function AllocationCard({ committee, myAllocation, conferenceStartDate, showCountry = true, seatLogo: seatLogoProp, joinFromXlOnly = false }: {
+export default function AllocationCard({ committee, myAllocation, conferenceStartDate, showCountry = true, seatLogo: seatLogoProp, joinFromXlOnly = false, headerFromXlOnly = false }: {
   committee: ParticipantCommittee | null;
   myAllocation: ParticipantAllocation | null;
   conferenceStartDate: string | null;
@@ -70,6 +70,10 @@ export default function AllocationCard({ committee, myAllocation, conferenceStar
    *  assignment just above, so this card's own button shows from xl only (the
    *  session code stays everywhere). */
   joinFromXlOnly?: boolean;
+  /** The one-page phone dashboard already shows the committee's emblem and
+   *  name in Your assignment just above, so below xl this card starts at the
+   *  difficulty and the topics (from xl it is unchanged). */
+  headerFromXlOnly?: boolean;
 }) {
   const now = useNow();
   // The country half is drawn by the dashboard's Overview now; the committee
@@ -109,6 +113,7 @@ export default function AllocationCard({ committee, myAllocation, conferenceStar
   return (
     <SectionCard>
       <div className="flex flex-col items-center px-2 text-center">
+        <div className={headerFromXlOnly ? 'hidden xl:flex flex-col items-center' : 'flex flex-col items-center'}>
         {committee.logo_url ? (
           <img
             src={committee.logo_url}
@@ -122,6 +127,7 @@ export default function AllocationCard({ committee, myAllocation, conferenceStar
         <h3 className="font-bold text-[17px] leading-snug mt-4" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
           {committee.name}
         </h3>
+        </div>
 
         <div className="flex items-center gap-2 mt-1.5">
           {committee.difficulty && (

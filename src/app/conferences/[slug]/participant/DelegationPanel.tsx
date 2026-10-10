@@ -44,7 +44,7 @@ import {
   type PoolMember,
 } from '@/app/manage/[slug]/assignment/delegationShared';
 import { SectionCard, OUTFIT, PaymentChipMark, derivePaymentChip, formatReleaseDate } from './shared';
-import { DashCard, CardHeading, BigCount, AppStatusMark, FOREST_GRADIENT } from './dashboardKit';
+import { DashCard, CardHeading, BigCount, AppStatusMark, FOREST_GRADIENT, useDashStacked } from './dashboardKit';
 
 interface Society {
   id: string;
@@ -383,6 +383,10 @@ export default function DelegationPanel({ conferenceId, conferenceSlug, societyI
   const { user, session } = useAuth();
   const router = useRouter();
   const { confirm, modal: confirmModal } = useConfirmModal();
+  // On the one-page phone dashboard (below xl) there are no sections: the
+  // full delegation card shows whatever section the desktop has open, and the
+  // Overview summary is a desktop-only view of it.
+  const stacked = useDashStacked();
 
   // ── The roster, for every member (my_delegation_roster) ──────────────────
   // Every hook in this component sits ABOVE the early returns further down.
@@ -644,10 +648,13 @@ export default function DelegationPanel({ conferenceId, conferenceSlug, societyI
     </>
   );
 
-  if (section !== 'overview' && section !== 'delegation') return overlays;
+  const ownSection = section === 'overview' || section === 'delegation';
+  if (!ownSection && !stacked) return overlays;
+  // Stacked and on another desktop section: drawn below xl only.
+  const phoneOnly = (node: React.ReactNode) => (ownSection ? node : <><div className="xl:hidden">{node}</div>{overlays}</>);
 
   if (!roster && rosterError) {
-    return (
+    return phoneOnly(
       <SectionCard>
         <p className="text-sm" role="alert" style={{ color: '#8B2020', fontFamily: OUTFIT, margin: 0 }}>{rosterError}</p>
       </SectionCard>
@@ -655,7 +662,7 @@ export default function DelegationPanel({ conferenceId, conferenceSlug, societyI
   }
 
   if (!roster || (isLeader && loading)) {
-    return (
+    return phoneOnly(
       <SectionCard>
         <div className="flex justify-center py-6">
           <Loader size={48} />
@@ -730,8 +737,7 @@ export default function DelegationPanel({ conferenceId, conferenceSlug, societyI
   );
 
   if (section === 'overview') {
-    return (
-      <>
+    const summary = (
         <DashCard className="@container">
           <CardHeading label="Your delegation" title={societyName} aside={leaderActions} />
           {counts}
@@ -754,14 +760,28 @@ export default function DelegationPanel({ conferenceId, conferenceSlug, societyI
             </div>
           )}
         </DashCard>
-        {overlays}
-      </>
     );
+    if (stacked) {
+      return (
+        <>
+          <div className="hidden xl:block">{summary}</div>
+          <div className="xl:hidden">{renderFull(false)}</div>
+          {overlays}
+        </>
+      );
+    }
+    return <>{summary}{overlays}</>;
   }
 
+  if (section !== 'delegation') return phoneOnly(renderFull(false));
+  return renderFull(true);
+
+  // The full card (members, pledges, swaps), drawn once per render. Overlays
+  // ride inside it only when it is the panel's whole output.
+  function renderFull(withOverlays: boolean) {
   return (
     <DashCard className="@container">
-      <CardHeading label="Delegation" title={societyName} aside={leaderActions} />
+      <CardHeading label="Delegation" title={societyName} aside={leaderActions} stackedHide="label" />
       <div className="mb-6">{counts}</div>
 
       {pendingSwapRequest && (
@@ -897,7 +917,8 @@ export default function DelegationPanel({ conferenceId, conferenceSlug, societyI
         </div>
       )}
 
-      {overlays}
+      {withOverlays && overlays}
     </DashCard>
   );
+  }
 }

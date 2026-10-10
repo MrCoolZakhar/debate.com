@@ -17,11 +17,11 @@
 // as a big number with the word beside it, sentence-case buttons in the forest
 // gradient, no "…" on a name, no em dashes, no tinted band behind anything.
 
-import { createContext, useContext, useEffect, useRef, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import type { LucideIcon } from 'lucide-react';
 import {
-  BadgeCheck, CheckCircle2, Clock, DoorOpen, MinusCircle, Hourglass,
+  ArrowDown, ArrowRight, BadgeCheck, CheckCircle2, Clock, DoorOpen, MinusCircle, Hourglass,
 } from 'lucide-react';
 import { MonogramMedallion } from '@/components/CommitteeEditorModal';
 import { committeeDisplayName } from '@/lib/presetNames';
@@ -53,13 +53,20 @@ export function DashCard({ children, className = '', style, id }: {
 }
 
 /** A small label above a sans heading (liked on the taste board), never an
- *  all-capitals tracked heading on its own. `aside` sits at the inline end. */
-export function CardHeading({ label, title, aside }: { label?: string; title: React.ReactNode; aside?: React.ReactNode }) {
+ *  all-capitals tracked heading on its own. `aside` sits at the inline end.
+ *  `stackedHide`: the card's title says the same as the section heading above
+ *  it on the one-page phone dashboard, so below xl it is left out there (the
+ *  aside stays); 'label' leaves out only the small label above the title.
+ *  From xl, and outside a stacked dashboard, nothing changes. */
+export function CardHeading({ label, title, aside, stackedHide = false }: { label?: string; title: React.ReactNode; aside?: React.ReactNode; stackedHide?: boolean | 'label' }) {
+  const stacked = useDashStacked();
+  const hide = stacked && stackedHide === true;
+  const hideLabel = stacked && stackedHide === 'label';
   return (
-    <div className="flex items-start justify-between gap-3 flex-wrap mb-4">
-      <div className="min-w-0">
+    <div className={`${hide && !aside ? 'hidden xl:flex' : 'flex'} items-start justify-between gap-3 flex-wrap mb-4`}>
+      <div className={hide ? 'hidden xl:block min-w-0' : 'min-w-0'}>
         {label && (
-          <p style={{ fontFamily: OUTFIT, fontSize: 12, fontWeight: 700, color: GOLD_DEEP, margin: '0 0 2px 0' }}>{label}</p>
+          <p className={hideLabel ? 'hidden xl:block' : undefined} style={{ fontFamily: OUTFIT, fontSize: 12, fontWeight: 700, color: GOLD_DEEP, margin: '0 0 2px 0' }}>{label}</p>
         )}
         <h3 className="[overflow-wrap:anywhere]" style={{ fontFamily: OUTFIT, fontSize: 19, fontWeight: 800, color: INK, margin: 0, lineHeight: 1.25 }}>
           {title}
@@ -265,17 +272,161 @@ export function useDashStacked(): boolean {
   return useContext(StackedContext);
 }
 
+/** A section's heading on the one-page phone dashboard (10 Oct 2026, owner:
+ *  "there is still multiple tabs in you ... not yet clear enough"): Title
+ *  Case, a duotone icon in a soft tinted disc (CLAUDE.md §8), sitting closer
+ *  to its own cards than to the section above. Below xl only: from xl the
+ *  sub-nav names the section. */
+export function StackHeading({ title, icon: Icon }: { title: string; icon: LucideIcon }) {
+  return (
+    <h2
+      className="xl:hidden flex items-center gap-3 mt-5 -mb-2 [overflow-wrap:anywhere]"
+      style={{ fontFamily: OUTFIT, fontSize: 20, fontWeight: 800, color: INK, lineHeight: 1.25 }}
+    >
+      <span
+        aria-hidden
+        className="inline-flex items-center justify-center flex-shrink-0"
+        style={{ width: 38, height: 38, borderRadius: 999, backgroundColor: 'rgba(61,122,82,0.13)' }}
+      >
+        <Icon size={18} strokeWidth={2.2} style={{ color: FOREST, fill: 'rgba(238,217,138,0.6)' }} />
+      </span>
+      <span className="min-w-0">{title}</span>
+    </h2>
+  );
+}
+
 /** A pane that stays mounted: display:none when it is not the one shown. In a
  *  stacked dashboard a pane that is not the one shown is hidden from xl only,
- *  so a phone or tablet reads every section on one scrolling page. */
-export function Pane({ show, children, gap = 6 }: { show: boolean; children: React.ReactNode; gap?: 4 | 6 }) {
+ *  so a phone or tablet reads every section on one scrolling page, each
+ *  section under its `title` (drawn below xl only). `phone={false}` keeps a
+ *  pane off the phone page (it would repeat what is already there) while the
+ *  desktop section is unchanged. `anchor` is the id a "next step" button
+ *  scrolls to. */
+export function Pane({ show, children, gap = 6, title, icon, phone = true, anchor }: {
+  show: boolean;
+  children: React.ReactNode;
+  gap?: 4 | 6;
+  title?: string;
+  icon?: LucideIcon;
+  phone?: boolean;
+  anchor?: string;
+}) {
   const stacked = useContext(StackedContext);
-  const base = gap === 4 ? 'flex flex-col gap-4' : 'flex flex-col gap-6';
-  if (stacked) return <div className={show ? base : `${base} xl:hidden`}>{children}</div>;
+  const flow = gap === 4 ? 'flex-col gap-4' : 'flex-col gap-6';
+  const base = `flex ${flow}`;
+  if (stacked) {
+    const cls = !phone
+      ? (show ? `hidden xl:flex ${flow}` : 'hidden')
+      : (show ? base : `${base} xl:hidden`);
+    return (
+      <div id={anchor} className={cls} style={anchor ? { scrollMarginTop: 96 } : undefined}>
+        {phone && title && icon && <StackHeading title={title} icon={icon} />}
+        {children}
+      </div>
+    );
+  }
   return (
     <div className={base} style={show ? undefined : { display: 'none' }}>
       {children}
     </div>
+  );
+}
+
+// ── The next step (the first thing on the phone page) ───────────────────────
+
+export type NextStepAction =
+  | { label: string; href: string; external?: boolean }
+  | { label: string; scrollTo: string };
+
+/** What this person should do now, in one line, with at most one button. A
+ *  'done' step has no button: "You're all set" and what happens next. */
+export interface NextStep {
+  kind: 'action' | 'done';
+  line: string;
+  action?: NextStepAction;
+}
+
+const NextStepReportContext = createContext<((step: NextStep | null) => void) | null>(null);
+export const NextStepReportProvider = NextStepReportContext.Provider;
+
+/** A role's own dashboard tells the page its next step (the chair's room is
+ *  loaded inside ChairParticipant, not by the page). Reported by value, so a
+ *  re-render with the same step changes nothing. */
+export function useReportNextStep(step: NextStep | null) {
+  const report = useContext(NextStepReportContext);
+  const key = step ? JSON.stringify(step) : '';
+  useEffect(() => {
+    if (!report) return;
+    report(key ? (JSON.parse(key) as NextStep) : null);
+  }, [report, key]);
+  useEffect(() => () => { report?.(null); }, [report]);
+}
+
+/** The page's side of useReportNextStep: a stable setter that ignores a
+ *  report equal to the one it already holds. */
+export function useNextStepSlot(): [NextStep | null, (step: NextStep | null) => void] {
+  const [step, setStep] = useState<NextStep | null>(null);
+  const report = useCallback((next: NextStep | null) => {
+    setStep(prev => (JSON.stringify(prev) === JSON.stringify(next) ? prev : next));
+  }, []);
+  return [step, report];
+}
+
+function scrollToAnchor(id: string) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  const reduce = typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+  el.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'start' });
+}
+
+/** "What do I do next", answered in one line with one button, or "You're all
+ *  set" when there is nothing to do. The application's status sits at the
+ *  top right as icon + word. Below xl only (the desktop Overview keeps its
+ *  status row). */
+export function NextStepCard({ step, status }: { step: NextStep; status: string }) {
+  const action = step.action;
+  return (
+    <DashCard className="xl:hidden">
+      <div className="flex items-center justify-between gap-3 flex-wrap mb-3">
+        {step.kind === 'action' ? (
+          <p style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 700, color: GOLD_DEEP, margin: 0 }}>Your next step</p>
+        ) : (
+          <p className="inline-flex items-center gap-2.5" style={{ fontFamily: OUTFIT, fontSize: 19, fontWeight: 800, color: INK, margin: 0 }}>
+            <span aria-hidden className="inline-flex items-center justify-center flex-shrink-0" style={{ width: 36, height: 36, borderRadius: 999, backgroundColor: 'rgba(61,122,82,0.14)' }}>
+              <CheckCircle2 size={19} strokeWidth={2.3} style={{ color: FOREST, fill: 'rgba(238,217,138,0.6)' }} />
+            </span>
+            You&apos;re all set
+          </p>
+        )}
+        <AppStatusMark status={status} size="sm" />
+      </div>
+      <p
+        className="[overflow-wrap:anywhere]"
+        style={step.kind === 'action'
+          ? { fontFamily: OUTFIT, fontSize: 18, fontWeight: 700, color: INK, margin: 0, lineHeight: 1.4 }
+          : { fontFamily: OUTFIT, fontSize: 15, fontWeight: 500, color: INK_SOFT, margin: 0, lineHeight: 1.5 }}
+      >
+        {step.line}
+      </p>
+      {step.kind === 'action' && action && (
+        <div className="mt-4">
+          {'href' in action ? (
+            <ForestLink href={action.href} external={action.external} className="w-full sm:w-auto">
+              {action.label} <ArrowRight size={16} strokeWidth={2.4} aria-hidden />
+            </ForestLink>
+          ) : (
+            <button
+              type="button"
+              onClick={() => scrollToAnchor(action.scrollTo)}
+              className="w-full sm:w-auto focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[#B6871F]"
+              style={{ ...BTN_BASE, background: FOREST_GRADIENT, color: '#FFFFFF', border: 'none', boxShadow: '0 6px 16px -8px rgba(27,56,40,0.55)' }}
+            >
+              {action.label} <ArrowDown size={16} strokeWidth={2.4} aria-hidden />
+            </button>
+          )}
+        </div>
+      )}
+    </DashCard>
   );
 }
 

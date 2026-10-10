@@ -1,17 +1,18 @@
 'use client';
 
-// The organiser import's two pop-ups (25 Sep 2026):
-//   ImportFlagDialog     step 1, only when the file has something to flag
-//                        (delegates without a committee and country, rows with
-//                        warnings, rows that will be skipped). No credit talk.
-//   GavellingImportPopup step 2, "Gavelling Import", in the Store pop-ups'
-//                        manner: the left explains, the right is the invoice.
-//                        1 credit per new delegate, head delegate, faculty
-//                        advisor or observer; the credits come from Conference
-//                        Credits first, then the organiser's own, then a
-//                        purchase. The page owns every write (import.page.tsx).
+// The organiser import's checkout (25 Sep 2026; Oct 2026 the flag pop-up was
+// replaced by the page's own inline confirm, asked before EVERY import):
+//   hasImportFlags       whether a file has something to flag (no longer read
+//                        by the page, kept with ImportFlags for reference).
+//   GavellingImportPopup "Gavelling Import", in the Store pop-ups' manner: the
+//                        left explains, the right is the invoice. 1 credit per
+//                        new delegate, head delegate, faculty advisor or
+//                        observer; the credits come from Conference Credits
+//                        first, then the organiser's own, then a purchase.
+//                        Shown only once IMPORTS_PAID_LAUNCH is on. The page
+//                        owns every write (page.tsx).
 
-import { AlertTriangle, ArrowRightLeft, CalendarClock, UserPlus } from 'lucide-react';
+import { ArrowRightLeft, CalendarClock, UserPlus } from 'lucide-react';
 import {
   PurchaseShell, PURCHASE_CSS, BrandTitle, Eyebrow, BenefitList, ErrorLine, GoldButton, type Benefit,
 } from '@/components/purchase/purchaseKit';
@@ -19,9 +20,8 @@ import {
 const FONT = "var(--font-brand), sans-serif";
 const INK = '#1C1410';
 const INK_SOFT = '#5A5046';
-const RED = '#8B2020';
 
-// ── Step 1: the flag ────────────────────────────────────────────────────────
+// ── The flag ────────────────────────────────────────────────────────
 
 export interface ImportFlags {
   /** Delegates and head delegates who will hold no allocation. */
@@ -38,43 +38,7 @@ export function hasImportFlags(f: ImportFlags): boolean {
   return f.noAlloc > 0 || f.warnings > 0 || f.errors > 0;
 }
 
-export function ImportFlagDialog({ flags, onCancel, onContinue }: {
-  flags: ImportFlags; onCancel: () => void; onContinue: () => void;
-}) {
-  const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
-  return (
-    <PurchaseShell tone="light" label="Check before importing" onClose={onCancel} panelClass="gv-imp-flag" testId="import-flag">
-      <style>{PURCHASE_CSS}{CSS}</style>
-      <div className="gv-imp-flag-body">
-        <span className="gv-imp-flag-icon" aria-hidden><AlertTriangle size={26} strokeWidth={2.2} /></span>
-        <h2 className="gv-imp-flag-title">Check Before Importing</h2>
-        {flags.noAlloc > 0 && (
-          <p className="gv-imp-flag-lead" role="alert">
-            {plural(flags.noAlloc, 'delegate', 'delegates')} will be imported without a committee and country.
-            {flags.unresolvedCommittee > 0 ? ` ${flags.unresolvedCommittee} of them name a committee that did not match.` : ''}
-          </p>
-        )}
-        <ul className="gv-imp-flag-list">
-          {flags.warnings > 0 && (
-            <li><b>{plural(flags.warnings, 'row has', 'rows have')} a warning.</b> Each one is explained in the table.</li>
-          )}
-          {flags.errors > 0 && (
-            <li><b>{plural(flags.errors, 'row has', 'rows have')} an error and will be skipped.</b> Fix them in the file to bring them in.</li>
-          )}
-          {flags.noAlloc > 0 && (
-            <li>Emails that mention a country or committee will have none to show. You can assign them later in Assignment.</li>
-          )}
-        </ul>
-        <div className="gv-imp-flag-actions">
-          <button type="button" className="gv-imp-btn gv-imp-secondary" onClick={onCancel}>Cancel</button>
-          <button type="button" className="gv-imp-btn gv-imp-primary" onClick={onContinue}>Continue with import</button>
-        </div>
-      </div>
-    </PurchaseShell>
-  );
-}
-
-// ── Step 2: Gavelling Import ────────────────────────────────────────────────
+// ── Gavelling Import ────────────────────────────────────────────────
 
 const BENEFITS: Benefit[] = [
   { emoji: 'Inbox tray', fallback: ArrowRightLeft, title: 'Handle applications outside Gavelling', live: true },
@@ -173,19 +137,4 @@ const CSS = `
 .gv-imp-total{display:flex;justify-content:space-between;align-items:baseline;gap:12px;margin-top:4px;padding-top:10px;border-top:1px solid rgba(28,20,16,0.12);font-size:18px;font-weight:800}
 .gv-imp-src{margin:2px 0 0;font-size:13.5px;line-height:1.45;color:${INK_SOFT}}
 .gv-imp-mode{margin:0;font-family:${FONT};font-size:13px;line-height:1.45;color:${INK_SOFT}}
-.gv-buy-panel.gv-imp-flag{max-width:540px;min-height:0}
-.gv-buy-panel.gv-imp-flag .gv-buy-body{flex-direction:column}
-.gv-imp-flag-body{padding:30px 30px 26px;display:flex;flex-direction:column;gap:12px;font-family:${FONT};color:${INK}}
-.gv-imp-flag-icon{width:48px;height:48px;border-radius:999px;display:inline-flex;align-items:center;justify-content:center;background:rgba(139,32,32,0.1);color:${RED}}
-.gv-imp-flag-title{margin:4px 0 0;font-size:26px;font-weight:800;letter-spacing:-0.015em;line-height:1.15;padding-right:36px}
-.gv-imp-flag-lead{margin:0;font-size:17px;font-weight:700;line-height:1.4;color:${RED}}
-.gv-imp-flag-list{margin:0;padding:0 0 0 18px;display:flex;flex-direction:column;gap:6px;font-size:14.5px;line-height:1.5;color:${INK_SOFT}}
-.gv-imp-flag-list b{color:${INK};font-weight:700}
-.gv-imp-flag-actions{display:flex;justify-content:flex-end;gap:10px;flex-wrap:wrap;margin-top:10px}
-.gv-imp-btn{min-height:46px;padding:0 20px;border-radius:10px;border:none;cursor:pointer;font-family:${FONT};font-size:15px;font-weight:700}
-.gv-imp-btn:focus{outline:none}
-.gv-imp-btn:focus-visible{outline:2px solid #1B3828;outline-offset:2px}
-.gv-imp-primary{background:linear-gradient(90deg,#1B3828 0%,#2A5A3C 55%,#1E4A31 100%);color:#FFFFFF}
-.gv-imp-secondary{background:#FFFFFF;color:${INK};box-shadow:inset 0 0 0 1.5px ${INK}}
-@media (max-width:743px){.gv-imp-flag-body{padding:calc(24px + env(safe-area-inset-top)) 20px calc(24px + env(safe-area-inset-bottom))}}
 `;

@@ -2572,11 +2572,13 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
 
             {/* Right column, sticky rail — on mobile it jumps to the very top so
                 the Apply CTA is the first thing a delegate reaches. Not on a
-                phone's You tab for someone who has applied (10 Oct 2026): there
-                it pushed the dashboard below a status card and a price that
-                the dashboard itself already answers, so You opened on the
-                wrong things. Overview keeps it, and from md it is unchanged. */}
-            <div className={`${activeTab === 'participant' && myApp && !isOrganizerViewer && !authLoading && !participantDataLoading ? 'hidden md:block ' : ''}w-full md:w-[340px] md:flex-shrink-0 order-first md:order-none`}>
+                phone's or tablet's You tab for someone who has applied (10 Oct
+                2026): there it pushed the dashboard below a status card and a
+                price that the dashboard itself already answers, so You opened
+                on the wrong things, and on a tablet it squeezed the one-page
+                dashboard into a 280px column. Overview keeps it, and from xl
+                (where the dashboard has its sub-nav) it is unchanged. */}
+            <div className={`${activeTab === 'participant' && myApp && !isOrganizerViewer && !authLoading && !participantDataLoading ? 'hidden xl:block ' : ''}w-full md:w-[340px] md:flex-shrink-0 order-first md:order-none`}>
               <div className="flex flex-col gap-4 md:sticky md:top-3 lg:top-[84px]">
 
                 {/* Apply CTA, always first */}

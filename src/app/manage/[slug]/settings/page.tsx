@@ -55,7 +55,7 @@ import ProfileLink from '@/components/ProfileLink';
 import { useNow } from '@/lib/useNow';
 import { SectionTop, ConferencePreview, sectionMeta, type SettingsSnapshot } from './settingsHome';
 import { SettingsControlPanel } from './controlPanel';
-import { RoleSetup } from './roleSetup';
+import { RoleSheet } from './roleSetup';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -487,7 +487,9 @@ export default function SettingsPage() {
   })();
   /** A render-time clock for the home's sentences ("open now", "until 3 Apr"). */
   const nowMs = useNow();
-  const showHome = !tabParam && !searchParams.get('role') && !searchParams.get('focus') && !searchParams.get('highlight');
+  // The control panel is the applications section now (Oct 2026): no ?tab=,
+  // or ?tab=applications, shows it; a role opens as a pop-up over it.
+  const showHome = activeTab === 'applications';
   function openSection(next: SettingsTab | null) {
     const params = new URLSearchParams(searchParams.toString());
     for (const k of ['tab', 'section', 'focus', 'highlight', 'step']) params.delete(k);
@@ -499,23 +501,48 @@ export default function SettingsPage() {
   // Which role's configuration the Applications section is showing. Derived
   // from ?role= rather than held in state, so a deep link lands on the right
   // role and the back button walks back through them.
+  //
+  // The role's pop-up (roleSetup.tsx) is open when ?role= names a role, or
+  // when an old link carries ?tab=applications&step= with no role (it opens
+  // Delegates, the role most links meant). ?tab=applications alone shows the
+  // control panel with Who Can Apply brought into view.
   const roleParam = searchParams.get('role');
-  const activeRole: string = (ROLES as readonly string[]).includes(roleParam ?? '') ? (roleParam as string) : ROLES[0];
-  function setActiveRole(next: string) {
-    const params = new URLSearchParams(searchParams.toString());
-    params.set('role', next);
-    params.delete('step');
-    router.push(`?${params.toString()}`, { scroll: false });
-  }
-  /** The control panel's Edit (and its Application form card): one role's
-   *  set-up, optionally opened on one step (?step=, see roleSetup.tsx). */
+  const sheetRole: string | null = showHome
+    ? ((ROLES as readonly string[]).includes(roleParam ?? '') ? (roleParam as string)
+      : (tabParam === 'applications' && searchParams.get('step')) ? 'delegate' : null)
+    : null;
+  const activeRole: string = sheetRole ?? 'delegate';
+  /** Set when this page itself pushed the pop-up's URL, so closing it can
+   *  step back instead of stacking another history entry. */
+  const sheetPushedRef = useRef(false);
+  // Closed some other way (the browser's Back): the next close must not step
+  // back again, which would leave Settings.
+  useEffect(() => { if (!sheetRole) sheetPushedRef.current = false; }, [sheetRole]);
+  /** The control panel's Edit: one role's pop-up, optionally scrolled to a
+   *  section (?step=, see roleSetup.tsx). */
   function openRoleSetup(role: string, step?: string) {
     const params = new URLSearchParams();
     params.set('tab', 'applications');
     params.set('role', role);
     if (step) params.set('step', step);
-    router.push(`${window.location.pathname}?${params.toString()}`);
+    sheetPushedRef.current = true;
+    router.push(`${window.location.pathname}?${params.toString()}`, { scroll: false });
   }
+  function closeRoleSheet() {
+    // Write any questions still waiting on their debounce before the form goes.
+    flushRef.current();
+    if (sheetPushedRef.current) {
+      sheetPushedRef.current = false;
+      router.back();
+      return;
+    }
+    router.replace(window.location.pathname, { scroll: false });
+  }
+  // Roles the organiser added with "Add a role" are listed even before they
+  // are set up. Per browser (a convenience, never state other people need):
+  // once a role is switched on, edited or applied to, panelKit.roleIsSetUp
+  // lists it for everyone anyway.
+  const [addedRoles, setAddedRoles] = useState<string[]>([]);
   const [linkCopied, setLinkCopied] = useState(false);
   // Conference tab: one section open at a time. (The role set-up keeps its
   // own open step, in roleSetup.tsx.)
@@ -1347,8 +1374,8 @@ export default function SettingsPage() {
 
   /** Copy this role's whole fee-phase ladder (and its flat fee, which the
    *  phases fall back to) onto the chosen roles. */
-  async function copyPhasesToRoles(targets: string[]) {
-    const source = roleConfigs.find(rc => rc.role === activeRole);
+  async function copyPhasesToRoles(targets: string[], sourceRole: string = activeRole) {
+    const source = roleConfigs.find(rc => rc.role === sourceRole);
     if (!conference || !source || copyPhasesBusy) return;
     setCopyPhasesBusy(true);
     clearErr('settings-applications');
@@ -2186,11 +2213,25 @@ export default function SettingsPage() {
   const submissionLinkLabelRef = useRef('');
   const submissionLinkUrlRef = useRef('');
   const submissionDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** The pending debounced save, so a role change (closing the role's pop-up
+   *  puts the page back on Delegates) writes it BEFORE the fields are resynced
+   *  to the next role. Without this the timer fired after the resync and wrote
+   *  the next role's message onto the role that was being edited. */
+  const submissionFlushRef = useRef<(() => void) | null>(null);
 
   // Resync from the saved row only when the active role actually changes —
   // never on every unrelated re-render, which would otherwise fight typing.
   useEffect(() => {
     if (submissionSyncedRoleRef.current === selectedRole) return;
+    if (submissionDebounceRef.current) {
+      clearTimeout(submissionDebounceRef.current);
+      submissionDebounceRef.current = null;
+      submissionFlushRef.current?.();
+    }
+    // Wait for the row: marking the role synced before roleConfigs lands
+    // would leave the fields blank for good (and the next keystroke would
+    // save over the stored message).
+    if (!activeRoleConfig) return;
     submissionSyncedRoleRef.current = selectedRole;
     const message = activeRoleConfig?.submission_message ?? '';
     const label = activeRoleConfig?.submission_link_label ?? '';
@@ -2213,8 +2254,9 @@ export default function SettingsPage() {
    *  fields too, because a button needs words around it. */
   function scheduleSubmissionSave() {
     if (submissionDebounceRef.current) clearTimeout(submissionDebounceRef.current);
-    submissionDebounceRef.current = setTimeout(() => {
+    const run = () => {
       submissionDebounceRef.current = null;
+      submissionFlushRef.current = null;
       const message = submissionMessageRef.current.trim();
       let label = submissionLinkLabelRef.current.trim();
       let url = submissionLinkUrlRef.current.trim();
@@ -2230,7 +2272,9 @@ export default function SettingsPage() {
         submission_link_label: label || null,
         submission_link_url: url || null,
       });
-    }, 800);
+    };
+    submissionFlushRef.current = run;
+    submissionDebounceRef.current = setTimeout(run, 800);
   }
 
   function handleCopyApplicationLink() {
@@ -2411,20 +2455,58 @@ export default function SettingsPage() {
     return { ...block, id: crypto.randomUUID() };
   }
 
-  async function handleCopyFormTo(targetRole: string) {
+  async function handleCopyFormTo(targetRole: string, sourceRole: string = selectedRole) {
     const targetBlocks = normalizeBlocks(roleConfigs.find(rc => rc.role === targetRole)?.custom_questions ?? []);
     if (targetBlocks.length > 0) {
       const { confirmed } = await confirm({
         title: `Overwrite ${roleLabel(targetRole)}'s questions?`,
-        body: `${roleLabel(targetRole)} already has custom questions. Copying will replace them with a copy of ${roleLabel(selectedRole)}'s form.`,
+        body: `${roleLabel(targetRole)} already has custom questions. Copying will replace them with a copy of ${roleLabel(sourceRole)}'s form.`,
         confirmLabel: 'Overwrite',
         danger: true,
       });
       if (!confirmed) return;
     }
-    const copiedBlocks = currentBlocks.map(cloneBlockWithNewId);
+    const sourceBlocks = sourceRole === selectedRole
+      ? currentBlocks
+      : normalizeBlocks(roleConfigs.find(rc => rc.role === sourceRole)?.custom_questions ?? []);
+    const copiedBlocks = sourceBlocks.map(cloneBlockWithNewId);
     await saveRoleConfig(targetRole, { custom_questions: copiedBlocks });
     notifyOk(`Copied to ${roleLabel(targetRole)}`, 'settings-copy');
+  }
+
+  // ── Add a role (control panel) ──────────────────────────────────────────
+  const addedRolesKey = conference ? `gavelling-settings-added-roles:${conference.id}` : null;
+  useEffect(() => {
+    if (!addedRolesKey) return;
+    let stored: string[] = [];
+    try {
+      const raw = window.localStorage.getItem(addedRolesKey);
+      const parsed: unknown = raw ? JSON.parse(raw) : [];
+      if (Array.isArray(parsed)) stored = parsed.filter((r): r is string => typeof r === 'string' && (ROLES as readonly string[]).includes(r));
+    } catch { /* storage blocked: the rule in roleIsSetUp still lists every set-up role */ }
+    setAddedRoles(stored);
+  }, [addedRolesKey]);
+
+  /** "Add a role": list it, copy another role's questions and prices when
+   *  asked (the same two writes as "Copy form" and "Use this price for
+   *  another role"), then open its pop-up. Nothing is written for "Start
+   *  from scratch": every role already has its row (handle_new_conference). */
+  async function handleAddRole(role: string, copyFrom: string | null) {
+    setAddedRoles(prev => {
+      const next = prev.includes(role) ? prev : [...prev, role];
+      try { if (addedRolesKey) window.localStorage.setItem(addedRolesKey, JSON.stringify(next)); } catch { /* per-browser convenience only */ }
+      return next;
+    });
+    if (copyFrom) {
+      const source = roleConfigs.find(rc => rc.role === copyFrom);
+      if (source) {
+        if (normalizeBlocks(source.custom_questions ?? []).length > 0) await handleCopyFormTo(role, copyFrom);
+        const priced = role !== 'secretariat' && role !== 'staff' && copyFrom !== 'secretariat' && copyFrom !== 'staff';
+        const charges = (Number(source.fee_amount) || 0) > 0 || (source.fee_phases ?? []).some(p => (Number(p.amount) || 0) > 0);
+        if (priced && charges) await copyPhasesToRoles([role], copyFrom);
+      }
+    }
+    openRoleSetup(role);
   }
 
   async function handleBannerUpload(file: File) {
@@ -2828,9 +2910,135 @@ export default function SettingsPage() {
 
   // Settings opens on the control panel (controlPanel.tsx, Oct 2026): the
   // three status tiles, who can apply, and everything else.
+  // The pop-up for one role (roleSetup.tsx). Every field, validation,
+  // autosave and write below is this page's own, passed in unchanged.
+  const sheetConfig = sheetRole ? roleConfigs.find(rc => rc.role === sheetRole) : undefined;
+  const sheetSaveStates = Object.values(stepSaveState);
+  const roleSheet = sheetRole ? (
+    <RoleSheet
+      key={sheetRole}
+      conference={view}
+      role={sheetRole}
+      config={sheetConfig}
+      now={nowMs}
+      appliedCount={roleAppCounts ? (roleAppCounts[sheetRole] ?? 0) : null}
+      configVersion={configVersion}
+      saveState={sheetSaveStates.includes('saving') ? 'saving' : sheetSaveStates.includes('saved') ? 'saved' : 'idle'}
+      timelineCtx={timelineCtx}
+      timelineMsg={timelineMsg?.role === sheetRole ? timelineMsg : null}
+      initialStep={searchParams.get('step')}
+      linkCopied={linkCopied}
+      onClose={closeRoleSheet}
+      onSave={(updates) => { void saveRoleConfig(sheetRole, updates as Partial<RoleConfig>); }}
+      onSaveTimeline={(change, where) => { saveTimeline(sheetRole, change, where); }}
+      onUpdatePhase={(phases, idx, patch) => updateFeePhase(sheetRole, phases, idx, patch)}
+      onCopyPhases={() => setCopyPhasesOpen(true)}
+      onCopyLink={handleCopyApplicationLink}
+      formSlot={
+        <>
+          <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">
+            <CopyFormMenu roles={otherRoles} onPick={handleCopyFormTo} />
+          </div>
+          {blocksBlocked && (
+            <p
+              role="alert"
+              className="text-sm mb-3 rounded-lg px-3 py-2"
+              style={{ color: '#8B2020', backgroundColor: 'rgba(139,32,32,0.06)', border: '1px solid rgba(139,32,32,0.2)', fontFamily: "var(--font-brand), sans-serif" }}
+            >
+              {blocksBlocked}
+            </p>
+          )}
+          <QuestionBuilder key={selectedRole} value={currentBlocks} onChange={handleBlocksChange} hasApplications={selectedRoleHasApplications} />
+        </>
+      }
+      afterSlot={
+        <>
+          <div className="mb-4">
+            <label htmlFor="role-after-message" className="mb-1.5 flex items-center gap-1.5" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif", fontSize: 14, fontWeight: 600 }}>
+              Message
+            </label>
+            <textarea
+              id="role-after-message"
+              rows={4}
+              maxLength={280}
+              value={submissionMessageInput}
+              placeholder="Join our WhatsApp group so you do not miss any announcements."
+              onChange={(e) => {
+                submissionMessageRef.current = e.target.value;
+                setSubmissionMessageInput(e.target.value);
+                scheduleSubmissionSave();
+              }}
+              onFocus={(e) => { e.currentTarget.style.borderColor = '#1B3828'; }}
+              onBlur={(e) => { e.currentTarget.style.borderColor = '#DDD4C0'; }}
+              style={{ ...inputStyle, fontSize: 15, resize: 'vertical', lineHeight: '1.6' }}
+            />
+            <p
+              className="mt-1"
+              style={{ textAlign: 'right', fontFamily: "var(--font-brand), sans-serif", fontSize: 12, fontWeight: 600, color: '#6E6152', fontVariantNumeric: 'tabular-nums' }}
+            >
+              {submissionMessageInput.length} / 280
+            </p>
+          </div>
+          <div className="flex gap-3 mb-2 flex-wrap">
+            <div className="flex-1" style={{ minWidth: 'min(100%, 200px)' }}>
+              <label htmlFor="role-after-label" className="mb-1.5 flex items-center gap-1.5" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif", fontSize: 14, fontWeight: 600 }}>
+                Button words (optional)
+              </label>
+              <input
+                id="role-after-label"
+                type="text"
+                maxLength={40}
+                value={submissionLinkLabelInput}
+                placeholder="Join the group"
+                onChange={(e) => {
+                  submissionLinkLabelRef.current = e.target.value;
+                  setSubmissionLinkLabelInput(e.target.value);
+                  scheduleSubmissionSave();
+                }}
+                onFocus={fgInput}
+                onBlur={bgInput}
+                style={{ ...inputStyle, fontSize: 15 }}
+              />
+            </div>
+            <div className="flex-1" style={{ minWidth: 'min(100%, 200px)' }}>
+              <label htmlFor="role-after-url" className="mb-1.5 flex items-center gap-1.5" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif", fontSize: 14, fontWeight: 600 }}>
+                Button link (optional)
+              </label>
+              <input
+                id="role-after-url"
+                type="text"
+                value={submissionLinkUrlInput}
+                placeholder="https://chat.whatsapp.com/..."
+                onChange={(e) => {
+                  submissionLinkUrlRef.current = e.target.value;
+                  setSubmissionLinkUrlInput(e.target.value);
+                  scheduleSubmissionSave();
+                }}
+                onFocus={fgInput}
+                onBlur={bgInput}
+                style={{ ...inputStyle, fontSize: 15 }}
+              />
+            </div>
+          </div>
+          <p style={{ color: '#6E6152', fontFamily: "var(--font-brand), sans-serif", fontSize: 13 }}>
+            Fill in both to show a button, or leave both empty for a message with no button. The link must start with https://
+          </p>
+          {submissionLinkError && (
+            <p role="alert" className="mt-1.5" style={{ color: '#8B2020', fontFamily: "var(--font-brand), sans-serif", fontSize: 13 }}>
+              {submissionLinkError}
+            </p>
+          )}
+        </>
+      }
+    />
+  ) : null;
+
+  // Settings opens on the control panel (controlPanel.tsx, Oct 2026): who
+  // can apply, then the conference's own sections. A role opens as a pop-up.
   if (showHome) {
+    const role = activeRole;
     return (
-      <div className="px-4 sm:px-6 md:px-10 py-8" style={{ maxWidth: '1240px' }}>
+      <div className="px-4 sm:px-6 md:px-10 py-8" style={{ maxWidth: '1080px' }}>
         <SettingsControlPanel
           conference={view}
           roles={roleConfigs}
@@ -2838,11 +3046,27 @@ export default function SettingsPage() {
           now={nowMs}
           organizerCount={organizers.length}
           pendingInviteCount={pendingInvites.length}
+          extraRoles={sheetRole && !addedRoles.includes(sheetRole) ? [...addedRoles, sheetRole] : addedRoles}
+          focusRoles={tabParam === 'applications' && !sheetRole}
           publicSaving={publicToggleSaving}
           onPublicToggle={handlePublicToggle}
-          onRoleToggle={(role, next) => { void saveRoleConfig(role, { is_enabled: next }); }}
+          onRoleToggle={(r, next) => { void saveRoleConfig(r, { is_enabled: next }); }}
           onEditRole={openRoleSetup}
+          onAddRole={(r, from) => { void handleAddRole(r, from); }}
           onOpen={(key) => openSection(key)}
+        />
+        {roleSheet}
+            {/* Offered when a price first gets its dates, and from "Use these
+            prices for another role". Copies the whole ladder plus the
+            flat fee it falls back to: a half-copied price is worse than none. */}
+        <CopyToRolesModal
+          open={copyPhasesOpen}
+          onClose={() => setCopyPhasesOpen(false)}
+          onConfirm={(targets) => void copyPhasesToRoles(targets)}
+          busy={copyPhasesBusy}
+          title="Set this up for another role too?"
+          sub={`${roleLabel(role)} prices are saved. Most conferences run the same dates for every role, so tick the ones that should get the same prices.`}
+          roles={ROLES.filter(r => r !== role && r !== 'secretariat' && r !== 'staff')}
         />
         {confirmModal}
       </div>
@@ -2854,23 +3078,20 @@ export default function SettingsPage() {
     // members out in a grid, so a wider panel means fewer wrapped rows and a
     // shallower, more legible hierarchy. Every other tab is a reading column
     // and stays at 1080 (1440 with the live preview beside it).
-    <div className="px-4 sm:px-6 md:px-10 py-8" style={{ maxWidth: activeTab === 'organizers' ? '1400px' : sidePreview ? '1440px' : activeTab === 'applications' ? '1040px' : '1080px' }}>
-      {/* The role set-up draws its own way back and its own role picker. */}
-      {activeTab !== 'applications' && (
-        <SectionTop
-          active={activeTab}
-          snap={settingsSnap}
-          onOpen={(key) => openSection(key)}
-          onHome={() => openSection(null)}
-        />
-      )}
+    <div className="px-4 sm:px-6 md:px-10 py-8" style={{ maxWidth: activeTab === 'organizers' ? '1400px' : sidePreview ? '1440px' : '1080px' }}>
+      <SectionTop
+        active={activeTab}
+        snap={settingsSnap}
+        onOpen={(key) => openSection(key)}
+        onHome={() => openSection(null)}
+      />
 
       <div className="flex items-start" style={{ gap: '28px' }}>
         {/* ── The section's content ── */}
         <section
           aria-label={sectionMeta(activeTab).question}
           className="flex-1 min-w-0"
-          style={activeTab === 'organizers' || activeTab === 'applications'
+          style={activeTab === 'organizers'
             // The team is a gallery of faces, and a gallery wants a wall, not a
             // sheet of paper. No panel, no border, no shadow — the portraits sit
             // straight on the ivory canvas with the full width to spread into.
@@ -2883,151 +3104,6 @@ export default function SettingsPage() {
               padding: 'clamp(14px, 3vw, 24px)',
             }}
         >
-
-      {/* ── APPLICATIONS: one role, step by step (roleSetup.tsx, Oct 2026).
-          Every field, validation, autosave and write below is this page's own,
-          passed in unchanged; the component only lays them out as steps. ── */}
-      {activeTab === 'applications' && (() => {
-        const role = activeRole;
-        const config = roleConfigs.find(rc => rc.role === role);
-        const saveStates = Object.values(stepSaveState);
-        return (
-          <>
-            <RoleSetup
-              key={role}
-              conference={view}
-              roles={roleConfigs}
-              role={role}
-              config={config}
-              now={nowMs}
-              appliedCount={roleAppCounts ? (roleAppCounts[role] ?? 0) : null}
-              configVersion={configVersion}
-              saveState={saveStates.includes('saving') ? 'saving' : saveStates.includes('saved') ? 'saved' : 'idle'}
-              timelineCtx={timelineCtx}
-              timelineMsg={timelineMsg?.role === role ? timelineMsg : null}
-              initialStep={searchParams.get('step')}
-              linkCopied={linkCopied}
-              onHome={() => openSection(null)}
-              onPickRole={setActiveRole}
-              onSave={(updates) => { void saveRoleConfig(role, updates as Partial<RoleConfig>); }}
-              onSaveTimeline={(change, where) => { saveTimeline(role, change, where); }}
-              onUpdatePhase={(phases, idx, patch) => updateFeePhase(role, phases, idx, patch)}
-              onCopyPhases={() => setCopyPhasesOpen(true)}
-              onCopyLink={handleCopyApplicationLink}
-              onLeaveForm={() => flushRef.current()}
-              formSlot={
-                <>
-                  <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">
-                    <CopyFormMenu roles={otherRoles} onPick={handleCopyFormTo} />
-                  </div>
-                  {blocksBlocked && (
-                    <p
-                      role="alert"
-                      className="text-sm mb-3 rounded-lg px-3 py-2"
-                      style={{ color: '#8B2020', backgroundColor: 'rgba(139,32,32,0.06)', border: '1px solid rgba(139,32,32,0.2)', fontFamily: "var(--font-brand), sans-serif" }}
-                    >
-                      {blocksBlocked}
-                    </p>
-                  )}
-                  <QuestionBuilder key={selectedRole} value={currentBlocks} onChange={handleBlocksChange} hasApplications={selectedRoleHasApplications} />
-                </>
-              }
-              afterSlot={
-                <>
-                  <div className="mb-4">
-                    <label htmlFor="role-after-message" className="mb-1.5 flex items-center gap-1.5" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif", fontSize: 14, fontWeight: 600 }}>
-                      Message
-                    </label>
-                    <textarea
-                      id="role-after-message"
-                      rows={4}
-                      maxLength={280}
-                      value={submissionMessageInput}
-                      placeholder="Join our WhatsApp group so you do not miss any announcements."
-                      onChange={(e) => {
-                        submissionMessageRef.current = e.target.value;
-                        setSubmissionMessageInput(e.target.value);
-                        scheduleSubmissionSave();
-                      }}
-                      onFocus={(e) => { e.currentTarget.style.borderColor = '#1B3828'; }}
-                      onBlur={(e) => { e.currentTarget.style.borderColor = '#DDD4C0'; }}
-                      style={{ ...inputStyle, fontSize: 15, resize: 'vertical', lineHeight: '1.6' }}
-                    />
-                    <p
-                      className="mt-1"
-                      style={{ textAlign: 'right', fontFamily: "var(--font-brand), sans-serif", fontSize: 12, fontWeight: 600, color: '#6E6152', fontVariantNumeric: 'tabular-nums' }}
-                    >
-                      {submissionMessageInput.length} / 280
-                    </p>
-                  </div>
-                  <div className="flex gap-3 mb-2 flex-wrap">
-                    <div className="flex-1" style={{ minWidth: 'min(100%, 200px)' }}>
-                      <label htmlFor="role-after-label" className="mb-1.5 flex items-center gap-1.5" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif", fontSize: 14, fontWeight: 600 }}>
-                        Button words (optional)
-                      </label>
-                      <input
-                        id="role-after-label"
-                        type="text"
-                        maxLength={40}
-                        value={submissionLinkLabelInput}
-                        placeholder="Join the group"
-                        onChange={(e) => {
-                          submissionLinkLabelRef.current = e.target.value;
-                          setSubmissionLinkLabelInput(e.target.value);
-                          scheduleSubmissionSave();
-                        }}
-                        onFocus={fgInput}
-                        onBlur={bgInput}
-                        style={{ ...inputStyle, fontSize: 15 }}
-                      />
-                    </div>
-                    <div className="flex-1" style={{ minWidth: 'min(100%, 200px)' }}>
-                      <label htmlFor="role-after-url" className="mb-1.5 flex items-center gap-1.5" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif", fontSize: 14, fontWeight: 600 }}>
-                        Button link (optional)
-                      </label>
-                      <input
-                        id="role-after-url"
-                        type="text"
-                        value={submissionLinkUrlInput}
-                        placeholder="https://chat.whatsapp.com/..."
-                        onChange={(e) => {
-                          submissionLinkUrlRef.current = e.target.value;
-                          setSubmissionLinkUrlInput(e.target.value);
-                          scheduleSubmissionSave();
-                        }}
-                        onFocus={fgInput}
-                        onBlur={bgInput}
-                        style={{ ...inputStyle, fontSize: 15 }}
-                      />
-                    </div>
-                  </div>
-                  <p style={{ color: '#6E6152', fontFamily: "var(--font-brand), sans-serif", fontSize: 13 }}>
-                    Fill in both to show a button, or leave both empty for a message with no button. The link must start with https://
-                  </p>
-                  {submissionLinkError && (
-                    <p role="alert" className="mt-1.5" style={{ color: '#8B2020', fontFamily: "var(--font-brand), sans-serif", fontSize: 13 }}>
-                      {submissionLinkError}
-                    </p>
-                  )}
-                </>
-              }
-            />
-
-            {/* Offered when a price first gets its dates, and from "Use these
-                prices for another role". Copies the whole ladder plus the
-                flat fee it falls back to: a half-copied price is worse than none. */}
-            <CopyToRolesModal
-              open={copyPhasesOpen}
-              onClose={() => setCopyPhasesOpen(false)}
-              onConfirm={(targets) => void copyPhasesToRoles(targets)}
-              busy={copyPhasesBusy}
-              title="Set this up for another role too?"
-              sub={`${roleLabel(role)} prices are saved. Most conferences run the same dates for every role, so tick the ones that should get the same prices.`}
-              roles={ROLES.filter(r => r !== role && r !== 'secretariat' && r !== 'staff')}
-            />
-          </>
-        );
-      })()}
 
       {/* ── VISUAL TAB ── */}
       {activeTab === 'delegations' && (
