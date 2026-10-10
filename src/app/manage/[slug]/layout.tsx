@@ -1151,29 +1151,42 @@ export default function ManageLayout({ children }: { children: React.ReactNode }
 
       {/* Top bar */}
       <header
-        className="fixed top-0 left-0 right-0 z-30 flex items-center justify-between px-6"
+        className="fixed top-0 left-0 right-0 z-30 flex items-center justify-between gap-3 px-4 sm:px-6"
         style={{ height: '56px', backgroundColor: '#1B3828', borderBottom: '1px solid rgba(61,122,82,0.3)' }}
       >
         {/* Left: logo + divider + acronym */}
-        <div className="flex items-center gap-3">
+        <div className="flex min-w-0 items-center gap-3">
           {/* The ONE wordmark (src/components/BrandLogo.tsx), in white on the
-              dark /manage chrome; the same mark the site header and footer use. */}
-          <BrandLogo height={26} tone="white" priority />
-          <span style={{ color: 'rgba(238,217,138,0.3)', fontSize: '16px' }}>/</span>
+              dark /manage chrome; the same mark the site header and footer use.
+              Below sm the ~134px lockup pushed the menu button off a phone
+              screen, so phones get the gavel mark alone (public/README.md). */}
+          <span className="hidden sm:inline-flex">
+            <BrandLogo height={26} tone="white" priority />
+          </span>
+          <Link
+            href="/"
+            aria-label="Gavelling home"
+            className="inline-flex shrink-0 items-center rounded-md focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] sm:hidden"
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/gavel-mark.png" alt="Gavelling" width={30} height={30} className="h-[30px] w-[30px] object-contain" />
+          </Link>
+          <span className="shrink-0" style={{ color: 'rgba(238,217,138,0.3)', fontSize: '16px' }}>/</span>
           <Link
             href={`/manage/${slug}`}
-            className="text-sm font-bold transition-opacity focus:outline-none inline-flex items-center gap-1.5"
+            className="min-w-0 text-sm font-bold leading-tight transition-opacity focus:outline-none inline-flex items-center gap-1.5"
             style={{ color: '#EED98A', fontFamily: "var(--font-brand), sans-serif", letterSpacing: '0.03em', textDecoration: 'none' }}
             onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.opacity = '0.75'; }}
             onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.opacity = '1'; }}
           >
-            {conference ? conferenceAcronymLabel(conference) : '...'}
-            {conference && <VerifiedCheck verified={conference.is_verified} showUnverified size={16} title={sealTitle} />}
+            {/* Wraps to two rows on a narrow phone, never an ellipsis (CLAUDE.md §8). */}
+            <span className="min-w-0 [overflow-wrap:anywhere]">{conference ? conferenceAcronymLabel(conference) : '...'}</span>
+            {conference && <span className="inline-flex shrink-0"><VerifiedCheck verified={conference.is_verified} showUnverified size={16} title={sealTitle} /></span>}
           </Link>
         </div>
 
         {/* Right: status pill + view page + avatar */}
-        <div className="flex items-center gap-4">
+        <div className="flex shrink-0 items-center gap-2 sm:gap-4">
           <Link
             href="/account/conferences"
             className="text-xs font-semibold hidden sm:inline-flex items-center gap-1 transition-colors focus:outline-none"
@@ -1199,8 +1212,11 @@ export default function ManageLayout({ children }: { children: React.ReactNode }
 
           {/* Mobile hamburger */}
           <button
-            className="md:hidden focus:outline-none"
+            type="button"
+            className="md:hidden inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F]"
             onClick={() => setMobileMenuOpen(v => !v)}
+            aria-label={mobileMenuOpen ? 'Close menu' : 'Open menu'}
+            aria-expanded={mobileMenuOpen}
             style={{ color: '#EED98A' }}
           >
             {mobileMenuOpen ? <X size={20} /> : <Menu size={20} />}

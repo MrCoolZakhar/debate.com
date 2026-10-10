@@ -502,7 +502,12 @@ export default function ProfileDropdown({ trigger, panelStyle }: ProfileDropdown
             borderRadius: '16px',
             boxShadow: '0 20px 48px rgba(27, 56, 40, 0.16)',
             zIndex: 9999,
-            overflow: 'hidden',
+            // A short phone (667px) cut off the last rows: cap the panel to the
+            // space below its top and let it scroll inside.
+            maxHeight: `calc(100dvh - ${pos.top}px - 12px)`,
+            overflowX: 'hidden',
+            overflowY: 'auto',
+            overscrollBehavior: 'contain',
             animation: 'profileMenuIn 180ms ease both',
           }}
         >

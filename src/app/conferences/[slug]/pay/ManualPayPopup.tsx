@@ -14,9 +14,14 @@
 //
 // PaymentWayPopup (prompt 101) is the small pop-up a started payment opens for
 // a QR ("Payment QR") or bank details ("Bank Details").
+//
+// On a phone (pointer: coarse, or narrower than 768px) the QR block also offers
+// "Save QR image", a line about scanning from a photo, and "Copy amount": most
+// delegates pay from the same phone that shows the code, so they cannot scan it.
+// Shown by CSS only (.gv-pm-touch), so nothing differs between server and client.
 
 import { useEffect, useRef, useState } from 'react';
-import { Check, Copy, ExternalLink } from 'lucide-react';
+import { Check, Copy, Download, ExternalLink } from 'lucide-react';
 import { PurchaseShell, PURCHASE_CSS } from '@/components/purchase/purchaseKit';
 import { notifyOk } from '@/lib/appNotify';
 import { DANGER, INK_SOFT } from './payKit';
@@ -36,12 +41,20 @@ export const MANUAL_CSS = `
 .gv-pm-copy:hover{background:#F0EBDD}
 .gv-pm-copy:focus{outline:none}
 .gv-pm-copy:focus-visible{outline:2px solid #1B3828;outline-offset:2px}
+.gv-pm-touch{display:none}
+@media (pointer:coarse),(max-width:767px){
+  .gv-pm-touch{display:flex;flex-direction:column;gap:10px;margin-top:14px;text-align:left}
+  .gv-pm-copy{min-height:44px}
+}
 `;
 
-function CopyRow({ label, value }: { label: string; value: string }) {
+function CopyRow({ label, value, notice }: { label: string; value: string; notice?: string }) {
   const [copied, setCopied] = useState(false);
   const copy = async () => {
-    try { await navigator.clipboard.writeText(value); setCopied(true); setTimeout(() => setCopied(false), 1600); } catch { /* the value is on screen to copy by hand */ }
+    try {
+      await navigator.clipboard.writeText(value); setCopied(true); setTimeout(() => setCopied(false), 1600);
+      if (notice) notifyOk(notice, 'pay');
+    } catch { /* the value is on screen to copy by hand */ }
   };
   return (
     <div className="gv-pm-copyrow">
@@ -116,7 +129,7 @@ export default function ManualPayPopup({ conference, batchId, totalCents, curren
           ) : <p className="gv-pay-quiet">The organizers have not added a payment page link yet</p>}
         </div>
       )}
-      {kind === 'qr' && <QrBlock qr={qr} onEnlarge={() => setQrBig(true)} />}
+      {kind === 'qr' && <QrBlock qr={qr} onEnlarge={() => setQrBig(true)} fileBase={conference.acronym || conference.slug} total={total} />}
       {kind === 'bank' && <BankRows bank={conference.bank} total={total} />}
     </div>
   );
@@ -159,7 +172,89 @@ export default function ManualPayPopup({ conference, batchId, totalCents, curren
   );
 }
 
-function QrBlock({ qr, onEnlarge }: { qr: string | null; onEnlarge: () => void }) {
+const QR_EXT: Record<string, string> = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp', 'image/gif': 'gif', 'image/svg+xml': 'svg' };
+
+function qrFileName(base: string, type: string, url: string): string {
+  const safe = base.trim().replace(/[^A-Za-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'conference';
+  const raw = /\.([a-z0-9]{3,4})(?:$|\?)/i.exec(url)?.[1]?.toLowerCase();
+  const fromUrl = raw === 'jpeg' ? 'jpg' : raw;
+  const ext = QR_EXT[type] ?? (fromUrl && Object.values(QR_EXT).includes(fromUrl) ? fromUrl : 'png');
+  return `${safe}-payment-qr.${ext}`;
+}
+
+/** Phones only (CSS): save the QR image, scan it from a photo, copy the amount. */
+function QrTouchHelp({ qr, fileBase, total }: { qr: string | null; fileBase: string; total: string }) {
+  const [blob, setBlob] = useState<Blob | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState('');
+  // Fetch the image ahead of the press, so a share sheet can open while the
+  // tap still counts as one (Safari refuses a share after a slow await).
+  useEffect(() => {
+    if (!qr || typeof window === 'undefined') return;
+    if (!window.matchMedia?.('(pointer: coarse), (max-width: 767px)').matches) return;
+    let alive = true;
+    fetch(qr).then(r => (r.ok ? r.blob() : null)).then(b => { if (alive && b) setBlob(b); }).catch(() => { /* fetched again on press */ });
+    return () => { alive = false; };
+  }, [qr]);
+
+  const save = async () => {
+    if (!qr || busy) return;
+    setMsg('');
+    let b = blob;
+    if (!b) {
+      setBusy(true);
+      try {
+        const r = await fetch(qr);
+        if (!r.ok) throw new Error('fetch');
+        b = await r.blob();
+      } catch {
+        b = null;
+      }
+      setBusy(false);
+    }
+    if (!b) {
+      // Open the image itself so it can be saved by pressing and holding it.
+      const w = window.open(qr, '_blank', 'noopener,noreferrer');
+      setMsg(w ? 'We opened the QR code in a new tab. Press and hold it to save it' : 'We could not save the QR code. Press and hold it above to save it');
+      return;
+    }
+    const name = qrFileName(fileBase, b.type, qr);
+    const file = new File([b], name, { type: b.type || 'image/png' });
+    const nav = navigator as Navigator & { canShare?: (d: ShareData) => boolean };
+    if (nav.canShare?.({ files: [file] }) && nav.share) {
+      try {
+        await nav.share({ files: [file] });
+        return;
+      } catch (e) {
+        if ((e as { name?: string })?.name === 'AbortError') return;
+        // Sharing refused: download it instead.
+      }
+    }
+    try {
+      const href = URL.createObjectURL(b);
+      const a = document.createElement('a');
+      a.href = href; a.download = name; a.rel = 'noopener';
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(href), 4000);
+      notifyOk('QR image saved', 'pay');
+    } catch {
+      setMsg('We could not save the QR code. Press and hold it above to save it');
+    }
+  };
+
+  return (
+    <div className="gv-pm-touch">
+      <button type="button" className="gv-pay-btn gv-pay-outline" disabled={!qr || busy} onClick={() => { void save(); }} style={{ width: '100%' }}>
+        <Download size={16} strokeWidth={2.2} aria-hidden /> {busy ? 'Saving' : 'Save QR image'}
+      </button>
+      {msg && <p role="status" style={{ margin: 0, fontSize: 13.5, color: INK_SOFT }}>{msg}</p>}
+      <p style={{ margin: 0, fontSize: 13.5, lineHeight: 1.5, color: INK_SOFT }}>Or open your banking app and choose scan from a photo</p>
+      <CopyRow label="Amount to pay" value={total} notice="Amount copied" />
+    </div>
+  );
+}
+
+function QrBlock({ qr, onEnlarge, fileBase, total }: { qr: string | null; onEnlarge: () => void; fileBase: string; total: string }) {
   return (
     <div style={{ padding: 16, borderRadius: 14, background: '#FFFFFF', textAlign: 'center' }}>
       {qr ? (
@@ -169,6 +264,7 @@ function QrBlock({ qr, onEnlarge }: { qr: string | null; onEnlarge: () => void }
         </button>
       ) : <p className="gv-pay-quiet">The QR code is loading</p>}
       <p style={{ margin: '8px 0 0', fontSize: 13, color: INK_SOFT }}>Scan it with your banking app. Tap to enlarge</p>
+      <QrTouchHelp qr={qr} fileBase={fileBase} total={total} />
     </div>
   );
 }
@@ -231,7 +327,7 @@ export function PaymentWayPopup({ conference, kind, totalCents, currency, onClos
             <p style={{ margin: 0, padding: 14, borderRadius: 14, background: '#FFFFFF', fontSize: 14.5, lineHeight: 1.55, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{instructions}</p>
           )}
           {kind === 'qr'
-            ? (conference.qr_path ? <QrBlock qr={qr} onEnlarge={() => setQrBig(true)} /> : <p className="gv-pay-quiet">The organizers have not added a QR code yet</p>)
+            ? (conference.qr_path ? <QrBlock qr={qr} onEnlarge={() => setQrBig(true)} fileBase={conference.acronym || conference.slug} total={total} /> : <p className="gv-pay-quiet">The organizers have not added a QR code yet</p>)
             : <BankRows bank={conference.bank} total={total} />}
           <div><button type="button" className="gv-pay-btn gv-pay-outline" onClick={onClose}>Close</button></div>
         </div>

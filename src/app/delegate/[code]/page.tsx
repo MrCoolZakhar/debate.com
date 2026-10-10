@@ -50,6 +50,7 @@ import DelegateIdleWarning from '@/components/delegate/DelegateIdleWarning';
 import DeviceBallotScreen from '@/components/delegate/DeviceBallotScreen';
 import { safeStorageKey } from '@/lib/storageKey';
 import { UnknownSeatIcon } from '@/components/UnknownSeatIcon';
+import PdfViewer, { type PdfZoom } from '@/components/documents/PdfViewer';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function abbreviateCommitteeName(name: string): string {
@@ -355,15 +356,40 @@ function SponsorsInput({
 }
 
 // ── Inline PDF Viewer ─────────────────────────────────────────────────────────
+/* A bare <iframe> could not show a PDF on phones (Android Chrome renders
+   nothing, iOS one page that does not scroll) and gave no way to open the
+   file. The shared pdf.js viewer draws every page (it falls back to the
+   iframe itself), and "Open" always hands the file to the phone's own viewer. */
 function InlinePdfViewer({ fileUrl, fileName }: { fileUrl: string; fileName: string }) {
+  const t = useT();
   const [show, setShow] = useState(false);
+  const [zoom, setZoom] = useState<PdfZoom>('fit');
   return (
     <div className="space-y-1.5">
-      <button onClick={() => setShow((v) => !v)} className="text-xs transition-colors focus:outline-none" style={{ color: '#1B3828' }}>
-        📎 {fileName} {show ? '▲' : '▼'}
-      </button>
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          onClick={() => setShow((v) => !v)}
+          aria-expanded={show}
+          className="min-h-[44px] min-w-0 flex-1 text-start text-xs transition-colors focus:outline-none [overflow-wrap:anywhere]"
+          style={{ color: '#1B3828' }}
+        >
+          📎 {fileName} {show ? '▲' : '▼'}
+        </button>
+        <a
+          href={fileUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label={t('delegate_doc_open_label').replace('{name}', fileName)}
+          className="inline-flex min-h-[44px] shrink-0 items-center px-2 text-xs font-bold underline focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] rounded-md"
+          style={{ color: '#1B3828' }}
+        >
+          {t('delegate_doc_open')}
+        </a>
+      </div>
       {show && (
-        <iframe src={fileUrl} title={fileName} className="w-full rounded-lg border border-[#DDD4C0]" style={{ height: '400px' }} />
+        <PdfViewer url={fileUrl} title={fileName} fileName={fileName} zoom={zoom} onZoomChange={setZoom} compact
+          className="relative w-full h-[420px] rounded-lg overflow-hidden border border-[#DDD4C0]" />
       )}
     </div>
   );

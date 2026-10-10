@@ -321,6 +321,8 @@ export const ptTranslationsC = {
   delegate_doc_sponsors_label: 'PATROCINADORES',
   delegate_doc_sponsors_auto: '- sua delegação aparece primeiro automaticamente',
   delegate_doc_cosponsor_placeholder: 'Busque copatrocinadores e pressione Enter para adicionar…',
+  delegate_doc_open: 'Abrir',
+  delegate_doc_open_label: 'Abrir {name} em uma nova aba',
   delegate_doc_attachment_label: 'ANEXO',
   delegate_doc_attachment_optional: '(opcional)',
   delegate_doc_remove: 'Remover',
