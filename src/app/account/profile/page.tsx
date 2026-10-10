@@ -758,7 +758,8 @@ export default function ProfilePage() {
                     type="button"
                     onClick={() => dismissReviewPrompt(conf.id)}
                     aria-label={`Dismiss review prompt for ${conferenceAcronymLabel(conf)}`}
-                    className="gv-acct-rim flex-shrink-0"
+                    /* 32px disc, 44px hit area (the ::before reaches 6px out). */
+                    className="gv-acct-rim flex-shrink-0 relative before:absolute before:-inset-1.5"
                     style={{ width: 32, height: 32, color: '#5A5046' }}
                   >
                     <X size={14} aria-hidden />
@@ -767,7 +768,9 @@ export default function ProfilePage() {
 
                 {formOpen && (
                   <div className="mt-4 pt-4" style={{ borderTop: '1px solid rgba(221,212,192,0.6)' }}>
-                    <div className="flex items-center gap-1.5 mb-3" onMouseLeave={() => setReviewHover(0)}>
+                    {/* Each star is a 44px target with no gap; the negative
+                        margin keeps the first star on the text's left edge. */}
+                    <div className="flex items-center mb-3" style={{ marginInlineStart: -9 }} onMouseLeave={() => setReviewHover(0)}>
                       {[1, 2, 3, 4, 5].map((i) => (
                         <button
                           key={i}
@@ -775,8 +778,8 @@ export default function ProfilePage() {
                           onClick={() => setReviewRating(i)}
                           onMouseEnter={() => setReviewHover(i)}
                           aria-label={`Rate ${i} out of 5`}
-                          className="focus:outline-none"
-                          style={{ background: 'none', border: 'none', padding: '2px', cursor: 'pointer' }}
+                          className="focus:outline-none inline-flex items-center justify-center"
+                          style={{ background: 'none', border: 'none', padding: 0, width: 44, height: 44, cursor: 'pointer' }}
                         >
                           <Star
                             size={26}

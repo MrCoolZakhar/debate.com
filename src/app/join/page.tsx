@@ -166,8 +166,35 @@ function JoinPageInner() {
   const returnSeat = (searchParams.get('seat') ?? '').trim().slice(0, 120);
   // The phone's sticky Join bar sits above the on-screen keyboard (visual viewport).
   const joinBarRef = useRef<HTMLDivElement>(null);
+  // The stage (role tiles, seats, chair steps). On a phone it starts near the bottom of
+  // the screen, behind the sticky Join bar and the tab bar, so when a code resolves the
+  // page brings it to the top (once per code). Below lg only: the desktop is one fixed
+  // screen. It only scrolls: focus stays in the code field, so typing goes on.
+  const stageRef = useRef<HTMLDivElement>(null);
+  const stageScrolledForRef = useRef<string | null>(null);
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const resolvedCode = foundCommittee?.code ?? null;
+  useEffect(() => {
+    if (!resolvedCode) { stageScrolledForRef.current = null; return; }
+    if (checkingConference || stageScrolledForRef.current === resolvedCode) return;
+    if (typeof window === 'undefined' || !window.matchMedia('(max-width: 1023px)').matches) return;
+    // A short timer rather than a frame: the step has painted by then, and a timer
+    // also runs in a tab that is not in front.
+    const timer = setTimeout(() => {
+      const el = stageRef.current;
+      if (!el) return;
+      // Marked here, not before: a re-run that cancels this timer must still scroll.
+      stageScrolledForRef.current = resolvedCode;
+      const top = el.getBoundingClientRect().top;
+      // Already near the top (the visitor scrolled there): leave the page alone.
+      if (top >= 0 && top <= 24) return;
+      const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      window.scrollTo({ top: Math.max(0, window.scrollY + top - 12), behavior: reduce ? 'auto' : 'smooth' });
+    }, 60);
+    return () => clearTimeout(timer);
+  }, [resolvedCode, checkingConference]);
 
   // On mount, if code was pre-filled from URL, trigger lookup immediately
   useEffect(() => {
@@ -881,7 +908,7 @@ function JoinPageInner() {
                 leaves (JOIN_FIT_CSS): a step taller than that scrolls INSIDE the stage,
                 the seat list flexing first, so the page itself never scrolls and the
                 Join button is always on screen. */}
-            <div className="gv-join-stage mt-4 lg:mt-3">
+            <div ref={stageRef} className="gv-join-stage mt-4 lg:mt-3">
               {!foundCommittee ? (
                 <EmptyStage busy={lookingUp} title={t('join_stage_empty_title')} body={t('join_stage_empty_body')} />
               ) : (
@@ -1226,12 +1253,17 @@ function JoinPageInner() {
               </div>
             )}
 
-            <p className="mt-5 text-center lg:mt-3" style={{ fontFamily: OUTFIT, fontSize: 13, color: C.inkSoft }}>
-              {t('join_chair_prompt')}{' '}
-              <Link href="/create/sessions" className="font-bold underline decoration-[1.5px] underline-offset-4 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] focus-visible:ring-offset-2 rounded-sm" style={{ color: C.forest }}>
-                {t('join_create_instead')}
-              </Link>
-            </p>
+            {/* Only before a code resolves: once it has, the visitor is joining that room,
+                and "Are you a chair? Create a committee" read to a chair joining it as the
+                way in. */}
+            {!foundCommittee && (
+              <p className="mt-5 text-center lg:mt-3" style={{ fontFamily: OUTFIT, fontSize: 13, color: C.inkSoft }}>
+                {t('join_chair_prompt')}{' '}
+                <Link href="/create/sessions" className="font-bold underline decoration-[1.5px] underline-offset-4 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] focus-visible:ring-offset-2 rounded-sm" style={{ color: C.forest }}>
+                  {t('join_create_instead')}
+                </Link>
+              </p>
+            )}
           </JoinCard>
         </div>
       </main>

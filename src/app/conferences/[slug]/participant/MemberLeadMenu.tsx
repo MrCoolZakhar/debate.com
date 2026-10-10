@@ -150,9 +150,12 @@ export default function MemberLeadMenu({ member, societyId, societyName, confirm
         aria-expanded={open}
         title="Options"
         className="inline-flex items-center justify-center flex-shrink-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]"
-        style={{ width: 34, height: 34, borderRadius: 10, border: 'none', background: open ? 'rgba(27,56,40,0.08)' : 'transparent', color: INK, cursor: busy ? 'default' : 'pointer', opacity: busy ? 0.5 : 1 }}
+        // A 44px hit area around the 34px disc; the negative margin keeps the row's layout as it was.
+        style={{ width: 44, height: 44, margin: -5, padding: 0, borderRadius: 12, border: 'none', background: 'transparent', color: INK, cursor: busy ? 'default' : 'pointer', opacity: busy ? 0.5 : 1 }}
       >
-        <MoreHorizontal size={18} strokeWidth={2.4} aria-hidden />
+        <span aria-hidden className="inline-flex items-center justify-center" style={{ width: 34, height: 34, borderRadius: 10, background: open ? 'rgba(27,56,40,0.08)' : 'transparent' }}>
+          <MoreHorizontal size={18} strokeWidth={2.4} aria-hidden />
+        </span>
       </button>
       {open && pos && (
         <Portal>

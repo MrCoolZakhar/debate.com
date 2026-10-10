@@ -2870,7 +2870,7 @@ export default function CommitteesPage() {
       )}
       {deleteTarget && (
         <ModalOverlay onClose={() => setDeleteTarget(null)}>
-          <div className="rounded-2xl p-6 flex flex-col gap-4" style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0', width: 400 }}>
+          <div className="rounded-2xl p-6 flex flex-col gap-4" style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0', width: 400, maxWidth: 'calc(100vw - 32px)' }}>
             <p className="text-sm font-bold" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>Delete &ldquo;{deleteTarget.name}&rdquo;?</p>
             <p className="text-xs" style={{ color: '#6B5D4F', fontFamily: "var(--font-brand), sans-serif", lineHeight: 1.5 }}>
               This permanently removes the committee and its live session, including all delegates, documents, messages, country slots, and allocations. Applicants are kept but returned to unassigned. This cannot be undone.

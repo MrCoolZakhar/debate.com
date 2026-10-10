@@ -1,6 +1,8 @@
 # GAVELLING — TRANSLATIONS AGENT BRIEFING
 ## Up-to-date guide for adding a new language to Gavelling
 
+**10 Oct 2026, delegate phone sponsor chip (not recounted):** ADDED 1 key × 5 locales, placed after `delegate_doc_remove` (pt in `translationsPtC.ts`): `delegate_doc_remove_sponsor` (`{country}`, "Remove {country}"), the accessible name and tooltip of the × on a co-sponsor chip in the delegate's document submit form (`SponsorsInput`, `src/app/delegate/[code]/page.tsx`). Nothing reworded or removed.
+
 **10 Oct 2026, delegate paper Open link (not recounted):** ADDED 2 keys × 5 locales, placed after `delegate_doc_cosponsor_placeholder` (pt in `translationsPtC.ts`): `delegate_doc_open` (the "Open" link beside a paper on the delegate phone's documents list) and `delegate_doc_open_label` (`{name}`, its accessible name, "Open {name} in a new tab"). Read by `InlinePdfViewer` in `src/app/delegate/[code]/page.tsx`.
 
 **9 Oct 2026, Portuguese (pt-BR) translated and reviewed:** all five locales have **1880 keys**, identical key sets (0 missing, 0 extra); pt has 38 values identical to en, every one a legitimate same-word case (Chat, PDF, Tour de Table, pts, 2/3, 1/2+1, endonyms, symbols). Placeholders match en except the two legacy `{s}` keys (benign, as in es/fr); no em dash. An independent review changed 87 pt dictionary values and 3 pt tutorial strings (`TutorialOverlay.tsx`): retry wording unified to "Tentar novamente", "Entrar na Mesa" / "Juntar-se à Mesa" / "Voltar à Mesa" for chair entry, scoreboard matrix RTR is "RÉPL" so "DR" never sits beside "PR", gender-free phrasing around `{country}` / `{list}` / `{doc}`, "alunos" on the advisor board. Settled terms are in `.claude/pt-glossary.md` §6. No key added, removed or reworded in any other locale.

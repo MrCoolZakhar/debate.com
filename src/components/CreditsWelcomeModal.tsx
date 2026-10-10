@@ -132,8 +132,8 @@ export default function CreditsWelcomeModal({
           <button
             onClick={onClose}
             aria-label="Close"
-            className="absolute flex items-center justify-center"
-            style={{ top: 14, right: 14, width: 30, height: 30, borderRadius: 999, backgroundColor: NEU.base, boxShadow: NEU.inSm, border: 'none', color: NEU.muted, cursor: 'pointer' }}
+            className="absolute flex items-center justify-center focus:outline-none"
+            style={{ top: 7, right: 7, width: 44, height: 44, borderRadius: 999, backgroundColor: NEU.base, boxShadow: NEU.inSm, border: 'none', color: NEU.muted, cursor: 'pointer' }}
           >
             <X size={15} strokeWidth={2.4} />
           </button>

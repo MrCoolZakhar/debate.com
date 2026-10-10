@@ -353,11 +353,11 @@ function InviteCardShell({ title, subtitle, responding, onDecline, onAccept }: {
           </p>
         </div>
       </div>
-      <div className="flex gap-2 flex-shrink-0 justify-end sm:justify-start">
+      <div className="flex gap-3 sm:gap-2 flex-shrink-0 justify-end sm:justify-start">
         <button
           onClick={onDecline}
           disabled={busy}
-          className="focus:outline-none inline-flex items-center gap-1.5"
+          className="focus:outline-none inline-flex items-center gap-1.5 min-h-11 sm:min-h-0"
           style={{
             padding: '7px 13px', borderRadius: 999, border: 'none',
             backgroundColor: NEU.surface, boxShadow: busy ? NEU.inSm : NEU.outSm,
@@ -370,7 +370,7 @@ function InviteCardShell({ title, subtitle, responding, onDecline, onAccept }: {
         <button
           onClick={onAccept}
           disabled={busy}
-          className="focus:outline-none inline-flex items-center gap-1.5"
+          className="focus:outline-none inline-flex items-center gap-1.5 min-h-11 sm:min-h-0"
           style={{
             padding: '7px 14px', borderRadius: 999, border: 'none',
             background: busy ? NEU.base : `linear-gradient(135deg, ${NEU_GRADIENTS.forest[0]}, ${NEU_GRADIENTS.forest[1]})`,
@@ -578,7 +578,7 @@ function DraftRowCard({ draft, onDelete }: { draft: DraftRow; onDelete: (draft: 
         </p>
       </div>
 
-      <div className="flex items-center gap-2 flex-shrink-0">
+      <div className="flex items-center gap-3 sm:gap-2 flex-shrink-0">
         <Link
           href={`/conferences/${draft.slug}/apply?role=${encodeURIComponent(draft.role)}`}
           className="inline-flex items-center focus:outline-none min-h-11 sm:min-h-0"
@@ -595,10 +595,10 @@ function DraftRowCard({ draft, onDelete }: { draft: DraftRow; onDelete: (draft: 
         <button
           onClick={async () => { setBusy(true); try { await onDelete(draft); } finally { setBusy(false); } }}
           disabled={busy}
-          className="inline-flex items-center justify-center focus:outline-none"
+          className="inline-flex items-center justify-center focus:outline-none w-11 h-11 sm:w-[34px] sm:h-[34px]"
           aria-label={`Delete ${primary} draft`}
           style={{
-            width: 34, height: 34, borderRadius: 999, border: 'none',
+            borderRadius: 999, border: 'none',
             backgroundColor: NEU.surface, boxShadow: busy ? NEU.inSm : NEU.outSm,
             color: busy ? NEU.inkSoft : '#8B2020', cursor: busy ? 'default' : 'pointer',
             transition: `box-shadow 160ms ${EASE}`,

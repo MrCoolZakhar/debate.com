@@ -36,6 +36,7 @@ export default function SiteFooter({
         .gv-foot-link{color:${FOREST};font-weight:700;text-decoration:underline;text-underline-offset:3px;text-decoration-thickness:1.5px;transition:color .15s ease}
         .gv-foot-link:hover{color:#0F3A28}
         .gv-foot-link:focus-visible{outline:2px solid ${FOREST};outline-offset:2px;border-radius:4px}
+        @media (pointer: coarse){.gv-foot-link{display:inline-flex;align-items:center;min-height:44px}}
       `}</style>
       <div className="mx-auto w-full max-w-6xl flex flex-col items-center gap-4 md:grid md:grid-cols-3 md:gap-0 md:items-center">
         <div className="justify-self-center md:justify-self-start">

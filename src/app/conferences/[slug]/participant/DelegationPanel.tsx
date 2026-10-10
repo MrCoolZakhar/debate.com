@@ -284,9 +284,12 @@ function RosterGroup({ title, members, pageSize, page, onPage, empty, renderRow 
         disabled={off}
         aria-label={`${dir < 0 ? 'Previous' : 'Next'} ${title.toLowerCase()}`}
         className="inline-flex items-center justify-center rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F]"
-        style={{ width: 32, height: 32, border: 'none', background: '#FFFFFF', boxShadow: '0 0 0 1px rgba(27,56,40,0.12), 0 2px 6px -2px rgba(27,56,40,0.25)', color: '#1B3828', opacity: off ? 0.35 : 1, cursor: off ? 'default' : 'pointer' }}
+        // A 44px hit area around the 32px disc; the negative margin keeps the header row's height.
+        style={{ width: 44, height: 44, margin: '-6px -3px', padding: 0, border: 'none', background: 'transparent', opacity: off ? 0.35 : 1, cursor: off ? 'default' : 'pointer' }}
       >
-        <Icon size={15} aria-hidden />
+        <span aria-hidden className="inline-flex items-center justify-center rounded-full" style={{ width: 32, height: 32, background: '#FFFFFF', boxShadow: '0 0 0 1px rgba(27,56,40,0.12), 0 2px 6px -2px rgba(27,56,40,0.25)', color: '#1B3828' }}>
+          <Icon size={15} aria-hidden />
+        </span>
       </button>
     );
   };

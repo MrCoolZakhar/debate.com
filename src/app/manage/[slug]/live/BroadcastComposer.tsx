@@ -518,7 +518,7 @@ export function BroadcastComposer({
   return (
     <Portal>
       <div
-        className="fixed inset-0 z-50 flex items-center justify-center px-4 py-8"
+        className="fixed inset-0 z-50 flex items-center justify-center px-4 py-4"
         style={{ backgroundColor: 'rgba(27,20,16,0.42)' }}
         onClick={onClose}
       >
@@ -528,7 +528,9 @@ export function BroadcastComposer({
             maxWidth: 720,
             backgroundColor: NEU.surface,
             boxShadow: NEU.out,
-            maxHeight: 'calc(100vh - 64px)',
+            // dvh, not vh: Safari's toolbar would hide Send under 100vh.
+            // The body below scrolls inside the card.
+            maxHeight: 'calc(100dvh - 32px)',
             fontFamily: OUTFIT,
           }}
           onClick={(e) => e.stopPropagation()}
@@ -558,7 +560,7 @@ export function BroadcastComposer({
           </div>
 
           {/* Body */}
-          <div className="overflow-y-auto" style={{ padding: '0 30px 4px' }}>
+          <div className="flex-1 min-h-0 overflow-y-auto" style={{ padding: '0 30px 4px' }}>
             {targets.length === 0 ? (
               <NeuInset className="text-center" style={{ padding: '34px 20px', borderRadius: 18, marginBottom: 18 }}>
                 <p className="text-sm font-bold" style={{ color: NEU.ink, fontFamily: OUTFIT }}>
@@ -603,7 +605,7 @@ export function BroadcastComposer({
                     placeholder={kind === 'actionable'
                       ? 'Tell the dais why, e.g. "Lunch break, please suspend and return at 14:00."'
                       : 'e.g. "Photos in the main hall at 15:30, delegates in formal dress."'}
-                    className="w-full mt-2 focus:outline-none"
+                    className="w-full mt-2 focus:outline-none max-sm:text-[16px]!"
                     style={{
                       padding: '12px 14px',
                       borderRadius: 16,
@@ -735,7 +737,7 @@ export function BroadcastComposer({
                               resetConfirm();
                             }}
                             placeholder="Custom"
-                            className="focus:outline-none"
+                            className="focus:outline-none max-sm:text-[16px]!"
                             style={{
                               inlineSize: 92, padding: '7px 12px', borderRadius: 999, border: 'none',
                               backgroundColor: NEU.base, boxShadow: NEU.inSm, color: NEU.ink,

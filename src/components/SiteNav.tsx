@@ -490,6 +490,7 @@ export default function SiteNav(props: SiteNavProps = {}) {
           className="flex flex-col justify-center items-center w-11 h-11 gap-1.5"
           onClick={() => setMenuOpen((v) => !v)}
           aria-label={menuOpen ? 'Close menu' : 'Open menu'}
+          aria-expanded={menuOpen}
         >
           <span
             className="block w-6 h-0.5 rounded-full transition-[transform,background-color] duration-300 origin-center"
@@ -524,6 +525,10 @@ export default function SiteNav(props: SiteNavProps = {}) {
           Pin it just below the 72px nav bar so every tab is visible. */}
       <div
         className={`lg:hidden overflow-hidden transition-[max-height] duration-300 ${overlay ? 'absolute left-0 right-0 z-40' : 'relative z-20'}`}
+        // Closed, the sheet is only max-height 0: take its links out of the
+        // tab order and the accessibility tree too.
+        inert={!menuOpen}
+        aria-hidden={!menuOpen}
         style={{
           top: overlay ? '72px' : undefined,
           // Measured, never guessed — see the sheetMax effect above.

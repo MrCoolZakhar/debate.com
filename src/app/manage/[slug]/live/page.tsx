@@ -732,7 +732,7 @@ export default function LiveStatusPage() {
             Committee Floor
           </h1>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-x-3 gap-y-2 flex-wrap min-w-0">
           {secondsAgo !== null && (
             <span className="text-xs" style={{ color: SOFT, fontFamily: OUTFIT, fontVariantNumeric: 'tabular-nums' }}>
               {loadError ? `Last good refresh ${secondsAgo}s ago` : `Refreshed ${secondsAgo}s ago`}

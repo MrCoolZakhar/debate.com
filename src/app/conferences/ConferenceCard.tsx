@@ -811,7 +811,7 @@ function ListingCard({
         >
           <span style={{ fontSize: '14px', color: '#1C1410', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
             {price.kind === 'tbd' ? (
-              <span title="Price to be announced" style={{ fontWeight: 600, color: '#6B5F52', fontSize: '12.5px' }}>Price TBA</span>
+              <span title="Price to be announced" style={{ fontWeight: 600, color: '#6B5F52', fontSize: '12.5px' }}>TBD</span>
             ) : price.kind === 'free' ? (
               <span style={{ fontWeight: 800 }}>Free</span>
             ) : (
@@ -872,6 +872,7 @@ function ApplyButton({ applied = false, member = false }: { applied?: boolean; m
         onMouseLeave={() => setHover(false)}
         className="inline-flex items-center gap-1.5 cursor-pointer"
         style={{
+          position: 'relative',
           fontFamily: "var(--font-brand), sans-serif",
           fontWeight: 800,
           fontSize: '10.5px',
@@ -888,6 +889,8 @@ function ApplyButton({ applied = false, member = false }: { applied?: boolean; m
           transition: 'background-color 180ms ease, transform 180ms ease, box-shadow 180ms ease',
         }}
       >
+        {/* 44px tap target (phones): invisible, centred, the pill's look unchanged */}
+        <span aria-hidden style={{ position: 'absolute', top: '50%', left: '50%', width: '100%', minWidth: 44, height: 44, transform: 'translate(-50%, -50%)' }} />
         VIEW
         <ArrowRight size={12} strokeWidth={2.75} />
       </button>
@@ -922,6 +925,7 @@ function ApplyButton({ applied = false, member = false }: { applied?: boolean; m
       onMouseLeave={() => setHover(false)}
       className="inline-flex items-center gap-1.5 cursor-pointer"
       style={{
+        position: 'relative',
         fontFamily: "var(--font-brand), sans-serif",
         fontWeight: 800,
         fontSize: '11px',
@@ -938,6 +942,8 @@ function ApplyButton({ applied = false, member = false }: { applied?: boolean; m
         transition: 'background-color 180ms ease, transform 180ms ease, box-shadow 180ms ease',
       }}
     >
+      {/* 44px tap target (phones): invisible, centred, the pill's look unchanged */}
+      <span aria-hidden style={{ position: 'absolute', top: '50%', left: '50%', width: '100%', minWidth: 44, height: 44, transform: 'translate(-50%, -50%)' }} />
       APPLY
       <ArrowRight size={12} strokeWidth={2.75} />
     </button>

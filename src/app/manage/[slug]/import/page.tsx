@@ -1578,7 +1578,7 @@ function ImportedDelegatesTab({ conference, session, confirm, fixApplicationId }
                               if (e.key === 'Enter') { e.preventDefault(); handleSaveEmail(r); }
                               else if (e.key === 'Escape') { e.preventDefault(); setEditingId(null); setRowError(null); }
                             }}
-                            className="rounded-lg px-2 py-1 text-xs focus:outline-none"
+                            className="rounded-lg px-2 py-1 text-base sm:text-xs focus:outline-none"
                             style={{ border: '1px solid #DDD4C0', color: '#1C1410', backgroundColor: '#FFFFFF', fontFamily: OUTFIT, minWidth: 180 }}
                           />
                           <button

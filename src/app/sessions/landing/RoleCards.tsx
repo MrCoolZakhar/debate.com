@@ -142,5 +142,7 @@ const CSS = `
   .rc-panel { flex: 0 0 84vw; max-width: 420px; min-height: 420px; aspect-ratio: 4 / 5; scroll-snap-align: center; }
   .rc-panel:hover { transform: none; }
 }
+/* 16px on phones and tablets: iOS zooms into any focused field under 16px. */
+@media (max-width: 743px) { .rc-code { font-size: 16px; } }
 @media (prefers-reduced-motion: reduce) { .rc-panel { transition: none; } .rc-row { scroll-behavior: auto; } }
 `;

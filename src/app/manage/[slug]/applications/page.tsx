@@ -342,10 +342,9 @@ const MID_BLOCK_H = 92;
 const ALLOCATE_RAIL_W = 152;
 
 /** Bottom padding the list reserves for the sticky bulk-action bar while a
- *  selection is live, so the last row is never trapped under it. Was 96, sized
- *  for a bar that fit on one line; it now carries Remind-to-pay and Email as
- *  well, which wraps to three or four lines on a 375px phone (~34px per line
- *  + 20px bar padding + its 20px offset from the bottom). */
+ *  selection is live, so the last row is never trapped under it. Below 640px
+ *  the bar is one sideways-scrolling row of 44px buttons (44 + 20px padding +
+ *  its 20px offset = 84px); from 640px it may wrap to two or three lines. */
 const BULK_BAR_CLEARANCE = 140;
 
 /** Role as its icon plus the plain word. Chairs read gold, delegates forest,
@@ -3979,7 +3978,7 @@ export default function ApplicationsPage() {
               onChange={e => setSearchInput(e.target.value)}
               placeholder="Search applicants…"
               aria-label="Search applications"
-              className="flex-1 outline-none"
+              className="flex-1 outline-none max-sm:text-[16px]!"
               style={{ backgroundColor: 'transparent', color: NEU.ink, fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 600, minWidth: 0 }}
             />
             {searchInput && (
@@ -4498,8 +4497,8 @@ export default function ApplicationsPage() {
                       clicks wholesale, which would have made its empty space
                       the one dead zone on an otherwise clickable card. */}
                   <div
-                    className="p-4 lg:p-5 flex flex-col lg:items-end gap-2.5 justify-center border-t lg:border-t-0 lg:border-l"
-                    style={{ flex: '0 0 248px', minWidth: 248, borderColor: 'rgba(221,212,192,0.6)' }}
+                    className="p-4 lg:p-5 flex flex-col lg:items-end gap-2.5 justify-center border-t lg:border-t-0 lg:border-l lg:flex-[0_0_248px] lg:min-w-[248px]"
+                    style={{ borderColor: 'rgba(221,212,192,0.6)' }}
                   >
                     {/* NOT ATTENDING stays full-strength while everything else
                         in this column fades, so it never gets lost in the dim. */}
@@ -4951,10 +4950,24 @@ export default function ApplicationsPage() {
       {/* Sticky bulk-action bar */}
       {!loading && !bulkRunning && selectedApps.length > 0 && (
         <div className="fixed inset-x-0 z-40 flex justify-center px-4" style={{ bottom: 20, pointerEvents: 'none' }}>
-          <style>{`@keyframes bulkPulse { 0%,100% { transform: scale(1); box-shadow: 0 4px 10px rgba(27,56,40,0.35); } 50% { transform: scale(1.06); box-shadow: 0 8px 20px rgba(27,56,40,0.5); } }`}</style>
+          <style>{`@keyframes bulkPulse { 0%,100% { transform: scale(1); box-shadow: 0 4px 10px rgba(27,56,40,0.35); } 50% { transform: scale(1.06); box-shadow: 0 8px 20px rgba(27,56,40,0.5); } }
+            /* Phones: one row that scrolls sideways, 44px targets, edge fade. */
+            @media (max-width: 639.98px) {
+              .gv-bulk-shell { width: 100%; }
+              .gv-bulk-bar { flex-wrap: nowrap !important; justify-content: flex-start !important; overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: none;
+                -webkit-mask-image: linear-gradient(to right, transparent 0, #000 16px, #000 calc(100% - 16px), transparent 100%);
+                mask-image: linear-gradient(to right, transparent 0, #000 16px, #000 calc(100% - 16px), transparent 100%); }
+              .gv-bulk-bar::-webkit-scrollbar { display: none; }
+              .gv-bulk-bar > * { flex-shrink: 0; white-space: nowrap; }
+              .gv-bulk-bar > button, .gv-bulk-bar > span[title] { min-height: 44px; }
+            }`}</style>
           <div
-            className="flex items-center gap-2 flex-wrap justify-center"
-            style={{ pointerEvents: 'auto', maxWidth: '100%', padding: '10px 14px', borderRadius: 999, backgroundColor: NEU.surface, boxShadow: NEU.out }}
+            className="gv-bulk-shell"
+            style={{ pointerEvents: 'auto', maxWidth: '100%', minWidth: 0, borderRadius: 999, backgroundColor: NEU.surface, boxShadow: NEU.out }}
+          >
+          <div
+            className="gv-bulk-bar flex items-center gap-2 flex-wrap justify-center"
+            style={{ padding: '10px 14px' }}
           >
             <span className="inline-flex items-center gap-2 pl-1 pr-1" style={{ fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 800, color: NEU.ink, fontVariantNumeric: 'tabular-nums' }}>
               <span className="inline-flex items-center justify-center" style={{ minWidth: 22, height: 22, padding: '0 6px', borderRadius: 999, background: `linear-gradient(135deg, ${NEU_GRADIENTS.forest[0]}, ${NEU_GRADIENTS.forest[1]})`, color: '#FFFFFF', fontSize: 11, fontWeight: 900 }}>
@@ -5118,6 +5131,7 @@ export default function ApplicationsPage() {
               <X size={13} strokeWidth={2.6} />
               Clear
             </button>
+          </div>
           </div>
         </div>
       )}

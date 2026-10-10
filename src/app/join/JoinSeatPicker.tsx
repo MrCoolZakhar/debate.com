@@ -149,17 +149,32 @@ export default function JoinSeatPicker({
     : ((rows.find((r) => pointable(r.seat)) ?? rows[0])?.seat.country ?? '');
   const currentAt = index.find((r) => r.seat.country === current)?.at ?? -1;
 
-  // Follow the active row with the scroll container, never the page.
+  // Follow the active row with the scroll container. Below lg the list is not a
+  // scroller (it grows with the page), so while the keyboard cursor is in use the
+  // PAGE follows instead, keeping the row clear of the sticky Join bar.
+  const searchRef = useRef<HTMLInputElement>(null);
   useEffect(() => {
     if (!current || !listRef.current) return;
     const list = listRef.current;
     const el = list.querySelector<HTMLElement>(`[data-seat="${CSS.escape(current)}"]`);
     if (!el) return;
-    // Scroll the list only. scrollIntoView would also scroll the page on a phone.
-    const top = el.offsetTop;
-    const bottom = top + el.offsetHeight;
-    if (top < list.scrollTop + 6) list.scrollTop = top - 6;
-    else if (bottom > list.scrollTop + list.clientHeight - 6) list.scrollTop = bottom - list.clientHeight + 6;
+    if (list.scrollHeight > list.clientHeight + 1) {
+      // Scroll the list only. scrollIntoView would also scroll the page on a phone.
+      const top = el.offsetTop;
+      const bottom = top + el.offsetHeight;
+      if (top < list.scrollTop + 6) list.scrollTop = top - 6;
+      else if (bottom > list.scrollTop + list.clientHeight - 6) list.scrollTop = bottom - list.clientHeight + 6;
+      return;
+    }
+    if (document.activeElement !== searchRef.current) return;
+    const vv = window.visualViewport;
+    const viewTop = vv ? vv.offsetTop : 0;
+    let viewBottom = vv ? vv.offsetTop + vv.height : window.innerHeight;
+    const bar = document.querySelector<HTMLElement>('.join-action-bar');
+    if (bar) viewBottom = Math.min(viewBottom, bar.getBoundingClientRect().top);
+    const r = el.getBoundingClientRect();
+    if (r.bottom > viewBottom - 6) window.scrollBy({ top: r.bottom - viewBottom + 6 });
+    else if (r.top < viewTop + 6) window.scrollBy({ top: r.top - viewTop - 6 });
   }, [current]);
 
   const move = (delta: number) => {
@@ -224,6 +239,7 @@ export default function JoinSeatPicker({
             <Search size={19} strokeWidth={2.5} />
           </span>
           <input
+            ref={searchRef}
             type="text"
             role="combobox"
             aria-expanded
@@ -264,14 +280,16 @@ export default function JoinSeatPicker({
         </span>
       </div>
 
-      {/* The list. Fixed height in every state, so the card never resizes; roomier than
-          the old 272px box (on a desktop of 700px+ it takes the stage's flexible space). */}
+      {/* The list. From lg a fixed-height scroller, so the card never resizes (on a
+          desktop of 700px+ it takes the stage's flexible space). Below lg it grows
+          with the page instead: a 380px box inside a scrolling page left only the
+          search field on screen above the sticky Join bar. */}
       <div
         id={listId}
         ref={listRef}
         role="listbox"
         aria-label={labels.search}
-        className="gv-join-picker-list relative h-[380px] overflow-y-auto overscroll-contain sm:h-[420px]"
+        className="gv-join-picker-list relative min-h-[220px] lg:h-[420px] lg:overflow-y-auto lg:overscroll-contain"
         style={{
           borderRadius: 20,
           backgroundColor: '#FFFFFF',

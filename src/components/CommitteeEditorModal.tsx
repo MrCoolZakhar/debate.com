@@ -1502,7 +1502,7 @@ function CommitteeEditor({ conferenceId, committeeType, existing, initialRoster,
     </ModalOverlay>
     {pendingRemovalCount !== null && (
       <ModalOverlay onClose={() => setPendingRemovalCount(null)}>
-        <div className="rounded-2xl p-6 flex flex-col gap-4" style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0', width: 380 }}>
+        <div className="rounded-2xl p-6 flex flex-col gap-4" style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0', width: 380, maxWidth: 'calc(100vw - 32px)' }}>
           <p className="text-sm" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif", lineHeight: 1.5 }}>
             {pendingRemovalCount} of the {seatNounPlural} you removed {pendingRemovalCount === 1 ? 'has' : 'have'} an allocated delegate. Removing {pendingRemovalCount === 1 ? 'it' : 'them'} will return {pendingRemovalCount === 1 ? 'that delegate' : 'those delegates'} to the allocation pool. Proceed?
           </p>
@@ -1515,7 +1515,7 @@ function CommitteeEditor({ conferenceId, committeeType, existing, initialRoster,
     )}
     {pendingDoubleOffCount !== null && (
       <ModalOverlay onClose={() => { setPendingDoubleOffCount(null); setDoubleDelegation(true); }}>
-        <div className="rounded-2xl p-6 flex flex-col gap-4" style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0', width: 380 }}>
+        <div className="rounded-2xl p-6 flex flex-col gap-4" style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0', width: 380, maxWidth: 'calc(100vw - 32px)' }}>
           <p className="text-sm" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif", lineHeight: 1.5 }}>
             This action will affect the allocations of {pendingDoubleOffCount} delegates. It is irreversible. Are you sure you wish to continue?
           </p>
@@ -1680,7 +1680,7 @@ export function CommitteeEditorModal({ conference, committee, onSaved, onClose, 
   if (!isEdit && !pendingType) {
     return (
       <ModalOverlay onClose={onClose}>
-        <div className="rounded-2xl p-7 flex flex-col gap-5" style={{ backgroundColor: NEU.base, border: '1px solid #DDD4C0', width: 400 }}>
+        <div className="rounded-2xl p-7 flex flex-col gap-5" style={{ backgroundColor: NEU.base, border: '1px solid #DDD4C0', width: 400, maxWidth: 'calc(100vw - 32px)' }}>
           <div className="flex items-center justify-between">
             <p className="text-base font-bold" style={{ color: NEU.ink, fontFamily: OUTFIT }}>Choose committee type</p>
             <button onClick={onClose} className="focus:outline-none" style={{ color: NEU.muted }}><X size={18} /></button>

@@ -51,7 +51,7 @@ import { compareStartDate, hasConcluded } from '@/lib/conferenceDates';
 import { ConferenceCard, ConferenceCardSkeleton } from '../ConferenceCard';
 import { GoldWord } from '@/components/BrandHeading';
 import {
-  ChoiceRow, FilterChip, PRIMARY_BUTTON, SCROLL_CSS, SearchPill, SortMenu, ToggleChip, ViewToggle,
+  ChoiceRow, FilterChip, PRIMARY_BUTTON, SCROLL_CSS, SearchPill, SortMenu, ToggleChip, ViewToggle, useEdgeFade,
   type DateTab, type ExploreView, type SuggestConference, type SuggestCountry,
 } from './ExploreChrome';
 import {
@@ -725,6 +725,9 @@ export default function ConferencesExploreClient() {
   const userCode = userCountry ? getCountryByName(userCountry)?.code : undefined;
 
   const resultsRef = useRef<HTMLElement>(null);
+  // The filter chips scroll sideways below 1024px: fade the side(s) with more.
+  const filterBandRef = useRef<HTMLDivElement>(null);
+  useEdgeFade(filterBandRef);
   function scrollToResults() {
     const el = resultsRef.current;
     if (!el) return;
@@ -916,7 +919,7 @@ export default function ConferencesExploreClient() {
                When (on phones, where the pill shows only Where, a When chip
                stands in). */}
           <div className="gv-explore-wrap gv-explore-toolbar" style={{ marginTop: 'clamp(10px, 1.2vw, 14px)', marginBottom: 10 }}>
-            <div role="toolbar" aria-label="Filters" className="gv-explore-scroll gv-explore-band">
+            <div ref={filterBandRef} role="toolbar" aria-label="Filters" className="gv-explore-scroll gv-explore-band">
               <span className="contents sm:hidden">
                 <FilterChip
                   label="When" title="When" icon={CalendarDays}

@@ -150,7 +150,7 @@ export default function RefundDialog({ items, currency, conferenceId, todoId, on
                 <p className="gv-fd-note">This sends {cents(cardTotal, currency)} back to their card through Stripe. Stripe keeps its fee</p>
                 <div>
                   <label className="gv-fd-label" htmlFor="gv-fd-refund-reason">Reason (optional)</label>
-                  <textarea id="gv-fd-refund-reason" className="gv-fd-text" style={{ minHeight: 72 }} maxLength={500} value={reason} onChange={e => setReason(e.target.value)} />
+                  <textarea id="gv-fd-refund-reason" className="gv-fd-text max-sm:text-[16px]!" style={{ minHeight: 72 }} maxLength={500} value={reason} onChange={e => setReason(e.target.value)} />
                 </div>
                 {cardErr && <p className="gv-st-err" role="alert">{cardErr}</p>}
                 <div>
@@ -202,7 +202,7 @@ export default function RefundDialog({ items, currency, conferenceId, todoId, on
                 </div>
                 <div>
                   <label className="gv-fd-label" htmlFor="gv-fd-refund-note">Note (optional)</label>
-                  <textarea id="gv-fd-refund-note" className="gv-fd-text" style={{ minHeight: 72 }} maxLength={500} value={note} onChange={e => setNote(e.target.value)} />
+                  <textarea id="gv-fd-refund-note" className="gv-fd-text max-sm:text-[16px]!" style={{ minHeight: 72 }} maxLength={500} value={note} onChange={e => setNote(e.target.value)} />
                 </div>
                 {confirmNoProof && !file && (
                   <p className="gv-fd-warn" role="alert">No proof attached. Record the refund anyway?</p>

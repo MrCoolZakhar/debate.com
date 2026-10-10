@@ -7,7 +7,7 @@
 // the payer added themselves (a delegate or advisor ticket, an add-on) has an
 // X to remove it. Nothing says owed once the money has arrived.
 
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   Ban, CircleCheck, Clock, ExternalLink, Gift, HandCoins, Hourglass, Lock, MoreHorizontal, RotateCcw, ShieldAlert, Undo2, X, XCircle,
 } from 'lucide-react';
@@ -73,6 +73,28 @@ export default function ItemList({ items, selected, onToggle, onReceipt, onRemov
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
   const busyRef = useRef(false);
+  const menuWrapRef = useRef<HTMLSpanElement | null>(null);
+
+  // The row menu closes on a press anywhere outside it and on Escape (focus
+  // goes back to its trigger), not only by tapping the trigger again.
+  useEffect(() => {
+    if (!menu) return;
+    const onDown = (e: PointerEvent) => {
+      if (menuWrapRef.current?.contains(e.target as Node)) return;
+      setMenu(null);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      menuWrapRef.current?.querySelector<HTMLButtonElement>('button[aria-expanded]')?.focus();
+      setMenu(null);
+    };
+    document.addEventListener('pointerdown', onDown);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('pointerdown', onDown);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [menu]);
 
   if (items.length === 0) {
     return (
@@ -159,7 +181,7 @@ export default function ItemList({ items, selected, onToggle, onReceipt, onRemov
               {below?.(it)}
             </div>
             <span className="gv-pay-amt" style={{ color: it.state === 'paid' ? GREEN : undefined }}>{amt}</span>
-            <span style={{ position: 'relative' }}>
+            <span style={{ position: 'relative' }} ref={menu === it.invoice_id ? menuWrapRef : undefined}>
               {it.state === 'paid' && it.can_request_refund && onRequestRefund && (
                 <>
                   <button type="button" className="gv-pay-x" aria-label={`More for ${it.label}`} aria-expanded={menu === it.invoice_id}

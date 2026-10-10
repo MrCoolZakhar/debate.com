@@ -49,6 +49,10 @@ interface CalendarEntry {
 
 /** Submitted shows "Applied", rejected "Not accepted", withdrawn "Withdrawn",
  *  instead of the role's eventual label (carried over from the old page). */
+// A count cell: min-w-0 so a grid cell can shrink, and below 640px the word
+// (the second span of StatBlock's line) is 12px and may hyphenate.
+const STAT_CLS = '!p-4 min-w-0 [hyphens:auto] max-sm:[&_p>span+span]:!text-[12px]';
+
 function statusTag(status: string, tag: RoleTag): RoleTag {
   if (status === 'submitted') return { key: tag.key, label: 'Applied', tone: 'amber' };
   if (status === 'rejected') return { key: tag.key, label: 'Not accepted', tone: 'rose' };
@@ -283,6 +287,19 @@ function MyConferencesInner() {
   const organising = entries.filter((e) => e.isOrganiser).length;
   const next = upcoming[0] ?? null;
 
+  // The counts. "organising" only for someone who organises (a delegate never
+  // sees "organising 0"). On a phone the word steps down to 12px and may
+  // hyphenate, so it never runs out of its cell. Drawn beside Next up from
+  // lg; below lg it follows the things to act on (see below), so the next
+  // step is not pushed under the fold.
+  const counts = (cls: string) => (
+    <div className={`${cls} ${organising > 0 ? 'grid-cols-3' : 'grid-cols-2'} lg:grid-cols-1 gap-3 md:gap-4`}>
+      <StatBlock value={loading ? '…' : upcoming.length} word="upcoming" className={STAT_CLS} />
+      <StatBlock value={loading ? '…' : past.length} word="past" className={STAT_CLS} />
+      {organising > 0 && <StatBlock value={organising} word="organising" className={STAT_CLS} />}
+    </div>
+  );
+
   return (
     <div>
       <AccountHero
@@ -319,11 +336,7 @@ function MyConferencesInner() {
               </RaisedCard>
             )}
           </div>
-          <div className="lg:col-span-5 grid grid-cols-3 lg:grid-cols-1 gap-3 md:gap-4">
-            <StatBlock value={loading ? '…' : upcoming.length} word="upcoming" className="!p-4" />
-            <StatBlock value={loading ? '…' : past.length} word="past" className="!p-4" />
-            <StatBlock value={loading ? '…' : organising} word="organising" className="!p-4" />
-          </div>
+          {counts('hidden lg:grid lg:col-span-5')}
         </div>
       </HeroOverlap>
 
@@ -335,6 +348,8 @@ function MyConferencesInner() {
         <DraftsToCompleteSection drafts={actions.drafts} onDelete={actions.deleteDraft} />
         <ChairInvitesSection invites={actions.chairInvites} onRespond={actions.respondChair} />
         <OrganizerInvitesSection invites={actions.organizerInvites} onRespond={actions.respondOrganizer} />
+
+        {counts('grid lg:hidden mb-8')}
 
         {loading ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

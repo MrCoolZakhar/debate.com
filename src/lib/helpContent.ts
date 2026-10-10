@@ -100,6 +100,14 @@ const DELEGATES: FaqEntry[] = [
     keywords: ['pay', 'payment', 'fee', 'invoice', 'card', 'stripe', 'bank transfer', 'manual', 'platform fee'],
   },
   {
+    id: 'refund-conference-fee',
+    question: 'How do I get a refund on a conference fee?',
+    answer: 'The fee goes to the conference, so the organiser decides. On the conference\'s pay page, open Completed, find the paid item and choose Request a refund, with a reason. The organiser accepts or declines it, and a decline comes with their note. A card payment goes back to the card you paid with. A manual payment is sent back by the organiser themselves, and if it never arrives you can tell them with I haven\'t received it. Your Gavelling credit is separate: it comes back to your balance by itself if your application is rejected or you withdraw.',
+    actions: [{ kind: 'link', label: 'My conferences', href: '/account/conferences' }],
+    pages: [],
+    keywords: ['refund', 'money back', 'cancel', 'request a refund', 'reimburse', 'fee', 'card', 'manual', 'not received'],
+  },
+  {
     id: 'mun-cv',
     question: 'What is my MUN CV?',
     answer: 'A record of your conferences, kept in your account and shown on a public page you can share. Awards published on Gavelling are added to it automatically, with a verified mark.',

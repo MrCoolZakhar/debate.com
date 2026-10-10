@@ -40,7 +40,7 @@ import { PAY_CSS, INK, INK_SOFT } from './payKit';
 import { money, readPayOverview, removeAddon, removePledgedTicket, type PayItem, type PayOverview } from './payApi';
 import BalanceHeader from './BalanceHeader';
 import ItemList, { canTick } from './ItemList';
-import PayBar from './PayBar';
+import PayBar, { PayListHead } from './PayBar';
 import CardPayPopup from './CardPayPopup';
 import ReceiptsList, { ReceiptPopup } from './ReceiptsList';
 import ActionsColumn from './ActionsColumn';
@@ -397,6 +397,21 @@ export default function PayPage() {
     }
   };
 
+  // The pay bar's secondary controls, drawn in the bar from 640px and in the
+  // item list's header below it (PayListHead): one definition, same handlers.
+  const payAllTicked = chosen.length > 0 && chosen.length >= tickable.filter(i => i.currency === chosenCur).length;
+  const clearChosen = () => { setSelected(new Set()); setNotice(''); };
+  const uploadProofButton = manual ? (
+    <button type="button" className="gv-pay-btn gv-pay-outline" disabled={startBusy}
+      title="Already paid? Tick the items you paid for, then upload your proof"
+      onClick={() => {
+        if (chosen.length === 0) { setNotice('Tick the items you paid for first'); return; }
+        void startManual(chosen.map(i => i.invoice_id), 'upload');
+      }}>
+      Upload proof
+    </button>
+  ) : undefined;
+
   return (
     <Frame theme={conference.theme} slug={slug}>
       <h1 style={{ margin: 0, fontSize: 'clamp(28px, 3vw, 36px)', fontWeight: 900, letterSpacing: '-0.02em', color: INK }}>
@@ -421,12 +436,28 @@ export default function PayPage() {
           </button>
         </nav>
 
-        <div className="flex flex-col gap-5" style={{ minWidth: 0 }}>
-          <BalanceHeader o={overview} />
-          {!canPay && <PaymentsNotSetUp contactEmail={c.contact_email} />}
+        {/* Below 1024px .gv-pay-mid is display:contents, so the balance (.gv-pay-head),
+            then the action cards (.gv-pay-side), then the rest sit in that order. */}
+        <div className="gv-pay-mid flex flex-col gap-5" style={{ minWidth: 0 }}>
+          <div className="gv-pay-head flex flex-col gap-5" style={{ minWidth: 0 }}>
+            <BalanceHeader o={overview} />
+            {!canPay && <PaymentsNotSetUp contactEmail={c.contact_email} />}
+          </div>
 
+          {/* Each tab is ONE wrapper: below 1024px .gv-pay-mid is display:contents, and a
+              sticky PayBar that became its own grid item could not stick (its grid
+              area is only as tall as itself). */}
           {tab === 'outstanding' ? (
-            <>
+            <div className="flex flex-col gap-5" style={{ minWidth: 0 }}>
+              {canPay && tickable.length > 0 && (
+                <PayListHead
+                  count={chosen.length}
+                  allTicked={payAllTicked}
+                  onSelectAll={selectAll}
+                  onClear={clearChosen}
+                  extra={uploadProofButton}
+                />
+              )}
               <ItemList
                 items={outstandingItems}
                 selected={selected}
@@ -446,27 +477,18 @@ export default function PayPage() {
                 <PayBar
                   count={chosen.length}
                   totalLabel={money(chosenTotal, chosenCur)}
-                  allTicked={chosen.length > 0 && chosen.length >= tickable.filter(i => i.currency === chosenCur).length}
+                  allTicked={payAllTicked}
                   onSelectAll={selectAll}
-                  onClear={() => { setSelected(new Set()); setNotice(''); }}
+                  onClear={clearChosen}
                   onPay={onPay}
                   busy={paying !== null || startBusy}
                   notice={notice}
-                  extra={manual ? (
-                    <button type="button" className="gv-pay-btn gv-pay-outline" disabled={startBusy}
-                      title="Already paid? Tick the items you paid for, then upload your proof"
-                      onClick={() => {
-                        if (chosen.length === 0) { setNotice('Tick the items you paid for first'); return; }
-                        void startManual(chosen.map(i => i.invoice_id), 'upload');
-                      }}>
-                      Upload proof
-                    </button>
-                  ) : undefined}
+                  extra={uploadProofButton}
                 />
               )}
-            </>
+            </div>
           ) : (
-            <>
+            <div className="flex flex-col gap-5" style={{ minWidth: 0 }}>
               {canPay && manual && started && (
                 <StartedPayments
                   payments={started.payments}
@@ -516,11 +538,12 @@ export default function PayPage() {
                   <p style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>No payments yet</p>
                 </div>
               )}
-            </>
+            </div>
           )}
         </div>
 
         {primary && (
+          <div className="gv-pay-side" style={{ minWidth: 0 }}>
           <ActionsColumn
             conference={conference}
             aidOpen={c.aid_open}
@@ -538,6 +561,7 @@ export default function PayPage() {
             onAidSubmitted={reload}
             delegation={overview.delegation}
           />
+          </div>
         )}
       </div>
 
@@ -617,7 +641,7 @@ function Frame({ theme, slug, children }: { theme: PayConference['theme'] | unde
       <style>{PAY_CSS}</style>
       <SiteNav />
       <div className="flex-1 w-full max-w-[1240px] mx-auto px-4 sm:px-6 pt-8 pb-[calc(2.5rem+env(safe-area-inset-bottom))]">
-        <Link href={`/conferences/${slug}/role`} className="gv-pay-link" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, marginBottom: 18, fontSize: 13.5 }}>
+        <Link href={`/conferences/${slug}/role`} className="gv-pay-link gv-pay-back" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, marginBottom: 6, fontSize: 13.5 }}>
           <ArrowLeft size={15} strokeWidth={2.4} aria-hidden /> Back to conference
         </Link>
         {children}

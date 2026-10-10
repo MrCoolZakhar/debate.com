@@ -3572,6 +3572,16 @@ export default function AssignmentPage() {
   const [railSource, setRailSource] = useState<'delegates' | 'delegations'>('delegates');
   const [dragSocietyId, setDragSocietyId] = useState<string | null>(null);
   const [societyDropModal, setSocietyDropModal] = useState<{ committeeId: string; societyId: string } | null>(null);
+  // Tap-to-select for delegation cards: HTML5 drag does not work on touch, so a
+  // tap picks the delegation and the next tap on a committee opens the drop
+  // pop-up with it (the same path as a drop). Escape or a second tap clears it.
+  const [selectedSocietyId, setSelectedSocietyId] = useState<string | null>(null);
+  useEffect(() => {
+    if (!selectedSocietyId || societyDropModal) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setSelectedSocietyId(null); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [selectedSocietyId, societyDropModal]);
   const [assignModal, setAssignModal] = useState<{ committeeId: string; preSlot?: SlotRow; preSeat?: number; preApp?: AcceptedApp; moveFrom?: AllocationRow } | null>(null);
   const [overviewCommitteeId, setOverviewCommitteeId] = useState<string | null>(null);
   // Delegation-purity safeguard: set whenever an individual-delegate
@@ -4969,6 +4979,29 @@ export default function AssignmentPage() {
             </NeuInset>
           )}
 
+          {/* Selected-delegation banner (tap path, works on touch) */}
+          {mode === 'delegates' && railSource === 'delegations' && selectedSocietyId && (() => {
+            const soc = societies.find(s => s.id === selectedSocietyId);
+            if (!soc) return null;
+            return (
+              <NeuInset className="flex items-center gap-2.5 px-4 py-2.5 mb-5">
+                <MousePointerClick size={14} style={{ color: NEU.green, flexShrink: 0 }} />
+                <p className="text-sm min-w-0 [overflow-wrap:anywhere]" style={{ color: NEU.forest, fontFamily: OUTFIT }}>
+                  <span style={{ fontWeight: 700 }}>{soc.name}</span> selected. Tap a committee panel to give them a seat, or drag their card.
+                </p>
+                <button
+                  onClick={() => setSelectedSocietyId(null)}
+                  className="focus:outline-none flex-shrink-0"
+                  style={{ color: NEU.green, marginLeft: 'auto', lineHeight: 0 }}
+                  title="Clear selection"
+                  aria-label="Clear selection"
+                >
+                  <X size={15} />
+                </button>
+              </NeuInset>
+            );
+          })()}
+
           {mode === 'delegates' && (
             <div className="flex flex-col xl:flex-row gap-6 items-start">
               {/* Left rail, unassigned applicants (or delegations to block-allocate) */}
@@ -4976,7 +5009,7 @@ export default function AssignmentPage() {
                 {/* Source toggle: drag individual delegates, or whole delegations. */}
                 <RailSourceToggle
                   value={railSource}
-                  onChange={v => { setRailSource(v); if (v === 'delegations') setSelectedAppId(null); }}
+                  onChange={v => { setRailSource(v); if (v === 'delegations') setSelectedAppId(null); else setSelectedSocietyId(null); }}
                 />
 
                 <RailHeader count={railSource === 'delegates' ? filteredApps.length : filteredSocieties.length} />
@@ -4997,9 +5030,17 @@ export default function AssignmentPage() {
                     <div className="flex flex-col gap-2">
                       {filteredSocieties.map(soc => {
                         const beingDragged = dragSocietyId === soc.id;
+                        const socSelected = selectedSocietyId === soc.id;
+                        const toggleSoc = () => setSelectedSocietyId(prev => (prev === soc.id ? null : soc.id));
                         return (
                           <div
                             key={soc.id}
+                            role="button"
+                            tabIndex={0}
+                            aria-pressed={socSelected}
+                            aria-label={`${soc.name}. ${socSelected ? 'Selected. Tap a committee to give them a seat' : 'Select, then tap a committee'}`}
+                            onClick={toggleSoc}
+                            onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleSoc(); } }}
                             draggable
                             onDragStart={e => {
                               e.dataTransfer.setData('text/plain', `society:${soc.id}`);
@@ -5007,17 +5048,17 @@ export default function AssignmentPage() {
                               setDragSocietyId(soc.id);
                             }}
                             onDragEnd={() => { setDragSocietyId(null); setDropTargetId(null); }}
-                            className="p-3 flex items-center gap-2.5"
+                            className="p-3 flex items-center gap-2.5 focus:outline-none"
                             style={{
                               backgroundColor: NEU.surface,
                               borderRadius: 18,
-                              boxShadow: NEU.outSm,
+                              boxShadow: socSelected ? `0 0 0 1.5px ${NEU.forest}, ${NEU.out}` : NEU.outSm,
                               opacity: beingDragged ? 0.45 : 1,
                               cursor: 'grab',
                               transition: 'box-shadow 200ms cubic-bezier(0.22,1,0.36,1)',
                             }}
-                            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.boxShadow = NEU.outSmHover; }}
-                            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.boxShadow = NEU.outSm; }}
+                            onMouseEnter={e => { if (!socSelected) (e.currentTarget as HTMLElement).style.boxShadow = NEU.outSmHover; }}
+                            onMouseLeave={e => { if (!socSelected) (e.currentTarget as HTMLElement).style.boxShadow = NEU.outSm; }}
                           >
                             <GripVertical size={13} style={{ color: NEU.muted, flexShrink: 0, opacity: 0.5 }} />
                             <DelegationAvatar size={40} />
@@ -5029,6 +5070,7 @@ export default function AssignmentPage() {
                                 <Users size={11} strokeWidth={2.2} /> {soc.memberCount} {soc.memberCount === 1 ? 'MEMBER' : 'MEMBERS'}
                               </p>
                             </div>
+                            {socSelected && <Check size={14} style={{ color: NEU.green, flexShrink: 0 }} />}
                           </div>
                         );
                       })}
@@ -5166,11 +5208,14 @@ export default function AssignmentPage() {
                       committee={c}
                       dragging={dragAppId !== null || dragSocietyId !== null}
                       isDropTarget={dropTargetId === c.id}
-                      selectable={selectedAppId !== null}
+                      selectable={selectedAppId !== null || (railSource === 'delegations' && selectedSocietyId !== null)}
                       onDragOverPanel={() => setDropTargetId(c.id)}
                       onDragLeavePanel={() => setDropTargetId(prev => (prev === c.id ? null : prev))}
                       onDropPanel={appId => handleDropOnCommittee(c.id, appId)}
-                      onClickPanel={() => { if (selectedAppId) openDropModal(c.id, selectedAppId); }}
+                      onClickPanel={() => {
+                        if (railSource === 'delegations' && selectedSocietyId) openSocietyDropModal(c.id, selectedSocietyId);
+                        else if (selectedAppId) openDropModal(c.id, selectedAppId);
+                      }}
                       onRemoveAllocation={handleRemoveAllocation}
                       onOpenOverview={() => setOverviewCommitteeId(c.id)}
                     />
@@ -5290,6 +5335,7 @@ export default function AssignmentPage() {
             // row(s) locally and swap in the real row ids with a silent refetch.
             applyLocalSocietyAllocation(societyDropModalCommittee, societyDropModalSociety, slot);
             showFlash('ok', msg);
+            setSelectedSocietyId(null);
             scheduleReconcile();
           }}
         />

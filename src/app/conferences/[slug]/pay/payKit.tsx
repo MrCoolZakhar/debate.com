@@ -32,6 +32,9 @@ export const PAY_CSS = `
 .gv-pay-link{background:none;border:none;padding:0;font-family:${OUTFIT};font-size:13.5px;font-weight:700;color:${FOREST};text-decoration:underline;text-underline-offset:3px;cursor:pointer}
 .gv-pay-link:focus{outline:none}
 .gv-pay-link:focus-visible{outline:2px solid ${FOREST};outline-offset:2px;border-radius:4px}
+/* 44px hit areas for the links beside Pay, in the list header and back to the conference */
+.gv-pay-bar .gv-pay-link,.gv-pay-listhead .gv-pay-link,.gv-pay-link.gv-pay-back{display:inline-flex;align-items:center;min-height:44px;padding:0 6px}
+.gv-pay-link.gv-pay-back{margin-left:-6px}
 .gv-pay-quiet{margin:0;font-size:13.5px;line-height:1.5;color:${INK_SOFT}}
 .gv-pay-err{margin:0;font-size:13.5px;line-height:1.5;color:${DANGER}}
 
@@ -64,6 +67,17 @@ export const PAY_CSS = `
 .gv-pay-bar{position:sticky;bottom:calc(12px + env(safe-area-inset-bottom,0px));z-index:30;margin-top:14px;display:flex;flex-wrap:wrap;align-items:center;gap:10px 16px;padding:12px 14px 12px 18px;border-radius:18px;background:#FFFFFF;box-shadow:0 2px 0 rgba(27,56,40,0.06),0 18px 40px -16px rgba(27,56,40,0.5)}
 .gv-pay-bar-sum{margin-right:auto;font-size:16px;font-weight:800;font-variant-numeric:tabular-nums}
 @media (max-width:1023px){.gv-pay-bar{bottom:calc(74px + env(safe-area-inset-bottom,0px))}}
+.gv-pay-bar span.gv-pay-bar-aux{display:contents}
+/* Item list header: the bar's Select all, Clear and Upload proof, phones only */
+.gv-pay-listhead{display:none}
+@media (max-width:639px){
+  .gv-pay-bar .gv-pay-bar-aux,.gv-pay-bar span.gv-pay-bar-aux{display:none}
+  .gv-pay-bar{flex-wrap:nowrap;gap:12px;padding:10px 10px 10px 16px}
+  .gv-pay-bar-sum{min-width:0;font-size:15px}
+  .gv-pay-bar .gv-pay-btn{flex-shrink:0}
+  .gv-pay-bar-btn-total{display:none}
+  .gv-pay-listhead{display:flex;flex-wrap:wrap;align-items:center;gap:4px 10px;margin:0 0 -8px}
+}
 
 /* Receipts */
 .gv-pay-receipts{display:flex;flex-direction:column;gap:8px}
@@ -90,6 +104,15 @@ export const PAY_CSS = `
 .gv-pay-tab:focus{outline:none}
 .gv-pay-tab:focus-visible{outline:2px solid ${FOREST};outline-offset:2px}
 .gv-pay-tab-n{font-size:15px;font-weight:800;font-variant-numeric:tabular-nums}
+/* One column (below 1024px): the middle column dissolves into the grid so the action
+   cards sit between the balance and the item list; only one ActionsColumn is mounted. */
+@media (max-width:1023px){
+  .gv-pay-mid{display:contents}
+  .gv-pay-mid > *{order:3;min-width:0}
+  .gv-pay-mid > .gv-pay-head{order:1}
+  .gv-pay-side{order:2}
+  .gv-pay-side:empty{display:none}
+}
 @media (min-width:1024px){
   .gv-pay-layout{grid-template-columns:180px minmax(0,1fr) 300px}
   .gv-pay-rail{position:sticky;top:96px;grid-template-columns:minmax(0,1fr);gap:6px}

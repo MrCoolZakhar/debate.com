@@ -5886,8 +5886,8 @@ function ConferenceApplyInner() {
         <div className="mb-4 flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
           <Link
             href={`/conferences/${slug}`}
-            className="text-xs"
-            style={{ color: 'var(--gv-muted)', fontFamily: "var(--font-brand), sans-serif", fontWeight: 600, letterSpacing: '0.06em', textDecoration: 'none' }}
+            className="text-xs inline-flex items-center"
+            style={{ minHeight: 44, color: 'var(--gv-muted)', fontFamily: "var(--font-brand), sans-serif", fontWeight: 600, letterSpacing: '0.06em', textDecoration: 'none' }}
           >
             ← {conferenceAcronymLabel(conference)}
           </Link>
@@ -5907,8 +5907,9 @@ function ConferenceApplyInner() {
                   type="button"
                   onClick={handleDiscardApplication}
                   disabled={discarding}
-                  className="focus:outline-none"
+                  className="focus:outline-none inline-flex items-center"
                   style={{
+                    minHeight: 44,
                     fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 700,
                     color: DANGER, background: 'none', border: 'none', padding: 0,
                     cursor: discarding ? 'default' : 'pointer',
@@ -5922,8 +5923,9 @@ function ConferenceApplyInner() {
                   type="button"
                   onClick={() => { setDiscardArmed(false); setDiscardError(''); }}
                   disabled={discarding}
-                  className="focus:outline-none"
+                  className="focus:outline-none inline-flex items-center"
                   style={{
+                    minHeight: 44,
                     fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 600,
                     color: NEU.inkSoft, background: 'none', border: 'none', padding: 0,
                     cursor: discarding ? 'default' : 'pointer',
@@ -5938,6 +5940,7 @@ function ConferenceApplyInner() {
                 onClick={() => { setDiscardArmed(true); setDiscardError(''); }}
                 className="inline-flex items-center gap-1.5 focus:outline-none transition-colors"
                 style={{
+                  minHeight: 44,
                   fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 600,
                   color: NEU.inkSoft, background: 'none', border: 'none', padding: 0,
                   cursor: 'pointer',

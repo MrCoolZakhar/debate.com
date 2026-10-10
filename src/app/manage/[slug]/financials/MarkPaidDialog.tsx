@@ -115,7 +115,7 @@ export default function MarkPaidDialog({ conferenceId, invoiceIds, totalLabel, o
 
           <div>
             <label className="gv-fd-label" htmlFor="gv-fd-mp-note">Note (optional)</label>
-            <textarea id="gv-fd-mp-note" className="gv-fd-text" style={{ minHeight: 72 }} maxLength={NOTE_MAX} value={note} disabled={busy}
+            <textarea id="gv-fd-mp-note" className="gv-fd-text max-sm:text-[16px]!" style={{ minHeight: 72 }} maxLength={NOTE_MAX} value={note} disabled={busy}
               onChange={e => { setNote(e.target.value); setNoteErr(''); }} aria-invalid={!!noteErr} />
             <p className="gv-fd-count">{note.length} / {NOTE_MAX}</p>
             {noteErr && <p className="gv-st-err" role="alert" style={{ marginTop: 2 }}>{noteErr}</p>}

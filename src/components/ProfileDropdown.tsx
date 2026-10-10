@@ -693,7 +693,8 @@ export default function ProfileDropdown({ trigger, panelStyle }: ProfileDropdown
                     onClick={() => setOpen(false)}
                     aria-label="Create a conference"
                     title="Create a conference"
-                    className="flex-shrink-0 flex items-center justify-center rounded-full focus:outline-none transition-colors"
+                    /* 18px disc, 44px hit area (the ::before reaches 13px out). */
+                    className="flex-shrink-0 flex items-center justify-center rounded-full focus:outline-none transition-colors relative before:absolute before:-inset-[13px]"
                     style={{
                       width: 18, height: 18,
                       backgroundColor: 'rgba(27,56,40,0.07)',

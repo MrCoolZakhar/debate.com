@@ -301,7 +301,11 @@ function fmtReviewDate(iso: string): string {
 // ── Sub-components ────────────────────────────────────────────────────────
 
 /** Small age-limit chip shown near the apply CTA on the dark green card.
- *  Reads "16+", "up to 26" or "16–26" depending on which bounds are set. */
+ *  Reads "16+", "up to 26" or "16–26" depending on which bounds are set.
+ *  A button: hover, focus or a tap shows the explanation in a small popover
+ *  (through Portal at fixed coordinates, flipped near the edges), because a
+ *  title tooltip never shows on a phone. Escape, a press outside or a scroll
+ *  closes it. */
 function MinAgeChip({ minAge, maxAge }: { minAge: number | null; maxAge: number | null }) {
   const label =
     minAge != null && maxAge != null ? `${minAge}–${maxAge}`
@@ -311,20 +315,175 @@ function MinAgeChip({ minAge, maxAge }: { minAge: number | null; maxAge: number 
     minAge != null && maxAge != null ? `between ${minAge} and ${maxAge} years old`
       : minAge != null ? `at least ${minAge} years old`
         : `no older than ${maxAge}`;
+  const explanation = `This conference requires delegates to be ${requirement} at its start date.`;
+  const btnRef = useRef<HTMLButtonElement | null>(null);
+  const popRef = useRef<HTMLDivElement | null>(null);
+  const closeTimer = useRef<number | null>(null);
+  const openedAt = useRef(0);
+  const [pos, setPos] = useState<{ left: number; top: number } | null>(null);
+  const tipId = `age-tip-${minAge ?? 'x'}-${maxAge ?? 'x'}`;
+
+  const show = useCallback(() => {
+    if (closeTimer.current) { window.clearTimeout(closeTimer.current); closeTimer.current = null; }
+    const el = btnRef.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    const W = Math.min(260, window.innerWidth - 24);
+    const left = Math.max(12, Math.min(r.right - W, window.innerWidth - W - 12));
+    const below = r.bottom + 8;
+    const top = below + 90 > window.innerHeight ? Math.max(12, r.top - 98) : below;
+    setPos((prev) => { if (!prev) openedAt.current = Date.now(); return { left, top }; });
+  }, []);
+  const hide = useCallback(() => {
+    if (closeTimer.current) window.clearTimeout(closeTimer.current);
+    closeTimer.current = null;
+    setPos(null);
+  }, []);
+  const hideSoon = useCallback(() => {
+    if (closeTimer.current) window.clearTimeout(closeTimer.current);
+    closeTimer.current = window.setTimeout(() => { closeTimer.current = null; setPos(null); }, 150);
+  }, []);
+
+  useEffect(() => {
+    if (!pos) return;
+    const onDown = (e: PointerEvent) => {
+      const t = e.target as Node;
+      if (btnRef.current?.contains(t) || popRef.current?.contains(t)) return;
+      hide();
+    };
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') { hide(); btnRef.current?.focus(); } };
+    window.addEventListener('pointerdown', onDown, true);
+    window.addEventListener('keydown', onKey);
+    window.addEventListener('scroll', hide, true);
+    window.addEventListener('resize', hide);
+    return () => {
+      window.removeEventListener('pointerdown', onDown, true);
+      window.removeEventListener('keydown', onKey);
+      window.removeEventListener('scroll', hide, true);
+      window.removeEventListener('resize', hide);
+    };
+  }, [pos, hide]);
+  useEffect(() => () => { if (closeTimer.current) window.clearTimeout(closeTimer.current); }, []);
+
   return (
-    <span
-      title={`This conference requires delegates to be ${requirement} at its start date`}
-      className="flex-shrink-0 inline-flex items-center gap-1"
-      style={{
-        color: 'var(--gv-on-main)',
-        fontFamily: "var(--font-brand), sans-serif",
-        fontSize: '12.5px',
-        fontWeight: 700,
-      }}
-    >
-      <Cake size={14} strokeWidth={2.2} aria-hidden />
-      {label}
-    </span>
+    <>
+      <button
+        ref={btnRef}
+        type="button"
+        aria-label={`Age limit ${label}. ${explanation}`}
+        aria-expanded={!!pos}
+        aria-describedby={pos ? tipId : undefined}
+        onClick={() => {
+          // A tap also fires focus (and emulated hover) first; only a press on
+          // an already-open tip closes it.
+          if (pos && Date.now() - openedAt.current > 400) hide();
+          else show();
+        }}
+        onPointerEnter={(e) => { if (e.pointerType === 'mouse') show(); }}
+        onPointerLeave={(e) => { if (e.pointerType === 'mouse') hideSoon(); }}
+        onFocus={show}
+        onBlur={hideSoon}
+        className="flex-shrink-0 inline-flex items-center justify-center gap-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gv-accent)] rounded-full"
+        style={{
+          color: 'var(--gv-on-main)',
+          fontFamily: "var(--font-brand), sans-serif",
+          fontSize: '12.5px',
+          fontWeight: 700,
+          background: 'none',
+          border: 'none',
+          cursor: 'pointer',
+          minHeight: 44,
+          minWidth: 44,
+          padding: '0 6px',
+          margin: '-12px -6px',
+        }}
+      >
+        <Cake size={14} strokeWidth={2.2} aria-hidden />
+        {label}
+      </button>
+      {pos && (
+        <Portal>
+          <div
+            ref={popRef}
+            id={tipId}
+            role="tooltip"
+            onPointerEnter={(e) => { if (e.pointerType === 'mouse') show(); }}
+            onPointerLeave={(e) => { if (e.pointerType === 'mouse') hideSoon(); }}
+            style={{
+              position: 'fixed',
+              left: pos.left,
+              top: pos.top,
+              width: 'min(260px, calc(100vw - 24px))',
+              zIndex: 1200,
+              backgroundColor: 'white',
+              color: '#3B342C',
+              borderRadius: 12,
+              padding: '10px 12px',
+              boxShadow: '0 8px 28px rgba(27,56,40,0.22)',
+              fontFamily: "var(--font-brand), sans-serif",
+              fontSize: 13,
+              lineHeight: 1.45,
+            }}
+          >
+            {explanation}
+          </div>
+        </Portal>
+      )}
+    </>
+  );
+}
+
+/** The conference description. On phones (below 640px) it is clamped to 10
+ *  lines with a "Read more" / "Show less" button; the whole text is always in
+ *  the HTML (the clamp is CSS only), so crawlers and screen readers get all of
+ *  it. The button shows only when the clamp actually hides something. */
+function ConferenceDescription({ text }: { text: string }) {
+  const ref = useRef<HTMLParagraphElement | null>(null);
+  const [expanded, setExpanded] = useState(false);
+  const [overflows, setOverflows] = useState(false);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || expanded) return;
+    const measure = () => {
+      const next = el.scrollHeight - el.clientHeight > 2;
+      setOverflows((prev) => (prev === next ? prev : next));
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [expanded, text]);
+  const id = 'conference-description';
+  return (
+    <>
+      <p
+        id={id}
+        ref={ref}
+        className={`text-[15px] ${expanded ? '' : 'max-sm:line-clamp-10'}`}
+        style={{ color: '#3B342C', fontFamily: "var(--font-brand), sans-serif", whiteSpace: 'pre-wrap', lineHeight: 1.9, margin: 0 }}
+      >
+        {text}
+      </p>
+      {(overflows || expanded) && (
+        <button
+          type="button"
+          aria-expanded={expanded}
+          aria-controls={id}
+          onClick={() => {
+            if (expanded) {
+              // Collapsing from far down the text: bring its start back into view.
+              const el = ref.current;
+              if (el && el.getBoundingClientRect().top < 0) el.scrollIntoView({ block: 'start' });
+            }
+            setExpanded((v) => !v);
+          }}
+          className="sm:hidden mt-2 min-h-11 focus:outline-none focus-visible:underline"
+          style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: 'var(--gv-main)', fontFamily: "var(--font-brand), sans-serif", fontWeight: 700, fontSize: 14, textDecoration: 'underline', textUnderlineOffset: 3 }}
+        >
+          {expanded ? 'Show less' : 'Read more'}
+        </button>
+      )}
+    </>
   );
 }
 
@@ -404,7 +563,7 @@ function SortButton({ label, dir, onClick }: { label: string; dir: 'asc' | 'desc
   return (
     <button
       onClick={onClick}
-      className="flex items-center gap-1.5 px-3.5 py-2 rounded-full text-[10.5px] font-bold transition-colors focus:outline-none gv-lift"
+      className="flex items-center gap-1.5 px-3.5 py-2 min-h-11 sm:min-h-0 rounded-full text-[10.5px] font-bold transition-colors focus:outline-none gv-lift"
       style={{
         backgroundColor: active ? 'var(--gv-main)' : 'rgba(237,231,216,0.5)',
         color: active ? 'var(--gv-on-main)' : '#6B5F52',
@@ -432,7 +591,7 @@ function TypeFilterButton({ mode, onClick }: { mode: 'ga' | 'crisis' | null; onC
   return (
     <button
       onClick={onClick}
-      className="flex items-center gap-1.5 px-3.5 py-2 rounded-full text-[10.5px] font-bold transition-colors focus:outline-none gv-lift"
+      className="flex items-center gap-1.5 px-3.5 py-2 min-h-11 sm:min-h-0 rounded-full text-[10.5px] font-bold transition-colors focus:outline-none gv-lift"
       style={{
         backgroundColor: active ? 'var(--gv-main)' : 'rgba(237,231,216,0.5)',
         color: active ? 'var(--gv-on-main)' : '#6B5F52',
@@ -1082,7 +1241,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
           logoUrl: c.logo_url,
           description: null,
           href: `/conferences/${c.slug}`,
-          location: [c.city, c.country].filter(Boolean).join(', ') || null,
+          location: [c.city?.trim(), c.country?.trim()].filter(Boolean).join(', ') || null,
           // The editor never offers the featured/website controls on a linked
           // conference row (its logo and page belong to the other team), but
           // the column still exists on every row, so pass it through honestly
@@ -1462,7 +1621,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
 
   // Derived
   const isOrganizer = user?.id === conference.organizer_id;
-  const countryObj = getCountryByName(conference.country);
+  const countryObj = getCountryByName((conference.country ?? "").trim());
   const flagUrl = countryObj ? getFlagUrl(countryObj.code) : null;
   const enabledRoles = roleConfigs.filter(r => r.is_enabled);
   const now = new Date(serverNowMs);
@@ -1752,7 +1911,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                     <span style={{ fontSize: '14px', color: 'rgba(237,231,216,0.92)', fontFamily: "var(--font-brand), sans-serif", fontWeight: 500 }}>
                       {/* City in full, country as its ISO code, the flag already
                           names the country, so the full name would repeat it. */}
-                      {isOnline ? 'Online' : `${conference.city}, ${(countryObj?.code ?? conference.country).toUpperCase()}`}
+                      {isOnline ? 'Online' : [(conference.city ?? '').trim(), (countryObj?.code ?? conference.country ?? '').trim().toUpperCase()].filter(Boolean).join(', ')}
                     </span>
                   </span>
                   {/* Dates are hidden when TBD or missing. The organizer alone
@@ -2016,9 +2175,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                     />
                   )}
                   {conference.description ? (
-                    <p className="text-[15px]" style={{ color: '#3B342C', fontFamily: "var(--font-brand), sans-serif", whiteSpace: 'pre-wrap', lineHeight: 1.9 }}>
-                      {conference.description}
-                    </p>
+                    <ConferenceDescription text={conference.description} />
                   ) : (
                     <button
                       type="button"
@@ -2091,8 +2248,9 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                           href={normalizeSocialUrl(conference.instagram_url, 'instagram') ?? '#'}
                           target="_blank"
                           rel="noopener noreferrer"
+                          aria-label="Instagram"
                           className="flex items-center justify-center rounded-full"
-                          style={{ width: '38px', height: '38px', color: 'var(--gv-muted)', backgroundColor: NEU.surface, boxShadow: NEU.outSm, transition: `box-shadow 200ms ${EASE}, color 200ms ${EASE}, transform 200ms ${EASE}` }}
+                          style={{ width: '44px', height: '44px', color: 'var(--gv-muted)', backgroundColor: NEU.surface, boxShadow: NEU.outSm, transition: `box-shadow 200ms ${EASE}, color 200ms ${EASE}, transform 200ms ${EASE}` }}
                           onMouseEnter={(e) => { const el = e.currentTarget as HTMLElement; el.style.color = 'var(--gv-main)'; el.style.boxShadow = NEU.outSmHover; el.style.transform = 'translateY(-2px)'; }}
                           onMouseLeave={(e) => { const el = e.currentTarget as HTMLElement; el.style.color = 'var(--gv-muted)'; el.style.boxShadow = NEU.outSm; el.style.transform = 'translateY(0)'; }}
                         >
@@ -2108,8 +2266,9 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                           href={normalizeSocialUrl(conference.facebook_url, 'facebook') ?? '#'}
                           target="_blank"
                           rel="noopener noreferrer"
+                          aria-label="Facebook"
                           className="flex items-center justify-center rounded-full"
-                          style={{ width: '38px', height: '38px', color: 'var(--gv-muted)', backgroundColor: NEU.surface, boxShadow: NEU.outSm, transition: `box-shadow 200ms ${EASE}, color 200ms ${EASE}, transform 200ms ${EASE}` }}
+                          style={{ width: '44px', height: '44px', color: 'var(--gv-muted)', backgroundColor: NEU.surface, boxShadow: NEU.outSm, transition: `box-shadow 200ms ${EASE}, color 200ms ${EASE}, transform 200ms ${EASE}` }}
                           onMouseEnter={(e) => { const el = e.currentTarget as HTMLElement; el.style.color = 'var(--gv-main)'; el.style.boxShadow = NEU.outSmHover; el.style.transform = 'translateY(-2px)'; }}
                           onMouseLeave={(e) => { const el = e.currentTarget as HTMLElement; el.style.color = 'var(--gv-muted)'; el.style.boxShadow = NEU.outSm; el.style.transform = 'translateY(0)'; }}
                         >
@@ -2121,8 +2280,9 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                           href={normalizeSocialUrl(conference.tiktok_url, 'tiktok') ?? '#'}
                           target="_blank"
                           rel="noopener noreferrer"
+                          aria-label="TikTok"
                           className="flex items-center justify-center rounded-full"
-                          style={{ width: '38px', height: '38px', color: 'var(--gv-muted)', backgroundColor: NEU.surface, boxShadow: NEU.outSm, transition: `box-shadow 200ms ${EASE}, color 200ms ${EASE}, transform 200ms ${EASE}` }}
+                          style={{ width: '44px', height: '44px', color: 'var(--gv-muted)', backgroundColor: NEU.surface, boxShadow: NEU.outSm, transition: `box-shadow 200ms ${EASE}, color 200ms ${EASE}, transform 200ms ${EASE}` }}
                           onMouseEnter={(e) => { const el = e.currentTarget as HTMLElement; el.style.color = 'var(--gv-main)'; el.style.boxShadow = NEU.outSmHover; el.style.transform = 'translateY(-2px)'; }}
                           onMouseLeave={(e) => { const el = e.currentTarget as HTMLElement; el.style.color = 'var(--gv-muted)'; el.style.boxShadow = NEU.outSm; el.style.transform = 'translateY(0)'; }}
                         >
@@ -2134,8 +2294,9 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                           href={normalizeSocialUrl(conference.whatsapp_url, 'whatsapp') ?? '#'}
                           target="_blank"
                           rel="noopener noreferrer"
+                          aria-label="WhatsApp"
                           className="flex items-center justify-center rounded-full"
-                          style={{ width: '38px', height: '38px', color: 'var(--gv-muted)', backgroundColor: NEU.surface, boxShadow: NEU.outSm, transition: `box-shadow 200ms ${EASE}, color 200ms ${EASE}, transform 200ms ${EASE}` }}
+                          style={{ width: '44px', height: '44px', color: 'var(--gv-muted)', backgroundColor: NEU.surface, boxShadow: NEU.outSm, transition: `box-shadow 200ms ${EASE}, color 200ms ${EASE}, transform 200ms ${EASE}` }}
                           onMouseEnter={(e) => { const el = e.currentTarget as HTMLElement; el.style.color = 'var(--gv-main)'; el.style.boxShadow = NEU.outSmHover; el.style.transform = 'translateY(-2px)'; }}
                           onMouseLeave={(e) => { const el = e.currentTarget as HTMLElement; el.style.color = 'var(--gv-muted)'; el.style.boxShadow = NEU.outSm; el.style.transform = 'translateY(0)'; }}
                         >
@@ -2147,8 +2308,9 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                           href={normalizeSocialUrl(conference.website_url) ?? '#'}
                           target="_blank"
                           rel="noopener noreferrer"
+                          aria-label="Website"
                           className="flex items-center justify-center rounded-full"
-                          style={{ width: '38px', height: '38px', color: 'var(--gv-muted)', backgroundColor: NEU.surface, boxShadow: NEU.outSm, transition: `box-shadow 200ms ${EASE}, color 200ms ${EASE}, transform 200ms ${EASE}` }}
+                          style={{ width: '44px', height: '44px', color: 'var(--gv-muted)', backgroundColor: NEU.surface, boxShadow: NEU.outSm, transition: `box-shadow 200ms ${EASE}, color 200ms ${EASE}, transform 200ms ${EASE}` }}
                           onMouseEnter={(e) => { const el = e.currentTarget as HTMLElement; el.style.color = 'var(--gv-main)'; el.style.boxShadow = NEU.outSmHover; el.style.transform = 'translateY(-2px)'; }}
                           onMouseLeave={(e) => { const el = e.currentTarget as HTMLElement; el.style.color = 'var(--gv-muted)'; el.style.boxShadow = NEU.outSm; el.style.transform = 'translateY(0)'; }}
                         >
@@ -2666,7 +2828,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                           onPick={(role) => {
                             const href = `/conferences/${slug}/apply?role=${role}`;
                             if (user) router.push(href);
-                            else openAuth({ next: href });
+                            else openAuth({ next: href, apply: true });
                           }}
                         />
                       </>
@@ -3014,7 +3176,17 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                         >
                           {sortedCommittees.map(c => {
                             const isCrisis = c.committee_type === 'crisis';
-                            const monogram = (c.abbreviation || c.name).replace(/[^A-Za-z0-9]/g, '').slice(0, 6).toUpperCase();
+                            // The disc shows a REAL short label only: the
+                            // committee's own abbreviation, or a name that is
+                            // itself short ("UNSC"). Never a word cut short
+                            // ("CHINES" from "Chinese Famine"): with neither,
+                            // the disc draws an icon and the full name below
+                            // carries the identity.
+                            const abbrClean = (c.abbreviation ?? '').replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+                            const nameClean = c.name.trim();
+                            const monogram = abbrClean && abbrClean.length <= 7
+                              ? abbrClean
+                              : /^[A-Za-z0-9]{2,6}$/.test(nameClean) ? nameClean.toUpperCase() : '';
                             const chairs = c.display_chairs ?? [];
                             const { countryCapacity, countriesTaken, seatCapacity, seatsTaken, pct, hasDoubles } = committeeStats(c);
 
@@ -3100,9 +3272,13 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                                       }}
                                     >
                                       <div className="pointer-events-none absolute inset-0" style={{ backgroundImage: GRAIN, backgroundSize: '300px', mixBlendMode: 'overlay', opacity: 0.12 }} />
-                                      <span style={{ fontFamily: "var(--font-brand), sans-serif", fontSize: monogram.length > 4 ? '13px' : '16px', fontWeight: 700, color: 'var(--gv-on-main)', letterSpacing: '0.06em', fontVariantNumeric: 'tabular-nums' }}>
-                                        {monogram}
-                                      </span>
+                                      {monogram ? (
+                                        <span style={{ fontFamily: "var(--font-brand), sans-serif", fontSize: monogram.length > 4 ? '13px' : '16px', fontWeight: 700, color: 'var(--gv-on-main)', letterSpacing: '0.06em', fontVariantNumeric: 'tabular-nums' }}>
+                                          {monogram}
+                                        </span>
+                                      ) : (
+                                        <Landmark size={34} strokeWidth={1.6} aria-hidden style={{ color: 'var(--gv-on-main)', position: 'relative' }} />
+                                      )}
                                     </div>
                                   )}
 
@@ -3111,7 +3287,12 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                                       repeated when it is the name itself. */}
                                   {(() => {
                                     const acr = c.abbreviation?.trim();
-                                    const showAcr = !!acr && acr.toUpperCase() !== c.name.trim().toUpperCase();
+                                    // Not when the disc above already shows the
+                                    // same letters (no logo): "FAO" twice in a
+                                    // row read as "FAO / FAO".
+                                    const showAcr = !!acr
+                                      && acr.toUpperCase() !== c.name.trim().toUpperCase()
+                                      && (!!c.logo_url || acr.replace(/[^A-Za-z0-9]/g, '').toUpperCase() !== monogram);
                                     return (
                                       <>
                                         {showAcr && (
@@ -3139,7 +3320,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                                       block), so this row leads with the seats. */}
                                   <div className="flex items-center gap-2 mt-1.5">
                                     <span className="text-[12px] font-semibold" style={{ color: '#6B5F52', fontFamily: "var(--font-brand), sans-serif" }}>
-                                      {!isCrisis && c.delegation_size >= 2 ? `${countryCapacity} countries · 2 delegates each` : `${countryCapacity} ${isCrisis ? 'roles' : 'seats'}`}
+                                      {!isCrisis && c.delegation_size >= 2 ? `${countryCapacity} ${countryCapacity === 1 ? 'country' : 'countries'} · 2 delegates each` : `${countryCapacity} ${isCrisis ? (countryCapacity === 1 ? 'role' : 'roles') : (countryCapacity === 1 ? 'seat' : 'seats')}`}
                                     </span>
                                     {isCrisis && (
                                       <>
@@ -3291,8 +3472,8 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                       const isCrisis = c.committee_type === 'crisis';
                       const { countryCapacity } = committeeStats(c);
                       const seatsLine = !isCrisis && c.delegation_size >= 2
-                        ? `${countryCapacity} countries · 2 delegates each`
-                        : `${countryCapacity} ${isCrisis ? 'roles' : 'seats'}`;
+                        ? `${countryCapacity} ${countryCapacity === 1 ? 'country' : 'countries'} · 2 delegates each`
+                        : `${countryCapacity} ${isCrisis ? (countryCapacity === 1 ? 'role' : 'roles') : (countryCapacity === 1 ? 'seat' : 'seats')}`;
                       return <CommitteeInfoDialog committee={c} seatsLine={seatsLine} onClose={() => setCommitteeInfoId(null)} />;
                     })()}
 

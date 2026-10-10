@@ -77,7 +77,7 @@ export default function BlogCard({
             {shelf.label}
           </span>
           <h3
-            className="m-0 line-clamp-3 font-extrabold"
+            className="m-0 font-extrabold [overflow-wrap:anywhere]"
             title={post.title}
             style={{ color: C.forest, fontSize: '14.5px', lineHeight: 1.28, letterSpacing: '-0.005em' }}
           >

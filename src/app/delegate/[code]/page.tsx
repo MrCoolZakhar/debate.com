@@ -318,7 +318,11 @@ function SponsorsInput({
         {value.map((c) => (
           <span key={c} className="inline-flex items-center gap-1 text-xs bg-[#FAF8F3] border border-[#DDD4C0] text-[#6A5A4A] rounded-full px-2.5 py-0.5">
             {<SeatMark country={c} />} {getCountryDisplayName(c, language)}
-            <button onClick={() => onChange(value.filter((x) => x !== c))} className="ms-1 text-[#9A8A78] hover:text-red-400 font-bold leading-none">×</button>
+            {/* A 32px hit box around the small ×: the negative margins keep the chip its size. */}
+            <button type="button" onClick={() => onChange(value.filter((x) => x !== c))}
+              aria-label={t('delegate_doc_remove_sponsor', { country: getCountryDisplayName(c, language) })}
+              title={t('delegate_doc_remove_sponsor', { country: getCountryDisplayName(c, language) })}
+              className="-my-2 -me-2.5 ms-0 flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[#9A8A78] hover:text-red-400 font-bold leading-none focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]">×</button>
           </span>
         ))}
       </div>
@@ -333,7 +337,7 @@ function SponsorsInput({
             if (e.key === 'Backspace' && !query && value.length > 0) onChange(value.slice(0, -1));
           }}
           placeholder={t('delegate_doc_cosponsor_placeholder')}
-          className="w-full bg-[#FAF8F3] border border-[#DDD4C0] rounded-lg px-3 py-2 text-[#1C1410] text-sm focus:outline-none focus:border-[#1B3828] placeholder-[#9A8A78]"
+          className="w-full bg-[#FAF8F3] border border-[#DDD4C0] rounded-lg px-3 py-2 text-[#1C1410] text-base sm:text-sm focus:outline-none focus:border-[#1B3828] placeholder-[#9A8A78]"
         />
         {matches.length > 0 && (
           <div className="absolute top-full left-0 right-0 mt-1 bg-[#FAF8F3] border border-[#DDD4C0] rounded-xl overflow-hidden z-20 shadow-xl max-h-40 overflow-y-auto">
@@ -589,7 +593,7 @@ function DelegateDocumentsTab({ committee, country }: { committee: Committee; co
           <label className="text-xs font-bold mb-1.5 block" style={{ color: '#1B3828', fontFamily: "var(--font-brand), sans-serif" }}>{t('delegate_doc_title_label')}</label>
           <input type="text" value={title} onChange={(e) => setTitle(e.target.value)}
             placeholder={t('delegate_doc_title_placeholder')}
-            className="w-full bg-[#FAF8F3] border border-[#DDD4C0] rounded-lg px-3 py-2 text-[#1C1410] text-sm focus:outline-none focus:border-[#1B3828]" />
+            className="w-full bg-[#FAF8F3] border border-[#DDD4C0] rounded-lg px-3 py-2 text-[#1C1410] text-base sm:text-sm focus:outline-none focus:border-[#1B3828]" />
         </div>
 
         {/* Co-sponsors */}
@@ -607,7 +611,7 @@ function DelegateDocumentsTab({ committee, country }: { committee: Committee; co
           </label>
           <input type="url" inputMode="url" value={link} onChange={(e) => setLink(e.target.value)}
             placeholder="https://docs.google.com/..."
-            className="w-full bg-[#FAF8F3] border border-[#DDD4C0] rounded-lg px-3 py-2 text-[#1C1410] text-sm placeholder-[#9A8A78] focus:outline-none focus:border-[#1B3828] transition-colors" />
+            className="w-full bg-[#FAF8F3] border border-[#DDD4C0] rounded-lg px-3 py-2 text-[#1C1410] text-base sm:text-sm placeholder-[#9A8A78] focus:outline-none focus:border-[#1B3828] transition-colors" />
         </div>
 
         {/* File — a real dropzone, not a text button. The old "+ Attach file"
@@ -622,8 +626,8 @@ function DelegateDocumentsTab({ committee, country }: { committee: Committee; co
                   : <>📎 {fileName}</>}
               </span>
               {!uploading && (
-                <button onClick={clearFile} aria-label={t('delegate_doc_remove')} title={t('delegate_doc_remove')}
-                  className="text-sm text-[#9A8A78] hover:text-red-500 transition-colors focus:outline-none">✕</button>
+                <button type="button" onClick={clearFile} aria-label={t('delegate_doc_remove')} title={t('delegate_doc_remove')}
+                  className="-my-3 -me-2 flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-sm text-[#9A8A78] hover:text-red-500 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]">✕</button>
               )}
             </div>
           ) : (
@@ -2304,7 +2308,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
                   <span
                     style={{
                       fontFamily: OUTFIT, fontWeight: 800, color: DG.body, textAlign: 'center',
-                      fontSize: 'clamp(7.5px, 2.3vw, 10.5px)', letterSpacing: '0.04em',
+                      fontSize: 'clamp(9px, 2.3vw, 10.5px)', letterSpacing: '0.04em',
                       textTransform: 'uppercase', lineHeight: 1.15,
                     }}
                   >
@@ -2325,7 +2329,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
                     <span
                       style={{
                         fontFamily: OUTFIT, fontWeight: 800, color: DG.body,
-                        fontSize: 'clamp(6.5px, 2vw, 9px)', letterSpacing: '0.04em',
+                        fontSize: '9px', letterSpacing: '0.04em',
                         textTransform: 'uppercase',
                       }}
                     >

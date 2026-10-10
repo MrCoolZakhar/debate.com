@@ -583,7 +583,7 @@ function CreatePageInner() {
                   placeholder={t('create_add_country_placeholder')}
                   className="h-full min-w-0 flex-1 bg-transparent text-base text-[#1C1410] placeholder-[#8A7C6B] focus:outline-none sm:text-[15px]" />
                 <button type="button" onClick={addTyped} disabled={!typedIsAddable} aria-label={t('create_add_btn')}
-                  className="flex h-[36px] min-w-[36px] shrink-0 items-center justify-center gap-1.5 rounded-[10px] px-2.5 text-[13px] font-extrabold tracking-[0.02em] transition-[background-color,transform,opacity] duration-150 enabled:hover:bg-[#2A5A3C] enabled:active:scale-[0.96] disabled:cursor-not-allowed disabled:opacity-35 focus:outline-none sm:px-3.5"
+                  className="relative flex h-[36px] min-w-[36px] shrink-0 items-center justify-center gap-1.5 rounded-[10px] px-2.5 before:absolute before:-inset-1 before:content-[''] text-[13px] font-extrabold tracking-[0.02em] transition-[background-color,transform,opacity] duration-150 enabled:hover:bg-[#2A5A3C] enabled:active:scale-[0.96] disabled:cursor-not-allowed disabled:opacity-35 focus:outline-none sm:px-3.5"
                   style={{ backgroundColor: C.forest, color: C.gold }}>
                   <Plus size={15} strokeWidth={2.8} /> <span className="hidden sm:inline">{t('create_add_btn')}</span>
                 </button>
@@ -627,8 +627,11 @@ function CreatePageInner() {
               <div className="-mx-4 flex gap-1.5 overflow-x-auto px-4 pb-1 [scrollbar-width:none] sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0 sm:pb-0 [&::-webkit-scrollbar]:hidden">
                 <div role="group" aria-labelledby="create-presets-label" className="contents">
                   {Object.entries(BUNDLES).map(([key, bundle]) => (
+                    // Below lg the button is a 44px-tall touch target around the same 32px pill
+                    // (the pill is the inner span); from lg the two are the same size again.
                     <button key={key} type="button" onClick={() => addBundle(key)} title={bundle.name ? `${bundle.name} · ${t('create_quick_bundles')}` : t('create_quick_bundles')}
-                      className={`group flex h-8 flex-shrink-0 items-center gap-1.5 rounded-full bg-[#1B3828]/[0.055] ${bundle.logoPath ? 'ps-1' : 'ps-3'} pe-2.5 text-[12.5px] font-bold text-[#1B3828] shadow-[inset_0_0_0_1px_rgba(27,56,40,0.10)] transition-[background-color,color,box-shadow,transform] duration-150 hover:bg-[#1B3828] hover:text-[#EED98A] hover:shadow-[0_4px_14px_rgba(27,56,40,0.22)] active:scale-[0.96] focus:outline-none focus-visible:shadow-[0_0_0_2px_#1B3828]`}>
+                      className="group flex h-11 flex-shrink-0 items-center focus:outline-none lg:h-8">
+                      <span className={`flex h-8 items-center gap-1.5 rounded-full bg-[#1B3828]/[0.055] ${bundle.logoPath ? 'ps-1' : 'ps-3'} pe-2.5 text-[12.5px] font-bold text-[#1B3828] shadow-[inset_0_0_0_1px_rgba(27,56,40,0.10)] transition-[background-color,color,box-shadow,transform] duration-150 group-hover:bg-[#1B3828] group-hover:text-[#EED98A] group-hover:shadow-[0_4px_14px_rgba(27,56,40,0.22)] group-active:scale-[0.96] group-focus-visible:shadow-[0_0_0_2px_#1B3828]`}>
                       {bundle.logoPath && (
                       <span className="flex shrink-0 items-center justify-center rounded-full bg-white" style={{ width: 24, height: 24, boxShadow: 'inset 0 0 0 1px rgba(0,0,0,0.08)' }}>
                         {(
@@ -645,6 +648,7 @@ function CreatePageInner() {
                       )}
                       <span>{bundle.label}</span>
                       <span className="text-[11px] font-semibold tabular-nums text-[#544B3E] transition-colors group-hover:text-[#EED98A]/80">+{bundle.members.length}</span>
+                      </span>
                     </button>
                   ))}
                 </div>
