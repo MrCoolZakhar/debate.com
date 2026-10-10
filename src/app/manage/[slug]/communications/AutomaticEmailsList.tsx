@@ -37,11 +37,14 @@ function firstSentence(s: string): string {
 }
 
 export default function AutomaticEmailsList({
-  groups, alwaysOnNames, onBack, onToggle, onPreview, onEdit, top,
+  groups, alwaysOnNames, onBack, onToggle, onPreview, onEdit, top, embedded,
 }: {
   groups: AutoGroup[];
   alwaysOnNames: string[];
   onBack: () => void;
+  /** Drawn as a tab of the Communications page ("Your messages"): the page
+   *  carries the title and the tabs, so no back link and no title here. */
+  embedded?: boolean;
   onToggle: (key: string) => void;
   onPreview: (key: string) => void;
   onEdit: (key: string) => void;
@@ -49,8 +52,16 @@ export default function AutomaticEmailsList({
 }) {
   return (
     <div>
-      <BackLink onClick={onBack} />
-      <CommsTitle lead="Automatic" gold="Emails" sub="These send themselves when something happens, like an application being accepted. Switch on the ones you want." />
+      {embedded ? (
+        <p className="mb-5" style={{ fontFamily: FONT, color: SOFT_INK, fontSize: 15, maxWidth: 620, textWrap: 'pretty' }}>
+          These send themselves when something happens, like an application being accepted. Switch on the ones you want.
+        </p>
+      ) : (
+        <>
+          <BackLink onClick={onBack} />
+          <CommsTitle lead="Automatic" gold="Emails" sub="These send themselves when something happens, like an application being accepted. Switch on the ones you want." />
+        </>
+      )}
       {top}
 
       <div className="flex flex-col gap-8" style={{ maxWidth: 860 }}>

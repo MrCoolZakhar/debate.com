@@ -4,18 +4,16 @@ import { Suspense, useState, useEffect, useCallback, useMemo, useRef } from 'rea
 import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
-  Mail, AlertTriangle, Send, Bell, Copy, X, ChevronDown, ChevronLeft, ChevronRight, Trash2,
-  BadgeCheck, MessageSquare, CalendarDays, ArrowRight, Compass, Wrench,
+  Mail, AlertTriangle, Send, Bell, Copy, X, ChevronDown,
+  BadgeCheck, MessageSquare, ArrowRight, Compass, Wrench,
   Zap, Clock, BookOpen, KeyRound, PenLine, Plus, Inbox, Users, CheckCircle2,
-  CreditCard, Globe, FileText, Mic, HelpCircle, Info, Repeat, CircleDot, CheckCheck, XCircle, CircleDashed,
+  CreditCard, Globe, FileText, Mic, HelpCircle, Info, Repeat, XCircle, CircleDashed,
   Lock,
 } from 'lucide-react';
 import { useManage } from '@/app/manage/[slug]/layout';
 import { getAuthedClient, getFreshAuthedClient } from '@/lib/supabase-auth';
 import { useAuth } from '@/components/AuthProvider';
 import { ConfirmModal, useConfirmModal } from '@/components/ConfirmModal';
-import { FilterPopoverShell, FilterGroup, FilterHeading, toggleIn } from '@/components/FilterPopover';
-import { DatePicker } from '@/components/DatePicker';
 import {
   EMAIL_TOKEN_KEYS, EMAIL_TOKEN_LABELS,
   type EmailTokenContext, type EmailTokenKey,
@@ -53,14 +51,16 @@ import ProfileLink from '@/components/ProfileLink';
 import Portal from '@/components/Portal';
 import { friendlyError, plainOrFallback, UserFacingError } from '@/lib/friendlyError';
 import { formatConferenceDates } from '@/lib/conferenceDates';
-import { waitingSince, waitAgeLabel } from './waitingOnReply';
-import CommsHome from './CommsHome';
+import { waitingSince } from './waitingOnReply';
+import MessagesHeader, { FindDelegatesCard, type MessagesTab } from './MessagesHeader';
+import InboxSplit, { type SplitThread, type SplitDetail } from './InboxSplit';
 import AutomaticEmailsList, { type AutoGroup } from './AutomaticEmailsList';
 import AnnounceView from './AnnounceView';
-import { BackLink, CommsTitle, CARD as COMMS_CARD } from './commsKit';
 
-/** The five screens of the redesign (9 Oct 2026): a home that asks what you
- *  want to do, and one screen per answer. */
+/** The screens of the page. Since 10 Oct 2026 ("Your messages", the owner's
+ *  "Inbox first" mockup) 'home' and 'inbox' are the same screen, the
+ *  Questions tab; 'sent' and 'automatic' are the other two tabs; 'announce'
+ *  (paid announcements) is a screen of its own with a way back. */
 type CommsView = 'home' | 'inbox' | 'sent' | 'automatic' | 'announce';
 
 /** The Communications tour is switched off (owner, 9 Oct 2026: "the tutorial
@@ -2075,7 +2075,6 @@ function CommunicationsPageInner() {
 
   const selectedRequest = inboxRequests.find(r => r.id === selectedRequestId) ?? null;
   const selectedMessages = selectedRequestId ? inboxMessagesByRequest.get(selectedRequestId) ?? [] : [];
-  const selectedKindChip = selectedRequest ? (KIND_CHIP[selectedRequest.kind] ?? KIND_CHIP.question) : null;
 
   // ── Derived data ──────────────────────────────────────────────────────────
 
@@ -3603,138 +3602,6 @@ function CommunicationsPageInner() {
   // Reply posts regardless of whether the notification email drafts, a
   // missing/disabled 'request_reply' template just nudges via DraftNotice.
 
-  /** ONE THREAD ROW. Shared by the receding stack at the top of the page and
-   *  by the full list underneath it, so a thread reads and behaves identically
-   *  wherever you meet it, and there is only one place to change it. Unread
-   *  carries the gold rail, the bolder subject and the count chip. */
-  function threadRow(r: InboxRequest) {
-    const threadProfile = inboxProfiles.get(r.user_id);
-    const role = inboxRoles.get(r.user_id);
-    const last = lastMessageOf(r.id);
-    const unread = unreadCountOf(r);
-    const attention = unread > 0;
-    const kindChip = KIND_CHIP[r.kind] ?? KIND_CHIP.question;
-    const waiting = waitingSince(r, inboxMessagesByRequest.get(r.id) ?? []);
-    const fromContactForm = (r.metadata as { source?: string } | null)?.source === 'contact_form';
-    const name = threadProfile?.display_name ?? 'Unknown';
-    return (
-      <button
-        key={r.id}
-        onClick={() => handleOpenThread(r.id)}
-        className="relative w-full flex items-start gap-3 rounded-xl p-3 pl-4 text-left focus:outline-none active:scale-[0.99] overflow-hidden"
-        style={{
-          backgroundColor: attention ? 'rgba(238,217,138,0.16)' : '#FAF8F3',
-          border: attention ? '1px solid rgba(182,135,31,0.45)' : '1px solid rgba(27,56,40,0.09)',
-          cursor: 'pointer',
-          transitionProperty: 'background-color, border-color, box-shadow, transform',
-          transitionDuration: '160ms', transitionTimingFunction: EASE,
-        }}
-        onMouseEnter={e => {
-          const el = e.currentTarget as HTMLElement;
-          el.style.borderColor = 'rgba(27,56,40,0.35)';
-          el.style.boxShadow = NEU.outSm;
-        }}
-        onMouseLeave={e => {
-          const el = e.currentTarget as HTMLElement;
-          el.style.borderColor = attention ? 'rgba(182,135,31,0.45)' : 'rgba(27,56,40,0.09)';
-          el.style.boxShadow = 'none';
-        }}
-      >
-        {/* THE UNREAD RAIL. A 3px gradient spine on the
-            leading edge, the same gesture the live card
-            uses for a room's status. It survives at a
-            glance down a column of twelve rows in a way a
-            background tint does not, and it does not have
-            to pass a contrast check because nothing is
-            written on it. */}
-        {attention && (
-          <span
-            aria-hidden
-            className="absolute inset-y-0 left-0"
-            style={{ width: 3, background: `linear-gradient(180deg, ${NEU_GRADIENTS.gold[1]}, ${NEU_GRADIENTS.gold[0]})` }}
-          />
-        )}
-        {threadProfile?.avatar_url ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={threadProfile.avatar_url} alt={name} className="rounded-full object-cover flex-shrink-0" style={{ width: 36, height: 36, marginTop: 1, outline: '1px solid rgba(0,0,0,0.1)', outlineOffset: -1, boxShadow: NEU.outSm }} />
-        ) : (
-          <span className="flex items-center justify-center rounded-full flex-shrink-0" style={{ width: 36, height: 36, marginTop: 1, backgroundColor: '#1B3828', color: '#EED98A', fontSize: 15, fontWeight: 800, fontFamily: OUTFIT, boxShadow: NEU.outSm }}>
-            {name.charAt(0)}
-          </span>
-        )}
-        <span className="min-w-0 flex-1 block">
-          {/* SUBJECT FIRST. It was the second line under a
-              12px name, which is the wrong way round: the
-              subject is what you scan a thread list for
-              and the sender is how you place it once you
-              have found it. No truncate: the row grows a
-              line instead of hiding the half of the
-              sentence that says what is being asked. */}
-          <span className="flex items-start gap-2">
-            <span
-              className="min-w-0 flex-1 block"
-              style={{
-                color: '#1C1410', fontFamily: OUTFIT, fontSize: 14,
-                fontWeight: attention ? 800 : 600, lineHeight: 1.3,
-                letterSpacing: '-0.01em', textWrap: 'pretty', overflowWrap: 'anywhere',
-              }}
-            >
-              {r.subject}
-            </span>
-            {attention && (
-              <span
-                className="inline-flex items-center justify-center flex-shrink-0"
-                style={{ minWidth: 19, height: 19, marginTop: 1, padding: '0 6px', borderRadius: 999, backgroundColor: '#EED98A', color: '#1B3828', fontFamily: OUTFIT, fontSize: 11, fontWeight: 900, fontVariantNumeric: 'tabular-nums' }}
-              >
-                {unread}
-              </span>
-            )}
-          </span>
-          <span className="flex items-center flex-wrap gap-x-1.5 gap-y-0.5" style={{ marginBlockStart: 3 }}>
-            <span
-              className="inline-flex items-center gap-1 flex-shrink-0"
-              style={{ fontSize: 11.5, fontWeight: 700, fontFamily: OUTFIT, color: kindChip.color }}
-            >
-              <kindChip.Icon size={14} strokeWidth={2.2} aria-hidden />
-              {kindChip.label}
-            </span>
-            <span className="min-w-0 [overflow-wrap:anywhere]" style={{ color: SOFT, fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 700 }}>
-              {name}{role ? ` · ${roleLabel(role)}` : ''}
-            </span>
-            {fromContactForm && (
-              <span className="flex-shrink-0" title="Sent through the gavelling.com contact form. The form does not verify the address." style={{ fontSize: 10.5, color: SOFT, fontFamily: OUTFIT, fontWeight: 700 }}>
-                · Contact form
-              </span>
-            )}
-            {waiting ? (
-              <span
-                className="ml-auto flex-shrink-0 inline-flex items-center gap-1"
-                title={`Waiting on your reply since ${new Date(waiting).toLocaleString()}`}
-                style={{ fontSize: 10.5, color: '#8A5A00', fontFamily: OUTFIT, fontWeight: 800, fontVariantNumeric: 'tabular-nums' }}
-              >
-                <Clock size={11} aria-hidden />
-                Waiting {waitAgeLabel(waiting)}
-              </span>
-            ) : (
-              <span className="ml-auto flex-shrink-0" style={{ fontSize: 10.5, color: SOFT, fontFamily: OUTFIT, fontVariantNumeric: 'tabular-nums' }}>
-                {formatDate(r.last_message_at)}
-              </span>
-            )}
-          </span>
-          {last && (
-            <span
-              className="block truncate"
-              title={`${last.is_organizer ? 'You: ' : ''}${last.body}`}
-              style={{ color: SOFT, fontFamily: OUTFIT, fontSize: 12, lineHeight: 1.4, marginBlockStart: 3 }}
-            >
-              {last.is_organizer ? 'You: ' : ''}{last.body}
-            </span>
-          )}
-        </span>
-      </button>
-    );
-  }
-
   function handleInboxReply() {
     if (!session || !conference || !selectedRequest || !replyText.trim()) return;
     const req = selectedRequest;
@@ -3990,6 +3857,65 @@ function CommunicationsPageInner() {
     );
   }
 
+  // ── "Your messages": the Questions tab as a messages app (InboxSplit) ──
+  function splitThreadOf(r: InboxRequest): SplitThread {
+    const prof = inboxProfiles.get(r.user_id);
+    const app = r.application_id ? appById.get(r.application_id) : undefined;
+    const last = lastMessageOf(r.id);
+    const meta = r.metadata as { source?: string; sender_label?: string; contact_email?: string } | null;
+    const fromContactForm = meta?.source === 'contact_form';
+    return {
+      id: r.id,
+      userId: r.user_id,
+      name: prof?.display_name ?? app?.profiles?.display_name ?? app?.invited_name
+        ?? (fromContactForm ? (meta?.sender_label ?? meta?.contact_email ?? 'Contact form') : 'Unknown'),
+      avatarUrl: prof?.avatar_url ?? null,
+      country: app?.assigned_country_name ?? null,
+      subject: r.subject,
+      kind: r.kind,
+      status: r.status,
+      waitingSince: waitingSince(r, inboxMessagesByRequest.get(r.id) ?? []),
+      lastActivity: lastActivityOf(r),
+      preview: last ? { mine: last.is_organizer, body: last.body } : null,
+      unread: unreadCountOf(r) > 0,
+      fromContactForm,
+    };
+  }
+  const splitThreads = inboxRequests.map(splitThreadOf);
+  const splitSelected = selectedRequest ? splitThreads.find(t => t.id === selectedRequest.id) ?? null : null;
+  const splitDetail: SplitDetail | null = selectedRequest ? (() => {
+    const req = selectedRequest;
+    const app = req.application_id ? appById.get(req.application_id) : undefined;
+    const role = app?.role ?? inboxRoles.get(req.user_id);
+    const committee = app?.assigned_committee ? (app.assigned_committee.abbreviation || app.assigned_committee.name) : null;
+    const roleLine = [role ? roleLabel(role) : null, committee, app?.assigned_country_name ?? null].filter(Boolean).join(' · ');
+    const meta = req.metadata as { sender_label?: string; contact_email?: string } | null;
+    const isSwap = req.kind === 'swap_request' || req.kind === 'swap_notice';
+    return {
+      roleLine,
+      applicationHref: req.application_id ? `/manage/${conference.slug}/applications?app=${encodeURIComponent(req.application_id)}` : null,
+      messages: selectedMessages.map(m => ({
+        id: m.id,
+        mine: m.is_organizer,
+        senderName: m.is_organizer ? 'You'
+          : m.sender_user_id ? (inboxProfiles.get(m.sender_user_id)?.display_name ?? 'Participant')
+          : `${meta?.sender_label ?? meta?.contact_email ?? 'Contact form'} (unverified)`,
+        senderUserId: m.sender_user_id,
+        showSender: !m.is_organizer && m.sender_user_id !== req.user_id,
+        body: m.body,
+        createdAt: m.created_at,
+      })),
+      swap: isSwap ? {
+        lines: [
+          `${req.metadata.member_a ?? 'Member A'}: ${req.metadata.before?.a ?? 'Not set'} → ${req.metadata.after?.a ?? 'Not set'}`,
+          `${req.metadata.member_b ?? 'Member B'}: ${req.metadata.before?.b ?? 'Not set'} → ${req.metadata.after?.b ?? 'Not set'}`,
+        ],
+        canDecide: req.kind === 'swap_request' && req.status === 'open',
+      } : null,
+    };
+  })() : null;
+  const messagesTab: MessagesTab = view === 'sent' ? 'sent' : view === 'automatic' ? 'automatic' : 'questions';
+
   const automaticGroups: AutoGroup[] = STAGE_ORDER.map(stage => ({
     title: stage,
     rows: (EVENT_REGISTRY as readonly EventDef[])
@@ -4055,9 +3981,29 @@ function CommunicationsPageInner() {
         </div>
       )}
 
+      {/* ═══ "YOUR MESSAGES": the title, the three tabs, Write an email and the
+          one slim line of things that need the organiser ═══ */}
+      {!builderOpen && !loading && view !== 'announce' && (
+        <MessagesHeader
+          tab={messagesTab}
+          onTab={t => setView(t === 'questions' ? 'inbox' : t)}
+          waitingCount={waitingCount}
+          onWrite={openPicker}
+          failedCount={failedTotal}
+          onSeeFailed={() => setView('sent')}
+          sessionCodesHint={sessionCodesNudge && railCardVisible('session-codes') ? `The conference starts ${daysToStart === 0 ? 'today' : `in ${daysToStart} day${daysToStart === 1 ? '' : 's'}`} and delegates do not have their session codes yet.` : null}
+          onSessionCodes={() => {
+            const def = EVENT_REGISTRY.find(e => e.key === 'session_join_invite');
+            if (def) { setView('automatic'); openBuilderForEvent(def); }
+          }}
+          onDismissSessionCodes={() => dismissRailCard('session-codes')}
+        />
+      )}
+
       {/* ═══ AUTOMATIC EMAILS: a plain list of switches (AutomaticEmailsList) ═══ */}
       {!builderOpen && !loading && view === 'automatic' && (
         <AutomaticEmailsList
+          embedded
           groups={automaticGroups}
           alwaysOnNames={ALWAYS_ON_EMAILS.map(e => e.label)}
           onBack={() => setView('home')}
@@ -4086,316 +4032,45 @@ function CommunicationsPageInner() {
         />
       )}
 
-      {/* ═══ HOME: what do you want to do? ═══ */}
-      {!builderOpen && !loading && view === 'home' && (
-        <CommsHome
-          conferenceName={conference.acronym || conference.full_name}
-          waitingCount={waitingCount}
-          failedCount={failedTotal}
-          savedCount={adhocTemplates.length}
-          sessionCodesHint={sessionCodesNudge && railCardVisible('session-codes') ? `The conference starts ${daysToStart === 0 ? 'today' : `in ${daysToStart} day${daysToStart === 1 ? '' : 's'}`} and delegates do not have their session codes yet.` : null}
-          onSessionCodes={() => {
-            const def = EVENT_REGISTRY.find(e => e.key === 'session_join_invite');
-            if (def) { setView('automatic'); openBuilderForEvent(def); }
-          }}
-          onDismissSessionCodes={() => dismissRailCard('session-codes')}
+      {/* ═══ QUESTIONS: questions and swap requests as a messages app ═══ */}
+      {!builderOpen && !loading && (view === 'home' || view === 'inbox') && (
+        <InboxSplit
+          threads={splitThreads}
+          selected={splitSelected}
+          detail={splitDetail}
+          search={inboxSearch}
+          onSearch={setInboxSearch}
+          onOpen={handleOpenThread}
+          onBack={() => setSelectedRequestId(null)}
+          replyText={replyText}
+          onReplyText={setReplyText}
+          onReply={handleInboxReply}
+          onMarkDone={() => setCloseConfirmOpen(true)}
+          onReopen={() => handleCloseReopen(false)}
+          onDelete={handleDeleteThread}
+          deleting={deletingThread}
+          onSwap={handleSwapDecision}
+          swapActing={swapActing}
           onWrite={openPicker}
-          onInbox={() => { setSelectedRequestId(null); setView('inbox'); }}
-          onAutomatic={() => setView('automatic')}
-          onSent={() => setView('sent')}
-          onAnnounce={() => setView('announce')}
-        />
-      )}
-
-      {/* ═══ INBOX: questions and swap requests ═══ */}
-      {!builderOpen && !loading && view === 'inbox' && (
-        <div>
-          <BackLink onClick={() => { setSelectedRequestId(null); setView('home'); }} />
-          <CommsTitle lead="Questions From" gold="Participants" sub="Reply here. They see your answer in Gavelling and get an email." />
-          <section id="comms-inbox-panel" className="rounded-2xl p-4 sm:p-5" style={{ ...COMMS_CARD, maxWidth: 900 }}>
-            {selectedRequest ? (
-              <>
-                  <button
-                    onClick={() => setSelectedRequestId(null)}
-                    className="text-xs font-bold mb-3 focus:outline-none"
-                    style={{ color: SOFT, fontFamily: OUTFIT, letterSpacing: '0.06em', background: 'none', border: 'none', cursor: 'pointer', padding: '6px 0' }}
-                    onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = '#1C1410'; }}
-                    onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = SOFT; }}
-                  >
-                    ← All questions
-                  </button>
-
-                  <div className="flex items-start justify-between gap-3 mb-1">
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2 mb-1">
-                        {(() => { const KindIcon = selectedKindChip!.Icon; return (
-                        <span
-                          className="inline-flex items-center gap-1 flex-shrink-0"
-                          style={{ fontSize: 12, fontWeight: 700, fontFamily: OUTFIT, color: selectedKindChip!.color }}
-                        >
-                          <KindIcon size={14} strokeWidth={2.2} aria-hidden />
-                          {selectedKindChip!.label}
-                        </span>
-                        ); })()}
-                        <span
-                          className="inline-flex items-center gap-1 flex-shrink-0"
-                          style={{ fontSize: 12, fontWeight: 700, fontFamily: OUTFIT, color: selectedRequest.status === 'open' ? GREEN_INK : '#6B5F52' }}
-                        >
-                          {selectedRequest.status === 'open'
-                            ? <CircleDot size={14} strokeWidth={2.2} aria-hidden />
-                            : <CheckCheck size={14} strokeWidth={2.2} aria-hidden />}
-                          {selectedRequest.status.charAt(0).toUpperCase() + selectedRequest.status.slice(1)}
-                        </span>
-                      </div>
-                      <p className="font-black text-base" style={{ color: '#1C1410', fontFamily: OUTFIT, textWrap: 'balance' }}>{selectedRequest.subject}</p>
-                      {/* Thread author → their public MUN CV, so an organiser reading a
-                          request can see who is asking. No `nested`: this header sits in a
-                          plain div (the BACK control and the CLOSE/DELETE buttons are
-                          siblings), so there is no ancestor onClick to swallow. */}
-                      <p className="text-xs" style={{ color: SOFT, fontFamily: OUTFIT }}>
-                        <ProfileLink
-                          userId={selectedRequest.user_id}
-                          name={inboxProfiles.get(selectedRequest.user_id)?.display_name}
-                        >
-                          {inboxProfiles.get(selectedRequest.user_id)?.display_name ?? 'Unknown'}
-                        </ProfileLink>
-                        {inboxRoles.get(selectedRequest.user_id) ? ` · ${roleLabel(inboxRoles.get(selectedRequest.user_id)!)}` : ''}
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-2 flex-shrink-0">
-                      <GhostBtn onClick={() => (selectedRequest.status === 'open' ? setCloseConfirmOpen(true) : handleCloseReopen(false))}>
-                        {selectedRequest.status === 'open' ? 'Close' : 'Reopen'}
-                      </GhostBtn>
-                      <GhostBtn onClick={handleDeleteThread} title="Delete this thread" danger disabled={deletingThread}>
-                        <Trash2 size={13} />
-                      </GhostBtn>
-                    </div>
-                  </div>
-
-                  {/* Swap details */}
-                  {(selectedRequest.kind === 'swap_request' || selectedRequest.kind === 'swap_notice') && (
-                    <div className="rounded-xl p-3.5 mt-4" style={{ backgroundColor: '#FAF8F3', border: '1px solid rgba(27,56,40,0.09)' }}>
-                      <p className="text-xs font-bold mb-1.5" style={{ color: GOLD_INK, fontFamily: OUTFIT, letterSpacing: '0.08em' }}>
-                        Swap details
-                      </p>
-                      <p className="text-sm" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
-                        {selectedRequest.metadata.member_a ?? 'Member A'}: {selectedRequest.metadata.before?.a ?? 'Not set'} → {selectedRequest.metadata.after?.a ?? 'Not set'}
-                      </p>
-                      <p className="text-sm mt-1" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
-                        {selectedRequest.metadata.member_b ?? 'Member B'}: {selectedRequest.metadata.before?.b ?? 'Not set'} → {selectedRequest.metadata.after?.b ?? 'Not set'}
-                      </p>
-                      {selectedRequest.kind === 'swap_request' && selectedRequest.status === 'open' && (
-                        <div className="flex gap-2 mt-3">
-                          <GhostBtn onClick={() => handleSwapDecision(false)} danger disabled={swapActing}>
-                            Decline
-                          </GhostBtn>
-                          <button
-                            onClick={() => handleSwapDecision(true)}
-                            disabled={swapActing}
-                            className="rounded-lg py-2 px-4 text-xs font-bold focus:outline-none active:scale-[0.96]"
-                            style={{
-                              backgroundColor: swapActing ? '#DDD4C0' : '#1B3828',
-                              color: swapActing ? SOFT : '#EED98A',
-                              border: 'none', fontFamily: OUTFIT,
-                              cursor: swapActing ? 'default' : 'pointer',
-                              transitionProperty: 'transform', transitionDuration: '160ms', transitionTimingFunction: EASE,
-                            }}
-                          >
-                            {swapActing ? 'Processing…' : 'Approve'}
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Messages */}
-                  <div className="flex flex-col gap-3 mt-4" style={{ maxHeight: 440, overflowY: 'auto' }}>
-                    {selectedMessages.map(m => {
-                      const mine = m.is_organizer;
-                      const contactLabel = (selectedRequest.metadata as { sender_label?: string; contact_email?: string } | null);
-                      const senderName = mine ? 'You'
-                        : m.sender_user_id ? (inboxProfiles.get(m.sender_user_id)?.display_name ?? 'Participant')
-                        : `${contactLabel?.sender_label ?? contactLabel?.contact_email ?? 'Contact form'} (unverified)`;
-                      return (
-                        <div key={m.id} className={`flex flex-col ${mine ? 'items-end' : 'items-start'}`}>
-                          {/* Sender label → that participant's public MUN CV. Only for
-                              incoming messages: `mine` renders as "You" with no user to
-                              link to. No `nested` — the message column is a plain div with
-                              no click handler of its own. */}
-                          {!mine && (
-                            <span className="mb-1" style={{ fontSize: 10, fontWeight: 700, color: GOLD_INK, fontFamily: OUTFIT, letterSpacing: '0.06em' }}>
-                              <ProfileLink userId={m.sender_user_id} name={senderName}>
-                                {senderName}
-                              </ProfileLink>
-                            </span>
-                          )}
-                          <div
-                            className="rounded-2xl px-4 py-2.5"
-                            style={{ maxWidth: '85%', backgroundColor: mine ? '#1B3828' : '#FAF8F3', border: mine ? 'none' : '1px solid rgba(27,56,40,0.09)', color: mine ? '#EED98A' : '#1C1410' }}
-                          >
-                            <p className="text-sm" style={{ fontFamily: OUTFIT, whiteSpace: 'pre-wrap', lineHeight: 1.55, margin: 0 }}>{m.body}</p>
-                          </div>
-                          <span className="mt-1" style={{ fontSize: 10, color: SOFT, fontFamily: OUTFIT }}>
-                            {formatDate(m.created_at)}
-                          </span>
-                        </div>
-                      );
-                    })}
-                  </div>
-
-                  {/* Reply */}
-                  {selectedRequest.status === 'open' && (
-                    <div className="flex gap-2 mt-4">
-                      <input
-                        value={replyText}
-                        onChange={e => setReplyText(e.target.value)}
-                        onKeyDown={e => { if (e.key === 'Enter') handleInboxReply(); }}
-                        placeholder="Write a reply..."
-                        className="flex-1 min-w-0 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none"
-                        style={{ border: CARD_BORDER, backgroundColor: '#FFFFFF', color: '#1C1410', fontFamily: OUTFIT }}
-                      />
-                      <button
-                        onClick={handleInboxReply}
-                        disabled={!replyText.trim()}
-                        className="rounded-xl px-4 text-xs font-bold focus:outline-none flex-shrink-0 active:scale-[0.96]"
-                        style={{
-                          backgroundColor: !replyText.trim() ? '#DDD4C0' : '#1B3828',
-                          color: !replyText.trim() ? SOFT : '#EED98A',
-                          border: 'none', fontFamily: OUTFIT,
-                          cursor: !replyText.trim() ? 'default' : 'pointer', minHeight: 40,
-                          transitionProperty: 'transform, background-color', transitionDuration: '160ms', transitionTimingFunction: EASE,
-                        }}
-                      >
-                        Send
-                      </button>
-                    </div>
-                  )}
-
-                  {closeConfirmOpen && (
-                    <ConfirmModal
-                      title="Close this thread?"
-                      body="The participant will see it as closed. You can reopen it later."
-                      confirmLabel="Close thread"
-                      danger
-                      onConfirm={() => handleCloseReopen(true)}
-                      onCancel={() => setCloseConfirmOpen(false)}
-                    />
-                  )}
-              </>
-            ) : (
-              <>
-                  <div className="flex flex-wrap items-center gap-2 mb-3">
-                    <input
-                      value={inboxSearch}
-                      onChange={e => setInboxSearch(e.target.value)}
-                      placeholder="Search subjects..."
-                      className="flex-1 rounded-xl px-3 py-2 text-sm focus:outline-none"
-                      style={{ border: CARD_BORDER, backgroundColor: '#FAF8F3', color: '#1C1410', fontFamily: OUTFIT, minWidth: 130 }}
-                    />
-                    {inboxVisibleUnreadCount > 0 && (
-                      <button
-                        onClick={handleMarkAllInboxRead}
-                        disabled={markingAllRead}
-                        className="focus:outline-none"
-                        style={{
-                          fontFamily: OUTFIT, fontSize: 11, fontWeight: 800,
-                          color: markingAllRead ? SOFT : '#1B3828',
-                          background: 'none', border: 'none', cursor: markingAllRead ? 'default' : 'pointer', padding: '8px 2px',
-                        }}
-                      >
-                        {markingAllRead ? 'Marking…' : 'Mark all read'}
-                      </button>
-                    )}
-                    <FilterPopoverShell
-                      title="Filter threads"
-                      activeCount={inboxActiveFilterCount}
-                      onClearAll={() => { setInboxStatusFilter(new Set()); setInboxKindFilter(new Set()); setInboxDateFrom(''); setInboxDateTo(''); }}
-                    >
-                      <FilterGroup
-                        title="State" icon={BadgeCheck} options={INBOX_STATE_OPTIONS} selected={inboxStatusFilter}
-                        onToggle={v => setInboxStatusFilter(s => toggleIn(s, v))}
-                        onAll={() => setInboxStatusFilter(new Set(INBOX_STATE_OPTIONS.map(o => o.value)))}
-                        onNone={() => setInboxStatusFilter(new Set())}
-                      />
-                      <FilterGroup
-                        title="Kind" icon={MessageSquare} options={INBOX_KIND_OPTIONS} selected={inboxKindFilter}
-                        onToggle={v => setInboxKindFilter(s => toggleIn(s, v))}
-                        onAll={() => setInboxKindFilter(new Set(INBOX_KIND_OPTIONS.map(o => o.value)))}
-                        onNone={() => setInboxKindFilter(new Set())}
-                      />
-                      <div>
-                        <div className="mb-2">
-                          <FilterHeading icon={CalendarDays}>Submitted between</FilterHeading>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <div style={{ flex: 1 }}>
-                            <DatePicker value={inboxDateFrom} max={inboxDateTo || undefined} onChange={setInboxDateFrom} placeholder="From" />
-                          </div>
-                          <ArrowRight size={13} style={{ color: SOFT, flexShrink: 0 }} />
-                          <div style={{ flex: 1 }}>
-                            <DatePicker value={inboxDateTo} min={inboxDateFrom || undefined} onChange={setInboxDateTo} placeholder="To" />
-                          </div>
-                        </div>
-                      </div>
-                    </FilterPopoverShell>
-                  </div>
-
-                  {filteredInboxRequests.length === 0 ? (
-                    <p className="text-sm py-6 text-center" style={{ color: SOFT, fontFamily: OUTFIT }}>
-                      {inboxRequests.length === 0 ? 'No questions yet. When a participant asks something, it shows up here.' : 'Nothing matches. Clear the search or the filters.'}
-                    </p>
-                  ) : (
-                    <div className="flex flex-col gap-2">
-                      {pagedInboxRequests.map(r => threadRow(r))}
-                    </div>
-                  )}
-
-                  {filteredInboxRequests.length > INBOX_PAGE_SIZE && (
-                    <div className="flex items-center justify-center gap-3 mt-4">
-                      <button
-                        onClick={() => setInboxPage(p => Math.max(1, p - 1))}
-                        disabled={inboxPage <= 1}
-                        aria-label="Previous page"
-                        className="flex items-center justify-center rounded-full focus:outline-none"
-                        style={{
-                          width: 28, height: 28, border: CARD_BORDER,
-                          backgroundColor: '#FAF8F3',
-                          color: inboxPage <= 1 ? '#C8BEA8' : '#1C1410',
-                          cursor: inboxPage <= 1 ? 'default' : 'pointer',
-                        }}
-                      >
-                        <ChevronLeft size={14} />
-                      </button>
-                      <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.04em', color: SOFT, fontFamily: OUTFIT, fontVariantNumeric: 'tabular-nums' }}>
-                        Page {inboxPage} of {inboxTotalPages}
-                      </span>
-                      <button
-                        onClick={() => setInboxPage(p => Math.min(inboxTotalPages, p + 1))}
-                        disabled={inboxPage >= inboxTotalPages}
-                        aria-label="Next page"
-                        className="flex items-center justify-center rounded-full focus:outline-none"
-                        style={{
-                          width: 28, height: 28, border: CARD_BORDER,
-                          backgroundColor: '#FAF8F3',
-                          color: inboxPage >= inboxTotalPages ? '#C8BEA8' : '#1C1410',
-                          cursor: inboxPage >= inboxTotalPages ? 'default' : 'pointer',
-                        }}
-                      >
-                        <ChevronRight size={14} />
-                      </button>
-                    </div>
-                  )}
-              </>
-            )}
-          </section>
-        </div>
+        >
+          {closeConfirmOpen && selectedRequest && (
+            <ConfirmModal
+              title="Mark This as Done?"
+              body="They will see it as closed. You can reopen it later."
+              confirmLabel="Mark as done"
+              onConfirm={() => handleCloseReopen(true)}
+              onCancel={() => setCloseConfirmOpen(false)}
+            />
+          )}
+        </InboxSplit>
       )}
 
       {/* ═══ SENT: everything that went out, and saved emails ═══ */}
       {!builderOpen && !loading && view === 'sent' && (
         <div>
-          <BackLink onClick={() => setView('home')} />
-          <CommsTitle lead="Emails You've" gold="Sent" sub="Emails you wrote and the automatic ones. Open one to see who got it." />
+          <p className="mb-5" style={{ fontFamily: OUTFIT, color: SOFT, fontSize: 15, maxWidth: 620, textWrap: 'pretty' }}>
+            Emails you wrote and the automatic ones. Open one to see who got it.
+          </p>
           <section style={{ maxWidth: 900 }}>
 
             {/* In-the-works strip: drafts + ready-to-send, tucked above the feed. */}
@@ -4591,6 +4266,10 @@ function CommunicationsPageInner() {
             )}
           </section>
         </div>
+      )}
+
+      {!builderOpen && !loading && view !== 'announce' && (
+        <FindDelegatesCard onClick={() => setView('announce')} />
       )}
 
       {/* ═══ ANNOUNCE: paid announcements to Gavelling users ═══ */}

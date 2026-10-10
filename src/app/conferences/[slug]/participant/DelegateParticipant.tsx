@@ -11,6 +11,8 @@
 //   committee   the committee card (topics, live session), the co-delegate
 //   documents   the study guide and the position paper
 //   delegation  the delegation roster (members of a delegation only)
+// Below xl (10 Oct 2026) there is no sub-nav: the panes stack in this order on
+// one page, with Payment and Support placed by the parent.
 
 import AllocationCard from './AllocationCard';
 import AssignmentHero from './AssignmentHero';
@@ -19,7 +21,7 @@ import StudyGuideCard from './StudyGuideCard';
 import PositionPaperCard from './PositionPaperCard';
 import DelegationPanel from './DelegationPanel';
 import MyAwardsCard from './MyAwardsCard';
-import { Pane } from './dashboardKit';
+import { Pane, useDashStacked } from './dashboardKit';
 import type { ParticipantApplication, ParticipantAllocation, ParticipantCommittee } from './types';
 
 export default function DelegateParticipant({ conferenceId, conferenceSlug, conferenceStartDate, application, myAllocation, committees, allocationSwapMode, section }: {
@@ -33,6 +35,9 @@ export default function DelegateParticipant({ conferenceId, conferenceSlug, conf
   section: string;
 }) {
   const committee = myAllocation ? committees.find(c => c.id === myAllocation.conference_committee_id) ?? null : null;
+  // Below xl every pane shows on one page (see ParticipantView), in this
+  // order: awards and the assignment, the committee, documents, delegation.
+  const stacked = useDashStacked();
 
   return (
     <>
@@ -54,6 +59,7 @@ export default function DelegateParticipant({ conferenceId, conferenceSlug, conf
           myAllocation={myAllocation}
           conferenceStartDate={conferenceStartDate}
           showCountry={false}
+          joinFromXlOnly={stacked}
         />
         {/* Double delegations only: the co-delegate and what the two share. */}
         <CoDelegateCard conferenceId={conferenceId} myAllocation={myAllocation} />

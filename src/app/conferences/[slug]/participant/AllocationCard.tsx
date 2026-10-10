@@ -58,7 +58,7 @@ export function useSeatCrest(myAllocation: ParticipantAllocation | null): string
   return seatLogo;
 }
 
-export default function AllocationCard({ committee, myAllocation, conferenceStartDate, showCountry = true, seatLogo: seatLogoProp }: {
+export default function AllocationCard({ committee, myAllocation, conferenceStartDate, showCountry = true, seatLogo: seatLogoProp, joinFromXlOnly = false }: {
   committee: ParticipantCommittee | null;
   myAllocation: ParticipantAllocation | null;
   conferenceStartDate: string | null;
@@ -66,6 +66,10 @@ export default function AllocationCard({ committee, myAllocation, conferenceStar
   showCountry?: boolean;
   /** A crest the caller already read (useSeatCrest); undefined = read it here. */
   seatLogo?: string | null;
+  /** The one-page phone dashboard already offers "Join session" in Your
+   *  assignment just above, so this card's own button shows from xl only (the
+   *  session code stays everywhere). */
+  joinFromXlOnly?: boolean;
 }) {
   const now = useNow();
   // The country half is drawn by the dashboard's Overview now; the committee
@@ -211,7 +215,7 @@ export default function AllocationCard({ committee, myAllocation, conferenceStar
                 </button>
                 <Link
                   href={`/join?code=${sessionCode}`}
-                  className="inline-flex items-center justify-center gap-2 w-full rounded-xl focus:outline-none"
+                  className={`${joinFromXlOnly ? 'hidden xl:inline-flex' : 'inline-flex'} items-center justify-center gap-2 w-full rounded-xl focus:outline-none`}
                   style={{
                     padding: '13px 18px', backgroundColor: '#1B3828', color: '#EED98A',
                     fontFamily: OUTFIT, fontWeight: 800, fontSize: 14,

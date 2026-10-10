@@ -1,14 +1,13 @@
 'use client';
 
 /**
- * Settings home (Oct 2026 redesign, owner: "WAYYYYY too bland ... is this easy
- * enough to use for a 12 year old to set up").
+ * Settings sections (Oct 2026 redesign): the way back, the jump row and each
+ * section's question with its current answer (SectionTop), and the live
+ * preview of the public conference card (ConferencePreview).
  *
- * Settings opens on the organiser's questions, not on a form. Each question is
- * one white card: what it is about, the CURRENT answer in one plain sentence,
- * one button. Beside them (below them on a phone) sits a live preview of the
- * public conference card, drawn from the same conference row every save
- * refreshes, so a change shows the moment it lands.
+ * The front page that used to live here (five questions) was replaced by the
+ * control panel in controlPanel.tsx; the per-role application set-up lives in
+ * roleSetup.tsx.
  *
  * Presentation only. Nothing here reads or writes the database: every sentence
  * is derived from props the page already holds, and every button only moves to
@@ -18,7 +17,7 @@
 import Link from 'next/link';
 import type { ReactNode } from 'react';
 import {
-  ArrowLeft, ArrowRight, CheckCircle2, CircleDot, Globe, Lock, Copy, Check, Eye,
+  ArrowLeft, Globe, Lock, Copy, Check, Eye,
   CalendarDays, MapPin, Ticket, Building2, CreditCard, ClipboardList, Users2,
   ShieldCheck, UsersRound, Trophy, type LucideIcon,
 } from 'lucide-react';
@@ -42,27 +41,6 @@ const CARD: React.CSSProperties = {
   borderRadius: 20,
   border: '1px solid rgba(27,56,40,0.07)',
   boxShadow: '0 1px 2px rgba(27,56,40,0.06), 0 10px 28px rgba(27,56,40,0.09)',
-};
-const PRIMARY_BTN: React.CSSProperties = {
-  background: 'linear-gradient(90deg, #1B3828 0%, #2A5A3C 100%)',
-  color: '#FFFFFF',
-  borderRadius: 10,
-  padding: '10px 16px',
-  fontFamily: F,
-  fontSize: 14,
-  fontWeight: 600,
-  border: 'none',
-  boxShadow: '0 4px 12px rgba(27,56,40,0.22)',
-};
-const SECOND_BTN: React.CSSProperties = {
-  backgroundColor: '#FFFFFF',
-  color: INK,
-  borderRadius: 10,
-  padding: '9px 15px',
-  fontFamily: F,
-  fontSize: 14,
-  fontWeight: 600,
-  border: '1.5px solid rgba(28,20,16,0.22)',
 };
 
 // ── Sections ────────────────────────────────────────────────────────────────
@@ -296,77 +274,6 @@ export function answerFor(key: SectionKey, snap: SettingsSnapshot): Answer {
   }
 }
 
-// ── Status mark: icon + plain word, never a pill ─────────────────────────────
-
-function StatusMark({ state }: { state: Readiness }) {
-  if (state === 'optional') return null;
-  const ready = state === 'ready';
-  const Icon = ready ? CheckCircle2 : CircleDot;
-  return (
-    <span className="inline-flex items-center gap-1.5 flex-shrink-0" style={{ color: ready ? FOREST : AMBER, fontFamily: F, fontSize: 13, fontWeight: 600 }}>
-      <Icon size={16} strokeWidth={2.4} aria-hidden />
-      {ready ? 'Done' : 'To do'}
-    </span>
-  );
-}
-
-// ── One question card ────────────────────────────────────────────────────────
-
-function QuestionCard({ meta, answer, href, onOpen, compact = false }: {
-  meta: SectionMeta;
-  answer: Answer;
-  /** Set for a card that leaves Settings (payments). */
-  href?: string;
-  onOpen?: () => void;
-  compact?: boolean;
-}) {
-  const todo = answer.state === 'todo';
-  const btnStyle = todo ? PRIMARY_BTN : SECOND_BTN;
-  const btnInner = (
-    <>
-      {answer.action}
-      <ArrowRight size={15} strokeWidth={2.4} aria-hidden />
-    </>
-  );
-  const btnClass = 'gvs-q-btn inline-flex items-center justify-center gap-1.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 transition-transform active:scale-[0.97]';
-  return (
-    <article
-      className="gvs-q relative"
-      style={{
-        ...CARD,
-        padding: compact ? '16px 18px' : '20px 22px',
-        // A coloured edge on the questions that still need an answer (taste
-        // board: "a coloured edge on a row" is liked; a count pill is not).
-        boxShadow: todo
-          ? `inset 4px 0 0 #D9B65A, ${CARD.boxShadow}`
-          : CARD.boxShadow,
-      }}
-    >
-      <div className="gvs-q-grid">
-        <EmojiDisc meta={meta} size={compact ? 44 : 52} />
-        <div className="min-w-0">
-          <div className="flex items-center gap-x-3 gap-y-1 flex-wrap">
-            <h3 style={{ fontFamily: F, fontSize: compact ? 16 : 18, fontWeight: 700, color: INK, lineHeight: 1.25, overflowWrap: 'anywhere' }}>
-              {meta.question}
-            </h3>
-            <StatusMark state={answer.state} />
-          </div>
-          <p style={{ fontFamily: F, fontSize: 14.5, color: INK_SOFT, lineHeight: 1.5, marginTop: 4, overflowWrap: 'anywhere' }}>
-            {answer.sentence}
-          </p>
-        </div>
-        <div className="gvs-q-act">
-          {href ? (
-            <Link href={href} className={btnClass} style={{ ...btnStyle, textDecoration: 'none' }}>{btnInner}</Link>
-          ) : (
-            <button type="button" onClick={onOpen} className={btnClass} style={{ ...btnStyle, cursor: 'pointer' }}>{btnInner}</button>
-          )}
-        </div>
-      </div>
-    </article>
-  );
-}
-
 // ── The live preview of the public card ──────────────────────────────────────
 
 export function ConferencePreview({ snap, onCopyLink, copied }: {
@@ -475,111 +382,6 @@ function PreviewRow({ icon: Icon, lead, children }: { icon: LucideIcon; lead?: R
       </span>
       <span className="min-w-0" style={{ lineHeight: 1.4, overflowWrap: 'anywhere' }}>{children}</span>
     </li>
-  );
-}
-
-// ── The home itself ──────────────────────────────────────────────────────────
-
-const HOME_CSS = `
-.gvs-home { display: grid; gap: 28px; grid-template-columns: minmax(0, 1fr); }
-@media (min-width: 1100px) { .gvs-home { grid-template-columns: minmax(0, 1fr) 320px; gap: 32px; } .gvs-preview { position: sticky; top: 24px; } }
-.gvs-q-grid { display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: 16px; row-gap: 14px; align-items: center; }
-.gvs-q-act { grid-column: 1 / -1; }
-.gvs-q-btn { width: 100%; }
-@media (min-width: 560px) {
-  .gvs-q-grid { grid-template-columns: auto minmax(0, 1fr) auto; }
-  .gvs-q-act { grid-column: auto; }
-  .gvs-q-btn { width: auto; white-space: nowrap; }
-}
-.gvs-trail { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 14px; }
-.gvs-stop { position: relative; }
-.gvs-stop-disc { display: none; }
-@media (min-width: 480px) {
-  .gvs-trail { padding-left: 46px; }
-  .gvs-stop-disc { display: flex; align-items: center; justify-content: center; position: absolute; left: -46px; top: 50%; width: 30px; height: 30px; margin-top: -15px; border-radius: 50%; font: 700 13px var(--font-brand), sans-serif; font-variant-numeric: tabular-nums; z-index: 1; }
-  .gvs-stop:not(:last-child)::after { content: ''; position: absolute; left: -32px; top: calc(50% + 17px); height: calc(100% - 20px); border-left: 2px dotted rgba(27,56,40,0.28); }
-}
-.gvs-later { display: grid; gap: 12px; grid-template-columns: minmax(0, 1fr); }
-@media (min-width: 480px) { .gvs-later, .gvs-later-h { padding-left: 46px; } }
-`;
-
-export function SettingsHome({ snap, onOpen, onCopyLink, copied }: {
-  snap: SettingsSnapshot;
-  onOpen: (key: InPageSection) => void;
-  onCopyLink: () => void;
-  copied: boolean;
-}) {
-  const c = snap.conference;
-  const core = SECTION_META.filter(s => !s.later);
-  const later = SECTION_META.filter(s => s.later);
-  const answers = new Map(SECTION_META.map(s => [s.key, answerFor(s.key, snap)] as const));
-  const done = core.filter(s => answers.get(s.key)?.state === 'ready').length;
-  const firstTodo = core.find(s => answers.get(s.key)?.state === 'todo');
-
-  const card = (s: SectionMeta, compact = false) => {
-    const a = answers.get(s.key)!;
-    return s.key === 'payments'
-      ? <QuestionCard key={s.key} meta={s} answer={a} compact={compact} href={`/manage/${c.slug}/financials?open=payment`} />
-      : <QuestionCard key={s.key} meta={s} answer={a} compact={compact} onOpen={() => onOpen(s.key as InPageSection)} />;
-  };
-
-  return (
-    <>
-      <style>{HOME_CSS}</style>
-      <header className="mb-7">
-        <h1 style={{ fontFamily: F, fontSize: 'clamp(28px, 3.2vw, 40px)', fontWeight: 800, color: INK, lineHeight: 1.1, letterSpacing: '-0.01em' }}>
-          Set Up Your <GoldWord>Conference</GoldWord>
-        </h1>
-        <p className="mt-2" style={{ fontFamily: F, fontSize: 15.5, color: INK_SOFT, lineHeight: 1.5 }}>
-          Answer five questions. You can change any answer later.
-        </p>
-      </header>
-
-      <div className="gvs-home">
-        <div className="min-w-0">
-          {/* Progress: a big number with the word beside it (taste board). */}
-          <div className="flex items-baseline gap-2 mb-4 flex-wrap" style={{ fontFamily: F }}>
-            <span style={{ fontSize: 34, fontWeight: 800, color: FOREST, fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>{done}</span>
-            <span style={{ fontSize: 15, color: INK_SOFT, fontWeight: 500 }}>
-              of {core.length} done{firstTodo ? `. Next: ${firstTodo.short.toLowerCase()}.` : '. You are all set.'}
-            </span>
-          </div>
-          {/* The questions as a trail: a numbered stop per question on a dotted
-              line, a forest check once it is answered. Reads as "do these in
-              order" without saying so. */}
-          <ol className="gvs-trail">
-            {core.map((s, i) => {
-              const ok = answers.get(s.key)?.state === 'ready';
-              return (
-                <li key={s.key} className="gvs-stop">
-                  <span
-                    className="gvs-stop-disc"
-                    aria-label={ok ? `Step ${i + 1}, done` : `Step ${i + 1}, to do`}
-                    style={ok
-                      ? { background: 'linear-gradient(140deg, #1B3828, #2A5A3C)', color: '#EED98A', boxShadow: '0 3px 8px rgba(27,56,40,0.25)' }
-                      : { backgroundColor: '#FFFFFF', color: FOREST, boxShadow: 'inset 0 0 0 1.5px rgba(27,56,40,0.25)' }}
-                  >
-                    {ok ? <Check size={15} strokeWidth={3} aria-hidden /> : i + 1}
-                  </span>
-                  {card(s)}
-                </li>
-              );
-            })}
-          </ol>
-
-          <h2 className="gvs-later-h mt-9 mb-3" style={{ fontFamily: F, fontSize: 15, fontWeight: 700, color: INK_SOFT }}>
-            Later on
-          </h2>
-          <div className="gvs-later">
-            {later.map(s => card(s, true))}
-          </div>
-        </div>
-
-        <aside className="gvs-preview min-w-0" aria-label="Preview of your conference card">
-          <ConferencePreview snap={snap} onCopyLink={onCopyLink} copied={copied} />
-        </aside>
-      </div>
-    </>
   );
 }
 

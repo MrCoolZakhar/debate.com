@@ -1,13 +1,12 @@
 'use client';
 
-import { useState, useEffect, useCallback, useMemo, useRef, Fragment } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import Link from 'next/link';
 import {
-  Building2, X, Lock, Copy, AlertTriangle, Check,
+  Building2, X, Lock, Copy, Check,
   Plus, Crown, Mail as MailIcon, ChevronDown, Info, ArrowLeft,
   Settings2, Globe, Eye, EyeOff, ArrowUp, ArrowDown, Trash2, Briefcase,
-  ClipboardList, CreditCard, Megaphone, Star, CheckCircle2, Clock, XCircle, MinusCircle, type LucideIcon,
+  ClipboardList, CreditCard, Megaphone, Star, CheckCircle2, Clock, type LucideIcon,
 } from 'lucide-react';
 import { useManage, type Conference } from '@/app/manage/[slug]/layout';
 
@@ -32,14 +31,12 @@ import {
   grantedSectionCount, canManageTeam as bundleGrantsTeam, financialsAreReadOnly,
   FINANCIALS_READONLY_KEY, TEAM_KEY, type BundleId, type PermissionMap,
 } from '@/lib/organizerPermissions';
-import { activeFeePhase, type FeePhase } from '@/lib/finance';
-import { CurrencyPicker } from '@/components/CurrencyPicker';
+import { type FeePhase } from '@/lib/finance';
 import { normalizeSocialUrl } from '@/lib/socialLinks';
 import { acronymProblem, conferenceAcronymLabel } from '@/lib/conferenceLabels';
 import {
-  ROLE_ORDER, ROLE_EMOJI, ROLE_BLURB, RoleBookmarks, StepDisc, InfoHint,
-  CopyToRolesModal, SetupIntro, Segmented,
-  type RoleStatus as RoleStatusKind,
+  ROLE_ORDER, StepDisc, InfoHint,
+  CopyToRolesModal,
 } from './applicationsUi';
 // Awards are behind a holding screen for now. `./awardsUi` (AwardsSettings) is
 // untouched on disk; swap this import and the render below back to it to
@@ -52,11 +49,13 @@ import QuestionBuilder from '@/components/QuestionBuilder';
 import { conferencePaymentsReady, paymentGateBlocks, paymentGateMessage } from '@/lib/payments';
 import { friendlyError, constraintMessage } from '@/lib/friendlyError';
 import { normaliseRoleTimeline, linkNeighbourPhase } from '@/lib/roleTimeline';
-import { useConferenceTimezone, timelineNotice, TimelineNotice, TimelineWarning } from './timelineUi';
+import { useConferenceTimezone, timelineNotice } from './timelineUi';
 import { INTENT_OPTIONS, getConferenceIntent, intentPayload } from '@/lib/conferenceIntent';
 import ProfileLink from '@/components/ProfileLink';
 import { useNow } from '@/lib/useNow';
-import { SettingsHome, SectionTop, ConferencePreview, sectionMeta, type SettingsSnapshot } from './settingsHome';
+import { SectionTop, ConferencePreview, sectionMeta, type SettingsSnapshot } from './settingsHome';
+import { SettingsControlPanel } from './controlPanel';
+import { RoleSetup } from './roleSetup';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -177,39 +176,6 @@ interface IncomingPartnerClaim {
   created_at: string;
 }
 
-/** A role is free when neither its base fee nor any fee phase charges anything.
- *  Payment settings are hidden for a free role (they cannot apply). */
-function roleIsFree(config: Pick<RoleConfig, 'fee_amount' | 'fee_phases'>): boolean {
-  if ((Number(config.fee_amount) || 0) > 0) return false;
-  return !(config.fee_phases ?? []).some(p => (Number(p.amount) || 0) > 0);
-}
-
-// What a role may express as preferences on the apply form. Persisted per role
-// on application_role_configs.preference_mode; read by the apply flow to
-// decide which pickers (committees / countries / neither) to show. Delegate
-// and head-delegate may use any of the four; chair may only use
-// committees_only or none (see CHAIR_PREF_MODE_OPTIONS below); every other
-// role is always 'none' and never shows the preference card at all.
-const PREF_MODE_OPTIONS: { value: string; label: string; desc: string }[] = [
-  { value: 'committees_and_countries', label: 'Committees + countries', desc: 'Delegates rank committee-and-country pairings, the fullest picture for allocation.' },
-  { value: 'committees_only', label: 'Committees', desc: 'Delegates rank committees only; you assign the countries.' },
-  { value: 'countries_only', label: 'Countries', desc: 'Delegates rank countries only; committees follow from the country.' },
-  { value: 'none', label: 'None', desc: 'No preference step. You allocate everyone manually.' },
-];
-
-// Chair's cut-down version: a chair picks which committee they would like to
-// chair, never a country, so the country pairing options do not apply.
-const CHAIR_PREF_MODE_OPTIONS: { value: string; label: string; desc: string }[] = [
-  { value: 'committees_only', label: 'Choose a committee', desc: 'Chairs rank which committee they would like to chair; you assign from their ranking.' },
-  { value: 'none', label: 'None', desc: 'No preference step. You assign every chair to a committee yourself.' },
-];
-
-/** Roles whose preference_mode can be anything other than 'none'. Mirrors the
- *  database's second CHECK constraint on application_role_configs. */
-function roleCanHavePreference(role: string): boolean {
-  return role === 'delegate' || role === 'head-delegate' || role === 'chair';
-}
-
 
 // ── Constants & helpers ────────────────────────────────────────────────────
 
@@ -226,29 +192,6 @@ const BANNER_PRESETS = [
 
 function roleLabel(role: string): string {
   return role.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-}
-
-
-type RoleStatus = RoleStatusKind;
-
-/** Four states, not two. A role can be switched on while its window has
- *  already closed, and "enabled" alone would report that as live. */
-/** The role's application state as an icon + a plain word (CLAUDE.md §8:
- *  no uppercase status pills). Presentation only; `RoleStatus` is unchanged. */
-const ROLE_STATUS_MARK: Record<RoleStatus, { label: string; color: string; Icon: LucideIcon }> = {
-  OPEN:      { label: 'Open',      color: '#1B3828', Icon: CheckCircle2 },
-  SCHEDULED: { label: 'Scheduled', color: '#6B4F12', Icon: Clock },
-  CLOSED:    { label: 'Closed',    color: '#8B2020', Icon: XCircle },
-  OFF:       { label: 'Off',       color: '#6B5F52', Icon: MinusCircle },
-};
-
-function roleStatus(config: RoleConfig | undefined, now: number): RoleStatus {
-  if (!config?.is_enabled) return 'OFF';
-  const opensAt = config.applications_open_at ? new Date(config.applications_open_at).getTime() : null;
-  const closesAt = config.applications_close_at ? new Date(config.applications_close_at).getTime() : null;
-  if (opensAt !== null && opensAt > now) return 'SCHEDULED';
-  if (closesAt !== null && closesAt < now) return 'CLOSED';
-  return 'OPEN';
 }
 
 
@@ -305,66 +248,6 @@ function StepHeader({ n, label, sub, complete, open, onClick, status = 'idle', h
   );
 }
 
-const STEPS = [
-  {
-    n: 1, label: 'General Info', sub: 'Dates, capacity and how applications are handled',
-    hint: 'The window this role can apply in, and what happens to an application once it arrives. Nothing is public before the opening time, and the link starts working on its own the moment it passes, so you do not have to be at a keyboard. Max accepted is the ceiling on how many you will take; acceptance decides whether they are let in automatically or wait for you to review them; payment decides how early they can pay.',
-  },
-  {
-    n: 2, label: 'Fees', sub: 'What this role costs and when the price changes',
-    hint: 'One flat price, plus optional phases if the price moves over time: an early-bird window, a standard window, a late window. Whichever phase covers today is the price an applicant is quoted and charged. When no phase covers today, the flat fee applies. Phases may not overlap, because two prices for one day has no answer.',
-  },
-  {
-    n: 3, label: 'Form', sub: 'The questions this role answers when applying',
-    hint: 'The questions this role fills in when they apply: short answers, long answers, choices, uploads. Each role has its own form, because an advisor and a delegate have almost nothing in common to say. Reordering and rewording is safe at any time; answers already submitted are kept exactly as they were given.',
-  },
-  {
-    n: 4, label: 'After submitting', sub: 'An optional message shown once, right after this role applies',
-    hint: 'This appears as a small card in the corner of the confirmation screen for about twenty seconds, right after someone submits this role. It is the last thing they read before they leave, so it is the right place for what to do next, rather than for anything they will need later, because it is not saved anywhere they can go back to. If there is something they must keep, an email is the right tool for that.',
-  },
-] as const;
-
-/** Fees (step 2) doesn't apply to secretariat or staff: nobody charges their
- *  own volunteers or their own secretariat, and the database already seeds
- *  fee_amount 0 for both. Used both by the render (which card to show) and by
- *  auto-advance (which step to land on next), so the two never disagree. */
-function stepsForRole(role: string): typeof STEPS[number][] {
-  return role === 'secretariat' || role === 'staff' ? STEPS.filter(s => s.n !== 2) : [...STEPS];
-}
-
-/** UTC instant from the database to the local wall-clock value a
- *  datetime-local input expects. The old version sliced the ISO string,
- *  showing a UTC instant as if its digits were local time. */
-function toDatetimeLocal(iso: string | null): string {
-  if (!iso) return '';
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return '';
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-}
-
-/** The inverse. A datetime-local value carries no zone, so `new Date` reads
- *  it as local wall-clock time, which is what the organizer meant, and we
- *  store the resulting instant as UTC. */
-function fromDatetimeLocal(value: string): string | null {
-  if (!value) return null;
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return null;
-  return d.toISOString();
-}
-
-/** IANA zone name for the label under the window fields, e.g. Europe/London. */
-function localZoneLabel(): string {
-  try {
-    return Intl.DateTimeFormat().resolvedOptions().timeZone || 'your local time';
-  } catch {
-    return 'your local time';
-  }
-}
-
-// Standard failure copy for every verified-write save in this page: a write
-// that returns an error OR affects zero rows (RLS silently filtered it, or
-// the row vanished) is treated identically, never a silent false success.
 /** Fixed-viewport placement for a portaled floating layer. Clamps horizontally
  *  so it never runs off the right edge, and flips above the trigger when there
  *  is not enough room below. Never relies on an ancestor's overflow. */
@@ -607,7 +490,7 @@ export default function SettingsPage() {
   const showHome = !tabParam && !searchParams.get('role') && !searchParams.get('focus') && !searchParams.get('highlight');
   function openSection(next: SettingsTab | null) {
     const params = new URLSearchParams(searchParams.toString());
-    for (const k of ['tab', 'section', 'focus', 'highlight']) params.delete(k);
+    for (const k of ['tab', 'section', 'focus', 'highlight', 'step']) params.delete(k);
     if (next !== 'applications') params.delete('role');
     if (next) params.set('tab', next);
     const qs = params.toString();
@@ -621,17 +504,21 @@ export default function SettingsPage() {
   function setActiveRole(next: string) {
     const params = new URLSearchParams(searchParams.toString());
     params.set('role', next);
+    params.delete('step');
     router.push(`?${params.toString()}`, { scroll: false });
   }
-  // Applications splits in two: the per-role setup (bookmarks + three steps)
-  // At most one step open. 0 means all collapsed, which is where auto-advance
-  // leaves you after the last step.
-  // Every section starts CLOSED when a tab opens (owner, 25 Sep 2026); a deep
-  // link (?focus=…) opens the card it targets.
-  const [openStep, setOpenStep] = useState<number>(0);
+  /** The control panel's Edit (and its Application form card): one role's
+   *  set-up, optionally opened on one step (?step=, see roleSetup.tsx). */
+  function openRoleSetup(role: string, step?: string) {
+    const params = new URLSearchParams();
+    params.set('tab', 'applications');
+    params.set('role', role);
+    if (step) params.set('step', step);
+    router.push(`${window.location.pathname}?${params.toString()}`);
+  }
   const [linkCopied, setLinkCopied] = useState(false);
-  // Conference tab: a separate "one open at a time" cursor, independent of
-  // the applications tab's openStep, so the two folds cannot fight.
+  // Conference tab: one section open at a time. (The role set-up keeps its
+  // own open step, in roleSetup.tsx.)
   const [openConfSection, setOpenConfSection] = useState<number>(0);
   const [confLinkCopied, setConfLinkCopied] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
@@ -699,11 +586,6 @@ export default function SettingsPage() {
   const [copyPhasesOpen, setCopyPhasesOpen] = useState(false);
   const [copyPhasesBusy, setCopyPhasesBusy] = useState(false);
   const phaseOfferedFor = useRef<Set<string>>(new Set());
-  // Roles whose first-run walkthrough has been dismissed, kept in localStorage
-  // per conference. Hydrated after mount so the server render and the first
-  // client render agree.
-  const [introDone, setIntroDone] = useState<Set<string>>(new Set());
-  const introHydrated = useRef(false);
 
   // Delegation allocation swaps (Applications tab)
   const [swapMode, setSwapMode] = useState('request');
@@ -724,6 +606,9 @@ export default function SettingsPage() {
   // builder when rewording a question those applicants may have already
   // answered. Never blocks an edit; see QuestionBuilder's hasApplications prop.
   const [rolesWithApplications, setRolesWithApplications] = useState<Set<string>>(new Set());
+  /** The same count per role, for "214 applied" on the control panel and the
+   *  role set-up. null until the first read lands. */
+  const [roleAppCounts, setRoleAppCounts] = useState<Record<string, number> | null>(null);
   const { confirm, modal: confirmModal } = useConfirmModal();
   const [organizers, setOrganizers] = useState<Organizer[]>([]);
   // ── Team highlight, from the secretariat-accept redirect ─────────────────
@@ -1067,10 +952,11 @@ export default function SettingsPage() {
         .eq('conference_id', conference.id)
         .eq('role', role)
         .in('status', ['submitted', 'accepted', 'assigned', 'checked-in']);
-      return { role, hasApplications: (count ?? 0) > 0 };
+      return { role, count: count ?? 0, hasApplications: (count ?? 0) > 0 };
     }));
     if (seq !== rolesWithApplicationsSeq.current) return;
     setRolesWithApplications(new Set(results.filter(r => r.hasApplications).map(r => r.role)));
+    setRoleAppCounts(Object.fromEntries(results.map(r => [r.role, r.count])));
   }, [conference, accessToken]);
 
   const loadOrganizers = useCallback(async () => {
@@ -1385,51 +1271,6 @@ export default function SettingsPage() {
         : rc)));
       markStep(step, 'saved');
     }
-  }
-
-  // ── First-run walkthrough bookkeeping ────────────────────────────────────
-  // A role that has never been configured gets three illustrated slides
-  // explaining what its three steps decide, before the form itself. Dismissed
-  // state is per conference and per role, in localStorage — it is a first-run
-  // courtesy, not a preference worth a database column.
-
-  const introStorageKey = conference ? `gv-role-setup-intro-${conference.id}` : null;
-
-  useEffect(() => {
-    if (!introStorageKey || introHydrated.current) return;
-    introHydrated.current = true;
-    try {
-      const raw = window.localStorage.getItem(introStorageKey);
-      if (raw) setIntroDone(new Set(JSON.parse(raw) as string[]));
-    } catch { /* private mode, or corrupt value: show the intro, harmless */ }
-  }, [introStorageKey]);
-
-  function dismissIntro(role: string) {
-    setIntroDone(prev => {
-      const next = new Set(prev).add(role);
-      if (introStorageKey) {
-        try { window.localStorage.setItem(introStorageKey, JSON.stringify([...next])); } catch { /* ignore */ }
-      }
-      return next;
-    });
-  }
-
-  /** True when nothing about this role has been decided yet: no window, no
-   *  cap, no fee, no questions. A role part-way through setup is NOT untouched
-   *  — the walkthrough would be an interruption at that point. */
-  function roleIsUntouched(rc: RoleConfig | undefined): boolean {
-    if (!rc) return false;
-    return (
-      // Switching the role on is the loudest possible "I have touched this",
-      // and it is the one field the header shows rather than the steps.
-      !rc.is_enabled &&
-      !rc.applications_open_at &&
-      !rc.applications_close_at &&
-      rc.max_accepted == null &&
-      Number(rc.fee_amount) === 0 &&
-      (rc.fee_phases ?? []).length === 0 &&
-      (rc.custom_questions ?? []).length === 0
-    );
   }
 
   const conferenceTz = useConferenceTimezone(conference?.id);
@@ -2329,33 +2170,7 @@ export default function SettingsPage() {
   const selectedRoleHasApplications = rolesWithApplications.has(selectedRole);
   const otherRoles = ROLES.filter(r => r !== selectedRole);
 
-  // ── Step completion ──────────────────────────────────────────────────────
-  // "Nothing unresolved", not "every field filled". Max accepted, the phase
-  // list and the custom questions are all legitimately empty, so requiring
-  // them would leave a step permanently unticked for a correct setup.
   const activeRoleConfig = roleConfigs.find(rc => rc.role === activeRole);
-  // Both ends set AND in the right order. DatePicker's `min` only disables
-  // whole days, so "opens 16 Jul 09:00, closes 16 Jul 08:00" gets through the
-  // control and has to be caught here — otherwise the step ticks green on a
-  // window that closes an hour before it opens.
-  const windowBackwards = !!(
-    activeRoleConfig?.applications_open_at &&
-    activeRoleConfig?.applications_close_at &&
-    new Date(activeRoleConfig.applications_close_at).getTime() <= new Date(activeRoleConfig.applications_open_at).getTime()
-  );
-  const step1Complete = !!(activeRoleConfig?.applications_open_at && activeRoleConfig?.applications_close_at) && !windowBackwards;
-  const step2Complete = !!activeRoleConfig?.fee_currency
-    && !(activeRoleConfig?.fee_phases ?? []).some(p => !p.start_date || !p.end_date);
-  // Form (3) and After submitting (4) are optional, so they are "complete"
-  // only once this role has SAVED content: at least one custom question, a
-  // submission message. An optional section a conference does not use keeps
-  // its number, which is fine (owner, 25 Sep 2026).
-  const step3Complete = normalizeBlocks(activeRoleConfig?.custom_questions ?? []).length > 0;
-  const step4Complete = !!activeRoleConfig?.submission_message?.trim();
-  const stepComplete = useMemo(
-    () => ({ 1: step1Complete, 2: step2Complete, 3: step3Complete, 4: step4Complete } as Record<number, boolean>),
-    [step1Complete, step2Complete, step3Complete, step4Complete],
-  );
 
   // ── After-submitting message (step 4) ───────────────────────────────────
   // Local, debounced input state — the same reason QuestionBuilder is
@@ -2417,43 +2232,6 @@ export default function SettingsPage() {
       });
     }, 800);
   }
-
-  const stepPanelRef = useRef<HTMLDivElement | null>(null);
-  const lastOpenedRef = useRef<string | null>(null);
-  const wasCompleteRef = useRef<Record<string, boolean>>({});
-
-  // Auto-advance, deliberately narrow: only on the incomplete → complete edge,
-  // only for the step actually open, and never while the person is still in it.
-  useEffect(() => {
-    const key = `${activeRole}-${openStep}`;
-    const complete = stepComplete[openStep] ?? true;
-    if (lastOpenedRef.current !== key) {
-      // Just opened, or the role changed. Record the baseline and stop, so
-      // reopening an already-complete step cannot bounce straight back out.
-      lastOpenedRef.current = key;
-      wasCompleteRef.current[key] = complete;
-      return;
-    }
-    const was = wasCompleteRef.current[key];
-    wasCompleteRef.current[key] = complete;
-    // Only General Info and Fees advance. Form and After submitting became
-    // real rules on 25 Sep 2026 (a saved question, a saved message), and a
-    // first saved question must not move the panel out from under the person
-    // writing it.
-    if (was || !complete || openStep > 2) return;
-    // A save can settle while focus is still inside the panel (blur one field,
-    // land on the next). Moving the panel out from under that is hostile.
-    if (stepPanelRef.current && stepPanelRef.current.contains(document.activeElement)) return;
-    // The step after this one, not the next unfinished one: Form is always
-    // complete, so hunting for an incomplete step left anyone finishing Fees
-    // staring at a step that had just closed itself. Finishing the last step
-    // advances to nothing, which is the end of the flow.
-    // Past the last step there is nowhere to go, and 0 (all collapsed) is now
-    // a legal resting place rather than a step stuck open behind you.
-    const roleSteps = stepsForRole(activeRole);
-    const next = roleSteps[roleSteps.findIndex(st => st.n === openStep) + 1];
-    setOpenStep(next ? next.n : 0);
-  }, [activeRole, openStep, stepComplete]);
 
   function handleCopyApplicationLink() {
     if (!conference) return;
@@ -2615,11 +2393,6 @@ export default function SettingsPage() {
   // The refusal names a question on the role being edited, so it must not
   // follow the organiser to another role's form.
   useEffect(() => { setBlocksBlocked(''); }, [selectedRole]);
-
-  // Leaving the Form step. Its panel is about to collapse, so write now.
-  useEffect(() => {
-    if (openStep !== 3) flushRef.current();
-  }, [openStep]);
 
   // Never leave a "Saved" timer running past unmount.
   useEffect(() => {
@@ -3012,14 +2785,6 @@ export default function SettingsPage() {
   // `conference` only changes once refreshConferenceQuiet() confirms a write.
   const view: Conference = conference;
 
-  // Applications can't be configured or opened until the conference's
-  // payment method is actually usable by a delegate, not merely on file:
-  // manual needs a link or note, Stripe needs onboarding complete. Even
-  // free conferences need a method (they pick Manual and note it's free)
-  // so the /pay page and PledgeInvoicingCard always have somewhere to
-  // point delegates. Mirrors conference_payments_ready in the database.
-  const applicationsGated = activeTab === 'applications' && paymentGateBlocks(conference);
-
   // Inner grouped sub-card. These sit *inside* the raised floating panel, so
   // they read as quiet content groups (thicker 1.5px edge, a whisper of warm
   // shadow) and let the panel itself stay the protagonist surface.
@@ -3061,14 +2826,23 @@ export default function SettingsPage() {
   // so an edit to the page shows on the card the moment it saves.
   const sidePreview = activeTab === 'conference';
 
+  // Settings opens on the control panel (controlPanel.tsx, Oct 2026): the
+  // three status tiles, who can apply, and everything else.
   if (showHome) {
     return (
       <div className="px-4 sm:px-6 md:px-10 py-8" style={{ maxWidth: '1240px' }}>
-        <SettingsHome
-          snap={settingsSnap}
+        <SettingsControlPanel
+          conference={view}
+          roles={roleConfigs}
+          counts={roleAppCounts}
+          now={nowMs}
+          organizerCount={organizers.length}
+          pendingInviteCount={pendingInvites.length}
+          publicSaving={publicToggleSaving}
+          onPublicToggle={handlePublicToggle}
+          onRoleToggle={(role, next) => { void saveRoleConfig(role, { is_enabled: next }); }}
+          onEditRole={openRoleSetup}
           onOpen={(key) => openSection(key)}
-          onCopyLink={handleCopyConferenceLink}
-          copied={confLinkCopied}
         />
         {confirmModal}
       </div>
@@ -3080,20 +2854,23 @@ export default function SettingsPage() {
     // members out in a grid, so a wider panel means fewer wrapped rows and a
     // shallower, more legible hierarchy. Every other tab is a reading column
     // and stays at 1080 (1440 with the live preview beside it).
-    <div className="px-4 sm:px-6 md:px-10 py-8" style={{ maxWidth: activeTab === 'organizers' ? '1400px' : sidePreview ? '1440px' : '1080px' }}>
-      <SectionTop
-        active={activeTab}
-        snap={settingsSnap}
-        onOpen={(key) => openSection(key)}
-        onHome={() => openSection(null)}
-      />
+    <div className="px-4 sm:px-6 md:px-10 py-8" style={{ maxWidth: activeTab === 'organizers' ? '1400px' : sidePreview ? '1440px' : activeTab === 'applications' ? '1040px' : '1080px' }}>
+      {/* The role set-up draws its own way back and its own role picker. */}
+      {activeTab !== 'applications' && (
+        <SectionTop
+          active={activeTab}
+          snap={settingsSnap}
+          onOpen={(key) => openSection(key)}
+          onHome={() => openSection(null)}
+        />
+      )}
 
       <div className="flex items-start" style={{ gap: '28px' }}>
         {/* ── The section's content ── */}
         <section
           aria-label={sectionMeta(activeTab).question}
           className="flex-1 min-w-0"
-          style={activeTab === 'organizers'
+          style={activeTab === 'organizers' || activeTab === 'applications'
             // The team is a gallery of faces, and a gallery wants a wall, not a
             // sheet of paper. No panel, no border, no shadow — the portraits sit
             // straight on the ivory canvas with the full width to spread into.
@@ -3107,828 +2884,150 @@ export default function SettingsPage() {
             }}
         >
 
-      {/* ── Grandfathered warning — payment_gate_exempt conferences the gate
-          let through on purpose, but that still can't actually get paid.
-          Informs without blocking: applications tab renders normally below. ── */}
-      {activeTab === 'applications' && conference.payment_gate_exempt && !conferencePaymentsReady(conference) && (
-        <div
-          className="flex items-start gap-3 rounded-2xl px-5 py-4 mb-6"
-          style={{ backgroundColor: 'rgba(238,217,138,0.22)', border: '1px solid rgba(182,135,31,0.35)' }}
-        >
-          <AlertTriangle size={18} style={{ color: '#8A6614', flexShrink: 0, marginTop: 1 }} />
-          <div>
-            <p className="font-bold text-sm mb-1" style={{ color: '#6B4F12', fontFamily: "var(--font-brand), sans-serif" }}>
-              Delegates cannot pay you yet
-            </p>
-            <p className="text-sm" style={{ color: '#6B4F12', fontFamily: "var(--font-brand), sans-serif", lineHeight: 1.6 }}>
-              Your applications are open, but nothing on your financial setup gives delegates a way to pay. Finish it in{' '}
-              <Link href={`/manage/${conference.slug}/financials/settings`} className="font-bold underline">
-                Financial Settings
-              </Link>
-              {' '}so applicants are not left stuck.
-            </p>
-          </div>
-        </div>
-      )}
-
-      {/* ── APPLICATIONS TAB ──────────────────────────────────────────────
-          One role at a time. The five-role stack made every role look equally
-          urgent and buried the one question that matters, which is whether the
-          role is actually taking applications right now. ── */}
+      {/* ── APPLICATIONS: one role, step by step (roleSetup.tsx, Oct 2026).
+          Every field, validation, autosave and write below is this page's own,
+          passed in unchanged; the component only lays them out as steps. ── */}
       {activeTab === 'applications' && (() => {
-        // `role` and `config` keep their old names so every control below reads
-        // exactly as it did when this was a ROLES.map.
         const role = activeRole;
         const config = roleConfigs.find(rc => rc.role === role);
-        const enabled = config?.is_enabled ?? false;
-        const status = roleStatus(config, Date.now());
-        const chip = ROLE_STATUS_MARK[status];
-        // Nobody charges their own volunteers or their own secretariat: the
-        // Fees step doesn't apply to either, so it isn't shown at all.
-        const showFeesStep = role !== 'secretariat' && role !== 'staff';
+        const saveStates = Object.values(stepSaveState);
         return (
-          /* `position: relative` so the payment gate below can cover THIS panel
-             and nothing else. It used to be a full-screen portal, which also
-             covered the section rail — an organiser who had not finished
-             financial onboarding could not reach Conference, Organizers or
-             Privacy either, on a page where none of those have anything to do
-             with taking money. */
-          <div style={{ position: 'relative' }}>
-            {/* The gate blurs the real screen rather than replacing it: this is
-                a step not yet done, not an error, and seeing what is waiting
-                behind it is the point. */}
-            <div
-              style={applicationsGated
-                ? { filter: 'blur(4px)', pointerEvents: 'none', userSelect: 'none' }
-                : undefined}
-            >
-              {/* ── Role bookmarks. Icon above the name, active tab raised and
-                  joined to the panel below it. Order follows how a conference
-                  is actually staffed, not the alphabet. ── */}
-              <RoleBookmarks
-                roles={ROLES}
-                active={role}
-                statusOf={(r) => roleStatus(roleConfigs.find(c => c.role === r), Date.now())}
-                onPick={setActiveRole}
-              />
-
-              {/* ── Role header bar. Never collapses: this is the one place that
-                  answers "is this role live". ── */}
-              <div style={{ ...cardStyle, borderRadius: undefined, borderTopLeftRadius: '4px', borderTopRightRadius: '16px', borderBottomLeftRadius: '16px', borderBottomRightRadius: '16px' }}>
-                <div className="flex items-center gap-3 flex-wrap">
-                  <span
-                    className="flex items-center justify-center flex-shrink-0"
-                    style={{ width: 40, height: 40, borderRadius: '999px', background: 'linear-gradient(145deg, #FFFDF9, #E4DCCB)', boxShadow: NEU.outSm }}
-                  >
-                    <Emoji3D name={ROLE_EMOJI[role] ?? 'Bust in silhouette'} size={24} />
-                  </span>
-                  <span className="inline-flex items-center gap-2 font-black" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif", fontSize: '18px' }}>
-                    {roleLabel(role)}
-                    <InfoHint label={`What a ${roleLabel(role)} is`} text={ROLE_BLURB[role] ?? ''} size={17} />
-                  </span>
-                  <span
-                    suppressHydrationWarning
-                    className="inline-flex items-center gap-1 font-bold"
-                    style={{
-                      fontFamily: "var(--font-brand), sans-serif", fontSize: '12px', fontWeight: 700,
-                      color: chip.color,
-                    }}
-                  >
-                    <chip.Icon size={14} strokeWidth={2.2} aria-hidden />
-                    {chip.label}
-                  </span>
-
-                  <div className="flex items-center gap-3 flex-wrap w-full sm:w-auto sm:ml-auto">
-                    <button
-                      type="button"
-                      onClick={handleCopyApplicationLink}
-                      className="inline-flex items-center gap-1.5 rounded-[10px] focus:outline-none transition-colors gv-lift"
-                      style={{
-                        padding: '7px 12px',
-                        fontFamily: "var(--font-brand), sans-serif", fontSize: '11px', fontWeight: 800,
-                        letterSpacing: 0,
-                        color: '#1B3828', backgroundColor: 'transparent',
-                        border: '1.5px solid #DDD4C0', cursor: 'pointer',
-                      }}
-                      onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.06)'; }}
-                      onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+          <>
+            <RoleSetup
+              key={role}
+              conference={view}
+              roles={roleConfigs}
+              role={role}
+              config={config}
+              now={nowMs}
+              appliedCount={roleAppCounts ? (roleAppCounts[role] ?? 0) : null}
+              configVersion={configVersion}
+              saveState={saveStates.includes('saving') ? 'saving' : saveStates.includes('saved') ? 'saved' : 'idle'}
+              timelineCtx={timelineCtx}
+              timelineMsg={timelineMsg?.role === role ? timelineMsg : null}
+              initialStep={searchParams.get('step')}
+              linkCopied={linkCopied}
+              onHome={() => openSection(null)}
+              onPickRole={setActiveRole}
+              onSave={(updates) => { void saveRoleConfig(role, updates as Partial<RoleConfig>); }}
+              onSaveTimeline={(change, where) => { saveTimeline(role, change, where); }}
+              onUpdatePhase={(phases, idx, patch) => updateFeePhase(role, phases, idx, patch)}
+              onCopyPhases={() => setCopyPhasesOpen(true)}
+              onCopyLink={handleCopyApplicationLink}
+              onLeaveForm={() => flushRef.current()}
+              formSlot={
+                <>
+                  <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">
+                    <CopyFormMenu roles={otherRoles} onPick={handleCopyFormTo} />
+                  </div>
+                  {blocksBlocked && (
+                    <p
+                      role="alert"
+                      className="text-sm mb-3 rounded-lg px-3 py-2"
+                      style={{ color: '#8B2020', backgroundColor: 'rgba(139,32,32,0.06)', border: '1px solid rgba(139,32,32,0.2)', fontFamily: "var(--font-brand), sans-serif" }}
                     >
-                      {linkCopied ? <Check size={13} strokeWidth={3} /> : <Copy size={13} strokeWidth={2.4} />}
-                      {linkCopied ? 'Copied' : 'Copy application link'}
-                    </button>
-                    <a
-                      href={`/conferences/${conference.slug}/apply?role=${role}&preview=1`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1.5 rounded-[10px] focus:outline-none transition-colors"
-                      style={{
-                        padding: '7px 12px',
-                        fontFamily: "var(--font-brand), sans-serif", fontSize: '11px', fontWeight: 800,
-                        letterSpacing: 0,
-                        color: '#1B3828', backgroundColor: 'transparent',
-                        border: '1.5px solid #DDD4C0', cursor: 'pointer',
-                        textDecoration: 'none',
-                      }}
-                      onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.06)'; }}
-                      onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
-                    >
-                      <Eye size={13} strokeWidth={2.4} />
-                      Preview application
-                    </a>
-                    {/* The switch says what it does, so nobody has to guess
-                        that this is the role's on/off (12-year-old test). */}
-                    <span className="inline-flex items-center gap-2 sm:ml-1">
-                      <span style={{ fontFamily: "var(--font-brand), sans-serif", fontSize: '13px', fontWeight: 600, color: enabled ? '#1B3828' : '#5C4F42' }}>
-                        {enabled ? 'Taking applications' : 'Not taking applications'}
-                      </span>
-                      <PillToggle
-                        value={enabled}
-                        onChange={(v) => saveRoleConfig(role, { is_enabled: v })}
-                        size="md"
-                      />
-                    </span>
-                  </div>
-                </div>
-
-              </div>
-
-              {/* ── First-run walkthrough. Only for a role nothing has been
-                  decided about yet, and only until it is dismissed. ── */}
-              {config && roleIsUntouched(config) && !introDone.has(role) && (
-                <SetupIntro role={role} onDone={() => dismissIntro(role)} />
-              )}
-
-              {/* ── The three steps. Editable whether or not the role is on: a
-                  role gets set up before it is opened. ── */}
-              {config && (
-                <div key={`${role}-${configVersion}`} ref={stepPanelRef}>
-
-                  <div style={cardStyle}>
-                    <StepHeader
-                      n={STEPS[0].n} label={STEPS[0].label} sub={STEPS[0].sub} hint={STEPS[0].hint}
-                      complete={stepComplete[1]} open={openStep === 1} status={stepSaveState[1]}
-                      onClick={() => setOpenStep(openStep === 1 ? 0 : 1)}
-                    />
-                    {openStep === 1 && (
-                      <div className="mt-5">
-                        {/* Opens / Closes. The shared friendly picker in
-                            datetime mode, not a native control: the same
-                            calendar the fee phases already use, plus the hour
-                            the window actually turns over. */}
-                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-3">
-                          <div>
-                            <label className="text-xs font-semibold mb-1.5 flex items-center gap-1.5" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>
-                              Opens
-                              <InfoHint
-                                label="About the opening time"
-                                text="The moment this role starts taking applications. Before it, the application link says the window has not opened yet and shows the date and time it will. Nothing needs doing at that moment. It opens itself. Leave it empty to have the role open the instant you switch it on."
-                              />
-                            </label>
-                            <DatePicker
-                              withTime
-                              clearable
-                              value={toDatetimeLocal(config.applications_open_at)}
-                              onChange={(v) => { saveTimeline(role, { applications_open_at: fromDatetimeLocal(v) }, 'window'); }}
-                              placeholder="Opens as soon as it is switched on"
-                              zoneNote={`Times are in ${localZoneLabel()}.`}
-                            />
-                          </div>
-
-                          <div>
-                            <label className="text-xs font-semibold mb-1.5 flex items-center gap-1.5" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>
-                              Closes
-                              <InfoHint
-                                label="About the closing time"
-                                text="The moment this role stops taking new applications. Applications already in progress are not deleted. The form simply stops accepting new ones, and the role reads as CLOSED. Leave it empty to keep it open until you switch the role off yourself."
-                              />
-                            </label>
-                            <DatePicker
-                              withTime
-                              clearable
-                              value={toDatetimeLocal(config.applications_close_at)}
-                              onChange={(v) => { saveTimeline(role, { applications_close_at: fromDatetimeLocal(v) }, 'window'); }}
-                              min={toDatetimeLocal(config.applications_open_at).slice(0, 10) || undefined}
-                              placeholder="Stays open until switched off"
-                              zoneNote={`Times are in ${localZoneLabel()}.`}
-                            />
-                          </div>
-
-                          <div className="md:col-span-2">
-                            {windowBackwards ? (
-                              <p className="text-xs rounded-lg px-3 py-2" suppressHydrationWarning style={{ color: '#8B2020', backgroundColor: 'rgba(139,32,32,0.06)', border: '1px solid rgba(139,32,32,0.2)', fontFamily: "var(--font-brand), sans-serif" }}>
-                                This window closes at or before it opens, so nobody can apply. Move one of the two.
-                              </p>
-                            ) : (
-                              <p className="text-xs" suppressHydrationWarning style={{ color: '#6E6152', fontFamily: "var(--font-brand), sans-serif" }}>
-                                Times are in {localZoneLabel()}. Applicants see these in their own timezone.
-                              </p>
-                            )}
-                            {(config.fee_phases ?? []).some(p => p.start_date && p.end_date) && (
-                              <p className="text-xs mt-1" style={{ color: '#6E6152', fontFamily: "var(--font-brand), sans-serif" }}>
-                                With fee phases, applications open when the first price starts and close when the last price ends. Changing one moves the other.
-                              </p>
-                            )}
-                            {timelineMsg?.role === role && timelineMsg.where === 'window' && (
-                              timelineMsg.kind === 'info'
-                                ? <TimelineNotice text={timelineMsg.text} />
-                                : <p role="alert" className="text-xs rounded-lg px-3 py-2 mt-2" style={{ color: '#8B2020', backgroundColor: 'rgba(139,32,32,0.06)', border: '1px solid rgba(139,32,32,0.2)', fontFamily: "var(--font-brand), sans-serif" }}>{timelineMsg.text}</p>
-                            )}
-                            <TimelineWarning
-                              config={config}
-                              roleLabel={role}
-                              ctx={timelineCtx}
-                              onFix={(patch) => { saveTimeline(role, patch, 'window'); }}
-                            />
-                          </div>
-                          <div>
-                            <label className="text-xs font-semibold mb-1.5 flex items-center gap-1.5" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>
-                              Max accepted
-                              <InfoHint
-                                label="About max accepted"
-                                text="The most people you will accept into this role. It is a ceiling on acceptances, not on applications. People can keep applying past it, you simply cannot accept more than this many. Leave it empty for no limit."
-                              />
-                            </label>
-                            <input
-                              type="number"
-                              min={1}
-                              placeholder="Unlimited"
-                              defaultValue={config.max_accepted ?? ''}
-                              onFocus={fgInput}
-                              onBlur={(e) => {
-                                e.currentTarget.style.borderColor = '#DDD4C0';
-                                saveRoleConfig(role, { max_accepted: e.target.value ? parseInt(e.target.value) : null });
-                              }}
-                              style={inputStyle}
-                            />
-                          </div>
-                        </div>
-                        {/* Acceptance, payment and the dashboard lock are
-                            toggles, all off by default (owner, 29 Sep 2026).
-                            'after_application' was merged into 'anytime' on
-                            the server the same day. */}
-                        <div className="mt-4 flex items-center justify-between gap-3">
-                          <div>
-                            <label className="text-xs font-semibold flex items-center gap-1.5" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>
-                              Auto-accept
-                              <InfoHint
-                                label="About acceptance"
-                                text="With this on, everyone is accepted the moment they submit, which is right for observers, advisors and any role where you are not really choosing. With it off, every application waits until someone on your team decides, which is what you want wherever places are limited or the answers matter."
-                              />
-                            </label>
-                            <p className="text-xs mt-0.5" style={{ color: '#6E6152', fontFamily: "var(--font-brand), sans-serif" }}>
-                              On: applicants are accepted as soon as they apply. Off: you review each application.
-                            </p>
-                          </div>
-                          <PillToggle
-                            value={config.auto_accept === true}
-                            onChange={(v) => saveRoleConfig(role, { auto_accept: v })}
-                            size="md"
-                          />
-                        </div>
-                        {/* Payment settings only matter when this role
-                            charges something. A free role hides them; the
-                            saved values are never touched, and they come
-                            back the moment a fee is set. */}
-                        {!roleIsFree(config) && (
-                          <>
-                        <div className="mt-4 flex items-center justify-between gap-3">
-                          <div>
-                            <label className="text-xs font-semibold flex items-center gap-1.5" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>
-                              Payment after acceptance
-                              <InfoHint
-                                label="About payment after acceptance"
-                                text="With this on, the pay button appears only once you accept someone, so you only charge the people you actually took. With it off, applicants can pay as soon as they apply."
-                              />
-                            </label>
-                            <p className="text-xs mt-0.5" style={{ color: '#6E6152', fontFamily: "var(--font-brand), sans-serif" }}>
-                              On: applicants can pay only once you accept them. Off: they can pay as soon as they apply.
-                            </p>
-                          </div>
-                          <PillToggle
-                            value={config.payment_timing === 'after_acceptance'}
-                            onChange={(v) => saveRoleConfig(role, { payment_timing: v ? 'after_acceptance' : 'anytime' })}
-                            size="md"
-                          />
-                        </div>
-                        <div className="mt-4 flex items-center justify-between gap-3">
-                          <div>
-                            <label className="text-xs font-semibold flex items-center gap-1.5" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>
-                              Hide dashboard until payment
-                              <InfoHint
-                                label="About hiding the dashboard until payment"
-                                text="Use this if you want payment before anyone sees committees, documents or study guides. Waived and sponsored participants always see everything."
-                              />
-                            </label>
-                            <p className="text-xs mt-0.5" style={{ color: '#6E6152', fontFamily: "var(--font-brand), sans-serif" }}>
-                              Accepted participants who have not paid see only their overview and payment until they pay. Off by default.
-                            </p>
-                          </div>
-                          <PillToggle
-                            value={config.hide_dashboard_until_paid === true}
-                            onChange={(v) => saveRoleConfig(role, { hide_dashboard_until_paid: v })}
-                            size="md"
-                          />
-                        </div>
-                          </>
-                        )}
-                        {/* Resubmission */}
-                        <div className="mt-4 flex items-center justify-between gap-3">
-                          <div>
-                            <label className="text-xs font-semibold flex items-center gap-1.5" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>
-                              Allow resubmission
-                              <InfoHint
-                                label="About resubmission"
-                                text="With this on, an applicant you have denied can reopen their form, change their answers and send it back for another look. Useful when denials are usually about a missing detail rather than a real no. With it off, a denial is final and they cannot apply again for this role."
-                              />
-                            </label>
-                            <p className="text-xs mt-0.5" style={{ color: '#6E6152', fontFamily: "var(--font-brand), sans-serif" }}>
-                              Let denied applicants edit and resubmit.
-                            </p>
-                          </div>
-                          <PillToggle
-                            value={config.allow_resubmission ?? false}
-                            onChange={(v) => saveRoleConfig(role, { allow_resubmission: v })}
-                            size="md"
-                          />
-                        </div>
-                        {/* Preference ranking — what this role is asked to rank
-                            on the application form. roleCanHavePreference (and
-                            the database's second CHECK) is what decides who
-                            gets a control here at all; every other role
-                            renders nothing, not a disabled version of it. */}
-                        {roleCanHavePreference(role) && (
-                          role === 'chair' ? (
-                            <div className="mt-4 flex items-center justify-between gap-3">
-                              <div>
-                                <label className="text-xs font-semibold flex items-center gap-1.5" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>
-                                  Ask for their committee preference
-                                </label>
-                                <p className="text-xs mt-0.5" style={{ color: '#6E6152', fontFamily: "var(--font-brand), sans-serif" }}>
-                                  Chairs rank which committee they would like to chair, and you assign from their ranking.
-                                </p>
-                              </div>
-                              <PillToggle
-                                value={config.preference_mode === 'committees_only'}
-                                onChange={(v) => saveRoleConfig(role, { preference_mode: v ? 'committees_only' : 'none' })}
-                                size="md"
-                              />
-                            </div>
-                          ) : (
-                            <div className="mt-4">
-                              <label className="text-xs font-semibold flex items-center gap-1.5" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>
-                                Delegate preferences
-                                <InfoHint
-                                  label="About delegate preferences"
-                                  text="What a delegate is asked to rank on the application form, and therefore what your allocation has to work with. Ranking committee-and-country pairs gives the fullest picture and the best automatic allocation, but it is also the longest form to fill in. Committees only, or countries only, are shorter. None skips the step entirely and leaves every seat for you to assign by hand."
-                                />
-                              </label>
-                              <p className="text-xs mt-0.5 mb-2" style={{ color: '#6E6152', fontFamily: "var(--font-brand), sans-serif" }}>
-                                Choose what delegates rank when they apply. The application form shows only the pickers you enable here.
-                              </p>
-                              <div className="grid grid-cols-1" style={{ gap: 8 }}>
-                                {PREF_MODE_OPTIONS.map(opt => {
-                                  const active = (config.preference_mode ?? 'none') === opt.value;
-                                  return (
-                                    <button
-                                      key={opt.value}
-                                      type="button"
-                                      onClick={() => saveRoleConfig(role, { preference_mode: opt.value })}
-                                      className="flex items-center rounded-xl focus:outline-none"
-                                      style={{
-                                        gap: 10, padding: '11px 13px', textAlign: 'left',
-                                        backgroundColor: active ? '#1B3828' : 'transparent',
-                                        color: active ? '#EED98A' : '#1C1410',
-                                        border: active ? '1.5px solid #1B3828' : '1.5px solid #DDD4C0',
-                                        boxShadow: active ? '0 4px 12px rgba(27,56,40,0.2)' : 'none',
-                                        fontFamily: "var(--font-brand), sans-serif", fontSize: 12, fontWeight: 800, letterSpacing: 0,
-                                        cursor: 'pointer',
-                                      }}
-                                    >
-                                      {/* The thing(s) being ranked, drawn rather than described:
-                                          a committee emblem and, for roles that pair it with a
-                                          country, a flag. */}
-                                      <span className="inline-flex items-center flex-shrink-0" style={{ gap: 3 }}>
-                                        {opt.value !== 'countries_only' && opt.value !== 'none' && <Emoji3D name="Classical building" size={19} fallback={Building2} fallbackColor={active ? '#EED98A' : '#1B3828'} />}
-                                        {opt.value !== 'committees_only' && opt.value !== 'none' && <Emoji3D name="Crossed flags" size={19} fallback={Globe} fallbackColor={active ? '#EED98A' : '#1B3828'} />}
-                                        {opt.value === 'none' && <Emoji3D name="Cross mark" size={19} fallback={X} fallbackColor={active ? '#EED98A' : '#1B3828'} />}
-                                      </span>
-                                      <span className="min-w-0">{opt.label}</span>
-                                    </button>
-                                  );
-                                })}
-                              </div>
-                              <p className="text-xs mt-1.5" style={{ color: '#6E6152', fontFamily: "var(--font-brand), sans-serif" }}>
-                                {PREF_MODE_OPTIONS.find(o => o.value === (config.preference_mode ?? 'none'))?.desc}
-                              </p>
-                            </div>
-                          )
-                        )}
-                        {/* MUN experience — chair and secretariat only. The
-                            database CHECK refuses true for every other role,
-                            so a control for them could never work and must
-                            not exist, not even disabled. */}
-                        {(role === 'chair' || role === 'secretariat') && (
-                          <div className="mt-4 flex items-center justify-between gap-3">
-                            <div>
-                              <label className="text-xs font-semibold flex items-center gap-1.5" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>
-                                Ask for MUN experience
-                                <InfoHint
-                                  label="About MUN experience"
-                                  text="Delegates and head delegates are not affected by this setting, on or off: their experience level feeds committee allocation directly, so it is never collected this way for them."
-                                />
-                              </label>
-                              <p className="text-xs mt-0.5" style={{ color: '#6E6152', fontFamily: "var(--font-brand), sans-serif" }}>
-                                Applicants list the conferences they have chaired or staffed, and can import them from their Gavelling MUN CV.
-                              </p>
-                            </div>
-                            <PillToggle
-                              value={config.collect_mun_experience ?? false}
-                              onChange={(v) => saveRoleConfig(role, { collect_mun_experience: v })}
-                              size="md"
-                            />
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-
-                  {showFeesStep && (
-                  <div style={cardStyle}>
-                    <StepHeader
-                      n={STEPS[1].n} label={STEPS[1].label} sub={STEPS[1].sub} hint={STEPS[1].hint}
-                      complete={stepComplete[2]} open={openStep === 2} status={stepSaveState[2]}
-                      onClick={() => setOpenStep(openStep === 2 ? 0 : 2)}
-                    />
-                    {openStep === 2 && (
-                      <div className="mt-5">
-                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-3">
-                          <div>
-                            <label className="block text-xs font-semibold mb-1" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>Fee</label>
-                            <div className="flex gap-2">
-                              <CurrencyPicker
-                                value={config.fee_currency}
-                                onChange={(code) => saveRoleConfig(role, { fee_currency: code })}
-                                ariaLabel={`${roleLabel(role)} fee currency`}
-                                variant="bordered"
-                                style={{ width: 118, flexShrink: 0 }}
-                              />
-                              <input
-                                type="number"
-                                min={0}
-                                step={0.01}
-                                placeholder="0.00"
-                                defaultValue={config.fee_amount}
-                                onFocus={fgInput}
-                                onBlur={(e) => {
-                                  e.currentTarget.style.borderColor = '#DDD4C0';
-                                  saveRoleConfig(role, { fee_amount: parseFloat(e.target.value) || 0 });
-                                }}
-                                style={{ ...inputStyle, flex: 1, minWidth: 0 }}
-                              />
-                            </div>
-                          </div>
-                        </div>
-                        {/* Fee phases, date-windowed pricing (Early Bird, Phase 1, …).
-                            When a phase's window contains today it overrides the flat
-                            fee above; gaps between phases fall back to the flat fee. */}
-                        {(() => {
-                          const phases = config.fee_phases ?? [];
-                          const active = activeFeePhase(phases);
-                          // A phase missing either date is skipped by the app and by
-                          // resolve_phase_fee, so the amount on it never applies. Say
-                          // so on the row, and refuse to stack another on top of it.
-                          const hasInvalidPhase = phases.some(p => !p.start_date || !p.end_date);
-                          return (
-                            <div className="mt-4">
-                              <div className="flex items-center justify-between mb-1.5 flex-wrap" style={{ gap: 8 }}>
-                                <label className="text-xs font-semibold flex items-center gap-1.5" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>
-                                  Fee phases
-                                  <InfoHint
-                                    label="About fee phases"
-                                    text="Optional date windows that override the flat fee: an early-bird rate, a standard rate, a late rate. Whichever phase contains today is what an applicant is quoted and charged; on a day no phase covers, the flat fee applies. Both dates are inclusive, and a phase missing either one is skipped entirely."
-                                  />
-                                </label>
-                                <div className="flex items-center" style={{ gap: 12 }}>
-                                  {phases.length > 0 && (
-                                    <button
-                                      type="button"
-                                      onClick={() => setCopyPhasesOpen(true)}
-                                      className="text-[11px] font-bold focus:outline-none hover:underline inline-flex items-center gap-1.5"
-                                      style={{ color: '#7A6E5E', fontFamily: "var(--font-brand), sans-serif", letterSpacing: 0, background: 'none', border: 'none', cursor: 'pointer' }}
-                                    >
-                                      <Copy size={12} strokeWidth={2.4} />
-                                      Copy to another role
-                                    </button>
-                                  )}
-                                  <button
-                                    type="button"
-                                    disabled={hasInvalidPhase}
-                                    onClick={() => { saveTimeline(role, {
-                                      fee_phases: [...phases, { label: `Phase ${phases.length + 1}`, start_date: '', end_date: '', amount: config.fee_amount }],
-                                    }, 'phases'); }}
-                                    className="text-[11px] font-bold focus:outline-none hover:underline"
-                                    style={{ color: '#1B3828', fontFamily: "var(--font-brand), sans-serif", letterSpacing: 0, background: 'none', border: 'none', opacity: hasInvalidPhase ? 0.45 : 1, cursor: hasInvalidPhase ? 'not-allowed' : 'pointer' }}
-                                  >
-                                    + Add phase
-                                  </button>
-                                </div>
-                              </div>
-                              {phases.length === 0 ? (
-                                <p className="text-xs" style={{ color: '#6E6152', fontFamily: "var(--font-brand), sans-serif", lineHeight: 1.55 }}>
-                                  Optional: charge different amounts by date, e.g. an Early Bird rate. When no phase covers today, the flat fee above applies.
-                                </p>
-                              ) : (
-                                <>
-                                  {phases.map((phase, pi) => {
-                                    const isActive = active !== null && phase === active;
-                                    const invalid = !phase.start_date || !phase.end_date;
-                                    return (
-                                      <Fragment key={`${pi}-${phases.length}-${configVersion}`}>
-                                      <div
-                                        // .gvs-phase-row (settingsHome.tsx) lays the five
-                                        // fields out in one row only when there is room for
-                                        // the dates; narrower, they stack in two rows.
-                                        className="gvs-phase-row grid gap-2 items-center mb-2 rounded-[10px] px-2.5 py-2"
-                                        style={{
-                                          backgroundColor: isActive ? 'rgba(27,56,40,0.06)' : 'rgba(27,56,40,0.02)',
-                                          border: invalid
-                                            ? '1.5px solid rgba(139,32,32,0.45)'
-                                            : isActive ? '1.5px solid rgba(27,56,40,0.35)' : '1px solid #F0EDE6',
-                                        }}
-                                      >
-                                        <div className="flex items-center gap-1.5 min-w-0">
-                                          <input
-                                            type="text"
-                                            placeholder="e.g. Early Bird"
-                                            defaultValue={phase.label}
-                                            onFocus={fgInput}
-                                            onBlur={(e) => {
-                                              e.currentTarget.style.borderColor = '#DDD4C0';
-                                              if (e.target.value.trim() !== phase.label) updateFeePhase(role, phases, pi, { label: e.target.value.trim() });
-                                            }}
-                                            style={{ ...inputStyle, padding: '6px 10px', fontSize: '12.5px', minWidth: 0 }}
-                                          />
-                                          {isActive && (
-                                            <span
-                                              className="flex-shrink-0 inline-flex items-center gap-1 text-[12px] font-bold"
-                                              style={{ color: '#1B3828', fontFamily: "var(--font-brand), sans-serif" }}
-                                            >
-                                              <Star size={14} strokeWidth={2.2} aria-hidden />
-                                              Current
-                                            </span>
-                                          )}
-                                        </div>
-                                        <DatePicker
-                                          value={phase.start_date}
-                                          max={phase.end_date || undefined}
-                                          placeholder="Start date"
-                                          onChange={(iso) => {
-                                            if (iso !== phase.start_date) updateFeePhase(role, phases, pi, { start_date: iso });
-                                          }}
-                                        />
-                                        <DatePicker
-                                          value={phase.end_date}
-                                          min={phase.start_date || undefined}
-                                          placeholder="End date"
-                                          onChange={(iso) => {
-                                            if (iso !== phase.end_date) updateFeePhase(role, phases, pi, { end_date: iso });
-                                          }}
-                                        />
-                                        <input
-                                          type="number"
-                                          min={0}
-                                          step={0.01}
-                                          aria-label="Phase fee amount"
-                                          placeholder="0.00"
-                                          defaultValue={phase.amount}
-                                          onFocus={fgInput}
-                                          onBlur={(e) => {
-                                            e.currentTarget.style.borderColor = '#DDD4C0';
-                                            const next = parseFloat(e.target.value) || 0;
-                                            if (next !== phase.amount) updateFeePhase(role, phases, pi, { amount: next });
-                                          }}
-                                          style={{ ...inputStyle, padding: '6px 8px', fontSize: '12.5px', minWidth: 0, fontVariantNumeric: 'tabular-nums' }}
-                                        />
-                                        <button
-                                          type="button"
-                                          aria-label={`Remove ${phase.label || 'phase'}`}
-                                          onClick={() => { saveTimeline(role, { fee_phases: phases.filter((_, i) => i !== pi) }, 'phases'); }}
-                                          className="text-sm font-bold focus:outline-none justify-self-center"
-                                          style={{ color: '#8B2020', background: 'none', border: 'none', cursor: 'pointer', lineHeight: 1 }}
-                                        >
-                                          ✕
-                                        </button>
-                                      </div>
-                                      {invalid && (
-                                        <p className="text-xs mb-2" style={{ color: '#8B2020', fontFamily: "var(--font-brand), sans-serif" }}>
-                                          This fee phase is invalid. Please add dates.
-                                        </p>
-                                      )}
-                                      </Fragment>
-                                    );
-                                  })}
-                                  <p className="text-xs mt-1" style={{ color: '#6E6152', fontFamily: "var(--font-brand), sans-serif" }}>
-                                    Dates are inclusive and each price starts the day after the previous one ends. Applications open when the first price starts and close when the last one ends.
-                                  </p>
-                                  {timelineMsg?.role === role && timelineMsg.where === 'phases' && (
-                                    timelineMsg.kind === 'info'
-                                      ? <TimelineNotice text={timelineMsg.text} />
-                                      : <p role="alert" className="text-xs rounded-lg px-3 py-2 mt-2" style={{ color: '#8B2020', backgroundColor: 'rgba(139,32,32,0.06)', border: '1px solid rgba(139,32,32,0.2)', fontFamily: "var(--font-brand), sans-serif" }}>{timelineMsg.text}</p>
-                                  )}
-                                  <TimelineWarning
-                                    config={config}
-                                    roleLabel={role}
-                                    ctx={timelineCtx}
-                                    onFix={(patch) => { saveTimeline(role, patch, 'phases'); }}
-                                  />
-                                </>
-                              )}
-                            </div>
-                          );
-                        })()}
-                      </div>
-                    )}
-                  </div>
+                      {blocksBlocked}
+                    </p>
                   )}
-
-                  <div style={cardStyle}>
-                    <StepHeader
-                      n={STEPS[2].n} label={STEPS[2].label} sub={STEPS[2].sub} hint={STEPS[2].hint}
-                      complete={stepComplete[3]} open={openStep === 3}
-                      onClick={() => setOpenStep(openStep === 3 ? 0 : 3)}
-                      status={stepSaveState[3]}
+                  <QuestionBuilder key={selectedRole} value={currentBlocks} onChange={handleBlocksChange} hasApplications={selectedRoleHasApplications} />
+                </>
+              }
+              afterSlot={
+                <>
+                  <div className="mb-4">
+                    <label htmlFor="role-after-message" className="mb-1.5 flex items-center gap-1.5" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif", fontSize: 14, fontWeight: 600 }}>
+                      Message
+                    </label>
+                    <textarea
+                      id="role-after-message"
+                      rows={4}
+                      maxLength={280}
+                      value={submissionMessageInput}
+                      placeholder="Join our WhatsApp group so you do not miss any announcements."
+                      onChange={(e) => {
+                        submissionMessageRef.current = e.target.value;
+                        setSubmissionMessageInput(e.target.value);
+                        scheduleSubmissionSave();
+                      }}
+                      onFocus={(e) => { e.currentTarget.style.borderColor = '#1B3828'; }}
+                      onBlur={(e) => { e.currentTarget.style.borderColor = '#DDD4C0'; }}
+                      style={{ ...inputStyle, fontSize: 15, resize: 'vertical', lineHeight: '1.6' }}
                     />
-                    {openStep === 3 && (
-                      <div className="mt-5">
-                        <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">
-                          <CopyFormMenu roles={otherRoles} onPick={handleCopyFormTo} />
-                        </div>
-                        {blocksBlocked && (
-                          <p
-                            role="alert"
-                            className="text-xs mb-3 rounded-lg px-3 py-2"
-                            style={{ color: '#8B2020', backgroundColor: 'rgba(139,32,32,0.06)', border: '1px solid rgba(139,32,32,0.2)', fontFamily: "var(--font-brand), sans-serif" }}
-                          >
-                            {blocksBlocked}
-                          </p>
-                        )}
-                        <QuestionBuilder key={selectedRole} value={currentBlocks} onChange={handleBlocksChange} hasApplications={selectedRoleHasApplications} />
-                      </div>
-                    )}
+                    <p
+                      className="mt-1"
+                      style={{ textAlign: 'right', fontFamily: "var(--font-brand), sans-serif", fontSize: 12, fontWeight: 600, color: '#6E6152', fontVariantNumeric: 'tabular-nums' }}
+                    >
+                      {submissionMessageInput.length} / 280
+                    </p>
                   </div>
-
-                  <div style={cardStyle}>
-                    <StepHeader
-                      n={STEPS[3].n} label={STEPS[3].label} sub={STEPS[3].sub} hint={STEPS[3].hint}
-                      complete={stepComplete[4]} open={openStep === 4}
-                      onClick={() => setOpenStep(openStep === 4 ? 0 : 4)}
-                      status={stepSaveState[4]}
-                    />
-                    {openStep === 4 && (
-                      <div className="mt-5">
-                        <div className="mb-4">
-                          <label className="text-xs font-semibold mb-1.5 flex items-center gap-1.5" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>
-                            Message
-                          </label>
-                          <textarea
-                            rows={4}
-                            maxLength={280}
-                            value={submissionMessageInput}
-                            placeholder="Join our WhatsApp group so you do not miss any announcements."
-                            onChange={(e) => {
-                              submissionMessageRef.current = e.target.value;
-                              setSubmissionMessageInput(e.target.value);
-                              scheduleSubmissionSave();
-                            }}
-                            onFocus={(e) => { e.currentTarget.style.borderColor = '#1B3828'; }}
-                            onBlur={(e) => { e.currentTarget.style.borderColor = '#DDD4C0'; }}
-                            style={{ ...inputStyle, resize: 'vertical', lineHeight: '1.6' }}
-                          />
-                          <p
-                            className="text-xs mt-1"
-                            style={{ textAlign: 'right', fontFamily: "var(--font-brand), sans-serif", fontSize: 11.5, fontWeight: 600, color: '#6E6152', fontVariantNumeric: 'tabular-nums' }}
-                          >
-                            {submissionMessageInput.length} / 280
-                          </p>
-                        </div>
-
-                        <div className="flex gap-3 mb-2 flex-wrap">
-                          <div className="flex-1" style={{ minWidth: 200 }}>
-                            <label className="text-xs font-semibold mb-1.5 flex items-center gap-1.5" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>
-                              Button text (optional)
-                            </label>
-                            <input
-                              type="text"
-                              maxLength={40}
-                              value={submissionLinkLabelInput}
-                              placeholder="Join the group"
-                              onChange={(e) => {
-                                submissionLinkLabelRef.current = e.target.value;
-                                setSubmissionLinkLabelInput(e.target.value);
-                                scheduleSubmissionSave();
-                              }}
-                              onFocus={fgInput}
-                              onBlur={bgInput}
-                              style={inputStyle}
-                            />
-                          </div>
-                          <div className="flex-1" style={{ minWidth: 200 }}>
-                            <label className="text-xs font-semibold mb-1.5 flex items-center gap-1.5" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>
-                              Button link (optional)
-                            </label>
-                            <input
-                              type="text"
-                              value={submissionLinkUrlInput}
-                              placeholder="https://chat.whatsapp.com/..."
-                              onChange={(e) => {
-                                submissionLinkUrlRef.current = e.target.value;
-                                setSubmissionLinkUrlInput(e.target.value);
-                                scheduleSubmissionSave();
-                              }}
-                              onFocus={fgInput}
-                              onBlur={bgInput}
-                              style={inputStyle}
-                            />
-                          </div>
-                        </div>
-                        <p className="text-xs" style={{ color: '#6E6152', fontFamily: "var(--font-brand), sans-serif" }}>
-                          Add both to show a button, or leave both empty for a message with no button. The link must start with https://
-                        </p>
-                        {submissionLinkError && (
-                          <p role="alert" className="text-xs mt-1.5" style={{ color: '#8B2020', fontFamily: "var(--font-brand), sans-serif" }}>
-                            {submissionLinkError}
-                          </p>
-                        )}
-                      </div>
-                    )}
+                  <div className="flex gap-3 mb-2 flex-wrap">
+                    <div className="flex-1" style={{ minWidth: 'min(100%, 200px)' }}>
+                      <label htmlFor="role-after-label" className="mb-1.5 flex items-center gap-1.5" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif", fontSize: 14, fontWeight: 600 }}>
+                        Button words (optional)
+                      </label>
+                      <input
+                        id="role-after-label"
+                        type="text"
+                        maxLength={40}
+                        value={submissionLinkLabelInput}
+                        placeholder="Join the group"
+                        onChange={(e) => {
+                          submissionLinkLabelRef.current = e.target.value;
+                          setSubmissionLinkLabelInput(e.target.value);
+                          scheduleSubmissionSave();
+                        }}
+                        onFocus={fgInput}
+                        onBlur={bgInput}
+                        style={{ ...inputStyle, fontSize: 15 }}
+                      />
+                    </div>
+                    <div className="flex-1" style={{ minWidth: 'min(100%, 200px)' }}>
+                      <label htmlFor="role-after-url" className="mb-1.5 flex items-center gap-1.5" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif", fontSize: 14, fontWeight: 600 }}>
+                        Button link (optional)
+                      </label>
+                      <input
+                        id="role-after-url"
+                        type="text"
+                        value={submissionLinkUrlInput}
+                        placeholder="https://chat.whatsapp.com/..."
+                        onChange={(e) => {
+                          submissionLinkUrlRef.current = e.target.value;
+                          setSubmissionLinkUrlInput(e.target.value);
+                          scheduleSubmissionSave();
+                        }}
+                        onFocus={fgInput}
+                        onBlur={bgInput}
+                        style={{ ...inputStyle, fontSize: 15 }}
+                      />
+                    </div>
                   </div>
-                </div>
-              )}
+                  <p style={{ color: '#6E6152', fontFamily: "var(--font-brand), sans-serif", fontSize: 13 }}>
+                    Fill in both to show a button, or leave both empty for a message with no button. The link must start with https://
+                  </p>
+                  {submissionLinkError && (
+                    <p role="alert" className="mt-1.5" style={{ color: '#8B2020', fontFamily: "var(--font-brand), sans-serif", fontSize: 13 }}>
+                      {submissionLinkError}
+                    </p>
+                  )}
+                </>
+              }
+            />
 
-            </div>
-
-            {/* Offered when a phase first becomes usable, and from the button
-                beside + ADD PHASE. Copies the whole ladder plus the flat fee it
-                falls back to — a half-copied price is worse than none. */}
+            {/* Offered when a price first gets its dates, and from "Use these
+                prices for another role". Copies the whole ladder plus the
+                flat fee it falls back to: a half-copied price is worse than none. */}
             <CopyToRolesModal
               open={copyPhasesOpen}
               onClose={() => setCopyPhasesOpen(false)}
               onConfirm={(targets) => void copyPhasesToRoles(targets)}
               busy={copyPhasesBusy}
               title="Set this up for another role too?"
-              sub={`${roleLabel(role)} fee phases are saved. Most conferences run the same windows for every role, so tick the ones that should get an identical ladder and the same fee.`}
+              sub={`${roleLabel(role)} prices are saved. Most conferences run the same dates for every role, so tick the ones that should get the same prices.`}
               roles={ROLES.filter(r => r !== role && r !== 'secretariat' && r !== 'staff')}
             />
-
-            {/* Not dismissible by design: no close, no backdrop click, no Escape.
-                It goes away when financial onboarding is done, and not before.
-                Scoped to this panel, NOT the viewport: applications are the only
-                thing that depends on being able to take money, so they are the
-                only thing that should be locked. */}
-            {applicationsGated && (
-              <div
-                role="region"
-                aria-label="Applications locked until financial setup is finished"
-                className="absolute inset-0 z-20 flex items-start justify-center px-4 pt-10"
-                style={{ backgroundColor: 'rgba(27,56,40,0.18)', borderRadius: 16 }}
-              >
-                  <div
-                    className="flex flex-col items-center text-center"
-                    style={{ ...cardStyle, marginBottom: 0, padding: '48px 32px', maxWidth: '520px', boxShadow: '0 24px 70px rgba(27,56,40,0.28)' }}
-                  >
-                    <span
-                      className="flex items-center justify-center flex-shrink-0 mb-5"
-                      style={{
-                        width: '56px', height: '56px', borderRadius: '16px',
-                        background: 'linear-gradient(140deg, #16301F, #2A5A3C)',
-                        boxShadow: '0 6px 16px rgba(27,56,40,0.28)',
-                      }}
-                    >
-                      <Lock size={24} strokeWidth={2.1} style={{ color: '#EED98A' }} />
-                    </span>
-                    <p className="font-black text-lg mb-2" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif", maxWidth: '420px' }}>
-                      Application opening is not available until Financial Onboarding is completed.
-                    </p>
-                    <p className="text-sm mb-6" style={{ color: '#6E6152', fontFamily: "var(--font-brand), sans-serif", maxWidth: '440px', lineHeight: 1.6 }}>
-                      {paymentGateMessage(conference)}
-                    </p>
-                    <button
-                      onClick={() => router.push(`/manage/${conference.slug}/financials/settings`)}
-                      className="rounded-xl px-6 py-3 text-sm font-bold focus:outline-none transition-colors gv-lift"
-                      style={{ backgroundColor: '#1B3828', color: '#EED98A', border: 'none', fontFamily: "var(--font-brand), sans-serif", letterSpacing: 0, cursor: 'pointer' }}
-                      onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
-                      onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
-                    >
-                      Go to financial settings
-                    </button>
-                  </div>
-                </div>
-            )}
-          </div>
+          </>
         );
       })()}
-
-
 
       {/* ── VISUAL TAB ── */}
       {activeTab === 'delegations' && (

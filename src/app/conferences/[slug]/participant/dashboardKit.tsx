@@ -17,7 +17,7 @@
 // as a big number with the word beside it, sentence-case buttons in the forest
 // gradient, no "…" on a name, no em dashes, no tinted band behind anything.
 
-import { useEffect, useRef, useState } from 'react';
+import { createContext, useContext, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import type { LucideIcon } from 'lucide-react';
 import {
@@ -254,10 +254,26 @@ export interface DashSection {
   icon: LucideIcon;
 }
 
-/** A pane that stays mounted: display:none when it is not the one shown. */
+/** True inside a DashboardShell drawn as ONE page below xl (the delegate
+ *  dashboard, 10 Oct 2026, owner: "on the phone ... just have everything in
+ *  one page"). Below xl every pane shows, in DOM order; from xl the sub-nav
+ *  and one pane at a time, exactly as before. */
+const StackedContext = createContext(false);
+
+/** Whether the current dashboard stacks every pane below xl. */
+export function useDashStacked(): boolean {
+  return useContext(StackedContext);
+}
+
+/** A pane that stays mounted: display:none when it is not the one shown. In a
+ *  stacked dashboard a pane that is not the one shown is hidden from xl only,
+ *  so a phone or tablet reads every section on one scrolling page. */
 export function Pane({ show, children, gap = 6 }: { show: boolean; children: React.ReactNode; gap?: 4 | 6 }) {
+  const stacked = useContext(StackedContext);
+  const base = gap === 4 ? 'flex flex-col gap-4' : 'flex flex-col gap-6';
+  if (stacked) return <div className={show ? base : `${base} xl:hidden`}>{children}</div>;
   return (
-    <div className={gap === 4 ? 'flex flex-col gap-4' : 'flex flex-col gap-6'} style={show ? undefined : { display: 'none' }}>
+    <div className={base} style={show ? undefined : { display: 'none' }}>
       {children}
     </div>
   );
@@ -296,13 +312,17 @@ function NavItem({ s, on, onSelect, row }: { s: DashSection; on: boolean; onSele
 }
 
 /** Sub-nav on the left from xl (sticky under the fixed site nav), a scrolling
- *  pill row above the content below that. */
-export function DashboardShell({ sections, active, onSelect, children, ariaLabel }: {
+ *  pill row above the content below that. With `stackBelowXl` there is no pill
+ *  row: below xl every pane is shown, one after another, on one page (the
+ *  pills hid sections off the edge of a phone, and a delegate could not tell
+ *  where anything was). */
+export function DashboardShell({ sections, active, onSelect, children, ariaLabel, stackBelowXl = false }: {
   sections: DashSection[];
   active: string;
   onSelect: (key: string) => void;
   children: React.ReactNode;
   ariaLabel: string;
+  stackBelowXl?: boolean;
 }) {
   const rootRef = useRef<HTMLDivElement>(null);
   const rowRef = useRef<HTMLDivElement>(null);
@@ -341,8 +361,10 @@ export function DashboardShell({ sections, active, onSelect, children, ariaLabel
 
   return (
     <div ref={rootRef} className="flex flex-col xl:flex-row gap-5 xl:gap-7" style={{ scrollMarginTop: 96 }}>
-      <nav aria-label={ariaLabel} className="xl:w-[176px] xl:flex-shrink-0">
-        {/* Phones and tablets: a row of pills that scrolls sideways. */}
+      <nav aria-label={ariaLabel} className={`${stackBelowXl ? 'hidden xl:block ' : ''}xl:w-[176px] xl:flex-shrink-0`}>
+        {/* Phones and tablets: a row of pills that scrolls sideways (not in a
+            stacked dashboard, which shows every section instead). */}
+        {!stackBelowXl && (
         <div
           ref={rowRef}
           className="xl:hidden flex items-center gap-1.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
@@ -350,12 +372,15 @@ export function DashboardShell({ sections, active, onSelect, children, ariaLabel
         >
           {sections.map(s => <NavItem key={s.key} s={s} on={s.key === active} onSelect={() => select(s.key)} row />)}
         </div>
+        )}
         {/* Desktop: a sticky column. */}
         <div className="hidden xl:flex flex-col gap-1 sticky top-[96px]">
           {sections.map(s => <NavItem key={s.key} s={s} on={s.key === active} onSelect={() => select(s.key)} row={false} />)}
         </div>
       </nav>
-      <div className="flex-1 min-w-0 @container">{children}</div>
+      <div className="flex-1 min-w-0 @container">
+        <StackedContext.Provider value={stackBelowXl}>{children}</StackedContext.Provider>
+      </div>
     </div>
   );
 }

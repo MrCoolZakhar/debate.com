@@ -298,6 +298,33 @@ export default function ParticipantView({
 
   const closed = selected.status === 'withdrawn' || selected.status === 'rejected';
 
+  // A delegate's dashboard is ONE page below xl (10 Oct 2026, owner: "the
+  // delegate dashboard on the phone ... is confusing to see where to go"),
+  // in the order that matters on the day: what to do now, the seat, the
+  // papers, the delegation, then the rest. From xl the sub-nav is unchanged.
+  // The Payment section leads that page only while this application owes a
+  // fee that can be paid now (the same test as the Payment card's button);
+  // otherwise it sits after the delegation. On desktop only one section shows
+  // at a time, so where it sits in the DOM changes nothing there.
+  const stacked = isDelegateRole;
+  const payNow = feeToday !== 0
+    && !(selected.payment_status === 'paid' || selected.payment_status === 'waived')
+    && !(paymentTiming === 'after_acceptance' && selected.status === 'submitted');
+  const payFirst = stacked && payNow;
+  const paymentPane = (
+    <Pane show={activeSection === 'payment'}>
+      <PaymentPane
+        application={selected}
+        conferenceId={conferenceId}
+        conferenceSlug={conferenceSlug}
+        userId={user?.id ?? null}
+        feeToday={feeToday}
+        paymentTiming={paymentTiming}
+        isLeader={isLeader}
+      />
+    </Pane>
+  );
+
   return (
     <div className="flex flex-col gap-5">
       {justClaimedCount > 0 && !claimNoticeDismissed && (
@@ -377,6 +404,7 @@ export default function ParticipantView({
           active={activeSection}
           onSelect={selectSection}
           ariaLabel={`${roleLabel(selected.role)} dashboard`}
+          stackBelowXl={stacked}
         >
           <div className="flex flex-col gap-6">
             {/* Overview: MyMUN's three facts first, never gated. */}
@@ -403,23 +431,16 @@ export default function ParticipantView({
               )}
             </Pane>
 
+            {/* Something to pay now: first after the status on a phone. */}
+            {payFirst && paymentPane}
+
             {/* The role's own sections. Mounted once; each hides the panes
                 that are not showing. Behind the pay gate exactly as before:
                 while it is closed the nav offers only Overview, Payment and
                 Support, and Overview's status row says what to do. */}
             {gateOpen ? roleContent : null}
 
-            <Pane show={activeSection === 'payment'}>
-              <PaymentPane
-                application={selected}
-                conferenceId={conferenceId}
-                conferenceSlug={conferenceSlug}
-                userId={user?.id ?? null}
-                feeToday={feeToday}
-                paymentTiming={paymentTiming}
-                isLeader={isLeader}
-              />
-            </Pane>
+            {!payFirst && paymentPane}
 
             {/* Questions & requests, never gated. */}
             <Pane show={activeSection === 'support'}>
