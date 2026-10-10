@@ -3879,7 +3879,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
       // (published by ChatPanel, src/lib/chatViewing.ts). This used to be `if (showChat)`,
       // which silenced a DM while the chair was reading Everyone and still let a card raised
       // a moment before opening the chat sit over the thread it was about.
-      const convKey = chatConvKeyForMessage(m, myChairName, true, committee?.chairNames ?? [], chatMessages);
+      const convKey = chatConvKeyForMessage(m, myChairName, true, committee?.chairNames ?? [], chatMessages, committee?.delegates.map((d) => d.country));
       if (convKey == null) continue;                   // lands in no thread this chair can open
       if (isViewingChatConversation(committeeId, convKey)) continue;
 
@@ -4296,7 +4296,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
         // The inline seat field beside the quorum tabs (replaces the + button and its
         // picker). A write, so never for a Commenter or an ended session.
         seatField={!sessionEnded && (!isViewOnly || commenterLock)
-          ? <SeatAddField delegates={committee.delegates} onAdd={handleDelegateAdd} large={!inSidebar} locked={commenterLock} />
+          ? <SeatAddField delegates={committee.delegates} onAdd={handleDelegateAdd} large={!inSidebar} locked={commenterLock} chairNames={committee.chairNames ?? []} />
           : undefined}
       />
     );
@@ -5483,7 +5483,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
           <SessionCodePresenter code={committee.code} origin={codePresenterOrigin} onClose={closeCodePresenter} />
         )}
         {committee.phase !== 'pre-session' && !sessionEnded && (() => {
-          const totalUnread = showChat ? 0 : chatUnreadTotal(committee.messages, myChairName || 'Chair', true, committee.chairNames ?? [], chatReadCounts);
+          const totalUnread = showChat ? 0 : chatUnreadTotal(committee.messages, myChairName || 'Chair', true, committee.chairNames ?? [], chatReadCounts, committee.delegates.map((d) => d.country));
           return (
             <TopBarIconButton tutorial="tab-chat" onClick={() => { if (!isPreSession) handleToggleChat(); }} active={showChat}
               count={totalUnread}

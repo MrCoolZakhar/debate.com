@@ -23,6 +23,8 @@
 // an ended session. Not a security boundary (AGENTS.md rule 15).
 // ─────────────────────────────────────────────────────────────────────────────
 
+import { normSeatName, isReservedChairName } from '@/lib/chairNameRules';
+import { notify, NOTIFY_TTL } from '@/lib/sessionNotifications';
 import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Megaphone, Plus } from 'lucide-react';
 import Portal from '@/components/Portal';
@@ -43,6 +45,7 @@ export default function SeatAddField({
   onAdd,
   large = false,
   locked = null,
+  chairNames = [],
 }: {
   /** The roster, to leave out seats that already exist. */
   delegates: { country: string }[];
@@ -51,6 +54,8 @@ export default function SeatAddField({
   large?: boolean;
   /** A Commenter: drawn disabled, a press raises the "only the Moderator" notice. Nothing is typed or written. */
   locked?: { reason: string; onAttempt: () => void } | null;
+  /** The dais. A seat may never take a chair's name (chat keys chairs by name). */
+  chairNames?: string[];
 }) {
   const t = useT();
   const { language } = useLanguage();
@@ -134,6 +139,18 @@ export default function SeatAddField({
     if (!opt) return;
     const name = opt.name.trim();
     if (!name || existing.has(name.toLowerCase())) return;
+    if (chairNames.some((c) => normSeatName(c) === normSeatName(name)) || isReservedChairName(name)) {
+      notify({
+        key: 'seat-name-is-chair',
+        kind: 'info',
+        title: t('rollcall_add_seat_is_chair_title'),
+        body: t('rollcall_add_seat_is_chair_body'),
+        ttlMs: NOTIFY_TTL.notice,
+        urgent: true,
+      });
+      setAnnounced(t('rollcall_add_seat_is_chair_body'));
+      return;
+    }
     onAdd(name, { observer });
     const shown = getCountryDisplayName(name, language);
     setAnnounced(observer ? t('rollcall_add_seat_added_observer', { country: shown }) : t('rollcall_add_seat_added', { country: shown }));

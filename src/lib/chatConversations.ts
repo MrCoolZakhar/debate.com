@@ -1,4 +1,5 @@
 import type { ChatMessage } from './types';
+import { chairNamesExcludingSeats } from './chairNameRules';
 
 // Single source of truth for how chat messages group into conversations and how
 // "unread" is counted. Both ChatPanel and the parent pages (chair + delegate) use
@@ -234,8 +235,12 @@ export function buildChatConversations(
   messages: ChatMessage[],
   senderName: string,
   isChair: boolean,
-  chairNames: string[],
+  chairNamesRaw: string[],
+  /** The committee's seat names. A chair name equal to a seat is NOT treated as a chair
+   *  (delegations win), so a room with a collision still lists and routes to the seat. */
+  seats?: Iterable<string>,
 ): ChatConv[] {
+  const chairNames = chairNamesExcludingSeats(chairNamesRaw, seats);
   const allMsgs = messages.filter((m) => !isSystemLog(m));
 
   // Everyone — public messages
@@ -316,9 +321,12 @@ export function chatConvKeyForMessage(
   m: ChatMessage,
   senderName: string,
   isChair: boolean,
-  chairNames: string[],
+  chairNamesRaw: string[],
   allMessages?: ChatMessage[],
+  /** Same as buildChatConversations' `seats`: keep the two in step. */
+  seats?: Iterable<string>,
 ): ChatConvKey | null {
+  const chairNames = chairNamesExcludingSeats(chairNamesRaw, seats);
   if (isSystemLog(m)) return null;
   if (!m.isPrivate) return 'everyone';
   if (isGroupRecipient(m.recipient)) {
@@ -404,8 +412,9 @@ export function chatUnreadTotal(
   isChair: boolean,
   chairNames: string[],
   readCounts: Record<string, number>,
+  seats?: Iterable<string>,
 ): number {
-  return buildChatConversations(messages, senderName, isChair, chairNames)
+  return buildChatConversations(messages, senderName, isChair, chairNames, seats)
     .reduce((sum, c) => sum + chatConvUnread(c, readCounts, senderName), 0);
 }
 
@@ -436,7 +445,7 @@ export function buildChatDirectory({
   messages,
   senderName,
   isChair,
-  chairNames,
+  chairNames: chairNamesRaw,
   delegations,
   extraActivity = {},
   compare = (a, b) => a.localeCompare(b),
@@ -453,6 +462,8 @@ export function buildChatDirectory({
   compare?: (a: string, b: string) => number;
 }): ChatDirectoryEntry[] {
   const groups = parseChatGroups(messages);
+  // Delegations win over a chair with the same name (incident RAAGKK).
+  const chairNames = chairNamesExcludingSeats(chairNamesRaw, delegations);
   const convs = buildChatConversations(messages, senderName, isChair, chairNames);
   const byKey = new Map<string, ChatConv>(convs.map((c) => [String(c.key), c]));
 

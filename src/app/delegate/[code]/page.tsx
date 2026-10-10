@@ -1715,7 +1715,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
   // This seat's own crest, when the conference gave it one. Null everywhere else.
   const mySeatLogo = myDelegate?.logoUrl ?? null;
   const unreadTotal = chatUnreadTotal(
-    committee.messages, country, false, committee.chairNames ?? [], chatReadCounts,
+    committee.messages, country, false, committee.chairNames ?? [], chatReadCounts, committee.delegates.map((d) => d.country),
   );
 
   // Speaking + chat counters. The tiles and StatisticsTab both derive from the same

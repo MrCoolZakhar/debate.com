@@ -1,5 +1,6 @@
 'use client';
 
+import { chairNamesExcludingSeats } from '@/lib/chairNameRules';
 import { useState, useRef, useEffect, useLayoutEffect, useMemo, useCallback } from 'react';
 import { Committee, type ChatMessage } from '@/lib/types';
 import { getCountryDisplayName, compareCountryNames } from '@/lib/countries';
@@ -115,7 +116,11 @@ export default function ChatPanel({
   const rootRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
-  const { chairNames } = committee;
+  // Delegations win over a chair with the same name (incident RAAGKK, chairNameRules.ts).
+  const chairNames = useMemo(
+    () => chairNamesExcludingSeats(committee.chairNames ?? [], committee.delegates.map((d) => d.country)),
+    [committee.chairNames, committee.delegates],
+  );
 
   // ── Panel width → one pane or two ────────────────────────────────────────
   const [wide, setWide] = useState<boolean | null>(null);

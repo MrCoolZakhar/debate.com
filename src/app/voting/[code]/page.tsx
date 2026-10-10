@@ -1705,7 +1705,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
   // hosts therefore keeps its open state while votes are being cast.
   const drPlural = docName(committee, 'draft-resolution', 'plural', t('documents_draft_resolutions_tab'));
   const drSingular = docName(committee, 'draft-resolution', 'singular', t('documents_draft_resolution_type'));
-  const chatUnread = committee.endedAt ? 0 : chatUnreadTotal(committee.messages, urlChairName || 'Chair', true, committee.chairNames ?? [], chatReadCounts);
+  const chatUnread = committee.endedAt ? 0 : chatUnreadTotal(committee.messages, urlChairName || 'Chair', true, committee.chairNames ?? [], chatReadCounts, committee.delegates.map((d) => d.country));
   const headerProps = {
     onBack: () => { void handleBackToSession(); },
     backBusy,

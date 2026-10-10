@@ -35,6 +35,7 @@ import {
   AlertCircle, ArrowRight, BadgeCheck, CheckCircle2, Eye, Gavel, Globe2, KeyRound,
   Loader2, Lock, LogIn, Mail, Plus, RotateCw, UserRound, Users,
 } from 'lucide-react';
+import { chairNameProblem, safeChairName } from '@/lib/chairNameRules';
 import { getCommitteeRosterByCode, addChairName, updateCommitteeHeadChairInDB } from '@/lib/committeeService';
 import { getGavelDeviceId } from '@/lib/gavelDevice';
 import { chairActiveElsewhere } from '@/lib/chairDeviceClaims';
@@ -540,7 +541,8 @@ function JoinPageInner() {
       if (allocationLoading) return;
       // Conference chair: no country allocation — route to the chair view using their profile name.
       if (mode === 'chair') {
-        const chairDisplayName = (profile?.display_name ?? user.email ?? 'Chair').trim();
+        // Never equal to a seat (chat keys chairs by name): "Name (chair)" when it would be.
+        const chairDisplayName = safeChairName((profile?.display_name ?? user.email ?? 'Chair').trim(), foundCommittee!.delegates.map((d) => d.country));
         addChairName(foundCommittee!.id, chairDisplayName, foundCommittee!.code, foundCommittee!.dbChairJoinSuffix ?? undefined);
         const goChair = () => router.push(`/chair/${foundCommittee!.code}?chairName=${encodeURIComponent(chairDisplayName)}`);
         // Claim-at-will Moderator works for conference sessions too; no password required —
@@ -578,6 +580,12 @@ function JoinPageInner() {
     if (mode === 'chair') {
       const name = chairNameMode === 'new' ? newChairName.trim() : chairName;
       if (!name) { setError(t('join_select_name')); return; }
+      // A NEW name may not be a seat of this room or a word the chat reserves. Names already
+      // on the dais list stay selectable.
+      if (chairNameMode === 'new') {
+        const problem = chairNameProblem(name, foundCommittee.delegates.map((d) => d.country));
+        if (problem) { setError(t(problem === 'seat' ? 'join_chair_name_is_seat' : 'join_chair_name_reserved')); return; }
+      }
       const expectedPassword = foundCommittee.dbChairJoinSuffix ?? getSettings(foundCommittee.code).chairJoinSuffix;
       if (expectedPassword && chairPassword !== expectedPassword) {
         setPasswordError(t('join_incorrect_code'));
