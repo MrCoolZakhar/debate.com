@@ -7,7 +7,7 @@
 // the payer added themselves (a delegate or advisor ticket, an add-on) has an
 // X to remove it. Nothing says owed once the money has arrived.
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import {
   Ban, CircleCheck, Clock, ExternalLink, Gift, HandCoins, Hourglass, Lock, MoreHorizontal, RotateCcw, ShieldAlert, Undo2, X, XCircle,
 } from 'lucide-react';
@@ -21,7 +21,7 @@ export function canTick(it: PayItem, locked?: Record<string, unknown>): boolean 
   return it.payable && PAYABLE_STATES.has(it.state) && it.due_cents > 0 && !(locked && locked[it.invoice_id]);
 }
 
-function refundVia(method: string | null | undefined): string {
+export function refundVia(method: string | null | undefined): string {
   if (!method || method === 'stripe' || method === 'card') return 'card';
   if (method === 'bank_transfer') return 'bank transfer';
   if (method === 'cash') return 'cash';
@@ -50,6 +50,46 @@ function amountFor(it: PayItem): string | null {
   if (it.state === 'paid' || it.state === 'disputed' || it.state === 'refund_requested') return money(it.paid_cents || it.amount_cents, it.currency);
   if (it.state === 'in_review' || it.state === 'started') return money(it.due_cents || it.amount_cents, it.currency);
   return money(it.due_cents, it.currency);
+}
+
+/**
+ * A waived or covered ticket (prompt 102): its real name and price, faded,
+ * under a small WAIVED or COVERED banner. The line is a button so the note on
+ * who took it off opens by hover, keyboard focus or a tap alike.
+ */
+function NotChargedLine({ it }: { it: PayItem }) {
+  const nc = it.not_charged!;
+  const [open, setOpen] = useState(false);
+  const tipId = useId();
+  const word = nc.by === 'delegation' ? 'COVERED' : 'WAIVED';
+  const note = nc.by === 'delegation' ? 'This ticket is covered by your delegation' : 'This ticket was waived by the organizers';
+  return (
+    <div className="gv-pay-item" role="listitem" style={{ position: 'relative' }}>
+      <button
+        type="button"
+        aria-describedby={tipId}
+        onClick={() => setOpen(o => !o)}
+        onMouseEnter={() => setOpen(true)}
+        onMouseLeave={() => setOpen(false)}
+        onFocus={() => setOpen(true)}
+        onBlur={() => setOpen(false)}
+        style={{ gridColumn: '1 / -1', position: 'relative', display: 'flex', alignItems: 'center', gap: 12, width: '100%', minHeight: 52, padding: '6px 12px 6px 50px', border: 'none', background: 'none', cursor: 'default', fontFamily: 'inherit', color: 'inherit', textAlign: 'left' }}
+      >
+        <span style={{ flex: 1, minWidth: 0, opacity: 0.45, fontSize: 15.5, fontWeight: 700, overflowWrap: 'anywhere' }}>{nc.label}</span>
+        <span style={{ opacity: 0.45, fontSize: 16, fontWeight: 800, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>{money(nc.cents, it.currency)}</span>
+        <span aria-hidden style={{
+          position: 'absolute', left: '50%', top: '50%', transform: 'translate(-50%, -50%) rotate(-4deg)',
+          padding: '2px 12px', borderRadius: 6, border: `1.5px solid ${GREEN}`, background: 'rgba(255,255,255,0.85)',
+          color: GREEN, fontSize: 11.5, fontWeight: 800, letterSpacing: '0.16em',
+        }}>{word}</span>
+      </button>
+      <span id={tipId} role="tooltip" style={{
+        position: 'absolute', left: '50%', bottom: 'calc(100% - 6px)', transform: 'translateX(-50%)', zIndex: 5,
+        padding: '7px 11px', borderRadius: 10, background: '#1C1410', color: '#FFFFFF', fontSize: 12.5, fontWeight: 600, whiteSpace: 'nowrap',
+        boxShadow: '0 8px 20px -10px rgba(0,0,0,0.5)', opacity: open ? 1 : 0, pointerEvents: 'none', transition: 'opacity 140ms ease',
+      }}>{note}</span>
+    </div>
+  );
 }
 
 export default function ItemList({ items, selected, onToggle, onReceipt, onRemove, below, locked, onLock, onRequestRefund, onNotReceived, onViewProof }: {
@@ -116,6 +156,7 @@ export default function ItemList({ items, selected, onToggle, onReceipt, onRemov
   return (
     <div className="gv-pay-items" role="list" aria-label="Your items">
       {items.map(it => {
+        if ((it.state === 'waived' || it.state === 'covered') && it.not_charged) return <NotChargedLine key={it.invoice_id} it={it} />;
         const lock = locked?.[it.invoice_id];
         const tick = canTick(it, locked);
         const st = lock && it.state !== 'in_review' && it.state !== 'paid'

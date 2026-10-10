@@ -38,6 +38,8 @@ export interface PayItem {
   payable: boolean;
   removable: boolean;
   can_request_refund: boolean;
+  /** Waived or covered items (prompt 102): the ticket's real name, its price today and who took it off. */
+  not_charged?: { label: string; cents: number; by: 'organizers' | 'delegation' } | null;
 }
 
 export interface PayPayment {

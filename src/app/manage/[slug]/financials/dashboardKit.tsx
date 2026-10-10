@@ -92,6 +92,10 @@ export const DASH_CSS = `
 /* Pop-ups: a wide panel, and the rows of a breakdown */
 .gv-buy-panel.gv-fd-wide{max-width:1040px}
 .gv-buy-panel.gv-fd-mid{max-width:620px}
+/* A pop-up as small as its content (the cleared Things to do): no 560px minimum, a bottom sheet on phones. */
+.gv-buy-panel.gv-fd-small{max-width:440px;min-height:0}
+.gv-buy-panel.gv-fd-small .gv-buy-body{flex-direction:column}
+@media (max-width:743px){.gv-buy-panel.gv-fd-small{height:auto;max-height:92dvh;margin-top:auto;border-radius:22px 22px 0 0}}
 .gv-fd-pop{flex:1 1 auto;min-width:0;width:100%;padding:30px 28px 26px;display:flex;flex-direction:column;gap:18px}
 .gv-fd-pop-title{margin:0;padding-right:40px;font-size:28px;font-weight:800;letter-spacing:-0.02em;line-height:1.1;color:${INK}}
 .gv-fd-sect{margin:0 0 6px;font-size:12px;font-weight:800;letter-spacing:0.08em;text-transform:uppercase;color:${INK_SOFT}}

@@ -57,7 +57,7 @@ export default function ThingsToDoPopup({ conferenceId, readOnly, onClose }: {
 
   return (
     <>
-      <PurchaseShell tone="light" label="Things to do" onClose={onClose} panelClass="gv-fd-wide" testId="financials-todo">
+      <PurchaseShell tone="light" label="Things to do" onClose={onClose} panelClass={queue && !current ? 'gv-fd-small' : 'gv-fd-wide'} testId="financials-todo">
         <div className="gv-fd-pop">
           {queue && current && (
             <p className="gv-fd-sect" aria-live="polite" style={{ margin: 0 }}>{index + 1} of {queue.length}</p>
@@ -69,9 +69,9 @@ export default function ThingsToDoPopup({ conferenceId, readOnly, onClose }: {
             </p>
           )}
           {queue && !current && (
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 14, padding: '24px 0 8px' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', gap: 14, padding: '8px 0 0' }}>
               <span className="gv-fd-clear-disc" aria-hidden><CheckCircle2 size={24} strokeWidth={2.2} /></span>
-              <h2 className="gv-fd-pop-title">
+              <h2 className="gv-fd-pop-title" style={{ padding: '0 36px' }}>
                 {queue.length === 0 ? 'You\'re all caught up' : 'You\'ve cleared your things to do'}
               </h2>
               {skipped > 0 && (

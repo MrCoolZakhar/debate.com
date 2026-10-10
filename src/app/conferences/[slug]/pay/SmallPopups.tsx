@@ -32,13 +32,14 @@ function Shell({ label, children, onClose, busyRef, small }: {
 }
 
 export function RefundRequestPopup({ items, preselect, onClose, onDone }: {
-  /** Every paid item that can be refunded. */
+  /** The paid items that can be refunded (from a receipt: that payment's). */
   items: PayItem[];
-  preselect: string | null;
+  /** Ticked when it opens. */
+  preselect: string[];
   onClose: () => void;
   onDone: () => void;
 }) {
-  const [ticked, setTicked] = useState<Set<string>>(() => new Set(preselect ? [preselect] : []));
+  const [ticked, setTicked] = useState<Set<string>>(() => new Set(preselect));
   const [reason, setReason] = useState('');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');

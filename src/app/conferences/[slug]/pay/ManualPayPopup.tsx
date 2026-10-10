@@ -26,10 +26,10 @@ import { PurchaseShell, PURCHASE_CSS } from '@/components/purchase/purchaseKit';
 import { notifyOk } from '@/lib/appNotify';
 import { DANGER, INK_SOFT } from './payKit';
 import { money, type PayOverview } from './payApi';
-import { attachProof, qrLink, replaceProof } from './manualApi';
+import { attachProof, qrLink, replaceProof, resubmitProof } from './manualApi';
 import ProofDrop from './ProofDrop';
 
-export type ManualMode = 'pay' | 'upload' | 'replace';
+export type ManualMode = 'pay' | 'upload' | 'replace' | 'resubmit';
 
 export const MANUAL_CSS = `
 .gv-buy-panel.gv-pay-manual{max-width:920px}
@@ -69,7 +69,7 @@ function CopyRow({ label, value, notice }: { label: string; value: string; notic
   );
 }
 
-export default function ManualPayPopup({ conference, batchId, totalCents, currency, mode, tabOpened, onClose, onDone }: {
+export default function ManualPayPopup({ conference, batchId, totalCents, currency, mode, tabOpened, reason, onStartNew, onClose, onDone }: {
   conference: PayOverview['conference'];
   batchId: string;
   totalCents: number;
@@ -77,6 +77,10 @@ export default function ManualPayPopup({ conference, batchId, totalCents, curren
   mode: ManualMode;
   /** Pay on a payment link: whether the Pay click managed to open the new tab. */
   tabOpened?: boolean;
+  /** 'resubmit': the organizer's reason the last proof was not accepted. */
+  reason?: string | null;
+  /** 'resubmit' answered items_changed: start a new payment for what is still payable. */
+  onStartNew?: () => void;
   onClose: () => void;
   /** The proof was sent (or replaced): the page re-reads. */
   onDone: () => void;
@@ -87,6 +91,7 @@ export default function ManualPayPopup({ conference, batchId, totalCents, curren
   const [path, setPath] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
+  const [itemsChanged, setItemsChanged] = useState(false);
   const busyRef = useRef(false);
 
   const [qr, setQr] = useState<string | null>(null);
@@ -100,10 +105,12 @@ export default function ManualPayPopup({ conference, batchId, totalCents, curren
 
   const finish = async () => {
     if (busyRef.current || !path) return;
-    busyRef.current = true; setBusy(true); setErr('');
-    const r = mode === 'replace' ? await replaceProof(batchId, path) : await attachProof(batchId, path);
+    busyRef.current = true; setBusy(true); setErr(''); setItemsChanged(false);
+    const r = mode === 'replace' ? await replaceProof(batchId, path)
+      : mode === 'resubmit' ? await resubmitProof(batchId, path)
+      : await attachProof(batchId, path);
     busyRef.current = false; setBusy(false);
-    if (!r.ok) { setErr(r.error); return; }
+    if (!r.ok) { setErr(r.error); setItemsChanged(r.code === 'items_changed'); return; }
     notifyOk(mode === 'replace' ? 'Proof replaced. The organizers will review it' : 'Proof sent. The organizers will review it', 'pay');
     onDone();
   };
@@ -134,7 +141,7 @@ export default function ManualPayPopup({ conference, batchId, totalCents, curren
     </div>
   );
 
-  const title = mode === 'replace' ? 'Replace Your Proof' : mode === 'upload' ? 'Upload Your Proof' : `Pay ${total}`;
+  const title = mode === 'replace' ? 'Replace Your Proof' : mode === 'resubmit' ? 'Upload a New Proof' : mode === 'upload' ? 'Upload Your Proof' : `Pay ${total}`;
 
   return (
     <>
@@ -149,6 +156,11 @@ export default function ManualPayPopup({ conference, batchId, totalCents, curren
 
           <div className={`gv-pm-grid${showWay && kind !== 'link' ? ' gv-pm-two' : ''}`}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              {mode === 'resubmit' && reason?.trim() && (
+                <p style={{ margin: 0, padding: 14, borderRadius: 14, background: 'rgba(139,32,32,0.07)', color: DANGER, fontSize: 14.5, lineHeight: 1.55, overflowWrap: 'anywhere' }}>
+                  Not accepted: {reason.trim()}
+                </p>
+              )}
               {instructions && (
                 <p style={{ margin: 0, padding: 14, borderRadius: 14, background: '#FFFFFF', fontSize: 14.5, lineHeight: 1.55, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{instructions}</p>
               )}
@@ -159,8 +171,11 @@ export default function ManualPayPopup({ conference, batchId, totalCents, curren
           </div>
 
           {err && <p role="alert" style={{ margin: 0, fontSize: 14, color: DANGER }}>{err}</p>}
+          {itemsChanged && onStartNew && (
+            <div><button type="button" className="gv-pay-btn gv-pay-outline" onClick={onStartNew}>Start a new payment</button></div>
+          )}
           <div className="flex items-center gap-3 flex-wrap">
-            <button type="button" className="gv-pay-btn gv-pay-forest" disabled={!path || busy} onClick={() => { void finish(); }}>
+            <button type="button" className="gv-pay-btn gv-pay-forest" disabled={!path || busy || itemsChanged} onClick={() => { void finish(); }}>
               {busy ? 'Sending' : mode === 'replace' ? 'Replace proof' : 'Finish'}
             </button>
             {!path && <span style={{ fontSize: 13.5, color: INK_SOFT }}>Upload your proof to finish</span>}

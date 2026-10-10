@@ -92,6 +92,11 @@ export function replaceProof(batchId: string, path: string) {
   return call('replace_proof', { p_batch_id: batchId, p_path: path }, 'Your proof could not be replaced. Try again in a moment.', () => ({}));
 }
 
+/** A NEW proof on a payment the organizers did not accept (prompt 102): the SAME payment goes back to review. code 'items_changed' = start a new payment instead. */
+export function resubmitProof(batchId: string, path: string) {
+  return call('resubmit_proof', { p_batch_id: batchId, p_path: path }, 'Your proof could not be sent. Try again in a moment.', () => ({}));
+}
+
 export function cancelStartedPayment(batchId: string) {
   return call('cancel_started_payment', { p_batch_id: batchId }, 'This payment could not be cancelled. Try again in a moment.', () => ({}));
 }

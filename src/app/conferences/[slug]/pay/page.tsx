@@ -53,9 +53,9 @@ import { CancelStartedPopup, LockPopup, NotReceivedPopup, RefundRequestPopup } f
 import { readMyDocs, receiptFor, type MyDocs } from './payDocsApi';
 import { DocViewPopup, DocumentsSection, MakeDocPopup, PAYDOCS_CSS, downloadById, type MakePreset } from './PayDocuments';
 
-// What each tab holds (prompt 101).
+// What the Outstanding tab holds (prompt 101). Paid items are shown only as
+// their receipts on Completed (prompt 102).
 const OUTSTANDING_STATES = new Set(['unpaid', 'rejected', 'refunded', 'started', 'in_review']);
-const PAID_STATES = new Set(['paid', 'refund_requested', 'disputed']);
 
 const INVOICE_SELECT = 'id, conference_id, kind, label, amount_cents, amount_paid_cents, currency, status, gates_acceptance, payable_before_acceptance, application_id, society_id, config_id, aid_applied_cents, quantity, created_at';
 
@@ -81,14 +81,18 @@ export default function PayPage() {
   const [paying, setPaying] = useState<'card' | null>(null);
   // Manual conferences (prompt 96): started payments, the pay / proof pop-up, locks, refunds.
   const [started, setStarted] = useState<StartedInfo | null>(null);
-  const [manualPop, setManualPop] = useState<{ batchId: string; totalCents: number; currency: string; mode: ManualMode; tabOpened?: boolean } | null>(null);
+  const [manualPop, setManualPop] = useState<{
+    batchId: string; totalCents: number; currency: string; mode: ManualMode; tabOpened?: boolean;
+    /** 'resubmit': the organizer's reason, and the payment's items for "Start a new payment". */
+    reason?: string | null; itemIds?: string[];
+  } | null>(null);
   const [wayPop, setWayPop] = useState<{ kind: 'qr' | 'bank'; totalCents: number; currency: string } | null>(null);
   const [cancelFor, setCancelFor] = useState<string | null>(null);
   // Outstanding or Completed (prompt 101), kept in the URL as ?tab=completed.
   const [tab, setTabState] = useState<'outstanding' | 'completed'>('outstanding');
   const [lockFor, setLockFor] = useState<{ batchId: string; mine: boolean } | null>(null);
   const [highlight, setHighlight] = useState<string | null>(null);
-  const [refundAsk, setRefundAsk] = useState<{ preselect: string | null } | null>(null);
+  const [refundAsk, setRefundAsk] = useState<{ items: PayItem[] } | null>(null);
   const [notReceived, setNotReceived] = useState<PayItem | null>(null);
   const [startBusy, setStartBusy] = useState(false);
   const [receiptKey, setReceiptKey] = useState<string | null>(null);
@@ -366,8 +370,7 @@ export default function PayPage() {
     if (w) w.location.href = url; else window.open(url, '_blank', 'noopener');
   };
 
-  const refundable = items.filter(i => i.state === 'paid' && i.can_request_refund);
-  const paidItems = items.filter(i => PAID_STATES.has(i.state));
+  const itemsById = new Map(items.map(i => [i.invoice_id, i]));
   const notCharged = items.filter(i => i.state === 'waived' || i.state === 'covered');
   const toPayCount = items.filter(i => (i.state === 'unpaid' || i.state === 'rejected' || i.state === 'refunded') && i.due_cents > 0).length;
 
@@ -466,8 +469,6 @@ export default function PayPage() {
                 onRemove={onRemove}
                 locked={started?.locked}
                 onLock={openLock}
-                onRequestRefund={(it) => setRefundAsk({ preselect: it.invoice_id })}
-                onNotReceived={setNotReceived}
                 onViewProof={(path) => { void viewProof(path); }}
                 below={(it) => (it.kind === 'role_fee' && it.owner_is_me && primary && (it.state === 'unpaid' || it.state === 'rejected'))
                   ? <VoucherPanel conferenceId={c.id} applicationId={primary.application_id} discountCents={discount} currency={it.currency} onChanged={reload} />
@@ -499,22 +500,13 @@ export default function PayPage() {
                   onCancel={(p) => setCancelFor(p.batch_id)}
                   onViewProof={(path) => { void viewProof(path); }}
                   onReplace={(p) => setManualPop({ batchId: p.batch_id, totalCents: p.total_cents, currency: p.currency, mode: 'replace' })}
-                  onRestart={(p) => { void startManual(p.items.map(i => i.invoice_id), 'upload'); }}
+                  onRestart={(p) => setManualPop({
+                    batchId: p.batch_id, totalCents: p.total_cents, currency: p.currency, mode: 'resubmit',
+                    reason: p.review_note, itemIds: p.items.map(i => i.invoice_id),
+                  })}
                 />
               )}
-              <ReceiptsList payments={overview.payments} onOpen={key => { setReceiptPdfErr(''); setReceiptKey(key); }} />
-              {paidItems.length > 0 && (
-                <ItemList
-                  items={paidItems}
-                  selected={selected}
-                  onToggle={toggle}
-                  onReceipt={setReceiptKey}
-                  onRemove={onRemove}
-                  onRequestRefund={(it) => setRefundAsk({ preselect: it.invoice_id })}
-                  onNotReceived={setNotReceived}
-                  onViewProof={(path) => { void viewProof(path); }}
-                />
-              )}
+              <ReceiptsList payments={overview.payments} itemsById={itemsById} onOpen={key => { setReceiptPdfErr(''); setReceiptKey(key); }} />
               {notCharged.length > 0 && (
                 <section aria-labelledby="gv-pay-notcharged">
                   <p className="gv-pay-sect" id="gv-pay-notcharged">Not Charged</p>
@@ -532,7 +524,7 @@ export default function PayPage() {
                   error={docListErr}
                 />
               )}
-              {!(manual && started && started.payments.length > 0) && overview.payments.length === 0 && paidItems.length === 0
+              {!(manual && started && started.payments.length > 0) && overview.payments.length === 0
                 && notCharged.length === 0 && !(docsReady && myDocs && myDocs.documents.length > 0) && (
                 <div className="gv-pay-card" style={{ textAlign: 'center', padding: '28px 20px' }}>
                   <p style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>No payments yet</p>
@@ -584,6 +576,16 @@ export default function PayPage() {
           currency={manualPop.currency}
           mode={manualPop.mode}
           tabOpened={manualPop.tabOpened}
+          reason={manualPop.reason}
+          onStartNew={manualPop.itemIds ? () => {
+            // The old flow: a new payment for this payment's items that can still be paid.
+            const ids = (manualPop.itemIds ?? []).filter(id => {
+              const it = itemsById.get(id);
+              return !!it && (it.state === 'unpaid' || it.state === 'rejected' || it.state === 'refunded') && it.due_cents > 0;
+            });
+            setManualPop(null);
+            if (ids.length > 0) void startManual(ids, 'upload'); else { setNotice('These items no longer need paying'); reload(); }
+          } : undefined}
           onClose={() => { setManualPop(null); reload(); }}
           onDone={() => { setManualPop(null); setTab('completed'); reload(); }}
         />
@@ -603,8 +605,8 @@ export default function PayPage() {
           }}
         />
       )}
-      {refundAsk && refundable.length > 0 && (
-        <RefundRequestPopup items={refundable} preselect={refundAsk.preselect} onClose={() => setRefundAsk(null)} onDone={() => { setRefundAsk(null); reload(); }} />
+      {refundAsk && refundAsk.items.length > 0 && (
+        <RefundRequestPopup items={refundAsk.items} preselect={refundAsk.items.map(i => i.invoice_id)} onClose={() => setRefundAsk(null)} onDone={() => { setRefundAsk(null); reload(); }} />
       )}
       {notReceived && (
         <NotReceivedPopup item={notReceived} onClose={() => setNotReceived(null)} onDone={() => { setNotReceived(null); reload(); }} />
@@ -616,6 +618,9 @@ export default function PayPage() {
           conferenceName={c.full_name}
           onClose={() => setReceiptKey(null)}
           pdf={docsReady ? { busy: docBusy !== null, error: receiptPdfErr, onDownload: receiptPdf } : null}
+          itemsById={itemsById}
+          onRequestRefund={(list) => { setReceiptKey(null); setRefundAsk({ items: list }); }}
+          onNotReceived={(it) => { setReceiptKey(null); setNotReceived(it); }}
         />
       )}
       {(makeDoc || viewDoc) && <style>{PAYDOCS_CSS}</style>}
