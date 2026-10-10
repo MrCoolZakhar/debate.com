@@ -1291,17 +1291,26 @@ export function Sheet({
   // iOS Safari, which is exactly where this bottom sheet lives. Shared hook.
   useScrollLock(open);
 
+  // Callers pass an inline onClose, which is a new function on every render. Keep it in
+  // a ref so the effect below runs ONLY when the sheet opens. It used to depend on
+  // onClose, so every re-render of the delegate page (each realtime event: in a busy
+  // room, every chat message) re-ran it and pulled focus onto the panel, taking it out
+  // of the chat box mid-typing: the keyboard dropped and the sheet jumped back
+  // (RAAGKK, 10 Oct 2026).
+  const onCloseRef = useRef(onClose);
+  useEffect(() => { onCloseRef.current = onClose; });
+
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') { e.stopPropagation(); onClose(); }
+      if (e.key === 'Escape') { e.stopPropagation(); onCloseRef.current(); }
     };
     document.addEventListener('keydown', onKey);
     panelRef.current?.focus();
     return () => {
       document.removeEventListener('keydown', onKey);
     };
-  }, [open, onClose]);
+  }, [open]);
 
   const stop = useCallback((e: React.MouseEvent) => e.stopPropagation(), []);
 
