@@ -128,7 +128,7 @@ export default function SubscriptionPage() {
         <ForestCard>
           <Eyebrow onDark>Unlimited</Eyebrow>
           <h2 style={{ margin: '6px 0 0', fontFamily: OUTFIT, fontWeight: W.title, fontSize: 'clamp(24px, 5vw, 30px)', lineHeight: 1.15, color: IVORY, letterSpacing: '-0.01em' }}>
-            Everything in <GoldWord tone="dark">Unlimited</GoldWord>
+            Everything in Unlimited
           </h2>
           <ul className="flex flex-col gap-3" style={{ margin: '20px 0 0', padding: 0, listStyle: 'none' }}>
             {BENEFITS.map((b) => (

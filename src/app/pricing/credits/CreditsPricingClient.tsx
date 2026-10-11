@@ -125,7 +125,7 @@ export default function CreditsPricingClient() {
 
       {/* WHAT CREDITS DO: white */}
       <section className="gv-p-block gv-p-block-white" aria-labelledby="gv-cr-uses-title">
-        <h2 id="gv-cr-uses-title" className="gv-p-h2">What You Can Do With <GoldWord tone="light">Credits</GoldWord></h2>
+        <h2 id="gv-cr-uses-title" className="gv-p-h2">What You Can Do With Credits</h2>
         <div className="gv-cr-uses">
           <article className="gv-cr-lead">
             <Emoji3D name="Ticket" size={56} fallback={Ticket} fallbackColor={P.forest} />
@@ -151,7 +151,7 @@ export default function CreditsPricingClient() {
 
       {/* QUESTIONS: white */}
       <section className="gv-p-block gv-p-block-white" aria-labelledby="gv-cr-faq-title" id="questions" style={{ scrollMarginTop: 96 }}>
-        <h2 id="gv-cr-faq-title" className="gv-p-h2">Common <GoldWord tone="light">Questions</GoldWord></h2>
+        <h2 id="gv-cr-faq-title" className="gv-p-h2">Common Questions</h2>
         <div className="gv-cr-faq">
           <FaqList entries={faq} context="pricing" />
         </div>

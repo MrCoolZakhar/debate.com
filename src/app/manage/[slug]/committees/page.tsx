@@ -2209,7 +2209,7 @@ export default function CommitteesPage() {
           {activeTab === 'settings' && releaseSettingsLoaded && (
             <NeuCard style={{ padding: '26px 28px', marginBottom: 24 }}>
               <h2 style={{ margin: 0, fontFamily: OUTFIT, fontWeight: 800, fontSize: 'clamp(26px, 2.6vw, 32px)', letterSpacing: '-0.02em', lineHeight: 1.1, color: NEU.ink }}>
-                Session <GoldWord>Release</GoldWord>
+                Session Release
               </h2>
 
               <div className="flex flex-col gap-4 mt-5">

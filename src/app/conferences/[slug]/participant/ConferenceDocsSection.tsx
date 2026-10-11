@@ -10,7 +10,6 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { FileText } from 'lucide-react';
-import { GoldWord } from '@/components/BrandHeading';
 import { DashCard as YouCard, CardHeading } from './dashboardKit';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
@@ -100,7 +99,7 @@ export default function ConferenceDocsSection({ docs }: { docs: ConferenceDoc[] 
       <style>{STORE_CSS}</style>
       <style>{DASH_CSS}</style>
       <style>{CSS}</style>
-      <CardHeading title={<>Conference <GoldWord>Documents</GoldWord></>} stackedHide />
+      <CardHeading title="Conference Documents" stackedHide />
       <ul className="gv-cdp" style={{ listStyle: 'none', margin: 0, padding: 0 }}>
         {docs.map(doc => {
           const info = kindInfo(doc.kind);

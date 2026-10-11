@@ -12,7 +12,6 @@
 
 import type { CSSProperties, ReactNode } from 'react';
 import { ArrowLeft, ChevronRight, type LucideIcon } from 'lucide-react';
-import { GoldWord } from '@/components/BrandHeading';
 import { Emoji3D } from '@/components/neu';
 
 export const FONT = 'var(--font-brand), sans-serif';
@@ -39,12 +38,13 @@ export const SECONDARY: CSSProperties = {
   fontFamily: FONT, fontWeight: 700, fontSize: 14, minHeight: 44, padding: '0 16px',
 };
 
-/** A page or view title: Title Case, the last word in the gold italic. */
+/** A view title: Title Case, plain sans (the gold italic word is for a
+ *  page's main heading only). */
 export function CommsTitle({ lead, gold, sub }: { lead: string; gold: string; sub?: string }) {
   return (
     <div className="mb-6">
       <h1 style={{ fontFamily: FONT, fontWeight: 800, color: INK, fontSize: 'clamp(26px, 3vw, 36px)', lineHeight: 1.1, letterSpacing: '-0.02em', textWrap: 'balance' }}>
-        {lead} <GoldWord>{gold}</GoldWord>
+        {lead} {gold}
       </h1>
       {sub && (
         <p style={{ fontFamily: FONT, color: SOFT_INK, fontSize: 15, marginTop: 6, maxWidth: 620, textWrap: 'pretty' }}>{sub}</p>

@@ -1084,7 +1084,7 @@ export default function ConferencesExploreClient() {
             <section className="gv-explore-wrap" aria-labelledby="gv-explore-big" style={{ marginTop: sectionGap }}>
               <div className="flex items-baseline flex-wrap" style={{ columnGap: 12, rowGap: 4, marginBottom: 16 }}>
                 <h2 id="gv-explore-big" style={{ fontWeight: 800, fontSize: 'clamp(22px, 2.2vw, 30px)', color: INK, margin: 0, letterSpacing: '-0.012em' }}>
-                  Bigger Conferences Worth <GoldWord>Travelling</GoldWord>
+                  Bigger Conferences Worth Travelling
                 </h2>
                 <p style={{ fontWeight: 500, fontSize: 14, color: '#6B5F52', margin: 0 }}>
                   Outside your filter, {BIG_CONFERENCE_DELEGATES}+ delegates expected

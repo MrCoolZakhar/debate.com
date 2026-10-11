@@ -39,7 +39,6 @@ import {
   UserCheck, ListChecks, PartyPopper, type LucideIcon,
 } from 'lucide-react';
 import Portal from '@/components/Portal';
-import { GoldWord } from '@/components/BrandHeading';
 import { DatePicker } from '@/components/DatePicker';
 import { CurrencyPicker } from '@/components/CurrencyPicker';
 import { useScrollLock } from '@/hooks/useScrollLock';
@@ -54,7 +53,7 @@ import { TimelineNotice, TimelineWarning } from './timelineUi';
 import { RoleTimelineBar } from './roleTimelineBar';
 import {
   F, INK, INK_SOFT, FOREST, AMBER, DANGER, HAIRLINE, TEXT_LINK, INPUT, ROW_CSS,
-  Switch, FieldLabel, Notice, PREF_MODE_OPTIONS, Row, SwitchRow, GoldLast, TINT_GOLD_BG, TINT_GREEN_BG, EmojiDisc, RoleDisc,
+  Switch, FieldLabel, Notice, PREF_MODE_OPTIONS, Row, SwitchRow, TINT_GOLD_BG, TINT_GREEN_BG, EmojiDisc, RoleDisc,
   inGeneralScope, generalValue, type GeneralField,
   roleIsFree, roleHasPrice, roleCanHavePreference, rolePlural, roleTitle, windowState, dateAndTime,
   toDatetimeLocal, fromDatetimeLocal, localZoneLabel, type RoleSetupConfig, type WindowState,
@@ -132,7 +131,7 @@ function Section({ id, emoji, icon, tint = TINT_GREEN_BG, title, hint, children 
     >
       <h3 id={`${id}-h`} className="flex items-center gap-2.5 mb-3" style={{ fontFamily: F, fontSize: 18, fontWeight: 800, color: INK, lineHeight: 1.25 }}>
         <EmojiDisc emoji={emoji} icon={icon} tint={tint} size={36} />
-        <span style={{ overflowWrap: 'anywhere' }}><GoldLast text={title} /></span>
+        <span style={{ overflowWrap: 'anywhere' }}>{title}</span>
         {hint}
       </h3>
       {children}
@@ -314,7 +313,7 @@ export function RoleSheet(props: RoleSheetProps) {
             <RoleDisc role={role} tint={TINT_GOLD_BG} size={46} />
             <div className="min-w-0 flex-1">
               <h2 id="role-sheet-title" className="flex items-center gap-1.5" style={{ fontFamily: F, fontSize: 'clamp(19px, 2.4vw, 24px)', fontWeight: 800, color: INK, lineHeight: 1.15, letterSpacing: '-0.01em' }}>
-                <span style={{ overflowWrap: 'anywhere' }}>{roleTitle(role)} <GoldWord>Applications</GoldWord></span>
+                <span style={{ overflowWrap: 'anywhere' }}>{roleTitle(role)} Applications</span>
                 {ROLE_BLURB[role] && <InfoHint label={`What a ${roleTitle(role)} is`} text={ROLE_BLURB[role]} size={16} />}
               </h2>
               <p className="mt-0.5" style={{ fontFamily: F, fontSize: 13.5, color: INK_SOFT }}>

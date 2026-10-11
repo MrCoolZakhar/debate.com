@@ -16,7 +16,6 @@ import { useCredits } from '@/hooks/useCredits';
 import { leaderImportsArePaid } from '@/app/manage/[slug]/import/importQuote';
 import { openCreditsPopup } from '@/lib/purchasePopup';
 import { PurchaseShell, PURCHASE_CSS } from '@/components/purchase/purchaseKit';
-import { GoldWord } from '@/components/BrandHeading';
 import { OUTFIT } from './shared';
 import DelegationImportCard, { type LeaderImport } from './DelegationImportCard';
 
@@ -50,7 +49,7 @@ export default function DelegationImportPopup({
       <style>{PURCHASE_CSS}{CSS}</style>
       <div className="gv-dimp-body">
         <div>
-          <h2 className="gv-buy-title" style={{ fontSize: 30 }}>Import <GoldWord tone="light">Delegates</GoldWord></h2>
+          <h2 className="gv-buy-title" style={{ fontSize: 30 }}>Import Delegates</h2>
           <p className="gv-buy-sub">Add a name and an email for each delegate and we&rsquo;ll invite them to join your delegation</p>
         </div>
 

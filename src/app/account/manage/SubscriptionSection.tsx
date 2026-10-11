@@ -26,7 +26,6 @@ import { formatLongDate, manageErrorText, manageSubscription, notifyPlanChanged,
 import { useAuth } from '@/components/AuthProvider';
 import { notifyErr, notifyOk } from '@/lib/appNotify';
 import { Emoji3D } from '@/components/neu';
-import { GoldWord } from '@/components/BrandHeading';
 import CancelUnlimitedSheet from '@/components/purchase/CancelUnlimitedSheet';
 import CancelledPopup from '@/components/purchase/CancelledPopup';
 import { GOLD_CTA_BG, GOLD_CTA_INK, GOLD_CTA_SHADOW } from '@/components/GoldButton';
@@ -156,7 +155,7 @@ export default function SubscriptionSection() {
               {/* What Unlimited adds, as on /pricing/subscription */}
               <div className="mt-6 pt-5" style={{ borderTop: '1px solid rgba(27,56,40,0.10)' }}>
                 <p style={{ margin: 0, fontFamily: OUTFIT, fontWeight: W.title, fontSize: 17, color: INK }}>
-                  Everything in <GoldWord>Unlimited</GoldWord>
+                  Everything in Unlimited
                 </p>
                 <ul className="flex flex-col gap-2.5" style={{ margin: '12px 0 0', padding: 0, listStyle: 'none' }}>
                   {BENEFITS.map((b) => (

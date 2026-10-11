@@ -19,7 +19,6 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useT } from '@/contexts/LanguageContext';
-import { GoldWord } from '@/components/BrandHeading';
 import { GoldButton } from '@/components/GoldButton';
 import type { TranslationKey } from '@/lib/translations';
 import { BRAND, INK, IVORY, GOLD_TEXT, CREAM, WHITE } from './tokens';
@@ -80,7 +79,7 @@ export default function RoleCards() {
       <style>{CSS}</style>
       <h2 id="rc-title" className="rc-h2">
         {t('sl_roles_lead')}{' '}
-        <GoldWord tone="light">{t('sl_roles_accent')}</GoldWord>
+        {t('sl_roles_accent')}
       </h2>
 
       <div className="rc-row">

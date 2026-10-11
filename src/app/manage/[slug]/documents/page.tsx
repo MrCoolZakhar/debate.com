@@ -155,7 +155,7 @@ function UploadStudyGuideModal({
     <ModalOverlay onClose={onClose}>
       <div style={{ backgroundColor: '#FAF8F3', border: '1.5px solid #D8CDB6', borderRadius: 16, padding: 24, maxWidth: 448, width: '100%', maxHeight: '90dvh', overflowY: 'auto', boxShadow: '0 20px 60px rgba(27,56,40,0.18)' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
-          <h2 style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 24, letterSpacing: '-0.02em', color: '#1C1410' }}>Upload Study <GoldWord>Guide</GoldWord></h2>
+          <h2 style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 24, letterSpacing: '-0.02em', color: '#1C1410' }}>Upload Study Guide</h2>
           <button onClick={onClose} aria-label="Close" className="focus:outline-none inline-flex items-center justify-center" style={{ color: NEU.inkSoft, width: 40, height: 40, borderRadius: 999, background: 'none', border: 'none', cursor: 'pointer' }}><X size={20} /></button>
         </div>
 
@@ -383,8 +383,7 @@ const SECTION_TABS: BigSectionTab<DocsTab>[] = [
   { key: 'settings', label: 'Settings', sub: 'Deadlines and release times', emoji: 'Gear', lucide: SettingsIcon, tone: 'gold' },
 ];
 
-/** A section card's title: a 3D emoji disc and a Title Case heading whose
- *  last word is gold. */
+/** A section card's title: a 3D emoji disc and a plain Title Case heading. */
 function SectionTitle({ emoji, lucide, lead, last, right }: {
   emoji: string; lucide: LucideIcon; lead: string; last: string; right?: React.ReactNode;
 }) {
@@ -395,7 +394,7 @@ function SectionTitle({ emoji, lucide, lead, last, right }: {
           <Emoji3D name={emoji} size={36} fallback={lucide} fallbackColor="#1B3828" />
         </span>
         <h2 style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 'clamp(26px, 2.6vw, 32px)', letterSpacing: '-0.02em', lineHeight: 1.1, color: '#1C1410', margin: 0 }}>
-          {lead}{lead ? ' ' : ''}<GoldWord>{last}</GoldWord>
+          {lead}{lead ? ' ' : ''}{last}
         </h2>
       </div>
       {right}

@@ -1,5 +1,8 @@
 // ── The site's title signature ───────────────────────────────────────────────
-// A heading is set in the brand face, with its LAST WORD in gold, in the
+// ONLY a page's main heading (its h1 / hero title), at most ONCE per page
+// (owner, 11 Oct 2026: "too much of the mix of fonts"). Section, card, tab and
+// pop-up titles are plain sans in ink: never use GoldWord in them.
+// The main heading is set in the brand face, with its LAST WORD in gold, in the
 // italic display face the homepage and the sessions landing already use for
 // their accent word ("MUN done *right.*", "Run the *room*"). Playfair Display
 // italic is loaded once in the root layout; nothing else may be loaded.

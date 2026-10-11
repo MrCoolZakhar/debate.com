@@ -26,7 +26,6 @@ import Image from 'next/image';
 import { Lock, ArrowRight, BookOpen, Clock, GraduationCap, Landmark, MonitorSmartphone } from 'lucide-react';
 import { CardPhoto } from '@/components/blog/BlogPhoto';
 import type { PhotoId } from '@/components/blog/photos';
-import { GoldWord } from '@/components/BrandHeading';
 import { CREAM, FOREST, GOLD, PALE_GOLD, SANS } from './shared';
 import { useGuideAccessMap } from '@/lib/useGuideAccess';
 import GuideOwnedMark from '@/components/premiumGuides/GuideOwnedMark';
@@ -148,7 +147,7 @@ export function SessionsSection() {
             id="hs-sess-heading"
             style={{ fontFamily: SANS, fontWeight: 900, fontSize: 'clamp(40px, 4.2vw, 60px)', lineHeight: 1.02, letterSpacing: '-0.02em', color: INK, margin: 0, textWrap: 'balance' }}
           >
-            MUN done <GoldWord>right.</GoldWord>
+            MUN done right.
           </h2>
           {/* Two lines on purpose, so the tagline never runs under the devices. */}
           <p style={{ fontFamily: SANS, fontSize: 'clamp(18px, 1.5vw, 24px)', lineHeight: 1.4, color: INK_70, margin: '14px auto 0', maxWidth: '460px', whiteSpace: 'pre-line' }}>
@@ -340,7 +339,7 @@ export function LearnMunSection({ guides }: { guides: HomeGuide[] }) {
               id="hs-learn-heading"
               style={{ fontFamily: SANS, fontWeight: 900, fontSize: 'clamp(26px, 2.4vw, 40px)', letterSpacing: '-0.015em', color: INK, margin: '0 0 4px 0', textWrap: 'balance' }}
             >
-              Learn <GoldWord>MUN</GoldWord>
+              Learn MUN
             </h2>
             <p style={{ fontFamily: SANS, fontSize: 'clamp(15px, 1.05vw, 18px)', lineHeight: 1.6, color: INK_70, margin: 0 }}>
               Explore guides written to sharpen your MUN

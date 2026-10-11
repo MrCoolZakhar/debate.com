@@ -12,7 +12,6 @@ import type { CSSProperties, ReactNode } from 'react';
 import {
   Loader2, Crown, UserRound, GraduationCap, Eye, Gavel, ClipboardList, HardHat, type LucideIcon,
 } from 'lucide-react';
-import { GoldWord } from '@/components/BrandHeading';
 import { Emoji3D } from '@/components/neu';
 import type { FeePhase } from '@/lib/finance';
 import { currentStageAmount, priceDate } from '@/lib/publicFees';
@@ -430,13 +429,6 @@ export const ROW_CSS = `
 }
 `;
 
-/** A Title Case heading with its last word in the gold italic (CLAUDE.md §8). */
-export function GoldLast({ text }: { text: string }) {
-  const i = text.lastIndexOf(' ');
-  if (i < 0) return <GoldWord>{text}</GoldWord>;
-  return <>{text.slice(0, i + 1)}<GoldWord>{text.slice(i + 1)}</GoldWord></>;
-}
-
 /** A Fluent 3D emoji in a soft tinted disc (the Store and Financials look,
  *  `IconDisc` in financials/dashboardKit.tsx). `icon` is the Lucide glyph drawn
  *  in forest if the emoji image cannot load. `tint` is TINT_GOLD_BG or
@@ -483,8 +475,9 @@ export function RoleDisc({ role, size = 38, tint = TINT_GREEN_BG, active = false
   return <EmojiDisc emoji={ROLE_EMOJI[role] ?? 'Busts in silhouette'} icon={ROLE_ICON[role] ?? UserRound} size={size} tint={tint} active={active} />;
 }
 
-/** The top of a settings section: a 3D emoji disc, the title (gold last word)
- *  and one plain line. `focal` is the section's one big thing (a number with
+/** The top of a settings section: a 3D emoji disc, the title
+ *  and one plain line. Plain sans: the gold italic word is for a page's main
+ *  heading only (owner, 11 Oct 2026). `focal` is the section's one big thing (a number with
  *  its word, or a picture), drawn on the right. */
 export function SectionHead({ emoji, icon, tint, title, line, focal }: {
   emoji: string; icon: LucideIcon; tint: string; title: string; line?: ReactNode; focal?: ReactNode;
@@ -496,7 +489,7 @@ export function SectionHead({ emoji, icon, tint, title, line, focal }: {
           <EmojiDisc emoji={emoji} icon={icon} tint={tint} size={56} />
           <div className="min-w-0">
             <h1 style={{ fontFamily: F, fontSize: 'clamp(24px, 2.6vw, 32px)', fontWeight: 800, color: INK, lineHeight: 1.1, letterSpacing: '-0.02em', overflowWrap: 'anywhere' }}>
-              <GoldLast text={title} />
+              {title}
             </h1>
             {line && (
               <p className="mt-1" style={{ fontFamily: F, fontSize: 14.5, color: '#3A2E24', lineHeight: 1.45, overflowWrap: 'anywhere' }}>{line}</p>
@@ -524,7 +517,7 @@ export const TINT_GOLD_BG = 'linear-gradient(150deg, rgba(238,217,138,0.70), rgb
 const WASH_GREEN = 'radial-gradient(120% 90% at 100% 0%, rgba(61,122,82,0.09) 0%, rgba(61,122,82,0) 55%), #FFFFFF';
 const WASH_GOLD = 'radial-gradient(120% 90% at 100% 0%, rgba(238,217,138,0.28) 0%, rgba(238,217,138,0) 55%), #FFFFFF';
 
-/** A white card with a 3D emoji disc, a Title Case heading (gold last word)
+/** A white card with a 3D emoji disc, a plain Title Case heading
  *  and its rows. */
 export function Group({ id, title, emoji, icon, tint = TINT_GREEN_BG, hint, aside, children, pulse = false }: {
   id?: string;
@@ -559,7 +552,7 @@ export function Group({ id, title, emoji, icon, tint = TINT_GREEN_BG, hint, asid
         <div className="flex items-center gap-3 min-w-0">
           <EmojiDisc emoji={emoji} icon={icon} tint={tint} size={40} />
           <h2 className="flex items-center gap-1.5 min-w-0" style={{ fontFamily: F, fontSize: 18, fontWeight: 800, color: INK, lineHeight: 1.25, letterSpacing: '-0.01em' }}>
-            <span style={{ overflowWrap: 'anywhere' }}><GoldLast text={title} /></span>
+            <span style={{ overflowWrap: 'anywhere' }}>{title}</span>
             {hint}
           </h2>
         </div>

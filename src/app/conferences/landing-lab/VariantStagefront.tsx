@@ -490,7 +490,7 @@ export default function VariantStagefront({
               textAlign: 'center',
             }}
           >
-            One platform, every <GoldWord>role</GoldWord>
+            One platform, every role
           </h2>
           <RoleCarousel slides={ROLE_SLIDES} />
         </section>
@@ -520,7 +520,7 @@ export default function VariantStagefront({
                     id="sf-near-heading"
                     style={{ fontFamily: SANS, fontWeight: 900, fontSize: 'clamp(24px, 2.4vw, 38px)', letterSpacing: '-0.015em', color: INK, margin: '0 0 4px 0', textWrap: 'balance' }}
                   >
-                    Conferences near <GoldWord>you</GoldWord>
+                    Conferences near you
                   </h2>
                   <p aria-live="polite" style={{ fontFamily: SANS, fontSize: 'clamp(15px, 1.05vw, 18px)', lineHeight: 1.6, color: INK_55, margin: 0 }}>
                     {nearbySub}

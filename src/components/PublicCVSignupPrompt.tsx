@@ -213,7 +213,7 @@ function Prompt({ onClose }: { onClose: () => void }) {
 
           <h2 id="gv-cv-prompt-title" style={{ margin: '0 0 12px', lineHeight: 1.14, letterSpacing: '-0.01em' }}>
             <span style={{ fontFamily: OUTFIT, fontSize: 25, fontWeight: 900, color: NEU.ink }}>Want your own </span>
-            <span style={{ fontFamily: "'Playfair Display', serif", fontStyle: 'italic', fontWeight: 400, fontSize: 25, color: NEU.amber }}>MUN CV</span>
+            <span style={{ fontFamily: OUTFIT, fontSize: 25, fontWeight: 900, color: NEU.ink }}>MUN CV</span>
             <span style={{ fontFamily: OUTFIT, fontSize: 25, fontWeight: 900, color: NEU.ink }}>?</span>
           </h2>
           <p style={{ fontFamily: OUTFIT, fontSize: 14, lineHeight: 1.6, color: NEU.muted, margin: '0 0 20px' }}>

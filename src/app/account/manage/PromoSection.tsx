@@ -14,7 +14,6 @@ import { getFreshAuthedClient } from '@/lib/supabase-auth';
 import { UserFacingError, friendlyError, plainOrFallback } from '@/lib/friendlyError';
 import { refreshCreditsEverywhere } from '@/hooks/useCredits';
 import { notifyUnlimitedChanged } from '@/lib/unlimitedStatus';
-import { GoldWord } from '@/components/BrandHeading';
 import { Emoji3D } from '@/components/neu';
 import { OUTFIT, W } from '../accountUi';
 import { InfoTip, PrimaryButton, WhiteCard, FOREST, FOREST_MID, INK } from './manageUi';
@@ -126,7 +125,7 @@ export default function PromoSection() {
           <Emoji3D name="Ticket" size={28} />
         </span>
         <h2 className="flex items-center gap-2" style={{ margin: 0, fontFamily: OUTFIT, fontWeight: W.title, fontSize: 20, letterSpacing: '-0.01em', color: INK }}>
-          Promo <GoldWord>Code</GoldWord>
+          Promo Code
           <InfoTip text={INFO} />
         </h2>
       </div>

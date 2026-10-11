@@ -200,7 +200,7 @@ export default function FinancialsDashboardPage() {
               <div className="gv-fd-welcome-body">
                 <IconDisc icon={{ emoji: 'Money bag', lucide: PiggyBank, tint: TINT_GREEN }} size={56} />
                 <h2 style={{ margin: '16px 0 0', fontSize: 'clamp(26px, 3vw, 36px)', fontWeight: 900, letterSpacing: '-0.02em', color: '#1C1410' }}>
-                  Welcome to <GoldWord tone="light">Financials</GoldWord>
+                  Welcome to Financials
                 </h2>
                 <p className="gv-st-quiet" style={{ marginTop: 8, fontSize: 16 }}>Set up how people pay you. It takes about two minutes</p>
                 <div style={{ marginTop: 20 }}>

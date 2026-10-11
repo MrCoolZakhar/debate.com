@@ -17,7 +17,6 @@
 // renewOnce ignores both.
 
 import { useCallback, useRef, useState } from 'react';
-import { GoldWord } from '@/components/BrandHeading';
 import { formatLongDate, manageErrorText, manageSubscription, notifyPlanChanged, useUnlimitedDetail } from '@/lib/subscriptionManage';
 import Link from 'next/link';
 import { BookOpen, Briefcase, Infinity as InfinityIcon, Loader2, Archive } from 'lucide-react';
@@ -153,7 +152,7 @@ export default function UnlimitedPopup({ request }: { request: UnlimitedPopupReq
             <span className="gv-buy-title-icon" aria-hidden><Emoji3D name="Infinity" size={44} fallback={InfinityIcon} fallbackColor={GOLD} /></span>
             <h2 className="gv-buy-title">
               <span className="gv-buy-title-text">
-                {resumeMode ? <>Resume <GoldWord tone="dark">Unlimited</GoldWord></> : <>Come Back to <GoldWord tone="dark">Unlimited</GoldWord></>}
+                {resumeMode ? 'Resume Unlimited' : 'Come Back to Unlimited'}
               </span>
             </h2>
             {resumeMode ? (

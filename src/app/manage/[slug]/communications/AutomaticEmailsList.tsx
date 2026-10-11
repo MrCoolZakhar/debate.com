@@ -33,7 +33,6 @@ import {
 } from 'lucide-react';
 import { STORE_CSS, INK, INK_SOFT, FOREST, GOLD, IVORY } from '../store/storeKit';
 import { DASH_CSS, OWED } from '../financials/dashboardKit';
-import { GoldWord } from '@/components/BrandHeading';
 import { Emoji3D } from '@/components/neu';
 import { BackLink, CommsTitle, OnOffSwitch } from './commsKit';
 
@@ -416,7 +415,7 @@ export default function AutomaticEmailsList({
           <section className="gv-st-card gv-fd-card gv-fd-wash-gold gv-ae-money" aria-labelledby="gv-ae-money-t">
             <div className="gv-ae-ghead">
               <EmojiDisc emoji="Locked" icon={Lock} size={44} />
-              <h2 className="gv-ae-gtitle" id="gv-ae-money-t">Always Sent by <GoldWord>Gavelling</GoldWord></h2>
+              <h2 className="gv-ae-gtitle" id="gv-ae-money-t">Always Sent by Gavelling</h2>
             </div>
             <p className="gv-ae-money-line">These four always go out, so the amounts are always right</p>
             <div className="gv-ae-grid gv-ae-inner">

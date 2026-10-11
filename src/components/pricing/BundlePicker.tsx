@@ -17,7 +17,6 @@ import { useCallback, useMemo, useRef, useState } from 'react';
 import type { KeyboardEvent } from 'react';
 import { Check, Flag, Minus, Plus } from 'lucide-react';
 import { OUTFIT } from '@/components/neu';
-import { GoldWord } from '@/components/BrandHeading';
 import {
   CREDIT_BUNDLES,
   clampQty,
@@ -208,7 +207,7 @@ export default function BundlePicker() {
       `}</style>
 
       <div className="gv-bp-head">
-        <h2 id="gv-bp-title" className="gv-p-h2">Pick Your <GoldWord tone="light">Bundle</GoldWord></h2>
+        <h2 id="gv-bp-title" className="gv-p-h2">Pick Your Bundle</h2>
         <p className="gv-p-line">Bigger bundles cost less a credit</p>
       </div>
 

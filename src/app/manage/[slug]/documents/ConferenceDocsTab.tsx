@@ -16,7 +16,6 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { ArrowDown, ArrowUp, Check, FileText, Library, Upload } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
-import { GoldWord } from '@/components/BrandHeading';
 import { PurchaseShell, PURCHASE_CSS } from '@/components/purchase/purchaseKit';
 import { useConfirmModal } from '@/components/ConfirmModal';
 import { friendlyError } from '@/lib/friendlyError';
@@ -193,7 +192,7 @@ export default function ConferenceDocsTab({ conferenceId }: { conferenceId: stri
 
       <section className="gv-st-card gv-fd-card gv-fd-wash-gold gv-cd-hero" aria-label="Documents for everyone">
         <span className="gv-cd-hero-disc"><IconDisc icon={{ emoji: 'Books', lucide: Library, tint: TINT_GOLD }} size={68} /></span>
-        <h2 className="gv-cd-hero-title">Documents for <GoldWord>Everyone</GoldWord></h2>
+        <h2 className="gv-cd-hero-title">Documents for Everyone</h2>
         <p className="gv-cd-hero-line">Rules of Procedure, logistics and schedules. Accepted participants find them on their You tab.</p>
         {load.kind === 'ok' && (
           <div className="gv-cd-hero-foot">
@@ -422,7 +421,7 @@ function DocumentDialog({ conferenceId, editing, nextOrder, onClose, onSaved }: 
       <style>{CSS}</style>
       <PurchaseShell tone="light" label={label} onClose={() => { if (!savingRef.current) onClose(); }} panelClass="gv-fd-mid" testId="conference-docs-dialog">
         <div className="gv-fd-pop gv-st" style={{ overflowY: 'auto' }}>
-          <h2 className="gv-fd-pop-title">{isEdit ? <>Edit the <GoldWord>Document</GoldWord></> : <>Add a <GoldWord>Document</GoldWord></>}</h2>
+          <h2 className="gv-fd-pop-title">{isEdit ? 'Edit the Document' : 'Add a Document'}</h2>
 
           <div>
             <p className="gv-fd-label" id="gv-cd-kind-l">What is it?</p>

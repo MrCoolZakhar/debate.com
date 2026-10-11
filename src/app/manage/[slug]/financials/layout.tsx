@@ -15,7 +15,6 @@ import { ArrowLeft, ArrowLeftRight, FileText, HeartHandshake, ReceiptText, type 
 import { useManage } from '@/app/manage/[slug]/layout';
 import { NEU, OUTFIT, Emoji3D } from '@/components/neu';
 import { TINT_GOLD, TINT_GREEN } from './dashboardKit';
-import { GoldWord } from '@/components/BrandHeading';
 import { CurrencyPicker } from '@/components/CurrencyPicker';
 import { FinancialsCurrencyProvider, useFinancialsCurrency, mutedCaption, conversionLine } from './shared';
 
@@ -54,7 +53,7 @@ function SubPageHeader({ slug, section }: { slug: string; section: string }) {
             <Emoji3D name={sub.emoji} size={32} fallback={sub.lucide} fallbackColor={NEU.forest} />
           </span>
           <h1 style={{ fontFamily: OUTFIT, fontWeight: 900, fontSize: 30, color: NEU.ink, letterSpacing: '-0.02em', margin: 0 }}>
-            <GoldWord tone="light">{sub.title}</GoldWord>
+            {sub.title}
           </h1>
         </div>
         {!sub.noCurrency && <CurrencyPicker

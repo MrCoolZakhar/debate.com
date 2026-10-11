@@ -8,7 +8,7 @@
 //
 //   <AccountHero>   a soft white band at the top of the page: a small capitals
 //                   label, a heavy sans title whose LAST word is the gold
-//                   Playfair italic (GoldWord), at most one short line, and a
+//                   Playfair italic (GoldWord; the page's one accent), at most one short line, and a
 //                   large 3D emoji resting on the right. It ends in extra
 //                   bottom padding on purpose, because
 //   <HeroOverlap>   pulls the page's first cards UP over that lower edge, so
