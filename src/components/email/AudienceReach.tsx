@@ -36,8 +36,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ChevronDown, Plus, X, Search, Users, Send, AlertTriangle, Check, SlidersHorizontal,
+  Hand, Mic, Crown, GraduationCap, Eye, type LucideIcon,
 } from 'lucide-react';
-import { Emoji3D, NEU, NEU_GRADIENTS, OUTFIT, EASE } from '@/components/neu';
+import { NEU, NEU_GRADIENTS, OUTFIT, EASE } from '@/components/neu';
+import { DuoGlyph } from '@/components/DuoIcon';
 import { SOFT, AMBER_INK, GREEN_INK, RED, CARD_BORDER, CARD_SHADOW } from '@/app/manage/[slug]/live/tokens';
 import ProfileLink from '@/components/ProfileLink';
 import PopoverLayer from '@/components/email/PopoverLayer';
@@ -55,8 +57,8 @@ export interface AudienceSectionDef {
   key: AudienceSection;
   /** Panel heading, e.g. "Payment". */
   label: string;
-  /** Fluent 3D emoji asset name for the "+ Add a filter" menu. */
-  emoji: string;
+  /** Duotone Lucide glyph for the "+ Add a filter" menu and the filter card. */
+  icon: LucideIcon;
   /** How this section reads inside the plain-English summary sentence, e.g.
    *  "who have {v}" → "who have paid". `{v}` is the joined option labels. */
   phrase: string;
@@ -147,12 +149,12 @@ function useIsWide(): boolean {
   return wide;
 }
 
-const ROLE_EMOJI: Record<string, string> = {
-  delegate: 'Person raising hand',
-  chair: 'Studio microphone',
-  'head-delegate': 'Busts in silhouette',
-  'faculty-advisor': 'Handshake',
-  observer: 'Card index',
+const ROLE_ICON: Record<string, LucideIcon> = {
+  delegate: Hand,
+  chair: Mic,
+  'head-delegate': Crown,
+  'faculty-advisor': GraduationCap,
+  observer: Eye,
 };
 
 function joinLabels(labels: string[]): string {
@@ -450,7 +452,7 @@ export default function AudienceReach({
                 boxShadow: NEU.outSm,
               }}
             >
-              <Emoji3D name="Busts in silhouette" size={21} fallback={Users} fallbackColor={FOREST} />
+              <DuoGlyph icon={Users} size={20} />
             </span>
 
             <div className="min-w-0 flex-1" style={{ minWidth: 190 }}>
@@ -615,7 +617,7 @@ export default function AudienceReach({
                 why the list of actual people below needed scrolling to reach.
                 The same six choices as chips wrap into one line (two at the
                 narrowest), and every one of them is still a 40px-tall target
-                carrying its emoji, its name and its live count. ── */}
+                carrying its icon, its name and its live count. ── */}
             <div className="mt-6">
               <StepHeading n={1} title="Who is this for?" hint="Pick one or more. Most emails stop here." />
               {roleSection && (
@@ -646,11 +648,10 @@ export default function AudienceReach({
                           transitionTimingFunction: EASE,
                         }}
                       >
-                        <Emoji3D
-                          name={isAll ? 'Busts in silhouette' : (ROLE_EMOJI[o.value] ?? 'Person raising hand')}
+                        <DuoGlyph
+                          icon={isAll ? Users : (ROLE_ICON[o.value] ?? Hand)}
                           size={16}
-                          fallback={Users}
-                          fallbackColor={active ? GOLD : FOREST}
+                          onDark={active}
                         />
                         <span style={{ fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 800, color: active ? GOLD : INK, whiteSpace: 'nowrap' }}>
                           {o.label}
@@ -687,7 +688,7 @@ export default function AudienceReach({
                     style={{ padding: '11px 13px', borderRadius: 16, backgroundColor: '#FFFDF8', boxShadow: NEU.inSm, border: '1px solid rgba(27,56,40,0.09)' }}
                   >
                     <div className="flex items-center gap-2 mb-2">
-                      <Emoji3D name={s.emoji} size={16} fallback={Users} fallbackColor={FOREST} />
+                      <DuoGlyph icon={s.icon} size={16} />
                       <span style={{ fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 800, letterSpacing: '0.08em', color: SOFT }}>
                         {s.label.toUpperCase()}
                       </span>
@@ -775,7 +776,7 @@ export default function AudienceReach({
                             onMouseEnter={e => { e.currentTarget.style.backgroundColor = 'rgba(27,56,40,0.055)'; }}
                             onMouseLeave={e => { e.currentTarget.style.backgroundColor = 'transparent'; }}
                           >
-                            <Emoji3D name={s.emoji} size={18} fallback={Users} fallbackColor={FOREST} />
+                            <DuoGlyph icon={s.icon} size={18} />
                             {s.label}
                           </button>
                         ))}

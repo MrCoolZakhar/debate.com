@@ -269,7 +269,7 @@ function MyConferencesInner() {
     loadAll();
     return () => { cancelled = true; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [authLoading, user?.id, session?.access_token, reloadKey]);
+  }, [authLoading, user?.id, reloadKey]);
 
   const { upcoming, past } = useMemo(() => {
     const today = startOfToday().getTime();

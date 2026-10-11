@@ -26,6 +26,8 @@ import ChatDisabledNotice from '@/components/ChatDisabledNotice';
 import { getCommitteeFlags, sponsorLabel, motionNames } from '@/lib/committeeFlags';
 import { docName, docCount, docLimit, docLimitReached } from '@/lib/docNames';
 import { chatUnreadTotal, mergeMessagesById } from '@/lib/chatConversations';
+import { useBroadcastHistory } from '@/lib/broadcastHistory';
+import { withBroadcastMessages } from '@/lib/broadcastMessages';
 import { loadChatReadCounts, saveChatReadCounts } from '@/lib/chatReadKey';
 import { startSessionSync, rowFields, withCurrentSpeaker, withLists, type ConnectionState } from '@/lib/sessionSync';
 import ConnectionPill from '@/components/ConnectionPill';
@@ -878,6 +880,10 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
   const [langOpen, setLangOpen] = useState(false);
   const [requestLangOpen, setRequestLangOpen] = useState(false);
   const [chatReadCounts, setChatReadCounts] = useState<Record<string, number>>({});
+  // Bumped by every `session_broadcasts` realtime event and every catch-up that ends 'done':
+  // organiser broadcasts are read again and shown in Everyone as Secretariat messages
+  // (src/lib/broadcastMessages.ts). Own state, never the committee; never per second.
+  const [broadcastVersion, setBroadcastVersion] = useState(0);
 
   const committeeIdRef = useRef('');
   const wasEverSuspended = useRef(false);
@@ -975,12 +981,18 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
         // approve (insert then delete) all land instead of cancelling each other (R-2). The
         // committees event refetches the committee ROW only (PERF-3), messages land straight
         // from the realtime payload, and a failed read is never applied (P-4). This page
-        // renders neither chair notes nor organiser broadcasts, so it does not subscribe to
-        // `feedback` / `session_broadcasts` at all (PERF-1). Wake, reconnect and back-online
-        // refetch every slice (R-4).
+        // renders no chair notes, so it does not subscribe to `feedback` (PERF-1). Wake, reconnect and back-online
+        // refetch every slice (R-4). Organiser broadcasts (`session_broadcasts`) are bound since
+        // 11 Oct 2026: they are Secretariat messages in the Everyone chat. An event only bumps
+        // `broadcastVersion` (no slice, outside every debounce); the list has its own state.
         const sync = startSessionSync({
           committeeId: found.id,
-          tables: ['committees', 'delegates', 'speakers_list', 'current_speaker', 'motions', 'documents', 'messages'],
+          tables: ['committees', 'delegates', 'speakers_list', 'current_speaker', 'motions', 'documents', 'messages', 'session_broadcasts'],
+          onEvent: (table) => {
+            if (table === 'session_broadcasts') { setBroadcastVersion((v) => v + 1); return true; }
+            return false;
+          },
+          onCatchUp: (phase) => { if (phase === 'done') setBroadcastVersion((v) => v + 1); },
           slices: ['row', 'delegates', 'lists', 'currentSpeaker', 'motions', 'documents', 'messages'],
           onConnection: setConnection,
           onMessage: (m) => setCommittee((prev) => {
@@ -1236,6 +1248,10 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
     if (!committee) return;
     saveChatReadCounts(committee.code, { role: 'delegate', identity: country }, chatReadCounts);
   }, [chatReadCounts, committee?.code, country]);
+
+  // Organiser broadcasts, shown in Everyone as messages from the Secretariat. Read on mount and
+  // per `broadcastVersion` bump; not while the seat is lost (the room is stopped then).
+  const broadcastHistory = useBroadcastHistory(committee?.id, broadcastVersion, seatAllowed);
 
   // Prevent browser back button from leaving an active session.
   // When sessionEnded or sessionSuspended become true the effect re-runs,
@@ -1715,7 +1731,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
   // This seat's own crest, when the conference gave it one. Null everywhere else.
   const mySeatLogo = myDelegate?.logoUrl ?? null;
   const unreadTotal = chatUnreadTotal(
-    committee.messages, country, false, committee.chairNames ?? [], chatReadCounts, committee.delegates.map((d) => d.country),
+    withBroadcastMessages(committee.messages, broadcastHistory), country, false, committee.chairNames ?? [], chatReadCounts, committee.delegates.map((d) => d.country),
   );
 
   // Speaking + chat counters. The tiles and StatisticsTab both derive from the same
@@ -2572,6 +2588,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
               readCounts={chatReadCounts}
               onReadCountsChange={setChatReadCounts}
               readOnly={sessionEnded}
+              broadcasts={broadcastHistory}
             />
           </div>
         )}

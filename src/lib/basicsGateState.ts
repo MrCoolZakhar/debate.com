@@ -44,11 +44,38 @@ export function useBasicsGateStatus(): BasicsGateStatus {
   return useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
 }
 
-/** True while the basics gate is deciding or open, or while the "Log in or
- *  sign up" modal is open (it has its own "Finish signing up" step). Other
- *  gates must stay closed. */
+// ── The name gate ("What's Your Name?", src/components/NameGate.tsx) ─────────
+//
+// Second in line: it waits for the basics gate to say 'ok' and for the auth
+// modal to close, then publishes its own status here with the same meaning.
+// While it is 'checking' or 'needed' the gates after it (credits welcome,
+// set-up reminder, "Your room is live") stay closed, exactly as they do for
+// the basics gate. A failed read resolves to 'ok', so it can never hold them.
+
+let nameStatus: BasicsGateStatus = 'idle';
+const nameListeners = new Set<() => void>();
+
+export function setNameGateStatus(next: BasicsGateStatus): void {
+  if (next === nameStatus) return;
+  nameStatus = next;
+  nameListeners.forEach((l) => l());
+}
+
+function subscribeName(l: () => void): () => void {
+  nameListeners.add(l);
+  return () => { nameListeners.delete(l); };
+}
+
+export function useNameGateStatus(): BasicsGateStatus {
+  return useSyncExternalStore(subscribeName, () => nameStatus, getServerSnapshot);
+}
+
+/** True while the basics gate or the name gate is deciding or open, or while
+ *  the "Log in or sign up" modal is open (it has its own "Finish signing up"
+ *  step). Other gates must stay closed. */
 export function useBasicsGateBlocking(): boolean {
   const s = useBasicsGateStatus();
+  const n = useNameGateStatus();
   const authOpen = useAuthModalOpen();
-  return authOpen || s === 'checking' || s === 'needed';
+  return authOpen || s === 'checking' || s === 'needed' || n === 'checking' || n === 'needed';
 }

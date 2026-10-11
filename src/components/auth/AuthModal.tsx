@@ -50,6 +50,7 @@ import {
 } from './authModalKit';
 import AuthQuestionnaire, { CV_QUESTION } from './AuthQuestionnaire';
 import { friendlyError } from '@/lib/friendlyError';
+import { joinName, nameProblem, nameProblemMessage, tidyName, titleCaseSuggestion, toTitleCase } from '@/lib/personName';
 
 type Step =
   | 'email'
@@ -663,14 +664,28 @@ function SignupStep({
   const guessed = useNationalityPrefill(nationality, setNationality);
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  // The name's own refusal, shown under the two name fields (src/lib/personName.ts):
+  // organisers, chairs and certificates read this name, so it must be a person's.
+  const [nameErr, setNameErr] = useState<{ text: string; first: boolean; last: boolean } | null>(null);
   const [busy, setBusy] = useState(false);
+  const fullName = joinName(firstName, lastName);
+  const caseSuggestion = !nameErr && nameProblem(fullName) === null ? titleCaseSuggestion(fullName) : null;
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     if (busy) return;
     setError('');
-    if (!firstName.trim()) { setError('Enter your first name.'); return; }
-    if (!lastName.trim()) { setError('Enter your last name.'); return; }
+    setNameErr(null);
+    if (!firstName.trim()) { setNameErr({ text: 'Enter your first name.', first: true, last: false }); return; }
+    if (!lastName.trim()) { setNameErr({ text: 'Enter your last name.', first: false, last: true }); return; }
+    const problem = nameProblem(fullName);
+    if (problem) {
+      // Point at the field that holds the problem word; both when it is the pair.
+      const inFirst = problem !== 'too_short' && nameProblem(firstName) !== null;
+      const inLast = problem !== 'too_short' && nameProblem(lastName) !== null;
+      setNameErr({ text: nameProblemMessage(problem), first: inFirst || !inLast, last: inLast || !inFirst });
+      return;
+    }
     const basics = validateBasics(nationality, dob);
     if (!basics.ok) { setError(basics.error); return; }
     if (password.length < 8) { setError('Your password needs at least 8 characters.'); return; }
@@ -680,9 +695,9 @@ function SignupStep({
       password,
       options: {
         data: {
-          full_name: `${firstName.trim()} ${lastName.trim()}`,
-          first_name: firstName.trim(),
-          last_name: lastName.trim(),
+          full_name: fullName,
+          first_name: tidyName(firstName),
+          last_name: tidyName(lastName),
           date_of_birth: basics.value.dateOfBirth,
           nationality: basics.value.nationality,
         },
@@ -712,9 +727,28 @@ function SignupStep({
 
   return (
     <form className="gv-auth-screen" onSubmit={submit} noValidate>
-      <FloatInput id="gv-auth-first" label="First name" value={firstName} onChange={(e) => setFirstName(e.target.value)} autoComplete="given-name" data-autofocus />
-      <FloatInput id="gv-auth-last" label="Last name" value={lastName} onChange={(e) => setLastName(e.target.value)} autoComplete="family-name" />
-      <Hint>Make sure it matches how it should read on a certificate or an award.</Hint>
+      <FloatInput id="gv-auth-first" label="First name" value={firstName} onChange={(e) => { setFirstName(e.target.value); setNameErr(null); }} autoComplete="given-name" data-autofocus invalid={!!nameErr?.first} aria-describedby="gv-auth-name-note" />
+      <FloatInput id="gv-auth-last" label="Last name" value={lastName} onChange={(e) => { setLastName(e.target.value); setNameErr(null); }} autoComplete="family-name" invalid={!!nameErr?.last} aria-describedby="gv-auth-name-note" />
+      {nameErr ? (
+        <ErrorLine id="gv-auth-name-note">{nameErr.text}</ErrorLine>
+      ) : (
+        <Hint id="gv-auth-name-note">
+          Your own name, the way it should read on a certificate. Your MUN society goes in your delegation later.
+          {caseSuggestion && (
+            <>
+              {' '}
+              <button
+                type="button"
+                className={`gv-inline ${FOCUS}`}
+                style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', font: 'inherit', fontWeight: 600 }}
+                onClick={() => { setFirstName(toTitleCase(firstName)); setLastName(toTitleCase(lastName)); }}
+              >
+                Use Title Case
+              </button>
+            </>
+          )}
+        </Hint>
+      )}
 
       <div className="gv-static gv-dp" style={{ marginTop: 8 }}>
         <label className="gv-static-label" htmlFor="gv-auth-dob">Date of birth</label>

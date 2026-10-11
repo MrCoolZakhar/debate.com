@@ -354,7 +354,7 @@ export default function PositionPaperPage() {
     })();
     return () => { cancelled = true; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [paperId, authLoading, user?.id, session?.access_token]);
+  }, [paperId, authLoading, user?.id]);
 
   useEffect(() => {
     threadRef.current?.scrollTo({ top: threadRef.current.scrollHeight });

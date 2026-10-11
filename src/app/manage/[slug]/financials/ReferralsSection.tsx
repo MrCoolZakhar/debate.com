@@ -175,7 +175,7 @@ export default function ReferralsSection({ conference }: { conference: Conferenc
       setInvoices((invs ?? []) as InvoiceRow[]);
     })();
     return () => { cancelled = true; };
-  }, [conference.id, session?.access_token]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [conference.id, !!session]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const rows = useMemo<{ rows: Row[]; totalPaidCents: number }>(() => {
     if (!vouchers) return { rows: [], totalPaidCents: 0 };

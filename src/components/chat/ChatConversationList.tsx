@@ -136,7 +136,7 @@ const Row = memo(function Row({ row, active, onSelect, t, locale }: {
 }) {
   const { last, unread } = row;
   const preview = last
-    ? `${row.lastSenderLabel ? `${row.lastSenderLabel}: ` : ''}${previewContent(last.content, t)}`
+    ? `${row.lastSenderLabel ? `${row.lastSenderLabel}: ` : ''}${last.broadcast ? last.content : previewContent(last.content, t)}`
     : row.idleLine;
   const showBadge = unread > 0 && !active;
   return (

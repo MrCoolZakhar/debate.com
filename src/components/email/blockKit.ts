@@ -7,7 +7,10 @@
 // cannot honour; the Starters section below is how the builder still offers
 // "layouts" without lying about what the email can hold.
 
-import { Type, MousePointerClick, Image as ImageIcon } from 'lucide-react';
+import {
+  Heading, AlignLeft, ALargeSmall, MousePointerClick, Image as ImageIcon,
+  Megaphone, Hourglass, PartyPopper, type LucideIcon,
+} from 'lucide-react';
 import type { EmailBlock, ParagraphVariant } from '@/lib/emailBlocks';
 
 export type BlockKind = 'paragraph' | 'button' | 'image';
@@ -21,16 +24,16 @@ export interface PaletteItem {
   kind: PaletteKind;
   label: string;
   hint: string;
-  emoji: string;
-  icon: typeof Type;
+  /** Duotone Lucide glyph (no 3D emoji on organiser pages). */
+  icon: LucideIcon;
 }
 
 export const PALETTE_ITEMS: PaletteItem[] = [
-  { kind: 'paragraph:heading', label: 'Headline', hint: 'One big line', emoji: 'Memo', icon: Type },
-  { kind: 'paragraph:body', label: 'Text', hint: 'A paragraph', emoji: 'Page facing up', icon: Type },
-  { kind: 'paragraph:small', label: 'Small print', hint: 'Quiet footnote', emoji: 'Card index', icon: Type },
-  { kind: 'button', label: 'Button', hint: 'Somewhere to click', emoji: 'Ticket', icon: MousePointerClick },
-  { kind: 'image', label: 'Picture', hint: 'A photo or poster', emoji: 'Framed picture', icon: ImageIcon },
+  { kind: 'paragraph:heading', label: 'Headline', hint: 'One big line', icon: Heading },
+  { kind: 'paragraph:body', label: 'Text', hint: 'A paragraph', icon: AlignLeft },
+  { kind: 'paragraph:small', label: 'Small print', hint: 'Quiet footnote', icon: ALargeSmall },
+  { kind: 'button', label: 'Button', hint: 'Somewhere to click', icon: MousePointerClick },
+  { kind: 'image', label: 'Picture', hint: 'A photo or poster', icon: ImageIcon },
 ];
 
 /** A palette kind → a fresh block. Note `body` is stored as an ABSENT variant,
@@ -47,7 +50,8 @@ export interface Starter {
   id: string;
   label: string;
   hint: string;
-  emoji: string;
+  /** Duotone Lucide glyph beside the label. */
+  icon: LucideIcon;
   /** Miniature of the arrangement, drawn as bar heights: 'h' headline,
    *  't' text, 's' small, 'b' button, 'i' image. */
   shape: ('h' | 't' | 's' | 'b' | 'i')[];
@@ -59,7 +63,7 @@ export const STARTERS: Starter[] = [
     id: 'announce',
     label: 'Announcement',
     hint: 'Headline, a paragraph, one button',
-    emoji: 'Loudspeaker',
+    icon: Megaphone,
     shape: ['h', 't', 'b'],
     blocks: [
       { type: 'paragraph', content: 'Something to announce', variant: 'heading' },
@@ -71,7 +75,7 @@ export const STARTERS: Starter[] = [
     id: 'reminder',
     label: 'Reminder',
     hint: 'Headline, the ask, the small print',
-    emoji: 'Hourglass not done',
+    icon: Hourglass,
     shape: ['h', 't', 's'],
     blocks: [
       { type: 'paragraph', content: 'A quick reminder', variant: 'heading' },
@@ -83,7 +87,7 @@ export const STARTERS: Starter[] = [
     id: 'picture',
     label: 'With a picture',
     hint: 'Image on top, then the words',
-    emoji: 'Framed picture',
+    icon: ImageIcon,
     shape: ['i', 'h', 't'],
     blocks: [
       { type: 'image', url: '', alt: '' },
@@ -95,7 +99,7 @@ export const STARTERS: Starter[] = [
     id: 'welcome',
     label: 'Welcome',
     hint: 'A greeting and a way in',
-    emoji: 'Party popper',
+    icon: PartyPopper,
     shape: ['h', 't', 'b', 's'],
     blocks: [
       { type: 'paragraph', content: 'Welcome to {{conference}}', variant: 'heading' },

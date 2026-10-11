@@ -20,6 +20,7 @@ import { DatePicker } from '@/components/DatePicker';
 import Portal from '@/components/Portal';
 import Loader from '@/components/Loader';
 import { plainOrFallback } from '@/lib/friendlyError';
+import { nameError, tidyName, titleCaseSuggestion } from '@/lib/personName';
 
 interface ReviewableConference {
   id: string;
@@ -69,12 +70,16 @@ const inputStyle: React.CSSProperties = {
 };
 
 export default function ProfilePage() {
-  const { user, session, profile, signOut, loading: authLoading } = useAuth();
+  const { user, session, profile, signOut, loading: authLoading, refreshProfile } = useAuth();
 
   const [displayName, setDisplayName] = useState('');
   const [nationality, setNationality] = useState('');
   const [dateOfBirth, setDateOfBirth] = useState('');
   const [dobError, setDobError] = useState('');
+  // The name as loaded: a stored name that fails nameProblem() is flagged under
+  // the field but never blocks saving the OTHER fields; a NEW name must pass.
+  const [loadedName, setLoadedName] = useState('');
+  const [nameErr, setNameErr] = useState('');
   const [notifications, setNotifications] = useState<NotifFields>({
     notify_email_applications: true,
     notify_email_payments:     true,
@@ -153,6 +158,7 @@ export default function ProfilePage() {
       .then(({ data }) => {
         if (data) {
           setDisplayName(data.display_name ?? '');
+          setLoadedName(tidyName(data.display_name));
           setNationality(data.nationality ?? '');
           setDateOfBirth(data.date_of_birth ?? '');
           setEducationLevel(data.education_level ?? null);
@@ -193,7 +199,7 @@ export default function ProfilePage() {
         setAwardCount(rows.reduce((n, r) => n + ((r.awards?.length ?? 0) > 0 ? r.awards!.length : (r.award && r.award !== 'None' ? 1 : 0)), 0));
       });
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [authLoading, user?.id, session?.access_token]);
+  }, [authLoading, user?.id]);
 
   // Close the nationality autocomplete on outside click (the menu lives in a
   // Portal, so check both the wrapper and the menu), and keep it anchored to
@@ -297,6 +303,15 @@ export default function ProfilePage() {
   async function handleSave() {
     if (!user) return;
     setDobError('');
+    setNameErr('');
+    // The name is a person's name (src/lib/personName.ts). Only a CHANGED name
+    // is refused: someone whose stored name is "GPS MUN" can still save their
+    // nationality here, and sees the same sentence under the field.
+    const cleanName = tidyName(displayName);
+    if (cleanName !== loadedName) {
+      const problem = nameError(cleanName);
+      if (problem) { setNameErr(problem); return; }
+    }
     if (dateOfBirth) {
       const age = ageAt(dateOfBirth);
       if (age === null || age < 0 || age > 120) {
@@ -355,7 +370,7 @@ export default function ProfilePage() {
     const { data, error } = await supabase
       .from('profiles')
       .update({
-        display_name: displayName,
+        display_name: cleanName,
         nationality:  country.name,
         date_of_birth: dateOfBirth,
       })
@@ -366,7 +381,11 @@ export default function ProfilePage() {
       setSaveError('We could not save your profile. Please check your connection and try again.');
       return;
     }
+    setDisplayName(cleanName);
+    setLoadedName(cleanName);
     setSaved(true);
+    // The nav and the account rail read the name from AuthProvider's profile.
+    void refreshProfile();
     setTimeout(() => setSaved(false), 2000);
   }
 
@@ -389,8 +408,9 @@ export default function ProfilePage() {
       await supabase.from('profiles').update({ avatar_url: publicUrl }).eq('id', user.id);
       setAvatarUrl(publicUrl);
       setAvatarUploading(false);
-      // Reload so the sidebar avatar (driven by AuthProvider's profile) syncs.
-      setTimeout(() => window.location.reload(), 400);
+      // The sidebar avatar is driven by AuthProvider's profile: re-read it in
+      // place. This used to reload the whole page 400 ms after the upload.
+      void refreshProfile();
     } catch {
       setAvatarError('Upload failed. Please try again.');
       setAvatarUploading(false);
@@ -834,11 +854,45 @@ export default function ProfilePage() {
               <input
                 type="text"
                 value={displayName}
-                onChange={(e) => setDisplayName(e.target.value)}
+                onChange={(e) => { setDisplayName(e.target.value); setNameErr(''); }}
+                autoComplete="name"
+                aria-invalid={nameErr ? true : undefined}
+                aria-describedby="acct-name-note"
                 className="gv-acct-input w-full rounded-xl px-4 py-3 text-sm focus:outline-none"
-                style={inputStyle}
+                style={nameErr ? { ...inputStyle, border: '1px solid #8B2020' } : inputStyle}
               />
             </label>
+            {(() => {
+              // One line under the field: the refusal, else a warning about a
+              // stored name that is not a person's, else the Title Case offer.
+              const shown = nameErr || (tidyName(displayName) === loadedName ? nameError(loadedName) ?? '' : '');
+              const suggestion = shown ? null : titleCaseSuggestion(displayName);
+              if (shown) {
+                return (
+                  <p id="acct-name-note" role={nameErr ? 'alert' : undefined} className="-mt-3 text-sm" style={{ color: '#8B2020', fontFamily: OUTFIT, lineHeight: 1.45 }}>
+                    {shown}
+                  </p>
+                );
+              }
+              return (
+                <p id="acct-name-note" className="-mt-3" style={{ fontSize: T.caption, color: HINT, fontFamily: OUTFIT }}>
+                  Your own name, the way you&apos;d sign a certificate. Organisers and chairs see it.
+                  {suggestion && (
+                    <>
+                      {' '}
+                      <button
+                        type="button"
+                        onClick={() => setDisplayName(suggestion)}
+                        className="font-bold underline underline-offset-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] rounded"
+                        style={{ color: '#1C1410', background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontFamily: OUTFIT }}
+                      >
+                        Use Title Case: {suggestion}
+                      </button>
+                    </>
+                  )}
+                </p>
+              );
+            })()}
 
             {/* Email (read-only) */}
             <div>

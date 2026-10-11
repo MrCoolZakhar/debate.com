@@ -34,12 +34,11 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import {
-  Check, Copy, Eye, ChevronDown, Plus, Star, X, Building2, Globe,
-  CheckCircle2, Clock, MinusCircle, XCircle, CalendarDays, Wallet, CreditCard,
+  Check, Copy, Eye, ChevronDown, Plus, Star, X,
+  CheckCircle2, Clock, MinusCircle, XCircle, CalendarDays, Wallet,
   UserCheck, ListChecks, PartyPopper, UsersRound, type LucideIcon,
 } from 'lucide-react';
 import Portal from '@/components/Portal';
-import { Emoji3D } from '@/components/neu';
 import { GoldWord } from '@/components/BrandHeading';
 import { DatePicker } from '@/components/DatePicker';
 import { CurrencyPicker } from '@/components/CurrencyPicker';
@@ -48,12 +47,15 @@ import { activeFeePhase, type FeePhase } from '@/lib/finance';
 import { conferencePaymentsReady, paymentGateBlocks } from '@/lib/payments';
 import type { TimelineContext, TimelineInput } from '@/lib/roleTimeline';
 import type { Conference } from '@/app/manage/[slug]/layout';
-import { ROLE_EMOJI, ROLE_BLURB, InfoHint } from './applicationsUi';
+import { STORE_CSS } from '../store/storeKit';
+import { DASH_CSS } from '../financials/dashboardKit';
+import { ROLE_BLURB, InfoHint } from './applicationsUi';
 import { TimelineNotice, TimelineWarning } from './timelineUi';
 import { RoleTimelineBar } from './roleTimelineBar';
 import {
-  F, INK, INK_SOFT, FOREST, AMBER, DANGER, HAIRLINE, PRIMARY_BTN, SECOND_BTN, TEXT_LINK, INPUT,
-  Switch, ToggleRow, FieldLabel, Notice, PREF_MODE_OPTIONS,
+  F, INK, INK_SOFT, FOREST, AMBER, DANGER, HAIRLINE, TEXT_LINK, INPUT, ROW_CSS,
+  Switch, FieldLabel, Notice, PREF_MODE_OPTIONS, Row, SwitchRow, GoldLast, TINT_GOLD_BG, TINT_GREEN_BG, DuoDisc, ROLE_ICON,
+  inGeneralScope, generalValue, type GeneralField,
   roleIsFree, roleHasPrice, roleCanHavePreference, rolePlural, roleTitle, windowState, dateAndTime,
   toDatetimeLocal, fromDatetimeLocal, localZoneLabel, type RoleSetupConfig, type WindowState,
 } from './panelKit';
@@ -74,7 +76,7 @@ const SHEET_BG = '#F3EEE2';
 const CSS = `
 .gvs-backdrop { position: fixed; inset: 0; z-index: 50; display: flex; align-items: center; justify-content: center;
   background: rgba(27,20,16,0.42); padding: 24px; }
-.gvs-panel { position: relative; display: flex; flex-direction: column; width: min(920px, 100%); height: min(100%, 980px);
+.gvs-panel { position: relative; display: flex; flex-direction: column; width: min(880px, 100%); height: min(100%, 980px);
   background: ${SHEET_BG}; border-radius: 24px; overflow: hidden; box-shadow: 0 30px 90px rgba(27,20,16,0.35); }
 @media (max-width: 720px) {
   .gvs-backdrop { padding: 0; }
@@ -83,33 +85,38 @@ const CSS = `
 }
 .gvs-body { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch;
   container-type: inline-size; }
-.gvs-col { width: 100%; max-width: 760px; margin: 0 auto; padding: 20px clamp(12px, 3vw, 24px) 40px;
-  display: flex; flex-direction: column; gap: 14px; }
-.gvs-two { display: grid; gap: 14px; grid-template-columns: minmax(0, 1fr); }
-@container (min-width: 560px) { .gvs-two { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-.gvs-rows > :first-child { border-top: none !important; padding-top: 4px !important; }
-/* A price row: the name on its own line (never squeezed), then from, to,
-   amount and remove. One field per line on a phone, the dates side by side
-   from 480px, dates, amount and remove on one line from 600px. */
-.gvs-phase { display: grid; gap: 8px; grid-template-columns: minmax(0, 1fr) 32px; align-items: center; }
-.gvs-phase > :nth-child(-n+3) { grid-column: 1 / -1; }
-@container (min-width: 480px) {
-  .gvs-phase { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
-  .gvs-phase > :nth-child(-n+3) { grid-column: auto; }
-  .gvs-phase > .gvs-phase-name { grid-column: 1 / -1; }
+.gvs-col { width: 100%; max-width: 760px; margin: 0 auto; padding: 16px clamp(10px, 3vw, 22px) 36px;
+  display: flex; flex-direction: column; gap: 12px; }
+.gvs-two { display: grid; gap: 10px; grid-template-columns: minmax(0, 1fr); }
+@container (min-width: 480px) { .gvs-two { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+/* Fee stages: a compact table. On a phone one stage is the name, then from
+   and to side by side, then the price and remove; one line of five from 620px. */
+.gvs-stages { display: flex; flex-direction: column; gap: 8px; }
+.gvs-stage { display: grid; gap: 8px; align-items: center; padding: 8px; border-radius: 14px; background: #FAF8F3;
+  grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-areas: "name name" "from to" "price rm"; }
+.gvs-stage[data-today="true"] { background: rgba(238,217,138,0.28); box-shadow: inset 3px 0 0 #B6871F; }
+.gvs-stage[data-bad="true"] { box-shadow: inset 0 0 0 1.5px rgba(139,32,32,0.45); }
+.gvs-st-name { grid-area: name; } .gvs-st-price { grid-area: price; } .gvs-st-from { grid-area: from; } .gvs-st-to { grid-area: to; }
+.gvs-st-rm { grid-area: rm; justify-self: end; }
+.gvs-stage-head { display: none; }
+@container (min-width: 620px) {
+  .gvs-stage { grid-template-columns: minmax(0, 1fr) 84px 160px 160px 34px; grid-template-areas: "name price from to rm"; }
+  .gvs-st-rm { justify-self: center; }
+  .gvs-stage-head { display: grid; grid-template-columns: minmax(0, 1fr) 84px 160px 160px 34px; gap: 8px; padding: 0 8px; }
 }
-@container (min-width: 600px) {
-  .gvs-phase { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 112px 32px; }
-}
+.gvs-st-from > div > button, .gvs-st-to > div > button { padding-left: 10px !important; padding-right: 10px !important; gap: 8px !important; }
 .gvs-head-word { display: none; }
 @media (min-width: 560px) { .gvs-head-word { display: inline; } }
 `;
 
 // ── Pieces ───────────────────────────────────────────────────────────────────
 
-function Section({ id, icon: Icon, title, hint, children }: {
+/** One card of the form: the Store's white card, a duotone icon in a tinted disc,
+ *  a Title Case heading with its last word gold. */
+function Section({ id, icon, tint = TINT_GREEN_BG, title, hint, children }: {
   id: string;
   icon: LucideIcon;
+  tint?: string;
   title: string;
   hint?: ReactNode;
   children: ReactNode;
@@ -118,41 +125,16 @@ function Section({ id, icon: Icon, title, hint, children }: {
     <section
       id={id}
       aria-labelledby={`${id}-h`}
-      style={{
-        backgroundColor: '#FFFFFF', borderRadius: 16, border: '1px solid rgba(27,56,40,0.08)',
-        boxShadow: '0 1px 2px rgba(27,56,40,0.05), 0 6px 18px rgba(27,56,40,0.06)',
-        padding: 'clamp(16px, 3vw, 22px)', scrollMarginTop: 16,
-      }}
+      className="gv-st-card gvk-group"
+      style={{ padding: 'clamp(14px, 3vw, 20px)', scrollMarginTop: 16 }}
     >
-      <h3 id={`${id}-h`} className="flex items-center gap-2.5 mb-3" style={{ fontFamily: F, fontSize: 19, fontWeight: 700, color: INK, lineHeight: 1.25 }}>
-        <span aria-hidden className="flex items-center justify-center flex-shrink-0" style={{ width: 32, height: 32, borderRadius: '50%', backgroundColor: 'rgba(238,217,138,0.38)' }}>
-          <Icon size={17} strokeWidth={2.2} color={FOREST} />
-        </span>
-        <span style={{ overflowWrap: 'anywhere' }}>{title}</span>
+      <h3 id={`${id}-h`} className="flex items-center gap-2.5 mb-3" style={{ fontFamily: F, fontSize: 18, fontWeight: 800, color: INK, lineHeight: 1.25 }}>
+        <DuoDisc icon={icon} tint={tint} size={36} />
+        <span style={{ overflowWrap: 'anywhere' }}><GoldLast text={title} /></span>
         {hint}
       </h3>
       {children}
     </section>
-  );
-}
-
-/** One small link that shows tucked-away options (open already when in use). */
-function MoreLink({ label, defaultOpen, children }: { label: string; defaultOpen: boolean; children: ReactNode }) {
-  const [open, setOpen] = useState(defaultOpen);
-  return (
-    <div className="mt-3">
-      <button
-        type="button"
-        onClick={() => setOpen(o => !o)}
-        aria-expanded={open}
-        className="inline-flex items-center gap-1.5 focus:outline-none focus-visible:ring-2 rounded"
-        style={{ ...TEXT_LINK, fontSize: 14 }}
-      >
-        <ChevronDown size={15} strokeWidth={2.5} aria-hidden style={{ transform: open ? 'rotate(180deg)' : 'rotate(-90deg)', transition: 'transform 200ms ease' }} />
-        {label}
-      </button>
-      {open && <div className="mt-3">{children}</div>}
-    </div>
   );
 }
 
@@ -161,10 +143,6 @@ function TimelineMsg({ msg }: { msg: { kind: 'info' | 'error'; text: string } | 
   return msg.kind === 'info'
     ? <TimelineNotice text={msg.text} />
     : <div className="mt-2"><Notice tone="danger" role="alert">{msg.text}</Notice></div>;
-}
-
-function Hint({ children }: { children: ReactNode }) {
-  return <p className="mt-1.5" style={{ fontFamily: F, fontSize: 13, color: INK_SOFT, lineHeight: 1.5, overflowWrap: 'anywhere' }}>{children}</p>;
 }
 
 /** Nodes that can sit at the end of <body> without being a layer over us
@@ -197,6 +175,9 @@ export interface RoleSheetProps {
   formSlot: ReactNode;
   /** The after-submitting message fields (their state lives in the page). */
   afterSlot: ReactNode;
+  /** Every role listed on the Applications page (this one included): the
+   *  rules for every role are compared against them. */
+  peers: RoleSetupConfig[];
 }
 
 export function RoleSheet(props: RoleSheetProps) {
@@ -291,9 +272,28 @@ export function RoleSheet(props: RoleSheetProps) {
     && new Date(config.applications_close_at).getTime() <= new Date(config.applications_open_at).getTime());
   const hasInvalidPhase = phases.some(p => !p.start_date || !p.end_date);
 
+  // The rules for every role (panelKit.inGeneralScope). A field this role is
+  // covered by sits under "Different rules for {role}", open by itself when
+  // this role already differs from another covered role. A field the rule
+  // does not cover (the secretariat's acceptance) is shown plainly.
+  const covered = (f: GeneralField) => inGeneralScope(f, role);
+  const differs = (f: GeneralField) => !!config && covered(f)
+    && props.peers.some(p => p.role !== role && inGeneralScope(f, p.role) && generalValue(p, f) !== generalValue(config, f));
+  const showPaying = priced && !free;
+  const showRank = roleCanHavePreference(role) && role !== 'chair';
+  const ownFields: GeneralField[] = (['auto_accept', 'allow_resubmission', 'payment_timing', 'hide_dashboard_until_paid', 'preference_mode'] as GeneralField[])
+    .filter(f => (f === 'payment_timing' || f === 'hide_dashboard_until_paid') ? showPaying : f === 'preference_mode' ? showRank : true);
+  const plainFields = ownFields.filter(f => !covered(f));
+  const overrideFields = ownFields.filter(f => covered(f));
+  const anyDiffers = overrideFields.some(differs);
+  const [overrideOpen, setOverrideOpen] = useState(anyDiffers || startStepIsRule(props.initialStep));
+
   return (
     <Portal>
       <div ref={rootRef} className="gvs-backdrop" onClick={props.onClose}>
+        <style>{STORE_CSS}</style>
+        <style>{DASH_CSS}</style>
+        <style>{ROW_CSS}</style>
         <style>{CSS}</style>
         <div
           ref={panelRef}
@@ -309,9 +309,7 @@ export function RoleSheet(props: RoleSheetProps) {
             className="flex items-center gap-3 flex-shrink-0"
             style={{ backgroundColor: '#FFFFFF', borderBottom: `1px solid ${HAIRLINE}`, padding: '12px clamp(12px, 2.6vw, 20px)' }}
           >
-            <span aria-hidden className="flex items-center justify-center flex-shrink-0" style={{ width: 44, height: 44, borderRadius: '50%', background: 'radial-gradient(circle at 35% 30%, #FFFFFF 0%, #F3EEDD 70%)', boxShadow: '0 0 0 1px rgba(27,56,40,0.07), 0 2px 6px rgba(27,56,40,0.08)' }}>
-              <Emoji3D name={ROLE_EMOJI[role] ?? 'Busts in silhouette'} size={26} fallback={UsersRound} fallbackColor={FOREST} />
-            </span>
+            <DuoDisc icon={ROLE_ICON[role] ?? UsersRound} tint={TINT_GOLD_BG} size={46} />
             <div className="min-w-0 flex-1">
               <h2 id="role-sheet-title" className="flex items-center gap-1.5" style={{ fontFamily: F, fontSize: 'clamp(19px, 2.4vw, 24px)', fontWeight: 800, color: INK, lineHeight: 1.15, letterSpacing: '-0.01em' }}>
                 <span style={{ overflowWrap: 'anywhere' }}>{roleTitle(role)} <GoldWord>Applications</GoldWord></span>
@@ -319,7 +317,7 @@ export function RoleSheet(props: RoleSheetProps) {
               </h2>
               <p className="mt-0.5" style={{ fontFamily: F, fontSize: 13.5, color: INK_SOFT }}>
                 {props.appliedCount !== null && (
-                  <><b style={{ fontSize: 15, fontWeight: 700, color: INK, fontVariantNumeric: 'tabular-nums' }}>{props.appliedCount}</b> applied · </>
+                  <><b style={{ fontSize: 22, fontWeight: 900, color: FOREST, fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.02em' }}>{props.appliedCount}</b> applied · </>
                 )}
                 <span role="status" aria-live="polite">{saveWord}</span>
               </p>
@@ -353,18 +351,11 @@ export function RoleSheet(props: RoleSheetProps) {
 
           <div ref={bodyRef} className="gvs-body">
             <div className="gvs-col">
-              {/* ── Title card (the Google Forms header card) ── */}
-              <section
-                id="step-review"
-                style={{
-                  backgroundColor: '#FFFFFF', borderRadius: 16, border: '1px solid rgba(27,56,40,0.08)',
-                  borderTop: `8px solid ${FOREST}`, boxShadow: '0 6px 18px rgba(27,56,40,0.06)',
-                  padding: 'clamp(16px, 3vw, 22px)',
-                }}
-              >
+              {/* ── What the switch means now, the link and the preview ── */}
+              <section id="step-review" className="gv-st-card gv-fd-wash-green" style={{ padding: 'clamp(14px, 3vw, 18px)' }}>
                 <p id="role-switch-line" style={{ fontFamily: F, fontSize: 15, color: INK, lineHeight: 1.5, overflowWrap: 'anywhere' }}>
                   {blocked
-                    ? <>Set up payments before you switch this on. Even a free conference needs one. You can still fill in everything below.{' '}
+                    ? <>Set up payments before you switch this on. You can still fill in everything below.{' '}
                       <Link href={`/manage/${c.slug}/financials?open=payment`} style={{ ...TEXT_LINK, fontSize: 15 }}>Set up payments</Link></>
                     : statusLine}
                 </p>
@@ -376,12 +367,12 @@ export function RoleSheet(props: RoleSheetProps) {
                     </Notice>
                   </div>
                 )}
-                <div className="mt-4 flex flex-wrap items-center gap-2.5">
-                  <button type="button" onClick={props.onCopyLink} className="inline-flex items-center gap-1.5 focus:outline-none focus-visible:ring-2" style={SECOND_BTN}>
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  <button type="button" onClick={props.onCopyLink} className="gv-st-btn gv-st-outline" style={{ minHeight: 40, padding: '0 14px' }}>
                     {props.linkCopied ? <Check size={15} strokeWidth={3} aria-hidden /> : <Copy size={15} strokeWidth={2.3} aria-hidden />}
                     {props.linkCopied ? 'Link copied' : 'Copy application link'}
                   </button>
-                  <a href={`/conferences/${c.slug}/apply?role=${role}&preview=1`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 focus:outline-none focus-visible:ring-2" style={SECOND_BTN}>
+                  <a href={`/conferences/${c.slug}/apply?role=${role}&preview=1`} target="_blank" rel="noopener noreferrer" className="gv-st-btn gv-st-outline" style={{ minHeight: 40, padding: '0 14px' }}>
                     <Eye size={15} strokeWidth={2.3} aria-hidden />
                     Preview the form
                   </a>
@@ -390,17 +381,12 @@ export function RoleSheet(props: RoleSheetProps) {
 
               {!config ? (
                 <div aria-busy="true" className="flex flex-col gap-3">
-                  {[0, 1, 2].map(i => (
-                    <div key={i} style={{ backgroundColor: '#FFFFFF', borderRadius: 16, padding: 22 }}>
-                      <span className="block rounded-lg animate-pulse" style={{ height: 20, width: '50%', backgroundColor: '#F1ECE0' }} />
-                      <span className="block rounded-lg animate-pulse mt-3" style={{ height: 40, backgroundColor: '#F6F2E8' }} />
-                    </div>
-                  ))}
+                  {[0, 1, 2].map(i => <div key={i} className="gv-fd-ph" style={{ height: 120 }} />)}
                 </div>
               ) : (
                 <>
-                  {/* ── When ── */}
-                  <Section id="step-when" icon={CalendarDays} title="When">
+                  {/* ── When: one row ── */}
+                  <Section id="step-when" icon={CalendarDays} tint={TINT_GOLD_BG} title="When">
                     <div key={configVersion}>
                       <div className="gvs-two">
                         <div>
@@ -433,35 +419,33 @@ export function RoleSheet(props: RoleSheetProps) {
                           />
                         </div>
                       </div>
-                      {windowBackwards ? (
+                      {windowBackwards && (
                         <div className="mt-3"><Notice tone="danger" role="alert">This closes before it opens, so nobody can apply. Move one of the two.</Notice></div>
-                      ) : (
-                        <p suppressHydrationWarning className="mt-2" style={{ fontFamily: F, fontSize: 13, color: INK_SOFT }}>
-                          Times are in {localZoneLabel()}.
-                          {datedPhases ? ' Your prices have dates, so the window follows them.' : ''}
-                        </p>
+                      )}
+                      {datedPhases && !windowBackwards && (
+                        <p className="mt-2" style={{ fontFamily: F, fontSize: 13, color: INK_SOFT }}>Your prices have dates, so the window follows them.</p>
                       )}
                       {timelineMsg?.where === 'window' && <TimelineMsg msg={timelineMsg} />}
                       <TimelineWarning config={config} roleLabel={role} ctx={timelineCtx} onFix={(patch) => props.onSaveTimeline(patch, 'window')} />
                       {(config.applications_open_at || config.applications_close_at || datedPhases) && (
-                        <div className="mt-4 rounded-2xl p-4" style={{ backgroundColor: '#FBF8F1' }}>
-                          <RoleTimelineBar config={config} now={now} fallbackCurrency={currency} timeZone={timelineCtx.timeZone} />
+                        <div className="mt-3">
+                          <RoleTimelineBar config={config} now={now} fallbackCurrency={currency} timeZone={timelineCtx.timeZone} compact />
                         </div>
                       )}
                     </div>
                   </Section>
 
-                  {/* ── Price ── */}
+                  {/* ── Price: one row, then the stages as a small table ── */}
                   {priced && (
-                    <Section id="step-price" icon={Wallet} title="Price">
+                    <Section id="step-price" icon={Wallet} tint={TINT_GOLD_BG} title="Price">
                       <div key={configVersion}>
-                        <div className="flex gap-2 flex-wrap" style={{ maxWidth: 420 }}>
+                        <div className="flex items-center gap-2 flex-wrap">
                           <CurrencyPicker
                             value={config.fee_currency}
                             onChange={(code) => props.onSave({ fee_currency: code })}
                             ariaLabel={`${roleTitle(role)} fee currency`}
                             variant="bordered"
-                            style={{ width: 118, flexShrink: 0 }}
+                            style={{ width: 112, flexShrink: 0 }}
                           />
                           <input
                             type="number"
@@ -471,26 +455,35 @@ export function RoleSheet(props: RoleSheetProps) {
                             aria-label={`${roleTitle(role)} price`}
                             defaultValue={config.fee_amount}
                             onBlur={(e) => props.onSave({ fee_amount: parseFloat(e.target.value) || 0 })}
-                            style={{ ...INPUT, fontSize: 16, flex: 1, width: 'auto', minWidth: 120, fontVariantNumeric: 'tabular-nums' }}
+                            style={{ ...INPUT, fontSize: 18, fontWeight: 800, width: 150, flex: '0 1 150px', fontVariantNumeric: 'tabular-nums' }}
                           />
+                          <span style={{ fontFamily: F, fontSize: 13, color: INK_SOFT }}>
+                            {phases.length > 0 ? 'On days no stage covers. 0 is free.' : '0 is free'}
+                          </span>
                         </div>
-                        <Hint>
-                          0 means free.{phases.length > 0 ? ' This price is used on days no dated price covers.' : ''}
-                        </Hint>
 
-                        <MoreLink label="Prices by date" defaultOpen={phases.length > 0}>
-                          <PhaseEditor
+                        <div className="mt-3">
+                          <StageTable
                             phases={phases}
                             active={active}
                             configVersion={configVersion}
-                            baseAmount={config.fee_amount}
-                            hasInvalid={hasInvalidPhase}
                             onUpdatePhase={props.onUpdatePhase}
                             onSaveTimeline={props.onSaveTimeline}
                           />
                           {timelineMsg?.where === 'phases' && <TimelineMsg msg={timelineMsg} />}
-                        </MoreLink>
-                        <div className="mt-3">
+                        </div>
+                        <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2">
+                          <button
+                            type="button"
+                            disabled={hasInvalidPhase}
+                            title={hasInvalidPhase ? 'Give the last stage its dates first' : undefined}
+                            onClick={() => props.onSaveTimeline({ fee_phases: [...phases, { label: phases.length === 0 ? 'Early bird' : `Stage ${phases.length + 1}`, start_date: '', end_date: '', amount: config.fee_amount }] }, 'phases')}
+                            className="gv-st-btn gv-st-outline"
+                            style={{ minHeight: 40, padding: '0 14px' }}
+                          >
+                            <Plus size={15} strokeWidth={2.6} aria-hidden />
+                            {phases.length === 0 ? 'Add a price by date' : 'Add a stage'}
+                          </button>
                           <button type="button" onClick={props.onCopyPhases} className="inline-flex items-center gap-1.5 focus:outline-none focus-visible:ring-2 rounded" style={{ ...TEXT_LINK, fontSize: 14 }}>
                             <Copy size={14} strokeWidth={2.4} aria-hidden />
                             Use this price for another role
@@ -500,40 +493,45 @@ export function RoleSheet(props: RoleSheetProps) {
                     </Section>
                   )}
 
-                  {/* ── Paying (paid roles only) ── */}
-                  {priced && !free && (
-                    <Section id="step-paying" icon={CreditCard} title="Paying">
-                      <div className="gvs-rows">
-                        <ToggleRow
-                          title="Only after you accept them"
-                          desc="Off: they can pay as soon as they apply."
-                          checked={config.payment_timing === 'after_acceptance'}
-                          onChange={(v) => props.onSave({ payment_timing: v ? 'after_acceptance' : 'anytime' })}
-                        />
-                        <ToggleRow
-                          title="Hide their dashboard until they pay"
-                          desc="Waived and sponsored people always see everything."
-                          checked={config.hide_dashboard_until_paid === true}
-                          onChange={(v) => props.onSave({ hide_dashboard_until_paid: v })}
-                        />
-                      </div>
-                    </Section>
-                  )}
+                  {/* ── Questions ── */}
+                  <Section id="step-form" icon={ListChecks} title="Questions">
+                    <div key={configVersion}>
+                      {(role === 'chair' || role === 'secretariat') && (
+                        <div className="gvk-rows mb-3">
+                          {role === 'chair' && (
+                            <SwitchRow
+                              label="Ask which committee they want"
+                              desc="They rank committees, you assign from it."
+                              checked={config.preference_mode === 'committees_only'}
+                              onChange={(v) => props.onSave({ preference_mode: v ? 'committees_only' : 'none' })}
+                            />
+                          )}
+                          {/* Chair and secretariat only: the database CHECK refuses it for
+                              every other role, so no control exists for them at all. */}
+                          <SwitchRow
+                            label="Ask for their MUN experience"
+                            desc="They can bring it in from their MUN CV."
+                            checked={config.collect_mun_experience ?? false}
+                            onChange={(v) => props.onSave({ collect_mun_experience: v })}
+                          />
+                        </div>
+                      )}
+                      {props.formSlot}
+                    </div>
+                  </Section>
 
-                  {/* ── Who gets in ── */}
+                  {/* ── After they apply ── */}
+                  <Section id="step-after" icon={PartyPopper} tint={TINT_GOLD_BG} title="After They Apply">
+                    <p className="mb-3" style={{ fontFamily: F, fontSize: 13.5, color: INK_SOFT, lineHeight: 1.5 }}>
+                      A short note on the confirmation screen, like a group chat to join. Optional.
+                    </p>
+                    {props.afterSlot}
+                  </Section>
+
+                  {/* ── Who gets in: the per-role cap, and this role's own rules ── */}
                   <Section id="step-entry" icon={UserCheck} title="Who Gets In">
-                    <div key={configVersion} className="gvs-rows">
-                      <ToggleRow
-                        title="Accept everyone straight away"
-                        desc="Off: you review each application."
-                        checked={config.auto_accept === true}
-                        onChange={(v) => props.onSave({ auto_accept: v })}
-                      />
-                      <div className="flex items-center justify-between gap-4 flex-wrap py-3.5" style={{ borderTop: `1px solid ${HAIRLINE}` }}>
-                        <label htmlFor="role-max-accepted" className="flex items-center gap-1.5" style={{ fontFamily: F, fontSize: 15, fontWeight: 600, color: INK }}>
-                          Most people you will accept
-                          <InfoHint label="About the most you will accept" text="A limit on acceptances, not on applications. Leave it empty for no limit." />
-                        </label>
+                    <div key={configVersion} className="gvk-rows">
+                      <Row label="Most people you will accept" htmlFor="role-max-accepted" align="end" desc="Leave it empty for no limit." on={config.max_accepted != null}>
                         <input
                           id="role-max-accepted"
                           type="number"
@@ -541,99 +539,41 @@ export function RoleSheet(props: RoleSheetProps) {
                           placeholder="No limit"
                           defaultValue={config.max_accepted ?? ''}
                           onBlur={(e) => props.onSave({ max_accepted: e.target.value ? parseInt(e.target.value) : null })}
-                          style={{ ...INPUT, fontSize: 16, width: 140, fontVariantNumeric: 'tabular-nums' }}
+                          style={{ ...INPUT, fontSize: 16, width: 120, fontVariantNumeric: 'tabular-nums' }}
                         />
-                      </div>
-                      <ToggleRow
-                        title="Let turned-down people try again"
-                        desc="They can change their answers and send it back."
-                        checked={config.allow_resubmission ?? false}
-                        onChange={(v) => props.onSave({ allow_resubmission: v })}
-                      />
+                      </Row>
+                      {plainFields.map(f => <RuleControl key={f} field={f} config={config} onSave={props.onSave} />)}
                     </div>
-                  </Section>
 
-                  {/* ── Questions ── */}
-                  <Section id="step-form" icon={ListChecks} title="Questions">
-                    <div key={configVersion}>
-                      {roleCanHavePreference(role) && (role === 'chair' ? (
-                        <div className="gvs-rows mb-2">
-                          <ToggleRow
-                            title="Ask which committee they want"
-                            desc="They rank committees, you assign from it."
-                            checked={config.preference_mode === 'committees_only'}
-                            onChange={(v) => props.onSave({ preference_mode: v ? 'committees_only' : 'none' })}
-                          />
-                        </div>
-                      ) : (
-                        <div className="pb-4">
-                          <FieldLabel>
-                            What do they rank?
-                            <InfoHint label="About preferences" text="What applicants rank on the form, so what your allocation works with. Nothing skips the step and you place everyone yourself." />
-                          </FieldLabel>
-                          <div role="radiogroup" aria-label="What do they rank?" className="grid gap-2" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 150px), 1fr))' }}>
-                            {PREF_MODE_OPTIONS.map(opt => {
-                              const on = (config.preference_mode ?? 'none') === opt.value;
-                              return (
-                                <button
-                                  key={opt.value}
-                                  type="button"
-                                  role="radio"
-                                  aria-checked={on}
-                                  title={opt.desc}
-                                  onClick={() => props.onSave({ preference_mode: opt.value })}
-                                  className="flex items-center gap-2 text-left focus:outline-none focus-visible:ring-2"
-                                  style={{
-                                    padding: '10px 12px', borderRadius: 12, cursor: 'pointer',
-                                    fontFamily: F, fontSize: 14, fontWeight: 600, lineHeight: 1.25,
-                                    backgroundColor: on ? 'rgba(27,56,40,0.06)' : '#FFFFFF',
-                                    color: INK,
-                                    border: on ? `2px solid ${FOREST}` : '1.5px solid #DDD4C0',
-                                  }}
-                                >
-                                  <span className="inline-flex items-center flex-shrink-0" style={{ gap: 2 }}>
-                                    {opt.value !== 'countries_only' && opt.value !== 'none' && <Emoji3D name="Classical building" size={18} fallback={Building2} fallbackColor={FOREST} />}
-                                    {opt.value !== 'committees_only' && opt.value !== 'none' && <Emoji3D name="Crossed flags" size={18} fallback={Globe} fallbackColor={FOREST} />}
-                                    {opt.value === 'none' && <Emoji3D name="Cross mark" size={18} fallback={X} fallbackColor={FOREST} />}
-                                  </span>
-                                  <span className="min-w-0" style={{ overflowWrap: 'anywhere' }}>{opt.label}</span>
-                                </button>
-                              );
-                            })}
+                    {overrideFields.length > 0 && (
+                      <div id="step-paying" className="mt-3" style={{ scrollMarginTop: 16 }}>
+                        <button
+                          type="button"
+                          onClick={() => setOverrideOpen(o => !o)}
+                          aria-expanded={overrideOpen}
+                          className="w-full flex items-center justify-between gap-3 text-left focus:outline-none focus-visible:ring-2 rounded-xl"
+                          style={{ padding: '12px 14px', borderRadius: 14, border: 'none', cursor: 'pointer', background: anyDiffers ? 'rgba(238,217,138,0.28)' : '#FAF8F3', boxShadow: anyDiffers ? 'inset 3px 0 0 #B6871F' : undefined, fontFamily: F }}
+                        >
+                          <span className="min-w-0">
+                            <span className="block" style={{ fontSize: 15, fontWeight: 800, color: INK }}>Different rules for {plural}</span>
+                            <span className="block" style={{ fontSize: 13, color: INK_SOFT, lineHeight: 1.45, overflowWrap: 'anywhere' }}>
+                              {anyDiffers ? 'This role already differs from the others.' : 'These follow the rules for every role on the Applications page.'}
+                            </span>
+                          </span>
+                          <ChevronDown size={18} strokeWidth={2.4} color={INK} aria-hidden style={{ transform: overrideOpen ? 'rotate(180deg)' : 'none', transition: 'transform 200ms ease', flexShrink: 0 }} />
+                        </button>
+                        {overrideOpen && (
+                          <div className="gvk-rows mt-2">
+                            {overrideFields.map(f => <RuleControl key={f} field={f} config={config} onSave={props.onSave} differs={differs(f)} />)}
                           </div>
-                          <Hint>{PREF_MODE_OPTIONS.find(o => o.value === (config.preference_mode ?? 'none'))?.desc}</Hint>
-                        </div>
-                      ))}
-                      {/* Chair and secretariat only: the database CHECK refuses it for
-                          every other role, so no control exists for them at all. */}
-                      {(role === 'chair' || role === 'secretariat') && (
-                        <div className="gvs-rows mb-2">
-                          <ToggleRow
-                            title="Ask for their MUN experience"
-                            desc="They can bring it in from their MUN CV."
-                            checked={config.collect_mun_experience ?? false}
-                            onChange={(v) => props.onSave({ collect_mun_experience: v })}
-                          />
-                        </div>
-                      )}
-                      <div className={roleCanHavePreference(role) || role === 'secretariat' ? 'pt-4' : ''} style={roleCanHavePreference(role) || role === 'secretariat' ? { borderTop: `1px solid ${HAIRLINE}` } : undefined}>
-                        <p className="mb-2" style={{ fontFamily: F, fontSize: 15, fontWeight: 600, color: INK }}>Your own questions</p>
-                        {props.formSlot}
+                        )}
                       </div>
-                    </div>
-                  </Section>
-
-                  {/* ── After they apply ── */}
-                  <Section id="step-after" icon={PartyPopper} title="After They Apply">
-                    <p className="mb-3" style={{ fontFamily: F, fontSize: 13.5, color: INK_SOFT, lineHeight: 1.5 }}>
-                      A short note on the confirmation screen, like a group chat to join. Optional.
-                    </p>
-                    {props.afterSlot}
+                    )}
                   </Section>
 
                   <div className="flex flex-wrap items-center justify-end gap-3 pt-1">
                     <span style={{ fontFamily: F, fontSize: 13.5, color: INK_SOFT }}>Everything saves by itself</span>
-                    <button type="button" onClick={props.onClose} className="inline-flex items-center gap-1.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 active:scale-[0.98] transition-transform" style={PRIMARY_BTN}>
+                    <button type="button" onClick={props.onClose} className="gv-st-btn gv-st-forest">
                       Done
                     </button>
                   </div>
@@ -647,103 +587,154 @@ export function RoleSheet(props: RoleSheetProps) {
   );
 }
 
-// ── Prices by date ───────────────────────────────────────────────────────────
+function startStepIsRule(step: string | null): boolean {
+  return step === 'paying';
+}
 
-function PhaseEditor({ phases, active, configVersion, baseAmount, hasInvalid, onUpdatePhase, onSaveTimeline }: {
+// ── One of the rules for every role, for this role only ───────────────────────
+
+function RuleControl({ field, config, onSave, differs = false }: {
+  field: GeneralField;
+  config: RoleSetupConfig;
+  onSave: (updates: Partial<RoleSetupConfig>) => void;
+  differs?: boolean;
+}) {
+  const note = differs ? 'Different from your other roles.' : undefined;
+  if (field === 'preference_mode') {
+    const value = config.preference_mode || 'none';
+    return (
+      <Row label="What they rank" desc={note ?? PREF_MODE_OPTIONS.find(o => o.value === value)?.desc} need={differs}>
+        <div role="radiogroup" aria-label="What they rank" className="flex flex-wrap gap-1.5">
+          {PREF_MODE_OPTIONS.map(opt => {
+            const on = value === opt.value;
+            return (
+              <button
+                key={opt.value}
+                type="button"
+                role="radio"
+                aria-checked={on}
+                onClick={() => onSave({ preference_mode: opt.value })}
+                className="focus:outline-none focus-visible:ring-2"
+                style={{
+                  minHeight: 38, padding: '0 12px', borderRadius: 10, cursor: 'pointer', fontFamily: F, fontSize: 13.5, fontWeight: 700,
+                  background: on ? FOREST : '#FFFFFF', color: on ? '#EED98A' : INK, border: 'none',
+                  boxShadow: on ? '0 6px 14px -8px rgba(27,56,40,0.7)' : 'inset 0 0 0 1.5px rgba(27,56,40,0.18)',
+                }}
+              >
+                {opt.label}
+              </button>
+            );
+          })}
+        </div>
+      </Row>
+    );
+  }
+  const words: Record<Exclude<GeneralField, 'preference_mode'>, [string, string]> = {
+    auto_accept: ['Accept everyone straight away', 'Off: you review each application.'],
+    allow_resubmission: ['Let turned-down people try again', 'They change their answers and send it back.'],
+    payment_timing: ['Pay only after you accept them', 'Off: they can pay as soon as they apply.'],
+    hide_dashboard_until_paid: ['Hide their dashboard until they pay', 'Waived and sponsored people always see everything.'],
+  };
+  const [label, desc] = words[field];
+  const checked = field === 'payment_timing' ? config.payment_timing === 'after_acceptance' : config[field] === true;
+  return (
+    <Row label={label} desc={note ?? desc} align="end" on={checked} need={differs}>
+      <Switch
+        label={label}
+        checked={checked}
+        onChange={(v) => onSave(field === 'payment_timing' ? { payment_timing: v ? 'after_acceptance' : 'anytime' } : { [field]: v } as Partial<RoleSetupConfig>)}
+      />
+    </Row>
+  );
+}
+
+// ── Prices by date: a compact table ───────────────────────────────────────────
+
+function StageTable({ phases, active, configVersion, onUpdatePhase, onSaveTimeline }: {
   phases: FeePhase[];
   active: FeePhase | null;
   configVersion: number;
-  baseAmount: number;
-  hasInvalid: boolean;
   onUpdatePhase: RoleSheetProps['onUpdatePhase'];
   onSaveTimeline: RoleSheetProps['onSaveTimeline'];
 }) {
+  if (phases.length === 0) return null;
+  const head: React.CSSProperties = { fontFamily: F, fontSize: 12, fontWeight: 700, color: INK_SOFT };
+  const cell: React.CSSProperties = { ...INPUT, padding: '8px 10px', fontSize: 15 };
   return (
     <div>
-      <p className="mb-3" style={{ fontFamily: F, fontSize: 13.5, color: INK_SOFT, lineHeight: 1.5 }}>
-        For example an early bird price, then a standard price. Each one starts the day after the last one ends.
-      </p>
-      <div className="flex flex-col gap-2.5">
+      <div className="gvs-stage-head mb-1.5" aria-hidden>
+        <span style={head}>Stage</span><span style={head}>Price</span><span style={head}>From</span><span style={head}>To</span><span />
+      </div>
+      <div className="gvs-stages">
         {phases.map((phase, pi) => {
           const isActive = active !== null && phase === active;
           const invalid = !phase.start_date || !phase.end_date;
           return (
             <div key={`${pi}-${phases.length}-${configVersion}`}>
-              <div
-                className="gvs-phase rounded-xl px-3 py-2.5"
-                style={{
-                  backgroundColor: isActive ? 'rgba(238,217,138,0.22)' : '#FBF8F1',
-                  border: invalid ? '1.5px solid rgba(139,32,32,0.45)' : isActive ? '1.5px solid rgba(182,135,31,0.45)' : '1px solid #EFE9DC',
-                }}
-              >
-                <div className="gvs-phase-name flex items-center gap-2 min-w-0">
+              <div className="gvs-stage" data-today={isActive ? 'true' : undefined} data-bad={invalid ? 'true' : undefined}>
+                <div className="gvs-st-name flex items-center gap-2 min-w-0">
                   <input
                     type="text"
                     placeholder="Name, e.g. Early bird"
-                    aria-label="Price name"
+                    aria-label="Stage name"
                     defaultValue={phase.label}
                     onBlur={(e) => { if (e.target.value.trim() !== phase.label) onUpdatePhase(phases, pi, { label: e.target.value.trim() }); }}
-                    style={{ ...INPUT, padding: '8px 11px', fontSize: 16 }}
+                    style={cell}
                   />
                   {isActive && (
-                    <span className="inline-flex items-center gap-1 flex-shrink-0" style={{ fontFamily: F, fontSize: 13, fontWeight: 700, color: AMBER }}>
-                      <Star size={14} strokeWidth={2.4} aria-hidden /> Today
+                    <span className="inline-flex items-center flex-shrink-0" title="The price today" style={{ color: AMBER }}>
+                      <Star size={16} strokeWidth={2.4} fill="#EED98A" aria-hidden /><span className="sr-only">Today</span>
                     </span>
                   )}
                 </div>
-                <DatePicker
-                  value={phase.start_date}
-                  max={phase.end_date || undefined}
-                  placeholder="From"
-                  onChange={(iso) => { if (iso !== phase.start_date) onUpdatePhase(phases, pi, { start_date: iso }); }}
-                />
-                <DatePicker
-                  value={phase.end_date}
-                  min={phase.start_date || undefined}
-                  placeholder="To"
-                  onChange={(iso) => { if (iso !== phase.end_date) onUpdatePhase(phases, pi, { end_date: iso }); }}
-                />
                 <input
+                  className="gvs-st-price"
                   type="number"
                   min={0}
                   step={0.01}
-                  aria-label="Price amount"
+                  aria-label="Stage price"
                   placeholder="0"
                   defaultValue={phase.amount}
                   onBlur={(e) => {
                     const next = parseFloat(e.target.value) || 0;
                     if (next !== phase.amount) onUpdatePhase(phases, pi, { amount: next });
                   }}
-                  style={{ ...INPUT, padding: '8px 10px', fontSize: 16, fontVariantNumeric: 'tabular-nums' }}
+                  style={{ ...cell, fontWeight: 800, fontVariantNumeric: 'tabular-nums' }}
                 />
+                <div className="gvs-st-from min-w-0">
+                  <DatePicker
+                    value={phase.start_date}
+                    max={phase.end_date || undefined}
+                    placeholder="From"
+                    onChange={(iso) => { if (iso !== phase.start_date) onUpdatePhase(phases, pi, { start_date: iso }); }}
+                  />
+                </div>
+                <div className="gvs-st-to min-w-0">
+                  <DatePicker
+                    value={phase.end_date}
+                    min={phase.start_date || undefined}
+                    placeholder="To"
+                    onChange={(iso) => { if (iso !== phase.end_date) onUpdatePhase(phases, pi, { end_date: iso }); }}
+                  />
+                </div>
                 <button
                   type="button"
-                  aria-label={`Remove ${phase.label || 'this price'}`}
+                  aria-label={`Remove ${phase.label || 'this stage'}`}
+                  title="Remove"
                   onClick={() => onSaveTimeline({ fee_phases: phases.filter((_, i2) => i2 !== pi) }, 'phases')}
-                  className="flex items-center justify-center justify-self-end focus:outline-none focus-visible:ring-2 rounded-full"
-                  style={{ width: 32, height: 32, background: 'none', border: 'none', color: DANGER, cursor: 'pointer' }}
+                  className="gvs-st-rm flex items-center justify-center focus:outline-none focus-visible:ring-2 rounded-full"
+                  style={{ width: 34, height: 34, background: 'none', border: 'none', color: DANGER, cursor: 'pointer' }}
                 >
                   <X size={17} strokeWidth={2.6} />
                 </button>
               </div>
               {invalid && (
-                <p className="mt-1" style={{ fontFamily: F, fontSize: 13, color: DANGER }}>This price needs both dates before it counts.</p>
+                <p className="mt-1" style={{ fontFamily: F, fontSize: 13, color: DANGER }}>This stage needs both dates before it counts.</p>
               )}
             </div>
           );
         })}
       </div>
-      <button
-        type="button"
-        disabled={hasInvalid}
-        title={hasInvalid ? 'Give the last price its dates first' : undefined}
-        onClick={() => onSaveTimeline({ fee_phases: [...phases, { label: `Price ${phases.length + 1}`, start_date: '', end_date: '', amount: baseAmount }] }, 'phases')}
-        className="mt-3 inline-flex items-center gap-1.5 focus:outline-none focus-visible:ring-2"
-        style={{ ...SECOND_BTN, opacity: hasInvalid ? 0.5 : 1, cursor: hasInvalid ? 'not-allowed' : 'pointer' }}
-      >
-        <Plus size={15} strokeWidth={2.6} aria-hidden />
-        Add a price
-      </button>
     </div>
   );
 }

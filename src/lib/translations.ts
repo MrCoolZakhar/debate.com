@@ -9,6 +9,7 @@ import { placeholderTranslations } from './translationsPlaceholders';
 import { floorToolsTranslations } from './translationsFloorTools';
 import { createJoinTranslations } from './translationsCreateJoin';
 import { restartTranslations } from './translationsRestart';
+import { broadcastsTranslations } from './translationsBroadcasts';
 import { ptTranslationsA } from './translationsPtA';
 import { ptTranslationsB } from './translationsPtB';
 import { ptTranslationsC } from './translationsPtC';
@@ -27,6 +28,7 @@ export const translations = {
     ...floorToolsTranslations.en,
     ...createJoinTranslations.en,
     ...restartTranslations.en,
+    ...broadcastsTranslations.en,
     ...placeholderTranslations.en,
     // --- session surfaces, added 17 Sep 2026 (tutorial + translations pass) ---
     session_loading: 'LOADING…',
@@ -1721,6 +1723,7 @@ export const translations = {
     ...floorToolsTranslations.es,
     ...createJoinTranslations.es,
     ...restartTranslations.es,
+    ...broadcastsTranslations.es,
     ...placeholderTranslations.es,
     // --- session surfaces, added 17 Sep 2026 (tutorial + translations pass) ---
     session_loading: 'CARGANDO…',
@@ -3412,6 +3415,7 @@ export const translations = {
     ...floorToolsTranslations.fr,
     ...createJoinTranslations.fr,
     ...restartTranslations.fr,
+    ...broadcastsTranslations.fr,
     ...placeholderTranslations.fr,
     // --- session surfaces, added 17 Sep 2026 (tutorial + translations pass) ---
     session_loading: 'CHARGEMENT…',
@@ -5103,6 +5107,7 @@ export const translations = {
     ...floorToolsTranslations.ar,
     ...createJoinTranslations.ar,
     ...restartTranslations.ar,
+    ...broadcastsTranslations.ar,
     ...placeholderTranslations.ar,
     // --- session surfaces, added 17 Sep 2026 (tutorial + translations pass) ---
     session_loading: 'جارٍ التحميل…',
@@ -6797,6 +6802,7 @@ export const translations = {
     ...floorToolsTranslations.pt,
     ...createJoinTranslations.pt,
     ...restartTranslations.pt,
+    ...broadcastsTranslations.pt,
     ...placeholderTranslations.pt,
     ...ptTranslationsA,
     ...ptTranslationsB,

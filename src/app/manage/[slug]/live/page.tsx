@@ -8,9 +8,10 @@ import { useAuth } from '@/components/AuthProvider';
 import { getFreshAuthedClient, refreshSessionNow } from '@/lib/supabase-auth';
 import { supabase as anonSupabase } from '@/lib/supabase';
 import {
-  NeuCard, NeuInset, NeuIconDisc, Emoji3D,
+  NeuCard, NeuInset, NeuIconDisc,
   NEU, NEU_GRADIENTS, OUTFIT, EASE,
 } from '@/components/neu';
+import { DuoGlyph } from '@/components/DuoIcon';
 import { getScoringConfig } from '@/lib/scoring';
 import type { ScoringConfig } from '@/lib/settingsStore';
 import { loadConferenceScoreboard, sessionHeadlineScores, type ConferenceScoreboard } from '@/lib/conferenceScoreboard';
@@ -816,7 +817,7 @@ export default function LiveStatusPage() {
         />
         <div className="flex items-center gap-4 min-w-0" style={{ paddingLeft: 8 }}>
           <span className="relative inline-flex flex-shrink-0">
-            <NeuIconDisc gradient={NEU_GRADIENTS.forest} emoji="Satellite antenna" icon={Radio} size={58} />
+            <NeuIconDisc gradient={NEU_GRADIENTS.forest} duo icon={Radio} size={58} />
             {counts.live > 0 && (
               <span
                 className="absolute rounded-full animate-pulse"
@@ -875,7 +876,7 @@ export default function LiveStatusPage() {
            skeleton here would read as "still loading" forever, which is the same
            lie as an empty floor stamped with a fresh refresh time. */
         <NeuCard style={{ padding: 40, textAlign: 'center' }}>
-          <Emoji3D name="Satellite antenna" size={34} fallback={Radio} fallbackColor={SOFT} style={{ opacity: 0.9 }} />
+          <DuoGlyph icon={Radio} size={32} />
           <p className="text-sm font-bold mt-3 mb-1" style={{ color: NEU.ink, fontFamily: OUTFIT }}>
             The floor could not be loaded
           </p>

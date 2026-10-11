@@ -257,7 +257,7 @@ export function useFinancialsData() {
         .order('submitted_at', { ascending: false });
       setRows((data ?? []) as unknown as FinRow[]);
     })();
-  }, [conference?.id, session?.access_token]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [conference?.id, !!session]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Derived money figures ────────────────────────────────────────────────
   const fin = useMemo(() => {

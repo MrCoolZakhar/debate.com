@@ -9,7 +9,10 @@
  */
 
 import type { CSSProperties, ReactNode } from 'react';
-import { Loader2 } from 'lucide-react';
+import {
+  Loader2, Crown, UserRound, GraduationCap, Eye, Gavel, ClipboardList, HardHat, type LucideIcon,
+} from 'lucide-react';
+import { GoldWord } from '@/components/BrandHeading';
 import type { FeePhase } from '@/lib/finance';
 import { currentStageAmount, priceDate } from '@/lib/publicFees';
 import { formatFee } from '@/lib/utils';
@@ -258,8 +261,11 @@ export function localZoneLabel(): string {
  * put the sentence that explains it beside the switch and pass its id as
  * `describedBy`.
  */
-export function Switch({ checked, onChange, label, disabled = false, busy = false, size = 'md', describedBy }: {
+export function Switch({ checked, onChange, label, disabled = false, busy = false, size = 'md', describedBy, mixed = false }: {
   checked: boolean;
+  /** Different per role: the thumb sits in the middle on a gold track, and a
+   *  press turns it ON for every role. */
+  mixed?: boolean;
   onChange: (next: boolean) => void;
   label: string;
   disabled?: boolean;
@@ -275,16 +281,16 @@ export function Switch({ checked, onChange, label, disabled = false, busy = fals
     <button
       type="button"
       role="switch"
-      aria-checked={checked}
+      aria-checked={mixed ? 'mixed' : checked}
       aria-label={label}
       aria-describedby={describedBy}
       aria-busy={busy || undefined}
       disabled={off}
-      onClick={() => { if (!off) onChange(!checked); }}
+      onClick={() => { if (!off) onChange(mixed ? true : !checked); }}
       className="relative flex-shrink-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
       style={{
         width: w, height: h, borderRadius: 999, border: 'none',
-        backgroundColor: checked ? FOREST : '#CFC6B2',
+        backgroundColor: mixed ? '#D9B65A' : checked ? FOREST : '#CFC6B2',
         opacity: disabled ? 0.5 : 1,
         cursor: off ? 'not-allowed' : 'pointer',
         transition: 'background-color 180ms ease, opacity 180ms ease',
@@ -293,7 +299,7 @@ export function Switch({ checked, onChange, label, disabled = false, busy = fals
       <span
         className="absolute flex items-center justify-center"
         style={{
-          top: 3, left: checked ? w - t - 3 : 3, width: t, height: t, borderRadius: '50%',
+          top: 3, left: mixed ? (w - t) / 2 : checked ? w - t - 3 : 3, width: t, height: t, borderRadius: '50%',
           backgroundColor: '#FFFFFF', boxShadow: '0 1px 3px rgba(0,0,0,0.22)',
           transition: 'left 180ms cubic-bezier(0.22,1,0.36,1)',
         }}
@@ -396,4 +402,251 @@ export function roleIsSetUp(cfg: RoleSetupConfig, appliedCount: number | undefin
   if (Array.isArray(cfg.custom_questions) && cfg.custom_questions.length > 0) return true;
   if ((cfg.submission_message ?? '').trim()) return true;
   return false;
+}
+
+// ── Rows and groups (Oct 2026, bookmarks redesign) ───────────────────────────
+//
+// Every settings section is built from the organiser kit the owner approved
+// (the Conference Store's and Financials' cards: STORE_CSS / DASH_CSS, mounted
+// once by settingsShell.tsx). A Group is a white gv-st-card with a duotone icon
+// in a tinted disc and a Title Case heading whose last word is gold;
+// inside it, compact rows that read as cards (ivory, separated by gaps, never
+// hairlines), label on the left and the control on the right. A row that is
+// ON carries a forest tint and edge; off has no tint. Below 600px of card
+// width a row stacks, label over control. Changes save in place.
+
+export const ROW_CSS = `
+.gvk-group { container-type: inline-size; }
+.gvk-rows { display: flex; flex-direction: column; gap: 8px; }
+.gvk-row { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; padding: 12px 14px; border-radius: 14px; background: #FAF8F3; align-items: center; transition: background-color 160ms ease, box-shadow 160ms ease; }
+.gvk-row[data-on="true"] { background: linear-gradient(150deg, rgba(61,122,82,0.13), rgba(61,122,82,0.05)); box-shadow: inset 3px 0 0 #2A5A3C; }
+.gvk-row[data-need="true"] { background: rgba(238,217,138,0.22); box-shadow: inset 3px 0 0 #B6871F; }
+.gvk-row-ctl { min-width: 0; }
+.gvk-row[data-align="end"] { grid-template-columns: minmax(0, 1fr) auto; }
+@container (min-width: 600px) {
+  .gvk-row { grid-template-columns: minmax(170px, 0.85fr) minmax(0, 1.5fr); column-gap: 20px; }
+  .gvk-row[data-align="end"] { grid-template-columns: minmax(0, 1fr) auto; }
+}
+`;
+
+/** A Title Case heading with its last word in the gold italic (CLAUDE.md §8). */
+export function GoldLast({ text }: { text: string }) {
+  const i = text.lastIndexOf(' ');
+  if (i < 0) return <GoldWord>{text}</GoldWord>;
+  return <>{text.slice(0, i + 1)}<GoldWord>{text.slice(i + 1)}</GoldWord></>;
+}
+
+/** A duotone icon in a soft tinted disc (taste board two, "like a lot"): a
+ *  forest line over a gold fill. Settings uses these, never 3D emoji (owner,
+ *  Oct 2026). `tint` is TINT_GOLD_BG or TINT_GREEN_BG. */
+export function DuoDisc({ icon: Icon, size = 40, tint = TINT_GOLD_BG, active = false }: {
+  icon: LucideIcon; size?: number; tint?: string; active?: boolean;
+}) {
+  return (
+    <span
+      aria-hidden
+      className="gv-fd-disc"
+      style={{ width: size, height: size, borderRadius: Math.round(size * 0.32), background: active ? 'linear-gradient(150deg, rgba(255,255,255,0.95), rgba(255,255,255,0.75))' : tint }}
+    >
+      <Icon size={Math.round(size * 0.52)} strokeWidth={2} style={{ color: FOREST, fill: active ? '#FFF6D6' : '#EED98A' }} />
+    </span>
+  );
+}
+
+/** The duotone glyph for each role. */
+export const ROLE_ICON: Record<string, LucideIcon> = {
+  'head-delegate': Crown,
+  delegate: UserRound,
+  'faculty-advisor': GraduationCap,
+  observer: Eye,
+  chair: Gavel,
+  secretariat: ClipboardList,
+  staff: HardHat,
+};
+
+/** The top of a settings section: a duotone icon disc, the title (gold last word)
+ *  and one plain line. `focal` is the section's one big thing (a number with
+ *  its word, or a picture), drawn on the right. */
+export function SectionHead({ icon, tint, title, line, focal }: {
+  icon: LucideIcon; tint: string; title: string; line?: ReactNode; focal?: ReactNode;
+}) {
+  return (
+    <header className="gv-st-card gv-fd-card mb-5" style={{ background: tint === TINT_GOLD_BG ? WASH_GOLD : WASH_GREEN }}>
+      <div className="flex items-center justify-between gap-x-5 gap-y-3 flex-wrap">
+        <div className="flex items-center gap-3.5 min-w-0">
+          <DuoDisc icon={icon} tint={tint} size={56} />
+          <div className="min-w-0">
+            <h1 style={{ fontFamily: F, fontSize: 'clamp(24px, 2.6vw, 32px)', fontWeight: 800, color: INK, lineHeight: 1.1, letterSpacing: '-0.02em', overflowWrap: 'anywhere' }}>
+              <GoldLast text={title} />
+            </h1>
+            {line && (
+              <p className="mt-1" style={{ fontFamily: F, fontSize: 14.5, color: '#3A2E24', lineHeight: 1.45, overflowWrap: 'anywhere' }}>{line}</p>
+            )}
+          </div>
+        </div>
+        {focal && <div className="min-w-0">{focal}</div>}
+      </div>
+    </header>
+  );
+}
+
+/** A big tabular number with its word beside it (the screen's focal point). */
+export function BigCount({ n, word, tone = 'forest' }: { n: number | string; word: string; tone?: 'forest' | 'gold' }) {
+  return (
+    <span className="inline-flex items-baseline gap-2" style={{ fontFamily: F }}>
+      <span style={{ fontSize: 'clamp(38px, 4.4vw, 54px)', fontWeight: 900, letterSpacing: '-0.04em', lineHeight: 0.95, fontVariantNumeric: 'tabular-nums', color: tone === 'gold' ? '#8A6614' : FOREST }}>{n}</span>
+      <span style={{ fontSize: 16, fontWeight: 800, color: INK }}>{word}</span>
+    </span>
+  );
+}
+
+export const TINT_GREEN_BG = 'linear-gradient(150deg, rgba(61,122,82,0.20), rgba(61,122,82,0.08))';
+export const TINT_GOLD_BG = 'linear-gradient(150deg, rgba(238,217,138,0.70), rgba(238,217,138,0.30))';
+const WASH_GREEN = 'radial-gradient(120% 90% at 100% 0%, rgba(61,122,82,0.09) 0%, rgba(61,122,82,0) 55%), #FFFFFF';
+const WASH_GOLD = 'radial-gradient(120% 90% at 100% 0%, rgba(238,217,138,0.28) 0%, rgba(238,217,138,0) 55%), #FFFFFF';
+
+/** A white card with a duotone icon disc, a Title Case heading (gold last word)
+ *  and its rows. */
+export function Group({ id, title, icon, tint = TINT_GREEN_BG, hint, aside, children, pulse = false }: {
+  id?: string;
+  title: string;
+  icon: LucideIcon;
+  tint?: string;
+  /** An InfoHint (or any small node) beside the heading. */
+  hint?: ReactNode;
+  /** A link or small button at the end of the heading line. */
+  aside?: ReactNode;
+  children: ReactNode;
+  /** A brief gold ring, for deep links that land on this group. */
+  pulse?: boolean;
+}) {
+  return (
+    <section
+      id={id}
+      aria-label={title}
+      className="gv-st-card gv-fd-card gvk-group min-w-0"
+      style={{
+        scrollMarginTop: 88, padding: 'clamp(14px, 2.4vw, 20px)',
+        background: tint === TINT_GOLD_BG ? WASH_GOLD : WASH_GREEN,
+        boxShadow: pulse
+          ? '0 0 0 2px #EED98A, 0 0 0 3px rgba(182,135,31,0.35), 0 18px 40px -26px rgba(182,135,31,0.65)'
+          : undefined,
+        transition: 'box-shadow 400ms ease',
+      }}
+    >
+      <div className="flex items-center justify-between gap-3 flex-wrap mb-3">
+        <div className="flex items-center gap-3 min-w-0">
+          <DuoDisc icon={icon} tint={tint} size={40} />
+          <h2 className="flex items-center gap-1.5 min-w-0" style={{ fontFamily: F, fontSize: 18, fontWeight: 800, color: INK, lineHeight: 1.25, letterSpacing: '-0.01em' }}>
+            <span style={{ overflowWrap: 'anywhere' }}><GoldLast text={title} /></span>
+            {hint}
+          </h2>
+        </div>
+        {aside}
+      </div>
+      <div className="gvk-rows">{children}</div>
+    </section>
+  );
+}
+
+/** One setting: label (and a short line) on the left, the control on the
+ *  right. `align="end"` keeps a small control (a switch, a button) on the
+ *  same line as its label at every width. `on` tints the row forest, `need`
+ *  gives it a gold edge (something to do). */
+export function Row({ label, desc, hint, htmlFor, align = 'stretch', id, on, need, children }: {
+  label: ReactNode;
+  desc?: ReactNode;
+  hint?: ReactNode;
+  htmlFor?: string;
+  align?: 'stretch' | 'end';
+  id?: string;
+  on?: boolean;
+  need?: boolean;
+  children?: ReactNode;
+}) {
+  const Label = htmlFor ? 'label' : 'p';
+  return (
+    <div id={id} className="gvk-row" data-align={align === 'end' ? 'end' : undefined} data-on={on ? 'true' : undefined} data-need={need ? 'true' : undefined} style={{ scrollMarginTop: 88, ...(children === undefined ? { gridTemplateColumns: 'minmax(0, 1fr)' } : null) }}>
+      <div className="min-w-0">
+        <Label htmlFor={htmlFor} className="flex items-center gap-1.5" style={{ fontFamily: F, fontSize: 15, fontWeight: 700, color: INK, lineHeight: 1.3 }}>
+          <span style={{ overflowWrap: 'anywhere' }}>{label}</span>
+          {hint}
+        </Label>
+        {desc && (
+          <p style={{ fontFamily: F, fontSize: 13.5, color: INK_SOFT, lineHeight: 1.45, marginTop: 2, overflowWrap: 'anywhere' }}>{desc}</p>
+        )}
+      </div>
+      {children !== undefined && <div className="gvk-row-ctl" style={align === 'end' ? { justifySelf: 'end' } : undefined}>{children}</div>}
+    </div>
+  );
+}
+
+/** A switch row: tinted forest while on. */
+export function SwitchRow({ label, desc, hint, checked, onChange, disabled, mixed, busy }: {
+  label: string; desc?: ReactNode; hint?: ReactNode; checked: boolean; onChange: (next: boolean) => void;
+  disabled?: boolean; mixed?: boolean; busy?: boolean;
+}) {
+  return (
+    <Row label={label} desc={desc} hint={hint} align="end" on={checked && !mixed} need={mixed}>
+      <Switch label={label} checked={checked} mixed={mixed} onChange={onChange} disabled={disabled} busy={busy} />
+    </Row>
+  );
+}
+
+// ── Rules for every role ─────────────────────────────────────────────────────
+//
+// Paying, who gets in and what applicants rank are decided once, for every
+// role on the Applications page. In the database they stay per role (one
+// column per application_role_configs row), so "for every role" means the
+// same value written to every listed role the setting applies to:
+//
+//   payment_timing, hide_dashboard_until_paid   every listed role that has a
+//                                               price (never secretariat, staff)
+//   auto_accept, allow_resubmission             every listed role but the
+//                                               secretariat (accepting one makes
+//                                               them an organiser, so that stays
+//                                               a per-role decision)
+//   preference_mode                             delegates and head delegates
+//                                               (chairs keep their own switch,
+//                                               the database allows them less)
+
+export type GeneralField = 'payment_timing' | 'hide_dashboard_until_paid' | 'auto_accept' | 'allow_resubmission' | 'preference_mode';
+export const GENERAL_FIELDS: readonly GeneralField[] = ['auto_accept', 'allow_resubmission', 'payment_timing', 'hide_dashboard_until_paid', 'preference_mode'];
+
+/** Does the rule for every role cover this field on this role? */
+export function inGeneralScope(field: GeneralField, role: string): boolean {
+  if (field === 'payment_timing' || field === 'hide_dashboard_until_paid') return roleHasPrice(role);
+  if (field === 'auto_accept' || field === 'allow_resubmission') return role !== 'secretariat';
+  return role === 'delegate' || role === 'head-delegate';
+}
+
+/** A field's value as the screens compare it (missing reads as the default). */
+export function generalValue(cfg: RoleSetupConfig, field: GeneralField): string | boolean {
+  switch (field) {
+    case 'payment_timing': return cfg.payment_timing === 'after_acceptance' ? 'after_acceptance' : 'anytime';
+    case 'hide_dashboard_until_paid': return cfg.hide_dashboard_until_paid === true;
+    case 'auto_accept': return cfg.auto_accept === true;
+    case 'allow_resubmission': return cfg.allow_resubmission === true;
+    case 'preference_mode': return cfg.preference_mode || 'none';
+  }
+}
+
+/** The one answer every covered role shares, or 'mixed', or null when no
+ *  listed role is covered. */
+export function generalAnswer(roles: RoleSetupConfig[], field: GeneralField): { value: string | boolean | null; mixed: boolean; roles: RoleSetupConfig[] } {
+  const covered = roles.filter(r => inGeneralScope(field, r.role));
+  if (covered.length === 0) return { value: null, mixed: false, roles: covered };
+  const first = generalValue(covered[0], field);
+  const mixed = covered.some(r => generalValue(r, field) !== first);
+  return { value: mixed ? null : first, mixed, roles: covered };
+}
+
+/** The roles Settings lists: Head delegates and Delegates always, any other
+ *  role once it is set up or added on this browser. */
+export function listedRoles(
+  ordered: RoleSetupConfig[],
+  counts: Record<string, number> | null,
+  extraRoles: readonly string[],
+): RoleSetupConfig[] {
+  return ordered.filter(r => ALWAYS_LISTED_ROLES.includes(r.role) || extraRoles.includes(r.role) || roleIsSetUp(r, counts?.[r.role]));
 }

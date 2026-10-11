@@ -20,7 +20,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 import { Bell, BellOff, Plus, Sun, SunDim, Pencil, Mic, X, DoorOpen, ListOrdered, Rows3 } from 'lucide-react';
 import SessionLanguageMenu from '@/components/SessionLanguageMenu';
 import { useLanguage, useT } from '@/contexts/LanguageContext';
@@ -40,6 +40,7 @@ import AddRoomSheet from './AddRoomSheet';
 import StudentSheet from './StudentSheet';
 import { MODE_KEY, SeatRow, committeeLabels, modeLabel, seatTitle, useClockSeconds } from './SeatCard';
 import { C, FONT, SHADOW, clock } from './tokens';
+import { replaceUrlInPlace } from '@/lib/replaceUrlInPlace';
 
 const STALE_AFTER_MS = 30_000;
 const lc = (s: string | null | undefined) => (s ?? '').trim().toLowerCase();
@@ -77,7 +78,6 @@ const GLOBAL_CSS = `
 export default function AdvisorBoard() {
   const t = useT();
   const { language } = useLanguage();
-  const router = useRouter();
   const params = useSearchParams();
   const board = useBoardState();
   const prefs = useBoardPrefs();
@@ -100,8 +100,8 @@ export default function AdvisorBoard() {
     ? addOpen.editing ?? (addOpen.code ? board.rooms.find((r) => r.code === addOpen.code) ?? null : null)
     : null;
   useEffect(() => {
-    if (addParam.length === 6) router.replace('/advisor', { scroll: false });
-  }, [addParam, router]);
+    if (addParam.length === 6) replaceUrlInPlace('/advisor');
+  }, [addParam]);
 
   // ── Everything the board follows ────────────────────────────────────────
   const conferenceCodes = useMemo(() => {

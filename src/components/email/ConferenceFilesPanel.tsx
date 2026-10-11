@@ -32,14 +32,14 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { useEffect, useState } from 'react';
-import { FileText, AlertTriangle, Paperclip } from 'lucide-react';
+import { FileText, FolderOpen, AlertTriangle, Paperclip } from 'lucide-react';
 import { getAuthedClient } from '@/lib/supabase-auth';
-import { Emoji3D, NEU, NEU_GRADIENTS, OUTFIT, EASE } from '@/components/neu';
+import { NEU, NEU_GRADIENTS, OUTFIT, EASE } from '@/components/neu';
+import { DuoGlyph } from '@/components/DuoIcon';
 import { SOFT, AMBER_INK, CARD_BORDER } from '@/app/manage/[slug]/live/tokens';
 import type { EmailBlock } from '@/lib/emailBlocks';
 import { friendlyError } from '@/lib/friendlyError';
 
-const FOREST = '#1B3828';
 const INK = '#1C1410';
 
 export interface ConferenceFile {
@@ -145,7 +145,7 @@ export default function ConferenceFilesPanel({
   if (files.length === 0) {
     return (
       <div className="flex flex-col items-start gap-2">
-        <Emoji3D name="Open file folder" size={30} fallback={FileText} fallbackColor={FOREST} />
+        <DuoGlyph icon={FolderOpen} size={28} />
         <p style={{ fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 800, color: INK, textWrap: 'balance' }}>
           Nothing uploaded yet
         </p>
@@ -201,7 +201,7 @@ export default function ConferenceFilesPanel({
                 boxShadow: NEU.outSm,
               }}
             >
-              <Emoji3D name="Page facing up" size={19} fallback={FileText} fallbackColor={FOREST} />
+              <DuoGlyph icon={FileText} size={18} />
             </span>
             {/* The title gets the WHOLE line. A status badge sharing it left
                 "HSC Study Guide" rendering as "H." in a 180px rail, which is

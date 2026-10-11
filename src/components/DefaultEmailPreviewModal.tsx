@@ -26,11 +26,9 @@
 import { useMemo, useState } from 'react';
 import { X, Send, PenLine } from 'lucide-react';
 import { resolveTokens, type EmailTokenContext } from '@/lib/emailTokens';
-import { flattenBlocksToPlainText, normalizeBlocks, type EmailBlock } from '@/lib/emailBlocks';
-import { renderEmailHtml, type EmailRenderConference } from '@/lib/emailHtml';
-import { emailCardSubject } from '@/lib/emailCard';
-import { getDefaultEventEmail } from '@/lib/defaultEmails';
-import { hasDraftContent } from '@/lib/emailEvents';
+import { flattenBlocksToPlainText } from '@/lib/emailBlocks';
+import type { EmailRenderConference } from '@/lib/emailHtml';
+import { eventEmailSource, eventEmailHtml, eventEmailSubject, type PreviewTemplate } from '@/lib/eventEmailPreview';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { triggerEmailDelivery } from '@/lib/emailDelivery';
 import { ModalOverlay, MODAL_PANEL_MAX_HEIGHT } from '@/components/CommitteeEditorModal';
@@ -43,12 +41,7 @@ const SOFT = '#5A4A3C';
 const FOREST = '#1B3828';
 const HAIR = 'rgba(27,56,40,0.12)';
 
-export interface PreviewTemplate {
-  subject: string;
-  body: string;
-  body_blocks: unknown;
-  enabled: boolean;
-}
+export type { PreviewTemplate };
 
 export interface DefaultEmailPreviewModalProps {
   eventKey: string;
@@ -79,14 +72,14 @@ export default function DefaultEmailPreviewModal({
   const [sendingTest, setSendingTest] = useState(false);
   const [testMessage, setTestMessage] = useState<string | null>(null);
 
-  const def = getDefaultEventEmail(eventKey);
   // The same choice queueEventEmail makes: written words win, an always-on
-  // invite's words only while that row is on.
-  const own = !forceDefault && !!template && hasDraftContent(template) && (!functional || template.enabled);
-  const blocks: EmailBlock[] | null = own
-    ? normalizeBlocks(template!.body_blocks, template!.body ?? '')
-    : def?.blocks ?? null;
-  const subjectSource = own ? template!.subject : def?.subject ?? '';
+  // invite's words only while that row is on (eventEmailPreview.ts, shared
+  // with the Automatic emails thumbnails).
+  const src = useMemo(
+    () => eventEmailSource({ eventKey, template, functional, forceDefault }),
+    [eventKey, template, functional, forceDefault]
+  );
+  const { blocks, own } = src;
 
   const matches = useMemo(() => {
     if (!search.trim()) return [];
@@ -96,13 +89,8 @@ export default function DefaultEmailPreviewModal({
   const candidate = candidateId ? previewCandidates.find(c => c.id === candidateId) ?? null : null;
   const ctx: EmailTokenContext = candidate?.ctx ?? testSendContext;
 
-  const html = useMemo(
-    () => (blocks ? renderEmailHtml({ blocks, conference, ctx, variant: 'transactional', event: eventKey, isDefault: !own }) : ''),
-    // blocks is derived from template / def, both stable for this render
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [template, def, own, conference, ctx, eventKey]
-  );
-  const subject = blocks ? emailCardSubject(resolveTokens(subjectSource, ctx), conference, !own) : '';
+  const html = useMemo(() => eventEmailHtml(src, eventKey, conference, ctx), [src, eventKey, conference, ctx]);
+  const subject = eventEmailSubject(src, conference, ctx);
 
   async function handleSendTest() {
     if (!blocks || !accessToken || !organizerEmail || sendingTest) return;

@@ -18,6 +18,7 @@
 import { useId, useState } from 'react';
 import Link from 'next/link';
 import { Check, ChevronRight } from 'lucide-react';
+import { DuoIconDisc } from '@/components/DuoIcon';
 
 // ── Tokens ─────────────────────────────────────────────────────────────────
 
@@ -293,6 +294,7 @@ export function NeuIconDisc({
   gradient,
   icon: Icon,
   emoji,
+  duo = false,
   size = 38,
   iconColor = '#FFFFFF',
   style,
@@ -301,10 +303,17 @@ export function NeuIconDisc({
   icon?: LucideIcon;
   /** Fluent 3D emoji asset name, replaces the lucide glyph inside the disc. */
   emoji?: string;
+  /** Duotone: the lucide glyph as a forest line over a gold fill in a soft
+   *  tinted disc. Organiser pages use this, never 3D emoji (owner, 11 Oct 2026). */
+  duo?: boolean;
   size?: number;
   iconColor?: string;
   style?: React.CSSProperties;
 }) {
+  if (duo && Icon) {
+    const goldish = gradient === NEU_GRADIENTS.gold || gradient === NEU_GRADIENTS.amber;
+    return <DuoIconDisc icon={Icon} size={size} tone={goldish ? 'gold' : 'green'} style={style} />;
+  }
   // Emoji discs seat the 3D glyph on a soft ~20-25%-opacity tint of the
   // gradient, the saturated fill fights the emoji's own colours, so the
   // emoji reads as the icon and the disc is just a seat. Lucide-only discs
@@ -379,6 +388,7 @@ function Sparkline({ data, color }: { data: number[]; color: string }) {
 export function NeuStatTile({
   icon,
   emoji,
+  duo = false,
   gradient,
   value,
   label,
@@ -394,6 +404,8 @@ export function NeuStatTile({
   icon?: LucideIcon;
   /** Fluent 3D emoji asset name for the disc. */
   emoji?: string;
+  /** Duotone lucide disc instead (organiser pages, no 3D emoji). */
+  duo?: boolean;
   gradient: NeuGradient;
   value: number | string;
   label: string;
@@ -431,7 +443,7 @@ export function NeuStatTile({
       }}
     >
       <div className="flex items-start justify-between gap-2">
-        <NeuIconDisc gradient={gradient} icon={icon} emoji={emoji} size={discSize} />
+        <NeuIconDisc gradient={gradient} icon={icon} emoji={duo ? undefined : emoji} duo={duo} size={discSize} />
         {spark && spark.length > 1 && <Sparkline data={spark} color={gradient[1]} />}
       </div>
       <div style={{ marginTop: prominent ? 14 : compact ? 8 : 12 }}>

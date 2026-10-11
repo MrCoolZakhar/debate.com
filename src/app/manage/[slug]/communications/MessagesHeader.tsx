@@ -4,32 +4,35 @@
  * The top of the Communications page, "Your messages" (redesign, 10 Oct 2026,
  * the owner's pick of three mockups: "Inbox first").
  *
- * One title, three tabs (Questions, Emails you sent, Automatic emails) and one
- * main button, "Write an email". Under it, ONE slim line, and only when
+ * One title, three tabs (Questions, Emails you sent, Automatic emails), the
+ * main button "Write an email" and beside it the secondary "Marketing" (11 Oct
+ * 2026, owner: it replaced the "Find new delegates" card), which opens the paid
+ * announcements (AnnounceView). Under it, ONE slim line, and only when
  * something needs the organiser: emails that could not be delivered, or
- * session codes that have not gone out. The paid announcements live in a
- * small "Find new delegates" card under the page (`FindDelegatesCard`).
+ * session codes that have not gone out.
  *
  * Presentation only: every action is a callback the page already had.
  */
 
 import type { ReactNode } from 'react';
-import { Plus, AlertTriangle, KeyRound, X, Megaphone, ChevronRight } from 'lucide-react';
+import { Plus, AlertTriangle, KeyRound, X, Megaphone } from 'lucide-react';
 import { GoldWord } from '@/components/BrandHeading';
-import { CARD, FONT, INK, SOFT_INK, FOREST, DANGER, PRIMARY, DuoIcon, EASE_OUT } from './commsKit';
+import { CARD, FONT, INK, SOFT_INK, FOREST, DANGER, PRIMARY, SECONDARY, EASE_OUT, DuoIcon } from './commsKit';
 
 export type MessagesTab = 'questions' | 'sent' | 'automatic';
 
 const TAB_GOLD = '#8A6512';
 
 export default function MessagesHeader({
-  tab, onTab, waitingCount, onWrite,
+  tab, onTab, waitingCount, onWrite, onMarketing,
   failedCount, onSeeFailed, sessionCodesHint, onSessionCodes, onDismissSessionCodes,
 }: {
   tab: MessagesTab;
   onTab: (t: MessagesTab) => void;
   waitingCount: number;
   onWrite: () => void;
+  /** Opens the paid announcements ("Find new delegates"). */
+  onMarketing: () => void;
   failedCount: number;
   onSeeFailed: () => void;
   sessionCodesHint: string | null;
@@ -95,15 +98,26 @@ export default function MessagesHeader({
           })}
         </div>
 
-        <button
-          type="button"
-          onClick={onWrite}
-          className="gv-msg-write inline-flex items-center justify-center gap-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[#1B3828]"
-          style={{ ...PRIMARY, fontSize: 15, minHeight: 46, padding: '0 20px' }}
-        >
-          <Plus size={17} strokeWidth={2.4} aria-hidden />
-          Write an email
-        </button>
+        <div className="gv-msg-actions">
+          <button
+            type="button"
+            onClick={onMarketing}
+            className="gv-msg-market inline-flex items-center justify-center gap-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[#1B3828]"
+            style={{ ...SECONDARY, fontSize: 15, minHeight: 46, padding: '0 18px' }}
+          >
+            <DuoIcon icon={Megaphone} size={28} />
+            Marketing
+          </button>
+          <button
+            type="button"
+            onClick={onWrite}
+            className="inline-flex items-center justify-center gap-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[#1B3828]"
+            style={{ ...PRIMARY, fontSize: 15, minHeight: 46, padding: '0 20px' }}
+          >
+            <Plus size={17} strokeWidth={2.4} aria-hidden />
+            Write an email
+          </button>
+        </div>
       </div>
 
       {(failedCount > 0 || sessionCodesHint) && (
@@ -138,12 +152,14 @@ export default function MessagesHeader({
       <style>{`
 .gv-msg-head{display:flex;flex-wrap:wrap;align-items:center;gap:14px 24px}
 .gv-msg-tabs{display:flex;gap:4px}
-.gv-msg-write{margin-inline-start:auto}
+.gv-msg-actions{display:flex;align-items:center;gap:10px;margin-inline-start:auto}
+.gv-msg-market:hover{background:#FAF8F3!important}
 @media (max-width: 720px){
   .gv-msg-title{flex-basis:100%}
   .gv-msg-tabs{flex-basis:100%;display:grid;grid-template-columns:repeat(3,minmax(0,1fr))}
   .gv-msg-tab{padding:8px 6px!important;font-size:13.5px!important;text-align:center}
-  .gv-msg-write{flex-basis:100%;margin-inline-start:0}
+  .gv-msg-actions{flex-basis:100%;margin-inline-start:0}
+  .gv-msg-actions > button{flex:1 1 0}
 }
 @media (prefers-reduced-motion: reduce){.gv-msg-tab{transition:none!important}}
 `}</style>
@@ -169,29 +185,6 @@ function InlineLink({ onClick, children }: { onClick: () => void; children: Reac
       style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontFamily: FONT, fontSize: 14, fontWeight: 700, color: FOREST, textDecoration: 'underline', textUnderlineOffset: 3 }}
     >
       {children}
-    </button>
-  );
-}
-
-/** "Find new delegates": the way into paid announcements (AnnounceView). */
-export function FindDelegatesCard({ onClick }: { onClick: () => void }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="gv-find-delegates mt-5 w-full text-left flex items-center gap-3 px-4 py-3 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]"
-      style={{ ...CARD, borderRadius: 16, border: 'none', cursor: 'pointer', maxWidth: 520, transitionProperty: 'transform, box-shadow', transitionDuration: '200ms', transitionTimingFunction: EASE_OUT }}
-    >
-      <DuoIcon icon={Megaphone} size={40} />
-      <span className="flex-1 min-w-0">
-        <span className="block" style={{ fontFamily: FONT, fontWeight: 700, fontSize: 15, color: INK }}>Find new delegates</span>
-        <span className="block" style={{ fontFamily: FONT, fontSize: 13.5, color: SOFT_INK, textWrap: 'pretty' }}>
-          Tell Gavelling users in your country or region about your conference. Paid.
-        </span>
-      </span>
-      <ChevronRight size={18} style={{ color: SOFT_INK }} aria-hidden />
-      <style>{`.gv-find-delegates:hover{transform:translateY(-1px)}
-@media (prefers-reduced-motion: reduce){.gv-find-delegates{transition:none!important}.gv-find-delegates:hover{transform:none}}`}</style>
     </button>
   );
 }

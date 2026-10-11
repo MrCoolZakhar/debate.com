@@ -6,18 +6,19 @@ import {
   Building2, X, Lock, Copy, Check,
   Plus, Crown, Mail as MailIcon, ChevronDown, Info, ArrowLeft,
   Settings2, Globe, Eye, EyeOff, ArrowUp, ArrowDown, Trash2, Briefcase,
-  ClipboardList, CreditCard, Megaphone, Star, CheckCircle2, Clock, type LucideIcon,
+  ClipboardList, CreditCard, Megaphone, Star, CheckCircle2, Clock, Users2, Trophy,
+  ChevronRight as ChevronRightIcon, CalendarDays, FileText, Image as ImageIcon, Palette, Handshake, Compass, History, Search,
+  School, ReceiptText, Gift, Ticket, HandHeart, type LucideIcon,
 } from 'lucide-react';
 import { useManage, type Conference } from '@/app/manage/[slug]/layout';
 
 import { getAuthedClient, getFreshAuthedClient } from '@/lib/supabase-auth';
 import { useAuth } from '@/components/AuthProvider';
-import { createClient } from '@supabase/supabase-js';
 import { UN_COUNTRIES } from '@/lib/countries';
 import { Pill } from '@/app/account/accountUi';
 import { useConfirmModal, ConfirmModal } from '@/components/ConfirmModal';
 import Portal from '@/components/Portal';
-import { NEU, OUTFIT, EASE, Emoji3D } from '@/components/neu';
+import { NEU, OUTFIT, EASE } from '@/components/neu';
 import { useScrollLock } from '@/hooks/useScrollLock';
 import { LogoDisc } from '@/components/LogoDisc';
 import { LogoCropModal } from '@/components/LogoCropModal';
@@ -35,7 +36,7 @@ import { type FeePhase } from '@/lib/finance';
 import { normalizeSocialUrl } from '@/lib/socialLinks';
 import { acronymProblem, conferenceAcronymLabel } from '@/lib/conferenceLabels';
 import {
-  ROLE_ORDER, StepDisc, InfoHint,
+  ROLE_ORDER, InfoHint,
   CopyToRolesModal,
 } from './applicationsUi';
 // Awards are behind a holding screen for now. `./awardsUi` (AwardsSettings) is
@@ -53,14 +54,30 @@ import { useConferenceTimezone, timelineNotice } from './timelineUi';
 import { INTENT_OPTIONS, getConferenceIntent, intentPayload } from '@/lib/conferenceIntent';
 import ProfileLink from '@/components/ProfileLink';
 import { useNow } from '@/lib/useNow';
-import { SectionTop, ConferencePreview, sectionMeta, type SettingsSnapshot } from './settingsHome';
-import { SettingsControlPanel } from './controlPanel';
+import { ConferencePreview, dateRange, type SettingsSnapshot } from './settingsHome';
+import { ApplicationsSection } from './controlPanel';
 import { RoleSheet } from './roleSetup';
+import { SettingsShell, type ShellSection } from './settingsShell';
+import {
+  SectionHead, Group, Row, SwitchRow, BigCount, Switch as KitSwitch, TINT_GOLD_BG, TINT_GREEN_BG, DuoDisc,
+  listedRoles, generalAnswer, inGeneralScope, GENERAL_FIELDS, type RoleSetupConfig,
+} from './panelKit';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
 /** The settings sub-tabs; also the accepted values of the ?tab= deep link. */
-type SettingsTab = 'applications' | 'delegations' | 'conference' | 'organizers' | 'privacy' | 'awards';
+type SettingsTab = 'applications' | 'delegations' | 'conference' | 'organizers' | 'privacy' | 'awards' | 'payments';
+
+/** The section each internal tab is drawn as in the bookmarks rail
+ *  (settingsShell.tsx), and so the ?tab= value written for it. */
+const SHELL_OF: Record<SettingsTab, ShellSection> = {
+  conference: 'general', privacy: 'visibility', applications: 'applications', delegations: 'delegations',
+  organizers: 'team', payments: 'payments', awards: 'awards',
+};
+const TAB_OF: Record<ShellSection, SettingsTab> = {
+  general: 'conference', visibility: 'privacy', applications: 'applications', delegations: 'delegations',
+  team: 'organizers', payments: 'payments', awards: 'awards',
+};
 
 interface RoleConfig {
   id: string;
@@ -194,59 +211,6 @@ function roleLabel(role: string): string {
   return role.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
 }
 
-
-/** One step's clickable header: a numbered disc that becomes a gold check once
- *  the step has nothing unresolved, the label, its subtitle, and a chevron.
- *  Module scope on purpose: a component declared inside the page would be a new
- *  type every render, remounting QuestionBuilder and losing its editing state. */
-// The disc shows the section's NUMBER until the section has really been
-// filled out and SAVED, then the checkmark (owner, 25 Sep 2026). `complete` is
-// always a rule over saved data (the conference row after
-// refreshConferenceQuiet, the role configs after a verified write), never a
-// hard-coded true and never local unsaved input. Opening a section earns
-// nothing. The dashboard checklist reads conference_setup_status(), not this.
-function StepHeader({ n, label, sub, complete, open, onClick, status = 'idle', hint }: {
-  n: number; label: string; sub: string; complete: boolean; open: boolean; onClick: () => void;
-  status?: 'idle' | 'saving' | 'saved';
-  /** One paragraph explaining what this step decides, on a hover "i". */
-  hint?: string;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-expanded={open}
-      className="w-full flex items-center gap-3 text-left focus:outline-none"
-      style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}
-    >
-      <StepDisc n={n} complete={complete} />
-      <span className="min-w-0 flex-1">
-        <span className="flex items-center gap-1.5 font-semibold text-base" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>
-          {label}
-          {hint && <InfoHint label={`About ${label}`} text={hint} />}
-        </span>
-        <span className="block text-xs" style={{ color: '#6E6152', fontFamily: "var(--font-brand), sans-serif" }}>
-          {sub}
-        </span>
-      </span>
-      {status === 'saving' && (
-        <span className="text-xs flex-shrink-0" style={{ color: '#6E6152', fontFamily: "var(--font-brand), sans-serif" }}>
-          Saving...
-        </span>
-      )}
-      {status === 'saved' && (
-        <span className="text-xs flex items-center gap-1 flex-shrink-0" style={{ color: '#1B3828', fontFamily: "var(--font-brand), sans-serif" }}>
-          <Check size={12} strokeWidth={3} /> Saved
-        </span>
-      )}
-      <ChevronDown
-        size={18}
-        strokeWidth={2.2}
-        style={{ color: '#6E6152', flexShrink: 0, transform: open ? 'none' : 'rotate(-90deg)', transition: 'transform 200ms ease' }}
-      />
-    </button>
-  );
-}
 
 /** Fixed-viewport placement for a portaled floating layer. Clamps horizontally
  *  so it never runs off the right edge, and flips above the trigger when there
@@ -472,29 +436,30 @@ export default function SettingsPage() {
   // same tab as 'organizers', named the way a person reading the URL would
   // expect rather than the internal section key.
   // The section shown is read from the URL every render, so the back button,
-  // the "All settings" link and every deep link agree. No ?tab= (and nothing
-  // else that targets a section) opens the settings HOME: the organiser's
-  // questions with a live preview (settingsHome.tsx, Oct 2026 redesign).
-  // Old tab names keep working exactly: applications, delegations,
-  // conference, organizers (alias team), privacy, awards.
+  // the bookmarks rail and every deep link agree (settingsShell.tsx).
   const tabParam = searchParams.get('tab') ?? searchParams.get('section');
   const activeTab: SettingsTab = (() => {
-    if (tabParam === 'team') return 'organizers';
-    if (tabParam === 'delegations' || tabParam === 'conference' || tabParam === 'organizers' || tabParam === 'privacy' || tabParam === 'awards' || tabParam === 'applications') return tabParam;
+    // New names (general, visibility, team, payments) and every old one
+    // (conference, privacy, organizers, applications, delegations, awards).
+    if (tabParam === 'team' || tabParam === 'organizers') return 'organizers';
+    if (tabParam === 'general' || tabParam === 'conference') return 'conference';
+    if (tabParam === 'visibility' || tabParam === 'privacy') return 'privacy';
+    if (tabParam === 'delegations' || tabParam === 'awards' || tabParam === 'applications' || tabParam === 'payments') return tabParam;
+    if ((ROLES as readonly string[]).includes(searchParams.get('role') ?? '') || searchParams.get('step')) return 'applications';
     if (searchParams.get('focus')) return 'conference';
     if (searchParams.get('highlight')) return 'organizers';
-    return 'applications';
+    // No ?tab=: General, the first bookmark (Oct 2026: "too much focused on
+    // applications"; Applications is one section among equals now).
+    return 'conference';
   })();
-  /** A render-time clock for the home's sentences ("open now", "until 3 Apr"). */
+  /** A render-time clock for the sentences ("open now", "until 3 Apr"). */
   const nowMs = useNow();
-  // The control panel is the applications section now (Oct 2026): no ?tab=,
-  // or ?tab=applications, shows it; a role opens as a pop-up over it.
   const showHome = activeTab === 'applications';
   function openSection(next: SettingsTab | null) {
     const params = new URLSearchParams(searchParams.toString());
     for (const k of ['tab', 'section', 'focus', 'highlight', 'step']) params.delete(k);
     if (next !== 'applications') params.delete('role');
-    if (next) params.set('tab', next);
+    if (next) params.set('tab', SHELL_OF[next]);
     const qs = params.toString();
     router.push(`${window.location.pathname}${qs ? `?${qs}` : ''}`);
   }
@@ -505,11 +470,11 @@ export default function SettingsPage() {
   // The role's pop-up (roleSetup.tsx) is open when ?role= names a role, or
   // when an old link carries ?tab=applications&step= with no role (it opens
   // Delegates, the role most links meant). ?tab=applications alone shows the
-  // control panel with Who Can Apply brought into view.
+  // Applications section.
   const roleParam = searchParams.get('role');
   const sheetRole: string | null = showHome
     ? ((ROLES as readonly string[]).includes(roleParam ?? '') ? (roleParam as string)
-      : (tabParam === 'applications' && searchParams.get('step')) ? 'delegate' : null)
+      : searchParams.get('step') ? 'delegate' : null)
     : null;
   const activeRole: string = sheetRole ?? 'delegate';
   /** Set when this page itself pushed the pop-up's URL, so closing it can
@@ -536,7 +501,7 @@ export default function SettingsPage() {
       router.back();
       return;
     }
-    router.replace(window.location.pathname, { scroll: false });
+    router.replace(`${window.location.pathname}?tab=applications`, { scroll: false });
   }
   // Roles the organiser added with "Add a role" are listed even before they
   // are set up. Per browser (a convenience, never state other people need):
@@ -544,9 +509,6 @@ export default function SettingsPage() {
   // lists it for everyone anyway.
   const [addedRoles, setAddedRoles] = useState<string[]>([]);
   const [linkCopied, setLinkCopied] = useState(false);
-  // Conference tab: one section open at a time. (The role set-up keeps its
-  // own open step, in roleSetup.tsx.)
-  const [openConfSection, setOpenConfSection] = useState<number>(0);
   const [confLinkCopied, setConfLinkCopied] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -665,8 +627,6 @@ export default function SettingsPage() {
   const intentFocusedRef = useRef(false);
   useEffect(() => {
     if (focusParam !== 'intent' || activeTab !== 'conference' || intentFocusedRef.current) return;
-    // The card lives in section 5, which starts closed: open it first.
-    if (openConfSection !== 5) { setOpenConfSection(5); return; }
     const el = document.getElementById('intent-card');
     if (!el) return;
     intentFocusedRef.current = true;
@@ -674,7 +634,7 @@ export default function SettingsPage() {
     setIntentPulse(true);
     const t = setTimeout(() => setIntentPulse(false), 2600);
     return () => clearTimeout(t);
-  }, [focusParam, activeTab, conference, openConfSection]);
+  }, [focusParam, activeTab, conference]);
   // ── Dates deep link, from the dashboard's publish gate and setup checklist ─
   // ?tab=conference&focus=dates scrolls the date fields into view and rings
   // them once, same shape as the intent deep link above. Reuses focusParam,
@@ -683,8 +643,6 @@ export default function SettingsPage() {
   const datesFocusedRef = useRef(false);
   useEffect(() => {
     if (focusParam !== 'dates' || activeTab !== 'conference' || datesFocusedRef.current) return;
-    // The date fields live in section 3 (Conference Details), closed by default.
-    if (openConfSection !== 3) { setOpenConfSection(3); return; }
     const el = document.getElementById('dates-card');
     if (!el) return;
     datesFocusedRef.current = true;
@@ -692,7 +650,7 @@ export default function SettingsPage() {
     setDatesPulse(true);
     const t = setTimeout(() => setDatesPulse(false), 2600);
     return () => clearTimeout(t);
-  }, [focusParam, activeTab, conference, openConfSection]);
+  }, [focusParam, activeTab, conference]);
   // The form builder edits whichever role the tab is on.
   const selectedRole = activeRole;
   const [inviteEmail, setInviteEmail] = useState('');
@@ -1415,6 +1373,45 @@ export default function SettingsPage() {
     setCopyPhasesOpen(false);
     setConfigVersion(v => v + 1);
     notifyOk(`Copied to ${targets.length} ${targets.length === 1 ? 'role' : 'roles'}`, 'settings-copy');
+  }
+
+  /** The rules for every role (Settings → Applications, panelKit
+   *  GENERAL_FIELDS): one value written to several roles in ONE update, the
+   *  same verified pattern as saveRoleConfig (optimistic, every row counted,
+   *  rolled back and explained when it did not land). */
+  async function saveRolesTogether(roles: string[], updates: Partial<RoleConfig>) {
+    if (!conference || roles.length === 0) return;
+    const previous = roleConfigs;
+    setRoleConfigs(prev => prev.map(rc => (roles.includes(rc.role) ? { ...rc, ...updates } : rc)));
+    clearErr('settings-applications');
+    markStep(1, 'saving');
+    const supabase = await getFreshAuthedClient();
+    if (!supabase) {
+      setRoleConfigs(previous);
+      markStep(1, 'idle');
+      notifyErr('Your session has expired, please refresh and sign in again.', 'settings-applications');
+      return;
+    }
+    const { data, error } = await supabase
+      .from('application_role_configs')
+      .update(updates)
+      .eq('conference_id', conference.id)
+      .in('role', roles)
+      .select('role');
+    if (error || !data || data.length !== roles.length) {
+      setRoleConfigs(previous);
+      markStep(1, 'idle');
+      notifyErr(error ? friendlyError(error, "Couldn't save that for every role. Please try again.") : "Couldn't save that for every role. Please refresh and try again.", 'settings-applications');
+      if (data && data.length > 0) void loadRoleConfigs();
+      return;
+    }
+    markStep(1, 'saved');
+  }
+
+  /** The roles the Applications page lists (panelKit.listedRoles). */
+  function listedRoleConfigs(extra: readonly string[] = addedRoles): RoleConfig[] {
+    const ordered = ROLES.map(r => roleConfigs.find(rc => rc.role === r)).filter((x): x is RoleConfig => !!x);
+    return listedRoles(ordered, roleAppCounts, extra) as RoleConfig[];
   }
 
   // Toggle that writes immediately (no dedicated save button): shows an
@@ -2492,11 +2489,27 @@ export default function SettingsPage() {
    *  another role"), then open its pop-up. Nothing is written for "Start
    *  from scratch": every role already has its row (handle_new_conference). */
   async function handleAddRole(role: string, copyFrom: string | null) {
+    // The rules for every role the others already share (who gets in,
+    // paying, what they rank) come with the new role, so it does not start
+    // out "different per role" by accident.
+    const peers = listedRoleConfigs().filter(rc => rc.role !== role);
+    const target = roleConfigs.find(rc => rc.role === role);
+    const inherit: Partial<RoleConfig> = {};
+    if (target) {
+      for (const f of GENERAL_FIELDS) {
+        if (!inGeneralScope(f, role)) continue;
+        const a = generalAnswer(peers, f);
+        if (a.mixed || a.value === null) continue;
+        const current = f === 'preference_mode' ? (target.preference_mode || 'none') : f === 'payment_timing' ? target.payment_timing : target[f] === true;
+        if (current !== a.value) (inherit as Record<string, unknown>)[f] = a.value;
+      }
+    }
     setAddedRoles(prev => {
       const next = prev.includes(role) ? prev : [...prev, role];
       try { if (addedRolesKey) window.localStorage.setItem(addedRolesKey, JSON.stringify(next)); } catch { /* per-browser convenience only */ }
       return next;
     });
+    if (Object.keys(inherit).length > 0) await saveRoleConfig(role, inherit);
     if (copyFrom) {
       const source = roleConfigs.find(rc => rc.role === copyFrom);
       if (source) {
@@ -2867,18 +2880,10 @@ export default function SettingsPage() {
   // `conference` only changes once refreshConferenceQuiet() confirms a write.
   const view: Conference = conference;
 
-  // Inner grouped sub-card. These sit *inside* the raised floating panel, so
-  // they read as quiet content groups (thicker 1.5px edge, a whisper of warm
-  // shadow) and let the panel itself stay the protagonist surface.
-  const cardStyle: React.CSSProperties = {
-    backgroundColor: '#FFFDF9',
-    border: '1.5px solid #D8CDB6',
-    borderRadius: '16px',
-    // Roomy on a desktop, tighter on a phone so the fields keep their width.
-    padding: 'clamp(16px, 3.5vw, 24px)',
-    marginBottom: '20px',
-    boxShadow: '0 1px 2px rgba(27,56,40,0.04)',
-  };
+  /** A field in a settings row: white, 16px so iOS never zooms. */
+  const FIELD: React.CSSProperties = { ...inputStyle, fontSize: 16, backgroundColor: '#FFFFFF', padding: '9px 12px' };
+
+
 
   // ── Applications → General ──────────────────────────────────────────────
   // The decisions that are the same for everybody, gathered in one place. Two
@@ -2934,6 +2939,7 @@ export default function SettingsPage() {
       onUpdatePhase={(phases, idx, patch) => updateFeePhase(sheetRole, phases, idx, patch)}
       onCopyPhases={() => setCopyPhasesOpen(true)}
       onCopyLink={handleCopyApplicationLink}
+      peers={listedRoleConfigs(sheetRole && !addedRoles.includes(sheetRole) ? [...addedRoles, sheetRole] : addedRoles) as RoleSetupConfig[]}
       formSlot={
         <>
           <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">
@@ -3033,165 +3039,104 @@ export default function SettingsPage() {
     />
   ) : null;
 
-  // Settings opens on the control panel (controlPanel.tsx, Oct 2026): who
-  // can apply, then the conference's own sections. A role opens as a pop-up.
-  if (showHome) {
-    const role = activeRole;
-    return (
-      <div className="px-4 sm:px-6 md:px-10 py-8" style={{ maxWidth: '1080px' }}>
-        <SettingsControlPanel
-          conference={view}
-          roles={roleConfigs}
-          counts={roleAppCounts}
-          now={nowMs}
-          organizerCount={organizers.length}
-          pendingInviteCount={pendingInvites.length}
-          extraRoles={sheetRole && !addedRoles.includes(sheetRole) ? [...addedRoles, sheetRole] : addedRoles}
-          focusRoles={tabParam === 'applications' && !sheetRole}
-          publicSaving={publicToggleSaving}
-          onPublicToggle={handlePublicToggle}
-          onRoleToggle={(r, next) => { void saveRoleConfig(r, { is_enabled: next }); }}
-          onEditRole={openRoleSetup}
-          onAddRole={(r, from) => { void handleAddRole(r, from); }}
-          onOpen={(key) => openSection(key)}
-        />
-        {roleSheet}
-            {/* Offered when a price first gets its dates, and from "Use these
-            prices for another role". Copies the whole ladder plus the
-            flat fee it falls back to: a half-copied price is worse than none. */}
-        <CopyToRolesModal
-          open={copyPhasesOpen}
-          onClose={() => setCopyPhasesOpen(false)}
-          onConfirm={(targets) => void copyPhasesToRoles(targets)}
-          busy={copyPhasesBusy}
-          title="Set this up for another role too?"
-          sub={`${roleLabel(role)} prices are saved. Most conferences run the same dates for every role, so tick the ones that should get the same prices.`}
-          roles={ROLES.filter(r => r !== role && r !== 'secretariat' && r !== 'staff')}
-        />
-        {confirmModal}
-      </div>
-    );
-  }
+  const extraListed = sheetRole && !addedRoles.includes(sheetRole) ? [...addedRoles, sheetRole] : addedRoles;
+  const shellTitle = <>Settings · {conferenceAcronymLabel(view) || view.full_name}</>;
 
   return (
-    // The team tree is the one tab that earns the extra width: it lays its
-    // members out in a grid, so a wider panel means fewer wrapped rows and a
-    // shallower, more legible hierarchy. Every other tab is a reading column
-    // and stays at 1080 (1440 with the live preview beside it).
-    <div className="px-4 sm:px-6 md:px-10 py-8" style={{ maxWidth: activeTab === 'organizers' ? '1400px' : sidePreview ? '1440px' : '1080px' }}>
-      <SectionTop
-        active={activeTab}
-        snap={settingsSnap}
-        onOpen={(key) => openSection(key)}
-        onHome={() => openSection(null)}
-      />
+    <div className="px-4 sm:px-6 md:px-10 py-8" style={{ maxWidth: activeTab === 'organizers' ? '1500px' : '1380px' }}>
+      <SettingsShell active={SHELL_OF[activeTab]} onOpen={(k) => openSection(TAB_OF[k])} title={shellTitle}>
 
-      <div className="flex items-start" style={{ gap: '28px' }}>
-        {/* ── The section's content ── */}
-        <section
-          aria-label={sectionMeta(activeTab).question}
-          className="flex-1 min-w-0"
-          style={activeTab === 'organizers'
-            // The team is a gallery of faces, and a gallery wants a wall, not a
-            // sheet of paper. No panel, no border, no shadow — the portraits sit
-            // straight on the ivory canvas with the full width to spread into.
-            ? { borderRadius: 0, backgroundColor: 'transparent', border: 'none', boxShadow: 'none', padding: 0 }
-            : {
-              borderRadius: '22px',
-              backgroundColor: '#FFFFFF',
-              border: '1px solid rgba(27,56,40,0.07)',
-              boxShadow: '0 1px 2px rgba(27,56,40,0.06), 0 14px 40px rgba(27,56,40,0.09)',
-              padding: 'clamp(14px, 3vw, 24px)',
-            }}
-        >
+      {activeTab === 'applications' && (
+        <>
+          <ApplicationsSection
+            conference={view}
+            roles={roleConfigs}
+            counts={roleAppCounts}
+            now={nowMs}
+            extraRoles={extraListed}
+            onRoleToggle={(r, next) => { void saveRoleConfig(r, { is_enabled: next }); }}
+            onEditRole={openRoleSetup}
+            onAddRole={(r, from) => { void handleAddRole(r, from); }}
+            onSaveAll={(updates, roles) => { void saveRolesTogether(roles, updates as Partial<RoleConfig>); }}
+          />
+          {roleSheet}
+          {/* Offered when a price first gets its dates, and from "Use this
+              price for another role". Copies the whole ladder plus the flat
+              fee it falls back to: a half-copied price is worse than none. */}
+          <CopyToRolesModal
+            open={copyPhasesOpen}
+            onClose={() => setCopyPhasesOpen(false)}
+            onConfirm={(targets) => void copyPhasesToRoles(targets)}
+            busy={copyPhasesBusy}
+            title="Set this up for another role too?"
+            sub={`${roleLabel(activeRole)} prices are saved. Most conferences run the same dates for every role, so tick the ones that should get the same prices.`}
+            roles={ROLES.filter(r => r !== activeRole && r !== 'secretariat' && r !== 'staff')}
+          />
+        </>
+      )}
 
-      {/* ── VISUAL TAB ── */}
       {activeTab === 'delegations' && (
-        <DelegationsSettings
-          conferenceId={conference.id}
-          allowImport={!!conference.allow_delegation_import}
-          onConferenceSaved={refreshConferenceQuiet}
-          swapMode={swapMode}
-          swapModeSaving={swapModeSaving}
-          onSwapModeChange={(v) => { void saveSwapMode(v); }}
-        />
+        <div className="flex flex-col gap-5">
+          <SectionHead icon={School} tint={TINT_GREEN_BG}
+            title="Delegations"
+            line={`${conference.allow_delegation_import ? 'Leaders bring in their own delegates.' : 'Each delegate applies on their own.'} ${swapMode === 'off' ? 'Only your team moves seats.' : swapMode === 'self_serve' ? 'Leaders swap seats themselves.' : 'Leaders ask to swap seats.'}`}
+          />
+          <DelegationsSettings
+            conferenceId={conference.id}
+            allowImport={!!conference.allow_delegation_import}
+            onConferenceSaved={refreshConferenceQuiet}
+            swapMode={swapMode}
+            swapModeSaving={swapModeSaving}
+            onSwapModeChange={(v) => { void saveSwapMode(v); }}
+          />
+        </div>
       )}
 
       {activeTab === 'conference' && (
-        <div>
-          {/* ── Persistent header bar. Never collapses: a preview link and a
-              copy-link button, the same visual language as the applications
-              tab's role header bar. ── */}
-          <div className="flex items-center gap-3 flex-wrap mb-5">
-            <div className="flex items-center gap-3 ml-auto">
-              <a
-                href={`/conferences/${conference.slug}?preview=1`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1.5 rounded-[10px] focus:outline-none transition-colors"
-                style={{
-                  padding: '7px 12px',
-                  fontFamily: "var(--font-brand), sans-serif", fontSize: '11px', fontWeight: 800,
-                  letterSpacing: 0,
-                  color: '#1B3828', backgroundColor: 'transparent',
-                  border: '1.5px solid #DDD4C0', cursor: 'pointer',
-                  textDecoration: 'none',
-                }}
-                onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.06)'; }}
-                onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
-              >
-                <Eye size={13} strokeWidth={2.4} />
-                Preview
-              </a>
-              <button
-                type="button"
-                onClick={handleCopyConferenceLink}
-                className="inline-flex items-center gap-1.5 rounded-[10px] focus:outline-none transition-colors gv-lift"
-                style={{
-                  padding: '7px 12px',
-                  fontFamily: "var(--font-brand), sans-serif", fontSize: '11px', fontWeight: 800,
-                  letterSpacing: 0,
-                  color: '#1B3828', backgroundColor: 'transparent',
-                  border: '1.5px solid #DDD4C0', cursor: 'pointer',
-                }}
-                onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.06)'; }}
-                onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
-              >
-                {confLinkCopied ? <Check size={13} strokeWidth={3} /> : <Copy size={13} strokeWidth={2.4} />}
-                {confLinkCopied ? 'Copied' : 'Copy link'}
-              </button>
-            </div>
-          </div>
+        <div className="flex items-start" style={{ gap: 28 }}>
+        <div className="flex-1 min-w-0 flex flex-col gap-5">
+          <SectionHead icon={Building2} tint={TINT_GOLD_BG}
+            title="General"
+            line={<>What your conference is and how people reach you. Changes save by themselves.{' '}
+              <a href={`/conferences/${conference.slug}?preview=1`} target="_blank" rel="noopener noreferrer" style={{ color: '#1B3828', fontWeight: 700, textDecoration: 'underline', textUnderlineOffset: 3 }}>Open your page</a></>}
+            focal={
+              <span className="flex items-center gap-3">
+                <LogoDisc src={view.logo_url} alt={view.acronym} size={64} fallbackText={(view.acronym || '?').slice(0, 3)} style={{ boxShadow: '0 0 0 4px #FFFFFF, 0 8px 20px rgba(27,56,40,0.18)' }} />
+                <span className="min-w-0" style={{ maxWidth: 220 }}>
+                  <span className="block" style={{ fontFamily: "var(--font-brand), sans-serif", fontSize: 20, fontWeight: 900, color: '#1C1410', lineHeight: 1.1, overflowWrap: 'anywhere' }}>{view.acronym || view.full_name}</span>
+                  <span className="block" style={{ fontFamily: "var(--font-brand), sans-serif", fontSize: 13, color: '#5C4F42', lineHeight: 1.35, marginTop: 2, overflowWrap: 'anywhere' }}>
+                    {view.dates_tbd || !view.start_date ? 'Dates to be decided' : dateRange(view.start_date, view.end_date)}
+                  </span>
+                </span>
+              </span>
+            }
+          />
 
-          {/* Conference Details card */}
-          <div style={cardStyle}>
-            <StepHeader
-              n={1} label="Name, Dates and Place" sub="What it is called, when and where it happens."
-              complete={!!(view.full_name?.trim() && view.city?.trim() && view.country?.trim() && view.description?.trim() && !view.dates_tbd && view.start_date && view.end_date)} open={openConfSection === 3}
-              status={detailsSaving ? 'saving' : detailsSaved ? 'saved' : 'idle'}
-              onClick={() => setOpenConfSection(openConfSection === 3 ? 0 : 3)}
-            />
-            {openConfSection === 3 && (
-            <div className="mt-5">
-            <p className="font-semibold text-base mb-1" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>Conference Details</p>
-            <p className="text-sm mb-4" style={{ color: '#6E6152', fontFamily: "var(--font-brand), sans-serif" }}>Core information shown on your public conference page and directory listing.</p>
-
-            <div className="mb-4">
-              <label className="block text-xs font-semibold mb-1" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>Full name</label>
+          {/* ── Name, dates and place ── */}
+          <Group
+            id="details-card" title="Name, Dates and Place" icon={CalendarDays} tint={TINT_GOLD_BG}
+            aside={<AutoSaveStatus saving={detailsSaving} saved={detailsSaved} />}
+          >
+            <Row label="Full name" htmlFor="set-full-name">
               <input
+                id="set-full-name"
                 type="text"
                 value={fullName}
                 onChange={(e) => setFullName(e.target.value)}
                 placeholder="London International Model United Nations 2027"
-                style={inputStyle}
+                style={FIELD}
                 onFocus={(e) => { onIdentityFocus(); e.currentTarget.style.borderColor = '#1B3828'; }}
                 onBlur={(e) => { onIdentityBlur(); e.currentTarget.style.borderColor = '#DDD4C0'; }}
               />
-            </div>
-
-            <div className="mb-4">
-              <label className="block text-xs font-semibold mb-1" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>Acronym</label>
+            </Row>
+            <Row
+              label="Acronym" htmlFor="set-acronym"
+              desc={acronymError
+                ? <span style={{ color: '#8B2020' }}>{acronymError}</span>
+                : <span suppressHydrationWarning>Shown as <strong style={{ color: '#1C1410' }}>{conferenceAcronymLabel({ acronym, start_date: startDate || conference.start_date })}</strong></span>}
+            >
               <input
+                id="set-acronym"
                 type="text"
                 value={acronym}
                 onChange={(e) => { setAcronym(e.target.value); if (acronymError) setAcronymError(''); }}
@@ -3202,407 +3147,178 @@ export default function SettingsPage() {
                   e.currentTarget.style.borderColor = '#DDD4C0';
                 }}
                 placeholder="e.g. LIMUN, or Model NATO Germany"
-                style={inputStyle}
+                style={FIELD}
               />
-              {acronymError ? (
-                <p className="text-xs mt-1" style={{ color: '#8B2020', fontFamily: "var(--font-brand), sans-serif" }}>{acronymError}</p>
-              ) : (
-                <p className="text-xs mt-1" suppressHydrationWarning style={{ color: '#6E6152', fontFamily: "var(--font-brand), sans-serif" }}>
-                  Shown as <strong style={{ color: '#1C1410' }}>{conferenceAcronymLabel({ acronym, start_date: startDate || conference.start_date })}</strong>
-                </p>
-              )}
-            </div>
-
-            <div className="mb-4">
-              <label className="block text-xs font-semibold mb-2" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>Student level</label>
-              <div className="flex gap-2">
+            </Row>
+            <Row id="dates-card" label="Dates" on={datesPulse} desc={datesTbd ? 'A conference with dates to be decided stays private until you add them.' : undefined}>
+              <div className="flex flex-col gap-2">
+                <div className="flex gap-2 flex-wrap" style={datesTbd ? { opacity: 0.45, pointerEvents: 'none' } : undefined}>
+                  <div style={{ flex: '1 1 150px', minWidth: 0 }}>
+                    <DatePicker
+                      value={startDate}
+                      placeholder="Starts"
+                      onChange={(iso) => {
+                        setStartDate(iso);
+                        // Keep end ≥ start: clear a now-invalid end date.
+                        if (endDate && iso && endDate < iso) setEndDate('');
+                      }}
+                    />
+                  </div>
+                  <div style={{ flex: '1 1 150px', minWidth: 0 }}>
+                    <DatePicker
+                      value={endDate}
+                      placeholder="Ends"
+                      min={startDate || undefined}
+                      initialView={startDate || undefined}
+                      onChange={(iso) => setEndDate(iso)}
+                    />
+                  </div>
+                </div>
+                {/* Dates TBD: keeps the conference private (no public link) until real
+                    dates are set — mirrors the DB CHECK conferences_tbd_not_public.
+                    Applications can still open while dates are undecided. */}
+                <label className="inline-flex items-center gap-2.5 self-start cursor-pointer" style={{ fontFamily: "var(--font-brand), sans-serif", fontSize: 14, fontWeight: 600, color: '#1C1410' }}>
+                  <KitSwitch
+                    label="Dates are to be decided"
+                    checked={datesTbd}
+                    onChange={(nextTbd) => {
+                      setDatesTbd(nextTbd);
+                      // Turning TBD on clears any set dates so the row goes null.
+                      if (nextTbd) { setStartDate(''); setEndDate(''); }
+                    }}
+                  />
+                  Dates are to be decided
+                </label>
+              </div>
+            </Row>
+            <Row label="City" htmlFor="set-city">
+              <input
+                id="set-city"
+                type="text"
+                value={city}
+                onChange={(e) => setCity(e.target.value)}
+                placeholder="London"
+                style={FIELD}
+                onFocus={fgInput}
+                onBlur={bgInput}
+              />
+            </Row>
+            <Row label="Country" htmlFor="set-country">
+              <select
+                id="set-country"
+                value={country}
+                onChange={(e) => setCountry(e.target.value)}
+                style={{ ...FIELD, cursor: 'pointer' }}
+                onFocus={fgInput}
+                onBlur={bgInput}
+              >
+                <option value="">Select a country</option>
+                {UN_COUNTRIES.map(c => <option key={c.code} value={c.name}>{c.name}</option>)}
+              </select>
+            </Row>
+            <Row label="Format">
+              <div role="radiogroup" aria-label="Format" className="gv-fd-seg">
+                {([
+                  { value: 'in-person', label: 'In person' },
+                  { value: 'online', label: 'Online' },
+                  { value: 'hybrid', label: 'Hybrid' },
+                ] as { value: 'in-person' | 'online' | 'hybrid'; label: string }[]).map(opt => (
+                  <button key={opt.value} type="button" role="radio" aria-checked={format === opt.value} onClick={() => setFormat(opt.value)}>{opt.label}</button>
+                ))}
+              </div>
+            </Row>
+            <Row label="Student level">
+              <div role="radiogroup" aria-label="Student level" className="gv-fd-seg">
                 {([
                   { value: 'school', label: 'High school' },
                   { value: 'university', label: 'University' },
                   { value: 'both', label: 'Both' },
-                ] as { value: 'school' | 'university' | 'both'; label: string }[]).map(opt => {
-                  const active = studentLevel === opt.value;
-                  return (
-                    <button
-                      key={opt.value}
-                      type="button"
-                      onClick={() => setStudentLevel(opt.value)}
-                      className="flex-1 rounded-xl py-2.5 font-bold text-xs transition-colors focus:outline-none gv-lift"
-                      style={{
-                        backgroundColor: active ? '#1B3828' : 'transparent',
-                        color: active ? '#EED98A' : '#9A8A78',
-                        border: active ? '1.5px solid #1B3828' : '1.5px solid #DDD4C0',
-                        fontFamily: "var(--font-brand), sans-serif", letterSpacing: 0,
-                      }}
-                    >
-                      {opt.label}
-                    </button>
-                  );
-                })}
+                ] as { value: 'school' | 'university' | 'both'; label: string }[]).map(opt => (
+                  <button key={opt.value} type="button" role="radio" aria-checked={studentLevel === opt.value} onClick={() => setStudentLevel(opt.value)}>{opt.label}</button>
+                ))}
               </div>
-            </div>
-
-            <div className="mb-4">
-              <label className="block text-xs font-semibold mb-2" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>Format</label>
-              <div className="flex gap-2">
-                {([
-                  { value: 'in-person', label: 'In-person' },
-                  { value: 'online', label: 'Online' },
-                  { value: 'hybrid', label: 'Hybrid' },
-                ] as { value: 'in-person' | 'online' | 'hybrid'; label: string }[]).map(opt => {
-                  const active = format === opt.value;
-                  return (
-                    <button
-                      key={opt.value}
-                      type="button"
-                      onClick={() => setFormat(opt.value)}
-                      className="flex-1 rounded-xl py-2.5 font-bold text-xs transition-colors focus:outline-none gv-lift"
-                      style={{
-                        backgroundColor: active ? '#1B3828' : 'transparent',
-                        color: active ? '#EED98A' : '#9A8A78',
-                        border: active ? '1.5px solid #1B3828' : '1.5px solid #DDD4C0',
-                        fontFamily: "var(--font-brand), sans-serif", letterSpacing: 0,
-                      }}
-                    >
-                      {opt.label}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            <div
-              id="dates-card"
-              className="rounded-xl"
-              style={{
-                boxShadow: datesPulse
-                  ? '0 0 0 3px rgba(238,217,138,0.55), 0 1px 2px rgba(27,56,40,0.04)'
-                  : 'none',
-                transition: 'box-shadow 400ms ease',
-              }}
-            >
-              <div
-                className="flex gap-3 mb-3"
-                style={datesTbd ? { opacity: 0.4, pointerEvents: 'none' } : undefined}
-              >
-                <div className="flex-1">
-                  <label className="block text-xs font-semibold mb-1" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>Start date</label>
-                  <DatePicker
-                    value={startDate}
-                    onChange={(iso) => {
-                      setStartDate(iso);
-                      // Keep end ≥ start: clear a now-invalid end date.
-                      if (endDate && iso && endDate < iso) setEndDate('');
-                    }}
-                  />
-                </div>
-                <div className="flex-1">
-                  <label className="block text-xs font-semibold mb-1" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>End date</label>
-                  <DatePicker
-                    value={endDate}
-                    min={startDate || undefined}
-                    initialView={startDate || undefined}
-                    onChange={(iso) => setEndDate(iso)}
-                  />
-                </div>
-              </div>
-
-              {/* Dates TBD: keeps the conference private (no public link) until real
-                  dates are set — mirrors the DB CHECK conferences_tbd_not_public.
-                  Applications can still open while dates are undecided. */}
-              <button
-                type="button"
-                onClick={() => {
-                  setDatesTbd((prev) => {
-                    const nextTbd = !prev;
-                    // Turning TBD on clears any set dates so the row goes null.
-                    if (nextTbd) { setStartDate(''); setEndDate(''); }
-                    return nextTbd;
-                  });
-                }}
-                className="flex items-start gap-3 w-full text-left mb-4 focus:outline-none"
-              >
-                <span
-                  className="flex items-center justify-center flex-shrink-0"
-                  style={{
-                    width: '20px', height: '20px', borderRadius: '6px',
-                    marginTop: '1px',
-                    backgroundColor: datesTbd ? '#1B3828' : 'transparent',
-                    border: datesTbd ? '1.5px solid #1B3828' : '1.5px solid #C9BEA6',
-                    transition: 'background-color 150ms ease, border-color 150ms ease',
-                  }}
-                >
-                  {datesTbd && <Check size={13} strokeWidth={3} color="#EED98A" />}
-                </span>
-                <span>
-                  <span className="block text-sm font-semibold" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>
-                    Dates are to be decided (TBD)
-                  </span>
-                  <span className="block text-xs mt-0.5" style={{ color: '#6E6152', fontFamily: "var(--font-brand), sans-serif" }}>
-                    A TBD conference stays private (no public link) until you add dates. Applications can still open.
-                  </span>
-                </span>
-              </button>
-            </div>
-
-            <div className="flex gap-3 mb-4">
-              <div className="flex-1">
-                <label className="block text-xs font-semibold mb-1" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>City</label>
-                <input
-                  type="text"
-                  value={city}
-                  onChange={(e) => setCity(e.target.value)}
-                  placeholder="London"
-                  style={inputStyle}
-                  onFocus={(e) => { e.currentTarget.style.borderColor = '#1B3828'; }}
-                  onBlur={(e) => { e.currentTarget.style.borderColor = '#DDD4C0'; }}
-                />
-              </div>
-              <div className="flex-1">
-                <label className="block text-xs font-semibold mb-1" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>Country</label>
-                <select
-                  value={country}
-                  onChange={(e) => setCountry(e.target.value)}
-                  style={{ ...inputStyle, cursor: 'pointer' }}
-                  onFocus={(e) => { e.currentTarget.style.borderColor = '#1B3828'; }}
-                  onBlur={(e) => { e.currentTarget.style.borderColor = '#DDD4C0'; }}
-                >
-                  <option value="">Select a country</option>
-                  {UN_COUNTRIES.map(c => <option key={c.code} value={c.name}>{c.name}</option>)}
-                </select>
-              </div>
-            </div>
-
-            <div className="mb-5">
-              <label className="block text-xs font-semibold mb-1" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>Expected delegates</label>
+            </Row>
+            <Row label="Expected delegates" htmlFor="set-expected" align="end">
               <input
+                id="set-expected"
                 type="number"
                 min={0}
                 value={expectedDelegates}
                 onChange={(e) => setExpectedDelegates(e.target.value)}
                 placeholder="1250"
-                style={inputStyle}
-                onFocus={(e) => { e.currentTarget.style.borderColor = '#1B3828'; }}
-                onBlur={(e) => { e.currentTarget.style.borderColor = '#DDD4C0'; }}
+                style={{ ...FIELD, width: 130, fontVariantNumeric: 'tabular-nums' }}
+                onFocus={fgInput}
+                onBlur={bgInput}
               />
-            </div>
+            </Row>
+            <Row
+              label="Age of participants"
+              hint={<InfoHint label="About the age range" text="Both ends are inclusive and both are measured on your conference's start date, so a delegate who turns sixteen the week before still counts as sixteen. Applicants outside the range are told before they fill anything in." />}
+              on={view.min_age != null || view.max_age != null}
+              desc={minAgeError
+                ? <span style={{ color: '#8B2020' }}>{minAgeError}</span>
+                : (view.min_age != null || view.max_age != null)
+                  ? (view.min_age != null && view.max_age != null
+                    ? `Between ${view.min_age} and ${view.max_age} on the first day.`
+                    : view.min_age != null ? `At least ${view.min_age} on the first day.` : `No older than ${view.max_age} on the first day.`)
+                  : 'Leave both empty for no limit.'}
+            >
+              <div className="flex items-center gap-2 flex-wrap">
+                <input
+                  type="number" min={10} max={99} step={1}
+                  aria-label="Minimum age"
+                  value={minAge}
+                  onChange={(e) => { setMinAge(e.target.value); setMinAgeError(''); }}
+                  placeholder="From"
+                  style={{ ...FIELD, width: 96, fontVariantNumeric: 'tabular-nums' }}
+                  onFocus={fgInput}
+                  onBlur={bgInput}
+                />
+                <span style={{ fontFamily: "var(--font-brand), sans-serif", fontSize: 14, color: '#5C4F42' }}>to</span>
+                <input
+                  type="number" min={10} max={99} step={1}
+                  aria-label="Maximum age"
+                  value={maxAge}
+                  onChange={(e) => { setMaxAge(e.target.value); setMinAgeError(''); }}
+                  placeholder="To"
+                  style={{ ...FIELD, width: 96, fontVariantNumeric: 'tabular-nums' }}
+                  onFocus={fgInput}
+                  onBlur={bgInput}
+                />
+                {(minAgeSaving || minAgeSaved) && <AutoSaveStatus saving={minAgeSaving} saved={minAgeSaved} />}
+              </div>
+            </Row>
+          </Group>
 
-            <div className="mb-5">
-              <p className="font-semibold text-base mb-1" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>Description</p>
-              <p className="text-sm mb-4" style={{ color: '#6E6152', fontFamily: "var(--font-brand), sans-serif" }}>Shown on your public conference page.</p>
+          {/* ── About ── */}
+          <Group title="About Your Conference" icon={FileText} tint={TINT_GREEN_BG}>
+            <Row label="Description" htmlFor="set-description" desc="Shown on your public page.">
               <textarea
-                rows={6}
+                id="set-description"
+                rows={5}
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 placeholder="Tell delegates about your conference, theme, highlights, what to expect..."
                 maxLength={1500}
-                style={{ ...inputStyle, resize: 'vertical', lineHeight: '1.6' }}
+                style={{ ...FIELD, resize: 'vertical', lineHeight: '1.6' }}
                 onFocus={(e) => { e.currentTarget.style.borderColor = '#1B3828'; }}
                 onBlur={(e) => { e.currentTarget.style.borderColor = '#DDD4C0'; }}
               />
-              <div style={{ textAlign: 'right', marginTop: 6, fontFamily: "var(--font-brand), sans-serif", fontSize: 11.5, fontWeight: 600, color: '#6E6152', fontVariantNumeric: 'tabular-nums' }}>
+              <div style={{ textAlign: 'right', marginTop: 4, fontFamily: "var(--font-brand), sans-serif", fontSize: 12, fontWeight: 600, color: '#6E6152', fontVariantNumeric: 'tabular-nums' }}>
                 {description.length} / 1500
               </div>
-            </div>
+            </Row>
+          </Group>
 
-            <div className="mb-5">
-            <p className="font-semibold text-base mb-1 flex items-center gap-2" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>
-              <Emoji3D name="Birthday cake" size={20} />
-              Age of participants
-              <InfoHint
-                label="About the age range"
-                text="Both bounds are inclusive and both are measured on your conference's start date, not on the day someone applies, so a delegate who turns sixteen the week before still counts as sixteen. Leave either end empty for no limit at that end. Applicants outside the range are told before they fill anything in, rather than after."
-              />
-            </p>
-            <p className="text-sm mb-4" style={{ color: '#6E6152', fontFamily: "var(--font-brand), sans-serif" }}>
-              Checked against each applicant&apos;s date of birth, on the day your conference starts. Leave either box empty for no limit.
-            </p>
-            <div className="flex items-end flex-wrap" style={{ gap: 14 }}>
-              <div style={{ width: '150px' }}>
-                <label className="block text-xs font-semibold mb-1" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>
-                  Minimum age
-                </label>
-                <input
-                  type="number"
-                  min={10}
-                  max={99}
-                  step={1}
-                  value={minAge}
-                  onChange={(e) => { setMinAge(e.target.value); setMinAgeError(''); }}
-                  placeholder="No limit"
-                  style={inputStyle}
-                  onFocus={fgInput}
-                  onBlur={bgInput}
-                />
-              </div>
-              <div style={{ width: '150px' }}>
-                <label className="block text-xs font-semibold mb-1" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>
-                  Maximum age
-                </label>
-                <input
-                  type="number"
-                  min={10}
-                  max={99}
-                  step={1}
-                  value={maxAge}
-                  onChange={(e) => { setMaxAge(e.target.value); setMinAgeError(''); }}
-                  placeholder="No limit"
-                  style={inputStyle}
-                  onFocus={fgInput}
-                  onBlur={bgInput}
-                />
-              </div>
-              <div className="pb-2">
-                <AutoSaveStatus saving={minAgeSaving} saved={minAgeSaved} />
-              </div>
-            </div>
-            {minAgeError && (
-              <p className="text-xs mt-2" style={{ color: '#8B2020', fontFamily: "var(--font-brand), sans-serif" }}>{minAgeError}</p>
-            )}
-            {!minAgeError && (view.min_age != null || view.max_age != null) && (
-              <p className="text-xs mt-3" style={{ color: '#1B3828', fontFamily: "var(--font-brand), sans-serif" }}>
-                {view.min_age != null && view.max_age != null
-                  ? `Applicants must be between ${view.min_age} and ${view.max_age} years old at the start of your conference.`
-                  : view.min_age != null
-                    ? `Applicants must be at least ${view.min_age} years old at the start of your conference.`
-                    : `Applicants must be no older than ${view.max_age} at the start of your conference.`}
-              </p>
-            )}
-            </div>
-
-            <AutoSaveStatus saving={detailsSaving} saved={detailsSaved} />
-            </div>
-            )}
-          </div>
-
-          {/* Section 2: Conference banner and logo. The two things a visitor
-              actually sees, stacked banner first then logo with a divider,
-              no longer buried under six fields of logistics nobody opens
-              twice. */}
-          {/* Banner card */}
-          <div style={cardStyle}>
-            <StepHeader
-              n={2} label="Logo and Banner" sub="The pictures at the top of your page."
-              complete={!!conference.banner_url && !!conference.logo_url} open={openConfSection === 2}
-              onClick={() => setOpenConfSection(openConfSection === 2 ? 0 : 2)}
-            />
-            {openConfSection === 2 && (
-            <div className="mt-5">
-            <p className="font-semibold text-base mb-1" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>Conference Banner</p>
-            <p className="text-sm mb-4" style={{ color: '#6E6152', fontFamily: "var(--font-brand), sans-serif" }}>Recommended: 1200x630px. JPG, PNG or WebP. Max 5MB.</p>
-            <div
-              style={{
-                border: '1.5px dashed #DDD4C0', borderRadius: 14, overflow: 'hidden',
-                backgroundColor: '#FAF8F3', minHeight: 140,
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                position: 'relative', cursor: 'pointer',
-              }}
-              onClick={() => { if (!bannerUploading) document.getElementById('settings-banner-upload')?.click(); }}
-              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#1B3828'; }}
-              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#DDD4C0'; }}
-            >
-              {view.banner_url ? (
-                <>
-                  <img src={view.banner_url} alt="Banner" style={{ width: '100%', height: '160px', objectFit: 'cover', display: 'block' }} />
-                  <button
-                    onClick={(e) => { e.stopPropagation(); document.getElementById('settings-banner-upload')?.click(); }}
-                    style={{
-                      position: 'absolute', top: 8, right: 8,
-                      backgroundColor: 'rgba(27,56,40,0.85)', color: '#EDE7D8',
-                      border: 'none', borderRadius: 8, padding: '4px 10px',
-                      fontSize: 11, fontFamily: "var(--font-brand), sans-serif", fontWeight: 700, cursor: 'pointer',
-                    }}
-                  >
-                    {bannerUploading ? 'Uploading…' : 'Change'}
-                  </button>
-                </>
-              ) : bannerUploading ? (
-                <div style={{ textAlign: 'center', padding: 24 }}>
-                  <div className="w-6 h-6 rounded-full border-2 border-t-transparent animate-spin mx-auto mb-2" style={{ borderColor: '#1B3828', borderTopColor: 'transparent' }} />
-                  <p style={{ fontSize: 12, color: '#6E6152', fontFamily: "var(--font-brand), sans-serif" }}>Uploading...</p>
-                </div>
-              ) : (
-                <div style={{ textAlign: 'center', padding: 24 }}>
-                  <p style={{ fontSize: 13, fontWeight: 700, color: '#1C1410', fontFamily: "var(--font-brand), sans-serif", marginBottom: 4 }}>Click to upload banner</p>
-                  <p style={{ fontSize: 11, color: '#6E6152', fontFamily: "var(--font-brand), sans-serif" }}>Recommended: 1200x630px</p>
-                </div>
-              )}
-              <input
-                id="settings-banner-upload"
-                type="file"
-                accept="image/jpeg,image/png,image/webp"
-                style={{ display: 'none' }}
-                onChange={(e) => { const f = e.target.files?.[0]; if (f) handleBannerUpload(f); e.target.value = ''; }}
-              />
-            </div>
-
-            {/* Preset picker, one click sets banner_url to a bundled photo */}
-            <div style={{ marginTop: 14 }}>
-              <p style={{ fontFamily: "var(--font-brand), sans-serif", fontSize: 12, fontWeight: 600, letterSpacing: '0.01em', color: '#7A6E5E', margin: '0 0 8px 0' }}>
-                Or pick a preset
-              </p>
-              <div className="flex flex-wrap gap-2">
-                {BANNER_PRESETS.map(p => {
-                  const selected = view.banner_url === p;
-                  return (
-                    <button
-                      key={p}
-                      type="button"
-                      onClick={() => handleBannerPreset(p)}
-                      disabled={bannerUploading}
-                      aria-label={'Use preset banner ' + p}
-                      style={{
-                        width: 84, height: 48, padding: 0, borderRadius: 10, overflow: 'hidden',
-                        cursor: bannerUploading ? 'wait' : 'pointer',
-                        border: selected ? '2px solid #B6871F' : '1.5px solid #DDD4C0',
-                        boxShadow: selected ? '0 0 0 3px rgba(238,217,138,0.55)' : 'none',
-                        opacity: bannerUploading && !selected ? 0.6 : 1,
-                        transition: 'border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease',
-                        backgroundColor: '#EDE7D8',
-                      }}
-                      onMouseEnter={(e) => { if (!selected) (e.currentTarget as HTMLElement).style.transform = 'translateY(-2px)'; }}
-                      onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.transform = 'translateY(0)'; }}
-                    >
-                      <img src={p} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            <div className="my-5" style={{ borderTop: '1px solid #F0EDE6' }} />
-
-            <p className="font-semibold text-base mb-1" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>Conference Logo</p>
-            <p className="text-sm mb-4" style={{ color: '#6E6152', fontFamily: "var(--font-brand), sans-serif" }}>Square, transparent PNG recommended. Shown on your public page, directory cards and search. Max 5MB.</p>
-            <div className="flex items-center gap-5">
-              <div
-                style={{
-                  width: 96, height: 96, borderRadius: 20, flexShrink: 0,
-                  border: '1.5px dashed #DDD4C0', backgroundColor: '#FFFFFF',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  overflow: 'hidden', cursor: 'pointer', position: 'relative',
-                }}
-                onClick={() => { if (!logoUploading) document.getElementById('settings-logo-upload')?.click(); }}
-                onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#1B3828'; }}
-                onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#DDD4C0'; }}
-              >
-                {logoUploading ? (
-                  <div className="w-5 h-5 rounded-full border-2 animate-spin" style={{ borderColor: '#1B3828', borderTopColor: 'transparent' }} />
-                ) : view.logo_url ? (
-                  <LogoDisc src={view.logo_url} alt="Logo" size={80} fallbackText={view.acronym?.slice(0, 3)} />
-                ) : (
-                  <span style={{ fontSize: 11, color: '#6E6152', fontFamily: "var(--font-brand), sans-serif", textAlign: 'center', padding: '0 8px' }}>Click to upload</span>
-                )}
-              </div>
-              <div>
-                <button
-                  onClick={() => { if (!logoUploading) document.getElementById('settings-logo-upload')?.click(); }}
-                  className="rounded-xl py-2 px-4 font-bold text-xs tracking-widest transition-colors focus:outline-none gv-lift"
-                  style={{ backgroundColor: '#1B3828', color: '#EED98A', fontFamily: "var(--font-brand), sans-serif", letterSpacing: 0 }}
-                  onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
-                  onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
-                >
-                  {logoUploading ? 'Uploading…' : view.logo_url ? 'Replace logo' : 'Upload logo'}
+          {/* ── Logo and banner: small previews, each with Change ── */}
+          <Group title="Logo and Banner" icon={ImageIcon} tint={TINT_GOLD_BG}>
+            <Row label="Logo" desc="Square, ideally a transparent PNG. Up to 5 MB." align="end" on={!!view.logo_url} need={!view.logo_url}>
+              <div className="flex items-center gap-3">
+                {logoUploading
+                  ? <span className="w-5 h-5 rounded-full border-2 animate-spin" style={{ borderColor: '#1B3828', borderTopColor: 'transparent' }} aria-hidden />
+                  : <LogoDisc src={view.logo_url} alt="Logo" size={52} fallbackText={view.acronym?.slice(0, 3)} />}
+                <button type="button" className="gv-st-btn gv-st-outline" style={{ minHeight: 40, padding: '0 14px' }} disabled={logoUploading} onClick={() => document.getElementById('settings-logo-upload')?.click()}>
+                  {logoUploading ? 'Uploading' : view.logo_url ? 'Change' : 'Upload'}
                 </button>
               </div>
               <input
@@ -3618,114 +3334,73 @@ export default function SettingsPage() {
                   setLogoCropFile(f);
                 }}
               />
-            </div>
-            </div>
-            )}
-          </div>
-
-          {/* Section 1: Customizability. CustomizationCard paints its own
-              card chrome (it receives cardStyle as a prop), so it renders
-              flat here, followed by the three public-visibility switches. */}
-          <div style={cardStyle}>
-            <StepHeader
-              n={3} label="Colours and What Visitors See" sub="Your colours, and what your page shows."
-              complete={Object.keys(conference.theme ?? {}).length > 0} open={openConfSection === 1} status={visibilityStatus}
-              onClick={() => setOpenConfSection(openConfSection === 1 ? 0 : 1)}
-            />
-            {openConfSection === 1 && (
-              <div className="mt-5">
-                <CustomizationCard
-                  conferenceId={conference.id}
-                  conferenceSlug={conference.slug}
-                  initialDraft={conference.theme_draft ?? {}}
-                  initialPublished={conference.theme ?? {}}
-                  cardStyle={{ padding: 0, margin: 0, border: 'none', boxShadow: 'none', backgroundColor: 'transparent', borderRadius: 0 }}
-                />
-                <div className="my-5" style={{ borderTop: '1px solid #F0EDE6' }} />
-                <div className="flex flex-col gap-3">
-                <div
-                  className="flex items-center justify-between p-4 rounded-xl"
-                  style={{ backgroundColor: 'rgba(27,56,40,0.03)', border: '1px solid rgba(27,56,40,0.08)' }}
-                >
-                  <div>
-                    <p className="font-semibold text-sm" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>Show member counts</p>
-                    <p className="text-xs mt-0.5" style={{ color: '#6E6152', fontFamily: "var(--font-brand), sans-serif" }}>How many delegates are in each committee.</p>
-                  </div>
-                  <span className="flex items-center gap-2 flex-shrink-0">
-                    {visibilitySavingKey === 'show_committee_counts' && (
-                      <div className="w-4 h-4 rounded-full border-2 border-t-transparent animate-spin" style={{ borderColor: '#1B3828', borderTopColor: 'transparent' }} />
-                    )}
-                    <PillToggle
-                      value={showCommitteeCounts}
-                      onChange={(v) => saveVisibility('show_committee_counts', v, setShowCommitteeCounts)}
-                      size="md"
-                      disabled={visibilitySavingKey !== null}
-                    />
+            </Row>
+            <Row label="Banner" desc="1200 x 630 works best. Up to 5 MB." on={!!view.banner_url} need={!view.banner_url}>
+              <div className="flex flex-col gap-2.5">
+                <div className="flex items-center gap-3 flex-wrap">
+                  <span className="relative overflow-hidden flex-shrink-0" style={{ width: 168, height: 64, borderRadius: 12, background: 'linear-gradient(135deg, #E9E2CF, #F6F1E4)', boxShadow: '0 0 0 1px rgba(27,56,40,0.08)' }}>
+                    {view.banner_url && <img src={view.banner_url} alt="Your banner" className="absolute inset-0 w-full h-full object-cover" />}
+                    {bannerUploading && <span className="absolute inset-0 flex items-center justify-center" style={{ background: 'rgba(255,255,255,0.6)' }}><span className="w-5 h-5 rounded-full border-2 animate-spin" style={{ borderColor: '#1B3828', borderTopColor: 'transparent' }} aria-hidden /></span>}
                   </span>
+                  <button type="button" className="gv-st-btn gv-st-outline" style={{ minHeight: 40, padding: '0 14px' }} disabled={bannerUploading} onClick={() => document.getElementById('settings-banner-upload')?.click()}>
+                    {bannerUploading ? 'Uploading' : view.banner_url ? 'Change' : 'Upload'}
+                  </button>
+                  <input
+                    id="settings-banner-upload"
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    style={{ display: 'none' }}
+                    onChange={(e) => { const f = e.target.files?.[0]; if (f) handleBannerUpload(f); e.target.value = ''; }}
+                  />
                 </div>
-                <div
-                  className="flex items-center justify-between p-4 rounded-xl"
-                  style={{ backgroundColor: 'rgba(27,56,40,0.03)', border: '1px solid rgba(27,56,40,0.08)' }}
-                >
-                  <div>
-                    <p className="font-semibold text-sm" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>Show taken countries</p>
-                    <p className="text-xs mt-0.5" style={{ color: '#6E6152', fontFamily: "var(--font-brand), sans-serif" }}>Which country slots are already allocated.</p>
-                  </div>
-                  <span className="flex items-center gap-2 flex-shrink-0">
-                    {visibilitySavingKey === 'show_taken_countries' && (
-                      <div className="w-4 h-4 rounded-full border-2 border-t-transparent animate-spin" style={{ borderColor: '#1B3828', borderTopColor: 'transparent' }} />
-                    )}
-                    <PillToggle
-                      value={showTakenCountries}
-                      onChange={(v) => saveVisibility('show_taken_countries', v, setShowTakenCountries)}
-                      size="md"
-                      disabled={visibilitySavingKey !== null}
-                    />
-                  </span>
-                </div>
-                <div
-                  className="flex items-center justify-between p-4 rounded-xl"
-                  style={{ backgroundColor: 'rgba(27,56,40,0.03)', border: '1px solid rgba(27,56,40,0.08)' }}
-                >
-                  <div>
-                    <p className="font-semibold text-sm" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>Show the committee list</p>
-                    <p className="text-xs mt-0.5" style={{ color: '#6E6152', fontFamily: "var(--font-brand), sans-serif" }}>Turn this off if your committees are not announced yet.</p>
-                  </div>
-                  <span className="flex items-center gap-2 flex-shrink-0">
-                    {visibilitySavingKey === 'show_committees' && (
-                      <div className="w-4 h-4 rounded-full border-2 border-t-transparent animate-spin" style={{ borderColor: '#1B3828', borderTopColor: 'transparent' }} />
-                    )}
-                    <PillToggle
-                      value={showCommittees}
-                      onChange={(v) => saveVisibility('show_committees', v, setShowCommittees)}
-                      size="md"
-                      disabled={visibilitySavingKey !== null}
-                    />
-                  </span>
-                </div>
+                {/* Preset picker, one click sets banner_url to a bundled photo */}
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <span style={{ fontFamily: "var(--font-brand), sans-serif", fontSize: 12.5, fontWeight: 600, color: '#5C4F42', marginRight: 2 }}>Or pick one</span>
+                  {BANNER_PRESETS.map((pth, i) => {
+                    const selected = view.banner_url === pth;
+                    return (
+                      <button
+                        key={pth}
+                        type="button"
+                        onClick={() => handleBannerPreset(pth)}
+                        disabled={bannerUploading}
+                        aria-label={`Use banner photo ${i + 1}`}
+                        aria-pressed={selected}
+                        className="focus:outline-none focus-visible:ring-2"
+                        style={{
+                          width: 56, height: 32, padding: 0, borderRadius: 8, overflow: 'hidden', cursor: bannerUploading ? 'wait' : 'pointer',
+                          border: 'none', boxShadow: selected ? '0 0 0 2px #B6871F, 0 0 0 4px rgba(238,217,138,0.55)' : '0 0 0 1px rgba(27,56,40,0.12)',
+                          backgroundColor: '#EDE7D8',
+                        }}
+                      >
+                        <img src={pth} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
-            )}
-          </div>
+            </Row>
+          </Group>
 
-          {/* Section 4: Partners and sponsors. Moved here from the Privacy
-              tab: partners are conference identity, not a privacy setting. */}
-          <div style={cardStyle}>
-            <StepHeader
-              n={4} label="Partners and Sponsors" sub="Other conferences and companies shown on your page."
-              complete={partners.length > 0} open={openConfSection === 4}
-              onClick={() => setOpenConfSection(openConfSection === 4 ? 0 : 4)}
-            />
-            {openConfSection === 4 && (
-            <div className="mt-5">
-        <p className="font-semibold text-base mb-1" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>
-          Partners
-        </p>
-        <p className="text-sm mb-5" style={{ color: '#6E6152', fontFamily: "var(--font-brand), sans-serif" }}>
-          Showcase partner conferences and sponsoring companies on your public page. A conference link only appears
-          once that conference&apos;s team approves it; a company you add yourself appears straight away.
-        </p>
+          {/* ── Colours ── */}
+          <Group title="Your Colours" icon={Palette} tint={TINT_GREEN_BG}>
+            <div className="gvk-row" style={{ display: 'block' }}>
+              <CustomizationCard
+                conferenceId={conference.id}
+                conferenceSlug={conference.slug}
+                initialDraft={conference.theme_draft ?? {}}
+                initialPublished={conference.theme ?? {}}
+                cardStyle={{ padding: 0, margin: 0, border: 'none', boxShadow: 'none', backgroundColor: 'transparent', borderRadius: 0 }}
+              />
+            </div>
+          </Group>
 
+          {/* ── Partners and sponsors ── */}
+          <Group
+            title="Partners and Sponsors" icon={Handshake} tint={TINT_GOLD_BG}
+            hint={<InfoHint label="About partners" text="A conference link only appears once that conference's team approves it. A company you add yourself appears straight away." />}
+          >
+            <div className="gvk-row" style={{ display: 'block' }}>
         {/* Kind chooser. Asked first because the two flows share nothing: one
             searches Gavelling for a conference to link, the other takes a name,
             a logo and a description typed here. */}
@@ -4135,31 +3810,26 @@ export default function SettingsPage() {
             </div>
           </div>
         )}
-
             </div>
-            )}
-          </div>
+          </Group>
 
-          {/* Section 5: Social media and communication. Contact email first,
-              because it is the one an applicant actually uses to reach a
-              conference, then the five URL fields. */}
-          <div style={cardStyle}>
-            <StepHeader
-              n={5} label="Contact and Social Links" sub="How applicants reach you."
-              complete={!!(view.instagram_url?.trim() || view.facebook_url?.trim() || view.tiktok_url?.trim() || view.whatsapp_url?.trim() || view.website_url?.trim() || view.contact_email?.trim())} open={openConfSection === 5}
-              status={visualSaving ? 'saving' : visualSaved ? 'saved' : 'idle'}
-              onClick={() => setOpenConfSection(openConfSection === 5 ? 0 : 5)}
-            />
-            {openConfSection === 5 && (
-            <div className="mt-5">
-            <div className="mb-3">
-              <label className="block text-xs font-semibold mb-1" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>Contact email</label>
+          {/* ── Contact and links ── */}
+          <Group
+            id="contact-card" title="Contact and Links" icon={MailIcon} tint={TINT_GREEN_BG}
+            aside={<AutoSaveStatus saving={visualSaving} saved={visualSaved} />}
+          >
+            <Row
+              label="Contact email" htmlFor="set-contact-email"
+              desc={contactEmailError ? <span style={{ color: '#8B2020' }}>{contactEmailError}</span> : 'Where applicants write to you.'}
+              on={!!view.contact_email?.trim()}
+            >
               <input
+                id="set-contact-email"
                 type="email"
                 value={contactEmail}
                 onChange={(e) => { setContactEmail(e.target.value); if (contactEmailError) setContactEmailError(''); }}
                 placeholder="hello@yourmun.org"
-                style={inputStyle}
+                style={FIELD}
                 onFocus={(e) => { e.currentTarget.style.borderColor = '#1B3828'; }}
                 onBlur={(e) => {
                   const trimmed = e.target.value.trim();
@@ -4168,66 +3838,39 @@ export default function SettingsPage() {
                   e.currentTarget.style.borderColor = '#DDD4C0';
                 }}
               />
-              {contactEmailError && (
-                <p className="text-xs mt-1" style={{ color: '#8B2020', fontFamily: "var(--font-brand), sans-serif" }}>{contactEmailError}</p>
-              )}
-            </div>
-            <div className="flex flex-col gap-3">
-              {([
-                { label: 'Instagram URL', value: instagramUrl, setter: setInstagramUrl },
-                { label: 'Facebook URL', value: facebookUrl, setter: setFacebookUrl },
-                { label: 'TikTok URL', value: tiktokUrl, setter: setTiktokUrl },
-                { label: 'WhatsApp URL', value: whatsappUrl, setter: setWhatsappUrl },
-                { label: 'Website URL', value: websiteUrl, setter: setWebsiteUrl },
-              ] as { label: string; value: string; setter: (v: string) => void }[]).map(({ label, value, setter }) => (
-                <div key={label}>
-                  <label className="block text-xs font-semibold mb-1" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>{label}</label>
-                  <input
-                    type="url"
-                    value={value}
-                    onChange={(e) => setter(e.target.value)}
-                    placeholder="https://"
-                    style={inputStyle}
-                    onFocus={(e) => { e.currentTarget.style.borderColor = '#1B3828'; }}
-                    onBlur={(e) => { e.currentTarget.style.borderColor = '#DDD4C0'; }}
-                  />
-                </div>
-              ))}
-            </div>
-            </div>
-            )}
-          </div>
+            </Row>
+            {([
+              { label: 'Website', value: websiteUrl, setter: setWebsiteUrl },
+              { label: 'Instagram', value: instagramUrl, setter: setInstagramUrl },
+              { label: 'WhatsApp', value: whatsappUrl, setter: setWhatsappUrl },
+              { label: 'TikTok', value: tiktokUrl, setter: setTiktokUrl },
+              { label: 'Facebook', value: facebookUrl, setter: setFacebookUrl },
+            ] as { label: string; value: string; setter: (v: string) => void }[]).map(({ label, value, setter }) => (
+              <Row key={label} label={label} htmlFor={`set-link-${label}`} on={!!value.trim()}>
+                <input
+                  id={`set-link-${label}`}
+                  type="url"
+                  value={value}
+                  onChange={(e) => setter(e.target.value)}
+                  placeholder="https://"
+                  style={FIELD}
+                  onFocus={fgInput}
+                  onBlur={bgInput}
+                />
+              </Row>
+            ))}
+          </Group>
 
           {/* ── What you use Gavelling for ──────────────────────────────────
-              The creation wizard asks this once on the way out and nothing
-              could change it afterwards, so a conference whose needs moved
-              (applications closed, the rooms are next) was stuck with the
-              order it picked in week one. Six options, straight from
-              INTENT_OPTIONS, written back through intentPayload.
-
-              Deliberately last in this tab: everything above it is the
-              conference the public sees, this is a preference about the
-              organiser's own dashboard. ── */}
-          <div
-            id="intent-card"
-            style={{
-              ...cardStyle,
-              boxShadow: intentPulse
-                ? '0 0 0 3px rgba(238,217,138,0.55), 0 1px 2px rgba(27,56,40,0.04)'
-                : cardStyle.boxShadow,
-              transition: 'box-shadow 400ms ease',
-            }}
+              The creation wizard asks this once; editable here. It only sorts
+              the dashboard's pending priorities (src/lib/conferenceIntent.ts):
+              nothing is switched on or off and nothing is hidden. ── */}
+          <Group
+            id="intent-card" pulse={intentPulse}
+            title="What You Use Gavelling For" icon={Compass} tint={TINT_GOLD_BG}
+            hint={<InfoHint label="About this" text="It only changes the order of the priorities on your dashboard. Nothing is switched on or off, and no work is hidden. Pick everything that applies." />}
+            aside={<AutoSaveStatus saving={intentSaving} saved={intentSaved} />}
           >
-            <p className="font-semibold text-base mb-1" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>
-              What you use Gavelling for
-            </p>
-            {/* One line, and it says exactly what the setting does. It is not a
-                permission, it turns nothing on or off, and it never hides a
-                priority — `financials` in particular gates both the checkmark
-                and publishing, so a hidden row would be a real bug. */}
-            <p className="text-sm mb-4" style={{ color: NEU.inkSoft, fontFamily: "var(--font-brand), sans-serif" }}>
-              This only changes the order of the priorities on your dashboard. Nothing is switched on or off, and no work is hidden. Pick everything that applies.
-            </p>
             <div className="grid grid-cols-1 sm:grid-cols-2" style={{ gap: 8 }}>
               {INTENT_OPTIONS.map(opt => {
                 const on = intentKeys.includes(opt.key);
@@ -4238,57 +3881,215 @@ export default function SettingsPage() {
                     role="checkbox"
                     aria-checked={on}
                     onClick={() => toggleIntent(opt.key)}
-                    className="flex items-start rounded-xl focus:outline-none text-left"
+                    className="flex items-center rounded-xl focus:outline-none focus-visible:ring-2 text-left"
                     style={{
-                      gap: 10, padding: '12px 13px',
-                      backgroundColor: on ? 'rgba(27,56,40,0.06)' : 'transparent',
-                      border: on ? '1.5px solid #1B3828' : '1.5px solid #DDD4C0',
-                      boxShadow: on ? '0 4px 12px rgba(27,56,40,0.14)' : 'none',
+                      gap: 10, padding: '10px 12px', border: 'none', cursor: 'pointer',
+                      background: on ? 'linear-gradient(150deg, rgba(61,122,82,0.14), rgba(61,122,82,0.05))' : '#FAF8F3',
+                      boxShadow: on ? 'inset 3px 0 0 #2A5A3C' : 'none',
                       fontFamily: "var(--font-brand), sans-serif",
-                      cursor: 'pointer',
-                      transition: 'background-color 150ms ease, border-color 150ms ease, box-shadow 150ms ease',
+                      transition: 'background-color 150ms ease, box-shadow 150ms ease',
                     }}
                   >
-                    <span
-                      className="flex items-center justify-center flex-shrink-0"
-                      style={{
-                        width: 20, height: 20, borderRadius: 6, marginTop: 1,
-                        backgroundColor: on ? '#1B3828' : 'transparent',
-                        border: on ? '1.5px solid #1B3828' : '1.5px solid #C9BEA6',
-                        transition: 'background-color 150ms ease, border-color 150ms ease',
-                      }}
-                    >
-                      {on && <Check size={13} strokeWidth={3} color="#EED98A" />}
+                    <DuoDisc icon={INTENT_FALLBACK_ICONS[opt.key] ?? ClipboardList} tint={on ? TINT_GREEN_BG : TINT_GOLD_BG} size={32} />
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-sm font-bold" style={{ color: '#1C1410' }}>{opt.label}</span>
                     </span>
-                    <Emoji3D
-                      name={opt.emoji}
-                      size={26}
-                      fallback={INTENT_FALLBACK_ICONS[opt.key]}
-                      fallbackColor="#1B3828"
-                      style={{ flexShrink: 0, marginTop: -1 }}
-                    />
-                    <span className="min-w-0">
-                      <span className="block text-sm font-semibold" style={{ color: '#1C1410' }}>{opt.label}</span>
-                      <span className="block text-xs mt-0.5" style={{ color: NEU.inkSoft, lineHeight: 1.45 }}>{opt.sub}</span>
-                    </span>
+                    {on && <CheckCircle2 size={18} strokeWidth={2.6} color="#1B3828" aria-hidden className="flex-shrink-0" />}
                   </button>
                 );
               })}
             </div>
-            {/* Clearing everything is a real answer, not an empty form:
-                intentPayload writes skipped:true and the dashboard keeps its
-                plain build order. Worth saying, because an all-grey card
-                otherwise looks like nothing was saved. */}
             {intentKeys.length === 0 && (
-              <p className="text-xs mt-3" style={{ color: NEU.inkSoft, fontFamily: "var(--font-brand), sans-serif" }}>
+              <p className="text-xs" style={{ color: NEU.inkSoft, fontFamily: "var(--font-brand), sans-serif" }}>
                 Nothing picked. Your dashboard lists the priorities in the normal build order.
               </p>
             )}
-            <AutoSaveStatus saving={intentSaving} saved={intentSaved} />
+          </Group>
+
+          {/* ── Editions (lineage) ── */}
+          <Group
+            title="Past Editions" icon={History} tint={TINT_GREEN_BG}
+            hint={<InfoHint label="About editions" text="Link editions of the same conference across years. A link only counts once the previous edition's owner approves it." />}
+          >
+            <div className="gvk-row" style={{ display: 'block' }}>
+        {/* Outgoing claim: this conference's predecessor */}
+        <p
+          className="text-xs font-bold mb-2"
+          style={{ color: '#6E5F4E', fontFamily: "var(--font-brand), sans-serif", letterSpacing: '0.02em' }}
+        >
+          Previous edition
+        </p>
+        {view.predecessor_conference_id ? (
+          <div
+            className="flex items-center gap-3 px-4 py-3 rounded-xl mb-6"
+            style={{ backgroundColor: 'rgba(27,56,40,0.03)', border: '1px solid rgba(27,56,40,0.08)' }}
+          >
+            <div className="flex-1 min-w-0">
+              <p className="font-semibold text-sm [overflow-wrap:anywhere]" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>
+                {predecessorInfo?.full_name ?? 'A private conference'}
+              </p>
+              <p className="text-xs" style={{ color: '#6E6152', fontFamily: "var(--font-brand), sans-serif" }}>
+                {view.predecessor_approved
+                  ? 'Confirmed as the previous edition of this conference.'
+                  : 'Waiting for its Main Organiser to confirm the link.'}
+              </p>
+            </div>
+            <span className="flex-shrink-0">
+              <Pill tone={view.predecessor_approved ? 'forest' : 'gold'} size="sm" dot>
+                {view.predecessor_approved ? 'Approved' : 'Pending approval'}
+              </Pill>
+            </span>
+            <button
+              onClick={handleWithdrawClaim}
+              disabled={withdrawingClaim}
+              className="text-xs font-semibold focus:outline-none hover:underline flex-shrink-0"
+              style={{ color: '#8B2020', fontFamily: "var(--font-brand), sans-serif" }}
+            >
+              {withdrawingClaim ? 'Withdrawing…' : 'Withdraw'}
+            </button>
           </div>
+        ) : (
+          <p className="text-sm mb-6" style={{ color: '#6E6152', fontFamily: "var(--font-brand), sans-serif" }}>
+            No previous edition linked. You can link one when creating your next edition on Gavelling.
+          </p>
+        )}
+
+        {/* Incoming claims: conferences claiming this one as their predecessor */}
+        <p
+          className="text-xs font-bold mb-2"
+          style={{ color: '#6E5F4E', fontFamily: "var(--font-brand), sans-serif", letterSpacing: '0.02em' }}
+        >
+          Incoming claims
+        </p>
+        {incomingClaims.length === 0 ? (
+          <p className="text-sm" style={{ color: '#6E6152', fontFamily: "var(--font-brand), sans-serif" }}>
+            No conferences currently claim {view.acronym} as their previous edition.
+          </p>
+        ) : (
+          <div className="flex flex-col">
+            {incomingClaims.map((claim, idx) => {
+              const isLast = idx === incomingClaims.length - 1;
+              const year = claim.start_date ? new Date(claim.start_date + 'T00:00:00').getFullYear() : null;
+              return (
+                <div
+                  key={claim.id}
+                  className="flex items-center gap-3 py-3"
+                  style={{ borderBottom: isLast ? 'none' : '1px solid #F0EDE6' }}
+                >
+                  <div className="flex-1 min-w-0">
+                    <p style={{ fontSize: 10, color: '#B6871F', fontFamily: "var(--font-brand), sans-serif", fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase' }}>
+                      {claim.acronym}{year ? ' · ' + year : ''}
+                    </p>
+                    <p className="font-semibold text-sm [overflow-wrap:anywhere]" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>
+                      {claim.full_name}
+                    </p>
+                    <p className="text-xs" style={{ color: '#6E6152', fontFamily: "var(--font-brand), sans-serif" }}>
+                      claims to be the next edition of {view.acronym}
+                    </p>
+                  </div>
+
+                  {claim.predecessor_approved ? (
+                    <span className="flex-shrink-0">
+                      <Pill tone="forest" size="sm" dot>Approved</Pill>
+                    </span>
+                  ) : isOwner ? (
+                    <div className="flex gap-2 flex-shrink-0">
+                      <button
+                        onClick={() => handleClaimDecision(claim.id, true)}
+                        disabled={lineageBusy === claim.id}
+                        className="rounded-lg py-1.5 px-3 font-bold text-[11px] focus:outline-none transition-colors gv-lift"
+                        style={{
+                          backgroundColor: lineageBusy === claim.id ? '#DDD4C0' : '#1B3828',
+                          color: lineageBusy === claim.id ? '#9A8A78' : '#EED98A',
+                          fontFamily: "var(--font-brand), sans-serif",
+                          letterSpacing: 0,
+                        }}
+                        onMouseEnter={(e) => { if (lineageBusy !== claim.id) (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
+                        onMouseLeave={(e) => { if (lineageBusy !== claim.id) (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
+                      >
+                        Approve
+                      </button>
+                      <button
+                        onClick={() => handleClaimDecision(claim.id, false)}
+                        disabled={lineageBusy === claim.id}
+                        className="rounded-lg py-1.5 px-3 font-bold text-[11px] focus:outline-none transition-colors gv-lift"
+                        style={{
+                          backgroundColor: 'transparent',
+                          color: '#8B2020',
+                          border: '1px solid rgba(139,32,32,0.3)',
+                          fontFamily: "var(--font-brand), sans-serif",
+                          letterSpacing: 0,
+                        }}
+                        onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(139,32,32,0.05)'; }}
+                        onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+                      >
+                        Reject
+                      </button>
+                    </div>
+                  ) : (
+                    <span className="flex-shrink-0" title="Only the conference owner can approve or reject lineage claims.">
+                      <Pill tone="neutral" size="sm">Owner decides</Pill>
+                    </span>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+            </div>
+          </Group>
+
+          {/* ── Delete ── */}
+          <Group title="Delete Conference" icon={Trash2} tint={TINT_GOLD_BG}>
+            <Row label="Delete this conference" desc="Everything about it is removed for good. Only the owner can do this." align="end">
+              <button
+                type="button"
+                onClick={() => { if (!isOwner) { notifyErr('Only the conference owner can delete this conference.', 'settings-delete'); return; } clearErr('settings-delete'); setConfirmingDelete(true); }}
+                className="gv-st-btn"
+                style={{ minHeight: 40, padding: '0 14px', background: '#FFFFFF', color: '#8B2020', boxShadow: 'inset 0 0 0 1.5px rgba(139,32,32,0.45)' }}
+              >
+                <Trash2 size={15} strokeWidth={2.4} aria-hidden />
+                Delete
+              </button>
+            </Row>
+          </Group>
+          {confirmingDelete && (
+            <ConfirmModal
+              title="Delete this conference?"
+              body="Are you sure you want to delete this conference? This action is irreversible, all data relating to this conference will be lost."
+              confirmLabel="Yes, delete"
+              danger
+              loading={deleting}
+              onConfirm={async () => {
+                if (!session || deleting) return;
+                setDeleting(true);
+                const supabase = getAuthedClient(session.access_token);
+                const { error } = await supabase.rpc('delete_conference', { p_conference_id: view.id });
+                if (error) { notifyErr(friendlyError(error, 'Could not delete view.'), 'settings-delete'); setConfirmingDelete(false); setDeleting(false); return; }
+                window.location.href = '/';
+              }}
+              onCancel={() => { if (!deleting) setConfirmingDelete(false); }}
+            />
+          )}
+        </div>
+
+        {sidePreview && (
+          <aside className="hidden min-[1500px]:block flex-shrink-0 sticky" style={{ width: '290px', top: '80px' }} aria-label="Preview of your conference card">
+            <ConferencePreview snap={settingsSnap} onCopyLink={handleCopyConferenceLink} copied={confLinkCopied} />
+          </aside>
+        )}
         </div>
       )}
 
+      {activeTab === 'organizers' && (
+        <div className="mb-5">
+          <SectionHead icon={Users2} tint={TINT_GREEN_BG}
+            title="Your Team"
+            line={pendingInvites.length > 0 ? `${pendingInvites.length} ${pendingInvites.length === 1 ? 'invite is' : 'invites are'} waiting.` : 'Who runs it with you, and what each person can open.'}
+            focal={<BigCount n={organizers.length} word={organizers.length === 1 ? 'person' : 'people'} />}
+          />
+        </div>
+      )}
       {activeTab === 'organizers' && (() => {
         // ── The team, drawn as a hierarchy ──────────────────────────────────
         // Not a stack of rows: a tree. Rank 1 holds the owner AND the super
@@ -4807,244 +4608,162 @@ export default function SettingsPage() {
         );
       })()}
 
-      {activeTab === 'privacy' && <><div style={cardStyle}>
-        <p className="font-semibold text-base mb-1" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>
-          Privacy & Publishing
-        </p>
-        <p className="text-sm mb-6" style={{ color: '#6E6152', fontFamily: "var(--font-brand), sans-serif" }}>
-          Who can find your conference.
-        </p>
-
-        {/* Public toggle */}
-        <div
-          className="flex items-center justify-between p-4 rounded-xl mb-4"
-          style={{ backgroundColor: 'rgba(27,56,40,0.03)', border: '1px solid rgba(27,56,40,0.08)' }}
-        >
-          <div>
-            <p className="font-semibold text-sm" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>Public listing</p>
-            <p className="text-xs mt-0.5" style={{ color: '#6E6152', fontFamily: "var(--font-brand), sans-serif" }}>
-              Your conference appears on gavelling.com/conferences
-            </p>
-          </div>
-          <span className="flex items-center gap-2 flex-shrink-0">
-            {publicToggleSaving && (
-              <div className="w-4 h-4 rounded-full border-2 border-t-transparent animate-spin" style={{ borderColor: '#1B3828', borderTopColor: 'transparent' }} />
-            )}
-            {/* Only the private->public direction is gated (mirrors the DB
-                trigger), an organizer must always be able to unpublish. */}
-            <PillToggle
-              value={view.is_public}
-              onChange={publicToggleSaving ? () => {} : handlePublicToggle}
-              size="md"
-              disabled={!view.is_public && (paymentGateBlocks(view) || view.dates_tbd || !view.start_date)}
+      {activeTab === 'privacy' && (() => {
+        const noDates = view.dates_tbd || !view.start_date;
+        const gateBlocks = paymentGateBlocks(view);
+        const blockPublic = !view.is_public && (gateBlocks || noDates);
+        return (
+          <div className="flex flex-col gap-5">
+            <SectionHead icon={view.is_public ? Globe : Lock}
+              tint={view.is_public ? TINT_GREEN_BG : TINT_GOLD_BG}
+              title="Visibility"
+              line="Who can find your conference, and what its page shows."
+              focal={
+                <span className="inline-flex items-center gap-2.5">
+                  <span style={{ fontFamily: "var(--font-brand), sans-serif", fontSize: 'clamp(30px, 3.6vw, 44px)', fontWeight: 900, letterSpacing: '-0.03em', lineHeight: 1, color: view.is_public ? '#1B3828' : '#8A6614' }}>
+                    {view.is_public ? 'Public' : 'Private'}
+                  </span>
+                </span>
+              }
             />
-          </span>
-        </div>
-
-        {!view.is_public && (view.dates_tbd || !view.start_date) ? (
-          <p className="text-sm mt-3" style={{ color: '#B8844A', fontFamily: "var(--font-brand), sans-serif" }}>
-            Add conference dates to publish. TBD conferences stay private.
-          </p>
-        ) : (
-          <p className="text-sm mt-3" style={{ color: view.is_public ? '#1B3828' : '#B8844A', fontFamily: "var(--font-brand), sans-serif" }}>
-            {view.is_public
-              ? 'Your conference is publicly listed on Gavelling.'
-              : 'Your conference is private. Only people with the direct link can find it.'}
-          </p>
-        )}
-        {!view.is_public && paymentGateBlocks(view) && (
-          <p className="text-xs mt-2" style={{ color: '#B8844A', fontFamily: "var(--font-brand), sans-serif" }}>{paymentGateMessage(view)}</p>
-        )}
-
-        {/* Danger zone */}
-        <div className="mt-6 pt-6" style={{ borderTop: '1px solid #F0EDE6' }}>
-          <p className="text-sm font-semibold mb-3" style={{ color: '#8B2020', fontFamily: "var(--font-brand), sans-serif" }}>
-            Danger Zone
-          </p>
-          <button
-            onClick={() => { if (!isOwner) { notifyErr('Only the conference owner can delete this conference.', 'settings-delete'); return; } clearErr('settings-delete'); setConfirmingDelete(true); }}
-            className="w-full rounded-xl py-2.5 font-semibold text-sm focus:outline-none transition-colors gv-lift"
-            style={{ border: '1px solid rgba(139,32,32,0.3)', color: '#8B2020', backgroundColor: 'transparent', fontFamily: "var(--font-brand), sans-serif" }}
-            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(139,32,32,0.05)'; }}
-            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
-          >
-            Delete conference
-          </button>
-
-          {confirmingDelete && (
-            <ConfirmModal
-              title="Delete this conference?"
-              body="Are you sure you want to delete this conference? This action is irreversible, all data relating to this conference will be lost."
-              confirmLabel="Yes, delete"
-              danger
-              loading={deleting}
-              onConfirm={async () => {
-                if (!session || deleting) return;
-                setDeleting(true);
-                const supabase = getAuthedClient(session.access_token);
-                const { error } = await supabase.rpc('delete_conference', { p_conference_id: view.id });
-                if (error) { notifyErr(friendlyError(error, 'Could not delete view.'), 'settings-delete'); setConfirmingDelete(false); setDeleting(false); return; }
-                window.location.href = '/';
-              }}
-              onCancel={() => { if (!deleting) setConfirmingDelete(false); }}
-            />
-          )}
-        </div>
-      </div>
-
-      {/* ── Lineage card ── */}
-      <div style={cardStyle}>
-        <p className="font-semibold text-base mb-1" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>
-          Lineage
-        </p>
-        <p className="text-sm mb-6" style={{ color: '#6E6152', fontFamily: "var(--font-brand), sans-serif" }}>
-          Link editions of the same conference across years. Links only count once the previous edition&apos;s owner approves them.
-        </p>
-
-        {/* Outgoing claim: this conference's predecessor */}
-        <p
-          className="text-xs font-bold mb-2"
-          style={{ color: '#6E5F4E', fontFamily: "var(--font-brand), sans-serif", letterSpacing: '0.02em' }}
-        >
-          Previous edition
-        </p>
-        {view.predecessor_conference_id ? (
-          <div
-            className="flex items-center gap-3 px-4 py-3 rounded-xl mb-6"
-            style={{ backgroundColor: 'rgba(27,56,40,0.03)', border: '1px solid rgba(27,56,40,0.08)' }}
-          >
-            <div className="flex-1 min-w-0">
-              <p className="font-semibold text-sm [overflow-wrap:anywhere]" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>
-                {predecessorInfo?.full_name ?? 'A private conference'}
-              </p>
-              <p className="text-xs" style={{ color: '#6E6152', fontFamily: "var(--font-brand), sans-serif" }}>
-                {view.predecessor_approved
-                  ? 'Confirmed as the previous edition of this conference.'
-                  : 'Waiting for its Main Organiser to confirm the link.'}
-              </p>
-            </div>
-            <span className="flex-shrink-0">
-              <Pill tone={view.predecessor_approved ? 'forest' : 'gold'} size="sm" dot>
-                {view.predecessor_approved ? 'Approved' : 'Pending approval'}
-              </Pill>
-            </span>
-            <button
-              onClick={handleWithdrawClaim}
-              disabled={withdrawingClaim}
-              className="text-xs font-semibold focus:outline-none hover:underline flex-shrink-0"
-              style={{ color: '#8B2020', fontFamily: "var(--font-brand), sans-serif" }}
-            >
-              {withdrawingClaim ? 'Withdrawing…' : 'Withdraw'}
-            </button>
-          </div>
-        ) : (
-          <p className="text-sm mb-6" style={{ color: '#6E6152', fontFamily: "var(--font-brand), sans-serif" }}>
-            No previous edition linked. You can link one when creating your next edition on Gavelling.
-          </p>
-        )}
-
-        {/* Incoming claims: conferences claiming this one as their predecessor */}
-        <p
-          className="text-xs font-bold mb-2"
-          style={{ color: '#6E5F4E', fontFamily: "var(--font-brand), sans-serif", letterSpacing: '0.02em' }}
-        >
-          Incoming claims
-        </p>
-        {incomingClaims.length === 0 ? (
-          <p className="text-sm" style={{ color: '#6E6152', fontFamily: "var(--font-brand), sans-serif" }}>
-            No conferences currently claim {view.acronym} as their previous edition.
-          </p>
-        ) : (
-          <div className="flex flex-col">
-            {incomingClaims.map((claim, idx) => {
-              const isLast = idx === incomingClaims.length - 1;
-              const year = claim.start_date ? new Date(claim.start_date + 'T00:00:00').getFullYear() : null;
-              return (
-                <div
-                  key={claim.id}
-                  className="flex items-center gap-3 py-3"
-                  style={{ borderBottom: isLast ? 'none' : '1px solid #F0EDE6' }}
-                >
-                  <div className="flex-1 min-w-0">
-                    <p style={{ fontSize: 10, color: '#B6871F', fontFamily: "var(--font-brand), sans-serif", fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase' }}>
-                      {claim.acronym}{year ? ' · ' + year : ''}
-                    </p>
-                    <p className="font-semibold text-sm [overflow-wrap:anywhere]" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>
-                      {claim.full_name}
-                    </p>
-                    <p className="text-xs" style={{ color: '#6E6152', fontFamily: "var(--font-brand), sans-serif" }}>
-                      claims to be the next edition of {view.acronym}
-                    </p>
-                  </div>
-
-                  {claim.predecessor_approved ? (
-                    <span className="flex-shrink-0">
-                      <Pill tone="forest" size="sm" dot>Approved</Pill>
-                    </span>
-                  ) : isOwner ? (
-                    <div className="flex gap-2 flex-shrink-0">
-                      <button
-                        onClick={() => handleClaimDecision(claim.id, true)}
-                        disabled={lineageBusy === claim.id}
-                        className="rounded-lg py-1.5 px-3 font-bold text-[11px] focus:outline-none transition-colors gv-lift"
-                        style={{
-                          backgroundColor: lineageBusy === claim.id ? '#DDD4C0' : '#1B3828',
-                          color: lineageBusy === claim.id ? '#9A8A78' : '#EED98A',
-                          fontFamily: "var(--font-brand), sans-serif",
-                          letterSpacing: 0,
-                        }}
-                        onMouseEnter={(e) => { if (lineageBusy !== claim.id) (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
-                        onMouseLeave={(e) => { if (lineageBusy !== claim.id) (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
-                      >
-                        Approve
-                      </button>
-                      <button
-                        onClick={() => handleClaimDecision(claim.id, false)}
-                        disabled={lineageBusy === claim.id}
-                        className="rounded-lg py-1.5 px-3 font-bold text-[11px] focus:outline-none transition-colors gv-lift"
-                        style={{
-                          backgroundColor: 'transparent',
-                          color: '#8B2020',
-                          border: '1px solid rgba(139,32,32,0.3)',
-                          fontFamily: "var(--font-brand), sans-serif",
-                          letterSpacing: 0,
-                        }}
-                        onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(139,32,32,0.05)'; }}
-                        onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
-                      >
-                        Reject
-                      </button>
-                    </div>
-                  ) : (
-                    <span className="flex-shrink-0" title="Only the conference owner can approve or reject lineage claims.">
-                      <Pill tone="neutral" size="sm">Owner decides</Pill>
-                    </span>
-                  )}
+            <Group title="Who Can Find It" icon={Search} tint={TINT_GREEN_BG}>
+              <Row
+                label="Public on Explore"
+                align="end"
+                on={view.is_public}
+                need={blockPublic}
+                desc={view.is_public
+                  ? 'Anyone can find your page on Gavelling.'
+                  : noDates
+                    ? <>Add your dates before it can go public.{' '}<button type="button" onClick={() => router.push(`${window.location.pathname}?tab=general&focus=dates`)} style={{ color: '#1B3828', fontWeight: 700, textDecoration: 'underline', textUnderlineOffset: 3, background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontSize: 'inherit', fontFamily: 'inherit' }}>Add dates</button></>
+                    : gateBlocks ? paymentGateMessage(view)
+                    : 'Private. Only people with the link can open it.'}
+              >
+                {/* Only the private->public direction is gated (mirrors the DB
+                    trigger), an organizer must always be able to unpublish. */}
+                <KitSwitch
+                  label="Public on Explore"
+                  checked={view.is_public}
+                  busy={publicToggleSaving}
+                  disabled={blockPublic}
+                  onChange={handlePublicToggle}
+                />
+              </Row>
+              <Row label="Your page link" desc={`gavelling.com/conferences/${view.slug}`} align="end">
+                <div className="flex items-center gap-2 flex-wrap justify-end">
+                  <button type="button" onClick={handleCopyConferenceLink} className="gv-st-btn gv-st-outline" style={{ minHeight: 40, padding: '0 14px' }}>
+                    {confLinkCopied ? <Check size={15} strokeWidth={3} aria-hidden /> : <Copy size={15} strokeWidth={2.4} aria-hidden />}
+                    {confLinkCopied ? 'Copied' : 'Copy link'}
+                  </button>
+                  <a href={`/conferences/${view.slug}?preview=1`} target="_blank" rel="noopener noreferrer" className="gv-st-btn gv-st-forest" style={{ minHeight: 40, padding: '0 14px' }}>
+                    <Eye size={15} strokeWidth={2.4} aria-hidden />
+                    Open
+                  </a>
                 </div>
-              );
-            })}
+              </Row>
+            </Group>
+            <Group title="What Your Page Shows" icon={Eye} tint={TINT_GOLD_BG} aside={visibilityStatus !== 'idle' ? <AutoSaveStatus saving={visibilityStatus === 'saving'} saved={visibilityStatus === 'saved'} /> : undefined}>
+              <SwitchRow
+                label="The committee list"
+                desc="Turn it off if your committees are not announced yet."
+                checked={showCommittees}
+                busy={visibilitySavingKey === 'show_committees'}
+                disabled={visibilitySavingKey !== null}
+                onChange={(v) => saveVisibility('show_committees', v, setShowCommittees)}
+              />
+              <SwitchRow
+                label="Member counts"
+                desc="How many delegates are in each committee."
+                checked={showCommitteeCounts}
+                busy={visibilitySavingKey === 'show_committee_counts'}
+                disabled={visibilitySavingKey !== null}
+                onChange={(v) => saveVisibility('show_committee_counts', v, setShowCommitteeCounts)}
+              />
+              <SwitchRow
+                label="Taken countries"
+                desc="Which country seats are already allocated."
+                checked={showTakenCountries}
+                busy={visibilitySavingKey === 'show_taken_countries'}
+                disabled={visibilitySavingKey !== null}
+                onChange={(v) => saveVisibility('show_taken_countries', v, setShowTakenCountries)}
+              />
+            </Group>
           </div>
-        )}
+        );
+      })()}
 
-      </div>
+      {activeTab === 'payments' && (() => {
+        const ready = conferencePaymentsReady(view);
+        const note = (view.external_payment_note ?? '').trim().toLowerCase();
+        const method = !ready ? 'Not set up yet'
+          : view.platform_collects || view.payment_method === 'stripe' ? 'Card payments'
+          : !view.external_payment_url && note.startsWith('this conference is free') ? 'It is free'
+          : view.manual_kind === 'qr' ? 'Payment QR code'
+          : view.manual_kind === 'bank' ? 'Bank transfer'
+          : 'Payment link';
+        const fin = `/manage/${view.slug}/financials`;
+        const doors: { icon: LucideIcon; label: string; desc: string; href: string }[] = [
+          { icon: ReceiptText, label: 'Registration fee', desc: 'A fee on top of the ticket, if you charge one.', href: `${fin}?open=fee` },
+          { icon: Gift, label: 'Add-ons', desc: 'Extras people buy with their ticket.', href: `${fin}?open=addons` },
+          { icon: Ticket, label: 'Vouchers and referrals', desc: 'Discount and referral codes.', href: `${fin}?open=vouchers` },
+          { icon: HandHeart, label: 'Financial aid', desc: 'The aid form and the requests waiting.', href: `${fin}/aid` },
+        ];
+        return (
+          <div className="flex flex-col gap-5">
+            <SectionHead icon={CreditCard} tint={TINT_GOLD_BG}
+              title="Payments"
+              line="Money lives in Financials. Prices live with each role, under Applications."
+              focal={
+                <span style={{ fontFamily: "var(--font-brand), sans-serif", fontSize: 'clamp(24px, 2.8vw, 34px)', fontWeight: 900, letterSpacing: '-0.02em', lineHeight: 1.05, color: ready ? '#1B3828' : '#8A6614', overflowWrap: 'anywhere' }}>
+                  {method}
+                </span>
+              }
+            />
+            <Group title="How People Pay" icon={CreditCard} tint={TINT_GOLD_BG}>
+              <Row
+                label="Payment method"
+                align="end"
+                on={ready}
+                need={!ready}
+                desc={ready ? method : 'Pick how people pay you. Even a free conference needs one before applications open.'}
+              >
+                <a href={`${fin}?open=payment`} className="gv-st-btn gv-st-forest" style={{ minHeight: 40, padding: '0 14px' }}>
+                  {ready ? 'Change' : 'Set up payments'}<ChevronRightIcon size={16} strokeWidth={2.4} aria-hidden />
+                </a>
+              </Row>
+              {doors.map(d => (
+                <Row
+                  key={d.label}
+                  align="end"
+                  label={<span className="inline-flex items-center gap-2.5"><DuoDisc icon={d.icon} size={30} tint={TINT_GOLD_BG} />{d.label}</span>}
+                  desc={d.desc}
+                >
+                  <a href={d.href} className="gv-st-btn gv-st-outline" style={{ minHeight: 40, padding: '0 14px' }}>
+                    Open<ChevronRightIcon size={16} strokeWidth={2.4} aria-hidden />
+                  </a>
+                </Row>
+              ))}
+              <Row
+                align="end"
+                label={<span className="inline-flex items-center gap-2.5"><DuoDisc icon={CalendarDays} size={30} tint={TINT_GREEN_BG} />Prices for each role</span>}
+                desc="Set in each role under Applications, with prices by date."
+              >
+                <button type="button" onClick={() => openSection('applications')} className="gv-st-btn gv-st-outline" style={{ minHeight: 40, padding: '0 14px' }}>
+                  Applications<ChevronRightIcon size={16} strokeWidth={2.4} aria-hidden />
+                </button>
+              </Row>
+            </Group>
+          </div>
+        );
+      })()}
 
-      {/* Partners moved to the Conference tab (Section 9): partners are
-          conference identity, not a privacy setting. */}
-
-      {/* Data import moved to the sidebar nav (Manage → Import); the launch
-          card that used to sit here has been removed. The import page itself
-          (/manage/[slug]/import) is unchanged. */}
-      </>}
-
-      {activeTab === 'awards' && <AwardsComingSoon />}
-        </section>
-
-        {sidePreview && (
-          <aside className="hidden min-[1440px]:block flex-shrink-0 sticky" style={{ width: '300px', top: '24px' }} aria-label="Preview of your conference card">
-            <ConferencePreview snap={settingsSnap} onCopyLink={handleCopyConferenceLink} copied={confLinkCopied} />
-          </aside>
-        )}
-      </div>
+      {activeTab === 'awards' && (
+        <div className="flex flex-col gap-5">
+          <SectionHead icon={Trophy} tint={TINT_GOLD_BG} title="Awards" line="Coming soon. Everything already published stays published." />
+          <div className="gv-st-card"><AwardsComingSoon /></div>
+        </div>
+      )}
+      </SettingsShell>
 
       {/* Drag-to-fit crop step, flattens the chosen framing into a square
           transparent PNG, then hands off to the existing upload path. */}

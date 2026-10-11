@@ -1173,6 +1173,21 @@ const ALLOCATED_GROUP = ['assigned', 'checked-in'];
 const NON_DELEGATE_ROLES = new Set(['chair', 'faculty-advisor']);
 
 /**
+ * The list's primary order (owner, 11 Oct 2026: "sort by to-be accepted, then
+ * accepted, then rejected"). 0 = still to decide, 1 = accepted or beyond,
+ * 2 = rejected, 3 = withdrawn. A rejected application that is resubmitted goes
+ * back to 'submitted' (resubmit_application), so it rejoins group 0 by itself.
+ * Any status not named here is treated as undecided, so nothing unknown can be
+ * buried at the bottom.
+ */
+function statusSortGroup(status: string): number {
+  if (ACCEPTED_GROUP.includes(status)) return 1;
+  if (status === 'rejected') return 2;
+  if (status === 'withdrawn') return 3;
+  return 0;
+}
+
+/**
  * Query params this page understands, so other surfaces (the dashboard's
  * applicants dial) can deep-link straight into a pre-filtered view:
  *   ?status=accepted | assigned | checked-in | submitted | rejected | withdrawn
@@ -1704,6 +1719,96 @@ function reconcileLoaded(
   return out;
 }
 
+// ── ApplicationsSearchPill ────────────────────────────────────────────────────
+// The page's first control: a big white pill in the Explore / Store look.
+// Presentational only: the parent owns the value, the debounce and the filter.
+// "/" focuses it from anywhere on the page, except while typing in a field or
+// while a dialog is open.
+
+function ApplicationsSearchPill({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [focused, setFocused] = useState(false);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== '/' || e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey) return;
+      const t = e.target as HTMLElement | null;
+      if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return;
+      if (document.querySelector('[aria-modal="true"], [role="dialog"], [role="alertdialog"]')) return;
+      e.preventDefault();
+      inputRef.current?.focus();
+      inputRef.current?.select();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
+  return (
+    <div
+      className="flex items-center gap-3 w-full mb-5"
+      onClick={() => inputRef.current?.focus()}
+      style={{
+        maxWidth: 760, minHeight: 56, padding: '0 10px 0 8px', borderRadius: 999,
+        backgroundColor: '#FFFFFF', cursor: 'text',
+        boxShadow: focused
+          ? '0 0 0 2px #1B3828, 0 2px 6px rgba(27,56,40,0.08), 0 22px 48px rgba(27,56,40,0.18)'
+          : '0 1px 0 rgba(27,56,40,0.08), 0 2px 6px rgba(27,56,40,0.08), 0 18px 40px -26px rgba(27,56,40,0.45)',
+        transition: 'box-shadow 160ms ease',
+      }}
+    >
+      <span
+        aria-hidden
+        className="inline-flex items-center justify-center flex-shrink-0"
+        style={{ width: 40, height: 40, borderRadius: 999, backgroundColor: '#EEF3EC' }}
+      >
+        <Search size={19} strokeWidth={2.5} style={{ color: '#1B3828' }} />
+      </span>
+      <input
+        ref={inputRef}
+        type="search"
+        value={value}
+        onChange={e => onChange(e.target.value)}
+        onFocus={() => setFocused(true)}
+        onBlur={() => setFocused(false)}
+        onKeyDown={e => {
+          if (e.key === 'Escape') {
+            if (value) { e.preventDefault(); onChange(''); } else inputRef.current?.blur();
+          }
+        }}
+        placeholder="Search by name, email, delegation, country or committee"
+        aria-label="Search applications by name, email, delegation, country or committee"
+        aria-keyshortcuts="/"
+        enterKeyHint="search"
+        autoComplete="off"
+        spellCheck={false}
+        className="flex-1 outline-none [&::-webkit-search-cancel-button]:appearance-none"
+        style={{ backgroundColor: 'transparent', border: 'none', color: NEU.ink, fontFamily: OUTFIT, fontSize: 16, fontWeight: 500, minWidth: 0, height: 52 }}
+      />
+      {value ? (
+        <button
+          type="button"
+          onClick={e => { e.stopPropagation(); onChange(''); inputRef.current?.focus(); }}
+          aria-label="Clear search"
+          title="Clear search"
+          className="inline-flex items-center justify-center flex-shrink-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]"
+          style={{ width: 36, height: 36, borderRadius: 999, backgroundColor: 'rgba(28,20,16,0.06)', border: 'none', cursor: 'pointer', color: NEU.ink }}
+        >
+          <X size={16} strokeWidth={2.6} />
+        </button>
+      ) : !focused && (
+        <kbd
+          aria-hidden
+          className="hidden sm:inline-flex items-center justify-center flex-shrink-0"
+          title="Press / to search"
+          style={{ minWidth: 26, height: 26, padding: '0 8px', borderRadius: 7, fontFamily: OUTFIT, fontSize: 13, fontWeight: 600, color: NEU.inkSoft, backgroundColor: '#F6F3EA', boxShadow: 'inset 0 0 0 1px rgba(28,20,16,0.12)' }}
+        >
+          /
+        </kbd>
+      )}
+    </div>
+  );
+}
+
 // ── ApplicationsPage ──────────────────────────────────────────────────────────
 
 export default function ApplicationsPage() {
@@ -1899,19 +2004,19 @@ export default function ApplicationsPage() {
   // `silent` refetches never touch the page-level loading flag, they
   // reconcile local optimistic state with what the server actually computed
   // (fillFreeSpots promotions, etc) without wiping the list.
-  /* Which applicants were still undecided when this page was OPENED.
-     Undecided rows sort to the top, but off this frozen snapshot rather than
-     off live status — so accepting someone does not yank their row out from
-     under the cursor mid-triage. They stay put, and the list only reshuffles
-     the next time the page is opened, which is a fresh mount and a fresh
-     snapshot. Deliberately NOT refreshed by the silent reloads that follow an
-     accept or reject, for exactly that reason. */
-  const pendingAtOpen = useRef<Set<string> | null>(null);
-  /* Every id present at open, so an application that ARRIVES while the page is
-     sitting there can be told apart from one that was already decided. A new
+  /* Each application's status GROUP when this page was OPENED
+     (statusSortGroup: to decide, accepted, rejected, withdrawn). Rows sort by
+     this frozen snapshot rather than by live status, so accepting or rejecting
+     someone does not yank their row out from under the cursor mid-triage. They
+     stay put, and the list only reshuffles the next time the page is opened,
+     which is a fresh mount and a fresh snapshot. Deliberately NOT refreshed by
+     the silent reloads that follow an accept or reject, for exactly that
+     reason. Its keys are
+     also every id present at open, so an application that ARRIVES while the
+     page is sitting there is grouped by its live status instead (a new
      submission is undecided and belongs at the top; burying it at the bottom
-     because it missed the snapshot would be the wrong kind of stable. */
-  const idsAtOpen = useRef<Set<string> | null>(null);
+     because it missed the snapshot would be the wrong kind of stable). */
+  const groupAtOpen = useRef<Map<string, number> | null>(null);
 
   const loadApplications = useCallback(async (opts?: { silent?: boolean }) => {
     if (!conference) return;
@@ -2002,11 +2107,8 @@ export default function ApplicationsPage() {
     setApplications(apps);
     // Seed once per mount. `opts.silent` reloads (post-accept, post-reject)
     // must not re-seed, or the row just acted on would jump away.
-    if (pendingAtOpen.current === null && !opts?.silent) {
-      pendingAtOpen.current = new Set(
-        apps.filter(a => a.status === 'submitted').map(a => a.id),
-      );
-      idsAtOpen.current = new Set(apps.map(a => a.id));
+    if (groupAtOpen.current === null && !opts?.silent) {
+      groupAtOpen.current = new Map(apps.map(a => [a.id, statusSortGroup(a.status)]));
     }
     setRoleConfigs((cfgRes.data ?? []) as unknown as RoleConfigLite[]);
     setGatingInvoices((gatingRes.data ?? []) as { application_id: string | null; society_id: string | null }[]);
@@ -3770,28 +3872,26 @@ export default function ApplicationsPage() {
     }
     return true;
   })
-    // Default order = still-to-decide first, then latest applications first.
-    // The DB fetch already orders by submitted_at desc; this keeps that
-    // guarantee after any optimistic in-place patching so the visible default
-    // always matches "newest first" within each group.
+    // Default order = status group first (still to decide, then accepted /
+    // assigned / checked in, then rejected, then withdrawn; statusSortGroup),
+    // then latest applications first inside each group. The DB fetch already
+    // orders by submitted_at desc; this keeps that guarantee after any
+    // optimistic in-place patching.
     //
-    // The top group is keyed on `pendingAtOpen`, the snapshot taken when the
-    // page was opened — not on live status. Accepting someone therefore leaves
-    // their row exactly where it is instead of flinging it down the list while
-    // the organiser is still looking at it; the reshuffle happens on the next
-    // visit. Before the snapshot exists (first paint) everything is treated as
-    // one group, so the order never flickers as it arrives.
+    // The group is keyed on `groupAtOpen`, the snapshot taken when the page
+    // was opened — not on live status. Accepting or rejecting someone therefore
+    // leaves their row exactly where it is instead of flinging it down the list
+    // while the organiser is still looking at it; the reshuffle happens on the
+    // next visit. Rows that arrived since are grouped by their live status.
+    // Before the snapshot exists (first paint) everything is treated as one
+    // group, so the order never flickers as it arrives.
     .sort((a, b) => {
-      const pending = pendingAtOpen.current;
-      const seen = idsAtOpen.current;
-      if (pending && seen) {
-        // Top group: undecided when the page opened, or undecided and arrived
-        // since. Decided-since-open rows stay put, which is the whole point.
-        const top = (x: Application) =>
-          pending.has(x.id) || (x.status === 'submitted' && !seen.has(x.id)) ? 0 : 1;
-        const aP = top(a);
-        const bP = top(b);
-        if (aP !== bP) return aP - bP;
+      const atOpen = groupAtOpen.current;
+      if (atOpen) {
+        const group = (x: Application) => atOpen.get(x.id) ?? statusSortGroup(x.status);
+        const aG = group(a);
+        const bG = group(b);
+        if (aG !== bG) return aG - bG;
       }
       return (b.submitted_at ?? '').localeCompare(a.submitted_at ?? '');
     });
@@ -3941,13 +4041,13 @@ export default function ApplicationsPage() {
   // it comes from) but made the one tile in the row that answers "how many are
   // seated?" the only one you had to do arithmetic on. Every other tile is a
   // number; this one is now too.
-  const statItems: { label: string; value: number | string; emoji: string; icon: typeof Inbox; gradient: [string, string]; active: boolean; onClick: () => void }[] = [
-    { label: 'Total',      value: stats.total,     emoji: 'Card index',          icon: Users,          gradient: NEU_GRADIENTS.forest, active: totalTileActive,           onClick: clearToDefault },
-    { label: 'Accepted',   value: stats.accepted,  emoji: 'Check mark button',   icon: Check,          gradient: NEU_GRADIENTS.green,  active: statusGroupTileActive(ACCEPTED_GROUP),  onClick: () => toggleStatusGroupTile(ACCEPTED_GROUP) },
-    { label: 'Allocated',  value: stats.assigned,  emoji: 'Round pushpin',       icon: BadgeCheck,     gradient: NEU_GRADIENTS.gold,   active: statusGroupTileActive(ALLOCATED_GROUP), onClick: () => toggleStatusGroupTile(ALLOCATED_GROUP) },
-    { label: 'Paid',       value: stats.paid,      emoji: 'Money bag',           icon: CircleCheck,    gradient: NEU_GRADIENTS.green,  active: paymentTileActive('paid'),      onClick: () => togglePaymentTile('paid') },
-    { label: 'Unpaid',     value: stats.unpaid,    emoji: 'Hourglass not done',  icon: Clock,          gradient: NEU_GRADIENTS.amber,  active: paymentTileActive('unpaid'),    onClick: () => togglePaymentTile('unpaid') },
-    { label: 'Checked in', value: stats.checkedIn, emoji: 'Busts in silhouette', icon: UserRoundCheck, gradient: NEU_GRADIENTS.sage,   active: statusTileActive('checked-in'), onClick: () => toggleStatusTile('checked-in') },
+  const statItems: { label: string; value: number | string; icon: typeof Inbox; gradient: [string, string]; active: boolean; onClick: () => void }[] = [
+    { label: 'Total',      value: stats.total,     icon: Users,          gradient: NEU_GRADIENTS.forest, active: totalTileActive,           onClick: clearToDefault },
+    { label: 'Accepted',   value: stats.accepted,  icon: Check,          gradient: NEU_GRADIENTS.green,  active: statusGroupTileActive(ACCEPTED_GROUP),  onClick: () => toggleStatusGroupTile(ACCEPTED_GROUP) },
+    { label: 'Allocated',  value: stats.assigned,  icon: BadgeCheck,     gradient: NEU_GRADIENTS.gold,   active: statusGroupTileActive(ALLOCATED_GROUP), onClick: () => toggleStatusGroupTile(ALLOCATED_GROUP) },
+    { label: 'Paid',       value: stats.paid,      icon: CircleCheck,    gradient: NEU_GRADIENTS.green,  active: paymentTileActive('paid'),      onClick: () => togglePaymentTile('paid') },
+    { label: 'Unpaid',     value: stats.unpaid,    icon: Clock,          gradient: NEU_GRADIENTS.amber,  active: paymentTileActive('unpaid'),    onClick: () => togglePaymentTile('unpaid') },
+    { label: 'Checked in', value: stats.checkedIn, icon: UserRoundCheck, gradient: NEU_GRADIENTS.sage,   active: statusTileActive('checked-in'), onClick: () => toggleStatusTile('checked-in') },
   ];
 
   return (
@@ -3957,7 +4057,7 @@ export default function ApplicationsPage() {
         <div className="flex items-center gap-3.5">
           {/* Gavel emblem moved off the header (#4) — it now marks chair rows.
               A neutral applications icon disc anchors the title instead. */}
-          <NeuIconDisc gradient={NEU_GRADIENTS.forest} icon={Inbox} emoji="Card index" size={46} />
+          <NeuIconDisc gradient={NEU_GRADIENTS.forest} icon={Inbox} duo size={46} />
           <div>
             <p className="mb-1" style={{ fontFamily: OUTFIT, fontSize: 11, fontWeight: 800, letterSpacing: '0.14em', color: NEU.deepGold, textTransform: 'uppercase' }}>
               {conference.acronym} · Applications
@@ -3966,32 +4066,6 @@ export default function ApplicationsPage() {
           </div>
         </div>
         <div className="flex items-center gap-2.5 flex-wrap">
-          {/* Quick-filter search (#2): debounced, case-insensitive, matches any
-              applicant detail. Neumorphic pressed-in well to match the system. */}
-          <div
-            className="inline-flex items-center gap-2"
-            style={{ padding: '8px 14px', borderRadius: 999, backgroundColor: NEU.base, boxShadow: NEU.inSm, minWidth: 200 }}
-          >
-            <Search size={15} strokeWidth={2.4} style={{ color: NEU.muted, flexShrink: 0 }} />
-            <input
-              value={searchInput}
-              onChange={e => setSearchInput(e.target.value)}
-              placeholder="Search applicants…"
-              aria-label="Search applications"
-              className="flex-1 outline-none max-sm:text-[16px]!"
-              style={{ backgroundColor: 'transparent', color: NEU.ink, fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 600, minWidth: 0 }}
-            />
-            {searchInput && (
-              <button
-                onClick={() => setSearchInput('')}
-                aria-label="Clear search"
-                className="inline-flex items-center justify-center flex-shrink-0 focus:outline-none"
-                style={{ width: 18, height: 18, borderRadius: 999, background: 'transparent', border: 'none', cursor: 'pointer', color: NEU.muted }}
-              >
-                <X size={13} strokeWidth={2.6} />
-              </button>
-            )}
-          </div>
           {/* Per-committee filter, alongside the existing filters. */}
           <CommitteeFilter
             options={committeeOptions}
@@ -4013,6 +4087,10 @@ export default function ApplicationsPage() {
           </button>
         </div>
       </div>
+
+      {/* Quick-filter search (#2): the page's first control. Debounced,
+          case-insensitive, matches any applicant detail (see the filter). */}
+      <ApplicationsSearchPill value={searchInput} onChange={setSearchInput} />
 
       {loadIncomplete && (
         <div role="alert" className="mb-4 flex items-center gap-3 flex-wrap" style={{ padding: '10px 14px', borderRadius: 12, backgroundColor: 'rgba(139,32,32,0.08)', border: '1px solid rgba(139,32,32,0.35)' }}>
@@ -4059,12 +4137,12 @@ export default function ApplicationsPage() {
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-[repeat(20,minmax(0,1fr))] gap-3 mb-6">
         {statItems.map(s => (
           <div key={s.label} className="lg:col-span-3">
-            <NeuStatTile emoji={s.emoji} icon={s.icon} gradient={s.gradient} value={s.value} label={s.label} compact onClick={s.onClick} active={s.active} />
+            <NeuStatTile duo icon={s.icon} gradient={s.gradient} value={s.value} label={s.label} compact onClick={s.onClick} active={s.active} />
           </div>
         ))}
         <div className="lg:col-span-2">
           <NeuStatTile
-            emoji="Memo"
+            duo
             icon={PencilLine}
             gradient={NEU_GRADIENTS.amber}
             value={drafts.length}
@@ -4119,7 +4197,7 @@ export default function ApplicationsPage() {
       {listView === 'people' && !draftsView && !loading && filtered.length === 0 && (
         <NeuCard style={{ padding: '48px 24px' }}>
           <div className="flex flex-col items-center text-center">
-            <NeuIconDisc gradient={NEU_GRADIENTS.forest} icon={Inbox} emoji="Inbox tray" size={48} />
+            <NeuIconDisc gradient={NEU_GRADIENTS.forest} icon={Inbox} duo size={48} />
             <p className="mt-4" style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 15, color: NEU.ink }}>
               {applications.length === 0 ? 'No applications yet' : 'No applications match these filters'}
             </p>

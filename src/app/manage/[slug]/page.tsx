@@ -1085,7 +1085,7 @@ export default function DashboardPage() {
         chairInvites: (chairInvAllRes.data ?? []) as ChairInviteRow[],
       });
     })();
-  }, [conference?.id, session?.access_token]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [conference?.id, !!session]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // "Explore emails" is the one checklist item that is NOT a function of the
   // database: it is ticked once this browser has visited the communications
@@ -1281,7 +1281,7 @@ export default function DashboardPage() {
       setActivity(evs);
     })();
     return () => { cancelled = true; };
-  }, [conference?.id, session?.access_token]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [conference?.id, !!session]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Cumulative funnel series for ParticipantsChart. Rolled here (before the
   // loading return, so hook order never changes) and only when the fetched

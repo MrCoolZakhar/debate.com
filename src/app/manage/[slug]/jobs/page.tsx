@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import { Building2, CreditCard, Clock, Users, X, ChevronDown, ChevronUp, Briefcase, CheckCircle2, XCircle, MinusCircle } from 'lucide-react';
 import { useManage } from '@/app/manage/[slug]/layout';
-import { Emoji3D } from '@/components/neu';
+import { DuoGlyph } from '@/components/DuoIcon';
 import { GoldWord } from '@/components/BrandHeading';
 
 // ── Launch gate ─────────────────────────────────────────────────────────────
@@ -944,7 +944,7 @@ export default function JobBoardPage() {
             className="inline-flex items-center justify-center rounded-2xl"
             style={{ width: 72, height: 72, backgroundColor: 'rgba(255,255,255,0.08)', marginBottom: 18 }}
           >
-            <Emoji3D name="Briefcase" size={48} fallback={Briefcase} fallbackColor={GOLD} />
+            <DuoGlyph icon={Briefcase} size={40} onDark />
           </div>
           <h1
             className="font-black"

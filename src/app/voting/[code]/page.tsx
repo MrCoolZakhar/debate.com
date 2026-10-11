@@ -29,6 +29,8 @@ import ChatDisabledNotice from '@/components/ChatDisabledNotice';
 import ScoreboardPanel from '@/components/ScoreboardPanel';
 import { getCommitteeFlags } from '@/lib/committeeFlags';
 import { chatUnreadTotal, mergeMessagesById } from '@/lib/chatConversations';
+import { useBroadcastHistory } from '@/lib/broadcastHistory';
+import { withBroadcastMessages, secretariatUnread } from '@/lib/broadcastMessages';
 import { loadChatReadCounts, saveChatReadCounts } from '@/lib/chatReadKey';
 import { serverNowIso } from '@/lib/serverClock';
 import { startSessionSync, rowFields } from '@/lib/sessionSync';
@@ -515,6 +517,11 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
     if (!committee?.code) return;
     saveChatReadCounts(committee.code, { role: 'chair', identity: urlChairName }, chatReadCounts);
   }, [chatReadCounts, committee?.code, urlChairName]);
+  // Organiser broadcasts, shown in the chat's Everyone thread as messages from the Secretariat
+  // (src/lib/broadcastMessages.ts). Re-read on every `session_broadcasts` event and every
+  // catch-up that ends 'done'; own state, never the committee, never per second.
+  const [broadcastVersion, setBroadcastVersion] = useState(0);
+  const broadcastHistory = useBroadcastHistory(committee?.id, broadcastVersion);
 
   const followDocId = isViewOnly && followLive
     ? (Object.entries(voteStates)
@@ -749,7 +756,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
       // counter the scoreboard's own query is keyed on (RULE 4, as on the chair page).
       const sync = startSessionSync({
         committeeId: found.id,
-        tables: ['committees', 'delegates', 'documents', 'messages', 'feedback'],
+        tables: ['committees', 'delegates', 'documents', 'messages', 'feedback', 'session_broadcasts'],
         slices: ['row', 'delegates', 'documents', 'messages'],
         onMessage: (m) => setCommittee((prev) => {
           if (!prev) return prev;
@@ -758,10 +765,14 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
         }),
         onEvent: (table) => {
           if (table === 'feedback') { setFeedbackVersion((v) => v + 1); return true; }
+          if (table === 'session_broadcasts') { setBroadcastVersion((v) => v + 1); return true; }
           if (table === 'documents') void refetchVotes(found.id);
           return false;
         },
-        onCatchUp: (phase) => { if (phase === 'start') void refetchVotes(found.id); },
+        onCatchUp: (phase) => {
+          if (phase === 'start') void refetchVotes(found.id);
+          if (phase === 'done') setBroadcastVersion((v) => v + 1);
+        },
         apply: (slice, data) => {
           if (cancelled) return;
           switch (slice) {
@@ -1705,7 +1716,12 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
   // hosts therefore keeps its open state while votes are being cast.
   const drPlural = docName(committee, 'draft-resolution', 'plural', t('documents_draft_resolutions_tab'));
   const drSingular = docName(committee, 'draft-resolution', 'singular', t('documents_draft_resolution_type'));
-  const chatUnread = committee.endedAt ? 0 : chatUnreadTotal(committee.messages, urlChairName || 'Chair', true, committee.chairNames ?? [], chatReadCounts, committee.delegates.map((d) => d.country));
+  // Chat off: only the Secretariat's messages (organiser broadcasts) under their own read key.
+  const chatOff = getCommitteeFlags(committee).disableChat;
+  const secretariatChatShown = committee.sessionOrigin === 'conference' || broadcastHistory.length > 0;
+  const chatUnread = committee.endedAt ? 0
+    : chatOff ? (secretariatChatShown ? secretariatUnread(broadcastHistory, chatReadCounts) : 0)
+    : chatUnreadTotal(withBroadcastMessages(committee.messages, broadcastHistory), urlChairName || 'Chair', true, committee.chairNames ?? [], chatReadCounts, committee.delegates.map((d) => d.country));
   const headerProps = {
     onBack: () => { void handleBackToSession(); },
     backBusy,
@@ -1722,8 +1738,23 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
     <>
       {showChat && !committee.endedAt && (
         <ChatDialog onClose={() => setShowChat(false)}>
-          {(requestClose) => getCommitteeFlags(committee).disableChat ? (
-            <ChatDisabledNotice onClose={requestClose} />
+          {(requestClose) => chatOff ? (
+            // Chat off: the Everyone thread, read only, with only the Secretariat's messages.
+            secretariatChatShown ? (
+              <ChatPanel
+                key="secretariat-only"
+                committee={committee}
+                senderName={urlChairName || 'Chair'}
+                isChair={true}
+                readOnly
+                secretariatOnly
+                broadcasts={broadcastHistory}
+                readCounts={chatReadCounts}
+                onReadCountsChange={setChatReadCounts}
+              />
+            ) : (
+              <ChatDisabledNotice onClose={requestClose} />
+            )
           ) : (
             <ChatPanel
               committee={committee}
@@ -1732,6 +1763,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
               readOnly={!!committee.endedAt}
               readCounts={chatReadCounts}
               onReadCountsChange={setChatReadCounts}
+              broadcasts={broadcastHistory}
             />
           )}
         </ChatDialog>

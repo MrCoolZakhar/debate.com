@@ -99,7 +99,7 @@ export default function FinancialsHistoryPage() {
         .order('created_at', { ascending: false });
       setPayments((data ?? []) as unknown as PaymentRow[]);
     })();
-  }, [conference?.id, session?.access_token]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [conference?.id, !!session]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!conference) return null;
 

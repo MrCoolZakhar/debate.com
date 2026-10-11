@@ -540,7 +540,7 @@ export function BroadcastComposer({
         >
           {/* Header */}
           <div className="flex items-center gap-3.5" style={{ padding: '26px 30px 16px' }}>
-            <NeuIconDisc gradient={NEU_GRADIENTS.forest} emoji="Loudspeaker" icon={Megaphone} size={46} />
+            <NeuIconDisc gradient={NEU_GRADIENTS.forest} duo icon={Megaphone} size={46} />
             <div className="min-w-0 flex-1">
               <Eyebrow>Broadcast · {conferenceLabel}</Eyebrow>
               <h2 className="font-black" style={{ color: NEU.ink, fontFamily: OUTFIT, fontSize: 23, lineHeight: 1.1, marginTop: 2 }}>

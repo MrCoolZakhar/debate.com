@@ -869,7 +869,7 @@ export default function ConferencesRolesClient() {
     }
     fetchAll();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [authLoading, user?.id, session?.access_token]);
+  }, [authLoading, user?.id]);
 
   // Both sides of every filter comparison are normalised to canonical
   // lowercase keys ('chairs', 'travel-covered').

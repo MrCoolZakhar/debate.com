@@ -2613,6 +2613,29 @@ export async function getActiveBroadcasts(committeeId: string): Promise<SessionB
   return (data ?? []).map((r) => rowToBroadcast(r as Record<string, unknown>));
 }
 
+/** How many broadcasts the chat keeps (newest). A committee gets a handful. */
+export const BROADCAST_HISTORY_LIMIT = 200;
+
+/**
+ * EVERY broadcast this committee received, expired or not, oldest first: the list behind
+ * the Secretariat messages in the Everyone chat (src/lib/broadcastHistory.ts,
+ * src/lib/broadcastMessages.ts). Rows are never deleted on
+ * expiry (no cron touches the table); only an organiser's Withdraw / Cancel deletes one, and
+ * the committee's own deletion cascades. SELECT is public, so the anon client is right.
+ *
+ * Null (never []) when the read failed, so a reader keeps what it already showed.
+ */
+export async function getBroadcastHistory(committeeId: string): Promise<SessionBroadcast[] | null> {
+  const { data, error } = await supabase
+    .from('session_broadcasts')
+    .select('*')
+    .eq('committee_id', committeeId)
+    .order('created_at', { ascending: false })
+    .limit(BROADCAST_HISTORY_LIMIT);
+  if (error) { console.error('Error loading broadcast history:', error); return null; }
+  return (data ?? []).map((r) => rowToBroadcast(r as Record<string, unknown>)).reverse();
+}
+
 // ============================================================
 // REAL-TIME SUBSCRIPTIONS
 // ============================================================

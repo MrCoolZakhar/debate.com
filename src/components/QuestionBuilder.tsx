@@ -2,8 +2,8 @@
 
 import { useEffect, useRef, useState } from 'react';
 import {
-  AlignLeft, Archive, Calendar, ChevronDown, ChevronDownCircle, CircleDot, Copy, GripHorizontal,
-  Hash, Heading, Info, MoreVertical, Plus, Rows3, RotateCcw, SquareCheck, Text, Trash2, X,
+  AlignLeft, Calendar, ChevronDown, ChevronDownCircle, CircleDot, Copy, GripHorizontal,
+  Hash, Heading, Info, MoreVertical, Plus, Rows3, SquareCheck, Text, Trash2, X,
 } from 'lucide-react';
 import Portal from '@/components/Portal';
 import { Pill, PillToggle } from '@/app/account/accountUi';
@@ -245,43 +245,6 @@ function AnswerPreview({ block, onPatch }: {
   );
 }
 
-// ── Archived question row ────────────────────────────────────────────────────
-// Collapsed and muted: no type/required pills, no edit or duplicate — an
-// archived question is off the live form, its only actions are bringing it
-// back or forgetting it (and its answers) for good.
-
-function ArchivedRow({ block, onRestore, onDeleteForever }: {
-  block: QuestionBlock;
-  onRestore: () => void;
-  onDeleteForever: () => void;
-}) {
-  return (
-    <div
-      className="flex items-center gap-2.5 rounded-xl px-3.5 py-2.5"
-      style={{ backgroundColor: 'rgba(154,138,120,0.07)', border: '1px solid #EDE7D9' }}
-    >
-      <span className="flex-1 min-w-0 truncate text-xs" title={block.label || undefined} style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}>
-        {block.label || 'Untitled question'}
-      </span>
-      <button
-        onClick={onRestore}
-        className="flex items-center gap-1 text-xs font-semibold focus:outline-none hover:underline flex-shrink-0"
-        style={{ color: '#1B3828', fontFamily: "var(--font-brand), sans-serif" }}
-      >
-        <RotateCcw size={11} /> RESTORE
-      </button>
-      <button
-        onClick={onDeleteForever}
-        className="p-1 rounded-lg focus:outline-none flex-shrink-0"
-        style={{ color: '#B8AC98' }}
-        title="Delete permanently"
-      >
-        <Trash2 size={13} />
-      </button>
-    </div>
-  );
-}
-
 // ── Right rail ───────────────────────────────────────────────────────────────
 
 const RAIL_ACTIONS = [
@@ -378,7 +341,7 @@ export default function QuestionBuilder({ value, onChange, hasApplications = fal
   // one of these can never orphan an answer, so it's removed outright instead
   // of archived.
   const [newIds, setNewIds] = useState<Set<string>>(() => new Set());
-  const { confirm, modal: confirmModal } = useConfirmModal();
+  const { modal: confirmModal } = useConfirmModal();
 
   const wrapperRef = useRef<HTMLDivElement | null>(null);
   const stackRef = useRef<HTMLDivElement | null>(null);
@@ -469,7 +432,10 @@ export default function QuestionBuilder({ value, onChange, hasApplications = fal
     if (!block) return;
     if (selectedId === id) setSelectedId(null);
     if (block.kind === 'question' && !newIds.has(id)) {
-      // Could already have answers — archive instead of destroying them.
+      // Could already have answers: keep it in the stored form, marked
+      // archived, so those answers still have their question. Archived
+      // questions are never shown in the builder (Oct 2026, owner: "don't
+      // have archived questions"); commit() writes them back unchanged.
       onChange(value.map(b => (b.id === id ? { ...b, archived: true } : b)));
       return;
     }
@@ -480,21 +446,6 @@ export default function QuestionBuilder({ value, onChange, hasApplications = fal
       next.delete(id);
       return next;
     });
-  }
-
-  function handleRestore(id: string) {
-    onChange(value.map(b => (b.id === id ? { ...b, archived: false } : b)));
-  }
-
-  async function handlePermanentDelete(id: string) {
-    const { confirmed } = await confirm({
-      title: 'Delete this question permanently?',
-      body: 'Answers already given to it will no longer be shown. This cannot be undone.',
-      confirmLabel: 'Delete permanently',
-      danger: true,
-    });
-    if (!confirmed) return;
-    onChange(value.filter(b => b.id !== id));
   }
 
   /** Changing type has to keep the options array legal: a choice type always
@@ -871,24 +822,6 @@ export default function QuestionBuilder({ value, onChange, hasApplications = fal
           </div>
         </div>
       </div>
-
-      {archivedBlocks.length > 0 && (
-        <div className="mt-5 pt-4" style={{ borderTop: '1px solid #EDE7D9' }}>
-          <p className="flex items-center gap-1.5 text-xs font-semibold mb-3" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif", letterSpacing: '0.08em' }}>
-            <Archive size={12} /> ARCHIVED QUESTIONS
-          </p>
-          <div className="flex flex-col gap-2">
-            {archivedBlocks.map(block => (
-              <ArchivedRow
-                key={block.id}
-                block={block}
-                onRestore={() => handleRestore(block.id)}
-                onDeleteForever={() => handlePermanentDelete(block.id)}
-              />
-            ))}
-          </div>
-        </div>
-      )}
 
       {menu?.kind === 'type' && menuBlock?.kind === 'question' && (
         <AnchoredMenu anchor={menu.anchor} width={220} height={300} onClose={() => setMenu(null)}>

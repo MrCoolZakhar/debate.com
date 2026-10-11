@@ -89,7 +89,7 @@ export default function AddonsSection({ conference, bare = false, renderStats }:
       setAddons((data ?? []) as Addon[]);
       setLoading(false);
     })();
-  }, [conference.id, session?.access_token]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [conference.id, !!session]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function handleCreate() {
     if (!session || creating) return;

@@ -4,6 +4,9 @@
 // Every announcement an organiser paid for waits here until a platform admin
 // approves it (it then sends, paced, through queue_paid_announcements_tick) or
 // rejects it with a reason the organiser reads (their credits go back).
+// Each submit also emails the team inbox (wearegavelling@gmail.com) with a
+// link here. Organisers never see reach numbers; admins do (quoted at submit,
+// and reached once sending).
 // Contract: scratch-paid-announcements.sql (not applied yet). Platform admins
 // only, enforced by the functions. Before the SQL exists the card says so.
 
@@ -14,6 +17,11 @@ import {
   loadAdminAnnouncements, reviewAnnouncement, placeName, statusWords,
   type AdminAnnouncementItem, type AnnouncementStatus,
 } from '@/lib/paidAnnouncements';
+
+// City = took part in a conference in the organiser's city (and country), on
+// Gavelling or on their public MUN CV; country = the same for the country, or
+// holds that nationality; world = everyone eligible.
+const SCOPE_LABEL: Record<string, string> = { city: 'City', country: 'Country', world: 'World' };
 
 const TABS: { key: AnnouncementStatus | null; label: string }[] = [
   { key: 'in_review', label: 'To review' },
@@ -94,10 +102,13 @@ export default function PaidAnnouncementsCard() {
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="min-w-0">
                   <p style={{ fontFamily: OUTFIT, fontSize: 12.5, color: NEU.inkSoft, overflowWrap: 'anywhere' }}>
-                    {i.acronym || i.conference} · to {placeName(i.scope, i.target)} · {i.quoted_reach.toLocaleString()} people · {i.credits} credits
+                    {i.acronym || i.conference} · {SCOPE_LABEL[i.scope] ?? i.scope}: {placeName(i.scope, i.target, i.target_country)} · {i.quoted_reach.toLocaleString()} people · {i.credits} credits
                   </p>
                   <p style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 16, color: NEU.ink, overflowWrap: 'anywhere' }}>{i.heading}</p>
                   <p style={{ fontFamily: OUTFIT, fontSize: 13, color: NEU.ink, marginTop: 4, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{i.body}</p>
+                  <p style={{ fontFamily: OUTFIT, fontSize: 12.5, color: NEU.ink, marginTop: 6, overflowWrap: 'anywhere' }}>
+                    Button: <strong>{i.button_label}</strong>{i.button_url ? <> → {i.button_url}</> : null}
+                  </p>
                   <p style={{ fontFamily: OUTFIT, fontSize: 12.5, color: NEU.inkSoft, marginTop: 6 }}>
                     {statusWords(i.status)}{i.status === 'sending' || i.status === 'sent' ? ` · ${i.reached} reached · ${i.clicked} clicked` : ''}
                     {i.reject_reason ? ` · Reason: ${i.reject_reason}` : ''}

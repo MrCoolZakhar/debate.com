@@ -43,7 +43,7 @@ export default function VoucherPanel({ conferenceId, applicationId, discountCent
       if (res?.ok && res.code) setReferralCode(res.code);
     })();
     return () => { cancelled = true; };
-  }, [session?.access_token, conferenceId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [!!session, conferenceId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function applyVoucher(value: string) {
     if (applying || !session) return;

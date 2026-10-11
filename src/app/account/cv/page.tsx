@@ -60,7 +60,7 @@ export default function CVPage() {
     // Keep profiles.mun_experience_level in sync with the CV count.
     syncExperienceLevel(supabase, user.id, rows.length);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.id, session?.access_token]);
+  }, [user?.id]);
 
   useEffect(() => {
     if (authLoading) return;
@@ -82,7 +82,7 @@ export default function CVPage() {
       });
     return () => { cancelled = true; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [authLoading, user?.id, session?.access_token]);
+  }, [authLoading, user?.id]);
 
   // Optimistic, then checked: supabase-js resolves with no error on a refused
   // or zero-row update, so the rows are counted and the old value comes back

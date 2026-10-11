@@ -7,6 +7,7 @@ import DemoGate from '@/components/DemoGate';
 import CreditsWelcomeGate from '@/components/CreditsWelcomeGate';
 import SetupReminderGate from '@/components/SetupReminderGate';
 import CompleteBasicsGate from '@/components/CompleteBasicsGate';
+import NameGate from '@/components/NameGate';
 import LiveRoomsGate from '@/components/liveRooms/LiveRoomsGate';
 import AuthModalHost from '@/components/auth/AuthModal';
 import PurchasePopupHost from '@/components/purchase/PurchasePopupHost';
@@ -184,6 +185,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             {/* CompleteBasicsGate takes precedence: the two gates after it stay
                 closed while it is checking or open (src/lib/basicsGateState.ts). */}
             <CompleteBasicsGate />
+            {/* "What's Your Name?": accounts named after a society or a role.
+                Second in line, after the basics (src/components/NameGate.tsx). */}
+            <NameGate />
             <CreditsWelcomeGate />
             <SetupReminderGate />
             {/* Your conference room is live: organiser, chair, delegate, faculty advisor

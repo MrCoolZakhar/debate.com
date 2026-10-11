@@ -11,7 +11,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { usePathname, useSearchParams } from 'next/navigation';
 import { useManage } from '@/app/manage/[slug]/layout';
 import { PURCHASE_CSS } from '@/components/purchase/purchaseKit';
 import { friendlyError } from '@/lib/friendlyError';
@@ -26,6 +26,7 @@ import { readPeople, type PersonRow } from './invoicesApi';
 import { FiltersBar, INV_CSS, PAGE_SIZE, PersonLine, filterPeople, type Filters, type StatusFilter, STATUS_OPTIONS } from './PeopleList';
 import { BulkBar, ConfirmMarkPaid } from './BulkBar';
 import PersonPopup from './PersonPopup';
+import { replaceUrlInPlace } from '@/lib/replaceUrlInPlace';
 
 type Step =
   | { kind: 'confirm-paid' }
@@ -35,7 +36,6 @@ type Step =
 export default function FinancialsInvoicesPage() {
   const { conference, financialsReadOnly } = useManage();
   const { currency, disp } = useFinancialsCurrency();
-  const router = useRouter();
   const pathname = usePathname();
   const params = useSearchParams();
   const [people, setPeople] = useState<PersonRow[] | null>(null);
@@ -77,7 +77,7 @@ export default function FinancialsInvoicesPage() {
       if (!v || v === 'all') next.delete(k); else next.set(k, String(v));
     }
     const qs = next.toString();
-    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+    replaceUrlInPlace(qs ? `${pathname}?${qs}` : pathname);
     setShown(PAGE_SIZE);
   };
 

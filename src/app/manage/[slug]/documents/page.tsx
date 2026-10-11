@@ -2,7 +2,8 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNow } from '@/lib/useNow';
-import { FileText, Upload, X, Check, LayoutGrid, Settings as SettingsIcon, CircleCheck, PencilLine } from 'lucide-react';
+import { FileText, Upload, X, Check, LayoutGrid, Settings as SettingsIcon, CircleCheck, PencilLine, Users } from 'lucide-react';
+import ConferenceDocsTab from './ConferenceDocsTab';
 import Link from 'next/link';
 import { useManage } from '@/app/manage/[slug]/layout';
 import { useAuth } from '@/components/AuthProvider';
@@ -382,7 +383,7 @@ export default function DocumentsPage() {
    *  dependency array. */
   const accessToken = session?.access_token;
 
-  const [activeTab, setActiveTab] = useState<'overview' | 'settings'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'settings' | 'everyone'>('overview');
   const [committees, setCommittees] = useState<CommitteeTab[]>([]);
   const [selectedCommitteeId, setSelectedCommitteeId] = useState<string | null>(null);
   const [studyGuides, setStudyGuides] = useState<StudyGuide[]>([]);
@@ -756,7 +757,29 @@ export default function DocumentsPage() {
         </div>
       )}
 
-      {!loading && committees.length === 0 && (
+      {/* Tab switcher, same neumorphic pill pattern as the committees page.
+          Shown even with no committees: "For everyone" (conference-wide
+          documents, 11 Oct 2026) needs none. */}
+      {!loading && (
+        <div className="flex items-center gap-2 mb-6 flex-wrap">
+          <NeuPill active={activeTab === 'overview'} onClick={() => setActiveTab('overview')}>
+            <LayoutGrid size={12} strokeWidth={2.5} />
+            Overview
+          </NeuPill>
+          <NeuPill active={activeTab === 'everyone'} onClick={() => setActiveTab('everyone')}>
+            <Users size={12} strokeWidth={2.5} />
+            For everyone
+          </NeuPill>
+          <NeuPill active={activeTab === 'settings'} onClick={() => setActiveTab('settings')}>
+            <SettingsIcon size={12} strokeWidth={2.5} />
+            Settings
+          </NeuPill>
+        </div>
+      )}
+
+      {!loading && activeTab === 'everyone' && <ConferenceDocsTab conferenceId={conference.id} />}
+
+      {!loading && activeTab !== 'everyone' && committees.length === 0 && (
         <div style={{ backgroundColor: '#FAF8F3', border: '1.5px solid #D8CDB6', borderRadius: 16, padding: 40, textAlign: 'center', boxShadow: CARD_SHADOW }}>
           <span className="inline-flex items-center justify-center" style={{ width: 56, height: 56, borderRadius: 16, background: 'linear-gradient(150deg, rgba(27,56,40,0.1), rgba(27,56,40,0.04))', border: '1px solid rgba(27,56,40,0.18)', marginBottom: 16 }}>
             <FileText size={26} strokeWidth={1.8} style={{ color: '#1B3828' }} />
@@ -774,18 +797,6 @@ export default function DocumentsPage() {
 
       {!loading && committees.length > 0 && (
         <>
-          {/* Tab switcher, same neumorphic pill pattern as the committees page */}
-          <div className="flex items-center gap-2 mb-6 flex-wrap">
-            <NeuPill active={activeTab === 'overview'} onClick={() => setActiveTab('overview')}>
-              <LayoutGrid size={12} strokeWidth={2.5} />
-              Overview
-            </NeuPill>
-            <NeuPill active={activeTab === 'settings'} onClick={() => setActiveTab('settings')}>
-              <SettingsIcon size={12} strokeWidth={2.5} />
-              Settings
-            </NeuPill>
-          </div>
-
           {activeTab === 'overview' && (
             <div className="flex flex-col md:flex-row gap-6 items-start">
               <CommitteeRail committees={committees} selectedId={selectedCommitteeId} onSelect={setSelectedCommitteeId} />

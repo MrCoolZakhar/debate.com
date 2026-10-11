@@ -41,9 +41,9 @@ export function hasImportFlags(f: ImportFlags): boolean {
 // ── Gavelling Import ────────────────────────────────────────────────
 
 const BENEFITS: Benefit[] = [
-  { emoji: 'Inbox tray', fallback: ArrowRightLeft, title: 'Handle applications outside Gavelling', live: true },
-  { emoji: 'Calendar', fallback: CalendarClock, title: 'Join Gavelling after your applications have already started', live: true },
-  { emoji: 'Busts in silhouette', fallback: UserPlus, title: 'Bring in external applicants in one step, and put them through your application process', live: true },
+  { fallback: ArrowRightLeft, title: 'Handle applications outside Gavelling', live: true },
+  { fallback: CalendarClock, title: 'Join Gavelling after your applications have already started', live: true },
+  { fallback: UserPlus, title: 'Bring in external applicants in one step, and put them through your application process', live: true },
 ];
 
 export interface ImportInvoice {

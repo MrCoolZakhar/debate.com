@@ -14,7 +14,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { usePathname, useSearchParams } from 'next/navigation';
 import { Bell, CheckCircle2, FilePlus2, PiggyBank, ReceiptText } from 'lucide-react';
 import { Emoji3D } from '@/components/neu';
 import { useManage } from '@/app/manage/[slug]/layout';
@@ -39,6 +39,7 @@ import PaymentFlow from './onboarding/PaymentFlow';
 import { FeePopup, AddonsPopup, VouchersPopup } from './onboarding/SettingsPopups';
 import { sessionDel, sessionGet, sessionSet, welcomeMarkerKey, welcomeSeenKey } from './onboarding/paymentApi';
 import ThingsToDoPopup from './ThingsToDoPopup';
+import { replaceUrlInPlace } from '@/lib/replaceUrlInPlace';
 
 const TODO_WORDS: Record<'proof' | TodoKind, [string, string]> = {
   proof: ['proof to review', 'proofs to review'],
@@ -61,7 +62,6 @@ function todoLine(t: ThingsToDo | null): string {
 
 export default function FinancialsDashboardPage() {
   const { conference, financialsReadOnly, refreshConferenceQuiet } = useManage();
-  const router = useRouter();
   const pathname = usePathname();
   const params = useSearchParams();
   // The payment flow (welcome or Payment method) and the three settings pop-ups.
@@ -109,8 +109,8 @@ export default function FinancialsDashboardPage() {
       else if (which === 'welcome4') setFlow({ mode: 'welcome', start: 4 });
       else if (which === 'fee' || which === 'addons' || which === 'vouchers') setSetting(which);
     });
-    router.replace(pathname, { scroll: false });
-  }, [conferenceId, openParam, pathname, router]);
+    replaceUrlInPlace(pathname);
+  }, [conferenceId, openParam, pathname]);
 
   // "Welcome to Financials" opens by itself once per browser session while nothing is set up.
   const needsSetup = !!data && data.settings.payment_method === null && !data.settings.platform_collects;

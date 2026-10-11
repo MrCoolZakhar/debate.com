@@ -277,7 +277,7 @@ export function UnmoderatedBody({ caucus }: { caucus: CaucusJson }) {
       </Eyebrow>
       <NeuInset style={{ padding: '14px 16px', borderRadius: 18 }}>
         <div className="flex items-center gap-3.5">
-          <NeuIconDisc gradient={NEU_GRADIENTS.amber} emoji="Hourglass not done" icon={Timer} size={42} />
+          <NeuIconDisc gradient={NEU_GRADIENTS.amber} duo icon={Timer} size={42} />
           <div className="min-w-0 flex-1">
             <div className="flex items-baseline gap-2 flex-wrap">
               <BigClock seconds={remaining} color={NEU.forest} expired={expired} />
@@ -354,7 +354,7 @@ export function ModeratedBody({ caucus }: { caucus: CaucusJson }) {
       </Eyebrow>
       <NeuInset style={{ padding: '13px 15px', borderRadius: 18 }}>
         <div className="flex items-center gap-3.5">
-          <NeuIconDisc gradient={NEU_GRADIENTS.sage} emoji="Speaking head" icon={Mic} size={38} />
+          <NeuIconDisc gradient={NEU_GRADIENTS.sage} duo icon={Mic} size={38} />
           <div className="min-w-0 flex-1">
             <div className="flex items-baseline gap-2 flex-wrap">
               <BigClock seconds={remaining} color={NEU.forest} expired={expired} />
@@ -426,7 +426,7 @@ export function VotingBody({ data }: { data: LiveCommittee }) {
       <NeuInset style={{ padding: '14px 16px', borderRadius: 18 }}>
         {/* Subject of the vote */}
         <div className="flex items-center gap-3">
-          <NeuIconDisc gradient={NEU_GRADIENTS.gold} emoji="Ballot box with ballot" icon={Gavel} size={40} />
+          <NeuIconDisc gradient={NEU_GRADIENTS.gold} duo icon={Gavel} size={40} />
           <div className="min-w-0 flex-1">
             <p className="text-sm font-extrabold [overflow-wrap:anywhere]" style={{ color: NEU.ink, fontFamily: OUTFIT }}>
               {subject ? (subject.docCode || subject.title || 'Draft resolution') : 'Vote in progress'}

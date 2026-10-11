@@ -557,6 +557,16 @@ export default function PrivacyPage() {
           <li><strong>Service emails</strong>: password resets, payment receipts, application updates, and messages from a conference you applied to about that conference. These are part of the service, so you cannot switch them off while you have an account.</li>
           <li><strong>Announcements and marketing</strong>: these go only to people who have opted in, and every one of them can be turned off in <Link href="/account/profile" style={LINK}>Account → Profile</Link>. Organisers sending a broadcast through Gavelling cannot reach anyone who has opted out; we exclude them automatically.</li>
         </ul>
+        {/* Paid announcements (scratch-paid-announcements.sql, `_paid_announcement_people`).
+            Keep this paragraph true to that function if the audience rule changes. */}
+        <p className="mt-3">
+          Conferences can pay to send one announcement, checked by our team first, to people who
+          opted in. To choose who gets one we use only the cities and countries of conferences you
+          were accepted to or seated at on Gavelling, the conferences on your public MUN CV, and the
+          nationality on your profile. We never use a CV entry you made private, or a CV you made
+          private. You get at most one of these every 14 days, never two from the same conference,
+          and every one has an unsubscribe link.
+        </p>
         <p className="mt-3">
           Emails are delivered by Resend on our behalf. We never sell your email address or pass it
           to anyone for their own marketing.

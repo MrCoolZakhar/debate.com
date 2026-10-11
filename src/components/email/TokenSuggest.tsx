@@ -29,7 +29,8 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { X } from 'lucide-react';
 import Portal from '@/components/Portal';
-import { Emoji3D, NEU, OUTFIT, EASE } from '@/components/neu';
+import { NEU, OUTFIT, EASE } from '@/components/neu';
+import { DuoGlyph } from '@/components/DuoIcon';
 import { SOFT, CARD_BORDER, CARD_SHADOW } from '@/app/manage/[slug]/live/tokens';
 import { EMAIL_TOKEN_KEYS, type EmailTokenKey } from '@/lib/emailTokens';
 import { tokenIdentity, tokenShort, tokenLabel, matchTokens } from './tokenKit';
@@ -256,7 +257,7 @@ export default function TokenSuggest({
                     transitionTimingFunction: EASE,
                   }}
                 >
-                  <Emoji3D name={id.emoji} size={18} fallback={id.icon} fallbackColor={FOREST} />
+                  <DuoGlyph icon={id.icon} size={17} />
                   <span className="min-w-0 flex-1">
                     <span className="block truncate" style={{ fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 800, color: INK }}>
                       {tokenShort(k)}
@@ -298,7 +299,7 @@ function TokenChipButton({ tokenKey, onPick }: { tokenKey: EmailTokenKey; onPick
         transitionTimingFunction: EASE,
       }}
     >
-      <Emoji3D name={id.emoji} size={14} fallback={id.icon} fallbackColor={FOREST} />
+      <DuoGlyph icon={id.icon} size={14} />
       {tokenShort(tokenKey)}
     </button>
   );

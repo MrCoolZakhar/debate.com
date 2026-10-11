@@ -221,10 +221,17 @@ export function chatGroupsFor(messages: ChatMessage[], senderName: string): Chat
   return Array.from(parseChatGroups(messages).values()).filter((g) => g.members.includes(senderName));
 }
 
-/** Rows that are never chat: the scoring ledger, group definitions and group edits. */
+/** The sender of the Secretariat messages src/lib/broadcastMessages.ts builds from organiser
+ *  broadcasts. Repeated here (not imported) so this module stays free of committeeService. */
+const SECRETARIAT_SENDER = '__secretariat__';
+
+/** Rows that are never chat: the scoring ledger, group definitions and group edits, and a
+ *  REAL row that claims to be the Secretariat (only the virtual broadcast messages carry
+ *  `broadcast`, so a forged sender is dropped rather than shown as an organiser). */
 function isSystemLog(m: ChatMessage): boolean {
   return m.content.startsWith('__log__:') || m.recipient === GROUP_DEF_RECIPIENT
-    || m.content.startsWith(GROUP_DEF_PREFIX) || m.content.startsWith(GROUP_EDIT_PREFIX);
+    || m.content.startsWith(GROUP_DEF_PREFIX) || m.content.startsWith(GROUP_EDIT_PREFIX)
+    || (m.sender === SECRETARIAT_SENDER && !m.broadcast);
 }
 
 function isGroupRecipient(recipient: string | undefined): boolean {

@@ -49,9 +49,11 @@ import ChatPanel from '@/components/ChatPanel';
 import ChatDialog from '@/components/chat/ChatDialog';
 import ChatDisabledNotice from '@/components/ChatDisabledNotice';
 import { getCommitteeFlags } from '@/lib/committeeFlags';
-import { chatUnreadTotal, mergeMessagesById, chatConvKeyForMessage } from '@/lib/chatConversations';
+import { chatUnreadTotal, mergeMessagesById, chatConvKeyForMessage, buildChatConversations } from '@/lib/chatConversations';
 import { isViewingChatConversation } from '@/lib/chatViewing';
 import { loadChatReadCounts, saveChatReadCounts } from '@/lib/chatReadKey';
+import { loadSeenBroadcasts, markBroadcastSeen, useBroadcastHistory } from '@/lib/broadcastHistory';
+import { withBroadcastMessages, secretariatUnread, BROADCAST_MESSAGE_PREFIX, SECRETARIAT_READ_KEY } from '@/lib/broadcastMessages';
 import ChairSidebarShell from '@/components/ChairSidebarShell';
 import SidebarFlagRail from '@/components/SidebarFlagRail';
 import FloorBarExtent from '@/components/FloorBarExtent';
@@ -245,32 +247,9 @@ const STATUS_PIN_TTL_MS = 8000;
 const LIST_SWAP_GUARD_MS = 1500;
 
 // ── Organiser broadcasts: per-device dismissal memory ─────────────────────────
-// A broadcast lives in the DB until it expires, and the chair page refetches the whole
-// active set on every reload and on every realtime event. Without a record of what this
-// device has already dealt with, one refresh would re-raise a card the chair dismissed ten
-// minutes ago. Keyed per committee AND per broadcast id — the same dais laptop can host two
-// committees in a day, and a chair who dismissed a message in one must not have it
-// suppressed in the other.
-const broadcastSeenStorageKey = (code: string) => `gavelling-broadcast-seen-${code}`;
-
-function loadSeenBroadcasts(code: string): Set<string> {
-  try {
-    const raw = localStorage.getItem(broadcastSeenStorageKey(code));
-    const parsed = raw ? JSON.parse(raw) : [];
-    return new Set(Array.isArray(parsed) ? (parsed as string[]) : []);
-  } catch { return new Set(); }
-}
-
-function markBroadcastSeen(code: string, id: string): void {
-  try {
-    const seen = loadSeenBroadcasts(code);
-    if (seen.has(id)) return;
-    seen.add(id);
-    // Capped: broadcasts are deleted upstream once they expire, so an unbounded list would
-    // only ever accumulate ids for rows that no longer exist.
-    localStorage.setItem(broadcastSeenStorageKey(code), JSON.stringify(Array.from(seen).slice(-120)));
-  } catch {}
-}
+// loadSeenBroadcasts / markBroadcastSeen live in src/lib/broadcastHistory.ts (same
+// localStorage key as before). Dealing with a card also counts its Secretariat message in the
+// Everyone chat as read (markBroadcastReadInChat below).
 
 // An actionable broadcast whose `action_at` is already well in the past must NOT fire. The
 // effect has either already happened (the committee is suspended/ended, and the guards below
@@ -1891,6 +1870,10 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
   // Bumped by every realtime `feedback` event. Passed to the comment dock and the
   // scoreboard as a refetch key so both stay live while open.
   const [feedbackVersion, setFeedbackVersion] = useState(0);
+  // Bumped by every `session_broadcasts` realtime event and every successful catch-up: the
+  // broadcast list behind the Secretariat messages in the chat (src/lib/broadcastHistory.ts)
+  // re-reads on it. Never per second.
+  const [broadcastVersion, setBroadcastVersion] = useState(0);
   const [showChat, setShowChat] = useState(false);
   const [chatReadCounts, setChatReadCounts] = useState<Record<string, number>>({});
   // Resume-from-suspend UI state. `resumeBusy` also double-taps the button, so one chair
@@ -2258,6 +2241,11 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
           onCatchUp: (phase) => {
             if (phase !== 'done') return;
             setCatchUpTick((n) => n + 1);
+            // Broadcasts are never fetched by the sync's slices: an organiser broadcast sent
+            // while this device was offline would raise no card and miss the chat until a
+            // reload. Re-read both (organiser-owned, outside RULE 4's debounce like the event).
+            getActiveBroadcasts(cid).then(setBroadcasts);
+            setBroadcastVersion((v) => v + 1);
             // feedback rows are never refetched by the sync itself (its events only bump this
             // counter), so a note written by another chair while this device was offline would
             // stay unseen: after a successful catch-up, ask the dock and the scoreboard to re-read.
@@ -2270,6 +2258,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
             // would drop the message that pauses the committee.
             if (table === 'session_broadcasts') {
               getActiveBroadcasts(cid).then(setBroadcasts);
+              setBroadcastVersion((v) => v + 1);
               return true;
             }
             // Chair notes + factor ratings, also outside the debounce. `feedback` is not
@@ -3711,6 +3700,44 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
     saveChatReadCounts(committee.code, { role: 'chair', identity: myChairName }, chatReadCounts);
   }, [chatReadCounts, committee?.code, myChairName]);
 
+  // ── Organiser broadcasts in the chat (messages from the Secretariat) ──────
+  // Every broadcast this committee received, expired or not, shown in the Everyone thread
+  // (src/lib/broadcastHistory.ts, src/lib/broadcastMessages.ts). One read on mount and one per
+  // `broadcastVersion` bump; never written. Counted like any received Everyone message.
+  const broadcastHistory = useBroadcastHistory(committee?.id, broadcastVersion);
+  // Chat off: a chair still reads the Secretariat messages, in a conference room (organisers
+  // can broadcast to it) or any room that has received one.
+  const secretariatChatShown = committee?.sessionOrigin === 'conference' || broadcastHistory.length > 0;
+
+  // Dealing with a broadcast card (acknowledge or dismiss) counts its Secretariat message as
+  // read, so it does not linger as a phantom unread on the chat icon. Read counts are a
+  // high-water count of received messages, so this moves the Everyone mark up by one only
+  // while that message is still among the unread ones (never past it, never down). Refs keep
+  // it callable from the card's `run`, which outlives renders.
+  const chatReadSourceRef = useRef({ committee, broadcastHistory, myChairName });
+  chatReadSourceRef.current = { committee, broadcastHistory, myChairName };
+  const markBroadcastReadInChat = useCallback((broadcastId: string) => {
+    const { committee: c, broadcastHistory: bcs, myChairName: me } = chatReadSourceRef.current;
+    if (!c) return;
+    const chatOff = getCommitteeFlags(c).disableChat;
+    setChatReadCounts((prev) => {
+      if (chatOff) {
+        const k = SECRETARIAT_READ_KEY;
+        const read = prev[k] ?? 0;
+        const idx = bcs.findIndex((b) => b.id === broadcastId);
+        return idx < 0 || idx < read ? prev : { ...prev, [k]: read + 1 };
+      }
+      const reader = me || 'Chair';
+      const everyone = buildChatConversations(
+        withBroadcastMessages(c.messages, bcs), reader, true, c.chairNames ?? [], c.delegates.map((d) => d.country),
+      ).find((conv) => conv.key === 'everyone');
+      const incoming = (everyone?.messages ?? []).filter((m) => m.sender !== reader);
+      const idx = incoming.findIndex((m) => m.id === `${BROADCAST_MESSAGE_PREFIX}${broadcastId}`);
+      const read = prev.everyone ?? 0;
+      return idx < 0 || idx < read ? prev : { ...prev, everyone: read + 1 };
+    });
+  }, []);
+
   // ── Sidebar width ─────────────────────────────────────────────────────────
   // Adopted after mount (localStorage is an external store; reading it during
   // render would desync the server markup). Keyed by READER for the same
@@ -3986,6 +4013,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
       void endDebateInDB(committee.id, code, suffix).then((ok) => { if (!ok) rollback(); });
     }
     markBroadcastSeen(code, b.id);
+    markBroadcastReadInChat(b.id);
     dismissNotification(notifyKey.broadcast(b.id));
   };
   broadcastEffectRef.current = runBroadcastEffect;
@@ -4026,6 +4054,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
           tone: actionable ? 'accept' : 'neutral',
           run: () => {
             markBroadcastSeen(committeeCode, broadcast.id);
+            markBroadcastReadInChat(broadcast.id);
             // With no `action_at` the organiser left the timing to the dais, so the
             // acknowledgement IS the trigger. With one, the schedule effect owns it and
             // acknowledging only clears the card — the pause still lands when promised.
@@ -5483,7 +5512,11 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
           <SessionCodePresenter code={committee.code} origin={codePresenterOrigin} onClose={closeCodePresenter} />
         )}
         {committee.phase !== 'pre-session' && !sessionEnded && (() => {
-          const totalUnread = showChat ? 0 : chatUnreadTotal(committee.messages, myChairName || 'Chair', true, committee.chairNames ?? [], chatReadCounts, committee.delegates.map((d) => d.country));
+          // Organiser broadcasts are Secretariat messages in Everyone, counted like any other
+          // received message. Chat off: only those, under their own read key.
+          const totalUnread = showChat ? 0
+            : getCommitteeFlags(committee).disableChat ? (secretariatChatShown ? secretariatUnread(broadcastHistory, chatReadCounts) : 0)
+            : chatUnreadTotal(withBroadcastMessages(committee.messages, broadcastHistory), myChairName || 'Chair', true, committee.chairNames ?? [], chatReadCounts, committee.delegates.map((d) => d.country));
           return (
             <TopBarIconButton tutorial="tab-chat" onClick={() => { if (!isPreSession) handleToggleChat(); }} active={showChat}
               count={totalUnread}
@@ -5684,7 +5717,23 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
         {showChat && !sessionEnded && (
           <ChatDialog onClose={() => setShowChat(false)}>
             {(requestClose) => getCommitteeFlags(committee).disableChat ? (
-              <ChatDisabledNotice onClose={requestClose} />
+              // Chat off: the same icon still opens the Everyone thread, read only, holding
+              // only the Secretariat's messages (when this room can receive any).
+              secretariatChatShown ? (
+                <ChatPanel
+                  key="secretariat-only"
+                  committee={committee}
+                  senderName={myChairName || 'Chair'}
+                  isChair={true}
+                  readOnly
+                  secretariatOnly
+                  broadcasts={broadcastHistory}
+                  readCounts={chatReadCounts}
+                  onReadCountsChange={setChatReadCounts}
+                />
+              ) : (
+                <ChatDisabledNotice onClose={requestClose} />
+              )
             ) : (
               <ChatPanel
                 committee={committee}
@@ -5694,6 +5743,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                 readOnly={sessionEnded}
                 readCounts={chatReadCounts}
                 onReadCountsChange={setChatReadCounts}
+                broadcasts={broadcastHistory}
               />
             )}
           </ChatDialog>

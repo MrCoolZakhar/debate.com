@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { NEU } from '@/components/neu';
-import type { ChatMessage } from '@/lib/types';
+import type { ChatMessage, ChatBroadcastInfo } from '@/lib/types';
 import type { OutboxMsg } from '@/lib/chatOutbox';
 import type { TranslationKey } from '@/lib/translations';
 import { parseAttachment, attachmentPreview, type ChatAttachment } from '@/lib/chatAttachments';
@@ -97,6 +97,8 @@ export interface ChatItem {
   outboxId?: string;
   /** A photo, PDF or GIF (src/lib/chatAttachments.ts); null for a text message. */
   attachment: ChatAttachment | null;
+  /** Present only on a Secretariat message (an organiser broadcast, src/lib/broadcastMessages.ts). */
+  broadcast?: ChatBroadcastInfo;
 }
 
 export interface ChatGroup {
@@ -104,6 +106,8 @@ export interface ChatGroup {
   sender: string;
   isMe: boolean;
   items: ChatItem[];
+  /** A run of Secretariat messages (organiser broadcasts), drawn by SecretariatMessage. */
+  secretariat?: boolean;
 }
 
 export type ChatRow =
@@ -143,7 +147,9 @@ export function buildChatRows(
     content: displayContent(m.content),
     timestamp: new Date(m.timestamp),
     delivery: 'sent' as DeliveryState,
-    attachment: parseAttachment(m.content),
+    // A broadcast's text is the organiser's own words: never parsed as a chat attachment.
+    attachment: m.broadcast ? null : parseAttachment(m.content),
+    broadcast: m.broadcast,
   }));
   // System lines go among the confirmed messages by time (stable, so equal times keep the
   // message first), always before the outbox, which has not landed yet.
@@ -207,10 +213,16 @@ export function buildChatRows(
       rows.push({ kind: 'unread', key: 'unread-divider' });
     }
     const ts = it.timestamp.getTime();
-    const sameGroup = current && current.sender === it.sender && ts - lastTs <= GROUP_WINDOW_MS;
+    const secretariat = !!it.broadcast;
+    const sameGroup = current && current.sender === it.sender && !!current.secretariat === secretariat && ts - lastTs <= GROUP_WINDOW_MS;
     if (!sameGroup) {
       flush();
-      current = { key: `g-${it.id}`, sender: it.sender, isMe: it.sender === senderName, items: [] };
+      current = {
+        key: `g-${it.id}`, sender: it.sender,
+        // The Secretariat is never the reader, whatever a seat happens to be called.
+        isMe: !secretariat && it.sender === senderName,
+        items: [], secretariat,
+      };
     }
     current!.items.push(it);
     lastTs = ts;

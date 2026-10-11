@@ -36,7 +36,7 @@ import {
   Trash2, ChevronUp, ChevronDown, Monitor, Smartphone, Send, Bold, Italic,
   Image as ImageIcon, Plus, GripVertical, X, Check, Sparkles, LayoutTemplate,
   Pencil, Eye, UserRound, Upload, AlertTriangle, CornerDownRight,
-  Braces, Paperclip, Palette, Users, Sun, Moon, Link2,
+  Braces, Paperclip, Palette, Users, Sun, Moon, Link2, Inbox,
 } from 'lucide-react';
 import {
   EMAIL_TOKEN_KEYS, resolveTokens, splitResolvedText,
@@ -50,7 +50,8 @@ import { renderEmailHtml, resolveEmailTheme, type EmailRenderConference } from '
 import { conferenceAcronymLabel } from '@/lib/conferenceLabels';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { triggerEmailDelivery } from '@/lib/emailDelivery';
-import { Emoji3D, NEU, NEU_GRADIENTS, OUTFIT, EASE } from '@/components/neu';
+import { NEU, NEU_GRADIENTS, OUTFIT, EASE } from '@/components/neu';
+import { DuoGlyph } from '@/components/DuoIcon';
 import { LogoDisc } from '@/components/LogoDisc';
 import { SOFT, AMBER_INK, GREEN_INK, RED, CARD_BORDER, CARD_SHADOW } from '@/app/manage/[slug]/live/tokens';
 import {
@@ -1134,7 +1135,7 @@ export default function EmailComposer({
             boxShadow: NEU.outSm,
           }}
         >
-          <Emoji3D name={item.emoji} size={20} fallback={item.icon} fallbackColor={FOREST} />
+          <DuoGlyph icon={item.icon} size={18} />
         </span>
         <span className="min-w-0">
           <span className="block truncate" style={{ fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 800, color: INK }}>
@@ -1172,7 +1173,7 @@ export default function EmailComposer({
               were indistinguishable, which is exactly what the owner said
               about them.
 
-              Every token now has an IDENTITY: its own 3D emoji, a short name
+              Every token now has an IDENTITY: its own duotone icon, a short name
               that fits mid-sentence, and one plain line saying what it turns
               into when the email actually lands. They are grouped into four
               or five families, so fourteen things read as a handful. The same
@@ -1222,7 +1223,7 @@ export default function EmailComposer({
                             e.currentTarget.style.transform = 'translateY(0)';
                           }}
                         >
-                          <Emoji3D name={id.emoji} size={17} fallback={id.icon} fallbackColor={FOREST} />
+                          <DuoGlyph icon={id.icon} size={16} />
                           <span className="min-w-0 flex-1 truncate" style={{ fontFamily: OUTFIT, fontSize: 12, fontWeight: 800, color: FOREST }}>
                             {tokenShort(key)}
                           </span>
@@ -1320,7 +1321,7 @@ export default function EmailComposer({
                     is the single-line label that has to be allowed to end. */}
                 <span className="min-w-0 flex-1">
                   <span className="flex items-center gap-1.5 min-w-0">
-                    <Emoji3D name={s.emoji} size={15} fallback={Sparkles} fallbackColor={FOREST} />
+                    <DuoGlyph icon={s.icon} size={15} />
                     <span className="min-w-0 truncate" title={s.label} style={{ fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 800, color: INK, lineHeight: 1.25 }}>{s.label}</span>
                   </span>
                   <span className="block" style={{ fontFamily: OUTFIT, fontSize: 10.5, color: SOFT, lineHeight: 1.4, textWrap: 'pretty' }}>
@@ -1408,7 +1409,7 @@ export default function EmailComposer({
                   fontFamily: OUTFIT, fontSize: 11, fontWeight: 800, color: INK, cursor: 'pointer',
                 }}
               >
-                <Emoji3D name={item.emoji} size={14} fallback={item.icon} fallbackColor={FOREST} />
+                <DuoGlyph icon={item.icon} size={14} />
                 {item.label}
               </button>
             ))}
@@ -1569,7 +1570,7 @@ export default function EmailComposer({
                   color: FOREST, fontFamily: OUTFIT, fontSize: 12, fontWeight: 700,
                 }}
               >
-                <Emoji3D name="Framed picture" size={26} fallback={ImageIcon} fallbackColor={FOREST} />
+                <DuoGlyph icon={ImageIcon} size={24} />
                 Pick a picture in the panel
               </span>
             )}
@@ -1680,7 +1681,7 @@ export default function EmailComposer({
               transitionDuration: '200ms',
             }}
           >
-            <Emoji3D name="Inbox tray" size={44} fallback={Send} fallbackColor={FOREST} />
+            <DuoGlyph icon={Inbox} size={40} />
             <p className="mt-3" style={{ fontFamily: OUTFIT, fontSize: 15, fontWeight: 800, color: INK, textWrap: 'balance' }}>
               Your email starts here
             </p>
@@ -1690,7 +1691,7 @@ export default function EmailComposer({
             <div className="flex flex-wrap gap-2 justify-center">
               {PALETTE_ITEMS.filter(i => i.kind !== 'paragraph:small').map(item => (
                 <ActionButton key={item.kind} size="sm" tone="quiet" onClick={() => addFromPalette(item.kind)}>
-                  <Emoji3D name={item.emoji} size={14} fallback={item.icon} fallbackColor={FOREST} />
+                  <DuoGlyph icon={item.icon} size={14} />
                   {item.label.toUpperCase()}
                 </ActionButton>
               ))}
@@ -2594,7 +2595,7 @@ function ImageProperties({
           <img src={block.url} alt={block.alt || ''} style={{ maxWidth: '100%', maxHeight: 150, borderRadius: 8, display: 'block', outline: '1px solid rgba(0,0,0,0.1)', outlineOffset: -1 }} />
         ) : (
           <>
-            <Emoji3D name="Framed picture" size={30} fallback={ImageIcon} fallbackColor={FOREST} />
+            <DuoGlyph icon={ImageIcon} size={28} />
             <span style={{ fontFamily: OUTFIT, fontSize: 12, fontWeight: 700, color: INK }}>
               {uploading ? 'Uploading…' : 'Drop a picture, or click'}
             </span>

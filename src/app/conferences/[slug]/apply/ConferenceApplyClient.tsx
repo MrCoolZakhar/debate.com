@@ -72,6 +72,7 @@ import {
   Ticket, Infinity as InfinityIcon, Globe, Lock, ChevronUp, ChevronDown,
   Info, Coins, Pencil, Ban, Cake,
 } from 'lucide-react';
+import { replaceUrlInPlace } from '@/lib/replaceUrlInPlace';
 
 /** Destructive-action red, matching /drafts/[token] exactly. */
 const DANGER = '#8B2020';
@@ -1329,13 +1330,14 @@ function ConferenceApplyInner() {
   useEffect(() => {
     if (authLoading) return;
     fetchAll();
-  // `session?.access_token`, not `session`: AuthProvider swaps the session
-  // OBJECT on every auth event (token refresh, tab focus), and depending on it
-  // would refetch the whole apply flow each time. The token is a string, so it
-  // only changes when it really changes — or when it first arrives, which is
-  // the case fetchAll's guard above was silently swallowing.
+  // Keyed on the USER ID, never the session or its token (11 Oct 2026). The
+  // token changes about once an hour (TOKEN_REFRESHED), and refetching here
+  // flips the whole apply flow back to its loader under someone filling in
+  // the form: the "weird reload" the owner reported. The id arrives in the
+  // same render as the session, so a sign-in still loads; the authed client
+  // always sends the CURRENT token (supabase-auth.ts), so nothing goes stale.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [authLoading, user?.id, slug, role, session?.access_token]);
+  }, [authLoading, user?.id, slug, role]);
 
   // ══ DRAFT AUTOSAVE & RESUME ═══════════════════════════════════════════
   // The apply flow saves itself to `application_drafts` as it is filled in,
@@ -1638,7 +1640,7 @@ function ConferenceApplyInner() {
     })();
     return () => { cancelled = true; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isEditMode, authLoading, loading, session?.access_token, conference?.id, user?.id, role, existingApp, totalSteps]);
+  }, [isEditMode, authLoading, loading, conference?.id, user?.id, role, existingApp, totalSteps]);
 
   /** Puts a server draft back into the form and takes over its bookkeeping:
    *  what the resume always did, now also run by the prompt's Continue. */
@@ -2428,7 +2430,8 @@ function ConferenceApplyInner() {
    * now, which is what they just chose to carry over.
    *
    * THE STATE. `role` comes from the URL and the component is not keyed on
-   * it, so router.replace keeps every answer in React state; fetchAll then
+   * it, so replacing the URL in place (replaceUrlInPlace: no server round
+   * trip, so no deploy-skew reload) keeps every answer in React state; fetchAll then
    * loads the new role's config, and the effect below drops only what no
    * longer applies (questions the new role does not ask, a ranking in a
    * different preference mode). The typed name stays in societyInput with no
@@ -2489,7 +2492,7 @@ function ConferenceApplyInner() {
     params.delete('delegationInvite');
     params.delete('delegation');
     params.delete('edit');
-    router.replace(`/conferences/${slug}/apply?${params.toString()}`, { scroll: false });
+    replaceUrlInPlace(`/conferences/${slug}/apply?${params.toString()}`);
     return null;
   }
 

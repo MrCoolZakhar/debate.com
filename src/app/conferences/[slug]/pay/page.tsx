@@ -177,7 +177,7 @@ export default function PayPage() {
     })();
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [slug, authLoading, user?.id, session?.access_token, attempt]);
+  }, [slug, authLoading, user?.id, attempt]);
 
   const reload = useCallback(() => setAttempt(a => a + 1), []);
 

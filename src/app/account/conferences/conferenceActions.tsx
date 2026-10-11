@@ -15,7 +15,7 @@
 // the page. Same reads, same RPCs, same refusal handling as before.
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { useRouter, usePathname, useSearchParams } from 'next/navigation';
+import { usePathname, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { Check, X, Mail, Trash2 } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
@@ -28,6 +28,7 @@ import { committeeDisplayName } from '@/lib/presetNames';
 import { conferenceAcronymLabel } from '@/lib/conferenceLabels';
 import { OUTFIT, MONO } from '@/app/account/accountUi';
 import { NEU, NEU_GRADIENTS, EASE, NeuIconDisc } from '@/components/neu';
+import { replaceUrlInPlace } from '@/lib/replaceUrlInPlace';
 
 const first = <T,>(v: T | T[] | null | undefined): T | null =>
   Array.isArray(v) ? (v[0] ?? null) : (v ?? null);
@@ -103,7 +104,6 @@ const DRAFT_ROLE_LABEL: Record<string, string> = {
 // ── The hook: every read and every response, as the old page had them ────────
 
 export function useConferenceActions(onAccepted: () => void | Promise<void>) {
-  const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const { user, session, profile, loading: authLoading } = useAuth();
@@ -120,7 +120,7 @@ export function useConferenceActions(onAccepted: () => void | Promise<void>) {
     setAcceptedToast(true);
     const params = new URLSearchParams(searchParams.toString());
     params.delete('chairInvite');
-    router.replace(params.toString() ? `${pathname}?${params.toString()}` : pathname, { scroll: false });
+    replaceUrlInPlace(params.toString() ? `${pathname}?${params.toString()}` : pathname);
     const t = setTimeout(() => setAcceptedToast(false), 5000);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps

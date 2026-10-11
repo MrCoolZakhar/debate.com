@@ -83,7 +83,7 @@ export default function ApplicationFeeSection({ conference, bare = false }: {
       }
       setLoading(false);
     })();
-  }, [conference.id, session?.access_token]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [conference.id, !!session]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // A fee of 0 can never be settled, so a zero-amount gate would block every
   // applicant with no way through. The DB enforces this too, via the

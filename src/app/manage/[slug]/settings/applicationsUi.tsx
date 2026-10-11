@@ -13,9 +13,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Check, ChevronDown, Info, X, ArrowRight, ArrowLeft, Copy, Sparkles,
+  CalendarDays, Wallet, NotebookPen, type LucideIcon,
 } from 'lucide-react';
+import { DuoDisc, ROLE_ICON, TINT_GREEN_BG } from './panelKit';
+import { UsersRound as UsersRoundIcon } from 'lucide-react';
 import Portal from '@/components/Portal';
-import { NEU, Emoji3D } from '@/components/neu';
+import { NEU } from '@/components/neu';
 
 const OUTFIT = "var(--font-brand), sans-serif";
 
@@ -30,17 +33,6 @@ const OUTFIT = "var(--font-brand), sans-serif";
 
 export const ROLE_ORDER = ['head-delegate', 'delegate', 'faculty-advisor', 'observer', 'chair', 'secretariat', 'staff'] as const;
 export type RoleKey = (typeof ROLE_ORDER)[number];
-
-/** Fluent 3D emoji per role. Every one of these asset paths is verified to
- *  exist; Emoji3D falls back to a lucide glyph if the CDN is unreachable. */
-export const ROLE_EMOJI: Record<string, string> = {
-  'head-delegate': 'Crown',
-  'delegate': 'Bust in silhouette',
-  'faculty-advisor': 'Graduation cap',
-  'observer': 'Eyes',
-  'chair': 'Hammer',
-  'secretariat': 'Clipboard',
-};
 
 export const ROLE_BLURB: Record<string, string> = {
   'head-delegate':
@@ -189,7 +181,7 @@ export function StepDisc({ n, complete, size = 34 }: { n: number; complete: bool
 // ── Role bookmarks ─────────────────────────────────────────────────────────
 
 /**
- * Bookmark tabs across the top of the panel: a 3D role emoji above the role
+ * Bookmark tabs across the top of the panel: a duotone role icon above the role
  * name, the active one raised and joined to the content below it by a flat
  * bottom edge. The status dot answers the only question that matters at a
  * glance — is this role taking applications right now.
@@ -247,18 +239,10 @@ export function RoleBookmarks({ roles, active, statusOf, onPick }: {
             onMouseEnter={(e) => { if (!on) { (e.currentTarget as HTMLElement).style.opacity = '1'; (e.currentTarget as HTMLElement).style.transform = 'translateY(0)'; } }}
             onMouseLeave={(e) => { if (!on) { (e.currentTarget as HTMLElement).style.opacity = String(rest); (e.currentTarget as HTMLElement).style.transform = 'translateY(3px)'; } }}
           >
-            {/* Icon above the name, seated on its own disc so the emoji has
-                somewhere to cast a shadow. */}
-            <span
-              className="flex items-center justify-center"
-              style={{
-                width: 38, height: 38, borderRadius: '999px', marginBottom: 7,
-                background: on ? 'linear-gradient(145deg, #FFFDF9, #E4DCCB)' : 'transparent',
-                boxShadow: on ? NEU.outSm : 'none',
-                transition: 'box-shadow 220ms',
-              }}
-            >
-              <Emoji3D name={ROLE_EMOJI[role] ?? 'Bust in silhouette'} size={on ? 24 : 21} />
+            {/* Icon above the name: the role's duotone glyph (forest line over a
+                gold fill) in its tinted disc. No 3D emoji on Settings (owner). */}
+            <span className="flex" style={{ marginBottom: 7 }}>
+              <DuoDisc icon={ROLE_ICON[role] ?? UsersRoundIcon} size={on ? 40 : 38} />
             </span>
             <span
               className="flex items-center"
@@ -286,8 +270,8 @@ export function SettingsModal({ open, onClose, title, sub, icon, width = 520, ch
   onClose: () => void;
   title: string;
   sub?: string;
-  /** Fluent emoji name for the header disc. */
-  icon?: string;
+  /** Duotone glyph for the header disc. */
+  icon?: LucideIcon;
   width?: number;
   children: React.ReactNode;
   footer?: React.ReactNode;
@@ -322,12 +306,7 @@ export function SettingsModal({ open, onClose, title, sub, icon, width = 520, ch
         >
           <div className="flex items-start gap-3 px-6 pt-6 pb-4">
             {icon && (
-              <span
-                className="flex items-center justify-center flex-shrink-0"
-                style={{ width: 44, height: 44, borderRadius: 14, background: `linear-gradient(145deg, #F6F2E7, ${NEU.base})`, boxShadow: NEU.outSm }}
-              >
-                <Emoji3D name={icon} size={24} />
-              </span>
+              <DuoDisc icon={icon} size={44} />
             )}
             <div className="min-w-0 flex-1">
               <h3 style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 18, color: NEU.ink, margin: 0, lineHeight: 1.2 }}>{title}</h3>
@@ -440,7 +419,6 @@ function CopyToRolesSheet({
       onClose={onClose}
       title={title}
       sub={sub}
-      icon="Card index dividers"
       footer={
         <>
           <ModalButton onClick={onClose}>Not now</ModalButton>
@@ -481,7 +459,7 @@ function CopyToRolesSheet({
               >
                 {on && <Check size={13} strokeWidth={3.2} style={{ color: NEU.gold }} />}
               </span>
-              <Emoji3D name={ROLE_EMOJI[r] ?? 'Bust in silhouette'} size={22} />
+              <DuoDisc icon={ROLE_ICON[r] ?? UsersRoundIcon} size={30} tint={TINT_GREEN_BG} />
               <span style={{ fontFamily: OUTFIT, fontSize: 14, fontWeight: 700, color: NEU.ink }}>{roleLabel(r)}</span>
             </button>
           );
@@ -499,7 +477,8 @@ export interface SetupSlide {
   /** One paragraph, plain language. Shown beside the image. */
   body: string;
   image: string;
-  emoji: string;
+  /** Duotone glyph seated on the picture band. */
+  icon: LucideIcon;
 }
 
 /** What a role's three steps actually decide, said once, with a picture. */
@@ -510,7 +489,7 @@ export const SETUP_SLIDES: SetupSlide[] = [
     body:
       'Every role has its own window. Pick the day and the hour applications open, the day and hour they close, and how many people you will take. Nothing is public before the opening time, and the moment it passes the application link starts working on its own, so you do not have to be at a keyboard.',
     image: '/onboarding/hall-01.jpg',
-    emoji: 'Spiral calendar',
+    icon: CalendarDays,
   },
   {
     key: 'money',
@@ -518,7 +497,7 @@ export const SETUP_SLIDES: SetupSlide[] = [
     body:
       'Set one price, then add phases if the price moves: an early-bird window, a standard window, a late window. Whichever phase covers today is the price an applicant sees. Choose whether they pay as soon as they apply, only once you accept them, or whenever they like.',
     image: '/onboarding/handshake-01.jpg',
-    emoji: 'Money bag',
+    icon: Wallet,
   },
   {
     key: 'form',
@@ -526,7 +505,7 @@ export const SETUP_SLIDES: SetupSlide[] = [
     body:
       'Build the form this role fills in. Short answers, long answers, choices, uploads, and for delegates the committee and country preferences your allocation runs on. Different roles ask different things, which is exactly why each one has its own form.',
     image: '/onboarding/classroom-01.jpg',
-    emoji: 'Memo',
+    icon: NotebookPen,
   },
 ];
 
@@ -566,7 +545,7 @@ export function SetupIntro({ role, slides = SETUP_SLIDES, onDone }: {
             className="flex items-center justify-center flex-shrink-0"
             style={{ width: 46, height: 46, borderRadius: 14, backgroundColor: 'rgba(250,248,243,0.92)', boxShadow: '0 6px 18px rgba(0,0,0,0.3)' }}
           >
-            <Emoji3D name={slide.emoji} size={26} />
+            <DuoDisc icon={slide.icon} size={46} />
           </span>
           <div className="min-w-0">
             <p style={{ fontFamily: OUTFIT, fontSize: 10, fontWeight: 800, letterSpacing: '0.16em', color: 'rgba(238,217,138,0.9)', margin: '0 0 3px' }}>

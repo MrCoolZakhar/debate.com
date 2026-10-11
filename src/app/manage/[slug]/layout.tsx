@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useContext, useEffect, useState, useCallback, useMemo } from 'react';
+import { createContext, useContext, useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { useRouter, usePathname, useParams } from 'next/navigation';
 import Link from 'next/link';
 import BrandLogo from '@/components/BrandLogo';
@@ -731,6 +731,20 @@ export default function ManageLayout({ children }: { children: React.ReactNode }
    *  `conference` is likewise an object a background refresh can swap for an
    *  equal-but-new one, so the id is what belongs in the dep array. */
   const accessToken = session?.access_token;
+  /** The session and user as of the latest render, read by the loaders below
+   *  at CALL time so their identities (and the context value built from them)
+   *  never change because a token was refreshed (11 Oct 2026). getAuthedClient
+   *  always sends the SDK's current token anyway (supabase-auth.ts). */
+  const sessionRef = useRef(session);
+  sessionRef.current = session;
+  const userRef = useRef(user);
+  userRef.current = user;
+  /** The account and slug (`user|slug`) whose conference is on screen. Only the FIRST load of a slug
+   *  shows the full-screen loader; every later re-read (a token refresh, a
+   *  consumer's refreshConference after a save) swaps the data in place.
+   *  It used to unmount the whole console behind the loader and draw it
+   *  again, which is the "weird reload" the owner kept seeing. */
+  const shownSlugRef = useRef<string | null>(null);
   const [conference, setConference] = useState<Conference | null>(null);
   const conferenceId = conference?.id;
   const [loadingConf, setLoadingConf] = useState(true);
@@ -856,8 +870,13 @@ export default function ManageLayout({ children }: { children: React.ReactNode }
   // layout render, that's what let a background refresh cascade into
   // re-running every consumer's effects.
   const loadConference = useCallback(async () => {
-    setLoadingConf(true);
-    if (!session) return;
+    const session = sessionRef.current;
+    const user = userRef.current;
+    if (!session || !user) return;
+    // A conference already on screen for this slug stays there while it is
+    // read again; only a first load (or another slug) shows the loader.
+    const quiet = shownSlugRef.current === `${user.id}|${slug}`;
+    if (!quiet) setLoadingConf(true);
     const supabase = getAuthedClient(session.access_token);
 
     const { data: confData, error: confError } = await supabase
@@ -875,7 +894,8 @@ export default function ManageLayout({ children }: { children: React.ReactNode }
     // PGRST116 is PostgREST's "0 rows for .single()"; anything else is a
     // failure we must show, not navigate away from.
     if (confError && confError.code !== 'PGRST116') {
-      setLoadFailed(true);
+      // A re-read that failed is not a verdict: keep the console on screen.
+      if (!quiet) setLoadFailed(true);
       setLoadingConf(false);
       return;
     }
@@ -925,19 +945,21 @@ export default function ManageLayout({ children }: { children: React.ReactNode }
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { organizer_id: _oid, ...conf } = confData as unknown as { organizer_id?: unknown } & Record<string, unknown>;
     setConference(conf as unknown as Conference);
+    shownSlugRef.current = `${user!.id}|${slug}`;
     setLoadingConf(false);
-  }, [session, slug, user, router]);
+  }, [slug, router]);
 
   const refreshConference = useCallback(async () => {
-    if (!user) return;
+    if (!userRef.current) return;
     await loadConference();
-  }, [user, loadConference]);
+  }, [loadConference]);
 
   // Quiet variant: re-fetches the conference row and swaps it in directly,
   // without touching loadingConf, so settings saves can confirm DB truth
   // post-write without unmounting the page behind the full-screen spinner.
   const refreshConferenceQuiet = useCallback(async () => {
-    if (!user || !session) return;
+    const session = sessionRef.current;
+    if (!userRef.current || !session) return;
     const supabase = getAuthedClient(session.access_token);
     const { data: confData } = await supabase
       .from('conferences')
@@ -948,7 +970,7 @@ export default function ManageLayout({ children }: { children: React.ReactNode }
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { organizer_id: _oid, ...conf } = confData as unknown as { organizer_id?: unknown } & Record<string, unknown>;
     setConference(conf as unknown as Conference);
-  }, [user, session, slug]);
+  }, [slug]);
 
   // ── Verification (the blue checkmark) ──────────────────────────────────
   // What is left is read once per conference from conference_setup_status().
@@ -959,6 +981,7 @@ export default function ManageLayout({ children }: { children: React.ReactNode }
   const [verificationState, setVerificationState] = useState<VerificationStatus | null>(null);
 
   const loadVerification = useCallback(async (id: string) => {
+    const session = sessionRef.current;
     if (!session) return;
     const supabase = getAuthedClient(session.access_token);
     const { data } = await supabase.rpc('conference_setup_status', { p_conference_id: id });
@@ -968,7 +991,7 @@ export default function ManageLayout({ children }: { children: React.ReactNode }
       minutesLeft: Math.max(0, Math.round(Number(status.verification_minutes_left ?? 0))),
       pending: Array.isArray(status.verification_pending) ? status.verification_pending : [],
     });
-  }, [session]);
+  }, []);
 
   useEffect(() => {
     if (!conferenceId || conferenceVerified) return;
@@ -976,13 +999,14 @@ export default function ManageLayout({ children }: { children: React.ReactNode }
   }, [conferenceId, conferenceVerified, loadVerification]);
 
   const refreshVerification = useCallback(async () => {
+    const session = sessionRef.current;
     if (!session || !conferenceId) return;
     const supabase = getAuthedClient(session.access_token);
     const { data, error } = await supabase.rpc('refresh_conference_verification', { p_conference: conferenceId });
     if (error || typeof data !== 'boolean') return;
     if (data !== conferenceVerified) await refreshConferenceQuiet();
     if (!data) await loadVerification(conferenceId);
-  }, [session, conferenceId, conferenceVerified, refreshConferenceQuiet, loadVerification]);
+  }, [conferenceId, conferenceVerified, refreshConferenceQuiet, loadVerification]);
 
   // Verified means nothing is pending: consumers never see stale minutes.
   const verification = conferenceVerified ? null : verificationState;
@@ -995,8 +1019,10 @@ export default function ManageLayout({ children }: { children: React.ReactNode }
     if (authLoading) return;
     if (!user || !session) return;
     loadConference();
+  // Keyed on the user id, never the token: a token refresh is not a reason
+  // to read the conference again (see shownSlugRef).
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [authLoading, user?.id, slug, session?.access_token]);
+  }, [authLoading, user?.id, slug]);
 
   // Memoised so consumers (useManage()) only see a new context value when
   // the conference data or the (now-stable, useCallback'd) refresh functions

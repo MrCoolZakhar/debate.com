@@ -12,7 +12,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { usePathname, useSearchParams } from 'next/navigation';
 import { FileText, Settings2 } from 'lucide-react';
 import { useManage } from '@/app/manage/[slug]/layout';
 import { PURCHASE_CSS } from '@/components/purchase/purchaseKit';
@@ -28,6 +28,7 @@ import {
 import { DocumentLine, PaymentFiltersBar, PaymentLine, filterPayments, type PayFilters } from './DocsLists';
 import InvoiceDetailsPopup from './InvoiceDetailsPopup';
 import DocumentEditor from './DocumentEditor';
+import { replaceUrlInPlace } from '@/lib/replaceUrlInPlace';
 
 const TABS_CSS = `
 .gv-md-tabs{display:inline-flex;gap:4px;padding:4px;border-radius:14px;background:#FFFFFF;box-shadow:0 1px 0 rgba(27,56,40,0.08)}
@@ -42,7 +43,6 @@ type Tab = 'payments' | 'documents';
 
 export default function InvoicesAndReceiptsPage() {
   const { conference, financialsReadOnly } = useManage();
-  const router = useRouter();
   const pathname = usePathname();
   const params = useSearchParams();
   const conferenceId = conference?.id ?? null;
@@ -113,7 +113,7 @@ export default function InvoicesAndReceiptsPage() {
     if (t === 'documents') next.set('tab', 'documents'); else next.delete('tab');
     next.delete('doc');
     const qs = next.toString();
-    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+    replaceUrlInPlace(qs ? `${pathname}?${qs}` : pathname);
   };
 
   const closeEditor = () => {
@@ -122,7 +122,7 @@ export default function InvoicesAndReceiptsPage() {
       const next = new URLSearchParams(params.toString());
       next.delete('doc');
       const qs = next.toString();
-      router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+      replaceUrlInPlace(qs ? `${pathname}?${qs}` : pathname);
     }
     reload();
   };
