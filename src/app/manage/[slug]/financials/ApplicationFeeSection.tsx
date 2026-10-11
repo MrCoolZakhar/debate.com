@@ -247,7 +247,7 @@ export default function ApplicationFeeSection({ conference, bare = false }: {
                   {gatesAcceptance ? 'Must be paid before acceptance' : "Collected as a normal invoice (doesn't block acceptance)"}
                 </span>
               </div>
-              <p style={{ fontFamily: OUTFIT, fontSize: 11, color: NEU.muted, marginTop: 4 }}>
+              <p style={{ fontFamily: OUTFIT, fontSize: 12, color: NEU.muted, marginTop: 4 }}>
                 {amountIsPositive
                   ? "When on, applicants can't be accepted until this fee is paid."
                   : 'Set an amount above 0 to use acceptance gating. A fee of 0 can never be paid, so it would block every applicant with no way through.'}

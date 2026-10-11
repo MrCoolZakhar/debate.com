@@ -12,22 +12,14 @@
 // — delegates who haven't paid", and beside it a meter showing 247 of 685. One
 // button opens the picker.
 //
-// Inside the picker there are three steps and they are ordered by how many
-// people ever need them:
+// Inside the picker (tidied Oct 2026, owner: "even my own brain hurts"):
 //
-//   1  WHO           six big tiles — Everyone, then each role. Most sends stop
-//                    here. Nothing is preselected, and nothing selected means
-//                    everyone, which is stated on the tile rather than implied.
-//   2  NARROW IT     the other six filters DO NOT EXIST until you ask for one.
-//                    "+ Add a filter" offers them by name; picking one unfolds
-//                    a single row. This is the whole fix for "too much
-//                    information, too crammed" — the screen only ever shows the
-//                    questions you have actually asked.
-//   3  THE PEOPLE    one dot per person, in a stable order, dark when they are
-//                    getting it. Filters light dots up and dim them down, so
-//                    the count is something you SEE rather than something you
-//                    are told. Below that, the same people as a grouped list
-//                    you can remove individuals from, plus search-to-add.
+//   WHO              big chips, Everyone then each role, each with its 3D
+//                    emoji and live count. The only thing open by default.
+//   NARROW IT DOWN   one fold, closed unless a filter is already on. Inside,
+//                    "+ Add a filter" offers the other filters by name.
+//   CHECK THE LIST   one fold: the dot field (one dot per person), add
+//                    someone by name, take someone off.
 //
 // Every choice everywhere carries its own live count, which is the one part of
 // the old panel that worked.
@@ -36,10 +28,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ChevronDown, Plus, X, Search, Users, Send, AlertTriangle, Check, SlidersHorizontal,
-  Hand, Mic, Crown, GraduationCap, Eye, type LucideIcon,
 } from 'lucide-react';
-import { NEU, NEU_GRADIENTS, OUTFIT, EASE } from '@/components/neu';
-import { DuoGlyph } from '@/components/DuoIcon';
+import { Emoji3D, NEU, NEU_GRADIENTS, OUTFIT, EASE } from '@/components/neu';
 import { SOFT, AMBER_INK, GREEN_INK, RED, CARD_BORDER, CARD_SHADOW } from '@/app/manage/[slug]/live/tokens';
 import ProfileLink from '@/components/ProfileLink';
 import PopoverLayer from '@/components/email/PopoverLayer';
@@ -57,8 +47,8 @@ export interface AudienceSectionDef {
   key: AudienceSection;
   /** Panel heading, e.g. "Payment". */
   label: string;
-  /** Duotone Lucide glyph for the "+ Add a filter" menu and the filter card. */
-  icon: LucideIcon;
+  /** Fluent 3D emoji asset name for the "+ Add a filter" menu. */
+  emoji: string;
   /** How this section reads inside the plain-English summary sentence, e.g.
    *  "who have {v}" → "who have paid". `{v}` is the joined option labels. */
   phrase: string;
@@ -149,12 +139,12 @@ function useIsWide(): boolean {
   return wide;
 }
 
-const ROLE_ICON: Record<string, LucideIcon> = {
-  delegate: Hand,
-  chair: Mic,
-  'head-delegate': Crown,
-  'faculty-advisor': GraduationCap,
-  observer: Eye,
+const ROLE_EMOJI: Record<string, string> = {
+  delegate: 'Person raising hand',
+  chair: 'Studio microphone',
+  'head-delegate': 'Busts in silhouette',
+  'faculty-advisor': 'Handshake',
+  observer: 'Card index',
 };
 
 function joinLabels(labels: string[]): string {
@@ -170,7 +160,7 @@ function describeAudience(sections: AudienceSectionDef[], manualAdded: number, e
   const roles = sections.find(s => s.key === 'roles');
   const rolePart = roles && roles.selected.size > 0
     ? joinLabels(roles.options.filter(o => roles.selected.has(o.value)).map(o => o.label))
-    : 'Everyone';
+    : null;
 
   const clauses: string[] = [];
   for (const s of sections) {
@@ -179,7 +169,10 @@ function describeAudience(sections: AudienceSectionDef[], manualAdded: number, e
     clauses.push(s.phrase.replace('{v}', labels));
   }
 
-  let out = rolePart + (clauses.length ? ' ' + clauses.join(', ') : '');
+  // With no role picked, "Everyone who are accepted" reads wrong: say
+  // "People" once a filter narrows it, and "Everyone" only when nothing does.
+  const subject = rolePart ?? (clauses.length ? 'People' : 'Everyone');
+  let out = subject + (clauses.length ? ' ' + clauses.join(', ') : '');
   if (manualAdded > 0) out += `, plus ${manualAdded} added by hand`;
   if (excluded > 0) out += `, minus ${excluded} you took off`;
   return out;
@@ -190,32 +183,6 @@ function BigNumber({ n }: { n: number }) {
     <span style={{ fontFamily: OUTFIT, fontWeight: 900, fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.02em' }}>
       {n.toLocaleString()}
     </span>
-  );
-}
-
-/** The meter: how much of the whole conference this send covers. Decorative
- *  fill only — the number beside it carries the meaning. */
-function ReachMeter({ reach, total }: { reach: number; total: number }) {
-  const pct = total > 0 ? Math.min(100, (reach / total) * 100) : 0;
-  return (
-    <div style={{ minWidth: 120 }}>
-      <div style={{ height: 10, borderRadius: 999, backgroundColor: 'rgba(27,56,40,0.10)', boxShadow: NEU.inSm, overflow: 'hidden' }}>
-        <div
-          style={{
-            width: `${pct}%`,
-            height: '100%',
-            borderRadius: 999,
-            background: `linear-gradient(90deg, ${NEU_GRADIENTS.forest[0]}, ${NEU_GRADIENTS.forest[1]})`,
-            transitionProperty: 'width',
-            transitionDuration: '420ms',
-            transitionTimingFunction: EASE,
-          }}
-        />
-      </div>
-      <p className="mt-1" style={{ fontFamily: OUTFIT, fontSize: 10.5, fontWeight: 700, color: SOFT, fontVariantNumeric: 'tabular-nums' }}>
-        {reach.toLocaleString()} of {total.toLocaleString()} people
-      </p>
-    </div>
   );
 }
 
@@ -330,30 +297,44 @@ function HintChip({
   );
 }
 
-function StepHeading({ n, title, hint }: { n: number; title: string; hint?: string }) {
+/** One fold in the picker: a full-width row (emoji, title, a quiet aside such
+ *  as "2 on"), and its content underneath only while open. */
+function Disclosure({
+  open, onToggle, emoji, title, aside, children,
+}: {
+  open: boolean;
+  onToggle: () => void;
+  emoji: string;
+  title: string;
+  aside?: string;
+  children: React.ReactNode;
+}) {
   return (
-    <div className="flex items-start gap-2.5 mb-3">
-      <span
-        className="inline-flex items-center justify-center flex-shrink-0"
-        style={{
-          width: 24, height: 24, borderRadius: 999,
-          background: `linear-gradient(135deg, ${NEU_GRADIENTS.forest[0]}, ${NEU_GRADIENTS.forest[1]})`,
-          color: GOLD, fontFamily: OUTFIT, fontSize: 12, fontWeight: 900,
-          boxShadow: '0 3px 8px rgba(27,56,40,0.26)',
-        }}
+    <div className="mt-5" style={{ borderTop: '1px solid rgba(27,56,40,0.1)', paddingTop: 6 }}>
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-expanded={open}
+        className="w-full flex items-center gap-3 text-left focus:outline-none"
+        style={{ minHeight: 52, padding: '8px 4px', background: 'none', border: 'none', cursor: 'pointer' }}
       >
-        {n}
-      </span>
-      <span className="min-w-0">
-        <span className="block" style={{ fontFamily: OUTFIT, fontSize: 14.5, fontWeight: 900, color: INK, textWrap: 'balance' }}>
+        <Emoji3D name={emoji} size={24} fallback={Users} fallbackColor={FOREST} />
+        <span className="min-w-0 flex-1" style={{ fontFamily: OUTFIT, fontSize: 15.5, fontWeight: 800, color: INK }}>
           {title}
         </span>
-        {hint && (
-          <span className="block" style={{ fontFamily: OUTFIT, fontSize: 12, color: SOFT, lineHeight: 1.5, textWrap: 'pretty' }}>
-            {hint}
+        {aside && (
+          <span className="flex-shrink-0" style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 600, color: SOFT, fontVariantNumeric: 'tabular-nums' }}>
+            {aside}
           </span>
         )}
-      </span>
+        <ChevronDown
+          size={16}
+          strokeWidth={2.4}
+          className="flex-shrink-0"
+          style={{ color: SOFT, transform: open ? 'rotate(180deg)' : 'none', transitionProperty: 'transform', transitionDuration: '220ms', transitionTimingFunction: EASE }}
+        />
+      </button>
+      {open && <div style={{ padding: '4px 0 6px' }}>{children}</div>}
     </div>
   );
 }
@@ -366,6 +347,10 @@ export default function AudienceReach({
   const [open, setOpen] = useState(false);
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
   const [addMenuOpen, setAddMenuOpen] = useState(false);
+  /** The two folds in the picker. Both closed on every open, except that
+   *  "Narrow it down" opens itself when a filter is already on. */
+  const [narrowOpen, setNarrowOpen] = useState(false);
+  const [listOpen, setListOpen] = useState(false);
   /** Narrowers the person has explicitly asked for. A section with something
    *  already selected (a restored audience) counts as asked-for. */
   const [openNarrowers, setOpenNarrowers] = useState<Set<AudienceSection>>(new Set());
@@ -405,6 +390,14 @@ export default function AudienceReach({
   const summary = describeAudience(sections, manualAddedCount, excludedCount);
   const anySelection = sections.some(s => s.selected.size > 0) || manualAddedCount > 0 || excludedCount > 0;
 
+  const narrowersOn = narrowers.filter(s => s.selected.size > 0).length;
+
+  function openPicker() {
+    setNarrowOpen(narrowers.some(s => s.selected.size > 0));
+    setListOpen(false);
+    setOpen(true);
+  }
+
   function closeNarrower(key: AudienceSection) {
     onClearSection(key);
     setOpenNarrowers(s => { const n = new Set(s); n.delete(key); return n; });
@@ -439,72 +432,79 @@ export default function AudienceReach({
           zIndex: 30,
         }}
       >
-        <div style={panelStyle}>
-          {/* ── The bar. One row, and it stays one row: it is pinned to the top
-              of the screen, so every pixel it takes is a pixel of the email
-              nobody can see. ── */}
-          <div className="flex flex-wrap items-center gap-x-3.5 gap-y-2.5" style={{ padding: '9px 13px' }}>
-            <span
-              className="inline-flex items-center justify-center flex-shrink-0"
-              style={{
-                width: 38, height: 38, borderRadius: 13,
-                background: `linear-gradient(135deg, color-mix(in srgb, ${NEU_GRADIENTS.gold[0]} 25%, transparent), color-mix(in srgb, ${NEU_GRADIENTS.gold[1]} 20%, transparent)), ${NEU.surface}`,
-                boxShadow: NEU.outSm,
-              }}
-            >
-              <DuoGlyph icon={Users} size={20} />
-            </span>
+        <div style={{ ...panelStyle, position: 'relative' }}>
+          {/* ── WHO, in one sentence and one big number.
+              The emoji disc deliberately hangs over the card's left edge: it
+              is the one thing on this bar that is decoration, and letting it
+              break the border is what makes the bar read as "the who" at a
+              glance without a printed heading. The meter that used to sit
+              here said the same number twice; "of 685" now rides beside the
+              count instead. ── */}
+          <span
+            aria-hidden
+            className="inline-flex items-center justify-center"
+            style={{
+              position: 'absolute', left: -14, top: '50%', transform: 'translateY(-50%)',
+              width: 46, height: 46, borderRadius: 999,
+              background: `radial-gradient(circle at 35% 30%, #FFFDF8, ${NEU.surface})`,
+              border: CARD_BORDER,
+              boxShadow: '0 6px 16px rgba(27,56,40,0.18)',
+            }}
+          >
+            <Emoji3D name="Busts in silhouette" size={26} fallback={Users} fallbackColor={FOREST} />
+          </span>
 
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2.5" style={{ padding: '10px 14px 10px 46px' }}>
             <div className="min-w-0 flex-1" style={{ minWidth: 190 }}>
-              <p style={{ fontFamily: OUTFIT, fontSize: 15.5, fontWeight: 900, color: INK, lineHeight: 1.3 }}>
-                Going to <BigNumber n={reachCount} /> {reachCount === 1 ? 'person' : 'people'}
-              </p>
-              <span className="flex items-start gap-1.5 min-w-0">
-                {/* One line while the bar is PINNED — its height comes
-                    straight out of the email's. A phone's bar is not pinned,
-                    so it gets two. Either way this is a SUMMARY, deliberately
-                    bounded: the sentence in full is the `title`, and it is
-                    restated unabridged as the modal's own subtitle one tap
-                    away, so nothing here is the only copy of anything. */}
-                <span
-                  className={wide ? 'truncate' : ''}
-                  style={{
-                    fontFamily: OUTFIT, fontSize: 12, color: SOFT, lineHeight: 1.45, textWrap: 'pretty',
-                    ...(wide ? null : { display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }),
-                  }}
-                  title={summary}
-                >
-                  {summary}
-                </span>
-                {optedOutCount > 0 && (
-                  <HintChip icon={AlertTriangle} tone="amber" label={String(optedOutCount)}>
-                    {optedOutCount} {optedOutCount === 1 ? 'person has' : 'people have'} turned off marketing emails. They are left off automatically and are not in the count.
-                  </HintChip>
+              <p className="flex items-baseline gap-1.5 flex-wrap" style={{ fontFamily: OUTFIT, color: INK, lineHeight: 1.15 }}>
+                <span style={{ fontSize: 26 }}><BigNumber n={reachCount} /></span>
+                <span style={{ fontSize: 15, fontWeight: 700 }}>{reachCount === 1 ? 'person' : 'people'}</span>
+                {total > 0 && (
+                  <span style={{ fontSize: 12.5, fontWeight: 600, color: SOFT, fontVariantNumeric: 'tabular-nums' }}>
+                    of {total.toLocaleString()}
+                  </span>
                 )}
-              </span>
+                {optedOutCount > 0 && (
+                  <span className="self-center">
+                    <HintChip icon={AlertTriangle} tone="amber" label={String(optedOutCount)}>
+                      {optedOutCount} {optedOutCount === 1 ? 'person has' : 'people have'} turned off marketing emails. They are left off automatically and are not in the count.
+                    </HintChip>
+                  </span>
+                )}
+              </p>
+              {/* The sentence wraps rather than ending in an ellipsis: it is
+                  the answer to "who", so it is never cut. Two lines at most,
+                  the full text in the title and again in the picker. */}
+              <p
+                title={summary}
+                style={{
+                  fontFamily: OUTFIT, fontSize: 13, color: SOFT, lineHeight: 1.4, textWrap: 'pretty',
+                  display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden',
+                }}
+              >
+                {summary}
+              </p>
             </div>
 
-            <div className="hidden lg:block flex-shrink-0">
-              <ReachMeter reach={reachCount} total={total} />
-            </div>
-
-            <div className="flex items-center gap-2 flex-shrink-0">
+            <div className="flex flex-wrap items-center gap-2 min-w-0">
               <button
                 type="button"
-                onClick={() => setOpen(true)}
+                onClick={openPicker}
                 aria-haspopup="dialog"
                 aria-expanded={open}
                 className="inline-flex items-center gap-1.5 focus:outline-none"
                 style={{
-                  minHeight: 44, padding: '11px 15px', borderRadius: 999,
-                  border: CARD_BORDER, backgroundColor: '#FFFDF8',
-                  fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 800, letterSpacing: '0.05em',
+                  minHeight: 44, padding: '11px 16px', borderRadius: 999,
+                  border: `1.5px solid rgba(27,56,40,0.22)`, backgroundColor: '#FFFDF8',
+                  fontFamily: OUTFIT, fontSize: 13.5, fontWeight: 700,
                   color: FOREST, cursor: 'pointer',
                   transitionProperty: 'background-color', transitionDuration: '180ms',
                 }}
+                onMouseEnter={e => { e.currentTarget.style.backgroundColor = 'rgba(27,56,40,0.05)'; }}
+                onMouseLeave={e => { e.currentTarget.style.backgroundColor = '#FFFDF8'; }}
               >
-                <SlidersHorizontal size={13} strokeWidth={2.6} />
-                CHANGE WHO
+                <SlidersHorizontal size={14} strokeWidth={2.4} />
+                Change who
               </button>
               <SendButton onClick={onSend} disabled={sendDisabled} count={reachCount} busy={sendBusyLabel} />
             </div>
@@ -560,10 +560,10 @@ export default function AudienceReach({
                 style={{ padding: '14px 16px', borderBottom: '1px solid rgba(27,56,40,0.1)' }}
               >
                 <span className="min-w-0 flex-1">
-                  <span className="block" style={{ fontFamily: OUTFIT, fontSize: 15.5, fontWeight: 900, color: INK, textWrap: 'balance' }}>
-                    Who gets this email?
+                  <span className="block" style={{ fontFamily: OUTFIT, fontSize: 18, fontWeight: 800, color: INK, textWrap: 'balance' }}>
+                    Who Gets This Email
                   </span>
-                  <span className="block truncate" style={{ fontFamily: OUTFIT, fontSize: 12, color: SOFT }} title={summary}>
+                  <span className="block" style={{ fontFamily: OUTFIT, fontSize: 13, color: SOFT, lineHeight: 1.4, textWrap: 'pretty' }}>
                     {summary}
                   </span>
                 </span>
@@ -581,386 +581,379 @@ export default function AudienceReach({
                 </button>
               </div>
 
-              <div className="min-h-0 flex-1" style={{ overflowY: 'auto', padding: '16px 16px 20px' }}>
-            {/* Step 3's dot field rides at the TOP: it is the count made
-                visible, so it belongs next to the count, not below the
-                controls that change it. */}
-            <p className="mb-2" style={{ fontFamily: OUTFIT, fontSize: 12.5, color: SOFT, textWrap: 'pretty' }}>
-              Every dot is one person. The dark ones are getting this email.
-            </p>
-            <DotField dots={dots} />
+              <div className="min-h-0 flex-1" style={{ overflowY: 'auto', padding: '18px 18px 22px' }}>
+                {restored && anySelection && (
+                  <div
+                    className="flex flex-wrap items-center gap-2 mb-4"
+                    style={{ padding: '9px 12px', borderRadius: 14, backgroundColor: 'rgba(47,102,68,0.08)', border: '1px solid rgba(47,102,68,0.18)' }}
+                  >
+                    <Check size={13} strokeWidth={3} style={{ color: GREEN_INK, flexShrink: 0 }} />
+                    <span style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 700, color: GREEN_INK }}>
+                      Picked up where you left off
+                    </span>
+                    <button
+                      type="button"
+                      onClick={onClearAll}
+                      className="ml-auto focus:outline-none"
+                      style={{ minHeight: 34, padding: '6px 10px', borderRadius: 999, border: 'none', background: 'transparent', fontFamily: OUTFIT, fontSize: 13, fontWeight: 700, color: GREEN_INK, cursor: 'pointer', textDecoration: 'underline', textUnderlineOffset: 3 }}
+                    >
+                      Start over
+                    </button>
+                  </div>
+                )}
 
-            {restored && anySelection && (
-              <div
-                className="flex flex-wrap items-center gap-2 mt-4"
-                style={{ padding: '9px 12px', borderRadius: 14, backgroundColor: 'rgba(47,102,68,0.08)', border: '1px solid rgba(47,102,68,0.18)' }}
-              >
-                <Check size={13} strokeWidth={3} style={{ color: GREEN_INK, flexShrink: 0 }} />
-                <span style={{ fontFamily: OUTFIT, fontSize: 12, fontWeight: 700, color: GREEN_INK }}>
-                  Picked up where you left off
-                </span>
-                <button
-                  type="button"
-                  onClick={onClearAll}
-                  className="ml-auto focus:outline-none"
-                  style={{ minHeight: 32, padding: '6px 10px', borderRadius: 999, border: 'none', background: 'transparent', fontFamily: OUTFIT, fontSize: 11, fontWeight: 800, letterSpacing: '0.05em', color: GREEN_INK, cursor: 'pointer' }}
-                >
-                  START OVER
-                </button>
-              </div>
-            )}
-
-            {/* ── Step 1 · Who ──
-                ONE LINE. This was a grid of 174×62 tiles, two rows of them on
-                any real screen, roughly 140px of dialog spent on six choices
-                that are each one word and one number long, which is most of
-                why the list of actual people below needed scrolling to reach.
-                The same six choices as chips wrap into one line (two at the
-                narrowest), and every one of them is still a 40px-tall target
-                carrying its icon, its name and its live count. ── */}
-            <div className="mt-6">
-              <StepHeading n={1} title="Who is this for?" hint="Pick one or more. Most emails stop here." />
-              {roleSection && (
-                <div className="flex flex-wrap gap-1.5">
-                  {[{ value: '__all__', label: 'Everyone' }, ...roleSection.options].map(o => {
-                    const isAll = o.value === '__all__';
-                    const active = isAll ? roleSection.selected.size === 0 : roleSection.selected.has(o.value);
-                    const count = isAll ? total : (roleSection.counts[o.value] ?? 0);
-                    return (
-                      <button
-                        key={o.value}
-                        type="button"
-                        aria-pressed={active}
-                        title={`${o.label} · ${count.toLocaleString()} ${count === 1 ? 'person' : 'people'}`}
-                        onClick={() => {
-                          if (isAll) onClearSection('roles');
-                          else onToggle('roles', o.value);
-                        }}
-                        className="inline-flex items-center gap-1.5 focus:outline-none"
-                        style={{
-                          minHeight: 40, padding: '8px 12px', borderRadius: 999,
-                          border: active ? `1.5px solid ${FOREST}` : CARD_BORDER,
-                          backgroundColor: active ? FOREST : '#FFFDF8',
-                          boxShadow: active ? NEU.outSm : NEU.inSm,
-                          cursor: 'pointer',
-                          transitionProperty: 'border-color, background-color, box-shadow, color',
-                          transitionDuration: '200ms',
-                          transitionTimingFunction: EASE,
-                        }}
-                      >
-                        <DuoGlyph
-                          icon={isAll ? Users : (ROLE_ICON[o.value] ?? Hand)}
-                          size={16}
-                          onDark={active}
-                        />
-                        <span style={{ fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 800, color: active ? GOLD : INK, whiteSpace: 'nowrap' }}>
-                          {o.label}
-                        </span>
-                        <span
+                {/* ── Who. The only question most emails need answered, so it is
+                    the only thing open: big chips, each with its emoji and its
+                    live count. Everything else is folded below. ── */}
+                {roleSection && (
+                  <div className="flex flex-wrap gap-2">
+                    {[{ value: '__all__', label: 'Everyone' }, ...roleSection.options].map(o => {
+                      const isAll = o.value === '__all__';
+                      const active = isAll ? roleSection.selected.size === 0 : roleSection.selected.has(o.value);
+                      const count = isAll ? total : (roleSection.counts[o.value] ?? 0);
+                      return (
+                        <button
+                          key={o.value}
+                          type="button"
+                          aria-pressed={active}
+                          title={`${o.label}, ${count.toLocaleString()} ${count === 1 ? 'person' : 'people'}`}
+                          onClick={() => {
+                            if (isAll) onClearSection('roles');
+                            else onToggle('roles', o.value);
+                          }}
+                          className="inline-flex items-center gap-2 focus:outline-none"
                           style={{
-                            fontFamily: OUTFIT, fontSize: 10.5, fontWeight: 800, fontVariantNumeric: 'tabular-nums',
-                            padding: '1px 6px', borderRadius: 999,
-                            backgroundColor: active ? 'rgba(255,255,255,0.16)' : 'rgba(27,56,40,0.07)',
-                            color: active ? GOLD : SOFT,
+                            minHeight: 54, padding: '9px 16px 9px 10px', borderRadius: 999,
+                            border: active ? `1.5px solid ${FOREST}` : CARD_BORDER,
+                            backgroundColor: active ? FOREST : '#FFFDF8',
+                            boxShadow: active ? '0 6px 14px rgba(27,56,40,0.22)' : NEU.outSm,
+                            cursor: 'pointer',
+                            transitionProperty: 'border-color, background-color, box-shadow, color',
+                            transitionDuration: '200ms',
+                            transitionTimingFunction: EASE,
                           }}
                         >
-                          {count.toLocaleString()}
-                        </span>
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
+                          <span
+                            className="inline-flex items-center justify-center flex-shrink-0"
+                            style={{ width: 36, height: 36, borderRadius: 999, backgroundColor: active ? 'rgba(255,253,248,0.14)' : 'rgba(238,217,138,0.32)' }}
+                          >
+                            <Emoji3D
+                              name={isAll ? 'Busts in silhouette' : (ROLE_EMOJI[o.value] ?? 'Person raising hand')}
+                              /* 'Person raising hand' is a skin-tone emoji: its
+                                 art lives in a Default/ subfolder, so without
+                                 `toned` it 404s and fell back to a line icon. */
+                              toned={!isAll && (ROLE_EMOJI[o.value] ?? 'Person raising hand') === 'Person raising hand'}
+                              size={26}
+                              fallback={Users}
+                              fallbackColor={active ? GOLD : FOREST}
+                            />
+                          </span>
+                          <span style={{ fontFamily: OUTFIT, fontSize: 14.5, fontWeight: 700, color: active ? GOLD : INK, whiteSpace: 'nowrap' }}>
+                            {o.label}
+                          </span>
+                          <span style={{ fontFamily: OUTFIT, fontSize: 14.5, fontWeight: 800, fontVariantNumeric: 'tabular-nums', color: active ? GOLD : SOFT }}>
+                            {count.toLocaleString()}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
 
-            {/* ── Step 2 · Narrow it down ── */}
-            <div className="mt-7">
-              <StepHeading
-                n={2}
-                title="Narrow it down?"
-                hint="Only if you need to. Nothing here is on until you turn it on."
-              />
-
-              <div className="flex flex-col gap-2">
-                {activeNarrowers.map(s => (
-                  <div
-                    key={s.key}
-                    style={{ padding: '11px 13px', borderRadius: 16, backgroundColor: '#FFFDF8', boxShadow: NEU.inSm, border: '1px solid rgba(27,56,40,0.09)' }}
+                {/* ── Narrow it down: closed until asked for. Opens by itself
+                    only when a filter is already on, so nothing that changes
+                    the count is ever hidden. ── */}
+                {narrowers.length > 0 && (
+                  <Disclosure
+                    open={narrowOpen}
+                    onToggle={() => setNarrowOpen(v => !v)}
+                    emoji="Magnifying glass tilted left"
+                    title="Narrow it down"
+                    aside={narrowersOn > 0 ? `${narrowersOn} on` : 'Optional'}
                   >
-                    <div className="flex items-center gap-2 mb-2">
-                      <DuoGlyph icon={s.icon} size={16} />
-                      <span style={{ fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 800, letterSpacing: '0.08em', color: SOFT }}>
-                        {s.label.toUpperCase()}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => closeNarrower(s.key)}
-                        title={`Remove the ${s.label.toLowerCase()} filter`}
-                        className="ml-auto inline-flex items-center justify-center focus:outline-none"
-                        style={{ width: 30, height: 30, borderRadius: 999, border: 'none', background: 'transparent', color: SOFT, cursor: 'pointer' }}
-                      >
-                        <X size={13} strokeWidth={2.6} />
-                      </button>
-                    </div>
-                    <div className="flex flex-wrap gap-1.5" style={{ maxHeight: 132, overflowY: 'auto' }}>
-                      {s.options.map(o => {
-                        const active = s.selected.has(o.value);
-                        const count = s.counts[o.value] ?? 0;
-                        return (
+                    <div className="flex flex-col gap-2">
+                      {activeNarrowers.map(s => (
+                        <div
+                          key={s.key}
+                          style={{ padding: '11px 13px', borderRadius: 16, backgroundColor: '#FFFDF8', boxShadow: NEU.inSm, border: '1px solid rgba(27,56,40,0.09)' }}
+                        >
+                          <div className="flex items-center gap-2 mb-2">
+                            <Emoji3D name={s.emoji} size={18} fallback={Users} fallbackColor={FOREST} />
+                            <span style={{ fontFamily: OUTFIT, fontSize: 13.5, fontWeight: 700, color: INK }}>
+                              {s.label}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => closeNarrower(s.key)}
+                              title={`Remove the ${s.label.toLowerCase()} filter`}
+                              aria-label={`Remove the ${s.label.toLowerCase()} filter`}
+                              className="ml-auto inline-flex items-center justify-center focus:outline-none"
+                              style={{ width: 32, height: 32, borderRadius: 999, border: 'none', background: 'transparent', color: SOFT, cursor: 'pointer' }}
+                            >
+                              <X size={14} strokeWidth={2.6} />
+                            </button>
+                          </div>
+                          <div className="flex flex-wrap gap-1.5" style={{ maxHeight: 140, overflowY: 'auto' }}>
+                            {s.options.map(o => {
+                              const active = s.selected.has(o.value);
+                              const count = s.counts[o.value] ?? 0;
+                              return (
+                                <button
+                                  key={o.value}
+                                  type="button"
+                                  aria-pressed={active}
+                                  onClick={() => onToggle(s.key, o.value)}
+                                  className="inline-flex items-center gap-1.5 focus:outline-none"
+                                  style={{
+                                    minHeight: 36, padding: '7px 12px', borderRadius: 999,
+                                    border: active ? `1px solid ${FOREST}` : CARD_BORDER,
+                                    backgroundColor: active ? FOREST : NEU.surface,
+                                    color: active ? GOLD : INK,
+                                    fontFamily: OUTFIT, fontSize: 13, fontWeight: 600, cursor: 'pointer',
+                                    transitionProperty: 'background-color, color, border-color',
+                                    transitionDuration: '180ms',
+                                  }}
+                                >
+                                  {o.label}
+                                  <span style={{ fontWeight: 800, fontVariantNumeric: 'tabular-nums', color: active ? GOLD : SOFT }}>
+                                    {count}
+                                  </span>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      ))}
+
+                      {availableNarrowers.length > 0 && (
+                        <div>
                           <button
-                            key={o.value}
+                            ref={addBtnRef}
                             type="button"
-                            onClick={() => onToggle(s.key, o.value)}
+                            onClick={() => setAddMenuOpen(v => !v)}
                             className="inline-flex items-center gap-1.5 focus:outline-none"
                             style={{
-                              minHeight: 34, padding: '7px 12px', borderRadius: 999,
-                              border: active ? `1px solid ${FOREST}` : CARD_BORDER,
-                              backgroundColor: active ? FOREST : NEU.surface,
-                              color: active ? GOLD : INK,
-                              fontFamily: OUTFIT, fontSize: 12, fontWeight: 700, cursor: 'pointer',
-                              transitionProperty: 'background-color, color, border-color',
-                              transitionDuration: '180ms',
+                              minHeight: 40, padding: '9px 15px', borderRadius: 999,
+                              border: `1.5px dashed rgba(27,56,40,0.28)`, backgroundColor: 'transparent',
+                              fontFamily: OUTFIT, fontSize: 13.5, fontWeight: 700,
+                              color: FOREST, cursor: 'pointer',
                             }}
                           >
-                            {o.label}
-                            <span
-                              style={{
-                                fontSize: 10.5, fontWeight: 800, fontVariantNumeric: 'tabular-nums',
-                                padding: '1px 6px', borderRadius: 999,
-                                backgroundColor: active ? 'rgba(255,255,255,0.16)' : 'rgba(27,56,40,0.07)',
-                                color: active ? GOLD : SOFT,
-                              }}
-                            >
-                              {count}
-                            </span>
+                            <Plus size={14} strokeWidth={2.8} style={{ transform: addMenuOpen ? 'rotate(45deg)' : 'none', transitionProperty: 'transform', transitionDuration: '220ms' }} />
+                            Add a filter
                           </button>
-                        );
-                      })}
+                          <PopoverLayer anchorRef={addBtnRef} open={addMenuOpen} onClose={closeAddMenu} width={260} maxHeight={300}>
+                            <div className="flex flex-col" style={{ padding: 6, borderRadius: 18, ...panelStyle }}>
+                              {availableNarrowers.map(s => (
+                                <button
+                                  key={s.key}
+                                  type="button"
+                                  onClick={() => {
+                                    setOpenNarrowers(prev => new Set(prev).add(s.key));
+                                    setAddMenuOpen(false);
+                                  }}
+                                  className="flex items-center gap-2.5 text-left focus:outline-none"
+                                  style={{
+                                    minHeight: 44, padding: '9px 11px', borderRadius: 13,
+                                    border: 'none', background: 'transparent',
+                                    fontFamily: OUTFIT, fontSize: 14, fontWeight: 600, color: INK, cursor: 'pointer',
+                                  }}
+                                  onMouseEnter={e => { e.currentTarget.style.backgroundColor = 'rgba(27,56,40,0.055)'; }}
+                                  onMouseLeave={e => { e.currentTarget.style.backgroundColor = 'transparent'; }}
+                                >
+                                  <Emoji3D name={s.emoji} size={20} fallback={Users} fallbackColor={FOREST} />
+                                  {s.label}
+                                </button>
+                              ))}
+                            </div>
+                          </PopoverLayer>
+                        </div>
+                      )}
                     </div>
-                  </div>
-                ))}
+                  </Disclosure>
+                )}
 
-                {availableNarrowers.length > 0 && (
-                  <div>
-                    <button
-                      ref={addBtnRef}
-                      type="button"
-                      onClick={() => setAddMenuOpen(v => !v)}
-                      className="inline-flex items-center gap-1.5 focus:outline-none"
+                {/* ── The people: the dot field, add someone by hand, take
+                    someone off. Folded, because most sends never open it. ── */}
+                <Disclosure
+                  open={listOpen}
+                  onToggle={() => setListOpen(v => !v)}
+                  emoji="Clipboard"
+                  title="Check the list"
+                  aside={`${reachCount.toLocaleString()} ${reachCount === 1 ? 'person' : 'people'}`}
+                >
+                  <div title="Every dot is one person. The dark ones are getting this email.">
+                    <DotField dots={dots} />
+                  </div>
+
+                  <div className="relative mt-4 mb-2.5" style={{ maxWidth: 440 }}>
+                    <Search size={15} strokeWidth={2.4} style={{ position: 'absolute', left: 14, top: 14, color: SOFT, pointerEvents: 'none' }} />
+                    <input
+                      ref={searchRef}
+                      value={manualQuery}
+                      onChange={e => onManualQuery(e.target.value)}
+                      placeholder="Add someone by name or email"
+                      aria-label="Add someone by name or email"
+                      className="w-full focus:outline-none"
                       style={{
-                        minHeight: 40, padding: '9px 15px', borderRadius: 999,
-                        border: `1.5px dashed rgba(27,56,40,0.28)`, backgroundColor: 'transparent',
-                        fontFamily: OUTFIT, fontSize: 12, fontWeight: 800, letterSpacing: '0.04em',
-                        color: FOREST, cursor: 'pointer',
+                        minHeight: 44, borderRadius: 999, padding: '10px 14px 10px 38px',
+                        fontFamily: OUTFIT, fontSize: 16, color: INK,
+                        backgroundColor: '#FFFDF8', border: '1px solid rgba(27,56,40,0.13)', boxShadow: NEU.inSm,
                       }}
-                    >
-                      <Plus size={14} strokeWidth={2.8} style={{ transform: addMenuOpen ? 'rotate(45deg)' : 'none', transitionProperty: 'transform', transitionDuration: '220ms' }} />
-                      ADD A FILTER
-                    </button>
-                    <PopoverLayer anchorRef={addBtnRef} open={addMenuOpen} onClose={closeAddMenu} width={260} maxHeight={300}>
-                      <div className="flex flex-col" style={{ padding: 6, borderRadius: 18, ...panelStyle }}>
-                        {availableNarrowers.map(s => (
+                    />
+                    <PopoverLayer anchorRef={searchRef} open={manualMatches.length > 0} onClose={closeSearch} width={420} maxHeight={240}>
+                      <div style={{ borderRadius: 16, overflow: 'hidden', ...panelStyle }}>
+                        {manualMatches.map(m => (
                           <button
-                            key={s.key}
+                            key={m.id}
                             type="button"
-                            onClick={() => {
-                              setOpenNarrowers(prev => new Set(prev).add(s.key));
-                              setAddMenuOpen(false);
-                            }}
-                            className="flex items-center gap-2.5 text-left focus:outline-none"
-                            style={{
-                              minHeight: 42, padding: '9px 11px', borderRadius: 13,
-                              border: 'none', background: 'transparent',
-                              fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 700, color: INK, cursor: 'pointer',
-                            }}
+                            onClick={() => onAddPerson(m.id)}
+                            className="w-full text-left focus:outline-none [overflow-wrap:anywhere]"
+                            style={{ minHeight: 42, padding: '9px 13px', border: 'none', background: 'transparent', fontFamily: OUTFIT, fontSize: 13.5, color: INK, cursor: 'pointer' }}
                             onMouseEnter={e => { e.currentTarget.style.backgroundColor = 'rgba(27,56,40,0.055)'; }}
                             onMouseLeave={e => { e.currentTarget.style.backgroundColor = 'transparent'; }}
                           >
-                            <DuoGlyph icon={s.icon} size={18} />
-                            {s.label}
+                            {m.name}
+                            <span style={{ color: SOFT }}> · {m.sub}</span>
                           </button>
                         ))}
                       </div>
                     </PopoverLayer>
                   </div>
-                )}
-              </div>
-            </div>
 
-            {/* ── Step 3 · The people ── */}
-            <div className="mt-7">
-              <StepHeading
-                n={3}
-                title="Check the list"
-                hint="Add anyone who was missed, take off anyone who shouldn't get it."
-              />
-
-              <div className="relative mb-2.5" style={{ maxWidth: 420 }}>
-                <Search size={14} strokeWidth={2.4} style={{ position: 'absolute', left: 13, top: 13, color: SOFT, pointerEvents: 'none' }} />
-                <input
-                  ref={searchRef}
-                  value={manualQuery}
-                  onChange={e => onManualQuery(e.target.value)}
-                  placeholder="Add someone by name or email…"
-                  className="w-full focus:outline-none"
-                  style={{
-                    minHeight: 40, borderRadius: 999, padding: '10px 14px 10px 34px',
-                    fontFamily: OUTFIT, fontSize: 12.5, color: INK,
-                    backgroundColor: '#FFFDF8', border: '1px solid rgba(27,56,40,0.13)', boxShadow: NEU.inSm,
-                  }}
-                />
-                <PopoverLayer anchorRef={searchRef} open={manualMatches.length > 0} onClose={closeSearch} width={420} maxHeight={240}>
-                  <div style={{ borderRadius: 16, overflow: 'hidden', ...panelStyle }}>
-                    {manualMatches.map(m => (
-                      <button
-                        key={m.id}
-                        type="button"
-                        onClick={() => onAddPerson(m.id)}
-                        className="w-full text-left focus:outline-none"
-                        style={{ minHeight: 40, padding: '9px 13px', border: 'none', background: 'transparent', fontFamily: OUTFIT, fontSize: 12.5, color: INK, cursor: 'pointer' }}
-                        onMouseEnter={e => { e.currentTarget.style.backgroundColor = 'rgba(27,56,40,0.055)'; }}
-                        onMouseLeave={e => { e.currentTarget.style.backgroundColor = 'transparent'; }}
-                      >
-                        {m.name}
-                        <span style={{ color: SOFT }}> · {m.sub}</span>
-                      </button>
-                    ))}
-                  </div>
-                </PopoverLayer>
-              </div>
-
-              <div className="flex flex-col gap-1.5" style={{ maxHeight: 420, overflowY: 'auto' }}>
-                {groups.length === 0 && (
-                  <p style={{ fontFamily: OUTFIT, fontSize: 12.5, color: SOFT, padding: '10px 2px', textWrap: 'pretty' }}>
-                    Nobody matches that yet. Loosen a filter above, or add someone by name.
-                  </p>
-                )}
-                {groups.map(g => {
-                  const isOpen = expandedGroups.has(g.key);
-                  return (
-                    <div key={g.key} style={{ borderRadius: 16, backgroundColor: '#FFFDF8', border: '1px solid rgba(27,56,40,0.09)' }}>
-                      <button
-                        type="button"
-                        onClick={() => setExpandedGroups(s => {
-                          const n = new Set(s);
-                          if (n.has(g.key)) n.delete(g.key); else n.add(g.key);
-                          return n;
-                        })}
-                        aria-expanded={isOpen}
-                        className="w-full flex items-center gap-2 text-left focus:outline-none"
-                        style={{ minHeight: 44, padding: '10px 13px', background: 'none', border: 'none', cursor: 'pointer' }}
-                      >
-                        <ChevronDown
-                          size={13}
-                          strokeWidth={2.6}
-                          className="flex-shrink-0"
-                          style={{ color: SOFT, transform: isOpen ? 'rotate(180deg)' : 'none', transitionProperty: 'transform', transitionDuration: '220ms', transitionTimingFunction: EASE }}
-                        />
-                        <span className="min-w-0 [overflow-wrap:anywhere]" style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 800, color: INK }}>{g.label}</span>
-                        <span className="flex-shrink-0" style={{ fontFamily: OUTFIT, fontSize: 12, color: SOFT, fontVariantNumeric: 'tabular-nums' }}>
-                          {g.members.length}
-                        </span>
-                        {g.optedOut > 0 && (
-                          <span className="flex-shrink-0" style={{ fontFamily: OUTFIT, fontSize: 11.5, color: AMBER_INK, fontVariantNumeric: 'tabular-nums' }}>
-                            · {g.optedOut} said no
-                          </span>
-                        )}
-                      </button>
-                      {isOpen && (
-                        <div className="flex flex-col gap-1" style={{ padding: '0 10px 10px' }}>
-                          {g.members.map(p => (
-                            <div
-                              key={p.id}
-                              className="flex items-center justify-between gap-2"
-                              style={{ minHeight: 40, padding: '6px 10px', borderRadius: 12, backgroundColor: NEU.surface, border: '1px solid rgba(27,56,40,0.07)' }}
-                              title={p.sub}
-                            >
-                              <ProfileLink userId={p.userId} name={p.name}>
-                                <span className="flex items-center gap-2 min-w-0">
-                                  {p.avatarUrl ? (
-                                    // eslint-disable-next-line @next/next/no-img-element
-                                    <img
-                                      src={p.avatarUrl}
-                                      alt=""
-                                      className="rounded-full object-cover flex-shrink-0"
-                                      style={{ width: 26, height: 26, outline: '1px solid rgba(0,0,0,0.1)', outlineOffset: -1 }}
-                                    />
-                                  ) : (
+                  <div className="flex flex-col gap-1.5" style={{ maxHeight: 420, overflowY: 'auto' }}>
+                    {groups.length === 0 && (
+                      <p style={{ fontFamily: OUTFIT, fontSize: 13, color: SOFT, padding: '10px 2px', textWrap: 'pretty' }}>
+                        Nobody matches that yet. Loosen a filter, or add someone by name.
+                      </p>
+                    )}
+                    {groups.map(g => {
+                      const isOpen = expandedGroups.has(g.key);
+                      return (
+                        <div key={g.key} style={{ borderRadius: 16, backgroundColor: '#FFFDF8', border: '1px solid rgba(27,56,40,0.09)' }}>
+                          <button
+                            type="button"
+                            onClick={() => setExpandedGroups(s => {
+                              const n = new Set(s);
+                              if (n.has(g.key)) n.delete(g.key); else n.add(g.key);
+                              return n;
+                            })}
+                            aria-expanded={isOpen}
+                            className="w-full flex items-center gap-2 text-left focus:outline-none"
+                            style={{ minHeight: 44, padding: '10px 13px', background: 'none', border: 'none', cursor: 'pointer' }}
+                          >
+                            <ChevronDown
+                              size={13}
+                              strokeWidth={2.6}
+                              className="flex-shrink-0"
+                              style={{ color: SOFT, transform: isOpen ? 'rotate(180deg)' : 'none', transitionProperty: 'transform', transitionDuration: '220ms', transitionTimingFunction: EASE }}
+                            />
+                            <span className="min-w-0 [overflow-wrap:anywhere]" style={{ fontFamily: OUTFIT, fontSize: 14, fontWeight: 700, color: INK }}>{g.label}</span>
+                            <span className="flex-shrink-0" style={{ fontFamily: OUTFIT, fontSize: 14, fontWeight: 700, color: SOFT, fontVariantNumeric: 'tabular-nums' }}>
+                              {g.members.length}
+                            </span>
+                            {g.optedOut > 0 && (
+                              <span className="flex-shrink-0" style={{ fontFamily: OUTFIT, fontSize: 11.5, color: AMBER_INK, fontVariantNumeric: 'tabular-nums' }}>
+                                · {g.optedOut} said no
+                              </span>
+                            )}
+                          </button>
+                          {isOpen && (
+                            <div className="flex flex-col gap-1" style={{ padding: '0 10px 10px' }}>
+                              {g.members.map(p => (
+                                <div
+                                  key={p.id}
+                                  className="flex items-center justify-between gap-2"
+                                  style={{ minHeight: 40, padding: '6px 10px', borderRadius: 12, backgroundColor: NEU.surface, border: '1px solid rgba(27,56,40,0.07)' }}
+                                  title={p.sub}
+                                >
+                                  <ProfileLink userId={p.userId} name={p.name}>
+                                    <span className="flex items-center gap-2 min-w-0">
+                                      {p.avatarUrl ? (
+                                        // eslint-disable-next-line @next/next/no-img-element
+                                        <img
+                                          src={p.avatarUrl}
+                                          alt=""
+                                          className="rounded-full object-cover flex-shrink-0"
+                                          style={{ width: 26, height: 26, outline: '1px solid rgba(0,0,0,0.1)', outlineOffset: -1 }}
+                                        />
+                                      ) : (
+                                        <span
+                                          className="flex items-center justify-center rounded-full flex-shrink-0"
+                                          style={{ width: 26, height: 26, backgroundColor: 'rgba(27,56,40,0.1)', color: FOREST, fontSize: 11, fontWeight: 800, fontFamily: OUTFIT }}
+                                        >
+                                          {p.name.charAt(0).toUpperCase()}
+                                        </span>
+                                      )}
+                                      <span className="min-w-0">
+                                        <span className="block [overflow-wrap:anywhere]" style={{ fontFamily: OUTFIT, fontSize: 13.5, fontWeight: 700, color: p.optedOut ? SOFT : INK }}>
+                                          {p.name}
+                                          {!p.registered && (
+                                            <span className="ml-1.5" style={{ fontSize: 11, fontWeight: 700, padding: '1px 7px', borderRadius: 999, backgroundColor: 'rgba(154,138,120,0.16)', color: SOFT }}>
+                                              Not signed up
+                                            </span>
+                                          )}
+                                          {/* Neutral information, so it is drawn
+                                              in the neutral colour. It used to be
+                                              a gold-tinted amber pill, which read
+                                              as a warning about a person nothing
+                                              is wrong with — and as ORANGE, which
+                                              is not a colour this app owns. */}
+                                          {p.manual && (
+                                            <span className="ml-1.5" style={{ fontSize: 11, fontWeight: 700, padding: '1px 7px', borderRadius: 999, backgroundColor: 'rgba(27,56,40,0.08)', color: FOREST }}>
+                                              Added by you
+                                            </span>
+                                          )}
+                                        </span>
+                                        <span className="block [overflow-wrap:anywhere]" style={{ fontFamily: OUTFIT, fontSize: 12, color: SOFT }}>
+                                          {p.sub}
+                                        </span>
+                                      </span>
+                                    </span>
+                                  </ProfileLink>
+                                  {p.optedOut ? (
                                     <span
-                                      className="flex items-center justify-center rounded-full flex-shrink-0"
-                                      style={{ width: 26, height: 26, backgroundColor: 'rgba(27,56,40,0.1)', color: FOREST, fontSize: 11, fontWeight: 800, fontFamily: OUTFIT }}
+                                      className="flex-shrink-0"
+                                      /* Amber survives here because this IS a
+                                         caution — the one place in this list where
+                                         something is genuinely off. Retinted off
+                                         the gold (#B6871F) it was mixed with and
+                                         onto AMBER_INK's own hue, so it stops
+                                         reading orange. */
+                                      style={{ fontSize: 11, fontWeight: 700, fontFamily: OUTFIT, padding: '3px 8px', borderRadius: 999, backgroundColor: 'rgba(126,81,40,0.10)', color: AMBER_INK, border: '1px solid rgba(126,81,40,0.28)' }}
                                     >
-                                      {p.name.charAt(0).toUpperCase()}
+                                      Said no
                                     </span>
+                                  ) : (
+                                    <button
+                                      type="button"
+                                      onClick={() => onRemovePerson(p.id)}
+                                      title={p.manual ? 'Undo this manual add' : 'Leave this person off'}
+                                      className="flex-shrink-0 inline-flex items-center justify-center focus:outline-none"
+                                      style={{ width: 32, height: 32, borderRadius: 999, border: '1px solid rgba(139,32,32,0.24)', background: 'transparent', color: RED, cursor: 'pointer' }}
+                                    >
+                                      <X size={12} strokeWidth={2.8} />
+                                    </button>
                                   )}
-                                  <span className="min-w-0">
-                                    <span className="block [overflow-wrap:anywhere]" style={{ fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 700, color: p.optedOut ? SOFT : INK }}>
-                                      {p.name}
-                                      {!p.registered && (
-                                        <span className="ml-1.5" style={{ fontSize: 9, fontWeight: 800, padding: '1px 6px', borderRadius: 999, backgroundColor: 'rgba(154,138,120,0.16)', color: SOFT }}>
-                                          NOT SIGNED UP
-                                        </span>
-                                      )}
-                                      {/* Neutral information, so it is drawn
-                                          in the neutral colour. It used to be
-                                          a gold-tinted amber pill, which read
-                                          as a warning about a person nothing
-                                          is wrong with — and as ORANGE, which
-                                          is not a colour this app owns. */}
-                                      {p.manual && (
-                                        <span className="ml-1.5" style={{ fontSize: 9, fontWeight: 800, padding: '1px 6px', borderRadius: 999, backgroundColor: 'rgba(27,56,40,0.08)', color: FOREST }}>
-                                          ADDED BY YOU
-                                        </span>
-                                      )}
-                                    </span>
-                                    <span className="block [overflow-wrap:anywhere]" style={{ fontFamily: OUTFIT, fontSize: 10.5, color: SOFT }}>
-                                      {p.sub}
-                                    </span>
-                                  </span>
-                                </span>
-                              </ProfileLink>
-                              {p.optedOut ? (
-                                <span
-                                  className="flex-shrink-0"
-                                  /* Amber survives here because this IS a
-                                     caution — the one place in this list where
-                                     something is genuinely off. Retinted off
-                                     the gold (#B6871F) it was mixed with and
-                                     onto AMBER_INK's own hue, so it stops
-                                     reading orange. */
-                                  style={{ fontSize: 9, fontWeight: 800, fontFamily: OUTFIT, padding: '3px 7px', borderRadius: 999, backgroundColor: 'rgba(126,81,40,0.10)', color: AMBER_INK, border: '1px solid rgba(126,81,40,0.28)' }}
-                                >
-                                  SAID NO
-                                </span>
-                              ) : (
-                                <button
-                                  type="button"
-                                  onClick={() => onRemovePerson(p.id)}
-                                  title={p.manual ? 'Undo this manual add' : 'Leave this person off'}
-                                  className="flex-shrink-0 inline-flex items-center justify-center focus:outline-none"
-                                  style={{ width: 32, height: 32, borderRadius: 999, border: '1px solid rgba(139,32,32,0.24)', background: 'transparent', color: RED, cursor: 'pointer' }}
-                                >
-                                  <X size={12} strokeWidth={2.8} />
-                                </button>
-                              )}
+                                </div>
+                              ))}
                             </div>
-                          ))}
+                          )}
                         </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
+                      );
+                    })}
+                  </div>
+                </Disclosure>
               </div>
 
               <div
                 className="flex items-center gap-3 flex-shrink-0"
                 style={{ padding: '12px 16px', borderTop: '1px solid rgba(27,56,40,0.1)', backgroundColor: NEU.surface }}
               >
-                <span className="min-w-0 flex-1" style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 800, color: INK }}>
-                  <BigNumber n={reachCount} /> {reachCount === 1 ? 'person' : 'people'}
-                  <span style={{ fontWeight: 600, color: SOFT }}> of {total.toLocaleString()}</span>
+                <span className="min-w-0 flex-1 flex items-baseline gap-1.5 flex-wrap" style={{ fontFamily: OUTFIT, color: INK }}>
+                  <span style={{ fontSize: 24 }}><BigNumber n={reachCount} /></span>
+                  <span style={{ fontSize: 14, fontWeight: 700 }}>{reachCount === 1 ? 'person' : 'people'}</span>
+                  <span style={{ fontSize: 13, fontWeight: 600, color: SOFT }}>of {total.toLocaleString()}</span>
                 </span>
                 <button
                   type="button"
@@ -969,12 +962,12 @@ export default function AudienceReach({
                   style={{
                     minHeight: 44, padding: '11px 22px', borderRadius: 999, border: 'none',
                     background: `linear-gradient(135deg, ${NEU_GRADIENTS.forest[0]}, ${NEU_GRADIENTS.forest[1]})`,
-                    color: GOLD, fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 900, letterSpacing: '0.05em',
+                    color: GOLD, fontFamily: OUTFIT, fontSize: 14, fontWeight: 700,
                     cursor: 'pointer', boxShadow: NEU.outSm,
                   }}
                 >
-                  <Check size={14} strokeWidth={3} />
-                  DONE
+                  <Check size={15} strokeWidth={3} />
+                  Done
                 </button>
               </div>
             </div>
@@ -1005,7 +998,7 @@ function SendButton({ onClick, disabled, count, busy }: { onClick: () => void; d
         minHeight: 44, padding: '11px 20px', borderRadius: 999, border: 'none',
         background: disabled ? 'rgba(27,56,40,0.12)' : `linear-gradient(135deg, ${g[0]}, ${g[1]})`,
         color: disabled ? NEU.muted : FOREST,
-        fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 900, letterSpacing: '0.05em',
+        fontFamily: OUTFIT, fontSize: 14, fontWeight: 800,
         cursor: disabled ? 'default' : 'pointer',
         boxShadow: disabled ? 'none' : hovered ? `0 8px 20px ${g[1]}66, ${NEU.outSmHover}` : `0 5px 13px ${g[1]}4D, ${NEU.outSm}`,
         transform: disabled ? 'none' : pressed ? 'scale(0.96)' : hovered ? 'translateY(-2px)' : 'translateY(0)',
@@ -1016,7 +1009,7 @@ function SendButton({ onClick, disabled, count, busy }: { onClick: () => void; d
     >
       <Send size={15} strokeWidth={2.6} />
       <span style={{ fontVariantNumeric: 'tabular-nums' }}>
-        {busy ?? (count > 0 ? `SEND TO ${count.toLocaleString()}` : 'SEND')}
+        {busy ?? (count > 0 ? `Send to ${count.toLocaleString()}` : 'Send')}
       </span>
     </button>
   );

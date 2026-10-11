@@ -32,19 +32,21 @@ import {
 } from 'lucide-react';
 import { STORE_CSS } from '../store/storeKit';
 import { DASH_CSS } from '../financials/dashboardKit';
-import { F, INK, INK_SOFT, FOREST, ROW_CSS, TINT_GOLD_BG, TINT_GREEN_BG, DuoDisc } from './panelKit';
+import { F, INK, INK_SOFT, FOREST, ROW_CSS, TINT_GOLD_BG, TINT_GREEN_BG, EmojiDisc } from './panelKit';
 
 /** The sections, in rail order. The key is also the ?tab= value written. */
 export type ShellSection = 'general' | 'visibility' | 'applications' | 'delegations' | 'team' | 'payments' | 'awards';
 
-export const SHELL_SECTIONS: { key: ShellSection; label: string; icon: LucideIcon; tint: string }[] = [
-  { key: 'general',      label: 'General', icon: Building2,     tint: TINT_GOLD_BG },
-  { key: 'visibility',   label: 'Visibility', icon: Globe,         tint: TINT_GREEN_BG },
-  { key: 'applications', label: 'Applications', icon: ClipboardList, tint: TINT_GOLD_BG },
-  { key: 'delegations',  label: 'Delegations', icon: School,    tint: TINT_GREEN_BG },
-  { key: 'team',         label: 'Team', icon: Users2,        tint: TINT_GREEN_BG },
-  { key: 'payments',     label: 'Payments', icon: CreditCard,    tint: TINT_GOLD_BG },
-  { key: 'awards',       label: 'Awards', icon: Trophy,        tint: TINT_GOLD_BG },
+/** Each section's Fluent 3D emoji (`emoji`) with the Lucide glyph it falls
+ *  back to (`icon`) if the image cannot load. */
+export const SHELL_SECTIONS: { key: ShellSection; label: string; emoji: string; icon: LucideIcon; tint: string }[] = [
+  { key: 'general',      label: 'General',      emoji: 'Classical building',          icon: Building2,     tint: TINT_GOLD_BG },
+  { key: 'visibility',   label: 'Visibility',   emoji: 'Globe showing europe-africa', icon: Globe,         tint: TINT_GREEN_BG },
+  { key: 'applications', label: 'Applications', emoji: 'Inbox tray',                  icon: ClipboardList, tint: TINT_GOLD_BG },
+  { key: 'delegations',  label: 'Delegations',  emoji: 'School',                      icon: School,        tint: TINT_GREEN_BG },
+  { key: 'team',         label: 'Team',         emoji: 'Busts in silhouette',         icon: Users2,        tint: TINT_GREEN_BG },
+  { key: 'payments',     label: 'Payments',     emoji: 'Credit card',                 icon: CreditCard,    tint: TINT_GOLD_BG },
+  { key: 'awards',       label: 'Awards',       emoji: 'Trophy',                      icon: Trophy,        tint: TINT_GOLD_BG },
 ];
 
 export function shellMeta(key: ShellSection) {
@@ -102,7 +104,7 @@ export function SettingsShell({ active, onOpen, title, children }: {
                 aria-current={s.key === active ? 'page' : undefined}
                 onClick={() => onOpen(s.key)}
               >
-                <DuoDisc icon={s.icon} tint={s.tint} size={32} active={s.key === active} />
+                <EmojiDisc emoji={s.emoji} icon={s.icon} tint={s.tint} size={34} active={s.key === active} />
                 {s.label}
               </button>
             ))}

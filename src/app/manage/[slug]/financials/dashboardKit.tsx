@@ -51,6 +51,25 @@ export const DASH_CSS = `
 /* The icon disc beside a card's title, and a soft wash of the same tint in the card's top corner */
 .gv-fd-disc{width:44px;height:44px;border-radius:14px;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;box-shadow:inset 0 1px 0 rgba(255,255,255,0.75),0 6px 14px -10px rgba(27,56,40,0.45)}
 .gv-fd-card .gv-st-card-head.gv-fd-head{gap:12px;margin-bottom:10px}
+/* Icons that break the card's border (owner, 11 Oct 2026: "have the icons stick
+   out ... sometimes in the middle, sometimes over the side"). The disc sits on
+   the card's top edge, about 40% of it outside: over the top inline-start
+   corner, centred, or over the top inline-end corner. It is opaque (the tint is
+   laid over white) with a white rim and a soft forest shadow, so the page never
+   shows through the half that is outside. The card gives it room: more padding
+   on top, and a margin so the disc never reaches the row above. Nothing here
+   clips: .gv-st-card has no overflow, and the content area does not scroll
+   sideways. */
+.gv-fd-hung{margin-top:14px;padding-top:46px!important}
+.gv-fd-hang{position:absolute;top:-24px;z-index:1;width:56px;height:56px;border-radius:18px;display:inline-flex;align-items:center;justify-content:center;box-shadow:0 0 0 3px #FFFFFF,inset 0 1px 0 rgba(255,255,255,0.8),0 12px 22px -12px rgba(27,56,40,0.55),0 3px 8px -4px rgba(27,56,40,0.18);pointer-events:none}
+.gv-fd-hang-start{inset-inline-start:-12px}
+.gv-fd-hang-end{inset-inline-end:-12px}
+.gv-fd-hang-center{left:50%;transform:translateX(-50%)}
+/* The small settings cards: a smaller disc centred on the top edge, the words centred under it. */
+.gv-fd-set.gv-fd-hung{padding-top:38px!important;text-align:center;align-items:center}
+.gv-fd-set .gv-fd-hang{top:-20px;width:48px;height:48px;border-radius:15px}
+.gv-fd-set.gv-fd-hung .gv-st-card-head{justify-content:center}
+.gv-fd-set.gv-fd-hung .gv-fd-foot{justify-content:center}
 .gv-fd-wash-green{background:radial-gradient(120% 90% at 100% 0%,rgba(61,122,82,0.07) 0%,rgba(61,122,82,0) 55%),#FFFFFF!important}
 .gv-fd-wash-gold{background:radial-gradient(120% 90% at 100% 0%,rgba(238,217,138,0.22) 0%,rgba(238,217,138,0) 55%),#FFFFFF!important}
 .gv-fd-in{color:${FOREST}}
@@ -77,7 +96,6 @@ export const DASH_CSS = `
 
 /* Small settings cards */
 .gv-fd-set{padding:16px 16px 14px!important}
-.gv-fd-set-icon{width:42px;height:42px;border-radius:13px;display:inline-flex;align-items:center;justify-content:center;color:${FOREST};margin-bottom:10px;box-shadow:inset 0 1px 0 rgba(255,255,255,0.75),0 6px 14px -10px rgba(27,56,40,0.45)}
 .gv-fd-set-fact{margin:2px 0 0;font-size:15px;font-weight:800;line-height:1.3;color:${INK};overflow-wrap:anywhere}
 .gv-fd-set-sub{margin:3px 0 0;font-size:12.5px;line-height:1.45;color:${INK_SOFT}}
 .gv-fd-set .gv-st-btn{min-height:38px;padding:0 14px;font-size:13px}
@@ -129,17 +147,22 @@ export const DASH_CSS = `
 `;
 
 /** A dashboard card: the Store's white card with the title, an "i" hint, and an optional line. */
-export function DashCard({ title, hint, line, children, className, style, icon }: {
+export function DashCard({ title, hint, line, children, className, style, icon, hang }: {
   title: string; hint: string; line?: string; children: React.ReactNode; className?: string; style?: React.CSSProperties;
   /** A Fluent 3D emoji in a tinted disc before the title, with a lucide fallback,
    *  and the same tint washed faintly into the card's top corner. */
   icon?: CardIcon;
+  /** Hang the icon over the card's top edge instead of beside the title:
+   *  over the inline-start corner, centred, or over the inline-end corner. */
+  hang?: HangSide;
 }) {
   const wash = icon ? (icon.tint === TINT_GOLD ? ' gv-fd-wash-gold' : ' gv-fd-wash-green') : '';
+  const hung = icon && hang;
   return (
-    <section className={`gv-st-card gv-fd-card${wash}${className ? ` ${className}` : ''}`} aria-label={title} style={style}>
-      <div className={`gv-st-card-head${icon ? ' gv-fd-head' : ''}`}>
-        {icon ? <IconDisc icon={icon} /> : null}
+    <section className={`gv-st-card gv-fd-card${wash}${hung ? ' gv-fd-hung' : ''}${className ? ` ${className}` : ''}`} aria-label={title} style={style}>
+      {hung ? <HangingDisc icon={icon} side={hang} /> : null}
+      <div className={`gv-st-card-head${icon && !hung ? ' gv-fd-head' : ''}`}>
+        {icon && !hung ? <IconDisc icon={icon} /> : null}
         <h2 className="gv-st-card-title">{title}</h2>
         <InfoHint label={`About ${title}`} text={hint} size={16} />
       </div>
@@ -150,6 +173,17 @@ export function DashCard({ title, hint, line, children, className, style, icon }
 }
 
 export type CardIcon = { emoji: string; lucide: LucideIcon; tint: string };
+export type HangSide = 'start' | 'center' | 'end';
+
+/** The disc that breaks the card's border (see .gv-fd-hang in DASH_CSS). The
+ *  tint is laid over white so the half outside the card is not see-through. */
+export function HangingDisc({ icon, side, size = 56 }: { icon: CardIcon; side: HangSide; size?: number }) {
+  return (
+    <span className={`gv-fd-hang gv-fd-hang-${side}`} aria-hidden style={{ background: `${icon.tint}, #FFFFFF` }}>
+      <Emoji3D name={icon.emoji} size={Math.round(size * 0.6)} fallback={icon.lucide} fallbackColor={FOREST} />
+    </span>
+  );
+}
 
 /** The tinted disc with a Fluent 3D emoji (lucide in forest if the image fails). */
 export function IconDisc({ icon, size = 44 }: { icon: CardIcon; size?: number }) {
@@ -192,10 +226,8 @@ function SettingCard({ title, hint, icon, fact, sub, onOpen, readOnly }: {
   title: string; hint: string; icon: CardIcon; fact: string; sub?: string; onOpen: () => void; readOnly: boolean;
 }) {
   return (
-    <section className="gv-st-card gv-fd-card gv-fd-set" aria-label={title}>
-      <span className="gv-fd-set-icon" aria-hidden style={{ background: icon.tint }}>
-        <Emoji3D name={icon.emoji} size={26} fallback={icon.lucide} fallbackColor={FOREST} />
-      </span>
+    <section className="gv-st-card gv-fd-card gv-fd-set gv-fd-hung" aria-label={title}>
+      <HangingDisc icon={icon} side="center" size={48} />
       <div className="gv-st-card-head">
         <h3 className="gv-st-card-title" style={{ fontSize: 15 }}>{title}</h3>
         <InfoHint label={`About ${title}`} text={hint} size={15} />

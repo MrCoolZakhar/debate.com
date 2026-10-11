@@ -855,7 +855,7 @@ export function CommitteeScoreboardBody({
           </div>
 
           <div className="flex items-center gap-2 mb-3 flex-wrap">
-            <span style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 10, letterSpacing: '0.12em', color: SOFT }}>
+            <span style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 12, letterSpacing: '0.12em', color: SOFT }}>
               SORT BY
             </span>
             {SORTS.map((s) => (

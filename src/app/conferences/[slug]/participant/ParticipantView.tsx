@@ -327,7 +327,10 @@ export default function ParticipantView({
   const isLeader = (selected.role === 'faculty-advisor' || selected.role === 'head-delegate') && !!selected.society_id;
   const gateOpen = gateState === 'full';
   const roleDocs = gateOpen && DOC_READER_STATUSES.has(selected.status)
-    ? conferenceDocs.filter(d => docForRole(d, selected.role))
+    ? conferenceDocs.filter(d => docForRole(d, selected.role, {
+        isHeadDelegate: selected.is_head_delegate === true,
+        isChair: !!user && committees.some(c => (c.chair_user_ids ?? []).includes(user.id)),
+      }))
     : [];
   const sections = sectionsFor(selected, gateOpen, roleDocs.length > 0);
   // A section that no longer exists for this application (a role switch, the

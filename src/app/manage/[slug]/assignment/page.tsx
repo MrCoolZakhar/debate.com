@@ -4,8 +4,10 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   X, Check, Sparkles, ChevronDown, ChevronUp, Award, Globe2, ArrowRight, GripVertical,
   MousePointerClick, Plus, Info, Layers, Gavel, UserRound, Users, Trash2, Repeat, MoreVertical,
-  CheckCircle2, Clock, Star,
+  CheckCircle2, Clock, Star, Mic, Compass,
 } from 'lucide-react';
+import { GoldWord } from '@/components/BrandHeading';
+import { BigSectionTabs, type BigSectionTab } from '../BigSectionTabs';
 import { createPortal } from 'react-dom';
 import { useManage } from '@/app/manage/[slug]/layout';
 import { getAuthedClient } from '@/lib/supabase-auth';
@@ -1074,21 +1076,22 @@ function RailSourceToggle({ value, onChange }: { value: 'delegates' | 'delegatio
             onClick={() => onChange(v)}
             className="focus:outline-none inline-flex items-center justify-center gap-1.5 flex-1"
             style={{
-              padding: '6px 12px',
+              padding: '0 14px',
+              minHeight: 40,
               borderRadius: 999,
-              fontSize: 10,
+              fontSize: 14,
               fontFamily: MONO,
               fontWeight: 800,
               letterSpacing: 0,
               border: 'none',
               background: active ? `linear-gradient(135deg, ${NEU_GRADIENTS.forest[0]}, ${NEU_GRADIENTS.forest[1]})` : 'transparent',
               boxShadow: active ? `0 3px 8px color-mix(in srgb, ${NEU_GRADIENTS.forest[0]} 27%, transparent), ${NEU.outSm}` : 'none',
-              color: active ? NEU.gold : NEU.muted,
+              color: active ? NEU.gold : NEU.inkSoft,
               cursor: 'pointer',
               transition: 'color 200ms, box-shadow 200ms',
             }}
           >
-            {v === 'delegates' ? <UserRound size={12} strokeWidth={2.4} /> : <Users size={12} strokeWidth={2.4} />}
+            {v === 'delegates' ? <UserRound size={16} strokeWidth={2.4} /> : <Users size={16} strokeWidth={2.4} />}
             {v === 'delegates' ? 'Delegates' : 'Delegations'}
           </button>
         );
@@ -1682,7 +1685,7 @@ function DropAllocateModal({ committee, app, needy = false, pushDraftNotice, onC
             <p style={{ fontSize: 9, color: NEU.deepGold, fontFamily: MONO, letterSpacing: '0.14em', fontWeight: 700, marginBottom: 6 }}>
               ALLOCATE
             </p>
-            <h2 className="font-black text-base flex items-center gap-2 flex-wrap" style={{ color: NEU.ink, fontFamily: OUTFIT }}>
+            <h2 className="font-black text-xl flex items-center gap-2 flex-wrap" style={{ color: NEU.ink, fontFamily: OUTFIT }}>
               {/* Static modal header — no clickable ancestor, so a plain link. */}
               <PersonAvatar name={app.profiles?.display_name ?? app.invited_name ?? 'Unknown'} url={app.profiles?.avatar_url ?? null} size={28} userId={app.profiles?.id} />
               <span>{app.profiles?.display_name ?? app.invited_name}</span>
@@ -1806,7 +1809,7 @@ function SocietyDropAllocateModal({ committee, society, onClose, onAssigned }: S
             <p style={{ fontSize: 9, color: NEU.deepGold, fontFamily: MONO, letterSpacing: '0.14em', fontWeight: 700, marginBottom: 6 }}>
               ALLOCATE TO DELEGATION
             </p>
-            <h2 className="font-black text-base flex items-center gap-2 flex-wrap" style={{ color: NEU.ink, fontFamily: OUTFIT }}>
+            <h2 className="font-black text-xl flex items-center gap-2 flex-wrap" style={{ color: NEU.ink, fontFamily: OUTFIT }}>
               <DelegationAvatar size={28} />
               <span>{society.name}</span>
               <ArrowRight size={14} style={{ color: NEU.muted }} />
@@ -1974,7 +1977,7 @@ function AssignModal({ committee, unassigned, preSelectedSlot, preSelectedSeat, 
     <ModalOverlay onClose={onClose}>
       <NeuModalCard width={460}>
         <div className="flex items-center justify-between mb-4">
-          <h2 className="font-black text-base" style={{ color: NEU.ink, fontFamily: OUTFIT }}>
+          <h2 className="font-black text-xl" style={{ color: NEU.ink, fontFamily: OUTFIT }}>
             Assign Delegate
           </h2>
           <button onClick={onClose} className="focus:outline-none" style={{ color: NEU.muted }}><X size={18} /></button>
@@ -2311,7 +2314,7 @@ function DelegationConflictModal({
     <ModalOverlay onClose={() => { if (!busy) onClose(); }}>
       <NeuModalCard width={440}>
         <div className="flex items-start justify-between gap-3 mb-3">
-          <h2 className="font-black text-base" style={{ color: NEU.ink, fontFamily: OUTFIT }}>
+          <h2 className="font-black text-xl" style={{ color: NEU.ink, fontFamily: OUTFIT }}>
             Mixed Delegation Seats
           </h2>
           <button onClick={onClose} disabled={!!busy} className="focus:outline-none flex-shrink-0" style={{ color: NEU.muted }}><X size={18} /></button>
@@ -3516,6 +3519,13 @@ function mergeLocalMutations(
 }
 
 // ── AssignmentPage ────────────────────────────────────────────────────────────
+
+const ASSIGNMENT_TABS: BigSectionTab<'delegates' | 'chairs' | 'delegations' | 'independents'>[] = [
+  { key: 'delegates', label: 'Delegates', sub: 'Seat each delegate in a committee', emoji: 'Bust in silhouette', lucide: UserRound, tone: 'gold' },
+  { key: 'chairs', label: 'Chairs', sub: 'Put chairs on each dais', emoji: 'Studio microphone', lucide: Mic, tone: 'green' },
+  { key: 'delegations', label: 'Delegations', sub: 'Schools and their seats', emoji: 'Busts in silhouette', lucide: Users, tone: 'gold' },
+  { key: 'independents', label: 'Independents', sub: 'Delegates with no delegation', emoji: 'Compass', lucide: Compass, tone: 'green' },
+];
 
 export default function AssignmentPage() {
   const { conference, refreshConferenceQuiet } = useManage();
@@ -4759,10 +4769,10 @@ export default function AssignmentPage() {
       {/* Header */}
       <div className="flex items-center justify-between gap-4 mb-4 flex-wrap">
         <div>
-          <p className="text-xs mb-1" style={{ color: NEU.muted, fontFamily: MONO, letterSpacing: '0.04em' }}>
+          <p style={{ color: NEU.inkSoft, fontFamily: OUTFIT, fontSize: 13, fontWeight: 700, letterSpacing: '0.06em', marginBottom: 6 }}>
             {conference.acronym} / Assignment
           </p>
-          <h1 className="font-black text-2xl" style={{ color: NEU.ink, fontFamily: OUTFIT }}>Assignment</h1>
+          <h1 style={{ color: NEU.ink, fontFamily: OUTFIT, fontWeight: 900, fontSize: 'clamp(32px, 3.4vw, 42px)', letterSpacing: '-0.025em', lineHeight: 1.05, margin: 0 }}>Seat <GoldWord>Assignment</GoldWord></h1>
         </div>
         {mode === 'delegates' && (
           <AllocationEmailBar
@@ -4792,35 +4802,9 @@ export default function AssignmentPage() {
         }}
       />
 
-      {/* Mode toggle: Delegates | Chairs | Delegations | Independents */}
-      <NeuInset className="inline-flex p-1.5 mb-6 flex-wrap" style={{ borderRadius: 999, gap: 4 }}>
-        {(['delegates', 'chairs', 'delegations', 'independents'] as const).map(m => {
-          const active = mode === m;
-          return (
-            <button
-              key={m}
-              onClick={() => setMode(m)}
-              className="focus:outline-none"
-              style={{
-                padding: '7px 18px',
-                borderRadius: 999,
-                fontSize: 11,
-                fontFamily: MONO,
-                fontWeight: 800,
-                letterSpacing: 0,
-                border: 'none',
-                background: active ? `linear-gradient(135deg, ${NEU_GRADIENTS.forest[0]}, ${NEU_GRADIENTS.forest[1]})` : 'transparent',
-                boxShadow: active ? `0 3px 8px color-mix(in srgb, ${NEU_GRADIENTS.forest[0]} 27%, transparent), ${NEU.outSm}` : 'none',
-                color: active ? NEU.gold : NEU.muted,
-                cursor: 'pointer',
-                transition: 'color 200ms, box-shadow 200ms',
-              }}
-            >
-              {m === 'delegates' ? 'Delegates' : m === 'chairs' ? 'Chairs' : m === 'delegations' ? 'Delegations' : 'Independents'}
-            </button>
-          );
-        })}
-      </NeuInset>
+      {/* Mode: Delegates | Chairs | Delegations | Independents, as big cards
+          (11 Oct 2026, owner: the 11px pill row was "too small"). */}
+      <BigSectionTabs compact tabs={ASSIGNMENT_TABS} value={mode} onChange={setMode} label="What to assign" />
 
       {loading && (
         <div className="flex justify-center py-16">

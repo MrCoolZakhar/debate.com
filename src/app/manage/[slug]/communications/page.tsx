@@ -7,8 +7,8 @@ import {
   Mail, AlertTriangle, Send, Bell, Copy, X, ChevronDown,
   BadgeCheck, MessageSquare, ArrowRight, Compass, Wrench,
   Zap, Clock, BookOpen, KeyRound, PenLine, Plus, Inbox, Users, CheckCircle2,
-  CreditCard, Globe, Mic, HelpCircle, Info, Repeat, XCircle, CircleDashed,
-  Lock, Gavel, Package, Wallet, Landmark, School, Ticket, FileText, HandCoins, type LucideIcon,
+  CreditCard, Globe, FileText, Mic, HelpCircle, Info, Repeat, XCircle, CircleDashed,
+  Lock,
 } from 'lucide-react';
 import { useManage } from '@/app/manage/[slug]/layout';
 import { getAuthedClient, getFreshAuthedClient } from '@/lib/supabase-auth';
@@ -20,7 +20,7 @@ import {
 } from '@/lib/emailTokens';
 import { ALWAYS_ON_EMAILS, ALWAYS_ON_LINE } from './alwaysOnEmails';
 import { EVENT_REGISTRY, queueEventEmail, getEventLabel, notifyIfNeeded, turnOnDefaultEmail, turnOffDefaultEmail, eventOnWhenMissing, newTemplateStartsEnabled, hasDraftContent, type EventDef, type EventKey } from '@/lib/emailEvents';
-import { EASE, NEU } from '@/components/neu';
+import { EASE, NEU, NEU_GRADIENTS, Emoji3D, NeuIconDisc, type NeuGradient } from '@/components/neu';
 import {
   SOFT, GREEN_INK, RED,
   CARD_BORDER, CARD_SHADOW as LIFTED_SHADOW, CARD_SHADOW_HOVER as HOVER_SHADOW,
@@ -57,7 +57,7 @@ import InboxSplit, { type SplitThread, type SplitDetail } from './InboxSplit';
 import AutomaticEmailsList, { type AutoGroup, type AutoRow } from './AutomaticEmailsList';
 import { JOURNEY, EVENT_JOURNEY, EVENT_COPY, REMINDER_OF } from './automaticEmails';
 import { eventEmailSource, eventEmailHtml } from '@/lib/eventEmailPreview';
-import { OnOffSwitch, DuoIcon } from './commsKit';
+import { OnOffSwitch } from './commsKit';
 import AnnounceView from './AnnounceView';
 
 /** The screens of the page. Since 10 Oct 2026 ("Your messages", the owner's
@@ -405,10 +405,12 @@ interface SeedContent {
 
 interface AdHocSeed {
   id: string;
-  /** The card's duotone glyph (forest line over a gold fill, in a gold disc).
-   *  The picker's job is "find my template in under a second", so each seed
-   *  has its own distinct shape. No 3D emoji on Communications (owner). */
-  icon: LucideIcon;
+  /** The emoji IS the affordance here, and this is the one place on the page
+   *  that earns one. The picker's whole job is "find my template in under a
+   *  second", and four monochrome forest lucide glyphs at 17px all read as
+   *  "an icon" — colour and shape are what make a chooser scannable. Every
+   *  other surface on this page stays on lucide. */
+  emoji: string;
   title: string;
   blurb: string;
   /** Tokens the seeded copy uses — surfaced on the card so the organiser
@@ -438,7 +440,7 @@ const AD_HOC_SEEDS: AdHocSeed[] = [
   {
     id: 'session-codes-delegates',
     audienceLabel: 'Delegates',
-    icon: KeyRound,
+    emoji: 'Key',
     title: 'Session codes for delegates',
     blurb: 'Every allocated delegate gets the join code for their committee room.',
     tokens: ['delegate_name', 'committee', 'session_code'],
@@ -452,7 +454,7 @@ const AD_HOC_SEEDS: AdHocSeed[] = [
   {
     id: 'session-codes-chairs',
     audienceLabel: 'Chairs',
-    icon: Gavel,
+    emoji: 'Chair',
     title: 'Session codes for chairs',
     blurb: 'Chairs get their session details and where to find their chair password.',
     tokens: ['delegate_name', 'committee', 'conference_name'],
@@ -466,7 +468,7 @@ const AD_HOC_SEEDS: AdHocSeed[] = [
   {
     id: 'payment-reminder',
     audienceLabel: 'Anyone still unpaid',
-    icon: CreditCard,
+    emoji: 'Credit card',
     title: 'Payment reminder',
     blurb: 'A nudge to everyone whose fee is still outstanding.',
     tokens: ['delegate_name', 'role', 'fee'],
@@ -484,7 +486,7 @@ const AD_HOC_SEEDS: AdHocSeed[] = [
   {
     id: 'welcome-pack',
     audienceLabel: 'Everyone',
-    icon: Package,
+    emoji: 'Package',
     title: 'Welcome / logistics pack',
     blurb: 'Arrival, venue and schedule details in one email before the conference.',
     tokens: ['delegate_name', 'conference_name', 'conference_dates'],
@@ -761,10 +763,11 @@ function outboxStatusColor(status: string) {
  *  Every disc passes a lucide `fallback`: the Fluent art is a CDN image and a
  *  blocked request must land on a glyph, never on a hole. */
 function ColumnHeading({
-  icon, tone = 'gold', title, sub, count,
+  emoji, icon, gradient, title, sub, count,
 }: {
-  icon: LucideIcon;
-  tone?: 'gold' | 'green' | 'red';
+  emoji: string;
+  icon: typeof Bell;
+  gradient: NeuGradient;
   title: string;
   sub: string;
   /** Unread badge. Rendered only above zero, in the forest/gold pairing. */
@@ -772,7 +775,7 @@ function ColumnHeading({
 }) {
   return (
     <div className="flex items-center gap-3 mb-3">
-      <DuoIcon icon={icon} tone={tone} size={44} />
+      <NeuIconDisc gradient={gradient} emoji={emoji} icon={icon} size={44} />
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
           <h2
@@ -877,11 +880,13 @@ function PrimaryBtn({
 /** One card on the "Coming up" rail. Gold-tinted when it is a recommendation;
  *  otherwise the same ivory panel as everything else. Exactly one action. */
 function RailCard({
-  icon: Icon, title, sub, gold = false, live = false,
+  icon: Icon, emoji, title, sub, gold = false, live = false,
   actionLabel, onAction, onDismiss,
 }: {
-  /** Drawn duotone (forest line over a gold fill) in a soft tinted disc. */
-  icon: LucideIcon;
+  icon: typeof Bell;
+  /** Fluent 3D asset name. `icon` stays required and becomes its fallback, so
+   *  a blocked CDN degrades to exactly the glyph this card had before. */
+  emoji: string;
   title: string; sub?: string; gold?: boolean; live?: boolean;
   actionLabel?: string; onAction?: () => void; onDismiss?: () => void;
 }) {
@@ -897,9 +902,13 @@ function RailCard({
         width: '100%',
       }}
     >
-      <span style={{ marginTop: 1 }} className="flex flex-shrink-0">
-        <DuoIcon icon={Icon} tone={gold ? 'gold' : 'green'} size={38} />
-      </span>
+      <NeuIconDisc
+        gradient={gold ? NEU_GRADIENTS.gold : NEU_GRADIENTS.forest}
+        emoji={emoji}
+        icon={Icon}
+        size={38}
+        style={{ marginTop: 1 }}
+      />
       <div className="min-w-0 flex-1">
         <p className="text-sm font-bold flex items-center gap-1.5" style={{ color: '#1C1410', fontFamily: OUTFIT, lineHeight: 1.3, textWrap: 'pretty' }}>
           {live && <span className="inline-block rounded-full animate-pulse flex-shrink-0" style={{ width: 7, height: 7, backgroundColor: '#B6871F' }} />}
@@ -1053,7 +1062,13 @@ function NewEmailModal({
                   transitionProperty: 'border-color, transform', transitionDuration: '160ms', transitionTimingFunction: EASE,
                 }}
               >
-                <DuoIcon icon={seed.icon} size={44} />
+                <span
+                  className="flex items-center justify-center rounded-xl flex-shrink-0"
+                  style={{ width: 44, height: 44, backgroundColor: 'rgba(238,217,138,0.5)' }}
+                  aria-hidden
+                >
+                  <Emoji3D name={seed.emoji} size={26} fallback={FileText} fallbackColor="#1B3828" />
+                </span>
                 <span className="min-w-0 flex-1 block">
                   <span className="block" style={{ color: '#1C1410', fontFamily: OUTFIT, fontSize: 16, fontWeight: 700, lineHeight: 1.25, overflowWrap: 'anywhere' }}>
                     {seed.title}
@@ -1151,15 +1166,26 @@ const CONSOLE_INK: Record<ConsoleTone, string> = {
   idle: SOFT,
 };
 
-/** The duotone tone per console state: a forest line over a gold fill for
- *  anything in flight or waiting, green for all clear, red for an alert. No 3D
- *  emoji on Communications (owner, 11 Oct 2026). */
-const CONSOLE_DUO: Record<ConsoleTone, 'gold' | 'green' | 'red'> = {
-  alert: 'red',
-  live: 'gold',
-  warn: 'gold',
-  calm: 'green',
-  idle: 'gold',
+/** Disc fill per tone. Tinted, never saturated — the disc is a token in a
+ *  well, and the well is ivory. */
+const CONSOLE_DISC: Record<ConsoleTone, string> = {
+  alert: 'linear-gradient(150deg, rgba(139,32,32,0.16), rgba(139,32,32,0.05))',
+  live: 'linear-gradient(150deg, rgba(182,135,31,0.24), rgba(182,135,31,0.07))',
+  warn: 'linear-gradient(150deg, rgba(182,135,31,0.24), rgba(182,135,31,0.07))',
+  calm: 'linear-gradient(150deg, rgba(61,122,82,0.20), rgba(61,122,82,0.06))',
+  idle: 'linear-gradient(150deg, rgba(27,56,40,0.10), rgba(27,56,40,0.03))',
+};
+
+/** The art per tone. 3D over lucide, because the console is the one thing on
+ *  the page that has to be readable from across a room, and a monochrome
+ *  forest glyph at 22px is not. Every one keeps its lucide glyph as the CDN
+ *  fallback, so a blocked image degrades to what was there before. */
+const CONSOLE_EMOJI: Record<ConsoleTone, string> = {
+  alert: 'Warning',
+  live: 'Envelope with arrow',
+  warn: 'Bellhop bell',
+  calm: 'Check mark button',
+  idle: 'Envelope',
 };
 
 /** The card surface per tone. The wash rides on the OUTER card and the well
@@ -1226,7 +1252,12 @@ function Console({
             style={{ ...RAISED_DISC, width: 58, height: 58 }}
             aria-hidden
           >
-            <DuoIcon icon={Icon} tone={CONSOLE_DUO[model.tone]} size={44} />
+            <span
+              className="flex items-center justify-center rounded-full"
+              style={{ width: 44, height: 44, background: CONSOLE_DISC[model.tone] }}
+            >
+              <Emoji3D name={CONSOLE_EMOJI[model.tone]} size={28} fallback={Icon} fallbackColor={ink} />
+            </span>
           </span>
 
           <div className="min-w-0 flex-1">
@@ -1347,13 +1378,14 @@ function Console({
  *  every state — the live card's "what has happened" band: static facts, low
  *  contrast in the hierarchy, so the console above keeps dominating. */
 function StatWell({
-  label, value, ink = '#1C1410', onClick, title: wellTitle, icon: Icon,
+  label, value, ink = '#1C1410', onClick, title: wellTitle, emoji, icon: Icon,
 }: {
   label: string; value: string | number; ink?: string;
   onClick?: () => void; title?: string;
-  /** A small duotone glyph in a tinted disc, seated top-right of the well.
-   *  Decorative and aria-hidden: the figure and its label say everything. */
-  icon: LucideIcon;
+  /** Fluent 3D art, seated top-right of the well. Decorative and aria-hidden:
+   *  the figure and its label already say everything, so a blocked CDN image
+   *  costs the strip nothing. */
+  emoji: string; icon: typeof Bell;
 }) {
   const interactive = !!onClick;
   const Tag = (interactive ? 'button' : 'div') as 'button';
@@ -1388,12 +1420,12 @@ function StatWell({
         >
           {value}
         </span>
-        <DuoIcon icon={Icon} size={24} />
+        <Emoji3D name={emoji} size={20} fallback={Icon} fallbackColor={SOFT} style={{ opacity: 0.95 }} />
       </span>
       <span
         className="block font-bold uppercase"
         style={{
-          color: SOFT, fontFamily: OUTFIT, fontSize: 9.5,
+          color: SOFT, fontFamily: OUTFIT, fontSize: 12,
           letterSpacing: '0.09em', lineHeight: 1.3, marginBlockStart: 3,
           textWrap: 'pretty',
         }}
@@ -2251,13 +2283,13 @@ function CommunicationsPageInner() {
    *  "Delegates marked unpaid in DISEC" comes out of the same data the chips
    *  are built from, rather than being written twice. */
   const audienceSections = useMemo<AudienceSectionDef[]>(() => [
-    { key: 'roles', label: 'Roles', icon: Users, phrase: '', options: ROLE_OPTIONS, selected: selRoles, counts: countsFor('roles', ROLE_OPTIONS) },
-    { key: 'payment', label: 'Payment', icon: Wallet, phrase: 'marked {v}', options: PAYMENT_OPTIONS, selected: selPayment, counts: countsFor('payment', PAYMENT_OPTIONS) },
-    { key: 'committees', label: 'Committees', icon: Landmark, phrase: 'in {v}', options: committeeOptions, selected: selCommittees, counts: countsFor('committees', committeeOptions) },
-    { key: 'delegations', label: 'Delegations', icon: School, phrase: 'from {v}', options: delegationOptions, selected: selDelegations, counts: countsFor('delegations', delegationOptions) },
-    { key: 'attendance', label: 'Coming or not', icon: Ticket, phrase: 'who are {v}', options: ATTENDANCE_OPTIONS, selected: selAttendance, counts: countsFor('attendance', ATTENDANCE_OPTIONS) },
-    { key: 'status', label: 'Application status', icon: FileText, phrase: 'whose application is {v}', options: APP_STATUS_OPTIONS, selected: selStatus, counts: countsFor('status', APP_STATUS_OPTIONS) },
-    { key: 'aid', label: 'Financial aid', icon: HandCoins, phrase: 'with {v}', options: AID_OPTIONS, selected: selAid, counts: countsFor('aid', AID_OPTIONS) },
+    { key: 'roles', label: 'Roles', emoji: 'Busts in silhouette', phrase: '', options: ROLE_OPTIONS, selected: selRoles, counts: countsFor('roles', ROLE_OPTIONS) },
+    { key: 'payment', label: 'Payment', emoji: 'Money bag', phrase: 'marked {v}', options: PAYMENT_OPTIONS, selected: selPayment, counts: countsFor('payment', PAYMENT_OPTIONS) },
+    { key: 'committees', label: 'Committees', emoji: 'Ballot box with ballot', phrase: 'in {v}', options: committeeOptions, selected: selCommittees, counts: countsFor('committees', committeeOptions) },
+    { key: 'delegations', label: 'Delegations', emoji: 'People hugging', phrase: 'from {v}', options: delegationOptions, selected: selDelegations, counts: countsFor('delegations', delegationOptions) },
+    { key: 'attendance', label: 'Coming or not', emoji: 'Ticket', phrase: 'who are {v}', options: ATTENDANCE_OPTIONS, selected: selAttendance, counts: countsFor('attendance', ATTENDANCE_OPTIONS) },
+    { key: 'status', label: 'Application status', emoji: 'Page facing up', phrase: 'whose application is {v}', options: APP_STATUS_OPTIONS, selected: selStatus, counts: countsFor('status', APP_STATUS_OPTIONS) },
+    { key: 'aid', label: 'Financial aid', emoji: 'Money with wings', phrase: 'with {v}', options: AID_OPTIONS, selected: selAid, counts: countsFor('aid', AID_OPTIONS) },
   ], [selRoles, selPayment, selCommittees, selDelegations, selAttendance, selStatus, selAid, committeeOptions, delegationOptions, countsFor]);
 
   /** One dot per eligible person, in `eligibleApplications` order — which is
@@ -4017,7 +4049,7 @@ function CommunicationsPageInner() {
                     return (
                       <div key={`auto-${g.key}`} className="rounded-2xl p-5" style={PANEL}>
                         <div className="flex items-center gap-3">
-                          <DuoIcon icon={Bell} size={34} />
+                          <NeuIconDisc gradient={NEU_GRADIENTS.gold} emoji="Bellhop bell" icon={Bell} size={34} />
                           <p className="font-semibold text-sm flex-1 min-w-0 [overflow-wrap:anywhere]" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
                             {g.label}
                           </p>
@@ -4066,7 +4098,7 @@ function CommunicationsPageInner() {
                   return (
                     <div key={email.id} className="rounded-2xl p-5" style={PANEL}>
                       <div className="flex items-center gap-3">
-                        <DuoIcon icon={Send} size={34} />
+                        <NeuIconDisc gradient={NEU_GRADIENTS.forest} emoji="Outbox tray" icon={Send} size={34} />
                         <p className="font-semibold text-sm flex-1 truncate" style={{ color: '#1C1410', fontFamily: OUTFIT }} title={email.subject || '(No subject)'}>
                           {email.subject || '(No subject)'}
                         </p>
@@ -4312,7 +4344,7 @@ function CommunicationsPageInner() {
                   onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = '#1C1410'; }}
                   onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = SOFT; }}
                 >
-                  ← BACK
+                  ← Back
                 </button>
               )}
               actionsSlot={(
@@ -4395,7 +4427,7 @@ function CommunicationsPageInner() {
                   restored={audienceRestored}
                   onSend={handleOpenSendConfirm}
                   sendDisabled={sending || openingSend || finalRecipients.length === 0}
-                  sendBusyLabel={sending ? 'QUEUEING…' : openingSend ? 'SAVING…' : null}
+                  sendBusyLabel={sending ? 'Queueing…' : openingSend ? 'Saving…' : null}
                 />
               ) : undefined}
             />

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNow } from '@/lib/useNow';
-import { FileText, Upload, X, Check, LayoutGrid, Settings as SettingsIcon, CircleCheck, PencilLine, Users } from 'lucide-react';
+import { FileText, Upload, X, Check, LayoutGrid, Settings as SettingsIcon, CircleCheck, PencilLine, Users, BookOpen, ScrollText, type LucideIcon } from 'lucide-react';
 import ConferenceDocsTab from './ConferenceDocsTab';
 import Link from 'next/link';
 import { useManage } from '@/app/manage/[slug]/layout';
@@ -14,7 +14,9 @@ import { PillToggle } from '@/app/account/accountUi';
 import { MonogramMedallion } from '@/components/CommitteeEditorModal';
 import { useConfirmModal } from '@/components/ConfirmModal';
 import { notifyErr, clearErr } from '@/lib/appNotify';
-import { NEU, EASE, NeuPill } from '@/components/neu';
+import { NEU, EASE, Emoji3D } from '@/components/neu';
+import { GoldWord } from '@/components/BrandHeading';
+import { BigSectionTabs, type BigSectionTab } from '../BigSectionTabs';
 import PositionPaperRoster, { type RosterAllocation, type RosterPaper } from '@/components/PositionPaperRoster';
 import { fetchMessageStubsForPapers, type PaperMessageStub } from '@/lib/positionPapers';
 import { safeStorageKey } from '@/lib/storageKey';
@@ -153,24 +155,24 @@ function UploadStudyGuideModal({
     <ModalOverlay onClose={onClose}>
       <div style={{ backgroundColor: '#FAF8F3', border: '1.5px solid #D8CDB6', borderRadius: 16, padding: 24, maxWidth: 448, width: '100%', maxHeight: '90dvh', overflowY: 'auto', boxShadow: '0 20px 60px rgba(27,56,40,0.18)' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
-          <h2 style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: 16, color: '#1C1410' }}>Upload Study Guide</h2>
-          <button onClick={onClose} className="focus:outline-none" style={{ color: '#9A8A78' }}><X size={18} /></button>
+          <h2 style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 24, letterSpacing: '-0.02em', color: '#1C1410' }}>Upload Study <GoldWord>Guide</GoldWord></h2>
+          <button onClick={onClose} aria-label="Close" className="focus:outline-none inline-flex items-center justify-center" style={{ color: NEU.inkSoft, width: 40, height: 40, borderRadius: 999, background: 'none', border: 'none', cursor: 'pointer' }}><X size={20} /></button>
         </div>
 
         <div style={{ marginBottom: 16 }}>
-          <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#6E5F4E', fontFamily: OUTFIT, letterSpacing: '0.02em', marginBottom: 6 }}>
+          <label style={{ display: 'block', fontSize: 14, fontWeight: 700, color: '#1C1410', fontFamily: OUTFIT, marginBottom: 6 }}>
             Title *
           </label>
           <input
             value={title}
             onChange={e => setTitle(e.target.value)}
             placeholder="e.g. UNHRC Background Guide 2026"
-            style={{ width: '100%', border: '1px solid #DDD4C0', borderRadius: 8, padding: '8px 12px', fontSize: 14, color: '#1C1410', backgroundColor: '#FAF8F3', outline: 'none', fontFamily: OUTFIT, boxSizing: 'border-box' }}
+            style={{ width: '100%', border: '1.5px solid #DDD4C0', borderRadius: 12, padding: '0 14px', height: 48, fontSize: 16, color: '#1C1410', backgroundColor: '#FAF8F3', outline: 'none', fontFamily: OUTFIT, boxSizing: 'border-box' }}
           />
         </div>
 
         <div style={{ marginBottom: 16 }}>
-          <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#6E5F4E', fontFamily: OUTFIT, letterSpacing: '0.02em', marginBottom: 6 }}>
+          <label style={{ display: 'block', fontSize: 14, fontWeight: 700, color: '#1C1410', fontFamily: OUTFIT, marginBottom: 6 }}>
             File (PDF · max 5MB)
           </label>
           <input type="file" accept="application/pdf" onChange={handleFileSelect} className="hidden" ref={fileInputRef} />
@@ -184,8 +186,8 @@ function UploadStudyGuideModal({
               <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 8 }}>
                 <Upload size={24} style={{ color: '#9A8A78' }} />
               </div>
-              <p style={{ fontSize: 13, color: '#9A8A78', fontFamily: OUTFIT, marginBottom: 4 }}>Click to select PDF</p>
-              <p style={{ fontSize: 11, color: '#C8BFB0', fontFamily: OUTFIT }}>Max 5MB</p>
+              <p style={{ fontSize: 15, fontWeight: 700, color: '#1C1410', fontFamily: OUTFIT, marginBottom: 4 }}>Click to select PDF</p>
+              <p style={{ fontSize: 13, color: NEU.inkSoft, fontFamily: OUTFIT }}>Max 5MB</p>
             </div>
           ) : (
             <div style={{ border: '1px solid rgba(61,122,82,0.3)', borderRadius: 12, padding: '12px 16px', backgroundColor: 'rgba(61,122,82,0.04)', display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -199,20 +201,20 @@ function UploadStudyGuideModal({
               </button>
             </div>
           )}
-          {fileError && <p style={{ fontSize: 11, color: '#8B2020', fontFamily: OUTFIT, marginTop: 4 }}>{fileError}</p>}
+          {fileError && <p style={{ fontSize: 13, color: '#8B2020', fontFamily: OUTFIT, marginTop: 4 }}>{fileError}</p>}
         </div>
 
-        {uploadError && <p style={{ fontSize: 12, color: '#8B2020', fontFamily: OUTFIT, marginBottom: 12 }}>{uploadError}</p>}
+        {uploadError && <p style={{ fontSize: 13.5, color: '#8B2020', fontFamily: OUTFIT, marginBottom: 12 }}>{uploadError}</p>}
 
         <div style={{ display: 'flex', gap: 10 }}>
-          <button onClick={onClose} className="focus:outline-none gv-lift" style={{ flex: 1, border: '1.5px solid #DDD4C0', borderRadius: 12, padding: '10px 0', fontFamily: OUTFIT, fontWeight: 700, fontSize: 13, color: '#1C1410', backgroundColor: 'transparent', cursor: 'pointer' }}>
+          <button onClick={onClose} className="focus:outline-none gv-lift" style={{ flex: 1, border: '1.5px solid #DDD4C0', borderRadius: 12, padding: '0', minHeight: 48, fontFamily: OUTFIT, fontWeight: 700, fontSize: 15, color: '#1C1410', backgroundColor: 'transparent', cursor: 'pointer' }}>
             Cancel
           </button>
           <button
             onClick={handleUpload}
             disabled={disabled}
             className="focus:outline-none gv-lift"
-            style={{ flex: 1, border: 'none', borderRadius: 12, padding: '10px 0', fontFamily: OUTFIT, fontWeight: 700, fontSize: 13, backgroundColor: disabled ? '#DDD4C0' : '#1B3828', color: disabled ? '#9A8A78' : '#EED98A', cursor: disabled ? 'default' : 'pointer' }}
+            style={{ flex: 1, border: 'none', borderRadius: 12, padding: '0', minHeight: 48, fontFamily: OUTFIT, fontWeight: 700, fontSize: 15, backgroundColor: disabled ? '#DDD4C0' : '#1B3828', color: disabled ? '#9A8A78' : '#EED98A', cursor: disabled ? 'default' : 'pointer' }}
           >
             {uploading ? 'Uploading…' : 'Upload'}
           </button>
@@ -280,7 +282,7 @@ function DateTimeField({ value, onSave, placeholder }: {
           className="focus:outline-none"
           style={{
             border: 'none', borderRadius: 12, padding: '11px 12px',
-            fontFamily: OUTFIT, fontSize: 13.5, fontWeight: 600,
+            fontFamily: OUTFIT, fontSize: 15, fontWeight: 600,
             color: datePart ? NEU.ink : NEU.muted, backgroundColor: NEU.base, boxShadow: NEU.inSm,
           }}
         />
@@ -297,7 +299,7 @@ function DateTimeField({ value, onSave, placeholder }: {
           </button>
         )}
       </div>
-      {error && <p style={{ fontSize: 11, color: '#8B2020', fontFamily: OUTFIT, marginTop: 4 }}>{error}</p>}
+      {error && <p style={{ fontSize: 13, color: '#8B2020', fontFamily: OUTFIT, marginTop: 4 }}>{error}</p>}
     </div>
   );
 }
@@ -313,7 +315,7 @@ function CommitteeRail({ committees, selectedId, onSelect }: {
   onSelect: (id: string) => void;
 }) {
   return (
-    <div className="flex md:flex-col gap-2 overflow-x-auto md:overflow-visible flex-shrink-0 md:w-[220px] pb-1 md:pb-0">
+    <div className="flex md:flex-col gap-2.5 overflow-x-auto md:overflow-visible flex-shrink-0 md:w-[250px] pb-1 md:pb-0" role="tablist" aria-label="Committees">
       {committees.map(c => {
         const active = c.id === selectedId;
         const label = c.abbreviation || c.name;
@@ -323,28 +325,30 @@ function CommitteeRail({ committees, selectedId, onSelect }: {
             type="button"
             onClick={() => onSelect(c.id)}
             title={c.name}
-            className="flex items-center gap-2.5 flex-shrink-0 md:w-full focus:outline-none text-left"
+            role="tab"
+            aria-selected={active}
+            className="flex items-center gap-3 flex-shrink-0 md:w-full focus:outline-none text-left"
             style={{
-              padding: '8px 12px', borderRadius: 14, border: 'none', cursor: 'pointer',
+              padding: '12px 14px', minHeight: 60, borderRadius: 16, border: 'none', cursor: 'pointer',
               backgroundColor: active ? NEU.base : NEU.surface,
               boxShadow: active ? `0 0 0 2px ${NEU.deepGold}, ${NEU.in}` : NEU.outSm,
               transition: `box-shadow 200ms ${EASE}`,
               minWidth: 0,
             }}
           >
-            <span className="flex-shrink-0 flex items-center justify-center overflow-hidden" style={{ width: 28, height: 28, borderRadius: 8 }}>
+            <span className="flex-shrink-0 flex items-center justify-center overflow-hidden" style={{ width: 38, height: 38, borderRadius: 10 }}>
               {c.logo_url ? (
-                <img src={c.logo_url} alt="" style={{ width: 28, height: 28, objectFit: 'contain', borderRadius: 8 }} />
+                <img src={c.logo_url} alt="" style={{ width: 38, height: 38, objectFit: 'contain', borderRadius: 10 }} />
               ) : (
-                <MonogramMedallion text={label} isCrisis={c.committee_type === 'crisis'} size={28} />
+                <MonogramMedallion text={label} isCrisis={c.committee_type === 'crisis'} size={38} />
               )}
             </span>
             <span className="min-w-0 flex flex-col" style={{ lineHeight: 1.2 }}>
-              <span className="[overflow-wrap:anywhere]" style={{ fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 800, color: NEU.ink }}>
+              <span className="[overflow-wrap:anywhere]" style={{ fontFamily: OUTFIT, fontSize: 15.5, fontWeight: 800, color: NEU.ink }}>
                 {label}
               </span>
               {c.abbreviation && c.abbreviation !== c.name && (
-                <span className="hidden md:block [overflow-wrap:anywhere]" style={{ fontFamily: OUTFIT, fontSize: 10.5, fontWeight: 500, color: NEU.inkSoft, marginTop: 1 }}>
+                <span className="hidden md:block [overflow-wrap:anywhere]" style={{ fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 500, color: NEU.inkSoft, marginTop: 2 }}>
                   {c.name}
                 </span>
               )}
@@ -361,8 +365,40 @@ function CommitteeRail({ committees, selectedId, onSelect }: {
 function SectionIntro({ title, description }: { title: string; description: string }) {
   return (
     <div style={{ marginBottom: 12 }}>
-      <p style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 13, color: '#1C1410', margin: '0 0 3px 0' }}>{title}</p>
-      <p style={{ fontFamily: OUTFIT, fontSize: 12, color: '#9A8A78', margin: 0, lineHeight: 1.5 }}>{description}</p>
+      <p style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 17, color: '#1C1410', margin: '0 0 4px 0' }}>{title}</p>
+      <p style={{ fontFamily: OUTFIT, fontSize: 14, color: NEU.inkSoft, margin: 0, lineHeight: 1.5 }}>{description}</p>
+    </div>
+  );
+}
+
+// ── Big section tabs (11 Oct 2026, owner: "make the sections for overview,
+// everyone and settings bigger, cmon its too small"): the shared organiser
+// BigSectionTabs, three white cards with a 3D emoji disc over their top edge.
+
+type DocsTab = 'overview' | 'everyone' | 'settings';
+
+const SECTION_TABS: BigSectionTab<DocsTab>[] = [
+  { key: 'overview', label: 'Overview', sub: 'Study guides and position papers', emoji: 'Card index dividers', lucide: LayoutGrid, tone: 'gold' },
+  { key: 'everyone', label: 'For everyone', sub: 'Rules of Procedure, logistics, schedules', emoji: 'Books', lucide: Users, tone: 'green' },
+  { key: 'settings', label: 'Settings', sub: 'Deadlines and release times', emoji: 'Gear', lucide: SettingsIcon, tone: 'gold' },
+];
+
+/** A section card's title: a 3D emoji disc and a Title Case heading whose
+ *  last word is gold. */
+function SectionTitle({ emoji, lucide, lead, last, right }: {
+  emoji: string; lucide: LucideIcon; lead: string; last: string; right?: React.ReactNode;
+}) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 14, flexWrap: 'wrap', marginBottom: 18 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 14, minWidth: 0 }}>
+        <span aria-hidden className="inline-flex items-center justify-center flex-shrink-0" style={{ width: 56, height: 56, borderRadius: 18, background: 'linear-gradient(150deg, rgba(238,217,138,0.75), rgba(238,217,138,0.32))', boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.8), 0 8px 18px -12px rgba(27,56,40,0.5)' }}>
+          <Emoji3D name={emoji} size={36} fallback={lucide} fallbackColor="#1B3828" />
+        </span>
+        <h2 style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 'clamp(26px, 2.6vw, 32px)', letterSpacing: '-0.02em', lineHeight: 1.1, color: '#1C1410', margin: 0 }}>
+          {lead}{lead ? ' ' : ''}<GoldWord>{last}</GoldWord>
+        </h2>
+      </div>
+      {right}
     </div>
   );
 }
@@ -383,7 +419,7 @@ export default function DocumentsPage() {
    *  dependency array. */
   const accessToken = session?.access_token;
 
-  const [activeTab, setActiveTab] = useState<'overview' | 'settings' | 'everyone'>('overview');
+  const [activeTab, setActiveTab] = useState<DocsTab>('overview');
   const [committees, setCommittees] = useState<CommitteeTab[]>([]);
   const [selectedCommitteeId, setSelectedCommitteeId] = useState<string | null>(null);
   const [studyGuides, setStudyGuides] = useState<StudyGuide[]>([]);
@@ -744,11 +780,11 @@ export default function DocumentsPage() {
   return (
     <div className="px-6 md:px-10 py-8">
       {/* Header */}
-      <p style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: 11, color: '#9A8A78', letterSpacing: '0.12em', marginBottom: 4 }}>
+      <p style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: 13, color: NEU.inkSoft, letterSpacing: '0.06em', marginBottom: 6 }}>
         {conference.acronym} / Documents
       </p>
-      <h1 style={{ fontFamily: OUTFIT, fontWeight: 900, fontSize: 24, color: '#1C1410', marginBottom: 24 }}>
-        Documents
+      <h1 style={{ fontFamily: OUTFIT, fontWeight: 900, fontSize: 'clamp(32px, 3.4vw, 42px)', letterSpacing: '-0.025em', lineHeight: 1.05, color: '#1C1410', margin: 0 }}>
+        Conference <GoldWord>Documents</GoldWord>
       </h1>
 
       {loading && (
@@ -757,25 +793,9 @@ export default function DocumentsPage() {
         </div>
       )}
 
-      {/* Tab switcher, same neumorphic pill pattern as the committees page.
-          Shown even with no committees: "For everyone" (conference-wide
-          documents, 11 Oct 2026) needs none. */}
-      {!loading && (
-        <div className="flex items-center gap-2 mb-6 flex-wrap">
-          <NeuPill active={activeTab === 'overview'} onClick={() => setActiveTab('overview')}>
-            <LayoutGrid size={12} strokeWidth={2.5} />
-            Overview
-          </NeuPill>
-          <NeuPill active={activeTab === 'everyone'} onClick={() => setActiveTab('everyone')}>
-            <Users size={12} strokeWidth={2.5} />
-            For everyone
-          </NeuPill>
-          <NeuPill active={activeTab === 'settings'} onClick={() => setActiveTab('settings')}>
-            <SettingsIcon size={12} strokeWidth={2.5} />
-            Settings
-          </NeuPill>
-        </div>
-      )}
+      {/* The three sections as big cards. Shown even with no committees:
+          "For everyone" (conference-wide documents) needs none. */}
+      {!loading && <BigSectionTabs tabs={SECTION_TABS} value={activeTab} onChange={setActiveTab} label="Documents sections" />}
 
       {!loading && activeTab === 'everyone' && <ConferenceDocsTab conferenceId={conference.id} />}
 
@@ -784,11 +804,11 @@ export default function DocumentsPage() {
           <span className="inline-flex items-center justify-center" style={{ width: 56, height: 56, borderRadius: 16, background: 'linear-gradient(150deg, rgba(27,56,40,0.1), rgba(27,56,40,0.04))', border: '1px solid rgba(27,56,40,0.18)', marginBottom: 16 }}>
             <FileText size={26} strokeWidth={1.8} style={{ color: '#1B3828' }} />
           </span>
-          <p style={{ fontFamily: OUTFIT, fontSize: 15, fontWeight: 600, color: '#1C1410', marginBottom: 6 }}>No committees yet</p>
-          <p style={{ fontFamily: OUTFIT, fontSize: 13, color: '#9A8A78', marginBottom: 20 }}>Add committees before managing documents.</p>
+          <p style={{ fontFamily: OUTFIT, fontSize: 22, fontWeight: 800, color: '#1C1410', marginBottom: 6 }}>No committees yet</p>
+          <p style={{ fontFamily: OUTFIT, fontSize: 15, color: NEU.inkSoft, marginBottom: 20 }}>Add committees before managing documents.</p>
           <Link
             href={`/manage/${conference.slug}/committees`}
-            style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: 13, color: '#EED98A', backgroundColor: '#1B3828', borderRadius: 10, padding: '8px 20px', textDecoration: 'none', display: 'inline-block' }}
+            style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: 15, color: '#EED98A', background: 'linear-gradient(90deg,#1B3828 0%,#2A5A3C 100%)', borderRadius: 12, padding: '0 22px', minHeight: 48, lineHeight: '48px', textDecoration: 'none', display: 'inline-block' }}
           >
             Add committees
           </Link>
@@ -803,20 +823,25 @@ export default function DocumentsPage() {
 
               <div className="flex-1 min-w-0 w-full flex flex-col gap-6">
                 {/* ── Section A: Study Guides ─────────────────────────────── */}
-                <div style={{ backgroundColor: '#FAF8F3', border: '1.5px solid #D8CDB6', borderRadius: 16, padding: 24, boxShadow: CARD_SHADOW }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-                    <p style={{ fontFamily: OUTFIT, fontWeight: 600, fontSize: 15, color: '#1C1410' }}>Study Guides</p>
-                    <button
-                      onClick={() => setShowUploadModal(true)}
-                      className="focus:outline-none gv-lift"
-                      style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: 12, color: '#EED98A', backgroundColor: '#1B3828', border: 'none', borderRadius: 10, padding: '8px 14px', cursor: 'pointer' }}
-                    >
-                      Upload study guide
-                    </button>
-                  </div>
+                <div style={{ backgroundColor: '#FFFFFF', borderRadius: 22, padding: '26px 28px', boxShadow: CARD_SHADOW }}>
+                  <SectionTitle
+                    emoji="Books"
+                    lucide={BookOpen}
+                    lead="Study"
+                    last="Guides"
+                    right={(
+                      <button
+                        onClick={() => setShowUploadModal(true)}
+                        className="focus:outline-none gv-lift"
+                        style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: 15, color: '#EED98A', background: 'linear-gradient(90deg,#1B3828 0%,#2A5A3C 100%)', border: 'none', borderRadius: 12, padding: '0 20px', minHeight: 46, cursor: 'pointer' }}
+                      >
+                        Upload study guide
+                      </button>
+                    )}
+                  />
 
                   {studyGuides.length === 0 ? (
-                    <p style={{ fontFamily: OUTFIT, fontSize: 13, color: '#9A8A78', textAlign: 'center', padding: '32px 0' }}>No study guides yet.</p>
+                    <p style={{ fontFamily: OUTFIT, fontSize: 15, color: NEU.inkSoft, textAlign: 'center', padding: '32px 0' }}>No study guides yet.</p>
                   ) : (
                     <div>
                       {studyGuides.map((guide, i) => {
@@ -827,26 +852,26 @@ export default function DocumentsPage() {
                         <div
                           key={guide.id}
                           style={{
-                            display: 'flex', alignItems: 'center', gap: 12, padding: '12px 0',
+                            display: 'flex', alignItems: 'center', gap: 14, padding: '16px 0',
                             borderBottom: i < studyGuides.length - 1 ? '1px solid #F0EDE6' : 'none',
                           }}
                         >
-                          <FileText size={18} style={{ color: '#9A8A78', flexShrink: 0 }} />
+                          <FileText size={22} style={{ color: NEU.forest, flexShrink: 0 }} />
                           <div style={{ flex: 1, minWidth: 0 }}>
-                            <p style={{ fontFamily: OUTFIT, fontWeight: 600, fontSize: 13, color: '#1C1410' }}>{guide.title}</p>
-                            <p style={{ fontFamily: OUTFIT, fontWeight: 500, fontVariantNumeric: 'tabular-nums', fontSize: 11, color: '#9A8A78', marginTop: 2 }}>
+                            <p className="[overflow-wrap:anywhere]" style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: 16, color: '#1C1410' }}>{guide.title}</p>
+                            <p className="[overflow-wrap:anywhere]" style={{ fontFamily: OUTFIT, fontWeight: 500, fontVariantNumeric: 'tabular-nums', fontSize: 13.5, color: NEU.inkSoft, marginTop: 3 }}>
                               {guide.file_name} · {formatFileSize(guide.file_size_bytes)}
                             </p>
                           </div>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
                             {guide.is_published ? (
                               <>
-                                <span className="inline-flex items-center gap-1" style={{ fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 700, color: '#2F6644' }}>
-                                  <CircleCheck size={13} strokeWidth={2.4} aria-hidden />
+                                <span className="inline-flex items-center gap-1" style={{ fontFamily: OUTFIT, fontSize: 14, fontWeight: 700, color: '#2F6644' }}>
+                                  <CircleCheck size={16} strokeWidth={2.4} aria-hidden />
                                   Published
                                 </span>
                                 {guide.published_at && (
-                                  <span style={{ fontFamily: OUTFIT, fontSize: 11, color: '#9A8A78' }}>
+                                  <span style={{ fontFamily: OUTFIT, fontSize: 13.5, color: NEU.inkSoft }}>
                                     {formatDate(guide.published_at)}
                                   </span>
                                 )}
@@ -854,7 +879,7 @@ export default function DocumentsPage() {
                                   onClick={() => handlePublishGuide(guide.id, false)}
                                   title={releaseAt && new Date(releaseAt).getTime() <= now ? "Won't hide it, the schedule already released it. Clear the schedule in Settings to fully unpublish." : undefined}
                                   className="focus:outline-none gv-lift"
-                                  style={{ border: '1px solid #DDD4C0', borderRadius: 8, padding: '6px 12px', fontSize: 11, fontFamily: OUTFIT, fontWeight: 700, color: '#1C1410', backgroundColor: 'transparent', cursor: 'pointer' }}
+                                  style={{ border: '1.5px solid #DDD4C0', borderRadius: 10, padding: '0 16px', minHeight: 40, fontSize: 14, fontFamily: OUTFIT, fontWeight: 700, color: '#1C1410', backgroundColor: 'transparent', cursor: 'pointer' }}
                                   onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.04)'; }}
                                   onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
                                 >
@@ -863,14 +888,14 @@ export default function DocumentsPage() {
                               </>
                             ) : released ? (
                               <>
-                                <span className="inline-flex items-center gap-1" style={{ fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 700, color: '#2F6644' }}>
-                                  <CircleCheck size={13} strokeWidth={2.4} aria-hidden />
+                                <span className="inline-flex items-center gap-1" style={{ fontFamily: OUTFIT, fontSize: 14, fontWeight: 700, color: '#2F6644' }}>
+                                  <CircleCheck size={16} strokeWidth={2.4} aria-hidden />
                                   Released
                                 </span>
                                 <button
                                   onClick={() => selectedCommitteeId && handleUnscheduleGuide(guide.id, selectedCommitteeId)}
                                   className="focus:outline-none gv-lift"
-                                  style={{ border: '1px solid #DDD4C0', borderRadius: 8, padding: '6px 12px', fontSize: 11, fontFamily: OUTFIT, fontWeight: 700, color: '#1C1410', backgroundColor: 'transparent', cursor: 'pointer' }}
+                                  style={{ border: '1.5px solid #DDD4C0', borderRadius: 10, padding: '0 16px', minHeight: 40, fontSize: 14, fontFamily: OUTFIT, fontWeight: 700, color: '#1C1410', backgroundColor: 'transparent', cursor: 'pointer' }}
                                   onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.04)'; }}
                                   onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
                                 >
@@ -879,19 +904,19 @@ export default function DocumentsPage() {
                               </>
                             ) : (
                               <>
-                                <span className="inline-flex items-center gap-1" style={{ fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 700, color: '#7A5A10' }}>
-                                  <PencilLine size={13} strokeWidth={2.4} aria-hidden />
+                                <span className="inline-flex items-center gap-1" style={{ fontFamily: OUTFIT, fontSize: 14, fontWeight: 700, color: '#7A5A10' }}>
+                                  <PencilLine size={16} strokeWidth={2.4} aria-hidden />
                                   Draft
                                 </span>
                                 {scheduled && (
-                                  <span style={{ fontFamily: OUTFIT, fontSize: 11, color: '#9A8A78' }}>
+                                  <span style={{ fontFamily: OUTFIT, fontSize: 13.5, color: NEU.inkSoft }}>
                                     Releases {formatDate(releaseAt!)}
                                   </span>
                                 )}
                                 <button
                                   onClick={() => handlePublishGuide(guide.id, true)}
                                   className="focus:outline-none gv-lift"
-                                  style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: 11, color: '#EED98A', backgroundColor: '#1B3828', border: 'none', borderRadius: 8, padding: '6px 10px', cursor: 'pointer' }}
+                                  style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: 14, color: '#EED98A', backgroundColor: '#1B3828', border: 'none', borderRadius: 10, padding: '0 16px', minHeight: 40, cursor: 'pointer' }}
                                 >
                                   Publish
                                 </button>
@@ -900,9 +925,9 @@ export default function DocumentsPage() {
                             <button
                               onClick={() => handleDeleteGuide(guide.id)}
                               className="focus:outline-none"
-                              style={{ fontSize: 11, color: '#9A8A78', fontFamily: OUTFIT, background: 'none', border: 'none', cursor: 'pointer' }}
+                              style={{ fontSize: 14, fontWeight: 700, color: '#8B2020', fontFamily: OUTFIT, background: 'none', border: 'none', cursor: 'pointer', minHeight: 40, padding: '0 6px' }}
                               onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = '#8B2020'; (e.currentTarget as HTMLElement).style.textDecoration = 'underline'; }}
-                              onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = '#9A8A78'; (e.currentTarget as HTMLElement).style.textDecoration = 'none'; }}
+                              onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = '#8B2020'; (e.currentTarget as HTMLElement).style.textDecoration = 'none'; }}
                             >
                               Delete
                             </button>
@@ -915,33 +940,38 @@ export default function DocumentsPage() {
                 </div>
 
                 {/* ── Section B: Position Papers ──────────────────────────── */}
-                <div style={{ backgroundColor: '#FAF8F3', border: '1.5px solid #D8CDB6', borderTop: '2.5px solid #1B3828', borderRadius: 16, padding: 24, boxShadow: CARD_SHADOW }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, marginBottom: 8 }}>
-                    <p style={{ fontFamily: OUTFIT, fontWeight: 600, fontSize: 15, color: '#1C1410' }}>Position Papers</p>
-                    <span style={{ fontFamily: OUTFIT, fontWeight: 500, letterSpacing: '0.01em', fontVariantNumeric: 'tabular-nums', fontSize: 11, color: '#9A8A78' }}>
-                      {selectedCommittee?.position_paper_deadline
-                        ? `Due ${formatDate(selectedCommittee.position_paper_deadline)}`
-                        : 'No deadline set'}
-                    </span>
-                  </div>
+                <div style={{ backgroundColor: '#FFFFFF', borderRadius: 22, padding: '26px 28px', boxShadow: CARD_SHADOW }}>
+                  <SectionTitle
+                    emoji="Scroll"
+                    lucide={ScrollText}
+                    lead="Position"
+                    last="Papers"
+                    right={(
+                      <span style={{ fontFamily: OUTFIT, fontWeight: 700, fontVariantNumeric: 'tabular-nums', fontSize: 15, color: selectedCommittee?.position_paper_deadline ? '#7A5A10' : NEU.inkSoft }}>
+                        {selectedCommittee?.position_paper_deadline
+                          ? `Due ${formatDate(selectedCommittee.position_paper_deadline)}`
+                          : 'No deadline set'}
+                      </span>
+                    )}
+                  />
 
                   {/* Stats: a big number with the word beside it. */}
-                  <div style={{ display: 'flex', gap: 18, marginBottom: 16, flexWrap: 'wrap', alignItems: 'baseline' }}>
+                  <div style={{ display: 'flex', gap: 26, marginBottom: 20, flexWrap: 'wrap', alignItems: 'baseline' }}>
                     {([
                       [totalCount, 'submitted', NEU.ink],
                       [approvedCount, 'approved', '#2F6644'],
                       [pendingCount, 'awaiting review', '#7A5A10'],
                       [rejectedCount, 'rejected', '#8B2020'],
                     ] as const).map(([n, word, color]) => (
-                      <span key={word} style={{ fontFamily: OUTFIT, display: 'inline-flex', alignItems: 'baseline', gap: 5 }}>
-                        <span style={{ fontSize: 20, fontWeight: 800, color, fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>{n}</span>
-                        <span style={{ fontSize: 12, fontWeight: 600, color: NEU.inkSoft }}>{word}</span>
+                      <span key={word} style={{ fontFamily: OUTFIT, display: 'inline-flex', alignItems: 'baseline', gap: 7 }}>
+                        <span style={{ fontSize: 32, fontWeight: 900, letterSpacing: '-0.02em', color, fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>{n}</span>
+                        <span style={{ fontSize: 15, fontWeight: 600, color: NEU.inkSoft }}>{word}</span>
                       </span>
                     ))}
                   </div>
 
                   {/* Filter pills */}
-                  <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
+                  <div style={{ display: 'flex', gap: 10, marginBottom: 18, flexWrap: 'wrap' }}>
                     {['ALL', 'SUBMITTED', 'REVIEWED', 'APPROVED', 'REJECTED'].map(f => {
                       const filterLabel = f.charAt(0) + f.slice(1).toLowerCase();
                       const isActive = filterStatus === f;
@@ -951,11 +981,11 @@ export default function DocumentsPage() {
                           onClick={() => setFilterStatus(f)}
                           className="focus:outline-none gv-lift"
                           style={{
-                            fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 700,
-                            padding: '5px 12px', borderRadius: 9999, cursor: 'pointer',
-                            border: isActive ? '1px solid #1B3828' : '1px solid #DDD4C0',
-                            backgroundColor: isActive ? '#1B3828' : 'transparent',
-                            color: isActive ? '#EED98A' : '#9A8A78',
+                            fontFamily: OUTFIT, fontSize: 14, fontWeight: 700,
+                            padding: '0 18px', minHeight: 40, borderRadius: 9999, cursor: 'pointer',
+                            border: isActive ? '1.5px solid #1B3828' : '1.5px solid #DDD4C0',
+                            backgroundColor: isActive ? '#1B3828' : '#FFFFFF',
+                            color: isActive ? '#EED98A' : NEU.ink,
                           }}
                         >
                           {filterLabel}
@@ -965,7 +995,7 @@ export default function DocumentsPage() {
                   </div>
 
                   {papersError ? (
-                    <p style={{ fontFamily: OUTFIT, fontSize: 13, color: '#8B2020', textAlign: 'center', padding: '32px 0' }}>
+                    <p style={{ fontFamily: OUTFIT, fontSize: 15, color: '#8B2020', textAlign: 'center', padding: '32px 0' }}>
                       Couldn&apos;t load position papers.
                     </p>
                   ) : (
@@ -989,25 +1019,23 @@ export default function DocumentsPage() {
           )}
 
           {activeTab === 'settings' && settingsLoaded && (
-            <div className="flex flex-col gap-6" style={{ maxWidth: 640 }}>
+            <div className="flex flex-col gap-6" style={{ maxWidth: 760 }}>
               {/* Position Papers settings */}
-              <div style={{ backgroundColor: '#FAF8F3', border: '1.5px solid #D8CDB6', borderRadius: 16, padding: 24, boxShadow: CARD_SHADOW }}>
-                <p style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: 10, letterSpacing: '0.14em', color: '#B6871F', textTransform: 'uppercase', margin: '0 0 16px 0' }}>
-                  Position Papers
-                </p>
+              <div style={{ backgroundColor: '#FFFFFF', borderRadius: 22, padding: '26px 28px', boxShadow: CARD_SHADOW }}>
+                <SectionTitle emoji="Scroll" lucide={ScrollText} lead="Position" last="Papers" />
 
                 <SectionIntro title="Submissions" description="Choose which committees delegates can submit position papers for." />
                 <div className="flex flex-col gap-2.5 mb-6">
                   {committees.map(c => (
-                    <div key={c.id} className="flex items-center justify-between gap-3 rounded-xl px-4 py-3" style={{ backgroundColor: NEU.base, boxShadow: NEU.inSm }}>
+                    <div key={c.id} className="flex items-center justify-between gap-3 rounded-2xl px-5 py-4" style={{ backgroundColor: NEU.base, boxShadow: NEU.inSm }}>
                       <div className="min-w-0">
-                        <p className="[overflow-wrap:anywhere]" style={{ fontFamily: OUTFIT, fontSize: 13.5, fontWeight: 700, color: NEU.ink, margin: 0 }}>
+                        <p className="[overflow-wrap:anywhere]" style={{ fontFamily: OUTFIT, fontSize: 16, fontWeight: 800, color: NEU.ink, margin: 0 }}>
                           {c.abbreviation || c.name}
                         </p>
                         {c.abbreviation && c.abbreviation !== c.name && (
-                          <p className="[overflow-wrap:anywhere]" style={{ fontFamily: OUTFIT, fontSize: 11, color: NEU.inkSoft, margin: '1px 0 0 0' }}>{c.name}</p>
+                          <p className="[overflow-wrap:anywhere]" style={{ fontFamily: OUTFIT, fontSize: 13, color: NEU.inkSoft, margin: '2px 0 0 0' }}>{c.name}</p>
                         )}
-                        <p style={{ fontFamily: OUTFIT, fontSize: 11, color: NEU.muted, margin: '2px 0 0 0' }}>
+                        <p style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 600, color: c.pp_submissions_enabled ? '#2F6644' : NEU.inkSoft, margin: '4px 0 0 0' }}>
                           {c.pp_submissions_enabled ? 'Submissions open' : 'Submissions closed'}
                         </p>
                       </div>
@@ -1019,7 +1047,7 @@ export default function DocumentsPage() {
                 <div className="pt-4" style={{ borderTop: '1px solid rgba(27,56,40,0.08)' }}>
                   <SectionIntro title="Deadline" description="Set when position paper submissions are due, the same time for every committee or a different one for each." />
                   <div className="flex items-center justify-between gap-3 mb-4">
-                    <span style={{ fontFamily: OUTFIT, fontSize: 13.5, color: '#1C1410', fontWeight: 600 }}>
+                    <span style={{ fontFamily: OUTFIT, fontSize: 15.5, color: '#1C1410', fontWeight: 700 }}>
                       Different Position Paper Deadline per Committee
                     </span>
                     <PillToggle value={ppPerCommittee} onChange={togglePpPerCommittee} />
@@ -1029,7 +1057,7 @@ export default function DocumentsPage() {
                     <div className="flex flex-col gap-2.5">
                       {committees.map(c => (
                         <div key={c.id} className="flex items-center gap-3 flex-wrap rounded-xl px-4 py-3" style={{ backgroundColor: NEU.base, boxShadow: NEU.inSm }}>
-                          <span className="[overflow-wrap:anywhere]" style={{ width: 140, flexShrink: 0, fontFamily: OUTFIT, fontSize: 13, fontWeight: 800, color: NEU.ink }} title={c.name}>
+                          <span className="[overflow-wrap:anywhere]" style={{ width: 150, flexShrink: 0, fontFamily: OUTFIT, fontSize: 15.5, fontWeight: 800, color: NEU.ink }} title={c.name}>
                             {c.abbreviation || c.name}
                           </span>
                           <div style={{ flex: 1, minWidth: 220 }}>
@@ -1045,14 +1073,12 @@ export default function DocumentsPage() {
               </div>
 
               {/* Study Guides settings */}
-              <div style={{ backgroundColor: '#FAF8F3', border: '1.5px solid #D8CDB6', borderRadius: 16, padding: 24, boxShadow: CARD_SHADOW }}>
-                <p style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: 10, letterSpacing: '0.14em', color: '#B6871F', textTransform: 'uppercase', margin: '0 0 16px 0' }}>
-                  Study Guides
-                </p>
+              <div style={{ backgroundColor: '#FFFFFF', borderRadius: 22, padding: '26px 28px', boxShadow: CARD_SHADOW }}>
+                <SectionTitle emoji="Books" lucide={BookOpen} lead="Study" last="Guides" />
 
                 <SectionIntro title="Release" description="Choose when study guides become visible to delegates, the same time for every committee or a different one for each." />
                 <div className="flex items-center justify-between gap-3 mb-4">
-                  <span style={{ fontFamily: OUTFIT, fontSize: 13.5, color: '#1C1410', fontWeight: 600 }}>
+                  <span style={{ fontFamily: OUTFIT, fontSize: 15.5, color: '#1C1410', fontWeight: 700 }}>
                     Different Study Guide Release per Committee
                   </span>
                   <PillToggle value={sgPerCommittee} onChange={toggleSgPerCommittee} />
@@ -1062,7 +1088,7 @@ export default function DocumentsPage() {
                   <div className="flex flex-col gap-2.5">
                     {committees.map(c => (
                       <div key={c.id} className="flex items-center gap-3 flex-wrap rounded-xl px-4 py-3" style={{ backgroundColor: NEU.base, boxShadow: NEU.inSm }}>
-                        <span className="[overflow-wrap:anywhere]" style={{ width: 140, flexShrink: 0, fontFamily: OUTFIT, fontSize: 13, fontWeight: 800, color: NEU.ink }} title={c.name}>
+                        <span className="[overflow-wrap:anywhere]" style={{ width: 150, flexShrink: 0, fontFamily: OUTFIT, fontSize: 15.5, fontWeight: 800, color: NEU.ink }} title={c.name}>
                           {c.abbreviation || c.name}
                         </span>
                         <div style={{ flex: 1, minWidth: 220 }}>
@@ -1076,10 +1102,10 @@ export default function DocumentsPage() {
                 )}
                 {/* 29 Sep 2026: a scheduled release now sends the release email
                     at that time too (before, only a manual publish did). */}
-                <p style={{ fontFamily: OUTFIT, fontSize: 13, color: '#5A5046', marginTop: 12, lineHeight: 1.55 }}>
+                <p style={{ fontFamily: OUTFIT, fontSize: 14.5, color: '#5A5046', marginTop: 14, lineHeight: 1.55 }}>
                   At this time delegates can see the study guide and get an email that it is out. Publishing a guide by hand releases it straight away.
                 </p>
-                <p style={{ fontFamily: OUTFIT, fontSize: 11.5, color: '#9A8A78', marginTop: 6, lineHeight: 1.6 }}>
+                <p style={{ fontFamily: OUTFIT, fontSize: 13.5, color: NEU.inkSoft, marginTop: 6, lineHeight: 1.6 }}>
                   Clear a schedule here if you need to pull an already-released draft back out of sight.
                 </p>
               </div>

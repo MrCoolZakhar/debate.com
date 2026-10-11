@@ -24,7 +24,6 @@ import { useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 import { Emoji3D } from '@/components/neu';
-import { DuoGlyph } from '@/components/DuoIcon';
 import { GoldWord } from '@/components/BrandHeading';
 import { useModalEscape } from '@/components/ModalOverlay';
 import { useScrollLock } from '@/hooks/useScrollLock';
@@ -125,10 +124,8 @@ export function Eyebrow({ children }: { children: React.ReactNode }) {
 }
 
 export interface Benefit {
-  /** Fluent 3D emoji folder name, e.g. "Ticket". Leave it out on an organiser
-   *  surface: `fallback` is then drawn as a duotone glyph (no 3D emoji on
-   *  organiser pages, owner 11 Oct 2026). */
-  emoji?: string;
+  /** Fluent 3D emoji folder name, e.g. "Ticket". */
+  emoji: string;
   fallback: LucideIcon;
   title: string;
   note?: string;
@@ -142,9 +139,7 @@ export function BenefitList({ items, tone }: { items: Benefit[]; tone: Tone }) {
       {items.map((b) => (
         <li key={b.title} className="gv-buy-benefit">
           <span className="gv-buy-benefit-disc" aria-hidden>
-            {b.emoji
-              ? <Emoji3D name={b.emoji} size={24} fallback={b.fallback} fallbackColor={tone === 'dark' ? GOLD : FOREST} />
-              : <DuoGlyph icon={b.fallback} size={22} onDark={tone === 'dark'} />}
+            <Emoji3D name={b.emoji} size={24} fallback={b.fallback} fallbackColor={tone === 'dark' ? GOLD : FOREST} />
           </span>
           <span className="gv-buy-benefit-text">
             {b.title}

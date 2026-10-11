@@ -5,7 +5,7 @@
  *
  * Built to the owner's 12-year-old rule: one obvious next step per screen,
  * plain words, no indicator that does not change a decision. White cards with
- * a soft forest shadow on the ivory page, duotone icons in a tinted disc,
+ * a soft forest shadow on the ivory page, Fluent 3D emoji in a tinted disc,
  * sentence-case buttons in the forest gradient, Title Case titles with the
  * last word in the gold italic.
  */
@@ -13,6 +13,7 @@
 import type { CSSProperties, ReactNode } from 'react';
 import { ArrowLeft, ChevronRight, type LucideIcon } from 'lucide-react';
 import { GoldWord } from '@/components/BrandHeading';
+import { Emoji3D } from '@/components/neu';
 
 export const FONT = 'var(--font-brand), sans-serif';
 export const INK = '#1C1410';
@@ -66,17 +67,25 @@ export function BackLink({ onClick, label = 'Communications' }: { onClick: () =>
   );
 }
 
-/** A duotone icon on a soft tinted disc: forest line over a gold fill. */
-export function DuoIcon({ icon: Icon, size = 52, tone = 'gold' }: { icon: LucideIcon; size?: number; tone?: 'gold' | 'green' | 'red' }) {
-  const fill = tone === 'gold' ? 'rgba(238,217,138,0.55)' : tone === 'green' ? 'rgba(61,122,82,0.18)' : 'rgba(139,32,32,0.12)';
-  const line = tone === 'red' ? DANGER : FOREST;
+/** A Fluent 3D emoji on a soft tinted disc (the Store and Financials look).
+ *  `icon` is the Lucide glyph drawn if the emoji image cannot load. Duotone
+ *  Lucide icons were tried here and rejected as ugly (owner, 11 Oct 2026). */
+export function EmojiIcon({ emoji, icon, size = 52, tone = 'gold' }: { emoji: string; icon: LucideIcon; size?: number; tone?: 'gold' | 'green' | 'red' }) {
+  const fill = tone === 'gold'
+    ? 'linear-gradient(150deg, rgba(238,217,138,0.70), rgba(238,217,138,0.30))'
+    : tone === 'green'
+      ? 'linear-gradient(150deg, rgba(61,122,82,0.20), rgba(61,122,82,0.08))'
+      : 'linear-gradient(150deg, rgba(139,32,32,0.16), rgba(139,32,32,0.05))';
   return (
     <span
       aria-hidden
       className="inline-flex items-center justify-center flex-shrink-0"
-      style={{ width: size, height: size, borderRadius: Math.round(size * 0.32), backgroundColor: fill }}
+      style={{
+        width: size, height: size, borderRadius: Math.round(size * 0.32), background: fill,
+        boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.75), 0 6px 14px -10px rgba(27,56,40,0.45)',
+      }}
     >
-      <Icon size={Math.round(size * 0.5)} strokeWidth={2} style={{ color: line, fill: tone === 'gold' ? 'rgba(238,217,138,0.9)' : 'none' }} />
+      <Emoji3D name={emoji} size={Math.round(size * 0.62)} fallback={icon} fallbackColor={tone === 'red' ? DANGER : FOREST} />
     </span>
   );
 }
@@ -86,8 +95,9 @@ export function DuoIcon({ icon: Icon, size = 52, tone = 'gold' }: { icon: Lucide
  * is a big number with its word beside it, and only appears when it matters.
  */
 export function ActionCard({
-  icon, title, line, count, countWord, urgent, onClick, badge,
+  emoji, icon, title, line, count, countWord, urgent, onClick, badge,
 }: {
+  emoji: string;
   icon: LucideIcon;
   title: string;
   line: string;
@@ -104,7 +114,7 @@ export function ActionCard({
       className="gv-comms-action w-full text-left flex items-start gap-4 p-5 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]"
       style={{ ...CARD, cursor: 'pointer', border: 'none', transitionProperty: 'transform, box-shadow', transitionDuration: '200ms', transitionTimingFunction: EASE_OUT }}
     >
-      <DuoIcon icon={icon} tone={urgent ? 'red' : 'gold'} />
+      <EmojiIcon emoji={emoji} icon={icon} tone={urgent ? 'red' : 'gold'} />
       <span className="min-w-0 flex-1 block">
         <span className="flex items-start gap-2">
           <span className="block flex-1 min-w-0" style={{ fontFamily: FONT, fontWeight: 800, fontSize: 18, color: INK, lineHeight: 1.25 }}>{title}</span>

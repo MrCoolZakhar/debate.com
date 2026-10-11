@@ -36,7 +36,7 @@ import Link from 'next/link';
 import {
   Check, Copy, Eye, ChevronDown, Plus, Star, X,
   CheckCircle2, Clock, MinusCircle, XCircle, CalendarDays, Wallet,
-  UserCheck, ListChecks, PartyPopper, UsersRound, type LucideIcon,
+  UserCheck, ListChecks, PartyPopper, type LucideIcon,
 } from 'lucide-react';
 import Portal from '@/components/Portal';
 import { GoldWord } from '@/components/BrandHeading';
@@ -54,7 +54,7 @@ import { TimelineNotice, TimelineWarning } from './timelineUi';
 import { RoleTimelineBar } from './roleTimelineBar';
 import {
   F, INK, INK_SOFT, FOREST, AMBER, DANGER, HAIRLINE, TEXT_LINK, INPUT, ROW_CSS,
-  Switch, FieldLabel, Notice, PREF_MODE_OPTIONS, Row, SwitchRow, GoldLast, TINT_GOLD_BG, TINT_GREEN_BG, DuoDisc, ROLE_ICON,
+  Switch, FieldLabel, Notice, PREF_MODE_OPTIONS, Row, SwitchRow, GoldLast, TINT_GOLD_BG, TINT_GREEN_BG, EmojiDisc, RoleDisc,
   inGeneralScope, generalValue, type GeneralField,
   roleIsFree, roleHasPrice, roleCanHavePreference, rolePlural, roleTitle, windowState, dateAndTime,
   toDatetimeLocal, fromDatetimeLocal, localZoneLabel, type RoleSetupConfig, type WindowState,
@@ -111,10 +111,12 @@ const CSS = `
 
 // ── Pieces ───────────────────────────────────────────────────────────────────
 
-/** One card of the form: the Store's white card, a duotone icon in a tinted disc,
+/** One card of the form: the Store's white card, a 3D emoji in a tinted disc,
  *  a Title Case heading with its last word gold. */
-function Section({ id, icon, tint = TINT_GREEN_BG, title, hint, children }: {
+function Section({ id, emoji, icon, tint = TINT_GREEN_BG, title, hint, children }: {
   id: string;
+  /** Fluent 3D emoji name; `icon` is its Lucide fallback. */
+  emoji: string;
   icon: LucideIcon;
   tint?: string;
   title: string;
@@ -129,7 +131,7 @@ function Section({ id, icon, tint = TINT_GREEN_BG, title, hint, children }: {
       style={{ padding: 'clamp(14px, 3vw, 20px)', scrollMarginTop: 16 }}
     >
       <h3 id={`${id}-h`} className="flex items-center gap-2.5 mb-3" style={{ fontFamily: F, fontSize: 18, fontWeight: 800, color: INK, lineHeight: 1.25 }}>
-        <DuoDisc icon={icon} tint={tint} size={36} />
+        <EmojiDisc emoji={emoji} icon={icon} tint={tint} size={36} />
         <span style={{ overflowWrap: 'anywhere' }}><GoldLast text={title} /></span>
         {hint}
       </h3>
@@ -309,7 +311,7 @@ export function RoleSheet(props: RoleSheetProps) {
             className="flex items-center gap-3 flex-shrink-0"
             style={{ backgroundColor: '#FFFFFF', borderBottom: `1px solid ${HAIRLINE}`, padding: '12px clamp(12px, 2.6vw, 20px)' }}
           >
-            <DuoDisc icon={ROLE_ICON[role] ?? UsersRound} tint={TINT_GOLD_BG} size={46} />
+            <RoleDisc role={role} tint={TINT_GOLD_BG} size={46} />
             <div className="min-w-0 flex-1">
               <h2 id="role-sheet-title" className="flex items-center gap-1.5" style={{ fontFamily: F, fontSize: 'clamp(19px, 2.4vw, 24px)', fontWeight: 800, color: INK, lineHeight: 1.15, letterSpacing: '-0.01em' }}>
                 <span style={{ overflowWrap: 'anywhere' }}>{roleTitle(role)} <GoldWord>Applications</GoldWord></span>
@@ -386,7 +388,7 @@ export function RoleSheet(props: RoleSheetProps) {
               ) : (
                 <>
                   {/* ── When: one row ── */}
-                  <Section id="step-when" icon={CalendarDays} tint={TINT_GOLD_BG} title="When">
+                  <Section id="step-when" emoji="Spiral calendar" icon={CalendarDays} tint={TINT_GOLD_BG} title="When">
                     <div key={configVersion}>
                       <div className="gvs-two">
                         <div>
@@ -437,7 +439,7 @@ export function RoleSheet(props: RoleSheetProps) {
 
                   {/* ── Price: one row, then the stages as a small table ── */}
                   {priced && (
-                    <Section id="step-price" icon={Wallet} tint={TINT_GOLD_BG} title="Price">
+                    <Section id="step-price" emoji="Money bag" icon={Wallet} tint={TINT_GOLD_BG} title="Price">
                       <div key={configVersion}>
                         <div className="flex items-center gap-2 flex-wrap">
                           <CurrencyPicker
@@ -494,7 +496,7 @@ export function RoleSheet(props: RoleSheetProps) {
                   )}
 
                   {/* ── Questions ── */}
-                  <Section id="step-form" icon={ListChecks} title="Questions">
+                  <Section id="step-form" emoji="Memo" icon={ListChecks} title="Questions">
                     <div key={configVersion}>
                       {(role === 'chair' || role === 'secretariat') && (
                         <div className="gvk-rows mb-3">
@@ -521,7 +523,7 @@ export function RoleSheet(props: RoleSheetProps) {
                   </Section>
 
                   {/* ── After they apply ── */}
-                  <Section id="step-after" icon={PartyPopper} tint={TINT_GOLD_BG} title="After They Apply">
+                  <Section id="step-after" emoji="Party popper" icon={PartyPopper} tint={TINT_GOLD_BG} title="After They Apply">
                     <p className="mb-3" style={{ fontFamily: F, fontSize: 13.5, color: INK_SOFT, lineHeight: 1.5 }}>
                       A short note on the confirmation screen, like a group chat to join. Optional.
                     </p>
@@ -529,7 +531,7 @@ export function RoleSheet(props: RoleSheetProps) {
                   </Section>
 
                   {/* ── Who gets in: the per-role cap, and this role's own rules ── */}
-                  <Section id="step-entry" icon={UserCheck} title="Who Gets In">
+                  <Section id="step-entry" emoji="Door" icon={UserCheck} title="Who Gets In">
                     <div key={configVersion} className="gvk-rows">
                       <Row label="Most people you will accept" htmlFor="role-max-accepted" align="end" desc="Leave it empty for no limit." on={config.max_accepted != null}>
                         <input

@@ -389,7 +389,7 @@ export default function ReferralsSection({ conference }: { conference: Conferenc
                               {p.delegation ? ` · ${p.delegation}` : ''}
                             </span>
                           </span>
-                          <span style={{ fontFamily: OUTFIT, fontSize: 11, fontWeight: 700, color: NEU.muted, textTransform: 'capitalize' }}>
+                          <span style={{ fontFamily: OUTFIT, fontSize: 12, fontWeight: 700, color: NEU.muted, textTransform: 'capitalize' }}>
                             {p.status}
                           </span>
                           <span style={{ fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 800, color: NEU.forest, fontVariantNumeric: 'tabular-nums' }}>

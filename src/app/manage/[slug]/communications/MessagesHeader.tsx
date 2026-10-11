@@ -17,7 +17,7 @@
 import type { ReactNode } from 'react';
 import { Plus, AlertTriangle, KeyRound, X, Megaphone } from 'lucide-react';
 import { GoldWord } from '@/components/BrandHeading';
-import { CARD, FONT, INK, SOFT_INK, FOREST, DANGER, PRIMARY, SECONDARY, EASE_OUT, DuoIcon } from './commsKit';
+import { CARD, FONT, INK, SOFT_INK, FOREST, DANGER, PRIMARY, SECONDARY, EASE_OUT, EmojiIcon } from './commsKit';
 
 export type MessagesTab = 'questions' | 'sent' | 'automatic';
 
@@ -105,7 +105,7 @@ export default function MessagesHeader({
             className="gv-msg-market inline-flex items-center justify-center gap-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[#1B3828]"
             style={{ ...SECONDARY, fontSize: 15, minHeight: 46, padding: '0 18px' }}
           >
-            <DuoIcon icon={Megaphone} size={28} />
+            <EmojiIcon emoji="Megaphone" icon={Megaphone} size={30} />
             Marketing
           </button>
           <button

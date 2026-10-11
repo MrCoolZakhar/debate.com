@@ -1,5 +1,9 @@
 -- scratch-conference-documents.sql
--- DRAFT, NOT APPLIED. Conference-wide documents (Rules of Procedure, logistics,
+-- APPLIED 11 Oct 2026 as migration `conference_documents` (table, helpers, RLS,
+-- the private bucket and its four storage policies, all as below). This file is
+-- the reference copy; the live schema is the truth.
+--
+-- Conference-wide documents (Rules of Procedure, logistics,
 -- schedules, code of conduct, anything else) that an organiser uploads once and
 -- every accepted participant sees on the You tab of the conference page.
 --

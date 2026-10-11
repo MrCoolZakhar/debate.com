@@ -996,7 +996,7 @@ function ImportedDelegatesTab({ conference, session, confirm, fixApplicationId }
             <thead>
               <tr style={{ backgroundColor: '#F0EDE6' }}>
                 {['Name', 'Email', 'Role', 'Status', 'Invite', ''].map(h => (
-                  <th key={h} className="text-left px-3 py-2.5" style={{ fontSize: 10, color: '#6B5F52', fontFamily: OUTFIT, fontWeight: 800, letterSpacing: '0.08em', whiteSpace: 'nowrap' }}>
+                  <th key={h} className="text-left px-3 py-2.5" style={{ fontSize: 12.5, color: '#6B5F52', fontFamily: OUTFIT, fontWeight: 800, letterSpacing: '0.06em', whiteSpace: 'nowrap' }}>
                     {h}
                   </th>
                 ))}
@@ -1011,8 +1011,8 @@ function ImportedDelegatesTab({ conference, session, confirm, fixApplicationId }
                 const isFixTarget = r.id === fixApplicationId;
                 return (
                   <tr id={`imported-row-${r.id}`} key={r.id} style={{ borderTop: '1px solid #F0EDE6', backgroundColor: isFixTarget ? 'rgba(238,217,138,0.30)' : '#FAF8F3' }}>
-                    <td className="px-3 py-2.5 text-xs font-semibold" style={{ color: '#1C1410', fontFamily: OUTFIT }}>{r.profiles?.display_name?.trim() || r.invited_name || 'None'}</td>
-                    <td className="px-3 py-2.5 text-xs" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
+                    <td className="px-3 py-3 text-[14.5px] font-semibold" style={{ color: '#1C1410', fontFamily: OUTFIT }}>{r.profiles?.display_name?.trim() || r.invited_name || 'None'}</td>
+                    <td className="px-3 py-3 text-sm" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
                       {claimed ? (
                         r.invited_email
                       ) : editing ? (
@@ -1027,14 +1027,14 @@ function ImportedDelegatesTab({ conference, session, confirm, fixApplicationId }
                               if (e.key === 'Enter') { e.preventDefault(); handleSaveEmail(r); }
                               else if (e.key === 'Escape') { e.preventDefault(); setEditingId(null); setRowError(null); }
                             }}
-                            className="rounded-lg px-2 py-1 text-base sm:text-xs focus:outline-none"
+                            className="rounded-lg px-2.5 py-1.5 text-base sm:text-sm focus:outline-none"
                             style={{ border: '1px solid #DDD4C0', color: '#1C1410', backgroundColor: '#FFFFFF', fontFamily: OUTFIT, minWidth: 180 }}
                           />
                           <button
                             onClick={() => handleSaveEmail(r)}
                             disabled={savingId === r.id}
                             aria-label="Save email"
-                            className="inline-flex items-center gap-1 rounded-lg py-1 px-2 text-xs font-bold focus:outline-none"
+                            className="inline-flex items-center gap-1 rounded-lg py-1.5 px-3 text-sm font-bold focus:outline-none"
                             style={{ border: '1px solid #DDD4C0', color: '#2A5A3C', backgroundColor: 'transparent', fontFamily: OUTFIT, cursor: savingId === r.id ? 'not-allowed' : 'pointer' }}
                           >
                             {savingId === r.id ? <Loader2 size={11} className="animate-spin" /> : <Check size={11} />} Save
@@ -1043,7 +1043,7 @@ function ImportedDelegatesTab({ conference, session, confirm, fixApplicationId }
                             onClick={() => { setEditingId(null); setRowError(null); }}
                             disabled={savingId === r.id}
                             aria-label="Cancel"
-                            className="inline-flex items-center gap-1 rounded-lg py-1 px-2 text-xs font-bold focus:outline-none"
+                            className="inline-flex items-center gap-1 rounded-lg py-1.5 px-3 text-sm font-bold focus:outline-none"
                             style={{ border: '1px solid #DDD4C0', color: '#1C1410', backgroundColor: 'transparent', fontFamily: OUTFIT, cursor: savingId === r.id ? 'not-allowed' : 'pointer' }}
                           >
                             <X size={11} /> Cancel
@@ -1054,7 +1054,7 @@ function ImportedDelegatesTab({ conference, session, confirm, fixApplicationId }
                           <span style={{ color: unsendable ? '#8B2020' : '#1C1410' }}>
                             {r.invited_email}
                             {unsendable && (
-                              <span className="block" style={{ color: '#8B2020', fontSize: 10, marginTop: 1 }}>Cannot receive email</span>
+                              <span className="block" style={{ color: '#8B2020', fontSize: 12.5, marginTop: 2 }}>Cannot receive email</span>
                             )}
                           </span>
                           <button
@@ -1068,14 +1068,14 @@ function ImportedDelegatesTab({ conference, session, confirm, fixApplicationId }
                         </span>
                       )}
                       {rowError?.id === r.id && (
-                        <p className="mt-1.5" style={{ color: '#8B2020', fontSize: 11, fontFamily: OUTFIT }}>{rowError.message}</p>
+                        <p className="mt-1.5" style={{ color: '#8B2020', fontSize: 13, fontFamily: OUTFIT }}>{rowError.message}</p>
                       )}
                     </td>
-                    <td className="px-3 py-2.5 text-xs" style={{ color: '#1C1410', fontFamily: OUTFIT }}>{roleLabel(r.role)}</td>
-                    <td className="px-3 py-2.5 text-xs" style={{ color: '#1C1410', fontFamily: OUTFIT }}>{STATUS_LABEL[r.status] ?? r.status}</td>
+                    <td className="px-3 py-3 text-sm" style={{ color: '#1C1410', fontFamily: OUTFIT }}>{roleLabel(r.role)}</td>
+                    <td className="px-3 py-3 text-sm" style={{ color: '#1C1410', fontFamily: OUTFIT }}>{STATUS_LABEL[r.status] ?? r.status}</td>
                     <td className="px-3 py-2.5">
                       <span
-                        className="inline-flex items-center gap-1 text-xs font-bold"
+                        className="inline-flex items-center gap-1 text-sm font-bold"
                         style={{ color: claimed ? '#2A5A3C' : '#9A6B2F', whiteSpace: 'nowrap' }}
                       >
                         {claimed ? <CheckCircle2 size={14} aria-hidden="true" /> : <Mail size={14} aria-hidden="true" />}
@@ -1087,7 +1087,7 @@ function ImportedDelegatesTab({ conference, session, confirm, fixApplicationId }
                         <button
                           onClick={() => handleResend(r)}
                           disabled={resendingId === r.id}
-                          className="inline-flex items-center gap-1.5 rounded-lg py-1 px-3 text-xs font-bold focus:outline-none"
+                          className="inline-flex items-center gap-1.5 rounded-lg py-2 px-3.5 text-sm font-bold focus:outline-none"
                           style={{
                             border: '1px solid #DDD4C0', color: resent ? '#2A5A3C' : '#1C1410',
                             backgroundColor: 'transparent', fontFamily: OUTFIT,

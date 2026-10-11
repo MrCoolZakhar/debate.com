@@ -34,8 +34,9 @@ import MarkPaidDialog from '../financials/MarkPaidDialog';
 import MarkUnpaidDialog from '../financials/MarkUnpaidDialog';
 import { cents as centsLabel } from '../financials/financialsApi';
 import {
-  NEU, NEU_GRADIENTS, OUTFIT, NeuCard, NeuStatTile, NeuIconDisc,
+  NEU, NEU_GRADIENTS, OUTFIT, NeuCard, NeuStatTile, NeuIconDisc, Emoji3D,
 } from '@/components/neu';
+import { matchPresetEmblem } from '@/lib/presetNames';
 import {
   poolForRole, fillFreeSpots, releasePoolSpot, MemberAvatar, markNotAttending, undoNotAttending,
 } from '@/app/manage/[slug]/assignment/delegationShared';
@@ -44,6 +45,7 @@ import { type CustomQuestion, type CustomAnswers, normalizeBlocks, questionsOf, 
 import { useScrollLock } from '@/hooks/useScrollLock';
 import DelegationsBoard, { PeopleDelegationsSwitch } from './DelegationsBoard';
 import { DelegationIdentity, useDelegationSummaries } from './DelegationAvatar';
+import OpenDelegateApplications from './OpenDelegateApplications';
 // Same vocabulary the team invite wizard in Settings uses — never a parallel
 // list. Only the library, not the wizard component itself.
 import { ORGANIZER_SECTIONS, bundlePermissions } from '@/lib/organizerPermissions';
@@ -74,6 +76,9 @@ interface RoleConfigLite {
   fee_currency: string | null;
   fee_phases: { amount?: number }[] | null;
   allow_resubmission: boolean;
+  is_enabled: boolean;
+  applications_open_at: string | null;
+  applications_close_at: string | null;
 }
 
 /** A role config actually charges something, the flat fee or any phase's
@@ -387,7 +392,7 @@ function LevelBadge({ level, count }: { level: string; count?: number }) {
         {label}
       </span>
       {count !== undefined && (
-        <span style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: 10, color: NEU.muted, fontVariantNumeric: 'tabular-nums' }}>
+        <span style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: 12, color: NEU.muted, fontVariantNumeric: 'tabular-nums' }}>
           {count} conf{count === 1 ? '' : 's'}
         </span>
       )}
@@ -829,7 +834,7 @@ function QuickAllocate({
                           <LogoDisc src={c.logo_url} size={30} fallbackText={committeeAbbr(c)} alt={c.name} />
                           <span className="flex-1 min-w-0">
                             <span className="block [overflow-wrap:anywhere]" style={{ fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 700, color: NEU.ink }}>{c.name}</span>
-                            <span className="block" style={{ fontFamily: OUTFIT, fontSize: 10.5, fontWeight: 700, color: full ? NEU.muted : NEU.green, fontVariantNumeric: 'tabular-nums' }}>
+                            <span className="block" style={{ fontFamily: OUTFIT, fontSize: 12, fontWeight: 700, color: full ? NEU.muted : NEU.green, fontVariantNumeric: 'tabular-nums' }}>
                               {full ? 'Full' : `${seats} open seat${seats === 1 ? '' : 's'}`}
                             </span>
                           </span>
@@ -1313,9 +1318,9 @@ function FilterGroup({
       <div className="flex items-center justify-between mb-2">
         <FilterHeading icon={icon}>{title}</FilterHeading>
         <div className="flex items-center gap-2">
-          <button onClick={onAll} className="focus:outline-none" style={{ fontFamily: OUTFIT, fontSize: 9.5, fontWeight: 800, color: NEU.forest, background: 'none', border: 'none', cursor: 'pointer' }}>All</button>
+          <button onClick={onAll} className="focus:outline-none" style={{ fontFamily: OUTFIT, display: 'inline-flex', alignItems: 'center', minHeight: 36, padding: '0 6px', margin: '-9px 0', fontSize: 13, fontWeight: 800, color: NEU.forest, background: 'none', border: 'none', cursor: 'pointer' }}>All</button>
           <span style={{ color: NEU.muted, opacity: 0.5 }}>·</span>
-          <button onClick={onNone} className="focus:outline-none" style={{ fontFamily: OUTFIT, fontSize: 9.5, fontWeight: 800, color: NEU.muted, background: 'none', border: 'none', cursor: 'pointer' }}>None</button>
+          <button onClick={onNone} className="focus:outline-none" style={{ fontFamily: OUTFIT, display: 'inline-flex', alignItems: 'center', minHeight: 36, padding: '0 6px', margin: '-9px 0', fontSize: 13, fontWeight: 800, color: NEU.muted, background: 'none', border: 'none', cursor: 'pointer' }}>None</button>
         </div>
       </div>
       <div className="flex flex-wrap gap-1.5">
@@ -1399,7 +1404,7 @@ function FilterPanel({
               <button
                 onClick={() => setFilters({ status: new Set(), role: new Set(DEFAULT_ROLES), payment: new Set(), dateFrom: '', dateTo: '', notAttending: false, committee: '' })}
                 className="focus:outline-none"
-                style={{ fontFamily: OUTFIT, fontSize: 10, fontWeight: 800, color: '#8B2020', background: 'none', border: 'none', cursor: 'pointer' }}
+                style={{ fontFamily: OUTFIT, display: 'inline-flex', alignItems: 'center', minHeight: 36, padding: '0 6px', margin: '-9px 0', fontSize: 13, fontWeight: 800, color: '#8B2020', background: 'none', border: 'none', cursor: 'pointer' }}
               >
                 Clear all
               </button>
@@ -1475,7 +1480,9 @@ function FilterPanel({
 // it can never be clipped by an ancestor's overflow (same pattern as
 // PaymentMenu / QuickAllocate). '' = "All committees".
 
-interface CommitteeOption { id: string; primary: string; secondary: string | null }
+/** `logo` is already resolved down the emblem chain (own logo, preset emblem,
+ *  conference logo, the UN emblem), so the filter only draws it. */
+interface CommitteeOption { id: string; primary: string; secondary: string | null; logo: string }
 
 function CommitteeFilter({
   options, value, onChange,
@@ -1489,8 +1496,8 @@ function CommitteeFilter({
   const menuRef = useRef<HTMLDivElement | null>(null);
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
 
-  const MENU_W = 272;
-  const MENU_H = 340;
+  const MENU_W = 300;
+  const MENU_H = 380;
 
   const place = useCallback(() => {
     const b = btnRef.current;
@@ -1529,13 +1536,15 @@ function CommitteeFilter({
   const current = options.find(o => o.id === value) ?? null;
   const label = current ? current.primary : 'All committees';
 
-  const row = (id: string, primary: string, secondary: string | null) => {
+  const row = (id: string, primary: string, secondary: string | null, logo: string | null) => {
     const isCurrent = id === value;
     return (
       <button
         key={id || '__all'}
+        role="option"
+        aria-selected={isCurrent}
         onClick={() => { setOpen(false); onChange(id); }}
-        className="inline-flex items-center gap-2 w-full focus:outline-none"
+        className="inline-flex items-center gap-2.5 w-full focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]"
         style={{
           padding: '8px 10px', borderRadius: 11, background: isCurrent ? 'rgba(27,56,40,0.07)' : 'transparent',
           border: 'none', cursor: 'pointer', textAlign: 'start',
@@ -1543,10 +1552,17 @@ function CommitteeFilter({
         onMouseEnter={e => { if (!isCurrent) (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.05)'; }}
         onMouseLeave={e => { if (!isCurrent) (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
       >
+        {logo ? (
+          <LogoDisc src={logo} size={34} fallbackText={primary.slice(0, 3)} alt="" style={{ flexShrink: 0 }} />
+        ) : (
+          <span aria-hidden className="inline-flex items-center justify-center flex-shrink-0" style={{ width: 34, height: 34 }}>
+            <Emoji3D name="Classical building" size={26} />
+          </span>
+        )}
         <span className="flex-1 min-w-0">
-          <span className="block [overflow-wrap:anywhere]" style={{ fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 700, color: NEU.ink }}>{primary}</span>
+          <span className="block [overflow-wrap:anywhere]" style={{ fontFamily: OUTFIT, fontSize: 14, fontWeight: 800, color: NEU.ink, lineHeight: 1.2 }}>{primary}</span>
           {secondary && (
-            <span className="block [overflow-wrap:anywhere]" style={{ fontFamily: OUTFIT, fontSize: 10.5, fontWeight: 600, color: NEU.muted }}>{secondary}</span>
+            <span className="block [overflow-wrap:anywhere]" style={{ fontFamily: OUTFIT, fontSize: 11, fontWeight: 500, color: NEU.inkSoft, lineHeight: 1.3, marginTop: 1 }}>{secondary}</span>
           )}
         </span>
         {isCurrent && <Check size={13} strokeWidth={3} style={{ color: NEU.deepGold, flexShrink: 0 }} />}
@@ -1573,7 +1589,9 @@ function CommitteeFilter({
           transition: `box-shadow 200ms ${EASE_LOCAL}`,
         }}
       >
-        <Landmark size={14} strokeWidth={2.5} />
+        {current
+          ? <LogoDisc src={current.logo} size={20} fallbackText={current.primary.slice(0, 3)} alt="" style={{ flexShrink: 0 }} />
+          : <Landmark size={14} strokeWidth={2.5} />}
         <span className="text-start [overflow-wrap:anywhere]" style={{ maxWidth: 150 }}>{label}</span>
         <ChevronDown size={12} strokeWidth={2.6} style={{ transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 160ms' }} />
       </button>
@@ -1591,8 +1609,8 @@ function CommitteeFilter({
           >
             <style>{`@keyframes neuFadeIn { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: translateY(0); } }`}</style>
             <div className="flex flex-col gap-0.5">
-              {row('', 'All committees', null)}
-              {options.map(o => row(o.id, o.primary, o.secondary))}
+              {row('', 'All committees', null, null)}
+              {options.map(o => row(o.id, o.primary, o.secondary, o.logo))}
             </div>
           </div>
         </Portal>
@@ -1720,8 +1738,9 @@ function reconcileLoaded(
 }
 
 // ── ApplicationsSearchPill ────────────────────────────────────────────────────
-// The page's first control: a big white pill in the Explore / Store look.
-// Presentational only: the parent owns the value, the debounce and the filter.
+// A big white pill in the Explore / Store look, at the top of the page in the
+// header's toolbar beside the filters, so the list starts as high as it did
+// (owner, 11 Oct 2026: "the search bar moves the apps lower"). Presentational only: the parent owns the value, the debounce and the filter.
 // "/" focuses it from anywhere on the page, except while typing in a field or
 // while a dialog is open.
 
@@ -1745,10 +1764,10 @@ function ApplicationsSearchPill({ value, onChange }: { value: string; onChange: 
 
   return (
     <div
-      className="flex items-center gap-3 w-full mb-5"
+      className="flex items-center gap-2.5 w-full sm:w-[400px]"
       onClick={() => inputRef.current?.focus()}
       style={{
-        maxWidth: 760, minHeight: 56, padding: '0 10px 0 8px', borderRadius: 999,
+        minHeight: 48, padding: '0 8px 0 6px', borderRadius: 999,
         backgroundColor: '#FFFFFF', cursor: 'text',
         boxShadow: focused
           ? '0 0 0 2px #1B3828, 0 2px 6px rgba(27,56,40,0.08), 0 22px 48px rgba(27,56,40,0.18)'
@@ -1759,9 +1778,9 @@ function ApplicationsSearchPill({ value, onChange }: { value: string; onChange: 
       <span
         aria-hidden
         className="inline-flex items-center justify-center flex-shrink-0"
-        style={{ width: 40, height: 40, borderRadius: 999, backgroundColor: '#EEF3EC' }}
+        style={{ width: 36, height: 36, borderRadius: 999, backgroundColor: '#EEF3EC' }}
       >
-        <Search size={19} strokeWidth={2.5} style={{ color: '#1B3828' }} />
+        <Search size={18} strokeWidth={2.6} style={{ color: '#1B3828' }} />
       </span>
       <input
         ref={inputRef}
@@ -1775,14 +1794,14 @@ function ApplicationsSearchPill({ value, onChange }: { value: string; onChange: 
             if (value) { e.preventDefault(); onChange(''); } else inputRef.current?.blur();
           }
         }}
-        placeholder="Search by name, email, delegation, country or committee"
+        placeholder="Search name, email, delegation, country"
         aria-label="Search applications by name, email, delegation, country or committee"
         aria-keyshortcuts="/"
         enterKeyHint="search"
         autoComplete="off"
         spellCheck={false}
         className="flex-1 outline-none [&::-webkit-search-cancel-button]:appearance-none"
-        style={{ backgroundColor: 'transparent', border: 'none', color: NEU.ink, fontFamily: OUTFIT, fontSize: 16, fontWeight: 500, minWidth: 0, height: 52 }}
+        style={{ backgroundColor: 'transparent', border: 'none', color: NEU.ink, fontFamily: OUTFIT, fontSize: 16, fontWeight: 500, minWidth: 0, height: 44 }}
       />
       {value ? (
         <button
@@ -1791,7 +1810,7 @@ function ApplicationsSearchPill({ value, onChange }: { value: string; onChange: 
           aria-label="Clear search"
           title="Clear search"
           className="inline-flex items-center justify-center flex-shrink-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]"
-          style={{ width: 36, height: 36, borderRadius: 999, backgroundColor: 'rgba(28,20,16,0.06)', border: 'none', cursor: 'pointer', color: NEU.ink }}
+          style={{ width: 32, height: 32, borderRadius: 999, backgroundColor: 'rgba(28,20,16,0.06)', border: 'none', cursor: 'pointer', color: NEU.ink }}
         >
           <X size={16} strokeWidth={2.6} />
         </button>
@@ -2070,7 +2089,7 @@ export default function ApplicationsPage() {
         .range(from, to)),
       supabase
         .from('application_role_configs')
-        .select('role, payment_timing, custom_questions, fee_amount, fee_currency, fee_phases, allow_resubmission')
+        .select('role, payment_timing, custom_questions, fee_amount, fee_currency, fee_phases, allow_resubmission, is_enabled, applications_open_at, applications_close_at')
         .eq('conference_id', conference.id),
       // Unpaid gating invoices block Accept until paid. The only source of
       // gates_acceptance=true is application_surcharges.gates_acceptance, the
@@ -2954,7 +2973,7 @@ export default function ApplicationsPage() {
               // Grey, deliberately quiet against the two decisions — but
               // NEU.inkSoft (6.8:1 on NEU.surface), never NEU.muted, which is
               // decoration-only at 3.15:1.
-              fontFamily: OUTFIT, fontSize: 10.5, fontWeight: 800,
+              fontFamily: OUTFIT, fontSize: 13, fontWeight: 800,
               color: NEU.inkSoft, backgroundColor: NEU.surface, boxShadow: NEU.outSm,
               border: 'none', cursor: 'pointer', transition: `box-shadow 200ms ${EASE_LOCAL}`,
               ...busyStyle,
@@ -3798,10 +3817,10 @@ export default function ApplicationsPage() {
   // the joined conference_committees name/abbreviation) — no extra round trip.
   // A committee with no allocations yet simply has nothing to filter to.
   const committeeOptions: CommitteeOption[] = (() => {
-    const seen = new Map<string, { name: string; abbreviation: string | null }>();
+    const seen = new Map<string, { name: string; abbreviation: string | null; logo_url: string | null }>();
     for (const a of applications) {
       if (a.assigned_committee_id && a.assigned_committee && !seen.has(a.assigned_committee_id)) {
-        seen.set(a.assigned_committee_id, { name: a.assigned_committee.name, abbreviation: a.assigned_committee.abbreviation });
+        seen.set(a.assigned_committee_id, { name: a.assigned_committee.name, abbreviation: a.assigned_committee.abbreviation, logo_url: a.assigned_committee.logo_url });
       }
     }
     return Array.from(seen.entries())
@@ -3809,10 +3828,13 @@ export default function ApplicationsPage() {
         // Same naming rule as the row cards: long name → ACRONYM with the full
         // name small beneath it.
         const disp = committeeDisplay(c);
-        return { id, primary: disp.primary, secondary: disp.secondary, sort: c.name };
+        // Emblem chain: the committee's own logo, its preset emblem, the
+        // conference logo, then the UN emblem.
+        const logo = c.logo_url || matchPresetEmblem(c.name, c.abbreviation) || conference?.logo_url || '/logos/un.svg';
+        return { id, primary: disp.primary, secondary: disp.secondary, logo, sort: c.name };
       })
       .sort((a, b) => a.sort.localeCompare(b.sort))
-      .map(({ id, primary, secondary }) => ({ id, primary, secondary }));
+      .map(({ id, primary, secondary, logo }) => ({ id, primary, secondary, logo }));
   })();
 
   // Empty selection = no constraint on that dimension (fresh page shows all)
@@ -4041,13 +4063,13 @@ export default function ApplicationsPage() {
   // it comes from) but made the one tile in the row that answers "how many are
   // seated?" the only one you had to do arithmetic on. Every other tile is a
   // number; this one is now too.
-  const statItems: { label: string; value: number | string; icon: typeof Inbox; gradient: [string, string]; active: boolean; onClick: () => void }[] = [
-    { label: 'Total',      value: stats.total,     icon: Users,          gradient: NEU_GRADIENTS.forest, active: totalTileActive,           onClick: clearToDefault },
-    { label: 'Accepted',   value: stats.accepted,  icon: Check,          gradient: NEU_GRADIENTS.green,  active: statusGroupTileActive(ACCEPTED_GROUP),  onClick: () => toggleStatusGroupTile(ACCEPTED_GROUP) },
-    { label: 'Allocated',  value: stats.assigned,  icon: BadgeCheck,     gradient: NEU_GRADIENTS.gold,   active: statusGroupTileActive(ALLOCATED_GROUP), onClick: () => toggleStatusGroupTile(ALLOCATED_GROUP) },
-    { label: 'Paid',       value: stats.paid,      icon: CircleCheck,    gradient: NEU_GRADIENTS.green,  active: paymentTileActive('paid'),      onClick: () => togglePaymentTile('paid') },
-    { label: 'Unpaid',     value: stats.unpaid,    icon: Clock,          gradient: NEU_GRADIENTS.amber,  active: paymentTileActive('unpaid'),    onClick: () => togglePaymentTile('unpaid') },
-    { label: 'Checked in', value: stats.checkedIn, icon: UserRoundCheck, gradient: NEU_GRADIENTS.sage,   active: statusTileActive('checked-in'), onClick: () => toggleStatusTile('checked-in') },
+  const statItems: { label: string; value: number | string; emoji: string; icon: typeof Inbox; gradient: [string, string]; active: boolean; onClick: () => void }[] = [
+    { label: 'Total',      value: stats.total,     emoji: 'Card index',          icon: Users,          gradient: NEU_GRADIENTS.forest, active: totalTileActive,           onClick: clearToDefault },
+    { label: 'Accepted',   value: stats.accepted,  emoji: 'Check mark button',   icon: Check,          gradient: NEU_GRADIENTS.green,  active: statusGroupTileActive(ACCEPTED_GROUP),  onClick: () => toggleStatusGroupTile(ACCEPTED_GROUP) },
+    { label: 'Allocated',  value: stats.assigned,  emoji: 'Round pushpin',       icon: BadgeCheck,     gradient: NEU_GRADIENTS.gold,   active: statusGroupTileActive(ALLOCATED_GROUP), onClick: () => toggleStatusGroupTile(ALLOCATED_GROUP) },
+    { label: 'Paid',       value: stats.paid,      emoji: 'Money bag',           icon: CircleCheck,    gradient: NEU_GRADIENTS.green,  active: paymentTileActive('paid'),      onClick: () => togglePaymentTile('paid') },
+    { label: 'Unpaid',     value: stats.unpaid,    emoji: 'Hourglass not done',  icon: Clock,          gradient: NEU_GRADIENTS.amber,  active: paymentTileActive('unpaid'),    onClick: () => togglePaymentTile('unpaid') },
+    { label: 'Checked in', value: stats.checkedIn, emoji: 'Busts in silhouette', icon: UserRoundCheck, gradient: NEU_GRADIENTS.sage,   active: statusTileActive('checked-in'), onClick: () => toggleStatusTile('checked-in') },
   ];
 
   return (
@@ -4057,7 +4079,7 @@ export default function ApplicationsPage() {
         <div className="flex items-center gap-3.5">
           {/* Gavel emblem moved off the header (#4) — it now marks chair rows.
               A neutral applications icon disc anchors the title instead. */}
-          <NeuIconDisc gradient={NEU_GRADIENTS.forest} icon={Inbox} duo size={46} />
+          <NeuIconDisc gradient={NEU_GRADIENTS.forest} icon={Inbox} emoji="Card index" size={46} />
           <div>
             <p className="mb-1" style={{ fontFamily: OUTFIT, fontSize: 11, fontWeight: 800, letterSpacing: '0.14em', color: NEU.deepGold, textTransform: 'uppercase' }}>
               {conference.acronym} · Applications
@@ -4066,6 +4088,9 @@ export default function ApplicationsPage() {
           </div>
         </div>
         <div className="flex items-center gap-2.5 flex-wrap">
+          {/* Quick-filter search (#2): first in the toolbar, at the top again.
+              Debounced, case-insensitive, matches any applicant detail. */}
+          <ApplicationsSearchPill value={searchInput} onChange={setSearchInput} />
           {/* Per-committee filter, alongside the existing filters. */}
           <CommitteeFilter
             options={committeeOptions}
@@ -4087,10 +4112,6 @@ export default function ApplicationsPage() {
           </button>
         </div>
       </div>
-
-      {/* Quick-filter search (#2): the page's first control. Debounced,
-          case-insensitive, matches any applicant detail (see the filter). */}
-      <ApplicationsSearchPill value={searchInput} onChange={setSearchInput} />
 
       {loadIncomplete && (
         <div role="alert" className="mb-4 flex items-center gap-3 flex-wrap" style={{ padding: '10px 14px', borderRadius: 12, backgroundColor: 'rgba(139,32,32,0.08)', border: '1px solid rgba(139,32,32,0.35)' }}>
@@ -4137,12 +4158,12 @@ export default function ApplicationsPage() {
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-[repeat(20,minmax(0,1fr))] gap-3 mb-6">
         {statItems.map(s => (
           <div key={s.label} className="lg:col-span-3">
-            <NeuStatTile duo icon={s.icon} gradient={s.gradient} value={s.value} label={s.label} compact onClick={s.onClick} active={s.active} />
+            <NeuStatTile emoji={s.emoji} icon={s.icon} gradient={s.gradient} value={s.value} label={s.label} compact onClick={s.onClick} active={s.active} />
           </div>
         ))}
         <div className="lg:col-span-2">
           <NeuStatTile
-            duo
+            emoji="Memo"
             icon={PencilLine}
             gradient={NEU_GRADIENTS.amber}
             value={drafts.length}
@@ -4194,19 +4215,35 @@ export default function ApplicationsPage() {
       )}
 
       {/* Empty state */}
-      {listView === 'people' && !draftsView && !loading && filtered.length === 0 && (
-        <NeuCard style={{ padding: '48px 24px' }}>
-          <div className="flex flex-col items-center text-center">
-            <NeuIconDisc gradient={NEU_GRADIENTS.forest} icon={Inbox} duo size={48} />
-            <p className="mt-4" style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 15, color: NEU.ink }}>
-              {applications.length === 0 ? 'No applications yet' : 'No applications match these filters'}
-            </p>
-            <p className="mt-1" style={{ fontFamily: OUTFIT, fontSize: 12.5, color: NEU.muted }}>
-              {applications.length === 0 ? 'Applications will appear here once delegates apply.' : 'Try adjusting your filters.'}
-            </p>
-          </div>
-        </NeuCard>
-      )}
+      {listView === 'people' && !draftsView && !loading && filtered.length === 0 && (() => {
+        const emptyCard = (
+          <NeuCard style={{ padding: '48px 24px' }}>
+            <div className="flex flex-col items-center text-center">
+              <NeuIconDisc gradient={NEU_GRADIENTS.forest} icon={Inbox} emoji="Inbox tray" size={48} />
+              <p className="mt-4" style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 15, color: NEU.ink }}>
+                {applications.length === 0 ? 'No applications yet' : 'No applications match these filters'}
+              </p>
+              <p className="mt-1" style={{ fontFamily: OUTFIT, fontSize: 12.5, color: NEU.muted }}>
+                {applications.length === 0 ? 'Applications will appear here once delegates apply.' : 'Try adjusting your filters.'}
+              </p>
+            </div>
+          </NeuCard>
+        );
+        // A conference with no applications yet: offer to open delegate
+        // applications right here (OpenDelegateApplications draws emptyCard
+        // when they are already open). Not after a partial load, where zero
+        // could be wrong.
+        if (applications.length > 0 || loadIncomplete) return emptyCard;
+        const delegateCfg = roleConfigs.find(rc => rc.role === 'delegate') ?? null;
+        return (
+          <OpenDelegateApplications
+            conference={conference}
+            delegate={delegateCfg}
+            fallback={emptyCard}
+            onOpened={row => setRoleConfigs(prev => prev.map(rc => (rc.role === 'delegate' ? { ...rc, ...row } : rc)))}
+          />
+        );
+      })()}
 
       {/* Select-all bar */}
       {listView === 'people' && !draftsView && !loading && filtered.length > 0 && (
@@ -4518,7 +4555,7 @@ export default function ApplicationsPage() {
                             alt={prefs[0].conference_committees?.name ?? 'Top preference'}
                           />
                           <div className="min-w-0 flex-1">
-                            <p style={{ fontFamily: OUTFIT, fontSize: 9.5, fontWeight: 800, letterSpacing: '0.1em', color: NEU.muted, textTransform: 'uppercase', marginBottom: 4 }}>
+                            <p style={{ fontFamily: OUTFIT, fontSize: 12, fontWeight: 800, letterSpacing: '0.1em', color: NEU.muted, textTransform: 'uppercase', marginBottom: 4 }}>
                               {app.role === 'chair' ? 'Committee preferences' : 'Preferences'}
                             </p>
                             <div className="flex flex-col gap-1">
@@ -4969,21 +5006,21 @@ export default function ApplicationsPage() {
                           }
                           className="draftRemind inline-flex items-center gap-1.5 focus:outline-none"
                           style={{
-                            padding: '6px 11px', borderRadius: 999,
+                            padding: '8px 14px', minHeight: 36, borderRadius: 999,
                             border: `1.5px solid ${remindDisabled ? DRAFT_DASH : NEU.forest}`,
                             backgroundColor: 'transparent',
                             color: remindDisabled ? NEU.inkSoft : NEU.forest,
                             opacity: remindDisabled ? 0.62 : 1,
                             cursor: remindDisabled ? 'default' : 'pointer',
-                            fontFamily: OUTFIT, fontSize: 10.5, fontWeight: 800, letterSpacing: '0.08em',
+                            fontFamily: OUTFIT, fontSize: 13, fontWeight: 800, letterSpacing: '0.08em',
                             whiteSpace: 'nowrap',
                           }}
                         >
-                          <Send size={11.5} strokeWidth={2.6} />
+                          <Send size={14} strokeWidth={2.6} />
                           {remindLabel}
                         </button>
                         {d.reminders_sent > 0 && !d.reminder_opt_out && (
-                          <span style={{ fontFamily: OUTFIT, fontSize: 10, fontWeight: 600, color: NEU.inkSoft, opacity: 0.85 }}>
+                          <span style={{ fontFamily: OUTFIT, fontSize: 12, fontWeight: 600, color: NEU.inkSoft, opacity: 0.85 }}>
                             {d.reminders_sent} sent
                           </span>
                         )}

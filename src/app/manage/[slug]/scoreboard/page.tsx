@@ -74,6 +74,8 @@ function csvEscape(v: string | number): string {
 
 // ── Page ─────────────────────────────────────────────────────────────────────
 
+const FILTER_PILL: React.CSSProperties = { padding: '0 18px', minHeight: 42, fontSize: 14.5, letterSpacing: 0 };
+
 export default function ScoreboardPage() {
   const { conference } = useManage();
   const { session } = useAuth();
@@ -202,11 +204,11 @@ export default function ScoreboardPage() {
 
   return (
     <div className="px-6 md:px-10 py-8">
-      <p style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: 11, color: SOFT, letterSpacing: '0.12em', marginBlockEnd: 4 }}>
+      <p style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: 13, color: SOFT, letterSpacing: '0.06em', marginBlockEnd: 6 }}>
         {conference.acronym} / Scoreboard
       </p>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginBlockEnd: 6 }}>
-        <h1 style={{ fontFamily: OUTFIT, fontWeight: 900, fontSize: 24, color: NEU.ink }}>
+        <h1 style={{ fontFamily: OUTFIT, fontWeight: 900, fontSize: 'clamp(30px, 3.2vw, 40px)', letterSpacing: '-0.025em', lineHeight: 1.08, color: NEU.ink, margin: 0 }}>
           {scopedCommittee ? committeeDisplayName(scopedCommittee.name, scopedCommittee.abbreviation) : 'Scoreboard'}
         </h1>
         <div style={{ display: 'flex', gap: 8, marginInlineStart: 'auto', flexWrap: 'wrap' }}>
@@ -219,24 +221,24 @@ export default function ScoreboardPage() {
               onClick={exportCsv}
               className="focus:outline-none"
               style={{
-                fontFamily: OUTFIT, fontWeight: 700, fontSize: 12, color: NEU.gold, backgroundColor: NEU.forest,
-                border: 'none', borderRadius: 10, padding: '8px 14px', cursor: 'pointer',
+                fontFamily: OUTFIT, fontWeight: 700, fontSize: 15, color: NEU.gold, background: 'linear-gradient(90deg,#1B3828 0%,#2A5A3C 100%)',
+                border: 'none', borderRadius: 12, padding: '0 20px', minHeight: 46, cursor: 'pointer',
                 display: 'inline-flex', alignItems: 'center', gap: 7,
               }}
             >
-              <Download size={13} strokeWidth={2.5} />
+              <Download size={17} strokeWidth={2.5} />
               Export CSV
             </button>
           )}
         </div>
       </div>
-      <p style={{ fontFamily: OUTFIT, fontSize: 13, color: SOFT, marginBlockEnd: 12, maxWidth: 660 }}>
+      <p style={{ fontFamily: OUTFIT, fontSize: 15, color: SOFT, marginBlockEnd: 12, marginBlockStart: 8, maxWidth: 680, lineHeight: 1.5 }}>
         Every delegation across your committees, scored by the chairs in their live sessions. Only chairs can award points.
       </p>
       {/* This page is no longer in the sidebar; say where it came from and how
           to get back, so an organiser who lands here by URL is not stranded. */}
-      <p style={{ fontFamily: OUTFIT, fontSize: 12, color: SOFT, marginBlockEnd: 22 }}>
-        <Radio size={11} strokeWidth={2.4} style={{ display: 'inline', verticalAlign: -1, marginInlineEnd: 5 }} />
+      <p style={{ fontFamily: OUTFIT, fontSize: 14, color: SOFT, marginBlockEnd: 24, lineHeight: 1.5 }}>
+        <Radio size={14} strokeWidth={2.4} style={{ display: 'inline', verticalAlign: -1, marginInlineEnd: 5 }} />
         A single committee&apos;s scoreboard opens straight from its card on{' '}
         <Link href={`/manage/${conference.slug}/live`} style={{ color: NEU.forest, fontWeight: 700, textDecoration: 'underline', textUnderlineOffset: 2 }}>
           Live Status
@@ -245,7 +247,7 @@ export default function ScoreboardPage() {
       </p>
 
       {loadError && (
-        <p style={{ fontFamily: OUTFIT, fontSize: 12, color: RED, backgroundColor: 'rgba(139,32,32,0.06)', border: '1px solid rgba(139,32,32,0.2)', borderRadius: 10, padding: '8px 12px', marginBlockEnd: 16 }}>
+        <p style={{ fontFamily: OUTFIT, fontSize: 14, color: RED, backgroundColor: 'rgba(139,32,32,0.06)', border: '1px solid rgba(139,32,32,0.2)', borderRadius: 10, padding: '8px 12px', marginBlockEnd: 16 }}>
           {loadError}
         </p>
       )}
@@ -290,14 +292,15 @@ export default function ScoreboardPage() {
             <IconStat compact icon={STAT_ICONS.time} label="Speaking time" value={formatSpeakingTime(totals.seconds)} tint={TINT.sage} />
           </div>
 
-          {/* Committee filter */}
-          <div className="flex items-center gap-2 mb-3 flex-wrap">
-            <NeuPill active={committeeFilter === 'ALL'} onClick={() => { setCommitteeFilter('ALL'); setExpanded(null); }}>
+          {/* Committee filter: bigger chips than NeuPill's default 11px (owner, 11 Oct 2026). */}
+          <div className="flex items-center gap-2.5 mb-4 flex-wrap">
+            <NeuPill style={FILTER_PILL} active={committeeFilter === 'ALL'} onClick={() => { setCommitteeFilter('ALL'); setExpanded(null); }}>
               All committees
             </NeuPill>
             {committees.map((c) => (
               <NeuPill
                 key={c.id}
+                style={FILTER_PILL}
                 active={committeeFilter === c.id}
                 onClick={() => { setCommitteeFilter(c.id); setExpanded(null); }}
               >
@@ -313,10 +316,10 @@ export default function ScoreboardPage() {
               style={{
                 display: 'inline-flex', alignItems: 'center', gap: 7, marginInlineStart: 'auto',
                 backgroundColor: NEU.surface, border: `1px solid ${CARD_BORDER_COLOR}`, borderRadius: 10,
-                paddingInline: 11, paddingBlock: 7,
+                paddingInline: 14, minHeight: 44,
               }}
             >
-              <Search size={13} style={{ color: SOFT, flexShrink: 0 }} />
+              <Search size={17} style={{ color: SOFT, flexShrink: 0 }} />
               <input
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
@@ -324,8 +327,8 @@ export default function ScoreboardPage() {
                 aria-label="Search delegation or committee"
                 className="focus:outline-none"
                 style={{
-                  fontFamily: OUTFIT, fontSize: 12.5, color: NEU.ink,
-                  backgroundColor: 'transparent', border: 'none', width: 210, maxWidth: '50vw',
+                  fontFamily: OUTFIT, fontSize: 15, color: NEU.ink,
+                  backgroundColor: 'transparent', border: 'none', width: 260, maxWidth: '50vw',
                 }}
               />
             </div>

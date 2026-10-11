@@ -21,7 +21,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Info, UserPlus, Repeat2 } from 'lucide-react';
 import Portal from '@/components/Portal';
 import { NEU } from '@/components/neu';
-import { DuoDisc, TINT_GOLD_BG, TINT_GREEN_BG } from './panelKit';
+import { EmojiDisc, TINT_GOLD_BG, TINT_GREEN_BG } from './panelKit';
 import { getFreshAuthedClient } from '@/lib/supabase-auth';
 import { friendlyError } from '@/lib/friendlyError';
 import { notifyErr, clearErr } from '@/lib/appNotify';
@@ -217,7 +217,7 @@ export function DelegationsSettings({
       {/* ── Swaps ── */}
       <div style={CARD}>
         <p className="font-semibold text-base mb-1 flex items-center gap-2" style={{ color: '#1C1410', fontFamily: FONT }}>
-          <DuoDisc icon={Repeat2} size={34} tint={TINT_GOLD_BG} />
+          <EmojiDisc emoji="Counterclockwise arrows button" icon={Repeat2} size={34} tint={TINT_GOLD_BG} />
           Delegation Allocation Swaps
           <Hint
             label="About allocation swaps"
@@ -267,7 +267,7 @@ export function DelegationsSettings({
         <div className="flex items-start gap-4">
           <div className="min-w-0 flex-1">
             <p className="font-semibold text-base mb-1 flex items-center gap-2" style={{ color: '#1C1410', fontFamily: FONT }}>
-              <DuoDisc icon={UserPlus} size={34} tint={TINT_GREEN_BG} />
+              <EmojiDisc emoji="Busts in silhouette" icon={UserPlus} size={34} tint={TINT_GREEN_BG} />
               Let delegation leaders import their delegates
               <Hint
                 label="About delegation imports"

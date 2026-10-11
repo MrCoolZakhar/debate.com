@@ -39,6 +39,7 @@ export default function AidCard({ conferenceId, slug, enabled }: { conferenceId:
     <DashCard
       title="Financial Aid"
       icon={{ emoji: 'Heart with ribbon', lucide: HeartHandshake, tint: TINT_GREEN }}
+      hang="end"
       className={pending ? 'gv-fd-todo' : undefined}
       hint="Let participants ask for help paying, with your own questions, then decide each request. Aid reduces what that person owes."
     >

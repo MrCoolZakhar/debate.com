@@ -161,7 +161,7 @@ export const IMPORT_CSS = `
   .gv-imp-row > .gv-imp-c{grid-column:auto}
 }
 .gv-imp-fix{display:flex;flex-wrap:wrap;align-items:flex-end;gap:10px;margin-top:8px;padding:12px;border-radius:14px;background:#F7F4EC}
-.gv-imp-field{display:flex;flex-direction:column;gap:4px;flex:1 1 180px;min-width:0;font-size:12.5px;font-weight:600;color:${INK_SOFT}}
+.gv-imp-field{display:flex;flex-direction:column;gap:4px;flex:1 1 180px;min-width:0;font-size:14px;font-weight:600;color:${INK_SOFT}}
 .gv-imp-field input,.gv-imp-field select{min-height:44px;padding:0 12px;border-radius:10px;border:1.5px solid #DDD4C0;background:#FFFFFF;font-family:${OUTFIT};font-size:16px;color:${INK};width:100%;min-width:0}
 .gv-imp-field input:focus,.gv-imp-field select:focus{outline:none;border-color:${FOREST}}
 .gv-imp-bar{position:sticky;bottom:8px;z-index:5;margin-top:16px;padding:12px 16px;padding-bottom:max(12px,env(safe-area-inset-bottom));border-radius:18px;background:#FFFFFF;border:1px solid rgba(27,56,40,0.08);box-shadow:0 -2px 10px rgba(27,56,40,0.05),0 12px 30px rgba(27,56,40,0.14)}
@@ -217,7 +217,7 @@ function AcceptSwitch({ on, onChange }: { on: boolean; onChange: (on: boolean) =
       </button>
       <span style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.25 }}>
         <span style={{ fontSize: 15, fontWeight: 600, color: INK }}>Already accepted</span>
-        <span style={{ fontSize: 12.5, color: INK_SOFT }}>{on ? 'They skip review' : 'You review them in Applications'}</span>
+        <span style={{ fontSize: 14, color: INK_SOFT }}>{on ? 'They skip review' : 'You review them in Applications'}</span>
       </span>
     </label>
   );

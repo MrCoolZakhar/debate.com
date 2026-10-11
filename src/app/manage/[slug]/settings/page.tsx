@@ -59,7 +59,7 @@ import { ApplicationsSection } from './controlPanel';
 import { RoleSheet } from './roleSetup';
 import { SettingsShell, type ShellSection } from './settingsShell';
 import {
-  SectionHead, Group, Row, SwitchRow, BigCount, Switch as KitSwitch, TINT_GOLD_BG, TINT_GREEN_BG, DuoDisc,
+  SectionHead, Group, Row, SwitchRow, BigCount, Switch as KitSwitch, TINT_GOLD_BG, TINT_GREEN_BG, EmojiDisc,
   listedRoles, generalAnswer, inGeneralScope, GENERAL_FIELDS, type RoleSetupConfig,
 } from './panelKit';
 
@@ -380,7 +380,7 @@ function CopyFormMenu({ roles, onPick }: { roles: string[]; onPick: (role: strin
               boxShadow: '0 12px 32px rgba(27,56,40,0.18)', padding: 6,
             }}
           >
-            <p className="px-2.5 pt-1 pb-1.5 text-[10px] font-bold" style={{ color: '#6E6152', fontFamily: "var(--font-brand), sans-serif", letterSpacing: '0.1em' }}>
+            <p className="px-2.5 pt-1 pb-1.5 text-[12px] font-bold" style={{ color: '#6E6152', fontFamily: "var(--font-brand), sans-serif", letterSpacing: '0.1em' }}>
               COPY TO
             </p>
             {roles.map(role => (
@@ -3077,7 +3077,7 @@ export default function SettingsPage() {
 
       {activeTab === 'delegations' && (
         <div className="flex flex-col gap-5">
-          <SectionHead icon={School} tint={TINT_GREEN_BG}
+          <SectionHead emoji="School" icon={School} tint={TINT_GREEN_BG}
             title="Delegations"
             line={`${conference.allow_delegation_import ? 'Leaders bring in their own delegates.' : 'Each delegate applies on their own.'} ${swapMode === 'off' ? 'Only your team moves seats.' : swapMode === 'self_serve' ? 'Leaders swap seats themselves.' : 'Leaders ask to swap seats.'}`}
           />
@@ -3095,7 +3095,7 @@ export default function SettingsPage() {
       {activeTab === 'conference' && (
         <div className="flex items-start" style={{ gap: 28 }}>
         <div className="flex-1 min-w-0 flex flex-col gap-5">
-          <SectionHead icon={Building2} tint={TINT_GOLD_BG}
+          <SectionHead emoji="Classical building" icon={Building2} tint={TINT_GOLD_BG}
             title="General"
             line={<>What your conference is and how people reach you. Changes save by themselves.{' '}
               <a href={`/conferences/${conference.slug}?preview=1`} target="_blank" rel="noopener noreferrer" style={{ color: '#1B3828', fontWeight: 700, textDecoration: 'underline', textUnderlineOffset: 3 }}>Open your page</a></>}
@@ -3114,7 +3114,7 @@ export default function SettingsPage() {
 
           {/* ── Name, dates and place ── */}
           <Group
-            id="details-card" title="Name, Dates and Place" icon={CalendarDays} tint={TINT_GOLD_BG}
+            id="details-card" title="Name, Dates and Place" emoji="Spiral calendar" icon={CalendarDays} tint={TINT_GOLD_BG}
             aside={<AutoSaveStatus saving={detailsSaving} saved={detailsSaved} />}
           >
             <Row label="Full name" htmlFor="set-full-name">
@@ -3291,7 +3291,7 @@ export default function SettingsPage() {
           </Group>
 
           {/* ── About ── */}
-          <Group title="About Your Conference" icon={FileText} tint={TINT_GREEN_BG}>
+          <Group title="About Your Conference" emoji="Memo" icon={FileText} tint={TINT_GREEN_BG}>
             <Row label="Description" htmlFor="set-description" desc="Shown on your public page.">
               <textarea
                 id="set-description"
@@ -3311,7 +3311,7 @@ export default function SettingsPage() {
           </Group>
 
           {/* ── Logo and banner: small previews, each with Change ── */}
-          <Group title="Logo and Banner" icon={ImageIcon} tint={TINT_GOLD_BG}>
+          <Group title="Logo and Banner" emoji="Framed picture" icon={ImageIcon} tint={TINT_GOLD_BG}>
             <Row label="Logo" desc="Square, ideally a transparent PNG. Up to 5 MB." align="end" on={!!view.logo_url} need={!view.logo_url}>
               <div className="flex items-center gap-3">
                 {logoUploading
@@ -3383,7 +3383,7 @@ export default function SettingsPage() {
           </Group>
 
           {/* ── Colours ── */}
-          <Group title="Your Colours" icon={Palette} tint={TINT_GREEN_BG}>
+          <Group title="Your Colours" emoji="Artist palette" icon={Palette} tint={TINT_GREEN_BG}>
             <div className="gvk-row" style={{ display: 'block' }}>
               <CustomizationCard
                 conferenceId={conference.id}
@@ -3397,7 +3397,7 @@ export default function SettingsPage() {
 
           {/* ── Partners and sponsors ── */}
           <Group
-            title="Partners and Sponsors" icon={Handshake} tint={TINT_GOLD_BG}
+            title="Partners and Sponsors" emoji="Handshake" icon={Handshake} tint={TINT_GOLD_BG}
             hint={<InfoHint label="About partners" text="A conference link only appears once that conference's team approves it. A company you add yourself appears straight away." />}
           >
             <div className="gvk-row" style={{ display: 'block' }}>
@@ -3709,7 +3709,7 @@ export default function SettingsPage() {
 
                 {isCompany && (
                   <div className="mt-2" style={{ paddingLeft: '52px' }}>
-                    <label className="block text-[10px] font-bold mb-1" style={{ color: '#6E6152', fontFamily: "var(--font-brand), sans-serif", letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+                    <label className="block text-[12px] font-bold mb-1" style={{ color: '#6E6152', fontFamily: "var(--font-brand), sans-serif", letterSpacing: '0.06em', textTransform: 'uppercase' }}>
                       Website
                     </label>
                     <input
@@ -3726,7 +3726,7 @@ export default function SettingsPage() {
                       onFocus={fgInput}
                     />
                     {partnerUrlWarnings[link.id] && (
-                      <p className="text-[10.5px] mt-1" style={{ color: '#B8844A', fontFamily: "var(--font-brand), sans-serif" }}>
+                      <p className="text-[13px] mt-1" style={{ color: '#B8844A', fontFamily: "var(--font-brand), sans-serif" }}>
                         Links must start with https:// to be secure.
                       </p>
                     )}
@@ -3761,7 +3761,7 @@ export default function SettingsPage() {
                   >
                     <PartnerDisc logoUrl={claim.requester_logo_url} acronym={claim.requester_acronym} />
                     <div className="flex-1 min-w-0">
-                      <p style={{ fontSize: 10, color: '#B6871F', fontFamily: "var(--font-brand), sans-serif", fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', fontVariantNumeric: 'tabular-nums' }}>
+                      <p style={{ fontSize: 12, color: '#B6871F', fontFamily: "var(--font-brand), sans-serif", fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', fontVariantNumeric: 'tabular-nums' }}>
                         {claim.requester_acronym}{year ? ' · ' + year : ''}
                       </p>
                       <p className="font-semibold text-sm [overflow-wrap:anywhere]" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>
@@ -3815,7 +3815,7 @@ export default function SettingsPage() {
 
           {/* ── Contact and links ── */}
           <Group
-            id="contact-card" title="Contact and Links" icon={MailIcon} tint={TINT_GREEN_BG}
+            id="contact-card" title="Contact and Links" emoji="Envelope" icon={MailIcon} tint={TINT_GREEN_BG}
             aside={<AutoSaveStatus saving={visualSaving} saved={visualSaved} />}
           >
             <Row
@@ -3867,7 +3867,7 @@ export default function SettingsPage() {
               nothing is switched on or off and nothing is hidden. ── */}
           <Group
             id="intent-card" pulse={intentPulse}
-            title="What You Use Gavelling For" icon={Compass} tint={TINT_GOLD_BG}
+            title="What You Use Gavelling For" emoji="Compass" icon={Compass} tint={TINT_GOLD_BG}
             hint={<InfoHint label="About this" text="It only changes the order of the priorities on your dashboard. Nothing is switched on or off, and no work is hidden. Pick everything that applies." />}
             aside={<AutoSaveStatus saving={intentSaving} saved={intentSaved} />}
           >
@@ -3890,7 +3890,7 @@ export default function SettingsPage() {
                       transition: 'background-color 150ms ease, box-shadow 150ms ease',
                     }}
                   >
-                    <DuoDisc icon={INTENT_FALLBACK_ICONS[opt.key] ?? ClipboardList} tint={on ? TINT_GREEN_BG : TINT_GOLD_BG} size={32} />
+                    <EmojiDisc emoji={opt.emoji} icon={INTENT_FALLBACK_ICONS[opt.key] ?? ClipboardList} tint={on ? TINT_GREEN_BG : TINT_GOLD_BG} size={34} />
                     <span className="min-w-0 flex-1">
                       <span className="block text-sm font-bold" style={{ color: '#1C1410' }}>{opt.label}</span>
                     </span>
@@ -3908,7 +3908,7 @@ export default function SettingsPage() {
 
           {/* ── Editions (lineage) ── */}
           <Group
-            title="Past Editions" icon={History} tint={TINT_GREEN_BG}
+            title="Past Editions" emoji="Books" icon={History} tint={TINT_GREEN_BG}
             hint={<InfoHint label="About editions" text="Link editions of the same conference across years. A link only counts once the previous edition's owner approves it." />}
           >
             <div className="gvk-row" style={{ display: 'block' }}>
@@ -3977,7 +3977,7 @@ export default function SettingsPage() {
                   style={{ borderBottom: isLast ? 'none' : '1px solid #F0EDE6' }}
                 >
                   <div className="flex-1 min-w-0">
-                    <p style={{ fontSize: 10, color: '#B6871F', fontFamily: "var(--font-brand), sans-serif", fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase' }}>
+                    <p style={{ fontSize: 12, color: '#B6871F', fontFamily: "var(--font-brand), sans-serif", fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase' }}>
                       {claim.acronym}{year ? ' · ' + year : ''}
                     </p>
                     <p className="font-semibold text-sm [overflow-wrap:anywhere]" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>
@@ -4040,7 +4040,7 @@ export default function SettingsPage() {
           </Group>
 
           {/* ── Delete ── */}
-          <Group title="Delete Conference" icon={Trash2} tint={TINT_GOLD_BG}>
+          <Group title="Delete Conference" emoji="Wastebasket" icon={Trash2} tint={TINT_GOLD_BG}>
             <Row label="Delete this conference" desc="Everything about it is removed for good. Only the owner can do this." align="end">
               <button
                 type="button"
@@ -4083,7 +4083,7 @@ export default function SettingsPage() {
 
       {activeTab === 'organizers' && (
         <div className="mb-5">
-          <SectionHead icon={Users2} tint={TINT_GREEN_BG}
+          <SectionHead emoji="Busts in silhouette" icon={Users2} tint={TINT_GREEN_BG}
             title="Your Team"
             line={pendingInvites.length > 0 ? `${pendingInvites.length} ${pendingInvites.length === 1 ? 'invite is' : 'invites are'} waiting.` : 'Who runs it with you, and what each person can open.'}
             focal={<BigCount n={organizers.length} word={organizers.length === 1 ? 'person' : 'people'} />}
@@ -4171,7 +4171,7 @@ export default function SettingsPage() {
           <>
             <div className="flex flex-wrap items-center justify-center gap-x-2 gap-y-1 mb-2">
               <span aria-hidden style={{ width: 7, height: 7, borderRadius: 999, backgroundColor: r.accent, display: 'inline-block' }} />
-              <p className="font-bold text-[10.5px]" style={{ color: r.accent, fontFamily: OUTFIT, letterSpacing: '0.14em' }}>
+              <p className="font-bold text-[12px]" style={{ color: r.accent, fontFamily: OUTFIT, letterSpacing: '0.14em' }}>
                 {r.label.toUpperCase()}
               </p>
               <span
@@ -4614,7 +4614,7 @@ export default function SettingsPage() {
         const blockPublic = !view.is_public && (gateBlocks || noDates);
         return (
           <div className="flex flex-col gap-5">
-            <SectionHead icon={view.is_public ? Globe : Lock}
+            <SectionHead emoji={view.is_public ? 'Globe showing europe-africa' : 'Locked'} icon={view.is_public ? Globe : Lock}
               tint={view.is_public ? TINT_GREEN_BG : TINT_GOLD_BG}
               title="Visibility"
               line="Who can find your conference, and what its page shows."
@@ -4626,7 +4626,7 @@ export default function SettingsPage() {
                 </span>
               }
             />
-            <Group title="Who Can Find It" icon={Search} tint={TINT_GREEN_BG}>
+            <Group title="Who Can Find It" emoji="Magnifying glass tilted left" icon={Search} tint={TINT_GREEN_BG}>
               <Row
                 label="Public on Explore"
                 align="end"
@@ -4662,7 +4662,7 @@ export default function SettingsPage() {
                 </div>
               </Row>
             </Group>
-            <Group title="What Your Page Shows" icon={Eye} tint={TINT_GOLD_BG} aside={visibilityStatus !== 'idle' ? <AutoSaveStatus saving={visibilityStatus === 'saving'} saved={visibilityStatus === 'saved'} /> : undefined}>
+            <Group title="What Your Page Shows" emoji="Eyes" icon={Eye} tint={TINT_GOLD_BG} aside={visibilityStatus !== 'idle' ? <AutoSaveStatus saving={visibilityStatus === 'saving'} saved={visibilityStatus === 'saved'} /> : undefined}>
               <SwitchRow
                 label="The committee list"
                 desc="Turn it off if your committees are not announced yet."
@@ -4702,15 +4702,15 @@ export default function SettingsPage() {
           : view.manual_kind === 'bank' ? 'Bank transfer'
           : 'Payment link';
         const fin = `/manage/${view.slug}/financials`;
-        const doors: { icon: LucideIcon; label: string; desc: string; href: string }[] = [
-          { icon: ReceiptText, label: 'Registration fee', desc: 'A fee on top of the ticket, if you charge one.', href: `${fin}?open=fee` },
-          { icon: Gift, label: 'Add-ons', desc: 'Extras people buy with their ticket.', href: `${fin}?open=addons` },
-          { icon: Ticket, label: 'Vouchers and referrals', desc: 'Discount and referral codes.', href: `${fin}?open=vouchers` },
-          { icon: HandHeart, label: 'Financial aid', desc: 'The aid form and the requests waiting.', href: `${fin}/aid` },
+        const doors: { emoji: string; icon: LucideIcon; label: string; desc: string; href: string }[] = [
+          { emoji: 'Receipt', icon: ReceiptText, label: 'Registration fee', desc: 'A fee on top of the ticket, if you charge one.', href: `${fin}?open=fee` },
+          { emoji: 'Wrapped gift', icon: Gift, label: 'Add-ons', desc: 'Extras people buy with their ticket.', href: `${fin}?open=addons` },
+          { emoji: 'Ticket', icon: Ticket, label: 'Vouchers and referrals', desc: 'Discount and referral codes.', href: `${fin}?open=vouchers` },
+          { emoji: 'Heart with ribbon', icon: HandHeart, label: 'Financial aid', desc: 'The aid form and the requests waiting.', href: `${fin}/aid` },
         ];
         return (
           <div className="flex flex-col gap-5">
-            <SectionHead icon={CreditCard} tint={TINT_GOLD_BG}
+            <SectionHead emoji="Credit card" icon={CreditCard} tint={TINT_GOLD_BG}
               title="Payments"
               line="Money lives in Financials. Prices live with each role, under Applications."
               focal={
@@ -4719,7 +4719,7 @@ export default function SettingsPage() {
                 </span>
               }
             />
-            <Group title="How People Pay" icon={CreditCard} tint={TINT_GOLD_BG}>
+            <Group title="How People Pay" emoji="Money bag" icon={CreditCard} tint={TINT_GOLD_BG}>
               <Row
                 label="Payment method"
                 align="end"
@@ -4735,7 +4735,7 @@ export default function SettingsPage() {
                 <Row
                   key={d.label}
                   align="end"
-                  label={<span className="inline-flex items-center gap-2.5"><DuoDisc icon={d.icon} size={30} tint={TINT_GOLD_BG} />{d.label}</span>}
+                  label={<span className="inline-flex items-center gap-2.5"><EmojiDisc emoji={d.emoji} icon={d.icon} size={32} tint={TINT_GOLD_BG} />{d.label}</span>}
                   desc={d.desc}
                 >
                   <a href={d.href} className="gv-st-btn gv-st-outline" style={{ minHeight: 40, padding: '0 14px' }}>
@@ -4745,7 +4745,7 @@ export default function SettingsPage() {
               ))}
               <Row
                 align="end"
-                label={<span className="inline-flex items-center gap-2.5"><DuoDisc icon={CalendarDays} size={30} tint={TINT_GREEN_BG} />Prices for each role</span>}
+                label={<span className="inline-flex items-center gap-2.5"><EmojiDisc emoji="Spiral calendar" icon={CalendarDays} size={32} tint={TINT_GREEN_BG} />Prices for each role</span>}
                 desc="Set in each role under Applications, with prices by date."
               >
                 <button type="button" onClick={() => openSection('applications')} className="gv-st-btn gv-st-outline" style={{ minHeight: 40, padding: '0 14px' }}>
@@ -4759,7 +4759,7 @@ export default function SettingsPage() {
 
       {activeTab === 'awards' && (
         <div className="flex flex-col gap-5">
-          <SectionHead icon={Trophy} tint={TINT_GOLD_BG} title="Awards" line="Coming soon. Everything already published stays published." />
+          <SectionHead emoji="Trophy" icon={Trophy} tint={TINT_GOLD_BG} title="Awards" line="Coming soon. Everything already published stays published." />
           <div className="gv-st-card"><AwardsComingSoon /></div>
         </div>
       )}
@@ -4895,7 +4895,7 @@ export default function SettingsPage() {
                 ))}
               </div>
 
-              <p className="font-bold text-[10px] mb-1" style={{ color: NEU.inkSoft, fontFamily: OUTFIT, letterSpacing: '0.14em' }}>
+              <p className="font-bold text-[12px] mb-1" style={{ color: NEU.inkSoft, fontFamily: OUTFIT, letterSpacing: '0.14em' }}>
                 STEP {inviteStep} OF 3
               </p>
 
@@ -5169,7 +5169,7 @@ export default function SettingsPage() {
         const close = () => setMemberSheetId(null);
 
         const groupHeading = (text: string) => (
-          <p className="font-bold text-[10px] mb-2" style={{ color: NEU.inkSoft, fontFamily: OUTFIT, letterSpacing: '0.14em' }}>
+          <p className="font-bold text-[12px] mb-2" style={{ color: NEU.inkSoft, fontFamily: OUTFIT, letterSpacing: '0.14em' }}>
             {text}
           </p>
         );

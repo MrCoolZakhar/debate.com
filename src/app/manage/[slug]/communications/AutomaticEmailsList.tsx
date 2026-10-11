@@ -4,14 +4,14 @@
  * Automatic emails (redesign 11 Oct 2026, owner: "needs more work in terms of
  * design"). Built on the organiser kits the owner approved on the Store and
  * Financials (STORE_CSS, DASH_CSS: white cards on ivory, gold and green
- * washes, big tabular numbers), with duotone icons (forest line over a gold
- * fill on a soft gold disc, Duo below). No 3D emoji on organiser pages.
+ * washes, big tabular numbers), with Fluent 3D emoji on a soft gold disc
+ * (EmojiDisc below).
  *
  * Top to bottom:
  *  - ONE focal card (gold wash, gold ring): "23 on of 31 emails", and the
- *    participant's journey as a strip of duotone discs, each with how many of
+ *    participant's journey as a strip of emoji discs, each with how many of
  *    its emails are on. A disc jumps to its group.
- *  - One group per journey moment: a 44px duotone disc, the title, "4 of 5 on".
+ *  - One group per journey moment: a 44px emoji disc, the title, "4 of 5 on".
  *  - Each email is its own card (two columns from 720px of list width): a
  *    small thumbnail of the real email (the same HTML the preview pop-up
  *    renders, drawn lazily into a sandboxed iframe when the card scrolls into
@@ -34,6 +34,7 @@ import {
 import { STORE_CSS, INK, INK_SOFT, FOREST, GOLD, IVORY } from '../store/storeKit';
 import { DASH_CSS, OWED } from '../financials/dashboardKit';
 import { GoldWord } from '@/components/BrandHeading';
+import { Emoji3D } from '@/components/neu';
 import { BackLink, CommsTitle, OnOffSwitch } from './commsKit';
 
 export interface AutoRow {
@@ -62,17 +63,17 @@ export interface AutoGroup { title: string; rows: AutoRow[] }
 
 export interface AlwaysSentEmail { key: string; label: string; description: string }
 
-/** One duotone shape and one short word per journey moment. */
-const JOURNEY_LOOK: Record<string, { icon: LucideIcon; short: string }> = {
-  'When They Apply': { icon: Inbox, short: 'Apply' },
-  'When You Decide': { icon: BadgeCheck, short: 'Decide' },
-  'When They Get a Seat': { icon: Armchair, short: 'Seat' },
-  'When They Pay': { icon: Wallet, short: 'Pay' },
-  'Before the Conference': { icon: CalendarDays, short: 'Before' },
-  'After the Conference': { icon: Trophy, short: 'After' },
-  'Your Team and Questions': { icon: Users, short: 'Team' },
+/** One Fluent 3D emoji (Lucide fallback) and one short word per journey moment. */
+const JOURNEY_LOOK: Record<string, { emoji: string; icon: LucideIcon; short: string }> = {
+  'When They Apply': { emoji: 'Inbox tray', icon: Inbox, short: 'Apply' },
+  'When You Decide': { emoji: 'Check mark button', icon: BadgeCheck, short: 'Decide' },
+  'When They Get a Seat': { emoji: 'Chair', icon: Armchair, short: 'Seat' },
+  'When They Pay': { emoji: 'Money bag', icon: Wallet, short: 'Pay' },
+  'Before the Conference': { emoji: 'Spiral calendar', icon: CalendarDays, short: 'Before' },
+  'After the Conference': { emoji: 'Trophy', icon: Trophy, short: 'After' },
+  'Your Team and Questions': { emoji: 'Busts in silhouette', icon: Users, short: 'Team' },
 };
-const lookOf = (title: string) => JOURNEY_LOOK[title] ?? { icon: Mail, short: title };
+const lookOf = (title: string) => JOURNEY_LOOK[title] ?? { emoji: 'Envelope', icon: Mail, short: title };
 const groupId = (title: string) => `gv-ae-${title.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
 
 const GREEN = '#2A6B45';
@@ -168,12 +169,12 @@ const AE_CSS = `
 @media (prefers-reduced-motion:reduce){.gv-ae-stage,.gv-ae-thumb,.gv-ae-disc,.gv-ae-mail,.gv-ae-mail::before{transition:none}.gv-ae-stage:hover,.gv-ae-thumb:hover,.gv-ae-disc:hover{transform:none}}
 `;
 
-/** A duotone glyph (forest line over a gold fill) in a soft gold disc with a
- *  lighter top highlight and a slightly darker rim. No 3D emoji on organiser pages. */
-function Duo({ icon: Icon, size = 44 }: { icon: LucideIcon; size?: number }) {
+/** A Fluent 3D emoji in a soft gold disc with a lighter top highlight and a
+ *  slightly darker rim; `icon` is drawn in forest if the image cannot load. */
+function EmojiDisc({ emoji, icon, size = 44 }: { emoji: string; icon: LucideIcon; size?: number }) {
   return (
     <span className="gv-ae-duo" aria-hidden style={{ width: size, height: size, borderRadius: Math.round(size * 0.34) }}>
-      <Icon size={Math.round(size * 0.5)} strokeWidth={2.1} style={{ color: FOREST, fill: GOLD }} />
+      <Emoji3D name={emoji} size={Math.round(size * 0.62)} fallback={icon} fallbackColor={FOREST} />
     </span>
   );
 }
@@ -382,7 +383,7 @@ export default function AutomaticEmailsList({
                 onClick={() => scrollToGroup(s.title)}
                 aria-label={`${s.title}: ${s.on} of ${s.total} on`}
               >
-                <Duo icon={look.icon} size={40} />
+                <EmojiDisc emoji={look.emoji} icon={look.icon} size={40} />
                 <span className="gv-ae-stage-n" aria-hidden>{s.on}<small>/{s.total}</small></span>
                 <span className="gv-ae-stage-w" aria-hidden>{look.short}</span>
               </button>
@@ -398,7 +399,7 @@ export default function AutomaticEmailsList({
           return (
             <section key={g.title} aria-labelledby={`${groupId(g.title)}-t`}>
               <div className="gv-ae-ghead" id={groupId(g.title)}>
-                <Duo icon={look.icon} size={44} />
+                <EmojiDisc emoji={look.emoji} icon={look.icon} size={44} />
                 <h2 className="gv-ae-gtitle" id={`${groupId(g.title)}-t`}>{g.title}</h2>
                 <span className="gv-ae-gcount"><b>{s.on}</b> of {s.total} on</span>
               </div>
@@ -414,7 +415,7 @@ export default function AutomaticEmailsList({
         {alwaysSent.length > 0 && (
           <section className="gv-st-card gv-fd-card gv-fd-wash-gold gv-ae-money" aria-labelledby="gv-ae-money-t">
             <div className="gv-ae-ghead">
-              <Duo icon={Lock} size={44} />
+              <EmojiDisc emoji="Locked" icon={Lock} size={44} />
               <h2 className="gv-ae-gtitle" id="gv-ae-money-t">Always Sent by <GoldWord>Gavelling</GoldWord></h2>
             </div>
             <p className="gv-ae-money-line">These four always go out, so the amounts are always right</p>

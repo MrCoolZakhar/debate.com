@@ -34,7 +34,7 @@ import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
 import {
   CheckCircle2, Clock, MinusCircle, ChevronRight, Plus, X, ArrowLeft, Copy, FilePlus2,
-  UsersRound, ClipboardList, DoorOpen, Wallet, ListOrdered, Ban, Hand,
+  ClipboardList, DoorOpen, Wallet, ListOrdered, Ban, Hand,
 } from 'lucide-react';
 import { CircleFlag } from '@/components/CircleFlag';
 import { paymentGateBlocks } from '@/lib/payments';
@@ -43,7 +43,7 @@ import { ROLE_ORDER } from './applicationsUi';
 import {
   F, INK, INK_SOFT, FOREST, AMBER, TEXT_LINK,
   Switch, windowState, shortDate, rolePriceText, rolePlural, roleHasPrice, roleIsFree,
-  PREF_MODE_OPTIONS, SectionHead, Group, Row, SwitchRow, BigCount, TINT_GOLD_BG, TINT_GREEN_BG, DuoDisc, ROLE_ICON,
+  PREF_MODE_OPTIONS, SectionHead, Group, Row, SwitchRow, BigCount, TINT_GOLD_BG, TINT_GREEN_BG, EmojiDisc, RoleDisc,
   generalAnswer, inGeneralScope, listedRoles, type GeneralField, type RoleSetupConfig,
 } from './panelKit';
 
@@ -170,7 +170,7 @@ function AddRole({ hidden, setUp, onAdd }: {
               className="flex items-center gap-3 text-left focus:outline-none focus-visible:ring-2 active:scale-[0.99] transition-transform"
               style={choice}
             >
-              <DuoDisc icon={ROLE_ICON[r.role] ?? UsersRound} tint={TINT_GREEN_BG} size={38} />
+              <RoleDisc role={r.role} tint={TINT_GREEN_BG} size={38} />
               <span className="min-w-0">
                 <span className="block" style={{ fontFamily: F, fontSize: 15, fontWeight: 700, color: INK, lineHeight: 1.3 }}>{rolePlural(r.role)}</span>
                 <span className="block" style={{ fontFamily: F, fontSize: 13, color: INK_SOFT, lineHeight: 1.4, overflowWrap: 'anywhere' }}>{ROLE_LINE[r.role]}</span>
@@ -187,7 +187,7 @@ function AddRole({ hidden, setUp, onAdd }: {
             className="flex items-center gap-3 text-left focus:outline-none focus-visible:ring-2 active:scale-[0.99] transition-transform"
             style={choice}
           >
-            <DuoDisc icon={FilePlus2} tint={TINT_GOLD_BG} size={38} />
+            <EmojiDisc emoji="Sparkles" icon={FilePlus2} tint={TINT_GOLD_BG} size={38} />
             <span className="min-w-0">
               <span className="block" style={{ fontFamily: F, fontSize: 15, fontWeight: 700, color: INK }}>Start from scratch</span>
               <span className="block" style={{ fontFamily: F, fontSize: 13, color: INK_SOFT }}>An empty form, switched off, with your rules for every role</span>
@@ -205,7 +205,7 @@ function AddRole({ hidden, setUp, onAdd }: {
                 className="flex items-center gap-3 text-left focus:outline-none focus-visible:ring-2 active:scale-[0.99] transition-transform"
                 style={choice}
               >
-                <DuoDisc icon={Copy} tint={TINT_GREEN_BG} size={38} />
+                <EmojiDisc emoji="Card index dividers" icon={Copy} tint={TINT_GREEN_BG} size={38} />
                 <span className="min-w-0">
                   <span className="block" style={{ fontFamily: F, fontSize: 15, fontWeight: 700, color: INK, overflowWrap: 'anywhere' }}>Copy from {rolePlural(s.role)}</span>
                   <span className="block" style={{ fontFamily: F, fontSize: 13, color: INK_SOFT }}>{withQuestions && withPrice ? 'Copies the questions and the prices' : withQuestions ? 'Copies the questions' : 'Copies the prices'}</span>
@@ -230,7 +230,7 @@ function RankPreview({ value }: { value: string }) {
   if (value === 'none') {
     return (
       <div className="gvc-mini" style={{ alignItems: 'center', justifyContent: 'center' }}>
-        <DuoDisc icon={Ban} tint={TINT_GOLD_BG} size={30} />
+        <EmojiDisc emoji="Prohibited" icon={Ban} tint={TINT_GOLD_BG} size={30} />
         <span className="gvc-mini-row" style={{ color: INK_SOFT, textAlign: 'center' }}>No ranking step</span>
       </div>
     );
@@ -312,7 +312,7 @@ export function ApplicationsSection({
   return (
     <div className="flex flex-col gap-5">
       <style>{CSS}</style>
-      <SectionHead icon={ClipboardList} tint={TINT_GOLD_BG}
+      <SectionHead emoji="Inbox tray" icon={ClipboardList} tint={TINT_GOLD_BG}
         title="Applications"
         line={<span className="inline-flex items-center gap-1.5" style={{ color: appsMark.color, fontWeight: 700 }}><appsMark.icon size={16} strokeWidth={2.4} aria-hidden />{appsMark.word}</span>}
         focal={totalApplied !== null ? <BigCount n={totalApplied} word={totalApplied === 1 ? 'application' : 'applications'} /> : undefined}
@@ -326,7 +326,7 @@ export function ApplicationsSection({
       )}
 
       {/* ── Who can apply ── */}
-      <Group id="who-can-apply" title="Who Can Apply" icon={Hand} tint={TINT_GOLD_BG}>
+      <Group id="who-can-apply" title="Who Can Apply" emoji="Identification card" icon={Hand} tint={TINT_GOLD_BG}>
         {listed.map(cfg => {
           const st = windowState(cfg, now);
           const blocked = gate && !cfg.is_enabled;
@@ -335,7 +335,7 @@ export function ApplicationsSection({
           return (
             <div key={cfg.role} className="gvc-row" data-on={cfg.is_enabled ? 'true' : undefined}>
               <span className="gvc-row-name flex items-center gap-2.5 min-w-0">
-                <DuoDisc icon={ROLE_ICON[cfg.role] ?? UsersRound} tint={cfg.is_enabled ? TINT_GREEN_BG : TINT_GOLD_BG} size={36} />
+                <RoleDisc role={cfg.role} tint={cfg.is_enabled ? TINT_GREEN_BG : TINT_GOLD_BG} size={36} />
                 <span style={{ fontFamily: F, fontSize: 16, fontWeight: 800, color: INK, lineHeight: 1.25, overflowWrap: 'anywhere' }}>{plural}</span>
               </span>
               <span className="gvc-row-detail min-w-0" style={{ fontFamily: F, fontSize: 14, color: INK_SOFT, lineHeight: 1.4, overflowWrap: 'anywhere' }}>
@@ -359,7 +359,7 @@ export function ApplicationsSection({
       </Group>
 
       {/* ── Who gets in (every role) ── */}
-      <Group title="Who Gets In" icon={DoorOpen} aside={<EveryRole />}>
+      <Group title="Who Gets In" emoji="Door" icon={DoorOpen} aside={<EveryRole />}>
         {auto.roles.length > 0 && (
           <SwitchRow
             label="Accept everyone straight away"
@@ -386,7 +386,7 @@ export function ApplicationsSection({
 
       {/* ── Paying (every role with a price) ── */}
       {anyPaid && (
-        <Group title="Paying" icon={Wallet} tint={TINT_GOLD_BG} aside={<EveryRole paid />}>
+        <Group title="Paying" emoji="Money bag" icon={Wallet} tint={TINT_GOLD_BG} aside={<EveryRole paid />}>
           <SwitchRow
             label="Pay only after you accept them"
             desc={timing.mixed ? splitLine(timing, 'payment_timing') : 'Off: they can pay as soon as they apply.'}
@@ -408,6 +408,7 @@ export function ApplicationsSection({
       {rank.roles.length > 0 && (
         <Group
           title="What They Rank"
+          emoji="Bar chart"
           icon={ListOrdered}
           aside={<span style={{ fontFamily: F, fontSize: 13, fontWeight: 700, color: INK_SOFT }}>{joinWords(rank.roles.map(r => rolePlural(r.role)))}</span>}
         >

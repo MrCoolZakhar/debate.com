@@ -13,6 +13,7 @@ import {
   Loader2, Crown, UserRound, GraduationCap, Eye, Gavel, ClipboardList, HardHat, type LucideIcon,
 } from 'lucide-react';
 import { GoldWord } from '@/components/BrandHeading';
+import { Emoji3D } from '@/components/neu';
 import type { FeePhase } from '@/lib/finance';
 import { currentStageAmount, priceDate } from '@/lib/publicFees';
 import { formatFee } from '@/lib/utils';
@@ -408,7 +409,7 @@ export function roleIsSetUp(cfg: RoleSetupConfig, appliedCount: number | undefin
 //
 // Every settings section is built from the organiser kit the owner approved
 // (the Conference Store's and Financials' cards: STORE_CSS / DASH_CSS, mounted
-// once by settingsShell.tsx). A Group is a white gv-st-card with a duotone icon
+// once by settingsShell.tsx). A Group is a white gv-st-card with a 3D emoji
 // in a tinted disc and a Title Case heading whose last word is gold;
 // inside it, compact rows that read as cards (ivory, separated by gaps, never
 // hairlines), label on the left and the control on the right. A row that is
@@ -436,24 +437,35 @@ export function GoldLast({ text }: { text: string }) {
   return <>{text.slice(0, i + 1)}<GoldWord>{text.slice(i + 1)}</GoldWord></>;
 }
 
-/** A duotone icon in a soft tinted disc (taste board two, "like a lot"): a
- *  forest line over a gold fill. Settings uses these, never 3D emoji (owner,
- *  Oct 2026). `tint` is TINT_GOLD_BG or TINT_GREEN_BG. */
-export function DuoDisc({ icon: Icon, size = 40, tint = TINT_GOLD_BG, active = false }: {
-  icon: LucideIcon; size?: number; tint?: string; active?: boolean;
+/** A Fluent 3D emoji in a soft tinted disc (the Store and Financials look,
+ *  `IconDisc` in financials/dashboardKit.tsx). `icon` is the Lucide glyph drawn
+ *  in forest if the emoji image cannot load. `tint` is TINT_GOLD_BG or
+ *  TINT_GREEN_BG; `active` seats it on white (the selected rail item). Duotone
+ *  Lucide icons were tried here and rejected as ugly (owner, 11 Oct 2026). */
+export function EmojiDisc({ emoji, icon, size = 40, tint = TINT_GOLD_BG, active = false, toned = false }: {
+  emoji: string; icon: LucideIcon; size?: number; tint?: string; active?: boolean; toned?: boolean;
 }) {
   return (
     <span
       aria-hidden
       className="gv-fd-disc"
-      style={{ width: size, height: size, borderRadius: Math.round(size * 0.32), background: active ? 'linear-gradient(150deg, rgba(255,255,255,0.95), rgba(255,255,255,0.75))' : tint }}
+      style={{ width: size, height: size, borderRadius: Math.round(size * 0.32), background: active ? 'linear-gradient(150deg, rgba(255,255,255,0.97), rgba(255,255,255,0.82))' : tint }}
     >
-      <Icon size={Math.round(size * 0.52)} strokeWidth={2} style={{ color: FOREST, fill: active ? '#FFF6D6' : '#EED98A' }} />
+      <Emoji3D name={emoji} toned={toned} size={Math.round(size * 0.62)} fallback={icon} fallbackColor={FOREST} />
     </span>
   );
 }
 
-/** The duotone glyph for each role. */
+/** The Fluent 3D emoji for each role, and the Lucide glyph it falls back to. */
+export const ROLE_EMOJI: Record<string, string> = {
+  'head-delegate': 'Crown',
+  delegate: 'Bust in silhouette',
+  'faculty-advisor': 'Graduation cap',
+  observer: 'Eyes',
+  chair: 'Hammer',
+  secretariat: 'Clipboard',
+  staff: 'Name badge',
+};
 export const ROLE_ICON: Record<string, LucideIcon> = {
   'head-delegate': Crown,
   delegate: UserRound,
@@ -464,17 +476,24 @@ export const ROLE_ICON: Record<string, LucideIcon> = {
   staff: HardHat,
 };
 
-/** The top of a settings section: a duotone icon disc, the title (gold last word)
+/** A role's emoji disc, by role key. */
+export function RoleDisc({ role, size = 38, tint = TINT_GREEN_BG, active = false }: {
+  role: string; size?: number; tint?: string; active?: boolean;
+}) {
+  return <EmojiDisc emoji={ROLE_EMOJI[role] ?? 'Busts in silhouette'} icon={ROLE_ICON[role] ?? UserRound} size={size} tint={tint} active={active} />;
+}
+
+/** The top of a settings section: a 3D emoji disc, the title (gold last word)
  *  and one plain line. `focal` is the section's one big thing (a number with
  *  its word, or a picture), drawn on the right. */
-export function SectionHead({ icon, tint, title, line, focal }: {
-  icon: LucideIcon; tint: string; title: string; line?: ReactNode; focal?: ReactNode;
+export function SectionHead({ emoji, icon, tint, title, line, focal }: {
+  emoji: string; icon: LucideIcon; tint: string; title: string; line?: ReactNode; focal?: ReactNode;
 }) {
   return (
     <header className="gv-st-card gv-fd-card mb-5" style={{ background: tint === TINT_GOLD_BG ? WASH_GOLD : WASH_GREEN }}>
       <div className="flex items-center justify-between gap-x-5 gap-y-3 flex-wrap">
         <div className="flex items-center gap-3.5 min-w-0">
-          <DuoDisc icon={icon} tint={tint} size={56} />
+          <EmojiDisc emoji={emoji} icon={icon} tint={tint} size={56} />
           <div className="min-w-0">
             <h1 style={{ fontFamily: F, fontSize: 'clamp(24px, 2.6vw, 32px)', fontWeight: 800, color: INK, lineHeight: 1.1, letterSpacing: '-0.02em', overflowWrap: 'anywhere' }}>
               <GoldLast text={title} />
@@ -505,11 +524,13 @@ export const TINT_GOLD_BG = 'linear-gradient(150deg, rgba(238,217,138,0.70), rgb
 const WASH_GREEN = 'radial-gradient(120% 90% at 100% 0%, rgba(61,122,82,0.09) 0%, rgba(61,122,82,0) 55%), #FFFFFF';
 const WASH_GOLD = 'radial-gradient(120% 90% at 100% 0%, rgba(238,217,138,0.28) 0%, rgba(238,217,138,0) 55%), #FFFFFF';
 
-/** A white card with a duotone icon disc, a Title Case heading (gold last word)
+/** A white card with a 3D emoji disc, a Title Case heading (gold last word)
  *  and its rows. */
-export function Group({ id, title, icon, tint = TINT_GREEN_BG, hint, aside, children, pulse = false }: {
+export function Group({ id, title, emoji, icon, tint = TINT_GREEN_BG, hint, aside, children, pulse = false }: {
   id?: string;
   title: string;
+  /** Fluent 3D emoji name; `icon` is its Lucide fallback. */
+  emoji: string;
   icon: LucideIcon;
   tint?: string;
   /** An InfoHint (or any small node) beside the heading. */
@@ -536,7 +557,7 @@ export function Group({ id, title, icon, tint = TINT_GREEN_BG, hint, aside, chil
     >
       <div className="flex items-center justify-between gap-3 flex-wrap mb-3">
         <div className="flex items-center gap-3 min-w-0">
-          <DuoDisc icon={icon} tint={tint} size={40} />
+          <EmojiDisc emoji={emoji} icon={icon} tint={tint} size={40} />
           <h2 className="flex items-center gap-1.5 min-w-0" style={{ fontFamily: F, fontSize: 18, fontWeight: 800, color: INK, lineHeight: 1.25, letterSpacing: '-0.01em' }}>
             <span style={{ overflowWrap: 'anywhere' }}><GoldLast text={title} /></span>
             {hint}

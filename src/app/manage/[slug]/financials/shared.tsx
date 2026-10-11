@@ -221,14 +221,14 @@ export const inputStyle: React.CSSProperties = {
 };
 
 export const fieldLabelStyle: React.CSSProperties = {
-  fontFamily: OUTFIT, fontSize: 10, fontWeight: 800, letterSpacing: '0.12em',
+  fontFamily: OUTFIT, fontSize: 12, fontWeight: 800, letterSpacing: '0.12em',
   color: NEU.muted, textTransform: 'uppercase', display: 'block', marginBottom: 6,
 };
 
 export const MAX_PAYMENT_NOTE_LENGTH = 500;
 
 export const mutedCaption: React.CSSProperties = {
-  fontFamily: OUTFIT, fontSize: 10.5, color: NEU.muted, lineHeight: 1.55,
+  fontFamily: OUTFIT, fontSize: 12.5, color: NEU.muted, lineHeight: 1.55,
 };
 
 // ── useFinancialsData ────────────────────────────────────────────────────────

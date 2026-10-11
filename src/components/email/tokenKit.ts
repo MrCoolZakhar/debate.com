@@ -4,9 +4,9 @@
 // A token used to render as an outlined pill with a form-label inside it
 // ("Delegate Name", "Committee", "Session Code"), which reads as a field you
 // have to fill in rather than as an object you drop into a sentence. Every
-// token now carries an IDENTITY: a duotone Lucide icon on the palette and in
-// the suggestion list, a unicode glyph inside the in-text pill (no network
-// fetch in a contentEditable), and a short name that fits.
+// token now carries an IDENTITY: a 3D emoji on the palette and in the
+// suggestion list, a unicode glyph inside the in-text pill (no network fetch
+// in a contentEditable), a lucide fallback, and a short name that fits.
 //
 // The glyph is the important half. It is what survives at 12px inside a
 // paragraph, and it is what makes {{committee}} and {{country}} tell each
@@ -29,9 +29,11 @@ import { EMAIL_TOKEN_LABELS, type EmailTokenKey } from '@/lib/emailTokens';
 export type TokenFamily = 'person' | 'place' | 'money' | 'conference' | 'thread' | 'link';
 
 export interface TokenIdentity {
+  /** Fluent 3D emoji asset name, for the palette and the suggestion list. */
+  emoji: string;
   /** Unicode glyph for the in-text pill. Must be one grapheme. */
   glyph: string;
-  /** Duotone Lucide glyph for the palette and the suggestion list. */
+  /** Lucide fallback for when the emoji CDN is unreachable. */
   icon: typeof UserRound;
   /** Short enough to sit in a pill mid-sentence. Falls back to the long label. */
   short: string;
@@ -41,24 +43,28 @@ export interface TokenIdentity {
 }
 
 export const TOKEN_IDENTITY: Record<EmailTokenKey, TokenIdentity> = {
-  delegate_name: { glyph: '🧑', icon: UserRound, short: 'Their name', family: 'person', becomes: 'The name of whoever opens the email.' },
-  role: { glyph: '🪪', icon: BadgeCheck, short: 'Their role', family: 'person', becomes: 'Delegate, Chair, Faculty Advisor, and so on.' },
-  delegation_name: { glyph: '🧑‍🤝‍🧑', icon: Users, short: 'Delegation', family: 'place', becomes: 'The school or society they came with.' },
-  committee: { glyph: '🗳️', icon: Landmark, short: 'Committee', family: 'place', becomes: 'The committee they were allocated to.' },
-  country: { glyph: '🌍', icon: Globe, short: 'Country', family: 'place', becomes: 'The country or seat they represent.' },
-  payment_status: { glyph: '💰', icon: Wallet, short: 'Paid or not', family: 'money', becomes: 'Paid, Unpaid, Waived, and so on.' },
-  fee: { glyph: '💳', icon: CreditCard, short: 'Their fee', family: 'money', becomes: 'The amount owed for their role, at the current phase.' },
-  conference_name: { glyph: '🏛️', icon: Building2, short: 'Conference', family: 'conference', becomes: 'This conference, spelled out in full.' },
-  conference_dates: { glyph: '📅', icon: CalendarDays, short: 'The dates', family: 'conference', becomes: 'The conference dates, written out.' },
-  session_code: { glyph: '🔑', icon: KeyRound, short: 'Session code', family: 'conference', becomes: 'The six-character code for their committee room.' },
-  award: { glyph: '🏆', icon: Trophy, short: 'Their award', family: 'conference', becomes: 'The award they received, such as Best Delegate.' },
-  request_subject: { glyph: '✉️', icon: Mail, short: 'Their subject', family: 'thread', becomes: 'The subject line of the message you are replying to.' },
-  request_body: { glyph: '💬', icon: MessageSquare, short: 'Their message', family: 'thread', becomes: 'The message you are replying to, quoted back.' },
-  draft_link: { glyph: '🔗', icon: Link2, short: 'Draft link', family: 'link', becomes: 'A private link back to their unfinished application.' },
-  draft_stop_link: { glyph: '🛑', icon: Ban, short: 'Stop link', family: 'link', becomes: 'A one-click way for them to turn these reminders off.' },
-  invited_by: { glyph: '🧑', icon: UserRound, short: 'Who invited', family: 'person', becomes: 'The organizer who sent the invitation.' },
-  co_delegate: { glyph: '🧑‍🤝‍🧑', icon: Users, short: 'Co-delegate', family: 'person', becomes: 'On a double delegation, the other delegate sharing their seat.' },
-  co_delegate_email: { glyph: '✉️', icon: Mail, short: 'Co-delegate email', family: 'person', becomes: "On a double delegation, the co-delegate's email address." },
+  delegate_name: { emoji: 'Bust in silhouette', glyph: '🧑', icon: UserRound, short: 'Their name', family: 'person', becomes: 'The name of whoever opens the email.' },
+  role: { emoji: 'Identification card', glyph: '🪪', icon: BadgeCheck, short: 'Their role', family: 'person', becomes: 'Delegate, Chair, Faculty Advisor, and so on.' },
+  /* NOT 'People holding hands': Fluent files skin-tone emoji under a per-tone
+     subfolder, so that name 404s on the flat asset path and silently falls back
+     to the lucide glyph. Verified: 'People holding hands' 404, 'Family' 404,
+     'Busts in silhouette' 200. */
+  delegation_name: { emoji: 'Busts in silhouette', glyph: '🧑‍🤝‍🧑', icon: Users, short: 'Delegation', family: 'place', becomes: 'The school or society they came with.' },
+  committee: { emoji: 'Ballot box with ballot', glyph: '🗳️', icon: Landmark, short: 'Committee', family: 'place', becomes: 'The committee they were allocated to.' },
+  country: { emoji: 'Globe showing europe-africa', glyph: '🌍', icon: Globe, short: 'Country', family: 'place', becomes: 'The country or seat they represent.' },
+  payment_status: { emoji: 'Money bag', glyph: '💰', icon: Wallet, short: 'Paid or not', family: 'money', becomes: 'Paid, Unpaid, Waived, and so on.' },
+  fee: { emoji: 'Credit card', glyph: '💳', icon: CreditCard, short: 'Their fee', family: 'money', becomes: 'The amount owed for their role, at the current phase.' },
+  conference_name: { emoji: 'Classical building', glyph: '🏛️', icon: Building2, short: 'Conference', family: 'conference', becomes: 'This conference, spelled out in full.' },
+  conference_dates: { emoji: 'Calendar', glyph: '📅', icon: CalendarDays, short: 'The dates', family: 'conference', becomes: 'The conference dates, written out.' },
+  session_code: { emoji: 'Key', glyph: '🔑', icon: KeyRound, short: 'Session code', family: 'conference', becomes: 'The six-character code for their committee room.' },
+  award: { emoji: 'Trophy', glyph: '🏆', icon: Trophy, short: 'Their award', family: 'conference', becomes: 'The award they received, such as Best Delegate.' },
+  request_subject: { emoji: 'Envelope', glyph: '✉️', icon: Mail, short: 'Their subject', family: 'thread', becomes: 'The subject line of the message you are replying to.' },
+  request_body: { emoji: 'Speech balloon', glyph: '💬', icon: MessageSquare, short: 'Their message', family: 'thread', becomes: 'The message you are replying to, quoted back.' },
+  draft_link: { emoji: 'Link', glyph: '🔗', icon: Link2, short: 'Draft link', family: 'link', becomes: 'A private link back to their unfinished application.' },
+  draft_stop_link: { emoji: 'Stop sign', glyph: '🛑', icon: Ban, short: 'Stop link', family: 'link', becomes: 'A one-click way for them to turn these reminders off.' },
+  invited_by: { emoji: 'Bust in silhouette', glyph: '🧑', icon: UserRound, short: 'Who invited', family: 'person', becomes: 'The organizer who sent the invitation.' },
+  co_delegate: { emoji: 'Busts in silhouette', glyph: '🧑‍🤝‍🧑', icon: Users, short: 'Co-delegate', family: 'person', becomes: 'On a double delegation, the other delegate sharing their seat.' },
+  co_delegate_email: { emoji: 'Envelope', glyph: '✉️', icon: Mail, short: 'Co-delegate email', family: 'person', becomes: "On a double delegation, the co-delegate's email address." },
 };
 
 export const TOKEN_FAMILY_LABEL: Record<TokenFamily, string> = {
@@ -76,6 +82,7 @@ export const TOKEN_FAMILY_ORDER: TokenFamily[] = ['person', 'place', 'money', 'c
  *  build does not know about, and it still has to render as something. */
 export function tokenIdentity(key: string): TokenIdentity {
   return TOKEN_IDENTITY[key as EmailTokenKey] ?? {
+    emoji: 'Label',
     glyph: '🏷️',
     icon: BadgeCheck,
     short: key,

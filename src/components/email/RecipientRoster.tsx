@@ -87,20 +87,20 @@ export default function RecipientRoster({
     <div>
       <p className="mb-2" style={{ fontFamily: OUTFIT, fontSize: 11.5, color: SOFT, lineHeight: 1.5, textWrap: 'pretty' }}>
         <span style={{ fontWeight: 800, color: INK, fontVariantNumeric: 'tabular-nums' }}>{reachCount.toLocaleString()}</span>
-        {reachCount === 1 ? ' person is' : ' people are'} getting this. Change who with the button at the top.
+        {reachCount === 1 ? ' person is' : ' people are'} getting this.
       </p>
 
       <div className="relative mb-2">
-        <Search size={13} strokeWidth={2.4} style={{ position: 'absolute', left: 11, top: 12, color: SOFT, pointerEvents: 'none' }} />
+        <Search size={13} strokeWidth={2.4} style={{ position: 'absolute', left: 11, top: 14, color: SOFT, pointerEvents: 'none' }} />
         <input
           value={query}
           onChange={e => setQuery(e.target.value)}
-          placeholder="Find someone…"
+          placeholder="Find someone"
           aria-label="Find someone in the list"
           className="w-full focus:outline-none"
           style={{
-            minHeight: 38, borderRadius: 999, padding: '9px 12px 9px 31px',
-            fontFamily: OUTFIT, fontSize: 12, color: INK,
+            minHeight: 42, borderRadius: 999, padding: '9px 12px 9px 31px',
+            fontFamily: OUTFIT, fontSize: 16, color: INK,
             backgroundColor: '#FFFDF8', border: '1px solid rgba(27,56,40,0.13)', boxShadow: NEU.inSm,
           }}
         />
@@ -108,7 +108,7 @@ export default function RecipientRoster({
 
       {groups.length === 0 && (
         <p style={{ fontFamily: OUTFIT, fontSize: 11.5, color: SOFT, lineHeight: 1.5, textWrap: 'pretty' }}>
-          Nobody yet. Pick an audience with CHANGE WHO above.
+          Nobody yet. Pick who gets it with Change who.
         </p>
       )}
       {groups.length > 0 && shown === 0 && (

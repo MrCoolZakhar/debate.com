@@ -376,7 +376,7 @@ function SideRail({
               <span
                 className="block"
                 style={{
-                  fontSize: '10.5px', fontWeight: 600, color: '#9A8A78',
+                  fontSize: '12px', fontWeight: 600, color: '#7A6E5E',
                   fontFamily: "var(--font-brand), sans-serif",
                   fontVariantNumeric: 'tabular-nums',
                   lineHeight: 1.3, marginTop: '1px',
@@ -400,11 +400,11 @@ function SideRail({
               <p
                 style={{
                   fontFamily: "var(--font-brand), sans-serif",
-                  fontSize: '9px', fontWeight: 800, letterSpacing: '0.16em',
-                  color: '#B6871F',
-                  padding: '4px 10px 3px',
+                  fontSize: '11px', fontWeight: 800, letterSpacing: '0.12em',
+                  color: '#9A6E14',
+                  padding: '5px 10px 3px',
                   margin: 0,
-                  maxHeight: expanded ? '20px' : '0px',
+                  maxHeight: expanded ? '24px' : '0px',
                   opacity: expanded ? 1 : 0,
                   overflow: 'hidden',
                   transition: 'max-height 280ms cubic-bezier(0.22,1,0.36,1), opacity 200ms ease 60ms',
@@ -426,8 +426,8 @@ function SideRail({
                   title={expanded ? undefined : item.label}
                   className="flex items-center rounded-xl transition-colors"
                   style={{
-                    gap: expanded ? '11px' : '0px',
-                    padding: '9px 10px',
+                    gap: expanded ? '12px' : '0px',
+                    padding: '10px 11px',
                     margin: '2px 0',
                     justifyContent: expanded ? 'flex-start' : 'center',
                     backgroundColor: active ? '#1B3828' : 'transparent',
@@ -449,7 +449,7 @@ function SideRail({
                   }}
                 >
                   <span className="relative flex-shrink-0" style={{ lineHeight: 0 }}>
-                    <Icon size={17} strokeWidth={2} />
+                    <Icon size={19} strokeWidth={2} />
                     {item.badge > 0 && (
                       <span
                         aria-label={`${item.badge} needing attention`}
@@ -461,9 +461,9 @@ function SideRail({
                   <span
                     style={{
                       fontFamily: "var(--font-brand), sans-serif",
-                      fontSize: '13px', fontWeight: 600,
+                      fontSize: '14.5px', fontWeight: 600,
                       whiteSpace: 'nowrap',
-                      maxWidth: expanded ? '150px' : '0px',
+                      maxWidth: expanded ? '165px' : '0px',
                       opacity: expanded ? 1 : 0,
                       overflow: 'hidden',
                       transition: 'max-width 280ms cubic-bezier(0.22,1,0.36,1), opacity 200ms ease 60ms',
@@ -475,7 +475,7 @@ function SideRail({
                     <span
                       className="flex-shrink-0 flex items-center justify-center rounded-full"
                       style={{
-                        minWidth: 18, height: 18, padding: '0 5px', fontSize: 10, fontWeight: 700,
+                        minWidth: 21, height: 21, padding: '0 6px', fontSize: 12, fontWeight: 700,
                         fontFamily: "var(--font-brand), sans-serif", fontVariantNumeric: 'tabular-nums',
                         backgroundColor: active ? '#EED98A' : 'rgba(182,135,31,0.16)',
                         color: active ? '#1B3828' : '#8A6614',
@@ -488,7 +488,7 @@ function SideRail({
                     <span
                       className="flex-shrink-0 inline-flex items-center gap-1"
                       style={{
-                        marginLeft: 'auto', fontSize: 11, fontWeight: 700,
+                        marginLeft: 'auto', fontSize: 12, fontWeight: 700,
                         lineHeight: 1.2, whiteSpace: 'nowrap',
                         fontFamily: "var(--font-brand), sans-serif",
                         color: active ? '#EED98A' : '#8A6614',
@@ -614,8 +614,8 @@ function SidebarContent({
           <div key={si}>
             {section.header && (
               <p
-                className="px-4 pt-4 pb-1 text-[10px] tracking-[0.16em] font-extrabold"
-                style={{ color: '#B6871F', fontFamily: "var(--font-brand), sans-serif" }}
+                className="px-4 pt-4 pb-1 text-[12px] tracking-[0.12em] font-extrabold"
+                style={{ color: '#9A6E14', fontFamily: "var(--font-brand), sans-serif" }}
               >
                 {section.header}
               </p>
@@ -630,7 +630,7 @@ function SidebarContent({
                   target={item.external ? '_blank' : undefined}
                   rel={item.external ? 'noopener noreferrer' : undefined}
                   onClick={onNavClick}
-                  className="flex items-center gap-3 px-4 py-2.5 text-sm font-semibold transition-colors"
+                  className="flex items-center gap-3 px-4 py-3 text-[15px] font-semibold transition-colors"
                   style={{
                     borderLeft: active ? '3px solid #1B3828' : '3px solid transparent',
                     backgroundColor: active ? 'rgba(27,56,40,0.08)' : 'transparent',
@@ -651,13 +651,13 @@ function SidebarContent({
                     }
                   }}
                 >
-                  <Icon size={16} style={{ flexShrink: 0 }} />
+                  <Icon size={19} style={{ flexShrink: 0 }} />
                   <span className="flex-1">{item.label}</span>
                   {item.badge > 0 && (
                     <span
                       className="flex-shrink-0 flex items-center justify-center rounded-full"
                       style={{
-                        minWidth: 18, height: 18, padding: '0 5px', fontSize: 10, fontWeight: 700,
+                        minWidth: 21, height: 21, padding: '0 6px', fontSize: 12, fontWeight: 700,
                         fontFamily: "var(--font-brand), sans-serif", fontVariantNumeric: 'tabular-nums',
                         backgroundColor: 'rgba(182,135,31,0.16)', color: '#8A6614',
                       }}
@@ -669,7 +669,7 @@ function SidebarContent({
                     <span
                       className="flex-shrink-0 inline-flex items-center gap-1"
                       style={{
-                        fontSize: 11, fontWeight: 700,
+                        fontSize: 12, fontWeight: 700,
                         lineHeight: 1.2, whiteSpace: 'nowrap',
                         fontFamily: "var(--font-brand), sans-serif",
                         color: '#8A6614',
@@ -696,7 +696,7 @@ function SidebarContent({
             {conference.full_name}
           </p>
           <span
-            className="text-[9px] font-extrabold px-2 py-0.5 rounded-full"
+            className="text-[11px] font-extrabold px-2.5 py-0.5 rounded-full"
             style={{
               backgroundColor: statusStyle.bg,
               color: statusStyle.color,

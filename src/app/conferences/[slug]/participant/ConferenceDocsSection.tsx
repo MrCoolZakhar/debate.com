@@ -3,9 +3,10 @@
 // Conference Documents on the You tab (11 Oct 2026): the Rules of Procedure,
 // logistics, schedules and the code of conduct the organisers added under
 // Documents → For everyone. Only for an accepted / assigned / checked-in
-// application; the database's RLS decides the same thing (draft in
-// scratch-conference-documents.sql). While the table does not exist the read
-// answers `missing` and nothing is drawn.
+// application; the database's RLS decides the same thing (migration
+// `conference_documents`, applied 11 Oct 2026). Files open through a one-hour
+// signed URL from the private bucket; links open as they are. A failed read
+// draws nothing.
 
 import { useCallback, useEffect, useState } from 'react';
 import { FileText } from 'lucide-react';
@@ -34,7 +35,7 @@ export function useConferenceDocs(conferenceId: string, enabled: boolean): Confe
     const token = session?.access_token;
     if (!enabled || !userId || !token) return;
     const res = await loadConferenceDocs(getAuthedClient(token), conferenceId);
-    // A missing table or a failed read shows nothing (participants never see an error for this).
+    // A failed read shows nothing (participants never see an error for this).
     setDocs({ key, docs: res.kind === 'ok' ? res.docs : [] });
     // Keyed on the user id, never the token (CLAUDE.md: a token refresh must not refetch).
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -46,12 +47,21 @@ export function useConferenceDocs(conferenceId: string, enabled: boolean): Confe
   return enabled && docs?.key === key ? docs.docs : [];
 }
 
-/** Whether a document is meant for the role on screen (empty = everyone). */
-export function docForRole(doc: ConferenceDoc, role: string, isHeadDelegate = false): boolean {
+/** Whether a document is meant for the role on screen (empty = everyone).
+ *  The same rule as the database's `can_read_conference_document`: the role is
+ *  listed, OR the application is a head delegate (`is_head_delegate`) and
+ *  'head-delegate' is listed, OR the person chairs a committee of this
+ *  conference and 'chair' is listed. */
+export function docForRole(
+  doc: ConferenceDoc,
+  role: string,
+  who: { isHeadDelegate?: boolean; isChair?: boolean } = {},
+): boolean {
   const v = doc.visible_to ?? [];
   if (v.length === 0) return true;
   if (v.includes(role)) return true;
-  return isHeadDelegate && v.includes('head-delegate');
+  if (who.isHeadDelegate && v.includes('head-delegate')) return true;
+  return !!who.isChair && v.includes('chair');
 }
 
 const CSS = `

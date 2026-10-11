@@ -590,7 +590,7 @@ export function RailTab({
       className="inline-flex items-center gap-2 focus:outline-none"
       style={{
         border: 'none', cursor: 'pointer', fontFamily: OUTFIT,
-        fontSize: 11.5, fontWeight: 800, letterSpacing: '0.03em', color: ink,
+        fontSize: 14.5, fontWeight: 800, letterSpacing: '0.01em', color: ink,
         backgroundColor: active ? NEU.surface : NEU.base,
         boxShadow: active
           ? (side
@@ -600,8 +600,8 @@ export function RailTab({
         ...(side
           ? {
               borderRadius: '0 12px 12px 0',
-              padding: '9px 12px 9px 16px',
-              width: 158, justifyContent: 'flex-start',
+              padding: '12px 14px 12px 18px', minHeight: 48,
+              width: 184, justifyContent: 'flex-start',
               transform: active ? 'translateX(3px)' : 'translateX(0)',
             }
           : {
@@ -609,20 +609,20 @@ export function RailTab({
               // card. 44px tall INCLUDING the 10px that is tucked under the
               // card, so the visible tab is 34px and the touch target is 44.
               borderRadius: '12px 12px 0 0',
-              padding: '11px 13px 22px 13px',
-              minHeight: 46, flexShrink: 0, whiteSpace: 'nowrap',
+              padding: '12px 16px 22px 16px',
+              minHeight: 50, flexShrink: 0, whiteSpace: 'nowrap',
               transform: active ? 'translateY(3px)' : 'translateY(0)',
             }),
         transitionProperty: 'transform, box-shadow, background-color, color',
         transitionDuration: '200ms', transitionTimingFunction: EASE,
       }}
     >
-      <Icon size={13} style={{ flexShrink: 0, color: ink }} />
+      <Icon size={17} style={{ flexShrink: 0, color: ink }} />
       <span className="min-w-0" style={{ overflowWrap: side ? 'anywhere' : 'normal' }}>{label}</span>
       {typeof count === 'number' && count > 0 && (
         <span
           style={{
-            marginInlineStart: 'auto', fontSize: 10.5, fontWeight: 800,
+            marginInlineStart: 'auto', fontSize: 13, fontWeight: 800,
             fontVariantNumeric: 'tabular-nums', color: SOFT, flexShrink: 0,
           }}
         >
@@ -633,8 +633,8 @@ export function RailTab({
   );
 }
 
-function StatTile({ icon: Icon, gradient, value, label, onClick, title }: {
-  icon: LucideIcon; gradient: NeuGradient; value: string; label: string;
+function StatTile({ icon: Icon, emoji, gradient, value, label, onClick, title }: {
+  icon: LucideIcon; emoji: string; gradient: NeuGradient; value: string; label: string;
   onClick?: () => void;
   /** The caveat this figure carries, if it carries one.
    *
@@ -662,10 +662,10 @@ function StatTile({ icon: Icon, gradient, value, label, onClick, title }: {
   const body = (
     <>
       <span className="flex-shrink-0 hidden sm:inline-flex">
-        <NeuIconDisc gradient={gradient} duo icon={Icon} size={36} />
+        <NeuIconDisc gradient={gradient} emoji={emoji} icon={Icon} size={36} />
       </span>
       <span className="flex-shrink-0 inline-flex sm:hidden">
-        <NeuIconDisc gradient={gradient} duo icon={Icon} size={26} />
+        <NeuIconDisc gradient={gradient} emoji={emoji} icon={Icon} size={26} />
       </span>
       <div className="min-w-0 text-left">
         <p className="font-black text-lg sm:text-xl leading-none" style={{ color: NEU.ink, fontFamily: OUTFIT, fontVariantNumeric: 'tabular-nums' }}>{value}</p>
@@ -929,25 +929,25 @@ export function RecapModal({
               silently dropped. */}
           <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-6">
             <StatTile
-              icon={Mic} gradient={NEU_GRADIENTS.forest}
+              icon={Mic} emoji="Studio microphone" gradient={NEU_GRADIENTS.forest}
               value={String(speeches)} label="Speeches given"
               title="Logged speeches only. Motions, rights of reply and manual point adjustments share the same ledger but are not speeches"
             />
-            <StatTile icon={Clock} gradient={NEU_GRADIENTS.sage} value={fmtSpeakingTotal(totalSpeakingSeconds)} label="Total speaking time" />
+            <StatTile icon={Clock} emoji="Stopwatch" gradient={NEU_GRADIENTS.sage} value={fmtSpeakingTotal(totalSpeakingSeconds)} label="Total speaking time" />
             <StatTile
-              icon={Gavel} gradient={NEU_GRADIENTS.gold}
+              icon={Gavel} emoji="Ballot box with ballot" gradient={NEU_GRADIENTS.gold}
               value={String(motionsLogged)} label="Motions raised"
               title="Motions a chair ACCEPTED: a rejected motion is deleted from the database outright and leaves no record, so the true total can only be higher than this"
             />
             <StatTile
-              icon={Users} gradient={NEU_GRADIENTS.sage}
+              icon={Users} emoji="Busts in silhouette" gradient={NEU_GRADIENTS.sage}
               value={`${present}/${votingTotal}`} label="Delegates present"
               title={observers > 0
                 ? `Excludes ${observers} observer${observers === 1 ? '' : 's'}, matching the chair's roll`
                 : "The voting body, matching the chair's roll"}
             />
-            <StatTile icon={FileText} gradient={NEU_GRADIENTS.green} value={String(wps)} label="Working papers" onClick={wps > 0 ? () => openDocs('working-paper') : undefined} />
-            <StatTile icon={ScrollText} gradient={NEU_GRADIENTS.amber} value={String(drs)} label="Draft resolutions" onClick={drs > 0 ? () => openDocs('draft-resolution') : undefined} />
+            <StatTile icon={FileText} emoji="Page facing up" gradient={NEU_GRADIENTS.green} value={String(wps)} label="Working papers" onClick={wps > 0 ? () => openDocs('working-paper') : undefined} />
+            <StatTile icon={ScrollText} emoji="Scroll" gradient={NEU_GRADIENTS.amber} value={String(drs)} label="Draft resolutions" onClick={drs > 0 ? () => openDocs('draft-resolution') : undefined} />
           </div>
 
           {/* Points, in summary. The full table is one tab away. */}

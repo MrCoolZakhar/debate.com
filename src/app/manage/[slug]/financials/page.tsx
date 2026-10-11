@@ -214,6 +214,7 @@ export default function FinancialsDashboardPage() {
             <DashCard
               title="Money"
               icon={{ emoji: 'Money bag', lucide: PiggyBank, tint: TINT_GREEN }}
+              hang="start"
               hint="Everything paid to your conference and everything still owed. Received is after refunds. Outstanding counts only people you have accepted."
             >
               <div className="gv-fd-pair">
@@ -233,6 +234,7 @@ export default function FinancialsDashboardPage() {
             <DashCard
               title="Things to Do"
               icon={{ emoji: 'Bell', lucide: Bell, tint: TINT_GOLD }}
+              hang="end"
               className={todoCount > 0 ? 'gv-fd-todo' : undefined}
               hint="Payments and refunds waiting on you: proofs to accept or deny, refund requests, and card refunds or disputes from Stripe. People are waiting until you answer."
             >
@@ -261,6 +263,7 @@ export default function FinancialsDashboardPage() {
             <DashCard
               title="Invoices"
               icon={{ emoji: 'Receipt', lucide: ReceiptText, tint: TINT_GOLD }}
+              hang="start"
               hint="Every item each person was billed: tickets, registration fees and add-ons, with what is paid, owed, waived or refunded."
             >
               <Big n={data.people_billed} cap={data.people_billed === 1 ? 'person billed' : 'people billed'} />
@@ -272,6 +275,7 @@ export default function FinancialsDashboardPage() {
             <DashCard
               title="Generate Invoices"
               icon={{ emoji: 'Page facing up', lucide: FilePlus2, tint: TINT_GOLD }}
+              hang="center"
               line="Make an invoice or receipt for any payment, in your conference's name"
               hint="Schools and sponsors often need a formal invoice or receipt. This makes one under your conference's name, ready to send."
             >

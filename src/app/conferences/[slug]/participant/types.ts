@@ -16,6 +16,8 @@ export interface ParticipantApplication {
   spots_pledged: number | null;
   pledge_confirmed_at: string | null;
   organizer_note: string | null;
+  /** A delegate who leads their delegation (reads 'head-delegate' documents). */
+  is_head_delegate?: boolean | null;
 }
 
 export interface ParticipantRoleConfig {
@@ -52,4 +54,6 @@ export interface ParticipantCommittee {
   difficulty: string;
   committee_type: string;
   logo_url: string | null;
+  /** Assigned chairs (conference committee read); used to show 'chair' documents. */
+  chair_user_ids?: string[] | null;
 }

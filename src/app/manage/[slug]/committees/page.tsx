@@ -24,7 +24,9 @@ import { useConfirmModal } from '@/components/ConfirmModal';
 import { PillToggle } from '@/app/account/accountUi';
 import { DifficultyTile } from '@/components/DifficultyTile';
 import { DatePicker } from '@/components/DatePicker';
-import { NEU, NEU_GRADIENTS, OUTFIT, NeuButton, NeuCard, NeuInset, NeuPill } from '@/components/neu';
+import { NEU, NEU_GRADIENTS, OUTFIT, NeuButton, NeuCard, NeuInset } from '@/components/neu';
+import { GoldWord } from '@/components/BrandHeading';
+import { BigSectionTabs, type BigSectionTab } from '../BigSectionTabs';
 import ProfileLink from '@/components/ProfileLink';
 import Portal from '@/components/Portal';
 import { ChairCodeChip, loadOpenDaisChairCodes } from './ChairCodeChip';
@@ -147,20 +149,21 @@ function ViewToggle({ value, onChange }: { value: 'cards' | 'list'; onChange: (v
             onClick={() => onChange(key)}
             className="inline-flex items-center gap-1.5 focus:outline-none"
             style={{
-              padding: '6px 13px',
+              padding: '0 18px',
+              minHeight: 40,
               borderRadius: 9999,
               border: 'none',
               cursor: 'pointer',
               fontFamily: OUTFIT,
-              fontSize: 11.5,
+              fontSize: 14,
               fontWeight: 800,
               backgroundColor: active ? NEU.surface : 'transparent',
-              color: active ? NEU.forest : NEU.muted,
+              color: active ? NEU.forest : NEU.inkSoft,
               boxShadow: active ? NEU.outSm : 'none',
               transition: `color 200ms ${EASE}, box-shadow 200ms ${EASE}`,
             }}
           >
-            <Icon size={13} strokeWidth={2.4} />
+            <Icon size={16} strokeWidth={2.4} />
             {label}
           </button>
         );
@@ -174,8 +177,8 @@ function ViewToggle({ value, onChange }: { value: 'cards' | 'list'; onChange: (v
 // Small gold uppercase eyebrow, the house convention for a section/field
 // label (matches ADD CHAIR, ACCEPTED CHAIR APPLICANTS elsewhere in this file).
 const labelStyle: React.CSSProperties = {
-  display: 'block', fontSize: 10, fontWeight: 700, color: NEU.deepGold,
-  fontFamily: OUTFIT, letterSpacing: '0.14em', textTransform: 'uppercase', marginBottom: 8,
+  display: 'block', fontSize: 14, fontWeight: 700, color: NEU.ink,
+  fontFamily: OUTFIT, marginBottom: 8,
 };
 
 function fmtConferenceStart(startDate: string): string {
@@ -1143,6 +1146,12 @@ function isInFuture(iso: string): boolean {
   return new Date(iso).getTime() > Date.now();
 }
 
+// The page's two sections as big cards (11 Oct 2026, owner: tabs were "too small").
+const COMMITTEE_TABS: BigSectionTab<'overview' | 'settings'>[] = [
+  { key: 'overview', label: 'Overview', sub: 'Every committee, its chairs and its room', emoji: 'Classical building', lucide: LayoutGrid, tone: 'gold' },
+  { key: 'settings', label: 'Settings', sub: 'When chairs and delegates get their codes', emoji: 'Gear', lucide: Settings, tone: 'green' },
+];
+
 export default function CommitteesPage() {
   const { conference } = useManage();
   const { session } = useAuth();
@@ -2076,11 +2085,11 @@ export default function CommitteesPage() {
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
-          <p className="text-xs mb-1" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif", fontWeight: 700, letterSpacing: '0.12em' }}>
+          <p style={{ color: NEU.inkSoft, fontFamily: OUTFIT, fontSize: 13, fontWeight: 700, letterSpacing: '0.06em', marginBottom: 6 }}>
             {conference.acronym} / Committees
           </p>
-          <h1 className="font-black text-2xl" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>
-            Committees
+          <h1 style={{ color: '#1C1410', fontFamily: OUTFIT, fontWeight: 900, fontSize: 'clamp(32px, 3.4vw, 42px)', letterSpacing: '-0.025em', lineHeight: 1.05, margin: 0 }}>
+            Your <GoldWord>Committees</GoldWord>
           </h1>
         </div>
         {/* Add a committee — the header only ever holds this one action, and
@@ -2155,16 +2164,9 @@ export default function CommitteesPage() {
 
       {!loading && committees.length > 0 && (
         <>
-          {/* Tab switcher, same neumorphic pill pattern as Financials' sub-nav */}
-          <div className="flex items-center gap-2 mb-6 flex-wrap">
-            <NeuPill active={activeTab === 'overview'} onClick={() => setActiveTab('overview')}>
-              <LayoutGrid size={12} strokeWidth={2.5} />
-              Overview
-            </NeuPill>
-            <NeuPill active={activeTab === 'settings'} onClick={() => setActiveTab('settings')}>
-              <Settings size={12} strokeWidth={2.5} />
-              Settings
-            </NeuPill>
+          {/* The two sections as big cards (shared organiser BigSectionTabs). */}
+          <BigSectionTabs tabs={COMMITTEE_TABS} value={activeTab} onChange={setActiveTab} label="Committees sections" />
+          <div className="flex items-center gap-2 mb-6 flex-wrap" style={{ marginTop: -10 }}>
 
             {/* One press for every committee that has no room yet. Shown only
                 while at least one is codeless, because the page no longer
@@ -2179,18 +2181,19 @@ export default function CommitteesPage() {
                 disabled={busyIds.has('mint-all')}
                 aria-busy={busyIds.has('mint-all') || undefined}
                 title="Creates the live session room and join code for every committee that has none yet."
-                className="gv-lift ms-auto inline-flex items-center gap-2 rounded-xl focus:outline-none"
+                className="gv-lift inline-flex items-center gap-2 rounded-xl focus:outline-none"
                 style={{
-                  padding: '9px 16px',
-                  backgroundColor: NEU.forest,
+                  padding: '0 20px',
+                  minHeight: 48,
+                  background: 'linear-gradient(90deg,#1B3828 0%,#2A5A3C 100%)',
                   color: '#EED98A',
                   border: 'none',
-                  fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 700,
+                  fontFamily: OUTFIT, fontSize: 15, fontWeight: 700,
                   cursor: busyIds.has('mint-all') ? 'default' : 'pointer',
                   opacity: busyIds.has('mint-all') ? 0.7 : 1,
                 }}
               >
-                <Radio size={14} strokeWidth={2.4} aria-hidden />
+                <Radio size={17} strokeWidth={2.4} aria-hidden />
                 {busyIds.has('mint-all')
                   ? 'Creating codes…'
                   : codelessCount === 1
@@ -2205,19 +2208,19 @@ export default function CommitteesPage() {
               inset wells for the time pickers, inset rows per committee. */}
           {activeTab === 'settings' && releaseSettingsLoaded && (
             <NeuCard style={{ padding: '26px 28px', marginBottom: 24 }}>
-              <p style={{ margin: 0, fontFamily: OUTFIT, fontWeight: 700, fontSize: 10, letterSpacing: '0.16em', color: NEU.deepGold, textTransform: 'uppercase' }}>
-                SESSION RELEASE
-              </p>
+              <h2 style={{ margin: 0, fontFamily: OUTFIT, fontWeight: 800, fontSize: 'clamp(26px, 2.6vw, 32px)', letterSpacing: '-0.02em', lineHeight: 1.1, color: NEU.ink }}>
+                Session <GoldWord>Release</GoldWord>
+              </h2>
 
               <div className="flex flex-col gap-4 mt-5">
                 <div className="flex items-center justify-between gap-3">
-                  <span style={{ fontFamily: OUTFIT, fontSize: 13.5, color: NEU.ink, fontWeight: 600 }}>
+                  <span style={{ fontFamily: OUTFIT, fontSize: 16, color: NEU.ink, fontWeight: 700 }}>
                     Chairs and delegates receive session codes at the same time
                   </span>
                   <PillToggle value={releaseSameTime} onChange={saveSameTime} />
                 </div>
                 <div className="flex items-center justify-between gap-3">
-                  <span style={{ fontFamily: OUTFIT, fontSize: 13.5, color: NEU.ink, fontWeight: 600 }}>
+                  <span style={{ fontFamily: OUTFIT, fontSize: 16, color: NEU.ink, fontWeight: 700 }}>
                     Release all committee sessions at once
                   </span>
                   <PillToggle value={releaseAllAtOnce} onChange={saveAllAtOnce} />

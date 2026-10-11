@@ -4,11 +4,12 @@
 // code of conduct: one upload for the whole conference, read by every
 // accepted / assigned / checked-in participant.
 //
-// The table, its RLS and the PRIVATE bucket are drafted in
-// scratch-conference-documents.sql and are NOT applied yet. Until they are,
-// every read here answers `missing`: participants see nothing, organisers see
-// an honest "not ready" note. Files are opened through short-lived signed
-// URLs, never a public URL.
+// The table `conference_documents`, its RLS and the PRIVATE bucket
+// `conference-documents` are live (migration `conference_documents`, applied
+// 11 Oct 2026; source scratch-conference-documents.sql). Organisers manage;
+// accepted / assigned / checked-in participants and committee chairs read,
+// narrowed by `visible_to`. Files are opened through short-lived signed URLs,
+// never a public URL.
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { BookOpen, CalendarDays, FileText, Handshake, MapPin, type LucideIcon } from 'lucide-react';
@@ -59,17 +60,9 @@ export interface ConferenceDoc {
 
 export type ConferenceDocsRead =
   | { kind: 'ok'; docs: ConferenceDoc[] }
-  | { kind: 'missing' }
   | { kind: 'error' };
 
 const COLUMNS = 'id, conference_id, title, kind, file_path, file_name, file_size_bytes, url, visible_to, sort_order, created_at';
-
-/** The table is not there yet (the SQL draft is unapplied). */
-export function isMissingTable(e: { code?: string; message?: string } | null | undefined): boolean {
-  if (!e) return false;
-  return e.code === '42P01' || e.code === 'PGRST205' || e.code === 'PGRST202'
-    || /could not find the table|relation .* does not exist|schema cache/i.test(e.message ?? '');
-}
 
 /** Every document of a conference the caller may read, in the organiser's order. */
 export async function loadConferenceDocs(client: SupabaseClient, conferenceId: string): Promise<ConferenceDocsRead> {
@@ -79,7 +72,7 @@ export async function loadConferenceDocs(client: SupabaseClient, conferenceId: s
     .eq('conference_id', conferenceId)
     .order('sort_order', { ascending: true })
     .order('created_at', { ascending: true });
-  if (error) return isMissingTable(error) ? { kind: 'missing' } : { kind: 'error' };
+  if (error) return { kind: 'error' };
   return {
     kind: 'ok',
     docs: ((data ?? []) as ConferenceDoc[]).map(d => ({ ...d, visible_to: d.visible_to ?? [] })),

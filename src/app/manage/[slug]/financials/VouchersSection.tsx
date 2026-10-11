@@ -398,15 +398,15 @@ export default function VouchersSection({
                 title="Generate a random code"
                 className="inline-flex items-center gap-1.5 flex-shrink-0 focus:outline-none"
                 style={{
-                  padding: '8px 12px', borderRadius: 999, border: 'none', cursor: 'pointer',
+                  padding: '8px 14px', minHeight: 36, borderRadius: 999, border: 'none', cursor: 'pointer',
                   backgroundColor: NEU.surface, boxShadow: NEU.outSm, color: NEU.forest,
-                  fontFamily: OUTFIT, fontSize: 11, fontWeight: 800,
+                  fontFamily: OUTFIT, fontSize: 13, fontWeight: 800,
                   transition: `box-shadow 200ms ${EASE}`,
                 }}
                 onMouseEnter={e => { (e.currentTarget as HTMLElement).style.boxShadow = NEU.outSmHover; }}
                 onMouseLeave={e => { (e.currentTarget as HTMLElement).style.boxShadow = NEU.outSm; }}
               >
-                <Dices size={13} strokeWidth={2.4} />
+                <Dices size={15} strokeWidth={2.4} />
                 Generate
               </button>
             </div>
@@ -608,7 +608,7 @@ export default function VouchersSection({
                     </span>
 
                     {/* Expiry */}
-                    <span style={{ fontFamily: OUTFIT, fontSize: 11, fontWeight: 600, color: expired ? '#8B2020' : NEU.muted, fontVariantNumeric: 'tabular-nums' }}>
+                    <span style={{ fontFamily: OUTFIT, fontSize: 12, fontWeight: 600, color: expired ? '#8B2020' : NEU.muted, fontVariantNumeric: 'tabular-nums' }}>
                       {v.expires_at ? `${expired ? 'Expired' : 'Expires'} ${formatExpiry(v.expires_at)}` : 'No expiry'}
                     </span>
 
@@ -624,9 +624,9 @@ export default function VouchersSection({
                         : 'Reactivate'}
                       className="focus:outline-none"
                       style={{
-                        padding: '4px 12px', borderRadius: 999, border: 'none',
+                        padding: '6px 14px', minHeight: 36, borderRadius: 999, border: 'none',
                         cursor: rowBusy ? 'default' : 'pointer',
-                        fontFamily: OUTFIT, fontSize: 11, fontWeight: 800,
+                        fontFamily: OUTFIT, fontSize: 13, fontWeight: 800,
                         background: v.active
                           ? `linear-gradient(135deg, ${NEU_GRADIENTS.green[0]}, ${NEU_GRADIENTS.green[1]})`
                           : NEU.base,

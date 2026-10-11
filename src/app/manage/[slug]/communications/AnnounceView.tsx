@@ -7,7 +7,7 @@
  * Two steps. First WHO: a short "How it works" card (who counts, our team
  * checks every one, at most one every 14 days and never two from the same
  * conference, unsubscribe), then three product cards in the Conference
- * Store's look (a duotone icon in a tinted disc, the flat price as a big
+ * Store's look (a 3D emoji in a tinted disc, the flat price as a big
  * number, one line saying who counts): the delegates in the conference's city,
  * in its country, or the whole world. NO reach numbers anywhere (owner,
  * 11 Oct 2026): the database only says whether anyone can get one there.
@@ -17,8 +17,8 @@
  * else until a platform admin approves it in /admin.
  *
  * Built from the organiser kits: STORE_CSS (storeKit) and DASH_CSS
- * (financials/dashboardKit), DuoIcon (commsKit: forest line over a gold fill;
- * no 3D emoji on Communications, owner), GoldWord for the title.
+ * (financials/dashboardKit), EmojiIcon (commsKit: a Fluent 3D emoji in a
+ * tinted disc), GoldWord for the title.
  *
  * The place is never chosen here: the database reads the conference's own
  * city and country. Prices come only from the database
@@ -48,7 +48,7 @@ import {
   ANNOUNCEMENT_SCOPES,
   type AnnouncementScope, type AnnouncementTargets, type AnnouncementItem, type AnnouncementOption,
 } from '@/lib/paidAnnouncements';
-import { BackLink, DuoIcon } from './commsKit';
+import { BackLink, EmojiIcon } from './commsKit';
 
 const HEADING_MAX = 80;
 const BODY_MAX = 1200;
@@ -61,19 +61,25 @@ const SCOPE_ICON: Record<AnnouncementScope, LucideIcon> = {
   country: MapPin,
   world: Globe2,
 };
+/** The Fluent 3D emoji per scope (SCOPE_ICON is its fallback). */
+const SCOPE_EMOJI: Record<AnnouncementScope, string> = {
+  city: 'Cityscape',
+  country: 'Round pushpin',
+  world: 'Globe showing europe-africa',
+};
 
 /**
- * A white Store card with a duotone icon, the title and an "i" hint. Replaces
- * the dashboard kit's DashCard here because that one draws a 3D emoji.
+ * A white Store card with a 3D emoji in a gold disc, the title and an "i"
+ * hint (always the gold wash, unlike the dashboard kit's DashCard).
  */
-function AnnCard({ title, hint, line, icon, children, className, style }: {
-  title: string; hint: string; line?: string; icon: LucideIcon; children?: ReactNode;
+function AnnCard({ title, hint, line, emoji, icon, children, className, style }: {
+  title: string; hint: string; line?: string; emoji: string; icon: LucideIcon; children?: ReactNode;
   className?: string; style?: React.CSSProperties;
 }) {
   return (
     <section className={`gv-st-card gv-fd-card gv-fd-wash-gold${className ? ` ${className}` : ''}`} aria-label={title} style={style}>
       <div className="gv-st-card-head gv-fd-head">
-        <DuoIcon icon={icon} size={44} />
+        <EmojiIcon emoji={emoji} icon={icon} size={44} />
         <h2 className="gv-st-card-title">{title}</h2>
         <InfoHint label={`About ${title}`} text={hint} size={16} />
       </div>
@@ -85,11 +91,11 @@ function AnnCard({ title, hint, line, icon, children, className, style }: {
 
 /** The rules, once, above the three choices. Short sentences, no numbers about reach. */
 function HowItWorks({ capDays }: { capDays: number }) {
-  const rows: { icon: LucideIcon; text: string }[] = [
-    { icon: MapPin, text: 'We pick people by the conferences they have been to: on Gavelling, or on their public MUN CV. For your country we also count people from there.' },
-    { icon: ShieldCheck, text: 'Our team checks every announcement before it goes out. If we say no, every credit comes back.' },
-    { icon: CalendarClock, text: `Each person gets at most one paid announcement every ${capDays} days, and never two from the same conference.` },
-    { icon: BellOff, text: 'Only delegates who chose to hear about conferences get it. Every email has an unsubscribe link.' },
+  const rows: { emoji: string; icon: LucideIcon; text: string }[] = [
+    { emoji: 'Round pushpin', icon: MapPin, text: 'We pick people by the conferences they have been to: on Gavelling, or on their public MUN CV. For your country we also count people from there.' },
+    { emoji: 'Shield', icon: ShieldCheck, text: 'Our team checks every announcement before it goes out. If we say no, every credit comes back.' },
+    { emoji: 'Spiral calendar', icon: CalendarClock, text: `Each person gets at most one paid announcement every ${capDays} days, and never two from the same conference.` },
+    { emoji: 'Bell with slash', icon: BellOff, text: 'Only delegates who chose to hear about conferences get it. Every email has an unsubscribe link.' },
   ];
   return (
     <section className="gv-st-card gv-ann-how" aria-label="How it works">
@@ -97,7 +103,7 @@ function HowItWorks({ capDays }: { capDays: number }) {
       <ul className="gv-ann-how-list">
         {rows.map(r => (
           <li key={r.text}>
-            <DuoIcon icon={r.icon} size={36} />
+            <EmojiIcon emoji={r.emoji} icon={r.icon} size={36} />
             <span>{r.text}</span>
           </li>
         ))}
@@ -334,6 +340,7 @@ export default function AnnounceView({
           title="Not Available Right Now"
           hint="We could not read the announcement options. Nothing was charged."
           line="Refresh the page to try again"
+          emoji="Megaphone"
           icon={Megaphone}
           style={{ maxWidth: 640 }}
         />
@@ -353,6 +360,7 @@ export default function AnnounceView({
             title="Coming Soon"
             hint="Paid announcements open after a final check by the Gavelling team. Prices appear here then."
             line="Soon you can pay to email one announcement to these delegates"
+            emoji="Hourglass not done"
             icon={Hourglass}
             className="gv-fd-todo"
             style={{ marginBottom: 18, maxWidth: 720 }}
@@ -371,7 +379,7 @@ export default function AnnounceView({
             const wash = ' gv-fd-wash-gold';
             const content = (
               <>
-                <DuoIcon icon={SCOPE_ICON[s]} size={60} />
+                <EmojiIcon emoji={SCOPE_EMOJI[s]} icon={SCOPE_ICON[s]} size={60} />
                 <span className="gv-ann-name">{scopeTitle(s, placeCity, placeCountry)}</span>
                 {o ? (
                   <span className="gv-ann-nums">
@@ -434,7 +442,7 @@ export default function AnnounceView({
 
       {option && (
         <div className="gv-st-card gv-ann-sum gv-fd-wash-gold" style={{ boxShadow: `0 0 0 2px ${FOREST}, 0 18px 40px -30px rgba(27,56,40,0.5)` }}>
-          <DuoIcon icon={ScopeIcon} size={44} />
+          <EmojiIcon emoji={SCOPE_EMOJI[scope]} icon={ScopeIcon} size={44} />
           <span className="gv-ann-sum-name">{scopeTitle(scope, placeCity, placeCountry)}</span>
           <span className="gv-ann-sum-nums">
             <span><b>{option.credits.toLocaleString()}</b>{plural(option.credits, 'credit', 'credits')}</span>
@@ -448,6 +456,7 @@ export default function AnnounceView({
         <AnnCard
           title="What It Says"
           hint="Plain words only. Links and email addresses go next to the button, not in the text."
+          emoji="Memo"
           icon={PenLine}
         >
           <div className="flex flex-col gap-4">
@@ -504,6 +513,7 @@ export default function AnnounceView({
           <AnnCard
             title="Check and Send"
             hint="Every email says who paid to send it and why the reader got it, and carries an unsubscribe link."
+            emoji="Envelope"
             icon={Mail}
           >
             <div className="gv-ann-mail">
@@ -563,6 +573,7 @@ function YourAnnouncements({ items, cancelling, onCancel }: { items: Announcemen
     <AnnCard
       title="Your Announcements"
       hint="Waiting ones can be cancelled for every credit back. Sent ones show how many people opened your page from the email."
+      emoji="Loudspeaker"
       icon={Megaphone}
       style={{ marginTop: 22, maxWidth: 760 }}
     >

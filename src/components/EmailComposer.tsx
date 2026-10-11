@@ -1,24 +1,21 @@
 'use client';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// THE EMAIL BUILDER — a playing field, not a form.
+// THE EMAIL BUILDER, top to bottom in the order an organiser thinks:
 //
-// Three zones, left to right:
+//   WHO       the audience bar (the page's `reachSlot`, AudienceReach): one
+//             big number, one sentence, Change who, and Send.
+//   SUBJECT   one field, labelled with the one word it is.
+//   MESSAGE   the email itself at its real 600px width, edited in place, so
+//             the sheet IS the live preview. Above it: Add (blocks, their
+//             details, files, starters, one menu), Design, and Write / See it
+//             for real (the true `renderEmailHtml` output in an iframe).
+//   BESIDE    whatever is selected; with nothing selected, the short "Before
+//             you send" checklist, who gets it, and the test send.
 //
-//   1  PALETTE      a slim icon rail (Blocks · Details · Starters) hinged to a
-//                   panel of draggable tiles. Drag one onto the sheet, or click
-//                   it and it lands after whatever is selected.
-//   2  CANVAS       the email itself, at its real 600px width, on a pressed-in
-//                   ivory desk. Paragraphs are edited IN PLACE at the exact
-//                   Georgia sizes the renderer uses, buttons are the real gold
-//                   pill, the banner and footer bands are drawn as the mail
-//                   client will draw them. One toggle flips the same sheet to
-//                   the true `renderEmailHtml` output in an iframe, desktop or
-//                   phone — so "is this really what they get" is one click, and
-//                   any drift between this canvas and the renderer is visible
-//                   rather than hidden.
-//   3  PROPERTIES   whatever is selected. Nothing selected → the send-readiness
-//                   card (subject, checks, test send).
+// Explanations live behind a "?" (HintDot) instead of being printed under
+// every title. Owner, Oct 2026: "slightly dumb down the email writer";
+// nothing was removed, it was folded away.
 //
 // WHAT IS DELIBERATELY NOT HERE: padding, margin, spacing, colour, font,
 // width, alignment. The email theme owns all of that. Every control on this
@@ -26,17 +23,16 @@
 // destination, an image and its alt text — because those are the only things
 // the block model actually stores.
 //
-// Below 1024px the three zones become one column: the palette turns into a
-// horizontally-scrolling strip of the same tiles, the sheet goes fluid, and the
-// properties panel becomes a bottom sheet that rises when a block is selected.
+// Below 1024px it is one column: the sheet goes fluid, and the properties
+// panel becomes a bottom sheet that rises when a block is selected.
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Trash2, ChevronUp, ChevronDown, Monitor, Smartphone, Send, Bold, Italic,
-  Image as ImageIcon, Plus, GripVertical, X, Check, Sparkles, LayoutTemplate,
-  Pencil, Eye, UserRound, Upload, AlertTriangle, CornerDownRight,
-  Braces, Paperclip, Palette, Users, Sun, Moon, Link2, Inbox,
+  Image as ImageIcon, Plus, GripVertical, X, Check, Sparkles,
+  Pencil, Eye, UserRound, Upload, AlertTriangle,
+  Palette, Users, Sun, Moon, Link2,
 } from 'lucide-react';
 import {
   EMAIL_TOKEN_KEYS, resolveTokens, splitResolvedText,
@@ -50,8 +46,7 @@ import { renderEmailHtml, resolveEmailTheme, type EmailRenderConference } from '
 import { conferenceAcronymLabel } from '@/lib/conferenceLabels';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { triggerEmailDelivery } from '@/lib/emailDelivery';
-import { NEU, NEU_GRADIENTS, OUTFIT, EASE } from '@/components/neu';
-import { DuoGlyph } from '@/components/DuoIcon';
+import { Emoji3D, NEU, NEU_GRADIENTS, OUTFIT, EASE } from '@/components/neu';
 import { LogoDisc } from '@/components/LogoDisc';
 import { SOFT, AMBER_INK, GREEN_INK, RED, CARD_BORDER, CARD_SHADOW } from '@/app/manage/[slug]/live/tokens';
 import {
@@ -248,14 +243,6 @@ function useIsWide(): boolean {
   return useMinWidth('(min-width: 1024px)');
 }
 
-/** Enough width that the wider palette column costs the paper nothing. At
- *  1024 the sheet is ALREADY squeezed well under its real 600px by the two
- *  side columns, so the extra 12px the Files and Recipients panels want is
- *  only taken once there is slack to take it from. */
-function useIsRoomy(): boolean {
-  return useMinWidth('(min-width: 1280px)');
-}
-
 // ── Small shared bits ────────────────────────────────────────────────────────
 
 function HighlightedText({ text }: { text: string }) {
@@ -317,9 +304,8 @@ function ActionButton({
             : `linear-gradient(135deg, ${g[0]}, ${g[1]})`,
         color: disabled ? NEU.muted : quiet ? FOREST : tone === 'gold' ? FOREST : GOLD,
         fontFamily: OUTFIT,
-        fontSize: size === 'sm' ? 11.5 : 13,
-        fontWeight: 800,
-        letterSpacing: '0.05em',
+        fontSize: size === 'sm' ? 13 : 14,
+        fontWeight: 700,
         cursor: disabled ? 'default' : 'pointer',
         boxShadow: disabled || quiet ? 'none' : hovered ? `0 7px 18px ${g[0]}59, ${NEU.outSmHover}` : `0 4px 11px ${g[0]}40, ${NEU.outSm}`,
         transform: disabled ? 'none' : pressed ? 'scale(0.96)' : hovered && !quiet ? 'translateY(-2px)' : 'translateY(0)',
@@ -381,9 +367,8 @@ function Segmented<T extends string>({
               background: active ? `linear-gradient(135deg, ${FOREST}, #2E6041)` : 'transparent',
               color: active ? GOLD : SOFT,
               fontFamily: OUTFIT,
-              fontSize: 11.5,
-              fontWeight: 800,
-              letterSpacing: '0.05em',
+              fontSize: 13,
+              fontWeight: 700,
               cursor: 'pointer',
               boxShadow: active ? '0 3px 8px rgba(27,56,40,0.28)' : 'none',
               transitionProperty: 'background, color, box-shadow',
@@ -400,24 +385,71 @@ function Segmented<T extends string>({
   );
 }
 
-function PanelTitle({ children, hint }: { children: React.ReactNode; hint?: string }) {
+/** A "?" that explains on hover and focus, never on click (AGENTS.md → UI
+ *  RULES). This is where every sentence that used to be printed under a title
+ *  now lives: one hover away instead of always on screen. Portaled through
+ *  PopoverLayer so no panel's overflow can clip it. */
+function HintDot({ text }: { text: string }) {
+  const ref = useRef<HTMLButtonElement | null>(null);
+  const [open, setOpen] = useState(false);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const cancel = useCallback(() => { if (timer.current) clearTimeout(timer.current); }, []);
+  const later = useCallback(() => { cancel(); timer.current = setTimeout(() => setOpen(false), 160); }, [cancel]);
+  const close = useCallback(() => setOpen(false), []);
+  useEffect(() => () => cancel(), [cancel]);
   return (
-    <div className="mb-3">
-      <p style={{ fontFamily: OUTFIT, fontSize: 10.5, fontWeight: 800, letterSpacing: '0.14em', color: SOFT }}>
+    <>
+      <button
+        ref={ref}
+        type="button"
+        aria-label={text}
+        onMouseDown={e => e.preventDefault()}
+        onMouseEnter={() => { cancel(); setOpen(true); }}
+        onMouseLeave={later}
+        onFocus={() => { cancel(); setOpen(true); }}
+        onBlur={later}
+        className="inline-flex items-center justify-center flex-shrink-0 focus:outline-none"
+        style={{
+          width: 20, height: 20, borderRadius: 999,
+          border: '1px solid rgba(27,56,40,0.22)', backgroundColor: '#FFFDF8',
+          color: SOFT, fontFamily: OUTFIT, fontSize: 12, fontWeight: 800, lineHeight: 1, cursor: 'help',
+        }}
+      >
+        ?
+      </button>
+      <PopoverLayer anchorRef={ref} open={open} onClose={close} width={250} maxHeight={220}>
+        <div
+          onMouseEnter={cancel}
+          onMouseLeave={later}
+          style={{
+            padding: '10px 12px', borderRadius: 14,
+            backgroundColor: NEU.surface, border: CARD_BORDER, boxShadow: CARD_SHADOW,
+            fontFamily: OUTFIT, fontSize: 13, lineHeight: 1.5, color: INK, textWrap: 'pretty',
+          }}
+        >
+          {text}
+        </div>
+      </PopoverLayer>
+    </>
+  );
+}
+
+/** One short Title Case title per area, the explanation behind a "?". */
+function PanelTitle({ children, hint, emoji }: { children: React.ReactNode; hint?: string; emoji?: string }) {
+  return (
+    <div className="mb-3 flex items-center gap-2">
+      {emoji && <Emoji3D name={emoji} size={22} fallback={Sparkles} fallbackColor={FOREST} />}
+      <p style={{ fontFamily: OUTFIT, fontSize: 16, fontWeight: 800, color: INK, textWrap: 'balance' }}>
         {children}
       </p>
-      {hint && (
-        <p className="mt-1" style={{ fontFamily: OUTFIT, fontSize: 11.5, color: SOFT, lineHeight: 1.5, textWrap: 'pretty' }}>
-          {hint}
-        </p>
-      )}
+      {hint && <HintDot text={hint} />}
     </div>
   );
 }
 
 function FieldLabel({ children }: { children: React.ReactNode }) {
   return (
-    <label className="block mb-1.5" style={{ fontFamily: OUTFIT, fontSize: 11, fontWeight: 800, letterSpacing: '0.08em', color: SOFT }}>
+    <label className="block mb-1.5" style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 700, color: SOFT }}>
       {children}
     </label>
   );
@@ -427,15 +459,33 @@ const FIELD_STYLE: React.CSSProperties = {
   width: '100%',
   borderRadius: 12,
   padding: '10px 13px',
-  fontSize: 13.5,
+  fontSize: 16,
   fontFamily: OUTFIT,
   color: INK,
   backgroundColor: '#FFFDF8',
   border: '1px solid rgba(27,56,40,0.13)',
   boxShadow: NEU.inSm,
   outline: 'none',
-  minHeight: 40,
+  minHeight: 44,
 };
+
+/** A quiet pill in the message toolbar: a 3D emoji and a plain word. */
+const TOOL_BUTTON_STYLE = (open: boolean): React.CSSProperties => ({
+  minHeight: 42,
+  padding: '7px 15px 7px 9px',
+  borderRadius: 999,
+  border: open ? `1.5px solid ${FOREST}` : '1.5px solid rgba(27,56,40,0.16)',
+  backgroundColor: open ? 'rgba(238,217,138,0.34)' : '#FFFDF8',
+  fontFamily: OUTFIT,
+  fontSize: 14,
+  fontWeight: 700,
+  color: FOREST,
+  cursor: 'pointer',
+  boxShadow: open ? 'none' : NEU.outSm,
+  transitionProperty: 'background-color, border-color, box-shadow',
+  transitionDuration: '180ms',
+  transitionTimingFunction: EASE,
+});
 
 // ── Paragraph editor: contentEditable at the real mail typography ────────────
 
@@ -586,7 +636,10 @@ function useImageUpload(conferenceId: string, accessToken: string | null) {
 
 // ── EmailComposer ────────────────────────────────────────────────────────────
 
-type PaletteTab = 'blocks' | 'details' | 'files' | 'starters' | 'design' | 'people';
+/** The tabs inside the one Add menu. Design and the recipient list have
+ *  their own quiet buttons; everything that ADDS something to the email lives
+ *  behind Add. */
+type AddTab = 'blocks' | 'details' | 'files' | 'starters';
 
 export default function EmailComposer({
   conference, conferenceId, initialSubject, initialBlocks, previewCandidates, onChange, unresolvedRecipients,
@@ -600,7 +653,21 @@ export default function EmailComposer({
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [activeTarget, setActiveTarget] = useState<string>('subject');
   const [fmt, setFmt] = useState({ bold: false, italic: false });
-  const [paletteTab, setPaletteTab] = useState<PaletteTab>('blocks');
+  // ── What used to be always on screen, now one button each ─────────────────
+  // The left rail (six icon tabs and a panel of tiles) sat beside the email
+  // the whole time, whether anyone wanted a block or not. Now: one Add menu
+  // (blocks, their details, files, starters), one Design button, and the
+  // recipient list behind a link in "Before you send".
+  const [addOpen, setAddOpen] = useState(false);
+  const [addTab, setAddTab] = useState<AddTab>('blocks');
+  const [designOpen, setDesignOpen] = useState(false);
+  const [listOpen, setListOpen] = useState(false);
+  const addBtnRef = useRef<HTMLButtonElement | null>(null);
+  const designBtnRef = useRef<HTMLButtonElement | null>(null);
+  const listBtnRef = useRef<HTMLButtonElement | null>(null);
+  const closeAdd = useCallback(() => setAddOpen(false), []);
+  const closeDesign = useCallback(() => setDesignOpen(false), []);
+  const closeList = useCallback(() => setListOpen(false), []);
   const [mode, setMode] = useState<'edit' | 'preview'>('edit');
   const [previewWidth, setPreviewWidth] = useState<'desktop' | 'mobile'>('desktop');
   // LIGHT BY DEFAULT, and a real switch rather than a surprise. The renderer
@@ -642,7 +709,6 @@ export default function EmailComposer({
   const [hoverGap, setHoverGap] = useState<number | null>(null);
 
   const wide = useIsWide();
-  const roomy = useIsRoomy();
   const blockRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const blockNodes = useRef<Record<string, HTMLDivElement | null>>({});
   /** One STABLE ref object per insertion gap. PopoverLayer measures its
@@ -670,7 +736,7 @@ export default function EmailComposer({
   // Lazily loaded, and only once the Files section is actually opened: most
   // emails never touch it, and this is a joined query across every committee.
   const { files: conferenceFiles, error: filesError } = useConferenceFiles(
-    conferenceId, accessToken, paletteTab === 'files'
+    conferenceId, accessToken, addOpen && addTab === 'files'
   );
 
   // Header shape, mirroring renderHeader/renderIdentityRow: with a banner the
@@ -1058,30 +1124,14 @@ export default function EmailComposer({
     const images = blocks.filter((b): b is ImageBlock & { _id: string } => b.type === 'image');
     const buttons = blocks.filter((b): b is ButtonBlock & { _id: string } => b.type === 'button');
     return [
-      { ok: subject.trim().length > 0, label: 'Subject line written', fix: 'People see this first. Write one.' },
-      { ok: paragraphs.length > 0, label: 'Something to say', fix: 'Add at least one block of text.' },
-      { ok: buttons.every(b => b.label.trim()), label: 'Every button is labelled', fix: 'A button with no words renders as "Learn more".' },
-      { ok: images.every(b => b.url && b.alt.trim()), label: 'Pictures described', fix: 'Alt text is what people on slow connections and screen readers get.' },
+      { ok: subject.trim().length > 0, label: 'A subject line', fix: 'People see this first. Write one above.' },
+      { ok: paragraphs.length > 0, label: 'Something to say', fix: 'Add at least one line of text.' },
+      { ok: buttons.every(b => b.label.trim()), label: 'Every button has words', fix: 'A button with no words reads "Learn more".' },
+      { ok: images.every(b => b.url && b.alt.trim()), label: 'Every picture described', fix: 'Some people never see the picture. The description is what they read instead.' },
     ];
   }, [blocks, subject]);
 
   // ── Pieces ─────────────────────────────────────────────────────────────────
-
-  // ── The rail ───────────────────────────────────────────────────────────────
-  // ICONS ONLY. The labels were 8.5px, all-caps, letter-spaced words under
-  // 15px glyphs inside a 44px button, six characters of "STARTERS" in a
-  // 44px box, which is where the clipping the owner reported was coming from,
-  // and they were describing icons that already say the same thing. Each
-  // button keeps `title` AND `aria-label`, so the words are still there for a
-  // hover, a screen reader and a keyboard.
-  const paletteRail: { key: PaletteTab; label: string; hint: string; icon: typeof LayoutTemplate }[] = [
-    { key: 'blocks', label: 'Blocks', hint: 'Pieces to build the email from', icon: LayoutTemplate },
-    { key: 'details', label: 'Details', hint: 'Their name, committee, fee…', icon: Braces },
-    { key: 'files', label: 'Files', hint: 'Study guides and rules of procedure', icon: Paperclip },
-    { key: 'starters', label: 'Starters', hint: 'A ready-made shape', icon: Sparkles },
-    ...(design ? [{ key: 'design' as const, label: 'Design', hint: 'How every email looks', icon: Palette }] : []),
-    ...(recipients ? [{ key: 'people' as const, label: 'Recipients', hint: 'Who is getting this', icon: Users }] : []),
-  ];
 
   // ─────────────────────────────────────────────────────────────────────────
   // RENDER HELPERS, NOT COMPONENTS. They are defined in the closure (they need
@@ -1093,105 +1143,127 @@ export default function EmailComposer({
   // whatever had just been typed. Calling them inlines the elements instead.
   // ─────────────────────────────────────────────────────────────────────────
 
+  /** Where anything picked from the Add menu lands: right after whatever is
+   *  selected, or at the end. */
+  const insertIndex = () => (selectedId ? blocks.findIndex(b => b._id === selectedId) + 1 : blocks.length);
+
+  const tileHover = {
+    onMouseEnter: (e: React.MouseEvent<HTMLButtonElement>) => {
+      e.currentTarget.style.boxShadow = NEU.outSmHover;
+      e.currentTarget.style.transform = 'translateY(-2px)';
+    },
+    onMouseLeave: (e: React.MouseEvent<HTMLButtonElement>) => {
+      e.currentTarget.style.boxShadow = NEU.outSm;
+      e.currentTarget.style.transform = 'translateY(0)';
+    },
+  };
+
   function paletteTile(item: (typeof PALETTE_ITEMS)[number]) {
     return (
       <button
+        key={item.kind}
         type="button"
         draggable
+        title={`${item.hint}. Click to add, or drag it onto the email.`}
         onDragStart={e => {
           e.dataTransfer.effectAllowed = 'copy';
           e.dataTransfer.setData('text/plain', item.kind);
           setDragging({ kind: 'new', palette: item.kind });
         }}
-        onDragEnd={() => { setDragging(null); setDropIndex(null); }}
-        onClick={() => addFromPalette(item.kind)}
-        className="group flex items-center gap-2.5 w-full text-left focus:outline-none"
+        onDragEnd={() => { setDragging(null); setDropIndex(null); setAddOpen(false); }}
+        onClick={() => { addFromPalette(item.kind); setAddOpen(false); }}
+        className="flex flex-col items-center justify-center gap-1.5 w-full focus:outline-none"
         style={{
-          minHeight: 52,
-          padding: '9px 11px',
+          minHeight: 84,
+          padding: '10px 8px',
           borderRadius: 16,
           border: CARD_BORDER,
-          backgroundColor: NEU.surface,
+          backgroundColor: '#FFFDF8',
           boxShadow: NEU.outSm,
           cursor: 'grab',
           transitionProperty: 'box-shadow, transform',
           transitionDuration: '220ms',
           transitionTimingFunction: EASE,
         }}
-        onMouseEnter={e => {
-          e.currentTarget.style.boxShadow = NEU.outSmHover;
-          e.currentTarget.style.transform = 'translateY(-2px)';
-        }}
-        onMouseLeave={e => {
-          e.currentTarget.style.boxShadow = NEU.outSm;
-          e.currentTarget.style.transform = 'translateY(0)';
-        }}
+        {...tileHover}
       >
-        <span
-          className="inline-flex items-center justify-center flex-shrink-0"
-          style={{
-            width: 34, height: 34, borderRadius: 12,
-            background: `linear-gradient(135deg, color-mix(in srgb, ${NEU_GRADIENTS.gold[0]} 25%, transparent), color-mix(in srgb, ${NEU_GRADIENTS.gold[1]} 18%, transparent)), ${NEU.surface}`,
-            boxShadow: NEU.outSm,
-          }}
-        >
-          <DuoGlyph icon={item.icon} size={18} />
-        </span>
-        <span className="min-w-0">
-          <span className="block truncate" style={{ fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 800, color: INK }}>
-            {item.label}
-          </span>
-          <span className="block truncate" style={{ fontFamily: OUTFIT, fontSize: 10.5, color: SOFT }}>
-            {item.hint}
-          </span>
+        <Emoji3D name={item.emoji} size={30} fallback={item.icon} fallbackColor={FOREST} />
+        <span style={{ fontFamily: OUTFIT, fontSize: 13.5, fontWeight: 700, color: INK, textAlign: 'center' }}>
+          {item.label}
         </span>
       </button>
     );
   }
 
-  const palettePanel = (
-    <div>
-      {paletteTab === 'blocks' && (
-        <>
-          <PanelTitle hint="Drag one onto the email, or click to drop it in.">BUILDING BLOCKS</PanelTitle>
-          <div className={wide ? 'flex flex-col gap-2' : 'flex gap-2 overflow-x-auto pb-1'}>
-            {PALETTE_ITEMS.map(item => (
-              <div key={item.kind} className={wide ? '' : 'flex-shrink-0'} style={wide ? undefined : { width: 168 }}>
-                {paletteTile(item)}
-              </div>
-            ))}
-          </div>
-        </>
+  const ADD_TABS: { key: AddTab; label: string; emoji: string }[] = [
+    { key: 'blocks', label: 'Blocks', emoji: 'Memo' },
+    { key: 'details', label: 'Their details', emoji: 'Bust in silhouette' },
+    { key: 'files', label: 'Files', emoji: 'Paperclip' },
+    { key: 'starters', label: 'Starters', emoji: 'Clipboard' },
+  ];
+
+  /** The one Add menu. Four tabs, one panel at a time. While a block is being
+   *  dragged out of it the menu turns see-through and lets the pointer pass,
+   *  so it never sits between the tile and the paper it is being dropped on. */
+  const addMenu = (
+    <div
+      style={{
+        padding: 12, borderRadius: 22,
+        backgroundColor: NEU.surface, border: CARD_BORDER, boxShadow: CARD_SHADOW,
+        opacity: dragging?.kind === 'new' ? 0 : 1,
+        pointerEvents: dragging?.kind === 'new' ? 'none' : 'auto',
+        transitionProperty: 'opacity', transitionDuration: '160ms',
+      }}
+    >
+      <div className="grid grid-cols-2 gap-1.5 mb-3" role="tablist" aria-label="What to add">
+        {ADD_TABS.map(t => {
+          const active = addTab === t.key;
+          return (
+            <button
+              key={t.key}
+              type="button"
+              role="tab"
+              aria-selected={active}
+              onMouseDown={e => e.preventDefault()}
+              onClick={() => setAddTab(t.key)}
+              className="inline-flex items-center gap-2 focus:outline-none"
+              style={{
+                minHeight: 42, padding: '6px 10px', borderRadius: 14,
+                border: 'none',
+                background: active ? `linear-gradient(135deg, ${FOREST}, #2E6041)` : 'rgba(27,56,40,0.05)',
+                color: active ? GOLD : INK,
+                fontFamily: OUTFIT, fontSize: 13.5, fontWeight: 700, cursor: 'pointer',
+                transitionProperty: 'background, color', transitionDuration: '180ms',
+              }}
+            >
+              <Emoji3D name={t.emoji} size={20} fallback={Sparkles} fallbackColor={active ? GOLD : FOREST} />
+              {t.label}
+            </button>
+          );
+        })}
+      </div>
+
+      {addTab === 'blocks' && (
+        <div className="grid grid-cols-3 gap-2">
+          {PALETTE_ITEMS.map(item => paletteTile(item))}
+        </div>
       )}
 
-      {paletteTab === 'details' && (
+      {addTab === 'details' && (
         <>
-          {/* ── DETAILS, rebuilt ────────────────────────────────────────────
-              These were fourteen identical outlined pills carrying form
-              labels: "Delegate Name", "Committee", "Session Code". Read at a
-              glance they were a form to fill in, and read individually they
-              were indistinguishable, which is exactly what the owner said
-              about them.
-
-              Every token now has an IDENTITY: its own duotone icon, a short name
-              that fits mid-sentence, and one plain line saying what it turns
-              into when the email actually lands. They are grouped into four
-              or five families, so fourteen things read as a handful. The same
-              identities are what the in-text pill and the caret suggestions
-              draw, so a token looks like itself everywhere it appears. ── */}
-          <PanelTitle hint="Drop one in and every person reads their own name, country or committee.">
-            THEIR OWN DETAILS
-          </PanelTitle>
+          {/* Every token keeps its identity (emoji, short name, what it
+              becomes) and its family; the family names are the only headings.
+              What it becomes is the hover, not a printed line. */}
           <div className="flex flex-col gap-3">
             {TOKEN_FAMILY_ORDER.map(family => {
               const keys = EMAIL_TOKEN_KEYS.filter(k => tokenIdentity(k).family === family);
               if (keys.length === 0) return null;
               return (
                 <div key={family}>
-                  <p className="mb-1.5" style={{ fontFamily: OUTFIT, fontSize: 9.5, fontWeight: 800, letterSpacing: '0.1em', color: SOFT }}>
-                    {TOKEN_FAMILY_LABEL[family as TokenFamily].toUpperCase()}
+                  <p className="mb-1.5" style={{ fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 700, color: SOFT }}>
+                    {TOKEN_FAMILY_LABEL[family as TokenFamily]}
                   </p>
-                  <div className="flex flex-col gap-1">
+                  <div className="grid grid-cols-2 gap-1.5">
                     {keys.map(key => {
                       const id = tokenIdentity(key);
                       return (
@@ -1201,30 +1273,24 @@ export default function EmailComposer({
                           title={id.becomes}
                           aria-label={`${tokenLabel(key)}. ${id.becomes}`}
                           onMouseDown={e => e.preventDefault()}
-                          onClick={() => handleTokenInsert(key)}
+                          onClick={() => { handleTokenInsert(key); setAddOpen(false); }}
                           className="flex items-center gap-2 w-full text-left focus:outline-none"
                           style={{
-                            minHeight: 40,
+                            minHeight: 42,
                             padding: '6px 10px',
                             borderRadius: 999,
                             backgroundColor: 'rgba(238,217,138,0.34)',
-                            border: '1px solid rgba(27,56,40,0.18)',
+                            border: '1px solid rgba(27,56,40,0.16)',
                             cursor: 'pointer',
-                            transitionProperty: 'background-color, box-shadow, transform',
+                            transitionProperty: 'background-color',
                             transitionDuration: '180ms',
                             transitionTimingFunction: EASE,
                           }}
-                          onMouseEnter={e => {
-                            e.currentTarget.style.backgroundColor = 'rgba(238,217,138,0.66)';
-                            e.currentTarget.style.transform = 'translateY(-1px)';
-                          }}
-                          onMouseLeave={e => {
-                            e.currentTarget.style.backgroundColor = 'rgba(238,217,138,0.34)';
-                            e.currentTarget.style.transform = 'translateY(0)';
-                          }}
+                          onMouseEnter={e => { e.currentTarget.style.backgroundColor = 'rgba(238,217,138,0.66)'; }}
+                          onMouseLeave={e => { e.currentTarget.style.backgroundColor = 'rgba(238,217,138,0.34)'; }}
                         >
-                          <DuoGlyph icon={id.icon} size={16} />
-                          <span className="min-w-0 flex-1 truncate" style={{ fontFamily: OUTFIT, fontSize: 12, fontWeight: 800, color: FOREST }}>
+                          <Emoji3D name={id.emoji} size={18} fallback={id.icon} fallbackColor={FOREST} />
+                          <span className="min-w-0 flex-1" style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 700, color: FOREST, lineHeight: 1.2 }}>
                             {tokenShort(key)}
                           </span>
                         </button>
@@ -1235,103 +1301,68 @@ export default function EmailComposer({
               );
             })}
           </div>
-          <p className="mt-3 flex items-start gap-1.5" style={{ fontFamily: OUTFIT, fontSize: 11, color: SOFT, lineHeight: 1.5, textWrap: 'pretty' }}>
-            <CornerDownRight size={12} style={{ color: SOFT, flexShrink: 0, marginTop: 2 }} />
-            Goes wherever your cursor is. Or just type <strong style={{ color: FOREST }}>{'{{'}</strong> in the email and they come to you.
+          <p className="mt-3" style={{ fontFamily: OUTFIT, fontSize: 12.5, color: SOFT, lineHeight: 1.5, textWrap: 'pretty' }}>
+            Tip: type <strong style={{ color: FOREST }}>{'{{'}</strong> while writing and they come to you.
           </p>
         </>
       )}
 
-      {paletteTab === 'files' && (
-        <>
-          <PanelTitle hint="Everything the secretariat uploaded. Adds a button that opens the file.">
-            YOUR FILES
-          </PanelTitle>
-          <ConferenceFilesPanel
-            files={conferenceFiles}
-            error={filesError}
-            wide={wide}
-            onInsert={f => insertBlocks([blockForFile(f)], selectedId ? blocks.findIndex(b => b._id === selectedId) + 1 : blocks.length)}
-          />
-        </>
+      {addTab === 'files' && (
+        <ConferenceFilesPanel
+          files={conferenceFiles}
+          error={filesError}
+          wide
+          onInsert={f => { insertBlocks([blockForFile(f)], insertIndex()); setAddOpen(false); }}
+        />
       )}
 
-      {paletteTab === 'design' && design && (
-        <>
-          <PanelTitle hint="The look every email from this conference inherits.">DESIGN</PanelTitle>
-          <DesignPanel design={design} />
-        </>
-      )}
-
-      {paletteTab === 'people' && recipients && (
-        <>
-          <PanelTitle hint="The list, out of the pop-up and next to the email it is for.">RECIPIENTS</PanelTitle>
-          <RecipientRoster groups={recipients.groups} reachCount={recipients.reachCount} wide={wide} />
-        </>
-      )}
-
-      {paletteTab === 'starters' && (
-        <>
-          <PanelTitle hint="A ready-made shape. Everything stays editable.">START FROM</PanelTitle>
-          <div className={wide ? 'flex flex-col gap-2' : 'flex gap-2 overflow-x-auto pb-1'}>
-            {STARTERS.map(s => (
-              <button
-                key={s.id}
-                type="button"
-                onClick={() => insertBlocks(s.blocks, blocks.length)}
-                className="flex items-center gap-2.5 text-left focus:outline-none flex-shrink-0"
-                style={{
-                  width: wide ? '100%' : 190,
-                  minHeight: 58,
-                  padding: '10px 12px',
-                  borderRadius: 16,
-                  border: CARD_BORDER,
-                  backgroundColor: NEU.surface,
-                  boxShadow: NEU.outSm,
-                  cursor: 'pointer',
-                  transitionProperty: 'box-shadow, transform',
-                  transitionDuration: '220ms',
-                  transitionTimingFunction: EASE,
-                }}
-                onMouseEnter={e => { e.currentTarget.style.boxShadow = NEU.outSmHover; e.currentTarget.style.transform = 'translateY(-2px)'; }}
-                onMouseLeave={e => { e.currentTarget.style.boxShadow = NEU.outSm; e.currentTarget.style.transform = 'translateY(0)'; }}
+      {addTab === 'starters' && (
+        <div className="flex flex-col gap-2">
+          {STARTERS.map(st => (
+            <button
+              key={st.id}
+              type="button"
+              title={`${st.hint}. Everything stays editable.`}
+              onClick={() => { insertBlocks(st.blocks, blocks.length); setAddOpen(false); }}
+              className="flex items-center gap-3 text-left focus:outline-none w-full"
+              style={{
+                minHeight: 56,
+                padding: '9px 12px',
+                borderRadius: 16,
+                border: CARD_BORDER,
+                backgroundColor: '#FFFDF8',
+                boxShadow: NEU.outSm,
+                cursor: 'pointer',
+                transitionProperty: 'box-shadow, transform',
+                transitionDuration: '220ms',
+                transitionTimingFunction: EASE,
+              }}
+              {...tileHover}
+            >
+              <span
+                className="flex flex-col justify-center gap-1 flex-shrink-0"
+                style={{ width: 34, height: 38, padding: 5, borderRadius: 8, backgroundColor: '#FFFFFF', boxShadow: NEU.inSm }}
               >
-                <span
-                  className="flex flex-col justify-center gap-1 flex-shrink-0"
-                  style={{ width: 34, height: 38, padding: 5, borderRadius: 8, backgroundColor: '#FFFDF8', boxShadow: NEU.inSm }}
-                >
-                  {s.shape.map((k, i) => (
-                    <span
-                      key={i}
-                      style={{
-                        display: 'block',
-                        height: k === 'i' ? 8 : k === 'h' ? 3.5 : 2,
-                        width: k === 'b' ? '58%' : k === 's' ? '70%' : '100%',
-                        borderRadius: 2,
-                        backgroundColor: k === 'b' ? NEU_GRADIENTS.gold[1] : k === 'i' ? 'rgba(27,56,40,0.22)' : k === 'h' ? FOREST : 'rgba(27,56,40,0.3)',
-                      }}
-                    />
-                  ))}
-                </span>
-                {/* Every link in this chain needs `min-w-0`, or a flex item
-                    refuses to shrink below its content and the label runs out
-                    of the tile instead of ellipsing, which is the clipped
-                    STARTERS row the owner photographed. The hint keeps
-                    wrapping (it is prose and there is room for two lines); it
-                    is the single-line label that has to be allowed to end. */}
-                <span className="min-w-0 flex-1">
-                  <span className="flex items-center gap-1.5 min-w-0">
-                    <DuoGlyph icon={s.icon} size={15} />
-                    <span className="min-w-0 truncate" title={s.label} style={{ fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 800, color: INK, lineHeight: 1.25 }}>{s.label}</span>
-                  </span>
-                  <span className="block" style={{ fontFamily: OUTFIT, fontSize: 10.5, color: SOFT, lineHeight: 1.4, textWrap: 'pretty' }}>
-                    {s.hint}
-                  </span>
-                </span>
-              </button>
-            ))}
-          </div>
-        </>
+                {st.shape.map((k, i) => (
+                  <span
+                    key={i}
+                    style={{
+                      display: 'block',
+                      height: k === 'i' ? 8 : k === 'h' ? 3.5 : 2,
+                      width: k === 'b' ? '58%' : k === 's' ? '70%' : '100%',
+                      borderRadius: 2,
+                      backgroundColor: k === 'b' ? NEU_GRADIENTS.gold[1] : k === 'i' ? 'rgba(27,56,40,0.22)' : k === 'h' ? FOREST : 'rgba(27,56,40,0.3)',
+                    }}
+                  />
+                ))}
+              </span>
+              <Emoji3D name={st.emoji} size={22} fallback={Sparkles} fallbackColor={FOREST} />
+              <span className="min-w-0 flex-1" style={{ fontFamily: OUTFIT, fontSize: 14, fontWeight: 700, color: INK, lineHeight: 1.25 }}>
+                {st.label}
+              </span>
+            </button>
+          ))}
+        </div>
       )}
     </div>
   );
@@ -1409,7 +1440,7 @@ export default function EmailComposer({
                   fontFamily: OUTFIT, fontSize: 11, fontWeight: 800, color: INK, cursor: 'pointer',
                 }}
               >
-                <DuoGlyph icon={item.icon} size={14} />
+                <Emoji3D name={item.emoji} size={14} fallback={item.icon} fallbackColor={FOREST} />
                 {item.label}
               </button>
             ))}
@@ -1535,8 +1566,8 @@ export default function EmailComposer({
                 </div>
               ))}
             </div>
-            <p style={{ fontSize: 11, color: '#6E6456', paddingTop: 7, textAlign: 'center' }}>
-              These fields fill in per delegate and are not editable yet.
+            <p style={{ fontFamily: OUTFIT, fontSize: 12.5, color: '#6E6456', paddingTop: 7, textAlign: 'center' }}>
+              Filled in for each person. Not editable yet.
             </p>
           </div>
         )}
@@ -1570,7 +1601,7 @@ export default function EmailComposer({
                   color: FOREST, fontFamily: OUTFIT, fontSize: 12, fontWeight: 700,
                 }}
               >
-                <DuoGlyph icon={ImageIcon} size={24} />
+                <Emoji3D name="Framed picture" size={26} fallback={ImageIcon} fallbackColor={FOREST} />
                 Pick a picture in the panel
               </span>
             )}
@@ -1651,15 +1682,17 @@ export default function EmailComposer({
             legible on any accent (10.7:1), and unmistakably Gavelling's rather
             than the accent's. */}
         <span
+          title="The top and the footer are added to every email for you. Change their look under Design."
           style={{
             position: 'absolute', left: 10, top: 11,
-            padding: '3px 9px', borderRadius: 999,
-            fontFamily: OUTFIT, fontSize: 9, fontWeight: 800, letterSpacing: '0.1em',
+            padding: '3px 10px', borderRadius: 999,
+            fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 700,
             backgroundColor: 'rgba(255,253,248,0.94)', color: FOREST,
             border: '1px solid rgba(27,56,40,0.14)',
+            cursor: 'help',
           }}
         >
-          ADDED FOR YOU
+          Added for you
         </span>
       </div>
 
@@ -1681,18 +1714,18 @@ export default function EmailComposer({
               transitionDuration: '200ms',
             }}
           >
-            <DuoGlyph icon={Inbox} size={40} />
-            <p className="mt-3" style={{ fontFamily: OUTFIT, fontSize: 15, fontWeight: 800, color: INK, textWrap: 'balance' }}>
-              Your email starts here
+            <Emoji3D name="Inbox tray" size={44} fallback={Send} fallbackColor={FOREST} />
+            <p className="mt-3" style={{ fontFamily: OUTFIT, fontSize: 17, fontWeight: 800, color: INK, textWrap: 'balance' }}>
+              Your Email Starts Here
             </p>
-            <p className="mt-1 mb-4" style={{ fontFamily: OUTFIT, fontSize: 12.5, color: SOFT, maxWidth: 300, lineHeight: 1.5, textWrap: 'pretty' }}>
-              Drag a block in from the left, or pick one of these.
+            <p className="mt-1 mb-4" style={{ fontFamily: OUTFIT, fontSize: 13.5, color: SOFT, maxWidth: 300, lineHeight: 1.5, textWrap: 'pretty' }}>
+              Pick a first piece.
             </p>
             <div className="flex flex-wrap gap-2 justify-center">
               {PALETTE_ITEMS.filter(i => i.kind !== 'paragraph:small').map(item => (
                 <ActionButton key={item.kind} size="sm" tone="quiet" onClick={() => addFromPalette(item.kind)}>
-                  <DuoGlyph icon={item.icon} size={14} />
-                  {item.label.toUpperCase()}
+                  <Emoji3D name={item.emoji} size={14} fallback={item.icon} fallbackColor={FOREST} />
+                  {item.label}
                 </ActionButton>
               ))}
             </div>
@@ -1731,17 +1764,6 @@ export default function EmailComposer({
 
       {/* Footer band — the renderer's, labelled as chrome. */}
       <div style={{ backgroundColor: MAIL_FOOTER_BG, borderTop: `1px solid ${MAIL_HAIRLINE}`, padding: '14px 40px 28px' }}>
-        <span
-          style={{
-            display: 'inline-block', marginBottom: 12,
-            padding: '3px 9px', borderRadius: 999,
-            fontFamily: OUTFIT, fontSize: 9, fontWeight: 800, letterSpacing: '0.1em',
-            backgroundColor: 'rgba(255,253,248,0.94)', color: FOREST,
-            border: '1px solid rgba(27,56,40,0.14)',
-          }}
-        >
-          ADDED FOR YOU
-        </span>
         {theme.footerLine.trim() && (
           <div style={{ fontFamily: MAIL_SANS, fontSize: 14, lineHeight: 1.65, color: MAIL_INK_SOFT, paddingBottom: 14 }}>
             {theme.footerLine}
@@ -1770,56 +1792,85 @@ export default function EmailComposer({
     <div>
       {!selected && (
         <>
-          <PanelTitle hint="Click any part of the email to edit it here.">BEFORE YOU SEND</PanelTitle>
-          <div className="flex flex-col gap-1.5 mb-4">
+          {/* The one emoji disc on this panel hangs over its top edge: the
+              resting state is a checklist, and the disc is what tells you so
+              before you have read a word. */}
+          <span
+            aria-hidden
+            className="inline-flex items-center justify-center"
+            style={{
+              position: 'absolute', top: -20, left: 16,
+              width: 44, height: 44, borderRadius: 999,
+              background: `radial-gradient(circle at 35% 30%, #FFFDF8, ${NEU.surface})`,
+              border: CARD_BORDER, boxShadow: '0 6px 16px rgba(27,56,40,0.18)',
+            }}
+          >
+            <Emoji3D name="Check mark button" size={26} fallback={Check} fallbackColor={FOREST} />
+          </span>
+          <div style={{ height: 14 }} />
+          <PanelTitle hint="Click any part of the email to change it here. When everything is ticked, send it from the top.">
+            Before You Send
+          </PanelTitle>
+          <div className="flex flex-col gap-1 mb-4">
             {checks.map(c => (
               <div
                 key={c.label}
-                className="flex items-start gap-2"
-                style={{
-                  padding: '9px 11px', borderRadius: 12,
-                  backgroundColor: c.ok ? 'rgba(47,102,68,0.08)' : '#FFFDF8',
-                  boxShadow: c.ok ? 'none' : NEU.inSm,
-                  border: c.ok ? '1px solid rgba(47,102,68,0.18)' : '1px solid rgba(27,56,40,0.09)',
-                }}
+                title={c.ok ? undefined : c.fix}
+                className="flex items-center gap-2.5"
+                style={{ minHeight: 34, padding: '4px 2px' }}
               >
                 <span
                   className="inline-flex items-center justify-center flex-shrink-0"
                   style={{
-                    width: 18, height: 18, borderRadius: 999, marginTop: 1,
+                    width: 22, height: 22, borderRadius: 999,
                     backgroundColor: c.ok ? GREEN_INK : 'rgba(126,81,40,0.16)',
                     color: c.ok ? '#FFFFFF' : AMBER_INK,
                   }}
                 >
-                  {c.ok ? <Check size={11} strokeWidth={3.2} /> : <AlertTriangle size={10} strokeWidth={2.8} />}
+                  {c.ok ? <Check size={13} strokeWidth={3.2} /> : <AlertTriangle size={12} strokeWidth={2.8} />}
                 </span>
-                <span className="min-w-0">
-                  <span className="block" style={{ fontFamily: OUTFIT, fontSize: 12, fontWeight: 700, color: c.ok ? GREEN_INK : INK }}>
-                    {c.label}
-                  </span>
-                  {!c.ok && (
-                    <span className="block" style={{ fontFamily: OUTFIT, fontSize: 11, color: SOFT, lineHeight: 1.45, textWrap: 'pretty' }}>
-                      {c.fix}
-                    </span>
-                  )}
+                <span style={{ fontFamily: OUTFIT, fontSize: 14, fontWeight: c.ok ? 600 : 700, color: c.ok ? GREEN_INK : INK, textWrap: 'pretty' }}>
+                  {c.label}
                 </span>
               </div>
             ))}
           </div>
 
-          <div style={{ height: 1, backgroundColor: 'rgba(27,56,40,0.1)', margin: '4px 0 14px' }} />
+          {recipients && (
+            <>
+              <button
+                ref={listBtnRef}
+                type="button"
+                onClick={() => setListOpen(v => !v)}
+                aria-expanded={listOpen}
+                className="w-full flex items-center gap-2.5 text-left focus:outline-none mb-2"
+                style={{ ...TOOL_BUTTON_STYLE(listOpen), borderRadius: 14, padding: '8px 12px' }}
+              >
+                <Emoji3D name="Busts in silhouette" size={22} fallback={Users} fallbackColor={FOREST} />
+                <span className="min-w-0 flex-1">See who gets it</span>
+                <span style={{ fontVariantNumeric: 'tabular-nums', color: SOFT }}>{recipients.reachCount.toLocaleString()}</span>
+              </button>
+              <PopoverLayer anchorRef={listBtnRef} open={listOpen} onClose={closeList} width={340} maxHeight={480} align="end">
+                <div style={{ padding: 14, borderRadius: 20, backgroundColor: NEU.surface, border: CARD_BORDER, boxShadow: CARD_SHADOW }}>
+                  <RecipientRoster groups={recipients.groups} reachCount={recipients.reachCount} wide={false} />
+                </div>
+              </PopoverLayer>
+            </>
+          )}
 
-          <PanelTitle hint="Goes to your own inbox, so you can read it the way they will.">TRY IT ON YOURSELF</PanelTitle>
           {unresolvedRecipients && unresolvedRecipients.affected > 0 && (
-            <p role="alert" className="mb-2" style={{ fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 700, color: RED, lineHeight: 1.45, textWrap: 'pretty' }}>
-              {unresolvedRecipients.affected} of {unresolvedRecipients.total} recipients are missing {unresolvedRecipients.fields.map(f => `${f.label} (${f.count})`).join(', ')}. Your test fills these in, but they will not be sent this email.
+            <p role="alert" className="mb-2" style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 700, color: RED, lineHeight: 1.45, textWrap: 'pretty' }}>
+              {unresolvedRecipients.affected} of {unresolvedRecipients.total} are missing {unresolvedRecipients.fields.map(f => `${f.label} (${f.count})`).join(', ')}, so they will not get this email.
             </p>
           )}
-          <ActionButton icon={Send} onClick={handleSendTest} disabled={sendingTest || !accessToken || !organizerEmail} style={{ width: '100%' }}>
-            {sendingTest ? 'SENDING…' : 'SEND ME A TEST'}
-          </ActionButton>
+          <div className="flex items-center gap-2">
+            <ActionButton icon={Send} tone="quiet" onClick={handleSendTest} disabled={sendingTest || !accessToken || !organizerEmail} style={{ flex: 1 }}>
+              {sendingTest ? 'Sending…' : 'Send me a test'}
+            </ActionButton>
+            <HintDot text="Goes to your own inbox, so you can read it the way they will. Missing details are filled with stand-ins." />
+          </div>
           {testMessage && (
-            <p className="mt-2" style={{ fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 700, color: testMessage.startsWith("Couldn't") ? RED : GREEN_INK, textWrap: 'pretty' }}>
+            <p className="mt-2" style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 700, color: testMessage.startsWith("Couldn't") ? RED : GREEN_INK, textWrap: 'pretty' }}>
               {testMessage}
             </p>
           )}
@@ -1828,8 +1879,8 @@ export default function EmailComposer({
 
       {selected?.type === 'paragraph' && (
         <>
-          <PanelTitle hint="Three sizes, nothing else. The email's own theme handles the rest.">TEXT</PanelTitle>
-          <FieldLabel>SIZE</FieldLabel>
+          <PanelTitle emoji="Page facing up" hint="Three sizes, nothing else. The email's own theme handles the colours and spacing.">Text</PanelTitle>
+          <FieldLabel>Size</FieldLabel>
           <div className="flex flex-col gap-1.5 mb-4">
             {VARIANT_META.map(v => {
               const active = (selected.variant ?? 'body') === v.value;
@@ -1866,13 +1917,14 @@ export default function EmailComposer({
             })}
           </div>
 
-          <FieldLabel>EMPHASIS</FieldLabel>
+          <FieldLabel>Bold or italic</FieldLabel>
           <div className="flex gap-1.5 mb-4">
             {([['bold', Bold, 'Bold'], ['italic', Italic, 'Italic']] as const).map(([cmd, Icon, title]) => (
               <button
                 key={cmd}
                 type="button"
-                title={`${title} (⌘${cmd === 'bold' ? 'B' : 'I'})`}
+                title={`${title} (⌘${cmd === 'bold' ? 'B' : 'I'}). Select some words first.`}
+                aria-label={title}
                 onMouseDown={e => e.preventDefault()}
                 onClick={() => applyMarkToSelected(cmd)}
                 className="flex-1 inline-flex items-center justify-center focus:outline-none"
@@ -1888,9 +1940,6 @@ export default function EmailComposer({
               </button>
             ))}
           </div>
-          <p style={{ fontFamily: OUTFIT, fontSize: 11, color: SOFT, lineHeight: 1.5, textWrap: 'pretty' }}>
-            Select some words in the email first, then hit one of these.
-          </p>
         </>
       )}
 
@@ -1952,11 +2001,11 @@ export default function EmailComposer({
               style={{
                 minHeight: 40, padding: '9px 14px', borderRadius: 999,
                 border: '1px solid rgba(139,32,32,0.28)', backgroundColor: 'transparent',
-                fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 800, letterSpacing: '0.05em',
+                fontFamily: OUTFIT, fontSize: 13.5, fontWeight: 700,
                 color: RED, cursor: 'pointer',
               }}
             >
-              <Trash2 size={13} strokeWidth={2.3} /> REMOVE
+              <Trash2 size={14} strokeWidth={2.3} /> Remove
             </button>
           </div>
         </>
@@ -1983,7 +2032,7 @@ export default function EmailComposer({
         style={{
           minHeight: 34, padding: '7px 12px', borderRadius: 999,
           border: CARD_BORDER, backgroundColor: '#FFFDF8',
-          fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 700, color: INK, cursor: 'pointer', maxWidth: 220,
+          fontFamily: OUTFIT, fontSize: 13, fontWeight: 700, color: INK, cursor: 'pointer', maxWidth: 260,
         }}
       >
         <UserRound size={13} strokeWidth={2.4} style={{ color: SOFT, flexShrink: 0 }} />
@@ -1996,16 +2045,17 @@ export default function EmailComposer({
             autoFocus
             value={asQuery}
             onChange={e => setAsQuery(e.target.value)}
-            placeholder="Search people…"
+            placeholder="Search people"
+            aria-label="Search people"
             className="w-full focus:outline-none"
-            style={{ padding: '10px 13px', fontFamily: OUTFIT, fontSize: 12.5, color: INK, borderBottom: '1px solid rgba(27,56,40,0.1)', minHeight: 40 }}
+            style={{ padding: '10px 13px', fontFamily: OUTFIT, fontSize: 16, color: INK, borderBottom: '1px solid rgba(27,56,40,0.1)', minHeight: 44 }}
           />
           <div style={{ maxHeight: 240, overflowY: 'auto' }}>
             <button
               type="button"
               onClick={() => { setAsId(null); setAsOpen(false); }}
               className="w-full text-left focus:outline-none"
-              style={{ padding: '9px 13px', minHeight: 38, fontFamily: OUTFIT, fontSize: 12.5, color: INK, fontWeight: asId === null ? 800 : 500, background: 'transparent', border: 'none', cursor: 'pointer' }}
+              style={{ padding: '9px 13px', minHeight: 40, fontFamily: OUTFIT, fontSize: 14, color: INK, fontWeight: asId === null ? 800 : 500, background: 'transparent', border: 'none', cursor: 'pointer' }}
             >
               Nobody in particular
             </button>
@@ -2015,7 +2065,7 @@ export default function EmailComposer({
                 type="button"
                 onClick={() => { setAsId(c.id); setAsOpen(false); }}
                 className="w-full text-left [overflow-wrap:anywhere] focus:outline-none"
-                style={{ padding: '9px 13px', minHeight: 38, fontFamily: OUTFIT, fontSize: 12.5, color: INK, fontWeight: asId === c.id ? 800 : 500, background: 'transparent', border: 'none', cursor: 'pointer' }}
+                style={{ padding: '9px 13px', minHeight: 40, fontFamily: OUTFIT, fontSize: 14, color: INK, fontWeight: asId === c.id ? 800 : 500, background: 'transparent', border: 'none', cursor: 'pointer' }}
               >
                 {c.label}
               </button>
@@ -2053,8 +2103,8 @@ export default function EmailComposer({
             aria-label="Name this email, just for you"
             className="w-full focus:outline-none"
             style={{
-              minHeight: 34, borderRadius: 999, padding: '7px 13px',
-              fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 700, color: INK,
+              minHeight: 40, borderRadius: 999, padding: '7px 14px',
+              fontFamily: OUTFIT, fontSize: 16, fontWeight: 600, color: INK,
               backgroundColor: '#FFFDF8', border: '1px solid rgba(27,56,40,0.13)', boxShadow: NEU.inSm,
             }}
           />
@@ -2064,64 +2114,107 @@ export default function EmailComposer({
     </div>
   ) : null;
 
-  const canvasColumn = (
-    <div className="min-w-0">
-      {/* ── The inbox row: the subject where it actually lands, AND the one
-          toggle that acts on the whole sheet.
-          These were two stacked rows. Between them they cost 132px of the
-          screen ABOVE the paper, every time the builder opened, on a laptop
-          that only has 800 of them — which is most of why the owner never saw
-          the top of their own email. The mode toggle is a property of the
-          sheet, so it rides on the sheet's own header rather than on a strip
-          of its own; on a phone it wraps to a second line INSIDE this panel,
-          which costs a line rather than a whole panel and its margin.
-          The old row's TEST button is gone, not moved: the properties panel
-          has carried "SEND ME A TEST", with the same handler and a sentence
-          explaining it, the whole time. ── */}
-      <div
-        className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-2"
-        style={{ ...panelStyle, borderRadius: 18, padding: '10px 12px' }}
-      >
-        {/* The conference's own mark, on the house's near-white disc rather
-            than on a forest chip. Conference logos are arbitrary uploads —
-            dark seals, transparent PNGs — which is exactly the case LogoDisc
-            exists for, and a dark seal on a dark chip is invisible. */}
+  /** SUBJECT. Its own card, full width, labelled with the one word it is.
+   *  The sender ("from") line that used to sit above it in tracked capitals is
+   *  now the hover on the conference's logo. */
+  const subjectCard = (
+    <div
+      className="mb-3 flex items-center gap-3"
+      style={{ ...panelStyle, borderRadius: 18, padding: '10px 16px' }}
+    >
+      <span title={`From ${confShortName}${conference.contact_email ? `, ${conference.contact_email}` : ''}`} className="flex-shrink-0">
         <LogoDisc
           src={conference.logo_url}
           alt={conference.acronym}
-          size={38}
+          size={40}
           fallbackText={conference.acronym.slice(0, 2)}
         />
-        <div className="min-w-0 flex-1" style={{ minWidth: 200 }}>
-          <p className="[overflow-wrap:anywhere]" style={{ fontFamily: OUTFIT, fontSize: 10.5, fontWeight: 800, letterSpacing: '0.1em', color: SOFT }}>
-            {confShortName.toUpperCase()} · {conference.contact_email}
-          </p>
-          <input
-            ref={subjectRef}
-            type="text"
-            value={subject}
-            onChange={e => {
-              setSubject(e.target.value);
-              refreshSubjectSuggest(e.target.value, e.target.selectionStart ?? e.target.value.length);
-            }}
-            onKeyUp={e => refreshSubjectSuggest(e.currentTarget.value, e.currentTarget.selectionStart ?? 0)}
-            onBlur={() => { if (suggest?.target === 'subject') setSuggest(null); }}
-            onFocus={() => { setActiveTarget('subject'); setSelectedId(null); }}
-            placeholder="Write the subject line. This is the bit they see first"
-            className="w-full focus:outline-none"
-            style={{
-              fontFamily: OUTFIT, fontSize: 15.5, fontWeight: 800, color: INK,
-              background: 'transparent', border: 'none', padding: '2px 0', minHeight: 30,
-            }}
-          />
-        </div>
-        <div className="flex-shrink-0">
+      </span>
+      <div className="min-w-0 flex-1">
+        <label htmlFor="email-composer-subject" className="block" style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 700, color: SOFT }}>
+          Subject
+        </label>
+        <input
+          id="email-composer-subject"
+          ref={subjectRef}
+          type="text"
+          value={subject}
+          onChange={e => {
+            setSubject(e.target.value);
+            refreshSubjectSuggest(e.target.value, e.target.selectionStart ?? e.target.value.length);
+          }}
+          onKeyUp={e => refreshSubjectSuggest(e.currentTarget.value, e.currentTarget.selectionStart ?? 0)}
+          onBlur={() => { if (suggest?.target === 'subject') setSuggest(null); }}
+          onFocus={() => { setActiveTarget('subject'); setSelectedId(null); }}
+          placeholder="What they see first in their inbox"
+          className="w-full focus:outline-none"
+          style={{
+            fontFamily: OUTFIT, fontSize: 18, fontWeight: 700, color: INK,
+            background: 'transparent', border: 'none', padding: '2px 0', minHeight: 32,
+          }}
+        />
+      </div>
+    </div>
+  );
+
+  const canvasColumn = (
+    <div className="min-w-0">
+      {/* ── MESSAGE: one title, two buttons, one switch.
+          Add holds everything that puts something INTO the email (blocks,
+          their details, files, starters); Design holds the look. Both used to
+          be a six-tab rail beside the paper, open all the time. ── */}
+      <div className="mb-2 flex flex-wrap items-center gap-2">
+        <p className="mr-1" style={{ fontFamily: OUTFIT, fontSize: 17, fontWeight: 800, color: INK }}>
+          Message
+        </p>
+        <button
+          ref={addBtnRef}
+          type="button"
+          aria-haspopup="dialog"
+          aria-expanded={addOpen}
+          onMouseDown={e => e.preventDefault()}
+          onClick={() => { setAddOpen(v => !v); setDesignOpen(false); }}
+          className="inline-flex items-center gap-2 focus:outline-none"
+          style={TOOL_BUTTON_STYLE(addOpen)}
+        >
+          <Emoji3D name="Sparkles" size={22} fallback={Plus} fallbackColor={FOREST} />
+          Add
+          <ChevronDown size={14} strokeWidth={2.6} style={{ color: SOFT, transform: addOpen ? 'rotate(180deg)' : 'none', transitionProperty: 'transform', transitionDuration: '200ms' }} />
+        </button>
+        <PopoverLayer anchorRef={addBtnRef} open={addOpen} onClose={closeAdd} width={352} maxHeight={520}>
+          {addMenu}
+        </PopoverLayer>
+        {design && (
+          <>
+            <button
+              ref={designBtnRef}
+              type="button"
+              aria-haspopup="dialog"
+              aria-expanded={designOpen}
+              onClick={() => { setDesignOpen(v => !v); setAddOpen(false); }}
+              className="inline-flex items-center gap-2 focus:outline-none"
+              style={TOOL_BUTTON_STYLE(designOpen)}
+            >
+              <Emoji3D name="Artist palette" size={22} fallback={Palette} fallbackColor={FOREST} />
+              Design
+            </button>
+            <PopoverLayer anchorRef={designBtnRef} open={designOpen} onClose={closeDesign} width={320} maxHeight={560}>
+              <div style={{ padding: 16, borderRadius: 22, backgroundColor: NEU.surface, border: CARD_BORDER, boxShadow: CARD_SHADOW }}>
+                <PanelTitle emoji="Artist palette" hint="Every email this conference sends uses this look. The email beside you changes as you pick.">
+                  Design
+                </PanelTitle>
+                <DesignPanel design={design} />
+              </div>
+            </PopoverLayer>
+          </>
+        )}
+        <div className="ml-auto flex-shrink-0">
           <Segmented
             value={mode}
             onChange={setMode}
             options={[
-              { value: 'edit' as const, label: 'WRITE', icon: Pencil },
-              { value: 'preview' as const, label: 'SEE IT FOR REAL', icon: Eye },
+              { value: 'edit' as const, label: 'Write', icon: Pencil },
+              { value: 'preview' as const, label: 'See it for real', icon: Eye },
             ]}
           />
         </div>
@@ -2210,6 +2303,7 @@ export default function EmailComposer({
     <div>
       {builderHeader}
       {reachSlot}
+      {subjectCard}
 
       {suggest && mode === 'edit' && (
         <TokenSuggest
@@ -2220,80 +2314,23 @@ export default function EmailComposer({
         />
       )}
 
+      {/* Two columns: the email (written in place, so it IS the live preview)
+          and, beside it, whatever is selected, or the send checklist. */}
       <div
         className="grid gap-4 items-start"
-        // 268 rather than 256 once there is room for it: the rail sections
-        // gained Files, Design and Recipients, and a roster row has to hold an
-        // avatar, a name, an address and a delegation. Below 1280 it stays at
-        // 256, because down there the extra 12px would come straight off a
-        // sheet that is already rendering well under its real 600px width.
-        style={wide ? { gridTemplateColumns: `${roomy ? 268 : 256}px minmax(0,1fr) 296px` } : { gridTemplateColumns: 'minmax(0,1fr)' }}
+        style={wide ? { gridTemplateColumns: 'minmax(0,1fr) 300px' } : { gridTemplateColumns: 'minmax(0,1fr)' }}
       >
-        {/* ── 1 · PALETTE ── */}
-        <div
-          className={wide ? 'lg:sticky' : ''}
-          style={{ ...panelStyle, top: 16, overflow: 'hidden', display: 'flex', flexDirection: wide ? 'row' : 'column' }}
-        >
-          {/* the slim rail */}
-          <div
-            className={wide ? 'flex flex-col gap-1' : 'flex flex-row gap-1'}
-            style={{
-              padding: 8,
-              backgroundColor: 'rgba(27,56,40,0.05)',
-              boxShadow: NEU.inSm,
-              flexShrink: 0,
-            }}
-          >
-            {paletteRail.map(t => {
-              const active = paletteTab === t.key;
-              return (
-                <button
-                  key={t.key}
-                  type="button"
-                  title={`${t.label}, ${t.hint}`}
-                  aria-label={`${t.label}. ${t.hint}`}
-                  aria-pressed={active}
-                  onClick={() => setPaletteTab(t.key)}
-                  className="inline-flex items-center justify-center focus:outline-none"
-                  style={{
-                    width: wide ? 44 : undefined,
-                    flex: wide ? undefined : 1,
-                    minWidth: 40,
-                    height: 44,
-                    borderRadius: 14,
-                    border: 'none',
-                    background: active ? `linear-gradient(135deg, ${FOREST}, #2E6041)` : 'transparent',
-                    color: active ? GOLD : SOFT,
-                    cursor: 'pointer',
-                    boxShadow: active ? '0 3px 9px rgba(27,56,40,0.3)' : 'none',
-                    transitionProperty: 'background, color, box-shadow',
-                    transitionDuration: '220ms',
-                    transitionTimingFunction: EASE,
-                  }}
-                >
-                  <t.icon size={17} strokeWidth={2.3} />
-                </button>
-              );
-            })}
-          </div>
-          <div className="min-w-0 flex-1" style={{ padding: 14 }}>
-            {palettePanel}
-          </div>
-        </div>
-
-        {/* ── 2 · CANVAS ── */}
         {canvasColumn}
 
-        {/* ── 3 · PROPERTIES ── */}
         {wide ? (
-          <div className="lg:sticky" style={{ ...panelStyle, top: 16, padding: 16 }}>
+          <div className="lg:sticky" style={{ ...panelStyle, top: 16, padding: 16, marginTop: selected ? 0 : 22, position: 'sticky' }}>
             {properties}
           </div>
         ) : (
           <div
             style={{
               ...panelStyle,
-              position: selected ? 'fixed' : 'static',
+              position: selected ? 'fixed' : 'relative',
               left: selected ? 8 : undefined,
               right: selected ? 8 : undefined,
               bottom: selected ? 8 : undefined,
@@ -2301,6 +2338,7 @@ export default function EmailComposer({
               maxHeight: selected ? '58vh' : undefined,
               overflowY: selected ? 'auto' : undefined,
               padding: 16,
+              marginTop: selected ? 0 : 18,
             }}
           >
             {selected && (
@@ -2309,9 +2347,9 @@ export default function EmailComposer({
                 onClick={() => setSelectedId(null)}
                 aria-label="Close"
                 className="absolute focus:outline-none inline-flex items-center justify-center"
-                style={{ top: 10, right: 10, width: 32, height: 32, borderRadius: 999, border: CARD_BORDER, background: '#FFFDF8', color: SOFT, cursor: 'pointer' }}
+                style={{ top: 10, right: 10, width: 36, height: 36, borderRadius: 999, border: CARD_BORDER, background: '#FFFDF8', color: SOFT, cursor: 'pointer' }}
               >
-                <X size={14} strokeWidth={2.6} />
+                <X size={15} strokeWidth={2.6} />
               </button>
             )}
             {properties}
@@ -2440,8 +2478,8 @@ function ButtonBlockCanvas({
               aria-label="Where this button goes"
               className="focus:outline-none"
               style={{
-                minHeight: 34, width: 236, borderRadius: 999, padding: '7px 13px',
-                fontFamily: OUTFIT, fontSize: 11.5, color: INK,
+                minHeight: 38, width: 260, maxWidth: '100%', borderRadius: 999, padding: '7px 13px',
+                fontFamily: OUTFIT, fontSize: 16, color: INK,
                 backgroundColor: '#FFFDF8', border: '1px solid rgba(27,56,40,0.13)', boxShadow: NEU.inSm,
               }}
             />
@@ -2492,8 +2530,8 @@ function ButtonBlockCanvas({
 function ButtonProperties({ block, onPatch, calendarUnavailable }: { block: ButtonBlock; onPatch: (patch: Partial<ButtonBlock>) => void; calendarUnavailable: boolean }) {
   return (
     <>
-      <PanelTitle hint="One button, one place to go. The colour comes from your email theme.">BUTTON</PanelTitle>
-      <FieldLabel>WHAT IT SAYS</FieldLabel>
+      <PanelTitle emoji="Ticket" hint="One button, one place to go. Its colour comes from Design.">Button</PanelTitle>
+      <FieldLabel>What it says</FieldLabel>
       <input
         value={block.label}
         onChange={e => onPatch({ label: e.target.value })}
@@ -2501,7 +2539,7 @@ function ButtonProperties({ block, onPatch, calendarUnavailable }: { block: Butt
         style={FIELD_STYLE}
         className="mb-4"
       />
-      <FieldLabel>WHERE IT GOES</FieldLabel>
+      <FieldLabel>Where it goes</FieldLabel>
       <select
         value={block.destination}
         onChange={e => onPatch({ destination: e.target.value as ButtonDestination })}
@@ -2514,7 +2552,7 @@ function ButtonProperties({ block, onPatch, calendarUnavailable }: { block: Butt
       </select>
       {block.destination === 'apply_page' && (
         <>
-          <FieldLabel>WHICH ROLE</FieldLabel>
+          <FieldLabel>Which role</FieldLabel>
           <select value={block.role ?? ''} onChange={e => onPatch({ role: e.target.value || undefined })} style={{ ...FIELD_STYLE, cursor: 'pointer' }} className="mb-3">
             <option value="">Any role</option>
             {ROLE_OPTIONS.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
@@ -2523,7 +2561,7 @@ function ButtonProperties({ block, onPatch, calendarUnavailable }: { block: Butt
       )}
       {block.destination === 'custom' && (
         <>
-          <FieldLabel>THE LINK</FieldLabel>
+          <FieldLabel>The link</FieldLabel>
           <input value={block.url ?? ''} onChange={e => onPatch({ url: e.target.value })} placeholder="https://…" style={FIELD_STYLE} className="mb-3" />
         </>
       )}
@@ -2562,7 +2600,7 @@ function ImageProperties({
 
   return (
     <>
-      <PanelTitle hint="Anything up to 5MB: JPEG, PNG, WebP or GIF.">PICTURE</PanelTitle>
+      <PanelTitle emoji="Framed picture" hint="Anything up to 5MB: JPEG, PNG, WebP or GIF.">Picture</PanelTitle>
       <input
         ref={fileRef}
         type="file"
@@ -2595,7 +2633,7 @@ function ImageProperties({
           <img src={block.url} alt={block.alt || ''} style={{ maxWidth: '100%', maxHeight: 150, borderRadius: 8, display: 'block', outline: '1px solid rgba(0,0,0,0.1)', outlineOffset: -1 }} />
         ) : (
           <>
-            <DuoGlyph icon={ImageIcon} size={28} />
+            <Emoji3D name="Framed picture" size={30} fallback={ImageIcon} fallbackColor={FOREST} />
             <span style={{ fontFamily: OUTFIT, fontSize: 12, fontWeight: 700, color: INK }}>
               {uploading ? 'Uploading…' : 'Drop a picture, or click'}
             </span>
@@ -2603,14 +2641,14 @@ function ImageProperties({
         )}
       </div>
       <ActionButton size="sm" tone="quiet" icon={Upload} onClick={() => fileRef.current?.click()} disabled={uploading} style={{ width: '100%' }}>
-        {uploading ? 'UPLOADING…' : block.url ? 'CHOOSE ANOTHER' : 'CHOOSE A PICTURE'}
+        {uploading ? 'Uploading…' : block.url ? 'Choose another' : 'Choose a picture'}
       </ActionButton>
       {error && (
         <p className="mt-2" style={{ fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 700, color: RED, textWrap: 'pretty' }}>{error}</p>
       )}
 
       <div className="mt-4">
-        <FieldLabel>DESCRIBE IT</FieldLabel>
+        <FieldLabel>Describe it</FieldLabel>
         <input
           value={block.alt}
           onChange={e => onPatch({ alt: e.target.value })}
