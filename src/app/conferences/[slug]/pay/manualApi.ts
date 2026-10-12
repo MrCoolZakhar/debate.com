@@ -5,7 +5,11 @@
 //
 // A STARTED PAYMENT is the ticked items and their price, held 3 days, until
 // the payer attaches a proof (then it waits for the organizer's review) or
-// cancels it. Proof is always required to finish a manual payment.
+// cancels it. Proof is required to finish a manual payment, except for
+// in-person payment (prompt 114): finishWithoutProof sends it to the
+// organizers' review with no file, and a proof can still be added later
+// (replace_proof). start_manual_payment answers code 'not_ready' while the
+// conference has not finished setting up payments (store_flags.fin_link_required).
 
 import { getFreshAuthedClient } from '@/lib/supabase-auth';
 import { friendlyError, plainOrFallback } from '@/lib/friendlyError';
@@ -102,6 +106,11 @@ export function replaceProof(batchId: string, path: string) {
 /** A NEW proof on a payment the organizers did not accept (prompt 102): the SAME payment goes back to review. code 'items_changed' = start a new payment instead. */
 export function resubmitProof(batchId: string, path: string) {
   return call('resubmit_proof', { p_batch_id: batchId, p_path: path }, 'Your proof could not be sent. Try again in a moment.', () => ({}));
+}
+
+/** In-person payment only (prompt 114): the started payment goes to the organizers' review with no proof. code 'proof_required' on any other kind. */
+export function finishWithoutProof(batchId: string) {
+  return call('finish_payment_without_proof', { p_batch_id: batchId }, 'Your payment could not be sent. Try again in a moment.', () => ({}));
 }
 
 export function cancelStartedPayment(batchId: string) {

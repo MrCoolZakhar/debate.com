@@ -79,7 +79,7 @@ export interface PayDelegation {
 export interface PayOverview {
   conference: {
     id: string; slug: string; acronym: string | null; full_name: string; currency: string;
-    method: 'stripe' | 'manual' | null; manual_kind: 'link' | 'qr' | 'bank' | null;
+    method: 'stripe' | 'manual' | null; manual_kind: 'link' | 'qr' | 'bank' | 'in_person' | null;
     payment_url: string | null; instructions: string | null; qr_path: string | null;
     bank: { account_name?: string; account_number?: string; swift?: string; bank_name?: string; reference?: string } | null;
     ready: boolean; aid_open: boolean; contact_email: string | null;

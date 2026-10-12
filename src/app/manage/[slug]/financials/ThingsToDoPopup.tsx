@@ -6,26 +6,32 @@
 // pop-up moves on by itself; Skip moves on and leaves the item for later. Every
 // landed action fires 'gv-financials-todo-changed' so the rail badge re-reads,
 // and closing re-reads the dashboard (the page does that in onClose).
+// Since prompt 114: a missing or incomplete payment setup is the FIRST item
+// ("Finish Your Payment Setup", the server's sentence, "Choose how people
+// pay"), and a proof step for an in-person payment finished without a file
+// shows a calm gold "No Proof Uploaded" panel where the file would be.
 
 import { useEffect, useRef, useState } from 'react';
-import { CheckCircle2, CreditCard, ExternalLink, Landmark } from 'lucide-react';
+import { CheckCircle2, CircleAlert, CreditCard, ExternalLink, Landmark, Wallet } from 'lucide-react';
 import { PurchaseShell } from '@/components/purchase/purchaseKit';
 import PdfViewer, { type PdfZoom } from '@/components/documents/PdfViewer';
 import { friendlyError } from '@/lib/friendlyError';
 import { notifyOk } from '@/lib/appNotify';
 import {
   cents, closeMoneyTodo, recordRefundDifference, refundDifferenceByCard, uploadRefundProof, proofFileProblem, type ManualMethod, matchStripeRefund, notifyMoneyTodoChanged, readThingsToDo, reviewProof, signedProofUrl,
-  type ProofThing, type RefundItem, type TodoThing,
+  type ProofThing, type RefundItem, type SetupThing, type TodoThing,
 } from './financialsApi';
 import { READ_ONLY_LINE, Row, formatDate } from './dashboardKit';
 import RefundDialog from './RefundDialog';
 
-type Thing = { type: 'proof'; key: string; p: ProofThing } | { type: 'todo'; key: string; t: TodoThing };
+type Thing = { type: 'setup'; key: string; s: SetupThing } | { type: 'proof'; key: string; p: ProofThing } | { type: 'todo'; key: string; t: TodoThing };
 
 const REASON_MAX = 500;
 
-export default function ThingsToDoPopup({ conferenceId, readOnly, onClose }: {
+export default function ThingsToDoPopup({ conferenceId, readOnly, onClose, onOpenPaymentMethod }: {
   conferenceId: string; readOnly: boolean; onClose: () => void;
+  /** Closes this pop-up and opens the payment set-up (the setup item, prompt 114). */
+  onOpenPaymentMethod: () => void;
 }) {
   const [queue, setQueue] = useState<Thing[] | null>(null);
   const [loadErr, setLoadErr] = useState('');
@@ -40,6 +46,7 @@ export default function ThingsToDoPopup({ conferenceId, readOnly, onClose }: {
       if (!alive) return;
       const byDate = <T,>(a: T[], at: (x: T) => string) => [...a].sort((x, y) => at(x).localeCompare(at(y)));
       setQueue([
+        ...(r.setup ? [{ type: 'setup' as const, key: `s:${r.setup.kind}`, s: r.setup }] : []),
         ...byDate(r.proofs, p => p.uploaded_at ?? '').map(p => ({ type: 'proof' as const, key: `p:${p.batch_id}`, p })),
         ...byDate(r.todos, t => t.created_at ?? '').map(t => ({ type: 'todo' as const, key: `t:${t.id}`, t })),
       ]);
@@ -82,7 +89,9 @@ export default function ThingsToDoPopup({ conferenceId, readOnly, onClose }: {
           )}
           {current && (
             <div key={current.key}>
-              {current.type === 'proof'
+              {current.type === 'setup'
+                ? <SetupStep s={current.s} readOnly={readOnly} onOpen={onOpenPaymentMethod} onSkip={skip} />
+                : current.type === 'proof'
                 ? <ProofStep p={current.p} readOnly={readOnly} onDone={done} onSkip={skip} />
                 : <TodoStep t={current.t} conferenceId={conferenceId} readOnly={readOnly} onDone={done} onSkip={skip}
                     onRefund={(items) => setRefund({ items, currency: current.t.currency ?? 'USD', todoId: current.t.id })} />}
@@ -163,6 +172,21 @@ function PaidBy({ card }: { card: boolean }) {
   );
 }
 
+// ── 0. The payment setup (prompt 114) ─────────────────────────────────────
+
+function SetupStep({ s, readOnly, onOpen, onSkip }: { s: SetupThing; readOnly: boolean; onOpen: () => void; onSkip: () => void }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <span className="gv-fd-clear-disc" aria-hidden style={{ alignSelf: 'flex-start' }}><Wallet size={22} strokeWidth={2.2} /></span>
+      <h2 className="gv-fd-pop-title" style={{ paddingRight: 36 }}>Finish Your Payment Setup</h2>
+      <p style={{ margin: 0, fontSize: 15.5, lineHeight: 1.55 }}>{s.message}</p>
+      <Actions readOnly={readOnly} onSkip={onSkip}>
+        <button type="button" className="gv-st-btn gv-st-forest" onClick={onOpen}>Choose how people pay</button>
+      </Actions>
+    </div>
+  );
+}
+
 // ── 1. A proof ─────────────────────────────────────────────────────────────
 
 function ProofStep({ p, readOnly, onDone, onSkip }: { p: ProofThing; readOnly: boolean; onDone: () => void; onSkip: () => void }) {
@@ -205,7 +229,17 @@ function ProofStep({ p, readOnly, onDone, onSkip }: { p: ProofThing; readOnly: b
     <div className="grid gap-6" style={{ gridTemplateColumns: 'minmax(0,1fr)' }}>
       <div className="grid gap-6 md:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)]">
         <div style={{ position: 'relative', height: 'min(560px, calc(100dvh - 220px))', minHeight: 320, borderRadius: 16, background: '#FFFFFF', overflow: 'hidden' }}>
-          {!p.proof_path || urlFailed ? (
+          {p.no_proof ? (
+            <div role="note" style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 12, padding: 'clamp(20px, 4vw, 36px)', background: 'rgba(238,217,138,0.28)', boxShadow: 'inset 0 0 0 1.5px rgba(182,135,31,0.35)', borderRadius: 16 }}>
+              <span aria-hidden style={{ width: 48, height: 48, borderRadius: 14, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(238,217,138,0.7)', color: '#6B4E0E' }}>
+                <CircleAlert size={24} strokeWidth={2.2} />
+              </span>
+              <h3 style={{ margin: 0, fontSize: 21, fontWeight: 800, letterSpacing: '-0.01em', color: '#1C1410' }}>No Proof Uploaded</h3>
+              <p style={{ margin: 0, fontSize: 15.5, lineHeight: 1.55, color: '#1C1410', overflowWrap: 'anywhere' }}>
+                {p.payer_name || 'The payer'} says they paid {cents(p.total_cents, p.currency)} in person. Check that you received it before you accept
+              </p>
+            </div>
+          ) : !p.proof_path || urlFailed ? (
             <p className="gv-fd-note" style={{ padding: 20 }}>{!p.proof_path ? 'No file was attached to this payment.' : 'The proof could not be opened. Try again in a moment.'}</p>
           ) : !url ? (
             <div className="gv-fd-ph" style={{ position: 'absolute', inset: 0, boxShadow: 'none' }} aria-label="Opening the proof" />

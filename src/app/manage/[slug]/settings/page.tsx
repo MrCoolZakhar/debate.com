@@ -4632,6 +4632,7 @@ export default function SettingsPage() {
           : !view.external_payment_url && note.startsWith('this conference is free') ? 'It is free'
           : view.manual_kind === 'qr' ? 'Payment QR code'
           : view.manual_kind === 'bank' ? 'Bank transfer'
+          : view.manual_kind === 'in_person' ? 'In-person payment'
           : 'Payment link';
         const fin = `/manage/${view.slug}/financials`;
         const doors: { emoji: string; icon: LucideIcon; label: string; desc: string; href: string }[] = [

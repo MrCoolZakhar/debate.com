@@ -15,12 +15,16 @@
 // The Payment Method pop-up is the same flow opened at step 2 with the
 // current method chosen and its details filled in; it ends after step 3.
 // Card OR one manual kind, never both: switching asks first and is one call.
+// Since prompt 114: a fifth way, In-person payment (its instructions are
+// required, payers can finish without a proof), and in the Payment Method
+// pop-up a quiet "Set up later" under the cards while a way is in use: it asks
+// first, then nothing is in use and every saved detail stays for later.
 // Each step saves on Continue, so closing halfway keeps what was saved.
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import {
-  ArrowLeft, Building2, Check, CircleCheck, CreditCard, Gift, ImageUp, Link2, QrCode, ReceiptText, Wallet, X,
+  ArrowLeft, Building2, Check, CircleCheck, CreditCard, Gift, HandCoins, ImageUp, Link2, QrCode, ReceiptText, Wallet, X,
 } from 'lucide-react';
 import type { Conference } from '@/app/manage/[slug]/layout';
 import { PurchaseShell, PURCHASE_CSS } from '@/components/purchase/purchaseKit';
@@ -37,7 +41,7 @@ import ApplicationFeeSection from '../ApplicationFeeSection';
 import AddonsSection from '../AddonsSection';
 import StripeState from './StripeState';
 import {
-  METHOD_NAME, currentMethod, setPaymentSetup, uploadPaymentQr, sessionSet, welcomeMarkerKey,
+  METHOD_NAME, currentMethod, setPaymentSetup, setUpLater, uploadPaymentQr, sessionSet, welcomeMarkerKey,
   connectStart, type BankDetails, type MethodKey,
 } from './paymentApi';
 
@@ -98,7 +102,11 @@ const METHOD_CARDS: { key: MethodKey; title: string; desc: string; icon: React.R
     desc: 'Show a QR code payers scan with their banking app (for example UPI). You confirm payments by reviewing the proofs payers upload.' },
   { key: 'bank', title: 'Bank transfer', icon: <Building2 size={24} strokeWidth={2.2} />,
     desc: 'Show your bank details with copy buttons. You confirm payments by reviewing the proofs payers upload.' },
+  { key: 'in_person', title: 'In-person payment', icon: <HandCoins size={24} strokeWidth={2.2} />,
+    desc: 'Payers pay you in person, for example in cash at registration. They see your instructions and can finish without a proof. You confirm each payment yourself.' },
 ];
+
+const IN_PERSON_NOTE_NEEDED = 'Add the instructions for paying in person, for example where and when to pay.';
 
 const qrUrl = (path: string) => `${SUPABASE_URL}/storage/v1/object/public/conference-assets/${path.split('/').map(encodeURIComponent).join('/')}`;
 
@@ -134,6 +142,7 @@ export default function PaymentFlow({ conference, mode, startStep, readOnly, onC
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
   const [askSwitch, setAskSwitch] = useState(false);
+  const [askLater, setAskLater] = useState(false);
 
   // What was set up, for the success screen. A failed read only leaves the summary out.
   useEffect(() => {
@@ -174,6 +183,7 @@ export default function PaymentFlow({ conference, mode, startStep, readOnly, onC
       const sw = bank.swift.trim().toUpperCase();
       if (sw && !/^[A-Z0-9]{8}([A-Z0-9]{3})?$/.test(sw)) e.swift = 'A SWIFT or BIC code has 8 or 11 letters and numbers.';
     }
+    if (method === 'in_person' && !note.trim()) e.note = IN_PERSON_NOTE_NEEDED;
     if (note.trim().length > NOTE_MAX) e.note = 'Keep the instructions under 500 characters.';
     return e;
   };
@@ -231,6 +241,16 @@ export default function PaymentFlow({ conference, mode, startStep, readOnly, onC
     if (await save()) afterSave();
   });
 
+  // "Set up later" (prompt 114): one call, then nothing is in use; the details stay.
+  const later = () => busyRun(async () => {
+    const r = await setUpLater(conference.id);
+    if (!r.ok) { setErr(r.error); return; }
+    setAskLater(false);
+    notifyOk('Payments set up later', 'financials');
+    onChanged();
+    onClose();
+  });
+
   const pickQr = (f: File | null) => {
     setErrs(e => ({ ...e, qr: undefined }));
     if (!f) return;
@@ -242,10 +262,12 @@ export default function PaymentFlow({ conference, mode, startStep, readOnly, onC
 
   const fieldErr = (k: keyof FieldErrs) => errs[k] ? <p className="gv-st-err" role="alert">{errs[k]}</p> : null;
 
+  const inPerson = method === 'in_person';
   const notesField = (
     <div>
-      <label className="gv-fd-label" htmlFor="gv-pf-note">Instructions for payers (optional)</label>
-      <textarea id="gv-pf-note" className="gv-fd-text" maxLength={NOTE_MAX} value={note} disabled={readOnly}
+      <label className="gv-fd-label" htmlFor="gv-pf-note">{inPerson ? 'Instructions for payment' : 'Instructions for payers (optional)'}</label>
+      <textarea id="gv-pf-note" className="gv-fd-text" maxLength={NOTE_MAX} value={note} disabled={readOnly} required={inPerson}
+        placeholder={inPerson ? 'For example: Pay in cash at the registration desk on day one' : undefined}
         onChange={e => { setNote(e.target.value); setErrs(x => ({ ...x, note: undefined })); }} aria-invalid={!!errs.note} />
       <p className="gv-fd-count">{note.length} / {NOTE_MAX}</p>
       {fieldErr('note')}
@@ -293,7 +315,7 @@ export default function PaymentFlow({ conference, mode, startStep, readOnly, onC
         <div className="gv-pf-cards" role="radiogroup" aria-label="How people pay you">
           {cards.map(m => (
             <button key={m.key} type="button" role="radio" aria-checked={method === m.key} className="gv-pf-card"
-              onClick={() => { setMethod(m.key); setErrs({}); setAskSwitch(false); }}>
+              onClick={() => { setMethod(m.key); setErrs({}); setAskSwitch(false); setAskLater(false); }}>
               {method === m.key && <span className="gv-pf-tick" aria-hidden><Check size={15} strokeWidth={3} /></span>}
               <span className="gv-pf-icon" aria-hidden>{m.icon}</span>
               <p className="gv-pf-title">{m.title}</p>
@@ -310,6 +332,11 @@ export default function PaymentFlow({ conference, mode, startStep, readOnly, onC
           <button type="button" className="gv-st-link" onClick={() => setStep(1)}>Change</button>
         </p>
         {fieldErr('method')}{fieldErr('manual_kind')}
+        {mode === 'payment' && current && !readOnly && !askLater && (
+          <p className="gv-fd-note" style={{ marginTop: 14 }}>
+            <button type="button" className="gv-st-link" onClick={() => { setErr(''); setAskLater(true); }}>Set up later</button>
+          </p>
+        )}
       </div>
     );
     primary = { label: 'Continue', disabled: !method || (method === 'card' && !cardOk), onClick: () => { if (method) setStep(3); } };
@@ -372,6 +399,10 @@ export default function PaymentFlow({ conference, mode, startStep, readOnly, onC
           {notesField}
         </div>
       );
+      primary = { label: 'Save', onClick: () => { void continueStep3(); } };
+    } else if (method === 'in_person') {
+      title = 'In-Person Payment';
+      body = <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>{notesField}</div>;
       primary = { label: 'Save', onClick: () => { void continueStep3(); } };
     } else if (method === 'bank') {
       title = 'Bank Transfer';
@@ -483,6 +514,17 @@ export default function PaymentFlow({ conference, mode, startStep, readOnly, onC
                   </div>
                 </div>
               )}
+              {askLater && step === 2 && (
+                <div className="gv-fd-warn" role="alertdialog" aria-label="Set up payments later">
+                  <p style={{ margin: '0 0 12px' }}>Set up payments later? Nobody can pay until you choose how people pay you. What you added is kept for when you come back</p>
+                  <div className="flex items-center gap-3 flex-wrap">
+                    <button type="button" className="gv-st-btn gv-st-forest" disabled={busy} onClick={() => { void later(); }} autoFocus>
+                      {busy ? 'Saving' : 'Set up later'}
+                    </button>
+                    <button type="button" className="gv-st-btn gv-st-outline" disabled={busy} onClick={() => setAskLater(false)}>Go back</button>
+                  </div>
+                </div>
+              )}
               {err && <p className="gv-st-err" role="alert">{err}</p>}
               <div className="gv-fd-footbar">
                 {showBack && (
@@ -490,7 +532,7 @@ export default function PaymentFlow({ conference, mode, startStep, readOnly, onC
                     <ArrowLeft size={16} strokeWidth={2.4} aria-hidden /> Back
                   </button>
                 )}
-                {primary && !askSwitch && (
+                {primary && !askSwitch && !(askLater && step === 2) && (
                   <button type="button" className="gv-st-btn gv-st-forest" disabled={readOnly || busy || primary.disabled} onClick={primary.onClick}>
                     {busy ? 'Saving' : primary.label}
                   </button>

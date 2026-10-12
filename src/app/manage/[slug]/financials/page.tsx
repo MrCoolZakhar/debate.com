@@ -41,18 +41,21 @@ import { sessionDel, sessionGet, sessionSet, welcomeMarkerKey, welcomeSeenKey } 
 import ThingsToDoPopup from './ThingsToDoPopup';
 import { replaceUrlInPlace } from '@/lib/replaceUrlInPlace';
 
-const TODO_WORDS: Record<'proof' | TodoKind, [string, string]> = {
+const TODO_WORDS: Record<'setup' | 'proof' | TodoKind, [string, string]> = {
   proof: ['proof to review', 'proofs to review'],
   refund_request: ['refund request', 'refund requests'],
   refund_not_received: ['refund not received', 'refunds not received'],
   stripe_refund_to_match: ['Stripe refund to match', 'Stripe refunds to match'],
   dispute: ['dispute', 'disputes'],
   refund_due: ['refund due', 'refunds due'],
+  setup: ['payment setup to finish', 'payment setups to finish'],
 };
 
 function todoLine(t: ThingsToDo | null): string {
   if (!t) return '';
-  const counts = new Map<'proof' | TodoKind, number>();
+  const counts = new Map<'setup' | 'proof' | TodoKind, number>();
+  // The payment setup to finish counts as one (prompt 114), first.
+  if (t.setup) counts.set('setup', 1);
   if (t.proofs.length) counts.set('proof', t.proofs.length);
   for (const x of t.todos) counts.set(x.kind, (counts.get(x.kind) ?? 0) + 1);
   return [...counts.entries()]
@@ -96,7 +99,8 @@ export default function FinancialsDashboardPage() {
   /** After anything in the payment flow or a settings pop-up was saved. */
   const afterChange = useCallback(() => { refreshConferenceQuiet(); reload(); }, [refreshConferenceQuiet, reload]);
 
-  // ?open=payment | fee | addons | vouchers | welcome4 opens that pop-up once, then leaves the URL.
+  // ?open=payment | fee | addons | vouchers | welcome4 | todo opens that pop-up once, then leaves the URL.
+  // ?open=todo is the link in the owner's email to organizers (prompt 114).
   const openParam = params.get('open');
   useEffect(() => {
     if (!conferenceId || openParamDone.current || !openParam) return;
@@ -108,6 +112,7 @@ export default function FinancialsDashboardPage() {
       if (which === 'payment') setFlow({ mode: 'payment' });
       else if (which === 'welcome4') setFlow({ mode: 'welcome', start: 4 });
       else if (which === 'fee' || which === 'addons' || which === 'vouchers') setSetting(which);
+      else if (which === 'todo') setPopup('todo');
     });
     replaceUrlInPlace(pathname);
   }, [conferenceId, openParam, pathname]);
@@ -323,6 +328,7 @@ export default function FinancialsDashboardPage() {
           conferenceId={conference.id}
           readOnly={financialsReadOnly}
           onClose={() => { setPopup(null); reload(); }}
+          onOpenPaymentMethod={() => { setPopup(null); setFlow(needsSetup ? { mode: 'welcome' } : { mode: 'payment' }); }}
         />
       )}
 

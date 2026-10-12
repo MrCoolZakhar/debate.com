@@ -167,7 +167,7 @@ export interface PaymentReadinessConference {
   /** Gavelling's own Stripe account collects (no Connect needed). Ready. */
   platform_collects?: boolean | null;
   /** Prompt 94: a manual conference's kind and what that kind needs. */
-  manual_kind?: 'link' | 'qr' | 'bank' | null;
+  manual_kind?: 'link' | 'qr' | 'bank' | 'in_person' | null;
   payment_qr_path?: string | null;
   bank_details?: { account_number?: string | null } | null;
 }
@@ -182,6 +182,7 @@ export function conferencePaymentsReady(conf: PaymentReadinessConference): boole
     const kind = conf.manual_kind ?? 'link';
     if (kind === 'qr') return !!conf.payment_qr_path?.trim();
     if (kind === 'bank') return !!conf.bank_details?.account_number?.trim();
+    if (kind === 'in_person') return !!conf.external_payment_note?.trim();
     return !!(conf.external_payment_url?.trim() || conf.external_payment_note?.trim());
   }
   if (conf.payment_method === 'stripe') {

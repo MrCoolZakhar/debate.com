@@ -96,8 +96,10 @@ export default function PayPage() {
     batchId: string; totalCents: number; currency: string; mode: ManualMode; tabOpened?: boolean;
     /** 'resubmit': the organizer's reason, and the payment's items for "Start a new payment". */
     reason?: string | null; itemIds?: string[];
+    /** In-person payment (prompt 114): open asking "Finish without a proof?"; or add a first proof to a payment sent without one. */
+    askWithout?: boolean; noProofYet?: boolean;
   } | null>(null);
-  const [wayPop, setWayPop] = useState<{ kind: 'qr' | 'bank'; totalCents: number; currency: string } | null>(null);
+  const [wayPop, setWayPop] = useState<{ kind: 'qr' | 'bank' | 'in_person'; totalCents: number; currency: string } | null>(null);
   const [cancelFor, setCancelFor] = useState<string | null>(null);
   // Outstanding or Completed (prompt 101), kept in the URL as ?tab=completed.
   const [tab, setTabState] = useState<'outstanding' | 'completed'>('outstanding');
@@ -365,7 +367,7 @@ export default function PayPage() {
       if (r.code === 'item_in_started_payment' && r.startedBatchId) {
         const mine = !!started?.payments.some(p => p.batch_id === r.startedBatchId);
         setLockFor({ batchId: r.startedBatchId, mine });
-      } else setNotice(r.error);
+      } else setNotice(r.error); // also code 'not_ready': payments are not set up yet (prompt 114)
       return;
     }
     // Any payment that starts clears the applied code.
@@ -425,7 +427,8 @@ export default function PayPage() {
   // A started payment's way to pay: the link opens straight away (inside the
   // click); a QR or bank details open their own small pop-up.
   const kind = c.manual_kind ?? 'link';
-  const wayLabel = kind === 'qr' ? 'Open payment QR' : kind === 'bank' ? 'View bank details' : (c.payment_url ? 'Open payment page' : null);
+  const wayLabel = kind === 'qr' ? 'Open payment QR' : kind === 'bank' ? 'View bank details' : kind === 'in_person' ? 'Payment instructions'
+    : (c.payment_url ? 'Open payment page' : null);
   const openWay = (p: StartedPayment) => {
     if (kind === 'link') { if (c.payment_url) window.open(c.payment_url, '_blank', 'noopener,noreferrer'); return; }
     setWayPop({ kind, totalCents: p.total_cents, currency: p.currency });
@@ -598,7 +601,9 @@ export default function PayPage() {
                   onOpenWay={openWay}
                   onCancel={(p) => setCancelFor(p.batch_id)}
                   onViewProof={(path) => { void viewProof(path); }}
-                  onReplace={(p) => setManualPop({ batchId: p.batch_id, totalCents: p.total_cents, currency: p.currency, mode: 'replace' })}
+                  onReplace={(p) => setManualPop({ batchId: p.batch_id, totalCents: p.total_cents, currency: p.currency, mode: 'replace', noProofYet: !p.proof_path })}
+                  inPerson={kind === 'in_person'}
+                  onFinishWithout={(p) => setManualPop({ batchId: p.batch_id, totalCents: p.total_cents, currency: p.currency, mode: 'upload', askWithout: true })}
                   onRestart={(p) => setManualPop({
                     batchId: p.batch_id, totalCents: p.total_cents, currency: p.currency, mode: 'resubmit',
                     reason: p.review_note, itemIds: p.items.map(i => i.invoice_id),
@@ -697,6 +702,8 @@ export default function PayPage() {
           mode={manualPop.mode}
           tabOpened={manualPop.tabOpened}
           reason={manualPop.reason}
+          askWithoutProof={manualPop.askWithout}
+          noProofYet={manualPop.noProofYet}
           onStartNew={manualPop.itemIds ? () => {
             // The old flow: a new payment for this payment's items that can still be paid.
             const ids = (manualPop.itemIds ?? []).filter(id => {

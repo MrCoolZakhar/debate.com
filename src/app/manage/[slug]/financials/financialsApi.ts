@@ -52,7 +52,9 @@ export interface FinancialsDashboard {
     is_free?: boolean;
     has_qr?: boolean;
     has_bank?: boolean;
-    manual_kind?: 'link' | 'qr' | 'bank' | null;
+    manual_kind?: 'link' | 'qr' | 'bank' | 'in_person' | null;
+    /** Prompt 114: the conference has payment instructions (what in-person payment needs). */
+    has_instructions?: boolean;
     registration_fee: null | { label: string | null; amount_cents: number; currency: string; applies_to: string | null; active: boolean };
     addons_active: number; addons_sold: number; vouchers_active: number; vouchers_used: number;
   };
@@ -72,6 +74,8 @@ export interface ProofThing {
   replaced_count: number;
   uploaded_at: string;
   items: ProofItem[];
+  /** Prompt 114: an in-person payment finished without a file. */
+  no_proof?: boolean;
 }
 
 export type TodoKind = 'refund_request' | 'refund_not_received' | 'stripe_refund_to_match' | 'dispute' | 'refund_due';
@@ -95,7 +99,10 @@ export interface TodoThing {
   card_items?: CardItem[];
 }
 
-export interface ThingsToDo { proofs: ProofThing[]; todos: TodoThing[] }
+/** Prompt 114: the payment setup is missing or incomplete (upcoming or undated, never free conferences). */
+export interface SetupThing { kind: string; message: string }
+
+export interface ThingsToDo { proofs: ProofThing[]; todos: TodoThing[]; setup: SetupThing | null }
 
 /** A refundable item, as the refund dialog takes it (kept general for Invoices). */
 export interface RefundItem { invoice_id: string; label: string; amount_cents: number; paid_by_card: boolean }
@@ -142,6 +149,9 @@ export async function readThingsToDo(conferenceId: string): Promise<ThingsToDo> 
   return {
     proofs: Array.isArray(a.proofs) ? (a.proofs as ProofThing[]) : [],
     todos: Array.isArray(a.todos) ? (a.todos as TodoThing[]) : [],
+    setup: a.setup && typeof a.setup === 'object' && !Array.isArray(a.setup) && typeof (a.setup as SetupThing).message === 'string'
+      ? { kind: String((a.setup as SetupThing).kind ?? ''), message: (a.setup as SetupThing).message }
+      : null,
   };
 }
 

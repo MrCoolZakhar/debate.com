@@ -66,8 +66,8 @@ export interface Conference {
   payment_method: string | null;
   external_payment_url: string | null;
   external_payment_note: string | null;
-  /** Which manual way to pay (prompt 94): a link, a QR code or bank details. */
-  manual_kind: 'link' | 'qr' | 'bank' | null;
+  /** Which manual way to pay (prompt 94): a link, a QR code or bank details; in person since prompt 114. */
+  manual_kind: 'link' | 'qr' | 'bank' | 'in_person' | null;
   /** A path in the public conference-assets bucket (manual_kind 'qr'). */
   payment_qr_path: string | null;
   bank_details: { account_name?: string; account_number?: string; swift?: string; bank_name?: string; reference?: string } | null;

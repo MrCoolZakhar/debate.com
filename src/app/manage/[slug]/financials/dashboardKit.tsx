@@ -266,6 +266,9 @@ export function paymentMethodWords(s: S): { fact: string; sub: string } {
   if (s.manual_kind === 'bank') {
     return { fact: 'Bank transfer', sub: s.has_bank ? 'Payers send a transfer, then upload a proof' : 'Add your bank details to start taking payments' };
   }
+  if (s.manual_kind === 'in_person') {
+    return { fact: 'In-person payment', sub: s.has_instructions ? 'Payers pay you in person, then you confirm it' : 'Add your instructions to start taking payments' };
+  }
   return { fact: 'Payment link', sub: s.has_external_url ? 'Payers pay on your page, then upload a proof' : 'Add your payment link to start taking payments' };
 }
 
@@ -286,7 +289,7 @@ export function PaymentMethodCard({ s, onOpen, readOnly }: { s: S; onOpen: () =>
   return (
     <SettingCard
       title="Payment Method" icon={{ emoji: 'Credit card', lucide: CreditCard, tint: TINT_GREEN }}
-      hint="How participants pay you. Card payments go straight to your own Stripe account. With a payment link, QR code or bank transfer, the payer uploads a proof for you to check."
+      hint="How participants pay you. Card payments go straight to your own Stripe account. With a payment link, QR code or bank transfer, the payer uploads a proof for you to check. With in-person payment, you confirm each payment yourself."
       fact={fact} sub={sub} onOpen={onOpen} readOnly={readOnly}
     />
   );

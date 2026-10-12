@@ -8,6 +8,9 @@
 //   pending         Waiting for the organizer to review, View proof, Replace proof
 //   rejected        Proof not accepted with the organizer's reason, Upload a new proof
 // `highlight` scrolls one into view and rings it (from an item's lock).
+// In-person payment (prompt 114): awaiting_proof also offers "Finish without
+// proof"; a pending payment sent without a proof says so, has no View proof,
+// and offers "Add a proof" (replace_proof) instead of Replace proof.
 
 import { useEffect, useRef } from 'react';
 import { Clock, Hourglass, XCircle } from 'lucide-react';
@@ -16,7 +19,7 @@ import { DANGER, DEEP_GOLD, INK_SOFT } from './payKit';
 import { money, shortDate } from './payApi';
 import { timeLeft, type StartedPayment } from './manualApi';
 
-export default function StartedPayments({ payments, highlight, wayLabel, onUpload, onOpenWay, onCancel, onViewProof, onReplace, onRestart }: {
+export default function StartedPayments({ payments, highlight, wayLabel, onUpload, onOpenWay, onCancel, onViewProof, onReplace, onRestart, inPerson, onFinishWithout }: {
   payments: StartedPayment[];
   highlight: string | null;
   /** "Open payment page", "Open payment QR" or "View bank details"; null hides the button. */
@@ -29,6 +32,10 @@ export default function StartedPayments({ payments, highlight, wayLabel, onUploa
   onViewProof: (path: string) => void;
   onReplace: (p: StartedPayment) => void;
   onRestart: (p: StartedPayment) => void;
+  /** The conference takes in-person payment (prompt 114). */
+  inPerson?: boolean;
+  /** Opens the proof pop-up with "Finish without proof?" asking. */
+  onFinishWithout?: (p: StartedPayment) => void;
 }) {
   const now = useNow(60_000);
   const refs = useRef(new Map<string, HTMLDivElement>());
@@ -60,7 +67,7 @@ export default function StartedPayments({ payments, highlight, wayLabel, onUploa
                     <p className="gv-pay-state" style={{ margin: 0, color: DEEP_GOLD }}><Clock size={15} strokeWidth={2.4} aria-hidden /> {left ?? 'Waiting for your proof'}</p>
                   )}
                   {p.status === 'pending' && (
-                    <p className="gv-pay-state" style={{ margin: 0, color: DEEP_GOLD }}><Hourglass size={15} strokeWidth={2.4} aria-hidden /> Waiting for the organizer to review</p>
+                    <p className="gv-pay-state" style={{ margin: 0, color: DEEP_GOLD }}><Hourglass size={15} strokeWidth={2.4} aria-hidden /> {inPerson && !p.proof_path ? 'Waiting for the organizers to confirm. No proof uploaded' : 'Waiting for the organizer to review'}</p>
                   )}
                   {p.status === 'rejected' && (
                     <p className="gv-pay-state" style={{ margin: 0, color: DANGER }}><XCircle size={15} strokeWidth={2.4} aria-hidden /> Proof not accepted</p>
@@ -85,6 +92,7 @@ export default function StartedPayments({ payments, highlight, wayLabel, onUploa
                   <>
                     <button type="button" className="gv-pay-btn gv-pay-forest" onClick={() => onUpload(p)}>Upload proof</button>
                     {wayLabel && <button type="button" className="gv-pay-btn gv-pay-outline" onClick={() => onOpenWay(p)}>{wayLabel}</button>}
+                    {inPerson && onFinishWithout && <button type="button" className="gv-pay-btn gv-pay-outline" onClick={() => onFinishWithout(p)}>Finish without proof</button>}
                     <button type="button" className="gv-pay-btn" style={{ background: DANGER, color: '#FFFFFF' }}
                       onClick={() => onCancel(p)}>Cancel</button>
                   </>
@@ -92,7 +100,7 @@ export default function StartedPayments({ payments, highlight, wayLabel, onUploa
                 {p.status === 'pending' && (
                   <>
                     {p.proof_path && <button type="button" className="gv-pay-btn gv-pay-outline" onClick={() => onViewProof(p.proof_path!)}>View proof</button>}
-                    <button type="button" className="gv-pay-btn gv-pay-outline" onClick={() => onReplace(p)}>Replace proof</button>
+                    <button type="button" className="gv-pay-btn gv-pay-outline" onClick={() => onReplace(p)}>{p.proof_path ? 'Replace proof' : 'Add a proof'}</button>
                   </>
                 )}
                 {p.status === 'rejected' && (
