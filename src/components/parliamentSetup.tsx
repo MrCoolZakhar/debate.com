@@ -37,6 +37,7 @@ export const COMMITTEE_TYPE_EMOJI: Record<CommitteeType, string> = {
   specialised: 'Balance scale',
   crisis: 'High voltage',
   custom: 'Classical building',
+  press: 'Newspaper',
 };
 
 /** The tinted disc behind each type's emoji. */
@@ -45,6 +46,7 @@ const TYPE_TINT: Record<CommitteeType, string> = {
   specialised: 'rgba(61,122,82,0.12)',
   crisis: 'rgba(139,32,32,0.09)',
   custom: 'rgba(238,217,138,0.42)',
+  press: 'rgba(47,96,118,0.12)',
 };
 
 /** What the type choice and the editor's header call each type. `custom` is
@@ -55,6 +57,7 @@ export const COMMITTEE_TYPE_TITLE: Record<CommitteeType, string> = {
   specialised: 'Specialised',
   crisis: 'Crisis',
   custom: 'Parliament or custom',
+  press: 'Press',
 };
 
 const TYPE_DESC: Record<CommitteeType, string> = {
@@ -62,13 +65,14 @@ const TYPE_DESC: Record<CommitteeType, string> = {
   specialised: 'Expert bodies: Security Council, ECOSOC, HRC, courts.',
   crisis: 'Character roles and live, fast-moving crises.',
   custom: 'Parties and benches with their own crests, or any format of your own.',
+  press: 'Outlets and journalists who report on every committee, with a Press Desk.',
 };
 
 export function CommitteeTypeEmoji({ type, size = 18 }: { type: CommitteeType; size?: number }) {
   return <Emoji3D name={COMMITTEE_TYPE_EMOJI[type] ?? COMMITTEE_TYPE_EMOJI['general-assembly']} size={size} />;
 }
 
-/** The create flow's first screen: four white cards, an emoji in a tinted disc,
+/** The create flow's first screen: five white cards (four while press is off), an emoji in a tinted disc,
  *  the name and one short line. Two columns from 560px, one below. */
 export function CommitteeTypeChooser({ types, onSelect }: { types: CommitteeType[]; onSelect: (t: CommitteeType) => void }) {
   return (

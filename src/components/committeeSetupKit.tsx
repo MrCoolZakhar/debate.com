@@ -35,7 +35,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from 'react';
-import { ImagePlus, RotateCcw, Loader2, Lock, X, Users2, Landmark, Scale, Zap, Minus, Plus, ChevronDown, Check, Languages } from 'lucide-react';
+import { ImagePlus, RotateCcw, Loader2, Lock, X, Users2, Newspaper, Landmark, Scale, Zap, Minus, Plus, ChevronDown, Check, Languages } from 'lucide-react';
 import Portal from '@/components/Portal';
 import { CircleFlag } from '@/components/CircleFlag';
 import { viewBox, useReposition } from '@/lib/visualViewport';
@@ -463,18 +463,19 @@ export function SetupGhostButton({ label, onClick }: { label: string; onClick: (
 /** The committee type. Governs rostering: GA + Specialised roster by country
  *  slots; Crisis rosters free-text character names; Custom is the parliamentary
  *  type (free-text seats plus seat GROUPS with their own crests). */
-export type CommitteeType = 'general-assembly' | 'specialised' | 'crisis' | 'custom';
+export type CommitteeType = 'general-assembly' | 'specialised' | 'crisis' | 'custom' | 'press';
 
 export const COMMITTEE_TYPE_LABEL: Record<string, string> = {
   'general-assembly': 'General Assembly',
   specialised: 'Specialised',
   crisis: 'Crisis',
   custom: 'Custom',
+  press: 'Press',
 };
 
 /** Declared in the order the editor's type picker offers them, rather than read
  *  off COMMITTEE_TYPE_LABEL's key order, so nothing can silently reshuffle. */
-export const COMMITTEE_TYPES: CommitteeType[] = ['general-assembly', 'specialised', 'crisis', 'custom'];
+export const COMMITTEE_TYPES: CommitteeType[] = ['general-assembly', 'specialised', 'crisis', 'custom', 'press'];
 
 export const DIFFICULTIES = ['beginner', 'intermediate', 'advanced', 'expert'] as const;
 export type Difficulty = (typeof DIFFICULTIES)[number];
@@ -533,12 +534,14 @@ export function effectiveEmblem(draft: CommitteeSetupDraft): string | null {
 
 /** Which roster a draft is building: countries, or free-text characters/members. */
 export function rosterModeOf(draft: CommitteeSetupDraft, type: CommitteeType): 'country' | 'character' {
-  return draft.presetRosterMode ?? ((type === 'crisis' || type === 'custom') ? 'character' : 'country');
+  return draft.presetRosterMode ?? ((type === 'crisis' || type === 'custom' || type === 'press') ? 'character' : 'country');
 }
 
 /** What one row of the roster is called in copy. */
 export function seatNounsOf(type: CommitteeType, isCharacterRoster: boolean): { noun: string; plural: string } {
   if (type === 'custom') return { noun: 'member', plural: 'members' };
+  // Press seats are outlets ("BBC") or journalists' names.
+  if (type === 'press') return { noun: 'outlet', plural: 'outlets' };
   return isCharacterRoster ? { noun: 'character', plural: 'characters' } : { noun: 'country', plural: 'countries' };
 }
 
@@ -548,11 +551,12 @@ export function seatNounsOf(type: CommitteeType, isCharacterRoster: boolean): { 
 export function CommitteeTypeGlyph({ type, size = 14 }: { type: CommitteeType; size?: number }) {
   if (type === 'crisis') return <Zap size={size} strokeWidth={2.2} />;
   if (type === 'custom') return <Users2 size={size} strokeWidth={2.2} />;
+  if (type === 'press') return <Newspaper size={size} strokeWidth={2.2} />;
   if (type === 'specialised') return <Scale size={size} strokeWidth={2.2} />;
   return <Landmark size={size} strokeWidth={2.2} />;
 }
 export function committeeTypeAccent(type: CommitteeType): string {
-  return type === 'crisis' ? '#8B2020' : type === 'custom' ? '#7A5416' : '#1B3828';
+  return type === 'crisis' ? '#8B2020' : type === 'custom' ? '#7A5416' : type === 'press' ? '#2F6076' : '#1B3828';
 }
 
 /** Exactly what the chair masthead and every conference card will show for this
@@ -1047,6 +1051,7 @@ export function CommitteeSetupFields({
   const [topicError, setTopicError] = useState('');
   const isCrisis = committeeType === 'crisis';
   const isCustom = committeeType === 'custom';
+  const isPress = committeeType === 'press';
   const { suggestion, emblem } = committeeSetupPreview(draft);
 
   function addTopic() {
@@ -1066,7 +1071,7 @@ export function CommitteeSetupFields({
         <div className="flex flex-col gap-3.5">
           <div>
             <SetupLabel htmlFor={nameInputId}>Name</SetupLabel>
-            {!isCrisis && !isCustom ? (
+            {!isCrisis && !isCustom && !isPress ? (
               <ConferenceCommitteeNameInput
                 id={nameInputId}
                 className={SETUP_INPUT_CLS}
@@ -1094,7 +1099,7 @@ export function CommitteeSetupFields({
                 value={draft.name}
                 onChange={(e) => onChange({ name: e.target.value })}
                 onKeyDown={(e) => { if (e.key === 'Enter' && onSubmit) { e.preventDefault(); onSubmit(); } }}
-                placeholder={isCustom ? 'e.g. Model European Parliament, Youth Lok Sabha' : 'e.g. The Cuban Missile Crisis, 1962'}
+                placeholder={isPress ? 'e.g. International Press Corps' : isCustom ? 'e.g. Model European Parliament, Youth Lok Sabha' : 'e.g. The Cuban Missile Crisis, 1962'}
                 className={SETUP_INPUT_CLS}
               />
             )}

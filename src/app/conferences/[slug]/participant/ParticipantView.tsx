@@ -18,6 +18,7 @@ import { SectionCardSkeleton } from '@/components/Skeleton';
 import { SectionCard, OUTFIT, CARD_SHADOW, getGateState, roleLabel, statusPriority } from './shared';
 import { RejectedCard, WithdrawnCard } from './PayGate';
 import { useConferencePaymentsReady } from './PaymentsLocked';
+import PressDeskEntry from './PressDeskEntry';
 import { DashboardShell, DashCard, OutlineLink, Pane, StatusRow, NextStepCard, NextStepReportProvider, useNextStepSlot, appStatusMark, type DashSection, type NextStep } from './dashboardKit';
 import PaymentPane from './PaymentPane';
 import DelegateParticipant from './DelegateParticipant';
@@ -96,6 +97,9 @@ function roleSections(app: ParticipantApplication): DashSection[] {
       return [OVERVIEW, PAYMENT, SUPPORT];
   }
 }
+
+// Roles that can hold the Press Desk: a press seat (delegate), a press chair, an observer.
+const PRESS_DESK_ROLES = new Set(['delegate', 'head-delegate', 'chair', 'observer']);
 
 // Roles whose own dashboard reports its next step (useReportNextStep): the
 // delegate (seat, room, paper) and the chair (the room, loaded inside).
@@ -590,6 +594,13 @@ export default function ParticipantView({
             <NextStepReportProvider value={reportRoleStep}>
               {gateOpen ? roleContent : null}
             </NextStepReportProvider>
+
+            {/* Press Desk (12 Oct 2026): only for the press of this conference (a press
+                committee's seat holders and chairs) and accepted observers; the card asks
+                the database and draws nothing for anyone else, or while the SQL is pending. */}
+            {gateOpen && PRESS_DESK_ROLES.has(selected.role) && (
+              <PressDeskEntry conferenceId={conferenceId} conferenceSlug={conferenceSlug} show={activeSection === 'overview'} />
+            )}
 
             {/* Conference Documents: the Rules of Procedure, logistics and the
                 rest the organisers shared with everyone accepted. In the

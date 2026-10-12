@@ -185,6 +185,9 @@ export interface ChatBroadcastInfo {
   actionAt: string | null;
   /** Only ever drawn after trustedBroadcastImageUrl (src/lib/chatAttachments.ts). */
   imageUrl: string | null;
+  /** 'press' = a press release, drawn as "Press · <authorLabel>" with a newspaper disc. */
+  source?: 'organiser' | 'press';
+  authorLabel?: string | null;
 }
 
 // Speaking log — stored as system messages, used for statistics

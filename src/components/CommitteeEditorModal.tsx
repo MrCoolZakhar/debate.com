@@ -9,6 +9,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { X, UserPlus, Mail, Send } from 'lucide-react';
 import { NEU, OUTFIT, NeuButton } from '@/components/neu';
+import { usePressCommitteesAvailable } from '@/lib/press';
 import { CommitteeTypeChooser, CommitteeTypeEmoji, COMMITTEE_TYPE_TITLE } from '@/components/parliamentSetup';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { sessionClient } from '@/lib/sessionClient';
@@ -1576,6 +1577,9 @@ export function CommitteeEditorModal({ conference, committee, onSaved, onClose, 
   draft?: CommitteeDraftMode;
 }) {
   const { session } = useAuth();
+  // Press committees need scratch-press.sql; until it is applied the card is not offered,
+  // so nobody builds a committee the database would refuse.
+  const pressAvailable = usePressCommitteesAvailable();
   const draftInitial = draft?.initial ?? null;
   const isEdit = !!committee || !!draftInitial;
   const [pendingType, setPendingType] = useState<CommitteeType | null>(
@@ -1641,7 +1645,7 @@ export function CommitteeEditorModal({ conference, committee, onSaved, onClose, 
               <X size={18} />
             </button>
           </div>
-          <CommitteeTypeChooser types={COMMITTEE_TYPES} onSelect={(t) => setPendingType(t)} />
+          <CommitteeTypeChooser types={pressAvailable ? COMMITTEE_TYPES : COMMITTEE_TYPES.filter((t) => t !== 'press')} onSelect={(t) => setPendingType(t)} />
         </div>
       </ModalOverlay>
     );

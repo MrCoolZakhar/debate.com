@@ -4,9 +4,11 @@
 // THE EMAIL BUILDER, three columns (owner, Oct 2026: "the email starts near
 // the top", "bring back the left and right layout, simplified"):
 //
-//   LEFT      Back, the email's name and Save; then the tools: Add (blocks,
-//             their details, files, starters), Design, and See it for real;
-//             then whatever block is selected, its few settings.
+//   TOP       one slim bar across the builder: Back, the email's name
+//             (written in place) and Save.
+//   LEFT      only the tools: Add (blocks, their details, files, starters,
+//             each opening the Add menu on its own tab), Design, and See it
+//             for real; then whatever block is selected, its few settings.
 //   MIDDLE    the email itself at its real 600px width, edited in place, so
 //             the sheet IS the live preview. Its subject line sits on top of
 //             it like a real email's. "See it for real" swaps the sheet for
@@ -1258,6 +1260,16 @@ export default function EmailComposer({
         transitionProperty: 'opacity', transitionDuration: '160ms',
       }}
     >
+      {/* The four tabs are drawn ONCE. On a wide screen the left column IS the
+          tab row (each tool opens this menu on its own tab), so the menu shows
+          only that tab's title; drawing its own row of four here as well is
+          what made the tabs "appear double when clicked" (owner, Oct 2026).
+          On a narrow screen the bottom bar has a single Add, so the tabs live
+          here. */}
+      {wide ? (() => {
+        const t = ADD_TABS.find(x => x.key === addTab) ?? ADD_TABS[0];
+        return <PanelTitle emoji={t.emoji}>{t.label}</PanelTitle>;
+      })() : (
       <div className="grid grid-cols-2 gap-1.5 mb-3" role="tablist" aria-label="What to add">
         {ADD_TABS.map(t => {
           const active = addTab === t.key;
@@ -1285,6 +1297,7 @@ export default function EmailComposer({
           );
         })}
       </div>
+      )}
 
       {addTab === 'blocks' && (
         <div className="grid grid-cols-3 gap-2">
@@ -2184,9 +2197,10 @@ export default function EmailComposer({
     </div>
   );
 
-  /** BACK · SAVE, then the email's name, small. The top of the left column
-   *  on a wide screen and a slim row above the email on a narrow one, so the
-   *  email itself starts at the top of the page rather than under three bars. */
+  /** ONE slim bar right at the top of the builder, across all three columns
+   *  (owner, Oct 2026: "have one tab right at the top, name it and save"):
+   *  Back, the email's name written in place, and Save. The left column then
+   *  holds only the tools, and the email still starts high on the screen. */
   const hasHeader = !!(backSlot || actionsSlot || onNameChange);
   const nameField = onNameChange ? (
         <input
@@ -2195,32 +2209,29 @@ export default function EmailComposer({
           onChange={e => onNameChange(e.target.value)}
           placeholder="Name this email"
           aria-label="Name this email, just for you"
-          title="Only you see this name"
-          className="w-full focus:outline-none"
+          title="Name this email, just for you. Only you see this name"
+          className="gv-email-name w-full min-w-0 focus:outline-none"
           style={{
-            minHeight: 38, borderRadius: 12, padding: '6px 11px',
-            fontFamily: OUTFIT, fontSize: 16, fontWeight: 600, color: INK,
-            backgroundColor: '#FFFDF8', border: '1px solid rgba(27,56,40,0.13)', boxShadow: NEU.inSm,
+            height: 38, borderRadius: 11, padding: '0 10px',
+            fontFamily: OUTFIT, fontSize: 16, fontWeight: 700, color: INK,
           }}
         />
   ) : null;
-  /** In the left column: Back and Save on one line, the name under them. */
-  const builderHeader = hasHeader ? (
-    <div>
-      <div className="flex items-center justify-between gap-2">
-        {backSlot && <div className="flex-shrink-0">{backSlot}</div>}
-        {actionsSlot && <div className="flex-shrink-0 ml-auto">{actionsSlot}</div>}
-      </div>
-      {nameField && <div className="mt-2">{nameField}</div>}
-    </div>
-  ) : null;
-  /** Above the email on a narrow screen: one row from 640px, so the email
-   *  is not pushed down by a second line. */
-  const builderHeaderRow = hasHeader ? (
-    <div className="flex flex-wrap sm:flex-nowrap items-center gap-x-3 gap-y-2">
+  const builderBar = hasHeader ? (
+    <div
+      className="flex items-center gap-2 sm:gap-3"
+      style={{ ...panelStyle, borderRadius: 18, height: 54, padding: '0 8px 0 14px' }}
+    >
+      <style>{`
+        .gv-email-name { background: transparent; border: 1px solid transparent; transition: background-color 160ms, border-color 160ms, box-shadow 160ms; }
+        .gv-email-name::placeholder { color: ${SOFT}; font-weight: 600; }
+        .gv-email-name:hover { background: rgba(27,56,40,0.04); }
+        .gv-email-name:focus { background: #FFFDF8; border-color: rgba(27,56,40,0.16); box-shadow: ${NEU.inSm}; }
+      `}</style>
       {backSlot && <div className="flex-shrink-0">{backSlot}</div>}
-      {nameField && <div className="order-last sm:order-none w-full sm:w-auto sm:flex-1 min-w-0">{nameField}</div>}
-      {actionsSlot && <div className="flex-shrink-0 ml-auto">{actionsSlot}</div>}
+      {backSlot && nameField && <div aria-hidden style={{ width: 1, height: 22, backgroundColor: 'rgba(27,56,40,0.12)', flexShrink: 0 }} />}
+      <div className="flex-1 min-w-0">{nameField}</div>
+      {actionsSlot && <div className="flex-shrink-0">{actionsSlot}</div>}
     </div>
   ) : null;
 
@@ -2288,7 +2299,6 @@ export default function EmailComposer({
    *  selected block's settings. */
   const toolsColumn = (
     <div className="flex flex-col gap-3">
-      {builderHeader && <div style={{ ...panelStyle, borderRadius: 18, padding: 12 }}>{builderHeader}</div>}
       <div style={{ ...panelStyle, borderRadius: 18, padding: 10 }}>
         <p className="px-1 pb-1.5" style={{ fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 700, color: SOFT }}>Add</p>
         <div className="flex flex-col gap-1.5">
@@ -2439,6 +2449,8 @@ export default function EmailComposer({
       {addPopover}
       {designPopover}
 
+      {builderBar && <div className={wide ? 'mb-3' : 'mb-2'}>{builderBar}</div>}
+
       {wide ? (
         <div className="grid gap-4 items-start" style={{ gridTemplateColumns: '184px minmax(0,1fr) 264px' }}>
           <div style={stickySide}>{toolsColumn}</div>
@@ -2449,7 +2461,6 @@ export default function EmailComposer({
         </div>
       ) : (
         <>
-          {builderHeaderRow && <div className="mb-2" style={{ ...panelStyle, borderRadius: 18, padding: '8px 12px' }}>{builderHeaderRow}</div>}
           {canvasColumn}
           <div className="mt-4" style={{ ...panelStyle, padding: 16 }}>{sendPanel}</div>
           {toolsBar}

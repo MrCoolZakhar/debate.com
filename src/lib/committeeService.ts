@@ -2577,6 +2577,11 @@ export interface SessionBroadcast {
   actionAt: string | null;
   createdAt: string;
   expiresAt: string | null;
+  /** 'organiser' (the Secretariat) or 'press' (a press release, scratch-press.sql). A row
+   *  from before the column existed reads as 'organiser'. */
+  source: 'organiser' | 'press';
+  /** A press release's outlet / seat name ("BBC"); null for the organisers'. */
+  authorLabel: string | null;
 }
 
 function rowToBroadcast(r: Record<string, unknown>): SessionBroadcast {
@@ -2591,6 +2596,8 @@ function rowToBroadcast(r: Record<string, unknown>): SessionBroadcast {
     actionAt: (r.action_at as string) ?? null,
     createdAt: r.created_at as string,
     expiresAt: (r.expires_at as string) ?? null,
+    source: r.source === 'press' ? 'press' : 'organiser',
+    authorLabel: typeof r.author_label === 'string' && r.author_label.trim() ? r.author_label.trim() : null,
   };
 }
 
@@ -2610,7 +2617,9 @@ export async function getActiveBroadcasts(committeeId: string): Promise<SessionB
     .or(`expires_at.is.null,expires_at.gt.${nowIso}`)
     .order('created_at', { ascending: true });
   if (error) { console.error('Error loading broadcasts:', error); return []; }
-  return (data ?? []).map((r) => rowToBroadcast(r as Record<string, unknown>));
+  // Press releases are chat-only: never a sticky card on the dais. Filtered here, on the
+  // client, so it holds before and after scratch-press.sql (the column may not exist yet).
+  return (data ?? []).map((r) => rowToBroadcast(r as Record<string, unknown>)).filter((b) => b.source !== 'press');
 }
 
 /** How many broadcasts the chat keeps (newest). A committee gets a handful. */

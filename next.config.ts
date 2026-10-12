@@ -27,6 +27,7 @@ const NOINDEX_ROUTES = [
   '/conferences/:slug/participant', '/conferences/:slug/participant/:path*',
   '/conferences/:slug/role/:path*',
   '/conferences/:slug/papers', '/conferences/:slug/papers/:path*',
+  '/conferences/:slug/press',
 ];
 
 const nextConfig: NextConfig = {

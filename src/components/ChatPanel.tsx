@@ -40,7 +40,7 @@ import NewGroupSheet, { type GroupCandidate } from './chat/NewGroupSheet';
 import { CHAT, type ChatThreadEvent } from './chat/chatTokens';
 import type { SessionBroadcast } from '@/lib/committeeService';
 import {
-  withBroadcastMessages, broadcastOnlyMessages, SECRETARIAT_SENDER, SECRETARIAT_READ_KEY, EMPTY_BROADCASTS,
+  withBroadcastMessages, broadcastOnlyMessages, SECRETARIAT_SENDER, SECRETARIAT_READ_KEY, EMPTY_BROADCASTS, broadcastAuthor,
 } from '@/lib/broadcastMessages';
 
 const LOCALES: Record<string, string> = { en: 'en-GB', es: 'es-ES', fr: 'fr-FR', ar: 'ar', pt: 'pt-BR' };
@@ -479,7 +479,8 @@ export default function ChatPanel({
       // Searching the dais for a person by name, not only by delegation.
       search: `${label} ${person} ${String(e.key)}`.toLowerCase(),
       last,
-      lastSenderLabel: !last ? '' : last.sender === senderName ? t('chat_you_prefix') : multi ? senderLabel(last.sender) : '',
+      lastSenderLabel: !last ? '' : last.sender === senderName ? t('chat_you_prefix')
+        : last.broadcast ? broadcastAuthor(last.broadcast, t) : multi ? senderLabel(last.sender) : '',
       lastAt: e.lastAt,
       unread: chatConvUnread({ key: readKeyOf(e.key), messages: e.messages }, readCounts, senderName),
       idleLine: e.kind === 'group' ? t('chat_group_member_count', { n: e.group?.members.length ?? 0 })

@@ -8,6 +8,9 @@
 // several changes can land without colliding in translations.ts; spread into each locale
 // there. Every key must exist in all five locales.
 //
+// Press releases (bc_press*, 12 Oct 2026) are the same messages signed "Press · <outlet>"
+// (scratch-press.sql, src/lib/press.ts).
+//
 // Copy rules (CLAUDE.md §8): no em dashes, no full stop on a title or a one-line caption.
 export const broadcastsTranslations = {
   en: {
@@ -19,6 +22,9 @@ export const broadcastsTranslations = {
     bc_image: 'Image from the Secretariat',
     bc_read_only: 'Only the Secretariat can post here',
     bc_chat_off: 'Chat is off for this committee. Messages from the Secretariat still arrive here',
+    bc_press: 'Press',
+    bc_press_from: 'Press · {name}',
+    bc_press_image: 'Image from the press',
   },
   es: {
     bc_secretariat: 'Secretaría',
@@ -29,6 +35,9 @@ export const broadcastsTranslations = {
     bc_image: 'Imagen de la Secretaría',
     bc_read_only: 'Solo la Secretaría puede publicar aquí',
     bc_chat_off: 'El chat está desactivado en este comité. Los mensajes de la Secretaría siguen llegando aquí',
+    bc_press: 'Prensa',
+    bc_press_from: 'Prensa · {name}',
+    bc_press_image: 'Imagen de la prensa',
   },
   fr: {
     bc_secretariat: 'Secrétariat',
@@ -39,6 +48,9 @@ export const broadcastsTranslations = {
     bc_image: 'Image du Secrétariat',
     bc_read_only: 'Seul le Secrétariat peut publier ici',
     bc_chat_off: 'Le chat est désactivé pour ce comité. Les messages du Secrétariat arrivent toujours ici',
+    bc_press: 'Presse',
+    bc_press_from: 'Presse · {name}',
+    bc_press_image: 'Image de la presse',
   },
   ar: {
     bc_secretariat: 'الأمانة العامة',
@@ -49,6 +61,9 @@ export const broadcastsTranslations = {
     bc_image: 'صورة من الأمانة العامة',
     bc_read_only: 'الأمانة العامة وحدها يمكنها النشر هنا',
     bc_chat_off: 'الدردشة متوقفة في هذه اللجنة. تصل رسائل الأمانة العامة إلى هنا رغم ذلك',
+    bc_press: 'الصحافة',
+    bc_press_from: 'الصحافة · {name}',
+    bc_press_image: 'صورة من الصحافة',
   },
   pt: {
     bc_secretariat: 'Secretariado',
@@ -59,5 +74,8 @@ export const broadcastsTranslations = {
     bc_image: 'Imagem do Secretariado',
     bc_read_only: 'Somente o Secretariado pode publicar aqui',
     bc_chat_off: 'O chat está desativado neste comitê. As mensagens do Secretariado continuam chegando aqui',
+    bc_press: 'Imprensa',
+    bc_press_from: 'Imprensa · {name}',
+    bc_press_image: 'Imagem da imprensa',
   },
 };
