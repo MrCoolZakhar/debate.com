@@ -4,13 +4,49 @@
  * The "choose what to apply for" rows on the public conference page.
  *
  * One raised white row per enabled role, stacked, the whole row is the
- * button: name, price and a round go key; a role that is not open says why.
+ * button: the role's glyph, its name and a round go key (no price here,
+ * owner 12 Oct 2026); a role that is not open says why.
  * No pictures (owner, 12 Oct 2026). Presentation only: the caller decides
  * which roles show, whether each is open, the price (publicFees) and what a
  * press does.
  */
 
-import { ArrowRight, CalendarClock, Lock } from 'lucide-react';
+import { ArrowRight, CalendarClock, Lock, UserRound, Users, Eye, GraduationCap, Gavel, Newspaper, Siren, IdCard, type LucideIcon } from 'lucide-react';
+
+/** The role's glyph, as the picker had it before the tiles (a person, a group,
+ *  an eye, a cap; a chair is a person holding a gavel). Plain Lucide line
+ *  icons in a soft gold disc: no 3D pictures here (owner, 12 Oct 2026). */
+const ROLE_GLYPH: Record<string, LucideIcon> = {
+  delegate: UserRound,
+  'head-delegate': Users,
+  'faculty-advisor': GraduationCap,
+  observer: Eye,
+  press: Newspaper,
+  crisis: Siren,
+  staff: IdCard,
+  secretariat: IdCard,
+};
+
+function RoleGlyph({ role, open }: { role: string; open: boolean }) {
+  const ink = open ? '#1B3828' : '#8A7A66';
+  const Icon = ROLE_GLYPH[role] ?? UserRound;
+  return (
+    <span
+      className="shrink-0 relative inline-flex items-center justify-center rounded-full"
+      aria-hidden
+      style={{ width: 36, height: 36, background: open ? 'rgba(238,217,138,0.45)' : 'rgba(27,56,40,0.06)' }}
+    >
+      {role === 'chair' ? (
+        <>
+          <UserRound size={19} strokeWidth={2.2} style={{ color: ink }} />
+          <Gavel size={11} strokeWidth={2.6} style={{ color: ink, position: 'absolute', right: 6, bottom: 6 }} />
+        </>
+      ) : (
+        <Icon size={19} strokeWidth={2.2} style={{ color: ink }} />
+      )}
+    </span>
+  );
+}
 
 export type RoleTileState = 'open' | 'opens-soon' | 'closed';
 
@@ -64,13 +100,14 @@ export function RoleApplyCards({ tiles, onPick }: { tiles: RoleTile[]; onPick: (
                 onClick={() => { if (open) onPick(t.role); }}
                 style={{
                   minHeight: 52,
-                  padding: '9px 12px 9px 14px',
+                  padding: '8px 12px 8px 10px',
                   border: 'none',
                   backgroundColor: open ? '#FFFFFF' : 'rgba(255,255,255,0.78)',
                   boxShadow: '0 2px 0 rgba(255,255,255,0.9) inset, 0 4px 12px rgba(0,0,0,0.18)',
                   cursor: open ? 'pointer' : 'default',
                 }}
               >
+                <RoleGlyph role={t.role} open={open} />
                 <span className="flex-1 min-w-0">
                   <span
                     className="block [overflow-wrap:anywhere]"
@@ -88,14 +125,6 @@ export function RoleApplyCards({ tiles, onPick }: { tiles: RoleTile[]; onPick: (
                     </span>
                   )}
                 </span>
-                {t.state !== 'closed' && (
-                  <span
-                    className="shrink-0"
-                    style={{ fontFamily: 'var(--font-brand), sans-serif', fontWeight: 700, fontSize: 14, fontVariantNumeric: 'tabular-nums', color: '#1B3828' }}
-                  >
-                    {t.price}
-                  </span>
-                )}
                 {open && (
                   <span
                     className="gv-role-go shrink-0 inline-flex items-center justify-center rounded-full"

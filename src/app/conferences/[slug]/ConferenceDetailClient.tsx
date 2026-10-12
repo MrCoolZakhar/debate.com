@@ -2831,13 +2831,12 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                           </p>
                           {(conference.min_age != null || conference.max_age != null) && <MinAgeChip minAge={conference.min_age} maxAge={conference.max_age} />}
                         </div>
-                        <p className="text-xs" style={{ color: 'color-mix(in srgb, var(--gv-on-main) 72%, transparent)', fontFamily: "var(--font-brand), sans-serif", lineHeight: 1.55, margin: '6px 0 0 0' }}>
-                          {!hasOpenRoles
-                            ? 'Check back when applications open.'
-                            : user
-                              ? 'Pick a role to start your application.'
-                              : 'Pick a role. You will sign in with a free account first.'}
-                        </p>
+                        {!hasOpenRoles && (
+                          <p className="text-xs" style={{ color: 'color-mix(in srgb, var(--gv-on-main) 72%, transparent)', fontFamily: "var(--font-brand), sans-serif", lineHeight: 1.55, margin: '6px 0 0 0' }}>
+                            Check back when applications open.
+                          </p>
+                        )}
+                        <div style={{ height: 12 }} aria-hidden />
                         <RoleApplyCards
                           tiles={enabledRoles.map((r): RoleTile => {
                             const windowStatus = getRoleWindowStatus(r);
