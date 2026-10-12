@@ -3,9 +3,9 @@
 // PublishControls — the conference's status and Publish / Unpublish, in the
 // manage header (prompt 106; they used to sit on the dashboard). A pill says
 // "Public" or "Draft" (icon and word), and the button beside it:
-//   Publish    the same gates as the dashboard's checklist row (at least one
-//              committee, read here with a head count when pressed; the
-//              payment gate), then PublishModal
+//   Publish    the same gate as the dashboard's checklist row (at least one
+//              committee, read here with a head count when pressed; payments
+//              never block publishing, owner 12 Oct 2026), then PublishModal
 //   Unpublish  "Unpublish Your Conference?" first, then is_public false and
 //              status 'private' as a verified write (exactly one row)
 // Publishing is open to every organizer, as it is on the dashboard (the
@@ -18,7 +18,6 @@ import { PurchaseShell, PURCHASE_CSS } from '@/components/purchase/purchaseKit';
 import { getFreshAuthedClient } from '@/lib/supabase-auth';
 import { friendlyError } from '@/lib/friendlyError';
 import { notifyErr, notifyOk } from '@/lib/appNotify';
-import { paymentGateBlocks, paymentGateMessage } from '@/lib/payments';
 import type { Conference } from './layout';
 import PublishModal from './PublishModal';
 
@@ -69,7 +68,6 @@ export default function PublishControls({ conference, onChanged, light }: {
       const { count, error } = await c.from('conference_committees').select('id', { count: 'exact', head: true }).eq('conference_id', conference.id);
       if (error) { notifyErr(friendlyError(error, 'Could not check your committees. Try again in a moment.'), 'publish'); return; }
       if (!count) { notifyErr('Add at least one committee before publishing.', 'publish'); return; }
-      if (paymentGateBlocks(conference)) { notifyErr(paymentGateMessage(conference), 'publish'); return; }
       setPublishing(true);
     } finally {
       busyRef.current = false; setChecking(false);

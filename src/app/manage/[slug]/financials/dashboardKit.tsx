@@ -271,7 +271,7 @@ export function paymentMethodWords(s: S): { fact: string; sub: string } {
 
 export function PaymentMethodCard({ s, onOpen, readOnly }: { s: S; onOpen: () => void; readOnly: boolean }) {
   let fact = 'Not set up yet';
-  let sub: string | undefined = 'Choose how people pay before you accept anyone';
+  let sub: string | undefined = 'Set this up when you want to take payments';
   if (s.platform_collects) {
     fact = 'Card payments (Stripe)';
     sub = 'Gavelling collects payments for you';

@@ -17,6 +17,7 @@
 // as a big number with the word beside it, sentence-case buttons in the forest
 // gradient, no "…" on a name, no em dashes, no tinted band behind anything.
 
+import LockedPayButton from './PaymentsLocked';
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import type { LucideIcon } from 'lucide-react';
@@ -335,7 +336,7 @@ export function Pane({ show, children, gap = 6, title, icon, phone = true, ancho
 // ── The next step (the first thing on the phone page) ───────────────────────
 
 export type NextStepAction =
-  | { label: string; href: string; external?: boolean }
+  | { label: string; href: string; external?: boolean; /** Payments not set up yet: drawn locked (prompt 108). */ lockedSlug?: string }
   | { label: string; scrollTo: string };
 
 /** What this person should do now, in one line, with at most one button. A
@@ -410,7 +411,10 @@ export function NextStepCard({ step, status }: { step: NextStep; status: string 
       </p>
       {step.kind === 'action' && action && (
         <div className="mt-4">
-          {'href' in action ? (
+          {'href' in action && action.lockedSlug ? (
+            <LockedPayButton slug={action.lockedSlug} label={<>{action.label}</>} className="w-full sm:w-auto"
+              style={{ ...BTN_BASE, background: FOREST_GRADIENT, color: '#FFFFFF', border: 'none' }} />
+          ) : 'href' in action ? (
             <ForestLink href={action.href} external={action.external} className="w-full sm:w-auto">
               {action.label} <ArrowRight size={16} strokeWidth={2.4} aria-hidden />
             </ForestLink>

@@ -31,7 +31,7 @@ import TrafficSourcesCard from '@/components/conferences/TrafficSourcesCard';
 import UntoldSeatsRow from './UntoldSeatsRow';
 import { fetchAllRows } from '@/lib/fetchAllRows';
 import { BENTO_BORDER, BENTO_WASH_FOREST } from '@/components/conferences/bento';
-import { conferencePaymentsReady, paymentGateBlocks, paymentGateMessage } from '@/lib/payments';
+import { conferencePaymentsReady } from '@/lib/payments';
 import { hasExploredEmails } from '@/lib/emailsExplored';
 import { getConferenceIntent, intentRank } from '@/lib/conferenceIntent';
 import { outstandingPledgedSpots } from '@/lib/pledgedSpots';
@@ -1503,10 +1503,7 @@ export default function DashboardPage() {
       notifyErr('Add at least one committee before publishing.', 'publish');
       return;
     }
-    if (conference && paymentGateBlocks(conference)) {
-      notifyErr(paymentGateMessage(conference), 'publish');
-      return;
-    }
+    // Publishing never waits for payments (owner, 12 Oct 2026): only paying on /pay does.
     setShowPublishModal(true);
   }
 

@@ -42,7 +42,7 @@ import { DelegationsSettings } from './delegationsUi';
 import CustomizationCard from './CustomizationCard';
 import { type FormBlock, normalizeBlocks, unpublishableQuestions } from '@/lib/customQuestions';
 import QuestionBuilder from '@/components/QuestionBuilder';
-import { conferencePaymentsReady, paymentGateBlocks, paymentGateMessage } from '@/lib/payments';
+import { conferencePaymentsReady } from '@/lib/payments';
 import { friendlyError, constraintMessage } from '@/lib/friendlyError';
 import { normaliseRoleTimeline, linkNeighbourPhase } from '@/lib/roleTimeline';
 import { useConferenceTimezone, timelineNotice } from './timelineUi';
@@ -943,11 +943,9 @@ export default function SettingsPage() {
     const defaults = ROLES.map(role => ({
       conference_id: conference.id,
       role,
-      // Mirrors the INSERT trigger's own coercion: the database would force
-      // these to false anyway when the conference isn't ready and isn't
-      // exempt, so seed local state with the same value it will actually
-      // land on rather than one the next refetch immediately contradicts.
-      is_enabled: (role === 'delegate' || role === 'chair') && (conference.payment_gate_exempt || conferencePaymentsReady(conference)),
+      // Applications never wait for payments (owner, 12 Oct 2026): the
+      // trigger lets every role open, with or without payments set up.
+      is_enabled: role === 'delegate' || role === 'chair',
       fee_amount: 0,
       fee_currency: conference.fee_currency ?? 'GBP',
       auto_accept: false,
@@ -3069,8 +3067,8 @@ export default function SettingsPage() {
   // ── Visibility: a card on General since 12 Oct 2026 (it was its own tab).
   // Every write is unchanged: handlePublicToggle and saveVisibility.
   const visNoDates = view.dates_tbd || !view.start_date;
-  const visGateBlocks = paymentGateBlocks(view);
-  const visBlockPublic = !view.is_public && (visGateBlocks || visNoDates);
+  // Publishing waits only for real dates; never for payments (owner, 12 Oct 2026).
+  const visBlockPublic = !view.is_public && visNoDates;
   const visibilityCard = (
     <Group
       id="visibility-card"
@@ -3100,7 +3098,6 @@ export default function SettingsPage() {
             ? 'Anyone can find your page on Gavelling.'
             : visNoDates
               ? <>Add your dates before it can go public.{' '}<button type="button" onClick={() => document.getElementById('dates-card')?.scrollIntoView({ behavior: 'smooth', block: 'center' })} style={{ color: '#1B3828', fontWeight: 700, textDecoration: 'underline', textUnderlineOffset: 3, background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontSize: 'inherit', fontFamily: 'inherit' }}>Add dates</button></>
-              : visGateBlocks ? paymentGateMessage(view)
               : 'Private. Only people with the link can open it.'}
         />
         <Row label="Your page link" desc={`gavelling.com/conferences/${view.slug}`} align="end">
@@ -4663,7 +4660,7 @@ export default function SettingsPage() {
                 align="end"
                 on={ready}
                 need={!ready}
-                desc={ready ? method : 'Pick how people pay you. Even a free conference needs one before applications open.'}
+                desc={ready ? method : 'Set this up when you want to take payments.'}
               >
                 <a href={`${fin}?open=payment`} className="gv-st-btn gv-st-forest">
                   {ready ? 'Change' : 'Set up payments'}<ChevronRightIcon size={16} strokeWidth={2.4} aria-hidden />

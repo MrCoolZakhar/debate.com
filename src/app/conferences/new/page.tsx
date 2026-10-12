@@ -98,10 +98,9 @@ const REVIEW_STEP = TOTAL_STEPS;
 // delegates" and "which rooms do they sit in" are one thought.
 
 // STEP 8, "How Do Delegates Pay?", is asked BEFORE the insert and is REQUIRED
-// (owner, 7 Oct 2026): 181 of 302 non-demo conferences had no payment_method,
-// and a conference with none can never open an application (the role-config
-// trigger coerces is_enabled back to false until conference_payments_ready()
-// is true), so every organizer answers it. Since 12 Oct 2026 (owner) it asks
+// (owner, 7 Oct 2026): 181 of 302 non-demo conferences had no payment_method.
+// Since 12 Oct 2026 applications never wait for payments (only paying on /pay
+// does), but every organizer still answers it. Since 12 Oct 2026 (owner) it asks
 // ONLY whether the conference is free or paid. Paid conferences set up how
 // they get paid in Financials, after the wizard, where the welcome flow does
 // it properly (card, a link, a QR or bank details, the fee and add-ons):
@@ -1016,8 +1015,8 @@ export default function NewConferencePage() {
       // WHY THIS IS A SECOND WRITE and not `is_public: true` in the insert.
       // The insert above is all-or-nothing: any refusal aborts the whole
       // creation and the organiser loses every step they filled in. Two
-      // database rules can refuse a publish — conferences_tbd_not_public and,
-      // until the owner drops it, the publish payment gate — and the
+      // database rules have refused a publish: conferences_tbd_not_public and,
+      // before 12 Oct 2026, a publish payment gate. The
       // `expected_delegates` note further up is the scar from exactly this
       // failure mode. As a separate write a refusal costs nothing: the
       // conference is already saved, it simply stays a draft, and the

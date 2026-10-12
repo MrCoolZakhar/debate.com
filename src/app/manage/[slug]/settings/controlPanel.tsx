@@ -41,14 +41,12 @@
  * Presentation only. Every write is the settings page's own handler.
  */
 
-import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
 import {
   CheckCircle2, Clock, MinusCircle, ChevronRight, Plus, X, ArrowLeft, Copy, FilePlus2,
   ClipboardList, DoorOpen, ListOrdered, Ban, Hand,
 } from 'lucide-react';
 import { CircleFlag } from '@/components/CircleFlag';
-import { paymentGateBlocks } from '@/lib/payments';
 import type { Conference } from '@/app/manage/[slug]/layout';
 import { ROLE_ORDER } from './applicationsUi';
 import {
@@ -290,7 +288,6 @@ export function ApplicationsSection({
   /** One value for every covered role (the page writes them in one update). */
   onSaveAll: (updates: Partial<RoleSetupConfig>, roles: string[]) => void;
 }) {
-  const gate = paymentGateBlocks(c);
   const ordered = ROLE_ORDER.map(r => roles.find(x => x.role === r)).filter((x): x is RoleSetupConfig => !!x);
   const listed = listedRoles(ordered, counts, extraRoles, removedRoles);
   const hidden = ordered.filter(r => !listed.includes(r));
@@ -334,18 +331,10 @@ export function ApplicationsSection({
         focal={totalApplied !== null ? <BigCount n={totalApplied} word={totalApplied === 1 ? 'application' : 'applications'} /> : undefined}
       />
 
-      {gate && (
-        <div className="gv-fd-warn" role="note">
-          Set up payments before you switch a role on. Even a free conference needs one. You can still set every role up now.{' '}
-          <Link href={`/manage/${c.slug}/financials?open=payment`} style={{ ...TEXT_LINK, fontSize: TYPE_PX.hint }}>Set up payments</Link>
-        </div>
-      )}
-
       {/* ── Who can apply ── */}
       <Group id="who-can-apply" title="Who Can Apply" emoji="Identification card" icon={Hand} tint={TINT_GOLD_BG}>
         {listed.map(cfg => {
           const st = windowState(cfg, now);
-          const blocked = gate && !cfg.is_enabled;
           const plural = rolePlural(cfg.role);
           const count = counts?.[cfg.role];
           return (
@@ -365,8 +354,9 @@ export function ApplicationsSection({
                   Edit<ChevronRight size={16} strokeWidth={2.4} aria-hidden />
                 </button>
               </span>
-              <span className="gvc-row-switch" title={blocked ? 'Set up payments before you switch a role on' : undefined}>
-                <Switch label={`${plural} taking applications`} checked={cfg.is_enabled} disabled={blocked} onChange={(next) => onRoleToggle(cfg.role, next)} />
+              {/* A role opens at any time: applications never wait for payments (owner, 12 Oct 2026). */}
+              <span className="gvc-row-switch">
+                <Switch label={`${plural} taking applications`} checked={cfg.is_enabled} onChange={(next) => onRoleToggle(cfg.role, next)} />
               </span>
             </div>
           );

@@ -17,6 +17,7 @@ import { type FormBlock } from '@/lib/customQuestions';
 import { SectionCardSkeleton } from '@/components/Skeleton';
 import { SectionCard, OUTFIT, CARD_SHADOW, getGateState, roleLabel, statusPriority } from './shared';
 import { RejectedCard, WithdrawnCard } from './PayGate';
+import { useConferencePaymentsReady } from './PaymentsLocked';
 import { DashboardShell, DashCard, OutlineLink, Pane, StatusRow, NextStepCard, NextStepReportProvider, useNextStepSlot, appStatusMark, type DashSection, type NextStep } from './dashboardKit';
 import PaymentPane from './PaymentPane';
 import DelegateParticipant from './DelegateParticipant';
@@ -110,8 +111,10 @@ function pageNextStep(o: {
   locked: boolean;
   payNow: boolean;
   roleStep: NextStep | null;
+  /** False while the conference has not set up payments: Pay now is drawn locked. */
+  paymentsReady?: boolean | null;
 }): NextStep | null {
-  const pay = { label: 'Pay now', href: `/conferences/${o.conferenceSlug}/pay` };
+  const pay = { label: 'Pay now', href: `/conferences/${o.conferenceSlug}/pay`, lockedSlug: o.paymentsReady === false ? o.conferenceSlug : undefined };
   if (o.locked) {
     return { kind: 'action', line: `Pay your registration fee to open your ${o.conferenceName} dashboard.`, action: pay };
   }
@@ -235,6 +238,8 @@ export default function ParticipantView({
 
   // The role dashboard's own next step (delegate, chair), reported upward.
   const [roleStep, reportRoleStep] = useNextStepSlot();
+  // Paying waits until the conference sets up how it gets paid (prompt 108); applying never does.
+  const paymentsReady = useConferencePaymentsReady(conferenceId);
 
   // Conference-wide documents (Documents → For everyone). Read only when one
   // of this person's applications here is accepted, assigned or checked in.
@@ -408,6 +413,7 @@ export default function ParticipantView({
     payNow,
     // A role step only counts while that role's dashboard is on the page.
     roleStep: gateOpen ? roleStep : null,
+    paymentsReady,
   });
   const paymentPane = (
     <Pane show={activeSection === 'payment'} title="Payment" icon={CreditCard}>

@@ -1,6 +1,7 @@
 'use client';
 
 import { openAuth } from '@/lib/authModal';
+import { PayLink } from './participant/PaymentsLocked';
 import { Fragment, useEffect, useState, useRef, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -1544,6 +1545,29 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
     if (data) setCommitteeEditor({ committee: data as EditableCommittee });
   }
 
+  // ?ask=organisers (prompt 108): opens the participant dashboard's "Ask the
+  // Organisers" thread, the same as ContactOrganisers' onAsk. The locked pay
+  // buttons' "Contact" link uses it (from /pay and from the dashboard itself).
+  // Read from window.location (no useSearchParams, see above); re-checked when
+  // the in-page link changes the URL without a reload.
+  const askHandledFor = useRef<string | null>(null);
+  const firstAppRole = myApplications[0]?.role ?? null;
+  useEffect(() => {
+    if (typeof window === 'undefined' || !user || authLoading || participantDataLoading || !firstAppRole) return;
+    const check = () => {
+      const url = new URL(window.location.href);
+      if (url.searchParams.get('ask') !== 'organisers') return;
+      const key = url.href;
+      if (askHandledFor.current === key) return;
+      askHandledFor.current = key;
+      showTab('participant', firstAppRole, 'replace');
+      setAskOrganisersRequest(n => n + 1);
+    };
+    void Promise.resolve().then(check);
+    window.addEventListener('gv-ask-organisers', check);
+    return () => window.removeEventListener('gv-ask-organisers', check);
+  }, [user, authLoading, participantDataLoading, firstAppRole, showTab]);
+
   // Which palette renders. `conference` can still be null here (before the
   // first fetch resolves for a client-only private conference), so this stays
   // optional-chained — the loading/404 wrappers below need it before the
@@ -2410,6 +2434,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                         processing={!confirmationPaid && (paymentConfirming || paymentTimedOut || !paymentConfirmed)}
                         onContinue={() => setPaymentReturn(null)}
                         payHref={`/conferences/${conference.slug}/pay`}
+                        conferenceId={conference.id}
                       />
                     </div>
                   )}
@@ -2735,16 +2760,18 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                               </p>
                             )}
                             {payable && (
-                              <Link
-                                href={`/conferences/${slug}/pay`}
+                              // Locked, with a note, while the conference has not set up payments (prompt 108).
+                              <PayLink
+                                conferenceId={conference.id}
+                                slug={slug}
                                 className="w-full flex items-center justify-center gap-2 rounded-xl py-3 mt-4 font-bold text-sm transition-colors focus:outline-none"
-                                style={{ backgroundColor: 'var(--gv-accent)', color: 'var(--gv-on-accent)', fontFamily: "var(--font-brand), sans-serif", boxShadow: '0 4px 16px rgba(0,0,0,0.2)', textDecoration: 'none' }}
+                                style={{ backgroundColor: 'var(--gv-accent)', color: 'var(--gv-on-accent)', fontFamily: "var(--font-brand), sans-serif", boxShadow: '0 4px 16px rgba(0,0,0,0.2)', textDecoration: 'none', border: 'none' }}
                                 onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'white'; }}
                                 onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--gv-accent)'; }}
                               >
                                 <CreditCard size={15} strokeWidth={2.2} />
                                 {payLabel}
-                              </Link>
+                              </PayLink>
                             )}
                             {myAllocation && (
                               <div
@@ -2821,9 +2848,11 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                         </>
                       )
                     ) : (
-                      /* 3 and 4, no involvement yet: one tile per role. Signed
-                         in, an open tile goes to /apply; signed out it opens
-                         sign-in and comes back to that role's form. */
+                      /* 3 and 4, no involvement yet: one tile per role. An open
+                         tile always goes straight to that role's form, signed
+                         in or not: a guest fills it all in and signs in only at
+                         Submit (Option A; the 12 Oct 2026 regression that
+                         opened sign-in here first is fixed). */
                       <>
                         <div className="flex items-start justify-between gap-2">
                           <p className="font-bold" style={{ color: 'var(--gv-on-main)', fontFamily: "var(--font-brand), sans-serif", margin: 0, fontSize: 19, lineHeight: 1.2 }}>
@@ -2853,9 +2882,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                             };
                           })}
                           onPick={(role) => {
-                            const href = `/conferences/${slug}/apply?role=${role}`;
-                            if (user) router.push(href);
-                            else openAuth({ next: href, apply: true });
+                            router.push(`/conferences/${slug}/apply?role=${role}`);
                           }}
                         />
                       </>

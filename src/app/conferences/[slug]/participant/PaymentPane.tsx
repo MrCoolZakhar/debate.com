@@ -9,6 +9,7 @@
 
 import { ArrowRight, CheckCircle2, Hourglass, MinusCircle } from 'lucide-react';
 import { PayNowCard, useOpenBalances } from './PayNowCard';
+import LockedPayButton, { useConferencePaymentsReady } from './PaymentsLocked';
 import { OUTFIT, CHIP_STYLES, derivePaymentChip } from './shared';
 import { DashCard, CardHeading, ForestLink, IconWord, INK, INK_SOFT, useDashStacked } from './dashboardKit';
 import type { ParticipantApplication } from './types';
@@ -35,6 +36,8 @@ export default function PaymentPane({ application, conferenceId, conferenceSlug,
   const balances = useOpenBalances(userId, conferenceId);
   const stacked = useDashStacked();
   const dueCardShows = !!balances && balances.length > 0;
+  // Paying waits until the conference sets up how it gets paid (prompt 108); applying never does.
+  const paymentsReady = useConferencePaymentsReady(conferenceId);
 
   let line: string;
   if (free) line = 'Your role has no registration fee.';
@@ -58,9 +61,18 @@ export default function PaymentPane({ application, conferenceId, conferenceSlug,
             <p style={{ fontFamily: OUTFIT, fontSize: 14, color: INK, margin: '8px 0 0 0', lineHeight: 1.5 }}>{line}</p>
           </div>
           <span className={stacked && dueCardShows ? 'hidden xl:inline-flex' : 'inline-flex'}>
-            <ForestLink href={`/conferences/${conferenceSlug}/pay`}>
-              Open payments <ArrowRight size={16} strokeWidth={2.4} aria-hidden />
-            </ForestLink>
+            {paymentsReady === false ? (
+              <LockedPayButton
+                slug={conferenceSlug}
+                label={<>Open payments</>}
+                className="inline-flex items-center gap-1.5 rounded-xl px-4 focus:outline-none"
+                style={{ minHeight: 44, backgroundColor: '#1B3828', color: '#EED98A', fontFamily: OUTFIT, fontSize: 14, fontWeight: 700, border: 'none' }}
+              />
+            ) : (
+              <ForestLink href={`/conferences/${conferenceSlug}/pay`}>
+                Open payments <ArrowRight size={16} strokeWidth={2.4} aria-hidden />
+              </ForestLink>
+            )}
           </span>
         </div>
       </DashCard>

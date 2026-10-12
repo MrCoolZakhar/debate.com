@@ -50,7 +50,7 @@ import { DatePicker } from '@/components/DatePicker';
 import { CurrencyPicker } from '@/components/CurrencyPicker';
 import { useScrollLock } from '@/hooks/useScrollLock';
 import { activeFeePhase, type FeePhase } from '@/lib/finance';
-import { conferencePaymentsReady, paymentGateBlocks } from '@/lib/payments';
+import { conferencePaymentsReady } from '@/lib/payments';
 import type { TimelineContext, TimelineInput } from '@/lib/roleTimeline';
 import type { Conference } from '@/app/manage/[slug]/layout';
 import { STORE_CSS } from '../store/storeKit';
@@ -197,12 +197,10 @@ export function RoleSheet(props: RoleSheetProps) {
   const { conference: c, role, config, now, configVersion, timelineCtx, timelineMsg } = props;
   const currency = c.fee_currency || 'USD';
   const priced = roleHasPrice(role);
-  const gate = paymentGateBlocks(c);
   const plural = rolePlural(role);
   const st = windowState(config, now);
   const mark = STATE_MARK[st];
   const enabled = config?.is_enabled ?? false;
-  const blocked = gate && !enabled;
   const phases = config?.fee_phases ?? [];
   const active = activeFeePhase(phases);
   const datedPhases = phases.some(p => p.start_date && p.end_date);
@@ -327,7 +325,7 @@ export function RoleSheet(props: RoleSheetProps) {
                 size="lg"
                 label={`${plural} taking applications`}
                 checked={enabled}
-                disabled={blocked || !config}
+                disabled={!config}
                 describedBy="role-switch-line"
                 onChange={(v) => props.onSave({ is_enabled: v })}
               />
@@ -350,15 +348,13 @@ export function RoleSheet(props: RoleSheetProps) {
               {/* ── What the switch means now, the link and the preview ── */}
               <section id="step-review" className="gv-st-card gv-fd-wash-green" style={{ padding: 'clamp(14px, 3vw, 18px)' }}>
                 <p id="role-switch-line" style={{ fontFamily: F, fontSize: TYPE_PX.body, color: INK, lineHeight: 1.5, overflowWrap: 'anywhere' }}>
-                  {blocked
-                    ? <>Set up payments before you switch this on. You can still fill in everything below.{' '}
-                      <Link href={`/manage/${c.slug}/financials?open=payment`} style={{ ...TEXT_LINK, fontSize: TYPE_PX.body }}>Set up payments</Link></>
-                    : statusLine}
+                  {statusLine}
                 </p>
-                {c.payment_gate_exempt && !conferencePaymentsReady(c) && (
+                {/* Applications never wait for payments (owner, 12 Oct 2026); only paying does. An option, never a requirement. */}
+                {priced && !conferencePaymentsReady(c) && (
                   <div className="mt-3">
                     <Notice>
-                      <b>Applicants cannot pay you yet.</b>{' '}
+                      People can apply now and pay once you set up how you get paid.{' '}
                       <Link href={`/manage/${c.slug}/financials?open=payment`} style={{ ...TEXT_LINK, color: '#6B4F12' }}>Set up payments</Link>
                     </Notice>
                   </div>

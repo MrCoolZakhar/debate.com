@@ -38,6 +38,7 @@ import {
   type GuestApplyAnswers,
   saveGuestDraft, loadGuestDraft, clearGuestDraft,
 } from '@/lib/guestApplyDraft';
+import { PayLink } from '../participant/PaymentsLocked';
 import { NEU, NeuInset, NeuCard, OUTFIT, EASE, Emoji3D } from '@/components/neu';
 import { WizardShell, TwoTabPick } from '@/components/wizard';
 import { CVEntryModal, type CVEntry, type ExperienceEntry } from '@/components/CVEntryModal';
@@ -5556,14 +5557,15 @@ function ConferenceApplyInner() {
               {guestDraftRow && ' The answers you just filled in are still saved in this browser.'}
             </p>
             <div className="flex flex-wrap items-center justify-center gap-3">
-              {showPayment && (
-                <Link
-                  href={`/conferences/${slug}/pay`}
-                  className="inline-block rounded-xl py-2.5 px-6 font-bold text-sm focus:outline-none"
-                  style={{ backgroundColor: '#1B3828', color: '#EED98A', textDecoration: 'none', fontFamily: "var(--font-brand), sans-serif" }}
+              {showPayment && conference && (
+                <PayLink
+                  conferenceId={conference.id}
+                  slug={slug}
+                  className="inline-flex items-center gap-1.5 rounded-xl py-2.5 px-6 font-bold text-sm focus:outline-none"
+                  style={{ backgroundColor: '#1B3828', color: '#EED98A', textDecoration: 'none', fontFamily: "var(--font-brand), sans-serif", border: 'none' }}
                 >
                   Go to payment
-                </Link>
+                </PayLink>
               )}
               <Link
                 href={`/conferences/${slug}`}

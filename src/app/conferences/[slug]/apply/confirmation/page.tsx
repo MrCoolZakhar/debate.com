@@ -211,6 +211,7 @@ function ConfirmationInner({ conference }: { conference: ConfRow }) {
           currency={roleFee?.currency || conference.fee_currency || 'USD'}
           continueHref={portalHref}
           payHref={payable ? `/conferences/${slug}/pay` : null}
+          conferenceId={conference.id}
         >
           {/* What happens next: the application still has to be read. */}
           <div className="w-full mx-auto mt-12" style={{ maxWidth: 440 }}>

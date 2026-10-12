@@ -11,10 +11,11 @@
 // as a chip with the old total struck through and the new one.
 
 import { CreditCard, X } from 'lucide-react';
+import LockedPayButton from '../participant/PaymentsLocked';
 
 export interface BarDiscount { code: string; beforeLabel: string; afterLabel: string; onRemove: () => void }
 
-export default function PayBar({ count, totalLabel, allTicked, onSelectAll, onClear, onPay, busy, notice, extra, discount, onHaveCode }: {
+export default function PayBar({ count, totalLabel, allTicked, onSelectAll, onClear, onPay, busy, notice, extra, discount, onHaveCode, lockedSlug }: {
   count: number;
   totalLabel: string;
   allTicked: boolean;
@@ -30,6 +31,9 @@ export default function PayBar({ count, totalLabel, allTicked, onSelectAll, onCl
   discount?: BarDiscount | null;
   /** Opens "Discount Code"; omitted when the conference offers no codes. */
   onHaveCode?: () => void;
+  /** Payments are not set up yet (prompt 108): Pay is drawn locked, with a note
+   *  and a way to ask the organizers. The conference slug for that link. */
+  lockedSlug?: string;
 }) {
   const codeLink = onHaveCode && count > 0 && !discount
     ? (cls: string) => <button type="button" className={`gv-pay-link gv-pay-code-link ${cls}`} onClick={onHaveCode}>Have a discount code?</button>
@@ -55,9 +59,14 @@ export default function PayBar({ count, totalLabel, allTicked, onSelectAll, onCl
       {count > 0 && <button type="button" className="gv-pay-link gv-pay-bar-aux" onClick={onClear}>Clear</button>}
       {extra && <span className="gv-pay-bar-aux">{extra}</span>}
       <span className="gv-pay-bar-pay">
-        <button type="button" className="gv-pay-btn gv-pay-forest" disabled={count === 0 || busy} onClick={onPay}>
-          <CreditCard size={17} strokeWidth={2.2} aria-hidden /> Pay{count > 0 && <span className="gv-pay-bar-btn-total"> {totalLabel}</span>}
-        </button>
+        {lockedSlug ? (
+          <LockedPayButton slug={lockedSlug} className="gv-pay-btn gv-pay-forest"
+            label={<>Pay{count > 0 && <span className="gv-pay-bar-btn-total"> {totalLabel}</span>}</>} />
+        ) : (
+          <button type="button" className="gv-pay-btn gv-pay-forest" disabled={count === 0 || busy} onClick={onPay}>
+            <CreditCard size={17} strokeWidth={2.2} aria-hidden /> Pay{count > 0 && <span className="gv-pay-bar-btn-total"> {totalLabel}</span>}
+          </button>
+        )}
         {codeLink?.('gv-pay-code-desk')}
       </span>
     </div>

@@ -525,13 +525,13 @@ export default function PayPage() {
               area is only as tall as itself). */}
           {tab === 'outstanding' ? (
             <div className="flex flex-col gap-5" style={{ minWidth: 0 }}>
-              {canPay && tickable.length > 0 && (
+              {tickable.length > 0 && (
                 <PayListHead
                   count={chosen.length}
                   allTicked={payAllTicked}
                   onSelectAll={selectAll}
                   onClear={clearChosen}
-                  extra={uploadProofButton}
+                  extra={canPay ? uploadProofButton : undefined}
                 />
               )}
               <ItemList
@@ -551,7 +551,7 @@ export default function PayPage() {
               {quote && quote.skipped.length > 0 && (
                 <p className="gv-pay-quiet">{quote.skipped.join(', ')} already {quote.skipped.length === 1 ? 'has' : 'have'} a discount</p>
               )}
-              {canPay && tickable.length > 0 && (
+              {tickable.length > 0 && (
                 <PayBar
                   count={chosen.length}
                   totalLabel={money(payTotal, chosenCur)}
@@ -561,14 +561,15 @@ export default function PayPage() {
                     afterLabel: money(quote.total_after_cents, chosenCur),
                     onRemove: () => setApplied(null),
                   } : null}
-                  onHaveCode={codesOn ? () => setCodePop(true) : undefined}
+                  onHaveCode={codesOn && canPay ? () => setCodePop(true) : undefined}
                   allTicked={payAllTicked}
                   onSelectAll={selectAll}
                   onClear={clearChosen}
                   onPay={onPay}
+                  lockedSlug={canPay ? undefined : slug}
                   busy={paying !== null || startBusy}
                   notice={notice}
-                  extra={uploadProofButton}
+                  extra={canPay ? uploadProofButton : undefined}
                 />
               )}
             </div>
