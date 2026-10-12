@@ -33,6 +33,7 @@ import YourPurchases from './YourPurchases';
 import { IMPORTS_PAID_LAUNCH } from '../import/importQuote';
 import EmailPacks from './EmailPacks';
 import { openCreditsPopup } from '@/lib/purchasePopup';
+import { useOrganiserVisit } from '@/lib/organiserVisits';
 
 // Pictures from the site's own library for now; public/store/<placement>.jpg
 // would be the owner's replacements (see the report).
@@ -65,6 +66,8 @@ type Popup =
 
 export default function StorePage() {
   const { conference } = useManage();
+  // Checklist step "Visit the Store": stamped once per page load, silently.
+  useOrganiserVisit(conference?.id, 'store');
   const { data, loading, error, reload } = useStoreData(conference?.id ?? null, conference?.country ?? null);
   const [popup, setPopup] = useState<Popup>(null);
   // After a Country or Region booking: "Add your pop-up" (29 Sep 2026).

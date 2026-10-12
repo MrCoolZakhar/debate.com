@@ -4,12 +4,9 @@
 // prompt 106, unchanged in behaviour). Mounted by the manage header's Publish
 // button and by the dashboard checklist's "Publish your conference" row. It
 // writes is_public true and status 'public' as a verified write (exactly one
-// row) and pings IndexNow; a conference with TBD dates is sent to add them first
-// (the CHECK conferences_tbd_not_public).
+// row) and pings IndexNow. Dates to be decided do not block it (12 Oct 2026).
 
 import { useState } from 'react';
-import Link from 'next/link';
-import { CalendarDays } from 'lucide-react';
 import { getFreshAuthedClient } from '@/lib/supabase-auth';
 import { friendlyError } from '@/lib/friendlyError';
 import { NEU, OUTFIT } from '@/components/neu';
@@ -32,11 +29,10 @@ export default function PublishModal({
   const [publishing, setPublishing] = useState(false);
   const [publishError, setPublishError] = useState('');
 
-  // Mirrors the database CHECK conferences_tbd_not_public: a conference with
-  // dates still TBD, or no start date at all, can never go public. Caught
-  // here rather than left to the write, so the organizer sees why and where
-  // to fix it instead of a raw constraint error.
-  const needsDates = conference.dates_tbd || !conference.start_date;
+  // Dates to be decided no longer block publishing (owner, 12 Oct 2026):
+  // Explore lists such a conference under "Dates to Be Decided". Until the
+  // CHECK conferences_tbd_not_public is dropped (scratch-tbd-public.sql) the
+  // write is refused and friendlyError shows CONSTRAINT_MESSAGES' sentence.
 
   async function handlePublish() {
     setPublishing(true);
@@ -81,37 +77,6 @@ export default function PublishModal({
         style={{ backgroundColor: NEU.surface, boxShadow: NEU.out }}
         onClick={(e) => e.stopPropagation()}
       >
-        {needsDates ? (
-          <>
-            <h2 className="font-black text-xl mb-2" style={{ color: NEU.ink, fontFamily: OUTFIT }}>
-              Add your dates first
-            </h2>
-            <p className="text-sm mb-6" style={{ color: NEU.muted, fontFamily: OUTFIT }}>
-              Your conference dates are set to TBD. A conference needs real dates before it can be listed publicly. You can keep taking applications while it stays private.
-            </p>
-            <div className="flex gap-3">
-              <button
-                onClick={onClose}
-                className="flex-1 rounded-xl py-2.5 font-bold text-sm transition-colors focus:outline-none gv-lift"
-                style={{ border: '1.5px solid #DDD4C0', color: NEU.ink, backgroundColor: 'transparent', fontFamily: OUTFIT }}
-                onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#1B3828'; }}
-                onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#DDD4C0'; }}
-              >
-                Cancel
-              </button>
-              <Link
-                href={`/manage/${conference.slug}/settings?tab=conference&focus=dates`}
-                className="flex-1 rounded-xl py-2.5 font-bold text-sm transition-colors focus:outline-none gv-lift flex items-center justify-center gap-2"
-                style={{ backgroundColor: '#1B3828', color: NEU.gold, fontFamily: OUTFIT, textDecoration: 'none' }}
-                onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
-                onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
-              >
-                <CalendarDays size={15} strokeWidth={2.2} />
-                Add dates
-              </Link>
-            </div>
-          </>
-        ) : (
           <>
             <h2 className="font-black text-xl mb-2" style={{ color: NEU.ink, fontFamily: OUTFIT }}>
               Publish Your Conference?
@@ -148,7 +113,6 @@ export default function PublishModal({
               </button>
             </div>
           </>
-        )}
       </div>
     </div></Portal>
   );

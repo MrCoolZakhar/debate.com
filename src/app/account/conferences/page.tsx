@@ -18,6 +18,7 @@ import {
   useConferenceActions, AcceptedNotice, ChairInvitesSection, OrganizerInvitesSection,
   PendingImportInvitesSection, DraftsToCompleteSection,
 } from './conferenceActions';
+import { ConferenceDraftsSection } from './ConferenceDraftsSection';
 import { CircleFlag } from '@/components/CircleFlag';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
@@ -346,6 +347,7 @@ function MyConferencesInner() {
         {actions.acceptedToast && <AcceptedNotice />}
         {user && <PaymentsDueSection userId={user.id} />}
         <PendingImportInvitesSection invites={actions.importInvites} />
+        <ConferenceDraftsSection />
         <DraftsToCompleteSection drafts={actions.drafts} onDelete={actions.deleteDraft} />
         <ChairInvitesSection invites={actions.chairInvites} onRespond={actions.respondChair} />
         <OrganizerInvitesSection invites={actions.organizerInvites} onRespond={actions.respondOrganizer} />

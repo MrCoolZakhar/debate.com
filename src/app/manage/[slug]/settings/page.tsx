@@ -1660,12 +1660,10 @@ export default function SettingsPage() {
 
   function handlePublicToggle(next: boolean) {
     if (!conference || publicToggleSaving) return;
-    // A conference with dates set to TBD (or no start date yet) can never be
-    // public — mirrors the DB CHECK `conferences_tbd_not_public`.
-    if (next && (conference.dates_tbd || !conference.start_date)) {
-      notifyErr('Add conference dates before publishing. A conference with dates set to TBD stays private.', 'settings-privacy');
-      return;
-    }
+    // Dates to be decided no longer block publishing (owner, 12 Oct 2026):
+    // Explore lists such a conference under "Dates to Be Decided". Until the
+    // owner drops the CHECK conferences_tbd_not_public (scratch-tbd-public.sql)
+    // the write is refused and CONSTRAINT_MESSAGES says why.
     setPublicToggleSaving(true);
     clearErr('settings-privacy');
     void (async () => {
@@ -3066,9 +3064,10 @@ export default function SettingsPage() {
 
   // ── Visibility: a card on General since 12 Oct 2026 (it was its own tab).
   // Every write is unchanged: handlePublicToggle and saveVisibility.
+  // Dates to be decided do not block publishing (owner, 12 Oct 2026).
   const visNoDates = view.dates_tbd || !view.start_date;
-  // Publishing waits only for real dates; never for payments (owner, 12 Oct 2026).
-  const visBlockPublic = !view.is_public && visNoDates;
+  // Publishing never waits for dates or payments (owners, 12 Oct 2026).
+  const visBlockPublic = false;
   const visibilityCard = (
     <Group
       id="visibility-card"
@@ -3095,9 +3094,7 @@ export default function SettingsPage() {
           disabled={visBlockPublic}
           onChange={handlePublicToggle}
           desc={view.is_public
-            ? 'Anyone can find your page on Gavelling.'
-            : visNoDates
-              ? <>Add your dates before it can go public.{' '}<button type="button" onClick={() => document.getElementById('dates-card')?.scrollIntoView({ behavior: 'smooth', block: 'center' })} style={{ color: '#1B3828', fontWeight: 700, textDecoration: 'underline', textUnderlineOffset: 3, background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontSize: 'inherit', fontFamily: 'inherit' }}>Add dates</button></>
+            ? (visNoDates ? 'Anyone can find your page on Gavelling. Explore lists it under Dates to be decided.' : 'Anyone can find your page on Gavelling.')
               : 'Private. Only people with the link can open it.'}
         />
         <Row label="Your page link" desc={`gavelling.com/conferences/${view.slug}`} align="end">
@@ -3303,11 +3300,11 @@ export default function SettingsPage() {
               <div className="gvg-grid">
                 <IdField
                   id="dates-card" label="Dates" emoji="Spiral calendar" span={4} ring={datesPulse}
-                  note={datesTbd ? 'A conference with dates to be decided stays private until you add them.' : undefined}
+                  note={datesTbd ? 'Explore lists your conference under Dates to be decided until you add them.' : undefined}
                   aside={
-                    // Dates TBD: keeps the conference private (no public link) until real
-                    // dates are set, mirroring the DB CHECK conferences_tbd_not_public.
-                    // Applications can still open while dates are undecided.
+                    // Dates TBD: the conference can still be public (owner,
+                    // 12 Oct 2026); Explore lists it in its own section at the
+                    // bottom. Applications can still open while dates are undecided.
                     <label className="inline-flex items-center gap-2 cursor-pointer" style={{ fontFamily: "var(--font-brand), sans-serif", fontSize: TYPE_PX.hint, fontWeight: 600, color: '#3A2E24' }}>
                       To be decided
                       <KitSwitch

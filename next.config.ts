@@ -81,6 +81,13 @@ const nextConfig: NextConfig = {
         has: [{ type: 'query' as const, key }],
         headers: NOINDEX,
       })),
+      // A saved conference-listing draft (reminder emails link here with its
+      // token). The bare wizard stays indexable.
+      {
+        source: '/conferences/new',
+        has: [{ type: 'query' as const, key: 'draft' }],
+        headers: NOINDEX,
+      },
       // Build assets and public files are fetched by Google to RENDER pages
       // (so never disallow them) but must not be reported as pages: Search
       // Console listed every /_next/static chunk as "Crawled, not indexed".

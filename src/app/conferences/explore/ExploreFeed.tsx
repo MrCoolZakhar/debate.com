@@ -17,7 +17,7 @@ import { CircleFlag } from '@/components/CircleFlag';
 import VerifiedCheck from '@/components/VerifiedCheck';
 import { CreditSponsoredMark, SpotlightTag, SPOTLIGHT_GLOW, SPOTLIGHT_GLOW_HOVER } from '@/components/conferences/SpotlightTag';
 import { conferenceAcronymLabel } from '@/lib/conferenceLabels';
-import { formatConferenceDates } from '@/lib/conferenceDates';
+import { formatConferenceDates, DATES_TO_BE_DECIDED } from '@/lib/conferenceDates';
 import { getCountryByName } from '@/lib/countries';
 import { currencySymbol, formatFeeAmountCompact } from '@/lib/utils';
 import { TBD_PRICE, type DelegatePrice } from '@/lib/publicFees';
@@ -40,6 +40,8 @@ export interface ExploreConference {
   city: string;
   start_date: string;
   end_date: string;
+  /** Dates to be decided (start and end are then null). */
+  dates_tbd?: boolean;
   expected_delegates: number;
   fee_amount: number;
   fee_currency: string;
@@ -84,7 +86,7 @@ function placeLine(c: { city: string | null; country: string | null }) {
 }
 
 function datesLine(start: string | null, end: string | null) {
-  return start ? formatConferenceDates(start, end, { style: 'dmy-end-year' }) : 'Dates to be announced';
+  return start ? formatConferenceDates(start, end, { style: 'dmy-end-year' }) : DATES_TO_BE_DECIDED;
 }
 
 /** Price in bold with the role in grey. */
@@ -294,7 +296,7 @@ export interface MonthGroup { key: string; label: string; items: ExploreConferen
 const MONTH_FMT = typeof Intl !== 'undefined' ? new Intl.DateTimeFormat('en-GB', { month: 'long', year: 'numeric' }) : null;
 
 /** Groups an already-sorted list by the month it starts in, keeping the order.
- *  Undated conferences form one group, "Dates to be announced". */
+ *  Undated conferences form one group, "Dates to be decided" (Explore never passes one: it lists them in their own section). */
 export function groupByMonth(list: ExploreConference[]): MonthGroup[] {
   const out: MonthGroup[] = [];
   const byKey = new Map<string, MonthGroup>();
@@ -303,7 +305,7 @@ export function groupByMonth(list: ExploreConference[]): MonthGroup[] {
     const key = d ? `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}` : 'tbd';
     let g = byKey.get(key);
     if (!g) {
-      g = { key, label: d && MONTH_FMT ? MONTH_FMT.format(d) : 'Dates to be announced', items: [] };
+      g = { key, label: d && MONTH_FMT ? MONTH_FMT.format(d) : DATES_TO_BE_DECIDED, items: [] };
       byKey.set(key, g);
       out.push(g);
     }

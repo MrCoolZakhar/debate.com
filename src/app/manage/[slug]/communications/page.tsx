@@ -44,6 +44,7 @@ import { getDefaultEventEmail } from '@/lib/defaultEmails';
 import DefaultEmailPreviewModal from '@/components/DefaultEmailPreviewModal';
 import EmailIssuesNotice from '@/components/conferences/EmailIssuesNotice';
 import { markEmailsExplored } from '@/lib/emailsExplored';
+import { useOrganiserVisit } from '@/lib/organiserVisits';
 import GuidedWalkthrough, {
   TourGold, TourGreen, OTTER_INTRO, OTTER_OUTRO, type WalkthroughStep,
 } from '@/components/GuidedWalkthrough';
@@ -1479,6 +1480,9 @@ function CommunicationsPageInner() {
   useEffect(() => {
     stampEmailsExplored();
   }, [stampEmailsExplored]);
+  // Checklist step "Go to the Communications page" (checklist v2): the
+  // server stamp comms_visited_at, once per page load, fire-and-forget.
+  useOrganiserVisit(conferenceId, 'communications');
 
   // ── Data state ──
   const [templates, setTemplates] = useState<EmailTemplate[]>([]);

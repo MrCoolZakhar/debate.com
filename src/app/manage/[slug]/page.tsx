@@ -2,17 +2,17 @@
 
 import EmailIssuesNotice from '@/components/conferences/EmailIssuesNotice';
 import { useState, useEffect, useMemo, useRef } from 'react';
-import { notifyErr, notifyOk } from '@/lib/appNotify';
+import { notifyOk } from '@/lib/appNotify';
 import { notify } from '@/lib/sessionNotifications';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
-  Building2, Rocket, Mail, Gavel, UsersRound, UserPlus, Wallet, Palette,
+  Building2, Rocket, Mail, Gavel, UsersRound, UserPlus, Wallet, Palette, Store as StoreIcon,
   Inbox, Globe2, CheckCircle2, AlertCircle, ArrowRight,
   Activity, UserRoundCheck, MapPin, RotateCcw,
 } from 'lucide-react';
 import { useManage } from '@/app/manage/[slug]/layout';
-import { getAuthedClient } from '@/lib/supabase-auth';
+import { getAuthedClient, getFreshAuthedClient } from '@/lib/supabase-auth';
 import { useAuth } from '@/components/AuthProvider';
 import { formatFee } from '@/lib/utils';
 import { LogoDisc } from '@/components/LogoDisc';
@@ -33,6 +33,8 @@ import { fetchAllRows } from '@/lib/fetchAllRows';
 import { BENTO_BORDER, BENTO_WASH_FOREST } from '@/components/conferences/bento';
 import { conferencePaymentsReady } from '@/lib/payments';
 import { hasExploredEmails } from '@/lib/emailsExplored';
+import { hasVisitedOrganiserPage } from '@/lib/organiserVisits';
+import { roleWindowState } from '@/lib/applicationWindow';
 import { getConferenceIntent, intentRank } from '@/lib/conferenceIntent';
 import { outstandingPledgedSpots } from '@/lib/pledgedSpots';
 import { useConferenceMoney } from '@/lib/conferenceMoney';
@@ -241,6 +243,8 @@ interface DashData {
   /** Pending and accepted chair invites (status + the invitee's account, never
    *  the email), for the invite-acceptance card. */
   chairInvites: ChairInviteRow[];
+  /** Every role's switch and window, for the "Launch applications" row. */
+  roleConfigs: { role: string; is_enabled: boolean; applications_open_at: string | null; applications_close_at: string | null }[];
 }
 
 // ── Recent activity feed ───────────────────────────────────────────────────
@@ -636,11 +640,11 @@ function ActivityModal({ events, now, onClose }: { events: ActivityEvent[]; now:
 // Revenue read-out (money card): src/components/conferences/RevenueReadout.tsx
 
 // ── Verification strip: the road to the blue checkmark ───────────────────
-// The seven verification stages are the checklist minus the delegate row.
+// The six verification stages are the checklist minus 'store' (checklist v2).
 // Minutes come from conference_setup_status() through the manage context;
 // these client estimates only fill the gap before that first answer lands.
 const VERIFICATION_MINUTES: Record<string, number> = {
-  page: 5, committees: 10, chairs: 5, email: 3, secretariat: 3, financials: 5, publish: 1,
+  page: 5, committees: 10, applications: 5, financials: 5, communications: 2, chairs: 3,
 };
 
 function VerificationStrip({ fallbackMinutes }: { fallbackMinutes: number }) {
@@ -696,7 +700,7 @@ function VerificationStrip({ fallbackMinutes }: { fallbackMinutes: number }) {
           size={16}
           title={verified
             ? 'Verified conference'
-            : 'Earned automatically once page, committees, chairs, emails, secretariat, payment method and publishing are done.'}
+            : 'Earned automatically once your page, committees, applications, payment method, a look at Communications and a chair are done.'}
         />
         <span className="truncate" title={headline} style={{ fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 700, color: verified ? NEU.forest : NEU.inkSoft, fontVariantNumeric: 'tabular-nums' }}>
           {headline}
@@ -744,6 +748,18 @@ const SETUP_DONE_NOTICE: Record<string, { title: string; body: string }> = {
   chairs: {
     title: 'Your dais has a chair',
     body: 'Chairs can run their committee sessions from their own dashboard.',
+  },
+  applications: {
+    title: 'Applications are open',
+    body: 'Delegates can apply from your public page now.',
+  },
+  communications: {
+    title: 'Communications explored',
+    body: 'You have seen what goes out to applicants and where their questions land.',
+  },
+  store: {
+    title: 'You have seen the Store',
+    body: 'Spotlights and email packs are there whenever you want more delegates.',
   },
   email: {
     title: 'Emails explored',
@@ -837,9 +853,8 @@ function SetupCompletionNotices({
 
 export default function DashboardPage() {
   const router = useRouter();
-  const { conference, refreshConferenceQuiet, verification, refreshVerification } = useManage();
+  const { conference, refreshConferenceQuiet, verification } = useManage();
   const { session } = useAuth();
-  const [soloSaving, setSoloSaving] = useState(false);
   const [showPublishModal, setShowPublishModal] = useState(false);
   const [showShareModal, setShowShareModal] = useState(false);
   const [dash, setDash] = useState<DashData | null>(null);
@@ -876,7 +891,7 @@ export default function DashboardPage() {
     const supabase = getAuthedClient(session.access_token);
     const confId = conference.id;
     (async () => {
-      const [appsRes, allocRes, committeesRes, orgRes, emailRes, chairInvRes, orgInvRes, chairInvAllRes] = await Promise.all([
+      const [appsRes, allocRes, committeesRes, orgRes, emailRes, chairInvRes, orgInvRes, chairInvAllRes, roleCfgRes] = await Promise.all([
         // Paged: one request stops silently at 1,000 rows, which undercounted
         // every tile of a big conference.
         fetchAllRows((from, to) => supabase
@@ -930,6 +945,12 @@ export default function DashboardPage() {
           .select('status, invited_user_id')
           .eq('conference_id', confId)
           .in('status', ['pending', 'accepted']),
+        // Checklist v2, "Launch applications": is any role switched on with a
+        // window that has not closed (the same rule as conference_setup_status).
+        supabase
+          .from('application_role_configs')
+          .select('role, is_enabled, applications_open_at, applications_close_at')
+          .eq('conference_id', confId),
       ]);
       const allocRows = (allocRes.data ?? []) as { created_at: string | null }[];
       setDash({
@@ -944,53 +965,63 @@ export default function DashboardPage() {
           .filter((id): id is string => !!id),
         pendingOrganizerInvites: orgInvRes.count ?? 0,
         chairInvites: (chairInvAllRes.data ?? []) as ChairInviteRow[],
+        roleConfigs: (roleCfgRes.data ?? []) as DashData['roleConfigs'],
       });
     })();
   }, [conference?.id, !!session]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // "Explore emails" is the one checklist item that is NOT a function of the
-  // database: it is ticked once this browser has visited the communications
-  // page (flag written there, see src/lib/emailsExplored.ts). Read in an effect,
-  // never during render, so the server-rendered markup still matches.
+  // Checklist v2 (owner, 12 Oct 2026): "Go to the Communications page" and
+  // "Visit the Store" are done once an organiser has opened that page. The
+  // server stamps (conferences.comms_visited_at / store_visited_at, written by
+  // mark_organiser_visit, scratch-checklist-v2.sql) are the truth;
+  // localStorage, written by the same pages (src/lib/organiserVisits.ts and,
+  // for Communications, src/lib/emailsExplored.ts), is the instant tick on the
+  // way back. Read in an effect, never during render, so the server-rendered
+  // markup still matches.
   const [emailsExplored, setEmailsExplored] = useState(false);
+  const [commsVisited, setCommsVisited] = useState(false);
+  const [storeVisited, setStoreVisited] = useState(false);
   useEffect(() => {
     if (!conference) return;
     // localStorage is an external store; it can only be read after mount.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setEmailsExplored(hasExploredEmails(conference.id));
+    setCommsVisited(hasVisitedOrganiserPage(conference.id, 'communications'));
+    setStoreVisited(hasVisitedOrganiserPage(conference.id, 'store'));
   }, [conference?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  /** Is the "Explore emails" stage done, as THE SERVER counts it?
-   *
-   *  This row used to be ticked from localStorage alone, which made it the one
-   *  checklist item that could disagree with the database. `conference_setup_status()`
-   *  counts it done when `emails_explored_at IS NOT NULL` **OR** an enabled
-   *  `email_templates` row exists — so an organiser who had already turned an
-   *  email on, or who came back on a second device, in another browser, in a
-   *  private window, or after clearing site data, was told to go and do a step
-   *  the checkmark logic had already credited. It never cleared, because
-   *  nothing they could do on the dashboard would write that browser's key.
-   *
-   *  The server is the only authority worth having here, and it is already on
-   *  screen: the layout reads `verification_pending` from that same function.
-   *  A verified conference has, by definition, no pending verification stage.
-   *  localStorage survives only as the optimistic tick for the seconds between
-   *  visiting the emails page and the row being refetched. */
-  const emailStageDone = conference?.is_verified
-    ? true
-    // A UNION, deliberately, not a precedence chain. Any one of these being
-    // true means the step is genuinely done, and reading them in priority
-    // order is what made this row stick: `verification.pending` is fetched
-    // once per conference, so coming back from the emails page it still
-    // listed 'email', the row stayed unticked, `doneCount` never moved, and
-    // VerificationStrip's refresh effect is keyed on `doneCount` — the stale
-    // answer prevented the very refresh that would have corrected it.
-    // localStorage ticks the instant they click through, the server column
-    // arrives with refreshConferenceQuiet, and verification confirms it
-    // later. None of them can now be outvoted by a stale sibling.
-    : (!!conference?.emails_explored_at
-        || emailsExplored
-        || (!!verification && !verification.pending.includes('email')));
+  /** The server's own answer per checklist key, from conference_setup_status().
+   *  Re-read whenever the layout's verification answer changes (the dashboard
+   *  asks for that whenever its checklist moves). Before the v2 SQL is applied
+   *  it carries the old keys, and the rows below simply fall back to their
+   *  client checks; nothing here assumes which keys come back. */
+  const [serverDone, setServerDone] = useState<Record<string, boolean>>({});
+  useEffect(() => {
+    if (!conference?.id || !session) return;
+    let alive = true;
+    void (async () => {
+      const client = await getFreshAuthedClient();
+      if (!client || !alive) return;
+      const { data } = await client.rpc('conference_setup_status', { p_conference_id: conference.id });
+      const items = (data as { items?: { key?: unknown; done?: unknown }[] } | null)?.items;
+      if (!alive || !Array.isArray(items)) return;
+      const next: Record<string, boolean> = {};
+      for (const i of items) if (typeof i.key === 'string') next[i.key] = i.done === true;
+      setServerDone(next);
+    })();
+    return () => { alive = false; };
+  }, [conference?.id, !!session, verification]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  /** "Go to the Communications page": a UNION, never a precedence chain, so a
+   *  stale sibling can never outvote a true one (the old "Explore emails" row
+   *  stuck for exactly that reason). emails_explored_at is the older stamp the
+   *  same page has written on every first visit since Sep 2026, so it counts. */
+  const commsStageDone =
+    !!serverDone.communications
+    || !!conference?.emails_explored_at
+    || emailsExplored
+    || commsVisited;
+  const storeStageDone = !!serverDone.store || storeVisited;
 
   // Money card: the payments ledger, never payment_status x fee.
   const { money } = useConferenceMoney(session?.access_token, conference?.id);
@@ -1175,43 +1206,6 @@ export default function DashboardPage() {
   }
 
   const slug = conference.slug;
-  // The organiser has said they are running this alone. It satisfies the
-  // secretariat stage on its own; see handleSoloSecretariat.
-  const soloSecretariat = !!conference.solo_secretariat_ack_at;
-
-  /**
-   * "I'm running this one on my own."
-   *
-   * The `secretariat` verification stage used to demand a SECOND organiser, so
-   * a conference genuinely run by one person could never be verified however
-   * ready everything else was. This is the other way to satisfy it: the
-   * organiser says so, once, and we stamp when they said it. It is never set
-   * for anybody automatically, and inviting someone later still works — the
-   * stage is a UNION, not a switch.
-   */
-  async function handleSoloSecretariat() {
-    if (!conference || !session || soloSaving) return;
-    setSoloSaving(true);
-    const supabase = getAuthedClient(session.access_token);
-    // .select() so a zero-row write (RLS refusing us) is visible. supabase-js
-    // resolves with error null on a write that matched nothing, so counting
-    // the returned rows is the only honest confirmation.
-    const { data, error } = await supabase
-      .from('conferences')
-      .update({ solo_secretariat_ack_at: new Date().toISOString() })
-      .eq('id', conference.id)
-      .select('id');
-    setSoloSaving(false);
-    if (error || !data || data.length === 0) {
-      notifyErr('Could not save that. Try again in a moment.', 'solo-secretariat');
-      return;
-    }
-    await refreshConferenceQuiet();
-    void refreshVerification();
-    // No success toast here: the checklist row flips to done on the refreshed
-    // conference and SetupCompletionNotices raises the card. Two would be noise.
-  }
-
   const confYear = conference.start_date ? new Date(conference.start_date + 'T00:00:00').getFullYear() : null;
 
   // ── Derived numbers ──────────────────────────────────────────────────────
@@ -1279,9 +1273,13 @@ export default function DashboardPage() {
     href: r.key === 'chairs' ? `/manage/${slug}/committees` : `/manage/${slug}/applications`,
   }));
 
-  // ── Set-up priorities: 8 detection checks, in journey order ──────────────
-  // Base order = the natural build journey (page → committees → chairs → email →
-  // secretariat → financials → delegate → launch). Done rows are
+  // ── Set-up priorities: 7 detection checks, in journey order ──────────────
+  // Checklist v2 (owner, 12 Oct 2026): page → committees → applications →
+  // financials → communications → chairs → store, the same seven keys and
+  // order as conference_setup_status() in scratch-checklist-v2.sql (pending).
+  // The blue checkmark is the first six; 'store' is not a criterion. 'email',
+  // 'secretariat' and 'publish' left the list (Publish lives in the manage
+  // header). Done rows are
   // filtered out entirely rather than sorted to the bottom, and what is left is
   // then reordered around the organiser's stated intent — both in
   // `pendingChecklist` below, which is where the render order is decided.
@@ -1294,10 +1292,16 @@ export default function DashboardPage() {
   // setup_total is now 7 in both places, all of them verification stages.) It was never a
   // verification criterion, so the blue checkmark is untouched.
   // Client twin of conference_setup_status()'s 'page' item: real dates are
-  // now part of what "set up" means, because a TBD conference can never be
-  // public (CHECK conferences_tbd_not_public) — the same rule PublishModal
-  // checks before it ever tries the write.
+  // part of what "set up" means. A conference with dates to be decided CAN be
+  // public since 12 Oct 2026 (Explore lists it under Dates to Be Decided), so
+  // the copy no longer says it cannot be published.
   const pageNeedsDates = conference.dates_tbd || !conference.start_date;
+  // Checklist v2, "Launch applications" (client twin of conference_setup_status).
+  const rolesSwitchedOn = dash.roleConfigs.some(r => r.is_enabled);
+  const applicationsLaunched = !!serverDone.applications || dash.roleConfigs.some(r => {
+    const state = roleWindowState(r, now);
+    return state === 'open' || state === 'not_open';
+  });
   const checklist = [
     {
       key: 'page',
@@ -1308,7 +1312,7 @@ export default function DashboardPage() {
       sub: pageNeedsDates
         ? ((!conference.banner_url || !conference.description?.trim())
           ? 'Add your conference dates, a banner and a description.'
-          : "Add your conference dates. Without them it can't be published.")
+          : 'Add your conference dates so delegates can plan their trip.')
         : 'Add a banner and a description delegates will see.',
       done: !!conference.banner_url && !!conference.description?.trim() && !conference.dates_tbd && !!conference.start_date,
       onClick: () => router.push(pageNeedsDates
@@ -1330,6 +1334,55 @@ export default function DashboardPage() {
           : `${committeeCount} committee${committeeCount === 1 ? '' : 's'}, ${seatCapacity} seats.`,
       done: committeeCount > 0 && seatShortfall === 0,
       onClick: () => router.push(`/manage/${slug}/committees`),
+    },
+    {
+      // Checklist v2: at least one role switched on with a window that has not
+      // closed (a window opening later counts). The server also counts a
+      // conference that already has applicants' own applications, so closed
+      // windows never take the step back; its answer joins in as a union.
+      key: 'applications',
+      icon: Rocket,
+      emoji: 'Ballot box with ballot',
+      gradient: NEU_GRADIENTS.forest,
+      title: 'Launch applications',
+      sub: applicationsLaunched
+        ? 'Applications are open.'
+        : rolesSwitchedOn
+          ? 'Your application windows have closed. Reopen a role or move its closing date.'
+          : !conferencePaymentsReady(conference)
+            ? 'Add your financial information, then open applications for at least one role.'
+            : 'Open applications for at least one role so delegates can apply.',
+      done: applicationsLaunched,
+      // With no applications yet, the Applications page carries the one-click
+      // "Open delegate applications" card (OpenDelegateApplications.tsx);
+      // otherwise the role switches live in Settings → Applications.
+      onClick: () => router.push(dash.apps.length === 0
+        ? `/manage/${slug}/applications`
+        : `/manage/${slug}/settings?tab=applications`),
+    },
+    {
+      key: 'financials',
+      icon: Wallet,
+      emoji: 'Money bag',
+      gradient: NEU_GRADIENTS.amber,
+      title: 'Add financial information',
+      // Mirrors conference_payments_ready: a non-null fee_amount alone was
+      // never a real signal (the creation page always writes one), this row
+      // only clears once delegates actually have somewhere to pay.
+      done: conferencePaymentsReady(conference),
+      sub: 'Choose how you get paid so delegates can actually pay you.',
+      onClick: () => router.push(`/manage/${slug}/financials?open=payment`),
+    },
+    {
+      key: 'communications',
+      icon: Mail,
+      emoji: 'Envelope',
+      gradient: NEU_GRADIENTS.gold,
+      title: 'Go to the Communications page',
+      sub: 'See the emails applicants get and the questions they send you.',
+      // Ticked by opening the page once. See `commsStageDone` above.
+      done: commsStageDone,
+      onClick: () => router.push(`/manage/${slug}/communications`),
     },
     {
       key: 'chairs',
@@ -1369,90 +1422,20 @@ export default function DashboardPage() {
       ),
     },
     {
-      key: 'email',
-      icon: Mail,
-      emoji: 'Envelope',
-      gradient: NEU_GRADIENTS.gold,
-      title: 'Explore emails',
-      sub: 'See what you can send applicants automatically.',
-      // Ticked by visiting the communications page, or by having any email
-      // turned on. See `emailStageDone` above: the answer comes from
-      // conference_setup_status() so this row cannot disagree with the
-      // checkmark, which is exactly what it used to do.
-      done: emailStageDone,
-      onClick: () => router.push(`/manage/${slug}/communications`),
-    },
-    {
-      key: 'secretariat',
-      icon: UsersRound,
-      // "Handshake" reads instantly as bringing co-organizers on board, the
-      // grey "Busts in silhouette" 3D asset was muddy on its tinted seat.
-      emoji: 'Handshake',
-      gradient: NEU_GRADIENTS.sage,
-      title: 'Add your secretariat',
-      sub: dash.organizerCount > 1
-        ? `${dash.organizerCount} organizers on the team.`
-        : dash.pendingOrganizerInvites > 0
-          ? 'Invite sent. Waiting for them to accept.'
-          : soloSecretariat
-            ? 'You are running this one on your own.'
-            : 'Invite co-organizers and grant them access.',
-      // One invite out is enough: the organiser has done the part they control,
-      // and accepting is not theirs to do. A solo organiser who has said so is
-      // the third way through: this stage gates the blue checkmark, and there
-      // was no honest answer here for a conference that really is one person.
-      done: dash.organizerCount > 1 || dash.pendingOrganizerInvites > 0 || soloSecretariat,
-      onClick: () => router.push(`/manage/${slug}/settings?tab=organizers`),
-      // Secondary, and quiet on purpose. The row's own click still goes to the
-      // invite screen, which stays the thing we suggest; this is only here so
-      // someone with nobody to invite is not stuck. Muted rather than gold,
-      // and it never nags.
-      action: (
-        <button
-          onClick={(e) => { e.stopPropagation(); void handleSoloSecretariat(); }}
-          disabled={soloSaving}
-          title="Marks this stage done so a one-person secretariat can still earn the checkmark. You can invite people any time."
-          className="focus:outline-none"
-          style={{
-            fontFamily: OUTFIT, fontSize: 10, fontWeight: 800,
-            color: NEU.muted, background: 'none', border: 'none',
-            cursor: soloSaving ? 'default' : 'pointer', padding: '2px 4px',
-            opacity: soloSaving ? 0.5 : 1, whiteSpace: 'nowrap',
-          }}
-        >
-          {soloSaving ? 'Saving…' : "I'm on my own"}
-        </button>
-      ),
-    },
-    {
-      key: 'financials',
-      icon: Wallet,
-      emoji: 'Money bag',
+      key: 'store',
+      icon: StoreIcon,
+      emoji: 'Shopping bags',
       gradient: NEU_GRADIENTS.amber,
-      title: 'Add financial information',
-      // Mirrors conference_payments_ready: a non-null fee_amount alone was
-      // never a real signal (the creation page always writes one), this row
-      // only clears once delegates actually have somewhere to pay.
-      done: conferencePaymentsReady(conference),
-      sub: 'Choose how you get paid so delegates can actually pay you.',
-      onClick: () => router.push(`/manage/${slug}/financials/settings`),
-    },
-    {
-      // Compact publish CTA lives here as the checklist's launch row, the
-      // big accent quick-actions card was removed with the one-page layout.
-      key: 'publish',
-      icon: Rocket,
-      emoji: 'Rocket',
-      gradient: NEU_GRADIENTS.forest,
-      title: 'Publish your conference',
-      sub: conference.is_public ? 'Your conference is live.' : 'Publish your conference to gavelling.com.',
-      done: conference.is_public,
-      onClick: handlePublishClick,
+      title: 'Visit the Store',
+      sub: 'See how Spotlights and email packs bring you more delegates.',
+      // Ticked by opening the Store once. Not a checkmark criterion.
+      done: storeStageDone,
+      onClick: () => router.push(`/manage/${slug}/store`),
     },
   ];
   const doneCount = checklist.filter(c => c.done).length;
   // Used only while the server's own estimate has not arrived yet: the
-  // verification stages are the checklist minus the delegate row.
+  // verification stages are the checklist minus 'store'.
   const fallbackMinutes = checklist
     .filter(c => !c.done && c.key in VERIFICATION_MINUTES)
     .reduce((sum, c) => sum + VERIFICATION_MINUTES[c.key], 0);
@@ -1482,9 +1465,9 @@ export default function DashboardPage() {
   // Stable by construction: the comparator returns 0 for equal ranks, so within
   // each band the journey order survives untouched. An intent of `{}` (every
   // conference created before this shipped, and anyone who skipped) boosts
-  // nothing, so every row scores 1 except `publish` at 2 — and `publish` is
-  // already last in the array, which makes the order for them byte-identical to
-  // what it was.
+  // nothing, so every row scores 1 except `store` at 2 — and `store` is
+  // already last in the array, which makes the order for them exactly the
+  // owner's journey order.
   const intent = getConferenceIntent(conference.intent);
   const intentRankOf = intentRank(intent);
   const pendingInJourneyOrder = checklist.filter(c => !c.done);
@@ -1497,15 +1480,6 @@ export default function DashboardPage() {
   const intentReordered =
     intent.keys.length > 0 &&
     pendingChecklist.some((c, i) => c.key !== pendingInJourneyOrder[i].key);
-
-  function handlePublishClick() {
-    if (committeeCount === 0) {
-      notifyErr('Add at least one committee before publishing.', 'publish');
-      return;
-    }
-    // Publishing never waits for payments (owner, 12 Oct 2026): only paying on /pay does.
-    setShowPublishModal(true);
-  }
 
   async function handlePublished() {
     // Quiet: swaps the conference row in without flipping the layout's

@@ -1960,8 +1960,8 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                       {isOnline ? 'Online' : [(conference.city ?? '').trim(), (countryObj?.code ?? conference.country ?? '').trim().toUpperCase()].filter(Boolean).join(', ')}
                     </span>
                   </span>
-                  {/* Dates are hidden when TBD or missing. The organizer alone
-                      still sees a subtle "Dates: TBD" chip so the state is clear. */}
+                  {/* Dates to be decided: a public TBD conference (allowed since
+                      12 Oct 2026) says so to everyone, never a made-up date. */}
                   {!conference.dates_tbd && conference.start_date ? (
                     <>
                       <span aria-hidden style={{ color: 'rgba(238,217,138,0.5)', fontSize: '10px' }}>◆</span>
@@ -1969,14 +1969,14 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                         {formatDateRange(conference.start_date, conference.end_date)}
                       </span>
                     </>
-                  ) : isOrganizerViewer ? (
+                  ) : (
                     <>
                       <span aria-hidden style={{ color: 'rgba(238,217,138,0.5)', fontSize: '10px' }}>◆</span>
-                      <span style={{ fontFamily: "var(--font-brand), sans-serif", fontWeight: 600, fontSize: '13px', color: 'var(--gv-on-main)' }}>
-                        Dates: TBD
+                      <span style={{ fontFamily: "var(--font-brand), sans-serif", fontWeight: 500, letterSpacing: '0.01em', fontSize: '12px', color: 'rgba(237,231,216,0.78)' }}>
+                        Dates to be decided
                       </span>
                     </>
-                  ) : null}
+                  )}
                   {/* Credit sponsored, beside the dates, so it is seen the
                       moment the page opens (the line under the price
                       medallion stays too). */}

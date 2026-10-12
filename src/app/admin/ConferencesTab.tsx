@@ -30,7 +30,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowDownWideNarrow, ArrowUpRight, Building2, CalendarClock, Check, ChevronDown,
   CircleAlert, Clock, FileText, Gavel, Globe, LayoutTemplate, Mail, MapPin, Megaphone,
-  History, PencilLine, Rocket, Search, Target, UserPlus, Users, Wallet, X,
+  History, PencilLine, Rocket, Search, Store, Target, UserPlus, Users, Wallet, X,
 } from 'lucide-react';
 import ConferenceDetailDialog from './ConferenceDetailDialog';
 import { UserDrawer } from './UsersTab';
@@ -84,8 +84,8 @@ export interface AdminConferenceRow {
 }
 
 // ── Set-up steps ────────────────────────────────────────────────────────────
-// THE SAME SEVEN PRIORITIES THE ORGANISER IS SHOWN (18 Sep 2026: 7, all of them
-// verification stages; "Get your first delegate" was removed on 8 Sep), in the same journey order
+// THE SAME SEVEN PRIORITIES THE ORGANISER IS SHOWN (checklist v2, 12 Oct 2026:
+// 7, the first six of them verification stages), in the same journey order
 // (src/app/manage/[slug]/page.tsx `checklist`). conference_setup_status() now
 // builds all seven, reports setup_total as the length of its own item list, and
 // counts setup_done and pending_keys over the same seven with no exception for
@@ -106,22 +106,28 @@ export interface AdminConferenceRow {
 // outstanding, so a checkmark would read as "done". Nor a Globe, which is the
 // live badge's glyph.
 const SETUP_STEPS: { key: string; label: string; icon: typeof LayoutTemplate }[] = [
-  { key: 'page',        label: 'Conference page',    icon: LayoutTemplate },
-  { key: 'committees',  label: 'Committees & seats', icon: Building2 },
-  { key: 'chairs',      label: 'Chairs on the dais', icon: Gavel },
-  { key: 'email',       label: 'Applicant email',    icon: Mail },
-  { key: 'secretariat', label: 'Secretariat',        icon: Users },
-  { key: 'financials',  label: 'Financials',         icon: Wallet },
-  // 'delegate' was here. "Get your first delegate" was dropped from the
-  // organiser checklist and from conference_setup_status() in the same change:
-  // it measured demand, not readiness, it was never a verification criterion,
-  // and it was the row that made this list and the organiser's disagree.
-  // 'awards' was here. The awards checklist item was removed from
-  // conference_setup_status() when awards went behind a coming-soon screen, so
-  // the key can never come back in pending_keys. Restore this row if it does.
-  { key: 'publish',     label: 'Published',          icon: Rocket },
+  // Checklist v2 (owner, 12 Oct 2026), the organiser's order. The first six are
+  // the blue checkmark's criteria; 'store' is not (scratch-checklist-v2.sql,
+  // pending: until it is applied the SQL still returns the old keys, which
+  // render through LEGACY_STEPS below).
+  { key: 'page',           label: 'Conference page',    icon: LayoutTemplate },
+  { key: 'committees',     label: 'Committees & seats', icon: Building2 },
+  { key: 'applications',   label: 'Applications open',  icon: Rocket },
+  { key: 'financials',     label: 'Financials',         icon: Wallet },
+  { key: 'communications', label: 'Communications',     icon: Mail },
+  { key: 'chairs',         label: 'Chairs on the dais', icon: Gavel },
+  { key: 'store',          label: 'Store visited',      icon: Store },
 ];
-const STEP_BY_KEY = new Map(SETUP_STEPS.map(s => [s.key, s]));
+/** Keys of the checklist before v2, so a server still on the old function
+ *  renders them by name rather than as raw keys. */
+const LEGACY_STEPS: { key: string; label: string; icon: typeof LayoutTemplate }[] = [
+  { key: 'email',       label: 'Applicant email', icon: Mail },
+  { key: 'secretariat', label: 'Secretariat',     icon: Users },
+  { key: 'publish',     label: 'Published',       icon: Rocket },
+];
+/** Not a checkmark criterion: left out of "what is missing for the seal". */
+const NON_CRITERIA = new Set(['store']);
+const STEP_BY_KEY = new Map([...SETUP_STEPS, ...LEGACY_STEPS].map(s => [s.key, s]));
 
 function outstandingSteps(pendingKeys: string[]) {
   return pendingKeys.map(k => STEP_BY_KEY.get(k) ?? { key: k, label: k, icon: CircleAlert });
@@ -1100,16 +1106,16 @@ function ConferenceRow({
   // same series among them, so the acronym carries its year.
   const acronym = conferenceAcronymLabel(r);
   const showFullNameBeneath = !!acronym && acronym.toLowerCase() !== r.full_name.trim().toLowerCase();
-  // The checkmark, and what it would take to earn it. SETUP_STEPS is exactly
-  // the seven verification criteria (see the note there: 'delegate' and
-  // 'awards' were both removed from conference_setup_status), so `pending` IS
-  // the outstanding-criteria list and the ring IS distance from the seal.
+  // The checkmark, and what it would take to earn it. Since checklist v2 the
+  // list has one step that is not a criterion ('store'), so the seal's own
+  // answer leaves it out; the ring still counts every step.
   const verifiedOn = answeredOn(r.verified_at);
+  const criteriaPending = pending.filter(p => !NON_CRITERIA.has(p.key));
   const sealTitle = r.is_verified
     ? `Verified${verifiedOn ? ` on ${verifiedOn}` : ''}`
-    : pending.length === 0
+    : criteriaPending.length === 0
       ? 'Every criterion is met. The mark lands on the next refresh.'
-      : `Not verified yet. Outstanding: ${pending.map(s => s.label).join(', ')}`;
+      : `Not verified yet. Outstanding: ${criteriaPending.map(s => s.label).join(', ')}`;
 
   return (
     // The row opens the conference pop-up (a staff decision replacing "open the

@@ -54,7 +54,7 @@ import { currencySymbol, formatFeeAmountCompact } from '@/lib/utils';
 import { TBD_PRICE, type DelegatePrice } from '@/lib/publicFees';
 import { LogoDisc } from '@/components/LogoDisc';
 import { conferenceAcronymLabel } from '@/lib/conferenceLabels';
-import { formatConferenceDates } from '@/lib/conferenceDates';
+import { formatConferenceDates, DATES_TO_BE_DECIDED } from '@/lib/conferenceDates';
 import VerifiedCheck from '@/components/VerifiedCheck';
 import { CircleFlag } from '@/components/CircleFlag';
 import { CreditSponsoredMark, SpotlightTag, SPOTLIGHT_GLOW, SPOTLIGHT_GLOW_HOVER } from '@/components/conferences/SpotlightTag';
@@ -558,7 +558,7 @@ export function ConferenceCard({
 
         {/* Dates */}
         <p style={{ margin: '3px 0 0', fontSize: '13.5px', fontWeight: 500, color: '#5C5140', fontVariantNumeric: 'tabular-nums', lineHeight: 1.35 }}>
-          {showDates ? formatDateRange(conf.start_date, conf.end_date) : 'Dates to be announced'}
+          {showDates ? formatDateRange(conf.start_date, conf.end_date) : DATES_TO_BE_DECIDED}
         </p>
 
         {/* Format and delegates: an icon and a plain word, never a chip */}
@@ -802,7 +802,7 @@ function ListingCard({
           </span>
         </p>
         <p style={{ margin: '3px 0 0', fontSize: '13px', fontWeight: 500, color: '#5C5140', fontVariantNumeric: 'tabular-nums', lineHeight: 1.3 }}>
-          {showDates ? formatDateRange(conf.start_date, conf.end_date) : 'Dates to be announced'}
+          {showDates ? formatDateRange(conf.start_date, conf.end_date) : DATES_TO_BE_DECIDED}
         </p>
         {/* Price, format and delegates on one line; the viewer's own state at the end */}
         <div

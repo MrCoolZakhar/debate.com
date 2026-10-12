@@ -61,7 +61,7 @@ export const INTENT_OPTIONS: IntentOption[] = [
     sub: 'Collect applications, score them, assign countries.',
     emoji: 'Ballot box with ballot',
     short: 'APPLICATIONS',
-    boosts: ['committees', 'delegate', 'publish'],
+    boosts: ['committees', 'applications'],
   },
   {
     key: 'payments',
@@ -85,7 +85,7 @@ export const INTENT_OPTIONS: IntentOption[] = [
     sub: 'One send to everyone, or to a committee, or to the unpaid.',
     emoji: 'Envelope',
     short: 'EMAILS',
-    boosts: ['email'],
+    boosts: ['communications'],
   },
   {
     key: 'chairs',
@@ -93,7 +93,7 @@ export const INTENT_OPTIONS: IntentOption[] = [
     sub: 'Post the roles and let chairs apply from anywhere.',
     emoji: 'Globe showing europe-africa',
     short: 'CHAIRS',
-    boosts: ['chairs', 'publish'],
+    boosts: ['chairs'],
   },
   {
     key: 'marketing',
@@ -101,7 +101,7 @@ export const INTENT_OPTIONS: IntentOption[] = [
     sub: 'Conferences on Gavelling see a 10 to 20% larger delegate count.',
     emoji: 'Megaphone',
     short: 'MARKETING',
-    boosts: ['page', 'publish'],
+    boosts: ['page', 'applications'],
   },
 ];
 
@@ -155,8 +155,8 @@ export function intentLabels(intent: ConferenceIntent): string[] {
  * Stable and presentational: it reorders what is already on screen and can
  * never remove a row, so `doneCount`, the ring, the progress bar and
  * `SetupCompletionNotices` all keep reading the full unfiltered checklist and
- * cannot disagree with it. `publish` is pinned last whatever they said, because
- * it is the finish line and leading with it would be nonsense.
+ * cannot disagree with it. `store` (checklist v2, 12 Oct 2026) is pinned last
+ * whatever they said: it is the one row that is not a checkmark criterion.
  */
 export function intentRank(intent: ConferenceIntent): (key: string) => number {
   const boosted = new Set<string>();
@@ -165,7 +165,7 @@ export function intentRank(intent: ConferenceIntent): (key: string) => number {
     for (const b of opt?.boosts ?? []) boosted.add(b);
   }
   return (key: string) => {
-    if (key === 'publish') return 2;
+    if (key === 'store') return 2;
     return boosted.has(key) ? 0 : 1;
   };
 }

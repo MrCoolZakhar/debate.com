@@ -15,7 +15,12 @@
  * (see handleCreate's "PUBLISH ON CREATE" block), and visibility is editable
  * from Settings → Privacy afterwards.
  *
- * Progress lives in component state only, a refresh restarts the wizard.
+ * Progress is saved on the server as the organiser goes (12 Oct 2026,
+ * useConferenceDraft.ts + src/lib/conferenceDrafts.ts): reloading, leaving or
+ * switching device resumes it, and a signed-out visitor starts with an email
+ * step (EmailStep.tsx) and only signs in to create. Until the drafts SQL
+ * (scratch-conference-drafts.sql) is applied, none of that runs and the wizard
+ * behaves as before: sign in first, progress in component state only.
  */
 
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -54,6 +59,12 @@ import {
 import { LevelInsignia, LEVEL_ACCENT } from '@/app/account/accountUi';
 import { effectiveEmblem } from '@/components/committeeSetupKit';
 import { normaliseCommitteeLanguage, DEFAULT_COMMITTEE_LANGUAGE } from '@/lib/committeeLanguage';
+// Server-side drafts and the signed-out email step (12 Oct 2026).
+import { openAuth } from '@/lib/authModal';
+import { useBasicsGateBlocking } from '@/lib/basicsGateState';
+import { useConferenceDraft } from './useConferenceDraft';
+import { EmailStep } from './EmailStep';
+import { DraftStatusCard, DraftSavedNote, DraftNotice } from './DraftChrome';
 
 
 // Mirrors settings' ensureRoleConfigs default set (source of truth there) —
@@ -549,12 +560,9 @@ export default function NewConferencePage() {
     );
   }
 
-  // Auth gate, unchanged from the old form.
-  useEffect(() => {
-    if (!loading && !user) {
-      router.replace('/auth/signin?next=/conferences/new');
-    }
-  }, [loading, user, router]);
+  // The auth gate now waits for the drafts check, further down (after
+  // useConferenceDraft): signed-out visitors may start listing when drafts
+  // exist, and are sent to sign in exactly as before when they do not.
 
   const [step, setStep] = useState(1);
   const [returnToReview, setReturnToReview] = useState(false);
@@ -574,7 +582,8 @@ export default function NewConferencePage() {
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   // Dates "to be decided": the conference can be created and take applications
-  // before dates are fixed. A TBD conference stays private until dates are set.
+  // before dates are fixed. A TBD conference is public like any other; Explore
+  // lists it under "Dates to Be Decided" until dates are set.
   const [datesTbd, setDatesTbd] = useState(false);
   const [delegateRange, setDelegateRange] = useState('');
   const [expectedDelegates, setExpectedDelegates] = useState('');
@@ -629,6 +638,101 @@ export default function NewConferencePage() {
     if (profile?.email && !contactEmail) setContactEmail(profile.email);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [profile?.email]);
+
+  // ── Server-side draft (12 Oct 2026) ──────────────────────────────────────
+  // Every answer above, as one JSON object, saved by useConferenceDraft about a
+  // second after each change and at once on a step change. `restoreDraft` is
+  // its inverse. Upload state, errors and pop-ups are not answers and are not
+  // saved. The conference id minted at mount rides along, because the logo,
+  // banner and emblem files were uploaded under it.
+  const draftData = useMemo(() => ({
+    v: 1,
+    conferenceId: conferenceIdRef.current,
+    fullName, acronym, contactEmail, format, studentLevel, country, city,
+    startDate, endDate, datesTbd, delegateRange, expectedDelegates,
+    committees, logoUrl, bannerUrl, payChoice, intentKeys,
+    description, instagram, facebook, tiktok, whatsapp, website,
+  }), [
+    fullName, acronym, contactEmail, format, studentLevel, country, city,
+    startDate, endDate, datesTbd, delegateRange, expectedDelegates,
+    committees, logoUrl, bannerUrl, payChoice, intentKeys,
+    description, instagram, facebook, tiktok, whatsapp, website,
+  ]);
+
+  function restoreDraft(d: Record<string, unknown>, savedStep: number) {
+    const str = (k: string) => (typeof d[k] === 'string' ? (d[k] as string) : '');
+    const id = str('conferenceId');
+    if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) conferenceIdRef.current = id;
+    setFullName(str('fullName'));
+    setAcronym(str('acronym'));
+    acronymTouched.current = !!str('acronym') && str('acronym') !== suggestAcronym(str('fullName'));
+    if (str('contactEmail')) setContactEmail(str('contactEmail'));
+    const f = str('format');
+    setFormat(f === 'in-person' || f === 'online' || f === 'hybrid' ? f : '');
+    const lv = str('studentLevel');
+    setStudentLevel(lv === 'school' || lv === 'university' || lv === 'both' ? lv : '');
+    setCountry(str('country'));
+    setCity(str('city'));
+    setStartDate(str('startDate'));
+    setEndDate(str('endDate'));
+    setDatesTbd(d.datesTbd === true);
+    setDelegateRange(str('delegateRange'));
+    setExpectedDelegates(str('expectedDelegates'));
+    setCommittees(
+      Array.isArray(d.committees)
+        ? (d.committees as DraftCommittee[]).filter((c) => c && typeof c.name === 'string' && typeof c.key === 'string')
+        : [],
+    );
+    setLogoUrl(str('logoUrl'));
+    setBannerUrl(str('bannerUrl'));
+    const pc = str('payChoice');
+    setPayChoice(pc === 'free' || pc === 'paid' ? pc : '');
+    setIntentKeys(
+      Array.isArray(d.intentKeys)
+        ? (d.intentKeys as unknown[]).filter((k): k is string => typeof k === 'string' && INTENT_OPTIONS.some((o) => o.key === k))
+        : [],
+    );
+    setDescription(str('description'));
+    setInstagram(str('instagram'));
+    setFacebook(str('facebook'));
+    setTiktok(str('tiktok'));
+    setWhatsapp(str('whatsapp'));
+    setWebsite(str('website'));
+    setReturnToReview(false);
+    setStep(Math.min(REVIEW_STEP, Math.max(1, Math.round(savedStep) || 1)));
+  }
+
+  const draft = useConferenceDraft({
+    userId: user?.id ?? null,
+    accessToken: session?.access_token ?? null,
+    authLoading: loading,
+    data: draftData,
+    step,
+    hasContent: !!fullName.trim() || step > 1,
+    restore: restoreDraft,
+  });
+
+  // Auth gate. Without drafts (the SQL not applied), unchanged from the old
+  // form: signed-out visitors go to sign in.
+  useEffect(() => {
+    if (!loading && !user && draft.available === false) {
+      router.replace('/auth/signin?next=/conferences/new');
+    }
+  }, [loading, user, router, draft.available]);
+
+  // Signed out: the email step comes first, unless the draft already has one.
+  // Signed in (including signing in from the email step): it is skipped.
+  useEffect(() => {
+    if (loading || draft.available !== true || draft.booting || draft.status !== 'ready') return;
+    if (!user && !draft.email && step !== 0) setStep(0);
+    else if (user && step === 0) setStep(1);
+  }, [loading, user, draft.available, draft.booting, draft.status, draft.email, step]);
+
+  // A signed-out organiser's contact email starts as the address they saved with.
+  useEffect(() => {
+    if (draft.email && !contactEmail) setContactEmail(draft.email);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draft.email]);
 
   const acronymError = acronym ? acronymProblem(acronym) : '';
 
@@ -744,7 +848,11 @@ export default function NewConferencePage() {
 
   // ── Logo + banner uploads (same recipe as Settings) ──────────────────────
   async function handleLogoUpload(file: File) {
-    if (!session) { setLogoError('You must be signed in to upload a logo.'); return; }
+    if (!session) {
+      setLogoError('Sign in to upload a logo, or skip it for now. Your answers are saved.');
+      if (draft.available) openAuth({ email: draft.email || undefined });
+      return;
+    }
     setLogoUploading(true);
     setLogoError('');
     const supabase = getAuthedClient();
@@ -756,7 +864,11 @@ export default function NewConferencePage() {
   }
 
   async function handleBannerUpload(file: File) {
-    if (!session) { setBannerError('You must be signed in to upload a banner.'); return; }
+    if (!session) {
+      setBannerError('Sign in to upload a banner, or pick one of ours. Your answers are saved.');
+      if (draft.available) openAuth({ email: draft.email || undefined });
+      return;
+    }
     setBannerUploading(true);
     setBannerError('');
     const supabase = getAuthedClient();
@@ -769,6 +881,15 @@ export default function NewConferencePage() {
   // ── Submit, preserved exactly from the old form ─────────────────────────
   async function handleCreate() {
     if (!user || !session) {
+      // Signed out with a saved draft: save it, ask them to sign in (or make
+      // an account) in the pop-up, and create it the moment they are back
+      // (the pending-create effect below). The insert needs auth.uid().
+      if (draft.available) {
+        await draft.flush();
+        draft.markPendingCreate();
+        openAuth({ email: draft.email || contactEmail.trim() || undefined });
+        return;
+      }
       setError('You must be signed in to create a conference.');
       return;
     }
@@ -1026,13 +1147,15 @@ export default function NewConferencePage() {
       // IT IS ATTEMPTED, never preconditioned on conferencePaymentsReady():
       // the owner is dropping the publish gate separately, so an attempt that
       // merely fails today starts succeeding the moment that SQL lands, with
-      // no code change. The ONE thing worth not attempting is TBD dates:
-      // conferences_tbd_not_public is a permanent rule, not a gate, so a
-      // conference with no start date is left private on purpose.
+      // no code change. Dates to be decided are attempted too (owner,
+      // 12 Oct 2026: a TBD conference is public like any other and Explore
+      // lists it under "Dates to Be Decided"); until the owner drops the CHECK
+      // conferences_tbd_not_public (scratch-tbd-public.sql) that write is
+      // refused and swallowed here like any other refusal.
       //
       // Awaited (one fast write) but it can never block the redirect: every
       // path below falls through to router.push.
-      if (!datesTbd && startDate.trim()) {
+      {
         try {
           const { data: publishedRows, error: publishError } = await supabase
             .from('conferences')
@@ -1060,6 +1183,10 @@ export default function NewConferencePage() {
           console.warn('Conference created but left as a draft:', publishErr);
         }
       }
+
+      // The saved draft is done: it stops its reminders and leaves My
+      // conferences. Never blocks the redirect.
+      try { await draft.finish(conferenceId); } catch { /* the reminders skip a created name anyway */ }
 
       // Created, intent and all. Straight to the dashboard — `submitting` stays
       // true through the navigation so the button cannot fire a second time
@@ -1152,8 +1279,38 @@ export default function NewConferencePage() {
     paymentAnswered &&
     intentKeys.length > 0;
 
+  // Signed in after "Sign in and create": create it now, once the pop-up has
+  // closed (a new account first answers its questions there).
+  const authBlocking = useBasicsGateBlocking();
+  useEffect(() => {
+    if (!user || !session || submitting || authBlocking || !readyToCreate || !contactEmail.trim()) return;
+    if (!draft.pendingCreate()) return;
+    draft.clearPendingCreate();
+    void handleCreate();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, session, submitting, authBlocking, readyToCreate, contactEmail, draft.status, draft.token]);
+
+  // A saved draft that cannot be opened here (another account's, or one that
+  // needs signing in): say so instead of an empty wizard.
+  if (!loading && !draft.booting && (draft.status === 'needs_sign_in' || draft.status === 'not_yours' || draft.status === 'load_failed')) {
+    return (
+      <div className="min-h-screen flex flex-col" style={{ backgroundColor: NEU.base }}>
+        <SiteNav hideLanguage />
+        <main className="flex-1 flex justify-center px-5 py-10">
+          <DraftStatusCard
+            status={draft.status}
+            maskedEmail={draft.maskedEmail}
+            token={draft.token}
+            onStartFresh={draft.startFresh}
+            onRetry={draft.retryLoad}
+          />
+        </main>
+      </div>
+    );
+  }
+
   // Loading / auth spinner
-  if (loading || !user) {
+  if (loading || draft.booting || (!user && draft.available !== true)) {
     return (
       <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: NEU.base }}>
         <Loader size={72} label="Loading" />
@@ -1181,6 +1338,18 @@ export default function NewConferencePage() {
         <main className="flex-1 flex justify-center px-5 py-10">
           <div className="w-full">
 
+            <DraftNotice text={draft.notice} onDismiss={draft.dismissNotice} />
+
+            {/* ── Step 0, signed out only: where to save the draft ───────── */}
+            {step === 0 && !user && (
+              <EmailStep
+                total={TOTAL_STEPS}
+                initialEmail={draft.email}
+                onSubmit={draft.submitEmail}
+                onDone={() => goTo(1)}
+              />
+            )}
+
             {/* ── Step 1, your conference: name, acronym, logo, banner, dates ── */}
             {step === 1 && (
               <WizardShell
@@ -1188,7 +1357,7 @@ export default function NewConferencePage() {
                 maxWidth={1080}
                 title="Your Conference"
                 sub="Its name, its look and its dates. You can change any of it later."
-                onBack={returnToReview ? back : undefined}
+                onBack={returnToReview ? back : (!user && draft.available ? () => goTo(0) : undefined)}
               >
                 <IdentityStep
                   fullName={fullName}
@@ -1648,16 +1817,18 @@ export default function NewConferencePage() {
                 </div>
 
                 {/* What happens the moment they tap Create (owner, 7 Oct 2026).
-                    Two states, because a conference with dates to be decided
-                    cannot be published at all (conferences_tbd_not_public). */}
+                    Two states: a conference with dates to be decided goes live
+                    too, listed in Explore's "Dates to Be Decided" section. */}
                 <p
                   style={{
                     fontFamily: OUTFIT, fontSize: 12.5, color: NEU.muted, lineHeight: 1.6,
                     textAlign: 'center', marginTop: 22, padding: '0 12px',
                   }}
                 >
-                  {datesTbd || !startDate.trim()
-                    ? 'Your conference stays private until you add its dates, and everything else is editable in Settings'
+                  {!user
+                    ? 'You sign in or make a free account next, then your conference goes live on gavelling.com. You can make it private any time in Settings'
+                    : datesTbd || !startDate.trim()
+                    ? 'Your conference goes live on gavelling.com as soon as you create it, listed under Dates to be decided until you add them'
                     : 'Your conference goes live on gavelling.com as soon as you create it, and you can make it private any time in Settings'}
                 </p>
 
@@ -1681,7 +1852,7 @@ export default function NewConferencePage() {
                     disabled={submitting || !readyToCreate || !contactEmail.trim()}
                     style={{ padding: '14px 38px' }}
                   >
-                    {submitting ? 'Creating' : 'Create conference'}
+                    {submitting ? 'Creating' : user ? 'Create conference' : 'Sign in and create'}
                   </PrimaryButton>
                 </div>
               </WizardShell>
@@ -1690,6 +1861,8 @@ export default function NewConferencePage() {
           </div>
         </main>
       </div>
+
+      {draft.available && <DraftSavedNote state={draft.saveState} error={draft.saveError} />}
 
       {/* Drag-to-fit crop step, flattens the chosen framing into a square
           transparent PNG, then hands off to the storage upload path. */}
