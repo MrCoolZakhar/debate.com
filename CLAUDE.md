@@ -760,7 +760,8 @@ triggers run in name order) and so sees the final recipient and status:
 - Deferral is always possible in practice; after 500 attempts the row is `held`
   with an `error` saying so (and `email_resume()` would release it: check first).
 - Exempt: the owner's alarm (`petizakhar@gmail.com` with the `email_alert_prefix()`
-  subject), and rows that are not pending / held (suppressed). Auth codes do not go
+  subject), the team inbox `wearegavelling@gmail.com` (owner, 12 Oct 2026: test emails
+  go there and must arrive at once; migration `rate_cap_exempt_team_inbox`), and rows that are not pending / held (suppressed). Auth codes do not go
   through the outbox (Supabase Auth sends them).
 - A per-address advisory lock serialises concurrent inserts; index
   `email_outbox_recipient_time_idx`. Existing rows were NOT rewritten.
