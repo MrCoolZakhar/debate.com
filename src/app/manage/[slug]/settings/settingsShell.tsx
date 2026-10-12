@@ -11,13 +11,14 @@
  * row of pills across the top.
  *
  *   General        what the conference is: name, dates, place, pictures,
- *                  colours, partners, contact, editions, delete
+ *                  colours, contact, editions, delete
+ *   Partners       linked conferences and sponsor companies
  *   Visibility     who can find it, and what its page shows
  *   Applications   who can apply, the rules for every role, each role's form
  *   Delegations    how schools and societies run themselves
  *   Team           who runs it with you
  *   Payments       a door to Financials, where the money settings live
- *   Awards         coming soon
+ *   Awards         blank slate, then presets and custom awards (awardsUi.tsx)
  *
  * The order follows the organiser's own order of thought: what it is, who
  * sees it, who joins (and how in groups), who runs it, then money and the
@@ -28,19 +29,20 @@
 
 import type { ReactNode } from 'react';
 import {
-  Building2, Globe, ClipboardList, School, Users2, CreditCard, Trophy, type LucideIcon,
+  Building2, Globe, ClipboardList, School, Users2, CreditCard, Trophy, Handshake, type LucideIcon,
 } from 'lucide-react';
 import { STORE_CSS } from '../store/storeKit';
 import { DASH_CSS } from '../financials/dashboardKit';
 import { F, INK, INK_SOFT, FOREST, ROW_CSS, TINT_GOLD_BG, TINT_GREEN_BG, EmojiDisc } from './panelKit';
 
 /** The sections, in rail order. The key is also the ?tab= value written. */
-export type ShellSection = 'general' | 'visibility' | 'applications' | 'delegations' | 'team' | 'payments' | 'awards';
+export type ShellSection = 'general' | 'partners' | 'visibility' | 'applications' | 'delegations' | 'team' | 'payments' | 'awards';
 
 /** Each section's Fluent 3D emoji (`emoji`) with the Lucide glyph it falls
  *  back to (`icon`) if the image cannot load. */
 export const SHELL_SECTIONS: { key: ShellSection; label: string; emoji: string; icon: LucideIcon; tint: string }[] = [
   { key: 'general',      label: 'General',      emoji: 'Classical building',          icon: Building2,     tint: TINT_GOLD_BG },
+  { key: 'partners',     label: 'Partners',     emoji: 'Handshake',                   icon: Handshake,     tint: TINT_GREEN_BG },
   { key: 'visibility',   label: 'Visibility',   emoji: 'Globe showing europe-africa', icon: Globe,         tint: TINT_GREEN_BG },
   { key: 'applications', label: 'Applications', emoji: 'Inbox tray',                  icon: ClipboardList, tint: TINT_GOLD_BG },
   { key: 'delegations',  label: 'Delegations',  emoji: 'School',                      icon: School,        tint: TINT_GREEN_BG },

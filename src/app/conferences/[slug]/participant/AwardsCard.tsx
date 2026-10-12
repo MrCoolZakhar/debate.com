@@ -17,7 +17,7 @@ import { getCountryByName } from '@/lib/countries';
 import { supabase as anonSupabase } from '@/lib/supabase';
 import { loadSlotArtIndex, artFromIndex, slotArtKey, type SlotArtIndex } from '@/lib/slotGroups';
 import {
-  getAwardsConfig, committeeSlots, chairDeadline, slateState, chairCanEdit, slateCompleteness,
+  getAwardsConfig, configForCommittee, awardsOfferedFor, committeeSlots, chairDeadline, slateState, chairCanEdit, slateCompleteness,
   suggestSlate, rankByHeadline,
   type AwardTypeConfig, type AwardTier, type ConferenceAwardRow, type PaperEvidence, type SlateState, type SlateStamps,
 } from '@/lib/awards';
@@ -145,7 +145,12 @@ export default function AwardsCard({ conferenceId, conferenceSlug, committee, co
   papers: PaperEvidence[];
 }) {
   const { user, session } = useAuth();
-  const config = useMemo(() => getAwardsConfig(conference.awards_config), [conference.awards_config]);
+  // The conference's awards as THIS committee sees them: its own set when the
+  // conference gives awards per committee, else the shared set (11 Oct 2026).
+  const conferenceConfig = useMemo(() => getAwardsConfig(conference.awards_config), [conference.awards_config]);
+  const config = useMemo(() => configForCommittee(conferenceConfig, committee.id), [conferenceConfig, committee.id]);
+  // Loads run while awards are offered here, or to show a published ceremony.
+  const awardsActive = !!conference.awards_published_at || awardsOfferedFor(conferenceConfig, committee.id);
   const slots = useMemo(() => committeeSlots(config), [config]);
   const delegations = useMemo(() => buildDelegations(allocations), [allocations]);
 
@@ -232,7 +237,7 @@ export default function AwardsCard({ conferenceId, conferenceSlug, committee, co
 
   // Loads
   useEffect(() => {
-    if (!session || !config.enabled) return;
+    if (!session || !awardsActive) return;
     let cancelled = false;
     (async () => {
       const supabase = getAuthedClient(session.access_token);
@@ -242,10 +247,10 @@ export default function AwardsCard({ conferenceId, conferenceSlug, committee, co
       setRowsLoading(false);
     })();
     return () => { cancelled = true; };
-  }, [session, committee.id, config.enabled]);
+  }, [session, committee.id, awardsActive]);
 
   useEffect(() => {
-    if (!session || !config.enabled || !hasSession || !evidenceOpen || evidence !== null) return;
+    if (!session || !awardsActive || !hasSession || !evidenceOpen || evidence !== null) return;
     let cancelled = false;
     (async () => {
       const supabase = getAuthedClient(session.access_token);
@@ -254,7 +259,7 @@ export default function AwardsCard({ conferenceId, conferenceSlug, committee, co
       setEvidence(board.rows.filter(r => !r.isObserver));
     })();
     return () => { cancelled = true; };
-  }, [session, config.enabled, hasSession, evidenceOpen, evidence, conferenceId, committee.id]);
+  }, [session, awardsActive, hasSession, evidenceOpen, evidence, conferenceId, committee.id]);
 
   // Country name (session) → allocation code, for paper pills and suggestions
   const codeByName = useMemo(() => {
@@ -442,8 +447,10 @@ export default function AwardsCard({ conferenceId, conferenceSlug, committee, co
     setStampOverride(prev => ({ base: baseStamps, patch: { ...(prev?.patch ?? {}), awards_submitted_at: null } }));
   }
 
-  // Awards off for this conference: render nothing at all.
-  if (!config.enabled || state === 'off') return null;
+  // Never offer awards a conference has not set up (owner, 11 Oct 2026), nor
+  // a committee whose set gives nothing. A published ceremony still shows.
+  if (state === 'off') return null;
+  if (state !== 'published' && !awardsOfferedFor(conferenceConfig, committee.id)) return null;
 
   const completeness = slateCompleteness(rows, config);
   const cd = deadline ? countdown(deadline, now) : null;

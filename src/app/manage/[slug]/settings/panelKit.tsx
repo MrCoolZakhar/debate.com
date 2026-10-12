@@ -10,7 +10,7 @@
 
 import type { CSSProperties, ReactNode } from 'react';
 import {
-  Loader2, Crown, UserRound, GraduationCap, Eye, Gavel, ClipboardList, HardHat, type LucideIcon,
+  Loader2, Crown, UserRound, GraduationCap, Eye, Gavel, ClipboardList, HardHat, Check, Minus, X, type LucideIcon,
 } from 'lucide-react';
 import { Emoji3D } from '@/components/neu';
 import type { FeePhase } from '@/lib/finance';
@@ -260,6 +260,13 @@ export function localZoneLabel(): string {
  * A real switch (role="switch"). `disabled` never hides the reason: callers
  * put the sentence that explains it beside the switch and pass its id as
  * `describedBy`.
+ *
+ * The look (owner, 11 Oct 2026: "make the sliders more fun"): a chunky track,
+ * a raised 3D thumb with a soft highlight that springs across (a slight
+ * overshoot), a squash while pressed, a check / cross / dash inside the thumb,
+ * and a tiny gold glint on the forest track when on. Styled by SWITCH_CSS
+ * (part of ROW_CSS, mounted once by settingsShell.tsx); all motion is off
+ * under prefers-reduced-motion.
  */
 export function Switch({ checked, onChange, label, disabled = false, busy = false, size = 'md', describedBy, mixed = false }: {
   checked: boolean;
@@ -273,10 +280,14 @@ export function Switch({ checked, onChange, label, disabled = false, busy = fals
   size?: 'md' | 'lg';
   describedBy?: string;
 }) {
-  const w = size === 'lg' ? 52 : 46;
-  const h = size === 'lg' ? 30 : 26;
-  const t = h - 6;
+  const w = size === 'lg' ? 58 : 52;
+  const h = size === 'lg' ? 34 : 30;
+  const pad = 3;
+  const t = h - pad * 2;
+  const x = mixed ? (w - t) / 2 - pad : checked ? w - t - pad * 2 : 0;
   const off = disabled || busy;
+  const state = mixed ? 'mixed' : checked ? 'on' : 'off';
+  const g = Math.round(t * 0.5);
   return (
     <button
       type="button"
@@ -287,28 +298,62 @@ export function Switch({ checked, onChange, label, disabled = false, busy = fals
       aria-busy={busy || undefined}
       disabled={off}
       onClick={() => { if (!off) onChange(mixed ? true : !checked); }}
-      className="relative flex-shrink-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
+      className="gvk-sw"
+      data-state={state}
       style={{
-        width: w, height: h, borderRadius: 999, border: 'none',
-        backgroundColor: mixed ? '#D9B65A' : checked ? FOREST : '#CFC6B2',
+        width: w, height: h,
         opacity: disabled ? 0.5 : 1,
         cursor: off ? 'not-allowed' : 'pointer',
-        transition: 'background-color 180ms ease, opacity 180ms ease',
-      }}
+        ['--sw-x' as string]: `${x}px`,
+        ['--sw-t' as string]: `${t}px`,
+      } as CSSProperties}
     >
-      <span
-        className="absolute flex items-center justify-center"
-        style={{
-          top: 3, left: mixed ? (w - t) / 2 : checked ? w - t - 3 : 3, width: t, height: t, borderRadius: '50%',
-          backgroundColor: '#FFFFFF', boxShadow: '0 1px 3px rgba(0,0,0,0.22)',
-          transition: 'left 180ms cubic-bezier(0.22,1,0.36,1)',
-        }}
-      >
-        {busy && <Loader2 size={t - 8} strokeWidth={2.6} className="animate-spin" style={{ color: FOREST }} aria-hidden />}
+      <span className="gvk-sw-glint" aria-hidden />
+      <span className="gvk-sw-thumb" aria-hidden>
+        {busy
+          ? <Loader2 size={g} strokeWidth={2.6} className="animate-spin" style={{ color: FOREST }} />
+          : state === 'on'
+            ? <Check size={g} strokeWidth={3.2} className="gvk-sw-glyph" style={{ color: FOREST }} />
+            : state === 'mixed'
+              ? <Minus size={g} strokeWidth={3.2} className="gvk-sw-glyph" style={{ color: AMBER }} />
+              : <X size={g - 1} strokeWidth={3} className="gvk-sw-glyph" style={{ color: '#A89B85' }} />}
       </span>
     </button>
   );
 }
+
+/** The switch's look; joined into ROW_CSS so the shell mounts it once. */
+export const SWITCH_CSS = `
+.gvk-sw { position: relative; flex-shrink: 0; padding: 0; border: none; border-radius: 999px; outline: none;
+  background: linear-gradient(180deg, #C6BBA4 0%, #D9D0BD 100%);
+  box-shadow: inset 0 2px 4px rgba(28,20,16,0.20), inset 0 -1px 0 rgba(255,255,255,0.55), 0 1px 0 rgba(255,255,255,0.7);
+  transition: background 240ms ease, box-shadow 240ms ease, opacity 180ms ease; -webkit-tap-highlight-color: transparent; }
+.gvk-sw[data-state="on"] { background: linear-gradient(180deg, #16301F 0%, #2A5A3C 100%);
+  box-shadow: inset 0 2px 5px rgba(0,0,0,0.32), inset 0 -1px 0 rgba(238,217,138,0.25), 0 3px 10px -4px rgba(27,56,40,0.55); }
+.gvk-sw[data-state="mixed"] { background: linear-gradient(180deg, #B98A2A 0%, #E2C46F 100%);
+  box-shadow: inset 0 2px 4px rgba(90,60,10,0.30), 0 1px 0 rgba(255,255,255,0.7); }
+.gvk-sw:focus-visible { box-shadow: 0 0 0 2px #FFFFFF, 0 0 0 4px #1B3828; }
+.gvk-sw-glint { position: absolute; top: 50%; left: 12px; width: 5px; height: 5px; margin-top: -2.5px; border-radius: 999px;
+  background: radial-gradient(circle at 40% 35%, #FFF8DC 0%, #EED98A 60%, #D9B65A 100%);
+  box-shadow: 0 0 5px 1px rgba(238,217,138,0.7); opacity: 0; transform: scale(0.2);
+  transition: opacity 200ms ease, transform 340ms cubic-bezier(0.34,1.56,0.64,1); }
+.gvk-sw[data-state="on"] .gvk-sw-glint { opacity: 1; transform: scale(1); transition-delay: 90ms; }
+.gvk-sw-thumb { position: absolute; top: 3px; left: 3px; width: var(--sw-t); height: var(--sw-t); border-radius: 999px;
+  display: flex; align-items: center; justify-content: center;
+  background: radial-gradient(circle at 34% 26%, #FFFFFF 0%, #FFFFFF 36%, #F3EEE2 78%, #E7E0CF 100%);
+  box-shadow: 0 1px 2px rgba(27,56,40,0.30), 0 5px 10px -3px rgba(27,56,40,0.35), inset 0 1px 0 #FFFFFF, inset 0 -2px 3px rgba(27,56,40,0.10);
+  transform: translateX(var(--sw-x)) scale(1, 1);
+  transition: transform 260ms cubic-bezier(0.34,1.56,0.64,1); will-change: transform; }
+.gvk-sw-glyph { transition: opacity 160ms ease, transform 260ms cubic-bezier(0.34,1.56,0.64,1); animation: gvk-sw-pop 260ms cubic-bezier(0.34,1.56,0.64,1); }
+@keyframes gvk-sw-pop { from { opacity: 0; transform: scale(0.4) rotate(-30deg); } to { opacity: 1; transform: scale(1) rotate(0deg); } }
+.gvk-sw:not(:disabled):hover .gvk-sw-thumb { box-shadow: 0 1px 2px rgba(27,56,40,0.30), 0 7px 14px -4px rgba(27,56,40,0.40), inset 0 1px 0 #FFFFFF, inset 0 -2px 3px rgba(27,56,40,0.10); }
+.gvk-sw:not(:disabled):active .gvk-sw-thumb { transform: translateX(var(--sw-x)) scale(1.16, 0.84); transition-duration: 110ms; }
+@media (prefers-reduced-motion: reduce) {
+  .gvk-sw, .gvk-sw-thumb, .gvk-sw-glint, .gvk-sw-glyph { transition: none; animation: none; }
+  .gvk-sw:not(:disabled):active .gvk-sw-thumb { transform: translateX(var(--sw-x)); }
+  .gvk-sw[data-state="on"] .gvk-sw-glint { transform: scale(1); }
+}
+`;
 
 /** A setting with a label, an optional one-line explanation and a switch. */
 export function ToggleRow({ title, desc, checked, onChange, hint }: {
@@ -427,7 +472,7 @@ export const ROW_CSS = `
   .gvk-row { grid-template-columns: minmax(170px, 0.85fr) minmax(0, 1.5fr); column-gap: 20px; }
   .gvk-row[data-align="end"] { grid-template-columns: minmax(0, 1fr) auto; }
 }
-`;
+${SWITCH_CSS}`;
 
 /** A Fluent 3D emoji in a soft tinted disc (the Store and Financials look,
  *  `IconDisc` in financials/dashboardKit.tsx). `icon` is the Lucide glyph drawn
@@ -479,16 +524,19 @@ export function RoleDisc({ role, size = 38, tint = TINT_GREEN_BG, active = false
  *  and one plain line. Plain sans: the gold italic word is for a page's main
  *  heading only (owner, 11 Oct 2026). `focal` is the section's one big thing (a number with
  *  its word, or a picture), drawn on the right. */
-export function SectionHead({ emoji, icon, tint, title, line, focal }: {
+export function SectionHead({ emoji, icon, tint, title, line, focal, compact = false }: {
   emoji: string; icon: LucideIcon; tint: string; title: string; line?: ReactNode; focal?: ReactNode;
+  /** A slimmer header with no bottom margin, for a section that sits in a
+   *  gapped column and wants its first card in the first screen (General). */
+  compact?: boolean;
 }) {
   return (
-    <header className="gv-st-card gv-fd-card mb-5" style={{ background: tint === TINT_GOLD_BG ? WASH_GOLD : WASH_GREEN }}>
+    <header className={`gv-st-card gv-fd-card${compact ? '' : ' mb-5'}`} style={{ background: tint === TINT_GOLD_BG ? WASH_GOLD : WASH_GREEN, ...(compact ? { padding: '14px 20px' } : null) }}>
       <div className="flex items-center justify-between gap-x-5 gap-y-3 flex-wrap">
         <div className="flex items-center gap-3.5 min-w-0">
-          <EmojiDisc emoji={emoji} icon={icon} tint={tint} size={56} />
+          <EmojiDisc emoji={emoji} icon={icon} tint={tint} size={compact ? 46 : 56} />
           <div className="min-w-0">
-            <h1 style={{ fontFamily: F, fontSize: 'clamp(24px, 2.6vw, 32px)', fontWeight: 800, color: INK, lineHeight: 1.1, letterSpacing: '-0.02em', overflowWrap: 'anywhere' }}>
+            <h1 style={{ fontFamily: F, fontSize: compact ? 'clamp(22px, 2.2vw, 28px)' : 'clamp(24px, 2.6vw, 32px)', fontWeight: 800, color: INK, lineHeight: 1.1, letterSpacing: '-0.02em', overflowWrap: 'anywhere' }}>
               {title}
             </h1>
             {line && (

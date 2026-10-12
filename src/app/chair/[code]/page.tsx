@@ -43,7 +43,7 @@ import { useSettingsStore, stripNonHydratedSettings } from '@/lib/settingsStore'
 import { useAuth } from '@/components/AuthProvider';
 import { useSessionAccess } from '@/lib/useSessionAccess';
 import type { ConferenceAccess } from '@/lib/conferenceAccess';
-import { resolveChairAwardsHref } from '@/lib/sessionAwardsLink';
+import { useChairAwards } from '@/lib/sessionAwardsLink';
 import { supabase } from '@/lib/supabase';
 import ChatPanel from '@/components/ChatPanel';
 import ChatDialog from '@/components/chat/ChatDialog';
@@ -1562,15 +1562,16 @@ function ModeratedCaucusMain({
 // `window.open`) so opening in a new tab never trips a popup blocker; until the
 // lookup lands, or when the conference is private to anon, it points at the chair's
 // conference hub, which lists every committee they chair.
+//
+// Since 11 Oct 2026 it renders NOTHING unless the conference set awards up and
+// this committee gives at least one (`useChairAwards(...).offered`): a
+// conference that never set awards up is never offered them.
 function ChairAwardsCta({ code, label, className, style }: {
   code: string; label: string; className?: string; style?: React.CSSProperties;
 }) {
-  const [href, setHref] = useState('/account/conferences');
-  useEffect(() => {
-    let cancelled = false;
-    resolveChairAwardsHref(code).then((h) => { if (!cancelled) setHref(h); });
-    return () => { cancelled = true; };
-  }, [code]);
+  const target = useChairAwards(code, true);
+  if (!target?.offered) return null;
+  const href = target.href;
   return (
     <a href={href} target="_blank" rel="noopener noreferrer" className={className} style={style}>
       {label}
@@ -1685,6 +1686,7 @@ function SessionEndedContent({ committee, hoursRemaining, canRestart, onRestart,
   const { language } = useLanguage();
   const t = useT();
   const isConferenceSession = committee.sessionOrigin === 'conference';
+  const awardsOffered = useChairAwards(committee.code, isConferenceSession)?.offered === true;
   const keptUntil = roomKeptUntil(committee);
   return (
     <div className="flex-1 flex flex-col items-center justify-center text-center px-8">
@@ -1705,8 +1707,8 @@ function SessionEndedContent({ committee, hoursRemaining, canRestart, onRestart,
           )}
         </p>
       )}
-      {/* Conference-linked sessions only — see ChairAwardsCta. Standalone sessions get nothing here. */}
-      {isConferenceSession && (
+      {/* Conference-linked sessions whose conference set awards up only (see ChairAwardsCta). */}
+      {isConferenceSession && awardsOffered && (
         <div className="mt-8 w-full max-w-md rounded-2xl px-6 py-5 text-start"
           style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0', boxShadow: '0 6px 18px rgba(28,20,16,0.06)' }}>
           <div className="flex items-center gap-2 mb-1.5">

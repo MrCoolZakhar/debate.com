@@ -742,6 +742,11 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
   // tab; assigned eagerly in showTab so back-to-back switches read the truth.
   const activeTabRef = useRef<TabKey>(initialView);
   const paneRef = useRef<HTMLDivElement | null>(null);
+  // The Overview / You / Reviews bar. Every scroll that brings the views back
+  // to their top lands on THIS bar, below the fixed site-nav pill (its
+  // scroll-margin is 84px from lg, where the pill exists), never on the pane:
+  // landing the pane at the top left the bar sitting under the pill.
+  const viewsRef = useRef<HTMLElement | null>(null);
 
   const tabHref = useCallback((tab: TabKey, role: string | null) => {
     if (tab === 'reviews') return `/conferences/${slug}/reviews`;
@@ -803,7 +808,13 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
     if (!el) return;
     const top = el.getBoundingClientRect().top;
     if (top >= 0) return;
-    window.scrollTo({ top: Math.max(0, window.scrollY + top - 78), behavior: 'auto' });
+    // Land the views bar itself just below the site-nav pill (its
+    // scroll-margin), so the bar is never left under the pill. It used to put
+    // the PANE at 78px, which parked the 49px bar (plus its 28px margin) at
+    // y 1 to 50: exactly where the fixed pill sits from 1024px.
+    const views = viewsRef.current;
+    if (views) views.scrollIntoView({ block: 'start', behavior: 'auto' });
+    else window.scrollTo({ top: Math.max(0, window.scrollY + top - 161), behavior: 'auto' });
   }, [activeTab, hasSwitchedTab]);
 
   // Stable identities: ParticipantView's role-resolution effect depends on
@@ -2094,8 +2105,10 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                   nothing ever scrolls under it. Same three destinations, same
                   state and URLs. */}
               <nav
+                ref={viewsRef}
                 aria-label="Conference views"
-                className="flex items-end gap-6 sm:gap-8 mb-7"
+                data-conference-views=""
+                className="flex items-end gap-6 sm:gap-8 mb-7 scroll-mt-3 lg:scroll-mt-[84px]"
                 style={{ borderBottom: '1px solid color-mix(in srgb, var(--gv-main) 10%, transparent)' }}
               >
                 {/* Real anchors, so the view a visitor is on is still copyable,

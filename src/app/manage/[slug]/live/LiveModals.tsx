@@ -5,7 +5,7 @@ import { X, Mic, FileText, ScrollText, Users, Gavel, Trophy, History as HistoryI
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import {
-  slateState, SLATE_STATE_LABEL, slateCompleteness, chairDeadline,
+  slateState, SLATE_STATE_LABEL, slateCompleteness, chairDeadline, configForCommittee,
   type AwardsConfig, type AwardTier, type ConferenceAwardRow, type SlateState,
 } from '@/lib/awards';
 import { loadCommitteeAwards } from '@/lib/awardsService';
@@ -1242,7 +1242,7 @@ interface SlateStampRow {
 
 // `conferenceSlug` stays in the props type (the caller still passes it) but is
 // no longer read here: the only consumer was the link to the retired awards desk.
-function AwardsRecap({ committeeId, config, publishedAt, conferenceEndDate }: {
+function AwardsRecap({ committeeId, config: conferenceConfig, publishedAt, conferenceEndDate }: {
   committeeId: string;
   conferenceSlug: string;
   config: AwardsConfig;
@@ -1251,6 +1251,8 @@ function AwardsRecap({ committeeId, config, publishedAt, conferenceEndDate }: {
 }) {
   const { session } = useAuth();
   const accessToken = session?.access_token;
+  // This committee's own awards when the conference sets them per committee.
+  const config = configForCommittee(conferenceConfig, committeeId);
   const [stamps, setStamps] = useState<SlateStampRow | null>(null);
   const [rows, setRows] = useState<ConferenceAwardRow[] | null>(null);
   const [error, setError] = useState('');
@@ -1300,7 +1302,7 @@ function AwardsRecap({ committeeId, config, publishedAt, conferenceEndDate }: {
   if (state === 'off') {
     return (
       <div className="flex flex-col gap-3">
-        <p className="text-sm" style={{ color: SOFT, fontFamily: OUTFIT }}>Awards are off for this conference.</p>
+        <p className="text-sm" style={{ color: SOFT, fontFamily: OUTFIT }}>Awards are not set up. Set them up in Settings, Awards.</p>
         {deskLink}
       </div>
     );

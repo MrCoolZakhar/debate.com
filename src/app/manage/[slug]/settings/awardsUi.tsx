@@ -1,254 +1,367 @@
 'use client';
 
-// ── Settings → Awards ───────────────────────────────────────────────────────
-// The organiser's half of the awards feature: which honours exist, how many
-// each committee gives, what they are worth, whether the secretariat ratifies
-// each slate, and when chairs must submit by. Everything here is a view over
-// `conferences.awards_config` (see src/lib/awards.ts for the model and the
-// vocabulary). Saves are debounced and fire-and-forget; the local state is
-// the source of truth while the organiser is on the tab.
+// ── Settings → Awards (11 Oct 2026) ─────────────────────────────────────────
+// Owner: "Make it simple, just like starting from a blank slate, no awards set
+// up yet. First asking them if all awards will be the same for all committees
+// and that they can change that later. Then a few preset awards in categories,
+// then custom awards. If a conference does not set up awards, never offer it
+// to chairs."
+//
+// Three screens, one obvious next step each:
+//   1. Blank slate        "No awards yet" + Set up awards
+//   2. The one question   Will every committee give the same awards?
+//   3. The editor         Placements, Other awards, Custom awards (one shared
+//                         set, or a committee picker with per-committee sets)
+//
+// Everything is a view over `conferences.awards_config` (src/lib/awards.ts:
+// `setUp`, `sameForAll`, `perCommittee` were added for this screen). Saves are
+// debounced (600 ms), row-counted through `saveAwardsConfig`, and flushed on
+// unmount. Answering the question is the moment awards become set up, and
+// therefore the moment chairs start to see them.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import Link from 'next/link';
-import { ArrowRight, Minus, Plus, Trophy, X } from 'lucide-react';
+import { Award, Check, Minus, Plus, Trophy, X } from 'lucide-react';
 import { useManage, type Conference } from '@/app/manage/[slug]/layout';
 import { getFreshAuthedClient } from '@/lib/supabase-auth';
-import { DatePicker } from '@/components/DatePicker';
-import { InfoHint, Segmented } from './applicationsUi';
+import { Emoji3D } from '@/components/neu';
 import {
-  awardKeyFromLabel, chairDeadline, getAwardsConfig,
-  type AwardsConfig, type AwardTier, type AwardTypeConfig,
+  AWARD_PRESET_GROUPS, awardKeyFromLabel, freshAwardTypes, getAwardsConfig,
+  type AwardPreset, type AwardsConfig, type AwardTypeConfig,
 } from '@/lib/awards';
 import { saveAwardsConfig } from '@/lib/awardsService';
 import { friendlyError } from '@/lib/friendlyError';
-
-const OUTFIT = "var(--font-brand), sans-serif";
-
-// Mirrors the inner grouped sub-card on settings/page.tsx. Kept as a copy on
-// purpose: the page's object is local to the page component and a Next.js
-// page file cannot export it.
-const cardStyle: React.CSSProperties = {
-  backgroundColor: '#FFFDF9',
-  border: '1.5px solid #D8CDB6',
-  borderRadius: '16px',
-  padding: '24px',
-  marginBottom: '20px',
-  boxShadow: '0 1px 2px rgba(27,56,40,0.04)',
-};
-
-const inputStyle: React.CSSProperties = {
-  border: '1.5px solid #DDD4C0',
-  borderRadius: '10px',
-  padding: '7px 10px',
-  fontFamily: OUTFIT,
-  fontSize: '13px',
-  color: '#1C1410',
-  backgroundColor: '#FAF8F3',
-  outline: 'none',
-  minWidth: 0,
-};
-
-const TIER_COLOUR: Record<AwardTier, string> = {
-  gold: '#B6871F',
-  silver: '#7A8594',
-  bronze: '#96603A',
-  special: '#2A5A3C',
-};
-
-const TIER_LABEL: Record<AwardTier, string> = {
-  gold: 'Gold',
-  silver: 'Silver',
-  bronze: 'Bronze',
-  special: 'Special',
-};
+import { notifyErr } from '@/lib/appNotify';
+import { committeeDisplayName } from '@/lib/presetNames';
+import {
+  F, INK, INK_SOFT, FOREST, GOLD, AMBER, INPUT,
+  SectionHead, Switch, EmojiDisc, BigCount, TINT_GOLD_BG, TINT_GREEN_BG,
+} from './panelKit';
 
 const SAVE_DEBOUNCE_MS = 600;
+const MAX_PER_COMMITTEE = 10;
+const MAX_LABEL = 60;
 
-// ── Small local controls ────────────────────────────────────────────────────
-// PillToggle and AutoSaveStatus are private to settings/page.tsx (a page file
-// cannot export components), so this tab carries identical copies.
+interface CommitteeLite {
+  id: string;
+  name: string;
+  abbreviation: string | null;
+}
 
-function PillToggle({ value, onChange, size = 'md', disabled = false }: {
-  value: boolean;
-  onChange: (v: boolean) => void;
-  size?: 'md' | 'sm';
-  disabled?: boolean;
-}) {
-  const w = size === 'md' ? 40 : 32;
-  const h = size === 'md' ? 22 : 18;
-  const thumb = size === 'md' ? 18 : 14;
-  const onLeft = size === 'md' ? 20 : 16;
+// ── Look ────────────────────────────────────────────────────────────────────
+
+const AWARDS_CSS = `
+.gv-aw-grid{display:grid;gap:22px 16px;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));padding-top:14px}
+.gv-aw-card{position:relative;background:#FFFFFF;border-radius:18px;padding:30px 16px 16px;
+  box-shadow:0 1px 0 rgba(27,56,40,0.08),0 14px 30px -26px rgba(27,56,40,0.45);transition:box-shadow 180ms ease,background 180ms ease}
+.gv-aw-card[data-on="true"]{background:linear-gradient(160deg,rgba(61,122,82,0.07),rgba(61,122,82,0.02)) ,#FFFFFF;
+  box-shadow:inset 0 0 0 1.5px rgba(61,122,82,0.45),0 14px 30px -24px rgba(27,56,40,0.5)}
+.gv-aw-pop{position:absolute;top:-20px;inset-inline-start:14px}
+.gv-aw-choice{display:flex;flex-direction:column;align-items:flex-start;gap:8px;text-align:start;width:100%;
+  background:#FFFFFF;border:none;border-radius:18px;padding:34px 18px 18px;cursor:pointer;position:relative;
+  box-shadow:inset 0 0 0 1.5px rgba(27,56,40,0.12),0 14px 30px -26px rgba(27,56,40,0.45);transition:box-shadow 160ms ease,transform 120ms ease}
+.gv-aw-choice:hover{box-shadow:inset 0 0 0 1.5px rgba(27,56,40,0.45),0 18px 34px -24px rgba(27,56,40,0.5)}
+.gv-aw-choice:active{transform:scale(0.99)}
+.gv-aw-choice:focus{outline:none}
+.gv-aw-choice:focus-visible{outline:2px solid ${FOREST};outline-offset:3px}
+.gv-aw-step{width:34px;height:34px;border-radius:10px;border:none;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;
+  background:#FFFFFF;color:${FOREST};box-shadow:inset 0 0 0 1.5px rgba(27,56,40,0.22)}
+.gv-aw-step:disabled{opacity:0.4;cursor:default}
+.gv-aw-step:focus{outline:none}
+.gv-aw-step:focus-visible{outline:2px solid ${FOREST};outline-offset:2px}
+.gv-aw-chip{border:none;cursor:pointer;border-radius:999px;padding:5px 11px;font-family:${F};font-size:12.5px;font-weight:600;
+  background:rgba(27,56,40,0.06);color:${INK}}
+.gv-aw-chip[aria-pressed="true"]{background:${FOREST};color:${GOLD}}
+.gv-aw-chip:focus{outline:none}
+.gv-aw-chip:focus-visible{outline:2px solid ${FOREST};outline-offset:2px}
+.gv-aw-com{display:flex;flex-direction:column;align-items:flex-start;gap:2px;text-align:start;border:none;cursor:pointer;
+  min-width:150px;max-width:240px;border-radius:14px;padding:10px 12px;background:#FFFFFF;
+  box-shadow:inset 0 0 0 1.5px rgba(27,56,40,0.12)}
+.gv-aw-com[aria-pressed="true"]{box-shadow:inset 0 0 0 2px ${FOREST},0 10px 22px -18px rgba(27,56,40,0.6);background:linear-gradient(160deg,rgba(61,122,82,0.08),rgba(61,122,82,0.02)),#FFFFFF}
+.gv-aw-com:focus{outline:none}
+.gv-aw-com:focus-visible{outline:2px solid ${FOREST};outline-offset:2px}
+@media (prefers-reduced-motion: reduce){.gv-aw-card,.gv-aw-choice{transition:none}}
+`;
+
+/**
+ * The custom award's mark (owner: "a trophy with a question mark"): the
+ * Fluent 3D Trophy with a small gold "?" badge overlapping its corner.
+ */
+export function TrophyQuestion({ size = 40 }: { size?: number }) {
+  const badge = Math.max(14, Math.round(size * 0.46));
   return (
-    <button
-      type="button"
-      onClick={() => { if (!disabled) onChange(!value); }}
-      disabled={disabled}
-      className="relative flex-shrink-0 focus:outline-none"
-      style={{
-        width: `${w}px`, height: `${h}px`,
-        borderRadius: '9999px',
-        backgroundColor: value ? '#1B3828' : '#DDD4C0',
-        opacity: disabled ? 0.5 : 1,
-        transition: 'background-color 200ms ease, opacity 200ms ease',
-        border: 'none', cursor: disabled ? 'not-allowed' : 'pointer',
-      }}
-    >
+    <span aria-hidden className="relative inline-flex" style={{ width: size, height: size }}>
+      <Emoji3D name="Trophy" size={size} fallback={Trophy} fallbackColor={AMBER} />
       <span
-        className="absolute rounded-full transition-all duration-200"
+        className="absolute inline-flex items-center justify-center"
         style={{
-          width: `${thumb}px`, height: `${thumb}px`,
-          backgroundColor: 'white',
-          top: '2px',
-          left: value ? `${onLeft}px` : '2px',
-          boxShadow: '0 1px 4px rgba(0,0,0,0.2)',
+          width: badge, height: badge, borderRadius: 999,
+          insetInlineEnd: -Math.round(badge * 0.28), bottom: -Math.round(badge * 0.12),
+          background: 'linear-gradient(150deg, #F6E7A6 0%, #E2C25C 55%, #B6871F 100%)',
+          boxShadow: '0 0 0 2px #FFFFFF, 0 4px 8px -3px rgba(138,102,20,0.7), inset 0 1px 0 rgba(255,255,255,0.7)',
+          color: FOREST, fontFamily: F, fontWeight: 900, fontSize: Math.round(badge * 0.66), lineHeight: 1,
         }}
-      />
-    </button>
-  );
-}
-
-function AutoSaveStatus({ saving, saved }: { saving: boolean; saved: boolean }) {
-  const text = saving ? 'Saving…' : saved ? 'Saved ✓' : 'Changes save automatically';
-  return (
-    <p className="text-xs mt-2 flex items-center gap-1.5" style={{ color: saved ? '#3D7A52' : '#9A8A78', fontFamily: OUTFIT }}>
-      {saving && <span className="w-3 h-3 rounded-full border-2 border-t-transparent animate-spin" style={{ borderColor: '#9A8A78', borderTopColor: 'transparent' }} />}
-      {text}
-    </p>
-  );
-}
-
-function Stepper({ value, onChange, min = 0, max = 10, disabled = false }: {
-  value: number;
-  onChange: (v: number) => void;
-  min?: number;
-  max?: number;
-  disabled?: boolean;
-}) {
-  const btn = (Icon: typeof Minus, delta: number, blocked: boolean) => (
-    <button
-      type="button"
-      disabled={disabled || blocked}
-      onClick={() => onChange(Math.max(min, Math.min(max, value + delta)))}
-      className="flex items-center justify-center focus:outline-none"
-      style={{
-        width: 26, height: 26, borderRadius: 8,
-        backgroundColor: blocked ? 'transparent' : '#1B3828',
-        color: blocked ? '#B8AE9C' : '#EED98A',
-        border: blocked ? '1.5px solid #DDD4C0' : '1.5px solid #1B3828',
-        cursor: disabled || blocked ? 'not-allowed' : 'pointer',
-        transition: 'background-color 150ms',
-      }}
-    >
-      <Icon size={13} strokeWidth={2.6} />
-    </button>
-  );
-  return (
-    <div className="inline-flex items-center gap-1.5">
-      {btn(Minus, -1, value <= min)}
-      <span
-        className="text-center tabular-nums"
-        style={{ minWidth: 22, fontFamily: OUTFIT, fontSize: 14, fontWeight: 800, color: '#1C1410' }}
       >
-        {value}
+        ?
       </span>
-      {btn(Plus, 1, value >= max)}
-    </div>
+    </span>
   );
 }
 
-function TierDot({ tier }: { tier: AwardTier }) {
+/** A big icon disc that sits over a card's top edge (the owner likes things sticking out). */
+function PopDisc({ children, tint = TINT_GOLD_BG, size = 52 }: { children: React.ReactNode; tint?: string; size?: number }) {
   return (
     <span
-      title={`${TIER_LABEL[tier]} tier`}
-      aria-label={`${TIER_LABEL[tier]} tier`}
-      className="inline-block flex-shrink-0 rounded-full"
-      style={{ width: 10, height: 10, backgroundColor: TIER_COLOUR[tier], boxShadow: '0 0 0 2px rgba(255,255,255,0.9), 0 1px 3px rgba(27,56,40,0.25)' }}
-    />
-  );
-}
-
-function FieldLabel({ children }: { children: React.ReactNode }) {
-  return (
-    <span style={{ fontFamily: OUTFIT, fontSize: 10, fontWeight: 800, letterSpacing: '0.1em', color: '#9A8A78', textTransform: 'uppercase' }}>
+      aria-hidden
+      className="gv-fd-disc"
+      style={{ width: size, height: size, borderRadius: Math.round(size * 0.32), background: tint }}
+    >
       {children}
     </span>
   );
 }
 
-// ── Deadline helpers ────────────────────────────────────────────────────────
-
-const pad2 = (n: number) => String(n).padStart(2, '0');
-
-function localDateOf(iso: string | null): string {
-  const d = iso ? new Date(iso) : null;
-  if (!d || Number.isNaN(d.getTime())) return '';
-  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+function Stepper({ value, onChange, label }: { value: number; onChange: (v: number) => void; label: string }) {
+  return (
+    <div className="inline-flex items-center gap-2" role="group" aria-label={label}>
+      <button type="button" className="gv-aw-step" aria-label={`One fewer ${label.toLowerCase()}`}
+        disabled={value <= 1} onClick={() => onChange(Math.max(1, value - 1))}>
+        <Minus size={16} strokeWidth={2.6} aria-hidden />
+      </button>
+      <span aria-live="polite" style={{ fontFamily: F, fontSize: 20, fontWeight: 800, color: FOREST, minWidth: 22, textAlign: 'center', fontVariantNumeric: 'tabular-nums' }}>
+        {value}
+      </span>
+      <button type="button" className="gv-aw-step" aria-label={`One more ${label.toLowerCase()}`}
+        disabled={value >= MAX_PER_COMMITTEE} onClick={() => onChange(Math.min(MAX_PER_COMMITTEE, value + 1))}>
+        <Plus size={16} strokeWidth={2.6} aria-hidden />
+      </button>
+    </div>
+  );
 }
 
-function localHourOf(iso: string | null, fallback: number): number {
-  const d = iso ? new Date(iso) : null;
-  if (!d || Number.isNaN(d.getTime())) return fallback;
-  return d.getHours();
+/** A label edited in place: saved on blur or Enter, Escape puts it back. */
+function LabelField({ value, fallback, onCommit, id }: { value: string; fallback: string; onCommit: (v: string) => void; id: string }) {
+  const [draft, setDraft] = useState(value);
+  const [prev, setPrev] = useState(value);
+  if (prev !== value) { setPrev(value); setDraft(value); }
+  const commit = () => {
+    const v = draft.replace(/\s+/g, ' ').trim().slice(0, MAX_LABEL);
+    if (!v) { setDraft(value || fallback); return; }
+    if (v !== value) onCommit(v);
+  };
+  return (
+    <input
+      id={id}
+      value={draft}
+      maxLength={MAX_LABEL}
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={commit}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') { e.preventDefault(); (e.target as HTMLInputElement).blur(); }
+        if (e.key === 'Escape') { setDraft(value); (e.target as HTMLInputElement).blur(); }
+      }}
+      style={{ ...INPUT, width: '100%', minHeight: 40, fontSize: 14.5 }}
+    />
+  );
 }
 
-/** Local date + hour → ISO instant. */
-function composeDeadline(date: string, hour: number): string | null {
-  const [y, m, d] = date.split('-').map(Number);
-  if (!y || !m || !d) return null;
-  const dt = new Date(y, m - 1, d, hour, 0, 0, 0);
-  return Number.isNaN(dt.getTime()) ? null : dt.toISOString();
+// ── One award card ──────────────────────────────────────────────────────────
+
+function AwardCard({ type, preset, onPatch, onRemove }: {
+  type: AwardTypeConfig;
+  preset: AwardPreset | null;
+  onPatch: (patch: Partial<AwardTypeConfig>) => void;
+  /** Custom awards only. */
+  onRemove?: () => void;
+}) {
+  const on = type.enabled && type.perCommittee > 0;
+  const fieldId = `aw-label-${type.key}`;
+  return (
+    <div className="gv-aw-card" data-on={on ? 'true' : undefined}>
+      <div className="gv-aw-pop">
+        <PopDisc tint={on ? TINT_GOLD_BG : 'linear-gradient(150deg, rgba(27,56,40,0.10), rgba(27,56,40,0.04))'}>
+          {preset
+            ? <Emoji3D name={preset.emoji} size={34} fallback={Award} fallbackColor={FOREST} />
+            : <TrophyQuestion size={32} />}
+        </PopDisc>
+      </div>
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p style={{ fontFamily: F, fontSize: 16, fontWeight: 800, color: INK, lineHeight: 1.25, overflowWrap: 'anywhere' }}>{type.label}</p>
+          <p style={{ fontFamily: F, fontSize: 13, color: INK_SOFT, marginTop: 2 }}>{preset ? preset.line : 'Your own award'}</p>
+        </div>
+        {preset ? (
+          <Switch
+            label={`Give ${type.label}`}
+            checked={on}
+            onChange={(next) => onPatch(next
+              ? { enabled: true, perCommittee: type.perCommittee > 0 ? type.perCommittee : preset.defaultCount }
+              : { enabled: false })}
+          />
+        ) : (
+          <button type="button" onClick={onRemove} aria-label={`Remove ${type.label}`} className="gv-aw-step" style={{ width: 32, height: 32 }}>
+            <X size={15} strokeWidth={2.6} aria-hidden />
+          </button>
+        )}
+      </div>
+
+      {on && (
+        <div className="mt-3 flex flex-col gap-3">
+          {preset && preset.names.length > 1 && (
+            <div className="flex flex-wrap gap-1.5" role="group" aria-label="Name">
+              {preset.names.map((n) => (
+                <button key={n} type="button" className="gv-aw-chip" aria-pressed={type.label === n} onClick={() => onPatch({ label: n })}>
+                  {n}
+                </button>
+              ))}
+            </div>
+          )}
+          <div>
+            <label htmlFor={fieldId} style={{ fontFamily: F, fontSize: 12.5, fontWeight: 600, color: INK_SOFT }}>Name on the certificate</label>
+            <div className="mt-1">
+              <LabelField id={fieldId} value={type.label} fallback={preset?.names[0] ?? 'Custom award'} onCommit={(v) => onPatch({ label: v })} />
+            </div>
+          </div>
+          <div className="flex items-center justify-between gap-3">
+            <span style={{ fontFamily: F, fontSize: 13.5, fontWeight: 700, color: INK }}>Per committee</span>
+            <Stepper label={type.label} value={Math.max(1, type.perCommittee)} onChange={(v) => onPatch({ perCommittee: v })} />
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
 
-function todayIso(): string {
-  const d = new Date();
-  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
-}
+// ── One set of awards (shared, or one committee's own) ─────────────────────
 
-function formatDeadline(d: Date): string {
-  return d.toLocaleString('en-GB', {
-    weekday: 'short', day: 'numeric', month: 'short', year: 'numeric',
-    hour: '2-digit', minute: '2-digit',
-  });
+function AwardSetEditor({ types, onChange }: { types: AwardTypeConfig[]; onChange: (next: AwardTypeConfig[]) => void }) {
+  const byKey = useMemo(() => new Map(types.map((t) => [t.key, t])), [types]);
+  const customs = types.filter((t) => !t.builtin && t.scope === 'committee');
+  const [newName, setNewName] = useState('');
+  const [addError, setAddError] = useState('');
+
+  const patch = (key: string, p: Partial<AwardTypeConfig>) =>
+    onChange(types.map((t) => (t.key === key ? { ...t, ...p } : t)));
+
+  const addCustom = () => {
+    const label = newName.replace(/\s+/g, ' ').trim().slice(0, MAX_LABEL);
+    if (!label) { setAddError('Type a name for the award.'); return; }
+    let key = awardKeyFromLabel(label);
+    if (types.some((t) => t.label.toLowerCase() === label.toLowerCase())) { setAddError('You already have an award with that name.'); return; }
+    let n = 2;
+    while (types.some((t) => t.key === key)) key = `${awardKeyFromLabel(label)}-${n++}`;
+    onChange([...types, {
+      key, label, tier: 'special', scope: 'committee', perCommittee: 1, points: 0,
+      enabled: true, builtin: false, description: '',
+    }]);
+    setNewName('');
+    setAddError('');
+  };
+
+  return (
+    <div className="flex flex-col gap-5">
+      {AWARD_PRESET_GROUPS.map((g) => (
+        <section key={g.id} className="gv-st-card gv-fd-card" aria-label={g.title}
+          style={{ background: g.id === 'placements'
+            ? 'radial-gradient(120% 90% at 100% 0%, rgba(238,217,138,0.28) 0%, rgba(238,217,138,0) 55%), #FFFFFF'
+            : 'radial-gradient(120% 90% at 100% 0%, rgba(61,122,82,0.09) 0%, rgba(61,122,82,0) 55%), #FFFFFF' }}>
+          <h2 style={{ fontFamily: F, fontSize: 18, fontWeight: 800, color: INK, letterSpacing: '-0.01em' }}>{g.title}</h2>
+          <div className="gv-aw-grid">
+            {g.presets.map((p) => {
+              const t = byKey.get(p.key);
+              return t ? <AwardCard key={p.key} type={t} preset={p} onPatch={(x) => patch(p.key, x)} /> : null;
+            })}
+          </div>
+        </section>
+      ))}
+
+      <section className="gv-st-card gv-fd-card" aria-label="Custom awards"
+        style={{ background: 'radial-gradient(120% 90% at 100% 0%, rgba(238,217,138,0.22) 0%, rgba(238,217,138,0) 55%), #FFFFFF' }}>
+        <h2 style={{ fontFamily: F, fontSize: 18, fontWeight: 800, color: INK, letterSpacing: '-0.01em' }}>Custom awards</h2>
+        {customs.length > 0 && (
+          <div className="gv-aw-grid">
+            {customs.map((t) => (
+              <AwardCard key={t.key} type={t} preset={null}
+                onPatch={(x) => patch(t.key, x)}
+                onRemove={() => onChange(types.filter((x) => x.key !== t.key))} />
+            ))}
+          </div>
+        )}
+        <form
+          className="mt-5 flex flex-wrap items-end gap-3"
+          onSubmit={(e) => { e.preventDefault(); addCustom(); }}
+        >
+          <span className="shrink-0" style={{ marginBottom: 2 }}><TrophyQuestion size={40} /></span>
+          <div className="min-w-0" style={{ flex: '1 1 220px' }}>
+            <label htmlFor="aw-new-custom" style={{ fontFamily: F, fontSize: 12.5, fontWeight: 600, color: INK_SOFT }}>Name your own award</label>
+            <input
+              id="aw-new-custom"
+              value={newName}
+              maxLength={MAX_LABEL}
+              placeholder="Best Crisis Response"
+              onChange={(e) => { setNewName(e.target.value); if (addError) setAddError(''); }}
+              aria-describedby={addError ? 'aw-new-custom-err' : undefined}
+              style={{ ...INPUT, width: '100%', minHeight: 44, fontSize: 15, marginTop: 4 }}
+            />
+          </div>
+          <button type="submit" className="gv-st-btn gv-st-forest">
+            <Plus size={16} strokeWidth={2.6} aria-hidden />Add award
+          </button>
+          {addError && <p id="aw-new-custom-err" role="alert" className="w-full" style={{ fontFamily: F, fontSize: 13, color: '#8B2020' }}>{addError}</p>}
+        </form>
+      </section>
+    </div>
+  );
 }
 
 // ── The tab ─────────────────────────────────────────────────────────────────
 
-export function AwardsSettings({ conference, onSaved }: {
-  conference: Conference;
-  /** Fires after each successful save, once the conference row has been re-read. */
-  onSaved?: () => void;
-}) {
+export function AwardsSettings({ conference }: { conference: Conference }) {
   const { refreshConferenceQuiet } = useManage();
-
   const [config, setConfig] = useState<AwardsConfig>(() => getAwardsConfig(conference.awards_config));
+  const [asking, setAsking] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
-  const [saveError, setSaveError] = useState<string | null>(null);
+  const [confirmOff, setConfirmOff] = useState(false);
+  const [committees, setCommittees] = useState<CommitteeLite[] | null>(null);
+  /** null = the shared set; otherwise a conference_committee id. */
+  const [editing, setEditing] = useState<string | null>(null);
+
+  // ── Committees (for the per-committee picker) ─────────────────────────
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const supabase = await getFreshAuthedClient();
+      if (!supabase) { if (!cancelled) setCommittees([]); return; }
+      const { data } = await supabase
+        .from('conference_committees')
+        .select('id, name, abbreviation')
+        .eq('conference_id', conference.id)
+        .order('name', { ascending: true });
+      if (!cancelled) setCommittees((data ?? []) as CommitteeLite[]);
+    })();
+    return () => { cancelled = true; };
+  }, [conference.id]);
 
   // ── Autosave ──────────────────────────────────────────────────────────
-  // Every edit marks the config dirty and arms a 600 ms timer. The latest
-  // config always wins: a save that started with an older snapshot has its
-  // status ignored (seq check), and the pending timer flushes on unmount so
-  // switching tabs inside the debounce window never drops a change.
+  // The latest config always wins: a save that started on an older snapshot
+  // has its outcome ignored (seq), and a pending save flushes on unmount.
   const latestRef = useRef(config);
   const dirtyRef = useRef(false);
   const seqRef = useRef(0);
-  const configuredAtRef = useRef<string | null>(config.configuredAt);
   const conferenceIdRef = useRef(conference.id);
   const refreshRef = useRef(refreshConferenceQuiet);
-  const onSavedRef = useRef(onSaved);
   useEffect(() => { refreshRef.current = refreshConferenceQuiet; }, [refreshConferenceQuiet]);
-  useEffect(() => { onSavedRef.current = onSaved; }, [onSaved]);
   useEffect(() => { conferenceIdRef.current = conference.id; }, [conference.id]);
 
   const persist = useCallback(async (snapshot: AwardsConfig, { silent = false } = {}) => {
     const seq = ++seqRef.current;
-    if (!silent) { setSaving(true); setSaved(false); setSaveError(null); }
+    if (!silent) { setSaving(true); setSaved(false); }
     const stamped: AwardsConfig = {
       ...snapshot,
-      configuredAt: snapshot.configuredAt ?? configuredAtRef.current ?? new Date().toISOString(),
+      // `enabled` is stored as the set-up answer: there is no separate switch.
+      enabled: snapshot.setUp,
+      configuredAt: snapshot.configuredAt ?? new Date().toISOString(),
     };
-    configuredAtRef.current = stamped.configuredAt;
     let err: string | null;
     try {
       const supabase = await getFreshAuthedClient();
@@ -256,18 +369,17 @@ export function AwardsSettings({ conference, onSaved }: {
         ? await saveAwardsConfig(supabase, conferenceIdRef.current, stamped)
         : 'Your session has expired. Sign in again and retry.';
     } catch (e) {
-      err = friendlyError(e, 'Your changes were not saved.');
+      err = friendlyError(e, 'Your awards were not saved. Try again in a moment.');
     }
     if (silent || seq !== seqRef.current) return;
     setSaving(false);
     if (err) {
-      setSaveError(err);
+      notifyErr(err, 'settings-awards');
       return;
     }
     dirtyRef.current = false;
     setSaved(true);
     await refreshRef.current();
-    onSavedRef.current?.();
   }, []);
 
   const update = useCallback((patch: (c: AwardsConfig) => AwardsConfig) => {
@@ -286,394 +398,209 @@ export function AwardsSettings({ conference, onSaved }: {
     return () => clearTimeout(t);
   }, [config, persist]);
 
-  // Flush on unmount. Fire-and-forget: there is nothing left on screen to
-  // report to, and the next mount re-reads the row.
   useEffect(() => () => {
     if (dirtyRef.current) void persist(latestRef.current, { silent: true });
   }, [persist]);
 
-  // ── Derived ───────────────────────────────────────────────────────────
-  const slug = conference.slug;
-  const effectiveDeadline = useMemo(
-    () => chairDeadline(config, conference.end_date ?? null),
-    [config, conference.end_date],
-  );
-  const deadlineMode: 'end' | 'custom' = config.chairDeadline ? 'custom' : 'end';
-  const customDate = localDateOf(config.chairDeadline);
-  const customHour = localHourOf(config.chairDeadline, 18);
-
-  const enabledCount = config.types.filter((t) => t.enabled).length;
-
-  // ── Category edits ────────────────────────────────────────────────────
-  const patchType = useCallback((key: string, patch: Partial<AwardTypeConfig>) => {
-    update((c) => ({ ...c, types: c.types.map((t) => (t.key === key ? { ...t, ...patch } : t)) }));
-  }, [update]);
-
-  const removeType = useCallback((key: string) => {
-    update((c) => ({ ...c, types: c.types.filter((t) => t.key !== key || t.builtin) }));
-  }, [update]);
-
-  // ── Custom award form ─────────────────────────────────────────────────
-  const [newLabel, setNewLabel] = useState('');
-  const [newTier, setNewTier] = useState<AwardTier>('special');
-  const [newScope, setNewScope] = useState<'committee' | 'conference'>('committee');
-  const [newPerCommittee, setNewPerCommittee] = useState(1);
-  const [newError, setNewError] = useState<string | null>(null);
-
-  const addCustom = () => {
-    const label = newLabel.trim();
-    if (!label) { setNewError('Give the award a name first.'); return; }
-    const key = awardKeyFromLabel(label);
-    if (config.types.some((t) => t.key === key)) {
-      setNewError('An award with that name already exists.');
-      return;
-    }
+  // ── Answers ───────────────────────────────────────────────────────────
+  const answer = (sameForAll: boolean) => {
     update((c) => ({
       ...c,
-      types: [...c.types, {
-        key,
-        label,
-        tier: newTier,
-        scope: newScope,
-        perCommittee: newScope === 'committee' ? newPerCommittee : 0,
-        points: 0,
-        enabled: true,
-        builtin: false,
-        description: '',
-      }],
+      setUp: true,
+      enabled: true,
+      sameForAll,
+      // A conference that used the old settings screen keeps the choices it
+      // made there; everyone else starts from the three placements.
+      types: c.configuredAt ? c.types : freshAwardTypes(),
     }));
-    setNewLabel('');
-    setNewTier('special');
-    setNewScope('committee');
-    setNewPerCommittee(1);
-    setNewError(null);
+    setAsking(false);
+    setEditing(null);
   };
 
-  const dimmed: React.CSSProperties = config.enabled
-    ? {}
-    : { opacity: 0.5, pointerEvents: 'none' };
+  const turnOff = () => {
+    update((c) => ({ ...c, setUp: false, enabled: false }));
+    setConfirmOff(false);
+    setEditing(null);
+  };
 
-  const sectionTitle = (text: string) => (
-    <h3 className="text-sm font-bold mb-1" style={{ color: '#1C1410', fontFamily: OUTFIT }}>{text}</h3>
+  const setShared = (types: AwardTypeConfig[]) => update((c) => ({ ...c, types }));
+  const setOwn = (id: string, types: AwardTypeConfig[]) =>
+    update((c) => ({ ...c, perCommittee: { ...c.perCommittee, [id]: { types } } }));
+  const giveOwn = (id: string) =>
+    update((c) => ({ ...c, perCommittee: { ...c.perCommittee, [id]: { types: c.types.map((t) => ({ ...t })) } } }));
+  const useShared = (id: string) =>
+    update((c) => {
+      const rest = { ...c.perCommittee };
+      delete rest[id];
+      return { ...c, perCommittee: rest };
+    });
+
+  // ── Derived ───────────────────────────────────────────────────────────
+  const countOn = (types: AwardTypeConfig[]) =>
+    types.filter((t) => t.enabled && t.scope === 'committee' && t.perCommittee > 0).length;
+  const sharedCount = countOn(config.types);
+  const ownCount = config.sameForAll ? 0 : (committees ?? []).filter((c) => config.perCommittee[c.id]).length;
+  const editingCommittee = editing ? (committees ?? []).find((c) => c.id === editing) ?? null : null;
+  const editingOwn = !!(editing && config.perCommittee[editing]);
+
+  const head = (
+    <SectionHead
+      emoji="Trophy" icon={Trophy} tint={TINT_GOLD_BG} title="Awards"
+      line={config.setUp
+        ? (config.sameForAll ? 'Every committee gives the same awards.' : 'Committees can give their own awards.')
+        : 'Chairs see nothing about awards until you set them up.'}
+      focal={config.setUp ? <BigCount n={sharedCount} word={sharedCount === 1 ? 'award' : 'awards'} tone="gold" /> : undefined}
+    />
   );
 
+  // 1. Blank slate
+  if (!config.setUp && !asking) {
+    return (
+      <div className="flex flex-col gap-5">
+        <style>{AWARDS_CSS}</style>
+        {head}
+        <div className="gv-st-card gv-fd-card relative flex flex-col items-center text-center" style={{ paddingTop: 54, paddingBottom: 30, marginTop: 26 }}>
+          <span className="absolute" style={{ top: -34, left: '50%', transform: 'translateX(-50%)' }}>
+            <PopDisc size={72}><Emoji3D name="Trophy" size={50} fallback={Trophy} fallbackColor={AMBER} /></PopDisc>
+          </span>
+          <p style={{ fontFamily: F, fontSize: 20, fontWeight: 800, color: INK }}>No awards yet</p>
+          <p className="mt-1" style={{ fontFamily: F, fontSize: 14.5, color: INK_SOFT }}>Pick the honours your committees give, then chairs can nominate.</p>
+          <button type="button" className="gv-st-btn gv-st-forest mt-5" onClick={() => setAsking(true)}>Set up awards</button>
+        </div>
+      </div>
+    );
+  }
+
+  // 2. The one question
+  if (!config.setUp && asking) {
+    return (
+      <div className="flex flex-col gap-5">
+        <style>{AWARDS_CSS}</style>
+        {head}
+        <div className="gv-st-card gv-fd-card">
+          <h2 style={{ fontFamily: F, fontSize: 22, fontWeight: 800, color: INK, letterSpacing: '-0.01em' }}>Will every committee give the same awards?</h2>
+          <p className="mt-1" style={{ fontFamily: F, fontSize: 14.5, color: INK_SOFT }}>
+            You can change this later and give any committee its own awards.
+          </p>
+          <div className="mt-8 grid gap-x-4 gap-y-9" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))' }}>
+            <button type="button" className="gv-aw-choice" onClick={() => answer(true)}>
+              <span className="gv-aw-pop"><PopDisc><Emoji3D name="Trophy" size={34} fallback={Trophy} fallbackColor={AMBER} /></PopDisc></span>
+              <span className="absolute" style={{ top: 12, insetInlineEnd: 14, fontFamily: F, fontSize: 12, fontWeight: 700, color: FOREST, background: 'rgba(61,122,82,0.12)', borderRadius: 999, padding: '3px 10px' }}>Recommended</span>
+              <span style={{ fontFamily: F, fontSize: 17, fontWeight: 800, color: INK }}>Yes, the same for all</span>
+              <span style={{ fontFamily: F, fontSize: 13.5, color: INK_SOFT }}>One set of awards for every committee.</span>
+            </button>
+            <button type="button" className="gv-aw-choice" onClick={() => answer(false)}>
+              <span className="gv-aw-pop"><PopDisc tint={TINT_GREEN_BG}><Emoji3D name="Card index dividers" size={34} fallback={Award} fallbackColor={FOREST} /></PopDisc></span>
+              <span style={{ fontFamily: F, fontSize: 17, fontWeight: 800, color: INK }}>No, set them per committee</span>
+              <span style={{ fontFamily: F, fontSize: 13.5, color: INK_SOFT }}>Committees start the same, then change any of them.</span>
+            </button>
+          </div>
+          <button type="button" className="gv-st-link mt-6" onClick={() => setAsking(false)}>Not now</button>
+        </div>
+      </div>
+    );
+  }
+
+  // 3. The editor
   return (
-    <>
-      {/* ── a. How awards work ── */}
-      <div style={cardStyle}>
-        <div className="flex items-start justify-between gap-4 mb-4">
-          <div className="flex items-center gap-3">
-            <span
-              className="flex items-center justify-center flex-shrink-0"
-              style={{ width: 36, height: 36, borderRadius: 11, background: 'linear-gradient(135deg, #EED98A, #B6871F)', boxShadow: '0 4px 12px rgba(182,135,31,0.28)' }}
-            >
-              <Trophy size={18} strokeWidth={2.2} style={{ color: '#1B3828' }} />
-            </span>
-            <div>
-              {sectionTitle('How awards work on Gavelling')}
-              <p className="text-xs" style={{ color: '#5B4F42', fontFamily: OUTFIT }}>
-                Decided once per conference, announced at the closing ceremony.
+    <div className="flex flex-col gap-5">
+      <style>{AWARDS_CSS}</style>
+      {head}
+
+      <div className="gv-st-card gv-fd-card">
+        <div className="flex items-center justify-between gap-4 flex-wrap">
+          <div className="flex items-center gap-3 min-w-0">
+            <EmojiDisc emoji="Card index dividers" icon={Award} tint={TINT_GREEN_BG} size={40} />
+            <div className="min-w-0">
+              <p style={{ fontFamily: F, fontSize: 15.5, fontWeight: 700, color: INK }}>Same awards for every committee</p>
+              <p style={{ fontFamily: F, fontSize: 13.5, color: INK_SOFT }}>
+                {config.sameForAll ? 'Turn off to give a committee its own awards.' : 'Each committee uses the shared awards until you give it its own.'}
               </p>
             </div>
           </div>
-          <Link
-            href={`/manage/${slug}/awards`}
-            className="inline-flex items-center gap-1.5 flex-shrink-0 rounded-xl focus:outline-none"
-            style={{
-              padding: '8px 14px', backgroundColor: '#1B3828', color: '#EED98A',
-              fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 800, letterSpacing: '0.06em',
-              boxShadow: '0 4px 12px rgba(27,56,40,0.2)', textDecoration: 'none',
-            }}
-          >
-            OPEN AWARDS <ArrowRight size={13} strokeWidth={2.6} />
-          </Link>
+          <Switch
+            label="Same awards for every committee"
+            checked={config.sameForAll}
+            onChange={(next) => { update((c) => ({ ...c, sameForAll: next })); if (next) setEditing(null); }}
+          />
         </div>
-        <ol className="grid gap-3 sm:grid-cols-2" style={{ listStyle: 'none', margin: 0, padding: 0 }}>
-          {[
-            ['You set the categories', 'Which honours exist, how many each committee gives, and what they are worth.'],
-            ['Chairs nominate', 'From their conference page after the last session, with the session scoreboard beside them as evidence.'],
-            ['The secretariat reviews', 'Each committee slate is checked and approved at Awards. Slates can be returned with a note.'],
-            ['Publish', 'The certificates list goes out, and every recipient gets a verified MUN CV entry.'],
-          ].map(([title, body], i) => (
-            <li key={title} className="flex items-start gap-3 rounded-xl" style={{ padding: '10px 12px', backgroundColor: '#FAF8F3', border: '1px solid #EDE7D8' }}>
-              <span
-                className="flex items-center justify-center flex-shrink-0"
-                style={{ width: 24, height: 24, borderRadius: 999, backgroundColor: '#1B3828', color: '#EED98A', fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 800 }}
-              >
-                {i + 1}
-              </span>
-              <div className="min-w-0">
-                <p className="text-xs font-bold" style={{ color: '#1C1410', fontFamily: OUTFIT }}>{title}</p>
-                <p className="text-xs mt-0.5" style={{ color: '#5B4F42', fontFamily: OUTFIT, lineHeight: 1.45 }}>{body}</p>
-              </div>
-            </li>
-          ))}
-        </ol>
-        <p className="text-xs mt-3" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>
-          Delegates never see nominations before publication.
-        </p>
-      </div>
 
-      {/* ── b. Master toggle ── */}
-      <div style={cardStyle}>
-        <div className="flex items-center justify-between gap-3">
-          <div>
-            <label className="text-xs font-semibold flex items-center gap-1.5" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
-              Give awards at this conference
-              <InfoHint
-                label="About turning awards off"
-                text="Off hides the nomination card from every chair and the Awards page stays empty. Nothing already nominated is deleted, so you can turn it back on at any time."
-              />
-            </label>
-            <p className="text-xs mt-0.5" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>
-              {config.enabled
-                ? `${enabledCount} categor${enabledCount === 1 ? 'y' : 'ies'} on. Chairs will be asked to nominate after their last session.`
-                : 'Awards are off. Chairs will not be asked to nominate.'}
+        {!config.sameForAll && (
+          <div className="mt-4">
+            <p style={{ fontFamily: F, fontSize: 13, fontWeight: 600, color: INK_SOFT }}>
+              Editing{ownCount > 0 ? ` · ${ownCount} with their own awards` : ''}
             </p>
+            <div className="mt-2 flex flex-wrap gap-2" role="group" aria-label="Which awards you are editing">
+              <button type="button" className="gv-aw-com" aria-pressed={editing === null} onClick={() => setEditing(null)}>
+                <span style={{ fontFamily: F, fontSize: 15, fontWeight: 800, color: INK }}>All committees</span>
+                <span style={{ fontFamily: F, fontSize: 12, color: INK_SOFT }}>The shared awards</span>
+              </button>
+              {committees === null && (
+                <span style={{ fontFamily: F, fontSize: 13, color: INK_SOFT, alignSelf: 'center' }}>Loading committees</span>
+              )}
+              {(committees ?? []).map((c) => {
+                const short = committeeDisplayName(c.name, c.abbreviation);
+                const own = !!config.perCommittee[c.id];
+                return (
+                  <button key={c.id} type="button" className="gv-aw-com" aria-pressed={editing === c.id} onClick={() => setEditing(c.id)}>
+                    <span style={{ fontFamily: F, fontSize: 15, fontWeight: 800, color: INK, overflowWrap: 'anywhere' }}>{short}</span>
+                    {short !== c.name && <span style={{ fontFamily: F, fontSize: 11.5, color: INK_SOFT, overflowWrap: 'anywhere' }}>{c.name}</span>}
+                    <span className="inline-flex items-center gap-1 mt-1" style={{ fontFamily: F, fontSize: 12, fontWeight: 700, color: own ? AMBER : FOREST }}>
+                      {own ? <Award size={12} strokeWidth={2.6} aria-hidden /> : <Check size={12} strokeWidth={2.8} aria-hidden />}
+                      {own ? 'Own awards' : 'Same as all'}
+                    </span>
+                  </button>
+                );
+              })}
+              {committees !== null && committees.length === 0 && (
+                <span style={{ fontFamily: F, fontSize: 13, color: INK_SOFT, alignSelf: 'center' }}>Add committees first, then give them their own awards.</span>
+              )}
+            </div>
           </div>
-          <PillToggle value={config.enabled} onChange={(v) => update((c) => ({ ...c, enabled: v }))} size="md" />
-        </div>
-        <AutoSaveStatus saving={saving} saved={saved} />
-        {saveError && (
-          <p
-            role="alert"
-            className="text-xs mt-2 rounded-lg px-3 py-2"
-            style={{ color: '#8B2020', backgroundColor: 'rgba(139,32,32,0.08)', border: '1px solid rgba(139,32,32,0.22)', fontFamily: OUTFIT }}
-          >
-            {saveError}
-          </p>
         )}
       </div>
 
-      {/* ── c. Categories ── */}
-      <div style={{ ...cardStyle, ...dimmed }} aria-disabled={!config.enabled}>
-        <div className="mb-4">
-          {sectionTitle('Categories')}
-          <p className="text-xs" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>
-            Rename any honour, set how many each committee gives, and what it is worth. Off categories are hidden from chairs.
-          </p>
-        </div>
-
-        <div className="flex flex-col" style={{ gap: 10 }}>
-          {config.types.map((t) => {
-            const off = !t.enabled;
-            return (
-              <div
-                key={t.key}
-                className="rounded-xl"
-                style={{
-                  padding: '12px 14px',
-                  backgroundColor: off ? '#FAF8F3' : '#FFFFFF',
-                  border: `1.5px solid ${off ? '#EDE7D8' : '#DDD4C0'}`,
-                  opacity: off ? 0.7 : 1,
-                  transition: 'opacity 150ms, border-color 150ms',
-                }}
-              >
-                <div className="flex flex-wrap items-center gap-x-4 gap-y-3">
-                  <PillToggle value={t.enabled} onChange={(v) => patchType(t.key, { enabled: v })} size="sm" />
-                  <div className="flex items-center gap-2 flex-1 min-w-0" style={{ minWidth: 200 }}>
-                    <TierDot tier={t.tier} />
-                    <input
-                      type="text"
-                      value={t.label}
-                      maxLength={60}
-                      aria-label="Award name"
-                      onChange={(e) => patchType(t.key, { label: e.target.value })}
-                      onBlur={(e) => { if (!e.target.value.trim()) patchType(t.key, { label: t.builtin ? defaultLabel(t.key) : 'Custom award' }); }}
-                      className="flex-1 focus:outline-none"
-                      style={{ ...inputStyle, fontWeight: 700 }}
-                    />
-                  </div>
-
-                  {t.scope === 'committee' ? (
-                    <div className="flex items-center gap-2">
-                      <Stepper value={t.perCommittee} onChange={(v) => patchType(t.key, { perCommittee: v })} />
-                      <FieldLabel>per committee</FieldLabel>
-                    </div>
-                  ) : (
-                    <span className="text-xs" style={{ color: '#5B4F42', fontFamily: OUTFIT, fontStyle: 'italic' }}>
-                      One per conference, assigned by the secretariat
-                    </span>
-                  )}
-
-                  {!t.builtin && (
-                    <button
-                      type="button"
-                      onClick={() => removeType(t.key)}
-                      aria-label={`Remove ${t.label}`}
-                      className="flex items-center justify-center focus:outline-none"
-                      style={{ width: 26, height: 26, borderRadius: 8, border: '1.5px solid #DDD4C0', backgroundColor: 'transparent', color: '#8B2020', cursor: 'pointer' }}
-                    >
-                      <X size={13} strokeWidth={2.4} />
-                    </button>
-                  )}
-                </div>
-                {(t.description || !t.builtin) && (
-                  <p className="text-xs mt-2" style={{ color: '#9A8A78', fontFamily: OUTFIT, paddingLeft: 42 }}>
-                    {t.description || `${TIER_LABEL[t.tier]} tier, ${t.scope === 'committee' ? 'per committee' : 'whole conference'}. Custom award.`}
-                  </p>
-                )}
-              </div>
-            );
-          })}
-        </div>
-
-        {/* Add a custom award */}
-        <div className="mt-5 rounded-xl" style={{ padding: '14px', border: '1.5px dashed #D8CDB6', backgroundColor: '#FAF8F3' }}>
-          <p className="text-xs font-bold mb-3" style={{ color: '#1C1410', fontFamily: OUTFIT }}>Add a custom award</p>
-          <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))' }}>
-            <label className="flex flex-col gap-1" style={{ gridColumn: 'span 2' }}>
-              <FieldLabel>Name</FieldLabel>
-              <input
-                type="text"
-                value={newLabel}
-                maxLength={60}
-                placeholder="e.g. Best Newcomer"
-                onChange={(e) => { setNewLabel(e.target.value); setNewError(null); }}
-                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addCustom(); } }}
-                className="focus:outline-none"
-                style={inputStyle}
-              />
-            </label>
-            <label className="flex flex-col gap-1">
-              <FieldLabel>Tier</FieldLabel>
-              <select value={newTier} onChange={(e) => setNewTier(e.target.value as AwardTier)} className="focus:outline-none" style={inputStyle}>
-                {(['gold', 'silver', 'bronze', 'special'] as AwardTier[]).map((tier) => (
-                  <option key={tier} value={tier}>{TIER_LABEL[tier]}</option>
-                ))}
-              </select>
-            </label>
-          </div>
-          <div className="flex flex-wrap items-end gap-4 mt-3">
-            <div className="flex flex-col gap-1" style={{ minWidth: 260 }}>
-              <FieldLabel>Scope</FieldLabel>
-              <Segmented
-                options={[
-                  { value: 'committee' as const, label: 'PER COMMITTEE' },
-                  { value: 'conference' as const, label: 'WHOLE CONFERENCE' },
-                ]}
-                value={newScope}
-                onChange={setNewScope}
-              />
-            </div>
-            {newScope === 'committee' && (
-              <div className="flex items-center gap-2 pb-1">
-                <Stepper value={newPerCommittee} onChange={setNewPerCommittee} min={1} />
-                <FieldLabel>per committee</FieldLabel>
-              </div>
-            )}
-            <button
-              type="button"
-              onClick={addCustom}
-              className="inline-flex items-center gap-1.5 rounded-xl focus:outline-none ml-auto"
-              style={{
-                padding: '9px 14px', backgroundColor: '#1B3828', color: '#EED98A',
-                fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 800, letterSpacing: '0.06em',
-                border: 'none', cursor: 'pointer', boxShadow: '0 4px 12px rgba(27,56,40,0.2)',
-              }}
-            >
-              <Plus size={13} strokeWidth={2.6} /> ADD AWARD
-            </button>
-          </div>
-          {newError && (
-            <p role="alert" className="text-xs mt-2" style={{ color: '#8B2020', fontFamily: OUTFIT }}>{newError}</p>
-          )}
-        </div>
-      </div>
-
-      {/* ── d. Ratification ── */}
-      <div style={{ ...cardStyle, ...dimmed }} aria-disabled={!config.enabled}>
-        <div className="mb-4">{sectionTitle('Ratification')}</div>
-
-        <div className="flex items-center justify-between gap-3">
-          <div>
-            <label className="text-xs font-semibold flex items-center gap-1.5" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
-              Secretariat approves each slate before publishing
-              <InfoHint
-                label="About ratification"
-                text="With this on, a committee's nominations only go out once someone on the secretariat has approved them at Awards. You can return a slate to its chairs with a note."
-              />
-            </label>
-            <p className="text-xs mt-0.5" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>
-              Off: publishing announces every chair nomination as submitted.
+      {/* The set being edited */}
+      {editing && editingCommittee && !editingOwn ? (
+        <div className="gv-st-card gv-fd-card flex items-center justify-between gap-4 flex-wrap">
+          <div className="min-w-0">
+            <p style={{ fontFamily: F, fontSize: 16, fontWeight: 800, color: INK, overflowWrap: 'anywhere' }}>
+              {committeeDisplayName(editingCommittee.name, editingCommittee.abbreviation)} uses the shared awards
+            </p>
+            <p style={{ fontFamily: F, fontSize: 13.5, color: INK_SOFT }}>
+              {sharedCount === 0 ? 'No awards switched on yet.' : `${sharedCount} ${sharedCount === 1 ? 'award' : 'awards'}, the same as every other committee.`}
             </p>
           </div>
-          <PillToggle value={config.requireApproval} onChange={(v) => update((c) => ({ ...c, requireApproval: v }))} size="md" />
+          <button type="button" className="gv-st-btn gv-st-forest" onClick={() => giveOwn(editingCommittee.id)}>Give it its own awards</button>
         </div>
-
-        <div className="mt-6">
-          <label className="text-xs font-semibold flex items-center gap-1.5 mb-2" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
-            Chair deadline
-            <InfoHint
-              label="About the chair deadline"
-              text="Chairs see this on their nomination card. It is a reminder, not a lock: slates are only locked once approved or published."
-            />
-          </label>
-          <div style={{ maxWidth: 420 }}>
-            <Segmented
-              options={[
-                { value: 'end' as const, label: 'CONFERENCE END DATE' },
-                { value: 'custom' as const, label: 'CUSTOM' },
-              ]}
-              value={deadlineMode}
-              onChange={(mode) => {
-                if (mode === 'end') {
-                  update((c) => ({ ...c, chairDeadline: null }));
-                } else {
-                  update((c) => ({
-                    ...c,
-                    chairDeadline: c.chairDeadline ?? composeDeadline(conference.end_date || todayIso(), 18),
-                  }));
-                }
-              }}
-            />
+      ) : editing && editingOwn ? (
+        <>
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <p style={{ fontFamily: F, fontSize: 15, fontWeight: 700, color: INK, overflowWrap: 'anywhere' }}>
+              Awards for {editingCommittee ? committeeDisplayName(editingCommittee.name, editingCommittee.abbreviation) : 'this committee'}
+            </p>
+            <button type="button" className="gv-st-link" onClick={() => useShared(editing)}>Use the shared awards again</button>
           </div>
+          <AwardSetEditor types={config.perCommittee[editing].types} onChange={(t) => setOwn(editing, t)} />
+        </>
+      ) : (
+        <AwardSetEditor types={config.types} onChange={setShared} />
+      )}
 
-          {deadlineMode === 'custom' && (
-            <div className="flex flex-wrap items-end gap-3 mt-3">
-              <div className="flex flex-col gap-1" style={{ minWidth: 220 }}>
-                <FieldLabel>Date</FieldLabel>
-                <DatePicker
-                  value={customDate}
-                  onChange={(iso) => {
-                    if (!iso) return;
-                    update((c) => ({ ...c, chairDeadline: composeDeadline(iso, customHour) }));
-                  }}
-                  placeholder="Pick a date"
-                />
-              </div>
-              <label className="flex flex-col gap-1">
-                <FieldLabel>Hour</FieldLabel>
-                <select
-                  value={customHour}
-                  onChange={(e) => {
-                    const h = Number(e.target.value);
-                    update((c) => ({ ...c, chairDeadline: composeDeadline(customDate || conference.end_date || todayIso(), h) }));
-                  }}
-                  className="focus:outline-none tabular-nums"
-                  style={{ ...inputStyle, width: 88 }}
-                >
-                  {Array.from({ length: 24 }, (_, h) => (
-                    <option key={h} value={h}>{pad2(h)}:00</option>
-                  ))}
-                </select>
-              </label>
-            </div>
-          )}
-
-          <p className="text-xs mt-3" style={{ color: '#5B4F42', fontFamily: OUTFIT }}>
-            {effectiveDeadline
-              ? <>Chairs must submit by <strong style={{ color: '#1C1410' }}>{formatDeadline(effectiveDeadline)}</strong> (your local time).</>
-              : 'No deadline yet: set the conference dates, or pick a custom date above.'}
-          </p>
-        </div>
+      <div className="flex items-center justify-between gap-3 flex-wrap" style={{ fontFamily: F }}>
+        <p aria-live="polite" style={{ fontSize: 13, color: saved ? '#3D7A52' : INK_SOFT }}>
+          {saving ? 'Saving' : saved ? 'Saved' : 'Changes save by themselves'}
+        </p>
+        {confirmOff ? (
+          <span className="inline-flex items-center gap-3 flex-wrap">
+            <span style={{ fontSize: 13.5, color: INK }}>Chairs will stop seeing awards. Turn them off?</span>
+            <button type="button" className="gv-st-btn gv-st-outline" style={{ minHeight: 38 }} onClick={() => setConfirmOff(false)}>Keep awards</button>
+            <button type="button" className="gv-st-link" style={{ color: '#8B2020' }} onClick={turnOff}>Turn off</button>
+          </span>
+        ) : (
+          <button type="button" className="gv-st-link" style={{ color: INK_SOFT }} onClick={() => setConfirmOff(true)}>Turn off awards</button>
+        )}
       </div>
-    </>
+    </div>
   );
-}
-
-/** The canonical English label for a built-in key, used when a rename is cleared. */
-function defaultLabel(key: string): string {
-  const found = getAwardsConfig({}).types.find((t) => t.key === key);
-  return found?.label ?? 'Award';
 }

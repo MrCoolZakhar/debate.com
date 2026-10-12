@@ -834,27 +834,28 @@ isModerator = nameHolds && !heldElsewhere;   // setIsViewOnly(!isModerator)
 
 ## FEATURE: AWARDS (conference-linked sessions only)
 
-### CURRENT STATE: HIDDEN BEHIND A COMING-SOON SCREEN (7 Sep 2026)
-The organiser-facing half of awards is switched off in the UI. Nothing was deleted
-and no data was migrated:
-- Settings → Awards renders `settings/awardsComingSoon.tsx`. `settings/awardsUi.tsx`
-  is untouched on disk; re-enabling is one import and one render line in
-  `settings/page.tsx`, both marked with comments.
-- `/manage/[slug]/awards` is now a redirect to `/manage/[slug]/settings?tab=awards`.
-  The secretariat desk is preserved unrendered as
-  `manage/[slug]/awards/AwardsConsole.tsx`. Its rail entry is gone, and so are the
-  two links into it from `manage/[slug]/scoreboard` and `live/LiveModals.tsx`.
-- The `awards` set-up priority was removed from the dashboard checklist, from
-  `conference_setup_status()` (setup_total 9 → 8) and from `SETUP_STEPS` in
-  `admin/ConferencesTab.tsx`; `admin_conference_overview()`'s setup_total fallback
-  moved 9 → 8. Verification is untouched: `awards` was never in `v_ver_keys`.
-- The DATABASE IS UNCHANGED. `conference_awards`, `awards_config`,
-  `awards_published_at`, the RLS policies and every RPC still exist and still work.
-  Anything already published is still published and still visible to its recipient.
-- Participant and public surfaces were deliberately left alone: `MyAwardsCard`,
-  `/account/cv`, the public honour roll, the chair-side `AwardsCard` and the session
-  signposts through `resolveChairAwardsHref`. None of them 404 and none of them can
-  leak an unpublished nomination (the RLS is unchanged).
+### CURRENT STATE: SET-UP LIVE, NO PUBLISH SCREEN (11 Oct 2026)
+- Settings → Awards is `settings/awardsUi.tsx` (`AwardsSettings`): blank slate → "Will
+  every committee give the same awards?" → the editor (Placements, Other awards,
+  Custom awards; shared set or per-committee sets). Full description in CLAUDE.md §5.
+  `awardsComingSoon.tsx` was deleted.
+- `conferences.awards_config` gained `setUp`, `sameForAll` and `perCommittee`
+  (`{ [conference_committee_id]: { types } }`, replacing the shared `types` for that
+  committee). `getAwardsConfig` reports `enabled` only when `setUp === true`: `{}`
+  and every config saved before 11 Oct 2026 read as NOT set up.
+- **The chair gate is `awardsOfferedFor(config, conferenceCommitteeId)`** and nothing
+  else: the chair's `AwardsCard`, and in a session `useChairAwards` /
+  `resolveChairAwards` (`src/lib/sessionAwardsLink.ts`) for the ScoreboardPanel link,
+  the End View card, the top-bar CTA and the session Settings → Awards tab. A failed
+  lookup is "not offered". Read per committee with `configForCommittee`. Never add an
+  award affordance for chairs that does not pass this gate. Published awards are
+  read by status and never gated.
+- `/manage/[slug]/awards` still redirects to Settings; `AwardsConsole.tsx` stays
+  unrendered (and does not read `perCommittee` yet). There is no approve / publish
+  screen. The database is unchanged; `scratch-awards-setup.sql` is an unapplied
+  draft that enforces the gate in RLS.
+- The `awards` set-up priority stays out of the dashboard checklist,
+  `conference_setup_status()` and `SETUP_STEPS` (since 7 Sep 2026).
 
 Everything below still describes the feature as built and is still true of the code
 and the database. Read it before touching anything awards-related.

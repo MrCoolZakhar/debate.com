@@ -71,7 +71,7 @@ import {
 import { logEvent, getFeedbackForCommittee, type FeedbackEntry } from '@/lib/committeeService';
 import { updateFeedbackContent } from '@/lib/feedbackEdit';
 import { NoteEditingProvider } from '@/components/scoreboard/EditableNote';
-import { resolveChairAwardsHref } from '@/lib/sessionAwardsLink';
+import { useChairAwards } from '@/lib/sessionAwardsLink';
 import { Trophy, ListOrdered, Grid3x3, History, FileSpreadsheet } from 'lucide-react';
 
 export default function ScoreboardPanel({ committee, onClose, feedbackVersion = 0, chairName = '' }: {
@@ -123,17 +123,13 @@ export default function ScoreboardPanel({ committee, onClose, feedbackVersion = 
   // a new tab without tripping popup blockers; a slow/failed prefetch falls back to the
   // chair's conference hub at click time.
   const isConferenceSession = committee.sessionOrigin === 'conference';
-  const [awardsHref, setAwardsHref] = useState<string | null>(null);
-  useEffect(() => {
-    if (!isConferenceSession) return;
-    let cancelled = false;
-    resolveChairAwardsHref(committee.code).then((href) => { if (!cancelled) setAwardsHref(href); });
-    return () => { cancelled = true; };
-  }, [isConferenceSession, committee.code]);
+  // Only when the conference set awards up for this committee (11 Oct 2026).
+  const awardsTarget = useChairAwards(committee.code, isConferenceSession);
+  const awardsHref = awardsTarget?.offered ? awardsTarget.href : null;
   const openAwards = () => {
-    if (awardsHref) { window.open(awardsHref, '_blank', 'noopener,noreferrer'); return; }
-    resolveChairAwardsHref(committee.code).then((href) => window.open(href, '_blank', 'noopener,noreferrer'));
+    if (awardsHref) window.open(awardsHref, '_blank', 'noopener,noreferrer');
   };
+
 
   // The shared table deliberately does NOT call `useT()` — its other callers are
   // the English-only organiser dashboard, which would otherwise start rendering
@@ -354,7 +350,7 @@ export default function ScoreboardPanel({ committee, onClose, feedbackVersion = 
             <div className="w-1 h-4 rounded-full" style={{ backgroundColor: NEU.gold }} />
             <span className="text-sm font-black tracking-wide" style={{ color: NEU.gold }}>{t('sb_title')}</span>
             <div className="ms-auto flex items-center gap-2">
-              {isConferenceSession && (
+              {awardsHref && (
                 <button onClick={openAwards} title={t('chair_ended_awards_title')}
                   className="text-xs font-bold px-3 py-1.5 rounded-lg gv-lift inline-flex items-center gap-1.5"
                   style={{ backgroundColor: 'rgba(238,217,138,0.14)', color: NEU.gold, border: `1px solid rgba(238,217,138,0.35)` }}>

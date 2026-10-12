@@ -7,7 +7,7 @@ import {
   Plus, Crown, Mail as MailIcon, ChevronDown, Info, ArrowLeft,
   Settings2, Globe, Eye, EyeOff, ArrowUp, ArrowDown, Trash2, Briefcase,
   ClipboardList, CreditCard, Megaphone, Star, CheckCircle2, Clock, Users2, Trophy,
-  ChevronRight as ChevronRightIcon, CalendarDays, FileText, Image as ImageIcon, Palette, Handshake, Compass, History, Search,
+  ChevronRight as ChevronRightIcon, CalendarDays, FileText, Palette, Handshake, Compass, History, Search,
   School, ReceiptText, Gift, Ticket, HandHeart, type LucideIcon,
 } from 'lucide-react';
 import { useManage, type Conference } from '@/app/manage/[slug]/layout';
@@ -39,10 +39,9 @@ import {
   ROLE_ORDER, InfoHint,
   CopyToRolesModal,
 } from './applicationsUi';
-// Awards are behind a holding screen for now. `./awardsUi` (AwardsSettings) is
-// untouched on disk; swap this import and the render below back to it to
-// re-enable the real configuration UI. See awardsComingSoon.tsx.
-import { AwardsComingSoon } from './awardsComingSoon';
+// Awards (11 Oct 2026): blank slate, one question, then presets in categories
+// and custom awards. Everything lives in ./awardsUi.
+import { AwardsSettings } from './awardsUi';
 import { DelegationsSettings } from './delegationsUi';
 import CustomizationCard from './CustomizationCard';
 import { type FormBlock, normalizeBlocks, unpublishableQuestions } from '@/lib/customQuestions';
@@ -54,9 +53,10 @@ import { useConferenceTimezone, timelineNotice } from './timelineUi';
 import { INTENT_OPTIONS, getConferenceIntent, intentPayload } from '@/lib/conferenceIntent';
 import ProfileLink from '@/components/ProfileLink';
 import { useNow } from '@/lib/useNow';
-import { ConferencePreview, dateRange, type SettingsSnapshot } from './settingsHome';
+import { ConferencePreview, type SettingsSnapshot } from './settingsHome';
 import { ApplicationsSection } from './controlPanel';
 import { RoleSheet } from './roleSetup';
+import { GENERAL_CSS, IdentityBanner, IdentityLogo, IdField, PlainField, NameField } from './generalUi';
 import { SettingsShell, type ShellSection } from './settingsShell';
 import {
   SectionHead, Group, Row, SwitchRow, BigCount, Switch as KitSwitch, TINT_GOLD_BG, TINT_GREEN_BG, EmojiDisc,
@@ -66,16 +66,16 @@ import {
 // ── Types ──────────────────────────────────────────────────────────────────
 
 /** The settings sub-tabs; also the accepted values of the ?tab= deep link. */
-type SettingsTab = 'applications' | 'delegations' | 'conference' | 'organizers' | 'privacy' | 'awards' | 'payments';
+type SettingsTab = 'applications' | 'delegations' | 'conference' | 'partners' | 'organizers' | 'privacy' | 'awards' | 'payments';
 
 /** The section each internal tab is drawn as in the bookmarks rail
  *  (settingsShell.tsx), and so the ?tab= value written for it. */
 const SHELL_OF: Record<SettingsTab, ShellSection> = {
-  conference: 'general', privacy: 'visibility', applications: 'applications', delegations: 'delegations',
+  conference: 'general', partners: 'partners', privacy: 'visibility', applications: 'applications', delegations: 'delegations',
   organizers: 'team', payments: 'payments', awards: 'awards',
 };
 const TAB_OF: Record<ShellSection, SettingsTab> = {
-  general: 'conference', visibility: 'privacy', applications: 'applications', delegations: 'delegations',
+  general: 'conference', partners: 'partners', visibility: 'privacy', applications: 'applications', delegations: 'delegations',
   team: 'organizers', payments: 'payments', awards: 'awards',
 };
 
@@ -444,6 +444,8 @@ export default function SettingsPage() {
     if (tabParam === 'team' || tabParam === 'organizers') return 'organizers';
     if (tabParam === 'general' || tabParam === 'conference') return 'conference';
     if (tabParam === 'visibility' || tabParam === 'privacy') return 'privacy';
+    // Partners and sponsors left General for a section of their own (11 Oct 2026).
+    if (tabParam === 'partners' || tabParam === 'sponsors') return 'partners';
     if (tabParam === 'delegations' || tabParam === 'awards' || tabParam === 'applications' || tabParam === 'payments') return tabParam;
     if ((ROLES as readonly string[]).includes(searchParams.get('role') ?? '') || searchParams.get('step')) return 'applications';
     if (searchParams.get('focus')) return 'conference';
@@ -3095,291 +3097,257 @@ export default function SettingsPage() {
       {activeTab === 'conference' && (
         <div className="flex items-start" style={{ gap: 28 }}>
         <div className="flex-1 min-w-0 flex flex-col gap-5">
-          <SectionHead emoji="Classical building" icon={Building2} tint={TINT_GOLD_BG}
+          <SectionHead emoji="Classical building" icon={Building2} tint={TINT_GOLD_BG} compact
             title="General"
             line={<>What your conference is and how people reach you. Changes save by themselves.{' '}
               <a href={`/conferences/${conference.slug}?preview=1`} target="_blank" rel="noopener noreferrer" style={{ color: '#1B3828', fontWeight: 700, textDecoration: 'underline', textUnderlineOffset: 3 }}>Open your page</a></>}
-            focal={
-              <span className="flex items-center gap-3">
-                <LogoDisc src={view.logo_url} alt={view.acronym} size={64} fallbackText={(view.acronym || '?').slice(0, 3)} style={{ boxShadow: '0 0 0 4px #FFFFFF, 0 8px 20px rgba(27,56,40,0.18)' }} />
-                <span className="min-w-0" style={{ maxWidth: 220 }}>
-                  <span className="block" style={{ fontFamily: "var(--font-brand), sans-serif", fontSize: 20, fontWeight: 900, color: '#1C1410', lineHeight: 1.1, overflowWrap: 'anywhere' }}>{view.acronym || view.full_name}</span>
-                  <span className="block" style={{ fontFamily: "var(--font-brand), sans-serif", fontSize: 13, color: '#5C4F42', lineHeight: 1.35, marginTop: 2, overflowWrap: 'anywhere' }}>
-                    {view.dates_tbd || !view.start_date ? 'Dates to be decided' : dateRange(view.start_date, view.end_date)}
-                  </span>
-                </span>
-              </span>
-            }
           />
+          <style>{GENERAL_CSS}</style>
 
-          {/* ── Name, dates and place ── */}
-          <Group
-            id="details-card" title="Name, Dates and Place" emoji="Spiral calendar" icon={CalendarDays} tint={TINT_GOLD_BG}
-            aside={<AutoSaveStatus saving={detailsSaving} saved={detailsSaved} />}
-          >
-            <Row label="Full name" htmlFor="set-full-name">
-              <input
-                id="set-full-name"
-                type="text"
-                value={fullName}
-                onChange={(e) => setFullName(e.target.value)}
-                placeholder="London International Model United Nations 2027"
-                style={FIELD}
-                onFocus={(e) => { onIdentityFocus(); e.currentTarget.style.borderColor = '#1B3828'; }}
-                onBlur={(e) => { onIdentityBlur(); e.currentTarget.style.borderColor = '#DDD4C0'; }}
-              />
-            </Row>
-            <Row
-              label="Acronym" htmlFor="set-acronym"
-              desc={acronymError
-                ? <span style={{ color: '#8B2020' }}>{acronymError}</span>
-                : <span suppressHydrationWarning>Shown as <strong style={{ color: '#1C1410' }}>{conferenceAcronymLabel({ acronym, start_date: startDate || conference.start_date })}</strong></span>}
-            >
-              <input
-                id="set-acronym"
-                type="text"
-                value={acronym}
-                onChange={(e) => { setAcronym(e.target.value); if (acronymError) setAcronymError(''); }}
-                onFocus={(e) => { onIdentityFocus(); e.currentTarget.style.borderColor = '#1B3828'; }}
-                onBlur={(e) => {
-                  setAcronymError(acronymProblem(e.target.value));
-                  onIdentityBlur();
-                  e.currentTarget.style.borderColor = '#DDD4C0';
-                }}
-                placeholder="e.g. LIMUN, or Model NATO Germany"
-                style={FIELD}
-              />
-            </Row>
-            <Row id="dates-card" label="Dates" on={datesPulse} desc={datesTbd ? 'A conference with dates to be decided stays private until you add them.' : undefined}>
-              <div className="flex flex-col gap-2">
-                <div className="flex gap-2 flex-wrap" style={datesTbd ? { opacity: 0.45, pointerEvents: 'none' } : undefined}>
-                  <div style={{ flex: '1 1 150px', minWidth: 0 }}>
-                    <DatePicker
-                      value={startDate}
-                      placeholder="Starts"
-                      onChange={(iso) => {
-                        setStartDate(iso);
-                        // Keep end ≥ start: clear a now-invalid end date.
-                        if (endDate && iso && endDate < iso) setEndDate('');
-                      }}
-                    />
+          {/* ── Identity: banner, logo over its edge, name, and the facts in a
+              dense grid with labels above (owner, 11 Oct 2026: "a big card
+              with information like the logo, banner as well as stuff like
+              dates"). Every value and write is unchanged. ── */}
+          <section id="details-card" className="gv-st-card gvg-id" aria-label="Your conference">
+            <IdentityBanner
+              src={view.banner_url}
+              uploading={bannerUploading}
+              onChange={() => document.getElementById('settings-banner-upload')?.click()}
+              presets={BANNER_PRESETS}
+              onPick={(pth) => handleBannerPreset(pth)}
+            />
+            <input
+              id="settings-banner-upload"
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              style={{ display: 'none' }}
+              onChange={(e) => { const f = e.target.files?.[0]; if (f) handleBannerUpload(f); e.target.value = ''; }}
+            />
+            <input
+              id="settings-logo-upload"
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              style={{ display: 'none' }}
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                e.target.value = '';
+                if (!f) return;
+                if (f.size > 5 * 1024 * 1024) { alert('Logo must be under 5MB.'); return; }
+                setLogoCropFile(f);
+              }}
+            />
+            <div className="gvg-body">
+              <div className="gvg-top">
+                <IdentityLogo
+                  src={view.logo_url}
+                  alt={view.acronym ? `${view.acronym} logo` : 'Logo'}
+                  fallbackText={(view.acronym || '?').slice(0, 3)}
+                  uploading={logoUploading}
+                  onChange={() => document.getElementById('settings-logo-upload')?.click()}
+                />
+                <div className="gvg-head">
+                  <div className="gvg-head-line">
+                    <label htmlFor="set-full-name" className="gvg-label" style={{ marginBottom: 0 }}>Full name</label>
+                    <AutoSaveStatus saving={detailsSaving} saved={detailsSaved} />
                   </div>
-                  <div style={{ flex: '1 1 150px', minWidth: 0 }}>
-                    <DatePicker
-                      value={endDate}
-                      placeholder="Ends"
-                      min={startDate || undefined}
-                      initialView={startDate || undefined}
-                      onChange={(iso) => setEndDate(iso)}
+                  <NameField
+                    id="set-full-name"
+                    value={fullName}
+                    onChange={setFullName}
+                    placeholder="London International Model United Nations 2027"
+                    onFocus={onIdentityFocus}
+                    onBlur={onIdentityBlur}
+                  />
+                  <div className="gvg-acro">
+                    <label htmlFor="set-acronym" className="gvg-label" style={{ marginBottom: 0 }}>Acronym</label>
+                    <input
+                      id="set-acronym"
+                      type="text"
+                      value={acronym}
+                      onChange={(e) => { setAcronym(e.target.value); if (acronymError) setAcronymError(''); }}
+                      onFocus={(e) => { onIdentityFocus(); e.currentTarget.style.borderColor = '#1B3828'; }}
+                      onBlur={(e) => {
+                        setAcronymError(acronymProblem(e.target.value));
+                        onIdentityBlur();
+                        e.currentTarget.style.borderColor = '#DDD4C0';
+                      }}
+                      placeholder="e.g. LIMUN"
+                      style={{ ...FIELD, width: 'auto', flex: '1 1 160px', maxWidth: 240 }}
                     />
+                    <span className="gvg-note" style={{ marginTop: 0 }} suppressHydrationWarning>
+                      {acronymError
+                        ? <span style={{ color: '#8B2020' }}>{acronymError}</span>
+                        : <>Shown as <strong style={{ color: '#1C1410' }}>{conferenceAcronymLabel({ acronym, start_date: startDate || conference.start_date })}</strong></>}
+                    </span>
                   </div>
                 </div>
-                {/* Dates TBD: keeps the conference private (no public link) until real
-                    dates are set — mirrors the DB CHECK conferences_tbd_not_public.
-                    Applications can still open while dates are undecided. */}
-                <label className="inline-flex items-center gap-2.5 self-start cursor-pointer" style={{ fontFamily: "var(--font-brand), sans-serif", fontSize: 14, fontWeight: 600, color: '#1C1410' }}>
-                  <KitSwitch
-                    label="Dates are to be decided"
-                    checked={datesTbd}
-                    onChange={(nextTbd) => {
-                      setDatesTbd(nextTbd);
-                      // Turning TBD on clears any set dates so the row goes null.
-                      if (nextTbd) { setStartDate(''); setEndDate(''); }
-                    }}
+              </div>
+
+              <div className="gvg-grid">
+                <IdField
+                  id="dates-card" label="Dates" span={4} ring={datesPulse}
+                  note={datesTbd ? 'A conference with dates to be decided stays private until you add them.' : undefined}
+                  aside={
+                    // Dates TBD: keeps the conference private (no public link) until real
+                    // dates are set, mirroring the DB CHECK conferences_tbd_not_public.
+                    // Applications can still open while dates are undecided.
+                    <label className="inline-flex items-center gap-2 cursor-pointer" style={{ fontFamily: "var(--font-brand), sans-serif", fontSize: 13, fontWeight: 600, color: '#3A2E24' }}>
+                      To be decided
+                      <KitSwitch
+                        label="Dates are to be decided"
+                        checked={datesTbd}
+                        onChange={(nextTbd) => {
+                          setDatesTbd(nextTbd);
+                          // Turning TBD on clears any set dates so the row goes null.
+                          if (nextTbd) { setStartDate(''); setEndDate(''); }
+                        }}
+                      />
+                    </label>
+                  }
+                >
+                  <div className="flex gap-2 flex-wrap" style={datesTbd ? { opacity: 0.45, pointerEvents: 'none' } : undefined}>
+                    <div style={{ flex: '1 1 170px', minWidth: 0 }}>
+                      <DatePicker
+                        value={startDate}
+                        placeholder="Starts"
+                        onChange={(iso) => {
+                          setStartDate(iso);
+                          // Keep end ≥ start: clear a now-invalid end date.
+                          if (endDate && iso && endDate < iso) setEndDate('');
+                        }}
+                      />
+                    </div>
+                    <div style={{ flex: '1 1 170px', minWidth: 0 }}>
+                      <DatePicker
+                        value={endDate}
+                        placeholder="Ends"
+                        min={startDate || undefined}
+                        initialView={startDate || undefined}
+                        onChange={(iso) => setEndDate(iso)}
+                      />
+                    </div>
+                  </div>
+                </IdField>
+                <IdField label="Expected delegates" htmlFor="set-expected" span={2}>
+                  <input
+                    id="set-expected"
+                    type="number"
+                    min={0}
+                    value={expectedDelegates}
+                    onChange={(e) => setExpectedDelegates(e.target.value)}
+                    placeholder="1250"
+                    style={{ ...FIELD, fontVariantNumeric: 'tabular-nums' }}
+                    onFocus={fgInput}
+                    onBlur={bgInput}
                   />
-                  Dates are to be decided
-                </label>
+                </IdField>
+                <IdField label="City" htmlFor="set-city" span={2}>
+                  <input
+                    id="set-city"
+                    type="text"
+                    value={city}
+                    onChange={(e) => setCity(e.target.value)}
+                    placeholder="London"
+                    style={FIELD}
+                    onFocus={fgInput}
+                    onBlur={bgInput}
+                  />
+                </IdField>
+                <IdField label="Country" htmlFor="set-country" span={2}>
+                  <select
+                    id="set-country"
+                    value={country}
+                    onChange={(e) => setCountry(e.target.value)}
+                    style={{ ...FIELD, cursor: 'pointer' }}
+                    onFocus={fgInput}
+                    onBlur={bgInput}
+                  >
+                    <option value="">Select a country</option>
+                    {UN_COUNTRIES.map(c => <option key={c.code} value={c.name}>{c.name}</option>)}
+                  </select>
+                </IdField>
+                <IdField
+                  label="Age of participants" span={2}
+                  hint={<InfoHint label="About the age range" text="Both ends are inclusive and both are measured on your conference's start date, so a delegate who turns sixteen the week before still counts as sixteen. Applicants outside the range are told before they fill anything in." />}
+                  note={minAgeError
+                    ? <span style={{ color: '#8B2020' }}>{minAgeError}</span>
+                    : (view.min_age != null || view.max_age != null)
+                      ? (view.min_age != null && view.max_age != null
+                        ? `Between ${view.min_age} and ${view.max_age} on the first day.`
+                        : view.min_age != null ? `At least ${view.min_age} on the first day.` : `No older than ${view.max_age} on the first day.`)
+                      : undefined}
+                >
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="number" min={10} max={99} step={1}
+                      aria-label="Minimum age"
+                      value={minAge}
+                      onChange={(e) => { setMinAge(e.target.value); setMinAgeError(''); }}
+                      placeholder="No min"
+                      style={{ ...FIELD, flex: '1 1 0', fontVariantNumeric: 'tabular-nums' }}
+                      onFocus={fgInput}
+                      onBlur={bgInput}
+                    />
+                    <span style={{ fontFamily: "var(--font-brand), sans-serif", fontSize: 14, color: '#5C4F42' }}>to</span>
+                    <input
+                      type="number" min={10} max={99} step={1}
+                      aria-label="Maximum age"
+                      value={maxAge}
+                      onChange={(e) => { setMaxAge(e.target.value); setMinAgeError(''); }}
+                      placeholder="No max"
+                      style={{ ...FIELD, flex: '1 1 0', fontVariantNumeric: 'tabular-nums' }}
+                      onFocus={fgInput}
+                      onBlur={bgInput}
+                    />
+                    {(minAgeSaving || minAgeSaved) && <AutoSaveStatus saving={minAgeSaving} saved={minAgeSaved} />}
+                  </div>
+                </IdField>
+                <IdField label="Format" span={3}>
+                  <div role="radiogroup" aria-label="Format" className="gv-fd-seg gvg-seg">
+                    {([
+                      { value: 'in-person', label: 'In person' },
+                      { value: 'online', label: 'Online' },
+                      { value: 'hybrid', label: 'Hybrid' },
+                    ] as { value: 'in-person' | 'online' | 'hybrid'; label: string }[]).map(opt => (
+                      <button key={opt.value} type="button" role="radio" aria-checked={format === opt.value} onClick={() => setFormat(opt.value)}>{opt.label}</button>
+                    ))}
+                  </div>
+                </IdField>
+                <IdField label="Student level" span={3}>
+                  <div role="radiogroup" aria-label="Student level" className="gv-fd-seg gvg-seg">
+                    {([
+                      { value: 'school', label: 'High school' },
+                      { value: 'university', label: 'University' },
+                      { value: 'both', label: 'Both' },
+                    ] as { value: 'school' | 'university' | 'both'; label: string }[]).map(opt => (
+                      <button key={opt.value} type="button" role="radio" aria-checked={studentLevel === opt.value} onClick={() => setStudentLevel(opt.value)}>{opt.label}</button>
+                    ))}
+                  </div>
+                </IdField>
               </div>
-            </Row>
-            <Row label="City" htmlFor="set-city">
-              <input
-                id="set-city"
-                type="text"
-                value={city}
-                onChange={(e) => setCity(e.target.value)}
-                placeholder="London"
-                style={FIELD}
-                onFocus={fgInput}
-                onBlur={bgInput}
-              />
-            </Row>
-            <Row label="Country" htmlFor="set-country">
-              <select
-                id="set-country"
-                value={country}
-                onChange={(e) => setCountry(e.target.value)}
-                style={{ ...FIELD, cursor: 'pointer' }}
-                onFocus={fgInput}
-                onBlur={bgInput}
-              >
-                <option value="">Select a country</option>
-                {UN_COUNTRIES.map(c => <option key={c.code} value={c.name}>{c.name}</option>)}
-              </select>
-            </Row>
-            <Row label="Format">
-              <div role="radiogroup" aria-label="Format" className="gv-fd-seg">
-                {([
-                  { value: 'in-person', label: 'In person' },
-                  { value: 'online', label: 'Online' },
-                  { value: 'hybrid', label: 'Hybrid' },
-                ] as { value: 'in-person' | 'online' | 'hybrid'; label: string }[]).map(opt => (
-                  <button key={opt.value} type="button" role="radio" aria-checked={format === opt.value} onClick={() => setFormat(opt.value)}>{opt.label}</button>
-                ))}
-              </div>
-            </Row>
-            <Row label="Student level">
-              <div role="radiogroup" aria-label="Student level" className="gv-fd-seg">
-                {([
-                  { value: 'school', label: 'High school' },
-                  { value: 'university', label: 'University' },
-                  { value: 'both', label: 'Both' },
-                ] as { value: 'school' | 'university' | 'both'; label: string }[]).map(opt => (
-                  <button key={opt.value} type="button" role="radio" aria-checked={studentLevel === opt.value} onClick={() => setStudentLevel(opt.value)}>{opt.label}</button>
-                ))}
-              </div>
-            </Row>
-            <Row label="Expected delegates" htmlFor="set-expected" align="end">
-              <input
-                id="set-expected"
-                type="number"
-                min={0}
-                value={expectedDelegates}
-                onChange={(e) => setExpectedDelegates(e.target.value)}
-                placeholder="1250"
-                style={{ ...FIELD, width: 130, fontVariantNumeric: 'tabular-nums' }}
-                onFocus={fgInput}
-                onBlur={bgInput}
-              />
-            </Row>
-            <Row
-              label="Age of participants"
-              hint={<InfoHint label="About the age range" text="Both ends are inclusive and both are measured on your conference's start date, so a delegate who turns sixteen the week before still counts as sixteen. Applicants outside the range are told before they fill anything in." />}
-              on={view.min_age != null || view.max_age != null}
-              desc={minAgeError
-                ? <span style={{ color: '#8B2020' }}>{minAgeError}</span>
-                : (view.min_age != null || view.max_age != null)
-                  ? (view.min_age != null && view.max_age != null
-                    ? `Between ${view.min_age} and ${view.max_age} on the first day.`
-                    : view.min_age != null ? `At least ${view.min_age} on the first day.` : `No older than ${view.max_age} on the first day.`)
-                  : 'Leave both empty for no limit.'}
-            >
-              <div className="flex items-center gap-2 flex-wrap">
-                <input
-                  type="number" min={10} max={99} step={1}
-                  aria-label="Minimum age"
-                  value={minAge}
-                  onChange={(e) => { setMinAge(e.target.value); setMinAgeError(''); }}
-                  placeholder="From"
-                  style={{ ...FIELD, width: 96, fontVariantNumeric: 'tabular-nums' }}
-                  onFocus={fgInput}
-                  onBlur={bgInput}
-                />
-                <span style={{ fontFamily: "var(--font-brand), sans-serif", fontSize: 14, color: '#5C4F42' }}>to</span>
-                <input
-                  type="number" min={10} max={99} step={1}
-                  aria-label="Maximum age"
-                  value={maxAge}
-                  onChange={(e) => { setMaxAge(e.target.value); setMinAgeError(''); }}
-                  placeholder="To"
-                  style={{ ...FIELD, width: 96, fontVariantNumeric: 'tabular-nums' }}
-                  onFocus={fgInput}
-                  onBlur={bgInput}
-                />
-                {(minAgeSaving || minAgeSaved) && <AutoSaveStatus saving={minAgeSaving} saved={minAgeSaved} />}
-              </div>
-            </Row>
-          </Group>
+            </div>
+          </section>
 
           {/* ── About ── */}
           <Group title="About Your Conference" emoji="Memo" icon={FileText} tint={TINT_GREEN_BG}>
-            <Row label="Description" htmlFor="set-description" desc="Shown on your public page.">
+            <div>
+              <label htmlFor="set-description" className="sr-only">Description</label>
               <textarea
                 id="set-description"
-                rows={5}
+                rows={3}
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 placeholder="Tell delegates about your conference, theme, highlights, what to expect..."
                 maxLength={1500}
-                style={{ ...FIELD, resize: 'vertical', lineHeight: '1.6' }}
+                style={{ ...FIELD, resize: 'vertical', lineHeight: '1.55' }}
                 onFocus={(e) => { e.currentTarget.style.borderColor = '#1B3828'; }}
                 onBlur={(e) => { e.currentTarget.style.borderColor = '#DDD4C0'; }}
               />
-              <div style={{ textAlign: 'right', marginTop: 4, fontFamily: "var(--font-brand), sans-serif", fontSize: 12, fontWeight: 600, color: '#6E6152', fontVariantNumeric: 'tabular-nums' }}>
-                {description.length} / 1500
+              <div className="flex items-center justify-between gap-3" style={{ marginTop: 5, fontFamily: "var(--font-brand), sans-serif", fontSize: 12.5, color: '#5C4F42' }}>
+                <span>Shown on your public page.</span>
+                <span style={{ fontWeight: 600, color: '#6E6152', fontVariantNumeric: 'tabular-nums' }}>{description.length} / 1500</span>
               </div>
-            </Row>
-          </Group>
-
-          {/* ── Logo and banner: small previews, each with Change ── */}
-          <Group title="Logo and Banner" emoji="Framed picture" icon={ImageIcon} tint={TINT_GOLD_BG}>
-            <Row label="Logo" desc="Square, ideally a transparent PNG. Up to 5 MB." align="end" on={!!view.logo_url} need={!view.logo_url}>
-              <div className="flex items-center gap-3">
-                {logoUploading
-                  ? <span className="w-5 h-5 rounded-full border-2 animate-spin" style={{ borderColor: '#1B3828', borderTopColor: 'transparent' }} aria-hidden />
-                  : <LogoDisc src={view.logo_url} alt="Logo" size={52} fallbackText={view.acronym?.slice(0, 3)} />}
-                <button type="button" className="gv-st-btn gv-st-outline" style={{ minHeight: 40, padding: '0 14px' }} disabled={logoUploading} onClick={() => document.getElementById('settings-logo-upload')?.click()}>
-                  {logoUploading ? 'Uploading' : view.logo_url ? 'Change' : 'Upload'}
-                </button>
-              </div>
-              <input
-                id="settings-logo-upload"
-                type="file"
-                accept="image/jpeg,image/png,image/webp"
-                style={{ display: 'none' }}
-                onChange={(e) => {
-                  const f = e.target.files?.[0];
-                  e.target.value = '';
-                  if (!f) return;
-                  if (f.size > 5 * 1024 * 1024) { alert('Logo must be under 5MB.'); return; }
-                  setLogoCropFile(f);
-                }}
-              />
-            </Row>
-            <Row label="Banner" desc="1200 x 630 works best. Up to 5 MB." on={!!view.banner_url} need={!view.banner_url}>
-              <div className="flex flex-col gap-2.5">
-                <div className="flex items-center gap-3 flex-wrap">
-                  <span className="relative overflow-hidden flex-shrink-0" style={{ width: 168, height: 64, borderRadius: 12, background: 'linear-gradient(135deg, #E9E2CF, #F6F1E4)', boxShadow: '0 0 0 1px rgba(27,56,40,0.08)' }}>
-                    {view.banner_url && <img src={view.banner_url} alt="Your banner" className="absolute inset-0 w-full h-full object-cover" />}
-                    {bannerUploading && <span className="absolute inset-0 flex items-center justify-center" style={{ background: 'rgba(255,255,255,0.6)' }}><span className="w-5 h-5 rounded-full border-2 animate-spin" style={{ borderColor: '#1B3828', borderTopColor: 'transparent' }} aria-hidden /></span>}
-                  </span>
-                  <button type="button" className="gv-st-btn gv-st-outline" style={{ minHeight: 40, padding: '0 14px' }} disabled={bannerUploading} onClick={() => document.getElementById('settings-banner-upload')?.click()}>
-                    {bannerUploading ? 'Uploading' : view.banner_url ? 'Change' : 'Upload'}
-                  </button>
-                  <input
-                    id="settings-banner-upload"
-                    type="file"
-                    accept="image/jpeg,image/png,image/webp"
-                    style={{ display: 'none' }}
-                    onChange={(e) => { const f = e.target.files?.[0]; if (f) handleBannerUpload(f); e.target.value = ''; }}
-                  />
-                </div>
-                {/* Preset picker, one click sets banner_url to a bundled photo */}
-                <div className="flex flex-wrap items-center gap-1.5">
-                  <span style={{ fontFamily: "var(--font-brand), sans-serif", fontSize: 12.5, fontWeight: 600, color: '#5C4F42', marginRight: 2 }}>Or pick one</span>
-                  {BANNER_PRESETS.map((pth, i) => {
-                    const selected = view.banner_url === pth;
-                    return (
-                      <button
-                        key={pth}
-                        type="button"
-                        onClick={() => handleBannerPreset(pth)}
-                        disabled={bannerUploading}
-                        aria-label={`Use banner photo ${i + 1}`}
-                        aria-pressed={selected}
-                        className="focus:outline-none focus-visible:ring-2"
-                        style={{
-                          width: 56, height: 32, padding: 0, borderRadius: 8, overflow: 'hidden', cursor: bannerUploading ? 'wait' : 'pointer',
-                          border: 'none', boxShadow: selected ? '0 0 0 2px #B6871F, 0 0 0 4px rgba(238,217,138,0.55)' : '0 0 0 1px rgba(27,56,40,0.12)',
-                          backgroundColor: '#EDE7D8',
-                        }}
-                      >
-                        <img src={pth} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            </Row>
+            </div>
           </Group>
 
           {/* ── Colours ── */}
@@ -3395,9 +3363,285 @@ export default function SettingsPage() {
             </div>
           </Group>
 
+          {/* ── Contact and links ── */}
+          <Group
+            id="contact-card" title="Contact and Links" emoji="Envelope" icon={MailIcon} tint={TINT_GREEN_BG}
+            aside={<AutoSaveStatus saving={visualSaving} saved={visualSaved} />}
+          >
+            <div className="gvg-fields">
+              <PlainField
+                label="Contact email" htmlFor="set-contact-email"
+                note={contactEmailError ? <span style={{ color: '#8B2020' }}>{contactEmailError}</span> : 'Where applicants write to you.'}
+              >
+                <input
+                  id="set-contact-email"
+                  type="email"
+                  value={contactEmail}
+                  onChange={(e) => { setContactEmail(e.target.value); if (contactEmailError) setContactEmailError(''); }}
+                  placeholder="hello@yourmun.org"
+                  style={FIELD}
+                  onFocus={(e) => { e.currentTarget.style.borderColor = '#1B3828'; }}
+                  onBlur={(e) => {
+                    const trimmed = e.target.value.trim();
+                    if (trimmed && !CONTACT_EMAIL_PATTERN.test(trimmed)) setContactEmailError('Enter a single email address, e.g. contact@yourmun.org.');
+                    else setContactEmailError('');
+                    e.currentTarget.style.borderColor = '#DDD4C0';
+                  }}
+                />
+              </PlainField>
+              {([
+                { label: 'Website', value: websiteUrl, setter: setWebsiteUrl },
+                { label: 'Instagram', value: instagramUrl, setter: setInstagramUrl },
+                { label: 'WhatsApp', value: whatsappUrl, setter: setWhatsappUrl },
+                { label: 'TikTok', value: tiktokUrl, setter: setTiktokUrl },
+                { label: 'Facebook', value: facebookUrl, setter: setFacebookUrl },
+              ] as { label: string; value: string; setter: (v: string) => void }[]).map(({ label, value, setter }) => (
+                <PlainField key={label} label={label} htmlFor={`set-link-${label}`}>
+                  <input
+                    id={`set-link-${label}`}
+                    type="url"
+                    value={value}
+                    onChange={(e) => setter(e.target.value)}
+                    placeholder="https://"
+                    style={FIELD}
+                    onFocus={fgInput}
+                    onBlur={bgInput}
+                  />
+                </PlainField>
+              ))}
+            </div>
+          </Group>
+
+          {/* ── What you use Gavelling for ──────────────────────────────────
+              The creation wizard asks this once; editable here. It only sorts
+              the dashboard's pending priorities (src/lib/conferenceIntent.ts):
+              nothing is switched on or off and nothing is hidden. ── */}
+          <Group
+            id="intent-card" pulse={intentPulse}
+            title="What You Use Gavelling For" emoji="Compass" icon={Compass} tint={TINT_GOLD_BG}
+            hint={<InfoHint label="About this" text="It only changes the order of the priorities on your dashboard. Nothing is switched on or off, and no work is hidden. Pick everything that applies." />}
+            aside={<AutoSaveStatus saving={intentSaving} saved={intentSaved} />}
+          >
+            <div className="grid grid-cols-1 sm:grid-cols-2" style={{ gap: 8 }}>
+              {INTENT_OPTIONS.map(opt => {
+                const on = intentKeys.includes(opt.key);
+                return (
+                  <button
+                    key={opt.key}
+                    type="button"
+                    role="checkbox"
+                    aria-checked={on}
+                    onClick={() => toggleIntent(opt.key)}
+                    className="flex items-center rounded-xl focus:outline-none focus-visible:ring-2 text-left"
+                    style={{
+                      gap: 10, padding: '10px 12px', border: 'none', cursor: 'pointer',
+                      background: on ? 'linear-gradient(150deg, rgba(61,122,82,0.14), rgba(61,122,82,0.05))' : '#FAF8F3',
+                      boxShadow: on ? 'inset 3px 0 0 #2A5A3C' : 'none',
+                      fontFamily: "var(--font-brand), sans-serif",
+                      transition: 'background-color 150ms ease, box-shadow 150ms ease',
+                    }}
+                  >
+                    <EmojiDisc emoji={opt.emoji} icon={INTENT_FALLBACK_ICONS[opt.key] ?? ClipboardList} tint={on ? TINT_GREEN_BG : TINT_GOLD_BG} size={34} />
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-sm font-bold" style={{ color: '#1C1410' }}>{opt.label}</span>
+                    </span>
+                    {on && <CheckCircle2 size={18} strokeWidth={2.6} color="#1B3828" aria-hidden className="flex-shrink-0" />}
+                  </button>
+                );
+              })}
+            </div>
+            {intentKeys.length === 0 && (
+              <p className="text-xs" style={{ color: NEU.inkSoft, fontFamily: "var(--font-brand), sans-serif" }}>
+                Nothing picked. Your dashboard lists the priorities in the normal build order.
+              </p>
+            )}
+          </Group>
+
+          {/* ── Editions (lineage) ── */}
+          <Group
+            title="Past Editions" emoji="Books" icon={History} tint={TINT_GREEN_BG}
+            hint={<InfoHint label="About editions" text="Link editions of the same conference across years. A link only counts once the previous edition's owner approves it." />}
+          >
+            <div className="gvk-row" style={{ display: 'block' }}>
+        {/* Outgoing claim: this conference's predecessor */}
+        <p
+          className="text-xs font-bold mb-2"
+          style={{ color: '#6E5F4E', fontFamily: "var(--font-brand), sans-serif", letterSpacing: '0.02em' }}
+        >
+          Previous edition
+        </p>
+        {view.predecessor_conference_id ? (
+          <div
+            className="flex items-center gap-3 px-4 py-3 rounded-xl mb-6"
+            style={{ backgroundColor: 'rgba(27,56,40,0.03)', border: '1px solid rgba(27,56,40,0.08)' }}
+          >
+            <div className="flex-1 min-w-0">
+              <p className="font-semibold text-sm [overflow-wrap:anywhere]" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>
+                {predecessorInfo?.full_name ?? 'A private conference'}
+              </p>
+              <p className="text-xs" style={{ color: '#6E6152', fontFamily: "var(--font-brand), sans-serif" }}>
+                {view.predecessor_approved
+                  ? 'Confirmed as the previous edition of this conference.'
+                  : 'Waiting for its Main Organiser to confirm the link.'}
+              </p>
+            </div>
+            <span className="flex-shrink-0">
+              <Pill tone={view.predecessor_approved ? 'forest' : 'gold'} size="sm" dot>
+                {view.predecessor_approved ? 'Approved' : 'Pending approval'}
+              </Pill>
+            </span>
+            <button
+              onClick={handleWithdrawClaim}
+              disabled={withdrawingClaim}
+              className="text-xs font-semibold focus:outline-none hover:underline flex-shrink-0"
+              style={{ color: '#8B2020', fontFamily: "var(--font-brand), sans-serif" }}
+            >
+              {withdrawingClaim ? 'Withdrawing…' : 'Withdraw'}
+            </button>
+          </div>
+        ) : (
+          <p className="text-sm mb-6" style={{ color: '#6E6152', fontFamily: "var(--font-brand), sans-serif" }}>
+            No previous edition linked. You can link one when creating your next edition on Gavelling.
+          </p>
+        )}
+
+        {/* Incoming claims: conferences claiming this one as their predecessor */}
+        <p
+          className="text-xs font-bold mb-2"
+          style={{ color: '#6E5F4E', fontFamily: "var(--font-brand), sans-serif", letterSpacing: '0.02em' }}
+        >
+          Incoming claims
+        </p>
+        {incomingClaims.length === 0 ? (
+          <p className="text-sm" style={{ color: '#6E6152', fontFamily: "var(--font-brand), sans-serif" }}>
+            No conferences currently claim {view.acronym} as their previous edition.
+          </p>
+        ) : (
+          <div className="flex flex-col">
+            {incomingClaims.map((claim, idx) => {
+              const isLast = idx === incomingClaims.length - 1;
+              const year = claim.start_date ? new Date(claim.start_date + 'T00:00:00').getFullYear() : null;
+              return (
+                <div
+                  key={claim.id}
+                  className="flex items-center gap-3 py-3"
+                  style={{ borderBottom: isLast ? 'none' : '1px solid #F0EDE6' }}
+                >
+                  <div className="flex-1 min-w-0">
+                    <p style={{ fontSize: 12, color: '#B6871F', fontFamily: "var(--font-brand), sans-serif", fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase' }}>
+                      {claim.acronym}{year ? ' · ' + year : ''}
+                    </p>
+                    <p className="font-semibold text-sm [overflow-wrap:anywhere]" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>
+                      {claim.full_name}
+                    </p>
+                    <p className="text-xs" style={{ color: '#6E6152', fontFamily: "var(--font-brand), sans-serif" }}>
+                      claims to be the next edition of {view.acronym}
+                    </p>
+                  </div>
+
+                  {claim.predecessor_approved ? (
+                    <span className="flex-shrink-0">
+                      <Pill tone="forest" size="sm" dot>Approved</Pill>
+                    </span>
+                  ) : isOwner ? (
+                    <div className="flex gap-2 flex-shrink-0">
+                      <button
+                        onClick={() => handleClaimDecision(claim.id, true)}
+                        disabled={lineageBusy === claim.id}
+                        className="rounded-lg py-1.5 px-3 font-bold text-[11px] focus:outline-none transition-colors gv-lift"
+                        style={{
+                          backgroundColor: lineageBusy === claim.id ? '#DDD4C0' : '#1B3828',
+                          color: lineageBusy === claim.id ? '#9A8A78' : '#EED98A',
+                          fontFamily: "var(--font-brand), sans-serif",
+                          letterSpacing: 0,
+                        }}
+                        onMouseEnter={(e) => { if (lineageBusy !== claim.id) (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
+                        onMouseLeave={(e) => { if (lineageBusy !== claim.id) (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
+                      >
+                        Approve
+                      </button>
+                      <button
+                        onClick={() => handleClaimDecision(claim.id, false)}
+                        disabled={lineageBusy === claim.id}
+                        className="rounded-lg py-1.5 px-3 font-bold text-[11px] focus:outline-none transition-colors gv-lift"
+                        style={{
+                          backgroundColor: 'transparent',
+                          color: '#8B2020',
+                          border: '1px solid rgba(139,32,32,0.3)',
+                          fontFamily: "var(--font-brand), sans-serif",
+                          letterSpacing: 0,
+                        }}
+                        onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(139,32,32,0.05)'; }}
+                        onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+                      >
+                        Reject
+                      </button>
+                    </div>
+                  ) : (
+                    <span className="flex-shrink-0" title="Only the conference owner can approve or reject lineage claims.">
+                      <Pill tone="neutral" size="sm">Owner decides</Pill>
+                    </span>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+            </div>
+          </Group>
+
+          {/* ── Delete ── */}
+          <Group title="Delete Conference" emoji="Wastebasket" icon={Trash2} tint={TINT_GOLD_BG}>
+            <Row label="Delete this conference" desc="Everything about it is removed for good. Only the owner can do this." align="end">
+              <button
+                type="button"
+                onClick={() => { if (!isOwner) { notifyErr('Only the conference owner can delete this conference.', 'settings-delete'); return; } clearErr('settings-delete'); setConfirmingDelete(true); }}
+                className="gv-st-btn"
+                style={{ minHeight: 40, padding: '0 14px', background: '#FFFFFF', color: '#8B2020', boxShadow: 'inset 0 0 0 1.5px rgba(139,32,32,0.45)' }}
+              >
+                <Trash2 size={15} strokeWidth={2.4} aria-hidden />
+                Delete
+              </button>
+            </Row>
+          </Group>
+          {confirmingDelete && (
+            <ConfirmModal
+              title="Delete this conference?"
+              body="Are you sure you want to delete this conference? This action is irreversible, all data relating to this conference will be lost."
+              confirmLabel="Yes, delete"
+              danger
+              loading={deleting}
+              onConfirm={async () => {
+                if (!session || deleting) return;
+                setDeleting(true);
+                const supabase = getAuthedClient(session.access_token);
+                const { error } = await supabase.rpc('delete_conference', { p_conference_id: view.id });
+                if (error) { notifyErr(friendlyError(error, 'Could not delete view.'), 'settings-delete'); setConfirmingDelete(false); setDeleting(false); return; }
+                window.location.href = '/';
+              }}
+              onCancel={() => { if (!deleting) setConfirmingDelete(false); }}
+            />
+          )}
+        </div>
+
+        {sidePreview && (
+          <aside className="hidden min-[1500px]:block flex-shrink-0 sticky" style={{ width: '290px', top: '80px' }} aria-label="Preview of your conference card">
+            <ConferencePreview snap={settingsSnap} onCopyLink={handleCopyConferenceLink} copied={confLinkCopied} />
+          </aside>
+        )}
+        </div>
+      )}
+
+      {activeTab === 'partners' && (
+        <div className="flex flex-col gap-5">
+          <SectionHead emoji="Handshake" icon={Handshake} tint={TINT_GREEN_BG}
+            title="Partners"
+            line="Other conferences you work with, and the companies that sponsor you. They show on your public page."
+            focal={<BigCount n={partners.length} word={partners.length === 1 ? 'partner' : 'partners'} />}
+          />
           {/* ── Partners and sponsors ── */}
           <Group
-            title="Partners and Sponsors" emoji="Handshake" icon={Handshake} tint={TINT_GOLD_BG}
+            title="Partners and Sponsors" emoji="Briefcase" icon={Briefcase} tint={TINT_GOLD_BG}
             hint={<InfoHint label="About partners" text="A conference link only appears once that conference's team approves it. A company you add yourself appears straight away." />}
           >
             <div className="gvk-row" style={{ display: 'block' }}>
@@ -3812,272 +4056,6 @@ export default function SettingsPage() {
         )}
             </div>
           </Group>
-
-          {/* ── Contact and links ── */}
-          <Group
-            id="contact-card" title="Contact and Links" emoji="Envelope" icon={MailIcon} tint={TINT_GREEN_BG}
-            aside={<AutoSaveStatus saving={visualSaving} saved={visualSaved} />}
-          >
-            <Row
-              label="Contact email" htmlFor="set-contact-email"
-              desc={contactEmailError ? <span style={{ color: '#8B2020' }}>{contactEmailError}</span> : 'Where applicants write to you.'}
-              on={!!view.contact_email?.trim()}
-            >
-              <input
-                id="set-contact-email"
-                type="email"
-                value={contactEmail}
-                onChange={(e) => { setContactEmail(e.target.value); if (contactEmailError) setContactEmailError(''); }}
-                placeholder="hello@yourmun.org"
-                style={FIELD}
-                onFocus={(e) => { e.currentTarget.style.borderColor = '#1B3828'; }}
-                onBlur={(e) => {
-                  const trimmed = e.target.value.trim();
-                  if (trimmed && !CONTACT_EMAIL_PATTERN.test(trimmed)) setContactEmailError('Enter a single email address, e.g. contact@yourmun.org.');
-                  else setContactEmailError('');
-                  e.currentTarget.style.borderColor = '#DDD4C0';
-                }}
-              />
-            </Row>
-            {([
-              { label: 'Website', value: websiteUrl, setter: setWebsiteUrl },
-              { label: 'Instagram', value: instagramUrl, setter: setInstagramUrl },
-              { label: 'WhatsApp', value: whatsappUrl, setter: setWhatsappUrl },
-              { label: 'TikTok', value: tiktokUrl, setter: setTiktokUrl },
-              { label: 'Facebook', value: facebookUrl, setter: setFacebookUrl },
-            ] as { label: string; value: string; setter: (v: string) => void }[]).map(({ label, value, setter }) => (
-              <Row key={label} label={label} htmlFor={`set-link-${label}`} on={!!value.trim()}>
-                <input
-                  id={`set-link-${label}`}
-                  type="url"
-                  value={value}
-                  onChange={(e) => setter(e.target.value)}
-                  placeholder="https://"
-                  style={FIELD}
-                  onFocus={fgInput}
-                  onBlur={bgInput}
-                />
-              </Row>
-            ))}
-          </Group>
-
-          {/* ── What you use Gavelling for ──────────────────────────────────
-              The creation wizard asks this once; editable here. It only sorts
-              the dashboard's pending priorities (src/lib/conferenceIntent.ts):
-              nothing is switched on or off and nothing is hidden. ── */}
-          <Group
-            id="intent-card" pulse={intentPulse}
-            title="What You Use Gavelling For" emoji="Compass" icon={Compass} tint={TINT_GOLD_BG}
-            hint={<InfoHint label="About this" text="It only changes the order of the priorities on your dashboard. Nothing is switched on or off, and no work is hidden. Pick everything that applies." />}
-            aside={<AutoSaveStatus saving={intentSaving} saved={intentSaved} />}
-          >
-            <div className="grid grid-cols-1 sm:grid-cols-2" style={{ gap: 8 }}>
-              {INTENT_OPTIONS.map(opt => {
-                const on = intentKeys.includes(opt.key);
-                return (
-                  <button
-                    key={opt.key}
-                    type="button"
-                    role="checkbox"
-                    aria-checked={on}
-                    onClick={() => toggleIntent(opt.key)}
-                    className="flex items-center rounded-xl focus:outline-none focus-visible:ring-2 text-left"
-                    style={{
-                      gap: 10, padding: '10px 12px', border: 'none', cursor: 'pointer',
-                      background: on ? 'linear-gradient(150deg, rgba(61,122,82,0.14), rgba(61,122,82,0.05))' : '#FAF8F3',
-                      boxShadow: on ? 'inset 3px 0 0 #2A5A3C' : 'none',
-                      fontFamily: "var(--font-brand), sans-serif",
-                      transition: 'background-color 150ms ease, box-shadow 150ms ease',
-                    }}
-                  >
-                    <EmojiDisc emoji={opt.emoji} icon={INTENT_FALLBACK_ICONS[opt.key] ?? ClipboardList} tint={on ? TINT_GREEN_BG : TINT_GOLD_BG} size={34} />
-                    <span className="min-w-0 flex-1">
-                      <span className="block text-sm font-bold" style={{ color: '#1C1410' }}>{opt.label}</span>
-                    </span>
-                    {on && <CheckCircle2 size={18} strokeWidth={2.6} color="#1B3828" aria-hidden className="flex-shrink-0" />}
-                  </button>
-                );
-              })}
-            </div>
-            {intentKeys.length === 0 && (
-              <p className="text-xs" style={{ color: NEU.inkSoft, fontFamily: "var(--font-brand), sans-serif" }}>
-                Nothing picked. Your dashboard lists the priorities in the normal build order.
-              </p>
-            )}
-          </Group>
-
-          {/* ── Editions (lineage) ── */}
-          <Group
-            title="Past Editions" emoji="Books" icon={History} tint={TINT_GREEN_BG}
-            hint={<InfoHint label="About editions" text="Link editions of the same conference across years. A link only counts once the previous edition's owner approves it." />}
-          >
-            <div className="gvk-row" style={{ display: 'block' }}>
-        {/* Outgoing claim: this conference's predecessor */}
-        <p
-          className="text-xs font-bold mb-2"
-          style={{ color: '#6E5F4E', fontFamily: "var(--font-brand), sans-serif", letterSpacing: '0.02em' }}
-        >
-          Previous edition
-        </p>
-        {view.predecessor_conference_id ? (
-          <div
-            className="flex items-center gap-3 px-4 py-3 rounded-xl mb-6"
-            style={{ backgroundColor: 'rgba(27,56,40,0.03)', border: '1px solid rgba(27,56,40,0.08)' }}
-          >
-            <div className="flex-1 min-w-0">
-              <p className="font-semibold text-sm [overflow-wrap:anywhere]" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>
-                {predecessorInfo?.full_name ?? 'A private conference'}
-              </p>
-              <p className="text-xs" style={{ color: '#6E6152', fontFamily: "var(--font-brand), sans-serif" }}>
-                {view.predecessor_approved
-                  ? 'Confirmed as the previous edition of this conference.'
-                  : 'Waiting for its Main Organiser to confirm the link.'}
-              </p>
-            </div>
-            <span className="flex-shrink-0">
-              <Pill tone={view.predecessor_approved ? 'forest' : 'gold'} size="sm" dot>
-                {view.predecessor_approved ? 'Approved' : 'Pending approval'}
-              </Pill>
-            </span>
-            <button
-              onClick={handleWithdrawClaim}
-              disabled={withdrawingClaim}
-              className="text-xs font-semibold focus:outline-none hover:underline flex-shrink-0"
-              style={{ color: '#8B2020', fontFamily: "var(--font-brand), sans-serif" }}
-            >
-              {withdrawingClaim ? 'Withdrawing…' : 'Withdraw'}
-            </button>
-          </div>
-        ) : (
-          <p className="text-sm mb-6" style={{ color: '#6E6152', fontFamily: "var(--font-brand), sans-serif" }}>
-            No previous edition linked. You can link one when creating your next edition on Gavelling.
-          </p>
-        )}
-
-        {/* Incoming claims: conferences claiming this one as their predecessor */}
-        <p
-          className="text-xs font-bold mb-2"
-          style={{ color: '#6E5F4E', fontFamily: "var(--font-brand), sans-serif", letterSpacing: '0.02em' }}
-        >
-          Incoming claims
-        </p>
-        {incomingClaims.length === 0 ? (
-          <p className="text-sm" style={{ color: '#6E6152', fontFamily: "var(--font-brand), sans-serif" }}>
-            No conferences currently claim {view.acronym} as their previous edition.
-          </p>
-        ) : (
-          <div className="flex flex-col">
-            {incomingClaims.map((claim, idx) => {
-              const isLast = idx === incomingClaims.length - 1;
-              const year = claim.start_date ? new Date(claim.start_date + 'T00:00:00').getFullYear() : null;
-              return (
-                <div
-                  key={claim.id}
-                  className="flex items-center gap-3 py-3"
-                  style={{ borderBottom: isLast ? 'none' : '1px solid #F0EDE6' }}
-                >
-                  <div className="flex-1 min-w-0">
-                    <p style={{ fontSize: 12, color: '#B6871F', fontFamily: "var(--font-brand), sans-serif", fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase' }}>
-                      {claim.acronym}{year ? ' · ' + year : ''}
-                    </p>
-                    <p className="font-semibold text-sm [overflow-wrap:anywhere]" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>
-                      {claim.full_name}
-                    </p>
-                    <p className="text-xs" style={{ color: '#6E6152', fontFamily: "var(--font-brand), sans-serif" }}>
-                      claims to be the next edition of {view.acronym}
-                    </p>
-                  </div>
-
-                  {claim.predecessor_approved ? (
-                    <span className="flex-shrink-0">
-                      <Pill tone="forest" size="sm" dot>Approved</Pill>
-                    </span>
-                  ) : isOwner ? (
-                    <div className="flex gap-2 flex-shrink-0">
-                      <button
-                        onClick={() => handleClaimDecision(claim.id, true)}
-                        disabled={lineageBusy === claim.id}
-                        className="rounded-lg py-1.5 px-3 font-bold text-[11px] focus:outline-none transition-colors gv-lift"
-                        style={{
-                          backgroundColor: lineageBusy === claim.id ? '#DDD4C0' : '#1B3828',
-                          color: lineageBusy === claim.id ? '#9A8A78' : '#EED98A',
-                          fontFamily: "var(--font-brand), sans-serif",
-                          letterSpacing: 0,
-                        }}
-                        onMouseEnter={(e) => { if (lineageBusy !== claim.id) (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
-                        onMouseLeave={(e) => { if (lineageBusy !== claim.id) (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
-                      >
-                        Approve
-                      </button>
-                      <button
-                        onClick={() => handleClaimDecision(claim.id, false)}
-                        disabled={lineageBusy === claim.id}
-                        className="rounded-lg py-1.5 px-3 font-bold text-[11px] focus:outline-none transition-colors gv-lift"
-                        style={{
-                          backgroundColor: 'transparent',
-                          color: '#8B2020',
-                          border: '1px solid rgba(139,32,32,0.3)',
-                          fontFamily: "var(--font-brand), sans-serif",
-                          letterSpacing: 0,
-                        }}
-                        onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(139,32,32,0.05)'; }}
-                        onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
-                      >
-                        Reject
-                      </button>
-                    </div>
-                  ) : (
-                    <span className="flex-shrink-0" title="Only the conference owner can approve or reject lineage claims.">
-                      <Pill tone="neutral" size="sm">Owner decides</Pill>
-                    </span>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        )}
-            </div>
-          </Group>
-
-          {/* ── Delete ── */}
-          <Group title="Delete Conference" emoji="Wastebasket" icon={Trash2} tint={TINT_GOLD_BG}>
-            <Row label="Delete this conference" desc="Everything about it is removed for good. Only the owner can do this." align="end">
-              <button
-                type="button"
-                onClick={() => { if (!isOwner) { notifyErr('Only the conference owner can delete this conference.', 'settings-delete'); return; } clearErr('settings-delete'); setConfirmingDelete(true); }}
-                className="gv-st-btn"
-                style={{ minHeight: 40, padding: '0 14px', background: '#FFFFFF', color: '#8B2020', boxShadow: 'inset 0 0 0 1.5px rgba(139,32,32,0.45)' }}
-              >
-                <Trash2 size={15} strokeWidth={2.4} aria-hidden />
-                Delete
-              </button>
-            </Row>
-          </Group>
-          {confirmingDelete && (
-            <ConfirmModal
-              title="Delete this conference?"
-              body="Are you sure you want to delete this conference? This action is irreversible, all data relating to this conference will be lost."
-              confirmLabel="Yes, delete"
-              danger
-              loading={deleting}
-              onConfirm={async () => {
-                if (!session || deleting) return;
-                setDeleting(true);
-                const supabase = getAuthedClient(session.access_token);
-                const { error } = await supabase.rpc('delete_conference', { p_conference_id: view.id });
-                if (error) { notifyErr(friendlyError(error, 'Could not delete view.'), 'settings-delete'); setConfirmingDelete(false); setDeleting(false); return; }
-                window.location.href = '/';
-              }}
-              onCancel={() => { if (!deleting) setConfirmingDelete(false); }}
-            />
-          )}
-        </div>
-
-        {sidePreview && (
-          <aside className="hidden min-[1500px]:block flex-shrink-0 sticky" style={{ width: '290px', top: '80px' }} aria-label="Preview of your conference card">
-            <ConferencePreview snap={settingsSnap} onCopyLink={handleCopyConferenceLink} copied={confLinkCopied} />
-          </aside>
-        )}
         </div>
       )}
 
@@ -4757,12 +4735,7 @@ export default function SettingsPage() {
         );
       })()}
 
-      {activeTab === 'awards' && (
-        <div className="flex flex-col gap-5">
-          <SectionHead emoji="Trophy" icon={Trophy} tint={TINT_GOLD_BG} title="Awards" line="Coming soon. Everything already published stays published." />
-          <div className="gv-st-card"><AwardsComingSoon /></div>
-        </div>
-      )}
+      {activeTab === 'awards' && <AwardsSettings conference={conference} />}
       </SettingsShell>
 
       {/* Drag-to-fit crop step, flattens the chosen framing into a square
@@ -5486,13 +5459,6 @@ export default function SettingsPage() {
           </Portal>
         );
       })()}
-
-      {/* Awards: holding screen while the feature is finished. The real UI
-          (categories, quotas, points, ratification, chair deadline, all
-          autosaved into conferences.awards_config) is still on disk in
-          settings/awardsUi.tsx. To re-enable it, change the import at the top
-          of this file back to `import { AwardsSettings } from './awardsUi'`
-          and render `<AwardsSettings conference={conference} />` here. */}
 
       {confirmModal}
     </div>

@@ -18,7 +18,7 @@ These were decided by the owner (Christian) on purpose. If a request would chang
 - /about and /contact are two separate pages; /about carries the ambassador world map; no footer on /contact.
 - /account/manage is three pages: Credits, Subscription, Promo code. Credits and Unlimited stay apart.
 - No site footer on /account.
-- Delegation leaders import from the "Import delegates" button on the delegation card (two-tab pop-up); there is no /delegation portal and no invite link. Leaders (faculty advisor or head delegate) can make a delegate a head delegate and back (delegation_set_head); delegate and faculty advisor never swap.
+- Delegation leaders import from the "Import delegates" button on the delegation card (two-tab pop-up) and, since 11 Oct 2026 (Peter, co-owner), share the delegation's invite link from a "Copy invite link" button on the same card (`participant/DelegationInviteLink.tsx`: `create_delegation_invite`, landing `/invites/delegation/[token]`, which applies with the delegation filled in or adds an existing application to it). There is still no /delegation portal. Leaders (faculty advisor or head delegate) can make a delegate a head delegate and back (delegation_set_head); delegate and faculty advisor never swap.
 - My conferences opens each conference's role dashboard.
 - Explore: the title left, the search pill on the left with "Organise your conference" on the same line, the place pills under Where (max 5), no place rail, filters with sort and view on one line, grid first in the toggle, at most 4 columns, spotlights are the first grid cards (no "In the Spotlight" row), the list view is plain date order with spotlights tagged in place, Near you is the IP country. Spotlights obey every filter; a filtered-out spotlight is not shown.
 - Free (house) spotlights exist only for flagship pairs listed in the database table spotlight_flagships (today only WorldMUN on the homepage); the database refuses any other. Never add free spotlights as test data.
@@ -290,36 +290,16 @@ There is **no third-party analytics or tracking** by policy (`/privacy`). The ad
 
 ---
 
-## 5. Awards (BEHIND A COMING-SOON SCREEN, 7 Sep 2026)
+## 5. Awards (SET-UP LIVE IN SETTINGS, 11 Oct 2026; NO PUBLISH SCREEN YET)
 
-**Current state, read this first.** Awards are hidden from organisers. Nothing was
-deleted and no data was touched:
+**Current state, read this first.** Owner, 11 Oct 2026: "set up the awards just for now. Make it simple, just like starting from a blank slate ... If a conference does not set up awards, never offer it to chairs."
 
-- Manage → **Settings → Awards** renders `settings/awardsComingSoon.tsx`, a holding
-  screen. The real configuration UI is still `settings/awardsUi.tsx`, on disk and
-  unrendered; re-enabling it is one import plus one render line in
-  `settings/page.tsx` (the comments there say exactly which).
-- The standalone secretariat desk is retired. `/manage/[slug]/awards` now redirects
-  to `/manage/[slug]/settings?tab=awards`, so bookmarks do not 404, and the desk
-  itself is preserved unrendered as `manage/[slug]/awards/AwardsConsole.tsx`. Its
-  rail entry (POST CONFERENCE / Awards) is gone, as are the two links that pointed
-  at it from the organiser scoreboard and the Live modal.
-- **Awards is no longer a set-up priority.** It was removed from the dashboard
-  checklist (`manage/[slug]/page.tsx`, 9 rows → 8), from `conference_setup_status()`
-  in the database (`setup_total` 9 → 8, it is `jsonb_array_length(v_items)`), from
-  `SETUP_STEPS` in `admin/ConferencesTab.tsx`, and the `setup_total` fallback in
-  `admin_conference_overview()` moved from 9 to 8. Because the organiser nudge
-  emails build their "STILL TO DO" list from `conference_setup_status().items`, no
-  organiser is nudged about awards any more (137 active conferences, 134 organisers,
-  stopped). The blue checkmark is untouched: `awards` was never in `v_ver_keys`.
-- Everything below still describes the feature as built, and everything below is
-  still true of the database. `conference_awards`, `conferences.awards_config`,
-  `awards_published_at`, the RLS policies and every RPC are intact. Awards already
-  published stay published: they are still on the public honour roll, still on
-  `MyAwardsCard`, still on `/account/cv`. The chair-side `AwardsCard` and the
-  session signposts (`resolveChairAwardsHref`) were left alone deliberately, since
-  they are participant surfaces and only matter at a conference that already has
-  awards configured.
+- **Manage → Settings → Awards** renders `settings/awardsUi.tsx` (`AwardsSettings`; the coming-soon screen `awardsComingSoon.tsx` was deleted). Three screens, one next step each: (1) **blank slate**, "No awards yet" + **Set up awards**; (2) **one question**, "Will every committee give the same awards?": "Yes, the same for all" (Recommended) or "No, set them per committee", with "You can change this later and give any committee its own awards"; (3) **the editor**: a "Same awards for every committee" switch and, when off, a committee picker ("All committees" = the shared set, then each committee, acronym over full name, marked **Same as all** or **Own awards**; a committee with no own set offers "Give it its own awards", which copies the shared set; "Use the shared awards again" drops it). Then the award cards in three groups: **Placements** (Best Delegate, first place, with a "Diplomacy Award" name option; Outstanding Delegate, second; Honourable Mention, third), **Other awards** (Most Improved, Verbal Commendation, Best Position Paper), **Custom awards** (typed name; its icon is `TrophyQuestion`, the 3D Trophy with a gold "?" badge). Each card is a switch; an award that is on shows a name chooser / rename field (the key never changes) and a "Per committee" stepper (1..10; Honourable Mention starts at 2). Autosaved (600 ms, row-counted through `saveAwardsConfig`, flushed on unmount; failures as a glass `notifyErr`). "Turn off awards" (confirmed inline) sets `setUp: false`; setting up again restores the earlier choices.
+- **Config shape** (`src/lib/awards.ts`, `conferences.awards_config` jsonb, extended, never renamed): the old `types` / `requireApproval` / `chairDeadline` / `configuredAt` / `enabled`, plus `setUp: true` (written when the question is answered), `sameForAll` (default true) and `perCommittee: { [conference_committee_id]: { types } }` (read only while `sameForAll` is false; kept when switching back). A committee's own `types` REPLACES the shared list for that committee. `getAwardsConfig` returns `enabled = stored enabled AND setUp`, so **`{}` reads as NOT set up**; the eight configs the old screen saved on purpose (`configuredAt` plus `types`: SISMUN, GAMUN, AMUN Global II, KU MUN, VelorumMUN, UGMUN (switched off), LIMUN, Velorum) count as set up, one shared set, so their chairs keep their awards. New key: `most-improved` (never suggested by `suggestSlate`); custom keys stay `custom-<slug>`. Helpers: `configForCommittee(config, ccId)`, `committeeHasOwnAwards`, `awardsOfferedFor(config, ccId)` (set up AND at least one slot for that committee), `AWARD_PRESET_GROUPS`, `freshAwardTypes()` (the three placements on). `slateState` now answers `published` before `off`.
+- **Chairs are offered awards only through `awardsOfferedFor`.** Gated: the chair's `AwardsCard` (renders nothing unless offered or already published; uses `configForCommittee`, so a chair sees their own committee's set), and every session signpost through `useChairAwards(code, isConference)` / `resolveChairAwards(code)` in `src/lib/sessionAwardsLink.ts` (anon read of `conference_committees.session_code` → `conferences(slug, awards_config)`, cached 5 min, a failed read = not offered): the ScoreboardPanel header link, the End View card and the top-bar CTA on `/chair/[code]` (`ChairAwardsCta` returns null), and the session Settings → Awards tab (`SettingsPanel`). The organiser Live recap (`LiveModals` `AwardsRecap`) also reads the per-committee set. Published awards (`MyAwardsCard`, `/account/cv`, the honour roll) are read by status and never pass through the gate.
+- **Database: unchanged.** Checked 11 Oct 2026: no function, constraint or policy reads award_type keys or the new fields (`publish_conference_awards` reads only `requireApproval`). The gate is UI-only today; `scratch-awards-setup.sql` is an UNAPPLIED, untested draft that adds it to the chair INSERT policy and `submit_committee_awards`. 28 nominated rows (0 published) exist from before; they are untouched.
+- **Not built yet: approving and publishing.** The secretariat desk stays retired (`/manage/[slug]/awards` redirects to `settings?tab=awards`; `AwardsConsole.tsx` unrendered, and it does not yet read `perCommittee`). Until a publish screen exists, chairs can nominate and submit but nothing reaches a CV.
+- Awards is still not a dashboard checklist item or a verification criterion (removed 7 Sep 2026: `conference_setup_status()` setup_total 9 → 8, `SETUP_STEPS`, the nudge emails).
 
 Model UN awards are given once per conference, at the closing ceremony. Per committee the dais names a Best Delegate, usually one or two Outstanding Delegates, a few Honourable Mentions, sometimes Verbal Commendations and a Best Position Paper. The secretariat sets categories and quotas beforehand, collects each committee's slate, ratifies it and announces. Delegation awards go to a school or society, tallied from committee honours.
 
@@ -327,7 +307,7 @@ Gavelling mirrors that exactly. Read `src/lib/awards.ts` (the vocabulary and con
 
 | Step | Surface | Storage |
 |---|---|---|
-| Configure categories, quotas, points, deadline, ratification | Manage → Settings → **Awards** (`settings/awardsUi.tsx`, currently replaced by the coming-soon screen). There is no longer a dashboard checklist item for awards. | `conferences.awards_config` (jsonb; empty = platform defaults) |
+| Set up which awards, how many, shared or per committee | Manage → Settings → **Awards** (`settings/awardsUi.tsx`). There is no dashboard checklist item for awards. | `conferences.awards_config` (jsonb; without `setUp: true` = not set up, never offered to chairs) |
 | Chair nominates, with the session scoreboard as evidence | the chair's conference page, `participant/AwardsCard.tsx` (`/conferences/[slug]/role/chair`) | `conference_awards` rows, `status = 'nominated'` |
 | Chair submits / withdraws | same card → `submit_committee_awards` / `withdraw_committee_awards` | `conference_committees.awards_submitted_*` |
 | Secretariat approves / returns with a note / edits / assigns delegation awards | `manage/[slug]/awards/AwardsConsole.tsx` (unrendered; the route redirects to Settings) | `awards_approved_*`, `awards_return_note`, rows → `approved` |
