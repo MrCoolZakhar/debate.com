@@ -48,6 +48,9 @@ export interface PersonInvoice {
   paid_by_card: boolean;
   refundable_cents: number;
   removable: boolean;
+  /** Money sent back (refunds, disputes) vs records undone by Mark unpaid (prompt 105). */
+  refunded_cents?: number;
+  undone_cents?: number;
 }
 
 export interface PersonPayment {
@@ -58,9 +61,14 @@ export interface PersonPayment {
   proof_path: string | null;
   note: string | null;
   total_cents: number;
+  /** refunded_cents + undone_cents; kept for older readers. */
   returned_cents: number;
+  /** Refunds and disputes only: money that really went back (prompt 105). */
+  refunded_cents?: number;
+  /** Mark unpaid only: a record undone, no money moved. Never shown as a refund. */
+  undone_cents?: number;
   currency: string;
-  items: { invoice_id: string; label: string; kind: string; amount_cents: number }[];
+  items: { invoice_id: string; label: string; kind: string; amount_cents: number; refunded_cents?: number; undone_cents?: number }[];
 }
 
 export interface LedgerLine {

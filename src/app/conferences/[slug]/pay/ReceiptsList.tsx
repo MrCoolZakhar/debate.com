@@ -26,7 +26,10 @@ export function receiptEvent(p: PayPayment, itemsById: Map<string, PayItem>): st
   const states = p.items.map(i => itemsById.get(i.invoice_id)?.state);
   if (states.includes('disputed')) return 'Disputed';
   if (states.includes('refund_requested')) return 'Refund requested';
-  if (p.returned_cents > 0) return p.returned_cents >= p.total_cents ? 'Refunded' : 'Partly refunded';
+  const refunded = p.refunded_cents ?? 0;
+  if (refunded > 0) return refunded >= p.total_cents ? 'Refunded' : 'Partly refunded';
+  // A Mark unpaid moved no money (prompt 105): said plainly, never as a refund.
+  if ((p.undone_cents ?? 0) > 0) return 'Marked unpaid by the organizers';
   return null;
 }
 
@@ -55,7 +58,7 @@ export default function ReceiptsList({ payments, itemsById, onOpen }: {
             </span>
             <span style={{ textAlign: 'right' }}>
               <span style={{ display: 'block', fontSize: 16, fontWeight: 800, fontVariantNumeric: 'tabular-nums' }}>{money(p.total_cents, p.currency)}</span>
-              {p.returned_cents > 0 && <span style={{ display: 'block', fontSize: 12.5, color: DANGER, fontVariantNumeric: 'tabular-nums' }}>{money(p.returned_cents, p.currency)} refunded</span>}
+              {(p.refunded_cents ?? 0) > 0 && <span style={{ display: 'block', fontSize: 12.5, color: DANGER, fontVariantNumeric: 'tabular-nums' }}>{money(p.refunded_cents!, p.currency)} refunded</span>}
             </span>
             <ChevronRight size={18} strokeWidth={2.2} aria-hidden style={{ color: INK_SOFT }} />
           </button>
@@ -115,8 +118,11 @@ export function ReceiptPopup({ payment, conferenceName, onClose, pdf, itemsById,
             })}
             <div className="gv-pay-row" style={{ fontWeight: 800 }}><span>Total</span><b style={{ color: '#1B3828' }}>{money(sum, payment.currency)}</b></div>
           </div>
-          {payment.returned_cents > 0 && (
-            <p style={{ margin: 0, fontSize: 14, color: DANGER }}>{money(payment.returned_cents, payment.currency)} of this was refunded</p>
+          {(payment.refunded_cents ?? 0) > 0 && (
+            <p style={{ margin: 0, fontSize: 14, color: DANGER }}>{money(payment.refunded_cents!, payment.currency)} of this was refunded</p>
+          )}
+          {(payment.undone_cents ?? 0) > 0 && (
+            <p style={{ margin: 0, fontSize: 14, color: INK_SOFT }}>Marked unpaid by the organizers</p>
           )}
           {refundable.length > 0 && (
             <div><button type="button" className="gv-pay-btn gv-pay-outline" onClick={() => onRequestRefund(refundable)}>Request a refund</button></div>

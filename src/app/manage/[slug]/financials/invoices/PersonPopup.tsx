@@ -25,6 +25,7 @@ import { readPerson, roleWord, type AuditRow, type PersonDetail, type PersonInvo
 
 const SOFT_GREEN = '#2A5A3C';
 const DANGER = '#8B2020';
+const INK_SOFT = '#5A5046';
 
 const AUDIT_WORDS: Record<string, string> = {
   payment_recorded: 'Payment recorded',
@@ -86,7 +87,7 @@ function waivedReason(i: PersonInvoice): string {
 
 type Sub =
   | { kind: 'paid'; ids: string[]; total: number; currency: string }
-  | { kind: 'unpaid'; ids: string[]; label: string }
+  | { kind: 'unpaid'; ids: string[]; label: string; title?: string; body?: string }
   | { kind: 'refund'; items: RefundItem[]; currency: string };
 
 export default function PersonPopup({ applicationId, conferenceId, slug, readOnly, onClose, onChanged }: {
@@ -107,6 +108,8 @@ export default function PersonPopup({ applicationId, conferenceId, slug, readOnl
   const [showLedger, setShowLedger] = useState(false);
   const [showAudit, setShowAudit] = useState(false);
   const [sub, setSub] = useState<Sub | null>(null);
+  // Paid items ticked inside the open payment, for "Mark unpaid (n)" (prompt 105).
+  const [paidTicks, setPaidTicks] = useState<Set<string>>(() => new Set());
   const [proofErr, setProofErr] = useState('');
   // "Make an invoice" for the ticked open items (prompt 98).
   const [invBusy, setInvBusy] = useState(false);
@@ -117,7 +120,7 @@ export default function PersonPopup({ applicationId, conferenceId, slug, readOnl
   useEffect(() => {
     let alive = true;
     readPerson(applicationId)
-      .then(d => { if (!alive) return; setDetail(d); setErr(''); setTicked(new Set()); })
+      .then(d => { if (!alive) return; setDetail(d); setErr(''); setTicked(new Set()); setPaidTicks(new Set()); })
       .catch(e => { if (alive) setErr(friendlyError(e, 'This person could not be read. Try again in a moment.')); });
     return () => { alive = false; };
   }, [applicationId, attempt]);
@@ -131,7 +134,9 @@ export default function PersonPopup({ applicationId, conferenceId, slug, readOnl
   const outstanding = invoices.filter(i => i.status !== 'waived' && (i.due_cents > 0 || i.status === 'open' || i.status === 'partial'));
   const waived = invoices.filter(i => i.status === 'waived' || i.aid_cents > 0);
   const owed = outstanding.reduce((s, i) => s + i.due_cents, 0);
+  // A Mark unpaid undoes a record and moves no money, so it is never shown as a refund (prompt 105).
   const returned = (detail?.payments ?? []).reduce((s, x) => s + (x.returned_cents || 0), 0);
+  const refunded = (detail?.payments ?? []).reduce((s, x) => s + (x.refunded_cents || 0), 0);
   const paid = (detail?.payments ?? []).reduce((s, x) => s + x.total_cents, 0) - returned;
   const tickedLines = outstanding.filter(i => ticked.has(i.invoice_id));
   const tickedTotal = tickedLines.reduce((s, i) => s + i.due_cents, 0);
@@ -183,7 +188,7 @@ export default function PersonPopup({ applicationId, conferenceId, slug, readOnl
                 <div className="flex items-start gap-6 flex-wrap">
                   <Num label="Outstanding" value={owed > 0 ? cents(owed, currency) : 'Nothing owed'} tone={owed > 0 ? 'ink' : 'green'} />
                   <Num label="Paid" value={cents(paid, currency)} tone="forest" />
-                  {returned > 0 && <Num label="Refunded" value={cents(returned, currency)} tone="ink" />}
+                  {refunded > 0 && <Num label="Refunded" value={cents(refunded, currency)} tone="ink" />}
                 </div>
               </div>
 
@@ -263,7 +268,7 @@ export default function PersonPopup({ applicationId, conferenceId, slug, readOnl
                       return (
                         <div key={pay.key} style={{ borderRadius: 14, background: '#FFFFFF' }}>
                           <div className="flex items-center gap-3 flex-wrap" style={{ padding: '12px 14px' }}>
-                            <button type="button" onClick={() => setOpen(isOpen ? null : pay.key)} aria-expanded={isOpen}
+                            <button type="button" onClick={() => { setOpen(isOpen ? null : pay.key); setPaidTicks(new Set()); }} aria-expanded={isOpen}
                               className="flex items-center gap-3 focus:outline-none" style={{ flex: '1 1 240px', minWidth: 0, background: 'none', border: 'none', padding: 0, cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit', color: 'inherit' }}>
                               {isOpen ? <ChevronDown size={16} strokeWidth={2.4} aria-hidden /> : <ChevronRight size={16} strokeWidth={2.4} aria-hidden />}
                               <span style={{ display: 'inline-flex', color: '#2A5A3C' }} aria-hidden>
@@ -278,7 +283,8 @@ export default function PersonPopup({ applicationId, conferenceId, slug, readOnl
                             </button>
                             <span style={{ textAlign: 'right' }}>
                               <span style={{ display: 'block', fontSize: 15, fontWeight: 800, fontVariantNumeric: 'tabular-nums' }}>{cents(pay.total_cents, pay.currency)}</span>
-                              {pay.returned_cents > 0 && <span style={{ display: 'block', fontSize: 12.5, color: DANGER, fontVariantNumeric: 'tabular-nums' }}>{cents(pay.returned_cents, pay.currency)} returned</span>}
+                              {(pay.refunded_cents ?? 0) > 0 && <span style={{ display: 'block', fontSize: 12.5, color: DANGER, fontVariantNumeric: 'tabular-nums' }}>{cents(pay.refunded_cents!, pay.currency)} refunded</span>}
+                              {(pay.undone_cents ?? 0) > 0 && <span style={{ display: 'block', fontSize: 12.5, color: INK_SOFT, fontVariantNumeric: 'tabular-nums' }}>{cents(pay.undone_cents!, pay.currency)} marked unpaid</span>}
                             </span>
                             {pay.proof_path && (
                               <button type="button" className="gv-st-link" onClick={() => { void viewProof(pay.proof_path!); }}>
@@ -286,18 +292,37 @@ export default function PersonPopup({ applicationId, conferenceId, slug, readOnl
                               </button>
                             )}
                           </div>
-                          {isOpen && (
+                          {isOpen && (() => {
+                            // Items of this payment still paid and not paid by card: these can be marked unpaid (prompt 105).
+                            const byHand = pay.how !== 'card' && !pay.items.some(x => byId.get(x.invoice_id)?.paid_by_card);
+                            const stillPaid = pay.items.filter(x => { const v = byId.get(x.invoice_id); return !!v && v.refundable_cents > 0 && !v.paid_by_card; });
+                            const tickedHere = stillPaid.filter(x => paidTicks.has(x.invoice_id));
+                            return (
                             <div style={{ padding: '0 14px 12px 14px' }}>
                               {pay.items.map(it => {
                                 const inv = byId.get(it.invoice_id);
                                 const gone = !inv || inv.refundable_cents <= 0;
+                                const canTick = !readOnly && !!inv && !gone && !inv.paid_by_card;
                                 return (
                                   <div key={it.invoice_id} className="gv-fd-row" style={{ alignItems: 'center', borderTop: `1px solid rgba(27,56,40,0.12)` }}>
-                                    <span className="gv-fd-row-label">{it.label}</span>
+                                    <span className="gv-fd-row-label" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                                      {canTick && (
+                                        <input type="checkbox" checked={paidTicks.has(it.invoice_id)} aria-label={`Select ${it.label}`}
+                                          style={{ width: 20, height: 20, accentColor: '#1B3828', flexShrink: 0 }}
+                                          onChange={e => {
+                                            const next = new Set(paidTicks);
+                                            if (e.target.checked) next.add(it.invoice_id); else next.delete(it.invoice_id);
+                                            setPaidTicks(next);
+                                          }} />
+                                      )}
+                                      <span style={{ minWidth: 0 }}>{it.label}</span>
+                                    </span>
                                     <span className="flex items-center gap-3 flex-wrap" style={{ justifyContent: 'flex-end' }}>
                                       <span className="gv-fd-row-amt">{cents(it.amount_cents, pay.currency)}</span>
                                       {gone ? (
-                                        <span style={{ fontSize: 12.5, color: '#5A5046', display: 'inline-flex', alignItems: 'center', gap: 4 }}><Undo2 size={12} strokeWidth={2.4} aria-hidden /> Returned</span>
+                                        <span style={{ fontSize: 12.5, color: '#5A5046', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                                          <Undo2 size={12} strokeWidth={2.4} aria-hidden /> {itemWasRefunded(it, inv, pay) ? 'Refunded' : 'Marked unpaid'}
+                                        </span>
                                       ) : !readOnly && inv ? (
                                         <>
                                           <button type="button" className="gv-st-link" onClick={() => setSub({
@@ -313,12 +338,32 @@ export default function PersonPopup({ applicationId, conferenceId, slug, readOnl
                                   </div>
                                 );
                               })}
-                              <div className="gv-fd-row gv-fd-total" style={{ borderTop: `1px solid rgba(27,56,40,0.12)` }}>
-                                <span className="gv-fd-row-label">Total</span>
+                              <div className="gv-fd-row gv-fd-total" style={{ borderTop: `1px solid rgba(27,56,40,0.12)`, alignItems: 'center' }}>
+                                <span className="gv-fd-row-label" style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
+                                  Total
+                                  {!readOnly && byHand && stillPaid.length > 0 && (
+                                    <button type="button" className="gv-st-link" style={{ fontWeight: 700 }} onClick={() => setSub({
+                                      kind: 'unpaid', ids: stillPaid.map(x => x.invoice_id), label: 'This payment',
+                                      title: 'Mark This Payment Unpaid?',
+                                      body: `${stillPaid.length} item${stillPaid.length === 1 ? '' : 's'} on this payment go${stillPaid.length === 1 ? 'es' : ''} back to owed, and the manual payment on ${stillPaid.length === 1 ? 'it is' : 'them is'} taken off the record.`,
+                                    })}>Mark this payment unpaid</button>
+                                  )}
+                                </span>
                                 <span className="gv-fd-row-amt">{cents(pay.total_cents, pay.currency)}</span>
                               </div>
+                              {!readOnly && tickedHere.length > 0 && (
+                                <div className="flex items-center gap-3 flex-wrap" style={{ marginTop: 10 }}>
+                                  <button type="button" className="gv-st-btn gv-st-outline" onClick={() => setSub({
+                                    kind: 'unpaid', ids: tickedHere.map(x => x.invoice_id), label: 'These items',
+                                    title: 'Mark as Unpaid?',
+                                    body: `${tickedHere.length} item${tickedHere.length === 1 ? '' : 's'} go${tickedHere.length === 1 ? 'es' : ''} back to owed, and the manual payment on ${tickedHere.length === 1 ? 'it is' : 'them is'} taken off the record.`,
+                                  })}>Mark unpaid ({tickedHere.length})</button>
+                                  <button type="button" className="gv-st-link" onClick={() => setPaidTicks(new Set())}>Clear</button>
+                                </div>
+                              )}
                             </div>
-                          )}
+                            );
+                          })()}
                         </div>
                       );
                     })}
@@ -409,8 +454,8 @@ export default function PersonPopup({ applicationId, conferenceId, slug, readOnl
       {sub?.kind === 'unpaid' && (
         <MarkUnpaidDialog
           invoiceIds={sub.ids}
-          title="Mark as Unpaid?"
-          body={`${sub.label} goes back to owed, and the manual payment on it is taken off the record.`}
+          title={sub.title ?? 'Mark as Unpaid?'}
+          body={sub.body ?? `${sub.label} goes back to owed, and the manual payment on it is taken off the record.`}
           onClose={() => setSub(null)}
           onDone={() => { setSub(null); reread(); }}
         />
@@ -426,6 +471,14 @@ export default function PersonPopup({ applicationId, conferenceId, slug, readOnl
       )}
     </>
   );
+}
+
+/** Whether an item no longer paid went back as a refund (money sent) rather than a Mark unpaid:
+ *  the item's own refunded_cents, else the invoice's, else the payment's split when it is all one kind. */
+function itemWasRefunded(it: { refunded_cents?: number }, inv: PersonInvoice | undefined, pay: PersonPayment): boolean {
+  if (typeof it.refunded_cents === 'number') return it.refunded_cents > 0;
+  if (inv && typeof inv.refunded_cents === 'number') return inv.refunded_cents > 0;
+  return (pay.refunded_cents ?? 0) > 0 && (pay.undone_cents ?? 0) === 0;
 }
 
 function Num({ label, value, tone }: { label: string; value: string; tone: 'ink' | 'forest' | 'green' }) {

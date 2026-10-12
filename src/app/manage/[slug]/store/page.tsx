@@ -238,12 +238,11 @@ export default function StorePage() {
 
             <StoreCard
               title="Bulk Import"
-              line={IMPORTS_PAID_LAUNCH ? 'Importing costs 1 credit per delegate imported, paid when you import' : 'Bring your whole roster in from a spreadsheet. Free while we grow.'}
+              line={IMPORTS_PAID_LAUNCH ? 'Importing costs 1 credit per delegate imported, paid when you import' : 'Bring your whole roster in from a spreadsheet'}
               hint={IMPORTS_PAID_LAUNCH
                 ? 'Bring a spreadsheet of delegates in at once and send each of them a claim link. Each imported delegate uses one conference credit at the moment you import.'
-                : 'Bring a spreadsheet of delegates in at once and send each of them a claim link. Imports are free for now; paid imports come later in 2026.'}
+                : 'Bring a spreadsheet of delegates in at once and send each of them a claim link'}
             >
-              {!IMPORTS_PAID_LAUNCH && <p className="gv-st-soon-tag">Paid imports: coming late 2026</p>}
               <div className="flex flex-wrap gap-2">
                 <Link href={`/manage/${conference.slug}/applications`} className="gv-st-btn gv-st-outline">Imported delegates</Link>
                 <Link href={`/manage/${conference.slug}/import`} className="gv-st-btn gv-st-forest">Go to importer</Link>

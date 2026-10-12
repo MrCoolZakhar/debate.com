@@ -50,7 +50,12 @@ export interface PayPayment {
   at: string;
   how: 'card' | 'proof' | 'marked';
   total_cents: number;
+  /** refunded_cents + undone_cents; kept for older readers. */
   returned_cents: number;
+  /** Refunds and disputes only: money that really went back (prompt 105). */
+  refunded_cents?: number;
+  /** Mark unpaid only: the organizers undid a record and no money moved. Never a refund. */
+  undone_cents?: number;
   currency: string;
   items: { invoice_id: string; label: string; amount_cents: number }[];
 }
