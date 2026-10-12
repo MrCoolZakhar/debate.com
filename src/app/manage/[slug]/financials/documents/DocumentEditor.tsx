@@ -6,9 +6,13 @@
 // the billed-to block can change (update_money_document); there is no amount
 // field anywhere, because the lines and totals are a snapshot of the ledger.
 // Download makes the PDF in the browser; the two sends email a link.
+// Since prompt 109: a refund receipt's words are the title, the reason and the
+// footer (the rest is the ledger), and both sends say what is happening:
+// "Sending" with cycling dots at once, then "Sent" with a check for 4 seconds.
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { CheckCircle2, Download, Loader2, Mail, Send } from 'lucide-react';
+import { Check, CheckCircle2, Download, Loader2, Mail, Send } from 'lucide-react';
+import CyclingDots from '@/components/CyclingDots';
 import { PurchaseShell } from '@/components/purchase/purchaseKit';
 import MoneyDocumentView from '@/components/money/MoneyDocumentView';
 import { BILLED_KEYS, EDITABLE_KEYS, docDate, docTitle, type BilledTo, type Editable, type MoneyDoc } from '@/components/money/moneyDocument';
@@ -21,6 +25,21 @@ import { Field } from './docsKit';
 import { sendDocument, updateDocument } from './documentsApi';
 
 const SAVE_AFTER_MS = 800;
+const SENT_FOR_MS = 4000;
+
+/**
+ * Refund receipts' words can be edited once update_money_document keeps their
+ * own keys ('reason', 'status', 'original_receipts'): today it keeps only the
+ * seven keys of an invoice or receipt, so one save would erase a refund's
+ * reason, status and original receipt numbers. Until then a refund receipt is
+ * shown read only. Flip this together with that server change (prompt 109).
+ */
+const REFUND_WORDS_EDITABLE = false;
+
+/** The words of a refund receipt that can be written. */
+const REFUND_KEYS = ['title', 'reason', 'footer'] as const;
+/** What a refund receipt keeps as it is, sent back unchanged with every save. */
+const REFUND_KEEP = ['status', 'original_receipts', 'receipt_paragraph'] as const;
 const MAX = 1500;
 
 type SaveState = 'idle' | 'saving' | 'saved' | 'error';
@@ -50,6 +69,9 @@ export default function DocumentEditor({ documentId, payerName, readOnly, onClos
   const [fieldErr, setFieldErr] = useState<Record<string, string>>({});
   const [dlBusy, setDlBusy] = useState(false);
   const [sendBusy, setSendBusy] = useState<'me' | 'payer' | null>(null);
+  const [sent, setSent] = useState<'me' | 'payer' | null>(null);
+  const sentTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [reason, setReason] = useState('');
   const [actionErr, setActionErr] = useState('');
   const [sentAt, setSentAt] = useState<string | null>(null);
 
@@ -67,6 +89,7 @@ export default function DocumentEditor({ documentId, payerName, readOnly, onClos
         if (!alive) return;
         setDoc(d);
         setEd(pick(d.editable as Record<string, unknown>, EDITABLE_KEYS));
+        setReason(typeof d.editable.reason === 'string' ? d.editable.reason : '');
         setBilled(pick(d.billed_to as Record<string, unknown>, BILLED_KEYS));
         setSentAt(d.sent_to_payer_at);
         setLoadErr('');
@@ -96,6 +119,8 @@ export default function DocumentEditor({ documentId, payerName, readOnly, onClos
     setSave('saved');
   }, [documentId, readOnly]);
 
+  useEffect(() => () => { if (sentTimer.current) clearTimeout(sentTimer.current); }, []);
+
   // Anything still unsaved goes out when the editor closes or the tab is hidden.
   useEffect(() => {
     const onHide = () => { if (document.visibilityState === 'hidden') void flush(); };
@@ -121,19 +146,27 @@ export default function DocumentEditor({ documentId, payerName, readOnly, onClos
     );
   }
 
-  const change = (part: 'ed' | 'billed', key: string, value: string) => {
+  const refund = doc.kind === 'refund';
+  const wordsLocked = readOnly || (refund && !REFUND_WORDS_EDITABLE);
+
+  const change = (part: 'ed' | 'billed' | 'reason', key: string, value: string) => {
+    if (part === 'reason') setReason(value);
     const nextEd = part === 'ed' ? { ...ed, [key]: value } : ed;
     const nextBilled = part === 'billed' ? { ...billed, [key]: value } : billed;
-    if (part === 'ed') setEd(nextEd); else setBilled(nextBilled);
+    if (part === 'ed') setEd(nextEd); else if (part === 'billed') setBilled(nextBilled);
     if (fieldErr[key]) setFieldErr(prev => { const n = { ...prev }; delete n[key]; return n; });
-    latest.current = { ed: nextEd, billed: nextBilled };
+    // A refund keeps its own words (reason, status, original receipts) in every save.
+    const keep: Editable = refund
+      ? { ...Object.fromEntries(REFUND_KEEP.map(k => [k, doc.editable[k] ?? null])), reason: part === 'reason' ? value : reason }
+      : {};
+    latest.current = { ed: { ...nextEd, ...keep }, billed: nextBilled };
     dirty.current = true;
     setSave('idle');
     if (timer.current) clearTimeout(timer.current);
     timer.current = setTimeout(() => { void flush(); }, SAVE_AFTER_MS);
   };
 
-  const merged: MoneyDoc = { ...doc, editable: { ...doc.editable, ...ed }, billed_to: { ...doc.billed_to, ...billed } };
+  const merged: MoneyDoc = { ...doc, editable: { ...doc.editable, ...ed, ...(refund ? { reason } : {}) }, billed_to: { ...doc.billed_to, ...billed } };
   const receipt = doc.kind === 'receipt';
   const who = (payerName || doc.billed_to.attn || '').trim() || 'the payer';
   const noAccount = !doc.payer_user_id;
@@ -148,11 +181,15 @@ export default function DocumentEditor({ documentId, payerName, readOnly, onClos
 
   const send = async (to: 'me' | 'payer') => {
     if (sendRef.current || readOnly) return;
-    sendRef.current = true; setSendBusy(to); setActionErr('');
+    // "Sending" shows at once, before the edits are saved (that can be the slow part).
+    if (sentTimer.current) clearTimeout(sentTimer.current);
+    sendRef.current = true; setSendBusy(to); setSent(null); setActionErr('');
     await flush();
     const r = await sendDocument(documentId, to);
     sendRef.current = false; setSendBusy(null);
     if (!r.ok) { setActionErr(r.error); return; }
+    setSent(to);
+    sentTimer.current = setTimeout(() => setSent(null), SENT_FOR_MS);
     if (to === 'payer') {
       setSentAt(new Date().toISOString());
       notifyOk(`Sent to ${who}`, 'financials');
@@ -180,12 +217,25 @@ export default function DocumentEditor({ documentId, payerName, readOnly, onClos
     <PurchaseShell tone="light" label={`${docTitle(merged)} ${doc.number}`} onClose={() => { void flush(); onClose(); }} panelClass="gv-md-studio" testId="money-document">
       <div className="gv-md-left">
         <div>
-          <p className="gv-md-sect" style={{ marginBottom: 6 }}>{receipt ? 'Receipt' : 'Invoice'} · {doc.number}</p>
+          <p className="gv-md-sect" style={{ marginBottom: 6 }}>{refund ? 'Refund receipt' : receipt ? 'Receipt' : 'Invoice'} · {doc.number}</p>
           <h2 className="gv-md-title">Edit the Words</h2>
           <p className="gv-md-sub">The items and amounts come from your records and cannot be changed</p>
           {readOnly && <p className="gv-md-sub">{READ_ONLY_LINE}</p>}
+          {!readOnly && refund && !REFUND_WORDS_EDITABLE && <p className="gv-md-sub">The words on a refund receipt cannot be changed yet. Download it or send it as it is</p>}
         </div>
 
+        {refund ? (
+        <fieldset disabled={wordsLocked} style={{ border: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 16, minWidth: 0 }}>
+          <div className="gv-md-group">
+            {input('ed', REFUND_KEYS[0], 'Title')}
+            <Field id="md-ed-reason" label={<>Reason for refund <small>(optional)</small></>}>
+              <textarea id="md-ed-reason" className="gv-md-area" rows={3} maxLength={MAX} value={reason}
+                onChange={e => change('reason', 'reason', e.target.value)} />
+            </Field>
+            {area(REFUND_KEYS[2], <>Footer <small>(optional)</small></>, undefined, 2)}
+          </div>
+        </fieldset>
+        ) : (
         <fieldset disabled={readOnly} style={{ border: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 16, minWidth: 0 }}>
           <div className="gv-md-group">
             {input('ed', 'title', 'Title')}
@@ -216,6 +266,7 @@ export default function DocumentEditor({ documentId, payerName, readOnly, onClos
             {area('footer', <>Footer <small>(optional)</small></>, undefined, 2)}
           </div>
         </fieldset>
+        )}
 
         <div className="gv-md-foot">
           <div className="gv-md-foot-row" style={{ justifyContent: 'space-between' }}>
@@ -234,14 +285,15 @@ export default function DocumentEditor({ documentId, payerName, readOnly, onClos
               <Download size={16} strokeWidth={2.4} aria-hidden /> {dlBusy ? 'Making the PDF' : 'Download PDF'}
             </button>
             <button type="button" className="gv-st-btn gv-st-outline" disabled={readOnly || sendBusy !== null} onClick={() => { void send('me'); }}>
-              <Mail size={16} strokeWidth={2.4} aria-hidden /> {sendBusy === 'me' ? 'Sending' : 'Send a preview to me'}
+              <SendLabel state={sendBusy === 'me' ? 'sending' : sent === 'me' ? 'sent' : 'idle'} icon={<Mail size={16} strokeWidth={2.4} aria-hidden />} idle="Send a preview to me" />
             </button>
           </div>
           <div className="gv-md-foot-row">
             <button type="button" className="gv-st-btn gv-st-outline" disabled={readOnly || noAccount || sendBusy !== null}
               title={noAccount ? `${who} has no Gavelling account yet, so there is nowhere to send it` : undefined}
               onClick={() => { void send('payer'); }}>
-              <Send size={16} strokeWidth={2.4} aria-hidden /> {sendBusy === 'payer' ? 'Sending' : sentAt ? `Send again to ${who}` : `Send to ${who}`}
+              <SendLabel state={sendBusy === 'payer' ? 'sending' : sent === 'payer' ? 'sent' : 'idle'} icon={<Send size={16} strokeWidth={2.4} aria-hidden />}
+                idle={sentAt ? `Send again to ${who}` : `Send to ${who}`} />
             </button>
           </div>
           {noAccount && <p className="gv-md-hint">{who} has no Gavelling account yet, so there is nowhere to send it. Download the PDF and send it yourself</p>}
@@ -255,4 +307,11 @@ export default function DocumentEditor({ documentId, payerName, readOnly, onClos
       </div>
     </PurchaseShell>
   );
+}
+
+/** A send button's words: the icon and label, "Sending..." at once, then "Sent" with a check (prompt 109). */
+function SendLabel({ state, icon, idle }: { state: 'idle' | 'sending' | 'sent'; icon: React.ReactNode; idle: string }) {
+  if (state === 'sending') return <span aria-live="polite">Sending<CyclingDots /></span>;
+  if (state === 'sent') return <span aria-live="polite" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><Check size={16} strokeWidth={2.8} aria-hidden /> Sent</span>;
+  return <>{icon} {idle}</>;
 }

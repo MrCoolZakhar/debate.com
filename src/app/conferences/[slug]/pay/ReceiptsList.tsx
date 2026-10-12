@@ -7,12 +7,15 @@
 // Since prompt 102 Paid lists ONLY these receipts: a card says when something
 // happened to its items (Refund requested, Refunded, Partly refunded, Disputed),
 // and refunds are asked for from the receipt pop-up ("Request a refund", and
-// "I haven't received it" beside a line refunded by hand).
+// "I haven't received it" beside a line refunded by hand). Since prompt 109
+// the pop-up lists each refund of the payment with "Download refund receipt",
+// and every download says "Making the PDF..." then "Downloaded".
 
 import { ChevronRight, CreditCard, Download, Landmark, ReceiptText } from 'lucide-react';
 import { PurchaseShell, PURCHASE_CSS } from '@/components/purchase/purchaseKit';
 import { DANGER, GREEN, INK_SOFT } from './payKit';
-import { money, shortDate, type PayItem, type PayPayment } from './payApi';
+import { money, shortDate, type PayItem, type PayPayment, type PayRefund } from './payApi';
+import { DownloadStatus, refundLine, type DownloadPhase } from './PayDocuments';
 import { refundVia } from './ItemList';
 
 export function howWords(how: PayPayment['how']): string {
@@ -71,7 +74,11 @@ export default function ReceiptsList({ payments, itemsById, onOpen }: {
 export function ReceiptPopup({ payment, conferenceName, onClose, pdf, itemsById, onRequestRefund, onNotReceived }: {
   payment: PayPayment; conferenceName: string; onClose: () => void;
   /** Only when the conference has set up its invoice details (prompt 98). */
-  pdf?: { busy: boolean; error: string; onDownload: () => void } | null;
+  pdf?: {
+    /** The download being made now and the one just done: 'receipt' or 'refund:<key>' (prompt 109). */
+    busy: string | null; done: string | null; error: string;
+    onDownload: () => void; onRefund: (r: PayRefund) => void;
+  } | null;
   /** The overview's items: which of this payment's lines can be refunded, or were refunded by hand. */
   itemsById: Map<string, PayItem>;
   /** Opens the refund request with this payment's refundable items, all ticked. */
@@ -81,6 +88,8 @@ export function ReceiptPopup({ payment, conferenceName, onClose, pdf, itemsById,
 }) {
   const refundable = payment.items.map(i => itemsById.get(i.invoice_id)).filter((i): i is PayItem => !!i && i.can_request_refund);
   const sum = payment.items.reduce((s, i) => s + i.amount_cents, 0);
+  const phaseOf = (slot: string): DownloadPhase => (pdf?.busy === slot ? 'making' : pdf?.done === slot ? 'done' : 'idle');
+  const refunds = payment.refunds ?? [];
   return (
     <>
       <style>{PURCHASE_CSS}</style>
@@ -127,11 +136,28 @@ export function ReceiptPopup({ payment, conferenceName, onClose, pdf, itemsById,
           {refundable.length > 0 && (
             <div><button type="button" className="gv-pay-btn gv-pay-outline" onClick={() => onRequestRefund(refundable)}>Request a refund</button></div>
           )}
+          {pdf && refunds.length > 0 && (
+            <div className="gv-pay-rows">
+              {refunds.map(r => {
+                const ph = phaseOf(`refund:${r.key}`);
+                return (
+                  <div key={r.key} className="gv-pay-row" style={{ flexWrap: 'wrap', alignItems: 'center' }}>
+                    <span style={{ overflowWrap: 'anywhere', minWidth: 0, flex: '1 1 200px' }}>{refundLine(r, payment.currency)}</span>
+                    <button type="button" className="gv-pay-link" style={{ fontSize: 13.5, display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                      disabled={pdf.busy !== null} aria-live="polite" onClick={() => pdf.onRefund(r)}>
+                      <DownloadStatus phase={ph} idle="Download refund receipt" />
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
           {pdf && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               <div>
-                <button type="button" className="gv-pay-btn gv-pay-forest" disabled={pdf.busy} onClick={pdf.onDownload}>
-                  <Download size={16} strokeWidth={2.4} aria-hidden /> {pdf.busy ? 'Making the PDF' : 'Download receipt (PDF)'}
+                <button type="button" className="gv-pay-btn gv-pay-forest" disabled={pdf.busy !== null} aria-live="polite" onClick={pdf.onDownload}>
+                  {phaseOf('receipt') === 'idle' && <Download size={16} strokeWidth={2.4} aria-hidden />}{' '}
+                  <DownloadStatus phase={phaseOf('receipt')} idle="Download receipt (PDF)" />
                 </button>
               </div>
               {pdf.error && <p className="gv-pay-err" role="alert">{pdf.error}</p>}

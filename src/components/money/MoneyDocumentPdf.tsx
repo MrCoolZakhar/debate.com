@@ -7,8 +7,8 @@
 
 import { Document, Font, Image, Page, StyleSheet, Text, View } from '@react-pdf/renderer';
 import {
-  DOC_INK, DOC_RULE, DOC_SOFT, DOC_TINT, accentOf, accentText, billedLines, detailRows, docDate, docMoney,
-  docShortDate, docTitle, issuerName, paidInFull, totalRows, type MoneyDoc,
+  DOC_INK, DOC_RULE, DOC_SOFT, DOC_TINT, accentOf, accentText, billedLines, detailRows, detailsLabel, docColumns, docDate,
+  docStamp, docTitle, issuerName, totalRows, type MoneyDoc,
 } from './moneyDocument';
 
 const p = (px: number) => px * 0.75;
@@ -49,7 +49,9 @@ export default function MoneyDocumentPdf({ doc, logoSrc }: { doc: MoneyDoc; logo
   const accent = accentOf(doc);
   const ink = accentText(accent);
   const billed = billedLines(doc.billed_to);
-  const invoice = doc.kind === 'invoice';
+  const refund = doc.kind === 'refund';
+  const cols = docColumns(doc);
+  const stamp = docStamp(doc);
   const name = issuerName(doc);
   const ed = doc.editable;
 
@@ -87,7 +89,7 @@ export default function MoneyDocumentPdf({ doc, logoSrc }: { doc: MoneyDoc; logo
               {billed.rest.map((l, i) => <Text key={i} style={s.soft}>{l}</Text>)}
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={s.label}>{invoice ? 'Invoice details' : 'Receipt details'}</Text>
+              <Text style={s.label}>{detailsLabel(doc.kind)}</Text>
               {detailRows(doc).map(([k, v]) => (
                 <View key={k} style={[s.row, { justifyContent: 'space-between' }]}>
                   <Text style={[s.soft, { paddingRight: p(12) }]}>{k}</Text>
@@ -102,17 +104,18 @@ export default function MoneyDocumentPdf({ doc, logoSrc }: { doc: MoneyDoc; logo
           {/* Lines */}
           <View style={{ marginTop: p(26) }}>
             <View style={[s.row, { paddingVertical: p(8), paddingHorizontal: p(12), backgroundColor: DOC_TINT, borderRadius: p(4) }]}>
-              <Text style={[s.label, { marginBottom: 0, width: p(96) }]}>Date</Text>
-              <Text style={[s.label, { marginBottom: 0, flex: 1 }]}>Description</Text>
-              {invoice && <Text style={[s.label, { marginBottom: 0, width: p(110), textAlign: 'right' }]}>Paid</Text>}
-              <Text style={[s.label, { marginBottom: 0, width: p(120), textAlign: 'right' }]}>Amount</Text>
+              {cols.map(c => (
+                <Text key={c.head} style={[s.label, { marginBottom: 0, textAlign: c.align }, c.width == null ? { flex: 1 } : { width: p(c.width) }]}>{c.head}</Text>
+              ))}
             </View>
             {doc.lines.map((l, i) => (
               <View key={i} wrap={false} style={[s.row, { paddingVertical: p(9), paddingHorizontal: p(12), borderBottomWidth: p(1), borderBottomColor: DOC_RULE }]}>
-                <Text style={[s.soft, { width: p(96) }]}>{docShortDate(l.date)}</Text>
-                <Text style={{ flex: 1, paddingRight: p(12) }}>{l.label}</Text>
-                {invoice && <Text style={[s.soft, { width: p(110), textAlign: 'right' }]}>{docMoney(l.paid_cents ?? 0, doc.currency)}</Text>}
-                <Text style={{ width: p(120), textAlign: 'right', fontWeight: 700 }}>{docMoney(l.amount_cents, doc.currency)}</Text>
+                {cols.map(c => (
+                  <Text key={c.head} style={[
+                    c.width == null ? { flex: 1, paddingRight: p(12) } : { width: p(c.width), textAlign: c.align },
+                    c.soft ? s.soft : {}, c.strong ? { fontWeight: 700 } : {},
+                  ]}>{c.cell(l, doc)}</Text>
+                ))}
               </View>
             ))}
           </View>
@@ -120,10 +123,10 @@ export default function MoneyDocumentPdf({ doc, logoSrc }: { doc: MoneyDoc; logo
           {/* Stamp and totals */}
           <View wrap={false} style={[s.row, { alignItems: 'center', marginTop: p(18) }]}>
             <View style={{ flex: 1, alignItems: 'center' }}>
-              {paidInFull(doc) && (
+              {stamp && (
                 <View style={{ transform: 'rotate(-8deg)', borderWidth: p(2.5), borderColor: ink, borderRadius: p(6), paddingVertical: p(8), paddingHorizontal: p(16), alignItems: 'center', opacity: 0.88 }}>
-                  <Text style={{ fontSize: p(18), fontWeight: 800, letterSpacing: 2, lineHeight: 1.2, color: ink }}>PAID IN FULL</Text>
-                  {doc.payment_date ? <Text style={{ fontSize: p(9.5), fontWeight: 700, lineHeight: 1.3, marginTop: p(3), color: ink }}>{docDate(doc.payment_date)}</Text> : null}
+                  <Text style={{ fontSize: p(18), fontWeight: 800, letterSpacing: 2, lineHeight: 1.2, color: ink }}>{stamp.text}</Text>
+                  {stamp.date ? <Text style={{ fontSize: p(9.5), fontWeight: 700, lineHeight: 1.3, marginTop: p(3), color: ink }}>{docDate(stamp.date)}</Text> : null}
                 </View>
               )}
             </View>
@@ -138,6 +141,15 @@ export default function MoneyDocumentPdf({ doc, logoSrc }: { doc: MoneyDoc; logo
             </View>
           </View>
 
+          {refund && ed.reason?.trim() ? (
+            <View wrap={false} style={{ marginTop: p(26) }}>
+              <Text style={s.label}>Reason for Refund</Text>
+              <Text>{ed.reason.trim()}</Text>
+            </View>
+          ) : null}
+          {refund && ed.status?.trim() ? (
+            <Text style={{ marginTop: p(14) }}><Text style={s.soft}>Refund Status: </Text><Text style={{ fontWeight: 700 }}>{ed.status.trim()}</Text></Text>
+          ) : null}
           {ed.receipt_paragraph?.trim() ? (
             <View wrap={false} style={{ marginTop: p(26), paddingVertical: p(12), paddingHorizontal: p(16), backgroundColor: DOC_TINT, borderLeftWidth: p(3), borderLeftColor: accent }}>
               <Text style={{ fontSize: p(12) }}>{ed.receipt_paragraph.trim()}</Text>

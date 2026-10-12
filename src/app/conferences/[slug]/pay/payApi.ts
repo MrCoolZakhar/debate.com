@@ -58,7 +58,12 @@ export interface PayPayment {
   undone_cents?: number;
   currency: string;
   items: { invoice_id: string; label: string; amount_cents: number }[];
+  /** The refunds made against this payment (prompt 109). document_id is the latest refund receipt made for it, or null. */
+  refunds?: PayRefund[];
 }
+
+/** One refund of a payment (prompt 109). `key` is the refund payment's id, what a refund receipt is made from. */
+export interface PayRefund { key: string; at: string; amount_cents: number; label: string; method: string | null; document_id: string | null }
 
 /** One delegation the caller leads (prompt 101): what every leader has requested, and who is in it now. */
 export interface PayDelegation {

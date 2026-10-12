@@ -17,9 +17,10 @@ import { getFreshAuthedClient } from '@/lib/supabase-auth';
 import { friendlyError } from '@/lib/friendlyError';
 import { PAY_CSS, INK, INK_SOFT } from '../payKit';
 import { readPayOverview } from '../payApi';
+import CyclingDots, { DOT_STEPS_PER_SECOND } from '@/components/CyclingDots';
 
 const SECONDS = 5;
-const STEPS_PER_SECOND = 3;
+const STEPS_PER_SECOND = DOT_STEPS_PER_SECOND;
 
 type State =
   | { kind: 'loading' }
@@ -79,7 +80,6 @@ export default function PayGoPage() {
   }, [state, step]);
 
   const left = Math.max(1, SECONDS - Math.floor(step / STEPS_PER_SECOND));
-  const dots = '.'.repeat((step % STEPS_PER_SECOND) + 1);
 
   return (
     <main className="gv-pay min-h-screen flex items-center justify-center px-4 py-10" style={{ backgroundColor: '#EDE7D8' }}>
@@ -99,7 +99,7 @@ export default function PayGoPage() {
         ) : state.kind === 'go' ? (
           <>
             <p style={{ margin: '12px 0 0', fontSize: 17, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }} aria-live="off">
-              Opening in {left}<span style={{ display: 'inline-block', width: '1.2em', textAlign: 'left' }}>{dots}</span>
+              Opening in {left}<CyclingDots step={step} />
             </p>
             <div style={{ marginTop: 18 }}>
               <button type="button" className="gv-pay-btn gv-pay-forest" onClick={() => window.location.replace(state.url)}>

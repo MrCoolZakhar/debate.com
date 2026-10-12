@@ -4,10 +4,12 @@
 //   PaymentsList   every payment from financials_payments, filterable, a tick each,
 //                  and the numbers of the documents already made for it as links
 //   DocumentsList  every document from financials_documents, each opening the editor
-// The rows reuse the Invoices page's look (INV_CSS).
+// The rows reuse the Invoices page's look (INV_CSS). Since prompt 109 a payment
+// with refunds offers "Generate refund receipt", and refund receipts are listed
+// with the label "Refund receipt".
 
-import { CreditCard, FileText, Landmark, ReceiptText, Search } from 'lucide-react';
-import { docShortDate } from '@/components/money/moneyDocument';
+import { CreditCard, FileText, Landmark, ReceiptText, Search, Undo2 } from 'lucide-react';
+import { docShortDate, kindWord } from '@/components/money/moneyDocument';
 import { FOREST, INK_SOFT } from '../dashboardKit';
 import { KIND_NAME, KIND_ORDER, cents } from '../financialsApi';
 import type { DocumentRow, MoneyPayment } from './documentsApi';
@@ -51,12 +53,16 @@ export function PaymentFiltersBar({ f, onChange }: { f: PayFilters; onChange: (p
   );
 }
 
-export function PaymentLine({ p, selected, onToggle, onOpenDoc, canTick }: {
+export function PaymentLine({ p, selected, onToggle, onOpenDoc, canTick, onRefundReceipt, refundBusy }: {
   p: MoneyPayment;
   selected: boolean;
   onToggle: () => void;
   onOpenDoc: (documentId: string) => void;
   canTick: boolean;
+  /** "Generate refund receipt" for this payment's refunds (prompt 109); absent for a read-only organizer. */
+  onRefundReceipt?: () => void;
+  /** This payment's refund receipt is being made now. */
+  refundBusy?: boolean;
 }) {
   const sub = [p.delegation, howWords(p.how), docShortDate(p.at)].filter(Boolean).join(' · ');
   return (
@@ -90,6 +96,12 @@ export function PaymentLine({ p, selected, onToggle, onOpenDoc, canTick }: {
           <b style={{ color: FOREST }}>{cents(p.total_cents, p.currency)}</b>
           {/* A Mark unpaid moved no money, so it is never called a refund (prompt 107). */}
           {(p.refunded_cents ?? 0) > 0 && <span style={{ color: '#8B2020' }}>{cents(p.refunded_cents!, p.currency)} refunded</span>}
+          {onRefundReceipt && (p.refunds ?? []).length > 0 && (
+            <button type="button" className="gv-st-link" style={{ fontSize: 13, whiteSpace: 'nowrap' }} disabled={refundBusy}
+              onClick={e => { e.stopPropagation(); onRefundReceipt(); }}>
+              {refundBusy ? 'Making it' : 'Generate refund receipt'}
+            </button>
+          )}
           {(p.undone_cents ?? 0) > 0 && <span style={{ color: INK_SOFT }}>{cents(p.undone_cents!, p.currency)} marked unpaid</span>}
           {!(p.refunded_cents ?? 0) && !(p.undone_cents ?? 0) && <span>Paid</span>}
         </div>
@@ -100,22 +112,23 @@ export function PaymentLine({ p, selected, onToggle, onOpenDoc, canTick }: {
 
 export function DocumentLine({ d, name, onOpen }: { d: DocumentRow; name: string; onOpen: () => void }) {
   const receipt = d.kind === 'receipt';
+  const refund = d.kind === 'refund';
   return (
     <div className="gv-inv-row" role="button" tabIndex={0} onClick={onOpen}
       onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpen(); } }}
-      aria-label={`${receipt ? 'Receipt' : 'Invoice'} ${d.number}, open it`}>
+      aria-label={`${kindWord(d.kind)} ${d.number}, open it`}>
       <span style={{ display: 'inline-flex', color: FOREST }} aria-hidden>
-        {receipt ? <ReceiptText size={18} strokeWidth={2.2} /> : <FileText size={18} strokeWidth={2.2} />}
+        {refund ? <Undo2 size={18} strokeWidth={2.2} /> : receipt ? <ReceiptText size={18} strokeWidth={2.2} /> : <FileText size={18} strokeWidth={2.2} />}
       </span>
       <div style={{ minWidth: 0 }}>
         <p className="gv-inv-name" style={{ fontVariantNumeric: 'tabular-nums' }}>{d.number}</p>
-        <p className="gv-inv-sub">{[receipt ? 'Receipt' : 'Invoice', name, docShortDate(d.created_at)].filter(Boolean).join(' · ')}</p>
+        <p className="gv-inv-sub">{[kindWord(d.kind), name, docShortDate(d.created_at)].filter(Boolean).join(' · ')}</p>
         {d.sent_to_payer_at && <p className="gv-inv-sub" style={{ color: INK_SOFT }}>Sent on {docShortDate(d.sent_to_payer_at)}</p>}
       </div>
       <div className="gv-inv-nums">
         <div className="gv-inv-num">
-          <b>{cents(receipt ? d.paid_cents : d.balance_cents, d.currency)}</b>
-          <span>{receipt ? 'Paid' : 'Balance due'}</span>
+          <b style={refund ? { color: '#8B2020' } : undefined}>{cents(d.kind === 'invoice' ? d.balance_cents : d.paid_cents, d.currency)}</b>
+          <span>{refund ? 'Refunded' : receipt ? 'Paid' : 'Balance due'}</span>
         </div>
       </div>
     </div>

@@ -1,4 +1,5 @@
-// moneyDocument.ts — the one shape of an invoice or receipt (prompt 98).
+// moneyDocument.ts — the one shape of an invoice, receipt or refund receipt
+// (prompt 98; refund receipts since prompt 109).
 //
 // get_money_document answers { document, issuer, conference }; toMoneyDoc()
 // turns that into a MoneyDoc, which both MoneyDocumentView (the preview on
@@ -8,9 +9,13 @@
 // Lines and every amount are a snapshot of the ledger made by the server; the
 // client never computes or edits money here. It only formats it.
 
-export type MoneyDocKind = 'receipt' | 'invoice';
+export type MoneyDocKind = 'receipt' | 'invoice' | 'refund';
 
-export interface MoneyDocLine { date: string | null; label: string; amount_cents: number; paid_cents?: number | null }
+/** A refund line (prompt 109) also carries the price first paid and when: date is the refund date, amount_cents the amount refunded. */
+export interface MoneyDocLine {
+  date: string | null; label: string; amount_cents: number; paid_cents?: number | null;
+  original_cents?: number | null; paid_date?: string | null;
+}
 
 export interface BilledTo {
   institution?: string | null; address?: string | null; phone?: string | null;
@@ -20,6 +25,8 @@ export interface BilledTo {
 export interface Editable {
   title?: string | null; intro?: string | null; receipt_paragraph?: string | null;
   tax_note?: string | null; tax_line?: string | null; footer?: string | null; notes?: string | null;
+  /** Refund receipts only (prompt 109). */
+  status?: string | null; reason?: string | null; original_receipts?: string | null;
 }
 
 export const EDITABLE_KEYS = ['title', 'intro', 'receipt_paragraph', 'tax_note', 'tax_line', 'footer', 'notes'] as const;
@@ -63,7 +70,7 @@ export function toMoneyDoc(a: Record<string, unknown>): MoneyDoc {
   const conf = (a.conference ?? {}) as Partial<DocConference>;
   return {
     id: String(d.id ?? ''),
-    kind: d.kind === 'invoice' ? 'invoice' : 'receipt',
+    kind: d.kind === 'invoice' ? 'invoice' : d.kind === 'refund' ? 'refund' : 'receipt',
     number: String(d.number ?? ''),
     created_at: String(d.created_at ?? new Date().toISOString()),
     currency: String(d.currency ?? 'USD').toUpperCase(),
@@ -137,11 +144,47 @@ export function docShortDate(iso: string | null | undefined): string {
 
 export function docTitle(doc: Pick<MoneyDoc, 'kind' | 'editable'>): string {
   const t = doc.editable.title?.trim();
-  return t || (doc.kind === 'receipt' ? 'Invoice and Official Receipt' : 'Invoice');
+  return t || (doc.kind === 'receipt' ? 'Invoice and Official Receipt' : doc.kind === 'refund' ? 'Refund Receipt' : 'Invoice');
 }
 
+/** The kind in words, for lists: "Receipt", "Invoice", "Refund receipt". */
+export function kindWord(kind: MoneyDocKind): string {
+  return kind === 'receipt' ? 'Receipt' : kind === 'refund' ? 'Refund receipt' : 'Invoice';
+}
+
+/** A receipt fully paid; never a refund (that one is stamped REFUNDED, see docStamp). */
 export function paidInFull(doc: Pick<MoneyDoc, 'kind' | 'balance_cents' | 'paid_cents'>): boolean {
   return doc.kind === 'receipt' && doc.balance_cents === 0 && doc.paid_cents > 0;
+}
+
+/** The stamp beside the totals: PAID IN FULL on a paid receipt, REFUNDED on a refund receipt. */
+export function docStamp(doc: Pick<MoneyDoc, 'kind' | 'balance_cents' | 'paid_cents' | 'payment_date'>): { text: string; date: string | null } | null {
+  if (doc.kind === 'refund') return { text: 'REFUNDED', date: doc.payment_date };
+  if (paidInFull(doc)) return { text: 'PAID IN FULL', date: doc.payment_date };
+  return null;
+}
+
+/** The label above the details block. */
+export function detailsLabel(kind: MoneyDocKind): string {
+  return kind === 'invoice' ? 'Invoice details' : kind === 'refund' ? 'Refund details' : 'Receipt details';
+}
+
+/** The table's columns: the header word and what each line shows. */
+export interface DocColumn { head: string; width: number | null; align: 'left' | 'right'; cell: (l: MoneyDocLine, doc: MoneyDoc) => string; soft?: boolean; strong?: boolean }
+export function docColumns(doc: Pick<MoneyDoc, 'kind'>): DocColumn[] {
+  if (doc.kind === 'refund') return [
+    { head: 'Date paid', width: 96, align: 'left', soft: true, cell: l => docShortDate(l.paid_date) },
+    { head: 'Description', width: null, align: 'left', cell: l => l.label },
+    { head: 'Original price', width: 120, align: 'right', soft: true, cell: (l, d) => (l.original_cents == null ? '' : docMoney(l.original_cents, d.currency)) },
+    { head: 'Refunded', width: 120, align: 'right', strong: true, cell: (l, d) => docMoney(l.amount_cents, d.currency) },
+  ];
+  const cols: DocColumn[] = [
+    { head: 'Date', width: 96, align: 'left', soft: true, cell: l => docShortDate(l.date) },
+    { head: 'Description', width: null, align: 'left', cell: l => l.label },
+  ];
+  if (doc.kind === 'invoice') cols.push({ head: 'Paid', width: 110, align: 'right', soft: true, cell: (l, d) => docMoney(l.paid_cents ?? 0, d.currency) });
+  cols.push({ head: 'Amount', width: 120, align: 'right', strong: true, cell: (l, d) => docMoney(l.amount_cents, d.currency) });
+  return cols;
 }
 
 /** The issuer's name for the header: the legal name, else the conference. */
@@ -163,6 +206,17 @@ export function billedLines(b: BilledTo): { strong: string | null; rest: string[
 
 /** The details block beside "Billed to". */
 export function detailRows(doc: MoneyDoc): [string, string][] {
+  if (doc.kind === 'refund') {
+    const r: [string, string][] = [['Refund number', doc.number], ['Date issued', docDate(doc.created_at)]];
+    if (doc.payment_date) r.push(['Refund date', docDate(doc.payment_date)]);
+    if (doc.payment_method) r.push(['Refunded by', doc.payment_method]);
+    const orig = doc.editable.original_receipts?.trim();
+    if (orig) r.push(['Original receipt', orig]);
+    const c = doc.conference.full_name || doc.conference.acronym;
+    if (c) r.push(['Conference', c]);
+    r.push(['Currency', doc.currency]);
+    return r;
+  }
   const rows: [string, string][] = [
     [doc.kind === 'receipt' ? 'Receipt number' : 'Invoice number', doc.number],
     ['Date issued', docDate(doc.created_at)],
@@ -177,6 +231,7 @@ export function detailRows(doc: MoneyDoc): [string, string][] {
 
 /** The totals under the table. The tax row reads the tax line, or "None". */
 export function totalRows(doc: MoneyDoc): { label: string; value: string; strong?: boolean }[] {
+  if (doc.kind === 'refund') return [{ label: 'Total refunded', value: docMoney(doc.subtotal_cents, doc.currency), strong: true }];
   const rows: { label: string; value: string; strong?: boolean }[] = [
     { label: 'Subtotal', value: docMoney(doc.subtotal_cents, doc.currency) },
     { label: 'Tax', value: doc.editable.tax_line?.trim() || 'None' },

@@ -39,7 +39,7 @@ import {
 import { PAY_CSS, INK, INK_SOFT } from './payKit';
 import {
   applyDiscount, cancelDiscount, discountsAvailable, money, quoteDiscount, readPayOverview, removeAddon, removePledgedTicket,
-  type DiscountQuote, type PayItem, type PayOverview,
+  type DiscountQuote, type PayItem, type PayOverview, type PayRefund,
 } from './payApi';
 import DiscountCodePopup from './DiscountCodePopup';
 import { notifyOk } from '@/lib/appNotify';
@@ -113,7 +113,10 @@ export default function PayPage() {
   const [docsAttempt, setDocsAttempt] = useState(0);
   const [makeDoc, setMakeDoc] = useState<{ preset: MakePreset | null } | null>(null);
   const [viewDoc, setViewDoc] = useState<string | null>(null);
+  // A download's slot ('receipt', 'refund:<key>' or a listed document's id): making it now, and the one just done (prompt 109).
   const [docBusy, setDocBusy] = useState<string | null>(null);
+  const [docDone, setDocDone] = useState<string | null>(null);
+  const docDoneTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [receiptPdfErr, setReceiptPdfErr] = useState('');
   const [docListErr, setDocListErr] = useState('');
 
@@ -449,20 +452,31 @@ export default function PayPage() {
 
   const docsReady = !!myDocs?.settings_ready;
   const openForInvoice = items.filter(i => i.due_cents > 0 && i.state !== 'covered' && i.state !== 'waived');
-  const downloadDoc = async (id: string, onError: (msg: string) => void) => {
+  const downloadDoc = async (id: string, onError: (msg: string) => void, slot: string = id) => {
     if (docBusy) return;
-    setDocBusy(id);
+    if (docDoneTimer.current) clearTimeout(docDoneTimer.current);
+    setDocDone(null);
+    setDocBusy(slot);
     const problem = await downloadById(id);
     setDocBusy(null);
-    if (problem) onError(problem);
+    if (problem) { onError(problem); return; }
+    setDocDone(slot);
+    docDoneTimer.current = setTimeout(() => setDocDone(null), 3500);
   };
   const receiptPdf = () => {
     if (!receipt || !myDocs) return;
     setReceiptPdfErr('');
     const existing = receiptFor(myDocs.documents, receipt.key);
-    if (existing) { void downloadDoc(existing.document_id, setReceiptPdfErr); return; }
+    if (existing) { void downloadDoc(existing.document_id, setReceiptPdfErr, 'receipt'); return; }
     setReceiptKey(null);
     setMakeDoc({ preset: { kind: 'receipt', keys: [receipt.key] } });
+  };
+  // A refund receipt (prompt 109): the one already made, else made now through the billing step.
+  const refundPdf = (r: PayRefund) => {
+    setReceiptPdfErr('');
+    if (r.document_id) { void downloadDoc(r.document_id, setReceiptPdfErr, `refund:${r.key}`); return; }
+    setReceiptKey(null);
+    setMakeDoc({ preset: { kind: 'refund', keys: [r.key] } });
   };
   const closeViewDoc = () => {
     setViewDoc(null);
@@ -613,6 +627,7 @@ export default function PayPage() {
                   onOpen={setViewDoc}
                   onDownload={id => { setDocListErr(''); void downloadDoc(id, setDocListErr); }}
                   downloading={docBusy}
+                  downloaded={docDone}
                   error={docListErr}
                 />
               )}
@@ -722,19 +737,20 @@ export default function PayPage() {
           payment={receipt}
           conferenceName={c.full_name}
           onClose={() => setReceiptKey(null)}
-          pdf={docsReady ? { busy: docBusy !== null, error: receiptPdfErr, onDownload: receiptPdf } : null}
+          pdf={docsReady ? { busy: docBusy, done: docDone, error: receiptPdfErr, onDownload: receiptPdf, onRefund: refundPdf } : null}
           itemsById={itemsById}
           onRequestRefund={(list) => { setReceiptKey(null); setRefundAsk({ items: list }); }}
           onNotReceived={(it) => { setReceiptKey(null); setNotReceived(it); }}
         />
       )}
-      {(makeDoc || viewDoc) && <style>{PAYDOCS_CSS}</style>}
+      {viewDoc && <style>{PAYDOCS_CSS}</style>}
       {makeDoc && docsReady && myDocs && (
         <MakeDocPopup
           conferenceId={c.id}
           payments={overview.payments}
           openItems={openForInvoice}
           billing={myDocs.billing}
+          suggestion={myDocs.billing_suggestion}
           preset={makeDoc.preset}
           onClose={() => setMakeDoc(null)}
           onMade={() => setDocsAttempt(a => a + 1)}
