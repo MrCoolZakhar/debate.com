@@ -22,6 +22,7 @@ import {
 } from '@/components/neu';
 import { useConfirmModal } from '@/components/ConfirmModal';
 import { inputStyle, fieldLabelStyle } from './shared';
+import { InfoHint } from '../settings/applicationsUi';
 
 // The house confirm sits at z-index 50; this section also lives inside the
 // Financials pop-ups (z-index 9090), so while the turn-off question is open
@@ -56,7 +57,8 @@ export default function ApplicationFeeSection({ conference, bare = false }: {
   const [amount, setAmount] = useState('');
   const [currency, setCurrency] = useState(conference.fee_currency ?? 'USD');
   const [appliesTo, setAppliesTo] = useState<'per_delegation' | 'per_delegate'>('per_delegation');
-  const [active, setActive] = useState(true);
+  // A NEW fee starts Inactive (prompt 106); a saved row keeps its own value below.
+  const [active, setActive] = useState(false);
   const [gatesAcceptance, setGatesAcceptance] = useState(false);
   const { confirm, modal: confirmModal } = useConfirmModal();
   const askingRef = useRef(false);
@@ -170,9 +172,34 @@ export default function ApplicationFeeSection({ conference, bare = false }: {
       {loading ? (
         <div className="rounded-[22px] animate-pulse" style={{ height: 160, backgroundColor: NEU.surface, boxShadow: NEU.out }} />
       ) : (
-        <NeuCard style={{ padding: '18px 20px' }}>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="sm:col-span-2">
+        <NeuCard style={{ padding: bare ? '14px 18px' : '18px 20px' }}>
+          {/* The switch comes first (prompt 106): everything below is what it turns on. */}
+          <div className="flex items-center justify-between gap-3 flex-wrap" style={{ marginBottom: bare ? 10 : 14 }}>
+            <div className="flex items-center gap-3">
+              <span style={{ fontFamily: OUTFIT, fontSize: 14, fontWeight: 800, color: NEU.ink }}>Charge a registration fee</span>
+              <PillToggle value={active} onChange={setActive} size="sm" />
+              <span style={{ fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 700, color: active ? '#2A5A3C' : NEU.muted }}>
+                {active ? 'Active' : 'Inactive'}
+              </span>
+            </div>
+            <span className="inline-flex items-center gap-1.5" style={{
+              fontFamily: OUTFIT, fontSize: 12, fontWeight: 700, color: '#7A5A10',
+              background: 'rgba(238,217,138,0.4)', borderRadius: 999, padding: '4px 6px 4px 10px',
+            }}>
+              Different than Conference Fee
+              <InfoHint label="About the registration fee" size={14}
+                text="This is charged once on top of the ticket price, for example a deposit. Ticket prices are set for each role in Settings." />
+            </span>
+          </div>
+
+          {/* Faded and locked while Inactive, but still there to see. */}
+          <fieldset
+            disabled={!active}
+            aria-disabled={!active}
+            style={{ border: 'none', margin: 0, padding: 0, minWidth: 0, opacity: active ? 1 : 0.5, transition: 'opacity 160ms ease', pointerEvents: active ? undefined : 'none' }}
+          >
+          <div className={`grid grid-cols-1 sm:grid-cols-2 ${bare ? 'gap-3' : 'gap-4'}`}>
+            <div>
               <label htmlFor="appfee-label" style={fieldLabelStyle}>Label</label>
               <input
                 id="appfee-label"
@@ -181,18 +208,6 @@ export default function ApplicationFeeSection({ conference, bare = false }: {
                 onChange={e => setLabel(e.target.value)}
                 placeholder="Conference Registration Fee"
                 style={inputStyle}
-              />
-            </div>
-
-            <div className="sm:col-span-2">
-              <label htmlFor="appfee-desc" style={fieldLabelStyle}>Description</label>
-              <textarea
-                id="appfee-desc"
-                rows={2}
-                value={description}
-                onChange={e => setDescription(e.target.value)}
-                placeholder="Shown to applicants on the invoice detail"
-                style={{ ...inputStyle, resize: 'vertical', lineHeight: 1.5 }}
               />
             </div>
 
@@ -222,6 +237,18 @@ export default function ApplicationFeeSection({ conference, bare = false }: {
               </div>
             </div>
 
+            <div className="sm:col-span-2">
+              <label htmlFor="appfee-desc" style={fieldLabelStyle}>Description</label>
+              <textarea
+                id="appfee-desc"
+                rows={bare ? 1 : 2}
+                value={description}
+                onChange={e => setDescription(e.target.value)}
+                placeholder="Shown to applicants on the invoice detail"
+                style={{ ...inputStyle, resize: 'vertical', lineHeight: 1.5 }}
+              />
+            </div>
+
             <div>
               <span style={fieldLabelStyle}>Charged per</span>
               <div className="flex items-center gap-2" style={{ paddingTop: 3 }}>
@@ -241,30 +268,25 @@ export default function ApplicationFeeSection({ conference, bare = false }: {
                   value={gatesAcceptance}
                   onChange={setGatesAcceptance}
                   size="sm"
-                  disabled={!amountIsPositive}
+                  disabled={!amountIsPositive || !active}
                 />
                 <span style={{ fontFamily: OUTFIT, fontSize: 12, fontWeight: 700, color: amountIsPositive ? NEU.ink : NEU.muted }}>
-                  {gatesAcceptance ? 'Must be paid before acceptance' : "Collected as a normal invoice (doesn't block acceptance)"}
+                  {gatesAcceptance ? 'Must be paid before acceptance' : "Doesn't block acceptance"}
                 </span>
               </div>
               <p style={{ fontFamily: OUTFIT, fontSize: 12, color: NEU.muted, marginTop: 4 }}>
                 {amountIsPositive
                   ? "When on, applicants can't be accepted until this fee is paid."
-                  : 'Set an amount above 0 to use acceptance gating. A fee of 0 can never be paid, so it would block every applicant with no way through.'}
+                  : 'Set an amount above 0 to use acceptance gating.'}
               </p>
             </div>
+          </div>
+          </fieldset>
 
-            <div className="sm:col-span-2 flex items-center justify-between gap-3 flex-wrap pt-1">
-              <div className="flex items-center gap-3">
-                <PillToggle value={active} onChange={setActive} size="sm" />
-                <span style={{ fontFamily: OUTFIT, fontSize: 12, fontWeight: 700, color: NEU.ink }}>
-                  {active ? 'Active: charged on applications' : 'Inactive: no fee charged'}
-                </span>
-              </div>
-              <NeuButton onClick={handleSave} disabled={saving} gradient={saved ? NEU_GRADIENTS.green : NEU_GRADIENTS.forest}>
-                {saving ? 'Saving…' : saved ? 'Saved' : 'Save'}
-              </NeuButton>
-            </div>
+          <div className="flex items-center justify-end gap-3 flex-wrap" style={{ marginTop: bare ? 12 : 16 }}>
+            <NeuButton onClick={handleSave} disabled={saving} gradient={saved ? NEU_GRADIENTS.green : NEU_GRADIENTS.forest}>
+              {saving ? 'Saving…' : saved ? 'Saved' : 'Save'}
+            </NeuButton>
           </div>
         </NeuCard>
       )}

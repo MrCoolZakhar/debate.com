@@ -66,7 +66,7 @@ export function AddonsPopup({ conference, readOnly, onClose }: { conference: Con
   }, [conference.id]);
 
   return (
-    <Shell title="Add-ons" line="Extras payers can add, like a gala ticket or a T-shirt" readOnly={readOnly} onClose={onClose}>
+    <Shell title="Add-ons" line="Extras payers can add, like a socials ticket or a T-shirt" readOnly={readOnly} onClose={onClose}>
       <AddonsSection
         conference={conference}
         bare

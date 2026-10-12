@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * Add-ons — optional extra-cost items (t-shirts, gala tickets, etc.) that
+ * Add-ons — optional extra-cost items (t-shirts, socials tickets, etc.) that
  * seed kind='addon' invoices via sync_participant_invoices, never gating
  * acceptance. Same optimistic list pattern as VouchersSection: temp-id
  * insert swapped for the real row, exact rollback on failure.
@@ -15,7 +15,6 @@ import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { useConfirmModal } from '@/components/ConfirmModal';
 import { CurrencyPicker } from '@/components/CurrencyPicker';
-import { PillToggle } from '@/app/account/accountUi';
 import {
   NEU, NEU_GRADIENTS, OUTFIT, NeuCard, NeuButton, NeuIconDisc,
 } from '@/components/neu';
@@ -65,7 +64,6 @@ export default function AddonsSection({ conference, bare = false, renderStats }:
   const [amount, setAmount] = useState('');
   const [currency, setCurrency] = useState(conference.fee_currency ?? 'USD');
   const [appliesTo, setAppliesTo] = useState<string>('per_delegate');
-  const [active, setActive] = useState(true);
   const [creating, setCreating] = useState(false);
 
   const [busyIds, setBusyIds] = useState<Set<string>>(new Set());
@@ -104,7 +102,8 @@ export default function AddonsSection({ conference, bare = false, renderStats }:
     const optimistic: Addon = {
       id: tempId, label: label.trim(), description: description.trim() || null,
       amount_cents: Math.round(amt * 100), currency: currency.toUpperCase(),
-      applies_to: appliesTo, active, created_at: new Date().toISOString(),
+      // New add-ons are always offered (prompt 106): there is no active switch.
+      applies_to: appliesTo, active: true, created_at: new Date().toISOString(),
     };
     setAddons(cur => [optimistic, ...cur]);
 
@@ -125,7 +124,7 @@ export default function AddonsSection({ conference, bare = false, renderStats }:
         .single();
       if (insertError || !data) throw insertError ?? new Error('insert returned no row');
       setAddons(cur => cur.map(a => (a.id === tempId ? (data as Addon) : a)));
-      setLabel(''); setDescription(''); setAmount(''); setAppliesTo('per_delegate'); setActive(true);
+      setLabel(''); setDescription(''); setAmount(''); setAppliesTo('per_delegate');
     })()
       .catch(() => {
         setAddons(cur => cur.filter(a => a.id !== tempId));
@@ -144,12 +143,13 @@ export default function AddonsSection({ conference, bare = false, renderStats }:
 
     (async () => {
       const supabase = getAuthedClient(session.access_token);
-      const { error: updateError } = await supabase
+      const { data, error: updateError } = await supabase
         .from('addons')
         .update({ active: !prev })
         .eq('id', a.id)
-        .eq('conference_id', conference.id);
-      if (updateError) throw updateError;
+        .eq('conference_id', conference.id)
+        .select('id');
+      if (updateError || !data || data.length !== 1) throw updateError ?? new Error('add-on not updated');
     })()
       .catch(() => {
         setAddons(cur => cur.map(x => (x.id === a.id ? { ...x, active: prev } : x)));
@@ -273,16 +273,7 @@ export default function AddonsSection({ conference, bare = false, renderStats }:
             </select>
           </div>
 
-          <div className="flex items-end justify-between gap-3">
-            <div>
-              <span style={fieldLabelStyle}>Status</span>
-              <div className="flex items-center gap-2" style={{ paddingTop: 3 }}>
-                <PillToggle value={active} onChange={setActive} size="sm" />
-                <span style={{ fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 700, color: NEU.ink }}>
-                  {active ? 'Active' : 'Inactive'}
-                </span>
-              </div>
-            </div>
+          <div className="flex items-end justify-end gap-3">
             <NeuButton icon={Plus} onClick={handleCreate} disabled={!canCreate}>
               {creating ? 'Creating…' : 'Add'}
             </NeuButton>
@@ -308,7 +299,8 @@ export default function AddonsSection({ conference, bare = false, renderStats }:
                   className="flex items-center gap-3 flex-wrap px-5 py-3"
                   style={{ ...(i > 0 ? { borderTop: '1px solid rgba(221,212,192,0.55)' } : {}), opacity: busy ? 0.6 : 1 }}
                 >
-                  <div className="min-w-0" style={{ flex: '1 1 200px' }}>
+                  {/* An old inactive add-on is faded and marked Hidden, with "Offer again" (prompt 106). */}
+                  <div className="min-w-0" style={{ flex: '1 1 200px', opacity: a.active ? 1 : 0.5 }}>
                     <p className="[overflow-wrap:anywhere]" style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 800, color: NEU.ink }}>
                       {a.label}
                     </p>
@@ -317,10 +309,19 @@ export default function AddonsSection({ conference, bare = false, renderStats }:
                     </p>
                     {renderStats ? renderStats(a.id) : null}
                   </div>
-                  <span style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 800, color: NEU.ink, fontVariantNumeric: 'tabular-nums' }}>
+                  <span style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 800, color: NEU.ink, fontVariantNumeric: 'tabular-nums', opacity: a.active ? 1 : 0.5 }}>
                     {formatMoney(a.amount_cents / 100, a.currency)}
                   </span>
-                  <PillToggle value={a.active} onChange={() => handleToggleActive(a)} size="sm" />
+                  {!a.active && (
+                    <span className="flex items-center gap-2" style={{ fontFamily: OUTFIT, fontSize: 12 }}>
+                      <span style={{ fontWeight: 700, color: NEU.muted }}>Hidden</span>
+                      <button type="button" onClick={() => handleToggleActive(a)} disabled={busy}
+                        className="focus:outline-none focus-visible:underline"
+                        style={{ border: 'none', background: 'none', padding: 0, cursor: busy ? 'default' : 'pointer', color: NEU.forest, fontWeight: 700, fontSize: 12, textDecoration: 'underline', textUnderlineOffset: 3 }}>
+                        Offer again
+                      </button>
+                    </span>
+                  )}
                   <button
                     onClick={() => handleDelete(a)}
                     disabled={busy}

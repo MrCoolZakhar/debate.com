@@ -127,6 +127,14 @@ export const PAY_CSS = `
 @media (max-width:743px){.gv-buy-panel.gv-pay-small{height:auto;max-height:92dvh;margin-top:auto;border-radius:22px 22px 0 0}}
 .gv-buy-panel.gv-pay-pop{max-width:640px}
 .gv-buy-panel.gv-pay-mid{max-width:560px}
+/* Every /pay pop-up is as tall as its content (prompt 106): no 560px minimum, a
+   bottom sheet on phones. A pop-up panel with gv-pay-mid must stay a box: the
+   one-column page rule above (.gv-pay-mid{display:contents}) is for the middle
+   column, not for a panel that shares the class name. */
+.gv-buy-panel.gv-pay-pop,.gv-buy-panel.gv-pay-mid,.gv-buy-panel.gv-pay-manual,.gv-buy-panel.gv-pd-view{min-height:0}
+.gv-buy-panel.gv-pay-pop .gv-buy-body,.gv-buy-panel.gv-pay-mid .gv-buy-body,.gv-buy-panel.gv-pay-manual .gv-buy-body,.gv-buy-panel.gv-pd-view .gv-buy-body{flex-direction:column}
+@media (max-width:1023px){.gv-buy-panel.gv-pay-mid{display:flex}}
+@media (max-width:743px){.gv-buy-panel.gv-pay-pop,.gv-buy-panel.gv-pay-mid,.gv-buy-panel.gv-pay-manual,.gv-buy-panel.gv-pd-view{height:auto;max-height:92dvh;margin-top:auto;border-radius:22px 22px 0 0}}
 .gv-pay-rows{display:flex;flex-direction:column;border-radius:14px;background:#FFFFFF;padding:4px 14px}
 .gv-pay-row{display:flex;justify-content:space-between;gap:16px;padding:10px 0;font-size:14.5px}
 .gv-pay-row + .gv-pay-row{border-top:1px solid ${LINE}}

@@ -110,6 +110,10 @@ export const DASH_CSS = `
 /* Pop-ups: a wide panel, and the rows of a breakdown */
 .gv-buy-panel.gv-fd-wide{max-width:1040px}
 .gv-buy-panel.gv-fd-mid{max-width:620px}
+/* Every Financials pop-up is as tall as its content (prompt 106): no 560px minimum, a bottom sheet on phones. */
+.gv-buy-panel.gv-fd-wide,.gv-buy-panel.gv-fd-mid{min-height:0}
+.gv-buy-panel.gv-fd-wide .gv-buy-body,.gv-buy-panel.gv-fd-mid .gv-buy-body{flex-direction:column}
+@media (max-width:743px){.gv-buy-panel.gv-fd-wide,.gv-buy-panel.gv-fd-mid{height:auto;max-height:92dvh;margin-top:auto;border-radius:22px 22px 0 0}}
 /* A money to-do (prompt 104): 620px, as tall as its content, a bottom sheet on phones, bigger type and buttons. */
 .gv-buy-panel.gv-fd-fit{min-height:0}
 .gv-buy-panel.gv-fd-fit .gv-buy-body{flex-direction:column}
@@ -253,6 +257,18 @@ function SettingCard({ title, hint, icon, fact, sub, onOpen, readOnly }: {
   );
 }
 
+/** A manual conference's method in words (prompt 106): free, a QR, bank transfer or a payment link. */
+export function paymentMethodWords(s: S): { fact: string; sub: string } {
+  if (s.is_free) return { fact: 'Free conference', sub: 'Delegates pay nothing' };
+  if (s.manual_kind === 'qr') {
+    return { fact: 'Payment QR code', sub: s.has_qr ? 'Payers scan your QR, then upload a proof' : 'Add your QR code to start taking payments' };
+  }
+  if (s.manual_kind === 'bank') {
+    return { fact: 'Bank transfer', sub: s.has_bank ? 'Payers send a transfer, then upload a proof' : 'Add your bank details to start taking payments' };
+  }
+  return { fact: 'Payment link', sub: s.has_external_url ? 'Payers pay on your page, then upload a proof' : 'Add your payment link to start taking payments' };
+}
+
 export function PaymentMethodCard({ s, onOpen, readOnly }: { s: S; onOpen: () => void; readOnly: boolean }) {
   let fact = 'Not set up yet';
   let sub: string | undefined = 'Choose how people pay before you accept anyone';
@@ -263,13 +279,14 @@ export function PaymentMethodCard({ s, onOpen, readOnly }: { s: S; onOpen: () =>
     fact = 'Card payments (Stripe)';
     sub = s.connect_status === 'complete' ? 'Ready' : 'Stripe needs a few more details';
   } else if (s.payment_method === 'manual') {
-    fact = 'Manual payments';
-    sub = 'Payers upload a proof for you to review';
+    const m = paymentMethodWords(s);
+    fact = m.fact;
+    sub = m.sub;
   }
   return (
     <SettingCard
       title="Payment Method" icon={{ emoji: 'Credit card', lucide: CreditCard, tint: TINT_GREEN }}
-      hint="How participants pay you. Card payments go straight to your own Stripe account. Manual payments are bank transfers or cash, and the payer uploads a proof for you to check."
+      hint="How participants pay you. Card payments go straight to your own Stripe account. With a payment link, QR code or bank transfer, the payer uploads a proof for you to check."
       fact={fact} sub={sub} onOpen={onOpen} readOnly={readOnly}
     />
   );

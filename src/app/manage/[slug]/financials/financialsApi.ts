@@ -48,6 +48,11 @@ export interface FinancialsDashboard {
     connect_status: string | null;
     platform_collects: boolean;
     has_external_url: boolean;
+    /** Prompt 106: "It's free" in the wizard; a QR uploaded; bank details saved; the manual kind. */
+    is_free?: boolean;
+    has_qr?: boolean;
+    has_bank?: boolean;
+    manual_kind?: 'link' | 'qr' | 'bank' | null;
     registration_fee: null | { label: string | null; amount_cents: number; currency: string; applies_to: string | null; active: boolean };
     addons_active: number; addons_sold: number; vouchers_active: number; vouchers_used: number;
   };

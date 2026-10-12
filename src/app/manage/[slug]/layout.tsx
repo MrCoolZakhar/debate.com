@@ -24,6 +24,7 @@ import VerifiedCheck, { minutesToCheckmarkLabel } from '@/components/VerifiedChe
 import { formatConferenceDates } from '@/lib/conferenceDates';
 import { NEU } from '@/components/neu';
 import { waitingSince } from './communications/waitingOnReply';
+import PublishControls from './PublishControls';
 
 // ── Conference type ────────────────────────────────────────────────────────
 
@@ -1209,29 +1210,28 @@ export default function ManageLayout({ children }: { children: React.ReactNode }
             <span className="min-w-0 [overflow-wrap:anywhere]">{conference ? conferenceAcronymLabel(conference) : '...'}</span>
             {conference && <span className="inline-flex shrink-0"><VerifiedCheck verified={conference.is_verified} showUnverified size={16} title={sealTitle} /></span>}
           </Link>
-        </div>
-
-        {/* Right: status pill + view page + avatar */}
-        <div className="flex shrink-0 items-center gap-2 sm:gap-4">
-          <Link
-            href="/account/conferences"
-            className="text-xs font-semibold hidden sm:inline-flex items-center gap-1 transition-colors focus:outline-none"
-            style={{ color: 'rgba(238,217,138,0.7)', textDecoration: 'none' }}
-            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = '#EED98A'; }}
-            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = 'rgba(238,217,138,0.7)'; }}
-          >
-            ← BACK
-          </Link>
-
+          {/* View page sits beside the acronym (prompt 106). Hidden on phones,
+              where it lives in the menu, so it can never squeeze the acronym. */}
           <Link
             href={`/conferences/${slug}`}
-            className="text-xs font-semibold hidden sm:inline-block transition-colors focus:outline-none"
+            className="text-xs font-semibold hidden sm:inline-flex items-center gap-1 shrink-0 transition-colors focus:outline-none focus-visible:underline"
             style={{ color: 'rgba(238,217,138,0.7)', textDecoration: 'none' }}
             onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = '#EED98A'; }}
             onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = 'rgba(238,217,138,0.7)'; }}
           >
-            VIEW PAGE →
+            View page <span aria-hidden>→</span>
           </Link>
+        </div>
+
+        {/* Right: status pill + Publish / Unpublish (prompt 106) + avatar. On
+            phones the pill and the button move into the menu (390px has room
+            for the acronym, the avatar and the menu button only). */}
+        <div className="flex shrink-0 items-center gap-2 sm:gap-4">
+          {conference && (
+            <span className="hidden sm:inline-flex">
+              <PublishControls conference={conference} onChanged={refreshConferenceQuiet} />
+            </span>
+          )}
 
           {/* Shared account menu (same hover-open dropdown as SiteNav) */}
           <ProfileAvatarMenu size={44} tone="dark" panelStyle={{ zIndex: 60 }} />
@@ -1266,6 +1266,20 @@ export default function ManageLayout({ children }: { children: React.ReactNode }
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex-1 overflow-y-auto">
+              {/* Phones: the status, Publish / Unpublish and View page live here (prompt 106). */}
+              {conference && (
+                <div className="sm:hidden flex flex-col gap-3 px-5 pt-5 pb-1">
+                  <PublishControls conference={conference} onChanged={refreshConferenceQuiet} light />
+                  <Link
+                    href={`/conferences/${slug}`}
+                    onClick={() => setMobileMenuOpen(false)}
+                    className="text-sm font-bold focus:outline-none focus-visible:underline"
+                    style={{ color: '#1B3828', textDecoration: 'underline', textUnderlineOffset: 3 }}
+                  >
+                    View page →
+                  </Link>
+                </div>
+              )}
               <SidebarContent
                 slug={slug}
                 conference={conference}

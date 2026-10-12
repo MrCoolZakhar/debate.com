@@ -9,19 +9,18 @@ import Link from 'next/link';
 import {
   Building2, Rocket, Mail, Gavel, UsersRound, UserPlus, Wallet, Palette,
   Inbox, Globe2, CheckCircle2, AlertCircle, ArrowRight,
-  Activity, UserRoundCheck, MapPin, RotateCcw, CalendarDays,
+  Activity, UserRoundCheck, MapPin, RotateCcw,
 } from 'lucide-react';
 import { useManage } from '@/app/manage/[slug]/layout';
-import { getAuthedClient, getFreshAuthedClient } from '@/lib/supabase-auth';
+import { getAuthedClient } from '@/lib/supabase-auth';
 import { useAuth } from '@/components/AuthProvider';
-import { friendlyError } from '@/lib/friendlyError';
 import { formatFee } from '@/lib/utils';
 import { LogoDisc } from '@/components/LogoDisc';
 import Avatar from '@/components/Avatar';
 import ProfileLink from '@/components/ProfileLink';
 import {
   NeuCard, NeuInset, NeuIconDisc, NeuProgress, NeuRing,
-  NeuPill, NeuButton, NeuChecklistRow, Emoji3D, NEU, NEU_GRADIENTS, OUTFIT, EASE,
+  NeuChecklistRow, Emoji3D, NEU, NEU_GRADIENTS, OUTFIT, EASE,
 } from '@/components/neu';
 import Portal from '@/components/Portal';
 import DecorativeBleed from '@/components/DecorativeBleed';
@@ -44,146 +43,8 @@ import { ShareLinkRow, ShareHero } from '@/components/conferences/ShareConferenc
 import { DASH_CSS, UnallocatedBadge, useDialSize } from '@/components/conferences/dashboardLayout';
 import { useScrollLock } from '@/hooks/useScrollLock';
 import VerifiedCheck, { minutesToCheckmarkLabel } from '@/components/VerifiedCheck';
+import PublishModal from './PublishModal';
 
-const RED = '#A8442F';
-
-// ── Publish modal ──────────────────────────────────────────────────────────
-
-function PublishModal({
-  conference,
-  onClose,
-  onPublished,
-}: {
-  conference: { id: string; slug: string; full_name: string; dates_tbd: boolean; start_date: string | null };
-  onClose: () => void;
-  onPublished: () => void;
-}) {
-  // Modal: freeze the dashboard behind it.
-  useScrollLock(true);
-  const [publishing, setPublishing] = useState(false);
-  const [publishError, setPublishError] = useState('');
-
-  // Mirrors the database CHECK conferences_tbd_not_public: a conference with
-  // dates still TBD, or no start date at all, can never go public. Caught
-  // here rather than left to the write, so the organizer sees why and where
-  // to fix it instead of a raw constraint error.
-  const needsDates = conference.dates_tbd || !conference.start_date;
-
-  async function handlePublish() {
-    setPublishing(true);
-    setPublishError('');
-    const supabase = await getFreshAuthedClient();
-    if (!supabase) {
-      setPublishing(false);
-      setPublishError('Your session has expired. Please refresh the page and sign in again.');
-      return;
-    }
-    const { data, error } = await supabase
-      .from('conferences')
-      .update({ is_public: true, status: 'public' })
-      .eq('id', conference.id)
-      .select('id');
-    if (error || !data || data.length !== 1) {
-      setPublishing(false);
-      setPublishError(error
-        ? friendlyError(error, "Couldn't publish your conference. Please try again.")
-        : "Couldn't publish your conference. Please refresh and try again.");
-      return;
-    }
-    // Fire-and-forget: ping search engines (IndexNow) so the newly public
-    // conference page gets crawled right away.
-    void fetch('/api/indexnow', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ slug: conference.slug }),
-    }).catch(() => {});
-    setPublishing(false);
-    onPublished();
-  }
-
-  return (
-    <Portal><div
-      className="fixed inset-0 z-50 flex items-center justify-center px-4"
-      style={{ backgroundColor: 'rgba(0,0,0,0.4)' }}
-      onClick={onClose}
-    >
-      <div
-        className="w-full max-w-md rounded-2xl p-8"
-        style={{ backgroundColor: NEU.surface, boxShadow: NEU.out }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        {needsDates ? (
-          <>
-            <h2 className="font-black text-xl mb-2" style={{ color: NEU.ink, fontFamily: OUTFIT }}>
-              Add your dates first
-            </h2>
-            <p className="text-sm mb-6" style={{ color: NEU.muted, fontFamily: OUTFIT }}>
-              Your conference dates are set to TBD. A conference needs real dates before it can be listed publicly. You can keep taking applications while it stays private.
-            </p>
-            <div className="flex gap-3">
-              <button
-                onClick={onClose}
-                className="flex-1 rounded-xl py-2.5 font-bold text-sm transition-colors focus:outline-none gv-lift"
-                style={{ border: '1.5px solid #DDD4C0', color: NEU.ink, backgroundColor: 'transparent', fontFamily: OUTFIT }}
-                onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#1B3828'; }}
-                onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#DDD4C0'; }}
-              >
-                Cancel
-              </button>
-              <Link
-                href={`/manage/${conference.slug}/settings?tab=conference&focus=dates`}
-                className="flex-1 rounded-xl py-2.5 font-bold text-sm transition-colors focus:outline-none gv-lift flex items-center justify-center gap-2"
-                style={{ backgroundColor: '#1B3828', color: NEU.gold, fontFamily: OUTFIT, textDecoration: 'none' }}
-                onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
-                onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
-              >
-                <CalendarDays size={15} strokeWidth={2.2} />
-                Add dates
-              </Link>
-            </div>
-          </>
-        ) : (
-          <>
-            <h2 className="font-black text-xl mb-2" style={{ color: NEU.ink, fontFamily: OUTFIT }}>
-              Publish Your Conference?
-            </h2>
-            <p className="text-sm mb-6" style={{ color: NEU.muted, fontFamily: OUTFIT }}>
-              Your conference will appear publicly on gavelling.com/conferences/explore and delegates will be able to apply.
-            </p>
-            {publishError && (
-              <p className="text-sm mb-4" style={{ color: RED, fontFamily: OUTFIT }}>{publishError}</p>
-            )}
-            <div className="flex gap-3">
-              <button
-                onClick={onClose}
-                className="flex-1 rounded-xl py-2.5 font-bold text-sm transition-colors focus:outline-none gv-lift"
-                style={{ border: '1.5px solid #DDD4C0', color: NEU.ink, backgroundColor: 'transparent', fontFamily: OUTFIT }}
-                onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#1B3828'; }}
-                onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#DDD4C0'; }}
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handlePublish}
-                disabled={publishing}
-                className="flex-1 rounded-xl py-2.5 font-bold text-sm transition-colors focus:outline-none gv-lift"
-                style={{
-                  backgroundColor: publishing ? '#DDD4C0' : '#1B3828',
-                  color: publishing ? NEU.muted : NEU.gold,
-                  fontFamily: OUTFIT,
-                }}
-                onMouseEnter={(e) => { if (!publishing) (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
-                onMouseLeave={(e) => { if (!publishing) (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
-              >
-                {publishing ? 'Publishing…' : 'Publish now'}
-              </button>
-            </div>
-          </>
-        )}
-      </div>
-    </div></Portal>
-  );
-}
 
 // ── First-delegate share modal ─────────────────────────────────────────────
 // House recipe for "Get your first delegate": copy the public conference
@@ -1708,15 +1569,6 @@ export default function DashboardPage() {
             money={money}
             href={`/manage/${slug}/financials`}
           />
-          <NeuPill active={conference.is_public} gradient={NEU_GRADIENTS.green}>
-            <span style={{ width: 6, height: 6, borderRadius: 999, backgroundColor: conference.is_public ? '#FFFFFF' : NEU.amber, flexShrink: 0 }} />
-            {conference.is_public ? 'LIVE' : 'DRAFT'}
-          </NeuPill>
-          {!conference.is_public && (
-            <NeuButton gradient={NEU_GRADIENTS.forest} icon={Rocket} onClick={handlePublishClick} style={{ padding: '8px 16px', fontSize: 12 }}>
-              Publish
-            </NeuButton>
-          )}
         </div>
       </div>
 

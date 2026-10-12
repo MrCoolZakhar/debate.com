@@ -20,7 +20,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { AlertTriangle, Mail, Pencil, Check, Camera, ThumbsUp, Music2, MessageCircle, Globe, Plus, ClipboardList, CreditCard, Building2, Megaphone, Trash2, Gift, Link2, Clock3, type LucideIcon } from 'lucide-react';
+import { AlertTriangle, Mail, Pencil, Check, Camera, ThumbsUp, Music2, MessageCircle, Globe, Plus, ClipboardList, CreditCard, Building2, Megaphone, Trash2, Gift, Banknote, type LucideIcon } from 'lucide-react';
 import SiteNav from '@/components/SiteNav';
 import Loader from '@/components/Loader';
 import { useAuth } from '@/components/AuthProvider';
@@ -97,26 +97,19 @@ const REVIEW_STEP = TOTAL_STEPS;
 // (169 → 83). It goes straight after the head count, because "how many
 // delegates" and "which rooms do they sit in" are one thought.
 
-// STEP 8, "How do delegates pay?", is asked BEFORE the insert and is REQUIRED
-// (owner, 7 Oct 2026). 181 of 302 non-demo conferences had no payment_method
-// at all, and a conference with none can never open an application: the
-// role-config trigger coerces is_enabled back to false until
-// conference_payments_ready() is true. Three answers, and all three are real
-// answers, including "later":
-//   free  → payment_method 'manual' + a fixed note saying it is free
-//   link  → payment_method 'manual' + the one thing they typed, as
-//           external_payment_url when it reads as a link, else as
-//           external_payment_note
-//   later → NOTHING is written, exactly the behaviour before this step existed
+// STEP 8, "How Do Delegates Pay?", is asked BEFORE the insert and is REQUIRED
+// (owner, 7 Oct 2026): 181 of 302 non-demo conferences had no payment_method,
+// and a conference with none can never open an application (the role-config
+// trigger coerces is_enabled back to false until conference_payments_ready()
+// is true), so every organizer answers it. Since 12 Oct 2026 (owner) it asks
+// ONLY whether the conference is free or paid. Paid conferences set up how
+// they get paid in Financials, after the wizard, where the welcome flow does
+// it properly (card, a link, a QR or bank details, the fee and add-ons):
+//   free → payment_method 'manual' + FREE_PAYMENT_NOTE, which satisfies
+//          conference_payments_ready() on its own
+//   paid → NOTHING is written; Financials sets the method up
 // It rides along in `insertRow` (`...paymentColumns`) like every other answer,
-// so there is no second write to fail. It asks no price: the amount is set in
-// Settings → Financials, where it always was.
-//
-// The two CHECKs this can reach are both enforced here first, so the
-// all-or-nothing insert can never be refused over it:
-// conferences_external_payment_url_https (a stored link starts with https://,
-// which paymentLinkValue guarantees) and conferences_external_payment_note_len
-// (500 characters, which the field's maxLength guarantees).
+// so there is no second write to fail. It asks no price.
 
 // STEP 9, "What will you use Gavelling for?", is asked BEFORE the insert and
 // is REQUIRED.
@@ -145,42 +138,14 @@ const INTENT_FALLBACK_ICONS: Record<string, LucideIcon> = {
 
 // ── Step 8, how delegates pay ──────────────────────────────────────────────
 
-/** 'free' and 'link' both store payment_method 'manual' (the one method that
- *  needs no onboarding); 'later' stores nothing at all. */
-type PayChoice = 'free' | 'link' | 'later' | '';
+/** 'free' stores payment_method 'manual' with the free note; 'paid' stores
+ *  nothing (payments are set up in Financials, owner 12 Oct 2026). */
+type PayChoice = 'free' | 'paid' | '';
 
 /** What a free conference puts on file. `conference_payments_ready()` is
  *  satisfied by either external field, so a note is enough, and the public
  *  pay page shows this sentence as the payment instructions. */
 const FREE_PAYMENT_NOTE = 'This conference is free.';
-
-/** conferences_external_payment_note_len. Enforced on the field so the
- *  all-or-nothing insert can never be refused over a long note. */
-const PAYMENT_NOTE_MAX = 500;
-
-/**
- * One typed answer, two possible columns. A value that reads as a web address
- * becomes `external_payment_url`; anything else is written verbatim as
- * `external_payment_note`.
- *
- * Deliberately NOT normalizeSocialUrl: that one prefixes https:// to whatever
- * it is handed, so "Bank transfer on arrival" would have become a link. The
- * test here is strict (no whitespace, a dot, a letters-only last label) and
- * falls back to the note, which is the safe side of the fence: a note is shown
- * as written and a mistaken one is fixed in Financials.
- *
- * A link is always stored as https://, because conferences_external_payment_url_https
- * refuses anything else and Financial Settings validates the same way.
- */
-function paymentLinkValue(raw: string): { url: string | null; note: string | null } {
-  const v = raw.trim();
-  if (!v) return { url: null, note: null };
-  const asUrl = /^https?:\/\//i.test(v) ? v.replace(/^https?:\/\//i, '') : v;
-  const looksLikeLink =
-    !/\s/.test(asUrl) && /^[a-z0-9][a-z0-9.-]*\.[a-z]{2,}(?:[/?#].*)?$/i.test(asUrl);
-  if (looksLikeLink) return { url: 'https://' + asUrl.replace(/^\/+/, ''), note: null };
-  return { url: null, note: v.slice(0, PAYMENT_NOTE_MAX) };
-}
 
 // Bundled banner artwork, mirrors settings' BANNER_PRESETS so the organiser
 // can set a banner during creation exactly as they would afterwards.
@@ -643,12 +608,8 @@ export default function NewConferencePage() {
   const [bannerUploading, setBannerUploading] = useState(false);
   const [bannerError, setBannerError] = useState('');
 
-  // How delegates pay (step 8). Required, and written as part of the
-  // conferences insert. `payLink` is the one field the 'link' answer asks for
-  // and holds either a web address or written instructions; paymentLinkValue
-  // decides which column it lands in.
+  // Free or paid (step 8). Required, and written as part of the conferences insert.
   const [payChoice, setPayChoice] = useState<PayChoice>('');
-  const [payLink, setPayLink] = useState('');
 
   // What they came here to do (step 9). Required, and written as part of the
   // conferences insert — there is no second write and nothing to fail.
@@ -691,11 +652,10 @@ export default function NewConferencePage() {
   // ── How delegates pay (step 8) ───────────────────────────────────────────
 
   /**
-   * The payment columns `insertRow` spreads. An EMPTY object for 'later' and
-   * for a 'link' answer with nothing typed, so the insert writes no payment
-   * column at all and the conference starts exactly as it did before this step
-   * existed. Computed here, not inside handleCreate, so the review row and the
-   * insert can never disagree about what will be stored.
+   * The payment columns `insertRow` spreads. An EMPTY object for 'paid', so
+   * the insert writes no payment column at all and Financials sets it up.
+   * Computed here, not inside handleCreate, so the review row and the insert
+   * can never disagree about what will be stored.
    */
   const paymentColumns = useMemo((): {
     payment_method?: 'manual';
@@ -705,17 +665,10 @@ export default function NewConferencePage() {
     if (payChoice === 'free') {
       return { payment_method: 'manual', external_payment_url: null, external_payment_note: FREE_PAYMENT_NOTE };
     }
-    if (payChoice === 'link') {
-      const { url, note } = paymentLinkValue(payLink);
-      if (!url && !note) return {};
-      return { payment_method: 'manual', external_payment_url: url, external_payment_note: note };
-    }
     return {};
-  }, [payChoice, payLink]);
+  }, [payChoice]);
 
-  /** "Later" is a real answer; a 'link' with an empty field is not. */
-  const paymentAnswered =
-    payChoice === 'free' || payChoice === 'later' || (payChoice === 'link' && !!payLink.trim());
+  const paymentAnswered = payChoice === 'free' || payChoice === 'paid';
 
   // ── Committees (step 6) ──────────────────────────────────────────────────
   function removeCommittee(key: string) {
@@ -1165,16 +1118,10 @@ export default function NewConferencePage() {
     ? committees.map((c) => committeeDisplayName(c.name, c.abbreviation)).join(', ')
     : 'None yet';
 
-  // Reads back what will actually be stored, not what was tapped: a 'link'
-  // answer says which of the two columns the typed value landed in.
   const paymentSummary =
     payChoice === 'free' ? 'Free'
-    : payChoice === 'later' ? 'Set up later'
-    : payChoice === 'link'
-      ? (paymentColumns.external_payment_url ? 'Payment link added'
-        : paymentColumns.external_payment_note ? 'Payment instructions added'
-        : 'Nothing added yet')
-      : 'Not answered';
+    : payChoice === 'paid' ? 'Paid, set up in Financials'
+    : 'Not answered';
 
   // Titles rather than the admin's SHOUTING short codes: this row sits beside
   // "Committees" and "Logo" in a sentence-case list.
@@ -1545,56 +1492,34 @@ export default function NewConferencePage() {
             {step === 8 && (
               <WizardShell
                 step={8} total={TOTAL_STEPS}
-                title="How do delegates pay?"
-                sub="Applications cannot open until this is set up. You can change it later in Financials."
+                title="How Do Delegates Pay?"
+                sub="You can change this later in Financials"
                 onBack={back}
               >
                 <CardSelect
                   options={[
                     { key: 'free', label: "It's free", sub: 'No delegate fee at all', icon: <Gift size={40} strokeWidth={1.7} style={{ color: NEU.forest }} /> },
-                    { key: 'link', label: 'A payment link or instructions', sub: 'Paste a link, or write how to pay', icon: <Link2 size={40} strokeWidth={1.7} style={{ color: NEU.forest }} /> },
-                    { key: 'later', label: "I'll set this up later", sub: 'Applications stay closed until you do', icon: <Clock3 size={40} strokeWidth={1.7} style={{ color: NEU.forest }} /> },
+                    { key: 'paid', label: 'Delegates pay a fee', sub: 'Set up how you get paid in Financials', icon: <Banknote size={40} strokeWidth={1.7} style={{ color: NEU.forest }} /> },
                   ]}
                   value={payChoice || null}
                   onChange={(k) => { setPayChoice(k as PayChoice); setStepError(''); }}
-                  columns={3}
+                  columns={2}
                   size="lg"
-                  // Short headings on big cards: let them wrap, and drop to
-                  // fewer columns on a phone rather than squeezing three.
                   wrapText
                   minColumnWidth={190}
                 />
 
-                {/* The one field the middle answer asks for. A web address goes
-                    to external_payment_url, anything else to
-                    external_payment_note; paymentLinkValue decides. */}
-                {payChoice === 'link' && (
-                  <div style={{ marginTop: 18 }}>
-                    <FieldLabel>Payment link or instructions</FieldLabel>
-                    <textarea
-                      value={payLink}
-                      onChange={(e) => { setPayLink(e.target.value); setStepError(''); }}
-                      placeholder="yourmun.org/pay, or how to pay: bank transfer, cash on arrival, anything"
-                      rows={2}
-                      maxLength={PAYMENT_NOTE_MAX}
-                      style={{ ...bigInputStyle, resize: 'vertical', lineHeight: 1.55, minHeight: 68, fontSize: 14 }}
-                      onFocus={focusForest}
-                      onBlur={blurClear}
-                    />
-                    <p style={{ fontFamily: OUTFIT, fontSize: 12, color: NEU.inkSoft, lineHeight: 1.5, marginTop: 7 }}>
-                      Delegates see this on their payment page
-                    </p>
-                  </div>
+                {/* A calm note, not a warning: payments are set up after the wizard. */}
+                {payChoice === 'paid' && (
+                  <p style={{ fontFamily: OUTFIT, fontSize: 14, color: NEU.inkSoft, lineHeight: 1.55, marginTop: 16 }}>
+                    To set up payments for your conference go to Financials once you finish conference set-up.
+                  </p>
                 )}
 
                 {stepError && <ErrorNote>{stepError}</ErrorNote>}
                 <ContinueButton
                   disabled={!paymentAnswered}
-                  onClick={() => (paymentAnswered
-                    ? advance(8)
-                    : setStepError(payChoice === 'link'
-                      ? 'Add a payment link, or write how delegates pay.'
-                      : 'Pick how delegates pay.'))}
+                  onClick={() => (paymentAnswered ? advance(8) : setStepError('Pick whether delegates pay.'))}
                 />
               </WizardShell>
             )}
