@@ -3677,7 +3677,43 @@ function ConferenceApplyInner() {
             {/* ── Big two-card choice (onboarding wizard parity): Independent vs
                 Delegation. The image cards return here — the same podium /
                 handshake photography the onboarding wizard uses. Invoicing roles
-                are always with a society, so they skip straight to the picker. ── */}
+                are always with a society: they see the same two pictures with
+                Delegation chosen and Independent locked, its explanation (and a
+                way to apply as a delegate) shown on hover, focus or a tap
+                (owner, 12 Oct 2026: the step without pictures "looks ugly"). ── */}
+            {isInvoicingRole && (
+              <TwoTabPick
+                value="society"
+                onChange={(key) => { if (key === 'society') { setIsIndependent(false); setSocietyError(''); } }}
+                options={[
+                  {
+                    key: 'independent',
+                    label: 'Independent',
+                    image: '/onboarding/podium-01.jpg',
+                    sub: 'Applying on your own',
+                    disabled: true,
+                    disabledHint: (
+                      <>
+                        {role === 'faculty-advisor' ? 'Faculty advisors' : 'Head delegates'} lead a delegation. To apply on your own,{' '}
+                        <a
+                          href={`/conferences/${slug}/apply?role=delegate`}
+                          style={{ fontWeight: 700, textDecoration: 'underline', color: NEU.forest }}
+                        >
+                          apply as a delegate instead
+                        </a>
+                      </>
+                    ),
+                  },
+                  {
+                    key: 'society',
+                    label: 'With a delegation',
+                    image: '/onboarding/handshake-01.jpg',
+                    sub: role === 'faculty-advisor' ? 'The society or high school you advise' : 'The society or high school you lead',
+                  },
+                ]}
+              />
+            )}
+            {isInvoicingRole && <div className="mb-6" />}
             {!isInvoicingRole && (
               <TwoTabPick
                 value={isIndependent ? 'independent' : 'society'}

@@ -472,7 +472,9 @@ export function roleIsSetUp(cfg: RoleSetupConfig, appliedCount: number | undefin
   if (cfg.payment_timing && cfg.payment_timing !== 'anytime') return true;
   if (cfg.preference_mode && cfg.preference_mode !== 'none') return true;
   if (cfg.collect_mun_experience) return true;
-  if (Array.isArray(cfg.custom_questions) && cfg.custom_questions.length > 0) return true;
+  // Archived questions (kept only so old answers keep their question) are not
+  // a set-up form: "Remove this role" archives a role's questions.
+  if (Array.isArray(cfg.custom_questions) && cfg.custom_questions.some(b => !(b && typeof b === 'object' && (b as { archived?: boolean }).archived))) return true;
   if ((cfg.submission_message ?? '').trim()) return true;
   return false;
 }
@@ -795,11 +797,19 @@ export function generalAnswer(roles: RoleSetupConfig[], field: GeneralField): { 
 }
 
 /** The roles Settings lists: Head delegates and Delegates always, any other
- *  role once it is set up or added on this browser. */
+ *  role once it is set up or added on this browser. A role removed with
+ *  "Remove this role" (`removedRoles`, kept per browser) is not listed while
+ *  it stays switched off, even when people applied for it or it is one of the
+ *  two default roles; adding it again (or opening it) lists it again. */
 export function listedRoles(
   ordered: RoleSetupConfig[],
   counts: Record<string, number> | null,
   extraRoles: readonly string[],
+  removedRoles: readonly string[] = [],
 ): RoleSetupConfig[] {
-  return ordered.filter(r => ALWAYS_LISTED_ROLES.includes(r.role) || extraRoles.includes(r.role) || roleIsSetUp(r, counts?.[r.role]));
+  return ordered.filter(r => {
+    if (extraRoles.includes(r.role)) return true;
+    if (removedRoles.includes(r.role) && !r.is_enabled) return false;
+    return ALWAYS_LISTED_ROLES.includes(r.role) || roleIsSetUp(r, counts?.[r.role]);
+  });
 }

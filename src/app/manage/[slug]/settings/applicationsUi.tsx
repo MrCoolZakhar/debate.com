@@ -12,7 +12,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  Check, ChevronDown, Info, X, ArrowRight, ArrowLeft, Copy, Sparkles,
+  Check, ChevronDown, Info, X, ArrowRight, ArrowLeft, Sparkles,
 } from 'lucide-react';
 import Portal from '@/components/Portal';
 import { NEU, Emoji3D } from '@/components/neu';
@@ -388,107 +388,6 @@ export function ModalButton({ children, onClick, tone = 'ghost', disabled, icon:
       {Icon && <Icon size={14} strokeWidth={2.4} />}
       {children}
     </button>
-  );
-}
-
-// ── "Also apply this to…" role picker ──────────────────────────────────────
-
-/**
- * Offered after a fee phase is saved, and again whenever another is added: a
- * phase that exists for delegates almost always exists for head delegates and
- * advisors too, and re-typing the same two dates five times is the single most
- * tedious thing about setting a conference up.
- */
-export function CopyToRolesModal(props: {
-  open: boolean;
-  onClose: () => void;
-  onConfirm: (roles: string[]) => void;
-  title: string;
-  sub: string;
-  /** Every role except the one the change was made on. */
-  roles: string[];
-  busy?: boolean;
-}) {
-  // Keyed on `open` so each opening is a fresh mount: reopening the sheet must
-  // never remember last time's ticks, and remounting says that without a
-  // setState-in-effect.
-  return props.open ? <CopyToRolesSheet key="open" {...props} /> : null;
-}
-
-function CopyToRolesSheet({
-  open, onClose, onConfirm, title, sub, roles, busy,
-}: {
-  open: boolean;
-  onClose: () => void;
-  onConfirm: (roles: string[]) => void;
-  title: string;
-  sub: string;
-  /** Every role except the one the change was made on. */
-  roles: string[];
-  busy?: boolean;
-}) {
-  const [picked, setPicked] = useState<Set<string>>(new Set());
-
-  const toggle = (r: string) => setPicked(prev => {
-    const next = new Set(prev);
-    if (next.has(r)) next.delete(r); else next.add(r);
-    return next;
-  });
-
-  return (
-    <SettingsModal
-      open={open}
-      onClose={onClose}
-      title={title}
-      sub={sub}
-      icon="Card index dividers"
-      footer={
-        <>
-          <ModalButton onClick={onClose}>Not now</ModalButton>
-          <ModalButton
-            tone="forest"
-            icon={Copy}
-            disabled={picked.size === 0 || busy}
-            onClick={() => onConfirm([...picked])}
-          >
-            {busy
-              ? 'Copying…'
-              : picked.size === 0
-                ? 'Copy'
-                : `Copy to ${picked.size} ${picked.size === 1 ? 'role' : 'roles'}`}
-          </ModalButton>
-        </>
-      }
-    >
-      <div className="flex flex-col" style={{ gap: 8 }}>
-        {roles.map(r => {
-          const on = picked.has(r);
-          return (
-            <button
-              key={r}
-              type="button"
-              onClick={() => toggle(r)}
-              className="w-full flex items-center text-left focus:outline-none"
-              style={{
-                gap: 12, padding: '11px 14px', borderRadius: 14,
-                backgroundColor: on ? 'rgba(27,56,40,0.07)' : 'transparent',
-                border: on ? '1.5px solid #1B3828' : '1.5px solid #DDD4C0',
-                cursor: 'pointer',
-              }}
-            >
-              <span
-                className="flex items-center justify-center flex-shrink-0"
-                style={{ width: 20, height: 20, borderRadius: 7, backgroundColor: on ? '#1B3828' : 'transparent', border: on ? 'none' : '1.5px solid #CFC6B4' }}
-              >
-                {on && <Check size={13} strokeWidth={3.2} style={{ color: NEU.gold }} />}
-              </span>
-              <Emoji3D name={ROLE_EMOJI[r] ?? 'Bust in silhouette'} size={22} />
-              <span style={{ fontFamily: OUTFIT, fontSize: TYPE_PX.body, fontWeight: 700, color: NEU.ink }}>{roleLabel(r)}</span>
-            </button>
-          );
-        })}
-      </div>
-    </SettingsModal>
   );
 }
 

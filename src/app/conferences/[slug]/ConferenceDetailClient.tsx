@@ -63,6 +63,7 @@ import { reportCrash } from '@/lib/reportCrash';
 const LOAD_WATCHDOG_MS = 12_000;
 import { useServerNow } from '@/lib/applicationWindow';
 import { RoleApplyCards, type RoleTile } from './RoleApplyCards';
+import { useFitSticky } from './useFitSticky';
 import { ContactOrganisers } from './ContactOrganisers';
 
 const GRAIN = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='grain'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23grain)' opacity='1'/%3E%3C/svg%3E")`;
@@ -984,6 +985,10 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
   const [expandedRoster, setExpandedRoster] = useState<string | null>(null);
   // The committee roster modal is a modal — freeze the conference page behind it.
   useScrollLock(!!expandedRoster);
+  // The right rail sticks below the nav pill only while it fits the window;
+  // taller, it sticks by its bottom edge instead (useFitSticky).
+  const railRef = useRef<HTMLDivElement>(null);
+  useFitSticky(railRef, !loading && !authLoading);
   const [pricingOpen, setPricingOpen] = useState(false);
   // Committee carousel + sorting (click: asc -> desc -> reset)
   const carouselRef = useRef<HTMLDivElement>(null);
@@ -2600,7 +2605,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                 dashboard into a 280px column. Overview keeps it, and from xl
                 (where the dashboard has its sub-nav) it is unchanged. */}
             <div className={`${activeTab === 'participant' && myApp && !isOrganizerViewer && !authLoading && !participantDataLoading ? 'hidden xl:block ' : ''}w-full md:w-[340px] md:flex-shrink-0 order-first md:order-none`}>
-              <div className="flex flex-col gap-4 md:sticky md:top-3 lg:top-[84px]">
+              <div ref={railRef} className="flex flex-col gap-4 md:sticky md:top-3 lg:top-[84px]">
 
                 {/* Apply CTA, always first */}
                 <div
@@ -3205,7 +3210,8 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                             // start-alignment (no clipping, scroll still reaches the first card)
                             // when it overflows — the effect then scrolls to the middle.
                             justifyContent: 'safe center',
-                            scrollSnapType: 'x mandatory',
+                            scrollSnapType: 'x proximity',
+                            overscrollBehaviorX: 'contain',
                             scrollbarWidth: 'none',
                             msOverflowStyle: 'none',
                             padding: '4px 4px 12px 4px',

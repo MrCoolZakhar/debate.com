@@ -21,15 +21,22 @@
  *                    by side, each right beside its words. "Let turned-down
  *                    people try again", "Hide their dashboard until they pay"
  *                    and the "Most you will accept" pointer were removed on
- *                    12 Oct 2026 (the per-role cap stays in the role pop-up).
+ *                    12 Oct 2026, and the per-role cap left the role pop-up
+ *                    the same day.
  *   What They Rank   preference_mode for delegates and head delegates, a
  *                    vertical list: each choice a row with a preview of what
  *                    the applicant will see, its name and one line.
  *
  * When the roles disagree, the control says so ("Different per role", a gold
  * edge and a switch with its thumb in the middle) and one press uses one
- * answer for every role. A role can still differ: its pop-up keeps these
- * fields under "Different rules for this role".
+ * answer for every role. These are the only place the rules are set: the
+ * role pop-up no longer has per-role overrides (owner, 12 Oct 2026: "remove
+ * all of this from the individual apps"). A role whose stored value already
+ * differs still reads "Different per role" here until one answer is pressed.
+ *
+ * A role leaves the list through "Remove this role" in its pop-up
+ * (`removedRoles`, see panelKit.listedRoles) and comes back through Add a
+ * role.
  *
  * Presentation only. Every write is the settings page's own handler.
  */
@@ -265,7 +272,7 @@ function RankPreview({ value }: { value: string }) {
 // ── The section ──────────────────────────────────────────────────────────────
 
 export function ApplicationsSection({
-  conference: c, roles, counts, now, extraRoles,
+  conference: c, roles, counts, now, extraRoles, removedRoles = [],
   onRoleToggle, onEditRole, onAddRole, onSaveAll,
 }: {
   conference: Conference;
@@ -275,6 +282,8 @@ export function ApplicationsSection({
   now: number;
   /** Roles the organiser added on this browser (or has open right now). */
   extraRoles: readonly string[];
+  /** Roles removed with "Remove this role" on this browser. */
+  removedRoles?: readonly string[];
   onRoleToggle: (role: string, next: boolean) => void;
   onEditRole: (role: string, step?: string) => void;
   onAddRole: (role: string, copyFrom: string | null) => void;
@@ -283,7 +292,7 @@ export function ApplicationsSection({
 }) {
   const gate = paymentGateBlocks(c);
   const ordered = ROLE_ORDER.map(r => roles.find(x => x.role === r)).filter((x): x is RoleSetupConfig => !!x);
-  const listed = listedRoles(ordered, counts, extraRoles);
+  const listed = listedRoles(ordered, counts, extraRoles, removedRoles);
   const hidden = ordered.filter(r => !listed.includes(r));
   const totalApplied = counts ? Object.values(counts).reduce((a, b) => a + b, 0) : null;
 

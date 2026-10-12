@@ -12,8 +12,8 @@
  *                  supports multiple + searchable
  */
 
-import { useMemo, useRef, useState } from 'react';
-import { ArrowLeft, Check, Search } from 'lucide-react';
+import { useId, useMemo, useRef, useState } from 'react';
+import { ArrowLeft, Check, Lock, Search } from 'lucide-react';
 import { NEU, OUTFIT, EASE } from '@/components/neu';
 
 // ── Shared types ───────────────────────────────────────────────────────────
@@ -27,6 +27,13 @@ export interface WizardOption {
   image?: string;
   /** Muted secondary line under the label. */
   sub?: string;
+  /**
+   * TwoTabPick only: the option is shown but cannot be chosen. It is drawn
+   * greyed out, skipped by the arrow keys, and `disabledHint` (which may hold
+   * a link) is revealed over its picture on hover, keyboard focus or a tap.
+   */
+  disabled?: boolean;
+  disabledHint?: React.ReactNode;
 }
 
 // ── WizardShell ────────────────────────────────────────────────────────────
@@ -346,6 +353,9 @@ function GoldCheck({ visible }: { visible: boolean }) {
       style={{
         top: 10,
         right: 10,
+        // Over the card's picture: the picture's CSS filter makes it its own
+        // stacking layer, which painted it over this check (12 Oct 2026).
+        zIndex: 2,
         width: 24,
         height: 24,
         borderRadius: 999,
@@ -435,7 +445,7 @@ const TWO_TAB_CSS = `
 .gv-twotab[data-n="3"]{gap:18px}
 @media (max-width:559px){
   .gv-twotab{grid-template-columns:1fr;gap:14px}
-  .gv-twotab>button{min-height:0!important}
+  .gv-twotab>*{min-height:0!important}
   .gv-twotab .gv-twotab-art{height:150px!important;margin-bottom:18px!important}
   .gv-twotab .gv-twotab-glyph{font-size:64px!important;height:84px!important;margin-bottom:14px!important}
 }
@@ -455,16 +465,35 @@ export function TwoTabPick({
   const [pressKey, setPressKey] = useState<string | null>(null);
   const refs = useRef<(HTMLButtonElement | null)[]>([]);
 
+  const hintBase = useId();
+  // A disabled option's explanation, pinned open by a tap (touch has no hover).
+  const [tapKey, setTapKey] = useState<string | null>(null);
+  const [focusKey, setFocusKey] = useState<string | null>(null);
+
+  // Arrow keys move between the options that can be chosen; a disabled one is
+  // still reachable with Tab, so its explanation can be read.
+  function step(idx: number, dir: 1 | -1) {
+    for (let n = 1; n <= options.length; n++) {
+      const j = (idx + dir * n + options.length * n) % options.length;
+      if (!options[j].disabled) return j;
+    }
+    return idx;
+  }
+
   function onKeyDown(e: React.KeyboardEvent, idx: number) {
     if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
       e.preventDefault();
-      refs.current[(idx + 1) % options.length]?.focus();
+      refs.current[step(idx, 1)]?.focus();
     } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
       e.preventDefault();
-      refs.current[(idx - 1 + options.length) % options.length]?.focus();
+      refs.current[step(idx, -1)]?.focus();
     } else if (e.key === 'Enter' || e.key === ' ') {
+      if (e.target !== e.currentTarget) return; // a link inside a hint
       e.preventDefault();
-      onChange(options[idx].key);
+      if (options[idx].disabled) setTapKey(k => (k === options[idx].key ? null : options[idx].key));
+      else onChange(options[idx].key);
+    } else if (e.key === 'Escape' && tapKey) {
+      setTapKey(null);
     }
   }
 
@@ -472,6 +501,114 @@ export function TwoTabPick({
     <div role="radiogroup" className="gv-twotab" data-n={options.length} style={{ ['--gv-twotab-n' as string]: options.length } as React.CSSProperties}>
       <style>{TWO_TAB_CSS}</style>
       {options.map((opt, idx) => {
+        if (opt.disabled) {
+          const hintId = `${hintBase}-${opt.key}`;
+          const open = hoverKey === opt.key || focusKey === opt.key || tapKey === opt.key;
+          return (
+            <div
+              key={opt.key}
+              ref={(el) => { refs.current[idx] = el as unknown as HTMLButtonElement; }}
+              role="radio"
+              aria-checked={false}
+              aria-disabled="true"
+              aria-describedby={opt.disabledHint ? hintId : undefined}
+              tabIndex={0}
+              onKeyDown={(e) => onKeyDown(e, idx)}
+              onMouseEnter={() => setHoverKey(opt.key)}
+              onMouseLeave={() => setHoverKey(null)}
+              onFocus={() => setFocusKey(opt.key)}
+              onBlur={(e) => {
+                const next = e.relatedTarget as Node | null;
+                if (next && e.currentTarget.contains(next)) return;
+                setFocusKey(null);
+              }}
+              onClick={(e) => {
+                if ((e.target as HTMLElement).closest('a')) return;
+                setTapKey(k => (k === opt.key ? null : opt.key));
+              }}
+              className="flex flex-col items-center justify-start focus-visible:ring-2"
+              style={{
+                ...cardBaseStyle(false, false),
+                cursor: 'not-allowed',
+                backgroundColor: NEU.base,
+                boxShadow: 'inset 0 0 0 1px color-mix(in srgb, var(--gv-main) 8%, transparent)',
+                border: '2px dashed color-mix(in srgb, var(--gv-main) 16%, transparent)',
+                minHeight: 400,
+                padding: opt.image ? '0 0 34px' : '56px 26px 44px',
+                overflow: 'hidden',
+              }}
+            >
+              <span
+                aria-hidden
+                className="absolute flex items-center justify-center"
+                style={{
+                  top: 10, right: 10, width: 26, height: 26, borderRadius: 999, zIndex: 2,
+                  background: 'rgba(255,255,255,0.85)',
+                  boxShadow: '0 2px 7px color-mix(in srgb, var(--gv-main) 18%, transparent)',
+                }}
+              >
+                <Lock size={13} strokeWidth={2.6} style={{ color: NEU.inkSoft }} />
+              </span>
+
+              {opt.image ? (
+                <span
+                  className="gv-twotab-art"
+                  style={{ position: 'relative', display: 'block', width: '100%', height: 248, marginBottom: 26 }}
+                >
+                  <span
+                    aria-hidden
+                    style={{
+                      position: 'absolute', inset: 0,
+                      backgroundImage: `url(${opt.image})`,
+                      backgroundSize: 'cover',
+                      backgroundPosition: 'center',
+                      filter: 'grayscale(1)',
+                      opacity: 0.45,
+                    }}
+                  />
+                  {opt.disabledHint && (
+                    <span
+                      id={hintId}
+                      className="flex items-center justify-center"
+                      style={{
+                        position: 'absolute', inset: 0, padding: '18px 20px',
+                        background: 'rgba(255,255,255,0.72)',
+                        backdropFilter: 'blur(10px)',
+                        WebkitBackdropFilter: 'blur(10px)',
+                        opacity: open ? 1 : 0,
+                        transition: `opacity 200ms ${EASE}`,
+                        pointerEvents: open ? 'auto' : 'none',
+                        cursor: 'default',
+                        fontFamily: OUTFIT,
+                        fontSize: 15,
+                        fontWeight: 500,
+                        lineHeight: 1.5,
+                        color: NEU.ink,
+                        textAlign: 'center',
+                      }}
+                    >
+                      <span>{opt.disabledHint}</span>
+                    </span>
+                  )}
+                </span>
+              ) : null}
+
+              <span style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 25, color: NEU.inkSoft, opacity: 0.7, padding: '0 14px', maxWidth: '100%', overflowWrap: 'anywhere' }}>
+                {opt.label}
+              </span>
+              {opt.sub && (
+                <span style={{ fontFamily: OUTFIT, fontSize: 15, fontWeight: 500, color: NEU.inkSoft, opacity: 0.7, marginTop: 9, padding: '0 20px', lineHeight: 1.5 }}>
+                  {opt.sub}
+                </span>
+              )}
+              {!opt.image && opt.disabledHint && (
+                <span id={hintId} style={{ fontFamily: OUTFIT, fontSize: 14, fontWeight: 500, color: NEU.ink, marginTop: 14, padding: '0 20px', lineHeight: 1.5, opacity: open ? 1 : 0, transition: `opacity 200ms ${EASE}` }}>
+                  {opt.disabledHint}
+                </span>
+              )}
+            </div>
+          );
+        }
         const selected = value === opt.key;
         const hovered = hoverKey === opt.key;
         const pressed = pressKey === opt.key;

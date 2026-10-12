@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
-  Building2, X, Lock, Copy, Check,
+  Building2, X, Lock, Copy, Check, Pencil,
   Plus, Crown, Mail as MailIcon, ChevronDown, Info, ArrowLeft,
   Settings2, Globe, Eye, EyeOff, ArrowUp, ArrowDown, Trash2, Briefcase,
   CreditCard, Star, CheckCircle2, Clock, Users2,
@@ -34,10 +34,7 @@ import {
 import { type FeePhase } from '@/lib/finance';
 import { normalizeSocialUrl } from '@/lib/socialLinks';
 import { acronymProblem, conferenceAcronymLabel } from '@/lib/conferenceLabels';
-import {
-  ROLE_ORDER, InfoHint,
-  CopyToRolesModal,
-} from './applicationsUi';
+import { ROLE_ORDER, InfoHint } from './applicationsUi';
 // Awards (11 Oct 2026): blank slate, one question, then presets in categories
 // and custom awards. Everything lives in ./awardsUi.
 import { AwardsSettings } from './awardsUi';
@@ -54,13 +51,16 @@ import { useNow } from '@/lib/useNow';
 import { ConferencePreview, type SettingsSnapshot } from './settingsHome';
 import { ApplicationsSection } from './controlPanel';
 import { RoleSheet } from './roleSetup';
+import { CopyFromMenu, rolePossessive, type CopySource } from './roleCopy';
+import { PartnerEditPanel, type PartnerEditPatch } from './partnerEdit';
 import { GENERAL_CSS, IdentityBanner, IdentityLogo, IdField, PlainField, NameField, IconInput } from './generalUi';
 import { PlatformLogo } from '@/components/conferences/ApplicationSourceMark';
 import { SettingsShell, type ShellSection } from './settingsShell';
 import { CountryPicker } from './countryPicker';
 import {
   SectionHead, Group, Row, SwitchRow, SwitchGrid, BigCount, Switch as KitSwitch, TINT_GOLD_BG, TINT_GREEN_BG, EmojiDisc, TYPE,
-  listedRoles, generalAnswer, inGeneralScope, GENERAL_FIELDS, type RoleSetupConfig, TYPE_PX
+  listedRoles, generalAnswer, inGeneralScope, GENERAL_FIELDS, type RoleSetupConfig, TYPE_PX,
+  rolePlural, roleHasPrice, roleIsFree, rolePriceText, shortDate,
 } from './panelKit';
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -207,10 +207,6 @@ const BANNER_PRESETS = [
   '/banners/preset-5.jpg',
 ];
 
-function roleLabel(role: string): string {
-  return role.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-}
-
 
 /** Fixed-viewport placement for a portaled floating layer. Clamps horizontally
  *  so it never runs off the right edge, and flips above the trigger when there
@@ -305,88 +301,6 @@ function PartnerDisc({ logoUrl, acronym, size = 40 }: {
   size?: number;
 }) {
   return <LogoDisc src={logoUrl} alt={acronym} size={size} fallbackText={acronym?.[0] ?? '?'} />;
-}
-
-/** "Copy form to another role…" trigger + portaled role picker. The row card
- *  above doesn't clip (no overflow:hidden here), but this still portals at
- *  fixed viewport coordinates to match the rest of the app's popover rule. */
-function CopyFormMenu({ roles, onPick }: { roles: string[]; onPick: (role: string) => void }) {
-  const [open, setOpen] = useState(false);
-  const btnRef = useRef<HTMLButtonElement | null>(null);
-  const menuRef = useRef<HTMLDivElement | null>(null);
-  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
-
-  const MENU_W = 200;
-
-  const place = useCallback(() => {
-    const b = btnRef.current;
-    if (!b) return;
-    const r = b.getBoundingClientRect();
-    const left = Math.min(Math.max(8, r.left), window.innerWidth - MENU_W - 8);
-    setPos({ top: r.bottom + 6, left });
-  }, []);
-
-  useEffect(() => {
-    if (!open) return;
-    place();
-    const onDoc = (e: MouseEvent) => {
-      const t = e.target as Node;
-      if (btnRef.current?.contains(t) || menuRef.current?.contains(t)) return;
-      setOpen(false);
-    };
-    const onScroll = () => setOpen(false);
-    document.addEventListener('mousedown', onDoc);
-    window.addEventListener('resize', place);
-    window.addEventListener('scroll', onScroll, true);
-    return () => {
-      document.removeEventListener('mousedown', onDoc);
-      window.removeEventListener('resize', place);
-      window.removeEventListener('scroll', onScroll, true);
-    };
-  }, [open, place]);
-
-  if (roles.length === 0) return null;
-
-  return (
-    <div style={{ display: 'inline-block' }}>
-      <button
-        ref={btnRef}
-        onClick={() => setOpen(o => !o)}
-        className="flex items-center gap-1.5 text-xs font-semibold focus:outline-none hover:underline"
-        style={{ color: '#1B3828', fontFamily: "var(--font-brand), sans-serif" }}
-      >
-        <Copy size={13} /> Copy form to another role…
-      </button>
-      {open && pos && (
-        <Portal>
-          <div
-            ref={menuRef}
-            style={{
-              position: 'fixed', top: pos.top, left: pos.left, zIndex: 9999, width: MENU_W,
-              backgroundColor: '#FAF8F3', borderRadius: 14, border: '1px solid #DDD4C0',
-              boxShadow: '0 12px 32px rgba(27,56,40,0.18)', padding: 6,
-            }}
-          >
-            <p className="px-2.5 pt-1 pb-1.5 text-[12px] font-bold" style={{ color: '#6E6152', fontFamily: "var(--font-brand), sans-serif", letterSpacing: '0.1em' }}>
-              COPY TO
-            </p>
-            {roles.map(role => (
-              <button
-                key={role}
-                onClick={() => { setOpen(false); onPick(role); }}
-                className="w-full text-left px-2.5 py-2 rounded-lg text-sm focus:outline-none transition-colors"
-                style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif", background: 'transparent' }}
-                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.06)'; }}
-                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
-              >
-                {roleLabel(role)}
-              </button>
-            ))}
-          </div>
-        </Portal>
-      )}
-    </div>
-  );
 }
 
 /** Subtle status line for an autosaving section, replaces a manual save button. */
@@ -499,6 +413,12 @@ export default function SettingsPage() {
   // once a role is switched on, edited or applied to, panelKit.roleIsSetUp
   // lists it for everyone anyway.
   const [addedRoles, setAddedRoles] = useState<string[]>([]);
+  // Roles taken off the list with "Remove this role", per browser like
+  // addedRoles (there is no column for it; see removeRole below).
+  const [removedRoles, setRemovedRoles] = useState<string[]>([]);
+  /** Bumps when the questions are replaced from outside the builder (Copy
+   *  from another role), so QuestionBuilder remounts on the stored form. */
+  const [formVersion, setFormVersion] = useState(0);
   const [linkCopied, setLinkCopied] = useState(false);
   const [confLinkCopied, setConfLinkCopied] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
@@ -551,14 +471,10 @@ export default function SettingsPage() {
   const [maxAge, setMaxAge] = useState('');
   const [minAgeSaved, setMinAgeSaved] = useState(false);
   const [minAgeError, setMinAgeError] = useState('');
-  // Writing one of the "same for everybody" settings across all five roles.
-  // "Set the same phase up for another role?" — offered once per role per
-  // visit, the moment a phase first becomes usable, and always available from
-  // the button beside + ADD PHASE. Re-typing the same two dates five times is
-  // the single most tedious part of setting a conference up.
-  const [copyPhasesOpen, setCopyPhasesOpen] = useState(false);
+  // "Copy from another role" for prices (roleCopy.tsx). Copying only ever
+  // runs INTO the role being edited, after a confirmation; the old
+  // "copy to other roles" offer could put an empty price over a set-up role.
   const [copyPhasesBusy, setCopyPhasesBusy] = useState(false);
-  const phaseOfferedFor = useRef<Set<string>>(new Set());
 
   // Delegation allocation swaps (Applications tab)
   const [swapMode, setSwapMode] = useState('request');
@@ -753,9 +669,8 @@ export default function SettingsPage() {
   const [partnerQuery, setPartnerQuery] = useState('');
   const [partnerResults, setPartnerResults] = useState<PartnerConf[]>([]);
   const [partnerBusy, setPartnerBusy] = useState<string | null>(null);
-  // Keyed by partner link id: true while that row's website field shows the
-  // "must start with https://" note, cleared the moment they edit it again.
-  const [partnerUrlWarnings, setPartnerUrlWarnings] = useState<Record<string, boolean>>({});
+  // The partner row open in its edit panel (partnerEdit.tsx), if any.
+  const [editingPartnerId, setEditingPartnerId] = useState<string | null>(null);
   // Which kind of partner is being added. null = neither picked yet, so the
   // card shows the two-way chooser instead of either form. The conference
   // flow is unchanged behind 'conference'.
@@ -1193,10 +1108,11 @@ export default function SettingsPage() {
     }
   }
 
-  async function saveRoleConfig(role: string, updates: Partial<RoleConfig>, localOnly: Partial<RoleConfig> = {}) {
+  /** Resolves true only when the row was really written (rows counted). */
+  async function saveRoleConfig(role: string, updates: Partial<RoleConfig>, localOnly: Partial<RoleConfig> = {}): Promise<boolean> {
     const step = stepForUpdates(updates as Record<string, unknown>);
-    if (!conference) return;
-    if (!session) return;
+    if (!conference) return false;
+    if (!session) return false;
 
     // Optimistic: patch local state immediately so the control reflects the
     // click at once, independent of any other save's in-flight DB round trip.
@@ -1210,7 +1126,7 @@ export default function SettingsPage() {
       setRoleConfigs(previous);
       notifyErr('Your session has expired, please refresh and sign in again.', 'settings-applications');
       markStep(step, 'idle');
-      return;
+      return false;
     }
 
     const { data, error } = await supabase
@@ -1226,6 +1142,7 @@ export default function SettingsPage() {
       setRoleConfigs(previous);
       notifyErr(error ? friendlyError(error, "Couldn't save this role. Please try again.") : "Couldn't save, that role config wasn't found.", 'settings-applications');
       markStep(step, 'idle');
+      return false;
     } else {
       // The timeline trigger may have moved a date (enforce_role_config_timeline):
       // show what the database stored, never our own guess.
@@ -1234,6 +1151,7 @@ export default function SettingsPage() {
         ? { ...rc, applications_open_at: row.applications_open_at, applications_close_at: row.applications_close_at, fee_phases: row.fee_phases }
         : rc)));
       markStep(step, 'saved');
+      return true;
     }
   }
 
@@ -1298,19 +1216,12 @@ export default function SettingsPage() {
     // previous price's end), so prices stay back to back.
     if (patch.end_date !== undefined) next = linkNeighbourPhase(next, idx, 'end_date');
     if (patch.start_date !== undefined) next = linkNeighbourPhase(next, idx, 'start_date');
-    if (!saveTimeline(role, { fee_phases: next }, 'phases')) return;
-    // The moment this role has at least one phase with both ends of its window
-    // filled in, offer to give the other roles the same one. Once per role per
-    // visit — a suggestion, never a nag.
-    const usable = next.some(p => p.start_date && p.end_date);
-    if (usable && !phaseOfferedFor.current.has(role) && ROLES.length > 1) {
-      phaseOfferedFor.current.add(role);
-      setCopyPhasesOpen(true);
-    }
+    saveTimeline(role, { fee_phases: next }, 'phases');
   }
 
-  /** Copy this role's whole fee-phase ladder (and its flat fee, which the
-   *  phases fall back to) onto the chosen roles. */
+  /** Copy a role's whole fee-phase ladder (and its flat fee, which the
+   *  phases fall back to) onto the given roles: "Copy from another role"
+   *  (always into the role being edited) and Add a role's "Copy from". */
   async function copyPhasesToRoles(targets: string[], sourceRole: string = activeRole) {
     const source = roleConfigs.find(rc => rc.role === sourceRole);
     if (!conference || !source || copyPhasesBusy) return;
@@ -1349,9 +1260,8 @@ export default function SettingsPage() {
       const r = stored.get(rc.role);
       return r ? { ...rc, applications_open_at: r.applications_open_at, applications_close_at: r.applications_close_at, fee_phases: r.fee_phases } : rc;
     }));
-    setCopyPhasesOpen(false);
     setConfigVersion(v => v + 1);
-    notifyOk(`Copied to ${targets.length} ${targets.length === 1 ? 'role' : 'roles'}`, 'settings-copy');
+    notifyOk(`Copied ${rolePossessive(sourceRole)} prices`, 'settings-copy');
   }
 
   /** The rules for every role (Settings → Applications, panelKit
@@ -1390,7 +1300,7 @@ export default function SettingsPage() {
   /** The roles the Applications page lists (panelKit.listedRoles). */
   function listedRoleConfigs(extra: readonly string[] = addedRoles): RoleConfig[] {
     const ordered = ROLES.map(r => roleConfigs.find(rc => rc.role === r)).filter((x): x is RoleConfig => !!x);
-    return listedRoles(ordered, roleAppCounts, extra) as RoleConfig[];
+    return listedRoles(ordered, roleAppCounts, extra, removedRoles) as RoleConfig[];
   }
 
   // Toggle that writes immediately (no dedicated save button): shows an
@@ -1921,29 +1831,87 @@ export default function SettingsPage() {
    *  raw filename is not a legal Storage key: macOS screenshots carry a
    *  U+202F narrow no-break space and any non-ASCII name (Ödeme, reçu) is
    *  refused outright — see src/lib/storageKey.ts. */
-  async function handleCompanyLogoUpload(file: File) {
-    if (!session || !conference || companyLogoUploading) return;
-    if (file.size > 5 * 1024 * 1024) { notifyErr('Logo must be under 5MB.', 'settings-partners'); return; }
-    setCompanyLogoUploading(true);
+  async function uploadPartnerLogo(file: File): Promise<string | null> {
+    if (!session || !conference) return null;
+    if (file.size > 5 * 1024 * 1024) { notifyErr('Logo must be under 5MB.', 'settings-partners'); return null; }
     clearErr('settings-partners');
     const supabase = await getFreshAuthedClient();
     if (!supabase) {
-      setCompanyLogoUploading(false);
       notifyErr('Your session has expired, please refresh and sign in again.', 'settings-partners');
-      return;
+      return null;
     }
     const path = safeStorageKey(`partner-logos/${conference.id}`, crypto.randomUUID(), file.name);
     const { error } = await supabase.storage
       .from('conference-assets')
       .upload(path, file, { contentType: file.type, upsert: true });
     if (error) {
-      setCompanyLogoUploading(false);
       notifyErr(friendlyError(error, "Couldn't upload the logo. Please try a different image."), 'settings-partners');
-      return;
+      return null;
     }
-    const { data: urlData } = supabase.storage.from('conference-assets').getPublicUrl(path);
-    setCompanyLogoUrl(urlData.publicUrl);
+    return supabase.storage.from('conference-assets').getPublicUrl(path).data.publicUrl;
+  }
+
+  async function handleCompanyLogoUpload(file: File) {
+    if (companyLogoUploading) return;
+    setCompanyLogoUploading(true);
+    const url = await uploadPartnerLogo(file);
+    if (url) setCompanyLogoUrl(url);
     setCompanyLogoUploading(false);
+  }
+
+  /** Public conferences for the edit panel's search (the add flow's query),
+   *  without this conference and anything already linked. */
+  const searchPartnerConferences = useCallback(async (q: string): Promise<PartnerConf[]> => {
+    if (!conference) return [];
+    const supabase = await getFreshAuthedClient();
+    if (!supabase) return [];
+    const safe = q.replace(/[%,()]/g, ' ').trim();
+    if (safe.length < 2) return [];
+    const { data } = await supabase
+      .from('conferences')
+      .select('id, slug, full_name, acronym, logo_url, city, country, start_date')
+      .eq('is_public', true)
+      .neq('id', conference.id)
+      .or(`acronym.ilike.%${safe}%,full_name.ilike.%${safe}%`)
+      .limit(8);
+    const linkedIds = new Set(partners.map(p => p.partner_conference_id).filter(Boolean));
+    return ((data as PartnerConf[] | null) ?? []).filter(c => !linkedIds.has(c.id));
+  }, [conference, partners]);
+
+  /** Edit a partner (partnerEdit.tsx): the whole shape in ONE update, so
+   *  `conference_partners_one_shape` never sees half of each kind; rows
+   *  counted; `approved` read back, because guard_partner_approval re-arms it
+   *  when the linked conference changes. */
+  async function handleEditPartner(link: PartnerLink, patch: PartnerEditPatch): Promise<boolean> {
+    if (link.id.startsWith('temp-')) return false;
+    clearErr('settings-partners');
+    const supabase = await getFreshAuthedClient();
+    if (!supabase) {
+      notifyErr('Your session has expired, please refresh and sign in again.', 'settings-partners');
+      return false;
+    }
+    const update = patch.kind === 'conference'
+      ? { partner_conference_id: patch.conf.id, company_name: null, company_logo_url: null, company_description: null, company_url: null, featured: false }
+      : { partner_conference_id: null, company_name: patch.name, company_logo_url: patch.logoUrl, company_description: patch.description, company_url: patch.url };
+    const { data, error } = await supabase
+      .from('conference_partners')
+      .update(update)
+      .eq('id', link.id)
+      .select('id, approved');
+    if (error || !data || data.length !== 1) {
+      notifyErr(error ? friendlyError(error, "Couldn't save this partner. Please try again.") : saveFailMessage(error), 'settings-partners');
+      return false;
+    }
+    const approved = (data[0] as { approved: boolean }).approved;
+    setPartners(prev => prev.map(p => (p.id !== link.id ? p : {
+      ...p,
+      ...update,
+      approved,
+      featured: patch.kind === 'conference' ? false : p.featured,
+      conf: patch.kind === 'conference' ? patch.conf : null,
+    })));
+    notifyOk('Partner saved', 'settings-partners-ok');
+    return true;
   }
 
   function resetCompanyDraft() {
@@ -2107,34 +2075,6 @@ export default function SettingsPage() {
     })();
   }
 
-  // Saves on blur, only when the field is empty or starts with https://. The
-  // http:// case gets a friendly note instead of a failed save; the database
-  // CHECK constraint would reject anything else on its own.
-  function handleCompanyUrlBlur(link: PartnerLink) {
-    const raw = (link.company_url ?? '').trim();
-    if (raw.startsWith('http://')) {
-      setPartnerUrlWarnings(prev => ({ ...prev, [link.id]: true }));
-      return;
-    }
-    setPartnerUrlWarnings(prev => ({ ...prev, [link.id]: false }));
-    const value = raw === '' ? null : raw;
-    void (async () => {
-      const supabase = await getFreshAuthedClient();
-      if (!supabase) {
-        notifyErr('Your session has expired, please refresh and sign in again.', 'settings-partners');
-        return;
-      }
-      const { data, error } = await supabase
-        .from('conference_partners')
-        .update({ company_url: value })
-        .eq('id', link.id)
-        .select('id');
-      if (error || !data || data.length !== 1) {
-        notifyErr(saveFailMessage(error), 'settings-partners');
-      }
-    })();
-  }
-
   function handlePartnerClaimDecision(linkId: string, approve: boolean) {
     if (partnerBusy === linkId) return;
     const previousIncoming = incomingPartnerClaims;
@@ -2171,7 +2111,6 @@ export default function SettingsPage() {
   const selectedConfig = roleConfigs.find(rc => rc.role === selectedRole);
   const currentBlocks: FormBlock[] = normalizeBlocks(selectedConfig?.custom_questions ?? []);
   const selectedRoleHasApplications = rolesWithApplications.has(selectedRole);
-  const otherRoles = ROLES.filter(r => r !== selectedRole);
 
   const activeRoleConfig = roleConfigs.find(rc => rc.role === activeRole);
 
@@ -2431,23 +2370,88 @@ export default function SettingsPage() {
     return { ...block, id: crypto.randomUUID() };
   }
 
-  async function handleCopyFormTo(targetRole: string, sourceRole: string = selectedRole) {
-    const targetBlocks = normalizeBlocks(roleConfigs.find(rc => rc.role === targetRole)?.custom_questions ?? []);
-    if (targetBlocks.length > 0) {
-      const { confirmed } = await confirm({
-        title: `Overwrite ${roleLabel(targetRole)}'s questions?`,
-        body: `${roleLabel(targetRole)} already has custom questions. Copying will replace them with a copy of ${roleLabel(sourceRole)}'s form.`,
-        confirmLabel: 'Overwrite',
-        danger: true,
-      });
-      if (!confirmed) return;
+  /** Put a copy of another role's questions on a role. The target's own
+   *  questions are not destroyed: they are kept ARCHIVED after the copies (the
+   *  builder never shows them), so any answer already given still has its
+   *  question. Written through the questions' own serial chain
+   *  (persistBlocks), so a debounced edit still waiting for this role can
+   *  never land after the copy and undo it. */
+  function copyQuestionsInto(targetRole: string, sourceRole: string) {
+    const source = normalizeBlocks(roleConfigs.find(rc => rc.role === sourceRole)?.custom_questions ?? [])
+      .filter(b => !(b.kind === 'question' && b.archived));
+    const kept = normalizeBlocks(roleConfigs.find(rc => rc.role === targetRole)?.custom_questions ?? [])
+      .filter((b): b is Extract<FormBlock, { kind: 'question' }> => b.kind === 'question')
+      .map(b => ({ ...b, archived: true }));
+    const next: FormBlock[] = [...source.map(cloneBlockWithNewId), ...kept];
+    if (targetRole === selectedRole && blocksTimerRef.current) {
+      clearTimeout(blocksTimerRef.current);
+      blocksTimerRef.current = null;
     }
-    const sourceBlocks = sourceRole === selectedRole
-      ? currentBlocks
-      : normalizeBlocks(roleConfigs.find(rc => rc.role === sourceRole)?.custom_questions ?? []);
-    const copiedBlocks = sourceBlocks.map(cloneBlockWithNewId);
-    await saveRoleConfig(targetRole, { custom_questions: copiedBlocks });
-    notifyOk(`Copied to ${roleLabel(targetRole)}`, 'settings-copy');
+    setBlocksBlocked('');
+    setRoleConfigs(prev => prev.map(rc => (rc.role === targetRole ? { ...rc, custom_questions: next } : rc)));
+    blocksPendingRef.current.set(targetRole, next);
+    markStep(3, 'saving');
+    persistBlocks(targetRole);
+    setFormVersion(v => v + 1);
+  }
+
+  /** "Copy from another role" on the role pop-up: always INTO the role being
+   *  edited, only from a role that has that thing set up (copySources), and
+   *  only after the organiser confirms what will be replaced. */
+  async function handleCopyFrom(what: 'price' | 'questions' | 'window', sourceRole: string) {
+    const target = sheetRole;
+    if (!target || target === sourceRole) return;
+    const targetCfg = roleConfigs.find(rc => rc.role === target);
+    const sourceCfg = roleConfigs.find(rc => rc.role === sourceRole);
+    if (!targetCfg || !sourceCfg) return;
+    const noun = what === 'price' ? 'prices' : what === 'questions' ? 'questions' : 'dates';
+    const body = what === 'price'
+      ? `${rolePlural(target)} get the same price${(sourceCfg.fee_phases ?? []).length > 0 ? ', prices by date' : ''} and currency. Their dates follow the copied prices.`
+      : what === 'questions'
+        ? `Your ${rolePlural(target).toLowerCase()} form gets a copy of every question. Answers already given to this role's questions are kept.`
+        : `${rolePlural(target)} open and close at the same times.`;
+    const { confirmed } = await confirm({
+      title: `Replace this role's ${noun} with ${rolePossessive(sourceRole)} ${noun}?`,
+      body,
+      confirmLabel: 'Replace',
+    });
+    if (!confirmed) return;
+    if (what === 'price') {
+      await copyPhasesToRoles([target], sourceRole);
+    } else if (what === 'questions') {
+      copyQuestionsInto(target, sourceRole);
+      notifyOk(`Copied ${rolePossessive(sourceRole)} questions`, 'settings-copy');
+    } else {
+      saveTimeline(target, {
+        applications_open_at: sourceCfg.applications_open_at,
+        applications_close_at: sourceCfg.applications_close_at,
+      }, 'window');
+      setConfigVersion(v => v + 1);
+    }
+  }
+
+  /** The roles "Copy from another role" offers on the role being edited: only
+   *  roles that actually have that thing set up. */
+  function copySourcesFor(target: string): { price: CopySource[]; questions: CopySource[]; window: CopySource[] } {
+    const others = ROLES.map(r => roleConfigs.find(rc => rc.role === r)).filter((x): x is RoleConfig => !!x && x.role !== target);
+    const currency = conference?.fee_currency || 'USD';
+    const price = !roleHasPrice(target) ? [] : others
+      .filter(o => roleHasPrice(o.role) && (!roleIsFree(o) || (o.fee_phases ?? []).length > 0))
+      .map(o => {
+        const n = (o.fee_phases ?? []).length;
+        return { role: o.role, detail: `${rolePriceText(o as RoleSetupConfig, currency, nowMs)}${n > 0 ? ` · ${n} ${n === 1 ? 'price' : 'prices'} by date` : ''}` };
+      });
+    const questions = others
+      .map(o => ({ o, n: normalizeBlocks(o.custom_questions ?? []).filter(b => b.kind === 'question' && !b.archived).length }))
+      .filter(x => x.n > 0)
+      .map(({ o, n }) => ({ role: o.role, detail: `${n} ${n === 1 ? 'question' : 'questions'}` }));
+    const windowSources = others
+      .filter(o => o.applications_open_at || o.applications_close_at)
+      .map(o => ({
+        role: o.role,
+        detail: [o.applications_open_at ? `Opens ${shortDate(o.applications_open_at, nowMs)}` : 'Opens when switched on', o.applications_close_at ? `closes ${shortDate(o.applications_close_at, nowMs)}` : 'no closing date'].join(', '),
+      }));
+    return { price, questions, window: windowSources };
   }
 
   // ── Add a role (control panel) ──────────────────────────────────────────
@@ -2463,9 +2467,102 @@ export default function SettingsPage() {
     setAddedRoles(stored);
   }, [addedRolesKey]);
 
+  const removedRolesKey = conference ? `gavelling-settings-removed-roles:${conference.id}` : null;
+  useEffect(() => {
+    if (!removedRolesKey) return;
+    let stored: string[] = [];
+    try {
+      const raw = window.localStorage.getItem(removedRolesKey);
+      const parsed: unknown = raw ? JSON.parse(raw) : [];
+      if (Array.isArray(parsed)) stored = parsed.filter((r): r is string => typeof r === 'string' && (ROLES as readonly string[]).includes(r));
+    } catch { /* storage blocked: a removed role with no applications is still unlisted by its reset row */ }
+    setRemovedRoles(stored);
+  }, [removedRolesKey]);
+
+  function storeRoleList(key: string | null, next: string[]) {
+    try { if (key) window.localStorage.setItem(key, JSON.stringify(next)); } catch { /* per-browser convenience only */ }
+  }
+
+  /**
+   * "Remove this role" (12 Oct 2026). There is no "listed" column on
+   * application_role_configs (and no schema change from a Claude Code run),
+   * and the row itself must stay (handle_new_conference made it; other code
+   * reads it). So removing a role is:
+   *   1. switch it off (is_enabled = false), row-counted; nothing else happens
+   *      if this does not land;
+   *   2. when nobody has applied for it: reset it through saveRoleConfig to a
+   *      fresh row's values (no window, no cap, no price, rules at their
+   *      defaults, no after-applying message, its questions ARCHIVED rather
+   *      than deleted), so panelKit.roleIsSetUp stops listing it for every
+   *      organiser. A role people applied for keeps its set-up (their
+   *      invoices and answers point at it);
+   *   3. remember it per browser (removedRoles), which unlists it here even
+   *      when it is a default role or has applications, while it stays off.
+   * Applications are never touched. Add a role lists it again.
+   */
+  async function removeRole(role: string) {
+    const cfg = roleConfigs.find(rc => rc.role === role);
+    if (!cfg) return;
+    const applied = roleAppCounts?.[role] ?? 0;
+    const plural = rolePlural(role);
+    const { confirmed } = await confirm({
+      title: `Remove ${plural}?`,
+      body: applied > 0
+        ? `${applied} ${applied === 1 ? 'person' : 'people'} applied as ${plural.toLowerCase()}. They keep their applications. Nobody new can apply, and the role leaves Who Can Apply. You can add it again from Add a role.`
+        : `Nobody can apply as ${plural.toLowerCase()} any more, and its dates, price and questions are cleared. You can add it again from Add a role.`,
+      confirmLabel: 'Remove role',
+      danger: true,
+    });
+    if (!confirmed) return;
+    // A question edit still waiting on its debounce must not land after this.
+    if (role === selectedRole && blocksTimerRef.current) {
+      clearTimeout(blocksTimerRef.current);
+      blocksTimerRef.current = null;
+    }
+    blocksPendingRef.current.delete(role);
+    await blocksChainRef.current;
+    if (cfg.is_enabled && !(await saveRoleConfig(role, { is_enabled: false }))) return;
+    if (applied === 0) {
+      const reset: Partial<RoleConfig> = {
+        applications_open_at: null,
+        applications_close_at: null,
+        max_accepted: null,
+        auto_accept: false,
+        payment_timing: 'anytime',
+        preference_mode: 'none',
+        collect_mun_experience: false,
+        submission_message: null,
+        submission_link_label: null,
+        submission_link_url: null,
+        custom_questions: normalizeBlocks(cfg.custom_questions ?? [])
+          .filter((b): b is Extract<FormBlock, { kind: 'question' }> => b.kind === 'question')
+          .map(b => ({ ...b, archived: true })),
+      };
+      // Prices only when there is one: an organiser who may not change fees
+      // can still remove a free role (guard_role_config_fee_columns).
+      if ((Number(cfg.fee_amount) || 0) !== 0) reset.fee_amount = 0;
+      if ((cfg.fee_phases ?? []).length > 0) reset.fee_phases = [];
+      await saveRoleConfig(role, reset);
+      setConfigVersion(v => v + 1);
+    }
+    setRemovedRoles(prev => {
+      const next = prev.includes(role) ? prev : [...prev, role];
+      storeRoleList(removedRolesKey, next);
+      return next;
+    });
+    setAddedRoles(prev => {
+      if (!prev.includes(role)) return prev;
+      const next = prev.filter(r => r !== role);
+      storeRoleList(addedRolesKey, next);
+      return next;
+    });
+    if (sheetRole === role) closeRoleSheet();
+    notifyOk(`${plural} removed`, 'settings-copy');
+  }
+
   /** "Add a role": list it, copy another role's questions and prices when
-   *  asked (the same two writes as "Copy form" and "Use this price for
-   *  another role"), then open its pop-up. Nothing is written for "Start
+   *  asked (the same two writes as "Copy from another role"), then open its
+   *  pop-up. Nothing is written for "Start
    *  from scratch": every role already has its row (handle_new_conference). */
   async function handleAddRole(role: string, copyFrom: string | null) {
     // The rules for every role the others already share (who gets in,
@@ -2485,14 +2582,20 @@ export default function SettingsPage() {
     }
     setAddedRoles(prev => {
       const next = prev.includes(role) ? prev : [...prev, role];
-      try { if (addedRolesKey) window.localStorage.setItem(addedRolesKey, JSON.stringify(next)); } catch { /* per-browser convenience only */ }
+      storeRoleList(addedRolesKey, next);
+      return next;
+    });
+    setRemovedRoles(prev => {
+      if (!prev.includes(role)) return prev;
+      const next = prev.filter(r => r !== role);
+      storeRoleList(removedRolesKey, next);
       return next;
     });
     if (Object.keys(inherit).length > 0) await saveRoleConfig(role, inherit);
     if (copyFrom) {
       const source = roleConfigs.find(rc => rc.role === copyFrom);
       if (source) {
-        if (normalizeBlocks(source.custom_questions ?? []).length > 0) await handleCopyFormTo(role, copyFrom);
+        if (normalizeBlocks(source.custom_questions ?? []).some(b => !(b.kind === 'question' && b.archived))) copyQuestionsInto(role, copyFrom);
         const priced = role !== 'secretariat' && role !== 'staff' && copyFrom !== 'secretariat' && copyFrom !== 'staff';
         const charges = (Number(source.fee_amount) || 0) > 0 || (source.fee_phases ?? []).some(p => (Number(p.amount) || 0) > 0);
         if (priced && charges) await copyPhasesToRoles([role], copyFrom);
@@ -2841,7 +2944,8 @@ export default function SettingsPage() {
   // autosave and write below is this page's own, passed in unchanged.
   const sheetConfig = sheetRole ? roleConfigs.find(rc => rc.role === sheetRole) : undefined;
   const sheetSaveStates = Object.values(stepSaveState);
-  const roleSheet = sheetRole ? (
+  const sheetCopy = sheetRole ? copySourcesFor(sheetRole) : null;
+  const roleSheet = sheetRole && sheetCopy ? (
     <RoleSheet
       key={sheetRole}
       conference={view}
@@ -2859,13 +2963,14 @@ export default function SettingsPage() {
       onSave={(updates) => { void saveRoleConfig(sheetRole, updates as Partial<RoleConfig>); }}
       onSaveTimeline={(change, where) => { saveTimeline(sheetRole, change, where); }}
       onUpdatePhase={(phases, idx, patch) => updateFeePhase(sheetRole, phases, idx, patch)}
-      onCopyPhases={() => setCopyPhasesOpen(true)}
+      copySources={{ price: sheetCopy.price, window: sheetCopy.window }}
+      onCopyFrom={(what, from) => { void handleCopyFrom(what, from); }}
       onCopyLink={handleCopyApplicationLink}
-      peers={listedRoleConfigs(sheetRole && !addedRoles.includes(sheetRole) ? [...addedRoles, sheetRole] : addedRoles) as RoleSetupConfig[]}
+      onRemove={() => { void removeRole(sheetRole); }}
       formSlot={
         <>
           <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">
-            <CopyFormMenu roles={otherRoles} onPick={handleCopyFormTo} />
+            <CopyFromMenu what="questions" sources={sheetCopy.questions} onPick={(from) => { void handleCopyFrom('questions', from); }} />
           </div>
           {blocksBlocked && (
             <p
@@ -2876,7 +2981,7 @@ export default function SettingsPage() {
               {blocksBlocked}
             </p>
           )}
-          <QuestionBuilder key={selectedRole} value={currentBlocks} onChange={handleBlocksChange} hasApplications={selectedRoleHasApplications} />
+          <QuestionBuilder key={`${selectedRole}-${formVersion}`} alwaysOpen value={currentBlocks} onChange={handleBlocksChange} hasApplications={selectedRoleHasApplications} />
         </>
       }
       afterSlot={
@@ -3062,24 +3167,14 @@ export default function SettingsPage() {
             counts={roleAppCounts}
             now={nowMs}
             extraRoles={extraListed}
+            removedRoles={removedRoles}
             onRoleToggle={(r, next) => { void saveRoleConfig(r, { is_enabled: next }); }}
             onEditRole={openRoleSetup}
             onAddRole={(r, from) => { void handleAddRole(r, from); }}
             onSaveAll={(updates, roles) => { void saveRolesTogether(roles, updates as Partial<RoleConfig>); }}
           />
           {roleSheet}
-          {/* Offered when a price first gets its dates, and from "Use this
-              price for another role". Copies the whole ladder plus the flat
-              fee it falls back to: a half-copied price is worse than none. */}
-          <CopyToRolesModal
-            open={copyPhasesOpen}
-            onClose={() => setCopyPhasesOpen(false)}
-            onConfirm={(targets) => void copyPhasesToRoles(targets)}
-            busy={copyPhasesBusy}
-            title="Set this up for another role too?"
-            sub={`${roleLabel(activeRole)} prices are saved. Most conferences run the same dates for every role, so tick the ones that should get the same prices.`}
-            roles={ROLES.filter(r => r !== activeRole && r !== 'secretariat' && r !== 'staff')}
-          />
+
         </>
       )}
 
@@ -3820,6 +3915,11 @@ export default function SettingsPage() {
                         {subLine}
                       </p>
                     )}
+                    {isCompany && link.company_url && (
+                      <a href={link.company_url} target="_blank" rel="noopener noreferrer" className="text-xs [overflow-wrap:anywhere]" style={{ color: '#1B3828', fontWeight: 700, textDecoration: 'underline', textUnderlineOffset: 3, fontFamily: "var(--font-brand), sans-serif" }}>
+                        {link.company_url.replace(/^https:\/\//, '')}
+                      </a>
+                    )}
                   </div>
 
                   {/* Featured only makes sense for a company: a linked
@@ -3883,6 +3983,19 @@ export default function SettingsPage() {
                   </div>
 
                   <button
+                    type="button"
+                    onClick={() => setEditingPartnerId(editingPartnerId === link.id ? null : link.id)}
+                    disabled={link.id.startsWith('temp-')}
+                    aria-expanded={editingPartnerId === link.id}
+                    aria-label={`Edit ${partnerLabel(link)}`}
+                    title="Edit"
+                    className="flex items-center justify-center flex-shrink-0 rounded-full focus:outline-none focus-visible:ring-2"
+                    style={{ width: 34, height: 34, border: 'none', cursor: 'pointer', background: editingPartnerId === link.id ? 'rgba(27,56,40,0.10)' : 'transparent', color: '#1B3828' }}
+                  >
+                    <Pencil size={15} strokeWidth={2.3} aria-hidden />
+                  </button>
+
+                  <button
                     onClick={() => handleRemovePartner(link)}
                     disabled={partnerBusy === link.id}
                     aria-label={`Remove ${partnerLabel(link)}`}
@@ -3893,30 +4006,14 @@ export default function SettingsPage() {
                   </button>
                 </div>
 
-                {isCompany && (
-                  <div className="mt-2" style={{ paddingLeft: '52px' }}>
-                    <label className="block text-[12px] font-bold mb-1" style={{ color: '#6E6152', fontFamily: "var(--font-brand), sans-serif", letterSpacing: '0.06em', textTransform: 'uppercase' }}>
-                      Website
-                    </label>
-                    <input
-                      type="text"
-                      value={link.company_url ?? ''}
-                      onChange={(e) => {
-                        const v = e.target.value;
-                        setPartners(prev => prev.map(p => (p.id === link.id ? { ...p, company_url: v } : p)));
-                        if (partnerUrlWarnings[link.id]) setPartnerUrlWarnings(prev => ({ ...prev, [link.id]: false }));
-                      }}
-                      onBlur={() => handleCompanyUrlBlur(link)}
-                      placeholder="https://"
-                      style={{ ...inputStyle, padding: '6px 10px', fontSize: TYPE_PX.hint, maxWidth: 320 }}
-                      onFocus={fgInput}
-                    />
-                    {partnerUrlWarnings[link.id] && (
-                      <p className="text-[13px] mt-1" style={{ color: '#B8844A', fontFamily: "var(--font-brand), sans-serif" }}>
-                        Links must start with https:// to be secure.
-                      </p>
-                    )}
-                  </div>
+                {editingPartnerId === link.id && (
+                  <PartnerEditPanel
+                    link={link}
+                    searchConferences={searchPartnerConferences}
+                    uploadLogo={uploadPartnerLogo}
+                    onSave={(patch) => handleEditPartner(link, patch)}
+                    onCancel={() => setEditingPartnerId(null)}
+                  />
                 )}
                 </div>
               );

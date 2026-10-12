@@ -15,12 +15,19 @@
  *   title card         what the switch means right now, Copy application link,
  *                      Preview the form
  *   When               opens / closes, the timeline bar
- *   Price              one price; "Prices by date" and "Use this price for
- *                      another role" are one small link each (priced roles only)
- *   Paying             payment timing and the dashboard lock (paid roles only)
- *   Who Gets In        auto-accept, the most you accept, try again
- *   Questions          preferences, MUN experience, the question builder
+ *   When               opens / closes, and "Copy from another role"
+ *   Price              one price, prices by date as a small table, and "Copy
+ *                      from another role" (priced roles only)
+ *   Questions          preferences, MUN experience, "Copy from another role"
+ *                      and the question builder (every question in full)
  *   After They Apply   the message shown once after submitting
+ *   footer             Remove this role, Done
+ *
+ * Accepting, paying and ranking are the rules for every role on the
+ * Applications page only (owner, 12 Oct 2026: "remove all of this from the
+ * individual apps"): the pop-up has no per-role "Who Gets In" section, no
+ * "Most people you will accept" cap and no "Different rules for {role}"
+ * block any more. The columns are untouched.
  *
  * The URL stays ?tab=applications&role=<role> (and ?step=<section> scrolls to
  * a section), so every old deep link opens this sheet. Escape and the X close
@@ -31,12 +38,12 @@
  * the settings page's own, passed in unchanged.
  */
 
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useRef, type ReactNode } from 'react';
 import Link from 'next/link';
 import {
-  Check, Copy, Eye, ChevronDown, Plus, Star, X,
+  Check, Copy, Eye, Plus, Star, X, Trash2,
   CheckCircle2, Clock, MinusCircle, XCircle, CalendarDays, Wallet,
-  UserCheck, ListChecks, PartyPopper, type LucideIcon,
+  ListChecks, PartyPopper, type LucideIcon,
 } from 'lucide-react';
 import Portal from '@/components/Portal';
 import { DatePicker } from '@/components/DatePicker';
@@ -51,15 +58,17 @@ import { DASH_CSS } from '../financials/dashboardKit';
 import { ROLE_BLURB, InfoHint } from './applicationsUi';
 import { TimelineNotice, TimelineWarning } from './timelineUi';
 import { RoleTimelineBar } from './roleTimelineBar';
+import { CopyFromMenu, type CopySource } from './roleCopy';
 import {
   F, INK, INK_SOFT, FOREST, AMBER, DANGER, HAIRLINE, TEXT_LINK, INPUT, ROW_CSS, TYPE,
-  Switch, FieldLabel, Notice, PREF_MODE_OPTIONS, Row, SwitchRow, TINT_GOLD_BG, TINT_GREEN_BG, EmojiDisc, RoleDisc,
-  inGeneralScope, generalValue, type GeneralField,
-  roleIsFree, roleHasPrice, roleCanHavePreference, rolePlural, roleTitle, windowState, dateAndTime,
+  Switch, FieldLabel, Notice, SwitchRow, TINT_GOLD_BG, TINT_GREEN_BG, EmojiDisc, RoleDisc,
+  roleHasPrice, rolePlural, roleTitle, windowState, dateAndTime,
   toDatetimeLocal, fromDatetimeLocal, localZoneLabel, type RoleSetupConfig, type WindowState, TYPE_PX
 } from './panelKit';
 
-/** The ?step= values. Old links used all seven; 'review' now means the top. */
+/** The ?step= values. Old links used all seven; 'review' now means the top,
+ *  and 'paying' / 'entry' (the per-role rules, removed 12 Oct 2026) open the
+ *  pop-up at the top too. */
 export type StepKey = 'when' | 'price' | 'paying' | 'entry' | 'form' | 'after' | 'review';
 export const STEP_KEYS: readonly StepKey[] = ['when', 'price', 'paying', 'entry', 'form', 'after', 'review'];
 
@@ -172,22 +181,22 @@ export interface RoleSheetProps {
   onSave: (updates: Partial<RoleSetupConfig>) => void;
   onSaveTimeline: (change: Partial<TimelineInput>, where: 'window' | 'phases') => void;
   onUpdatePhase: (phases: FeePhase[], idx: number, patch: Partial<FeePhase>) => void;
-  onCopyPhases: () => void;
+  /** "Copy from another role": the roles that have each thing set up. */
+  copySources: { price: CopySource[]; window: CopySource[] };
+  onCopyFrom: (what: 'price' | 'window', sourceRole: string) => void;
   onCopyLink: () => void;
+  /** "Remove this role" (the page confirms, switches it off and unlists it). */
+  onRemove: () => void;
   /** The copy-form menu, the refusal line and the question builder. */
   formSlot: ReactNode;
   /** The after-submitting message fields (their state lives in the page). */
   afterSlot: ReactNode;
-  /** Every role listed on the Applications page (this one included): the
-   *  rules for every role are compared against them. */
-  peers: RoleSetupConfig[];
 }
 
 export function RoleSheet(props: RoleSheetProps) {
   const { conference: c, role, config, now, configVersion, timelineCtx, timelineMsg } = props;
   const currency = c.fee_currency || 'USD';
   const priced = roleHasPrice(role);
-  const free = config ? roleIsFree(config) : true;
   const gate = paymentGateBlocks(c);
   const plural = rolePlural(role);
   const st = windowState(config, now);
@@ -274,22 +283,6 @@ export function RoleSheet(props: RoleSheetProps) {
   const windowBackwards = !!(config?.applications_open_at && config?.applications_close_at
     && new Date(config.applications_close_at).getTime() <= new Date(config.applications_open_at).getTime());
   const hasInvalidPhase = phases.some(p => !p.start_date || !p.end_date);
-
-  // The rules for every role (panelKit.inGeneralScope). A field this role is
-  // covered by sits under "Different rules for {role}", open by itself when
-  // this role already differs from another covered role. A field the rule
-  // does not cover (the secretariat's acceptance) is shown plainly.
-  const covered = (f: GeneralField) => inGeneralScope(f, role);
-  const differs = (f: GeneralField) => !!config && covered(f)
-    && props.peers.some(p => p.role !== role && inGeneralScope(f, p.role) && generalValue(p, f) !== generalValue(config, f));
-  const showPaying = priced && !free;
-  const showRank = roleCanHavePreference(role) && role !== 'chair';
-  const ownFields: GeneralField[] = (['auto_accept', 'payment_timing', 'preference_mode'] as GeneralField[])
-    .filter(f => f === 'payment_timing' ? showPaying : f === 'preference_mode' ? showRank : true);
-  const plainFields = ownFields.filter(f => !covered(f));
-  const overrideFields = ownFields.filter(f => covered(f));
-  const anyDiffers = overrideFields.some(differs);
-  const [overrideOpen, setOverrideOpen] = useState(anyDiffers || startStepIsRule(props.initialStep));
 
   return (
     <Portal>
@@ -435,6 +428,9 @@ export function RoleSheet(props: RoleSheetProps) {
                           <RoleTimelineBar config={config} now={now} fallbackCurrency={currency} timeZone={timelineCtx.timeZone} compact />
                         </div>
                       )}
+                      <div className="mt-3">
+                        <CopyFromMenu what="dates" sources={props.copySources.window} onPick={(r) => props.onCopyFrom('window', r)} />
+                      </div>
                     </div>
                   </Section>
 
@@ -487,10 +483,7 @@ export function RoleSheet(props: RoleSheetProps) {
                             <Plus size={15} strokeWidth={2.6} aria-hidden />
                             {phases.length === 0 ? 'Add a price by date' : 'Add a stage'}
                           </button>
-                          <button type="button" onClick={props.onCopyPhases} className="inline-flex items-center gap-1.5 focus:outline-none focus-visible:ring-2 rounded" style={{ ...TEXT_LINK, fontSize: TYPE_PX.body }}>
-                            <Copy size={14} strokeWidth={2.4} aria-hidden />
-                            Use this price for another role
-                          </button>
+                          <CopyFromMenu what="prices" sources={props.copySources.price} onPick={(r) => props.onCopyFrom('price', r)} />
                         </div>
                       </div>
                     </Section>
@@ -531,50 +524,16 @@ export function RoleSheet(props: RoleSheetProps) {
                     {props.afterSlot}
                   </Section>
 
-                  {/* ── Who gets in: the per-role cap, and this role's own rules ── */}
-                  <Section id="step-entry" emoji="Door" icon={UserCheck} title="Who Gets In">
-                    <div key={configVersion} className="gvk-rows">
-                      <Row label="Most people you will accept" htmlFor="role-max-accepted" align="end" desc="Leave it empty for no limit." on={config.max_accepted != null}>
-                        <input
-                          id="role-max-accepted"
-                          type="number"
-                          min={1}
-                          placeholder="No limit"
-                          defaultValue={config.max_accepted ?? ''}
-                          onBlur={(e) => props.onSave({ max_accepted: e.target.value ? parseInt(e.target.value) : null })}
-                          style={{ ...INPUT, fontSize: 16, width: 120, fontVariantNumeric: 'tabular-nums' }}
-                        />
-                      </Row>
-                      {plainFields.map(f => <RuleControl key={f} field={f} config={config} onSave={props.onSave} />)}
-                    </div>
-
-                    {overrideFields.length > 0 && (
-                      <div id="step-paying" className="mt-3" style={{ scrollMarginTop: 16 }}>
-                        <button
-                          type="button"
-                          onClick={() => setOverrideOpen(o => !o)}
-                          aria-expanded={overrideOpen}
-                          className="w-full flex items-center justify-between gap-3 text-left focus:outline-none focus-visible:ring-2 rounded-xl"
-                          style={{ padding: '12px 14px', borderRadius: 14, border: 'none', cursor: 'pointer', background: anyDiffers ? 'rgba(238,217,138,0.28)' : '#FAF8F3', boxShadow: anyDiffers ? 'inset 3px 0 0 #B6871F' : undefined, fontFamily: F }}
-                        >
-                          <span className="min-w-0">
-                            <span className="block" style={{ fontSize: TYPE_PX.body, fontWeight: 800, color: INK }}>Different rules for {plural}</span>
-                            <span className="block" style={{ fontSize: TYPE_PX.hint, color: INK_SOFT, lineHeight: 1.45, overflowWrap: 'anywhere' }}>
-                              {anyDiffers ? 'This role already differs from the others.' : 'These follow the rules for every role on the Applications page.'}
-                            </span>
-                          </span>
-                          <ChevronDown size={18} strokeWidth={2.4} color={INK} aria-hidden style={{ transform: overrideOpen ? 'rotate(180deg)' : 'none', transition: 'transform 200ms ease', flexShrink: 0 }} />
-                        </button>
-                        {overrideOpen && (
-                          <div className="gvk-rows mt-2">
-                            {overrideFields.map(f => <RuleControl key={f} field={f} config={config} onSave={props.onSave} differs={differs(f)} />)}
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </Section>
-
                   <div className="flex flex-wrap items-center justify-end gap-3 pt-1">
+                    <button
+                      type="button"
+                      onClick={props.onRemove}
+                      className="inline-flex items-center gap-1.5 mr-auto focus:outline-none focus-visible:ring-2 rounded-lg"
+                      style={{ fontFamily: F, fontSize: TYPE_PX.body, fontWeight: 700, color: DANGER, background: 'none', border: 'none', padding: '8px 4px', cursor: 'pointer' }}
+                    >
+                      <Trash2 size={16} strokeWidth={2.3} aria-hidden />
+                      Remove this role
+                    </button>
                     <span style={{ fontFamily: F, fontSize: TYPE_PX.hint, color: INK_SOFT }}>Everything saves by itself</span>
                     <button type="button" onClick={props.onClose} className="gv-st-btn gv-st-forest">
                       Done
@@ -587,65 +546,6 @@ export function RoleSheet(props: RoleSheetProps) {
         </div>
       </div>
     </Portal>
-  );
-}
-
-function startStepIsRule(step: string | null): boolean {
-  return step === 'paying';
-}
-
-// ── One of the rules for every role, for this role only ───────────────────────
-
-function RuleControl({ field, config, onSave, differs = false }: {
-  field: GeneralField;
-  config: RoleSetupConfig;
-  onSave: (updates: Partial<RoleSetupConfig>) => void;
-  differs?: boolean;
-}) {
-  const note = differs ? 'Different from your other roles.' : undefined;
-  if (field === 'preference_mode') {
-    const value = config.preference_mode || 'none';
-    return (
-      <Row label="What they rank" desc={note ?? PREF_MODE_OPTIONS.find(o => o.value === value)?.desc} need={differs}>
-        <div role="radiogroup" aria-label="What they rank" className="flex flex-wrap gap-1.5">
-          {PREF_MODE_OPTIONS.map(opt => {
-            const on = value === opt.value;
-            return (
-              <button
-                key={opt.value}
-                type="button"
-                role="radio"
-                aria-checked={on}
-                onClick={() => onSave({ preference_mode: opt.value })}
-                className="focus:outline-none focus-visible:ring-2"
-                style={{
-                  minHeight: 38, padding: '0 12px', borderRadius: 10, cursor: 'pointer', fontFamily: F, fontSize: TYPE_PX.hint, fontWeight: 700,
-                  background: on ? FOREST : '#FFFFFF', color: on ? '#EED98A' : INK, border: 'none',
-                  boxShadow: on ? '0 6px 14px -8px rgba(27,56,40,0.7)' : 'inset 0 0 0 1.5px rgba(27,56,40,0.18)',
-                }}
-              >
-                {opt.label}
-              </button>
-            );
-          })}
-        </div>
-      </Row>
-    );
-  }
-  const words: Record<Exclude<GeneralField, 'preference_mode'>, [string, string]> = {
-    auto_accept: ['Accept everyone straight away', 'Off: you review each application.'],
-    payment_timing: ['Pay only after you accept them', 'Off: they can pay as soon as they apply.'],
-  };
-  const [label, desc] = words[field];
-  const checked = field === 'payment_timing' ? config.payment_timing === 'after_acceptance' : config[field] === true;
-  return (
-    <SwitchRow
-      label={label}
-      desc={note ?? desc}
-      need={differs}
-      checked={checked}
-      onChange={(v) => onSave(field === 'payment_timing' ? { payment_timing: v ? 'after_acceptance' : 'anytime' } : { [field]: v } as Partial<RoleSetupConfig>)}
-    />
   );
 }
 

@@ -44,14 +44,19 @@ const NAV_LINKS_CONFIG: ReadonlyArray<{
 ];
 
 /** SESSIONS lights on every sessions path (isSessionsPath), CREATE on the
- *  chooser and the creator under it, EXPLORE on any public conferences page
- *  (explore, map, roles, a conference page), PRICING on every /pricing page,
- *  HELP on /help. */
+ *  chooser and the creator under it, EXPLORE on /conferences/explore only
+ *  (owner, 12 Oct 2026: it stayed lit on a conference's own page; a
+ *  conference page, /conferences/all, /conferences/in/* and /conferences/roles
+ *  light nothing), PRICING on every /pricing page, HELP on /help. */
+function isExplorePath(pathname: string): boolean {
+  return pathname === '/conferences/explore' || pathname.startsWith('/conferences/explore/');
+}
+
 function isNavLinkActive(pathname: string | null, href: string | null): boolean {
   if (!pathname || !href) return false;
   if (href === '/sessions') return isSessionsPath(pathname) && !pathname.startsWith('/create');
   if (href === '/conferences/new') return pathname.startsWith('/conferences/new');
-  if (href === '/conferences/explore') return pathname.startsWith('/conferences') && !pathname.startsWith('/conferences/new');
+  if (href === '/conferences/explore') return isExplorePath(pathname);
   if (href === '/pricing/credits') return pathname.startsWith('/pricing');
   if (href === '/help') return pathname === '/help' || pathname.startsWith('/help/');
   return pathname === href;
