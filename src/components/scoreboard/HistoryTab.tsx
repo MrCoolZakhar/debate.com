@@ -51,6 +51,7 @@ import { NEU, OUTFIT, EASE } from '@/components/neu';
 import { SOFT, RED, CARD_BORDER_COLOR } from '@/components/scoreboardTokens';
 import { SeatCircleFlag } from '@/components/CircleFlag';
 import { getCountryDisplayName } from '@/lib/countries';
+import SeatName from '@/components/SeatName';
 import { formatSpeakingTime } from '@/lib/conferenceScoreboard';
 import { useLanguage, useT } from '@/contexts/LanguageContext';
 import type { Committee } from '@/lib/types';
@@ -162,9 +163,11 @@ export default function HistoryTab({ committee, feedback, manualAuthors }: {
       <SeatCircleFlag country={s.country} size={26} decorative style={{ marginBlockStart: 1 }} />
       <span style={{ flex: 1, minWidth: 0 }}>
         <span style={{ display: 'flex', alignItems: 'baseline', gap: 10, minHeight: 26 }}>
-          <span style={{ flex: 1, minWidth: 0, fontFamily: OUTFIT, fontWeight: 700, fontSize: 13, color: NEU.ink, overflowWrap: 'anywhere', lineHeight: 1.25, alignSelf: 'center' }}>
-            {getCountryDisplayName(s.country, language)}
-          </span>
+          <SeatName
+            name={getCountryDisplayName(s.country, language)}
+            max={26}
+            style={{ flex: 1, minWidth: 0, fontFamily: OUTFIT, fontWeight: 700, fontSize: 13, color: NEU.ink, lineHeight: 1.25, alignSelf: 'center' }}
+          />
           <span style={{ flexShrink: 0, alignSelf: 'center', fontFamily: OUTFIT, fontSize: 11, color: SOFT, fontVariantNumeric: 'tabular-nums' }}>
             {stamp(s.timestamp)}
           </span>

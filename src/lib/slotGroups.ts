@@ -152,13 +152,18 @@ export interface ParliamentPreset {
   label: string;
   hint: string;
   groups: string[];
+  /** Display only (the preset cards in the committee editor): the round flag
+   *  of a national parliament, ISO 3166-1 alpha-2 ('EU' has its own disc). */
+  flag?: string;
+  /** Display only: a Fluent 3D emoji name, for a preset with no flag. */
+  emoji?: string;
 }
 
 export const PARLIAMENT_PRESETS: ParliamentPreset[] = [
-  { key: 'ep', label: 'European Parliament', hint: 'Political groups of the EP', groups: ['EPP', 'S&D', 'Patriots for Europe', 'ECR', 'Renew Europe', 'Greens/EFA', 'The Left', 'ESN', 'Non-attached'] },
-  { key: 'lok-sabha', label: 'Lok Sabha', hint: 'Treasury and opposition benches', groups: ['BJP', 'INC', 'SP', 'AITC', 'DMK', 'TDP', 'JD(U)', 'Independents'] },
-  { key: 'commons', label: 'House of Commons', hint: 'Government and opposition', groups: ['Government', 'Official Opposition', 'Liberal Democrats', 'SNP', 'Reform UK', 'Green', 'DUP', 'Independents'] },
-  { key: 'congress', label: 'US Congress', hint: 'Two parties and the chair', groups: ['Democrats', 'Republicans', 'Independents'] },
-  { key: 'bundestag', label: 'Bundestag', hint: 'Fraktionen', groups: ['CDU/CSU', 'AfD', 'SPD', 'Grüne', 'Die Linke', 'Fraktionslos'] },
-  { key: 'benches', label: 'Government vs Opposition', hint: 'The simplest split', groups: ['Government', 'Opposition', 'Crossbench'] },
+  { key: 'ep', label: 'European Parliament', hint: 'Political groups of the EP', flag: 'EU', groups: ['EPP', 'S&D', 'Patriots for Europe', 'ECR', 'Renew Europe', 'Greens/EFA', 'The Left', 'ESN', 'Non-attached'] },
+  { key: 'lok-sabha', label: 'Lok Sabha', hint: 'Treasury and opposition benches', flag: 'IN', groups: ['BJP', 'INC', 'SP', 'AITC', 'DMK', 'TDP', 'JD(U)', 'Independents'] },
+  { key: 'commons', label: 'House of Commons', hint: 'Government and opposition', flag: 'GB', groups: ['Government', 'Official Opposition', 'Liberal Democrats', 'SNP', 'Reform UK', 'Green', 'DUP', 'Independents'] },
+  { key: 'congress', label: 'US Congress', hint: 'Two parties and the chair', flag: 'US', groups: ['Democrats', 'Republicans', 'Independents'] },
+  { key: 'bundestag', label: 'Bundestag', hint: 'Fraktionen', flag: 'DE', groups: ['CDU/CSU', 'AfD', 'SPD', 'Grüne', 'Die Linke', 'Fraktionslos'] },
+  { key: 'benches', label: 'Government vs Opposition', hint: 'The simplest split', emoji: 'Ballot box with ballot', groups: ['Government', 'Opposition', 'Crossbench'] },
 ];

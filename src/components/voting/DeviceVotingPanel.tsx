@@ -30,6 +30,7 @@ import Portal from '@/components/Portal';
 import { SeatCircleFlag } from '@/components/CircleFlag';
 import { useT, useLanguage } from '@/contexts/LanguageContext';
 import { getCountryDisplayName } from '@/lib/countries';
+import SeatName from '@/components/SeatName';
 import { getSessionParticipants } from '@/lib/sessionParticipants';
 import { getDeviceVoteStatus, revealDeviceVotes, joinedSeatsFrom, type DeviceVoteStatus, type VotingMethod } from '@/lib/deviceVoting';
 import type { DelegateVote } from '@/lib/voteState';
@@ -113,7 +114,7 @@ export function DeviceVoteGate({ code, chairSuffix, method, onMethodChange, seat
     <li key={d.id} className="flex items-center gap-3 min-h-12 rounded-2xl ps-2 pe-3"
       style={{ backgroundColor: state === 'missing' ? 'rgba(139,32,32,0.07)' : 'rgba(27,56,40,0.05)' }}>
       <SeatCircleFlag country={d.country} size={34} decorative fallback="initials" />
-      <span className="flex-1 min-w-0 leading-tight [overflow-wrap:anywhere] text-[15px] font-semibold" style={{ color: INK }}>{getCountryDisplayName(d.country, language)}</span>
+      <SeatName name={getCountryDisplayName(d.country, language)} max={22} className="flex-1 min-w-0 leading-tight text-[15px] font-semibold" style={{ color: INK }} />
       {state === 'missing'
         ? <WifiOff size={17} strokeWidth={2.3} aria-hidden style={{ color: RED }} />
         : <Check size={17} strokeWidth={2.6} aria-hidden style={{ color: state === 'idle' ? '#8A6A10' : '#2A5A3C' }} />}
@@ -328,7 +329,7 @@ export function DeviceVotingPanel({ code, chairSuffix, documentId, ballotId, sea
                   {voted ? <Check size={14} strokeWidth={3} /> : offline ? <WifiOff size={12} strokeWidth={2.5} /> : null}
                 </span>
               </span>
-              <span className="text-[14px] font-semibold leading-tight [overflow-wrap:anywhere]" style={{ color: INK }}>{getCountryDisplayName(d.country, language)}</span>
+              <SeatName name={getCountryDisplayName(d.country, language)} max={14} block align="center" className="text-[14px] font-semibold leading-tight" style={{ color: INK }} subScale={0.8} />
               <span className="text-[12px] font-medium" style={{ color: offline ? RED : INK_SOFT }}>{label}</span>
             </li>
           );

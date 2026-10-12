@@ -30,6 +30,8 @@
  * collide across files. Do not drop the prefix.
  */
 
+import SeatName from '@/components/SeatName';
+import { splitSeatName } from '@/lib/seatName';
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { getCircleFlagUrl } from '@/lib/countries';
@@ -118,6 +120,7 @@ export function DelegateStyles() {
       .dgv-scroll { scrollbar-width: thin; scrollbar-color: ${DG.hairline} transparent }
       .dgv-scroll::-webkit-scrollbar { width: 6px }
       .dgv-scroll::-webkit-scrollbar-thumb { background: ${DG.hairline}; border-radius: 3px }
+      .dgv-noscroll::-webkit-scrollbar { display: none }
 
       /* Focus is never signalled by shadow alone — shadows are invisible to AT
          and to anyone who cannot perceive the depth cue. */
@@ -1175,15 +1178,18 @@ export function QueueRow({
 
       <FlagDisc code={code} name={name} size={compact ? 22 : 26} ring={DG.ivory} />
 
-      <span
+      {/* A long seat (a crisis character) is two rows: the short form, the full name
+          smaller beneath, wrapping; never cut (src/components/SeatName.tsx). */}
+      <SeatName
+        name={name}
+        max={14}
         style={{
           flex: 1, minWidth: 0, fontFamily: OUTFIT,
-          fontSize: (compact ? 12.5 : 13.5) - (name.length > 24 ? 1.5 : 0), fontWeight: 700, color: DG.forest,
-          lineHeight: 1.15, overflowWrap: 'break-word', hyphens: 'auto',
+          fontSize: (compact ? 12.5 : 13.5) - (name.length > 24 && !splitSeatName(name, { max: 14 }).split ? 1.5 : 0), fontWeight: 700, color: DG.forest,
+          lineHeight: 1.15, hyphens: 'auto',
         }}
-      >
-        {name}
-      </span>
+        subScale={0.8}
+      />
 
       {/* Already spoken. Drops out on a narrow row before the country name
           does, and never appears for a delegation still waiting on its first

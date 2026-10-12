@@ -4,6 +4,7 @@ import React, { useRef, useState, useEffect, useCallback, useLayoutEffect } from
 import { Committee, DelegateStatus } from '@/lib/types';
 import { getCountryDisplayName, compareCountryNames } from '@/lib/countries';
 import { SeatCircleFlag, SIDEBAR_MONOGRAM } from '@/components/CircleFlag';
+import SeatName from '@/components/SeatName';
 import { getCommitteeDisplayName } from '@/lib/presetNames';
 import {
   beginSessionAfterRollCall,
@@ -172,7 +173,7 @@ function FullListPopup({
                   {i + 1}
                 </span>
                 <FlagCircle country={s.country} size="xs" />
-                <span className="text-sm text-[#1C1410] flex-1 min-w-0 leading-tight [overflow-wrap:anywhere]">{getCountryDisplayName(s.country, language)}</span>
+                <SeatName name={getCountryDisplayName(s.country, language)} max={24} className="text-sm text-[#1C1410] flex-1 min-w-0 leading-tight" />
                 {onRemove && (
                   <button
                     onClick={() => onRemove(s.delegateId)}
@@ -1076,8 +1077,13 @@ function RollCallPanelInner({
                   )}
                 </div>
                 <div className="flex-1 min-w-0 flex flex-col">
-                  <span
-                    className="[overflow-wrap:anywhere]"
+                  {/* A long seat (a crisis character) is two rows: the short form, the full
+                      name smaller beneath, wrapping; never cut (src/components/SeatName.tsx). */}
+                  <SeatName
+                    name={getCountryDisplayName(d.country, language)}
+                    max={bigRoll ? 30 : sliderMode ? 14 : 18}
+                    block
+                    subScale={0.72}
                     style={{
                       fontSize: isUpNext ? qr(19.5) : bigRoll ? 21 : sliderMode ? 15.5 : qr(17),
                       fontWeight: isUpNext ? 800 : 600,
@@ -1086,9 +1092,7 @@ function RollCallPanelInner({
                       // word says absent. Nothing on this list is ever faded out.
                       color: '#F4EFE3',
                     }}
-                  >
-                    {getCountryDisplayName(d.country, language)}
-                  </span>
+                  />
                   {isSpeakingRow && !sliderMode && (
                     <span className="truncate uppercase" style={{ fontSize: qr(11), fontWeight: 800, letterSpacing: '0.08em', lineHeight: 1.3, color: '#EED98A' }}>
                       {t('rollcall_speaking')}

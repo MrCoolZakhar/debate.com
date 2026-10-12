@@ -61,6 +61,7 @@ import ManualAdjust from '@/components/scoreboard/ManualAdjust';
 import HistoryTab from '@/components/scoreboard/HistoryTab';
 import { Committee } from '@/lib/types';
 import { getCountryDisplayName } from '@/lib/countries';
+import SeatName from '@/components/SeatName';
 import { motionNames } from '@/lib/committeeFlags';
 import { useLanguage, useT } from '@/contexts/LanguageContext';
 import { buildSessionScoreboardRows, sessionPointSlices, manualAuthorIndex, isDocumentNote } from '@/lib/sessionScoreboard';
@@ -512,7 +513,7 @@ export default function ScoreboardPanel({ committee, onClose, feedbackVersion = 
                             {/* Round and bigger here too, so the Matrix and the
                                 Ranking tab identify a delegation the same way. */}
                             <span className="shrink-0 flex"><SeatCircleFlag country={r.country} size={26} decorative /></span>
-                            <span className="min-w-0 [overflow-wrap:anywhere]" style={{ color: NEU.ink, lineHeight: 1.2 }}>{getCountryDisplayName(r.country, language)}</span>
+                            <SeatName name={getCountryDisplayName(r.country, language)} max={20} className="min-w-0" style={{ color: NEU.ink, lineHeight: 1.2 }} subScale={0.8} />
                           </span>
                         </td>
                         <td style={TD}>{r.gslSpeeches}</td>

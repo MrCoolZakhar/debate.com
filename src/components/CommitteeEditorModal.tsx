@@ -7,8 +7,9 @@
 // backdrop) and mintConferenceSession (session minting for conference committees).
 
 import { useState, useEffect, useCallback } from 'react';
-import { X, UserPlus, Mail, Send, Landmark, Scale, Zap, Users2 } from 'lucide-react';
-import { NEU, NEU_GRADIENTS, OUTFIT, NeuButton, type NeuGradient } from '@/components/neu';
+import { X, UserPlus, Mail, Send } from 'lucide-react';
+import { NEU, OUTFIT, NeuButton } from '@/components/neu';
+import { CommitteeTypeChooser, CommitteeTypeEmoji, COMMITTEE_TYPE_TITLE } from '@/components/parliamentSetup';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { sessionClient } from '@/lib/sessionClient';
 import { useAuth } from '@/components/AuthProvider';
@@ -24,8 +25,8 @@ import {
   SetupPrimaryButton,
   SetupGhostButton,
   committeeSetupPreview,
-  CommitteeTypeGlyph,
   committeeTypeAccent,
+  COMMITTEE_TYPES,
   effectiveEmblem,
   resolveSeatArt,
   rosterModeOf,
@@ -629,11 +630,11 @@ function ChairsDock({ conferenceId, committeeId, committeeName, embedded = false
           <button
             onClick={() => setExpanded(true)}
             className="w-full flex items-center justify-center gap-1.5 rounded-xl py-2 font-bold text-[11px] focus:outline-none"
-            style={{ border: '1.5px solid #1B3828', color: '#1B3828', backgroundColor: 'transparent', fontFamily: OUTFIT, letterSpacing: '0.06em', cursor: 'pointer', transition: `background-color 200ms ${EASE}` }}
+            style={{ border: '1.5px solid #1B3828', color: '#1B3828', backgroundColor: 'transparent', fontFamily: OUTFIT, fontSize: 12.5, cursor: 'pointer', transition: `background-color 200ms ${EASE}` }}
             onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.05)'; }}
             onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
           >
-            <UserPlus size={13} /> ADD CHAIR
+            <UserPlus size={13} /> Add chair
           </button>
         ) : (
           <div className="flex flex-col gap-3 pt-3" style={{ borderTop: '1px solid #EDE7D8' }}>
@@ -1375,8 +1376,8 @@ function CommitteeEditor({ conferenceId, committeeType, existing, initialRoster,
                 title="Committee type"
                 style={{ fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 700, color: typeAccent }}
               >
-                <CommitteeTypeGlyph type={effectiveType as CommitteeType} />
-                {COMMITTEE_TYPE_LABEL[effectiveType] ?? effectiveType}
+                <CommitteeTypeEmoji type={effectiveType as CommitteeType} size={20} />
+                {COMMITTEE_TYPE_TITLE[effectiveType as CommitteeType] ?? COMMITTEE_TYPE_LABEL[effectiveType] ?? effectiveType}
               </span>
             </div>
             <button
@@ -1555,63 +1556,10 @@ function CommitteeEditor({ conferenceId, committeeType, existing, initialRoster,
   );
 }
 
-// ── Committee-type picker card (neumorphic) ───────────────────────────────────
-// One extruded ivory card per type. Selected = forest ring + gold-tinted seat +
-// gradient icon disc lit; unselected = calm surface + soft-tinted icon seat.
-// Hover lifts the card. Used only in the create flow's type chooser.
-
-const TYPE_OPTIONS: {
-  type: CommitteeType;
-  label: string;
-  desc: string;
-  icon: React.ComponentType<{ size?: number; strokeWidth?: number; style?: React.CSSProperties }>;
-  gradient: NeuGradient;
-}[] = [
-  { type: 'general-assembly', label: 'General Assembly', desc: 'Large committees, country delegates, formal debate.', icon: Landmark, gradient: NEU_GRADIENTS.forest },
-  { type: 'specialised', label: 'Specialised', desc: 'Mid-size expert bodies (ECOSOC, HRC, legal).', icon: Scale, gradient: NEU_GRADIENTS.sage },
-  { type: 'crisis', label: 'Crisis', desc: 'Fast-paced, character roles, live crises.', icon: Zap, gradient: NEU_GRADIENTS.amber },
-  { type: 'custom', label: 'Custom', desc: 'Parliaments, party groups, any format with its own seats and flags.', icon: Users2, gradient: NEU_GRADIENTS.gold },
-];
-
-function TypeCard({ opt, onSelect }: { opt: (typeof TYPE_OPTIONS)[number]; onSelect: () => void }) {
-  const [hovered, setHovered] = useState(false);
-  const { label, desc, icon: Icon, gradient } = opt;
-  return (
-    <button
-      type="button"
-      onClick={onSelect}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-      className="flex items-center gap-3.5 text-left focus:outline-none w-full"
-      style={{
-        padding: '14px 16px',
-        borderRadius: 18,
-        border: `1.5px solid ${hovered ? NEU.forest : 'transparent'}`,
-        backgroundColor: NEU.surface,
-        boxShadow: hovered ? NEU.outHover : NEU.out,
-        transform: hovered ? 'translateY(-2px)' : 'translateY(0)',
-        transition: `box-shadow 260ms ${EASE}, transform 260ms ${EASE}, border-color 200ms ${EASE}`,
-        cursor: 'pointer',
-      }}
-    >
-      <span
-        className="inline-flex items-center justify-center flex-shrink-0"
-        style={{
-          width: 44, height: 44, borderRadius: 14,
-          background: `linear-gradient(135deg, ${gradient[0]}, ${gradient[1]})`,
-          boxShadow: `0 4px 10px color-mix(in srgb, ${gradient[0]} 27%, transparent), ${NEU.outSm}`,
-        }}
-      >
-        {/* Same rule as neu.tsx: forest ink on the gold gradient, white elsewhere. */}
-        <Icon size={21} strokeWidth={2.2} style={{ color: gradient === NEU_GRADIENTS.gold ? NEU.forest : '#FFFFFF' }} />
-      </span>
-      <span className="flex flex-col min-w-0">
-        <span style={{ fontFamily: OUTFIT, fontSize: 14.5, fontWeight: 800, color: NEU.ink, letterSpacing: '0.01em' }}>{label}</span>
-        <span style={{ fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 500, color: NEU.muted, lineHeight: 1.35, marginTop: 2 }}>{desc}</span>
-      </span>
-    </button>
-  );
-}
+// ── Committee-type choice ─────────────────────────────────────────────────────
+// Drawn by CommitteeTypeChooser (src/components/parliamentSetup.tsx, 12 Oct
+// 2026): four white cards, each a Fluent 3D emoji in a tinted disc, the name and
+// one short line. Order from COMMITTEE_TYPES.
 
 // ── CommitteeEditorModal, public API ─────────────────────────────────────────
 // committee = null → create flow (opens with the GA / Specialised / Crisis
@@ -1680,16 +1628,20 @@ export function CommitteeEditorModal({ conference, committee, onSaved, onClose, 
   if (!isEdit && !pendingType) {
     return (
       <ModalOverlay onClose={onClose}>
-        <div className="rounded-2xl p-7 flex flex-col gap-5" style={{ backgroundColor: NEU.base, border: '1px solid #DDD4C0', width: 400, maxWidth: 'calc(100vw - 32px)' }}>
-          <div className="flex items-center justify-between">
-            <p className="text-base font-bold" style={{ color: NEU.ink, fontFamily: OUTFIT }}>Choose committee type</p>
-            <button onClick={onClose} className="focus:outline-none" style={{ color: NEU.muted }}><X size={18} /></button>
+        <div className="flex flex-col gap-4 rounded-[24px] p-5 sm:p-6" style={{ backgroundColor: NEU.base, boxShadow: NEU.out, width: 600, maxWidth: 'calc(100vw - 32px)' }}>
+          <div className="flex items-center justify-between gap-3">
+            <h2 style={{ margin: 0, color: NEU.ink, fontFamily: OUTFIT, fontSize: 19, fontWeight: 800, letterSpacing: '-0.01em' }}>Choose a Committee Type</h2>
+            <button
+              onClick={onClose}
+              aria-label="Close"
+              title="Close"
+              className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full transition-[background-color,transform] duration-150 hover:bg-[#1B3828]/[0.07] active:scale-[0.96] focus:outline-none focus-visible:shadow-[0_0_0_2px_#1B3828]"
+              style={{ color: '#544B3E' }}
+            >
+              <X size={18} />
+            </button>
           </div>
-          <div className="flex flex-col gap-3.5 w-full">
-            {TYPE_OPTIONS.map((opt) => (
-              <TypeCard key={opt.type} opt={opt} onSelect={() => setPendingType(opt.type)} />
-            ))}
-          </div>
+          <CommitteeTypeChooser types={COMMITTEE_TYPES} onSelect={(t) => setPendingType(t)} />
         </div>
       </ModalOverlay>
     );

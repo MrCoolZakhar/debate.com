@@ -5,9 +5,11 @@ import { getCountryDisplayName, compareCountryNames } from '@/lib/countries';
 import { SeatFlag, useSeatArt } from '@/components/SeatFlag';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { UnknownSeatIcon } from '@/components/UnknownSeatIcon';
+import SeatName from '@/components/SeatName';
 
 // A flag tile with a VISIBLE globe fallback (not display:none).
 function FlagTile({ country, active, spoken }: { country: string; active: boolean; spoken: boolean }) {
+  const { language } = useLanguage();
   // Seat crest first, national flag second — same tile, same ring, same globe
   // fallback. `hasArt` replaces the old `code` truthiness check.
   const art = useSeatArt(country);
@@ -28,9 +30,17 @@ function FlagTile({ country, active, spoken }: { country: string; active: boolea
           <span style={{ position: 'absolute', top: 3, right: 3, width: 7, height: 7, borderRadius: '50%', backgroundColor: '#3D7A52', boxShadow: '0 0 0 1.5px #FAF8F3' }} />
         )}
       </div>
-      <span className="text-[9px] leading-tight text-center [overflow-wrap:anywhere] w-full" style={{ color: active ? '#1B3828' : '#6A5A4A', fontWeight: active ? 800 : 500 }}>
-        {country}
-      </span>
+      {/* A long seat (a crisis character) is two rows: the short form, the full name smaller
+          beneath, wrapping; never cut (CLAUDE.md §8, src/components/SeatName.tsx). */}
+      <SeatName
+        name={getCountryDisplayName(country, language)}
+        max={10}
+        block
+        align="center"
+        subScale={0.86}
+        className="text-[10px] leading-tight text-center w-full"
+        style={{ color: active ? '#1B3828' : '#6A5A4A', fontWeight: active ? 800 : 600 }}
+      />
     </div>
   );
 }
@@ -54,7 +64,7 @@ export default function CowDelegationBoard({ committee, onTap }: {
       {current && (
         <p className="text-xs text-center mb-2 font-mono" style={{ color: '#6A5A4A' }}>
           <span style={{ color: '#9A8A78' }}>Speaking: </span>
-          <span style={{ color: '#1B3828', fontWeight: 700 }}>{getCountryDisplayName(current, language)}</span>
+          <SeatName name={getCountryDisplayName(current, language)} max={30} align="center" style={{ color: '#1B3828', fontWeight: 700, verticalAlign: 'top' }} />
         </p>
       )}
       <div className="flex flex-wrap justify-center gap-2 max-h-[280px] overflow-y-auto">

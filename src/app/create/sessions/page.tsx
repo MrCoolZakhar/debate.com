@@ -8,6 +8,7 @@ import Link from 'next/link';
 import { createCommittee as createCommitteeInDB } from '@/lib/committeeService';
 import { useSettingsStore } from '@/lib/settingsStore';
 import { UN_COUNTRIES, getCountryByName, getCountryDisplayName, countryMatchRank, findCountryFlexible, compareCountryNames } from '@/lib/countries';
+import SeatName from '@/components/SeatName';
 import { UNSC_MEMBERS, WHO_MEMBERS, IMF_MEMBERS, WORLD_BANK_MEMBERS, UNEP_MEMBERS, ICC_ROLES, ICJ_ROLES, CRISIS_MEMBERS, FIFA_MEMBERS, HOUSE_OF_COMMONS_ROLES, US_SENATE_MEMBERS, PRESS_ROLES, EUROPEAN_PARLIAMENT_MEMBERS } from '@/lib/presets';
 import { Check, ChevronLeft, ClipboardList, CornerDownLeft, Globe, Languages, Megaphone, PenLine, Plus, Search, UserRound, Wand2, X } from 'lucide-react';
 import { CircleFlag } from '@/components/CircleFlag';
@@ -764,7 +765,7 @@ function CreatePageInner() {
                             onBlur={() => commitRename(editDraft)}
                           />
                         ) : (
-                          <span className="min-w-0 [overflow-wrap:anywhere] text-[14.5px] font-semibold leading-tight" style={{ color: C.ink }} title={display}>{display}</span>
+                          <SeatName name={display} max={26} className="min-w-0 text-[14.5px] font-semibold leading-tight" style={{ color: C.ink }} title={display} />
                         )}
                       </div>
                       {/* Observer status is the megaphone itself (CLAUDE.md §8: never an "Observer" pill). */}

@@ -29,6 +29,10 @@ import {
 } from '@/lib/presets';
 import { useScrollLock } from '@/hooks/useScrollLock';
 import { type SlotGroup, newGroupId, GROUP_COLORS, effectiveSlotArt, PARLIAMENT_PRESETS } from '@/lib/slotGroups';
+// The groups bar, the parliament presets and the group menu's colour and
+// add-seats controls (12 Oct 2026). Presentation only; every mutation below
+// stays here.
+import { SeatGroupsBar, GroupColorSwatches, AddSeatsToGroup, PARLIAMENT_CSS } from '@/components/parliamentSetup';
 
 // ── Importance tiers ──────────────────────────────────────────────────────────
 // Mirrors the assignment page's model so tiers set here round-trip through the
@@ -647,14 +651,12 @@ export function ConferenceRosterSelected({
   const chooserPanelRef = useRef<HTMLDivElement>(null);
   const chooserPos = useFloatingPos(!!chooser, applyFor?.idx ?? null, chooserAnchorRef, 240, 280);
 
-  // Groups bar state.
-  const [addingGroup, setAddingGroup] = useState(false);
-  const [groupDraft, setGroupDraft] = useState('');
+  // Groups bar state (the add-group field lives in SeatGroupsBar).
   const [groupMenuId, setGroupMenuId] = useState<string | null>(null);
   const [groupRename, setGroupRename] = useState('');
   const groupMenuAnchorRef = useRef<HTMLElement | null>(null);
   const groupMenuPanelRef = useRef<HTMLDivElement>(null);
-  const groupMenuPos = useFloatingPos(!!groupMenuId, groupMenuId, groupMenuAnchorRef, 220, 200);
+  const groupMenuPos = useFloatingPos(!!groupMenuId, groupMenuId, groupMenuAnchorRef, 260, 420);
 
   // Drag and drop between sections.
   const [dragIdx, setDragIdx] = useState<number | null>(null);
@@ -749,10 +751,8 @@ export function ConferenceRosterSelected({
   // ── Groups ──
   const nextColor = (list: SlotGroup[], offset = 0) => GROUP_COLORS[(list.length + offset) % GROUP_COLORS.length];
 
-  const commitNewGroup = () => {
-    const name = groupDraft.trim();
-    setAddingGroup(false);
-    setGroupDraft('');
+  const addGroup = (raw: string) => {
+    const name = raw.trim();
     if (!name) return;
     mutateGroups((prev) => (
       prev.some((g) => g.name.toLowerCase() === name.toLowerCase())
@@ -813,6 +813,35 @@ export function ConferenceRosterSelected({
 
   const clearGroupLogo = (id: string) => {
     mutateGroups((prev) => prev.map((g) => (g.id === id ? { ...g, logo_url: null } : g)));
+  };
+
+  // A party colour. `color` already lives in conference_committees.groups and
+  // is written whole on save, so this needs nothing new in the database. Id
+  // untouched, like a rename.
+  const recolorGroup = (id: string, color: string) => {
+    mutateGroups((prev) => prev.map((g) => (g.id === id ? { ...g, color } : g)));
+  };
+
+  // "Add N seats" to a group: a parliament seats MPs by number. Named after
+  // the group ("EPP 1", "EPP 2"), skipping any name already on the list (the
+  // roster is unique by name, case-insensitively), each one renameable.
+  const addSeatsToGroup = (id: string, n: number) => {
+    const g = groupsRef.current.find((x) => x.id === id);
+    if (!g || n < 1) return;
+    const cur = valueRef.current;
+    const taken = new Set(cur.map((r) => r.name.toLowerCase()));
+    const add: RosterEntry[] = [];
+    for (let k = 1; add.length < Math.min(n, 200) && k < 10000; k++) {
+      const name = `${g.name} ${k}`;
+      if (taken.has(name.toLowerCase())) continue;
+      taken.add(name.toLowerCase());
+      add.push({ name, importance: 'standard', isObserver: false, logoUrl: null, groupId: id });
+    }
+    if (add.length === 0) return;
+    const next = [...cur, ...add];
+    valueRef.current = next;
+    onChange(next);
+    setGroupMenuId(null);
   };
 
   // Rows to render, paired with their original index so every handler mutates
@@ -971,61 +1000,18 @@ export function ConferenceRosterSelected({
         </div>
       </div>
 
-      {/* Groups bar (custom committees only). */}
+      {/* Groups bar (custom committees only): group cards, add group, and the
+          parliaments to start from (src/components/parliamentSetup.tsx). */}
       {showGroups && (
-        <div className="mb-2 flex flex-col gap-1.5">
-          <div className="flex items-center gap-1.5 flex-wrap">
-            <span style={{ ...labelStyle, marginBottom: 0, fontSize: 9.5 }}>Groups</span>
-            {groups.map((g) => (
-              <button
-                key={g.id}
-                type="button"
-                className="gv-rs-pill"
-                title={`${g.name}: rename, set a flag, or remove`}
-                aria-expanded={groupMenuId === g.id}
-                onClick={(e) => { if (groupMenuId === g.id) setGroupMenuId(null); else openGroupMenu(g.id, e.currentTarget); }}
-                style={{ borderColor: groupMenuId === g.id ? '#1B3828' : undefined }}
-              >
-                {g.logo_url
-                  ? <CircleFlag logoUrl={g.logo_url} label={g.name} size={16} logoFit="contain" decorative />
-                  : <span style={{ width: 8, height: 8, borderRadius: 999, backgroundColor: g.color ?? '#1B3828', flexShrink: 0 }} />}
-                <span className="min-w-0 text-left [overflow-wrap:anywhere]" style={{ maxWidth: 160 }}>{g.name}</span>
-                <span style={{ fontSize: 9.5, color: '#9A8A78', fontVariantNumeric: 'tabular-nums' }}>{groupCounts.get(g.id) ?? 0}</span>
-              </button>
-            ))}
-            {addingGroup ? (
-              <input
-                autoFocus
-                value={groupDraft}
-                onChange={(e) => setGroupDraft(e.target.value)}
-                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); commitNewGroup(); } else if (e.key === 'Escape') { setAddingGroup(false); setGroupDraft(''); } }}
-                onBlur={commitNewGroup}
-                placeholder="Group name"
-                aria-label="New group name"
-                style={{ ...inputStyle, width: 130, padding: '3px 8px', fontSize: 11.5, borderRadius: 999 }}
-              />
-            ) : (
-              <button type="button" className="gv-rs-pill" onClick={() => setAddingGroup(true)} style={{ borderStyle: 'dashed', color: '#1B3828' }}>
-                <Plus size={11} strokeWidth={2.5} />
-                Group
-              </button>
-            )}
-            <GSelect
-              value=""
-              onChange={(v) => applyPreset(v)}
-              aria-label="Start from a preset"
-              title="Append a parliament's groups"
-              placeholder="Start from a preset"
-              size="sm"
-              panelMinWidth={220}
-              style={{ fontFamily: "var(--font-brand), sans-serif", fontSize: 10.5, fontWeight: 600, color: '#6E5F4E', border: '1px solid #DDD4C0', borderRadius: 999, padding: '3px 8px', backgroundColor: '#FAF8F3', minHeight: 0, width: 'auto', maxWidth: 170 }}
-              options={PARLIAMENT_PRESETS.map((p) => ({ value: p.key, label: p.label }))}
-            />
-          </div>
-          {groups.length === 0 && (
-            <p style={{ margin: 0, fontSize: 10.5, color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}>Add parties or benches, then drag seats under them.</p>
-          )}
-        </div>
+        <SeatGroupsBar
+          groups={groups}
+          counts={groupCounts}
+          seatTotal={value.length}
+          menuOpenId={groupMenuId}
+          onOpenMenu={(id, el) => { if (groupMenuId === id) setGroupMenuId(null); else openGroupMenu(id, el); }}
+          onAddGroup={addGroup}
+          onApplyPreset={applyPreset}
+        />
       )}
 
       {/* Order toggle. Display-only; sorts inside each section when grouped. */}
@@ -1099,18 +1085,23 @@ export function ConferenceRosterSelected({
                 }}
               >
                 {hasGroups && (
-                  <div className="flex items-center gap-2" style={{ padding: '5px 4px 4px' }}>
-                    <span style={{ width: 3, height: 14, borderRadius: 2, backgroundColor: g ? (g.color ?? '#1B3828') : '#C9BEA2', flexShrink: 0 }} />
-                    {g?.logo_url && <CircleFlag logoUrl={g.logo_url} label={g.name} size={18} logoFit="contain" decorative />}
-                    <span className="min-w-0 [overflow-wrap:anywhere]" style={{ fontFamily: "var(--font-brand), sans-serif", fontSize: 10.5, fontWeight: 800, letterSpacing: '0.08em', textTransform: 'uppercase', color: g ? '#1B3828' : '#9A8A78' }}>
+                  /* The group's header: its crest (or its colour as a disc),
+                     its name in plain sans, and the count beside it. */
+                  <div className="flex items-center gap-2" style={{ padding: '7px 6px 5px' }}>
+                    {g ? (
+                      <CircleFlag logoUrl={g.logo_url} label={g.name} size={20} logoFit="contain" ring={!!g.logo_url} monogramColors={{ bg: g.color ?? '#1B3828', fg: '#FFFFFF' }} decorative />
+                    ) : (
+                      <span aria-hidden style={{ width: 20, height: 20, borderRadius: 999, border: '1.5px dashed #B3A794', flexShrink: 0 }} />
+                    )}
+                    <span className="min-w-0 [overflow-wrap:anywhere]" style={{ fontFamily: "var(--font-brand), sans-serif", fontSize: 13, fontWeight: 700, color: g ? '#1C1410' : '#5A5046' }}>
                       {g ? g.name : 'Ungrouped'}
                     </span>
-                    <span style={{ fontFamily: "var(--font-brand), sans-serif", fontSize: 9.5, fontWeight: 700, color: '#9A8A78', fontVariantNumeric: 'tabular-nums' }}>{sec.rows.length}</span>
+                    <span style={{ fontFamily: "var(--font-brand), sans-serif", fontSize: 12.5, fontWeight: 800, color: '#1B3828', fontVariantNumeric: 'tabular-nums' }}>{sec.rows.length}</span>
                   </div>
                 )}
                 {hasGroups && sec.rows.length === 0 && (
                   <p style={{ margin: 0, padding: '4px 8px 6px', fontSize: 10.5, color: '#B3A794', fontFamily: "var(--font-brand), sans-serif", fontStyle: 'italic' }}>
-                    {isUngrouped ? 'Drop a seat here to ungroup it' : 'No seats yet. Drag seats here'}
+                    {isUngrouped ? 'Drop a seat here to ungroup it' : 'No seats yet. Drag seats here, or add seats from the group card'}
                   </p>
                 )}
                 {sec.rows.map(({ r: row, i: idx }) => {
@@ -1139,6 +1130,10 @@ export function ConferenceRosterSelected({
                         <span className="gv-rs-art">
                           {art.kind === 'logo' || art.kind === 'flag' ? (
                             <CircleFlag art={art} label={row.name} size={panel ? 30 : 24} logoFit="contain" decorative />
+                          ) : hasGroups && row.groupId && groups.some((x) => x.id === row.groupId) ? (
+                            /* No crest yet: the seat wears its party's colour, so
+                               the list reads by group at a glance. Display only. */
+                            <CircleFlag label={row.name} size={panel ? 30 : 24} ring={false} monogramColors={{ bg: groups.find((x) => x.id === row.groupId)?.color ?? '#1B3828', fg: '#FFFFFF' }} decorative />
                           ) : isCharacter ? (
                             <Users size={17} strokeWidth={1.5} style={{ color: '#B6871F' }} />
                           ) : (
@@ -1307,29 +1302,37 @@ export function ConferenceRosterSelected({
           <div
             ref={groupMenuPanelRef}
             onKeyDown={(e) => { if (e.key === 'Escape') setGroupMenuId(null); }}
-            style={{ ...floatingPanelStyle, top: groupMenuPos.top, left: groupMenuPos.left, width: 220, transform: groupMenuPos.up ? 'translateY(-100%)' : undefined, padding: 6 }}
+            style={{ ...floatingPanelStyle, top: groupMenuPos.top, left: groupMenuPos.left, width: 260, maxWidth: 'calc(100vw - 16px)', maxHeight: 'calc(100dvh - 16px)', overflowY: 'auto', overscrollBehavior: 'contain', transform: groupMenuPos.up ? 'translateY(-100%)' : undefined, padding: 8, backgroundColor: '#FFFFFF', border: 'none', borderRadius: 16 }}
           >
-            <div className="flex items-center gap-2" style={{ padding: '4px 6px 6px' }}>
-              <span style={{ width: 10, height: 10, borderRadius: 999, backgroundColor: menuGroup.color ?? '#1B3828', flexShrink: 0 }} />
+            <style>{PARLIAMENT_CSS}</style>
+            <div className="flex items-center gap-2" style={{ padding: '2px 4px 8px' }}>
+              <CircleFlag logoUrl={menuGroup.logo_url} label={menuGroup.name} size={28} logoFit="contain" ring={!!menuGroup.logo_url} monogramColors={{ bg: menuGroup.color ?? '#1B3828', fg: '#FFFFFF' }} decorative />
               <input
                 value={groupRename}
                 onChange={(e) => setGroupRename(e.target.value)}
                 onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); commitGroupRename(menuGroup.id); } else if (e.key === 'Escape') setGroupMenuId(null); }}
                 onBlur={() => commitGroupRename(menuGroup.id)}
                 aria-label="Group name"
-                style={{ ...inputStyle, padding: '4px 8px', fontSize: 12, borderRadius: 7 }}
+                style={{ ...inputStyle, padding: '7px 10px', fontSize: 16, fontWeight: 600, borderRadius: 10 }}
               />
+            </div>
+            <div style={{ padding: '2px 6px 10px' }}>
+              <p style={{ margin: '0 0 6px', fontSize: 12.5, fontWeight: 700, color: '#1C1410' }}>Colour</p>
+              <GroupColorSwatches value={menuGroup.color} onPick={(c) => recolorGroup(menuGroup.id, c)} />
+            </div>
+            <div style={{ padding: '2px 6px 10px', borderBottom: '1px solid #EFE9DB', marginBottom: 4 }}>
+              <AddSeatsToGroup key={menuGroup.id} groupName={menuGroup.name} onAdd={(n) => addSeatsToGroup(menuGroup.id, n)} />
             </div>
             <button type="button" className="gv-rs-menu-btn" onClick={() => pickFile({ kind: 'group', id: menuGroup.id })} disabled={uploading === `group:${menuGroup.id}`}>
               {menuGroup.logo_url
                 ? <CircleFlag logoUrl={menuGroup.logo_url} label={menuGroup.name} size={18} logoFit="contain" decorative />
                 : <ImagePlus size={14} strokeWidth={1.75} style={{ color: '#B6871F' }} />}
-              {uploading === `group:${menuGroup.id}` ? 'Uploading…' : menuGroup.logo_url ? 'Replace flag' : 'Set flag'}
+              {uploading === `group:${menuGroup.id}` ? 'Uploading…' : menuGroup.logo_url ? 'Replace crest' : 'Set a crest'}
             </button>
             {menuGroup.logo_url && (
               <button type="button" className="gv-rs-menu-btn" onClick={() => clearGroupLogo(menuGroup.id)}>
                 <X size={14} strokeWidth={2} style={{ color: '#9A8A78' }} />
-                Remove flag
+                Remove crest
               </button>
             )}
             <button type="button" className="gv-rs-menu-btn gv-rs-danger" onClick={() => removeGroup(menuGroup.id)}>
@@ -1343,8 +1346,11 @@ export function ConferenceRosterSelected({
   );
 }
 
-export function ConferenceRosterPicker({ mode, value, onChange, showSelected = true, compact = false }: {
+export function ConferenceRosterPicker({ mode, value, onChange, showSelected = true, compact = false, parliament = false }: {
   mode: 'country' | 'character';
+  /** A custom (parliamentary) committee: the free-text seats are members, not
+   *  characters, so the labels say so. Wording only. */
+  parliament?: boolean;
   value: RosterEntry[];
   onChange: (roster: RosterEntry[]) => void;
   /** The committee editor's layout: the paste box is three rows and the
@@ -1473,7 +1479,7 @@ export function ConferenceRosterPicker({ mode, value, onChange, showSelected = t
       <div className={`flex flex-col ${compact ? 'gap-2' : 'gap-3'} flex-1 min-w-0`}>
         {/* Search & Add */}
         <div>
-          <label style={labelStyle}>{isCharacter ? 'Add Character' : 'Search & Add'}</label>
+          <label style={labelStyle}>{parliament ? 'Add a Member' : isCharacter ? 'Add Character' : 'Search & Add'}</label>
           <div className="relative">
             <div ref={searchAnchorRef} className="flex items-center rounded-xl" style={{ border: '1px solid #DDD4C0', backgroundColor: '#FAF8F3' }}>
               <input
@@ -1488,7 +1494,7 @@ export function ConferenceRosterPicker({ mode, value, onChange, showSelected = t
                   }
                   if (e.key === 'Escape') setSearch('');
                 }}
-                placeholder={isCharacter ? 'Type a character or role name, press Enter…' : 'Search countries or type a name…'}
+                placeholder={parliament ? 'Type a member or seat name, press Enter…' : isCharacter ? 'Type a character or role name, press Enter…' : 'Search countries or type a name…'}
                 className="flex-1 min-w-0 bg-transparent px-3 py-2 text-base sm:text-sm focus:outline-none"
                 style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}
               />
@@ -1560,7 +1566,7 @@ export function ConferenceRosterPicker({ mode, value, onChange, showSelected = t
             "the copy-a-list-of-countries should be there all the time, not a
             drop-down"). Compact only makes it three rows. */}
         <div className="flex flex-col flex-1">
-          <label style={labelStyle}>{isCharacter ? 'Paste Character List' : 'Paste Country List'}</label>
+          <label style={labelStyle}>{parliament ? 'Paste Member List' : isCharacter ? 'Paste Character List' : 'Paste Country List'}</label>
           {isCharacter && (
             <p style={{ margin: '0 0 4px', fontSize: 10.5, color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}>
               One per line. Commas are kept, so &quot;Chairperson, Standing Committee&quot; stays one seat.
@@ -1569,7 +1575,7 @@ export function ConferenceRosterPicker({ mode, value, onChange, showSelected = t
           <textarea
             value={pasteText}
             onChange={(e) => { setPasteText(e.target.value); setPasteError(''); }}
-            placeholder={isCharacter ? 'Fidel Castro\nNikita Khrushchev\nJohn F. Kennedy…' : 'France\nGermany\nBrazil, India…'}
+            placeholder={parliament ? 'Roberta Metsola\nManfred Weber\nIratxe García…' : isCharacter ? 'Fidel Castro\nNikita Khrushchev\nJohn F. Kennedy…' : 'France\nGermany\nBrazil, India…'}
             /* 8 rows → 4. This is a paste TARGET, not a place anyone reads a
                list back: it scrolls, it is resize-y, and the 8-row default was
                ~90px of the committee editor's height — the single biggest

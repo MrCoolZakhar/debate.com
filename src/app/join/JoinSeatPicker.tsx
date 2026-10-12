@@ -36,6 +36,7 @@ import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'rea
 import { Check, Lock, Megaphone, Search, UserRound, UserX, X } from 'lucide-react';
 import { CircleFlag } from '@/components/CircleFlag';
 import { countryMatchRank, getCountryDisplayName } from '@/lib/countries';
+import SeatName from '@/components/SeatName';
 import { C, OUTFIT } from './joinUi';
 
 /** 'removed' = a chair removed this device from this seat in the last 10 minutes. */
@@ -357,9 +358,7 @@ export default function JoinSeatPicker({
                   decorative
                   ring={picked ? 'rgba(238,217,138,0.5)' : true}
                 />
-                <span className="min-w-0 flex-1 [overflow-wrap:anywhere]" style={{ fontFamily: OUTFIT, fontSize: 16, lineHeight: 1.25, fontWeight: picked ? 700 : 600, color: picked ? '#FFFFFF' : C.ink }}>
-                  {label}
-                </span>
+                <SeatName name={label} max={26} className="min-w-0 flex-1" style={{ fontFamily: OUTFIT, fontSize: 16, lineHeight: 1.25, fontWeight: picked ? 700 : 600, color: picked ? '#FFFFFF' : C.ink }} subScale={0.8} />
                 {seat.isObserver && (
                   <span role="img" aria-label={labels.observer} title={labels.observer} className="flex flex-shrink-0" style={{ color: picked ? C.gold : '#8A6414' }}>
                     <Megaphone size={15} strokeWidth={2.2} />

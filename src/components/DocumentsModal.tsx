@@ -23,6 +23,7 @@ import { sponsorLabel } from '@/lib/committeeFlags';
 import { docName, docCount, docLimit, docLimitReached } from '@/lib/docNames';
 import { TranslationKey } from '@/lib/translations';
 import { getCountryDisplayName, matchesCountryQuery, startsWithCountryQuery } from '@/lib/countries';
+import SeatName from '@/components/SeatName';
 import { SeatFlag } from '@/components/SeatFlag';
 import { supabase } from '@/lib/supabase';
 import { safeStorageKey } from '@/lib/storageKey';
@@ -190,7 +191,7 @@ function SponsorSelect({ candidates, selected, onChange, committee }: {
                   <button key={c} onMouseDown={(e) => { e.preventDefault(); add(c); }}
                     className={`w-full flex items-center gap-2 px-3 py-2 text-start transition-colors ${i === 0 ? 'bg-[#1B3828]/20 text-[#1C1410]' : 'text-[#1C1410] hover:bg-[#DDD4C0]'}`}>
                     <SeatFlag country={c} size={20} className="object-contain inline-block" fallback={<UnknownSeatIcon size={20} />} />
-                    <span className="text-sm">{getCountryDisplayName(c, language)}</span>
+                    <SeatName name={getCountryDisplayName(c, language)} max={26} className="text-sm" />
                   </button>
                 );
               })}

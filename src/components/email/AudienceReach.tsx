@@ -118,6 +118,12 @@ interface Props {
   onSend: () => void;
   sendDisabled: boolean;
   sendBusyLabel: string | null;
+  /** 'bar' (default): the sticky full-width bar with Send in it.
+   *  'column': the builder's right-hand sending column. Title, the big
+   *  count, the sentence and Change who stacked, no card of its own, no
+   *  sticky, and no Send (the column puts Send at its own foot). The picker
+   *  modal is the same in both. */
+  layout?: 'bar' | 'column';
 }
 
 /** Beyond this the field stops being one-dot-per-person and says so, rather
@@ -156,7 +162,7 @@ function joinLabels(labels: string[]): string {
 
 /** The sentence. This is the thing that has to survive the ten-year-old test,
  *  so it is built out of whole clauses rather than a chip salad. */
-function describeAudience(sections: AudienceSectionDef[], manualAdded: number, excluded: number): string {
+export function describeAudience(sections: AudienceSectionDef[], manualAdded: number, excluded: number): string {
   const roles = sections.find(s => s.key === 'roles');
   const rolePart = roles && roles.selected.size > 0
     ? joinLabels(roles.options.filter(o => roles.selected.has(o.value)).map(o => o.label))
@@ -342,7 +348,7 @@ function Disclosure({
 export default function AudienceReach({
   sections, onToggle, onClearSection, onClearAll, dots, reachCount, optedOutCount, groups,
   manualQuery, onManualQuery, manualMatches, onAddPerson, onRemovePerson,
-  manualAddedCount, excludedCount, restored, onSend, sendDisabled, sendBusyLabel,
+  manualAddedCount, excludedCount, restored, onSend, sendDisabled, sendBusyLabel, layout = 'bar',
 }: Props) {
   const [open, setOpen] = useState(false);
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
@@ -410,8 +416,63 @@ export default function AudienceReach({
     borderRadius: 22,
   };
 
+  const changeWhoButton = (full: boolean) => (
+    <button
+      type="button"
+      onClick={openPicker}
+      aria-haspopup="dialog"
+      aria-expanded={open}
+      className={`inline-flex items-center justify-center gap-1.5 focus:outline-none ${full ? 'w-full' : ''}`}
+      style={{
+        minHeight: 44, padding: '11px 16px', borderRadius: 999,
+        border: `1.5px solid rgba(27,56,40,0.22)`, backgroundColor: '#FFFDF8',
+        fontFamily: OUTFIT, fontSize: 13.5, fontWeight: 700,
+        color: FOREST, cursor: 'pointer',
+        transitionProperty: 'background-color', transitionDuration: '180ms',
+      }}
+      onMouseEnter={e => { e.currentTarget.style.backgroundColor = 'rgba(27,56,40,0.05)'; }}
+      onMouseLeave={e => { e.currentTarget.style.backgroundColor = '#FFFDF8'; }}
+    >
+      <SlidersHorizontal size={14} strokeWidth={2.4} />
+      Change who
+    </button>
+  );
+
+  const optedOutChip = optedOutCount > 0 ? (
+    <span className="self-center">
+      <HintChip icon={AlertTriangle} tone="amber" label={String(optedOutCount)}>
+        {optedOutCount} {optedOutCount === 1 ? 'person has' : 'people have'} turned off marketing emails. They are left off automatically and are not in the count.
+      </HintChip>
+    </span>
+  ) : null;
+
   return (
     <>
+      {layout === 'column' ? (
+        // ── THE SENDING COLUMN'S "WHO". The same facts as the bar, stacked
+        // for a 260px column: a title, the big number, the whole sentence
+        // (never clamped here: the column has the height), Change who.
+        <div>
+          <div className="mb-1.5 flex items-center gap-2">
+            <Emoji3D name="Busts in silhouette" size={22} fallback={Users} fallbackColor={FOREST} />
+            <p style={{ fontFamily: OUTFIT, fontSize: 16, fontWeight: 800, color: INK }}>Who Gets It</p>
+          </div>
+          <p className="flex items-baseline gap-1.5 flex-wrap" style={{ fontFamily: OUTFIT, color: INK, lineHeight: 1.15 }}>
+            <span style={{ fontSize: 30 }}><BigNumber n={reachCount} /></span>
+            <span style={{ fontSize: 15, fontWeight: 700 }}>{reachCount === 1 ? 'person' : 'people'}</span>
+            {total > 0 && (
+              <span style={{ fontSize: 12.5, fontWeight: 600, color: SOFT, fontVariantNumeric: 'tabular-nums' }}>
+                of {total.toLocaleString()}
+              </span>
+            )}
+            {optedOutChip}
+          </p>
+          <p className="mt-1 mb-3" style={{ fontFamily: OUTFIT, fontSize: 13.5, color: SOFT, lineHeight: 1.45, textWrap: 'pretty' }}>
+            {summary}
+          </p>
+          {changeWhoButton(true)}
+        </div>
+      ) : (
       <div
         className="mb-3"
         style={{
@@ -464,13 +525,7 @@ export default function AudienceReach({
                     of {total.toLocaleString()}
                   </span>
                 )}
-                {optedOutCount > 0 && (
-                  <span className="self-center">
-                    <HintChip icon={AlertTriangle} tone="amber" label={String(optedOutCount)}>
-                      {optedOutCount} {optedOutCount === 1 ? 'person has' : 'people have'} turned off marketing emails. They are left off automatically and are not in the count.
-                    </HintChip>
-                  </span>
-                )}
+                {optedOutChip}
               </p>
               {/* The sentence wraps rather than ending in an ellipsis: it is
                   the answer to "who", so it is never cut. Two lines at most,
@@ -487,30 +542,13 @@ export default function AudienceReach({
             </div>
 
             <div className="flex flex-wrap items-center gap-2 min-w-0">
-              <button
-                type="button"
-                onClick={openPicker}
-                aria-haspopup="dialog"
-                aria-expanded={open}
-                className="inline-flex items-center gap-1.5 focus:outline-none"
-                style={{
-                  minHeight: 44, padding: '11px 16px', borderRadius: 999,
-                  border: `1.5px solid rgba(27,56,40,0.22)`, backgroundColor: '#FFFDF8',
-                  fontFamily: OUTFIT, fontSize: 13.5, fontWeight: 700,
-                  color: FOREST, cursor: 'pointer',
-                  transitionProperty: 'background-color', transitionDuration: '180ms',
-                }}
-                onMouseEnter={e => { e.currentTarget.style.backgroundColor = 'rgba(27,56,40,0.05)'; }}
-                onMouseLeave={e => { e.currentTarget.style.backgroundColor = '#FFFDF8'; }}
-              >
-                <SlidersHorizontal size={14} strokeWidth={2.4} />
-                Change who
-              </button>
+              {changeWhoButton(false)}
               <SendButton onClick={onSend} disabled={sendDisabled} count={reachCount} busy={sendBusyLabel} />
             </div>
           </div>
         </div>
       </div>
+      )}
 
       {/* ── The picker. A MODAL, not a drop-down.
           As an inline unfold it was a 954px panel that shoved the whole
@@ -980,7 +1018,7 @@ export default function AudienceReach({
 
 /** The one irreversible button on the screen, so it is the one that looks
  *  most like an object: gold, lifted, and it says the number out loud. */
-function SendButton({ onClick, disabled, count, busy }: { onClick: () => void; disabled: boolean; count: number; busy: string | null }) {
+export function SendButton({ onClick, disabled, count, busy, block }: { onClick: () => void; disabled: boolean; count: number; busy: string | null; block?: boolean }) {
   const [hovered, setHovered] = useState(false);
   const [pressed, setPressed] = useState(false);
   const g = NEU_GRADIENTS.gold;
@@ -993,9 +1031,9 @@ function SendButton({ onClick, disabled, count, busy }: { onClick: () => void; d
       onMouseLeave={() => { setHovered(false); setPressed(false); }}
       onPointerDown={() => setPressed(true)}
       onPointerUp={() => setPressed(false)}
-      className="inline-flex items-center justify-center gap-2 focus:outline-none flex-shrink-0"
+      className={`inline-flex items-center justify-center gap-2 focus:outline-none flex-shrink-0 ${block ? 'w-full' : ''}`}
       style={{
-        minHeight: 44, padding: '11px 20px', borderRadius: 999, border: 'none',
+        minHeight: block ? 50 : 44, padding: '11px 20px', borderRadius: 999, border: 'none',
         background: disabled ? 'rgba(27,56,40,0.12)' : `linear-gradient(135deg, ${g[0]}, ${g[1]})`,
         color: disabled ? NEU.muted : FOREST,
         fontFamily: OUTFIT, fontSize: 14, fontWeight: 800,

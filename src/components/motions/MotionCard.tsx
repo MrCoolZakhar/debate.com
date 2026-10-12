@@ -24,6 +24,7 @@ import { Gavel } from 'lucide-react';
 import { useT } from '@/contexts/LanguageContext';
 import type { PendingMotion } from '@/lib/types';
 import { getCountryDisplayName } from '@/lib/countries';
+import SeatName from '@/components/SeatName';
 import { caucusQueueCapacity } from '@/lib/committeeService';
 import { SeatCircleFlag } from '@/components/CircleFlag';
 
@@ -160,7 +161,7 @@ export function MotionSummary({ motion, label, size, language, titleAddon }: {
           <ProposerFlag proposedBy={m.proposedBy} size={z.flag} />
           <div className="min-w-0 flex flex-col">
             <span style={{ fontSize: z.whoLabel, lineHeight: 1.2, fontWeight: 600, color: MOTION_SOFT }}>{t('motion_card_raised_by')}</span>
-            <span className="[overflow-wrap:anywhere]" style={{ fontSize: z.who, lineHeight: 1.18, fontWeight: 800, color: INK }}>{whoName}</span>
+            <SeatName name={whoName} max={size === 'primary' ? 26 : 20} block style={{ fontSize: z.who, lineHeight: 1.18, fontWeight: 800, color: INK }} subScale={0.8} />
           </div>
         </div>
       ) : (

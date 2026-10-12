@@ -65,11 +65,13 @@ function emailOf(p: ReachPerson): string | null {
 }
 
 export default function RecipientRoster({
-  groups, reachCount, wide,
+  groups, reachCount, wide, listMaxHeight,
 }: {
   groups: ReachGroup[];
   reachCount: number;
   wide: boolean;
+  /** Caps the scrolling list (the send confirmation keeps it short). */
+  listMaxHeight?: number;
 }) {
   const [query, setQuery] = useState('');
 
@@ -119,7 +121,7 @@ export default function RecipientRoster({
 
       <div
         className="flex flex-col gap-2.5"
-        style={{ maxHeight: wide ? 'calc(100vh - 260px)' : 320, overflowY: 'auto', overflowX: 'hidden' }}
+        style={{ maxHeight: listMaxHeight ?? (wide ? 'calc(100vh - 260px)' : 320), overflowY: 'auto', overflowX: 'hidden' }}
       >
         {filtered.map(g => (
           <div key={g.key}>

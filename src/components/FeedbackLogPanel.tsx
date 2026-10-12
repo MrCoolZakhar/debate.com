@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { SeatCircleFlag } from '@/components/CircleFlag';
 import { CaucusState, Committee } from '@/lib/types';
 import { getCountryDisplayName } from '@/lib/countries';
+import SeatName from '@/components/SeatName';
 import { useLanguage, useT } from '@/contexts/LanguageContext';
 import { getScoringConfig, RATING_MIN } from '@/lib/scoring';
 import { factorName } from '@/lib/scoringNames';
@@ -892,7 +893,7 @@ export default function FeedbackLogPanel({ committee, chairName, currentCountry,
             <div className="flex items-center gap-2.5">
               <span title={item.topic || undefined} className="text-[11px] font-black uppercase tracking-wider shrink-0" style={{ color: '#1B3828' }}>{tagFor(item)}</span>
               <SeatCircleFlag country={item.country} size={26} decorative className="shrink-0" />
-              <span className="flex-1 min-w-0 text-base font-bold leading-tight [overflow-wrap:anywhere]" style={{ color: '#1C1410' }}>{getCountryDisplayName(item.country, language)}</span>
+              <SeatName name={getCountryDisplayName(item.country, language)} max={26} className="flex-1 min-w-0 text-base font-bold leading-tight" style={{ color: '#1C1410' }} />
               {!isLive && (
                 <button
                   onClick={(e) => { e.stopPropagation(); returnPendingRef.current = false; setFocusKey(null); }}
@@ -939,7 +940,7 @@ export default function FeedbackLogPanel({ committee, chairName, currentCountry,
             onClick={() => { returnPendingRef.current = false; setFocusKey(item.key); }}
             className="flex-1 min-w-0 flex items-center gap-3"
             style={{
-              height: 54, borderRadius: 9999, backgroundColor: '#EDE7D8',
+              minHeight: 54, borderRadius: 9999, backgroundColor: '#EDE7D8',
               border: '1px solid rgba(221,212,192,0.85)', boxShadow,
               transform: `scale(${scale})`,
               transformOrigin: 'center', transition: PILL_TRANSITION,
@@ -947,7 +948,7 @@ export default function FeedbackLogPanel({ committee, chairName, currentCountry,
             }}
           >
             <SeatCircleFlag country={item.country} size={22} decorative className="shrink-0" />
-            <span className="font-semibold shrink-0" style={{ color: '#1C1410' }}>{getCountryDisplayName(item.country, language)}</span>
+            <SeatName name={getCountryDisplayName(item.country, language)} max={18} className="font-semibold min-w-0 leading-tight" style={{ color: '#1C1410', flexShrink: 0, maxWidth: '45%' }} />
             {notes.length > 0 ? (
               <span
                 className="flex-1 min-w-0 truncate text-sm" style={{ color: '#6A5A4A' }}

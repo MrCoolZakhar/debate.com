@@ -1,5 +1,6 @@
 'use client';
 
+import SeatName from '@/components/SeatName';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { ArrowDown, ChevronLeft, Pencil } from 'lucide-react';
 import Portal from '@/components/Portal';
@@ -295,7 +296,7 @@ export default function ChatThread({
         <ChatAvatar kind={kind} name={convKey} size={40} />
         <div className="min-w-0 flex-1" style={{ paddingInlineStart: onBack ? 0 : 2 }}>
           <h3 className="[overflow-wrap:anywhere]" style={{ fontFamily: OUTFIT, fontWeight: 750, fontSize: 16.5, color: NEU.ink, lineHeight: 1.2 }}>
-            {label}
+            <SeatName name={label} max={kind === 'delegate' ? 26 : 999} block subScale={0.8} />
           </h3>
           {subtitle && (
             <p className="[overflow-wrap:anywhere]" style={{ fontFamily: OUTFIT, fontSize: 12.5, color: NEU.inkSoft, fontVariantNumeric: 'tabular-nums', lineHeight: 1.3 }}>

@@ -27,6 +27,7 @@
 // conferences side changed.
 // ─────────────────────────────────────────────────────────────────────────────
 
+import SeatName from '@/components/SeatName';
 import React, { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { MessageSquareQuote, ChevronRight, ChevronUp, ChevronDown, Trophy, ExternalLink } from 'lucide-react';
@@ -621,7 +622,7 @@ export function ScoreboardTable({
                   <span className="md:hidden" style={{ color: SOFT, fontVariantNumeric: 'tabular-nums', fontWeight: 700 }}>
                     {sortKey === 'name' ? '' : `${i + 1}. `}
                   </span>
-                  {displayCountry(r.country, locale)}
+                  <SeatName name={displayCountry(r.country, locale)} max={24} style={{ verticalAlign: 'top' }} />
                 </span>
                 {(r.status === 'absent' || r.isObserver) && (
                   <span style={{ fontFamily: OUTFIT, fontSize: 10.5, color: SOFT }}>

@@ -1327,6 +1327,7 @@ export function CommitteeSeatsStep({
         onChange={(roster) => onChange({ roster })}
         showSelected={false}
         compact={compactPaste}
+        parliament={isCustom}
       />
       {part === 'all' && (selectedInline || panel) && (
         <ConferenceRosterSelected

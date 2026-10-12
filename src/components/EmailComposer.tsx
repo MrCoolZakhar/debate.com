@@ -1,17 +1,24 @@
 'use client';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// THE EMAIL BUILDER, top to bottom in the order an organiser thinks:
+// THE EMAIL BUILDER, three columns (owner, Oct 2026: "the email starts near
+// the top", "bring back the left and right layout, simplified"):
 //
-//   WHO       the audience bar (the page's `reachSlot`, AudienceReach): one
-//             big number, one sentence, Change who, and Send.
-//   SUBJECT   one field, labelled with the one word it is.
-//   MESSAGE   the email itself at its real 600px width, edited in place, so
-//             the sheet IS the live preview. Above it: Add (blocks, their
-//             details, files, starters, one menu), Design, and Write / See it
-//             for real (the true `renderEmailHtml` output in an iframe).
-//   BESIDE    whatever is selected; with nothing selected, the short "Before
-//             you send" checklist, who gets it, and the test send.
+//   LEFT      Back, the email's name and Save; then the tools: Add (blocks,
+//             their details, files, starters), Design, and See it for real;
+//             then whatever block is selected, its few settings.
+//   MIDDLE    the email itself at its real 600px width, edited in place, so
+//             the sheet IS the live preview. Its subject line sits on top of
+//             it like a real email's. "See it for real" swaps the sheet for
+//             the true `renderEmailHtml` output in an iframe.
+//   RIGHT     everything about sending: who gets it (the page's `reachSlot`),
+//             the "Before you send" ticks, Send me a test, and Send at the
+//             foot (the page's `sendSlot`).
+//
+// The sheet mirrors the CARD design that is actually sent (emailCard.ts, the
+// twin of the database's gavelling_email_html): banner with the logo in a
+// white circle over its edge, the centred light headline with its gold rule,
+// forest pill buttons, the sign-off and "Made with Gavelling" under the card.
 //
 // Explanations live behind a "?" (HintDot) instead of being printed under
 // every title. Owner, Oct 2026: "slightly dumb down the email writer";
@@ -23,16 +30,17 @@
 // destination, an image and its alt text — because those are the only things
 // the block model actually stores.
 //
-// Below 1024px it is one column: the sheet goes fluid, and the properties
-// panel becomes a bottom sheet that rises when a block is selected.
+// Below 1180px it is one column: the email first, the sending column after
+// it, the tools in a bar pinned to the bottom of the screen, and a selected
+// block's settings in a sheet that rises above that bar.
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Trash2, ChevronUp, ChevronDown, Monitor, Smartphone, Send, Bold, Italic,
   Image as ImageIcon, Plus, GripVertical, X, Check, Sparkles,
-  Pencil, Eye, UserRound, Upload, AlertTriangle,
-  Palette, Users, Sun, Moon, Link2,
+  UserRound, Upload, AlertTriangle,
+  Sun, Moon, Link2,
 } from 'lucide-react';
 import {
   EMAIL_TOKEN_KEYS, resolveTokens, splitResolvedText,
@@ -42,7 +50,11 @@ import {
   type EmailBlock, type ButtonBlock, type ButtonDestination, type ImageBlock, type ParagraphVariant,
   BUTTON_DESTINATION_LABELS, flattenBlocksToPlainText, calendarUrlFor,
 } from '@/lib/emailBlocks';
-import { renderEmailHtml, resolveEmailTheme, type EmailRenderConference } from '@/lib/emailHtml';
+import { renderEmailHtml, resolveEmailTheme, socialLinks, type EmailRenderConference } from '@/lib/emailHtml';
+import {
+  emailBannerUrl, emailDatesLabel, emailCardFor, secretariatSignature, EMAIL_ASSET_BASE,
+} from '@/lib/emailCard';
+import { companyLegalLines } from '@/lib/companyDetails';
 import { conferenceAcronymLabel } from '@/lib/conferenceLabels';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { triggerEmailDelivery } from '@/lib/emailDelivery';
@@ -68,7 +80,6 @@ import ConferenceFilesPanel, {
   useConferenceFiles, blockForFile,
 } from '@/components/email/ConferenceFilesPanel';
 import DesignPanel, { type DesignControls } from '@/components/email/DesignPanel';
-import RecipientRoster from '@/components/email/RecipientRoster';
 import type { ReachGroup } from '@/components/email/AudienceReach';
 import { friendlyError } from '@/lib/friendlyError';
 
@@ -92,35 +103,25 @@ const DESK_WELL = 'inset 5px 5px 12px rgba(27,56,40,0.16), inset -4px -4px 10px 
 // same markup). The canvas deliberately draws the LIGHT scheme only: it is an
 // editing surface, and "See it for real" hands the real document to an iframe
 // where the reader's own scheme applies.
-const MAIL_SERIF = "Georgia, 'Times New Roman', Times, serif";
+// Since Oct 2026 these are the CARD design's numbers (src/lib/emailCard.ts,
+// switched on 23 Sep 2026, and its SQL twin public.gavelling_email_html),
+// because that is what `renderEmailHtml` actually sends. The canvas used to
+// mirror the retired classic design (a serif headline, an accent spine, a
+// footer band inside the card), so what was written did not look like what
+// arrived.
 const MAIL_SANS = "'Helvetica Neue', Helvetica, Arial, sans-serif";
 const MAIL_INK = '#241E17';
-const MAIL_INK_SOFT = '#544B3E';
+const MAIL_INK_SOFT = '#574B40';
 const MAIL_MUTED = '#6E6456';
 const MAIL_CARD = '#FFFFFF';
-const MAIL_FOOTER_BG = '#F7F4EC';
-const MAIL_HAIRLINE = '#E7E1D3';
-const MAIL_CHIP_BG = '#FAF8F3';
+const MAIL_CARD_BORDER = '#E4DCC8';
+const MAIL_HAIRLINE = '#EDE6D6';
+const MAIL_RULE = '#C9A63A';
 const SHEET_WIDTH = 600;
-const BANNER_HEIGHT = 170;
-const CONTENT_WIDTH = 520;
+const CONTENT_WIDTH = 528;
+/** The card's side padding (36px), the same on every row. */
+const MAIL_PAD = 36;
 
-/** The renderer's `inkOn`, restated: pick whichever of near-black / white
- *  contrasts better with a conference's chosen fill. Approximate on purpose —
- *  it only decides the colour of preview text, never of a sent email. */
-function inkOnColor(hex: string): string {
-  const h = hex.replace('#', '');
-  const full = h.length === 3 ? h.split('').map(c => c + c).join('') : h;
-  if (full.length !== 6) return MAIL_INK;
-  const lin = [0, 2, 4].map(i => {
-    const v = parseInt(full.slice(i, i + 2), 16) / 255;
-    return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
-  });
-  const L = 0.2126 * lin[0] + 0.7152 * lin[1] + 0.0722 * lin[2];
-  const cDark = (L + 0.05) / (0.0166 + 0.05);
-  const cLight = 1.05 / (L + 0.05);
-  return cDark >= cLight ? MAIL_INK : '#FFFFFF';
-}
 
 export interface PreviewCandidate {
   id: string;
@@ -144,9 +145,14 @@ interface EmailComposerProps {
   testSendContext: EmailTokenContext;
   accessToken: string | null;
   organizerEmail: string | null;
-  /** Rendered inside the canvas toolbar's own row on wide screens — the page
-   *  slots the audience summary here so "who gets it" is never off-screen. */
+  /** "Who gets it", drawn at the top of the right-hand sending column (the
+   *  page hands AudienceReach in `layout="column"`). Absent for an automatic
+   *  email, whose audience is fixed by its event. */
   reachSlot?: React.ReactNode;
+  /** The page's Send button, at the foot of the sending column. */
+  sendSlot?: React.ReactNode;
+  /** A quiet line under Send (the page's "N of 1,000 free emails used"). */
+  sendingNote?: React.ReactNode;
 
   // ── The builder's own header ──────────────────────────────────────────────
   // These three exist so the page can STOP rendering a header row of its own.
@@ -167,8 +173,8 @@ interface EmailComposerProps {
    *  rail section is not offered. See `DesignControls` in DesignPanel. */
   design?: DesignControls;
 
-  /** The audience, already grouped, for the Recipients rail section. Same
-   *  array the audience modal is given; this panel only ever reads it. */
+  /** The audience, already grouped. No longer drawn here (the list is in the
+   *  send confirmation now); kept so the page's call does not change. */
   recipients?: { groups: ReachGroup[]; reachCount: number };
 
   /** How many of the real recipients would get a ⚠field⚠ marker, and which
@@ -213,15 +219,23 @@ const ROLE_OPTIONS = [
 /** Editor typography per size preset — the renderer's own numbers, so what is
  *  typed is what is sent. Colour and family match too. */
 const VARIANT_CANVAS_STYLE: Record<ParagraphVariant, React.CSSProperties> = {
-  heading: { fontFamily: MAIL_SERIF, fontSize: 23, fontWeight: 700, lineHeight: 1.3, letterSpacing: '-0.01em', color: MAIL_INK, padding: '2px 0 12px' },
-  body: { fontFamily: MAIL_SANS, fontSize: 16, lineHeight: 1.7, color: MAIL_INK, paddingBottom: 20 },
-  small: { fontFamily: MAIL_SANS, fontSize: 13, lineHeight: 1.65, color: MAIL_MUTED, paddingBottom: 18 },
+  // A heading AFTER the first: emailCard's 19px bold forest row.
+  heading: { fontFamily: MAIL_SANS, fontSize: 19, fontWeight: 700, lineHeight: 1.3, color: FOREST, padding: '12px 0 12px' },
+  body: { fontFamily: MAIL_SANS, fontSize: 16, lineHeight: 1.6, color: MAIL_INK, paddingBottom: 12 },
+  small: { fontFamily: MAIL_SANS, fontSize: 13, lineHeight: 1.65, color: MAIL_MUTED, paddingBottom: 12 },
 };
 
-const VARIANT_META: { value: ParagraphVariant; label: string; sample: number; serif: boolean }[] = [
-  { value: 'heading', label: 'Headline', sample: 18, serif: true },
-  { value: 'body', label: 'Text', sample: 14, serif: false },
-  { value: 'small', label: 'Small', sample: 11.5, serif: false },
+/** The FIRST headline: emailCard's `headline()`, one large light sentence,
+ *  centred, with a short gold rule under it (drawn by the block frame). */
+const LEAD_CANVAS_STYLE: React.CSSProperties = {
+  fontFamily: MAIL_SANS, fontSize: 29, fontWeight: 300, lineHeight: 1.25, letterSpacing: '-0.01em',
+  color: FOREST, textAlign: 'center', padding: '4px 0 0',
+};
+
+const VARIANT_META: { value: ParagraphVariant; label: string; sample: number }[] = [
+  { value: 'heading', label: 'Headline', sample: 18 },
+  { value: 'body', label: 'Text', sample: 14 },
+  { value: 'small', label: 'Small', sample: 11.5 },
 ];
 
 /** Desktop-first: renders the three-zone layout on the server, corrects to the
@@ -239,9 +253,10 @@ function useMinWidth(query: string): boolean {
   return matches;
 }
 
-/** Three zones or one. */
+/** Three columns or one. 1180, not 1024: below it the manage rail plus a
+ *  tools column and a sending column leave the email too narrow to write in. */
 function useIsWide(): boolean {
-  return useMinWidth('(min-width: 1024px)');
+  return useMinWidth('(min-width: 1180px)');
 }
 
 // ── Small shared bits ────────────────────────────────────────────────────────
@@ -491,11 +506,13 @@ const TOOL_BUTTON_STYLE = (open: boolean): React.CSSProperties => ({
 // ── Paragraph editor: contentEditable at the real mail typography ────────────
 
 function ParagraphEditor({
-  blockId, initialContent, variant, registerRef, onFocusBlock, onContentChange, onFormatState, onCaret,
+  blockId, initialContent, variant, lead, registerRef, onFocusBlock, onContentChange, onFormatState, onCaret,
 }: {
   blockId: string;
   initialContent: string;
   variant: ParagraphVariant;
+  /** The email's first headline, drawn as the card's big centred one. */
+  lead?: boolean;
   registerRef: (id: string, el: HTMLDivElement | null) => void;
   onFocusBlock: (id: string) => void;
   onContentChange: (id: string, content: string) => void;
@@ -583,14 +600,14 @@ function ParagraphEditor({
         onSelect={refreshFormatState}
         onMouseUp={refreshFormatState}
         onPaste={handlePaste}
-        data-placeholder={variant === 'heading' ? 'A headline…' : variant === 'small' ? 'Small print…' : 'Write here…'}
+        data-placeholder={lead ? 'Your headline' : variant === 'heading' ? 'A smaller heading' : variant === 'small' ? 'Small print' : 'Write your message here'}
         className="mail-paragraph"
         style={{
           whiteSpace: 'pre-wrap',
           outline: 'none',
           cursor: 'text',
-          minHeight: variant === 'heading' ? 30 : 26,
-          ...VARIANT_CANVAS_STYLE[variant],
+          minHeight: lead ? 40 : variant === 'heading' ? 30 : 26,
+          ...(lead ? LEAD_CANVAS_STYLE : VARIANT_CANVAS_STYLE[variant]),
         }}
       />
       <style jsx>{`
@@ -644,8 +661,8 @@ type AddTab = 'blocks' | 'details' | 'files' | 'starters';
 
 export default function EmailComposer({
   conference, conferenceId, initialSubject, initialBlocks, previewCandidates, onChange, unresolvedRecipients,
-  testSendContext, accessToken, organizerEmail, reachSlot,
-  backSlot, actionsSlot, name, onNameChange, design, recipients, eventKey,
+  testSendContext, accessToken, organizerEmail, reachSlot, sendSlot, sendingNote,
+  backSlot, actionsSlot, name, onNameChange, design, eventKey,
 }: EmailComposerProps) {
   /** How "See it for real" and the test send render: like the real send. */
   const renderAs = eventKey ? { variant: 'transactional' as const, event: eventKey, isDefault: false } : {};
@@ -654,21 +671,18 @@ export default function EmailComposer({
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [activeTarget, setActiveTarget] = useState<string>('subject');
   const [fmt, setFmt] = useState({ bold: false, italic: false });
-  // ── What used to be always on screen, now one button each ─────────────────
-  // The left rail (six icon tabs and a panel of tiles) sat beside the email
-  // the whole time, whether anyone wanted a block or not. Now: one Add menu
-  // (blocks, their details, files, starters), one Design button, and the
-  // recipient list behind a link in "Before you send".
+  // ── The tools ─────────────────────────────────────────────────────────────
+  // One Add menu (blocks, their details, files, starters) and one Design
+  // panel. On a wide screen each Add tab has its own button in the left
+  // column and the menu opens beside the button that was pressed, so
+  // `addAnchorRef` is pointed at that button just before it opens.
   const [addOpen, setAddOpen] = useState(false);
   const [addTab, setAddTab] = useState<AddTab>('blocks');
   const [designOpen, setDesignOpen] = useState(false);
-  const [listOpen, setListOpen] = useState(false);
-  const addBtnRef = useRef<HTMLButtonElement | null>(null);
+  const addAnchorRef = useRef<HTMLButtonElement | null>(null);
   const designBtnRef = useRef<HTMLButtonElement | null>(null);
-  const listBtnRef = useRef<HTMLButtonElement | null>(null);
   const closeAdd = useCallback(() => setAddOpen(false), []);
   const closeDesign = useCallback(() => setDesignOpen(false), []);
-  const closeList = useCallback(() => setListOpen(false), []);
   const [mode, setMode] = useState<'edit' | 'preview'>('edit');
   const [previewWidth, setPreviewWidth] = useState<'desktop' | 'mobile'>('desktop');
   // LIGHT BY DEFAULT, and a real switch rather than a surprise. The renderer
@@ -740,19 +754,34 @@ export default function EmailComposer({
     conferenceId, accessToken, addOpen && addTab === 'files'
   );
 
-  // Header shape, mirroring renderHeader/renderIdentityRow: with a banner the
-  // identity row sits BELOW it on the white card; without one it becomes a
-  // centred masthead painted in the accent colour.
-  const useBannerHeader = theme.headerStyle === 'banner' && !!conference.banner_url;
+  // The masthead, mirroring emailCard's `masthead()`: the banner (the email
+  // image when one is set, else the conference banner) as a 4:1 strip with
+  // the logo in a white circle over its lower edge, or a small centred logo
+  // without one; then the conference name and "dates · place" beneath.
+  // headerStyle and the accent colour are NOT read: the card design ignores
+  // both, so drawing them here would show something that is never sent.
+  const mastBanner = emailBannerUrl({ banner_url: conference.banner_url, email_theme: theme });
   const headerLogo = theme.showLogo ? conference.logo_url : null;
-  const distinctFullName = !!conference.acronym && !!conference.full_name && conference.full_name !== conference.acronym;
   // Mirrors `shortName` in emailHtml.ts: the masthead and the footer name the
   // EDITION, not just the series, so the preview matches what is sent.
   const confShortName =
     conferenceAcronymLabel({ acronym: conference.acronym, start_date: conference.start_date ?? null })
     || conference.acronym
     || conference.full_name;
-  const accentInk = inkOnColor(theme.accentColor);
+  const mastMeta = [
+    emailDatesLabel(conference.start_date, conference.end_date, conference.dates_tbd),
+    [conference.city, conference.country].map(x => (x ?? '').trim()).filter(Boolean).join(', ') || null,
+  ].filter(Boolean).join(' · ') || null;
+  const heroIcon = eventKey ? emailCardFor(eventKey, false).icon : null;
+  const signers = secretariatSignature(conference.display_secretariat);
+  const showSignoff = !!eventKey || signers.length > 0;
+  const socials = socialLinks(conference);
+  const legalLines = useMemo(() => companyLegalLines(), []);
+  // The first headline is the big centred one. The card uses the first
+  // heading WITH words; the canvas uses the first heading block, so its look
+  // does not jump while that block is still empty.
+  const leadId = blocks.find(b => b.type === 'paragraph' && b.variant === 'heading')?._id ?? null;
+  const firstButtonId = blocks.find(b => b.type === 'button')?._id ?? null;
 
   useEffect(() => { onChangeRef.current = onChange; });
   useEffect(() => { onChangeRef.current({ subject, blocks: stripIds(blocks) }); }, [subject, blocks]);
@@ -839,6 +868,19 @@ export default function EmailComposer({
       return;
     }
     insertBlocks([blockForKind('paragraph:body')], blocks.length);
+  }
+
+  /** A starter REPLACES an email that has no words in it yet (a new email
+   *  opens with an empty headline and an empty line, which a starter should
+   *  take the place of, not sit under). An email with anything in it keeps
+   *  it, and the starter goes at the end. */
+  function applyStarter(starterBlocks: EmailBlock[]) {
+    const untouched = blocks.every(b => b.type === 'paragraph' && !b.content.trim());
+    if (!untouched) { insertBlocks(starterBlocks, blocks.length); return; }
+    setBlocks(withIds(starterBlocks));
+    setSelectedId(null);
+    setActiveTarget('subject');
+    setMode('edit');
   }
 
   function deleteBlock(id: string) {
@@ -1324,7 +1366,7 @@ export default function EmailComposer({
               key={st.id}
               type="button"
               title={`${st.hint}. Everything stays editable.`}
-              onClick={() => { insertBlocks(st.blocks, blocks.length); setAddOpen(false); }}
+              onClick={() => { applyStarter(st.blocks); setAddOpen(false); }}
               className="flex items-center gap-3 text-left focus:outline-none w-full"
               style={{
                 minHeight: 56,
@@ -1509,10 +1551,10 @@ export default function EmailComposer({
           title={`Drag to move: block ${index + 1} of ${blocks.length}`}
           className="absolute inline-flex items-center justify-center"
           style={{
-            // -28, measured: blockFrame's own `margin: 0 -10px` already hangs
-            // it 10px into the sheet's 40px paper margin, so the free strip is
-            // 0…30px from the sheet's edge. -28 puts this 26px handle at 2…28.
-            left: -28, top: 4, width: 26, height: 30, borderRadius: 9,
+            // -24, measured: blockFrame's own `margin: 0 -10px` already hangs
+            // it 10px into the sheet's 36px paper margin, so the free strip is
+            // 0…26px from the sheet's edge. -24 puts this 22px handle at 2…24.
+            left: -24, top: 4, width: 22, height: 30, borderRadius: 8,
             backgroundColor: isSelected ? NEU_GRADIENTS.gold[0] : 'rgba(27,56,40,0.06)',
             color: isSelected ? FOREST : SOFT,
             cursor: 'grab',
@@ -1532,12 +1574,19 @@ export default function EmailComposer({
             blockId={block._id}
             initialContent={block.content}
             variant={block.variant ?? 'body'}
+            lead={block._id === leadId}
             registerRef={registerBlockRef}
             onFocusBlock={id => { setActiveTarget(id); setSelectedId(id); }}
             onContentChange={updateParagraphContent}
             onFormatState={setFmt}
             onCaret={refreshSuggest}
           />
+        )}
+        {block.type === 'paragraph' && block._id === leadId && (
+          // The card's short gold rule under the headline.
+          <div aria-hidden style={{ display: 'flex', justifyContent: 'center', padding: '18px 0 24px' }}>
+            <span style={{ width: 44, height: 2, borderRadius: 1, backgroundColor: MAIL_RULE }} />
+          </div>
         )}
 
         {/* A labelled-facts block, read-only for now.
@@ -1549,21 +1598,24 @@ export default function EmailComposer({
             as a blank card, so an organiser would be looking at an unexplained
             gap where their delegate sees committee and country. */}
         {block.type === 'facts' && (
-          <div style={{ padding: '2px 0 22px' }}>
-            <div style={{ backgroundColor: '#FAF8F3', borderRadius: 10, padding: '14px 18px', outline: '1px solid rgba(0,0,0,0.07)', outlineOffset: -1 }}>
+          <div style={{ padding: '6px 0 22px' }}>
+            {/* emailCard's detailRows: plain rows between hairlines, the
+                label in grey on the left, the value bold on the right. */}
+            <div style={{ borderTop: `1px solid ${MAIL_HAIRLINE}`, borderBottom: `1px solid ${MAIL_HAIRLINE}` }}>
               {block.items.map((it, i) => (
                 <div
                   key={`${it.label}-${i}`}
                   style={{
-                    display: 'flex', gap: 14, alignItems: 'baseline',
-                    padding: i === 0 ? '0 0 9px' : '9px 0',
-                    borderTop: i === 0 ? 'none' : '1px solid #E7E1D3',
+                    display: 'flex', gap: 12, alignItems: 'center', justifyContent: 'space-between',
+                    padding: '12px 0',
+                    borderTop: i === 0 ? 'none' : `1px solid ${MAIL_HAIRLINE}`,
+                    fontFamily: MAIL_SANS,
                   }}
                 >
-                  <span style={{ width: 130, flexShrink: 0, fontSize: 10, fontWeight: 800, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#6E6456' }}>
+                  <span style={{ fontSize: 14, lineHeight: 1.4, color: MAIL_INK_SOFT }}>
                     {it.label}
                   </span>
-                  <span style={{ fontSize: 15, fontWeight: 700, color: '#241E17' }}>{it.value}</span>
+                  <span style={{ fontSize: 16, lineHeight: 1.35, fontWeight: 700, color: '#1C1410', textAlign: 'right' }}>{it.value}</span>
                 </div>
               ))}
             </div>
@@ -1577,20 +1629,19 @@ export default function EmailComposer({
           <ButtonBlockCanvas
             block={block}
             selected={isSelected}
-            buttonColor={theme.buttonColor}
-            ink={inkOnColor(theme.buttonColor)}
+            asLink={block._id !== firstButtonId}
             onPatch={patch => patchButton(block._id, patch)}
           />
         )}
 
         {block.type === 'image' && (
-          <div style={{ textAlign: 'center', padding: '2px 0 22px' }}>
+          <div style={{ textAlign: 'center', padding: '10px 0 22px' }}>
             {block.url ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
                 src={block.url}
                 alt={block.alt || ''}
-                style={{ width: '100%', maxWidth: CONTENT_WIDTH, height: 'auto', display: 'block', margin: '0 auto', borderRadius: 10, outline: '1px solid rgba(0,0,0,0.1)', outlineOffset: -1 }}
+                style={{ width: '100%', maxWidth: CONTENT_WIDTH, height: 'auto', display: 'block', margin: '0 auto', borderRadius: 12 }}
               />
             ) : (
               <span
@@ -1612,80 +1663,127 @@ export default function EmailComposer({
     );
   }
 
+  /** SUBJECT, on top of the email like a real email's subject line: who it is
+   *  from, small, then the subject itself, large. Inside the sheet while
+   *  writing; above the real email while previewing. */
+  const subjectStrip = (
+    <div
+      className="flex items-center gap-3"
+      style={{ padding: '12px 18px', backgroundColor: '#FFFFFF', borderBottom: `1px solid ${MAIL_HAIRLINE}` }}
+    >
+      <span title={`From ${confShortName}${conference.contact_email ? `, ${conference.contact_email}` : ''}`} className="flex-shrink-0">
+        <LogoDisc
+          src={conference.logo_url}
+          alt={conference.acronym}
+          size={34}
+          fallbackText={conference.acronym.slice(0, 2)}
+        />
+      </span>
+      <div className="min-w-0 flex-1">
+        <span className="flex items-baseline gap-1.5 flex-wrap" style={{ fontFamily: OUTFIT, fontSize: 12.5, color: SOFT, lineHeight: 1.3 }}>
+          <label htmlFor="email-composer-subject" style={{ fontWeight: 700, color: SOFT }}>Subject</label>
+          <span className="[overflow-wrap:anywhere]">from {confShortName}</span>
+        </span>
+        <input
+          id="email-composer-subject"
+          ref={subjectRef}
+          type="text"
+          value={subject}
+          onChange={e => {
+            setSubject(e.target.value);
+            refreshSubjectSuggest(e.target.value, e.target.selectionStart ?? e.target.value.length);
+          }}
+          onKeyUp={e => refreshSubjectSuggest(e.currentTarget.value, e.currentTarget.selectionStart ?? 0)}
+          onBlur={() => { if (suggest?.target === 'subject') setSuggest(null); }}
+          onFocus={() => { setActiveTarget('subject'); setSelectedId(null); }}
+          placeholder="What they see first in their inbox"
+          className="w-full focus:outline-none"
+          style={{
+            fontFamily: OUTFIT, fontSize: 18, fontWeight: 700, color: INK,
+            background: 'transparent', border: 'none', padding: '1px 0', minHeight: 30,
+          }}
+        />
+      </div>
+    </div>
+  );
+
   const sheet = (
+    <div style={{ width: '100%', maxWidth: SHEET_WIDTH, margin: '0 auto' }}>
     <div
       style={{
-        width: '100%',
-        maxWidth: SHEET_WIDTH,
-        margin: '0 auto',
-        borderRadius: 14,
+        borderRadius: 18,
         backgroundColor: MAIL_CARD,
-        border: `1px solid ${MAIL_HAIRLINE}`,
+        border: `1px solid ${MAIL_CARD_BORDER}`,
         overflow: 'hidden',
-        boxShadow: '0 1px 2px rgba(27,56,40,0.12), 0 14px 34px rgba(27,56,40,0.20)',
+        boxShadow: '0 1px 2px rgba(27,56,40,0.10), 0 18px 40px -20px rgba(27,56,40,0.36)',
       }}
     >
-      {/* ── Chrome the renderer adds on its own: accent spine, optional banner,
-          identity row. Drawn here so the sheet is the whole email rather than
-          a floating middle, and labelled ADDED FOR YOU so nobody hunts for the
-          control that would edit it (it lives in Design, not here). ── */}
-      <div className="relative">
-        <div style={{ height: 5, backgroundColor: theme.accentColor }} />
-        {useBannerHeader && (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={conference.banner_url ?? ''}
-            alt=""
-            style={{ display: 'block', width: '100%', height: BANNER_HEIGHT, objectFit: 'cover', objectPosition: 'center' }}
-          />
-        )}
-        {useBannerHeader ? (
-          <div className="flex items-center gap-3" style={{ padding: '22px 40px', borderBottom: `1px solid ${MAIL_HAIRLINE}`, backgroundColor: MAIL_CARD }}>
+      {subjectStrip}
+
+      {/* ── Chrome the renderer adds on its own (emailCard's masthead), drawn
+          so the sheet is the whole email, and labelled ADDED FOR YOU so
+          nobody hunts for the control that would edit it. ── */}
+      <div className="relative" style={{ textAlign: 'center' }}>
+        {mastBanner ? (
+          <>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={mastBanner}
+              alt=""
+              style={{ display: 'block', width: '100%', aspectRatio: '4 / 1', objectFit: 'cover', backgroundColor: MAIL_CARD_BORDER }}
+            />
             {headerLogo && (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={headerLogo} alt="" style={{ width: 52, height: 52, borderRadius: 10, objectFit: 'contain', backgroundColor: MAIL_CHIP_BG, flexShrink: 0 }} />
-            )}
-            <span className="min-w-0">
-              <span className="block" style={{ fontFamily: MAIL_SERIF, fontSize: 20, fontWeight: 700, lineHeight: 1.25, letterSpacing: '0.03em', color: MAIL_INK }}>
-                {confShortName}
-              </span>
-              {distinctFullName && (
-                <span className="block" style={{ fontFamily: MAIL_SANS, fontSize: 12, lineHeight: 1.45, color: MAIL_MUTED, paddingTop: 4 }}>
-                  {conference.full_name}
+              <div style={{ marginTop: -40, display: 'flex', justifyContent: 'center' }}>
+                <span style={{ padding: 4, borderRadius: 999, backgroundColor: '#FFFFFF', display: 'inline-flex' }}>
+                  <span style={{ width: 76, height: 76, borderRadius: 999, backgroundColor: '#FFFFFF', boxShadow: '0 3px 10px rgba(10,24,16,0.22)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={headerLogo} alt="" style={{ width: 59, height: 59, objectFit: 'contain' }} />
+                  </span>
                 </span>
-              )}
+              </div>
+            )}
+          </>
+        ) : headerLogo ? (
+          <div style={{ paddingTop: 30, display: 'flex', justifyContent: 'center' }}>
+            <span style={{ width: 56, height: 56, borderRadius: 999, backgroundColor: '#FFFFFF', boxShadow: '0 3px 10px rgba(10,24,16,0.22)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={headerLogo} alt="" style={{ width: 44, height: 44, objectFit: 'contain' }} />
             </span>
           </div>
         ) : (
-          <div className="text-center" style={{ padding: '30px 32px', backgroundColor: theme.accentColor }}>
-            {headerLogo && (
-              <div style={{ paddingBottom: 14 }}>
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={headerLogo} alt="" style={{ display: 'inline-block', width: 52, height: 52, borderRadius: 10, objectFit: 'contain', backgroundColor: MAIL_CHIP_BG }} />
-              </div>
-            )}
-            <div style={{ fontFamily: MAIL_SERIF, fontSize: 20, fontWeight: 700, lineHeight: 1.25, letterSpacing: '0.03em', color: accentInk }}>
-              {confShortName}
+          <div style={{ height: 18 }} />
+        )}
+        <div style={{ padding: `${mastBanner && headerLogo ? 10 : 12}px ${MAIL_PAD}px 0`, fontFamily: MAIL_SANS }}>
+          <div className="[overflow-wrap:anywhere]" style={{ fontSize: 15, lineHeight: 1.3, fontWeight: 800, letterSpacing: '0.02em', color: FOREST }}>
+            {confShortName}
+          </div>
+          {mastMeta && (
+            <div style={{ fontSize: 12.5, lineHeight: 1.45, color: MAIL_INK_SOFT, paddingTop: 2 }}>
+              {mastMeta}
             </div>
-            {distinctFullName && (
-              <div style={{ fontFamily: MAIL_SANS, fontSize: 12, lineHeight: 1.45, color: accentInk, opacity: 0.78, paddingTop: 4 }}>
-                {conference.full_name}
-              </div>
-            )}
+          )}
+        </div>
+        {heroIcon && (
+          <div style={{ paddingTop: 30, display: 'flex', justifyContent: 'center' }}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={`${EMAIL_ASSET_BASE}icons/${heroIcon}.png`} alt="" width={64} height={64} style={{ display: 'block', width: 64, height: 64 }} />
           </div>
         )}
-        {/* This chip is printed ON the conference's own accent colour, which
-            is an arbitrary hex somebody picked in Design — it can be anything,
-            including an orange. A 0.9-alpha white therefore tinted itself with
-            whatever was behind it and the muted grey inside it had no
-            guaranteed contrast at all. Near-opaque house ivory with forest ink
-            and a forest hairline instead: the same chip on every conference,
-            legible on any accent (10.7:1), and unmistakably Gavelling's rather
-            than the accent's. */}
+        {/* No headline at all: the card uses the conference's name as one. */}
+        {!leadId && blocks.length > 0 && (
+          <div title="With no headline of your own, the conference's name is used. Add a Headline block to write your own." style={{ padding: `${heroIcon ? 22 : 28}px ${MAIL_PAD}px 0`, cursor: 'help' }}>
+            <div style={{ fontFamily: MAIL_SANS, fontSize: 29, fontWeight: 300, lineHeight: 1.25, letterSpacing: '-0.01em', color: FOREST, opacity: 0.55 }}>
+              {confShortName}
+            </div>
+            <div aria-hidden style={{ display: 'flex', justifyContent: 'center', paddingTop: 18 }}>
+              <span style={{ width: 44, height: 2, borderRadius: 1, backgroundColor: MAIL_RULE }} />
+            </div>
+          </div>
+        )}
         <span
-          title="The top and the footer are added to every email for you. Change their look under Design."
+          title="The top and the bottom are added to every email for you. The logo and the footer line are under Design."
           style={{
-            position: 'absolute', left: 10, top: 11,
+            position: 'absolute', left: 10, top: 10,
             padding: '3px 10px', borderRadius: 999,
             fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 700,
             backgroundColor: 'rgba(255,253,248,0.94)', color: FOREST,
@@ -1701,7 +1799,7 @@ export default function EmailComposer({
       <div
         onDragOver={handleCanvasDragOver}
         onDrop={handleCanvasDrop}
-        style={{ padding: '34px 40px 8px 40px', minHeight: 200 }}
+        style={{ padding: `${leadId && blocks[0]?._id === leadId ? (heroIcon ? 22 : 28) : 24}px ${MAIL_PAD}px 0 ${MAIL_PAD}px`, minHeight: 160 }}
       >
         {blocks.length === 0 ? (
           <div
@@ -1748,42 +1846,138 @@ export default function EmailComposer({
             {insertGap(blocks.length)}
             {/* ── THE TAIL ──────────────────────────────────────────────────
                 Blank paper under the last block, and clicking it starts a new
-                line, the thing every document editor in the world does, and
-                the thing this canvas used to answer by doing nothing at all.
-                It reuses the last block when that block is an empty paragraph,
+                line, the thing every document editor in the world does. It
+                reuses the last block when that block is an empty paragraph,
                 so leaning on the mouse cannot stack blank paragraphs down the
-                page. The cursor is a text caret because that is the promise
-                being made. ── */}
+                page. ── */}
             <div
               onClick={appendAtTail}
               aria-hidden
-              style={{ minHeight: 92, cursor: 'text', marginTop: 8 }}
+              style={{ minHeight: 56, cursor: 'text', marginTop: 4 }}
             />
           </>
         )}
       </div>
 
-      {/* Footer band — the renderer's, labelled as chrome. */}
-      <div style={{ backgroundColor: MAIL_FOOTER_BG, borderTop: `1px solid ${MAIL_HAIRLINE}`, padding: '14px 40px 28px' }}>
-        {theme.footerLine.trim() && (
-          <div style={{ fontFamily: MAIL_SANS, fontSize: 14, lineHeight: 1.65, color: MAIL_INK_SOFT, paddingBottom: 14 }}>
-            {theme.footerLine}
+      {/* ── The end of the card, emailCard's: the footer line, the sign-off
+          (an automatic email, or a broadcast from a conference that named its
+          secretariat), the conference's own social icons. ── */}
+      {theme.footerLine.trim() && (
+        <div style={{ padding: `0 ${MAIL_PAD}px 4px`, fontFamily: MAIL_SANS, fontSize: 13, lineHeight: 1.65, color: MAIL_MUTED, whiteSpace: 'pre-wrap' }}>
+          {theme.footerLine}
+        </div>
+      )}
+      {showSignoff ? (
+        <div style={{ padding: `22px ${MAIL_PAD}px 32px` }}>
+          <div style={{ borderTop: `1px solid ${MAIL_HAIRLINE}`, paddingTop: 22, fontFamily: MAIL_SANS, fontSize: 15, lineHeight: 1.6, color: MAIL_INK_SOFT }}>
+            {(conference.contact_email ?? '').trim() && <p style={{ margin: '0 0 14px' }}>Reply to this email to reach the organisers.</p>}
+            <p style={{ margin: 0 }}>Warm regards,</p>
+            {signers.length > 0 ? (
+              <>
+                {signers.map(p => (
+                  <p key={p.name} style={{ margin: '6px 0 0', lineHeight: 1.45, color: '#1C1410' }}>
+                    <strong>{p.name}</strong>{p.title && <span style={{ color: MAIL_INK_SOFT }}>, {p.title}</span>}
+                  </p>
+                ))}
+                <p style={{ margin: '6px 0 0', lineHeight: 1.45 }}>{confShortName}</p>
+              </>
+            ) : (
+              <p style={{ margin: '6px 0 0', lineHeight: 1.45, color: '#1C1410' }}><strong>The {confShortName} team</strong></p>
+            )}
+          </div>
+        </div>
+      ) : (
+        <div style={{ height: 32 }} />
+      )}
+      {socials.length > 0 && (
+        <div className="flex justify-center flex-wrap" style={{ gap: 12, padding: `0 ${MAIL_PAD}px 30px` }}>
+          {socials.map(x => (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img key={x.icon} src={`${EMAIL_ASSET_BASE}social/${x.icon}.png`} alt={x.label} title={x.label} width={32} height={32} style={{ width: 32, height: 32 }} />
+          ))}
+        </div>
+      )}
+    </div>
+
+      {/* Under the card, on the page, as sent. */}
+      <div className="text-center" style={{ padding: '18px 16px 4px', fontFamily: MAIL_SANS, color: MAIL_MUTED }}>
+        <div className="inline-flex items-center gap-1.5" style={{ fontSize: 12, lineHeight: '18px' }}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/gavel-mark.png" alt="" width={18} height={18} style={{ width: 18, height: 18, objectFit: 'contain' }} />
+          <span>Made with <span style={{ textDecoration: 'underline' }}>Gavelling</span> for {confShortName}</span>
+        </div>
+        <div style={{ fontSize: 11.5, lineHeight: 1.7, paddingTop: 6 }}>
+          <span style={{ textDecoration: 'underline' }}>Email preferences</span>{' · '}<span style={{ textDecoration: 'underline' }}>Unsubscribe</span>
+        </div>
+        {legalLines.length > 0 && (
+          <div style={{ fontSize: 10.5, lineHeight: 1.6, paddingTop: 6 }}>
+            {legalLines.map(l => <div key={l}>{l}</div>)}
           </div>
         )}
-        <div style={{ fontFamily: MAIL_SANS, fontSize: 13, lineHeight: 1.6, fontWeight: 700, color: MAIL_INK_SOFT }}>
-          {conference.full_name}
-        </div>
-        <div style={{ fontFamily: MAIL_SANS, fontSize: 13, lineHeight: 1.6, color: MAIL_MUTED, paddingTop: 2, textDecoration: 'underline' }}>
-          {conference.contact_email}
-        </div>
-        <div style={{ fontFamily: MAIL_SANS, fontSize: 12, lineHeight: 1.7, color: MAIL_MUTED, paddingTop: 14 }}>
-          Sent to you by {confShortName} through Gavelling, the platform it runs on.
-          <br />
-          <span style={{ textDecoration: 'underline' }}>Manage email preferences</span>
-          {' · '}
-          <span style={{ textDecoration: 'underline' }}>gavelling.com</span>
-        </div>
       </div>
+    </div>
+  );
+
+  // ── Sending (the right-hand column) ───────────────────────────────────────
+
+  /** Everything about sending, top to bottom: who gets it, the ticks, the
+   *  test to yourself, and Send at the foot. The recipient LIST is no longer
+   *  here: it is in the confirmation Send opens, where the question "who is
+   *  this going to?" is actually asked. */
+  const sendPanel = (
+    <div>
+      {reachSlot && (
+        <>
+          {reachSlot}
+          <div style={{ height: 1, backgroundColor: 'rgba(27,56,40,0.1)', margin: '16px 0 14px' }} />
+        </>
+      )}
+      <PanelTitle emoji="Check mark button" hint="Click any part of the email to change it. When everything is ticked, send it from the bottom of this column.">
+        Before You Send
+      </PanelTitle>
+      <div className="flex flex-col gap-1 mb-3">
+        {checks.map(c => (
+          <div
+            key={c.label}
+            title={c.ok ? undefined : c.fix}
+            className="flex items-center gap-2.5"
+            style={{ minHeight: 32, padding: '3px 2px' }}
+          >
+            <span
+              className="inline-flex items-center justify-center flex-shrink-0"
+              style={{
+                width: 22, height: 22, borderRadius: 999,
+                backgroundColor: c.ok ? GREEN_INK : 'rgba(126,81,40,0.16)',
+                color: c.ok ? '#FFFFFF' : AMBER_INK,
+              }}
+            >
+              {c.ok ? <Check size={13} strokeWidth={3.2} /> : <AlertTriangle size={12} strokeWidth={2.8} />}
+            </span>
+            <span style={{ fontFamily: OUTFIT, fontSize: 14, fontWeight: c.ok ? 600 : 700, color: c.ok ? GREEN_INK : INK, textWrap: 'pretty' }}>
+              {c.label}
+            </span>
+          </div>
+        ))}
+      </div>
+
+      {unresolvedRecipients && unresolvedRecipients.affected > 0 && (
+        <p role="alert" className="mb-2" style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 700, color: RED, lineHeight: 1.45, textWrap: 'pretty' }}>
+          {unresolvedRecipients.affected} of {unresolvedRecipients.total} are missing {unresolvedRecipients.fields.map(f => `${f.label} (${f.count})`).join(', ')}, so they will not get this email.
+        </p>
+      )}
+      <div className="flex items-center gap-2">
+        <ActionButton icon={Send} tone="quiet" onClick={handleSendTest} disabled={sendingTest || !accessToken || !organizerEmail} style={{ flex: 1 }}>
+          {sendingTest ? 'Sending…' : 'Send me a test'}
+        </ActionButton>
+        <HintDot text="Goes to your own inbox, so you can read it the way they will. Missing details are filled with stand-ins." />
+      </div>
+      {testMessage && (
+        <p className="mt-2" style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 700, color: testMessage.startsWith("Couldn't") ? RED : GREEN_INK, textWrap: 'pretty' }}>
+          {testMessage}
+        </p>
+      )}
+      {sendSlot && <div className="mt-4">{sendSlot}</div>}
+      {sendingNote && <div className="mt-2.5 text-center">{sendingNote}</div>}
     </div>
   );
 
@@ -1791,93 +1985,6 @@ export default function EmailComposer({
 
   const properties = (
     <div>
-      {!selected && (
-        <>
-          {/* The one emoji disc on this panel hangs over its top edge: the
-              resting state is a checklist, and the disc is what tells you so
-              before you have read a word. */}
-          <span
-            aria-hidden
-            className="inline-flex items-center justify-center"
-            style={{
-              position: 'absolute', top: -20, left: 16,
-              width: 44, height: 44, borderRadius: 999,
-              background: `radial-gradient(circle at 35% 30%, #FFFDF8, ${NEU.surface})`,
-              border: CARD_BORDER, boxShadow: '0 6px 16px rgba(27,56,40,0.18)',
-            }}
-          >
-            <Emoji3D name="Check mark button" size={26} fallback={Check} fallbackColor={FOREST} />
-          </span>
-          <div style={{ height: 14 }} />
-          <PanelTitle hint="Click any part of the email to change it here. When everything is ticked, send it from the top.">
-            Before You Send
-          </PanelTitle>
-          <div className="flex flex-col gap-1 mb-4">
-            {checks.map(c => (
-              <div
-                key={c.label}
-                title={c.ok ? undefined : c.fix}
-                className="flex items-center gap-2.5"
-                style={{ minHeight: 34, padding: '4px 2px' }}
-              >
-                <span
-                  className="inline-flex items-center justify-center flex-shrink-0"
-                  style={{
-                    width: 22, height: 22, borderRadius: 999,
-                    backgroundColor: c.ok ? GREEN_INK : 'rgba(126,81,40,0.16)',
-                    color: c.ok ? '#FFFFFF' : AMBER_INK,
-                  }}
-                >
-                  {c.ok ? <Check size={13} strokeWidth={3.2} /> : <AlertTriangle size={12} strokeWidth={2.8} />}
-                </span>
-                <span style={{ fontFamily: OUTFIT, fontSize: 14, fontWeight: c.ok ? 600 : 700, color: c.ok ? GREEN_INK : INK, textWrap: 'pretty' }}>
-                  {c.label}
-                </span>
-              </div>
-            ))}
-          </div>
-
-          {recipients && (
-            <>
-              <button
-                ref={listBtnRef}
-                type="button"
-                onClick={() => setListOpen(v => !v)}
-                aria-expanded={listOpen}
-                className="w-full flex items-center gap-2.5 text-left focus:outline-none mb-2"
-                style={{ ...TOOL_BUTTON_STYLE(listOpen), borderRadius: 14, padding: '8px 12px' }}
-              >
-                <Emoji3D name="Busts in silhouette" size={22} fallback={Users} fallbackColor={FOREST} />
-                <span className="min-w-0 flex-1">See who gets it</span>
-                <span style={{ fontVariantNumeric: 'tabular-nums', color: SOFT }}>{recipients.reachCount.toLocaleString()}</span>
-              </button>
-              <PopoverLayer anchorRef={listBtnRef} open={listOpen} onClose={closeList} width={340} maxHeight={480} align="end">
-                <div style={{ padding: 14, borderRadius: 20, backgroundColor: NEU.surface, border: CARD_BORDER, boxShadow: CARD_SHADOW }}>
-                  <RecipientRoster groups={recipients.groups} reachCount={recipients.reachCount} wide={false} />
-                </div>
-              </PopoverLayer>
-            </>
-          )}
-
-          {unresolvedRecipients && unresolvedRecipients.affected > 0 && (
-            <p role="alert" className="mb-2" style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 700, color: RED, lineHeight: 1.45, textWrap: 'pretty' }}>
-              {unresolvedRecipients.affected} of {unresolvedRecipients.total} are missing {unresolvedRecipients.fields.map(f => `${f.label} (${f.count})`).join(', ')}, so they will not get this email.
-            </p>
-          )}
-          <div className="flex items-center gap-2">
-            <ActionButton icon={Send} tone="quiet" onClick={handleSendTest} disabled={sendingTest || !accessToken || !organizerEmail} style={{ flex: 1 }}>
-              {sendingTest ? 'Sending…' : 'Send me a test'}
-            </ActionButton>
-            <HintDot text="Goes to your own inbox, so you can read it the way they will. Missing details are filled with stand-ins." />
-          </div>
-          {testMessage && (
-            <p className="mt-2" style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 700, color: testMessage.startsWith("Couldn't") ? RED : GREEN_INK, textWrap: 'pretty' }}>
-              {testMessage}
-            </p>
-          )}
-        </>
-      )}
-
       {selected?.type === 'paragraph' && (
         <>
           <PanelTitle emoji="Page facing up" hint="Three sizes, nothing else. The email's own theme handles the colours and spacing.">Text</PanelTitle>
@@ -1904,10 +2011,10 @@ export default function EmailComposer({
                 >
                   <span
                     style={{
-                      fontFamily: v.serif ? MAIL_SERIF : MAIL_SANS,
+                      fontFamily: MAIL_SANS,
                       fontSize: v.sample,
                       fontWeight: v.value === 'heading' ? 700 : 400,
-                      color: v.value === 'small' ? MAIL_MUTED : MAIL_INK,
+                      color: v.value === 'small' ? MAIL_MUTED : v.value === 'heading' ? FOREST : MAIL_INK,
                     }}
                   >
                     {v.label}
@@ -2077,154 +2184,163 @@ export default function EmailComposer({
     </div>
   );
 
-  /** BACK · the email's name · SAVE, in ONE strip.
-   *
-   *  The page used to draw two blocks above the composer: a header row holding
-   *  ← BACK and SAVE (40px plus a 24px margin) and, under it, a labelled Name
-   *  field in its own 82px block. Neither had anything to do with the other,
-   *  and between them the paper started 146px down a laptop screen that only
-   *  has 800. Handed in as slots they share one 48px row, and both of the
-   *  page's blocks go away, see the props above for the contract. */
-  const builderHeader = (backSlot || actionsSlot || onNameChange) ? (
-    <div
-      className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-2"
-      style={{ ...panelStyle, borderRadius: 18, padding: '7px 12px' }}
-    >
+  /** BACK · SAVE, then the email's name, small. The top of the left column
+   *  on a wide screen and a slim row above the email on a narrow one, so the
+   *  email itself starts at the top of the page rather than under three bars. */
+  const hasHeader = !!(backSlot || actionsSlot || onNameChange);
+  const nameField = onNameChange ? (
+        <input
+          type="text"
+          value={name ?? ''}
+          onChange={e => onNameChange(e.target.value)}
+          placeholder="Name this email"
+          aria-label="Name this email, just for you"
+          title="Only you see this name"
+          className="w-full focus:outline-none"
+          style={{
+            minHeight: 38, borderRadius: 12, padding: '6px 11px',
+            fontFamily: OUTFIT, fontSize: 16, fontWeight: 600, color: INK,
+            backgroundColor: '#FFFDF8', border: '1px solid rgba(27,56,40,0.13)', boxShadow: NEU.inSm,
+          }}
+        />
+  ) : null;
+  /** In the left column: Back and Save on one line, the name under them. */
+  const builderHeader = hasHeader ? (
+    <div>
+      <div className="flex items-center justify-between gap-2">
+        {backSlot && <div className="flex-shrink-0">{backSlot}</div>}
+        {actionsSlot && <div className="flex-shrink-0 ml-auto">{actionsSlot}</div>}
+      </div>
+      {nameField && <div className="mt-2">{nameField}</div>}
+    </div>
+  ) : null;
+  /** Above the email on a narrow screen: one row from 640px, so the email
+   *  is not pushed down by a second line. */
+  const builderHeaderRow = hasHeader ? (
+    <div className="flex flex-wrap sm:flex-nowrap items-center gap-x-3 gap-y-2">
       {backSlot && <div className="flex-shrink-0">{backSlot}</div>}
-      {onNameChange && (
-        <div className="min-w-0 flex-1" style={{ minWidth: 170 }}>
-          {/* The label is the placeholder. A stacked "Name" caption above a
-              single field is a whole line spent saying what the field already
-              says, and this row is the one the paper is waiting behind. */}
-          <input
-            type="text"
-            value={name ?? ''}
-            onChange={e => onNameChange(e.target.value)}
-            placeholder="Name this email, just for you"
-            aria-label="Name this email, just for you"
-            className="w-full focus:outline-none"
-            style={{
-              minHeight: 40, borderRadius: 999, padding: '7px 14px',
-              fontFamily: OUTFIT, fontSize: 16, fontWeight: 600, color: INK,
-              backgroundColor: '#FFFDF8', border: '1px solid rgba(27,56,40,0.13)', boxShadow: NEU.inSm,
-            }}
-          />
-        </div>
-      )}
+      {nameField && <div className="order-last sm:order-none w-full sm:w-auto sm:flex-1 min-w-0">{nameField}</div>}
       {actionsSlot && <div className="flex-shrink-0 ml-auto">{actionsSlot}</div>}
     </div>
   ) : null;
 
-  /** SUBJECT. Its own card, full width, labelled with the one word it is.
-   *  The sender ("from") line that used to sit above it in tracked capitals is
-   *  now the hover on the conference's logo. */
-  const subjectCard = (
-    <div
-      className="mb-3 flex items-center gap-3"
-      style={{ ...panelStyle, borderRadius: 18, padding: '10px 16px' }}
+  /** One tool in the left column: a 3D emoji and a plain word. */
+  const toolButton = (
+    key: string, label: string, emoji: string, active: boolean, onClick: (el: HTMLButtonElement) => void,
+    ref?: React.RefObject<HTMLButtonElement | null>, opts?: { hasPopup?: boolean; compact?: boolean },
+  ) => (
+    <button
+      key={key}
+      ref={ref}
+      type="button"
+      aria-haspopup={opts?.hasPopup ? 'dialog' : undefined}
+      aria-expanded={opts?.hasPopup ? active : undefined}
+      aria-pressed={opts?.hasPopup ? undefined : active}
+      onMouseDown={e => e.preventDefault()}
+      onClick={e => onClick(e.currentTarget)}
+      className={opts?.compact
+        ? 'flex flex-col items-center justify-center gap-0.5 focus:outline-none flex-1 min-w-0'
+        : 'w-full flex items-center gap-2.5 text-left focus:outline-none'}
+      style={opts?.compact ? {
+        minHeight: 54, padding: '5px 4px', borderRadius: 14, border: 'none',
+        backgroundColor: active ? 'rgba(238,217,138,0.42)' : 'transparent',
+        fontFamily: OUTFIT, fontSize: 12, fontWeight: 700, color: FOREST, cursor: 'pointer',
+      } : {
+        ...TOOL_BUTTON_STYLE(active), borderRadius: 14, padding: '7px 12px 7px 9px',
+      }}
     >
-      <span title={`From ${confShortName}${conference.contact_email ? `, ${conference.contact_email}` : ''}`} className="flex-shrink-0">
-        <LogoDisc
-          src={conference.logo_url}
-          alt={conference.acronym}
-          size={40}
-          fallbackText={conference.acronym.slice(0, 2)}
-        />
-      </span>
-      <div className="min-w-0 flex-1">
-        <label htmlFor="email-composer-subject" className="block" style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 700, color: SOFT }}>
-          Subject
-        </label>
-        <input
-          id="email-composer-subject"
-          ref={subjectRef}
-          type="text"
-          value={subject}
-          onChange={e => {
-            setSubject(e.target.value);
-            refreshSubjectSuggest(e.target.value, e.target.selectionStart ?? e.target.value.length);
-          }}
-          onKeyUp={e => refreshSubjectSuggest(e.currentTarget.value, e.currentTarget.selectionStart ?? 0)}
-          onBlur={() => { if (suggest?.target === 'subject') setSuggest(null); }}
-          onFocus={() => { setActiveTarget('subject'); setSelectedId(null); }}
-          placeholder="What they see first in their inbox"
-          className="w-full focus:outline-none"
-          style={{
-            fontFamily: OUTFIT, fontSize: 18, fontWeight: 700, color: INK,
-            background: 'transparent', border: 'none', padding: '2px 0', minHeight: 32,
-          }}
-        />
+      <Emoji3D name={emoji} size={opts?.compact ? 24 : 22} fallback={Sparkles} fallbackColor={FOREST} />
+      <span className={opts?.compact ? '' : 'min-w-0 flex-1'}>{label}</span>
+    </button>
+  );
+
+  /** Opens the Add menu on one tab, beside the button that was pressed;
+   *  pressing the same button again closes it. */
+  const openAddTab = (tab: AddTab, el: HTMLButtonElement) => {
+    if (addOpen && addTab === tab && addAnchorRef.current === el) { setAddOpen(false); return; }
+    addAnchorRef.current = el;
+    setAddTab(tab);
+    setDesignOpen(false);
+    setAddOpen(true);
+  };
+
+  const addPopover = (
+    <PopoverLayer anchorRef={addAnchorRef} open={addOpen} onClose={closeAdd} width={352} maxHeight={560} side={wide ? 'right' : 'bottom'}>
+      {addMenu}
+    </PopoverLayer>
+  );
+
+  const designPopover = design ? (
+    <PopoverLayer anchorRef={designBtnRef} open={designOpen} onClose={closeDesign} width={320} maxHeight={600} side={wide ? 'right' : 'bottom'}>
+      <div style={{ padding: 16, borderRadius: 22, backgroundColor: NEU.surface, border: CARD_BORDER, boxShadow: CARD_SHADOW }}>
+        <PanelTitle emoji="Artist palette" hint="Every email this conference sends uses this look. The email beside you changes as you pick.">
+          Design
+        </PanelTitle>
+        <DesignPanel design={design} />
       </div>
+    </PopoverLayer>
+  ) : null;
+
+  const toggleDesign = () => { setDesignOpen(v => !v); setAddOpen(false); };
+  const toggleMode = () => { setMode(m => (m === 'edit' ? 'preview' : 'edit')); setAddOpen(false); setDesignOpen(false); };
+
+  /** The left column on a wide screen: the header, then the tools, then the
+   *  selected block's settings. */
+  const toolsColumn = (
+    <div className="flex flex-col gap-3">
+      {builderHeader && <div style={{ ...panelStyle, borderRadius: 18, padding: 12 }}>{builderHeader}</div>}
+      <div style={{ ...panelStyle, borderRadius: 18, padding: 10 }}>
+        <p className="px-1 pb-1.5" style={{ fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 700, color: SOFT }}>Add</p>
+        <div className="flex flex-col gap-1.5">
+          {ADD_TABS.map(t => toolButton(
+            t.key, t.label, t.emoji, addOpen && addTab === t.key,
+            el => openAddTab(t.key, el), undefined, { hasPopup: true },
+          ))}
+        </div>
+        <div style={{ height: 1, backgroundColor: 'rgba(27,56,40,0.1)', margin: '10px 2px' }} />
+        <div className="flex flex-col gap-1.5">
+          {design && toolButton('design', 'Design', 'Artist palette', designOpen, toggleDesign, designBtnRef, { hasPopup: true })}
+          {toolButton('mode', mode === 'edit' ? 'See it for real' : 'Back to writing', mode === 'edit' ? 'Eyes' : 'Pencil', mode === 'preview', toggleMode)}
+        </div>
+      </div>
+      {selected && mode === 'edit' && (
+        <div style={{ ...panelStyle, borderRadius: 18, padding: 14, position: 'relative' }}>
+          <button
+            type="button"
+            onClick={() => setSelectedId(null)}
+            aria-label="Done with this block"
+            title="Done with this block"
+            className="absolute focus:outline-none inline-flex items-center justify-center"
+            style={{ top: 10, right: 10, width: 32, height: 32, borderRadius: 999, border: CARD_BORDER, background: '#FFFDF8', color: SOFT, cursor: 'pointer' }}
+          >
+            <X size={14} strokeWidth={2.6} />
+          </button>
+          {properties}
+        </div>
+      )}
+    </div>
+  );
+
+  /** The tools on a narrow screen: one bar pinned to the bottom of the
+   *  screen (clear of the manage rail from md up). */
+  const toolsBar = (
+    <div
+      className="fixed left-2 right-2 md:left-[104px] flex items-stretch gap-1"
+      style={{
+        bottom: 'max(8px, env(safe-area-inset-bottom))', zIndex: 44,
+        ...panelStyle, borderRadius: 20, padding: 5,
+      }}
+    >
+      {toolButton('add', 'Add', 'Sparkles', addOpen, el => openAddTab(addTab, el), undefined, { hasPopup: true, compact: true })}
+      {design && toolButton('design', 'Design', 'Artist palette', designOpen, toggleDesign, designBtnRef, { hasPopup: true, compact: true })}
+      {toolButton('mode', mode === 'edit' ? 'See it for real' : 'Write', mode === 'edit' ? 'Eyes' : 'Pencil', mode === 'preview', toggleMode, undefined, { compact: true })}
     </div>
   );
 
   const canvasColumn = (
     <div className="min-w-0">
-      {/* ── MESSAGE: one title, two buttons, one switch.
-          Add holds everything that puts something INTO the email (blocks,
-          their details, files, starters); Design holds the look. Both used to
-          be a six-tab rail beside the paper, open all the time. ── */}
-      <div className="mb-2 flex flex-wrap items-center gap-2">
-        <p className="mr-1" style={{ fontFamily: OUTFIT, fontSize: 17, fontWeight: 800, color: INK }}>
-          Message
-        </p>
-        <button
-          ref={addBtnRef}
-          type="button"
-          aria-haspopup="dialog"
-          aria-expanded={addOpen}
-          onMouseDown={e => e.preventDefault()}
-          onClick={() => { setAddOpen(v => !v); setDesignOpen(false); }}
-          className="inline-flex items-center gap-2 focus:outline-none"
-          style={TOOL_BUTTON_STYLE(addOpen)}
-        >
-          <Emoji3D name="Sparkles" size={22} fallback={Plus} fallbackColor={FOREST} />
-          Add
-          <ChevronDown size={14} strokeWidth={2.6} style={{ color: SOFT, transform: addOpen ? 'rotate(180deg)' : 'none', transitionProperty: 'transform', transitionDuration: '200ms' }} />
-        </button>
-        <PopoverLayer anchorRef={addBtnRef} open={addOpen} onClose={closeAdd} width={352} maxHeight={520}>
-          {addMenu}
-        </PopoverLayer>
-        {design && (
-          <>
-            <button
-              ref={designBtnRef}
-              type="button"
-              aria-haspopup="dialog"
-              aria-expanded={designOpen}
-              onClick={() => { setDesignOpen(v => !v); setAddOpen(false); }}
-              className="inline-flex items-center gap-2 focus:outline-none"
-              style={TOOL_BUTTON_STYLE(designOpen)}
-            >
-              <Emoji3D name="Artist palette" size={22} fallback={Palette} fallbackColor={FOREST} />
-              Design
-            </button>
-            <PopoverLayer anchorRef={designBtnRef} open={designOpen} onClose={closeDesign} width={320} maxHeight={560}>
-              <div style={{ padding: 16, borderRadius: 22, backgroundColor: NEU.surface, border: CARD_BORDER, boxShadow: CARD_SHADOW }}>
-                <PanelTitle emoji="Artist palette" hint="Every email this conference sends uses this look. The email beside you changes as you pick.">
-                  Design
-                </PanelTitle>
-                <DesignPanel design={design} />
-              </div>
-            </PopoverLayer>
-          </>
-        )}
-        <div className="ml-auto flex-shrink-0">
-          <Segmented
-            value={mode}
-            onChange={setMode}
-            options={[
-              { value: 'edit' as const, label: 'Write', icon: Pencil },
-              { value: 'preview' as const, label: 'See it for real', icon: Eye },
-            ]}
-          />
-        </div>
-      </div>
-
       {/* Preview-only controls. They have no meaning while you are writing, so
-          they do not take a row while you are writing. LAPTOP/PHONE are icons
-          alone: a monitor and a handset say it, and the words were the widest
-          thing in the row. */}
+          they do not take a row while you are writing. */}
       {mode === 'preview' && (
         <div className="mb-2 flex flex-wrap items-center gap-2">
           <Segmented
@@ -2256,16 +2372,17 @@ export default function EmailComposer({
           backgroundColor: DESK,
           borderRadius: 22,
           boxShadow: DESK_WELL,
-          // Asymmetric on purpose: the top inset is the last thing standing
-          // between the fold and the email, so it is the thinnest it can be
-          // and still read as paper resting on a desk. The bottom keeps the
-          // original weight, where it costs nothing.
-          padding: wide ? '14px 24px 26px' : '12px 12px 20px',
+          padding: wide ? '12px 12px 20px' : '8px 6px 16px',
           minHeight: 420,
         }}
       >
         {mode === 'edit' ? sheet : (
-          <div className="flex justify-center">
+          <div className="flex flex-col items-center">
+            {/* The subject stays where it is while the body is swapped for the
+                real email, so it can still be edited while looking. */}
+            <div style={{ width: previewWidth === 'desktop' ? '100%' : 390, maxWidth: previewWidth === 'desktop' ? 620 : '100%', marginBottom: 10, borderRadius: 14, overflow: 'hidden', border: `1px solid ${MAIL_CARD_BORDER}` }}>
+              {subjectStrip}
+            </div>
             <iframe
               key={previewWidth}
               srcDoc={previewHtml}
@@ -2300,12 +2417,17 @@ export default function EmailComposer({
     </div>
   );
 
-  return (
-    <div>
-      {builderHeader}
-      {reachSlot}
-      {subjectCard}
+  // The side columns stay in view while the email scrolls past them, each
+  // scrolling on its own when it is taller than the window. 72 = the manage
+  // layout's fixed 56px header plus a little air.
+  const stickySide: React.CSSProperties = {
+    position: 'sticky', top: 72, maxHeight: 'calc(100vh - 88px)', overflowY: 'auto',
+    // Room for the cards' shadows inside the scroller.
+    padding: 4, margin: -4,
+  };
 
+  return (
+    <div style={wide ? undefined : { paddingBottom: 84 }}>
       {suggest && mode === 'edit' && (
         <TokenSuggest
           state={suggest}
@@ -2314,35 +2436,32 @@ export default function EmailComposer({
           onSilenceNudges={silenceNudges}
         />
       )}
+      {addPopover}
+      {designPopover}
 
-      {/* Two columns: the email (written in place, so it IS the live preview)
-          and, beside it, whatever is selected, or the send checklist. */}
-      <div
-        className="grid gap-4 items-start"
-        style={wide ? { gridTemplateColumns: 'minmax(0,1fr) 300px' } : { gridTemplateColumns: 'minmax(0,1fr)' }}
-      >
-        {canvasColumn}
-
-        {wide ? (
-          <div className="lg:sticky" style={{ ...panelStyle, top: 16, padding: 16, marginTop: selected ? 0 : 22, position: 'sticky' }}>
-            {properties}
+      {wide ? (
+        <div className="grid gap-4 items-start" style={{ gridTemplateColumns: '184px minmax(0,1fr) 264px' }}>
+          <div style={stickySide}>{toolsColumn}</div>
+          {canvasColumn}
+          <div style={stickySide}>
+            <div style={{ ...panelStyle, padding: 16 }}>{sendPanel}</div>
           </div>
-        ) : (
-          <div
-            style={{
-              ...panelStyle,
-              position: selected ? 'fixed' : 'relative',
-              left: selected ? 8 : undefined,
-              right: selected ? 8 : undefined,
-              bottom: selected ? 8 : undefined,
-              zIndex: selected ? 45 : undefined,
-              maxHeight: selected ? '58vh' : undefined,
-              overflowY: selected ? 'auto' : undefined,
-              padding: 16,
-              marginTop: selected ? 0 : 18,
-            }}
-          >
-            {selected && (
+        </div>
+      ) : (
+        <>
+          {builderHeaderRow && <div className="mb-2" style={{ ...panelStyle, borderRadius: 18, padding: '8px 12px' }}>{builderHeaderRow}</div>}
+          {canvasColumn}
+          <div className="mt-4" style={{ ...panelStyle, padding: 16 }}>{sendPanel}</div>
+          {toolsBar}
+          {selected && mode === 'edit' && (
+            <div
+              style={{
+                ...panelStyle,
+                position: 'fixed', left: 8, right: 8,
+                bottom: 'calc(max(8px, env(safe-area-inset-bottom)) + 74px)',
+                zIndex: 45, maxHeight: '52vh', overflowY: 'auto', padding: 16,
+              }}
+            >
               <button
                 type="button"
                 onClick={() => setSelectedId(null)}
@@ -2352,11 +2471,11 @@ export default function EmailComposer({
               >
                 <X size={15} strokeWidth={2.6} />
               </button>
-            )}
-            {properties}
-          </div>
-        )}
-      </div>
+              {properties}
+            </div>
+          )}
+        </>
+      )}
     </div>
   );
 }
@@ -2379,12 +2498,13 @@ export default function EmailComposer({
 // render, which would remount it and eat whatever had just been typed.
 
 function ButtonBlockCanvas({
-  block, selected, buttonColor, ink, onPatch,
+  block, selected, asLink, onPatch,
 }: {
   block: ButtonBlock;
   selected: boolean;
-  buttonColor: string;
-  ink: string;
+  /** The card sends ONE button: the first is a forest pill with gold words,
+   *  every later one becomes an underlined text link. Drawn the same here. */
+  asLink: boolean;
   onPatch: (patch: Partial<ButtonBlock>) => void;
 }) {
   const labelRef = useRef<HTMLSpanElement | null>(null);
@@ -2409,7 +2529,7 @@ function ButtonBlockCanvas({
   const empty = !block.label.trim();
 
   return (
-    <div style={{ textAlign: 'center', padding: selected ? '10px 0 8px 0' : '10px 0 26px 0' }}>
+    <div style={{ textAlign: 'center', padding: asLink ? (selected ? '6px 0 8px 0' : '6px 0 18px 0') : (selected ? '18px 0 8px 0' : '18px 0 26px 0') }}>
       <span
         ref={labelRef}
         contentEditable
@@ -2433,18 +2553,30 @@ function ButtonBlockCanvas({
           if (sel && sel.rangeCount > 0) insertTextAtRange(sel.getRangeAt(0), text);
           onPatch({ label: (e.currentTarget.textContent ?? '').replace(/\n/g, ' ') });
         }}
-        style={{
+        title={asLink ? 'Only the first button is sent as a button. This one is sent as a link.' : undefined}
+        style={asLink ? {
           display: 'inline-block',
-          backgroundColor: buttonColor,
-          border: '1px solid rgba(0,0,0,0.16)',
-          borderRadius: 8,
-          padding: '15px 34px',
           fontFamily: MAIL_SANS,
           fontSize: 15,
           fontWeight: 700,
+          lineHeight: 1.5,
+          color: FOREST,
+          textDecoration: 'underline',
+          outline: 'none',
+          cursor: 'text',
+          minWidth: 80,
+          maxWidth: '100%',
+        } : {
+          display: 'inline-block',
+          backgroundColor: FOREST,
+          borderRadius: 999,
+          padding: '15px 40px',
+          fontFamily: MAIL_SANS,
+          fontSize: 16,
+          fontWeight: 700,
           lineHeight: '20px',
-          letterSpacing: '0.01em',
-          color: ink,
+          color: GOLD,
+          boxShadow: '0 8px 18px -8px rgba(27,56,40,0.6)',
           outline: 'none',
           cursor: 'text',
           minWidth: 120,

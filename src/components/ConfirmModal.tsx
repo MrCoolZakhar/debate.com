@@ -47,6 +47,8 @@ export interface ConfirmModalProps {
   loading?: boolean;
   /** Disables the confirm button (e.g. a type-to-confirm gate) without disabling the whole modal. */
   confirmDisabled?: boolean;
+  /** Card width in px (default 400). */
+  width?: number;
   onConfirm: () => void;
   onCancel: () => void;
 }
@@ -55,14 +57,14 @@ export interface ConfirmModalProps {
 
 export function ConfirmModal({
   title, body, confirmLabel = 'Confirm', cancelLabel = 'Cancel', danger = false,
-  checkbox, checked = false, onCheckedChange, loading = false, confirmDisabled = false, onConfirm, onCancel,
+  checkbox, checked = false, onCheckedChange, loading = false, confirmDisabled = false, width = 400, onConfirm, onCancel,
 }: ConfirmModalProps) {
   // Enter confirms. Escape is NOT handled here — ModalOverlay owns it, via a
   // stack that only ever dismisses the top-most overlay. Doing it locally as
   // well would close a confirm AND the drawer underneath it with one keypress.
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
-      if (loading) return;
+      if (loading || e.defaultPrevented) return;
       if (e.key === 'Enter') { if (confirmDisabled) return; e.preventDefault(); onConfirm(); }
     }
     window.addEventListener('keydown', handleKeyDown);
@@ -86,7 +88,7 @@ export function ConfirmModal({
         aria-modal="true"
         aria-labelledby="confirm-modal-title"
         className="rounded-2xl p-6 flex flex-col gap-4"
-        style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0', width: 400, maxWidth: '90vw' }}
+        style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0', width, maxWidth: '90vw', maxHeight: '92vh', overflowY: 'auto' }}
       >
         <p id="confirm-modal-title" className="text-base font-bold" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
           {title}

@@ -14,6 +14,7 @@ import { Gavel } from 'lucide-react';
 import { useLanguage, useT } from '@/contexts/LanguageContext';
 import { SeatCircleFlag } from '@/components/CircleFlag';
 import { getCountryDisplayName } from '@/lib/countries';
+import SeatName from '@/components/SeatName';
 
 const CHAIR_KEY = '__chair__';
 
@@ -66,7 +67,10 @@ export default function CaucusProposer({
           style={{ boxShadow: '0 1px 3px rgba(28,20,16,0.18)' }}
         />
       )}
-      <span aria-hidden className="min-w-0 font-extrabold [overflow-wrap:anywhere]" style={{ color: ink }}>{name}</span>
+      {/* A long seat is two rows, short form over the full name (src/components/SeatName.tsx). */}
+      <span aria-hidden className="min-w-0 inline-flex">
+        <SeatName name={name} max={22} className="min-w-0 font-extrabold" style={{ color: ink }} />
+      </span>
     </span>
   );
 }
