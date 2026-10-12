@@ -3143,6 +3143,24 @@ export default function SettingsPage() {
           onChange={(v) => saveVisibility('show_taken_countries', v, setShowTakenCountries)}
         />
       </SwitchGrid>
+      {/* ── Delete Conference (owner, 12 Oct 2026): at the foot of Visibility, set apart
+          from the public-page switches. Same confirm and owner check as before. ── */}
+      <div style={{ marginTop: 22, paddingTop: 18, borderTop: '1px solid rgba(139,32,32,0.18)' }}>
+        <p className="mb-2" style={{ color: '#8B2020', fontFamily: "var(--font-brand), sans-serif", fontSize: TYPE_PX.hint, fontWeight: 800, letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+          Delete Conference
+        </p>
+        <Row label="Delete this conference" desc="Everything about it is removed for good. Only the owner can do this." align="end">
+          <button
+            type="button"
+            onClick={() => { if (!isOwner) { notifyErr('Only the conference owner can delete this conference.', 'settings-delete'); return; } clearErr('settings-delete'); setConfirmingDelete(true); }}
+            className="gv-st-btn"
+            style={{ background: '#FFFFFF', color: '#8B2020', boxShadow: 'inset 0 0 0 1.5px rgba(139,32,32,0.45)' }}
+          >
+            <Trash2 size={15} strokeWidth={2.4} aria-hidden />
+            Delete
+          </button>
+        </Row>
+      </div>
     </Group>
   );
 
@@ -3627,20 +3645,7 @@ export default function SettingsPage() {
             </div>
           </Group>
 
-          {/* ── Delete ── */}
-          <Group title="Delete Conference" emoji="Wastebasket" icon={Trash2} tint={TINT_GOLD_BG}>
-            <Row label="Delete this conference" desc="Everything about it is removed for good. Only the owner can do this." align="end">
-              <button
-                type="button"
-                onClick={() => { if (!isOwner) { notifyErr('Only the conference owner can delete this conference.', 'settings-delete'); return; } clearErr('settings-delete'); setConfirmingDelete(true); }}
-                className="gv-st-btn"
-                style={{ background: '#FFFFFF', color: '#8B2020', boxShadow: 'inset 0 0 0 1.5px rgba(139,32,32,0.45)' }}
-              >
-                <Trash2 size={15} strokeWidth={2.4} aria-hidden />
-                Delete
-              </button>
-            </Row>
-          </Group>
+          {/* Delete Conference moved to the bottom of the Visibility card (owner, 12 Oct 2026). */}
           {confirmingDelete && (
             <ConfirmModal
               title="Delete this conference?"

@@ -66,6 +66,16 @@ export const PAY_CSS = `
 /* Bottom pay bar */
 .gv-pay-bar{position:sticky;bottom:calc(12px + env(safe-area-inset-bottom,0px));z-index:30;margin-top:14px;display:flex;flex-wrap:wrap;align-items:center;gap:10px 16px;padding:12px 14px 12px 18px;border-radius:18px;background:#FFFFFF;box-shadow:0 2px 0 rgba(27,56,40,0.06),0 18px 40px -16px rgba(27,56,40,0.5)}
 .gv-pay-bar-sum{margin-right:auto;font-size:16px;font-weight:800;font-variant-numeric:tabular-nums}
+/* Discount codes (prompt 107): the link under Pay (under the total on phones) and the applied chip */
+.gv-pay-bar-pay{display:inline-flex;flex-direction:column;align-items:center;gap:0}
+.gv-pay-bar .gv-pay-link.gv-pay-code-link{min-height:32px;font-size:13px;font-weight:700}
+.gv-pay-code-phone{display:none!important}
+.gv-pay-code-chip{display:inline-flex;align-items:center;gap:4px;margin-left:8px;padding:2px 4px 2px 10px;border-radius:999px;background:rgba(238,217,138,0.45);color:${FOREST};font-size:12.5px;font-weight:800;letter-spacing:0.04em;vertical-align:2px}
+.gv-pay-code-chip button{width:24px;height:24px;display:inline-flex;align-items:center;justify-content:center;border:none;border-radius:999px;background:transparent;color:${FOREST};cursor:pointer}
+.gv-pay-code-chip button:hover{background:rgba(27,56,40,0.1)}
+.gv-pay-code-chip button:focus{outline:none}
+.gv-pay-code-chip button:focus-visible{outline:2px solid ${FOREST}}
+@media (max-width:639px){.gv-pay-code-desk{display:none!important}.gv-pay-code-phone{display:inline-flex!important;margin-left:-6px}}
 @media (max-width:1023px){.gv-pay-bar{bottom:calc(74px + env(safe-area-inset-bottom,0px))}}
 .gv-pay-bar span.gv-pay-bar-aux{display:contents}
 /* Item list header: the bar's Select all, Clear and Upload proof, phones only */

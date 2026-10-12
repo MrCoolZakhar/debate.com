@@ -37,7 +37,12 @@ import {
   type ActiveAddon, type AidRequestRow, type PayConference, type PayRoleConfig,
 } from './payPanels';
 import { PAY_CSS, INK, INK_SOFT } from './payKit';
-import { money, readPayOverview, removeAddon, removePledgedTicket, type PayItem, type PayOverview } from './payApi';
+import {
+  applyDiscount, cancelDiscount, discountsAvailable, money, quoteDiscount, readPayOverview, removeAddon, removePledgedTicket,
+  type DiscountQuote, type PayItem, type PayOverview,
+} from './payApi';
+import DiscountCodePopup from './DiscountCodePopup';
+import { notifyOk } from '@/lib/appNotify';
 import BalanceHeader from './BalanceHeader';
 import ItemList, { canTick } from './ItemList';
 import PayBar, { PayListHead } from './PayBar';
@@ -79,6 +84,12 @@ export default function PayPage() {
   const [selected, setSelected] = useState<Set<string>>(() => new Set());
   const [notice, setNotice] = useState('');
   const [paying, setPaying] = useState<'card' | null>(null);
+  // Discount codes at checkout (prompt 107). codesOn = checkout_discounts_available.
+  const [codesOn, setCodesOn] = useState(false);
+  const [applied, setApplied] = useState<{ code: string; quote: DiscountQuote | null } | null>(null);
+  const [codePop, setCodePop] = useState(false);
+  // A card payment's held discount: given back when the card pop-up closes unpaid.
+  const [hold, setHold] = useState<{ id: string; totalCents: number; currency: string } | null>(null);
   // Manual conferences (prompt 96): started payments, the pay / proof pop-up, locks, refunds.
   const [started, setStarted] = useState<StartedInfo | null>(null);
   const [manualPop, setManualPop] = useState<{
@@ -233,12 +244,38 @@ export default function PayPage() {
     });
   }, [wait, reload]);
 
+  // Codes are offered only while the switch is on and the conference has a live code.
+  const codesConfId = conference?.id ?? null;
+  useEffect(() => {
+    if (!codesConfId || !user) return;
+    let alive = true;
+    void discountsAvailable(codesConfId).then(v => { if (alive) setCodesOn(v); });
+    return () => { alive = false; };
+  }, [codesConfId, user]);
+
+  // Changing the ticks asks again with the same code; a code that no longer fits is dropped once, with its sentence.
+  const selectedKey = [...selected].sort().join(',');
+  const appliedCode = applied?.code ?? null;
+  useEffect(() => {
+    if (!appliedCode) return;
+    if (!selectedKey) { void Promise.resolve().then(() => setApplied(a => (a ? { ...a, quote: null } : a))); return; }
+    let alive = true;
+    void quoteDiscount(selectedKey.split(','), appliedCode).then(r => {
+      if (!alive) return;
+      if (r.ok) setApplied({ code: appliedCode, quote: r.data });
+      else { setApplied(null); setNotice(r.error); }
+    });
+    return () => { alive = false; };
+  }, [selectedKey, appliedCode]);
+
   const items = useMemo(() => overview?.items ?? [], [overview]);
   const outstandingItems = items.filter(i => OUTSTANDING_STATES.has(i.state));
   const tickable = outstandingItems.filter(i => canTick(i, started?.locked));
   const chosen = items.filter(i => selected.has(i.invoice_id));
   const chosenCur = chosen[0]?.currency ?? overview?.conference.currency ?? 'USD';
   const chosenTotal = chosen.reduce((s, i) => s + i.due_cents, 0);
+  const quote = applied?.quote ?? null;
+  const payTotal = quote ? quote.total_after_cents : chosenTotal;
 
   const toggle = (it: PayItem) => {
     setNotice('');
@@ -315,10 +352,10 @@ export default function PayPage() {
   // Manual: start (or resume) a payment for these items, then the proof pop-up.
   // `tab` is the payment page's tab, opened by the Pay click itself (prompt
   // 101): it is closed when the start fails and sent to /pay/go when it lands.
-  const startManual = async (ids: string[], mode: ManualMode, tab?: Window | null) => {
+  const startManual = async (ids: string[], mode: ManualMode, tab?: Window | null, code?: string | null) => {
     if (startBusy || ids.length === 0) { tab?.close(); return; }
     setStartBusy(true); setNotice('');
-    const r = await startManualPayment(ids);
+    const r = await startManualPayment(ids, code);
     setStartBusy(false);
     if (!r.ok) {
       tab?.close();
@@ -326,6 +363,16 @@ export default function PayPage() {
         const mine = !!started?.payments.some(p => p.batch_id === r.startedBatchId);
         setLockFor({ batchId: r.startedBatchId, mine });
       } else setNotice(r.error);
+      return;
+    }
+    // Any payment that starts clears the applied code.
+    setApplied(null);
+    // The code covered everything: the items are paid and there is no started payment.
+    if (r.free) {
+      tab?.close();
+      setSelected(new Set());
+      notifyOk('Your code covers these items. They are paid', 'pay');
+      reload();
       return;
     }
     if (tab) tab.location.href = `/conferences/${slug}/pay/go`;
@@ -338,14 +385,38 @@ export default function PayPage() {
   // inside the click: a tab opened later (after an await, or by a timer) is blocked.
   const onPay = () => {
     const ids = chosen.map(i => i.invoice_id);
-    if (!manual) { setPaying('card'); return; }
+    const code = quote ? applied!.code : null;
+    if (!manual) {
+      if (code) { void payByCardWithCode(ids, code); return; }
+      setPaying('card');
+      return;
+    }
     if (c.manual_kind === 'link' && c.payment_url && ids.length > 0 && !startBusy) {
       const t = window.open('', '_blank');
       if (t) t.opener = null;
-      void startManual(ids, 'pay', t);
+      void startManual(ids, 'pay', t, code);
       return;
     }
-    void startManual(ids, 'pay');
+    void startManual(ids, 'pay', undefined, code);
+  };
+
+  // Card with a code: hold the lowered prices first (checkout_discount_apply), then the
+  // usual card pop-up charges them. Free = paid already, no card pop-up.
+  const payByCardWithCode = async (ids: string[], code: string) => {
+    if (startBusy || ids.length === 0) return;
+    setStartBusy(true); setNotice('');
+    const r = await applyDiscount(ids, code);
+    setStartBusy(false);
+    setApplied(null);
+    if (!r.ok) { setNotice(r.error); return; }
+    if (r.data.free) {
+      setSelected(new Set());
+      notifyOk('Your code covers these items. They are paid', 'pay');
+      reload();
+      return;
+    }
+    setHold(r.data.hold_id ? { id: r.data.hold_id, totalCents: r.data.total_after_cents, currency: r.data.currency || chosenCur } : null);
+    setPaying('card');
   };
 
   // A started payment's way to pay: the link opens straight away (inside the
@@ -475,11 +546,22 @@ export default function PayPage() {
                 below={(it) => (it.kind === 'role_fee' && it.owner_is_me && primary && (it.state === 'unpaid' || it.state === 'rejected'))
                   ? <VoucherPanel conferenceId={c.id} applicationId={primary.application_id} discountCents={discount} currency={it.currency} onChanged={reload} />
                   : null}
+                discounts={quote ? new Map(quote.lines.filter(l => l.eligible && l.discount_cents > 0).map(l => [l.invoice_id, l.after_cents])) : undefined}
               />
+              {quote && quote.skipped.length > 0 && (
+                <p className="gv-pay-quiet">{quote.skipped.join(', ')} already {quote.skipped.length === 1 ? 'has' : 'have'} a discount</p>
+              )}
               {canPay && tickable.length > 0 && (
                 <PayBar
                   count={chosen.length}
-                  totalLabel={money(chosenTotal, chosenCur)}
+                  totalLabel={money(payTotal, chosenCur)}
+                  discount={quote ? {
+                    code: applied!.code,
+                    beforeLabel: money(quote.total_before_cents, chosenCur),
+                    afterLabel: money(quote.total_after_cents, chosenCur),
+                    onRemove: () => setApplied(null),
+                  } : null}
+                  onHaveCode={codesOn ? () => setCodePop(true) : undefined}
                   allTicked={payAllTicked}
                   onSelectAll={selectAll}
                   onClear={clearChosen}
@@ -566,14 +648,27 @@ export default function PayPage() {
         )}
       </div>
 
+      {codePop && chosen.length > 0 && (
+        <DiscountCodePopup
+          invoiceIds={chosen.map(i => i.invoice_id)}
+          onClose={() => setCodePop(false)}
+          onApplied={(code, q) => { setNotice(''); setApplied({ code, quote: q }); setCodePop(false); }}
+        />
+      )}
       {paying === 'card' && (
         <CardPayPopup
           conferenceId={c.id}
           conferenceName={c.full_name}
           invoiceIds={chosen.map(i => i.invoice_id)}
-          totalLabel={money(chosenTotal, chosenCur)}
-          onClose={(stillWaiting) => { setPaying(null); if (stillWaiting) setReturnWait(true); else reload(); }}
-          onSettled={() => { setPaying(null); setSelected(new Set()); reload(); }}
+          totalLabel={hold ? money(hold.totalCents, hold.currency) : money(chosenTotal, chosenCur)}
+          onClose={(stillWaiting) => {
+            setPaying(null);
+            // Closed unpaid with a held code: the old prices come back now (the server also does it after 2 hours).
+            if (!stillWaiting && hold) void cancelDiscount(hold.id).then(() => reload());
+            setHold(null);
+            if (stillWaiting) setReturnWait(true); else reload();
+          }}
+          onSettled={() => { setPaying(null); setHold(null); setSelected(new Set()); reload(); }}
         />
       )}
 

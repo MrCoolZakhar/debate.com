@@ -95,7 +95,7 @@ function NotChargedLine({ it }: { it: PayItem }) {
   );
 }
 
-export default function ItemList({ items, selected, onToggle, onReceipt, onRemove, below, locked, onLock, onRequestRefund, onNotReceived, onViewProof }: {
+export default function ItemList({ items, selected, onToggle, onReceipt, onRemove, below, locked, onLock, onRequestRefund, onNotReceived, onViewProof, discounts }: {
   items: PayItem[];
   /** Items held by a started payment (my_started_payments.locked). */
   locked?: Record<string, { batch_id: string; status: string; mine: boolean }>;
@@ -110,6 +110,8 @@ export default function ItemList({ items, selected, onToggle, onReceipt, onRemov
   onRemove: (it: PayItem) => Promise<string | null>;
   /** Anything drawn under one line (the voucher panel under the person's own ticket). */
   below?: (it: PayItem) => React.ReactNode;
+  /** An applied checkout code (prompt 107): each discounted item's new price, by invoice id. */
+  discounts?: Map<string, number>;
 }) {
   const [confirming, setConfirming] = useState<string | null>(null);
   const [menu, setMenu] = useState<string | null>(null);
@@ -224,7 +226,14 @@ export default function ItemList({ items, selected, onToggle, onReceipt, onRemov
               )}
               {below?.(it)}
             </div>
-            <span className="gv-pay-amt" style={{ color: it.state === 'paid' ? GREEN : undefined }}>{amt}</span>
+            <span className="gv-pay-amt" style={{ color: it.state === 'paid' ? GREEN : undefined }}>
+              {discounts?.has(it.invoice_id) && discounts.get(it.invoice_id)! < it.due_cents ? (
+                <>
+                  <s style={{ display: 'block', fontSize: 13, fontWeight: 600, color: INK_SOFT }}>{amt}</s>
+                  {money(discounts.get(it.invoice_id)!, it.currency)}
+                </>
+              ) : amt}
+            </span>
             <span style={{ position: 'relative' }} ref={menu === it.invoice_id ? menuWrapRef : undefined}>
               {it.state === 'paid' && it.can_request_refund && onRequestRefund && (
                 <>

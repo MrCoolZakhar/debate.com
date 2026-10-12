@@ -79,7 +79,12 @@ export interface MoneyPayment {
   name: string;
   delegation: string | null;
   total_cents: number;
+  /** refunded_cents + undone_cents; kept for older readers, never shown. */
   returned_cents: number;
+  /** Refunds and disputes only: money that went back (prompt 107). */
+  refunded_cents?: number;
+  /** Mark unpaid only: a record undone, no money moved. */
+  undone_cents?: number;
   currency: string;
   kinds: string[];
   items: { invoice_id: string; label: string; kind: string; amount_cents: number }[];

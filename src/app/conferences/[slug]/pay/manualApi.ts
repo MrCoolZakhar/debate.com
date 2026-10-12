@@ -74,13 +74,20 @@ async function call<T extends object>(fn: string, args: Record<string, unknown>,
   }
 }
 
-export function startManualPayment(invoiceIds: string[]) {
-  return call('start_manual_payment', { p_invoice_ids: invoiceIds }, 'Your payment could not be started. Try again in a moment.', a => ({
+/** Starts a payment. With a checkout code (prompt 107) it goes through
+ *  start_manual_payment_with_code, which lowers the prices first; free = the
+ *  code covered everything, the items are paid and there is no started payment. */
+export function startManualPayment(invoiceIds: string[], code?: string | null) {
+  const withCode = !!code && code.trim() !== '';
+  return call(withCode ? 'start_manual_payment_with_code' : 'start_manual_payment',
+    withCode ? { p_invoice_ids: invoiceIds, p_code: code!.trim() } : { p_invoice_ids: invoiceIds },
+    'Your payment could not be started. Try again in a moment.', a => ({
     batchId: String(a.batch_id ?? ''),
     expiresAt: typeof a.expires_at === 'string' ? a.expires_at : null,
     totalCents: typeof a.total_cents === 'number' ? a.total_cents : 0,
     currency: typeof a.currency === 'string' ? a.currency : 'USD',
     resumed: a.resumed === true,
+    free: a.free === true,
   }));
 }
 

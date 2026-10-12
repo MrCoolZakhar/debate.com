@@ -88,9 +88,10 @@ export function PaymentLine({ p, selected, onToggle, onOpenDoc, canTick }: {
       <div className="gv-inv-nums">
         <div className="gv-inv-num">
           <b style={{ color: FOREST }}>{cents(p.total_cents, p.currency)}</b>
-          {p.returned_cents > 0
-            ? <span style={{ color: '#8B2020' }}>{cents(p.returned_cents, p.currency)} refunded</span>
-            : <span>Paid</span>}
+          {/* A Mark unpaid moved no money, so it is never called a refund (prompt 107). */}
+          {(p.refunded_cents ?? 0) > 0 && <span style={{ color: '#8B2020' }}>{cents(p.refunded_cents!, p.currency)} refunded</span>}
+          {(p.undone_cents ?? 0) > 0 && <span style={{ color: INK_SOFT }}>{cents(p.undone_cents!, p.currency)} marked unpaid</span>}
+          {!(p.refunded_cents ?? 0) && !(p.undone_cents ?? 0) && <span>Paid</span>}
         </div>
       </div>
     </div>

@@ -208,3 +208,74 @@ export function shortDate(iso: string | null | undefined): string {
   if (Number.isNaN(d.getTime())) return '';
   return d.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
 }
+
+// ── Discount codes at checkout (prompt 107) ─────────────────────────────────
+// Behind store_flags.fin_checkout_vouchers: checkout_discounts_available is
+// false while it is off, and nothing about codes is drawn. A % code comes off
+// every ticked item; a fixed code comes off the total once, spread over the
+// items. Items that already carry a voucher are not discounted again (their
+// labels come back in `skipped`). Ticket vouchers (VoucherPanel) are separate.
+
+export interface DiscountQuote {
+  code: string;
+  kind: 'percent' | 'flat';
+  amount: number;
+  currency: string;
+  total_before_cents: number;
+  discount_cents: number;
+  total_after_cents: number;
+  skipped: string[];
+  lines: { invoice_id: string; label: string; due_cents: number; discount_cents: number; after_cents: number; eligible: boolean }[];
+}
+
+export type DiscountResult<T> = { ok: true; data: T } | { ok: false; error: string; field?: string; code?: string };
+
+async function discountCall<T>(fn: string, args: Record<string, unknown>, fallback: string): Promise<DiscountResult<T>> {
+  try {
+    const c = await getFreshAuthedClient();
+    if (!c) return { ok: false, error: 'Your session has expired. Please sign in again.' };
+    const { data, error } = await c.rpc(fn, args);
+    if (error) return { ok: false, error: friendlyError(error, fallback) };
+    const a = (data ?? null) as Record<string, unknown> | null;
+    if (!a || a.ok !== true) {
+      return {
+        ok: false,
+        error: plainOrFallback(a?.error, fallback),
+        field: typeof a?.field === 'string' ? a.field : undefined,
+        code: typeof a?.code === 'string' ? a.code : undefined,
+      };
+    }
+    return { ok: true, data: a as T };
+  } catch (e) {
+    return { ok: false, error: friendlyError(e, fallback) };
+  }
+}
+
+/** Whether this conference offers checkout codes right now (the switch is on and a % or fixed code is live). */
+export async function discountsAvailable(conferenceId: string): Promise<boolean> {
+  try {
+    const c = await getFreshAuthedClient();
+    if (!c) return false;
+    const { data, error } = await c.rpc('checkout_discounts_available', { p_conference_id: conferenceId });
+    return !error && data === true;
+  } catch {
+    return false;
+  }
+}
+
+/** Read only: what a code would take off these items. */
+export function quoteDiscount(invoiceIds: string[], code: string) {
+  return discountCall<DiscountQuote>('checkout_discount_quote', { p_invoice_ids: invoiceIds, p_code: code.trim() },
+    'This code could not be checked. Try again in a moment.');
+}
+
+/** Card conferences: lowers and holds the prices (2 hours); free = nothing left to pay. */
+export function applyDiscount(invoiceIds: string[], code: string) {
+  return discountCall<DiscountQuote & { hold_id: string | null; free: boolean }>('checkout_discount_apply',
+    { p_invoice_ids: invoiceIds, p_code: code.trim() }, 'Your code could not be applied. Try again in a moment.');
+}
+
+/** The card pop-up closed unpaid: give the old prices back now. */
+export async function cancelDiscount(holdId: string): Promise<void> {
+  await discountCall('checkout_discount_cancel', { p_hold_id: holdId }, 'The discount could not be released.');
+}
