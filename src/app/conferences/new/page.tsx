@@ -1038,7 +1038,10 @@ export default function NewConferencePage() {
       // "Add committees with enough seats".
       //
       // `.select('id, name')` because the seats below need the minted ids.
-      const { data: createdCommittees, error: committeesError } = await supabase
+      // No committees is allowed (optional step): skip the insert entirely.
+      const { data: createdCommittees, error: committeesError } = committees.length === 0
+        ? { data: [] as { id: string; name: string }[], error: null }
+        : await supabase
         .from('conference_committees')
         .insert(
           committees.map((c) => ({
@@ -1234,7 +1237,8 @@ export default function NewConferencePage() {
   }
 
   function continueCommittees() {
-    if (committees.length === 0) { setStepError('Add at least one committee. Delegates apply to a committee, not to a conference.'); return; }
+    // Optional since 12 Oct 2026 (owner): committees can be added later in
+    // Manage → Committees, so an empty list simply moves on.
     advance(6);
   }
 
@@ -1275,7 +1279,6 @@ export default function NewConferencePage() {
     fullName.trim() && acronym.trim() && !acronymProblem(acronym) && contactEmail.trim() &&
     studentLevel && country && city.trim() && format &&
     parseInt(expectedDelegates) > 0 &&
-    committees.length > 0 &&
     paymentAnswered &&
     intentKeys.length > 0;
 
@@ -1600,7 +1603,12 @@ export default function NewConferencePage() {
                 </p>
 
                 {stepError && <ErrorNote>{stepError}</ErrorNote>}
-                <ContinueButton onClick={continueCommittees} disabled={committees.length === 0} />
+                <ContinueButton onClick={continueCommittees} />
+                {committees.length === 0 && (
+                  <p style={{ fontFamily: OUTFIT, fontSize: 13, color: NEU.inkSoft, textAlign: 'center', marginTop: 10 }}>
+                    No committees yet? Continue and add them later in Manage&nbsp;→&nbsp;Committees.
+                  </p>
+                )}
               </WizardShell>
             )}
 
