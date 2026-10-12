@@ -8,10 +8,10 @@
 // (DelegationCreditsCard, which renders nothing for anyone who does not lead).
 
 import { ArrowRight, CheckCircle2, Hourglass, MinusCircle } from 'lucide-react';
-import { PayNowCard } from './PayNowCard';
+import { PayNowCard, useOpenBalances } from './PayNowCard';
 import DelegationCreditsCard from './DelegationCreditsCard';
 import { OUTFIT, CHIP_STYLES, derivePaymentChip } from './shared';
-import { DashCard, CardHeading, ForestLink, IconWord, INK, INK_SOFT } from './dashboardKit';
+import { DashCard, CardHeading, ForestLink, IconWord, INK, INK_SOFT, useDashStacked } from './dashboardKit';
 import type { ParticipantApplication } from './types';
 
 const PAID = new Set(['paid', 'waived']);
@@ -30,6 +30,12 @@ export default function PaymentPane({ application, conferenceId, conferenceSlug,
   const settled = PAID.has(application.payment_status);
   const waitingForAcceptance = paymentTiming === 'after_acceptance' && application.status === 'submitted' && !settled;
   const chip = CHIP_STYLES[derivePaymentChip(application.payment_status, application.self_paid, application.amount_paid)];
+  // Read once here and handed to the Due now card. On the phone page, when
+  // that card has something to pay (with its own Pay now), this card's
+  // "Open payments" would be a second button to the same page: from xl only.
+  const balances = useOpenBalances(userId, conferenceId);
+  const stacked = useDashStacked();
+  const dueCardShows = !!balances && balances.length > 0;
 
   let line: string;
   if (free) line = 'Your role has no registration fee.';
@@ -40,7 +46,7 @@ export default function PaymentPane({ application, conferenceId, conferenceSlug,
   return (
     <>
       <DashCard>
-        <CardHeading title="Payment" />
+        <CardHeading title="Payment" stackedHide />
         <div className="flex items-center justify-between gap-4 flex-wrap">
           <div className="min-w-0" style={{ maxWidth: 440 }}>
             {free ? (
@@ -53,16 +59,18 @@ export default function PaymentPane({ application, conferenceId, conferenceSlug,
             <p style={{ fontFamily: OUTFIT, fontSize: 14, color: INK, margin: '8px 0 0 0', lineHeight: 1.5 }}>{line}</p>
           </div>
           {!(free && settled) && !waitingForAcceptance && (
-            <ForestLink href={`/conferences/${conferenceSlug}/pay`}>
-              Open payments <ArrowRight size={16} strokeWidth={2.4} aria-hidden />
-            </ForestLink>
+            <span className={stacked && dueCardShows ? 'hidden xl:inline-flex' : 'inline-flex'}>
+              <ForestLink href={`/conferences/${conferenceSlug}/pay`}>
+                Open payments <ArrowRight size={16} strokeWidth={2.4} aria-hidden />
+              </ForestLink>
+            </span>
           )}
         </div>
       </DashCard>
 
       {/* What is owed right now across this conference (own + delegation
           invoices), with the due date when set and a way to /pay. */}
-      <PayNowCard userId={userId} conferenceId={conferenceId} />
+      <PayNowCard userId={userId} conferenceId={conferenceId} rows={balances} />
 
       {isLeader && application.society_id && <DelegationCreditsCard societyId={application.society_id} />}
     </>

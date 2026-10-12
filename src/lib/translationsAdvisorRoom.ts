@@ -26,4 +26,10 @@ export const advisorRoomTranslations = {
     join_advisor_follow_body: 'للقراءة فقط. تضيف هذه القاعة إلى لوحة المستشار.',
     join_advisor_follow_btn: 'تابع على لوحتي',
   },
+  // pt-BR: scaffold, values still English. Translate per .claude/pt-glossary.md.
+  pt: {
+    join_advisor_follow_title: 'Acompanhar como orientador',
+    join_advisor_follow_body: 'Somente leitura. Adiciona esta sala ao seu painel de orientador.',
+    join_advisor_follow_btn: 'Acompanhar no meu painel',
+  },
 } as const;

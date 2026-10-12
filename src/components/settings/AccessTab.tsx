@@ -206,7 +206,7 @@ function ChairAvatar({ name, state, isMe, youLabel, stateLabel }: {
         <span aria-hidden style={{ position: 'absolute', bottom: -1, insetInlineEnd: -1, width: 11, height: 11, borderRadius: 11, background: dot, boxShadow: `0 0 0 2px ${moderator ? K.surface : K.page}` }} />
       </span>
       <span className="flex-1 min-w-0">
-        <span className="block truncate" style={{ fontSize: T.body, fontWeight: W.label, color: live ? K.ink : K.inkSoft }}>
+        <span className="block [overflow-wrap:anywhere]" style={{ fontSize: T.body, fontWeight: W.label, color: live ? K.ink : K.inkSoft }}>
           {name}{isMe && <span style={{ marginInlineStart: 5, fontSize: T.caption, fontWeight: W.label, color: K.forestMid }}>{youLabel}</span>}
         </span>
         <span className="flex items-center gap-1" style={{ marginTop: 1, fontSize: T.caption, fontWeight: W.label, color: moderator ? '#7A5812' : K.inkSoft }}>

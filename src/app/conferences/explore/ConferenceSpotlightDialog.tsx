@@ -14,7 +14,6 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { GoldWord } from '@/components/BrandHeading';
 import { LogoDisc } from '@/components/LogoDisc';
 import { PurchaseShell, PURCHASE_CSS } from '@/components/purchase/purchaseKit';
 import { conferenceAcronymLabel } from '@/lib/conferenceLabels';
@@ -67,7 +66,7 @@ export default function ConferenceSpotlightDialog({ rows, onClose, openRolesFor 
       <style>{PURCHASE_CSS}{CSS}</style>
       <div className="gv-cs-body">
         <div>
-          <h2 className="gv-buy-title" style={{ fontSize: 30 }}>Conference <GoldWord tone="light">Spotlight</GoldWord></h2>
+          <h2 className="gv-buy-title" style={{ fontSize: 30 }}>Conference Spotlight</h2>
           <p className="gv-buy-sub">Our best picks of conferences for you</p>
         </div>
         <div className="gv-cs-list">

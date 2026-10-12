@@ -31,7 +31,7 @@ function webApplication(path: string, description: string) {
     applicationCategory: 'EducationalApplication',
     operatingSystem: 'Any (web browser)',
     browserRequirements: 'Requires JavaScript. Works in any modern browser on a laptop, tablet or phone.',
-    inLanguage: ['en', 'es', 'fr', 'ar'],
+    inLanguage: ['en', 'es', 'fr', 'ar', 'pt-BR'],
     isAccessibleForFree: true,
     image: OG_IMAGE_URL,
     offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },

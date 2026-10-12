@@ -508,14 +508,15 @@ export default function ScoreboardPanel({ committee, onClose, feedbackVersion = 
                   <tbody>
                     {[...allRows].sort((a, b) => b.headline - a.headline).map((r) => (
                       <tr key={r.key}>
-                        {/* Cap the name column so a long delegation name truncates instead of
-                            widening the table (which would force the whole row to scroll). */}
+                        {/* Cap the name column so a long delegation name wraps onto a second
+                            line instead of widening the table (which would force the whole
+                            row to scroll). Never cut with an ellipsis. */}
                         <td style={{ ...TD, textAlign: 'start', maxWidth: 220 }}>
                           <span className="flex items-center gap-2 min-w-0">
                             {/* Round and bigger here too, so the Matrix and the
                                 Ranking tab identify a delegation the same way. */}
                             <span className="shrink-0 flex"><SeatCircleFlag country={r.country} size={26} decorative /></span>
-                            <span className="truncate" style={{ color: NEU.ink }} title={getCountryDisplayName(r.country, language)}>{getCountryDisplayName(r.country, language)}</span>
+                            <span className="min-w-0 [overflow-wrap:anywhere]" style={{ color: NEU.ink, lineHeight: 1.2 }}>{getCountryDisplayName(r.country, language)}</span>
                           </span>
                         </td>
                         <td style={TD}>{r.gslSpeeches}</td>
@@ -532,11 +533,9 @@ export default function ScoreboardPanel({ committee, onClose, feedbackVersion = 
                             factor ratings, which is why the SCORE column looked
                             like it was inventing a number. */}
                         <td style={{ ...TD, color: r.quality != null ? NEU.ink : SOFT }}>
-                          {/* An en dash, not a translated phrase: this cell sits in
-                              a narrow numeric column and the row's own CHAIR
-                              RATINGS section already says in words when a
-                              delegation has no ratings. */}
-                          {r.quality != null ? r.quality : '–'}
+                          {/* A short muted word, like the organiser board's
+                              SessionBoard: no dash placeholders anywhere. */}
+                          {r.quality != null ? r.quality : t('sb_quality_none')}
                         </td>
                         <td style={{ ...TD, color: NEU.forest, fontWeight: 900 }}>{r.headline}</td>
                       </tr>

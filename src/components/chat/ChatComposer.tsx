@@ -40,6 +40,8 @@ const ChatComposer = forwardRef<HTMLTextAreaElement, {
   onChange: (v: string) => void;
   onSend: () => void;
   readOnly: boolean;
+  /** Replaces the read-only line ("View only") when the reason is different (chat off). */
+  readOnlyNote?: string;
   t: TFn;
   draft?: AttachmentDraft | null;
   onPickFile?: (file: File) => void;
@@ -50,7 +52,7 @@ const ChatComposer = forwardRef<HTMLTextAreaElement, {
   onSendGif?: (g: GifItem) => void;
   lang?: string;
 }>(function ChatComposer({
-  value, onChange, onSend, readOnly, t,
+  value, onChange, onSend, readOnly, readOnlyNote, t,
   draft = null, onPickFile, onRemoveDraft, attachError = null, gifsEnabled = false, onSendGif, lang = 'en',
 }, ref) {
   // The delegate chat lives inside FitToScreen's scaled root; on iOS the keyboard shrinks the
@@ -84,7 +86,7 @@ const ChatComposer = forwardRef<HTMLTextAreaElement, {
       {readOnly ? (
         <p className="flex items-center justify-center gap-2 py-2" style={{ fontFamily: OUTFIT, fontSize: 13, color: NEU.inkSoft }}>
           <Eye size={15} strokeWidth={2} aria-hidden />
-          {t('chat_view_only')}
+          {readOnlyNote ?? t('chat_view_only')}
         </p>
       ) : (
         <>
@@ -120,7 +122,7 @@ const ChatComposer = forwardRef<HTMLTextAreaElement, {
                 )}
               </span>
               <span className="min-w-0 flex-1">
-                <span className="block truncate" style={{ fontFamily: OUTFIT, fontSize: 14, fontWeight: 650, color: NEU.ink }}>{draft.name}</span>
+                <span className="block truncate" title={draft.name} style={{ fontFamily: OUTFIT, fontSize: 14, fontWeight: 650, color: NEU.ink }}>{draft.name}</span>
                 <span
                   className="block"
                   aria-live="polite"

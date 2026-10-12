@@ -1,4 +1,5 @@
 import type { ChatMessage } from './types';
+import { chairNamesExcludingSeats } from './chairNameRules';
 
 // Single source of truth for how chat messages group into conversations and how
 // "unread" is counted. Both ChatPanel and the parent pages (chair + delegate) use
@@ -220,10 +221,17 @@ export function chatGroupsFor(messages: ChatMessage[], senderName: string): Chat
   return Array.from(parseChatGroups(messages).values()).filter((g) => g.members.includes(senderName));
 }
 
-/** Rows that are never chat: the scoring ledger, group definitions and group edits. */
+/** The sender of the Secretariat messages src/lib/broadcastMessages.ts builds from organiser
+ *  broadcasts. Repeated here (not imported) so this module stays free of committeeService. */
+const SECRETARIAT_SENDER = '__secretariat__';
+
+/** Rows that are never chat: the scoring ledger, group definitions and group edits, and a
+ *  REAL row that claims to be the Secretariat (only the virtual broadcast messages carry
+ *  `broadcast`, so a forged sender is dropped rather than shown as an organiser). */
 function isSystemLog(m: ChatMessage): boolean {
   return m.content.startsWith('__log__:') || m.recipient === GROUP_DEF_RECIPIENT
-    || m.content.startsWith(GROUP_DEF_PREFIX) || m.content.startsWith(GROUP_EDIT_PREFIX);
+    || m.content.startsWith(GROUP_DEF_PREFIX) || m.content.startsWith(GROUP_EDIT_PREFIX)
+    || (m.sender === SECRETARIAT_SENDER && !m.broadcast);
 }
 
 function isGroupRecipient(recipient: string | undefined): boolean {
@@ -234,8 +242,12 @@ export function buildChatConversations(
   messages: ChatMessage[],
   senderName: string,
   isChair: boolean,
-  chairNames: string[],
+  chairNamesRaw: string[],
+  /** The committee's seat names. A chair name equal to a seat is NOT treated as a chair
+   *  (delegations win), so a room with a collision still lists and routes to the seat. */
+  seats?: Iterable<string>,
 ): ChatConv[] {
+  const chairNames = chairNamesExcludingSeats(chairNamesRaw, seats);
   const allMsgs = messages.filter((m) => !isSystemLog(m));
 
   // Everyone — public messages
@@ -316,9 +328,12 @@ export function chatConvKeyForMessage(
   m: ChatMessage,
   senderName: string,
   isChair: boolean,
-  chairNames: string[],
+  chairNamesRaw: string[],
   allMessages?: ChatMessage[],
+  /** Same as buildChatConversations' `seats`: keep the two in step. */
+  seats?: Iterable<string>,
 ): ChatConvKey | null {
+  const chairNames = chairNamesExcludingSeats(chairNamesRaw, seats);
   if (isSystemLog(m)) return null;
   if (!m.isPrivate) return 'everyone';
   if (isGroupRecipient(m.recipient)) {
@@ -404,8 +419,9 @@ export function chatUnreadTotal(
   isChair: boolean,
   chairNames: string[],
   readCounts: Record<string, number>,
+  seats?: Iterable<string>,
 ): number {
-  return buildChatConversations(messages, senderName, isChair, chairNames)
+  return buildChatConversations(messages, senderName, isChair, chairNames, seats)
     .reduce((sum, c) => sum + chatConvUnread(c, readCounts, senderName), 0);
 }
 
@@ -436,7 +452,7 @@ export function buildChatDirectory({
   messages,
   senderName,
   isChair,
-  chairNames,
+  chairNames: chairNamesRaw,
   delegations,
   extraActivity = {},
   compare = (a, b) => a.localeCompare(b),
@@ -453,6 +469,8 @@ export function buildChatDirectory({
   compare?: (a: string, b: string) => number;
 }): ChatDirectoryEntry[] {
   const groups = parseChatGroups(messages);
+  // Delegations win over a chair with the same name (incident RAAGKK).
+  const chairNames = chairNamesExcludingSeats(chairNamesRaw, delegations);
   const convs = buildChatConversations(messages, senderName, isChair, chairNames);
   const byKey = new Map<string, ChatConv>(convs.map((c) => [String(c.key), c]));
 

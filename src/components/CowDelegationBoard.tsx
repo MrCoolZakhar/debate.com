@@ -28,7 +28,7 @@ function FlagTile({ country, active, spoken }: { country: string; active: boolea
           <span style={{ position: 'absolute', top: 3, right: 3, width: 7, height: 7, borderRadius: '50%', backgroundColor: '#3D7A52', boxShadow: '0 0 0 1.5px #FAF8F3' }} />
         )}
       </div>
-      <span className="text-[9px] leading-tight text-center truncate w-full" style={{ color: active ? '#1B3828' : '#6A5A4A', fontWeight: active ? 800 : 500 }}>
+      <span className="text-[9px] leading-tight text-center [overflow-wrap:anywhere] w-full" style={{ color: active ? '#1B3828' : '#6A5A4A', fontWeight: active ? 800 : 500 }}>
         {country}
       </span>
     </div>

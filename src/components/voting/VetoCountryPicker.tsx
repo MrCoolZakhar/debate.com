@@ -184,7 +184,7 @@ export function VetoCountryPicker({
                   style={{ backgroundColor: i === active ? 'rgba(27,56,40,0.08)' : 'transparent', color: '#1C1410' }}
                 >
                   <SeatCircleFlag seat={d} size={24} decorative />
-                  <span className="flex-1 min-w-0 truncate">{getCountryDisplayName(d.country, language)}</span>
+                  <span className="flex-1 min-w-0 leading-tight [overflow-wrap:anywhere]">{getCountryDisplayName(d.country, language)}</span>
                   <Plus size={14} className="shrink-0 opacity-50" aria-hidden />
                 </li>
               ))}
@@ -216,7 +216,7 @@ export function VetoCountryPicker({
                 style={{ boxShadow: '0 1px 2px rgba(27,56,40,0.22), 0 3px 8px rgba(27,56,40,0.16)' }}
               />
               <span className="flex-1 min-w-0">
-                <span className="block truncate text-[18px] font-semibold leading-tight" style={{ color: seat ? '#1C1410' : c.warnFg }}>{name}</span>
+                <span className="block [overflow-wrap:anywhere] text-[18px] font-semibold leading-tight" style={{ color: seat ? '#1C1410' : c.warnFg }}>{name}</span>
                 {!seat && <span className="block text-[12.5px] font-semibold mt-0.5" style={{ color: c.warnFg }}>{t('voting_veto_not_seated')}</span>}
               </span>
               {!readOnly && (
@@ -278,7 +278,7 @@ export function VetoCountryPicker({
             title={seat ? undefined : t('voting_veto_not_seated')}
           >
             <SeatCircleFlag seat={seat ?? { country: entry }} size={flagSize} decorative ring={tone === 'light'} />
-            <span className="truncate">{name}</span>
+            <span className="min-w-0 leading-tight [overflow-wrap:anywhere]">{name}</span>
             {!seat && <span className={`${lg ? 'text-[12px]' : 'text-[10px]'} font-bold opacity-80 whitespace-nowrap`}>{t('voting_veto_not_seated')}</span>}
             {!readOnly && (
               <button

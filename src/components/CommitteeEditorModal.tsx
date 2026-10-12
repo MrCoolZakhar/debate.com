@@ -551,7 +551,7 @@ function ChairsDock({ conferenceId, committeeId, committeeName, embedded = false
               ) : (
                 <span className="flex items-center justify-center flex-shrink-0" style={{ width: 28, height: 28, borderRadius: '9999px', backgroundColor: '#1B3828', color: '#EED98A', fontSize: 11, fontWeight: 700, fontFamily: OUTFIT }}>{c.name.charAt(0)}</span>
               )}
-              <span className="text-[12.5px] truncate min-w-0 flex-1" style={{ color: '#1C1410', fontFamily: OUTFIT }}>{c.name}</span>
+              <span className="text-[12.5px] [overflow-wrap:anywhere] min-w-0 flex-1" style={{ color: '#1C1410', fontFamily: OUTFIT }}>{c.name}</span>
               {chairIds.length === chairs.length && (
                 <ChairTitleSelect
                   value={c.title}
@@ -586,7 +586,7 @@ function ChairsDock({ conferenceId, committeeId, committeeName, embedded = false
                     <span aria-hidden className="absolute inset-0 pointer-events-none" style={{ borderRadius: 9999, border: '1.5px dashed #B6871F' }} />
                   </span>
                   <span className="min-w-0 flex-1">
-                    <span className="text-[12px] truncate" style={{ display: 'block', color: '#1C1410', fontFamily: OUTFIT, fontWeight: 600 }} title={inv.email}>{label}</span>
+                    <span className="text-[12px] [overflow-wrap:anywhere]" style={{ display: 'block', color: '#1C1410', fontFamily: OUTFIT, fontWeight: 600 }} title={inv.email}>{label}</span>
                     <span style={{ display: 'block', fontFamily: OUTFIT, fontSize: 8.5, fontWeight: 800, letterSpacing: '0.12em', color: '#7A5A10' }}>PENDING</span>
                   </span>
                   <ChairTitleSelect
@@ -690,7 +690,7 @@ function ChairsDock({ conferenceId, committeeId, committeeName, embedded = false
                       ) : (
                         <span className="flex items-center justify-center flex-shrink-0" style={{ width: 22, height: 22, borderRadius: '9999px', backgroundColor: '#1B3828', color: '#EED98A', fontSize: 10, fontWeight: 700, fontFamily: OUTFIT }}>{(app.profiles?.display_name ?? '?').charAt(0)}</span>
                       )}
-                      <span className="text-[11.5px] truncate flex-1 min-w-0" style={{ color: '#1C1410', fontFamily: OUTFIT }}>{app.profiles?.display_name ?? 'Unknown'}</span>
+                      <span className="text-[11.5px] [overflow-wrap:anywhere] flex-1 min-w-0" style={{ color: '#1C1410', fontFamily: OUTFIT }}>{app.profiles?.display_name ?? 'Unknown'}</span>
                       <UserPlus size={12} style={{ color: '#1B3828', flexShrink: 0 }} />
                     </button>
                   ))}
@@ -1502,7 +1502,7 @@ function CommitteeEditor({ conferenceId, committeeType, existing, initialRoster,
     </ModalOverlay>
     {pendingRemovalCount !== null && (
       <ModalOverlay onClose={() => setPendingRemovalCount(null)}>
-        <div className="rounded-2xl p-6 flex flex-col gap-4" style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0', width: 380 }}>
+        <div className="rounded-2xl p-6 flex flex-col gap-4" style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0', width: 380, maxWidth: 'calc(100vw - 32px)' }}>
           <p className="text-sm" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif", lineHeight: 1.5 }}>
             {pendingRemovalCount} of the {seatNounPlural} you removed {pendingRemovalCount === 1 ? 'has' : 'have'} an allocated delegate. Removing {pendingRemovalCount === 1 ? 'it' : 'them'} will return {pendingRemovalCount === 1 ? 'that delegate' : 'those delegates'} to the allocation pool. Proceed?
           </p>
@@ -1515,7 +1515,7 @@ function CommitteeEditor({ conferenceId, committeeType, existing, initialRoster,
     )}
     {pendingDoubleOffCount !== null && (
       <ModalOverlay onClose={() => { setPendingDoubleOffCount(null); setDoubleDelegation(true); }}>
-        <div className="rounded-2xl p-6 flex flex-col gap-4" style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0', width: 380 }}>
+        <div className="rounded-2xl p-6 flex flex-col gap-4" style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0', width: 380, maxWidth: 'calc(100vw - 32px)' }}>
           <p className="text-sm" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif", lineHeight: 1.5 }}>
             This action will affect the allocations of {pendingDoubleOffCount} delegates. It is irreversible. Are you sure you wish to continue?
           </p>
@@ -1680,7 +1680,7 @@ export function CommitteeEditorModal({ conference, committee, onSaved, onClose, 
   if (!isEdit && !pendingType) {
     return (
       <ModalOverlay onClose={onClose}>
-        <div className="rounded-2xl p-7 flex flex-col gap-5" style={{ backgroundColor: NEU.base, border: '1px solid #DDD4C0', width: 400 }}>
+        <div className="rounded-2xl p-7 flex flex-col gap-5" style={{ backgroundColor: NEU.base, border: '1px solid #DDD4C0', width: 400, maxWidth: 'calc(100vw - 32px)' }}>
           <div className="flex items-center justify-between">
             <p className="text-base font-bold" style={{ color: NEU.ink, fontFamily: OUTFIT }}>Choose committee type</p>
             <button onClick={onClose} className="focus:outline-none" style={{ color: NEU.muted }}><X size={18} /></button>

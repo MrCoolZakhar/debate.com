@@ -162,7 +162,7 @@ export default function HistoryTab({ committee, feedback, manualAuthors }: {
       <SeatCircleFlag country={s.country} size={26} decorative style={{ marginBlockStart: 1 }} />
       <span style={{ flex: 1, minWidth: 0 }}>
         <span style={{ display: 'flex', alignItems: 'baseline', gap: 10, minHeight: 26 }}>
-          <span style={{ flex: 1, minWidth: 0, fontFamily: OUTFIT, fontWeight: 700, fontSize: 13, color: NEU.ink, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', alignSelf: 'center' }}>
+          <span style={{ flex: 1, minWidth: 0, fontFamily: OUTFIT, fontWeight: 700, fontSize: 13, color: NEU.ink, overflowWrap: 'anywhere', lineHeight: 1.25, alignSelf: 'center' }}>
             {getCountryDisplayName(s.country, language)}
           </span>
           <span style={{ flexShrink: 0, alignSelf: 'center', fontFamily: OUTFIT, fontSize: 11, color: SOFT, fontVariantNumeric: 'tabular-nums' }}>
@@ -206,7 +206,7 @@ export default function HistoryTab({ committee, feedback, manualAuthors }: {
           <SeatCircleFlag country={e.country} size={20} decorative />
         )}
         <span
-          style={{ flex: 1, minWidth: 0, fontFamily: OUTFIT, fontSize: 12.5, color: NEU.ink, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+          style={{ flex: 1, minWidth: 0, fontFamily: OUTFIT, fontSize: 12.5, color: NEU.ink, overflowWrap: 'anywhere', lineHeight: 1.25 }}
           title={`${who} · ${what}`}
         >
           <strong style={{ fontWeight: 700 }}>{who}</strong>
@@ -237,7 +237,7 @@ export default function HistoryTab({ committee, feedback, manualAuthors }: {
         <span aria-hidden className="inline-flex items-center justify-center" style={{ width: 26, flexShrink: 0, color: SOFT }}>
           <Icon size={14} strokeWidth={2.3} />
         </span>
-        <span style={{ flex: 1, minWidth: 0, fontFamily: OUTFIT, fontSize: 12.5, color: NEU.ink, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        <span style={{ flex: 1, minWidth: 0, fontFamily: OUTFIT, fontSize: 12.5, color: NEU.ink, overflowWrap: 'anywhere', lineHeight: 1.25 }}>
           <strong style={{ fontWeight: 700 }}>{getCountryDisplayName(e.country, language)}</strong>
           {` · ${eventLabel(e)}`}
           {e.note && e.type.startsWith('manual') ? <span style={{ color: SOFT }}>{` · ${e.note}`}</span> : null}

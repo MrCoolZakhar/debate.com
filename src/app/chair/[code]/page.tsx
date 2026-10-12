@@ -49,9 +49,11 @@ import ChatPanel from '@/components/ChatPanel';
 import ChatDialog from '@/components/chat/ChatDialog';
 import ChatDisabledNotice from '@/components/ChatDisabledNotice';
 import { getCommitteeFlags } from '@/lib/committeeFlags';
-import { chatUnreadTotal, mergeMessagesById, chatConvKeyForMessage } from '@/lib/chatConversations';
+import { chatUnreadTotal, mergeMessagesById, chatConvKeyForMessage, buildChatConversations } from '@/lib/chatConversations';
 import { isViewingChatConversation } from '@/lib/chatViewing';
 import { loadChatReadCounts, saveChatReadCounts } from '@/lib/chatReadKey';
+import { loadSeenBroadcasts, markBroadcastSeen, useBroadcastHistory } from '@/lib/broadcastHistory';
+import { withBroadcastMessages, secretariatUnread, BROADCAST_MESSAGE_PREFIX, SECRETARIAT_READ_KEY } from '@/lib/broadcastMessages';
 import ChairSidebarShell from '@/components/ChairSidebarShell';
 import SidebarFlagRail from '@/components/SidebarFlagRail';
 import FloorBarExtent from '@/components/FloorBarExtent';
@@ -245,32 +247,9 @@ const STATUS_PIN_TTL_MS = 8000;
 const LIST_SWAP_GUARD_MS = 1500;
 
 // ── Organiser broadcasts: per-device dismissal memory ─────────────────────────
-// A broadcast lives in the DB until it expires, and the chair page refetches the whole
-// active set on every reload and on every realtime event. Without a record of what this
-// device has already dealt with, one refresh would re-raise a card the chair dismissed ten
-// minutes ago. Keyed per committee AND per broadcast id — the same dais laptop can host two
-// committees in a day, and a chair who dismissed a message in one must not have it
-// suppressed in the other.
-const broadcastSeenStorageKey = (code: string) => `gavelling-broadcast-seen-${code}`;
-
-function loadSeenBroadcasts(code: string): Set<string> {
-  try {
-    const raw = localStorage.getItem(broadcastSeenStorageKey(code));
-    const parsed = raw ? JSON.parse(raw) : [];
-    return new Set(Array.isArray(parsed) ? (parsed as string[]) : []);
-  } catch { return new Set(); }
-}
-
-function markBroadcastSeen(code: string, id: string): void {
-  try {
-    const seen = loadSeenBroadcasts(code);
-    if (seen.has(id)) return;
-    seen.add(id);
-    // Capped: broadcasts are deleted upstream once they expire, so an unbounded list would
-    // only ever accumulate ids for rows that no longer exist.
-    localStorage.setItem(broadcastSeenStorageKey(code), JSON.stringify(Array.from(seen).slice(-120)));
-  } catch {}
-}
+// loadSeenBroadcasts / markBroadcastSeen live in src/lib/broadcastHistory.ts (same
+// localStorage key as before). Dealing with a card also counts its Secretariat message in the
+// Everyone chat as read (markBroadcastReadInChat below).
 
 // An actionable broadcast whose `action_at` is already well in the past must NOT fire. The
 // effect has either already happened (the committee is suspended/ended, and the guards below
@@ -357,7 +336,7 @@ function AddSpeakerInput({ committee, onAdd, onRecognise }: { committee: Committ
           onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); commit(topNotOnList); } if (e.key === 'Escape') setQuery(''); }}
           placeholder={t('gsl_add_to_list')} autoFocus
           className="flex-1 min-w-[7rem] bg-transparent px-4 py-2.5 text-[#1C1410] placeholder-[#9A8A78] focus:outline-none text-sm" />
-        {topNotOnList && query && <span className="text-xs text-[#9A8A78] px-2 truncate max-w-[120px]">↵ {getCountryDisplayName(topNotOnList.country, language)}</span>}
+        {topNotOnList && query && <span className="text-xs text-[#9A8A78] px-2 max-w-[140px] leading-tight [overflow-wrap:anywhere]">↵ {getCountryDisplayName(topNotOnList.country, language)}</span>}
       </div>
       {query && matches.length > 0 && (
         <div data-tutorial="speakers-autocomplete" className="absolute bottom-full left-0 right-0 mb-1 bg-[#FAF8F3] border border-[#DDD4C0] rounded-xl overflow-hidden shadow-xl z-10 max-h-48 overflow-y-auto">
@@ -462,11 +441,11 @@ function RtrCountryInput({
             }
             if (e.key === 'Escape') { setQuery(''); onChange(''); }
           }}
-          placeholder={language === 'ar' ? 'أدخل اسم الدولة...' : language === 'fr' ? 'Ajouter un pays...' : language === 'es' ? 'Agregar país...' : 'Type country...'}
+          placeholder={language === 'ar' ? 'أدخل اسم الدولة...' : language === 'fr' ? 'Ajouter un pays...' : language === 'pt' ? 'Adicionar país...' : language === 'es' ? 'Agregar país...' : 'Type country...'}
           className="flex-1 bg-transparent px-3 py-1.5 text-[#1C1410] text-xs placeholder-[#9A8A78] focus:outline-none"
         />
         {topMatch && query && !value && query.toLowerCase() !== topMatch.country.toLowerCase() && (
-          <span className="text-[10px] text-[#9A8A78] px-2 truncate max-w-[90px]">↵ {getCountryDisplayName(topMatch.country, language)}</span>
+          <span className="text-[10px] text-[#9A8A78] px-2 max-w-[110px] leading-tight [overflow-wrap:anywhere]">↵ {getCountryDisplayName(topMatch.country, language)}</span>
         )}
       </div>
       {listShown && (
@@ -587,7 +566,7 @@ function CaucusQueueSidebar({ committee, onRemove, onReorder, lastSpeakerDelegat
                 <span className="shrink-0 w-6 h-6 inline-flex items-center justify-center">
                   <SeatFlag country={s.country} size={20} className="object-contain" fallback={<UnknownSeatIcon size={20} />} />
               </span>
-                <span className="flex-1 text-sm text-[#1C1410] line-clamp-2 break-words whitespace-normal leading-tight">{getCountryDisplayName(s.country, language)}</span>
+                <span className="flex-1 text-sm text-[#1C1410] [overflow-wrap:anywhere] whitespace-normal leading-tight">{getCountryDisplayName(s.country, language)}</span>
                 {lastSpeakerDelegateId && s.delegateId === lastSpeakerDelegateId && (
                   <span className="text-xs font-bold text-[#9A8A78] bg-[#DDD4C0] px-1.5 py-0.5 rounded shrink-0">Last</span>
                 )}
@@ -688,7 +667,7 @@ function CaucusAddSpeakerInput({ committee, spokenCountries, onAdd, onAddFirst, 
             {t('caucus_queue_full_title')}
           </span>
         )}
-        {!isFull && topNotOnList && query && <span className="text-xs text-[#9A8A78] px-3 truncate max-w-[120px]">↵ {getCountryDisplayName(topNotOnList.country, language)}</span>}
+        {!isFull && topNotOnList && query && <span className="text-xs text-[#9A8A78] px-3 max-w-[140px] leading-tight [overflow-wrap:anywhere]">↵ {getCountryDisplayName(topNotOnList.country, language)}</span>}
       </div>
       {!isFull && query && matches.length > 0 && (
         <div className="absolute bottom-full left-0 right-0 mb-1 bg-[#FAF8F3] border border-[#DDD4C0] rounded-xl overflow-hidden shadow-xl z-10 max-h-48 overflow-y-auto">
@@ -759,7 +738,7 @@ function CaucusAddSpeakerInput({ committee, spokenCountries, onAdd, onAddFirst, 
 function UnmoderatedCaucusView({ committee, setCommittee, isViewOnly = false, gavelCue }: { committee: Committee; setCommittee: CommitteeSetter; isViewOnly?: boolean; gavelCue?: GavelCue }) {
   const t = useT();
   const { language } = useLanguage();
-  const unmoderatedName = language === 'ar' ? 'حوار حر' : language === 'fr' ? 'Caucus non modéré' : language === 'es' ? 'Cáucus No Moderado' : 'Unmoderated Caucus';
+  const unmoderatedName = language === 'ar' ? 'حوار حر' : language === 'fr' ? 'Caucus non modéré' : language === 'pt' ? 'Debate Não Moderado' : language === 'es' ? 'Cáucus No Moderado' : 'Unmoderated Caucus';
   // Resume the countdown on mount when the stored caucus carries a live anchor — i.e. the
   // clock was running when this chair refreshed or rejoined (H2). Lazy initial state, so it
   // reads the anchor before the chair-level resolver effect consumes it. No anchor (paused
@@ -1191,7 +1170,7 @@ function ModeratedCaucusMain({
   const speakerTime = caucus.speakingTime;
   const isTdT = caucus.purpose?.startsWith('Tour de Table') ?? false;
   const isRoomOrderTdT = isTdT && (caucus.purpose?.includes('Room Order') ?? false);
-  const caucusTitle = isTdT ? (language === 'ar' ? 'جولة المتحدثين' : 'TOUR DE TABLE') : (language === 'ar' ? 'حوار منهجي' : language === 'fr' ? 'CAUCUS MODÉRÉ' : language === 'es' ? 'CÁUCUS MODERADO' : 'MODERATED CAUCUS');
+  const caucusTitle = isTdT ? (language === 'ar' ? 'جولة المتحدثين' : 'TOUR DE TABLE') : (language === 'ar' ? 'حوار منهجي' : language === 'fr' ? 'CAUCUS MODÉRÉ' : language === 'pt' ? 'DEBATE MODERADO' : language === 'es' ? 'CÁUCUS MODERADO' : 'MODERATED CAUCUS');
   const spokenCountries = caucus.spokenCountries ?? [];
 
   // Extend-time UI state
@@ -1891,6 +1870,10 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
   // Bumped by every realtime `feedback` event. Passed to the comment dock and the
   // scoreboard as a refetch key so both stay live while open.
   const [feedbackVersion, setFeedbackVersion] = useState(0);
+  // Bumped by every `session_broadcasts` realtime event and every successful catch-up: the
+  // broadcast list behind the Secretariat messages in the chat (src/lib/broadcastHistory.ts)
+  // re-reads on it. Never per second.
+  const [broadcastVersion, setBroadcastVersion] = useState(0);
   const [showChat, setShowChat] = useState(false);
   const [chatReadCounts, setChatReadCounts] = useState<Record<string, number>>({});
   // Resume-from-suspend UI state. `resumeBusy` also double-taps the button, so one chair
@@ -2258,6 +2241,11 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
           onCatchUp: (phase) => {
             if (phase !== 'done') return;
             setCatchUpTick((n) => n + 1);
+            // Broadcasts are never fetched by the sync's slices: an organiser broadcast sent
+            // while this device was offline would raise no card and miss the chat until a
+            // reload. Re-read both (organiser-owned, outside RULE 4's debounce like the event).
+            getActiveBroadcasts(cid).then(setBroadcasts);
+            setBroadcastVersion((v) => v + 1);
             // feedback rows are never refetched by the sync itself (its events only bump this
             // counter), so a note written by another chair while this device was offline would
             // stay unseen: after a successful catch-up, ask the dock and the scoreboard to re-read.
@@ -2270,6 +2258,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
             // would drop the message that pauses the committee.
             if (table === 'session_broadcasts') {
               getActiveBroadcasts(cid).then(setBroadcasts);
+              setBroadcastVersion((v) => v + 1);
               return true;
             }
             // Chair notes + factor ratings, also outside the debounce. `feedback` is not
@@ -3711,6 +3700,44 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
     saveChatReadCounts(committee.code, { role: 'chair', identity: myChairName }, chatReadCounts);
   }, [chatReadCounts, committee?.code, myChairName]);
 
+  // ── Organiser broadcasts in the chat (messages from the Secretariat) ──────
+  // Every broadcast this committee received, expired or not, shown in the Everyone thread
+  // (src/lib/broadcastHistory.ts, src/lib/broadcastMessages.ts). One read on mount and one per
+  // `broadcastVersion` bump; never written. Counted like any received Everyone message.
+  const broadcastHistory = useBroadcastHistory(committee?.id, broadcastVersion);
+  // Chat off: a chair still reads the Secretariat messages, in a conference room (organisers
+  // can broadcast to it) or any room that has received one.
+  const secretariatChatShown = committee?.sessionOrigin === 'conference' || broadcastHistory.length > 0;
+
+  // Dealing with a broadcast card (acknowledge or dismiss) counts its Secretariat message as
+  // read, so it does not linger as a phantom unread on the chat icon. Read counts are a
+  // high-water count of received messages, so this moves the Everyone mark up by one only
+  // while that message is still among the unread ones (never past it, never down). Refs keep
+  // it callable from the card's `run`, which outlives renders.
+  const chatReadSourceRef = useRef({ committee, broadcastHistory, myChairName });
+  chatReadSourceRef.current = { committee, broadcastHistory, myChairName };
+  const markBroadcastReadInChat = useCallback((broadcastId: string) => {
+    const { committee: c, broadcastHistory: bcs, myChairName: me } = chatReadSourceRef.current;
+    if (!c) return;
+    const chatOff = getCommitteeFlags(c).disableChat;
+    setChatReadCounts((prev) => {
+      if (chatOff) {
+        const k = SECRETARIAT_READ_KEY;
+        const read = prev[k] ?? 0;
+        const idx = bcs.findIndex((b) => b.id === broadcastId);
+        return idx < 0 || idx < read ? prev : { ...prev, [k]: read + 1 };
+      }
+      const reader = me || 'Chair';
+      const everyone = buildChatConversations(
+        withBroadcastMessages(c.messages, bcs), reader, true, c.chairNames ?? [], c.delegates.map((d) => d.country),
+      ).find((conv) => conv.key === 'everyone');
+      const incoming = (everyone?.messages ?? []).filter((m) => m.sender !== reader);
+      const idx = incoming.findIndex((m) => m.id === `${BROADCAST_MESSAGE_PREFIX}${broadcastId}`);
+      const read = prev.everyone ?? 0;
+      return idx < 0 || idx < read ? prev : { ...prev, everyone: read + 1 };
+    });
+  }, []);
+
   // ── Sidebar width ─────────────────────────────────────────────────────────
   // Adopted after mount (localStorage is an external store; reading it during
   // render would desync the server markup). Keyed by READER for the same
@@ -3879,7 +3906,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
       // (published by ChatPanel, src/lib/chatViewing.ts). This used to be `if (showChat)`,
       // which silenced a DM while the chair was reading Everyone and still let a card raised
       // a moment before opening the chat sit over the thread it was about.
-      const convKey = chatConvKeyForMessage(m, myChairName, true, committee?.chairNames ?? [], chatMessages);
+      const convKey = chatConvKeyForMessage(m, myChairName, true, committee?.chairNames ?? [], chatMessages, committee?.delegates.map((d) => d.country));
       if (convKey == null) continue;                   // lands in no thread this chair can open
       if (isViewingChatConversation(committeeId, convKey)) continue;
 
@@ -3986,6 +4013,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
       void endDebateInDB(committee.id, code, suffix).then((ok) => { if (!ok) rollback(); });
     }
     markBroadcastSeen(code, b.id);
+    markBroadcastReadInChat(b.id);
     dismissNotification(notifyKey.broadcast(b.id));
   };
   broadcastEffectRef.current = runBroadcastEffect;
@@ -4026,6 +4054,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
           tone: actionable ? 'accept' : 'neutral',
           run: () => {
             markBroadcastSeen(committeeCode, broadcast.id);
+            markBroadcastReadInChat(broadcast.id);
             // With no `action_at` the organiser left the timing to the dais, so the
             // acknowledgement IS the trigger. With one, the schedule effect owns it and
             // acknowledging only clears the card — the pause still lands when promised.
@@ -4296,7 +4325,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
         // The inline seat field beside the quorum tabs (replaces the + button and its
         // picker). A write, so never for a Commenter or an ended session.
         seatField={!sessionEnded && (!isViewOnly || commenterLock)
-          ? <SeatAddField delegates={committee.delegates} onAdd={handleDelegateAdd} large={!inSidebar} locked={commenterLock} />
+          ? <SeatAddField delegates={committee.delegates} onAdd={handleDelegateAdd} large={!inSidebar} locked={commenterLock} chairNames={committee.chairNames ?? []} />
           : undefined}
       />
     );
@@ -5430,11 +5459,15 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
           </nav>
         ) : agenda.canSwitch ? (
           <button type="button" onClick={agenda.openPicker} title={t('agenda_change_title')}
-            className="text-[#6A5A4A] text-sm hidden sm:block truncate flex-1 min-w-0 px-2 text-start rounded cursor-pointer transition-colors hover:text-[#1B3828] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F]/60">
-            {getCommitteeDisplayName(committee.name, language)}: <span className="underline decoration-dotted underline-offset-2">{committee.topic}</span>
+            className="text-[#6A5A4A] text-sm hidden sm:flex items-center gap-1 flex-1 min-w-0 px-2 text-start rounded cursor-pointer transition-colors hover:text-[#1B3828] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F]/60">
+            <span className="shrink min-w-[6rem] max-w-[55%] leading-[1.15] [overflow-wrap:anywhere]">{getCommitteeDisplayName(committee.name, language)}:</span>
+            <span className="min-w-0 flex-1 truncate underline decoration-dotted underline-offset-2" title={committee.topic}>{committee.topic}</span>
           </button>
         ) : (
-          <span className="text-[#6A5A4A] text-sm hidden sm:block truncate flex-1 min-w-0 px-2">{getCommitteeDisplayName(committee.name, language)}: {committee.topic}</span>
+          <span className="text-[#6A5A4A] text-sm hidden sm:flex items-center gap-1 flex-1 min-w-0 px-2">
+            <span className="shrink min-w-[6rem] max-w-[55%] leading-[1.15] [overflow-wrap:anywhere]">{getCommitteeDisplayName(committee.name, language)}:</span>
+            <span className="min-w-0 flex-1 truncate" title={committee.topic}>{committee.topic}</span>
+          </span>
         )}
 
         {/* The icon cluster: always in row one, at the inline end. */}
@@ -5479,7 +5512,11 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
           <SessionCodePresenter code={committee.code} origin={codePresenterOrigin} onClose={closeCodePresenter} />
         )}
         {committee.phase !== 'pre-session' && !sessionEnded && (() => {
-          const totalUnread = showChat ? 0 : chatUnreadTotal(committee.messages, myChairName || 'Chair', true, committee.chairNames ?? [], chatReadCounts);
+          // Organiser broadcasts are Secretariat messages in Everyone, counted like any other
+          // received message. Chat off: only those, under their own read key.
+          const totalUnread = showChat ? 0
+            : getCommitteeFlags(committee).disableChat ? (secretariatChatShown ? secretariatUnread(broadcastHistory, chatReadCounts) : 0)
+            : chatUnreadTotal(withBroadcastMessages(committee.messages, broadcastHistory), myChairName || 'Chair', true, committee.chairNames ?? [], chatReadCounts, committee.delegates.map((d) => d.country));
           return (
             <TopBarIconButton tutorial="tab-chat" onClick={() => { if (!isPreSession) handleToggleChat(); }} active={showChat}
               count={totalUnread}
@@ -5571,7 +5608,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
       {(() => {
         const joinReqs = (committee.pendingMotions ?? []).filter((m) => m.type === ('join-request' as string));
         if (joinReqs.length === 0) return null;
-        const wrLabel = language === 'ar' ? 'غرفة الانتظار' : language === 'fr' ? "Salle d'attente" : language === 'es' ? 'Sala de Espera' : 'Waiting Room';
+        const wrLabel = language === 'ar' ? 'غرفة الانتظار' : language === 'fr' ? "Salle d'attente" : language === 'pt' ? 'Sala de Espera' : language === 'es' ? 'Sala de Espera' : 'Waiting Room';
         return (
           <div className="shrink-0 border-b border-[#1B3828]/40 px-4 py-2 flex flex-wrap items-center gap-3" style={{ backgroundColor: '#F3EEE2' }}>
             <span className="shrink-0 inline-flex items-center gap-1.5 text-xs font-black uppercase tracking-wide px-2.5 py-1 rounded-full" style={{ backgroundColor: '#1B3828', color: '#EED98A' }}>
@@ -5680,7 +5717,23 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
         {showChat && !sessionEnded && (
           <ChatDialog onClose={() => setShowChat(false)}>
             {(requestClose) => getCommitteeFlags(committee).disableChat ? (
-              <ChatDisabledNotice onClose={requestClose} />
+              // Chat off: the same icon still opens the Everyone thread, read only, holding
+              // only the Secretariat's messages (when this room can receive any).
+              secretariatChatShown ? (
+                <ChatPanel
+                  key="secretariat-only"
+                  committee={committee}
+                  senderName={myChairName || 'Chair'}
+                  isChair={true}
+                  readOnly
+                  secretariatOnly
+                  broadcasts={broadcastHistory}
+                  readCounts={chatReadCounts}
+                  onReadCountsChange={setChatReadCounts}
+                />
+              ) : (
+                <ChatDisabledNotice onClose={requestClose} />
+              )
             ) : (
               <ChatPanel
                 committee={committee}
@@ -5690,6 +5743,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                 readOnly={sessionEnded}
                 readCounts={chatReadCounts}
                 onReadCountsChange={setChatReadCounts}
+                broadcasts={broadcastHistory}
               />
             )}
           </ChatDialog>
@@ -5830,10 +5884,10 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                   <div className="flex-1 flex flex-col items-center justify-center text-center px-8">
                     <div className="bg-[#EDE7D8] border border-[#DDD4C0]/40 rounded-3xl px-12 py-10 max-w-lg w-full shadow-2xl">
                       <p className="text-xs font-mono tracking-widest mb-3 font-bold" style={{ color: '#1B3828' }}>
-                        {t('caucus_unmod_starting').replace('{name}', (committee.caucus.motionLabel ?? (language === 'ar' ? 'حوار حر' : language === 'fr' ? 'CAUCUS NON MODÉRÉ' : language === 'es' ? 'CÁUCUS NO MODERADO' : 'UNMODERATED CAUCUS')).toUpperCase())}
+                        {t('caucus_unmod_starting').replace('{name}', (committee.caucus.motionLabel ?? (language === 'ar' ? 'حوار حر' : language === 'fr' ? 'CAUCUS NON MODÉRÉ' : language === 'pt' ? 'DEBATE NÃO MODERADO' : language === 'es' ? 'CÁUCUS NO MODERADO' : 'UNMODERATED CAUCUS')).toUpperCase())}
                       </p>
                       <h1 className="text-5xl font-black mb-2" style={{ color: '#1B3828' }}>
-                        {committee.caucus.motionLabel ?? (language === 'ar' ? 'حوار حر' : language === 'fr' ? 'Caucus non modéré' : language === 'es' ? 'Cáucus No Moderado' : 'Unmoderated Caucus')}
+                        {committee.caucus.motionLabel ?? (language === 'ar' ? 'حوار حر' : language === 'fr' ? 'Caucus non modéré' : language === 'pt' ? 'Debate Não Moderado' : language === 'es' ? 'Cáucus No Moderado' : 'Unmoderated Caucus')}
                       </h1>
                       {committee.caucus.purpose && (
                         <p className="text-[#6A5A4A] text-sm mb-6">{committee.caucus.purpose}</p>
@@ -6134,7 +6188,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                 value={extraTimeSecs}
                 onChange={(e) => setExtraTimeSecs(e.target.value)}
                 onKeyDown={(e) => { if (e.key === 'Enter') { const n = parseInt(extraTimeSecs); if (n > 0) { handleAddExtraTime(n); } } }}
-                placeholder={language === 'ar' ? 'ثوانٍ مخصصة...' : language === 'fr' ? 'Sec. personnalisées...' : language === 'es' ? 'Tiempo personalizado...' : 'Custom sec...'}
+                placeholder={language === 'ar' ? 'ثوانٍ مخصصة...' : language === 'fr' ? 'Sec. personnalisées...' : language === 'pt' ? 'Segundos personalizados...' : language === 'es' ? 'Tiempo personalizado...' : 'Custom sec...'}
                 style={{ MozAppearance: 'textfield', color: POPOVER_TONES.time.ink } as React.CSSProperties}
                 className="flex-1 min-w-0 bg-white/70 border border-[#0E3A57]/25 rounded-lg px-2 py-2 text-xs font-semibold placeholder-[#0A3350]/55 focus:outline-none focus:border-[#0E3A57] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
               />

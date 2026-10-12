@@ -224,7 +224,32 @@ export default function CreditsPage() {
             Nothing yet
           </p>
         ) : (
-          <div className="overflow-x-auto rounded-[16px]" style={{ border: `1px solid ${RULE}`, backgroundColor: '#FFFFFF' }}>
+          <>
+          {/* Below 640px each entry is two lines (action on top, then the date
+              and the change, the change right-aligned), so nothing starts off
+              screen in a scroll box. From 640px the table is unchanged. */}
+          <ul className="sm:hidden rounded-[16px]" style={{ listStyle: 'none', margin: 0, padding: 0, border: `1px solid ${RULE}`, backgroundColor: '#FFFFFF', fontFamily: OUTFIT, fontSize: T.body, color: INK }}>
+            {visible.map((r, i) => (
+              <li key={`${r.at}-${i}`} style={{ padding: '12px 16px', borderTop: i === 0 ? 'none' : `1px solid rgba(221,212,192,0.6)` }}>
+                <p style={{ margin: 0, lineHeight: 1.45, overflowWrap: 'anywhere' }}>{r.action}</p>
+                <div className="flex items-baseline justify-between gap-3" style={{ marginTop: 4 }}>
+                  <span style={{ color: INK_SOFT, fontVariantNumeric: 'tabular-nums', fontSize: T.caption }}>{formatDay(r.at)}</span>
+                  <span
+                    style={{
+                      whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums', fontWeight: W.section,
+                      color: r.delta < 0 ? INK : r.delta > 0 ? FOREST_MID : INK_SOFT,
+                    }}
+                  >
+                    {signed(r.delta)}
+                  </span>
+                </div>
+              </li>
+            ))}
+            {loading && rows.length > 0 && (
+              <li style={{ padding: '12px 16px', color: INK_SOFT, borderTop: `1px solid rgba(221,212,192,0.6)` }}>Loading more</li>
+            )}
+          </ul>
+          <div className="hidden sm:block overflow-x-auto rounded-[16px]" style={{ border: `1px solid ${RULE}`, backgroundColor: '#FFFFFF' }}>
             <table className="w-full" style={{ borderCollapse: 'collapse', fontFamily: OUTFIT, fontSize: T.body, color: INK, minWidth: 420 }}>
               <thead>
                 <tr style={{ backgroundColor: IVORY, borderBottom: `1px solid ${RULE}` }}>
@@ -255,6 +280,7 @@ export default function CreditsPage() {
               </tbody>
             </table>
           </div>
+          </>
         )}
 
         {canLoadMore && rows.length >= PAGE && (
@@ -297,11 +323,27 @@ function Figure({ value, label }: { value: number; label: string }) {
 
 function UsageChart({ days, empty, spent, added }: { days: Day[]; empty: boolean; spent: number; added: number }) {
   const [hover, setHover] = useState<number | null>(null);
+  const chartRef = useRef<HTMLDivElement | null>(null);
+
+  // On touch the tooltip opens on a tap and must close on a tap anywhere
+  // outside the chart (there is no mouseleave on a phone).
+  useEffect(() => {
+    if (hover === null) return;
+    const onDown = (e: PointerEvent) => {
+      const el = chartRef.current;
+      if (el && e.target instanceof Node && el.contains(e.target)) return;
+      setHover(null);
+    };
+    document.addEventListener('pointerdown', onDown);
+    return () => document.removeEventListener('pointerdown', onDown);
+  }, [hover]);
 
   const W_ = 720;
-  const H = 132;
+  const H = 114;
   const PAD_TOP = 10;
-  const PAD_BOTTOM = 24;
+  // Room only for the day ticks; the day labels are HTML under the SVG so
+  // preserveAspectRatio="none" never squashes them on a narrow screen.
+  const PAD_BOTTOM = 6;
   const plotH = H - PAD_TOP - PAD_BOTTOM;
   const baseY = PAD_TOP + plotH;
   const slot = W_ / days.length;
@@ -344,7 +386,7 @@ function UsageChart({ days, empty, spent, added }: { days: Day[]; empty: boolean
         </span>
       </div>
 
-      <div className="relative">
+      <div className="relative" ref={chartRef}>
         <svg
           viewBox={`0 0 ${W_} ${H}`}
           width="100%"
@@ -355,7 +397,7 @@ function UsageChart({ days, empty, spent, added }: { days: Day[]; empty: boolean
             ? 'No credits spent or added in the last 30 days'
             : `Credits spent and added per day over the last 30 days. Most in one day: ${max}`}
           style={{ display: 'block', overflow: 'visible' }}
-          onMouseLeave={() => setHover(null)}
+          onPointerLeave={(e) => { if (e.pointerType === 'mouse') setHover(null); }}
         >
           {/* faint day ticks on the baseline */}
           {days.map((d, i) => (
@@ -382,7 +424,8 @@ function UsageChart({ days, empty, spent, added }: { days: Day[]; empty: boolean
                 {/* hit target: the whole slot, taller than the marks */}
                 <rect
                   x={i * slot} y={0} width={slot} height={H} fill="transparent"
-                  onMouseEnter={() => setHover(i)}
+                  onPointerEnter={(e) => { if (e.pointerType === 'mouse') setHover(i); }}
+                  onPointerDown={(e) => { if (e.pointerType !== 'mouse') setHover((h) => (h === i ? null : i)); }}
                   onFocus={() => setHover(i)}
                   onBlur={() => setHover(null)}
                   tabIndex={-1}
@@ -391,18 +434,27 @@ function UsageChart({ days, empty, spent, added }: { days: Day[]; empty: boolean
             );
           })}
 
-          {[0, Math.floor(days.length / 2), days.length - 1].map((i) => (
-            <text
-              key={`lbl-${i}`}
-              x={i * slot + slot / 2}
-              y={H - 4}
-              textAnchor={i === 0 ? 'start' : i === days.length - 1 ? 'end' : 'middle'}
-              style={{ fontFamily: OUTFIT, fontSize: 11, fill: INK_SOFT }}
-            >
-              {i === days.length - 1 ? 'Today' : days[i].label}
-            </text>
-          ))}
         </svg>
+
+        {/* Day labels: the first, the middle and today, as HTML. */}
+        <div className="relative" aria-hidden style={{ height: 16, marginTop: 4, fontFamily: OUTFIT, fontSize: 11, color: INK_SOFT, lineHeight: '16px' }}>
+          {[0, Math.floor(days.length / 2), days.length - 1].map((i) => {
+            const first = i === 0;
+            const last = i === days.length - 1;
+            return (
+              <span
+                key={`lbl-${i}`}
+                className="absolute top-0"
+                style={{
+                  whiteSpace: 'nowrap',
+                  ...(first ? { left: 0 } : last ? { right: 0 } : { left: `${((i + 0.5) / days.length) * 100}%`, transform: 'translateX(-50%)' }),
+                }}
+              >
+                {last ? 'Today' : days[i].label}
+              </span>
+            );
+          })}
+        </div>
 
         {/* The empty-state sentence sits in the plot area, above the baseline,
             as HTML so preserveAspectRatio="none" cannot stretch its letters. */}

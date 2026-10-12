@@ -163,6 +163,20 @@ export default function CreateChooserPage() {
           .gv-create-points{margin-bottom:28px}
           .gv-create-dash{top:30px;padding:18px 20px}
         }
+        /* Phones: both doors on one screen. The preview art goes (it is decorative and
+           aria-hidden), the body loses the room it kept for the hanging phone, and on a
+           short screen the tick list folds away too; the name, the line and the button
+           say enough to choose. */
+        @media (max-width:759px){
+          .gv-create-main{padding-top:20px;padding-bottom:40px}
+          .gv-create-grid{gap:14px;margin-top:20px}
+          .gv-create-visual{display:none}
+          .gv-create-body{padding:20px 20px 20px}
+          .gv-create-cta{margin-top:16px;min-height:48px}
+        }
+        @media (max-width:759px) and (max-height:899px){
+          .gv-create-points{display:none}
+        }
         @media (prefers-reduced-motion:reduce){.gv-create-card{transition:none}.gv-create-card:hover,.gv-create-card:active{transform:none}}
       `}</style>
       <SiteNav />

@@ -19,7 +19,7 @@
 //   org_applications  organiser: applications waiting on a decision, with `new_count`
 //   org_proofs        organiser: manual payment proofs waiting for review      -> /manage/<slug>/financials/invoices
 //   org_inbox         organiser: unread participant messages                  -> /manage/<slug>/communications[?inbox=<id>]
-//   org_aid           organiser: financial aid requests pending               -> /manage/<slug>/financial-aid
+//   org_aid           organiser: financial aid requests pending               -> /manage/<slug>/financials/aid
 //
 // THE TWO COLOURS (owner, 24 Sep 2026). The avatar badge carries two counts:
 //   RED    = messages and drafts: an unread secretariat reply (1 per thread),
@@ -195,7 +195,7 @@ function shape(r: Raw): ActivityItem | null {
     case 'org_aid':
       if (n <= 0) return null;
       return { ...base, organiser: true, kind: 'org_aid', title: plural(n, 'aid request to decide', 'aid requests to decide'),
-        detail: conf, href: `/manage/${slug}/financial-aid` };
+        detail: conf, href: `/manage/${slug}/financials/aid` };
     default:
       return null;
   }

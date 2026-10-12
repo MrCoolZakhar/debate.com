@@ -20,7 +20,6 @@
 import { useEffect } from 'react';
 import Link from 'next/link';
 import { CheckCircle2, MapPin, CalendarDays, Globe2 } from 'lucide-react';
-import { GoldWord } from '@/components/BrandHeading';
 import { LogoDisc } from '@/components/LogoDisc';
 import { PurchaseShell, PURCHASE_CSS } from '@/components/purchase/purchaseKit';
 import { SpotlightTag } from '@/components/conferences/SpotlightTag';
@@ -75,12 +74,9 @@ export function claimPlacePopup(placement: PlacePopupPlacement, target: string):
 
 const FORMAT_WORD: Record<string, string> = { 'in-person': 'In person', online: 'Online', virtual: 'Online', hybrid: 'Hybrid' };
 
-/** The full name with its last word in gold italic. */
+/** The full name, plain sans (a pop-up title is secondary: no gold italic). */
 function TitleWithGold({ name }: { name: string }) {
-  const trimmed = name.trim();
-  const cut = trimmed.lastIndexOf(' ');
-  if (cut < 0) return <GoldWord tone="light">{trimmed}</GoldWord>;
-  return <>{trimmed.slice(0, cut)} <GoldWord tone="light">{trimmed.slice(cut + 1)}</GoldWord></>;
+  return <>{name.trim()}</>;
 }
 
 export default function SpotlightPlacePopup({ rows, placement, onClose, preview = false }: {

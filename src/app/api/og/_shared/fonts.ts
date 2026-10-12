@@ -5,13 +5,14 @@
  *
  * It renders through satori, which has no browser, no network fetch for CSS and
  * no `@font-face` resolution. A `<link rel="stylesheet" href="fonts.googleapis…">`
- * or a `font-family: Outfit` with no `fonts` array does not fail loudly — it
+ * or a `font-family: Inter` with no `fonts` array does not fail loudly — it
  * silently falls back to the single bundled Geist face, and the card ships in
  * the wrong typeface. Fonts must be handed to `ImageResponse` as raw bytes.
  *
- * So the four Outfit weights the card uses live in this folder as TTFs and are
- * read off disk once, at module scope, into the module cache. A cold lambda
- * pays ~190KB of disk read; every subsequent render pays nothing.
+ * So the four Inter weights the card uses (the site's brand face, CLAUDE.md §8;
+ * Outfit until 7 Oct 2026) live in this folder as static TTFs and are read off
+ * disk once, at module scope, into the module cache. A cold lambda pays ~630KB
+ * of disk read; every subsequent render pays nothing.
  *
  * WHY THE PATH IS RESOLVED THREE WAYS
  *
@@ -39,7 +40,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 /** Brand family name. Referenced by `fontFamily` in the card styles. */
-export const FONT_FAMILY = 'Outfit';
+export const FONT_FAMILY = 'Inter';
 
 /** What `ImageResponse` wants: name + bytes + weight + style. */
 export interface LoadedFont {
@@ -72,24 +73,45 @@ function nextToThisModule(url: URL): string | null {
   }
 }
 
-// Both resolution strategies, per weight. The `join(process.cwd(), …)` argument
+// Both resolution strategies, per file. The `join(process.cwd(), …)` argument
 // is a single literal on purpose — see (1) above; splitting it into variables
 // defeats the tracer and the font silently disappears in production only.
-const OUTFIT_REGULAR = readFirst([
-  join(process.cwd(), 'src/app/api/og/_shared/Outfit-Regular.ttf'),
-  nextToThisModule(new URL('./Outfit-Regular.ttf', import.meta.url)),
+//
+// Each weight is TWO static files from Fontsource (Inter, SIL Open Font
+// License 1.1, see INTER-LICENSE.txt): the latin subset and the latin-ext
+// subset. Satori falls back across every face registered for a family, so a
+// Turkish or Polish name (ğ, ş, İ, Ł) finds its glyph in the -LatinExt file.
+const INTER_REGULAR = readFirst([
+  join(process.cwd(), 'src/app/api/og/_shared/Inter-Regular.ttf'),
+  nextToThisModule(new URL('./Inter-Regular.ttf', import.meta.url)),
 ]);
-const OUTFIT_MEDIUM = readFirst([
-  join(process.cwd(), 'src/app/api/og/_shared/Outfit-Medium.ttf'),
-  nextToThisModule(new URL('./Outfit-Medium.ttf', import.meta.url)),
+const INTER_MEDIUM = readFirst([
+  join(process.cwd(), 'src/app/api/og/_shared/Inter-Medium.ttf'),
+  nextToThisModule(new URL('./Inter-Medium.ttf', import.meta.url)),
 ]);
-const OUTFIT_BOLD = readFirst([
-  join(process.cwd(), 'src/app/api/og/_shared/Outfit-Bold.ttf'),
-  nextToThisModule(new URL('./Outfit-Bold.ttf', import.meta.url)),
+const INTER_BOLD = readFirst([
+  join(process.cwd(), 'src/app/api/og/_shared/Inter-Bold.ttf'),
+  nextToThisModule(new URL('./Inter-Bold.ttf', import.meta.url)),
 ]);
-const OUTFIT_EXTRABOLD = readFirst([
-  join(process.cwd(), 'src/app/api/og/_shared/Outfit-ExtraBold.ttf'),
-  nextToThisModule(new URL('./Outfit-ExtraBold.ttf', import.meta.url)),
+const INTER_EXTRABOLD = readFirst([
+  join(process.cwd(), 'src/app/api/og/_shared/Inter-ExtraBold.ttf'),
+  nextToThisModule(new URL('./Inter-ExtraBold.ttf', import.meta.url)),
+]);
+const INTER_REGULAR_EXT = readFirst([
+  join(process.cwd(), 'src/app/api/og/_shared/Inter-Regular-LatinExt.ttf'),
+  nextToThisModule(new URL('./Inter-Regular-LatinExt.ttf', import.meta.url)),
+]);
+const INTER_MEDIUM_EXT = readFirst([
+  join(process.cwd(), 'src/app/api/og/_shared/Inter-Medium-LatinExt.ttf'),
+  nextToThisModule(new URL('./Inter-Medium-LatinExt.ttf', import.meta.url)),
+]);
+const INTER_BOLD_EXT = readFirst([
+  join(process.cwd(), 'src/app/api/og/_shared/Inter-Bold-LatinExt.ttf'),
+  nextToThisModule(new URL('./Inter-Bold-LatinExt.ttf', import.meta.url)),
+]);
+const INTER_EXTRABOLD_EXT = readFirst([
+  join(process.cwd(), 'src/app/api/og/_shared/Inter-ExtraBold-LatinExt.ttf'),
+  nextToThisModule(new URL('./Inter-ExtraBold-LatinExt.ttf', import.meta.url)),
 ]);
 
 /** Last resort (3): the Geist face bundled inside `next/og`. */
@@ -105,8 +127,8 @@ function toArrayBuffer(buf: Buffer): ArrayBuffer {
   return buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength) as ArrayBuffer;
 }
 
-function face(buf: Buffer | null, weight: LoadedFont['weight']): LoadedFont | null {
-  const bytes = buf ?? GEIST_FALLBACK;
+function face(buf: Buffer | null, weight: LoadedFont['weight'], fallback: Buffer | null = GEIST_FALLBACK): LoadedFont | null {
+  const bytes = buf ?? fallback;
   if (!bytes) return null;
   return { name: FONT_FAMILY, data: toArrayBuffer(bytes), weight, style: 'normal' };
 }
@@ -114,14 +136,20 @@ function face(buf: Buffer | null, weight: LoadedFont['weight']): LoadedFont | nu
 /** The font set for `ImageResponse`. Empty only if even Geist is unreachable,
  *  in which case satori falls back to its own internal metrics. */
 export const CARD_FONTS: LoadedFont[] = [
-  face(OUTFIT_REGULAR, 400),
-  face(OUTFIT_MEDIUM, 500),
-  face(OUTFIT_BOLD, 700),
-  face(OUTFIT_EXTRABOLD, 800),
+  face(INTER_REGULAR, 400),
+  face(INTER_MEDIUM, 500),
+  face(INTER_BOLD, 700),
+  face(INTER_EXTRABOLD, 800),
+  // Extra glyphs only: a missing latin-ext file adds nothing (no Geist twin).
+  face(INTER_REGULAR_EXT, 400, null),
+  face(INTER_MEDIUM_EXT, 500, null),
+  face(INTER_BOLD_EXT, 700, null),
+  face(INTER_EXTRABOLD_EXT, 800, null),
 ].filter((f): f is LoadedFont => f !== null);
 
-/** True when every weight is the real Outfit file. Surfaced in the route's
- *  `X-Og-Fonts` response header so a wrong-font regression is diagnosable from
- *  `curl -I` instead of by eye. */
-export const FONTS_ARE_OUTFIT =
-  !!OUTFIT_REGULAR && !!OUTFIT_MEDIUM && !!OUTFIT_BOLD && !!OUTFIT_EXTRABOLD;
+/** True when every weight is the real Inter file (both subsets). Surfaced in
+ *  the route's `X-Og-Fonts` response header so a wrong-font regression is
+ *  diagnosable from `curl -I` instead of by eye. */
+export const FONTS_ARE_INTER =
+  !!INTER_REGULAR && !!INTER_MEDIUM && !!INTER_BOLD && !!INTER_EXTRABOLD
+  && !!INTER_REGULAR_EXT && !!INTER_MEDIUM_EXT && !!INTER_BOLD_EXT && !!INTER_EXTRABOLD_EXT;

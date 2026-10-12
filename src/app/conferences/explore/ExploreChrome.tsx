@@ -90,6 +90,93 @@ function useAnchoredLayer(open: boolean, anchor: React.RefObject<HTMLElement | n
   return open ? pos : null;
 }
 
+/** Publishes the bottom of the VISUAL viewport (its height plus its offset,
+ *  in layout-viewport px) as `--vvh` on <html> while a layer is open, so a
+ *  fixed popover can stop above the iPhone keyboard. rAF-coalesced; removed
+ *  when the last user closes. */
+let vvhUsers = 0;
+export function useVisualViewportVar(active: boolean) {
+  useEffect(() => {
+    if (!active || typeof window === 'undefined') return;
+    const vv = window.visualViewport;
+    const root = document.documentElement;
+    let raf = 0;
+    const write = () => {
+      raf = 0;
+      const h = vv ? vv.height + vv.offsetTop : window.innerHeight;
+      root.style.setProperty('--vvh', `${Math.round(h)}px`);
+    };
+    const schedule = () => { if (!raf) raf = requestAnimationFrame(write); };
+    vvhUsers += 1;
+    write();
+    vv?.addEventListener('resize', schedule);
+    vv?.addEventListener('scroll', schedule);
+    window.addEventListener('resize', schedule);
+    return () => {
+      if (raf) cancelAnimationFrame(raf);
+      vv?.removeEventListener('resize', schedule);
+      vv?.removeEventListener('scroll', schedule);
+      window.removeEventListener('resize', schedule);
+      vvhUsers -= 1;
+      if (vvhUsers <= 0) { vvhUsers = 0; root.style.removeProperty('--vvh'); }
+    };
+  }, [active]);
+}
+
+/** A layer anchored at `top` never runs under the keyboard or off the screen:
+ *  it scrolls inside itself instead. */
+function layerMaxHeight(top: number): React.CSSProperties {
+  return { maxHeight: `calc(var(--vvh, 100dvh) - ${Math.round(top) + 16}px)`, overflowY: 'auto', overscrollBehavior: 'contain' };
+}
+
+/** An invisible 44x44 hit area centred on a small control (the control's
+ *  look is unchanged; its parent must be position: relative). */
+export function HitArea() {
+  return (
+    <span
+      aria-hidden
+      style={{ position: 'absolute', top: '50%', left: '50%', width: 44, height: 44, minWidth: '100%', minHeight: '100%', transform: 'translate(-50%, -50%)' }}
+    />
+  );
+}
+
+/** Fades the scrolling side(s) of a sideways scroller, so a chip cut at the
+ *  edge reads as "more this way". Written to the node on scroll and resize,
+ *  never through React state. No overflow = no mask. */
+export function useEdgeFade(ref: React.RefObject<HTMLElement | null>) {
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    let raf = 0;
+    const write = () => {
+      raf = 0;
+      const max = el.scrollWidth - el.clientWidth;
+      if (max <= 2) { el.style.removeProperty('mask-image'); el.style.removeProperty('-webkit-mask-image'); return; }
+      const rtl = getComputedStyle(el).direction === 'rtl';
+      const pos = Math.abs(el.scrollLeft);
+      const atStart = pos <= 2;
+      const atEnd = pos >= max - 2;
+      const startFade = !atStart, endFade = !atEnd;
+      const leftFade = rtl ? endFade : startFade;
+      const rightFade = rtl ? startFade : endFade;
+      const mask = `linear-gradient(90deg, ${leftFade ? 'transparent 0, #000 36px' : '#000 0'}, ${rightFade ? '#000 calc(100% - 36px), transparent 100%' : '#000 100%'})`;
+      el.style.setProperty('mask-image', mask);
+      el.style.setProperty('-webkit-mask-image', mask);
+    };
+    const schedule = () => { if (!raf) raf = requestAnimationFrame(write); };
+    write();
+    el.addEventListener('scroll', schedule, { passive: true });
+    const ro = new ResizeObserver(schedule);
+    ro.observe(el);
+    for (const c of Array.from(el.children)) ro.observe(c);
+    return () => {
+      if (raf) cancelAnimationFrame(raf);
+      el.removeEventListener('scroll', schedule);
+      ro.disconnect();
+    };
+  }, [ref]);
+}
+
 const LAYER: React.CSSProperties = {
   position: 'fixed', zIndex: 1200,
   backgroundColor: '#FFFFFF', borderRadius: 24,
@@ -173,6 +260,7 @@ export function SearchPill({
   const layerRef = useRef<HTMLDivElement>(null);
   const anchor = open === 'when' ? whenRef : open === 'role' ? roleRef : whereRef;
   const pos = useAnchoredLayer(open !== null, anchor as React.RefObject<HTMLElement | null>, open === 'where' ? 420 : 320, open === 'role' ? 'end' : 'start');
+  useVisualViewportVar(open !== null);
 
   useEffect(() => {
     if (!open) return;
@@ -313,7 +401,7 @@ export function SearchPill({
 
       {open && pos && (
         <Portal>
-          <div ref={layerRef} role="dialog" aria-label={open === 'where' ? 'Where' : open === 'when' ? 'When' : 'Role'} style={{ ...LAYER, top: pos.top, left: pos.left, width: pos.width, padding: 18 }}>
+          <div ref={layerRef} role="dialog" aria-label={open === 'where' ? 'Where' : open === 'when' ? 'When' : 'Role'} style={{ ...LAYER, top: pos.top, left: pos.left, width: pos.width, padding: 18, ...layerMaxHeight(pos.top) }}>
             {open === 'where' && typed && (
               <div id="gv-explore-where-list" role="listbox" aria-label="Suggestions">
                 {countrySuggestions.length > 0 && (
@@ -548,8 +636,9 @@ export function SortMenu({ sort, onChange }: { sort: 'asc' | 'desc'; onChange: (
         aria-expanded={open}
         onClick={() => setOpen(o => !o)}
         className="inline-flex items-center focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] rounded-md"
-        style={{ gap: 4, background: 'none', border: 'none', cursor: 'pointer', fontFamily: FONT, fontSize: 14, color: INK_SOFT, padding: '6px 2px', whiteSpace: 'nowrap' }}
+        style={{ position: 'relative', gap: 4, background: 'none', border: 'none', cursor: 'pointer', fontFamily: FONT, fontSize: 14, color: INK_SOFT, padding: '6px 2px', whiteSpace: 'nowrap' }}
       >
+        <HitArea />
         Sort: <span style={{ fontWeight: 800, color: INK }}>{current}</span>
         <ChevronDown size={15} strokeWidth={2.4} aria-hidden style={{ color: INK, transform: open ? 'rotate(180deg)' : undefined, transition: 'transform 160ms ease' }} />
       </button>
@@ -606,11 +695,12 @@ export function ViewToggle({ view, onChange }: { view: ExploreView; onChange: (v
             onClick={() => onChange(key)}
             className="flex items-center justify-center focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]"
             style={{
-              width: 36, height: 30, borderRadius: 9, border: 'none', cursor: 'pointer',
+              position: 'relative', width: 36, height: 30, borderRadius: 9, border: 'none', cursor: 'pointer',
               backgroundColor: active ? '#EEF3EC' : 'transparent',
               color: active ? FOREST : '#6B5F52',
             }}
           >
+            <HitArea />
             <Icon size={16} strokeWidth={2.25} />
           </button>
         );
@@ -752,6 +842,7 @@ export function ChipLayer({
 }) {
   const narrow = useIsNarrow();
   const pos = useAnchoredLayer(open && !narrow, anchor, width, 'start');
+  useVisualViewportVar(open && !narrow);
   const panel = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!open) return;
@@ -819,7 +910,7 @@ export function ChipLayer({
                 onClick={onClear}
                 disabled={!onClear}
                 className="focus:outline-none"
-                style={{ background: 'none', border: 'none', cursor: onClear ? 'pointer' : 'default', fontFamily: FONT, fontSize: 15, fontWeight: 700, color: onClear ? INK : '#A89C8C', textDecoration: 'underline', textUnderlineOffset: 3 }}
+                style={{ minHeight: 44, minWidth: 44, padding: '0 6px', margin: '0 -6px', background: 'none', border: 'none', cursor: onClear ? 'pointer' : 'default', fontFamily: FONT, fontSize: 15, fontWeight: 700, color: onClear ? INK : '#A89C8C', textDecoration: 'underline', textUnderlineOffset: 3 }}
               >
                 Clear
               </button>
@@ -843,7 +934,7 @@ export function ChipLayer({
         aria-label={title}
         tabIndex={-1}
         className="focus:outline-none"
-        style={{ ...LAYER, top: pos.top, left: pos.left, width: pos.width, padding: 18, maxHeight: `calc(100dvh - ${pos.top + 16}px)`, overflowY: 'auto' }}
+        style={{ ...LAYER, top: pos.top, left: pos.left, width: pos.width, padding: 18, ...layerMaxHeight(pos.top) }}
       >
         {head}
         {children}

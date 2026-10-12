@@ -159,9 +159,13 @@ export function Emoji3D({
   fallback: Fallback,
   fallbackColor = '#FFFFFF',
   style,
+  toned = false,
 }: {
   /** Fluent emoji asset folder name, sentence case, e.g. "Money bag", "Globe showing europe-africa". */
   name: string;
+  /** People emoji with skin tones ("Teacher", "Office worker") keep their
+   *  art in a Default/ subfolder; true draws that default (yellow) tone. */
+  toned?: boolean;
   size?: number;
   fallback?: LucideIcon;
   fallbackColor?: string;
@@ -177,7 +181,9 @@ export function Emoji3D({
   return (
     /* eslint-disable-next-line @next/next/no-img-element */
     <img
-      src={`${EMOJI_CDN}/${encodeURIComponent(name)}/3D/${file}_3d.png`}
+      src={toned
+        ? `${EMOJI_CDN}/${encodeURIComponent(name)}/Default/3D/${file}_3d_default.png`
+        : `${EMOJI_CDN}/${encodeURIComponent(name)}/3D/${file}_3d.png`}
       alt=""
       aria-hidden
       width={size}
@@ -591,10 +597,10 @@ export function NeuPill({
 }) {
   const [hovered, setHovered] = useState(false);
   const shared: React.CSSProperties = {
-    padding: '4px 12px',
+    padding: '6px 14px',
     borderRadius: 999,
     fontFamily: OUTFIT,
-    fontSize: 11,
+    fontSize: 13,
     fontWeight: 800,
     letterSpacing: '0.04em',
     fontVariantNumeric: 'tabular-nums',
@@ -615,7 +621,7 @@ export function NeuPill({
         onMouseEnter={() => setHovered(true)}
         onMouseLeave={() => setHovered(false)}
         className="inline-flex items-center gap-1.5 focus:outline-none"
-        style={{ border: 'none', cursor: 'pointer', ...shared }}
+        style={{ border: 'none', cursor: 'pointer', minHeight: 36, ...shared }}
       >
         {children}
       </button>

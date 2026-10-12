@@ -515,7 +515,7 @@ export function StatRow({
             /* The rail width — and therefore how big the crest can be — is set
                by the longest word here. Every 1px shaved off this gives ~3px
                back to the disc across both rails. */
-            fontSize: 'clamp(6.5px, 1.85vw, 9px)', letterSpacing: '0.03em',
+            fontSize: '9px', letterSpacing: '0.03em',
             textTransform: 'uppercase', lineHeight: 1.18, marginTop: 2, overflowWrap: 'anywhere',
           }}
         >
@@ -1178,8 +1178,8 @@ export function QueueRow({
       <span
         style={{
           flex: 1, minWidth: 0, fontFamily: OUTFIT,
-          fontSize: compact ? 12.5 : 13.5, fontWeight: 700, color: DG.forest,
-          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+          fontSize: (compact ? 12.5 : 13.5) - (name.length > 24 ? 1.5 : 0), fontWeight: 700, color: DG.forest,
+          lineHeight: 1.15, overflowWrap: 'break-word', hyphens: 'auto',
         }}
       >
         {name}

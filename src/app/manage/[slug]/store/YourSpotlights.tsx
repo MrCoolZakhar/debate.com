@@ -191,7 +191,7 @@ export default function YourSpotlights({ spotlights, stats, onChanged }: {
             ) : (() => {
               const st = STATUS[chosen.status] ?? STATUS.upcoming;
               const t = totalsFor(statRows, chosen.purchase_id);
-              const rate = t.views > 0 ? `${((t.clicks / t.views) * 100).toFixed(1)}%` : '–';
+              const rate = t.views > 0 ? `${((t.clicks / t.views) * 100).toFixed(1)}%` : 'No views';
               return (
                 <>
                   <div className="flex items-center gap-2" style={{ paddingRight: 40 }}>

@@ -15,7 +15,6 @@
 import { useRef, useState } from 'react';
 import { Eye } from 'lucide-react';
 import { useManage } from '@/app/manage/[slug]/layout';
-import { GoldWord } from '@/components/BrandHeading';
 import { getFreshAuthedClient } from '@/lib/supabase-auth';
 import { friendlyError, plainOrFallback } from '@/lib/friendlyError';
 import { notifyOk } from '@/lib/appNotify';
@@ -86,7 +85,7 @@ export default function SpotlightPopupEditor({ purchase, description, onSaved }:
   return (
     <section className="gv-spe" aria-label="Explore pop-up">
       <style>{CSS}</style>
-      <h3 className="gv-spe-title">Explore <GoldWord tone="light">Pop-up</GoldWord></h3>
+      <h3 className="gv-spe-title">Explore Pop-up</h3>
       <p className="gv-spe-sub">Shown when a visitor filters Explore by your country or region on your Spotlight days</p>
 
       <label className="gv-spe-label" htmlFor={`spe-pitch-${purchase.purchase_id}`}>
@@ -196,7 +195,7 @@ export function PopupOfferDialog({ purchaseId, placements, onClose, onSaved }: {
           <SpotlightPopupEditor purchase={{ purchase_id: purchaseId, bookings, pitch: null, highlights: null }} onSaved={() => { onSaved?.(); onClose(); }} />
         ) : (
           <>
-            <h2 className="gv-buy-title" style={{ fontSize: 28 }}>Spotlight <GoldWord tone="light">Booked</GoldWord></h2>
+            <h2 className="gv-buy-title" style={{ fontSize: 28 }}>Spotlight Booked</h2>
             <p className="gv-buy-sub" style={{ margin: 0 }}>Shown when a visitor filters Explore by your country or region on your Spotlight days</p>
             <div className="gv-spe-actions" style={{ marginTop: 6 }}>
               <button type="button" className="gv-spe-btn gv-spe-primary" onClick={() => setEditing(true)}>Add your pop-up</button>

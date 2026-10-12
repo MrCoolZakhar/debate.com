@@ -160,7 +160,7 @@ export function CommitteeIdentityPreview({ src, primary, secondary, placeholder,
 
       <div aria-hidden className="min-w-0 flex-1">
         <p
-          className="truncate"
+          className="[overflow-wrap:anywhere]"
           title={shown}
           style={{
             fontFamily: OUTFIT, fontWeight: 800, letterSpacing: '-0.015em', lineHeight: 1.12,
@@ -171,7 +171,7 @@ export function CommitteeIdentityPreview({ src, primary, secondary, placeholder,
           {shown}
         </p>
         {secondary && (
-          <p className="mt-0.5 truncate" style={{ fontFamily: OUTFIT, fontSize: 13.5, fontWeight: 500, lineHeight: 1.35, color: C.inkSoft }}>
+          <p className="mt-0.5 [overflow-wrap:anywhere]" style={{ fontFamily: OUTFIT, fontSize: 13.5, fontWeight: 500, lineHeight: 1.35, color: C.inkSoft }}>
             {secondary}
           </p>
         )}
@@ -313,7 +313,7 @@ export function EmblemPicker({ value, onPick, onUpload, onReset, uploading, canR
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={p.logo} alt="" draggable={false} decoding="async" className="block h-full w-full object-contain" style={{ padding: 5 }} />
             </span>
-            <span className="max-w-full truncate" style={{ fontFamily: OUTFIT, fontSize: 9.5, fontWeight: 800, letterSpacing: '0.04em', color: active ? C.forest : C.inkSoft }}>
+            <span className="max-w-full text-center [overflow-wrap:anywhere]" style={{ fontFamily: OUTFIT, fontSize: 9.5, fontWeight: 800, letterSpacing: '0.04em', color: active ? C.forest : C.inkSoft }}>
               {p.label}
             </span>
           </button>
@@ -362,7 +362,7 @@ export function EmblemPicker({ value, onPick, onUpload, onReset, uploading, canR
       {/* No emblem at all: the type-toned seal the committee would ship with. */}
       {!value && !uploading && (
         <span className="flex items-center gap-2 self-center ps-1" style={{ fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 600, color: C.muted }}>
-          <MonogramMedallion text={monogramText || '–'} tone={tone} size={26} />
+          <MonogramMedallion text={monogramText} tone={tone} size={26} />
           Initials, until you pick one
         </span>
       )}

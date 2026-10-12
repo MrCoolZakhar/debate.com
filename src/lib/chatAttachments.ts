@@ -69,6 +69,29 @@ function trustedFileUrl(u: string): boolean {
 }
 function trustedGifUrl(u: string): boolean { return GIPHY_HOST.test(u); }
 
+/**
+ * The image an organiser attached to a broadcast, and nothing else. NOT used by
+ * parseAttachment (chat messages keep their own, narrower rule above): it is read only for the
+ * Secretariat messages src/lib/broadcastMessages.ts builds from `session_broadcasts.image_url`.
+ *
+ * BroadcastComposer.uploadBroadcastImage writes exactly one shape: the public
+ * `conference-assets` bucket, `broadcasts/<conference uuid>-<epoch ms>.<ext>`, read back with
+ * getPublicUrl. The checks mirror trustedFileUrl: no dot segment (literal or encoded), no
+ * backslash, no query or fragment, this project's origin, and the raw string equal to that
+ * origin plus the parsed pathname.
+ */
+const BROADCAST_IMAGE_PATH = /^\/storage\/v1\/object\/public\/conference-assets\/broadcasts\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}-\d{10,16}\.[a-z0-9]{1,8}$/i;
+export function trustedBroadcastImageUrl(u: string | null | undefined): string | null {
+  if (!u || !PROJECT_ORIGIN) return null;
+  if (u.includes('#') || u.includes('?') || u.includes('\\')) return null;
+  if (/(^|\/)\.{1,2}(\/|$)/.test(u) || /%2e|%2f|%5c/i.test(u)) return null;
+  let parsed: URL;
+  try { parsed = new URL(u); } catch { return null; }
+  if (parsed.protocol !== 'https:' || parsed.origin !== PROJECT_ORIGIN || parsed.username || parsed.password) return null;
+  if (u !== PROJECT_ORIGIN + parsed.pathname) return null;
+  return BROADCAST_IMAGE_PATH.test(parsed.pathname) ? u : null;
+}
+
 function oneLine(s: string, max = 120): string {
   return s.replace(/[\r\n]+/g, ' ').trim().slice(0, max) || 'file';
 }

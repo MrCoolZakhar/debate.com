@@ -634,8 +634,72 @@ export const COUNTRY_NAMES_AR: Record<string, string> = {
   PS: 'فلسطين', VA: 'الكرسي الرسولي', XK: 'كوسوفو', CK: 'جزر كوك', NU: 'نيوي',
 };
 
+export const COUNTRY_NAMES_PT: Record<string, string> = {
+  // Brazilian Portuguese (pt-BR), the forms used by Itamaraty and Brazilian MUNs.
+  AF: 'Afeganistão', AL: 'Albânia', DZ: 'Argélia', AD: 'Andorra', AO: 'Angola',
+  AG: 'Antígua e Barbuda', AR: 'Argentina', AM: 'Armênia', AU: 'Austrália',
+  AT: 'Áustria', AZ: 'Azerbaijão', BS: 'Bahamas', BH: 'Bahrein', BD: 'Bangladesh',
+  BB: 'Barbados', BY: 'Belarus', BE: 'Bélgica', BZ: 'Belize', BJ: 'Benin',
+  BT: 'Butão', BO: 'Bolívia', BA: 'Bósnia e Herzegovina', BW: 'Botsuana',
+  BR: 'Brasil', BN: 'Brunei', BG: 'Bulgária', BF: 'Burkina Faso', BI: 'Burundi',
+  CV: 'Cabo Verde', KH: 'Camboja', CM: 'Camarões', CA: 'Canadá', CF: 'República Centro-Africana',
+  TD: 'Chade', CL: 'Chile', CN: 'China', CO: 'Colômbia', KM: 'Comores',
+  CG: 'Congo', CD: 'República Democrática do Congo', CR: 'Costa Rica',
+  CI: 'Costa do Marfim', HR: 'Croácia', CU: 'Cuba', CY: 'Chipre',
+  CZ: 'Tchéquia', DK: 'Dinamarca', DJ: 'Djibuti', DM: 'Dominica',
+  DO: 'República Dominicana', EC: 'Equador', EG: 'Egito', SV: 'El Salvador',
+  GQ: 'Guiné Equatorial', ER: 'Eritreia', EE: 'Estônia', SZ: 'Essuatíni',
+  ET: 'Etiópia', FJ: 'Fiji', FI: 'Finlândia', FR: 'França', GA: 'Gabão',
+  GM: 'Gâmbia', GE: 'Geórgia', DE: 'Alemanha', GH: 'Gana', GR: 'Grécia',
+  GD: 'Granada', GT: 'Guatemala', GN: 'Guiné', GW: 'Guiné-Bissau',
+  GY: 'Guiana', HT: 'Haiti', HN: 'Honduras', HU: 'Hungria', IS: 'Islândia',
+  IN: 'Índia', ID: 'Indonésia', IR: 'Irã', IQ: 'Iraque', IE: 'Irlanda',
+  IL: 'Israel', IT: 'Itália', JM: 'Jamaica', JP: 'Japão', JO: 'Jordânia',
+  KZ: 'Cazaquistão', KE: 'Quênia', KI: 'Kiribati', KP: 'Coreia do Norte',
+  KR: 'Coreia do Sul', KW: 'Kuwait', KG: 'Quirguistão', LA: 'Laos', LV: 'Letônia',
+  LB: 'Líbano', LS: 'Lesoto', LR: 'Libéria', LY: 'Líbia', LI: 'Liechtenstein',
+  LT: 'Lituânia', LU: 'Luxemburgo', MG: 'Madagascar', MW: 'Malawi',
+  MY: 'Malásia', MV: 'Maldivas', ML: 'Mali', MT: 'Malta', MH: 'Ilhas Marshall',
+  MR: 'Mauritânia', MU: 'Maurício', MX: 'México', FM: 'Micronésia',
+  MD: 'Moldávia', MC: 'Mônaco', MN: 'Mongólia', ME: 'Montenegro', MA: 'Marrocos',
+  MZ: 'Moçambique', MM: 'Mianmar', NA: 'Namíbia', NR: 'Nauru', NP: 'Nepal',
+  NL: 'Países Baixos', NZ: 'Nova Zelândia', NI: 'Nicarágua', NE: 'Níger',
+  NG: 'Nigéria', NO: 'Noruega', OM: 'Omã', PK: 'Paquistão', PW: 'Palau',
+  PA: 'Panamá', PG: 'Papua-Nova Guiné', PY: 'Paraguai', PE: 'Peru',
+  PH: 'Filipinas', PL: 'Polônia', PT: 'Portugal', QA: 'Catar', RO: 'Romênia',
+  RU: 'Rússia', RW: 'Ruanda', KN: 'São Cristóvão e Névis', LC: 'Santa Lúcia',
+  VC: 'São Vicente e Granadinas', WS: 'Samoa', SM: 'San Marino',
+  ST: 'São Tomé e Príncipe', SA: 'Arábia Saudita', SN: 'Senegal', RS: 'Sérvia',
+  SC: 'Seicheles', SL: 'Serra Leoa', SG: 'Singapura', SK: 'Eslováquia',
+  SI: 'Eslovênia', SB: 'Ilhas Salomão', SO: 'Somália', ZA: 'África do Sul',
+  SS: 'Sudão do Sul', ES: 'Espanha', LK: 'Sri Lanka', SD: 'Sudão',
+  SR: 'Suriname', SE: 'Suécia', CH: 'Suíça', SY: 'Síria', TW: 'Taiwan',
+  TJ: 'Tadjiquistão', TZ: 'Tanzânia', TH: 'Tailândia', TL: 'Timor-Leste',
+  TG: 'Togo', TO: 'Tonga', TT: 'Trinidad e Tobago', TN: 'Tunísia', TR: 'Turquia',
+  TM: 'Turcomenistão', TV: 'Tuvalu', UG: 'Uganda', UA: 'Ucrânia',
+  AE: 'Emirados Árabes Unidos', GB: 'Reino Unido', US: 'Estados Unidos',
+  UY: 'Uruguai', UZ: 'Uzbequistão', VU: 'Vanuatu', VE: 'Venezuela', VN: 'Vietnã',
+  YE: 'Iêmen', ZM: 'Zâmbia', ZW: 'Zimbábue', EU: 'União Europeia',
+  MK: 'Macedônia do Norte',
+  // Non-UN-member / observer states
+  PS: 'Palestina', VA: 'Santa Sé', XK: 'Kosovo', CK: 'Ilhas Cook', NU: 'Niue',
+};
+
 export function getCountryDisplayName(name: string, language: string): string {
-  if (language !== 'es' && language !== 'fr' && language !== 'ar') return name;
+  if (language !== 'es' && language !== 'fr' && language !== 'ar' && language !== 'pt') return name;
+  if (language === 'pt') {
+    if (name === 'African Union') return 'União Africana';
+    const country = getCountryByName(name);
+    if (!country) return name;
+    const fromDict = COUNTRY_NAMES_PT[country.code];
+    if (fromDict) return fromDict;
+    try {
+      const dn = new Intl.DisplayNames(['pt-BR'], { type: 'region' });
+      return dn.of(country.code) ?? name;
+    } catch {
+      return name;
+    }
+  }
   if (language === 'ar') {
     if (name === 'African Union') return 'الاتحاد الأفريقي';
     const country = getCountryByName(name);
@@ -678,7 +742,7 @@ export function getCountryDisplayName(name: string, language: string): string {
 // Accent/diacritic-insensitive, language-aware comparator on DISPLAY names
 export function compareCountryNames(a: string, b: string, language: string): number {
   return getCountryDisplayName(a, language).localeCompare(
-    getCountryDisplayName(b, language), language, { sensitivity: 'base' });
+    getCountryDisplayName(b, language), language === 'pt' ? 'pt-BR' : language, { sensitivity: 'base' });
 }
 
 /** True when `q` starts a WORD of `haystack` — so "emirates" finds
@@ -754,8 +818,8 @@ export function findCountryFlexible(input: string): string | null {
   // 2. retired spellings, long-form UN names and acronyms
   const aliased = COUNTRY_NAME_ALIASES[n];
   if (aliased) return aliased;
-  // 3. exact across the ES/FR/AR dictionaries (value match → code → EN name)
-  for (const dict of [COUNTRY_NAMES_ES, COUNTRY_NAMES_FR, COUNTRY_NAMES_AR]) {
+  // 3. exact across the ES/FR/AR/PT dictionaries (value match → code → EN name)
+  for (const dict of [COUNTRY_NAMES_ES, COUNTRY_NAMES_FR, COUNTRY_NAMES_AR, COUNTRY_NAMES_PT]) {
     const codeEntry = Object.entries(dict).find(([, v]) => fold(v) === n);
     if (codeEntry) { const c = UN_COUNTRIES.find((u) => u.code === codeEntry[0]); if (c) return c.name; }
   }

@@ -30,7 +30,6 @@ import { openCreditsPopup } from '@/lib/purchasePopup';
 import { leaderImportsArePaid } from '@/app/manage/[slug]/import/importQuote';
 import { triggerEmailDelivery } from '@/lib/emailDelivery';
 import { friendlyError, plainOrFallback, UserFacingError } from '@/lib/friendlyError';
-import { GoldWord } from '@/components/BrandHeading';
 import { SectionCard, OUTFIT } from './shared';
 
 const MAX_ROWS = 200;
@@ -774,7 +773,7 @@ export default function DelegationImportCard({
     <SectionCard>
       {rowCss}
       <h3 style={{ fontFamily: OUTFIT, fontSize: 24, fontWeight: 800, color: INK, margin: 0, lineHeight: 1.15 }}>
-        Import Your <GoldWord tone="light">Delegates</GoldWord>
+        Import Your Delegates
       </h3>
       <p style={{ fontFamily: OUTFIT, fontSize: 13, color: INK_SOFT, margin: '6px 0 20px 0', lineHeight: 1.55 }}>
         Add a name and an email for each delegate and we&rsquo;ll invite them to join your delegation

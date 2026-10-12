@@ -12,7 +12,6 @@
 
 import Link from 'next/link';
 import { useT } from '@/contexts/LanguageContext';
-import { GoldWord } from '@/components/BrandHeading';
 import { CommitteeCard } from '@/app/manage/[slug]/live/CommitteeCard';
 import { committeeIdentity } from '@/app/manage/[slug]/live/identity';
 import { demoLiveRooms } from './demoLiveRoom';
@@ -31,7 +30,7 @@ export default function ConferenceBridge() {
         <div className="cb-text">
           <h2 id="cb-title" className="cb-h2">
             {t('sl_conf_title_lead')}{' '}
-            <GoldWord tone="light">{t('sl_conf_title_accent')}</GoldWord>
+            {t('sl_conf_title_accent')}
           </h2>
           <p className="cb-body">{t('sl_conf_body')}</p>
         </div>

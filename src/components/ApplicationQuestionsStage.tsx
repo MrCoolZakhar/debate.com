@@ -110,7 +110,7 @@ export function ConferencePlate({
             {acronymLabel}
           </p>
           {showFullName && (
-            <p className="truncate" style={{ fontFamily: OUTFIT, fontWeight: 500, fontSize: 13, color: 'rgba(255,252,244,0.78)', marginTop: 2 }}>
+            <p className="[overflow-wrap:anywhere]" style={{ fontFamily: OUTFIT, fontWeight: 500, fontSize: 13, color: 'rgba(255,252,244,0.78)', marginTop: 2 }}>
               {fullName}
             </p>
           )}
@@ -165,7 +165,7 @@ export function SectionStrip({
       />
       <span aria-hidden className="absolute inset-0" style={{ background: 'linear-gradient(100deg, rgba(20,36,27,0.88) 0%, rgba(20,36,27,0.60) 55%, rgba(20,36,27,0.26) 100%)' }} />
       <div className="absolute inset-0 flex items-center justify-between gap-3" style={{ padding: '0 16px' }}>
-        <p className="truncate" style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 14.5, color: '#FFFCF4', letterSpacing: '0.01em' }}>
+        <p className="min-w-0 [overflow-wrap:anywhere]" style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 14.5, color: '#FFFCF4', letterSpacing: '0.01em' }}>
           {acronymLabel}
         </p>
         <span

@@ -475,10 +475,10 @@ export default function RequestsPanel({ conferenceId, applicationId, myApplicati
                 SWAP DETAILS
               </p>
               <p className="text-sm" style={{ color: NEU.ink, fontFamily: OUTFIT, margin: 0 }}>
-                {selectedRequest.metadata.member_a ?? 'Member A'}: {selectedRequest.metadata.before?.a ?? '–'} → {selectedRequest.metadata.after?.a ?? '–'}
+                {selectedRequest.metadata.member_a ?? 'Member A'}: {selectedRequest.metadata.before?.a ?? 'None'} → {selectedRequest.metadata.after?.a ?? 'None'}
               </p>
               <p className="text-sm mt-1" style={{ color: NEU.ink, fontFamily: OUTFIT, margin: '4px 0 0 0' }}>
-                {selectedRequest.metadata.member_b ?? 'Member B'}: {selectedRequest.metadata.before?.b ?? '–'} → {selectedRequest.metadata.after?.b ?? '–'}
+                {selectedRequest.metadata.member_b ?? 'Member B'}: {selectedRequest.metadata.before?.b ?? 'None'} → {selectedRequest.metadata.after?.b ?? 'None'}
               </p>
             </NeuInset>
           )}

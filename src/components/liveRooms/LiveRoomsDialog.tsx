@@ -535,7 +535,7 @@ function SingleCard({ item, t, primaryRef, onGo, onClose, onForget }: ViewProps 
         <div className="min-w-0 flex-1">
           <Label>{t('srp_deleg_country')}</Label>
           <p className="srp-acronym" style={{ color: LR.forest }}>{item.countryName}</p>
-          <p className="mt-1.5 truncate" title={`${r.committeeName} · ${r.conferenceName}`} style={{ fontSize: 13.5, color: LR.inkSoft }}>
+          <p className="mt-1.5 [overflow-wrap:anywhere]" title={`${r.committeeName} · ${r.conferenceName}`} style={{ fontSize: 13.5, color: LR.inkSoft, lineHeight: 1.3 }}>
             <span style={{ fontWeight: 700, color: LR.ink }}>{primary}</span>{' · '}{conferenceLabel}
           </p>
           <div className="mt-1.5"><StatusLine status={statusOf(r)} t={t} /></div>
@@ -565,7 +565,7 @@ function SingleCard({ item, t, primaryRef, onGo, onClose, onForget }: ViewProps 
         <div className="min-w-0 flex-1">
           <p className="srp-acronym" style={{ color: LR.forest }}>{primary}</p>
           {secondary && <p style={{ fontSize: 13.5, color: LR.inkSoft, lineHeight: 1.3, marginTop: 2 }}>{secondary}</p>}
-          <p className="mt-2 truncate" title={r.conferenceName} style={{ fontSize: 13, color: LR.inkSoft }}>
+          <p className="mt-2 [overflow-wrap:anywhere]" title={r.conferenceName} style={{ fontSize: 13, color: LR.inkSoft, lineHeight: 1.3 }}>
             <span style={{ fontWeight: 700, color: LR.ink }}>{conferenceLabel}</span>
             {r.conferenceCountry && <span>{' · '}{r.conferenceCountry}</span>}
           </p>
@@ -773,8 +773,8 @@ function Chooser({ items, t, primaryRef, onGo, onClose, onForget }: ViewProps & 
                 )}
               </div>
               <div className="min-w-0 flex-1">
-                <p className="truncate" style={{ fontSize: 16, fontWeight: 800, color: LR.forest, lineHeight: 1.2 }}>{title}</p>
-                <p className="truncate" title={sub} style={{ fontSize: 12.5, color: LR.inkSoft }}>
+                <p className="[overflow-wrap:anywhere]" style={{ fontSize: 16, fontWeight: 800, color: LR.forest, lineHeight: 1.2 }}>{title}</p>
+                <p className="[overflow-wrap:anywhere]" style={{ fontSize: 12.5, color: LR.inkSoft, lineHeight: 1.3 }}>
                   {code && <><span dir="ltr" style={{ fontWeight: 800, color: LR.ink, letterSpacing: '0.08em' }}>{code}</span> <span aria-hidden>·</span> </>}
                   {sub}
                 </p>

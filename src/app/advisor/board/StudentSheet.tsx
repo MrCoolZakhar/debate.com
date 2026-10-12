@@ -83,9 +83,9 @@ export default function StudentSheet({
         <div className="flex items-center gap-4">
           <CircleFlag country={seat.country} code={seat.countryCode} logoUrl={state.delegate?.logoUrl ?? null} size={72} decorative loading="eager" />
           <div className="min-w-0 flex-1">
-            <div className="truncate" style={{ fontSize: 14, fontWeight: 600, color: C.inkSoft }}>{seatSubtitle(seat, committeeName, language) || committeeName}</div>
+            <div className="[overflow-wrap:anywhere]" style={{ fontSize: 14, fontWeight: 600, color: C.inkSoft, lineHeight: 1.3 }}>{seatSubtitle(seat, committeeName, language) || committeeName}</div>
             <div className="mt-1"><StateLine state={state} big /></div>
-            {state.caucusLabel && <div className="mt-0.5 truncate" style={{ fontSize: 13, color: C.inkSoft }}>{state.caucusLabel}</div>}
+            {state.caucusLabel && <div className="mt-0.5 [overflow-wrap:anywhere]" style={{ fontSize: 13, color: C.inkSoft, lineHeight: 1.3 }}>{state.caucusLabel}</div>}
           </div>
         </div>
 
@@ -131,7 +131,7 @@ export default function StudentSheet({
                     <li key={i} className="flex items-center gap-3 rounded-xl px-3 py-2.5" style={{ backgroundColor: C.surface }}>
                       <FileText size={17} aria-hidden style={{ color: C.forestSoft }} className="shrink-0" />
                       <span className="min-w-0 flex-1">
-                        <span className="block truncate" style={{ fontSize: 14.5, fontWeight: 700, color: C.ink }}>
+                        <span className="block truncate" title={p.title} style={{ fontSize: 14.5, fontWeight: 700, color: C.ink }}>
                           {p.docCode ? `${p.docCode} · ` : ''}{p.title}
                         </span>
                       </span>

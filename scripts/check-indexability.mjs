@@ -77,6 +77,7 @@ const PRIVATE_ROUTES = [
   { path: '/conferences/example-slug/papers' },
   { path: '/unsubscribe?token=x', blocked: true },
   { path: '/api/geo', blocked: true },
+  { path: '/r/0000000000000000/home', blocked: true },
 ];
 
 // Pages that MUST stay indexable even though their parameterised forms are not.

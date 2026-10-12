@@ -9,7 +9,7 @@
  * every later save updates it in place.
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { notifyErr, clearErr } from '@/lib/appNotify';
 import { ShieldAlert } from 'lucide-react';
 import type { Conference } from '@/app/manage/[slug]/layout';
@@ -20,7 +20,13 @@ import { PillToggle } from '@/app/account/accountUi';
 import {
   NEU, NEU_GRADIENTS, OUTFIT, NeuCard, NeuButton, NeuIconDisc, NeuPill,
 } from '@/components/neu';
+import { useConfirmModal } from '@/components/ConfirmModal';
 import { inputStyle, fieldLabelStyle } from './shared';
+
+// The house confirm sits at z-index 50; this section also lives inside the
+// Financials pop-ups (z-index 9090), so while the turn-off question is open
+// its backdrop is lifted above them.
+const RAISE_CONFIRM_CSS = '.gv-modal-backdrop{z-index:9300 !important}';
 
 interface SurchargeRow {
   id: string;
@@ -33,7 +39,11 @@ interface SurchargeRow {
   gates_acceptance: boolean;
 }
 
-export default function ApplicationFeeSection({ conference }: { conference: Conference }) {
+export default function ApplicationFeeSection({ conference, bare = false }: {
+  conference: Conference;
+  /** Inside a pop-up (prompt 94): no section header and no top margin. */
+  bare?: boolean;
+}) {
   const { session } = useAuth();
   const [existing, setExisting] = useState<SurchargeRow | null>(null);
   const [loading, setLoading] = useState(true);
@@ -48,6 +58,8 @@ export default function ApplicationFeeSection({ conference }: { conference: Conf
   const [appliesTo, setAppliesTo] = useState<'per_delegation' | 'per_delegate'>('per_delegation');
   const [active, setActive] = useState(true);
   const [gatesAcceptance, setGatesAcceptance] = useState(false);
+  const { confirm, modal: confirmModal } = useConfirmModal();
+  const askingRef = useRef(false);
 
   useEffect(() => {
     if (!session) return;
@@ -71,7 +83,7 @@ export default function ApplicationFeeSection({ conference }: { conference: Conf
       }
       setLoading(false);
     })();
-  }, [conference.id, session?.access_token]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [conference.id, !!session]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // A fee of 0 can never be settled, so a zero-amount gate would block every
   // applicant with no way through. The DB enforces this too, via the
@@ -80,13 +92,28 @@ export default function ApplicationFeeSection({ conference }: { conference: Conf
   const amountIsPositive = Number.isFinite(amountMinor) && amountMinor > 0;
 
   async function handleSave() {
-    if (!session || saving) return;
+    if (!session || saving || askingRef.current) return;
     const amt = Number(amount);
     if (!label.trim()) { setError('Give the fee a label.'); return; }
     if (!Number.isFinite(amt) || amt < 0) { setError('Enter an amount of 0 or more.'); return; }
     if (gatesAcceptance && Math.round(amt * 100) <= 0) {
       setError('A fee of 0 cannot block acceptance. Enter an amount above 0, or turn acceptance gating off.');
       return;
+    }
+    // Turning a live fee off cancels pending Registration Fee invoices on the
+    // server (owner, 8 Oct 2026), so ask first. Only when the SAVED fee is on
+    // and this save turns it off: never on first setup, never when already off.
+    if (existing?.active && !active) {
+      askingRef.current = true;
+      const { confirmed } = await confirm({
+        title: 'Turn Off Registration Fee?',
+        body: 'Turning off registration fee will cancel any pending Registration Fee invoices from applicants. Do you wish to continue?',
+        confirmLabel: 'Turn off',
+        cancelLabel: 'Keep it on',
+        danger: true,
+      });
+      askingRef.current = false;
+      if (!confirmed) { setActive(true); return; }
     }
     setError('');
     clearErr('financials-fee');
@@ -113,24 +140,28 @@ export default function ApplicationFeeSection({ conference }: { conference: Conf
       notifyErr('Could not save the application fee. Please try again.', 'financials-fee');
       return;
     }
-    if (!existing) setExisting({ id: (data as { id: string }).id, ...payload } as SurchargeRow);
+    // Keep what is saved in step with the form, so the next turn-off asks again only when the fee is on.
+    setExisting(prev => ({ ...(prev ?? {}), id: (data as { id: string }).id, ...payload } as SurchargeRow));
     setSaved(true);
     setTimeout(() => setSaved(false), 2500);
   }
 
   return (
-    <section className="mt-8">
+    <section className={bare ? undefined : 'mt-8'}>
+      {confirmModal && <><style>{RAISE_CONFIRM_CSS}</style>{confirmModal}</>}
+      {!bare && (
       <div className="flex items-center gap-3 mb-4">
-        <NeuIconDisc gradient={NEU_GRADIENTS.amber} icon={ShieldAlert} emoji="Locked" size={36} />
-        <div>
-          <h2 style={{ fontFamily: OUTFIT, fontWeight: 900, fontSize: 18, color: NEU.ink, lineHeight: 1.15 }}>
-            Conference Registration Fee
-          </h2>
-          <p style={{ fontFamily: OUTFIT, fontSize: 11.5, color: NEU.muted }}>
-            A registration charge collected alongside conference fees. Set whether it must be paid before you can accept an applicant.
-          </p>
+          <NeuIconDisc gradient={NEU_GRADIENTS.amber} icon={ShieldAlert} emoji="Locked" size={36} />
+          <div>
+            <h2 style={{ fontFamily: OUTFIT, fontWeight: 900, fontSize: 18, color: NEU.ink, lineHeight: 1.15 }}>
+              Conference Registration Fee
+            </h2>
+            <p style={{ fontFamily: OUTFIT, fontSize: 11.5, color: NEU.muted }}>
+              A registration charge collected alongside conference fees. Set whether it must be paid before you can accept an applicant.
+            </p>
+          </div>
         </div>
-      </div>
+      )}
 
       {error && (
         <p className="text-xs font-semibold mb-3" style={{ color: '#8B2020', fontFamily: OUTFIT }}>{error}</p>
@@ -216,7 +247,7 @@ export default function ApplicationFeeSection({ conference }: { conference: Conf
                   {gatesAcceptance ? 'Must be paid before acceptance' : "Collected as a normal invoice (doesn't block acceptance)"}
                 </span>
               </div>
-              <p style={{ fontFamily: OUTFIT, fontSize: 11, color: NEU.muted, marginTop: 4 }}>
+              <p style={{ fontFamily: OUTFIT, fontSize: 12, color: NEU.muted, marginTop: 4 }}>
                 {amountIsPositive
                   ? "When on, applicants can't be accepted until this fee is paid."
                   : 'Set an amount above 0 to use acceptance gating. A fee of 0 can never be paid, so it would block every applicant with no way through.'}

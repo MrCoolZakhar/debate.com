@@ -38,6 +38,7 @@ import {
   committeeIdentities,
 } from './cardModel';
 import { SOFT, AMBER_INK, RED } from './tokens';
+import { GoldWord } from '@/components/BrandHeading';
 import { friendlyError } from '@/lib/friendlyError';
 import { notifyErr, clearErr } from '@/lib/appNotify';
 
@@ -51,8 +52,8 @@ const LOAD_TIMEOUT_MS = 30_000;
 function Eyebrow({ children, style }: { children: React.ReactNode; style?: React.CSSProperties }) {
   return (
     <p
-      className="text-[11px] font-bold uppercase"
-      style={{ color: SOFT, fontFamily: OUTFIT, letterSpacing: '0.08em', ...style }}
+      className="text-[13px] font-bold uppercase"
+      style={{ color: SOFT, fontFamily: OUTFIT, letterSpacing: '0.06em', ...style }}
     >
       {children}
     </p>
@@ -728,13 +729,13 @@ export default function LiveStatusPage() {
       <div className="flex items-end justify-between gap-4 mb-6 flex-wrap">
         <div>
           <Eyebrow>Live status</Eyebrow>
-          <h1 className="font-black" style={{ color: NEU.ink, fontFamily: OUTFIT, fontSize: 28, lineHeight: 1.1, marginTop: 2 }}>
-            Committee Floor
+          <h1 className="font-black" style={{ color: NEU.ink, fontFamily: OUTFIT, fontSize: 'clamp(32px, 3.4vw, 42px)', letterSpacing: '-0.025em', lineHeight: 1.05, marginTop: 4 }}>
+            Committee <GoldWord>Floor</GoldWord>
           </h1>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-x-3 gap-y-2 flex-wrap min-w-0">
           {secondsAgo !== null && (
-            <span className="text-xs" style={{ color: SOFT, fontFamily: OUTFIT, fontVariantNumeric: 'tabular-nums' }}>
+            <span style={{ color: SOFT, fontFamily: OUTFIT, fontSize: 14, fontVariantNumeric: 'tabular-nums' }}>
               {loadError ? `Last good refresh ${secondsAgo}s ago` : `Refreshed ${secondsAgo}s ago`}
             </span>
           )}
@@ -743,8 +744,9 @@ export default function LiveStatusPage() {
             disabled={refreshing}
             onMouseEnter={() => setRefreshHover(true)}
             onMouseLeave={() => setRefreshHover(false)}
-            className="inline-flex items-center gap-2 rounded-full py-2.5 px-4 text-xs font-bold focus:outline-none"
+            className="inline-flex items-center gap-2 rounded-full px-5 text-[15px] font-bold focus:outline-none"
             style={{
+              minHeight: 46,
               border: 'none', color: NEU.forest, backgroundColor: NEU.surface,
               fontFamily: OUTFIT,
               boxShadow: refreshHover && !refreshing ? NEU.outSmHover : NEU.outSm,
@@ -752,7 +754,7 @@ export default function LiveStatusPage() {
               transition: `box-shadow 200ms ${EASE}`,
             }}
           >
-            <RefreshCw size={13} className={refreshing ? 'animate-spin' : ''} />
+            <RefreshCw size={17} className={refreshing ? 'animate-spin' : ''} />
             Refresh
           </button>
           {/* Broadcast — writes session_broadcasts rows, one per targeted
@@ -761,8 +763,9 @@ export default function LiveStatusPage() {
             onClick={() => setComposerOpen(true)}
             onMouseEnter={() => setBroadcastHover(true)}
             onMouseLeave={() => setBroadcastHover(false)}
-            className="inline-flex items-center gap-2 rounded-full py-2.5 px-4 text-xs font-bold focus:outline-none"
+            className="inline-flex items-center gap-2 rounded-full px-5 text-[15px] font-bold focus:outline-none"
             style={{
+              minHeight: 46,
               border: 'none', color: NEU.gold,
               background: `linear-gradient(135deg, ${NEU_GRADIENTS.forest[0]}, ${NEU_GRADIENTS.forest[1]})`,
               fontFamily: OUTFIT,
@@ -775,7 +778,7 @@ export default function LiveStatusPage() {
             }}
             title="Send a message to every committee on the floor"
           >
-            <Megaphone size={13} />
+            <Megaphone size={17} />
             Broadcast
           </button>
         </div>
@@ -788,7 +791,7 @@ export default function LiveStatusPage() {
           <PauseCircle size={15} style={{ color: AMBER_INK, flexShrink: 0, marginBlockStart: 1 }} />
           <div className="min-w-0">
             <p className="text-sm font-bold" style={{ color: NEU.ink, fontFamily: OUTFIT }}>{loadError}</p>
-            <p className="text-[11px] mt-0.5" style={{ color: SOFT, fontFamily: OUTFIT }}>
+            <p className="text-[13px] mt-0.5" style={{ color: SOFT, fontFamily: OUTFIT }}>
               Retrying automatically every 10 seconds.
             </p>
           </div>
@@ -825,20 +828,20 @@ export default function LiveStatusPage() {
             )}
           </span>
           <div className="min-w-0">
-            <p style={{ fontFamily: OUTFIT, fontSize: 10.5, fontWeight: 800, letterSpacing: '0.16em', color: NEU.forest }}>
+            <p style={{ fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 800, letterSpacing: '0.1em', color: NEU.forest }}>
               {conference?.acronym ?? '…'} · FLOOR OVERVIEW
             </p>
             {/* The headline now reports the STATUS axis. "Committees are in
                 session" used to be true of any room whose phase had ever left
                 pre-session, including one abandoned three hours earlier. */}
-            <p className="font-black" style={{ color: needsAttention > 0 ? RED : counts.live > 0 ? NEU.forest : NEU.ink, fontFamily: OUTFIT, fontSize: 21, lineHeight: 1.12, marginTop: 2 }}>
+            <p className="font-black" style={{ color: needsAttention > 0 ? RED : counts.live > 0 ? NEU.forest : NEU.ink, fontFamily: OUTFIT, fontSize: 26, lineHeight: 1.12, marginTop: 3 }}>
               {needsAttention > 0
                 ? `${needsAttention} room${needsAttention === 1 ? '' : 's'} need${needsAttention === 1 ? 's' : ''} attention`
                 : counts.live > 0
                   ? `${counts.live} committee${counts.live === 1 ? '' : 's'} running normally`
                   : 'All quiet on the floor'}
             </p>
-            <p className="text-xs" style={{ color: SOFT, fontFamily: OUTFIT, marginTop: 3, fontVariantNumeric: 'tabular-nums' }}>
+            <p style={{ color: SOFT, fontFamily: OUTFIT, fontSize: 14.5, marginTop: 4, fontVariantNumeric: 'tabular-nums' }}>
               {onFloor > 0
                 ? `${onFloor} room${onFloor === 1 ? '' : 's'} open${presentTotal > 0 ? ` · ${presentTotal} delegate${presentTotal === 1 ? '' : 's'} present` : ''}`
                 : 'No committee has been opened yet'}
@@ -854,9 +857,9 @@ export default function LiveStatusPage() {
             { value: counts.live, label: 'LIVE NOW', color: counts.live > 0 ? NEU.green : SOFT },
             { value: needsAttention, label: 'NEED ATTENTION', color: needsAttention > 0 ? RED : SOFT },
           ].map((s) => (
-            <NeuInset key={s.label} className="text-center" style={{ padding: '10px 18px', borderRadius: 14, minWidth: 92 }}>
-              <p style={{ fontFamily: OUTFIT, fontWeight: 900, fontSize: 30, color: s.color, lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>{s.value}</p>
-              <p style={{ fontFamily: OUTFIT, fontSize: 9.5, fontWeight: 800, letterSpacing: '0.12em', color: SOFT, marginTop: 5 }}>{s.label}</p>
+            <NeuInset key={s.label} className="text-center" style={{ padding: '12px 20px', borderRadius: 16, minWidth: 112 }}>
+              <p style={{ fontFamily: OUTFIT, fontWeight: 900, fontSize: 36, color: s.color, lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>{s.value}</p>
+              <p style={{ fontFamily: OUTFIT, fontSize: 12, fontWeight: 800, letterSpacing: '0.08em', color: SOFT, marginTop: 6 }}>{s.label}</p>
             </NeuInset>
           ))}
         </div>

@@ -793,7 +793,7 @@ export default function FeedbackLogPanel({ committee, chairName, currentCountry,
           return (
             <div key={f.id} className="flex items-baseline gap-1.5">
               <span className={`${factorLabelClass} flex-1`} style={{ color: '#9A8A78' }}>{factorName(f, language)}</span>
-              <span className="text-[11px] font-bold shrink-0" style={{ color: '#9A8A78' }}>{rated ? v : '–'}</span>
+              <span className="text-[11px] font-bold shrink-0" style={{ color: '#9A8A78' }}>{rated ? v : t('fb_not_rated')}</span>
             </div>
           );
         }
@@ -801,7 +801,7 @@ export default function FeedbackLogPanel({ committee, chairName, currentCountry,
           <div key={f.id}>
             <div className="flex items-baseline justify-between gap-1">
               <span className={`${factorLabelClass} font-bold`} style={{ color: '#6A5A4A' }}>{factorName(f, language)}</span>
-              <span className="text-xs font-black shrink-0" style={{ color: rated ? '#1B3828' : '#B8AE9C' }}>{rated ? v : '–'}</span>
+              <span className="text-xs font-black shrink-0" style={{ color: rated ? '#1B3828' : '#B8AE9C' }}>{rated ? v : t('fb_not_rated')}</span>
             </div>
             <input
               type="range" min={RATING_MIN} max={maxScale} step={1}

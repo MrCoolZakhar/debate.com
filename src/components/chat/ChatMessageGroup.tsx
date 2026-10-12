@@ -46,7 +46,7 @@ export default function ChatMessageGroup({
       <div className={`flex flex-col ${isMe ? 'items-end' : 'items-start'}`} style={{ maxWidth: 'min(76%, 560px)', minWidth: 0 }}>
         {withAvatar && (
           <span
-            className="truncate max-w-full"
+            className="max-w-full [overflow-wrap:anywhere]"
             style={{
               fontFamily: OUTFIT, fontSize: 12, fontWeight: 700, marginBottom: 3, paddingInlineStart: 12,
               color: isChairSender ? 'color-mix(in srgb, var(--gv-accent, #B6871F) 60%, var(--gv-on-surface, #1C1410))' : NEU.inkSoft,

@@ -104,7 +104,7 @@ export default function ResolutionsPanel({ committee }: { committee: Committee }
                   onClick={() => setExpanded(expanded === res.id ? null : res.id)}
                 >
                   <div className="flex-1 min-w-0">
-                    <div className="text-sm font-semibold text-[#1C1410] truncate">{res.title}</div>
+                    <div className="text-sm font-semibold text-[#1C1410] truncate" title={res.title}>{res.title}</div>
                     <div className="text-xs text-[#8892aa] mt-0.5">{res.sponsors.join(', ')}</div>
                   </div>
                   <span className={`text-xs font-bold ms-3 ${cfg.color}`}>{cfg.label}</span>

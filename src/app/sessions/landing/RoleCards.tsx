@@ -19,7 +19,6 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useT } from '@/contexts/LanguageContext';
-import { GoldWord } from '@/components/BrandHeading';
 import { GoldButton } from '@/components/GoldButton';
 import type { TranslationKey } from '@/lib/translations';
 import { BRAND, INK, IVORY, GOLD_TEXT, CREAM, WHITE } from './tokens';
@@ -80,7 +79,7 @@ export default function RoleCards() {
       <style>{CSS}</style>
       <h2 id="rc-title" className="rc-h2">
         {t('sl_roles_lead')}{' '}
-        <GoldWord tone="light">{t('sl_roles_accent')}</GoldWord>
+        {t('sl_roles_accent')}
       </h2>
 
       <div className="rc-row">
@@ -142,5 +141,7 @@ const CSS = `
   .rc-panel { flex: 0 0 84vw; max-width: 420px; min-height: 420px; aspect-ratio: 4 / 5; scroll-snap-align: center; }
   .rc-panel:hover { transform: none; }
 }
+/* 16px on phones and tablets: iOS zooms into any focused field under 16px. */
+@media (max-width: 743px) { .rc-code { font-size: 16px; } }
 @media (prefers-reduced-motion: reduce) { .rc-panel { transition: none; } .rc-row { scroll-behavior: auto; } }
 `;

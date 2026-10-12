@@ -162,7 +162,7 @@ export default function ProfileDropdown({ trigger, panelStyle }: ProfileDropdown
   // The credit count shown on the MANAGE ACCOUNT row (refreshes itself after a purchase).
   const { balance: creditBalance, loading: creditsLoading } = useCredits();
   const creditText = creditsLoading || creditBalance === null
-    ? '–'
+    ? '…'
     : `${creditBalance} ${creditBalance === 1 ? 'credit' : 'credits'}`;
   // Imported registrations for this account's verified address attach on
   // the first page of a visit (src/lib/importClaim.ts).
@@ -502,7 +502,12 @@ export default function ProfileDropdown({ trigger, panelStyle }: ProfileDropdown
             borderRadius: '16px',
             boxShadow: '0 20px 48px rgba(27, 56, 40, 0.16)',
             zIndex: 9999,
-            overflow: 'hidden',
+            // A short phone (667px) cut off the last rows: cap the panel to the
+            // space below its top and let it scroll inside.
+            maxHeight: `calc(100dvh - ${pos.top}px - 12px)`,
+            overflowX: 'hidden',
+            overflowY: 'auto',
+            overscrollBehavior: 'contain',
             animation: 'profileMenuIn 180ms ease both',
           }}
         >
@@ -526,10 +531,10 @@ export default function ProfileDropdown({ trigger, panelStyle }: ProfileDropdown
               </div>
             )}
             <div className="min-w-0">
-              <p className="text-sm font-bold truncate" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>
+              <p className="text-sm font-bold [overflow-wrap:anywhere]" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>
                 {profile?.display_name ?? user.email?.split('@')[0]}
               </p>
-              <p className="text-xs truncate mt-0.5" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}>
+              <p className="text-xs [overflow-wrap:anywhere] mt-0.5" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}>
                 {profile?.email ?? user.email}
               </p>
             </div>
@@ -688,7 +693,8 @@ export default function ProfileDropdown({ trigger, panelStyle }: ProfileDropdown
                     onClick={() => setOpen(false)}
                     aria-label="Create a conference"
                     title="Create a conference"
-                    className="flex-shrink-0 flex items-center justify-center rounded-full focus:outline-none transition-colors"
+                    /* 18px disc, 44px hit area (the ::before reaches 13px out). */
+                    className="flex-shrink-0 flex items-center justify-center rounded-full focus:outline-none transition-colors relative before:absolute before:-inset-[13px]"
                     style={{
                       width: 18, height: 18,
                       backgroundColor: 'rgba(27,56,40,0.07)',
@@ -753,7 +759,7 @@ export default function ProfileDropdown({ trigger, panelStyle }: ProfileDropdown
                           )}
                         </span>
                         <span
-                          className="flex-1 truncate font-bold"
+                          className="flex-1 min-w-0 [overflow-wrap:anywhere] font-bold"
                           style={{ color: '#1C1410', fontSize: '12px', letterSpacing: '0.03em', fontFamily: "var(--font-brand), sans-serif" }}
                         >
                           {conferenceAcronymLabel({ acronym: conf.acronym, start_date: conf.start_date })}
@@ -778,7 +784,7 @@ export default function ProfileDropdown({ trigger, panelStyle }: ProfileDropdown
                             title={`${conf.standing.countryName ?? ''}${conf.standing.committee ? ` · ${conf.standing.committee}` : ''}`}
                           >
                             <CircleFlag code={conf.standing.countryCode} country={conf.standing.countryName} size={18} decorative />
-                            <span className="truncate">{conf.standing.committee || conf.standing.countryName}</span>
+                            <span className="min-w-0 [overflow-wrap:anywhere]">{conf.standing.committee || conf.standing.countryName}</span>
                           </span>
                         ) : (
                           <span

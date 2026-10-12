@@ -167,7 +167,7 @@ export default function PromoCodePage() {
                 borderBottom: `3px solid ${focused ? FOREST : RULE}`,
                 borderRadius: 0,
                 fontFamily: OUTFIT,
-                fontSize: 'clamp(36px, 6vw, 64px)',
+                fontSize: 'clamp(26px, 7vw, 64px)',
                 fontWeight: 800,
                 letterSpacing: '0.06em',
                 textTransform: 'uppercase',

@@ -44,6 +44,26 @@ const breadcrumbSchema = {
   ],
 };
 
+/** How many posts a shelf shows on a phone before "See all N". */
+const PHONE_SHELF_PREVIEW = 4;
+
+const SHELF_PREVIEW_CSS = `
+.gv-shelf-more-btn { display: none; }
+@media (min-width: 640px) { .gv-shelf-more { display: none; } }
+@media (max-width: 639px) {
+  .gv-shelf-more:not(:checked) ~ .gv-shelf-grid > :nth-child(n+${PHONE_SHELF_PREVIEW + 1}) { display: none; }
+  .gv-shelf-more-btn {
+    display: flex; align-items: center; justify-content: center; width: 100%; min-height: 48px; margin-top: 16px;
+    border-radius: 11px; border: 1.5px solid #1C1410; background: #FFFFFF; color: #1C1410;
+    font-size: 15px; font-weight: 700; cursor: pointer;
+  }
+  .gv-shelf-more:focus-visible ~ .gv-shelf-more-btn { outline: 2px solid #1B3828; outline-offset: 2px; }
+  .gv-shelf-more-close { display: none; }
+  .gv-shelf-more:checked ~ .gv-shelf-more-btn .gv-shelf-more-open { display: none; }
+  .gv-shelf-more:checked ~ .gv-shelf-more-btn .gv-shelf-more-close { display: inline; }
+}
+`;
+
 export default function BlogIndexPage() {
   const lead = articles.find((a) => a.featured) ?? byNewest(articles)[0];
   // "Start here": the lead guide, then the guides a first-time reader of each
@@ -75,6 +95,7 @@ export default function BlogIndexPage() {
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbSchema) }} />
 
       <BlogChrome>
+        <style>{SHELF_PREVIEW_CSS}</style>
         <div className="mx-auto w-full max-w-[1060px] px-4 sm:px-8">
           <header className="pt-6 pb-9 sm:pt-10 sm:pb-12">
             <h1
@@ -173,14 +194,31 @@ export default function BlogIndexPage() {
                   </p>
                 </div>
 
+                {/* On phones only the first few posts show until "See all N" is
+                    pressed. Every post is still in the HTML (CSS hides the
+                    rest), so /blog keeps linking to all of them. */}
+                {posts.length > PHONE_SHELF_PREVIEW && (
+                  <input
+                    type="checkbox"
+                    id={`more-${key}`}
+                    className="gv-shelf-more sr-only"
+                    aria-label={`See all ${posts.length} ${shelf.label} guides`}
+                  />
+                )}
                 <div
-                  className="mt-6 grid gap-5 sm:grid-cols-2 lg:grid-cols-3"
+                  className="gv-shelf-grid mt-6 grid gap-5 sm:grid-cols-2 lg:grid-cols-3"
                   style={{ '--gv-accent': shelf.accent } as React.CSSProperties}
                 >
                   {posts.map((post) => (
                     <BlogCard key={post.slug} post={post} />
                   ))}
                 </div>
+                {posts.length > PHONE_SHELF_PREVIEW && (
+                  <label htmlFor={`more-${key}`} className="gv-shelf-more-btn" aria-hidden="true">
+                    <span className="gv-shelf-more-open">See all {posts.length}</span>
+                    <span className="gv-shelf-more-close">Show fewer</span>
+                  </label>
+                )}
               </section>
             );
           })}

@@ -41,6 +41,8 @@ type NavLink = {
   badge?: number;
   /** Drawn indented under its parent (the Manage account sub-pages). */
   sub?: boolean;
+  /** The shorter word used by the phone switch (the Manage account sub-pages). */
+  short?: string;
 };
 
 const PROFILE_LINKS: NavLink[] = [
@@ -54,9 +56,9 @@ const PROFILE_LINKS: NavLink[] = [
 const MANAGE_PARENT: NavLink = { label: 'Manage account', href: '/account/manage', Icon: Settings2, match: 'prefix' };
 
 const MANAGE_LINKS: NavLink[] = [
-  { label: 'Credits and Usage', href: '/account/manage/credits', Icon: Coins, match: 'prefix', sub: true },
-  { label: 'Subscription', href: '/account/manage/subscription', Icon: InfinityIcon, match: 'prefix', sub: true },
-  { label: 'Promo Code', href: '/account/manage/promo', Icon: Ticket, match: 'prefix', sub: true },
+  { label: 'Credits and Usage', short: 'Credits', href: '/account/manage/credits', Icon: Coins, match: 'prefix', sub: true },
+  { label: 'Subscription', short: 'Subscription', href: '/account/manage/subscription', Icon: InfinityIcon, match: 'prefix', sub: true },
+  { label: 'Promo Code', short: 'Promo code', href: '/account/manage/promo', Icon: Ticket, match: 'prefix', sub: true },
 ];
 
 function isActive(link: NavLink, pathname: string): boolean {
@@ -159,6 +161,10 @@ export default function AccountLayout({ children }: { children: React.ReactNode 
 
   // Every entry of the phone row, in rail order.
   const phoneLinks: NavLink[] = [...profileLinks, MANAGE_PARENT];
+  // On a Manage account page the phone also gets the three pages as a small
+  // switch, because the pages do not link to each other and the rail that
+  // lists them is desktop only.
+  const onManage = isActive(MANAGE_PARENT, pathname);
 
   return (
     <div className="min-h-screen" style={{ backgroundColor: '#EDE7D8' }}>
@@ -238,6 +244,41 @@ export default function AccountLayout({ children }: { children: React.ReactNode 
               );
             })}
           </nav>
+          {onManage && (
+            <nav
+              className="grid grid-cols-3 gap-1 p-1 mb-3 rounded-2xl"
+              style={{ background: 'rgba(27,56,40,0.06)', boxShadow: 'inset 0 1px 2px rgba(27,56,40,0.08)' }}
+              aria-label="Manage account pages"
+            >
+              {MANAGE_LINKS.map((link) => {
+                const active = isActive(link, pathname);
+                return (
+                  <Link
+                    key={link.href}
+                    href={link.href}
+                    aria-current={active ? 'page' : undefined}
+                    className={`gv-acct-pill flex flex-col items-center justify-center gap-1 px-1.5 py-1.5 rounded-xl text-center ${FOCUS}`}
+                    style={{
+                      minHeight: 52,
+                      color: active ? FOREST : INK_SOFT,
+                      background: active ? 'linear-gradient(180deg,#FFFFFF,#F7F3EA)' : 'transparent',
+                      boxShadow: active
+                        ? 'inset 0 1px 0 #FFFFFF,0 0 0 1px rgba(27,56,40,0.10),0 4px 10px -4px rgba(27,56,40,0.28)'
+                        : 'none',
+                      textDecoration: 'none',
+                      fontFamily: FONT,
+                      fontSize: 13,
+                      lineHeight: 1.2,
+                      fontWeight: active ? 800 : 600,
+                    }}
+                  >
+                    <DuoIcon Icon={link.Icon} size={16} active={active} />
+                    <span className="[overflow-wrap:anywhere]">{link.short ?? link.label}</span>
+                  </Link>
+                );
+              })}
+            </nav>
+          )}
         </div>
 
         {/* Rail on the left, content column flexible. The content is rendered

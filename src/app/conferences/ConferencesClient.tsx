@@ -312,9 +312,9 @@ function OrganiserSection() {
 
 function RolesSection() {
   const stats = [
-    { number: '–', label: 'Open Positions', sub: 'Across all conferences' },
-    { number: '–', label: 'Conferences Hiring', sub: 'Actively recruiting' },
-    { number: '–', label: 'Roles Filled', sub: 'This season' },
+    { number: 'Soon', label: 'Open Positions', sub: 'Across all conferences' },
+    { number: 'Soon', label: 'Conferences Hiring', sub: 'Actively recruiting' },
+    { number: 'Soon', label: 'Roles Filled', sub: 'This season' },
   ];
 
   return (

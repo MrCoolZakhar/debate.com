@@ -196,9 +196,34 @@ export default async function AllConferencesPage() {
               .
             </p>
           ) : (
+            <>
+            {/* Jump to a letter: plain anchors in the server HTML, only for the
+                letters that have conferences. Not sticky. */}
+            <nav aria-label="Jump to a letter" style={{ margin: '0 0 22px' }}>
+              <ul className="flex flex-wrap" style={{ listStyle: 'none', margin: 0, padding: 0, gap: 4 }}>
+                {groups
+                  .filter(([letter]) => /^[A-Z]$/.test(letter))
+                  .map(([letter]) => (
+                    <li key={letter}>
+                      <a
+                        href={`#letter-${letter}`}
+                        className="inline-flex items-center justify-center hover:bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]"
+                        style={{ minWidth: 44, minHeight: 44, borderRadius: 10, fontSize: 16, fontWeight: 800, color: FOREST, textDecoration: 'none' }}
+                      >
+                        {letter}
+                      </a>
+                    </li>
+                  ))}
+              </ul>
+            </nav>
             <div className="flex flex-col" style={{ gap: 28 }}>
               {groups.map(([letter, list]) => (
-                <div key={letter} className="grid grid-cols-[2.25rem_1fr] gap-x-3">
+                <div
+                  key={letter}
+                  id={letter === '#' ? 'letter-other' : `letter-${letter}`}
+                  className="grid grid-cols-[2.25rem_1fr] gap-x-3"
+                  style={{ scrollMarginTop: 88 }}
+                >
                   <h3
                     aria-label={letter === '#' ? 'Other' : letter}
                     style={{
@@ -245,6 +270,7 @@ export default async function AllConferencesPage() {
                 </div>
               ))}
             </div>
+            </>
           )}
         </section>
       </main>

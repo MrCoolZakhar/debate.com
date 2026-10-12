@@ -585,14 +585,14 @@ export function CurrencyPicker({
                       <CurrencyFlag code={c.country} />
                       <span className="flex-1 min-w-0">
                         <span
-                          className="block truncate"
+                          className="block [overflow-wrap:anywhere]"
                           style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 800, color: INK, fontVariantNumeric: 'tabular-nums' }}
                         >
                           {c.code}
                           <span style={{ fontWeight: 600, color: INK_SOFT }}> {c.name}</span>
                         </span>
                         <span
-                          className="block truncate"
+                          className="block [overflow-wrap:anywhere]"
                           style={{ fontFamily: OUTFIT, fontSize: 11, fontWeight: 600, color: INK_SOFT }}
                         >
                           {c.countryLabel}

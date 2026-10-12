@@ -531,7 +531,7 @@ export function VotingRollCall({
                         ring="rgba(255,255,255,0.18)"
                         style={{ boxShadow: '0 1px 2px rgba(0,0,0,0.30), 0 2px 7px rgba(0,0,0,0.22)' }}
                       />
-                      <span className="flex-1 min-w-0 truncate" style={{ fontSize: 21, fontWeight: 600, lineHeight: 1.2, color: '#F4EFE3' }}>{name}</span>
+                      <span className="flex-1 min-w-0 [overflow-wrap:anywhere]" style={{ fontSize: 21, fontWeight: 600, lineHeight: 1.2, color: '#F4EFE3' }}>{name}</span>
                       <div className={`shrink-0 flex items-center gap-2.5 ${readOnly ? 'opacity-50' : ''}`}>
                         {/* Fixed width on every row, so the word under an observer's megaphone
                             never shifts the slider column. */}
@@ -631,7 +631,7 @@ export function VotingRollCall({
                     <>
                       <div className="flex items-baseline gap-2 mb-4" aria-live="polite">
                         <span className="text-[13px] font-semibold" style={{ color: INK_SOFT }}>{t('voting_rc_to_pass')}</span>
-                        <span className="text-[34px] font-bold leading-none tabular-nums" style={{ color: FOREST }}>{consensus ? 0 : presentCount === 0 ? '–' : outcome.needed}</span>
+                        <span className="text-[34px] font-bold leading-none tabular-nums" style={{ color: FOREST }}>{consensus ? 0 : presentCount === 0 ? t('voting_rc_needed_none') : outcome.needed}</span>
                         <span className="text-[14px] font-medium" style={{ color: INK_SOFT }}>{consensus ? t('voting_rules_stat_against_max').toLowerCase() : t('voting_rc_of_total', { total: presentCount })}</span>
                       </div>
                       <Choice

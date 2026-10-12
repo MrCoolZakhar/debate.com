@@ -76,6 +76,23 @@ export const PRESET_NAME_AR: Record<string, string> = {
   'ASEAN': 'رابطة دول جنوب شرق آسيا',
 };
 
+export const PRESET_NAME_PT: Record<string, string> = {
+  'UN Security Council': 'Conselho de Segurança da ONU',
+  'UN Environment Programme': 'Programa das Nações Unidas para o Meio Ambiente',
+  'World Health Organization': 'Organização Mundial da Saúde',
+  'International Monetary Fund': 'Fundo Monetário Internacional',
+  'World Bank': 'Banco Mundial',
+  'UN General Assembly': 'Assembleia Geral da ONU',
+  'UN Human Rights Council': 'Conselho de Direitos Humanos da ONU',
+  'Economic and Social Council': 'Conselho Econômico e Social',
+  'NATO': 'OTAN',
+  'G20': 'G20',
+  'European Union': 'União Europeia',
+  'African Union': 'União Africana',
+  'Arab League': 'Liga Árabe',
+  'ASEAN': 'ASEAN',
+};
+
 // ── Committee emblem presets ──────────────────────────────────────────────────
 // A curated set of committee emblems the organiser can one-click apply in the
 // editor, plus the aliases used to AUTO-ASSIGN a default emblem when a committee's
@@ -544,5 +561,6 @@ export function getCommitteeDisplayName(name: string, language: string): string 
   if (language === 'ar') return PRESET_NAME_AR[name] ?? name;
   if (language === 'fr') return PRESET_NAME_FR[name] ?? name;
   if (language === 'es') return PRESET_NAME_ES[name] ?? name;
+  if (language === 'pt') return PRESET_NAME_PT[name] ?? name;
   return name;
 }

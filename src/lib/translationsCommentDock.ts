@@ -16,4 +16,10 @@ export const commentDockTranslations = {
   ar: {
     fb_note_unsaved: 'لم تُحفظ بعد. ملاحظتك محفوظة هنا وستُرسل عند عودة الاتصال.',
   },
+  // pt-BR: scaffold, values still English. Translate per .claude/pt-glossary.md.
+  pt: {
+    // Under a note the server has not confirmed after two attempts. The text is kept on
+    // this device (and in its storage) and sent again by itself.
+    fb_note_unsaved: 'Ainda não foi salva. Sua anotação fica guardada aqui e será enviada quando a conexão voltar.',
+  },
 };

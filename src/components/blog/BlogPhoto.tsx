@@ -75,7 +75,7 @@ export function CardPhoto({ id, lead = false, thumb = false }: { id: PhotoId; le
         className="gv-card-photo block h-full w-full object-cover"
       />
       {!thumb && <span
-        className="pointer-events-none absolute inset-x-0 bottom-0 truncate px-3 pb-1.5 pt-5 text-right text-[10.5px]"
+        className="pointer-events-none absolute inset-x-0 bottom-0 [overflow-wrap:anywhere] px-3 pb-1.5 pt-5 text-right text-[10.5px]"
         style={{ color: 'rgba(255,255,255,0.86)', background: 'linear-gradient(to top, rgba(12,24,17,0.55), transparent)' }}
       >
         Photo: {p.author}, {licenceLabel(p)}

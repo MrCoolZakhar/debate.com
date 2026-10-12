@@ -91,7 +91,7 @@ export default function BottomSheet({
         >
           <div aria-hidden className="mx-auto mt-2.5 h-1.5 w-10 rounded-full sm:hidden" style={{ backgroundColor: 'rgba(27,56,40,0.18)' }} />
           <div className="flex items-center gap-3 px-5 pb-2 pt-3">
-            <h2 id={titleId} className="min-w-0 flex-1 truncate" style={{ fontSize: 19, fontWeight: 800, color: C.ink, letterSpacing: '-0.01em' }}>{title}</h2>
+            <h2 id={titleId} className="min-w-0 flex-1 [overflow-wrap:anywhere]" style={{ lineHeight: 1.2, fontSize: 19, fontWeight: 800, color: C.ink, letterSpacing: '-0.01em' }}>{title}</h2>
             <button
               type="button"
               onClick={onClose}

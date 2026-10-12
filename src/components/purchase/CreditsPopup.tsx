@@ -189,12 +189,12 @@ export default function CreditsPopup({ request }: { request: CreditsPopupRequest
           <Eyebrow>Your credits</Eyebrow>
           <div className="gv-buy-balance-row" aria-live="polite">
             <div className="gv-buy-balance-cell">
-              <span className="gv-buy-balance-big">{balance === null ? '–' : balance}</span>
+              <span className="gv-buy-balance-big">{balance === null ? '…' : balance}</span>
               <span className="gv-buy-balance-cap">now</span>
             </div>
             <ArrowRight size={24} strokeWidth={2.4} className="gv-buy-balance-arrow" style={{ color: FOREST }} aria-hidden />
             <div className="gv-buy-balance-cell">
-              <span className="gv-buy-balance-big gv-buy-after">{balance === null ? '–' : balance + qty}</span>
+              <span className="gv-buy-balance-big gv-buy-after">{balance === null ? '…' : balance + qty}</span>
               <span className="gv-buy-balance-cap">after this purchase</span>
             </div>
           </div>

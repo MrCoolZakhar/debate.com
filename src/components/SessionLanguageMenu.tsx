@@ -29,7 +29,7 @@ export default function SessionLanguageMenu() {
     return () => { document.removeEventListener('pointerdown', onDown); document.removeEventListener('keydown', onKey); };
   }, [open]);
 
-  const langs: [Language, string][] = [['en', t('settings_english')], ['es', t('settings_spanish')], ['fr', t('settings_french')], ['ar', 'العربية']];
+  const langs: [Language, string][] = [['en', t('settings_english')], ['es', t('settings_spanish')], ['fr', t('settings_french')], ['pt', t('settings_portuguese')], ['ar', 'العربية']];
 
   return (
     <div className="relative" ref={rootRef}>

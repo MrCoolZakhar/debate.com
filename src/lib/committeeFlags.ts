@@ -58,6 +58,13 @@ const MOTION_NAMES_LOCALIZED: Record<string, MotionNames> = {
     tour: 'Round Robin', custom: 'Personalizada',
     suspendDebate: 'Suspender Debate', endDebate: 'Cerrar Debate',
   },
+  // pt-BR, PiraMUN terminology (see .claude/pt-glossary.md). "Consulta Plenária" is not in
+  // the guide; "Adiamento" / "Encerramento do Debate" are its names for the two closing motions.
+  pt: {
+    moderated: 'Debate Moderado', unmoderated: 'Debate Não Moderado', consultation: 'Consulta Plenária',
+    tour: 'Tour de Table', custom: 'Personalizada',
+    suspendDebate: 'Adiamento do Debate', endDebate: 'Encerramento do Debate',
+  },
 };
 
 const MOTION_NAME_KEYS = Object.keys(DEFAULT_MOTION_NAMES) as (keyof MotionNames)[];

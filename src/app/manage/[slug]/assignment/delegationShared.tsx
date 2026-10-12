@@ -359,9 +359,14 @@ export async function undoNotAttending(
   conferenceId: string,
   member: Pick<PoolMember, 'id'>
 ): Promise<{ result: QueueEventEmailResult; error: string | null }> {
-  const { error } = await supabase.from('applications').update({ attending: true, payment_status: 'unpaid' }).eq('id', member.id);
+  // Attendance never changes payment (prompt 99): marking someone not attending
+  // never touched it, so coming back must not wipe a paid or covered person.
+  const { data, error } = await supabase.from('applications').update({ attending: true }).eq('id', member.id).select('id');
+  if (error || !data || data.length === 0) {
+    return { result: { outcome: 'no-recipients', drafted: false }, error: error?.message ?? 'Attendance could not be restored.' };
+  }
   const result = await queueEventEmail(supabase, conferenceId, 'attendance_restored', [member.id]);
-  return { result, error: error?.message ?? null };
+  return { result, error: null };
 }
 
 /**

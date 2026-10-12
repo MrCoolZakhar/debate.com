@@ -449,7 +449,7 @@ export default function VariantStagefront({
                 >
                   {/* Null while both the RPC and the card fetch are still in
                       flight; a dash holds the space instead of a false zero. */}
-                  {stat.n === null ? '–' : stat.n.toLocaleString()}
+                  {stat.n === null ? '…' : stat.n.toLocaleString()}
                 </span>
                 {/* The word beside the number (owner's taste board: "big number,
                     word beside", 25 Sep 2026), not an uppercase gold label under it. */}
@@ -490,7 +490,7 @@ export default function VariantStagefront({
               textAlign: 'center',
             }}
           >
-            One platform, every <GoldWord>role</GoldWord>
+            One platform, every role
           </h2>
           <RoleCarousel slides={ROLE_SLIDES} />
         </section>
@@ -520,7 +520,7 @@ export default function VariantStagefront({
                     id="sf-near-heading"
                     style={{ fontFamily: SANS, fontWeight: 900, fontSize: 'clamp(24px, 2.4vw, 38px)', letterSpacing: '-0.015em', color: INK, margin: '0 0 4px 0', textWrap: 'balance' }}
                   >
-                    Conferences near <GoldWord>you</GoldWord>
+                    Conferences near you
                   </h2>
                   <p aria-live="polite" style={{ fontFamily: SANS, fontSize: 'clamp(15px, 1.05vw, 18px)', lineHeight: 1.6, color: INK_55, margin: 0 }}>
                     {nearbySub}
@@ -692,10 +692,10 @@ function HeroSearchBar({ conferences }: { conferences: LabConference[] }) {
                 style={{ boxShadow: 'none', border: '1px solid rgba(0,0,0,0.08)' }}
               />
               <span className="min-w-0 flex-1">
-                <span className="block truncate" style={{ fontFamily: SANS, fontWeight: 700, fontSize: 14.5, color: INK }}>
+                <span className="block [overflow-wrap:anywhere]" style={{ fontFamily: SANS, fontWeight: 700, fontSize: 14.5, color: INK }}>
                   {landingConfTitle(c)}
                 </span>
-                <span className="block truncate" style={{ fontFamily: SANS, fontWeight: 500, fontSize: 12.5, color: INK_55 }}>
+                <span className="block [overflow-wrap:anywhere]" style={{ fontFamily: SANS, fontWeight: 500, fontSize: 12.5, color: INK_55 }}>
                   {[c.city, c.country].filter(Boolean).join(', ')}
                 </span>
               </span>

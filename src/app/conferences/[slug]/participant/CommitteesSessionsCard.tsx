@@ -77,6 +77,7 @@ export default function CommitteesSessionsCard({ conferenceId, conferenceStartDa
   return (
     <DashCard>
       <CardHeading
+        stackedHide
         title="Committees"
         aside={committees.length > 0 ? (
           <span style={{ fontFamily: OUTFIT, fontSize: 13, color: INK_SOFT, fontVariantNumeric: 'tabular-nums' }}>

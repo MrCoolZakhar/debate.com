@@ -310,14 +310,15 @@ export function DatePicker({
               onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}>
               <ChevronLeft size={18} />
             </button>
+            {/* 16px selects: anything smaller makes iOS zoom the page on tap. */}
             <div className="flex items-center gap-2" style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 14, color: '#1C1410' }}>
               <select value={view.getMonth()} onChange={(e) => setView(new Date(view.getFullYear(), Number(e.target.value), 1))}
-                className="focus:outline-none" style={{ fontFamily: OUTFIT, fontWeight: 800, color: '#1C1410', background: 'transparent', border: 'none', cursor: 'pointer' }}>
+                className="focus:outline-none" style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 16, color: '#1C1410', background: 'transparent', border: 'none', cursor: 'pointer' }}>
                 {MONTHS.map((m, i) => <option key={m} value={i}>{m}</option>)}
               </select>
               <select value={view.getFullYear()} onChange={(e) => setView(new Date(Number(e.target.value), view.getMonth(), 1))}
                 aria-label="Year"
-                className="focus:outline-none" style={{ fontFamily: OUTFIT, fontWeight: 800, color: '#1C1410', background: 'transparent', border: 'none', cursor: 'pointer', fontVariantNumeric: 'tabular-nums' }}>
+                className="focus:outline-none" style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 16, color: '#1C1410', background: 'transparent', border: 'none', cursor: 'pointer', fontVariantNumeric: 'tabular-nums' }}>
                 {years.map((y) => <option key={y} value={y}>{y}</option>)}
               </select>
             </div>

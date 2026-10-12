@@ -1,24 +1,24 @@
 'use client';
 
-import { useState, useEffect, useCallback, useMemo, useRef, Fragment } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import Link from 'next/link';
 import {
-  SlidersHorizontal, Building2, Users2, ShieldCheck, X, Lock, Copy, AlertTriangle, Check,
+  Building2, X, Lock, Copy, Check,
   Plus, Crown, Mail as MailIcon, ChevronDown, Info, ArrowLeft,
-  Settings2, Globe, Eye, EyeOff, ArrowUp, ArrowDown, Trash2, Briefcase, Trophy,
-  ClipboardList, CreditCard, Megaphone, Star, UsersRound, CheckCircle2, Clock, XCircle, MinusCircle, type LucideIcon,
+  Settings2, Globe, Eye, EyeOff, ArrowUp, ArrowDown, Trash2, Briefcase,
+  ClipboardList, CreditCard, Megaphone, Star, CheckCircle2, Clock, Users2, Trophy,
+  ChevronRight as ChevronRightIcon, CalendarDays, FileText, Image as ImageIcon, Palette, Handshake, Compass, History, Search,
+  School, ReceiptText, Gift, Ticket, HandHeart, type LucideIcon,
 } from 'lucide-react';
 import { useManage, type Conference } from '@/app/manage/[slug]/layout';
 
 import { getAuthedClient, getFreshAuthedClient } from '@/lib/supabase-auth';
 import { useAuth } from '@/components/AuthProvider';
-import { createClient } from '@supabase/supabase-js';
 import { UN_COUNTRIES } from '@/lib/countries';
 import { Pill } from '@/app/account/accountUi';
 import { useConfirmModal, ConfirmModal } from '@/components/ConfirmModal';
 import Portal from '@/components/Portal';
-import { NEU, OUTFIT, EASE, Emoji3D } from '@/components/neu';
+import { NEU, OUTFIT, EASE } from '@/components/neu';
 import { useScrollLock } from '@/hooks/useScrollLock';
 import { LogoDisc } from '@/components/LogoDisc';
 import { LogoCropModal } from '@/components/LogoCropModal';
@@ -32,14 +32,12 @@ import {
   grantedSectionCount, canManageTeam as bundleGrantsTeam, financialsAreReadOnly,
   FINANCIALS_READONLY_KEY, TEAM_KEY, type BundleId, type PermissionMap,
 } from '@/lib/organizerPermissions';
-import { activeFeePhase, type FeePhase } from '@/lib/finance';
-import { CurrencyPicker } from '@/components/CurrencyPicker';
+import { type FeePhase } from '@/lib/finance';
 import { normalizeSocialUrl } from '@/lib/socialLinks';
 import { acronymProblem, conferenceAcronymLabel } from '@/lib/conferenceLabels';
 import {
-  ROLE_ORDER, ROLE_EMOJI, ROLE_BLURB, RoleBookmarks, StepDisc, InfoHint,
-  CopyToRolesModal, SetupIntro, Segmented,
-  type RoleStatus as RoleStatusKind,
+  ROLE_ORDER, InfoHint,
+  CopyToRolesModal,
 } from './applicationsUi';
 // Awards are behind a holding screen for now. `./awardsUi` (AwardsSettings) is
 // untouched on disk; swap this import and the render below back to it to
@@ -52,14 +50,34 @@ import QuestionBuilder from '@/components/QuestionBuilder';
 import { conferencePaymentsReady, paymentGateBlocks, paymentGateMessage } from '@/lib/payments';
 import { friendlyError, constraintMessage } from '@/lib/friendlyError';
 import { normaliseRoleTimeline, linkNeighbourPhase } from '@/lib/roleTimeline';
-import { useConferenceTimezone, timelineNotice, TimelineNotice, TimelineWarning } from './timelineUi';
+import { useConferenceTimezone, timelineNotice } from './timelineUi';
 import { INTENT_OPTIONS, getConferenceIntent, intentPayload } from '@/lib/conferenceIntent';
 import ProfileLink from '@/components/ProfileLink';
+import { useNow } from '@/lib/useNow';
+import { ConferencePreview, dateRange, type SettingsSnapshot } from './settingsHome';
+import { ApplicationsSection } from './controlPanel';
+import { RoleSheet } from './roleSetup';
+import { SettingsShell, type ShellSection } from './settingsShell';
+import {
+  SectionHead, Group, Row, SwitchRow, BigCount, Switch as KitSwitch, TINT_GOLD_BG, TINT_GREEN_BG, EmojiDisc,
+  listedRoles, generalAnswer, inGeneralScope, GENERAL_FIELDS, type RoleSetupConfig,
+} from './panelKit';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
 /** The settings sub-tabs; also the accepted values of the ?tab= deep link. */
-type SettingsTab = 'applications' | 'delegations' | 'conference' | 'organizers' | 'privacy' | 'awards';
+type SettingsTab = 'applications' | 'delegations' | 'conference' | 'organizers' | 'privacy' | 'awards' | 'payments';
+
+/** The section each internal tab is drawn as in the bookmarks rail
+ *  (settingsShell.tsx), and so the ?tab= value written for it. */
+const SHELL_OF: Record<SettingsTab, ShellSection> = {
+  conference: 'general', privacy: 'visibility', applications: 'applications', delegations: 'delegations',
+  organizers: 'team', payments: 'payments', awards: 'awards',
+};
+const TAB_OF: Record<ShellSection, SettingsTab> = {
+  general: 'conference', visibility: 'privacy', applications: 'applications', delegations: 'delegations',
+  team: 'organizers', payments: 'payments', awards: 'awards',
+};
 
 interface RoleConfig {
   id: string;
@@ -175,39 +193,6 @@ interface IncomingPartnerClaim {
   created_at: string;
 }
 
-/** A role is free when neither its base fee nor any fee phase charges anything.
- *  Payment settings are hidden for a free role (they cannot apply). */
-function roleIsFree(config: Pick<RoleConfig, 'fee_amount' | 'fee_phases'>): boolean {
-  if ((Number(config.fee_amount) || 0) > 0) return false;
-  return !(config.fee_phases ?? []).some(p => (Number(p.amount) || 0) > 0);
-}
-
-// What a role may express as preferences on the apply form. Persisted per role
-// on application_role_configs.preference_mode; read by the apply flow to
-// decide which pickers (committees / countries / neither) to show. Delegate
-// and head-delegate may use any of the four; chair may only use
-// committees_only or none (see CHAIR_PREF_MODE_OPTIONS below); every other
-// role is always 'none' and never shows the preference card at all.
-const PREF_MODE_OPTIONS: { value: string; label: string; desc: string }[] = [
-  { value: 'committees_and_countries', label: 'Committees + countries', desc: 'Delegates rank committee-and-country pairings, the fullest picture for allocation.' },
-  { value: 'committees_only', label: 'Committees', desc: 'Delegates rank committees only; you assign the countries.' },
-  { value: 'countries_only', label: 'Countries', desc: 'Delegates rank countries only; committees follow from the country.' },
-  { value: 'none', label: 'None', desc: 'No preference step. You allocate everyone manually.' },
-];
-
-// Chair's cut-down version: a chair picks which committee they would like to
-// chair, never a country, so the country pairing options do not apply.
-const CHAIR_PREF_MODE_OPTIONS: { value: string; label: string; desc: string }[] = [
-  { value: 'committees_only', label: 'Choose a committee', desc: 'Chairs rank which committee they would like to chair; you assign from their ranking.' },
-  { value: 'none', label: 'None', desc: 'No preference step. You assign every chair to a committee yourself.' },
-];
-
-/** Roles whose preference_mode can be anything other than 'none'. Mirrors the
- *  database's second CHECK constraint on application_role_configs. */
-function roleCanHavePreference(role: string): boolean {
-  return role === 'delegate' || role === 'head-delegate' || role === 'chair';
-}
-
 
 // ── Constants & helpers ────────────────────────────────────────────────────
 
@@ -227,142 +212,6 @@ function roleLabel(role: string): string {
 }
 
 
-type RoleStatus = RoleStatusKind;
-
-/** Four states, not two. A role can be switched on while its window has
- *  already closed, and "enabled" alone would report that as live. */
-/** The role's application state as an icon + a plain word (CLAUDE.md §8:
- *  no uppercase status pills). Presentation only; `RoleStatus` is unchanged. */
-const ROLE_STATUS_MARK: Record<RoleStatus, { label: string; color: string; Icon: LucideIcon }> = {
-  OPEN:      { label: 'Open',      color: '#1B3828', Icon: CheckCircle2 },
-  SCHEDULED: { label: 'Scheduled', color: '#6B4F12', Icon: Clock },
-  CLOSED:    { label: 'Closed',    color: '#8B2020', Icon: XCircle },
-  OFF:       { label: 'Off',       color: '#6B5F52', Icon: MinusCircle },
-};
-
-function roleStatus(config: RoleConfig | undefined, now: number): RoleStatus {
-  if (!config?.is_enabled) return 'OFF';
-  const opensAt = config.applications_open_at ? new Date(config.applications_open_at).getTime() : null;
-  const closesAt = config.applications_close_at ? new Date(config.applications_close_at).getTime() : null;
-  if (opensAt !== null && opensAt > now) return 'SCHEDULED';
-  if (closesAt !== null && closesAt < now) return 'CLOSED';
-  return 'OPEN';
-}
-
-
-/** One step's clickable header: a numbered disc that becomes a gold check once
- *  the step has nothing unresolved, the label, its subtitle, and a chevron.
- *  Module scope on purpose: a component declared inside the page would be a new
- *  type every render, remounting QuestionBuilder and losing its editing state. */
-// The disc shows the section's NUMBER until the section has really been
-// filled out and SAVED, then the checkmark (owner, 25 Sep 2026). `complete` is
-// always a rule over saved data (the conference row after
-// refreshConferenceQuiet, the role configs after a verified write), never a
-// hard-coded true and never local unsaved input. Opening a section earns
-// nothing. The dashboard checklist reads conference_setup_status(), not this.
-function StepHeader({ n, label, sub, complete, open, onClick, status = 'idle', hint }: {
-  n: number; label: string; sub: string; complete: boolean; open: boolean; onClick: () => void;
-  status?: 'idle' | 'saving' | 'saved';
-  /** One paragraph explaining what this step decides, on a hover "i". */
-  hint?: string;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-expanded={open}
-      className="w-full flex items-center gap-3 text-left focus:outline-none"
-      style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}
-    >
-      <StepDisc n={n} complete={complete} />
-      <span className="min-w-0 flex-1">
-        <span className="flex items-center gap-1.5 font-semibold text-base" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>
-          {label}
-          {hint && <InfoHint label={`About ${label}`} text={hint} />}
-        </span>
-        <span className="block text-xs" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}>
-          {sub}
-        </span>
-      </span>
-      {status === 'saving' && (
-        <span className="text-xs flex-shrink-0" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}>
-          Saving...
-        </span>
-      )}
-      {status === 'saved' && (
-        <span className="text-xs flex items-center gap-1 flex-shrink-0" style={{ color: '#1B3828', fontFamily: "var(--font-brand), sans-serif" }}>
-          <Check size={12} strokeWidth={3} /> Saved
-        </span>
-      )}
-      <ChevronDown
-        size={18}
-        strokeWidth={2.2}
-        style={{ color: '#9A8A78', flexShrink: 0, transform: open ? 'none' : 'rotate(-90deg)', transition: 'transform 200ms ease' }}
-      />
-    </button>
-  );
-}
-
-const STEPS = [
-  {
-    n: 1, label: 'General Info', sub: 'Dates, capacity and how applications are handled',
-    hint: 'The window this role can apply in, and what happens to an application once it arrives. Nothing is public before the opening time, and the link starts working on its own the moment it passes, so you do not have to be at a keyboard. Max accepted is the ceiling on how many you will take; acceptance decides whether they are let in automatically or wait for you to review them; payment decides how early they can pay.',
-  },
-  {
-    n: 2, label: 'Fees', sub: 'What this role costs and when the price changes',
-    hint: 'One flat price, plus optional phases if the price moves over time: an early-bird window, a standard window, a late window. Whichever phase covers today is the price an applicant is quoted and charged. When no phase covers today, the flat fee applies. Phases may not overlap, because two prices for one day has no answer.',
-  },
-  {
-    n: 3, label: 'Form', sub: 'The questions this role answers when applying',
-    hint: 'The questions this role fills in when they apply: short answers, long answers, choices, uploads. Each role has its own form, because an advisor and a delegate have almost nothing in common to say. Reordering and rewording is safe at any time; answers already submitted are kept exactly as they were given.',
-  },
-  {
-    n: 4, label: 'After submitting', sub: 'An optional message shown once, right after this role applies',
-    hint: 'This appears as a small card in the corner of the confirmation screen for about twenty seconds, right after someone submits this role. It is the last thing they read before they leave, so it is the right place for what to do next, rather than for anything they will need later, because it is not saved anywhere they can go back to. If there is something they must keep, an email is the right tool for that.',
-  },
-] as const;
-
-/** Fees (step 2) doesn't apply to secretariat or staff: nobody charges their
- *  own volunteers or their own secretariat, and the database already seeds
- *  fee_amount 0 for both. Used both by the render (which card to show) and by
- *  auto-advance (which step to land on next), so the two never disagree. */
-function stepsForRole(role: string): typeof STEPS[number][] {
-  return role === 'secretariat' || role === 'staff' ? STEPS.filter(s => s.n !== 2) : [...STEPS];
-}
-
-/** UTC instant from the database to the local wall-clock value a
- *  datetime-local input expects. The old version sliced the ISO string,
- *  showing a UTC instant as if its digits were local time. */
-function toDatetimeLocal(iso: string | null): string {
-  if (!iso) return '';
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return '';
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-}
-
-/** The inverse. A datetime-local value carries no zone, so `new Date` reads
- *  it as local wall-clock time, which is what the organizer meant, and we
- *  store the resulting instant as UTC. */
-function fromDatetimeLocal(value: string): string | null {
-  if (!value) return null;
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return null;
-  return d.toISOString();
-}
-
-/** IANA zone name for the label under the window fields, e.g. Europe/London. */
-function localZoneLabel(): string {
-  try {
-    return Intl.DateTimeFormat().resolvedOptions().timeZone || 'your local time';
-  } catch {
-    return 'your local time';
-  }
-}
-
-// Standard failure copy for every verified-write save in this page: a write
-// that returns an error OR affects zero rows (RLS silently filtered it, or
-// the row vanished) is treated identically, never a silent false success.
 /** Fixed-viewport placement for a portaled floating layer. Clamps horizontally
  *  so it never runs off the right edge, and flips above the trigger when there
  *  is not enough room below. Never relies on an ancestor's overflow. */
@@ -531,7 +380,7 @@ function CopyFormMenu({ roles, onPick }: { roles: string[]; onPick: (role: strin
               boxShadow: '0 12px 32px rgba(27,56,40,0.18)', padding: 6,
             }}
           >
-            <p className="px-2.5 pt-1 pb-1.5 text-[10px] font-bold" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif", letterSpacing: '0.1em' }}>
+            <p className="px-2.5 pt-1 pb-1.5 text-[12px] font-bold" style={{ color: '#6E6152', fontFamily: "var(--font-brand), sans-serif", letterSpacing: '0.1em' }}>
               COPY TO
             </p>
             {roles.map(role => (
@@ -586,32 +435,80 @@ export default function SettingsPage() {
   // secretariat accept redirect uses (?tab=team&highlight=<organizer id>) —
   // same tab as 'organizers', named the way a person reading the URL would
   // expect rather than the internal section key.
-  const initialTab = ((): SettingsTab => {
-    const t = searchParams.get('tab') ?? searchParams.get('section');
-    if (t === 'team') return 'organizers';
-    return t === 'delegations' || t === 'conference' || t === 'organizers' || t === 'privacy' || t === 'awards' ? t : 'applications';
+  // The section shown is read from the URL every render, so the back button,
+  // the bookmarks rail and every deep link agree (settingsShell.tsx).
+  const tabParam = searchParams.get('tab') ?? searchParams.get('section');
+  const activeTab: SettingsTab = (() => {
+    // New names (general, visibility, team, payments) and every old one
+    // (conference, privacy, organizers, applications, delegations, awards).
+    if (tabParam === 'team' || tabParam === 'organizers') return 'organizers';
+    if (tabParam === 'general' || tabParam === 'conference') return 'conference';
+    if (tabParam === 'visibility' || tabParam === 'privacy') return 'privacy';
+    if (tabParam === 'delegations' || tabParam === 'awards' || tabParam === 'applications' || tabParam === 'payments') return tabParam;
+    if ((ROLES as readonly string[]).includes(searchParams.get('role') ?? '') || searchParams.get('step')) return 'applications';
+    if (searchParams.get('focus')) return 'conference';
+    if (searchParams.get('highlight')) return 'organizers';
+    // No ?tab=: General, the first bookmark (Oct 2026: "too much focused on
+    // applications"; Applications is one section among equals now).
+    return 'conference';
   })();
-  const [activeTab, setActiveTab] = useState<SettingsTab>(initialTab);
+  /** A render-time clock for the sentences ("open now", "until 3 Apr"). */
+  const nowMs = useNow();
+  const showHome = activeTab === 'applications';
+  function openSection(next: SettingsTab | null) {
+    const params = new URLSearchParams(searchParams.toString());
+    for (const k of ['tab', 'section', 'focus', 'highlight', 'step']) params.delete(k);
+    if (next !== 'applications') params.delete('role');
+    if (next) params.set('tab', SHELL_OF[next]);
+    const qs = params.toString();
+    router.push(`${window.location.pathname}${qs ? `?${qs}` : ''}`);
+  }
   // Which role's configuration the Applications section is showing. Derived
   // from ?role= rather than held in state, so a deep link lands on the right
   // role and the back button walks back through them.
+  //
+  // The role's pop-up (roleSetup.tsx) is open when ?role= names a role, or
+  // when an old link carries ?tab=applications&step= with no role (it opens
+  // Delegates, the role most links meant). ?tab=applications alone shows the
+  // Applications section.
   const roleParam = searchParams.get('role');
-  const activeRole: string = (ROLES as readonly string[]).includes(roleParam ?? '') ? (roleParam as string) : ROLES[0];
-  function setActiveRole(next: string) {
-    const params = new URLSearchParams(searchParams.toString());
-    params.set('role', next);
-    router.push(`?${params.toString()}`, { scroll: false });
+  const sheetRole: string | null = showHome
+    ? ((ROLES as readonly string[]).includes(roleParam ?? '') ? (roleParam as string)
+      : searchParams.get('step') ? 'delegate' : null)
+    : null;
+  const activeRole: string = sheetRole ?? 'delegate';
+  /** Set when this page itself pushed the pop-up's URL, so closing it can
+   *  step back instead of stacking another history entry. */
+  const sheetPushedRef = useRef(false);
+  // Closed some other way (the browser's Back): the next close must not step
+  // back again, which would leave Settings.
+  useEffect(() => { if (!sheetRole) sheetPushedRef.current = false; }, [sheetRole]);
+  /** The control panel's Edit: one role's pop-up, optionally scrolled to a
+   *  section (?step=, see roleSetup.tsx). */
+  function openRoleSetup(role: string, step?: string) {
+    const params = new URLSearchParams();
+    params.set('tab', 'applications');
+    params.set('role', role);
+    if (step) params.set('step', step);
+    sheetPushedRef.current = true;
+    router.push(`${window.location.pathname}?${params.toString()}`, { scroll: false });
   }
-  // Applications splits in two: the per-role setup (bookmarks + three steps)
-  // At most one step open. 0 means all collapsed, which is where auto-advance
-  // leaves you after the last step.
-  // Every section starts CLOSED when a tab opens (owner, 25 Sep 2026); a deep
-  // link (?focus=…) opens the card it targets.
-  const [openStep, setOpenStep] = useState<number>(0);
+  function closeRoleSheet() {
+    // Write any questions still waiting on their debounce before the form goes.
+    flushRef.current();
+    if (sheetPushedRef.current) {
+      sheetPushedRef.current = false;
+      router.back();
+      return;
+    }
+    router.replace(`${window.location.pathname}?tab=applications`, { scroll: false });
+  }
+  // Roles the organiser added with "Add a role" are listed even before they
+  // are set up. Per browser (a convenience, never state other people need):
+  // once a role is switched on, edited or applied to, panelKit.roleIsSetUp
+  // lists it for everyone anyway.
+  const [addedRoles, setAddedRoles] = useState<string[]>([]);
   const [linkCopied, setLinkCopied] = useState(false);
-  // Conference tab: a separate "one open at a time" cursor, independent of
-  // the applications tab's openStep, so the two folds cannot fight.
-  const [openConfSection, setOpenConfSection] = useState<number>(0);
   const [confLinkCopied, setConfLinkCopied] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -678,11 +575,6 @@ export default function SettingsPage() {
   const [copyPhasesOpen, setCopyPhasesOpen] = useState(false);
   const [copyPhasesBusy, setCopyPhasesBusy] = useState(false);
   const phaseOfferedFor = useRef<Set<string>>(new Set());
-  // Roles whose first-run walkthrough has been dismissed, kept in localStorage
-  // per conference. Hydrated after mount so the server render and the first
-  // client render agree.
-  const [introDone, setIntroDone] = useState<Set<string>>(new Set());
-  const introHydrated = useRef(false);
 
   // Delegation allocation swaps (Applications tab)
   const [swapMode, setSwapMode] = useState('request');
@@ -703,6 +595,9 @@ export default function SettingsPage() {
   // builder when rewording a question those applicants may have already
   // answered. Never blocks an edit; see QuestionBuilder's hasApplications prop.
   const [rolesWithApplications, setRolesWithApplications] = useState<Set<string>>(new Set());
+  /** The same count per role, for "214 applied" on the control panel and the
+   *  role set-up. null until the first read lands. */
+  const [roleAppCounts, setRoleAppCounts] = useState<Record<string, number> | null>(null);
   const { confirm, modal: confirmModal } = useConfirmModal();
   const [organizers, setOrganizers] = useState<Organizer[]>([]);
   // ── Team highlight, from the secretariat-accept redirect ─────────────────
@@ -732,8 +627,6 @@ export default function SettingsPage() {
   const intentFocusedRef = useRef(false);
   useEffect(() => {
     if (focusParam !== 'intent' || activeTab !== 'conference' || intentFocusedRef.current) return;
-    // The card lives in section 5, which starts closed: open it first.
-    if (openConfSection !== 5) { setOpenConfSection(5); return; }
     const el = document.getElementById('intent-card');
     if (!el) return;
     intentFocusedRef.current = true;
@@ -741,7 +634,7 @@ export default function SettingsPage() {
     setIntentPulse(true);
     const t = setTimeout(() => setIntentPulse(false), 2600);
     return () => clearTimeout(t);
-  }, [focusParam, activeTab, conference, openConfSection]);
+  }, [focusParam, activeTab, conference]);
   // ── Dates deep link, from the dashboard's publish gate and setup checklist ─
   // ?tab=conference&focus=dates scrolls the date fields into view and rings
   // them once, same shape as the intent deep link above. Reuses focusParam,
@@ -750,8 +643,6 @@ export default function SettingsPage() {
   const datesFocusedRef = useRef(false);
   useEffect(() => {
     if (focusParam !== 'dates' || activeTab !== 'conference' || datesFocusedRef.current) return;
-    // The date fields live in section 3 (Conference Details), closed by default.
-    if (openConfSection !== 3) { setOpenConfSection(3); return; }
     const el = document.getElementById('dates-card');
     if (!el) return;
     datesFocusedRef.current = true;
@@ -759,7 +650,7 @@ export default function SettingsPage() {
     setDatesPulse(true);
     const t = setTimeout(() => setDatesPulse(false), 2600);
     return () => clearTimeout(t);
-  }, [focusParam, activeTab, conference, openConfSection]);
+  }, [focusParam, activeTab, conference]);
   // The form builder edits whichever role the tab is on.
   const selectedRole = activeRole;
   const [inviteEmail, setInviteEmail] = useState('');
@@ -1046,10 +937,11 @@ export default function SettingsPage() {
         .eq('conference_id', conference.id)
         .eq('role', role)
         .in('status', ['submitted', 'accepted', 'assigned', 'checked-in']);
-      return { role, hasApplications: (count ?? 0) > 0 };
+      return { role, count: count ?? 0, hasApplications: (count ?? 0) > 0 };
     }));
     if (seq !== rolesWithApplicationsSeq.current) return;
     setRolesWithApplications(new Set(results.filter(r => r.hasApplications).map(r => r.role)));
+    setRoleAppCounts(Object.fromEntries(results.map(r => [r.role, r.count])));
   }, [conference, accessToken]);
 
   const loadOrganizers = useCallback(async () => {
@@ -1366,51 +1258,6 @@ export default function SettingsPage() {
     }
   }
 
-  // ── First-run walkthrough bookkeeping ────────────────────────────────────
-  // A role that has never been configured gets three illustrated slides
-  // explaining what its three steps decide, before the form itself. Dismissed
-  // state is per conference and per role, in localStorage — it is a first-run
-  // courtesy, not a preference worth a database column.
-
-  const introStorageKey = conference ? `gv-role-setup-intro-${conference.id}` : null;
-
-  useEffect(() => {
-    if (!introStorageKey || introHydrated.current) return;
-    introHydrated.current = true;
-    try {
-      const raw = window.localStorage.getItem(introStorageKey);
-      if (raw) setIntroDone(new Set(JSON.parse(raw) as string[]));
-    } catch { /* private mode, or corrupt value: show the intro, harmless */ }
-  }, [introStorageKey]);
-
-  function dismissIntro(role: string) {
-    setIntroDone(prev => {
-      const next = new Set(prev).add(role);
-      if (introStorageKey) {
-        try { window.localStorage.setItem(introStorageKey, JSON.stringify([...next])); } catch { /* ignore */ }
-      }
-      return next;
-    });
-  }
-
-  /** True when nothing about this role has been decided yet: no window, no
-   *  cap, no fee, no questions. A role part-way through setup is NOT untouched
-   *  — the walkthrough would be an interruption at that point. */
-  function roleIsUntouched(rc: RoleConfig | undefined): boolean {
-    if (!rc) return false;
-    return (
-      // Switching the role on is the loudest possible "I have touched this",
-      // and it is the one field the header shows rather than the steps.
-      !rc.is_enabled &&
-      !rc.applications_open_at &&
-      !rc.applications_close_at &&
-      rc.max_accepted == null &&
-      Number(rc.fee_amount) === 0 &&
-      (rc.fee_phases ?? []).length === 0 &&
-      (rc.custom_questions ?? []).length === 0
-    );
-  }
-
   const conferenceTz = useConferenceTimezone(conference?.id);
   const timelineCtx = {
     timeZone: conferenceTz,
@@ -1485,8 +1332,8 @@ export default function SettingsPage() {
 
   /** Copy this role's whole fee-phase ladder (and its flat fee, which the
    *  phases fall back to) onto the chosen roles. */
-  async function copyPhasesToRoles(targets: string[]) {
-    const source = roleConfigs.find(rc => rc.role === activeRole);
+  async function copyPhasesToRoles(targets: string[], sourceRole: string = activeRole) {
+    const source = roleConfigs.find(rc => rc.role === sourceRole);
     if (!conference || !source || copyPhasesBusy) return;
     setCopyPhasesBusy(true);
     clearErr('settings-applications');
@@ -1526,6 +1373,45 @@ export default function SettingsPage() {
     setCopyPhasesOpen(false);
     setConfigVersion(v => v + 1);
     notifyOk(`Copied to ${targets.length} ${targets.length === 1 ? 'role' : 'roles'}`, 'settings-copy');
+  }
+
+  /** The rules for every role (Settings → Applications, panelKit
+   *  GENERAL_FIELDS): one value written to several roles in ONE update, the
+   *  same verified pattern as saveRoleConfig (optimistic, every row counted,
+   *  rolled back and explained when it did not land). */
+  async function saveRolesTogether(roles: string[], updates: Partial<RoleConfig>) {
+    if (!conference || roles.length === 0) return;
+    const previous = roleConfigs;
+    setRoleConfigs(prev => prev.map(rc => (roles.includes(rc.role) ? { ...rc, ...updates } : rc)));
+    clearErr('settings-applications');
+    markStep(1, 'saving');
+    const supabase = await getFreshAuthedClient();
+    if (!supabase) {
+      setRoleConfigs(previous);
+      markStep(1, 'idle');
+      notifyErr('Your session has expired, please refresh and sign in again.', 'settings-applications');
+      return;
+    }
+    const { data, error } = await supabase
+      .from('application_role_configs')
+      .update(updates)
+      .eq('conference_id', conference.id)
+      .in('role', roles)
+      .select('role');
+    if (error || !data || data.length !== roles.length) {
+      setRoleConfigs(previous);
+      markStep(1, 'idle');
+      notifyErr(error ? friendlyError(error, "Couldn't save that for every role. Please try again.") : "Couldn't save that for every role. Please refresh and try again.", 'settings-applications');
+      if (data && data.length > 0) void loadRoleConfigs();
+      return;
+    }
+    markStep(1, 'saved');
+  }
+
+  /** The roles the Applications page lists (panelKit.listedRoles). */
+  function listedRoleConfigs(extra: readonly string[] = addedRoles): RoleConfig[] {
+    const ordered = ROLES.map(r => roleConfigs.find(rc => rc.role === r)).filter((x): x is RoleConfig => !!x);
+    return listedRoles(ordered, roleAppCounts, extra) as RoleConfig[];
   }
 
   // Toggle that writes immediately (no dedicated save button): shows an
@@ -2308,33 +2194,7 @@ export default function SettingsPage() {
   const selectedRoleHasApplications = rolesWithApplications.has(selectedRole);
   const otherRoles = ROLES.filter(r => r !== selectedRole);
 
-  // ── Step completion ──────────────────────────────────────────────────────
-  // "Nothing unresolved", not "every field filled". Max accepted, the phase
-  // list and the custom questions are all legitimately empty, so requiring
-  // them would leave a step permanently unticked for a correct setup.
   const activeRoleConfig = roleConfigs.find(rc => rc.role === activeRole);
-  // Both ends set AND in the right order. DatePicker's `min` only disables
-  // whole days, so "opens 16 Jul 09:00, closes 16 Jul 08:00" gets through the
-  // control and has to be caught here — otherwise the step ticks green on a
-  // window that closes an hour before it opens.
-  const windowBackwards = !!(
-    activeRoleConfig?.applications_open_at &&
-    activeRoleConfig?.applications_close_at &&
-    new Date(activeRoleConfig.applications_close_at).getTime() <= new Date(activeRoleConfig.applications_open_at).getTime()
-  );
-  const step1Complete = !!(activeRoleConfig?.applications_open_at && activeRoleConfig?.applications_close_at) && !windowBackwards;
-  const step2Complete = !!activeRoleConfig?.fee_currency
-    && !(activeRoleConfig?.fee_phases ?? []).some(p => !p.start_date || !p.end_date);
-  // Form (3) and After submitting (4) are optional, so they are "complete"
-  // only once this role has SAVED content: at least one custom question, a
-  // submission message. An optional section a conference does not use keeps
-  // its number, which is fine (owner, 25 Sep 2026).
-  const step3Complete = normalizeBlocks(activeRoleConfig?.custom_questions ?? []).length > 0;
-  const step4Complete = !!activeRoleConfig?.submission_message?.trim();
-  const stepComplete = useMemo(
-    () => ({ 1: step1Complete, 2: step2Complete, 3: step3Complete, 4: step4Complete } as Record<number, boolean>),
-    [step1Complete, step2Complete, step3Complete, step4Complete],
-  );
 
   // ── After-submitting message (step 4) ───────────────────────────────────
   // Local, debounced input state — the same reason QuestionBuilder is
@@ -2350,11 +2210,25 @@ export default function SettingsPage() {
   const submissionLinkLabelRef = useRef('');
   const submissionLinkUrlRef = useRef('');
   const submissionDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** The pending debounced save, so a role change (closing the role's pop-up
+   *  puts the page back on Delegates) writes it BEFORE the fields are resynced
+   *  to the next role. Without this the timer fired after the resync and wrote
+   *  the next role's message onto the role that was being edited. */
+  const submissionFlushRef = useRef<(() => void) | null>(null);
 
   // Resync from the saved row only when the active role actually changes —
   // never on every unrelated re-render, which would otherwise fight typing.
   useEffect(() => {
     if (submissionSyncedRoleRef.current === selectedRole) return;
+    if (submissionDebounceRef.current) {
+      clearTimeout(submissionDebounceRef.current);
+      submissionDebounceRef.current = null;
+      submissionFlushRef.current?.();
+    }
+    // Wait for the row: marking the role synced before roleConfigs lands
+    // would leave the fields blank for good (and the next keystroke would
+    // save over the stored message).
+    if (!activeRoleConfig) return;
     submissionSyncedRoleRef.current = selectedRole;
     const message = activeRoleConfig?.submission_message ?? '';
     const label = activeRoleConfig?.submission_link_label ?? '';
@@ -2377,8 +2251,9 @@ export default function SettingsPage() {
    *  fields too, because a button needs words around it. */
   function scheduleSubmissionSave() {
     if (submissionDebounceRef.current) clearTimeout(submissionDebounceRef.current);
-    submissionDebounceRef.current = setTimeout(() => {
+    const run = () => {
       submissionDebounceRef.current = null;
+      submissionFlushRef.current = null;
       const message = submissionMessageRef.current.trim();
       let label = submissionLinkLabelRef.current.trim();
       let url = submissionLinkUrlRef.current.trim();
@@ -2394,45 +2269,10 @@ export default function SettingsPage() {
         submission_link_label: label || null,
         submission_link_url: url || null,
       });
-    }, 800);
+    };
+    submissionFlushRef.current = run;
+    submissionDebounceRef.current = setTimeout(run, 800);
   }
-
-  const stepPanelRef = useRef<HTMLDivElement | null>(null);
-  const lastOpenedRef = useRef<string | null>(null);
-  const wasCompleteRef = useRef<Record<string, boolean>>({});
-
-  // Auto-advance, deliberately narrow: only on the incomplete → complete edge,
-  // only for the step actually open, and never while the person is still in it.
-  useEffect(() => {
-    const key = `${activeRole}-${openStep}`;
-    const complete = stepComplete[openStep] ?? true;
-    if (lastOpenedRef.current !== key) {
-      // Just opened, or the role changed. Record the baseline and stop, so
-      // reopening an already-complete step cannot bounce straight back out.
-      lastOpenedRef.current = key;
-      wasCompleteRef.current[key] = complete;
-      return;
-    }
-    const was = wasCompleteRef.current[key];
-    wasCompleteRef.current[key] = complete;
-    // Only General Info and Fees advance. Form and After submitting became
-    // real rules on 25 Sep 2026 (a saved question, a saved message), and a
-    // first saved question must not move the panel out from under the person
-    // writing it.
-    if (was || !complete || openStep > 2) return;
-    // A save can settle while focus is still inside the panel (blur one field,
-    // land on the next). Moving the panel out from under that is hostile.
-    if (stepPanelRef.current && stepPanelRef.current.contains(document.activeElement)) return;
-    // The step after this one, not the next unfinished one: Form is always
-    // complete, so hunting for an incomplete step left anyone finishing Fees
-    // staring at a step that had just closed itself. Finishing the last step
-    // advances to nothing, which is the end of the flow.
-    // Past the last step there is nowhere to go, and 0 (all collapsed) is now
-    // a legal resting place rather than a step stuck open behind you.
-    const roleSteps = stepsForRole(activeRole);
-    const next = roleSteps[roleSteps.findIndex(st => st.n === openStep) + 1];
-    setOpenStep(next ? next.n : 0);
-  }, [activeRole, openStep, stepComplete]);
 
   function handleCopyApplicationLink() {
     if (!conference) return;
@@ -2595,11 +2435,6 @@ export default function SettingsPage() {
   // follow the organiser to another role's form.
   useEffect(() => { setBlocksBlocked(''); }, [selectedRole]);
 
-  // Leaving the Form step. Its panel is about to collapse, so write now.
-  useEffect(() => {
-    if (openStep !== 3) flushRef.current();
-  }, [openStep]);
-
   // Never leave a "Saved" timer running past unmount.
   useEffect(() => {
     const timers = savedTimersRef.current;
@@ -2617,20 +2452,74 @@ export default function SettingsPage() {
     return { ...block, id: crypto.randomUUID() };
   }
 
-  async function handleCopyFormTo(targetRole: string) {
+  async function handleCopyFormTo(targetRole: string, sourceRole: string = selectedRole) {
     const targetBlocks = normalizeBlocks(roleConfigs.find(rc => rc.role === targetRole)?.custom_questions ?? []);
     if (targetBlocks.length > 0) {
       const { confirmed } = await confirm({
         title: `Overwrite ${roleLabel(targetRole)}'s questions?`,
-        body: `${roleLabel(targetRole)} already has custom questions. Copying will replace them with a copy of ${roleLabel(selectedRole)}'s form.`,
+        body: `${roleLabel(targetRole)} already has custom questions. Copying will replace them with a copy of ${roleLabel(sourceRole)}'s form.`,
         confirmLabel: 'Overwrite',
         danger: true,
       });
       if (!confirmed) return;
     }
-    const copiedBlocks = currentBlocks.map(cloneBlockWithNewId);
+    const sourceBlocks = sourceRole === selectedRole
+      ? currentBlocks
+      : normalizeBlocks(roleConfigs.find(rc => rc.role === sourceRole)?.custom_questions ?? []);
+    const copiedBlocks = sourceBlocks.map(cloneBlockWithNewId);
     await saveRoleConfig(targetRole, { custom_questions: copiedBlocks });
     notifyOk(`Copied to ${roleLabel(targetRole)}`, 'settings-copy');
+  }
+
+  // ── Add a role (control panel) ──────────────────────────────────────────
+  const addedRolesKey = conference ? `gavelling-settings-added-roles:${conference.id}` : null;
+  useEffect(() => {
+    if (!addedRolesKey) return;
+    let stored: string[] = [];
+    try {
+      const raw = window.localStorage.getItem(addedRolesKey);
+      const parsed: unknown = raw ? JSON.parse(raw) : [];
+      if (Array.isArray(parsed)) stored = parsed.filter((r): r is string => typeof r === 'string' && (ROLES as readonly string[]).includes(r));
+    } catch { /* storage blocked: the rule in roleIsSetUp still lists every set-up role */ }
+    setAddedRoles(stored);
+  }, [addedRolesKey]);
+
+  /** "Add a role": list it, copy another role's questions and prices when
+   *  asked (the same two writes as "Copy form" and "Use this price for
+   *  another role"), then open its pop-up. Nothing is written for "Start
+   *  from scratch": every role already has its row (handle_new_conference). */
+  async function handleAddRole(role: string, copyFrom: string | null) {
+    // The rules for every role the others already share (who gets in,
+    // paying, what they rank) come with the new role, so it does not start
+    // out "different per role" by accident.
+    const peers = listedRoleConfigs().filter(rc => rc.role !== role);
+    const target = roleConfigs.find(rc => rc.role === role);
+    const inherit: Partial<RoleConfig> = {};
+    if (target) {
+      for (const f of GENERAL_FIELDS) {
+        if (!inGeneralScope(f, role)) continue;
+        const a = generalAnswer(peers, f);
+        if (a.mixed || a.value === null) continue;
+        const current = f === 'preference_mode' ? (target.preference_mode || 'none') : f === 'payment_timing' ? target.payment_timing : target[f] === true;
+        if (current !== a.value) (inherit as Record<string, unknown>)[f] = a.value;
+      }
+    }
+    setAddedRoles(prev => {
+      const next = prev.includes(role) ? prev : [...prev, role];
+      try { if (addedRolesKey) window.localStorage.setItem(addedRolesKey, JSON.stringify(next)); } catch { /* per-browser convenience only */ }
+      return next;
+    });
+    if (Object.keys(inherit).length > 0) await saveRoleConfig(role, inherit);
+    if (copyFrom) {
+      const source = roleConfigs.find(rc => rc.role === copyFrom);
+      if (source) {
+        if (normalizeBlocks(source.custom_questions ?? []).length > 0) await handleCopyFormTo(role, copyFrom);
+        const priced = role !== 'secretariat' && role !== 'staff' && copyFrom !== 'secretariat' && copyFrom !== 'staff';
+        const charges = (Number(source.fee_amount) || 0) > 0 || (source.fee_phases ?? []).some(p => (Number(p.amount) || 0) > 0);
+        if (priced && charges) await copyPhasesToRoles([role], copyFrom);
+      }
+    }
+    openRoleSetup(role);
   }
 
   async function handleBannerUpload(file: File) {
@@ -2991,25 +2880,10 @@ export default function SettingsPage() {
   // `conference` only changes once refreshConferenceQuiet() confirms a write.
   const view: Conference = conference;
 
-  // Applications can't be configured or opened until the conference's
-  // payment method is actually usable by a delegate, not merely on file:
-  // manual needs a link or note, Stripe needs onboarding complete. Even
-  // free conferences need a method (they pick Manual and note it's free)
-  // so the /pay page and PledgeInvoicingCard always have somewhere to
-  // point delegates. Mirrors conference_payments_ready in the database.
-  const applicationsGated = activeTab === 'applications' && paymentGateBlocks(conference);
+  /** A field in a settings row: white, 16px so iOS never zooms. */
+  const FIELD: React.CSSProperties = { ...inputStyle, fontSize: 16, backgroundColor: '#FFFFFF', padding: '9px 12px' };
 
-  // Inner grouped sub-card. These sit *inside* the raised floating panel, so
-  // they read as quiet content groups (thicker 1.5px edge, a whisper of warm
-  // shadow) and let the panel itself stay the protagonist surface.
-  const cardStyle: React.CSSProperties = {
-    backgroundColor: '#FFFDF9',
-    border: '1.5px solid #D8CDB6',
-    borderRadius: '16px',
-    padding: '24px',
-    marginBottom: '20px',
-    boxShadow: '0 1px 2px rgba(27,56,40,0.04)',
-  };
+
 
   // ── Applications → General ──────────────────────────────────────────────
   // The decisions that are the same for everybody, gathered in one place. Two
@@ -3024,1235 +2898,427 @@ export default function SettingsPage() {
   //     reads them as one answer and writes to every role at once. When the
   //     roles disagree, it says so instead of picking a winner.
 
-  // ── Section rail definition ──────────────────────────────────────────────
-  // Mirrors the manage layout rail's language: lucide icon + Outfit label +
-  // forest active state. Drives the same `activeTab` state the content blocks
-  // already switch on, no logic change, purely the switcher's new skin.
-  const SECTIONS: {
-    key: SettingsTab;
-    label: string;
-    hint: string;
-    icon: typeof SlidersHorizontal;
-  }[] = [
-    { key: 'applications', label: 'Applications', hint: 'Roles, windows & questions', icon: SlidersHorizontal },
-    { key: 'delegations',  label: 'Delegations',  hint: 'Swaps & leader imports',     icon: UsersRound },
-    { key: 'conference',   label: 'Conference',   hint: 'Identity, media & fee',      icon: Building2 },
-    { key: 'organizers',   label: 'Organizers',   hint: 'Team & permissions',         icon: Users2 },
-    { key: 'privacy',      label: 'Privacy',       hint: 'Publishing & lineage',       icon: ShieldCheck },
-    { key: 'awards',       label: 'Awards',        hint: 'Coming soon',                icon: Trophy },
-  ];
-  const activeSection = SECTIONS.find(s => s.key === activeTab) ?? SECTIONS[0];
+  // ── The redesigned shell (Oct 2026) ─────────────────────────────────────
+  // Settings opens on the organiser's questions (SettingsHome); a question
+  // opens its section, which is the old tab's content, unchanged. Everything
+  // the cards say is derived from state this page already loads.
+  const settingsSnap: SettingsSnapshot = {
+    conference: view,
+    roles: roleConfigs,
+    organizerCount: organizers.length,
+    pendingInviteCount: pendingInvites.length,
+    now: nowMs,
+  };
+  // The live preview sits beside "What is your conference?" on wide screens,
+  // so an edit to the page shows on the card the moment it saves.
+  const sidePreview = activeTab === 'conference';
 
-  return (
-    // The team tree is the one tab that earns the extra width: it lays its
-    // members out in a grid, so a wider panel means fewer wrapped rows and a
-    // shallower, more legible hierarchy. Every other tab is a reading column
-    // and stays at 1080.
-    <div className="px-4 sm:px-6 md:px-10 py-8" style={{ maxWidth: activeTab === 'organizers' ? '1400px' : '1080px' }}>
-      {/* Header */}
-      <p className="text-xs mb-2" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif", fontWeight: 700, letterSpacing: '0.12em' }}>
-        {view.acronym} / Settings
-      </p>
-      <h1 className="font-black text-2xl mb-7" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>
-        Settings
-      </h1>
-
-      {/* Rail + floating panel shell */}
-      <div className="flex flex-col md:flex-row md:items-start" style={{ gap: '24px' }}>
-
-        {/* ── Section rail (desktop: vertical glass rail; mobile: horizontal scroller) ── */}
-        <nav
-          aria-label="Settings sections"
-          className="md:flex-shrink-0 md:sticky min-w-0 w-full md:w-[220px]"
-          style={{ top: '24px' }}
-        >
-          <div
-            className="flex md:flex-col overflow-x-auto md:overflow-visible"
-            style={{
-              gap: '6px',
-              padding: '10px',
-              borderRadius: '20px',
-              backgroundColor: 'rgba(250,248,243,0.72)',
-              backdropFilter: 'blur(16px) saturate(1.3)',
-              WebkitBackdropFilter: 'blur(16px) saturate(1.3)',
-              border: '1.5px solid rgba(216,205,182,0.9)',
-              boxShadow: '0 10px 34px rgba(27,56,40,0.10), 0 1px 3px rgba(27,56,40,0.05)',
-              scrollbarWidth: 'none',
-            }}
-          >
-            {SECTIONS.map(section => {
-              const active = activeTab === section.key;
-              const Icon = section.icon;
-              return (
-                <button
-                  key={section.key}
-                  onClick={() => setActiveTab(section.key)}
-                  className="flex items-center flex-shrink-0 md:w-full text-left focus:outline-none transition-colors"
-                  style={{
-                    gap: '11px',
-                    padding: '10px 13px',
-                    borderRadius: '13px',
-                    backgroundColor: active ? '#1B3828' : 'transparent',
-                    color: active ? '#EED98A' : '#7A6E5E',
-                    boxShadow: active ? '0 5px 16px rgba(27,56,40,0.26)' : 'none',
-                    cursor: 'pointer',
-                    whiteSpace: 'nowrap',
-                  }}
-                  onMouseEnter={(e) => { if (!active) { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.06)'; (e.currentTarget as HTMLElement).style.color = '#1C1410'; } }}
-                  onMouseLeave={(e) => { if (!active) { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; (e.currentTarget as HTMLElement).style.color = '#7A6E5E'; } }}
-                >
-                  <span
-                    className="flex items-center justify-center flex-shrink-0"
-                    style={{
-                      width: '30px', height: '30px', borderRadius: '9px',
-                      backgroundColor: active ? 'rgba(238,217,138,0.16)' : 'rgba(27,56,40,0.06)',
-                      border: active ? '1px solid rgba(238,217,138,0.28)' : '1px solid rgba(27,56,40,0.08)',
-                    }}
-                  >
-                    <Icon size={16} strokeWidth={2.1} style={{ color: active ? '#EED98A' : '#6E5F4E' }} />
-                  </span>
-                  <span className="hidden md:flex flex-col min-w-0">
-                    <span style={{ fontFamily: "var(--font-brand), sans-serif", fontSize: '13.5px', fontWeight: 700, letterSpacing: '0.01em' }}>
-                      {section.label}
-                    </span>
-                    <span style={{ fontFamily: "var(--font-brand), sans-serif", fontSize: '11px', fontWeight: 500, color: active ? 'rgba(238,217,138,0.72)' : '#9A8A78', marginTop: '1px' }}>
-                      {section.hint}
-                    </span>
-                  </span>
-                  <span className="md:hidden" style={{ fontFamily: "var(--font-brand), sans-serif", fontSize: '13px', fontWeight: 700 }}>
-                    {section.label}
-                  </span>
-                </button>
-              );
-            })}
+  // Settings opens on the control panel (controlPanel.tsx, Oct 2026): the
+  // three status tiles, who can apply, and everything else.
+  // The pop-up for one role (roleSetup.tsx). Every field, validation,
+  // autosave and write below is this page's own, passed in unchanged.
+  const sheetConfig = sheetRole ? roleConfigs.find(rc => rc.role === sheetRole) : undefined;
+  const sheetSaveStates = Object.values(stepSaveState);
+  const roleSheet = sheetRole ? (
+    <RoleSheet
+      key={sheetRole}
+      conference={view}
+      role={sheetRole}
+      config={sheetConfig}
+      now={nowMs}
+      appliedCount={roleAppCounts ? (roleAppCounts[sheetRole] ?? 0) : null}
+      configVersion={configVersion}
+      saveState={sheetSaveStates.includes('saving') ? 'saving' : sheetSaveStates.includes('saved') ? 'saved' : 'idle'}
+      timelineCtx={timelineCtx}
+      timelineMsg={timelineMsg?.role === sheetRole ? timelineMsg : null}
+      initialStep={searchParams.get('step')}
+      linkCopied={linkCopied}
+      onClose={closeRoleSheet}
+      onSave={(updates) => { void saveRoleConfig(sheetRole, updates as Partial<RoleConfig>); }}
+      onSaveTimeline={(change, where) => { saveTimeline(sheetRole, change, where); }}
+      onUpdatePhase={(phases, idx, patch) => updateFeePhase(sheetRole, phases, idx, patch)}
+      onCopyPhases={() => setCopyPhasesOpen(true)}
+      onCopyLink={handleCopyApplicationLink}
+      peers={listedRoleConfigs(sheetRole && !addedRoles.includes(sheetRole) ? [...addedRoles, sheetRole] : addedRoles) as RoleSetupConfig[]}
+      formSlot={
+        <>
+          <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">
+            <CopyFormMenu roles={otherRoles} onPick={handleCopyFormTo} />
           </div>
-        </nav>
-
-        {/* ── Floating elevated content panel ── */}
-        <section
-          className="flex-1 min-w-0"
-          style={activeTab === 'organizers'
-            // The team is a gallery of faces, and a gallery wants a wall, not a
-            // sheet of paper. No panel, no border, no shadow — the portraits sit
-            // straight on the ivory canvas with the full width to spread into.
-            ? { borderRadius: 0, backgroundColor: 'transparent', border: 'none', boxShadow: 'none', padding: 0 }
-            : {
-              borderRadius: '22px',
-              backgroundColor: 'rgba(250,248,243,0.9)',
-              backdropFilter: 'blur(14px) saturate(1.25)',
-              WebkitBackdropFilter: 'blur(14px) saturate(1.25)',
-              border: '1.5px solid #D8CDB6',
-              boxShadow: '0 1px 3px rgba(27,56,40,0.06), 0 20px 60px rgba(27,56,40,0.12)',
-              padding: '22px 22px 24px',
-            }}
-        >
-          {/* Panel header, echoes the active rail item, gives the panel a protagonist */}
-          <div className="flex items-center gap-3 mb-6 pb-5" style={{ borderBottom: '1.5px solid rgba(216,205,182,0.9)' }}>
-            <span
-              className="flex items-center justify-center flex-shrink-0"
-              style={{
-                width: '42px', height: '42px', borderRadius: '13px',
-                background: 'linear-gradient(140deg, #16301F, #2A5A3C)',
-                boxShadow: '0 6px 16px rgba(27,56,40,0.28)',
-              }}
+          {blocksBlocked && (
+            <p
+              role="alert"
+              className="text-sm mb-3 rounded-lg px-3 py-2"
+              style={{ color: '#8B2020', backgroundColor: 'rgba(139,32,32,0.06)', border: '1px solid rgba(139,32,32,0.2)', fontFamily: "var(--font-brand), sans-serif" }}
             >
-              <activeSection.icon size={20} strokeWidth={2.1} style={{ color: '#EED98A' }} />
-            </span>
-            <div className="min-w-0">
-              <h2 className="font-black text-lg leading-tight" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>
-                {activeSection.label}
-              </h2>
-              <p className="text-xs" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}>
-                {activeSection.hint}
-              </p>
+              {blocksBlocked}
+            </p>
+          )}
+          <QuestionBuilder key={selectedRole} value={currentBlocks} onChange={handleBlocksChange} hasApplications={selectedRoleHasApplications} />
+        </>
+      }
+      afterSlot={
+        <>
+          <div className="mb-4">
+            <label htmlFor="role-after-message" className="mb-1.5 flex items-center gap-1.5" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif", fontSize: 14, fontWeight: 600 }}>
+              Message
+            </label>
+            <textarea
+              id="role-after-message"
+              rows={4}
+              maxLength={280}
+              value={submissionMessageInput}
+              placeholder="Join our WhatsApp group so you do not miss any announcements."
+              onChange={(e) => {
+                submissionMessageRef.current = e.target.value;
+                setSubmissionMessageInput(e.target.value);
+                scheduleSubmissionSave();
+              }}
+              onFocus={(e) => { e.currentTarget.style.borderColor = '#1B3828'; }}
+              onBlur={(e) => { e.currentTarget.style.borderColor = '#DDD4C0'; }}
+              style={{ ...inputStyle, fontSize: 15, resize: 'vertical', lineHeight: '1.6' }}
+            />
+            <p
+              className="mt-1"
+              style={{ textAlign: 'right', fontFamily: "var(--font-brand), sans-serif", fontSize: 12, fontWeight: 600, color: '#6E6152', fontVariantNumeric: 'tabular-nums' }}
+            >
+              {submissionMessageInput.length} / 280
+            </p>
+          </div>
+          <div className="flex gap-3 mb-2 flex-wrap">
+            <div className="flex-1" style={{ minWidth: 'min(100%, 200px)' }}>
+              <label htmlFor="role-after-label" className="mb-1.5 flex items-center gap-1.5" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif", fontSize: 14, fontWeight: 600 }}>
+                Button words (optional)
+              </label>
+              <input
+                id="role-after-label"
+                type="text"
+                maxLength={40}
+                value={submissionLinkLabelInput}
+                placeholder="Join the group"
+                onChange={(e) => {
+                  submissionLinkLabelRef.current = e.target.value;
+                  setSubmissionLinkLabelInput(e.target.value);
+                  scheduleSubmissionSave();
+                }}
+                onFocus={fgInput}
+                onBlur={bgInput}
+                style={{ ...inputStyle, fontSize: 15 }}
+              />
+            </div>
+            <div className="flex-1" style={{ minWidth: 'min(100%, 200px)' }}>
+              <label htmlFor="role-after-url" className="mb-1.5 flex items-center gap-1.5" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif", fontSize: 14, fontWeight: 600 }}>
+                Button link (optional)
+              </label>
+              <input
+                id="role-after-url"
+                type="text"
+                value={submissionLinkUrlInput}
+                placeholder="https://chat.whatsapp.com/..."
+                onChange={(e) => {
+                  submissionLinkUrlRef.current = e.target.value;
+                  setSubmissionLinkUrlInput(e.target.value);
+                  scheduleSubmissionSave();
+                }}
+                onFocus={fgInput}
+                onBlur={bgInput}
+                style={{ ...inputStyle, fontSize: 15 }}
+              />
             </div>
           </div>
+          <p style={{ color: '#6E6152', fontFamily: "var(--font-brand), sans-serif", fontSize: 13 }}>
+            Fill in both to show a button, or leave both empty for a message with no button. The link must start with https://
+          </p>
+          {submissionLinkError && (
+            <p role="alert" className="mt-1.5" style={{ color: '#8B2020', fontFamily: "var(--font-brand), sans-serif", fontSize: 13 }}>
+              {submissionLinkError}
+            </p>
+          )}
+        </>
+      }
+    />
+  ) : null;
 
-      {/* ── Grandfathered warning — payment_gate_exempt conferences the gate
-          let through on purpose, but that still can't actually get paid.
-          Informs without blocking: applications tab renders normally below. ── */}
-      {activeTab === 'applications' && conference.payment_gate_exempt && !conferencePaymentsReady(conference) && (
-        <div
-          className="flex items-start gap-3 rounded-2xl px-5 py-4 mb-6"
-          style={{ backgroundColor: 'rgba(238,217,138,0.22)', border: '1px solid rgba(182,135,31,0.35)' }}
-        >
-          <AlertTriangle size={18} style={{ color: '#8A6614', flexShrink: 0, marginTop: 1 }} />
-          <div>
-            <p className="font-bold text-sm mb-1" style={{ color: '#6B4F12', fontFamily: "var(--font-brand), sans-serif" }}>
-              Delegates cannot pay you yet
-            </p>
-            <p className="text-sm" style={{ color: '#6B4F12', fontFamily: "var(--font-brand), sans-serif", lineHeight: 1.6 }}>
-              Your applications are open, but nothing on your financial setup gives delegates a way to pay. Finish it in{' '}
-              <Link href={`/manage/${conference.slug}/financials/settings`} className="font-bold underline">
-                Financial Settings
-              </Link>
-              {' '}so applicants are not left stuck.
-            </p>
-          </div>
+  const extraListed = sheetRole && !addedRoles.includes(sheetRole) ? [...addedRoles, sheetRole] : addedRoles;
+  const shellTitle = <>Settings · {conferenceAcronymLabel(view) || view.full_name}</>;
+
+  return (
+    <div className="px-4 sm:px-6 md:px-10 py-8" style={{ maxWidth: activeTab === 'organizers' ? '1500px' : '1380px' }}>
+      <SettingsShell active={SHELL_OF[activeTab]} onOpen={(k) => openSection(TAB_OF[k])} title={shellTitle}>
+
+      {activeTab === 'applications' && (
+        <>
+          <ApplicationsSection
+            conference={view}
+            roles={roleConfigs}
+            counts={roleAppCounts}
+            now={nowMs}
+            extraRoles={extraListed}
+            onRoleToggle={(r, next) => { void saveRoleConfig(r, { is_enabled: next }); }}
+            onEditRole={openRoleSetup}
+            onAddRole={(r, from) => { void handleAddRole(r, from); }}
+            onSaveAll={(updates, roles) => { void saveRolesTogether(roles, updates as Partial<RoleConfig>); }}
+          />
+          {roleSheet}
+          {/* Offered when a price first gets its dates, and from "Use this
+              price for another role". Copies the whole ladder plus the flat
+              fee it falls back to: a half-copied price is worse than none. */}
+          <CopyToRolesModal
+            open={copyPhasesOpen}
+            onClose={() => setCopyPhasesOpen(false)}
+            onConfirm={(targets) => void copyPhasesToRoles(targets)}
+            busy={copyPhasesBusy}
+            title="Set this up for another role too?"
+            sub={`${roleLabel(activeRole)} prices are saved. Most conferences run the same dates for every role, so tick the ones that should get the same prices.`}
+            roles={ROLES.filter(r => r !== activeRole && r !== 'secretariat' && r !== 'staff')}
+          />
+        </>
+      )}
+
+      {activeTab === 'delegations' && (
+        <div className="flex flex-col gap-5">
+          <SectionHead emoji="School" icon={School} tint={TINT_GREEN_BG}
+            title="Delegations"
+            line={`${conference.allow_delegation_import ? 'Leaders bring in their own delegates.' : 'Each delegate applies on their own.'} ${swapMode === 'off' ? 'Only your team moves seats.' : swapMode === 'self_serve' ? 'Leaders swap seats themselves.' : 'Leaders ask to swap seats.'}`}
+          />
+          <DelegationsSettings
+            conferenceId={conference.id}
+            allowImport={!!conference.allow_delegation_import}
+            onConferenceSaved={refreshConferenceQuiet}
+            swapMode={swapMode}
+            swapModeSaving={swapModeSaving}
+            onSwapModeChange={(v) => { void saveSwapMode(v); }}
+          />
         </div>
       )}
 
-      {/* ── APPLICATIONS TAB ──────────────────────────────────────────────
-          One role at a time. The five-role stack made every role look equally
-          urgent and buried the one question that matters, which is whether the
-          role is actually taking applications right now. ── */}
-      {activeTab === 'applications' && (() => {
-        // `role` and `config` keep their old names so every control below reads
-        // exactly as it did when this was a ROLES.map.
-        const role = activeRole;
-        const config = roleConfigs.find(rc => rc.role === role);
-        const enabled = config?.is_enabled ?? false;
-        const status = roleStatus(config, Date.now());
-        const chip = ROLE_STATUS_MARK[status];
-        // Nobody charges their own volunteers or their own secretariat: the
-        // Fees step doesn't apply to either, so it isn't shown at all.
-        const showFeesStep = role !== 'secretariat' && role !== 'staff';
-        return (
-          /* `position: relative` so the payment gate below can cover THIS panel
-             and nothing else. It used to be a full-screen portal, which also
-             covered the section rail — an organiser who had not finished
-             financial onboarding could not reach Conference, Organizers or
-             Privacy either, on a page where none of those have anything to do
-             with taking money. */
-          <div style={{ position: 'relative' }}>
-            {/* The gate blurs the real screen rather than replacing it: this is
-                a step not yet done, not an error, and seeing what is waiting
-                behind it is the point. */}
-            <div
-              style={applicationsGated
-                ? { filter: 'blur(4px)', pointerEvents: 'none', userSelect: 'none' }
-                : undefined}
-            >
-              {/* ── Role bookmarks. Icon above the name, active tab raised and
-                  joined to the panel below it. Order follows how a conference
-                  is actually staffed, not the alphabet. ── */}
-              <RoleBookmarks
-                roles={ROLES}
-                active={role}
-                statusOf={(r) => roleStatus(roleConfigs.find(c => c.role === r), Date.now())}
-                onPick={setActiveRole}
-              />
-
-              {/* ── Role header bar. Never collapses: this is the one place that
-                  answers "is this role live". ── */}
-              <div style={{ ...cardStyle, borderRadius: undefined, borderTopLeftRadius: '4px', borderTopRightRadius: '16px', borderBottomLeftRadius: '16px', borderBottomRightRadius: '16px' }}>
-                <div className="flex items-center gap-3 flex-wrap">
-                  <span
-                    className="flex items-center justify-center flex-shrink-0"
-                    style={{ width: 40, height: 40, borderRadius: '999px', background: 'linear-gradient(145deg, #FFFDF9, #E4DCCB)', boxShadow: NEU.outSm }}
-                  >
-                    <Emoji3D name={ROLE_EMOJI[role] ?? 'Bust in silhouette'} size={24} />
-                  </span>
-                  <span className="inline-flex items-center gap-2 font-black" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif", fontSize: '18px' }}>
-                    {roleLabel(role)}
-                    <InfoHint label={`What a ${roleLabel(role)} is`} text={ROLE_BLURB[role] ?? ''} size={17} />
-                  </span>
-                  <span
-                    suppressHydrationWarning
-                    className="inline-flex items-center gap-1 font-bold"
-                    style={{
-                      fontFamily: "var(--font-brand), sans-serif", fontSize: '12px', fontWeight: 700,
-                      color: chip.color,
-                    }}
-                  >
-                    <chip.Icon size={14} strokeWidth={2.2} aria-hidden />
-                    {chip.label}
-                  </span>
-
-                  <div className="flex items-center gap-3 flex-wrap w-full sm:w-auto sm:ml-auto">
-                    <button
-                      type="button"
-                      onClick={handleCopyApplicationLink}
-                      className="inline-flex items-center gap-1.5 rounded-[10px] focus:outline-none transition-colors gv-lift"
-                      style={{
-                        padding: '7px 12px',
-                        fontFamily: "var(--font-brand), sans-serif", fontSize: '11px', fontWeight: 800,
-                        letterSpacing: 0,
-                        color: '#1B3828', backgroundColor: 'transparent',
-                        border: '1.5px solid #DDD4C0', cursor: 'pointer',
-                      }}
-                      onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.06)'; }}
-                      onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
-                    >
-                      {linkCopied ? <Check size={13} strokeWidth={3} /> : <Copy size={13} strokeWidth={2.4} />}
-                      {linkCopied ? 'Copied' : 'Copy application link'}
-                    </button>
-                    <a
-                      href={`/conferences/${conference.slug}/apply?role=${role}&preview=1`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1.5 rounded-[10px] focus:outline-none transition-colors"
-                      style={{
-                        padding: '7px 12px',
-                        fontFamily: "var(--font-brand), sans-serif", fontSize: '11px', fontWeight: 800,
-                        letterSpacing: 0,
-                        color: '#1B3828', backgroundColor: 'transparent',
-                        border: '1.5px solid #DDD4C0', cursor: 'pointer',
-                        textDecoration: 'none',
-                      }}
-                      onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.06)'; }}
-                      onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
-                    >
-                      <Eye size={13} strokeWidth={2.4} />
-                      Preview application
-                    </a>
-                    <PillToggle
-                      value={enabled}
-                      onChange={(v) => saveRoleConfig(role, { is_enabled: v })}
-                      size="md"
-                    />
-                  </div>
-                </div>
-
-              </div>
-
-              {/* ── First-run walkthrough. Only for a role nothing has been
-                  decided about yet, and only until it is dismissed. ── */}
-              {config && roleIsUntouched(config) && !introDone.has(role) && (
-                <SetupIntro role={role} onDone={() => dismissIntro(role)} />
-              )}
-
-              {/* ── The three steps. Editable whether or not the role is on: a
-                  role gets set up before it is opened. ── */}
-              {config && (
-                <div key={`${role}-${configVersion}`} ref={stepPanelRef}>
-
-                  <div style={cardStyle}>
-                    <StepHeader
-                      n={STEPS[0].n} label={STEPS[0].label} sub={STEPS[0].sub} hint={STEPS[0].hint}
-                      complete={stepComplete[1]} open={openStep === 1} status={stepSaveState[1]}
-                      onClick={() => setOpenStep(openStep === 1 ? 0 : 1)}
-                    />
-                    {openStep === 1 && (
-                      <div className="mt-5">
-                        {/* Opens / Closes. The shared friendly picker in
-                            datetime mode, not a native control: the same
-                            calendar the fee phases already use, plus the hour
-                            the window actually turns over. */}
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-3">
-                          <div>
-                            <label className="text-xs font-semibold mb-1.5 flex items-center gap-1.5" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>
-                              Opens
-                              <InfoHint
-                                label="About the opening time"
-                                text="The moment this role starts taking applications. Before it, the application link says the window has not opened yet and shows the date and time it will. Nothing needs doing at that moment. It opens itself. Leave it empty to have the role open the instant you switch it on."
-                              />
-                            </label>
-                            <DatePicker
-                              withTime
-                              clearable
-                              value={toDatetimeLocal(config.applications_open_at)}
-                              onChange={(v) => { saveTimeline(role, { applications_open_at: fromDatetimeLocal(v) }, 'window'); }}
-                              placeholder="Opens as soon as it is switched on"
-                              zoneNote={`Times are in ${localZoneLabel()}.`}
-                            />
-                          </div>
-
-                          <div>
-                            <label className="text-xs font-semibold mb-1.5 flex items-center gap-1.5" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>
-                              Closes
-                              <InfoHint
-                                label="About the closing time"
-                                text="The moment this role stops taking new applications. Applications already in progress are not deleted. The form simply stops accepting new ones, and the role reads as CLOSED. Leave it empty to keep it open until you switch the role off yourself."
-                              />
-                            </label>
-                            <DatePicker
-                              withTime
-                              clearable
-                              value={toDatetimeLocal(config.applications_close_at)}
-                              onChange={(v) => { saveTimeline(role, { applications_close_at: fromDatetimeLocal(v) }, 'window'); }}
-                              min={toDatetimeLocal(config.applications_open_at).slice(0, 10) || undefined}
-                              placeholder="Stays open until switched off"
-                              zoneNote={`Times are in ${localZoneLabel()}.`}
-                            />
-                          </div>
-
-                          <div className="md:col-span-2">
-                            {windowBackwards ? (
-                              <p className="text-xs rounded-lg px-3 py-2" suppressHydrationWarning style={{ color: '#8B2020', backgroundColor: 'rgba(139,32,32,0.06)', border: '1px solid rgba(139,32,32,0.2)', fontFamily: "var(--font-brand), sans-serif" }}>
-                                This window closes at or before it opens, so nobody can apply. Move one of the two.
-                              </p>
-                            ) : (
-                              <p className="text-xs" suppressHydrationWarning style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}>
-                                Times are in {localZoneLabel()}. Applicants see these in their own timezone.
-                              </p>
-                            )}
-                            {(config.fee_phases ?? []).some(p => p.start_date && p.end_date) && (
-                              <p className="text-xs mt-1" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}>
-                                With fee phases, applications open when the first price starts and close when the last price ends. Changing one moves the other.
-                              </p>
-                            )}
-                            {timelineMsg?.role === role && timelineMsg.where === 'window' && (
-                              timelineMsg.kind === 'info'
-                                ? <TimelineNotice text={timelineMsg.text} />
-                                : <p role="alert" className="text-xs rounded-lg px-3 py-2 mt-2" style={{ color: '#8B2020', backgroundColor: 'rgba(139,32,32,0.06)', border: '1px solid rgba(139,32,32,0.2)', fontFamily: "var(--font-brand), sans-serif" }}>{timelineMsg.text}</p>
-                            )}
-                            <TimelineWarning
-                              config={config}
-                              roleLabel={role}
-                              ctx={timelineCtx}
-                              onFix={(patch) => { saveTimeline(role, patch, 'window'); }}
-                            />
-                          </div>
-                          <div>
-                            <label className="text-xs font-semibold mb-1.5 flex items-center gap-1.5" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>
-                              Max accepted
-                              <InfoHint
-                                label="About max accepted"
-                                text="The most people you will accept into this role. It is a ceiling on acceptances, not on applications. People can keep applying past it, you simply cannot accept more than this many. Leave it empty for no limit."
-                              />
-                            </label>
-                            <input
-                              type="number"
-                              min={1}
-                              placeholder="Unlimited"
-                              defaultValue={config.max_accepted ?? ''}
-                              onFocus={fgInput}
-                              onBlur={(e) => {
-                                e.currentTarget.style.borderColor = '#DDD4C0';
-                                saveRoleConfig(role, { max_accepted: e.target.value ? parseInt(e.target.value) : null });
-                              }}
-                              style={inputStyle}
-                            />
-                          </div>
-                        </div>
-                        {/* Acceptance, payment and the dashboard lock are
-                            toggles, all off by default (owner, 29 Sep 2026).
-                            'after_application' was merged into 'anytime' on
-                            the server the same day. */}
-                        <div className="mt-4 flex items-center justify-between gap-3">
-                          <div>
-                            <label className="text-xs font-semibold flex items-center gap-1.5" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>
-                              Auto-accept
-                              <InfoHint
-                                label="About acceptance"
-                                text="With this on, everyone is accepted the moment they submit, which is right for observers, advisors and any role where you are not really choosing. With it off, every application waits until someone on your team decides, which is what you want wherever places are limited or the answers matter."
-                              />
-                            </label>
-                            <p className="text-xs mt-0.5" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}>
-                              On: applicants are accepted as soon as they apply. Off: you review each application.
-                            </p>
-                          </div>
-                          <PillToggle
-                            value={config.auto_accept === true}
-                            onChange={(v) => saveRoleConfig(role, { auto_accept: v })}
-                            size="md"
-                          />
-                        </div>
-                        {/* Payment settings only matter when this role
-                            charges something. A free role hides them; the
-                            saved values are never touched, and they come
-                            back the moment a fee is set. */}
-                        {!roleIsFree(config) && (
-                          <>
-                        <div className="mt-4 flex items-center justify-between gap-3">
-                          <div>
-                            <label className="text-xs font-semibold flex items-center gap-1.5" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>
-                              Payment after acceptance
-                              <InfoHint
-                                label="About payment after acceptance"
-                                text="With this on, the pay button appears only once you accept someone, so you only charge the people you actually took. With it off, applicants can pay as soon as they apply."
-                              />
-                            </label>
-                            <p className="text-xs mt-0.5" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}>
-                              On: applicants can pay only once you accept them. Off: they can pay as soon as they apply.
-                            </p>
-                          </div>
-                          <PillToggle
-                            value={config.payment_timing === 'after_acceptance'}
-                            onChange={(v) => saveRoleConfig(role, { payment_timing: v ? 'after_acceptance' : 'anytime' })}
-                            size="md"
-                          />
-                        </div>
-                        <div className="mt-4 flex items-center justify-between gap-3">
-                          <div>
-                            <label className="text-xs font-semibold flex items-center gap-1.5" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>
-                              Hide dashboard until payment
-                              <InfoHint
-                                label="About hiding the dashboard until payment"
-                                text="Use this if you want payment before anyone sees committees, documents or study guides. Waived and sponsored participants always see everything."
-                              />
-                            </label>
-                            <p className="text-xs mt-0.5" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}>
-                              Accepted participants who have not paid see only their overview and payment until they pay. Off by default.
-                            </p>
-                          </div>
-                          <PillToggle
-                            value={config.hide_dashboard_until_paid === true}
-                            onChange={(v) => saveRoleConfig(role, { hide_dashboard_until_paid: v })}
-                            size="md"
-                          />
-                        </div>
-                          </>
-                        )}
-                        {/* Resubmission */}
-                        <div className="mt-4 flex items-center justify-between gap-3">
-                          <div>
-                            <label className="text-xs font-semibold flex items-center gap-1.5" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>
-                              Allow resubmission
-                              <InfoHint
-                                label="About resubmission"
-                                text="With this on, an applicant you have denied can reopen their form, change their answers and send it back for another look. Useful when denials are usually about a missing detail rather than a real no. With it off, a denial is final and they cannot apply again for this role."
-                              />
-                            </label>
-                            <p className="text-xs mt-0.5" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}>
-                              Let denied applicants edit and resubmit.
-                            </p>
-                          </div>
-                          <PillToggle
-                            value={config.allow_resubmission ?? false}
-                            onChange={(v) => saveRoleConfig(role, { allow_resubmission: v })}
-                            size="md"
-                          />
-                        </div>
-                        {/* Preference ranking — what this role is asked to rank
-                            on the application form. roleCanHavePreference (and
-                            the database's second CHECK) is what decides who
-                            gets a control here at all; every other role
-                            renders nothing, not a disabled version of it. */}
-                        {roleCanHavePreference(role) && (
-                          role === 'chair' ? (
-                            <div className="mt-4 flex items-center justify-between gap-3">
-                              <div>
-                                <label className="text-xs font-semibold flex items-center gap-1.5" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>
-                                  Ask for their committee preference
-                                </label>
-                                <p className="text-xs mt-0.5" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}>
-                                  Chairs rank which committee they would like to chair, and you assign from their ranking.
-                                </p>
-                              </div>
-                              <PillToggle
-                                value={config.preference_mode === 'committees_only'}
-                                onChange={(v) => saveRoleConfig(role, { preference_mode: v ? 'committees_only' : 'none' })}
-                                size="md"
-                              />
-                            </div>
-                          ) : (
-                            <div className="mt-4">
-                              <label className="text-xs font-semibold flex items-center gap-1.5" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>
-                                Delegate preferences
-                                <InfoHint
-                                  label="About delegate preferences"
-                                  text="What a delegate is asked to rank on the application form, and therefore what your allocation has to work with. Ranking committee-and-country pairs gives the fullest picture and the best automatic allocation, but it is also the longest form to fill in. Committees only, or countries only, are shorter. None skips the step entirely and leaves every seat for you to assign by hand."
-                                />
-                              </label>
-                              <p className="text-xs mt-0.5 mb-2" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}>
-                                Choose what delegates rank when they apply. The application form shows only the pickers you enable here.
-                              </p>
-                              <div className="grid grid-cols-1" style={{ gap: 8 }}>
-                                {PREF_MODE_OPTIONS.map(opt => {
-                                  const active = (config.preference_mode ?? 'none') === opt.value;
-                                  return (
-                                    <button
-                                      key={opt.value}
-                                      type="button"
-                                      onClick={() => saveRoleConfig(role, { preference_mode: opt.value })}
-                                      className="flex items-center rounded-xl focus:outline-none"
-                                      style={{
-                                        gap: 10, padding: '11px 13px', textAlign: 'left',
-                                        backgroundColor: active ? '#1B3828' : 'transparent',
-                                        color: active ? '#EED98A' : '#1C1410',
-                                        border: active ? '1.5px solid #1B3828' : '1.5px solid #DDD4C0',
-                                        boxShadow: active ? '0 4px 12px rgba(27,56,40,0.2)' : 'none',
-                                        fontFamily: "var(--font-brand), sans-serif", fontSize: 12, fontWeight: 800, letterSpacing: 0,
-                                        cursor: 'pointer',
-                                      }}
-                                    >
-                                      {/* The thing(s) being ranked, drawn rather than described:
-                                          a committee emblem and, for roles that pair it with a
-                                          country, a flag. */}
-                                      <span className="inline-flex items-center flex-shrink-0" style={{ gap: 3 }}>
-                                        {opt.value !== 'countries_only' && opt.value !== 'none' && <Emoji3D name="Classical building" size={19} fallback={Building2} fallbackColor={active ? '#EED98A' : '#1B3828'} />}
-                                        {opt.value !== 'committees_only' && opt.value !== 'none' && <Emoji3D name="Crossed flags" size={19} fallback={Globe} fallbackColor={active ? '#EED98A' : '#1B3828'} />}
-                                        {opt.value === 'none' && <Emoji3D name="Cross mark" size={19} fallback={X} fallbackColor={active ? '#EED98A' : '#1B3828'} />}
-                                      </span>
-                                      <span className="min-w-0">{opt.label}</span>
-                                    </button>
-                                  );
-                                })}
-                              </div>
-                              <p className="text-xs mt-1.5" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}>
-                                {PREF_MODE_OPTIONS.find(o => o.value === (config.preference_mode ?? 'none'))?.desc}
-                              </p>
-                            </div>
-                          )
-                        )}
-                        {/* MUN experience — chair and secretariat only. The
-                            database CHECK refuses true for every other role,
-                            so a control for them could never work and must
-                            not exist, not even disabled. */}
-                        {(role === 'chair' || role === 'secretariat') && (
-                          <div className="mt-4 flex items-center justify-between gap-3">
-                            <div>
-                              <label className="text-xs font-semibold flex items-center gap-1.5" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>
-                                Ask for MUN experience
-                                <InfoHint
-                                  label="About MUN experience"
-                                  text="Delegates and head delegates are not affected by this setting, on or off: their experience level feeds committee allocation directly, so it is never collected this way for them."
-                                />
-                              </label>
-                              <p className="text-xs mt-0.5" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}>
-                                Applicants list the conferences they have chaired or staffed, and can import them from their Gavelling MUN CV.
-                              </p>
-                            </div>
-                            <PillToggle
-                              value={config.collect_mun_experience ?? false}
-                              onChange={(v) => saveRoleConfig(role, { collect_mun_experience: v })}
-                              size="md"
-                            />
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-
-                  {showFeesStep && (
-                  <div style={cardStyle}>
-                    <StepHeader
-                      n={STEPS[1].n} label={STEPS[1].label} sub={STEPS[1].sub} hint={STEPS[1].hint}
-                      complete={stepComplete[2]} open={openStep === 2} status={stepSaveState[2]}
-                      onClick={() => setOpenStep(openStep === 2 ? 0 : 2)}
-                    />
-                    {openStep === 2 && (
-                      <div className="mt-5">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-3">
-                          <div>
-                            <label className="block text-xs font-semibold mb-1" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>Fee</label>
-                            <div className="flex gap-2">
-                              <CurrencyPicker
-                                value={config.fee_currency}
-                                onChange={(code) => saveRoleConfig(role, { fee_currency: code })}
-                                ariaLabel={`${roleLabel(role)} fee currency`}
-                                variant="bordered"
-                                style={{ width: 118, flexShrink: 0 }}
-                              />
-                              <input
-                                type="number"
-                                min={0}
-                                step={0.01}
-                                placeholder="0.00"
-                                defaultValue={config.fee_amount}
-                                onFocus={fgInput}
-                                onBlur={(e) => {
-                                  e.currentTarget.style.borderColor = '#DDD4C0';
-                                  saveRoleConfig(role, { fee_amount: parseFloat(e.target.value) || 0 });
-                                }}
-                                style={{ ...inputStyle, flex: 1, minWidth: 0 }}
-                              />
-                            </div>
-                          </div>
-                        </div>
-                        {/* Fee phases, date-windowed pricing (Early Bird, Phase 1, …).
-                            When a phase's window contains today it overrides the flat
-                            fee above; gaps between phases fall back to the flat fee. */}
-                        {(() => {
-                          const phases = config.fee_phases ?? [];
-                          const active = activeFeePhase(phases);
-                          // A phase missing either date is skipped by the app and by
-                          // resolve_phase_fee, so the amount on it never applies. Say
-                          // so on the row, and refuse to stack another on top of it.
-                          const hasInvalidPhase = phases.some(p => !p.start_date || !p.end_date);
-                          return (
-                            <div className="mt-4">
-                              <div className="flex items-center justify-between mb-1.5 flex-wrap" style={{ gap: 8 }}>
-                                <label className="text-xs font-semibold flex items-center gap-1.5" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>
-                                  Fee phases
-                                  <InfoHint
-                                    label="About fee phases"
-                                    text="Optional date windows that override the flat fee: an early-bird rate, a standard rate, a late rate. Whichever phase contains today is what an applicant is quoted and charged; on a day no phase covers, the flat fee applies. Both dates are inclusive, and a phase missing either one is skipped entirely."
-                                  />
-                                </label>
-                                <div className="flex items-center" style={{ gap: 12 }}>
-                                  {phases.length > 0 && (
-                                    <button
-                                      type="button"
-                                      onClick={() => setCopyPhasesOpen(true)}
-                                      className="text-[11px] font-bold focus:outline-none hover:underline inline-flex items-center gap-1.5"
-                                      style={{ color: '#7A6E5E', fontFamily: "var(--font-brand), sans-serif", letterSpacing: 0, background: 'none', border: 'none', cursor: 'pointer' }}
-                                    >
-                                      <Copy size={12} strokeWidth={2.4} />
-                                      Copy to another role
-                                    </button>
-                                  )}
-                                  <button
-                                    type="button"
-                                    disabled={hasInvalidPhase}
-                                    onClick={() => { saveTimeline(role, {
-                                      fee_phases: [...phases, { label: `Phase ${phases.length + 1}`, start_date: '', end_date: '', amount: config.fee_amount }],
-                                    }, 'phases'); }}
-                                    className="text-[11px] font-bold focus:outline-none hover:underline"
-                                    style={{ color: '#1B3828', fontFamily: "var(--font-brand), sans-serif", letterSpacing: 0, background: 'none', border: 'none', opacity: hasInvalidPhase ? 0.45 : 1, cursor: hasInvalidPhase ? 'not-allowed' : 'pointer' }}
-                                  >
-                                    + Add phase
-                                  </button>
-                                </div>
-                              </div>
-                              {phases.length === 0 ? (
-                                <p className="text-xs" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif", lineHeight: 1.55 }}>
-                                  Optional: charge different amounts by date, e.g. an Early Bird rate. When no phase covers today, the flat fee above applies.
-                                </p>
-                              ) : (
-                                <>
-                                  {phases.map((phase, pi) => {
-                                    const isActive = active !== null && phase === active;
-                                    const invalid = !phase.start_date || !phase.end_date;
-                                    return (
-                                      <Fragment key={`${pi}-${phases.length}-${configVersion}`}>
-                                      <div
-                                        className="grid gap-2 items-center mb-2 rounded-[10px] px-2.5 py-2"
-                                        style={{
-                                          gridTemplateColumns: 'minmax(0,1.1fr) minmax(0,1.25fr) minmax(0,1.25fr) minmax(0,0.7fr) 24px',
-                                          backgroundColor: isActive ? 'rgba(27,56,40,0.06)' : 'rgba(27,56,40,0.02)',
-                                          border: invalid
-                                            ? '1.5px solid rgba(139,32,32,0.45)'
-                                            : isActive ? '1.5px solid rgba(27,56,40,0.35)' : '1px solid #F0EDE6',
-                                        }}
-                                      >
-                                        <div className="flex items-center gap-1.5 min-w-0">
-                                          <input
-                                            type="text"
-                                            placeholder="e.g. Early Bird"
-                                            defaultValue={phase.label}
-                                            onFocus={fgInput}
-                                            onBlur={(e) => {
-                                              e.currentTarget.style.borderColor = '#DDD4C0';
-                                              if (e.target.value.trim() !== phase.label) updateFeePhase(role, phases, pi, { label: e.target.value.trim() });
-                                            }}
-                                            style={{ ...inputStyle, padding: '6px 10px', fontSize: '12.5px', minWidth: 0 }}
-                                          />
-                                          {isActive && (
-                                            <span
-                                              className="flex-shrink-0 inline-flex items-center gap-1 text-[12px] font-bold"
-                                              style={{ color: '#1B3828', fontFamily: "var(--font-brand), sans-serif" }}
-                                            >
-                                              <Star size={14} strokeWidth={2.2} aria-hidden />
-                                              Current
-                                            </span>
-                                          )}
-                                        </div>
-                                        <DatePicker
-                                          value={phase.start_date}
-                                          max={phase.end_date || undefined}
-                                          placeholder="Start date"
-                                          onChange={(iso) => {
-                                            if (iso !== phase.start_date) updateFeePhase(role, phases, pi, { start_date: iso });
-                                          }}
-                                        />
-                                        <DatePicker
-                                          value={phase.end_date}
-                                          min={phase.start_date || undefined}
-                                          placeholder="End date"
-                                          onChange={(iso) => {
-                                            if (iso !== phase.end_date) updateFeePhase(role, phases, pi, { end_date: iso });
-                                          }}
-                                        />
-                                        <input
-                                          type="number"
-                                          min={0}
-                                          step={0.01}
-                                          aria-label="Phase fee amount"
-                                          placeholder="0.00"
-                                          defaultValue={phase.amount}
-                                          onFocus={fgInput}
-                                          onBlur={(e) => {
-                                            e.currentTarget.style.borderColor = '#DDD4C0';
-                                            const next = parseFloat(e.target.value) || 0;
-                                            if (next !== phase.amount) updateFeePhase(role, phases, pi, { amount: next });
-                                          }}
-                                          style={{ ...inputStyle, padding: '6px 8px', fontSize: '12.5px', minWidth: 0, fontVariantNumeric: 'tabular-nums' }}
-                                        />
-                                        <button
-                                          type="button"
-                                          aria-label={`Remove ${phase.label || 'phase'}`}
-                                          onClick={() => { saveTimeline(role, { fee_phases: phases.filter((_, i) => i !== pi) }, 'phases'); }}
-                                          className="text-sm font-bold focus:outline-none justify-self-center"
-                                          style={{ color: '#8B2020', background: 'none', border: 'none', cursor: 'pointer', lineHeight: 1 }}
-                                        >
-                                          ✕
-                                        </button>
-                                      </div>
-                                      {invalid && (
-                                        <p className="text-xs mb-2" style={{ color: '#8B2020', fontFamily: "var(--font-brand), sans-serif" }}>
-                                          This fee phase is invalid. Please add dates.
-                                        </p>
-                                      )}
-                                      </Fragment>
-                                    );
-                                  })}
-                                  <p className="text-xs mt-1" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}>
-                                    Dates are inclusive and each price starts the day after the previous one ends. Applications open when the first price starts and close when the last one ends.
-                                  </p>
-                                  {timelineMsg?.role === role && timelineMsg.where === 'phases' && (
-                                    timelineMsg.kind === 'info'
-                                      ? <TimelineNotice text={timelineMsg.text} />
-                                      : <p role="alert" className="text-xs rounded-lg px-3 py-2 mt-2" style={{ color: '#8B2020', backgroundColor: 'rgba(139,32,32,0.06)', border: '1px solid rgba(139,32,32,0.2)', fontFamily: "var(--font-brand), sans-serif" }}>{timelineMsg.text}</p>
-                                  )}
-                                  <TimelineWarning
-                                    config={config}
-                                    roleLabel={role}
-                                    ctx={timelineCtx}
-                                    onFix={(patch) => { saveTimeline(role, patch, 'phases'); }}
-                                  />
-                                </>
-                              )}
-                            </div>
-                          );
-                        })()}
-                      </div>
-                    )}
-                  </div>
-                  )}
-
-                  <div style={cardStyle}>
-                    <StepHeader
-                      n={STEPS[2].n} label={STEPS[2].label} sub={STEPS[2].sub} hint={STEPS[2].hint}
-                      complete={stepComplete[3]} open={openStep === 3}
-                      onClick={() => setOpenStep(openStep === 3 ? 0 : 3)}
-                      status={stepSaveState[3]}
-                    />
-                    {openStep === 3 && (
-                      <div className="mt-5">
-                        <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">
-                          <CopyFormMenu roles={otherRoles} onPick={handleCopyFormTo} />
-                        </div>
-                        {blocksBlocked && (
-                          <p
-                            role="alert"
-                            className="text-xs mb-3 rounded-lg px-3 py-2"
-                            style={{ color: '#8B2020', backgroundColor: 'rgba(139,32,32,0.06)', border: '1px solid rgba(139,32,32,0.2)', fontFamily: "var(--font-brand), sans-serif" }}
-                          >
-                            {blocksBlocked}
-                          </p>
-                        )}
-                        <QuestionBuilder key={selectedRole} value={currentBlocks} onChange={handleBlocksChange} hasApplications={selectedRoleHasApplications} />
-                      </div>
-                    )}
-                  </div>
-
-                  <div style={cardStyle}>
-                    <StepHeader
-                      n={STEPS[3].n} label={STEPS[3].label} sub={STEPS[3].sub} hint={STEPS[3].hint}
-                      complete={stepComplete[4]} open={openStep === 4}
-                      onClick={() => setOpenStep(openStep === 4 ? 0 : 4)}
-                      status={stepSaveState[4]}
-                    />
-                    {openStep === 4 && (
-                      <div className="mt-5">
-                        <div className="mb-4">
-                          <label className="text-xs font-semibold mb-1.5 flex items-center gap-1.5" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>
-                            Message
-                          </label>
-                          <textarea
-                            rows={4}
-                            maxLength={280}
-                            value={submissionMessageInput}
-                            placeholder="Join our WhatsApp group so you do not miss any announcements."
-                            onChange={(e) => {
-                              submissionMessageRef.current = e.target.value;
-                              setSubmissionMessageInput(e.target.value);
-                              scheduleSubmissionSave();
-                            }}
-                            onFocus={(e) => { e.currentTarget.style.borderColor = '#1B3828'; }}
-                            onBlur={(e) => { e.currentTarget.style.borderColor = '#DDD4C0'; }}
-                            style={{ ...inputStyle, resize: 'vertical', lineHeight: '1.6' }}
-                          />
-                          <p
-                            className="text-xs mt-1"
-                            style={{ textAlign: 'right', fontFamily: "var(--font-brand), sans-serif", fontSize: 11.5, fontWeight: 600, color: '#9A8A78', fontVariantNumeric: 'tabular-nums' }}
-                          >
-                            {submissionMessageInput.length} / 280
-                          </p>
-                        </div>
-
-                        <div className="flex gap-3 mb-2 flex-wrap">
-                          <div className="flex-1" style={{ minWidth: 200 }}>
-                            <label className="text-xs font-semibold mb-1.5 flex items-center gap-1.5" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>
-                              Button text (optional)
-                            </label>
-                            <input
-                              type="text"
-                              maxLength={40}
-                              value={submissionLinkLabelInput}
-                              placeholder="Join the group"
-                              onChange={(e) => {
-                                submissionLinkLabelRef.current = e.target.value;
-                                setSubmissionLinkLabelInput(e.target.value);
-                                scheduleSubmissionSave();
-                              }}
-                              onFocus={fgInput}
-                              onBlur={bgInput}
-                              style={inputStyle}
-                            />
-                          </div>
-                          <div className="flex-1" style={{ minWidth: 200 }}>
-                            <label className="text-xs font-semibold mb-1.5 flex items-center gap-1.5" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>
-                              Button link (optional)
-                            </label>
-                            <input
-                              type="text"
-                              value={submissionLinkUrlInput}
-                              placeholder="https://chat.whatsapp.com/..."
-                              onChange={(e) => {
-                                submissionLinkUrlRef.current = e.target.value;
-                                setSubmissionLinkUrlInput(e.target.value);
-                                scheduleSubmissionSave();
-                              }}
-                              onFocus={fgInput}
-                              onBlur={bgInput}
-                              style={inputStyle}
-                            />
-                          </div>
-                        </div>
-                        <p className="text-xs" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}>
-                          Add both to show a button, or leave both empty for a message with no button. The link must start with https://
-                        </p>
-                        {submissionLinkError && (
-                          <p role="alert" className="text-xs mt-1.5" style={{ color: '#8B2020', fontFamily: "var(--font-brand), sans-serif" }}>
-                            {submissionLinkError}
-                          </p>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-
-            </div>
-
-            {/* Offered when a phase first becomes usable, and from the button
-                beside + ADD PHASE. Copies the whole ladder plus the flat fee it
-                falls back to — a half-copied price is worse than none. */}
-            <CopyToRolesModal
-              open={copyPhasesOpen}
-              onClose={() => setCopyPhasesOpen(false)}
-              onConfirm={(targets) => void copyPhasesToRoles(targets)}
-              busy={copyPhasesBusy}
-              title="Set this up for another role too?"
-              sub={`${roleLabel(role)} fee phases are saved. Most conferences run the same windows for every role, so tick the ones that should get an identical ladder and the same fee.`}
-              roles={ROLES.filter(r => r !== role && r !== 'secretariat' && r !== 'staff')}
-            />
-
-            {/* Not dismissible by design: no close, no backdrop click, no Escape.
-                It goes away when financial onboarding is done, and not before.
-                Scoped to this panel, NOT the viewport: applications are the only
-                thing that depends on being able to take money, so they are the
-                only thing that should be locked. */}
-            {applicationsGated && (
-              <div
-                role="region"
-                aria-label="Applications locked until financial setup is finished"
-                className="absolute inset-0 z-20 flex items-start justify-center px-4 pt-10"
-                style={{ backgroundColor: 'rgba(27,56,40,0.18)', borderRadius: 16 }}
-              >
-                  <div
-                    className="flex flex-col items-center text-center"
-                    style={{ ...cardStyle, marginBottom: 0, padding: '48px 32px', maxWidth: '520px', boxShadow: '0 24px 70px rgba(27,56,40,0.28)' }}
-                  >
-                    <span
-                      className="flex items-center justify-center flex-shrink-0 mb-5"
-                      style={{
-                        width: '56px', height: '56px', borderRadius: '16px',
-                        background: 'linear-gradient(140deg, #16301F, #2A5A3C)',
-                        boxShadow: '0 6px 16px rgba(27,56,40,0.28)',
-                      }}
-                    >
-                      <Lock size={24} strokeWidth={2.1} style={{ color: '#EED98A' }} />
-                    </span>
-                    <p className="font-black text-lg mb-2" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif", maxWidth: '420px' }}>
-                      Application opening is not available until Financial Onboarding is completed.
-                    </p>
-                    <p className="text-sm mb-6" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif", maxWidth: '440px', lineHeight: 1.6 }}>
-                      {paymentGateMessage(conference)}
-                    </p>
-                    <button
-                      onClick={() => router.push(`/manage/${conference.slug}/financials/settings`)}
-                      className="rounded-xl px-6 py-3 text-sm font-bold focus:outline-none transition-colors gv-lift"
-                      style={{ backgroundColor: '#1B3828', color: '#EED98A', border: 'none', fontFamily: "var(--font-brand), sans-serif", letterSpacing: 0, cursor: 'pointer' }}
-                      onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
-                      onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
-                    >
-                      Go to financial settings
-                    </button>
-                  </div>
-                </div>
-            )}
-          </div>
-        );
-      })()}
-
-
-
-      {/* ── VISUAL TAB ── */}
-      {activeTab === 'delegations' && (
-        <DelegationsSettings
-          conferenceId={conference.id}
-          allowImport={!!conference.allow_delegation_import}
-          onConferenceSaved={refreshConferenceQuiet}
-          swapMode={swapMode}
-          swapModeSaving={swapModeSaving}
-          onSwapModeChange={(v) => { void saveSwapMode(v); }}
-        />
-      )}
-
       {activeTab === 'conference' && (
-        <div>
-          {/* ── Persistent header bar. Never collapses: a preview link and a
-              copy-link button, the same visual language as the applications
-              tab's role header bar. ── */}
-          <div className="flex items-center gap-3 flex-wrap mb-5">
-            <div className="flex items-center gap-3 ml-auto">
-              <a
-                href={`/conferences/${conference.slug}?preview=1`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1.5 rounded-[10px] focus:outline-none transition-colors"
-                style={{
-                  padding: '7px 12px',
-                  fontFamily: "var(--font-brand), sans-serif", fontSize: '11px', fontWeight: 800,
-                  letterSpacing: 0,
-                  color: '#1B3828', backgroundColor: 'transparent',
-                  border: '1.5px solid #DDD4C0', cursor: 'pointer',
-                  textDecoration: 'none',
-                }}
-                onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.06)'; }}
-                onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
-              >
-                <Eye size={13} strokeWidth={2.4} />
-                Preview
-              </a>
-              <button
-                type="button"
-                onClick={handleCopyConferenceLink}
-                className="inline-flex items-center gap-1.5 rounded-[10px] focus:outline-none transition-colors gv-lift"
-                style={{
-                  padding: '7px 12px',
-                  fontFamily: "var(--font-brand), sans-serif", fontSize: '11px', fontWeight: 800,
-                  letterSpacing: 0,
-                  color: '#1B3828', backgroundColor: 'transparent',
-                  border: '1.5px solid #DDD4C0', cursor: 'pointer',
-                }}
-                onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.06)'; }}
-                onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
-              >
-                {confLinkCopied ? <Check size={13} strokeWidth={3} /> : <Copy size={13} strokeWidth={2.4} />}
-                {confLinkCopied ? 'Copied' : 'Copy link'}
-              </button>
-            </div>
-          </div>
+        <div className="flex items-start" style={{ gap: 28 }}>
+        <div className="flex-1 min-w-0 flex flex-col gap-5">
+          <SectionHead emoji="Classical building" icon={Building2} tint={TINT_GOLD_BG}
+            title="General"
+            line={<>What your conference is and how people reach you. Changes save by themselves.{' '}
+              <a href={`/conferences/${conference.slug}?preview=1`} target="_blank" rel="noopener noreferrer" style={{ color: '#1B3828', fontWeight: 700, textDecoration: 'underline', textUnderlineOffset: 3 }}>Open your page</a></>}
+            focal={
+              <span className="flex items-center gap-3">
+                <LogoDisc src={view.logo_url} alt={view.acronym} size={64} fallbackText={(view.acronym || '?').slice(0, 3)} style={{ boxShadow: '0 0 0 4px #FFFFFF, 0 8px 20px rgba(27,56,40,0.18)' }} />
+                <span className="min-w-0" style={{ maxWidth: 220 }}>
+                  <span className="block" style={{ fontFamily: "var(--font-brand), sans-serif", fontSize: 20, fontWeight: 900, color: '#1C1410', lineHeight: 1.1, overflowWrap: 'anywhere' }}>{view.acronym || view.full_name}</span>
+                  <span className="block" style={{ fontFamily: "var(--font-brand), sans-serif", fontSize: 13, color: '#5C4F42', lineHeight: 1.35, marginTop: 2, overflowWrap: 'anywhere' }}>
+                    {view.dates_tbd || !view.start_date ? 'Dates to be decided' : dateRange(view.start_date, view.end_date)}
+                  </span>
+                </span>
+              </span>
+            }
+          />
 
-          {/* Section 1: Customizability. CustomizationCard paints its own
-              card chrome (it receives cardStyle as a prop), so it renders
-              flat here, followed by the three public-visibility switches. */}
-          <div style={cardStyle}>
-            <StepHeader
-              n={1} label="Customizability" sub="Your colours and what visitors can see."
-              complete={Object.keys(conference.theme ?? {}).length > 0} open={openConfSection === 1} status={visibilityStatus}
-              onClick={() => setOpenConfSection(openConfSection === 1 ? 0 : 1)}
-            />
-            {openConfSection === 1 && (
-              <div className="mt-5">
-                <CustomizationCard
-                  conferenceId={conference.id}
-                  conferenceSlug={conference.slug}
-                  initialDraft={conference.theme_draft ?? {}}
-                  initialPublished={conference.theme ?? {}}
-                  cardStyle={{ padding: 0, margin: 0, border: 'none', boxShadow: 'none', backgroundColor: 'transparent', borderRadius: 0 }}
-                />
-                <div className="my-5" style={{ borderTop: '1px solid #F0EDE6' }} />
-                <div className="flex flex-col gap-3">
-                <div
-                  className="flex items-center justify-between p-4 rounded-xl"
-                  style={{ backgroundColor: 'rgba(27,56,40,0.03)', border: '1px solid rgba(27,56,40,0.08)' }}
-                >
-                  <div>
-                    <p className="font-semibold text-sm" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>Show member counts</p>
-                    <p className="text-xs mt-0.5" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}>How many delegates are in each committee.</p>
-                  </div>
-                  <span className="flex items-center gap-2 flex-shrink-0">
-                    {visibilitySavingKey === 'show_committee_counts' && (
-                      <div className="w-4 h-4 rounded-full border-2 border-t-transparent animate-spin" style={{ borderColor: '#1B3828', borderTopColor: 'transparent' }} />
-                    )}
-                    <PillToggle
-                      value={showCommitteeCounts}
-                      onChange={(v) => saveVisibility('show_committee_counts', v, setShowCommitteeCounts)}
-                      size="md"
-                      disabled={visibilitySavingKey !== null}
-                    />
-                  </span>
-                </div>
-                <div
-                  className="flex items-center justify-between p-4 rounded-xl"
-                  style={{ backgroundColor: 'rgba(27,56,40,0.03)', border: '1px solid rgba(27,56,40,0.08)' }}
-                >
-                  <div>
-                    <p className="font-semibold text-sm" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>Show taken countries</p>
-                    <p className="text-xs mt-0.5" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}>Which country slots are already allocated.</p>
-                  </div>
-                  <span className="flex items-center gap-2 flex-shrink-0">
-                    {visibilitySavingKey === 'show_taken_countries' && (
-                      <div className="w-4 h-4 rounded-full border-2 border-t-transparent animate-spin" style={{ borderColor: '#1B3828', borderTopColor: 'transparent' }} />
-                    )}
-                    <PillToggle
-                      value={showTakenCountries}
-                      onChange={(v) => saveVisibility('show_taken_countries', v, setShowTakenCountries)}
-                      size="md"
-                      disabled={visibilitySavingKey !== null}
-                    />
-                  </span>
-                </div>
-                <div
-                  className="flex items-center justify-between p-4 rounded-xl"
-                  style={{ backgroundColor: 'rgba(27,56,40,0.03)', border: '1px solid rgba(27,56,40,0.08)' }}
-                >
-                  <div>
-                    <p className="font-semibold text-sm" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>Show the committee list</p>
-                    <p className="text-xs mt-0.5" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}>Turn this off if your committees are not announced yet.</p>
-                  </div>
-                  <span className="flex items-center gap-2 flex-shrink-0">
-                    {visibilitySavingKey === 'show_committees' && (
-                      <div className="w-4 h-4 rounded-full border-2 border-t-transparent animate-spin" style={{ borderColor: '#1B3828', borderTopColor: 'transparent' }} />
-                    )}
-                    <PillToggle
-                      value={showCommittees}
-                      onChange={(v) => saveVisibility('show_committees', v, setShowCommittees)}
-                      size="md"
-                      disabled={visibilitySavingKey !== null}
-                    />
-                  </span>
-                </div>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Section 2: Conference banner and logo. The two things a visitor
-              actually sees, stacked banner first then logo with a divider,
-              no longer buried under six fields of logistics nobody opens
-              twice. */}
-          {/* Banner card */}
-          <div style={cardStyle}>
-            <StepHeader
-              n={2} label="Conference Banner and Logo" sub="The images at the top of your page."
-              complete={!!conference.banner_url && !!conference.logo_url} open={openConfSection === 2}
-              onClick={() => setOpenConfSection(openConfSection === 2 ? 0 : 2)}
-            />
-            {openConfSection === 2 && (
-            <div className="mt-5">
-            <p className="font-semibold text-base mb-1" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>Conference Banner</p>
-            <p className="text-sm mb-4" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}>Recommended: 1200x630px. JPG, PNG or WebP. Max 5MB.</p>
-            <div
-              style={{
-                border: '1.5px dashed #DDD4C0', borderRadius: 14, overflow: 'hidden',
-                backgroundColor: '#FAF8F3', minHeight: 140,
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                position: 'relative', cursor: 'pointer',
-              }}
-              onClick={() => { if (!bannerUploading) document.getElementById('settings-banner-upload')?.click(); }}
-              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#1B3828'; }}
-              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#DDD4C0'; }}
-            >
-              {view.banner_url ? (
-                <>
-                  <img src={view.banner_url} alt="Banner" style={{ width: '100%', height: '160px', objectFit: 'cover', display: 'block' }} />
-                  <button
-                    onClick={(e) => { e.stopPropagation(); document.getElementById('settings-banner-upload')?.click(); }}
-                    style={{
-                      position: 'absolute', top: 8, right: 8,
-                      backgroundColor: 'rgba(27,56,40,0.85)', color: '#EDE7D8',
-                      border: 'none', borderRadius: 8, padding: '4px 10px',
-                      fontSize: 11, fontFamily: "var(--font-brand), sans-serif", fontWeight: 700, cursor: 'pointer',
-                    }}
-                  >
-                    {bannerUploading ? 'Uploading…' : 'Change'}
-                  </button>
-                </>
-              ) : bannerUploading ? (
-                <div style={{ textAlign: 'center', padding: 24 }}>
-                  <div className="w-6 h-6 rounded-full border-2 border-t-transparent animate-spin mx-auto mb-2" style={{ borderColor: '#1B3828', borderTopColor: 'transparent' }} />
-                  <p style={{ fontSize: 12, color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}>Uploading...</p>
-                </div>
-              ) : (
-                <div style={{ textAlign: 'center', padding: 24 }}>
-                  <p style={{ fontSize: 13, fontWeight: 700, color: '#1C1410', fontFamily: "var(--font-brand), sans-serif", marginBottom: 4 }}>Click to upload banner</p>
-                  <p style={{ fontSize: 11, color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}>Recommended: 1200x630px</p>
-                </div>
-              )}
+          {/* ── Name, dates and place ── */}
+          <Group
+            id="details-card" title="Name, Dates and Place" emoji="Spiral calendar" icon={CalendarDays} tint={TINT_GOLD_BG}
+            aside={<AutoSaveStatus saving={detailsSaving} saved={detailsSaved} />}
+          >
+            <Row label="Full name" htmlFor="set-full-name">
               <input
-                id="settings-banner-upload"
-                type="file"
-                accept="image/jpeg,image/png,image/webp"
-                style={{ display: 'none' }}
-                onChange={(e) => { const f = e.target.files?.[0]; if (f) handleBannerUpload(f); e.target.value = ''; }}
+                id="set-full-name"
+                type="text"
+                value={fullName}
+                onChange={(e) => setFullName(e.target.value)}
+                placeholder="London International Model United Nations 2027"
+                style={FIELD}
+                onFocus={(e) => { onIdentityFocus(); e.currentTarget.style.borderColor = '#1B3828'; }}
+                onBlur={(e) => { onIdentityBlur(); e.currentTarget.style.borderColor = '#DDD4C0'; }}
               />
-            </div>
-
-            {/* Preset picker, one click sets banner_url to a bundled photo */}
-            <div style={{ marginTop: 14 }}>
-              <p style={{ fontFamily: "var(--font-brand), sans-serif", fontSize: 12, fontWeight: 600, letterSpacing: '0.01em', color: '#7A6E5E', margin: '0 0 8px 0' }}>
-                Or pick a preset
-              </p>
-              <div className="flex flex-wrap gap-2">
-                {BANNER_PRESETS.map(p => {
-                  const selected = view.banner_url === p;
-                  return (
-                    <button
-                      key={p}
-                      type="button"
-                      onClick={() => handleBannerPreset(p)}
-                      disabled={bannerUploading}
-                      aria-label={'Use preset banner ' + p}
-                      style={{
-                        width: 84, height: 48, padding: 0, borderRadius: 10, overflow: 'hidden',
-                        cursor: bannerUploading ? 'wait' : 'pointer',
-                        border: selected ? '2px solid #B6871F' : '1.5px solid #DDD4C0',
-                        boxShadow: selected ? '0 0 0 3px rgba(238,217,138,0.55)' : 'none',
-                        opacity: bannerUploading && !selected ? 0.6 : 1,
-                        transition: 'border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease',
-                        backgroundColor: '#EDE7D8',
-                      }}
-                      onMouseEnter={(e) => { if (!selected) (e.currentTarget as HTMLElement).style.transform = 'translateY(-2px)'; }}
-                      onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.transform = 'translateY(0)'; }}
-                    >
-                      <img src={p} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            <div className="my-5" style={{ borderTop: '1px solid #F0EDE6' }} />
-
-            <p className="font-semibold text-base mb-1" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>Conference Logo</p>
-            <p className="text-sm mb-4" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}>Square, transparent PNG recommended. Shown on your public page, directory cards and search. Max 5MB.</p>
-            <div className="flex items-center gap-5">
-              <div
-                style={{
-                  width: 96, height: 96, borderRadius: 20, flexShrink: 0,
-                  border: '1.5px dashed #DDD4C0', backgroundColor: '#FFFFFF',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  overflow: 'hidden', cursor: 'pointer', position: 'relative',
+            </Row>
+            <Row
+              label="Acronym" htmlFor="set-acronym"
+              desc={acronymError
+                ? <span style={{ color: '#8B2020' }}>{acronymError}</span>
+                : <span suppressHydrationWarning>Shown as <strong style={{ color: '#1C1410' }}>{conferenceAcronymLabel({ acronym, start_date: startDate || conference.start_date })}</strong></span>}
+            >
+              <input
+                id="set-acronym"
+                type="text"
+                value={acronym}
+                onChange={(e) => { setAcronym(e.target.value); if (acronymError) setAcronymError(''); }}
+                onFocus={(e) => { onIdentityFocus(); e.currentTarget.style.borderColor = '#1B3828'; }}
+                onBlur={(e) => {
+                  setAcronymError(acronymProblem(e.target.value));
+                  onIdentityBlur();
+                  e.currentTarget.style.borderColor = '#DDD4C0';
                 }}
-                onClick={() => { if (!logoUploading) document.getElementById('settings-logo-upload')?.click(); }}
-                onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#1B3828'; }}
-                onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#DDD4C0'; }}
-              >
-                {logoUploading ? (
-                  <div className="w-5 h-5 rounded-full border-2 animate-spin" style={{ borderColor: '#1B3828', borderTopColor: 'transparent' }} />
-                ) : view.logo_url ? (
-                  <LogoDisc src={view.logo_url} alt="Logo" size={80} fallbackText={view.acronym?.slice(0, 3)} />
-                ) : (
-                  <span style={{ fontSize: 11, color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif", textAlign: 'center', padding: '0 8px' }}>Click to upload</span>
-                )}
+                placeholder="e.g. LIMUN, or Model NATO Germany"
+                style={FIELD}
+              />
+            </Row>
+            <Row id="dates-card" label="Dates" on={datesPulse} desc={datesTbd ? 'A conference with dates to be decided stays private until you add them.' : undefined}>
+              <div className="flex flex-col gap-2">
+                <div className="flex gap-2 flex-wrap" style={datesTbd ? { opacity: 0.45, pointerEvents: 'none' } : undefined}>
+                  <div style={{ flex: '1 1 150px', minWidth: 0 }}>
+                    <DatePicker
+                      value={startDate}
+                      placeholder="Starts"
+                      onChange={(iso) => {
+                        setStartDate(iso);
+                        // Keep end ≥ start: clear a now-invalid end date.
+                        if (endDate && iso && endDate < iso) setEndDate('');
+                      }}
+                    />
+                  </div>
+                  <div style={{ flex: '1 1 150px', minWidth: 0 }}>
+                    <DatePicker
+                      value={endDate}
+                      placeholder="Ends"
+                      min={startDate || undefined}
+                      initialView={startDate || undefined}
+                      onChange={(iso) => setEndDate(iso)}
+                    />
+                  </div>
+                </div>
+                {/* Dates TBD: keeps the conference private (no public link) until real
+                    dates are set — mirrors the DB CHECK conferences_tbd_not_public.
+                    Applications can still open while dates are undecided. */}
+                <label className="inline-flex items-center gap-2.5 self-start cursor-pointer" style={{ fontFamily: "var(--font-brand), sans-serif", fontSize: 14, fontWeight: 600, color: '#1C1410' }}>
+                  <KitSwitch
+                    label="Dates are to be decided"
+                    checked={datesTbd}
+                    onChange={(nextTbd) => {
+                      setDatesTbd(nextTbd);
+                      // Turning TBD on clears any set dates so the row goes null.
+                      if (nextTbd) { setStartDate(''); setEndDate(''); }
+                    }}
+                  />
+                  Dates are to be decided
+                </label>
               </div>
-              <div>
-                <button
-                  onClick={() => { if (!logoUploading) document.getElementById('settings-logo-upload')?.click(); }}
-                  className="rounded-xl py-2 px-4 font-bold text-xs tracking-widest transition-colors focus:outline-none gv-lift"
-                  style={{ backgroundColor: '#1B3828', color: '#EED98A', fontFamily: "var(--font-brand), sans-serif", letterSpacing: 0 }}
-                  onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
-                  onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
-                >
-                  {logoUploading ? 'Uploading…' : view.logo_url ? 'Replace logo' : 'Upload logo'}
+            </Row>
+            <Row label="City" htmlFor="set-city">
+              <input
+                id="set-city"
+                type="text"
+                value={city}
+                onChange={(e) => setCity(e.target.value)}
+                placeholder="London"
+                style={FIELD}
+                onFocus={fgInput}
+                onBlur={bgInput}
+              />
+            </Row>
+            <Row label="Country" htmlFor="set-country">
+              <select
+                id="set-country"
+                value={country}
+                onChange={(e) => setCountry(e.target.value)}
+                style={{ ...FIELD, cursor: 'pointer' }}
+                onFocus={fgInput}
+                onBlur={bgInput}
+              >
+                <option value="">Select a country</option>
+                {UN_COUNTRIES.map(c => <option key={c.code} value={c.name}>{c.name}</option>)}
+              </select>
+            </Row>
+            <Row label="Format">
+              <div role="radiogroup" aria-label="Format" className="gv-fd-seg">
+                {([
+                  { value: 'in-person', label: 'In person' },
+                  { value: 'online', label: 'Online' },
+                  { value: 'hybrid', label: 'Hybrid' },
+                ] as { value: 'in-person' | 'online' | 'hybrid'; label: string }[]).map(opt => (
+                  <button key={opt.value} type="button" role="radio" aria-checked={format === opt.value} onClick={() => setFormat(opt.value)}>{opt.label}</button>
+                ))}
+              </div>
+            </Row>
+            <Row label="Student level">
+              <div role="radiogroup" aria-label="Student level" className="gv-fd-seg">
+                {([
+                  { value: 'school', label: 'High school' },
+                  { value: 'university', label: 'University' },
+                  { value: 'both', label: 'Both' },
+                ] as { value: 'school' | 'university' | 'both'; label: string }[]).map(opt => (
+                  <button key={opt.value} type="button" role="radio" aria-checked={studentLevel === opt.value} onClick={() => setStudentLevel(opt.value)}>{opt.label}</button>
+                ))}
+              </div>
+            </Row>
+            <Row label="Expected delegates" htmlFor="set-expected" align="end">
+              <input
+                id="set-expected"
+                type="number"
+                min={0}
+                value={expectedDelegates}
+                onChange={(e) => setExpectedDelegates(e.target.value)}
+                placeholder="1250"
+                style={{ ...FIELD, width: 130, fontVariantNumeric: 'tabular-nums' }}
+                onFocus={fgInput}
+                onBlur={bgInput}
+              />
+            </Row>
+            <Row
+              label="Age of participants"
+              hint={<InfoHint label="About the age range" text="Both ends are inclusive and both are measured on your conference's start date, so a delegate who turns sixteen the week before still counts as sixteen. Applicants outside the range are told before they fill anything in." />}
+              on={view.min_age != null || view.max_age != null}
+              desc={minAgeError
+                ? <span style={{ color: '#8B2020' }}>{minAgeError}</span>
+                : (view.min_age != null || view.max_age != null)
+                  ? (view.min_age != null && view.max_age != null
+                    ? `Between ${view.min_age} and ${view.max_age} on the first day.`
+                    : view.min_age != null ? `At least ${view.min_age} on the first day.` : `No older than ${view.max_age} on the first day.`)
+                  : 'Leave both empty for no limit.'}
+            >
+              <div className="flex items-center gap-2 flex-wrap">
+                <input
+                  type="number" min={10} max={99} step={1}
+                  aria-label="Minimum age"
+                  value={minAge}
+                  onChange={(e) => { setMinAge(e.target.value); setMinAgeError(''); }}
+                  placeholder="From"
+                  style={{ ...FIELD, width: 96, fontVariantNumeric: 'tabular-nums' }}
+                  onFocus={fgInput}
+                  onBlur={bgInput}
+                />
+                <span style={{ fontFamily: "var(--font-brand), sans-serif", fontSize: 14, color: '#5C4F42' }}>to</span>
+                <input
+                  type="number" min={10} max={99} step={1}
+                  aria-label="Maximum age"
+                  value={maxAge}
+                  onChange={(e) => { setMaxAge(e.target.value); setMinAgeError(''); }}
+                  placeholder="To"
+                  style={{ ...FIELD, width: 96, fontVariantNumeric: 'tabular-nums' }}
+                  onFocus={fgInput}
+                  onBlur={bgInput}
+                />
+                {(minAgeSaving || minAgeSaved) && <AutoSaveStatus saving={minAgeSaving} saved={minAgeSaved} />}
+              </div>
+            </Row>
+          </Group>
+
+          {/* ── About ── */}
+          <Group title="About Your Conference" emoji="Memo" icon={FileText} tint={TINT_GREEN_BG}>
+            <Row label="Description" htmlFor="set-description" desc="Shown on your public page.">
+              <textarea
+                id="set-description"
+                rows={5}
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder="Tell delegates about your conference, theme, highlights, what to expect..."
+                maxLength={1500}
+                style={{ ...FIELD, resize: 'vertical', lineHeight: '1.6' }}
+                onFocus={(e) => { e.currentTarget.style.borderColor = '#1B3828'; }}
+                onBlur={(e) => { e.currentTarget.style.borderColor = '#DDD4C0'; }}
+              />
+              <div style={{ textAlign: 'right', marginTop: 4, fontFamily: "var(--font-brand), sans-serif", fontSize: 12, fontWeight: 600, color: '#6E6152', fontVariantNumeric: 'tabular-nums' }}>
+                {description.length} / 1500
+              </div>
+            </Row>
+          </Group>
+
+          {/* ── Logo and banner: small previews, each with Change ── */}
+          <Group title="Logo and Banner" emoji="Framed picture" icon={ImageIcon} tint={TINT_GOLD_BG}>
+            <Row label="Logo" desc="Square, ideally a transparent PNG. Up to 5 MB." align="end" on={!!view.logo_url} need={!view.logo_url}>
+              <div className="flex items-center gap-3">
+                {logoUploading
+                  ? <span className="w-5 h-5 rounded-full border-2 animate-spin" style={{ borderColor: '#1B3828', borderTopColor: 'transparent' }} aria-hidden />
+                  : <LogoDisc src={view.logo_url} alt="Logo" size={52} fallbackText={view.acronym?.slice(0, 3)} />}
+                <button type="button" className="gv-st-btn gv-st-outline" style={{ minHeight: 40, padding: '0 14px' }} disabled={logoUploading} onClick={() => document.getElementById('settings-logo-upload')?.click()}>
+                  {logoUploading ? 'Uploading' : view.logo_url ? 'Change' : 'Upload'}
                 </button>
               </div>
               <input
@@ -4268,341 +3334,73 @@ export default function SettingsPage() {
                   setLogoCropFile(f);
                 }}
               />
-            </div>
-            </div>
-            )}
-          </div>
-
-          {/* Conference Details card */}
-          <div style={cardStyle}>
-            <StepHeader
-              n={3} label="Conference Details" sub="Name, dates, location, description and age range."
-              complete={!!(view.full_name?.trim() && view.city?.trim() && view.country?.trim() && view.description?.trim() && !view.dates_tbd && view.start_date && view.end_date)} open={openConfSection === 3}
-              status={detailsSaving ? 'saving' : detailsSaved ? 'saved' : 'idle'}
-              onClick={() => setOpenConfSection(openConfSection === 3 ? 0 : 3)}
-            />
-            {openConfSection === 3 && (
-            <div className="mt-5">
-            <p className="font-semibold text-base mb-1" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>Conference Details</p>
-            <p className="text-sm mb-4" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}>Core information shown on your public conference page and directory listing.</p>
-
-            <div className="mb-4">
-              <label className="block text-xs font-semibold mb-1" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>Full name</label>
-              <input
-                type="text"
-                value={fullName}
-                onChange={(e) => setFullName(e.target.value)}
-                placeholder="London International Model United Nations 2027"
-                style={inputStyle}
-                onFocus={(e) => { onIdentityFocus(); e.currentTarget.style.borderColor = '#1B3828'; }}
-                onBlur={(e) => { onIdentityBlur(); e.currentTarget.style.borderColor = '#DDD4C0'; }}
-              />
-            </div>
-
-            <div className="mb-4">
-              <label className="block text-xs font-semibold mb-1" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>Acronym</label>
-              <input
-                type="text"
-                value={acronym}
-                onChange={(e) => { setAcronym(e.target.value); if (acronymError) setAcronymError(''); }}
-                onFocus={(e) => { onIdentityFocus(); e.currentTarget.style.borderColor = '#1B3828'; }}
-                onBlur={(e) => {
-                  setAcronymError(acronymProblem(e.target.value));
-                  onIdentityBlur();
-                  e.currentTarget.style.borderColor = '#DDD4C0';
-                }}
-                placeholder="e.g. LIMUN, or Model NATO Germany"
-                style={inputStyle}
-              />
-              {acronymError ? (
-                <p className="text-xs mt-1" style={{ color: '#8B2020', fontFamily: "var(--font-brand), sans-serif" }}>{acronymError}</p>
-              ) : (
-                <p className="text-xs mt-1" suppressHydrationWarning style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}>
-                  Shown as <strong style={{ color: '#1C1410' }}>{conferenceAcronymLabel({ acronym, start_date: startDate || conference.start_date })}</strong>
-                </p>
-              )}
-            </div>
-
-            <div className="mb-4">
-              <label className="block text-xs font-semibold mb-2" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>Student level</label>
-              <div className="flex gap-2">
-                {([
-                  { value: 'school', label: 'High school' },
-                  { value: 'university', label: 'University' },
-                  { value: 'both', label: 'Both' },
-                ] as { value: 'school' | 'university' | 'both'; label: string }[]).map(opt => {
-                  const active = studentLevel === opt.value;
-                  return (
-                    <button
-                      key={opt.value}
-                      type="button"
-                      onClick={() => setStudentLevel(opt.value)}
-                      className="flex-1 rounded-xl py-2.5 font-bold text-xs transition-colors focus:outline-none gv-lift"
-                      style={{
-                        backgroundColor: active ? '#1B3828' : 'transparent',
-                        color: active ? '#EED98A' : '#9A8A78',
-                        border: active ? '1.5px solid #1B3828' : '1.5px solid #DDD4C0',
-                        fontFamily: "var(--font-brand), sans-serif", letterSpacing: 0,
-                      }}
-                    >
-                      {opt.label}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            <div className="mb-4">
-              <label className="block text-xs font-semibold mb-2" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>Format</label>
-              <div className="flex gap-2">
-                {([
-                  { value: 'in-person', label: 'In-person' },
-                  { value: 'online', label: 'Online' },
-                  { value: 'hybrid', label: 'Hybrid' },
-                ] as { value: 'in-person' | 'online' | 'hybrid'; label: string }[]).map(opt => {
-                  const active = format === opt.value;
-                  return (
-                    <button
-                      key={opt.value}
-                      type="button"
-                      onClick={() => setFormat(opt.value)}
-                      className="flex-1 rounded-xl py-2.5 font-bold text-xs transition-colors focus:outline-none gv-lift"
-                      style={{
-                        backgroundColor: active ? '#1B3828' : 'transparent',
-                        color: active ? '#EED98A' : '#9A8A78',
-                        border: active ? '1.5px solid #1B3828' : '1.5px solid #DDD4C0',
-                        fontFamily: "var(--font-brand), sans-serif", letterSpacing: 0,
-                      }}
-                    >
-                      {opt.label}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            <div
-              id="dates-card"
-              className="rounded-xl"
-              style={{
-                boxShadow: datesPulse
-                  ? '0 0 0 3px rgba(238,217,138,0.55), 0 1px 2px rgba(27,56,40,0.04)'
-                  : 'none',
-                transition: 'box-shadow 400ms ease',
-              }}
-            >
-              <div
-                className="flex gap-3 mb-3"
-                style={datesTbd ? { opacity: 0.4, pointerEvents: 'none' } : undefined}
-              >
-                <div className="flex-1">
-                  <label className="block text-xs font-semibold mb-1" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>Start date</label>
-                  <DatePicker
-                    value={startDate}
-                    onChange={(iso) => {
-                      setStartDate(iso);
-                      // Keep end ≥ start: clear a now-invalid end date.
-                      if (endDate && iso && endDate < iso) setEndDate('');
-                    }}
+            </Row>
+            <Row label="Banner" desc="1200 x 630 works best. Up to 5 MB." on={!!view.banner_url} need={!view.banner_url}>
+              <div className="flex flex-col gap-2.5">
+                <div className="flex items-center gap-3 flex-wrap">
+                  <span className="relative overflow-hidden flex-shrink-0" style={{ width: 168, height: 64, borderRadius: 12, background: 'linear-gradient(135deg, #E9E2CF, #F6F1E4)', boxShadow: '0 0 0 1px rgba(27,56,40,0.08)' }}>
+                    {view.banner_url && <img src={view.banner_url} alt="Your banner" className="absolute inset-0 w-full h-full object-cover" />}
+                    {bannerUploading && <span className="absolute inset-0 flex items-center justify-center" style={{ background: 'rgba(255,255,255,0.6)' }}><span className="w-5 h-5 rounded-full border-2 animate-spin" style={{ borderColor: '#1B3828', borderTopColor: 'transparent' }} aria-hidden /></span>}
+                  </span>
+                  <button type="button" className="gv-st-btn gv-st-outline" style={{ minHeight: 40, padding: '0 14px' }} disabled={bannerUploading} onClick={() => document.getElementById('settings-banner-upload')?.click()}>
+                    {bannerUploading ? 'Uploading' : view.banner_url ? 'Change' : 'Upload'}
+                  </button>
+                  <input
+                    id="settings-banner-upload"
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    style={{ display: 'none' }}
+                    onChange={(e) => { const f = e.target.files?.[0]; if (f) handleBannerUpload(f); e.target.value = ''; }}
                   />
                 </div>
-                <div className="flex-1">
-                  <label className="block text-xs font-semibold mb-1" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>End date</label>
-                  <DatePicker
-                    value={endDate}
-                    min={startDate || undefined}
-                    initialView={startDate || undefined}
-                    onChange={(iso) => setEndDate(iso)}
-                  />
+                {/* Preset picker, one click sets banner_url to a bundled photo */}
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <span style={{ fontFamily: "var(--font-brand), sans-serif", fontSize: 12.5, fontWeight: 600, color: '#5C4F42', marginRight: 2 }}>Or pick one</span>
+                  {BANNER_PRESETS.map((pth, i) => {
+                    const selected = view.banner_url === pth;
+                    return (
+                      <button
+                        key={pth}
+                        type="button"
+                        onClick={() => handleBannerPreset(pth)}
+                        disabled={bannerUploading}
+                        aria-label={`Use banner photo ${i + 1}`}
+                        aria-pressed={selected}
+                        className="focus:outline-none focus-visible:ring-2"
+                        style={{
+                          width: 56, height: 32, padding: 0, borderRadius: 8, overflow: 'hidden', cursor: bannerUploading ? 'wait' : 'pointer',
+                          border: 'none', boxShadow: selected ? '0 0 0 2px #B6871F, 0 0 0 4px rgba(238,217,138,0.55)' : '0 0 0 1px rgba(27,56,40,0.12)',
+                          backgroundColor: '#EDE7D8',
+                        }}
+                      >
+                        <img src={pth} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
+            </Row>
+          </Group>
 
-              {/* Dates TBD: keeps the conference private (no public link) until real
-                  dates are set — mirrors the DB CHECK conferences_tbd_not_public.
-                  Applications can still open while dates are undecided. */}
-              <button
-                type="button"
-                onClick={() => {
-                  setDatesTbd((prev) => {
-                    const nextTbd = !prev;
-                    // Turning TBD on clears any set dates so the row goes null.
-                    if (nextTbd) { setStartDate(''); setEndDate(''); }
-                    return nextTbd;
-                  });
-                }}
-                className="flex items-start gap-3 w-full text-left mb-4 focus:outline-none"
-              >
-                <span
-                  className="flex items-center justify-center flex-shrink-0"
-                  style={{
-                    width: '20px', height: '20px', borderRadius: '6px',
-                    marginTop: '1px',
-                    backgroundColor: datesTbd ? '#1B3828' : 'transparent',
-                    border: datesTbd ? '1.5px solid #1B3828' : '1.5px solid #C9BEA6',
-                    transition: 'background-color 150ms ease, border-color 150ms ease',
-                  }}
-                >
-                  {datesTbd && <Check size={13} strokeWidth={3} color="#EED98A" />}
-                </span>
-                <span>
-                  <span className="block text-sm font-semibold" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>
-                    Dates are to be decided (TBD)
-                  </span>
-                  <span className="block text-xs mt-0.5" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}>
-                    A TBD conference stays private (no public link) until you add dates. Applications can still open.
-                  </span>
-                </span>
-              </button>
-            </div>
-
-            <div className="flex gap-3 mb-4">
-              <div className="flex-1">
-                <label className="block text-xs font-semibold mb-1" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>City</label>
-                <input
-                  type="text"
-                  value={city}
-                  onChange={(e) => setCity(e.target.value)}
-                  placeholder="London"
-                  style={inputStyle}
-                  onFocus={(e) => { e.currentTarget.style.borderColor = '#1B3828'; }}
-                  onBlur={(e) => { e.currentTarget.style.borderColor = '#DDD4C0'; }}
-                />
-              </div>
-              <div className="flex-1">
-                <label className="block text-xs font-semibold mb-1" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>Country</label>
-                <select
-                  value={country}
-                  onChange={(e) => setCountry(e.target.value)}
-                  style={{ ...inputStyle, cursor: 'pointer' }}
-                  onFocus={(e) => { e.currentTarget.style.borderColor = '#1B3828'; }}
-                  onBlur={(e) => { e.currentTarget.style.borderColor = '#DDD4C0'; }}
-                >
-                  <option value="">Select a country</option>
-                  {UN_COUNTRIES.map(c => <option key={c.code} value={c.name}>{c.name}</option>)}
-                </select>
-              </div>
-            </div>
-
-            <div className="mb-5">
-              <label className="block text-xs font-semibold mb-1" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>Expected delegates</label>
-              <input
-                type="number"
-                min={0}
-                value={expectedDelegates}
-                onChange={(e) => setExpectedDelegates(e.target.value)}
-                placeholder="1250"
-                style={inputStyle}
-                onFocus={(e) => { e.currentTarget.style.borderColor = '#1B3828'; }}
-                onBlur={(e) => { e.currentTarget.style.borderColor = '#DDD4C0'; }}
+          {/* ── Colours ── */}
+          <Group title="Your Colours" emoji="Artist palette" icon={Palette} tint={TINT_GREEN_BG}>
+            <div className="gvk-row" style={{ display: 'block' }}>
+              <CustomizationCard
+                conferenceId={conference.id}
+                conferenceSlug={conference.slug}
+                initialDraft={conference.theme_draft ?? {}}
+                initialPublished={conference.theme ?? {}}
+                cardStyle={{ padding: 0, margin: 0, border: 'none', boxShadow: 'none', backgroundColor: 'transparent', borderRadius: 0 }}
               />
             </div>
+          </Group>
 
-            <div className="mb-5">
-              <p className="font-semibold text-base mb-1" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>Description</p>
-              <p className="text-sm mb-4" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}>Shown on your public conference page.</p>
-              <textarea
-                rows={6}
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                placeholder="Tell delegates about your conference, theme, highlights, what to expect..."
-                maxLength={1500}
-                style={{ ...inputStyle, resize: 'vertical', lineHeight: '1.6' }}
-                onFocus={(e) => { e.currentTarget.style.borderColor = '#1B3828'; }}
-                onBlur={(e) => { e.currentTarget.style.borderColor = '#DDD4C0'; }}
-              />
-              <div style={{ textAlign: 'right', marginTop: 6, fontFamily: "var(--font-brand), sans-serif", fontSize: 11.5, fontWeight: 600, color: '#9A8A78', fontVariantNumeric: 'tabular-nums' }}>
-                {description.length} / 1500
-              </div>
-            </div>
-
-            <div className="mb-5">
-            <p className="font-semibold text-base mb-1 flex items-center gap-2" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>
-              <Emoji3D name="Birthday cake" size={20} />
-              Age of participants
-              <InfoHint
-                label="About the age range"
-                text="Both bounds are inclusive and both are measured on your conference's start date, not on the day someone applies, so a delegate who turns sixteen the week before still counts as sixteen. Leave either end empty for no limit at that end. Applicants outside the range are told before they fill anything in, rather than after."
-              />
-            </p>
-            <p className="text-sm mb-4" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}>
-              Checked against each applicant&apos;s date of birth, on the day your conference starts. Leave either box empty for no limit.
-            </p>
-            <div className="flex items-end flex-wrap" style={{ gap: 14 }}>
-              <div style={{ width: '150px' }}>
-                <label className="block text-xs font-semibold mb-1" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>
-                  Minimum age
-                </label>
-                <input
-                  type="number"
-                  min={10}
-                  max={99}
-                  step={1}
-                  value={minAge}
-                  onChange={(e) => { setMinAge(e.target.value); setMinAgeError(''); }}
-                  placeholder="No limit"
-                  style={inputStyle}
-                  onFocus={fgInput}
-                  onBlur={bgInput}
-                />
-              </div>
-              <div style={{ width: '150px' }}>
-                <label className="block text-xs font-semibold mb-1" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>
-                  Maximum age
-                </label>
-                <input
-                  type="number"
-                  min={10}
-                  max={99}
-                  step={1}
-                  value={maxAge}
-                  onChange={(e) => { setMaxAge(e.target.value); setMinAgeError(''); }}
-                  placeholder="No limit"
-                  style={inputStyle}
-                  onFocus={fgInput}
-                  onBlur={bgInput}
-                />
-              </div>
-              <div className="pb-2">
-                <AutoSaveStatus saving={minAgeSaving} saved={minAgeSaved} />
-              </div>
-            </div>
-            {minAgeError && (
-              <p className="text-xs mt-2" style={{ color: '#8B2020', fontFamily: "var(--font-brand), sans-serif" }}>{minAgeError}</p>
-            )}
-            {!minAgeError && (view.min_age != null || view.max_age != null) && (
-              <p className="text-xs mt-3" style={{ color: '#1B3828', fontFamily: "var(--font-brand), sans-serif" }}>
-                {view.min_age != null && view.max_age != null
-                  ? `Applicants must be between ${view.min_age} and ${view.max_age} years old at the start of your conference.`
-                  : view.min_age != null
-                    ? `Applicants must be at least ${view.min_age} years old at the start of your conference.`
-                    : `Applicants must be no older than ${view.max_age} at the start of your conference.`}
-              </p>
-            )}
-            </div>
-
-            <AutoSaveStatus saving={detailsSaving} saved={detailsSaved} />
-            </div>
-            )}
-          </div>
-
-          {/* Section 4: Partners and sponsors. Moved here from the Privacy
-              tab: partners are conference identity, not a privacy setting. */}
-          <div style={cardStyle}>
-            <StepHeader
-              n={4} label="Partners and Sponsors" sub="Other conferences and companies shown on your page."
-              complete={partners.length > 0} open={openConfSection === 4}
-              onClick={() => setOpenConfSection(openConfSection === 4 ? 0 : 4)}
-            />
-            {openConfSection === 4 && (
-            <div className="mt-5">
-        <p className="font-semibold text-base mb-1" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>
-          Partners
-        </p>
-        <p className="text-sm mb-5" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}>
-          Showcase partner conferences and sponsoring companies on your public page. A conference link only appears
-          once that conference&apos;s team approves it; a company you add yourself appears straight away.
-        </p>
-
+          {/* ── Partners and sponsors ── */}
+          <Group
+            title="Partners and Sponsors" emoji="Handshake" icon={Handshake} tint={TINT_GOLD_BG}
+            hint={<InfoHint label="About partners" text="A conference link only appears once that conference's team approves it. A company you add yourself appears straight away." />}
+          >
+            <div className="gvk-row" style={{ display: 'block' }}>
         {/* Kind chooser. Asked first because the two flows share nothing: one
             searches Gavelling for a conference to link, the other takes a name,
             a logo and a description typed here. */}
@@ -4678,7 +3476,7 @@ export default function SettingsPage() {
                     }}
                   />
                 </label>
-                <p className="text-xs mt-1.5" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}>
+                <p className="text-xs mt-1.5" style={{ color: '#6E6152', fontFamily: "var(--font-brand), sans-serif" }}>
                   PNG or JPG, under 5MB. Optional.
                 </p>
               </div>
@@ -4778,7 +3576,7 @@ export default function SettingsPage() {
                     <span className="block font-bold text-sm [overflow-wrap:anywhere]" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>
                       {conferenceAcronymLabel(c)}
                     </span>
-                    <span className="block text-xs [overflow-wrap:anywhere]" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}>
+                    <span className="block text-xs [overflow-wrap:anywhere]" style={{ color: '#6E6152', fontFamily: "var(--font-brand), sans-serif" }}>
                       {[c.city, c.country].filter(Boolean).join(', ') || c.full_name}
                     </span>
                   </span>
@@ -4797,7 +3595,7 @@ export default function SettingsPage() {
           Linked partners
         </p>
         {partners.length === 0 ? (
-          <p className="text-sm" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}>
+          <p className="text-sm" style={{ color: '#6E6152', fontFamily: "var(--font-brand), sans-serif" }}>
             No partners added yet.
           </p>
         ) : (
@@ -4832,7 +3630,7 @@ export default function SettingsPage() {
                       {partnerLabel(link)}{!isCompany && year ? ` ${year}` : ''}
                     </p>
                     {subLine && (
-                      <p className="text-xs [overflow-wrap:anywhere]" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}>
+                      <p className="text-xs [overflow-wrap:anywhere]" style={{ color: '#6E6152', fontFamily: "var(--font-brand), sans-serif" }}>
                         {subLine}
                       </p>
                     )}
@@ -4879,7 +3677,7 @@ export default function SettingsPage() {
                       disabled={idx === 0}
                       aria-label="Move partner up"
                       className="text-xs focus:outline-none px-1 transition-colors"
-                      style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif", background: 'transparent', border: 'none', cursor: idx === 0 ? 'default' : 'pointer', opacity: idx === 0 ? 0.3 : 1 }}
+                      style={{ color: '#6E6152', fontFamily: "var(--font-brand), sans-serif", background: 'transparent', border: 'none', cursor: idx === 0 ? 'default' : 'pointer', opacity: idx === 0 ? 0.3 : 1 }}
                       onMouseEnter={(e) => { if (idx !== 0) (e.currentTarget as HTMLElement).style.color = '#1B3828'; }}
                       onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = '#9A8A78'; }}
                     >
@@ -4890,7 +3688,7 @@ export default function SettingsPage() {
                       disabled={idx === partners.length - 1}
                       aria-label="Move partner down"
                       className="text-xs focus:outline-none px-1 transition-colors"
-                      style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif", background: 'transparent', border: 'none', cursor: idx === partners.length - 1 ? 'default' : 'pointer', opacity: idx === partners.length - 1 ? 0.3 : 1 }}
+                      style={{ color: '#6E6152', fontFamily: "var(--font-brand), sans-serif", background: 'transparent', border: 'none', cursor: idx === partners.length - 1 ? 'default' : 'pointer', opacity: idx === partners.length - 1 ? 0.3 : 1 }}
                       onMouseEnter={(e) => { if (idx !== partners.length - 1) (e.currentTarget as HTMLElement).style.color = '#1B3828'; }}
                       onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = '#9A8A78'; }}
                     >
@@ -4911,7 +3709,7 @@ export default function SettingsPage() {
 
                 {isCompany && (
                   <div className="mt-2" style={{ paddingLeft: '52px' }}>
-                    <label className="block text-[10px] font-bold mb-1" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif", letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+                    <label className="block text-[12px] font-bold mb-1" style={{ color: '#6E6152', fontFamily: "var(--font-brand), sans-serif", letterSpacing: '0.06em', textTransform: 'uppercase' }}>
                       Website
                     </label>
                     <input
@@ -4928,7 +3726,7 @@ export default function SettingsPage() {
                       onFocus={fgInput}
                     />
                     {partnerUrlWarnings[link.id] && (
-                      <p className="text-[10.5px] mt-1" style={{ color: '#B8844A', fontFamily: "var(--font-brand), sans-serif" }}>
+                      <p className="text-[13px] mt-1" style={{ color: '#B8844A', fontFamily: "var(--font-brand), sans-serif" }}>
                         Links must start with https:// to be secure.
                       </p>
                     )}
@@ -4963,13 +3761,13 @@ export default function SettingsPage() {
                   >
                     <PartnerDisc logoUrl={claim.requester_logo_url} acronym={claim.requester_acronym} />
                     <div className="flex-1 min-w-0">
-                      <p style={{ fontSize: 10, color: '#B6871F', fontFamily: "var(--font-brand), sans-serif", fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', fontVariantNumeric: 'tabular-nums' }}>
+                      <p style={{ fontSize: 12, color: '#B6871F', fontFamily: "var(--font-brand), sans-serif", fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', fontVariantNumeric: 'tabular-nums' }}>
                         {claim.requester_acronym}{year ? ' · ' + year : ''}
                       </p>
                       <p className="font-semibold text-sm [overflow-wrap:anywhere]" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>
                         {claim.requester_full_name}
                       </p>
-                      <p className="text-xs [overflow-wrap:anywhere]" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}>
+                      <p className="text-xs [overflow-wrap:anywhere]" style={{ color: '#6E6152', fontFamily: "var(--font-brand), sans-serif" }}>
                         {cityLine ? cityLine + ', ' : ''}wants to list {view.acronym} as a partner conference
                       </p>
                     </div>
@@ -5012,31 +3810,26 @@ export default function SettingsPage() {
             </div>
           </div>
         )}
-
             </div>
-            )}
-          </div>
+          </Group>
 
-          {/* Section 5: Social media and communication. Contact email first,
-              because it is the one an applicant actually uses to reach a
-              conference, then the five URL fields. */}
-          <div style={cardStyle}>
-            <StepHeader
-              n={5} label="Social Media and Communication" sub="How applicants find you and reach you."
-              complete={!!(view.instagram_url?.trim() || view.facebook_url?.trim() || view.tiktok_url?.trim() || view.whatsapp_url?.trim() || view.website_url?.trim() || view.contact_email?.trim())} open={openConfSection === 5}
-              status={visualSaving ? 'saving' : visualSaved ? 'saved' : 'idle'}
-              onClick={() => setOpenConfSection(openConfSection === 5 ? 0 : 5)}
-            />
-            {openConfSection === 5 && (
-            <div className="mt-5">
-            <div className="mb-3">
-              <label className="block text-xs font-semibold mb-1" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>Contact email</label>
+          {/* ── Contact and links ── */}
+          <Group
+            id="contact-card" title="Contact and Links" emoji="Envelope" icon={MailIcon} tint={TINT_GREEN_BG}
+            aside={<AutoSaveStatus saving={visualSaving} saved={visualSaved} />}
+          >
+            <Row
+              label="Contact email" htmlFor="set-contact-email"
+              desc={contactEmailError ? <span style={{ color: '#8B2020' }}>{contactEmailError}</span> : 'Where applicants write to you.'}
+              on={!!view.contact_email?.trim()}
+            >
               <input
+                id="set-contact-email"
                 type="email"
                 value={contactEmail}
                 onChange={(e) => { setContactEmail(e.target.value); if (contactEmailError) setContactEmailError(''); }}
                 placeholder="hello@yourmun.org"
-                style={inputStyle}
+                style={FIELD}
                 onFocus={(e) => { e.currentTarget.style.borderColor = '#1B3828'; }}
                 onBlur={(e) => {
                   const trimmed = e.target.value.trim();
@@ -5045,66 +3838,39 @@ export default function SettingsPage() {
                   e.currentTarget.style.borderColor = '#DDD4C0';
                 }}
               />
-              {contactEmailError && (
-                <p className="text-xs mt-1" style={{ color: '#8B2020', fontFamily: "var(--font-brand), sans-serif" }}>{contactEmailError}</p>
-              )}
-            </div>
-            <div className="flex flex-col gap-3">
-              {([
-                { label: 'Instagram URL', value: instagramUrl, setter: setInstagramUrl },
-                { label: 'Facebook URL', value: facebookUrl, setter: setFacebookUrl },
-                { label: 'TikTok URL', value: tiktokUrl, setter: setTiktokUrl },
-                { label: 'WhatsApp URL', value: whatsappUrl, setter: setWhatsappUrl },
-                { label: 'Website URL', value: websiteUrl, setter: setWebsiteUrl },
-              ] as { label: string; value: string; setter: (v: string) => void }[]).map(({ label, value, setter }) => (
-                <div key={label}>
-                  <label className="block text-xs font-semibold mb-1" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>{label}</label>
-                  <input
-                    type="url"
-                    value={value}
-                    onChange={(e) => setter(e.target.value)}
-                    placeholder="https://"
-                    style={inputStyle}
-                    onFocus={(e) => { e.currentTarget.style.borderColor = '#1B3828'; }}
-                    onBlur={(e) => { e.currentTarget.style.borderColor = '#DDD4C0'; }}
-                  />
-                </div>
-              ))}
-            </div>
-            </div>
-            )}
-          </div>
+            </Row>
+            {([
+              { label: 'Website', value: websiteUrl, setter: setWebsiteUrl },
+              { label: 'Instagram', value: instagramUrl, setter: setInstagramUrl },
+              { label: 'WhatsApp', value: whatsappUrl, setter: setWhatsappUrl },
+              { label: 'TikTok', value: tiktokUrl, setter: setTiktokUrl },
+              { label: 'Facebook', value: facebookUrl, setter: setFacebookUrl },
+            ] as { label: string; value: string; setter: (v: string) => void }[]).map(({ label, value, setter }) => (
+              <Row key={label} label={label} htmlFor={`set-link-${label}`} on={!!value.trim()}>
+                <input
+                  id={`set-link-${label}`}
+                  type="url"
+                  value={value}
+                  onChange={(e) => setter(e.target.value)}
+                  placeholder="https://"
+                  style={FIELD}
+                  onFocus={fgInput}
+                  onBlur={bgInput}
+                />
+              </Row>
+            ))}
+          </Group>
 
           {/* ── What you use Gavelling for ──────────────────────────────────
-              The creation wizard asks this once on the way out and nothing
-              could change it afterwards, so a conference whose needs moved
-              (applications closed, the rooms are next) was stuck with the
-              order it picked in week one. Six options, straight from
-              INTENT_OPTIONS, written back through intentPayload.
-
-              Deliberately last in this tab: everything above it is the
-              conference the public sees, this is a preference about the
-              organiser's own dashboard. ── */}
-          <div
-            id="intent-card"
-            style={{
-              ...cardStyle,
-              boxShadow: intentPulse
-                ? '0 0 0 3px rgba(238,217,138,0.55), 0 1px 2px rgba(27,56,40,0.04)'
-                : cardStyle.boxShadow,
-              transition: 'box-shadow 400ms ease',
-            }}
+              The creation wizard asks this once; editable here. It only sorts
+              the dashboard's pending priorities (src/lib/conferenceIntent.ts):
+              nothing is switched on or off and nothing is hidden. ── */}
+          <Group
+            id="intent-card" pulse={intentPulse}
+            title="What You Use Gavelling For" emoji="Compass" icon={Compass} tint={TINT_GOLD_BG}
+            hint={<InfoHint label="About this" text="It only changes the order of the priorities on your dashboard. Nothing is switched on or off, and no work is hidden. Pick everything that applies." />}
+            aside={<AutoSaveStatus saving={intentSaving} saved={intentSaved} />}
           >
-            <p className="font-semibold text-base mb-1" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>
-              What you use Gavelling for
-            </p>
-            {/* One line, and it says exactly what the setting does. It is not a
-                permission, it turns nothing on or off, and it never hides a
-                priority — `financials` in particular gates both the checkmark
-                and publishing, so a hidden row would be a real bug. */}
-            <p className="text-sm mb-4" style={{ color: NEU.inkSoft, fontFamily: "var(--font-brand), sans-serif" }}>
-              This only changes the order of the priorities on your dashboard. Nothing is switched on or off, and no work is hidden. Pick everything that applies.
-            </p>
             <div className="grid grid-cols-1 sm:grid-cols-2" style={{ gap: 8 }}>
               {INTENT_OPTIONS.map(opt => {
                 const on = intentKeys.includes(opt.key);
@@ -5115,57 +3881,215 @@ export default function SettingsPage() {
                     role="checkbox"
                     aria-checked={on}
                     onClick={() => toggleIntent(opt.key)}
-                    className="flex items-start rounded-xl focus:outline-none text-left"
+                    className="flex items-center rounded-xl focus:outline-none focus-visible:ring-2 text-left"
                     style={{
-                      gap: 10, padding: '12px 13px',
-                      backgroundColor: on ? 'rgba(27,56,40,0.06)' : 'transparent',
-                      border: on ? '1.5px solid #1B3828' : '1.5px solid #DDD4C0',
-                      boxShadow: on ? '0 4px 12px rgba(27,56,40,0.14)' : 'none',
+                      gap: 10, padding: '10px 12px', border: 'none', cursor: 'pointer',
+                      background: on ? 'linear-gradient(150deg, rgba(61,122,82,0.14), rgba(61,122,82,0.05))' : '#FAF8F3',
+                      boxShadow: on ? 'inset 3px 0 0 #2A5A3C' : 'none',
                       fontFamily: "var(--font-brand), sans-serif",
-                      cursor: 'pointer',
-                      transition: 'background-color 150ms ease, border-color 150ms ease, box-shadow 150ms ease',
+                      transition: 'background-color 150ms ease, box-shadow 150ms ease',
                     }}
                   >
-                    <span
-                      className="flex items-center justify-center flex-shrink-0"
-                      style={{
-                        width: 20, height: 20, borderRadius: 6, marginTop: 1,
-                        backgroundColor: on ? '#1B3828' : 'transparent',
-                        border: on ? '1.5px solid #1B3828' : '1.5px solid #C9BEA6',
-                        transition: 'background-color 150ms ease, border-color 150ms ease',
-                      }}
-                    >
-                      {on && <Check size={13} strokeWidth={3} color="#EED98A" />}
+                    <EmojiDisc emoji={opt.emoji} icon={INTENT_FALLBACK_ICONS[opt.key] ?? ClipboardList} tint={on ? TINT_GREEN_BG : TINT_GOLD_BG} size={34} />
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-sm font-bold" style={{ color: '#1C1410' }}>{opt.label}</span>
                     </span>
-                    <Emoji3D
-                      name={opt.emoji}
-                      size={26}
-                      fallback={INTENT_FALLBACK_ICONS[opt.key]}
-                      fallbackColor="#1B3828"
-                      style={{ flexShrink: 0, marginTop: -1 }}
-                    />
-                    <span className="min-w-0">
-                      <span className="block text-sm font-semibold" style={{ color: '#1C1410' }}>{opt.label}</span>
-                      <span className="block text-xs mt-0.5" style={{ color: NEU.inkSoft, lineHeight: 1.45 }}>{opt.sub}</span>
-                    </span>
+                    {on && <CheckCircle2 size={18} strokeWidth={2.6} color="#1B3828" aria-hidden className="flex-shrink-0" />}
                   </button>
                 );
               })}
             </div>
-            {/* Clearing everything is a real answer, not an empty form:
-                intentPayload writes skipped:true and the dashboard keeps its
-                plain build order. Worth saying, because an all-grey card
-                otherwise looks like nothing was saved. */}
             {intentKeys.length === 0 && (
-              <p className="text-xs mt-3" style={{ color: NEU.inkSoft, fontFamily: "var(--font-brand), sans-serif" }}>
+              <p className="text-xs" style={{ color: NEU.inkSoft, fontFamily: "var(--font-brand), sans-serif" }}>
                 Nothing picked. Your dashboard lists the priorities in the normal build order.
               </p>
             )}
-            <AutoSaveStatus saving={intentSaving} saved={intentSaved} />
+          </Group>
+
+          {/* ── Editions (lineage) ── */}
+          <Group
+            title="Past Editions" emoji="Books" icon={History} tint={TINT_GREEN_BG}
+            hint={<InfoHint label="About editions" text="Link editions of the same conference across years. A link only counts once the previous edition's owner approves it." />}
+          >
+            <div className="gvk-row" style={{ display: 'block' }}>
+        {/* Outgoing claim: this conference's predecessor */}
+        <p
+          className="text-xs font-bold mb-2"
+          style={{ color: '#6E5F4E', fontFamily: "var(--font-brand), sans-serif", letterSpacing: '0.02em' }}
+        >
+          Previous edition
+        </p>
+        {view.predecessor_conference_id ? (
+          <div
+            className="flex items-center gap-3 px-4 py-3 rounded-xl mb-6"
+            style={{ backgroundColor: 'rgba(27,56,40,0.03)', border: '1px solid rgba(27,56,40,0.08)' }}
+          >
+            <div className="flex-1 min-w-0">
+              <p className="font-semibold text-sm [overflow-wrap:anywhere]" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>
+                {predecessorInfo?.full_name ?? 'A private conference'}
+              </p>
+              <p className="text-xs" style={{ color: '#6E6152', fontFamily: "var(--font-brand), sans-serif" }}>
+                {view.predecessor_approved
+                  ? 'Confirmed as the previous edition of this conference.'
+                  : 'Waiting for its Main Organiser to confirm the link.'}
+              </p>
+            </div>
+            <span className="flex-shrink-0">
+              <Pill tone={view.predecessor_approved ? 'forest' : 'gold'} size="sm" dot>
+                {view.predecessor_approved ? 'Approved' : 'Pending approval'}
+              </Pill>
+            </span>
+            <button
+              onClick={handleWithdrawClaim}
+              disabled={withdrawingClaim}
+              className="text-xs font-semibold focus:outline-none hover:underline flex-shrink-0"
+              style={{ color: '#8B2020', fontFamily: "var(--font-brand), sans-serif" }}
+            >
+              {withdrawingClaim ? 'Withdrawing…' : 'Withdraw'}
+            </button>
           </div>
+        ) : (
+          <p className="text-sm mb-6" style={{ color: '#6E6152', fontFamily: "var(--font-brand), sans-serif" }}>
+            No previous edition linked. You can link one when creating your next edition on Gavelling.
+          </p>
+        )}
+
+        {/* Incoming claims: conferences claiming this one as their predecessor */}
+        <p
+          className="text-xs font-bold mb-2"
+          style={{ color: '#6E5F4E', fontFamily: "var(--font-brand), sans-serif", letterSpacing: '0.02em' }}
+        >
+          Incoming claims
+        </p>
+        {incomingClaims.length === 0 ? (
+          <p className="text-sm" style={{ color: '#6E6152', fontFamily: "var(--font-brand), sans-serif" }}>
+            No conferences currently claim {view.acronym} as their previous edition.
+          </p>
+        ) : (
+          <div className="flex flex-col">
+            {incomingClaims.map((claim, idx) => {
+              const isLast = idx === incomingClaims.length - 1;
+              const year = claim.start_date ? new Date(claim.start_date + 'T00:00:00').getFullYear() : null;
+              return (
+                <div
+                  key={claim.id}
+                  className="flex items-center gap-3 py-3"
+                  style={{ borderBottom: isLast ? 'none' : '1px solid #F0EDE6' }}
+                >
+                  <div className="flex-1 min-w-0">
+                    <p style={{ fontSize: 12, color: '#B6871F', fontFamily: "var(--font-brand), sans-serif", fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase' }}>
+                      {claim.acronym}{year ? ' · ' + year : ''}
+                    </p>
+                    <p className="font-semibold text-sm [overflow-wrap:anywhere]" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>
+                      {claim.full_name}
+                    </p>
+                    <p className="text-xs" style={{ color: '#6E6152', fontFamily: "var(--font-brand), sans-serif" }}>
+                      claims to be the next edition of {view.acronym}
+                    </p>
+                  </div>
+
+                  {claim.predecessor_approved ? (
+                    <span className="flex-shrink-0">
+                      <Pill tone="forest" size="sm" dot>Approved</Pill>
+                    </span>
+                  ) : isOwner ? (
+                    <div className="flex gap-2 flex-shrink-0">
+                      <button
+                        onClick={() => handleClaimDecision(claim.id, true)}
+                        disabled={lineageBusy === claim.id}
+                        className="rounded-lg py-1.5 px-3 font-bold text-[11px] focus:outline-none transition-colors gv-lift"
+                        style={{
+                          backgroundColor: lineageBusy === claim.id ? '#DDD4C0' : '#1B3828',
+                          color: lineageBusy === claim.id ? '#9A8A78' : '#EED98A',
+                          fontFamily: "var(--font-brand), sans-serif",
+                          letterSpacing: 0,
+                        }}
+                        onMouseEnter={(e) => { if (lineageBusy !== claim.id) (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
+                        onMouseLeave={(e) => { if (lineageBusy !== claim.id) (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
+                      >
+                        Approve
+                      </button>
+                      <button
+                        onClick={() => handleClaimDecision(claim.id, false)}
+                        disabled={lineageBusy === claim.id}
+                        className="rounded-lg py-1.5 px-3 font-bold text-[11px] focus:outline-none transition-colors gv-lift"
+                        style={{
+                          backgroundColor: 'transparent',
+                          color: '#8B2020',
+                          border: '1px solid rgba(139,32,32,0.3)',
+                          fontFamily: "var(--font-brand), sans-serif",
+                          letterSpacing: 0,
+                        }}
+                        onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(139,32,32,0.05)'; }}
+                        onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+                      >
+                        Reject
+                      </button>
+                    </div>
+                  ) : (
+                    <span className="flex-shrink-0" title="Only the conference owner can approve or reject lineage claims.">
+                      <Pill tone="neutral" size="sm">Owner decides</Pill>
+                    </span>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+            </div>
+          </Group>
+
+          {/* ── Delete ── */}
+          <Group title="Delete Conference" emoji="Wastebasket" icon={Trash2} tint={TINT_GOLD_BG}>
+            <Row label="Delete this conference" desc="Everything about it is removed for good. Only the owner can do this." align="end">
+              <button
+                type="button"
+                onClick={() => { if (!isOwner) { notifyErr('Only the conference owner can delete this conference.', 'settings-delete'); return; } clearErr('settings-delete'); setConfirmingDelete(true); }}
+                className="gv-st-btn"
+                style={{ minHeight: 40, padding: '0 14px', background: '#FFFFFF', color: '#8B2020', boxShadow: 'inset 0 0 0 1.5px rgba(139,32,32,0.45)' }}
+              >
+                <Trash2 size={15} strokeWidth={2.4} aria-hidden />
+                Delete
+              </button>
+            </Row>
+          </Group>
+          {confirmingDelete && (
+            <ConfirmModal
+              title="Delete this conference?"
+              body="Are you sure you want to delete this conference? This action is irreversible, all data relating to this conference will be lost."
+              confirmLabel="Yes, delete"
+              danger
+              loading={deleting}
+              onConfirm={async () => {
+                if (!session || deleting) return;
+                setDeleting(true);
+                const supabase = getAuthedClient(session.access_token);
+                const { error } = await supabase.rpc('delete_conference', { p_conference_id: view.id });
+                if (error) { notifyErr(friendlyError(error, 'Could not delete view.'), 'settings-delete'); setConfirmingDelete(false); setDeleting(false); return; }
+                window.location.href = '/';
+              }}
+              onCancel={() => { if (!deleting) setConfirmingDelete(false); }}
+            />
+          )}
+        </div>
+
+        {sidePreview && (
+          <aside className="hidden min-[1500px]:block flex-shrink-0 sticky" style={{ width: '290px', top: '80px' }} aria-label="Preview of your conference card">
+            <ConferencePreview snap={settingsSnap} onCopyLink={handleCopyConferenceLink} copied={confLinkCopied} />
+          </aside>
+        )}
         </div>
       )}
 
+      {activeTab === 'organizers' && (
+        <div className="mb-5">
+          <SectionHead emoji="Busts in silhouette" icon={Users2} tint={TINT_GREEN_BG}
+            title="Your Team"
+            line={pendingInvites.length > 0 ? `${pendingInvites.length} ${pendingInvites.length === 1 ? 'invite is' : 'invites are'} waiting.` : 'Who runs it with you, and what each person can open.'}
+            focal={<BigCount n={organizers.length} word={organizers.length === 1 ? 'person' : 'people'} />}
+          />
+        </div>
+      )}
       {activeTab === 'organizers' && (() => {
         // ── The team, drawn as a hierarchy ──────────────────────────────────
         // Not a stack of rows: a tree. Rank 1 holds the owner AND the super
@@ -5247,7 +4171,7 @@ export default function SettingsPage() {
           <>
             <div className="flex flex-wrap items-center justify-center gap-x-2 gap-y-1 mb-2">
               <span aria-hidden style={{ width: 7, height: 7, borderRadius: 999, backgroundColor: r.accent, display: 'inline-block' }} />
-              <p className="font-bold text-[10.5px]" style={{ color: r.accent, fontFamily: OUTFIT, letterSpacing: '0.14em' }}>
+              <p className="font-bold text-[12px]" style={{ color: r.accent, fontFamily: OUTFIT, letterSpacing: '0.14em' }}>
                 {r.label.toUpperCase()}
               </p>
               <span
@@ -5684,237 +4608,162 @@ export default function SettingsPage() {
         );
       })()}
 
-      {activeTab === 'privacy' && <><div style={cardStyle}>
-        <p className="font-semibold text-base mb-1" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>
-          Privacy & Publishing
-        </p>
-        <p className="text-sm mb-6" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}>
-          Control who can see your view.
-        </p>
-
-        {/* Public toggle */}
-        <div
-          className="flex items-center justify-between p-4 rounded-xl mb-4"
-          style={{ backgroundColor: 'rgba(27,56,40,0.03)', border: '1px solid rgba(27,56,40,0.08)' }}
-        >
-          <div>
-            <p className="font-semibold text-sm" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>Public listing</p>
-            <p className="text-xs mt-0.5" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}>
-              Your conference appears on gavelling.com/conferences
-            </p>
-          </div>
-          <span className="flex items-center gap-2 flex-shrink-0">
-            {publicToggleSaving && (
-              <div className="w-4 h-4 rounded-full border-2 border-t-transparent animate-spin" style={{ borderColor: '#1B3828', borderTopColor: 'transparent' }} />
-            )}
-            {/* Only the private->public direction is gated (mirrors the DB
-                trigger), an organizer must always be able to unpublish. */}
-            <PillToggle
-              value={view.is_public}
-              onChange={publicToggleSaving ? () => {} : handlePublicToggle}
-              size="md"
-              disabled={!view.is_public && (paymentGateBlocks(view) || view.dates_tbd || !view.start_date)}
+      {activeTab === 'privacy' && (() => {
+        const noDates = view.dates_tbd || !view.start_date;
+        const gateBlocks = paymentGateBlocks(view);
+        const blockPublic = !view.is_public && (gateBlocks || noDates);
+        return (
+          <div className="flex flex-col gap-5">
+            <SectionHead emoji={view.is_public ? 'Globe showing europe-africa' : 'Locked'} icon={view.is_public ? Globe : Lock}
+              tint={view.is_public ? TINT_GREEN_BG : TINT_GOLD_BG}
+              title="Visibility"
+              line="Who can find your conference, and what its page shows."
+              focal={
+                <span className="inline-flex items-center gap-2.5">
+                  <span style={{ fontFamily: "var(--font-brand), sans-serif", fontSize: 'clamp(30px, 3.6vw, 44px)', fontWeight: 900, letterSpacing: '-0.03em', lineHeight: 1, color: view.is_public ? '#1B3828' : '#8A6614' }}>
+                    {view.is_public ? 'Public' : 'Private'}
+                  </span>
+                </span>
+              }
             />
-          </span>
-        </div>
-
-        {!view.is_public && (view.dates_tbd || !view.start_date) ? (
-          <p className="text-sm mt-3" style={{ color: '#B8844A', fontFamily: "var(--font-brand), sans-serif" }}>
-            Add conference dates to publish. TBD conferences stay private.
-          </p>
-        ) : (
-          <p className="text-sm mt-3" style={{ color: view.is_public ? '#1B3828' : '#B8844A', fontFamily: "var(--font-brand), sans-serif" }}>
-            {view.is_public
-              ? 'Your conference is publicly listed on Gavelling.'
-              : 'Your conference is private. Only people with the direct link can find it.'}
-          </p>
-        )}
-        {!view.is_public && paymentGateBlocks(view) && (
-          <p className="text-xs mt-2" style={{ color: '#B8844A', fontFamily: "var(--font-brand), sans-serif" }}>{paymentGateMessage(view)}</p>
-        )}
-
-        {/* Danger zone */}
-        <div className="mt-6 pt-6" style={{ borderTop: '1px solid #F0EDE6' }}>
-          <p className="text-sm font-semibold mb-3" style={{ color: '#8B2020', fontFamily: "var(--font-brand), sans-serif" }}>
-            Danger Zone
-          </p>
-          <button
-            onClick={() => { if (!isOwner) { notifyErr('Only the conference owner can delete this view.', 'settings-delete'); return; } clearErr('settings-delete'); setConfirmingDelete(true); }}
-            className="w-full rounded-xl py-2.5 font-semibold text-sm focus:outline-none transition-colors gv-lift"
-            style={{ border: '1px solid rgba(139,32,32,0.3)', color: '#8B2020', backgroundColor: 'transparent', fontFamily: "var(--font-brand), sans-serif" }}
-            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(139,32,32,0.05)'; }}
-            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
-          >
-            Delete conference
-          </button>
-
-          {confirmingDelete && (
-            <ConfirmModal
-              title="Delete this conference?"
-              body="Are you sure you want to delete this conference? This action is irreversible, all data relating to this conference will be lost."
-              confirmLabel="Yes, delete"
-              danger
-              loading={deleting}
-              onConfirm={async () => {
-                if (!session || deleting) return;
-                setDeleting(true);
-                const supabase = getAuthedClient(session.access_token);
-                const { error } = await supabase.rpc('delete_conference', { p_conference_id: view.id });
-                if (error) { notifyErr(friendlyError(error, 'Could not delete view.'), 'settings-delete'); setConfirmingDelete(false); setDeleting(false); return; }
-                window.location.href = '/';
-              }}
-              onCancel={() => { if (!deleting) setConfirmingDelete(false); }}
-            />
-          )}
-        </div>
-      </div>
-
-      {/* ── Lineage card ── */}
-      <div style={cardStyle}>
-        <p className="font-semibold text-base mb-1" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>
-          Lineage
-        </p>
-        <p className="text-sm mb-6" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}>
-          Link editions of the same conference across years. Links only count once the previous edition&apos;s owner approves them.
-        </p>
-
-        {/* Outgoing claim: this conference's predecessor */}
-        <p
-          className="text-xs font-bold mb-2"
-          style={{ color: '#6E5F4E', fontFamily: "var(--font-brand), sans-serif", letterSpacing: '0.02em' }}
-        >
-          Previous edition
-        </p>
-        {view.predecessor_conference_id ? (
-          <div
-            className="flex items-center gap-3 px-4 py-3 rounded-xl mb-6"
-            style={{ backgroundColor: 'rgba(27,56,40,0.03)', border: '1px solid rgba(27,56,40,0.08)' }}
-          >
-            <div className="flex-1 min-w-0">
-              <p className="font-semibold text-sm [overflow-wrap:anywhere]" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>
-                {predecessorInfo?.full_name ?? 'A private conference'}
-              </p>
-              <p className="text-xs" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}>
-                {view.predecessor_approved
-                  ? 'Confirmed as the previous edition of this view.'
-                  : 'Waiting for its Main Organiser to confirm the link.'}
-              </p>
-            </div>
-            <span className="flex-shrink-0">
-              <Pill tone={view.predecessor_approved ? 'forest' : 'gold'} size="sm" dot>
-                {view.predecessor_approved ? 'Approved' : 'Pending approval'}
-              </Pill>
-            </span>
-            <button
-              onClick={handleWithdrawClaim}
-              disabled={withdrawingClaim}
-              className="text-xs font-semibold focus:outline-none hover:underline flex-shrink-0"
-              style={{ color: '#8B2020', fontFamily: "var(--font-brand), sans-serif" }}
-            >
-              {withdrawingClaim ? 'Withdrawing…' : 'Withdraw'}
-            </button>
-          </div>
-        ) : (
-          <p className="text-sm mb-6" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}>
-            No previous edition linked. You can link one when creating your next edition on Gavelling.
-          </p>
-        )}
-
-        {/* Incoming claims: conferences claiming this one as their predecessor */}
-        <p
-          className="text-xs font-bold mb-2"
-          style={{ color: '#6E5F4E', fontFamily: "var(--font-brand), sans-serif", letterSpacing: '0.02em' }}
-        >
-          Incoming claims
-        </p>
-        {incomingClaims.length === 0 ? (
-          <p className="text-sm" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}>
-            No conferences currently claim {view.acronym} as their previous edition.
-          </p>
-        ) : (
-          <div className="flex flex-col">
-            {incomingClaims.map((claim, idx) => {
-              const isLast = idx === incomingClaims.length - 1;
-              const year = claim.start_date ? new Date(claim.start_date + 'T00:00:00').getFullYear() : null;
-              return (
-                <div
-                  key={claim.id}
-                  className="flex items-center gap-3 py-3"
-                  style={{ borderBottom: isLast ? 'none' : '1px solid #F0EDE6' }}
-                >
-                  <div className="flex-1 min-w-0">
-                    <p style={{ fontSize: 10, color: '#B6871F', fontFamily: "var(--font-brand), sans-serif", fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase' }}>
-                      {claim.acronym}{year ? ' · ' + year : ''}
-                    </p>
-                    <p className="font-semibold text-sm [overflow-wrap:anywhere]" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>
-                      {claim.full_name}
-                    </p>
-                    <p className="text-xs" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}>
-                      claims to be the next edition of {view.acronym}
-                    </p>
-                  </div>
-
-                  {claim.predecessor_approved ? (
-                    <span className="flex-shrink-0">
-                      <Pill tone="forest" size="sm" dot>Approved</Pill>
-                    </span>
-                  ) : isOwner ? (
-                    <div className="flex gap-2 flex-shrink-0">
-                      <button
-                        onClick={() => handleClaimDecision(claim.id, true)}
-                        disabled={lineageBusy === claim.id}
-                        className="rounded-lg py-1.5 px-3 font-bold text-[11px] focus:outline-none transition-colors gv-lift"
-                        style={{
-                          backgroundColor: lineageBusy === claim.id ? '#DDD4C0' : '#1B3828',
-                          color: lineageBusy === claim.id ? '#9A8A78' : '#EED98A',
-                          fontFamily: "var(--font-brand), sans-serif",
-                          letterSpacing: 0,
-                        }}
-                        onMouseEnter={(e) => { if (lineageBusy !== claim.id) (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
-                        onMouseLeave={(e) => { if (lineageBusy !== claim.id) (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
-                      >
-                        Approve
-                      </button>
-                      <button
-                        onClick={() => handleClaimDecision(claim.id, false)}
-                        disabled={lineageBusy === claim.id}
-                        className="rounded-lg py-1.5 px-3 font-bold text-[11px] focus:outline-none transition-colors gv-lift"
-                        style={{
-                          backgroundColor: 'transparent',
-                          color: '#8B2020',
-                          border: '1px solid rgba(139,32,32,0.3)',
-                          fontFamily: "var(--font-brand), sans-serif",
-                          letterSpacing: 0,
-                        }}
-                        onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(139,32,32,0.05)'; }}
-                        onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
-                      >
-                        Reject
-                      </button>
-                    </div>
-                  ) : (
-                    <span className="flex-shrink-0" title="Only the conference owner can approve or reject lineage claims.">
-                      <Pill tone="neutral" size="sm">Owner decides</Pill>
-                    </span>
-                  )}
+            <Group title="Who Can Find It" emoji="Magnifying glass tilted left" icon={Search} tint={TINT_GREEN_BG}>
+              <Row
+                label="Public on Explore"
+                align="end"
+                on={view.is_public}
+                need={blockPublic}
+                desc={view.is_public
+                  ? 'Anyone can find your page on Gavelling.'
+                  : noDates
+                    ? <>Add your dates before it can go public.{' '}<button type="button" onClick={() => router.push(`${window.location.pathname}?tab=general&focus=dates`)} style={{ color: '#1B3828', fontWeight: 700, textDecoration: 'underline', textUnderlineOffset: 3, background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontSize: 'inherit', fontFamily: 'inherit' }}>Add dates</button></>
+                    : gateBlocks ? paymentGateMessage(view)
+                    : 'Private. Only people with the link can open it.'}
+              >
+                {/* Only the private->public direction is gated (mirrors the DB
+                    trigger), an organizer must always be able to unpublish. */}
+                <KitSwitch
+                  label="Public on Explore"
+                  checked={view.is_public}
+                  busy={publicToggleSaving}
+                  disabled={blockPublic}
+                  onChange={handlePublicToggle}
+                />
+              </Row>
+              <Row label="Your page link" desc={`gavelling.com/conferences/${view.slug}`} align="end">
+                <div className="flex items-center gap-2 flex-wrap justify-end">
+                  <button type="button" onClick={handleCopyConferenceLink} className="gv-st-btn gv-st-outline" style={{ minHeight: 40, padding: '0 14px' }}>
+                    {confLinkCopied ? <Check size={15} strokeWidth={3} aria-hidden /> : <Copy size={15} strokeWidth={2.4} aria-hidden />}
+                    {confLinkCopied ? 'Copied' : 'Copy link'}
+                  </button>
+                  <a href={`/conferences/${view.slug}?preview=1`} target="_blank" rel="noopener noreferrer" className="gv-st-btn gv-st-forest" style={{ minHeight: 40, padding: '0 14px' }}>
+                    <Eye size={15} strokeWidth={2.4} aria-hidden />
+                    Open
+                  </a>
                 </div>
-              );
-            })}
+              </Row>
+            </Group>
+            <Group title="What Your Page Shows" emoji="Eyes" icon={Eye} tint={TINT_GOLD_BG} aside={visibilityStatus !== 'idle' ? <AutoSaveStatus saving={visibilityStatus === 'saving'} saved={visibilityStatus === 'saved'} /> : undefined}>
+              <SwitchRow
+                label="The committee list"
+                desc="Turn it off if your committees are not announced yet."
+                checked={showCommittees}
+                busy={visibilitySavingKey === 'show_committees'}
+                disabled={visibilitySavingKey !== null}
+                onChange={(v) => saveVisibility('show_committees', v, setShowCommittees)}
+              />
+              <SwitchRow
+                label="Member counts"
+                desc="How many delegates are in each committee."
+                checked={showCommitteeCounts}
+                busy={visibilitySavingKey === 'show_committee_counts'}
+                disabled={visibilitySavingKey !== null}
+                onChange={(v) => saveVisibility('show_committee_counts', v, setShowCommitteeCounts)}
+              />
+              <SwitchRow
+                label="Taken countries"
+                desc="Which country seats are already allocated."
+                checked={showTakenCountries}
+                busy={visibilitySavingKey === 'show_taken_countries'}
+                disabled={visibilitySavingKey !== null}
+                onChange={(v) => saveVisibility('show_taken_countries', v, setShowTakenCountries)}
+              />
+            </Group>
           </div>
-        )}
+        );
+      })()}
 
-      </div>
+      {activeTab === 'payments' && (() => {
+        const ready = conferencePaymentsReady(view);
+        const note = (view.external_payment_note ?? '').trim().toLowerCase();
+        const method = !ready ? 'Not set up yet'
+          : view.platform_collects || view.payment_method === 'stripe' ? 'Card payments'
+          : !view.external_payment_url && note.startsWith('this conference is free') ? 'It is free'
+          : view.manual_kind === 'qr' ? 'Payment QR code'
+          : view.manual_kind === 'bank' ? 'Bank transfer'
+          : 'Payment link';
+        const fin = `/manage/${view.slug}/financials`;
+        const doors: { emoji: string; icon: LucideIcon; label: string; desc: string; href: string }[] = [
+          { emoji: 'Receipt', icon: ReceiptText, label: 'Registration fee', desc: 'A fee on top of the ticket, if you charge one.', href: `${fin}?open=fee` },
+          { emoji: 'Wrapped gift', icon: Gift, label: 'Add-ons', desc: 'Extras people buy with their ticket.', href: `${fin}?open=addons` },
+          { emoji: 'Ticket', icon: Ticket, label: 'Vouchers and referrals', desc: 'Discount and referral codes.', href: `${fin}?open=vouchers` },
+          { emoji: 'Heart with ribbon', icon: HandHeart, label: 'Financial aid', desc: 'The aid form and the requests waiting.', href: `${fin}/aid` },
+        ];
+        return (
+          <div className="flex flex-col gap-5">
+            <SectionHead emoji="Credit card" icon={CreditCard} tint={TINT_GOLD_BG}
+              title="Payments"
+              line="Money lives in Financials. Prices live with each role, under Applications."
+              focal={
+                <span style={{ fontFamily: "var(--font-brand), sans-serif", fontSize: 'clamp(24px, 2.8vw, 34px)', fontWeight: 900, letterSpacing: '-0.02em', lineHeight: 1.05, color: ready ? '#1B3828' : '#8A6614', overflowWrap: 'anywhere' }}>
+                  {method}
+                </span>
+              }
+            />
+            <Group title="How People Pay" emoji="Money bag" icon={CreditCard} tint={TINT_GOLD_BG}>
+              <Row
+                label="Payment method"
+                align="end"
+                on={ready}
+                need={!ready}
+                desc={ready ? method : 'Pick how people pay you. Even a free conference needs one before applications open.'}
+              >
+                <a href={`${fin}?open=payment`} className="gv-st-btn gv-st-forest" style={{ minHeight: 40, padding: '0 14px' }}>
+                  {ready ? 'Change' : 'Set up payments'}<ChevronRightIcon size={16} strokeWidth={2.4} aria-hidden />
+                </a>
+              </Row>
+              {doors.map(d => (
+                <Row
+                  key={d.label}
+                  align="end"
+                  label={<span className="inline-flex items-center gap-2.5"><EmojiDisc emoji={d.emoji} icon={d.icon} size={32} tint={TINT_GOLD_BG} />{d.label}</span>}
+                  desc={d.desc}
+                >
+                  <a href={d.href} className="gv-st-btn gv-st-outline" style={{ minHeight: 40, padding: '0 14px' }}>
+                    Open<ChevronRightIcon size={16} strokeWidth={2.4} aria-hidden />
+                  </a>
+                </Row>
+              ))}
+              <Row
+                align="end"
+                label={<span className="inline-flex items-center gap-2.5"><EmojiDisc emoji="Spiral calendar" icon={CalendarDays} size={32} tint={TINT_GREEN_BG} />Prices for each role</span>}
+                desc="Set in each role under Applications, with prices by date."
+              >
+                <button type="button" onClick={() => openSection('applications')} className="gv-st-btn gv-st-outline" style={{ minHeight: 40, padding: '0 14px' }}>
+                  Applications<ChevronRightIcon size={16} strokeWidth={2.4} aria-hidden />
+                </button>
+              </Row>
+            </Group>
+          </div>
+        );
+      })()}
 
-      {/* Partners moved to the Conference tab (Section 9): partners are
-          conference identity, not a privacy setting. */}
-
-      {/* Data import moved to the sidebar nav (Manage → Import); the launch
-          card that used to sit here has been removed. The import page itself
-          (/manage/[slug]/import) is unchanged. */}
-      </>}
-
-        </section>
-      </div>
+      {activeTab === 'awards' && (
+        <div className="flex flex-col gap-5">
+          <SectionHead emoji="Trophy" icon={Trophy} tint={TINT_GOLD_BG} title="Awards" line="Coming soon. Everything already published stays published." />
+          <div className="gv-st-card"><AwardsComingSoon /></div>
+        </div>
+      )}
+      </SettingsShell>
 
       {/* Drag-to-fit crop step, flattens the chosen framing into a square
           transparent PNG, then hands off to the existing upload path. */}
@@ -6046,7 +4895,7 @@ export default function SettingsPage() {
                 ))}
               </div>
 
-              <p className="font-bold text-[10px] mb-1" style={{ color: NEU.inkSoft, fontFamily: OUTFIT, letterSpacing: '0.14em' }}>
+              <p className="font-bold text-[12px] mb-1" style={{ color: NEU.inkSoft, fontFamily: OUTFIT, letterSpacing: '0.14em' }}>
                 STEP {inviteStep} OF 3
               </p>
 
@@ -6320,7 +5169,7 @@ export default function SettingsPage() {
         const close = () => setMemberSheetId(null);
 
         const groupHeading = (text: string) => (
-          <p className="font-bold text-[10px] mb-2" style={{ color: NEU.inkSoft, fontFamily: OUTFIT, letterSpacing: '0.14em' }}>
+          <p className="font-bold text-[12px] mb-2" style={{ color: NEU.inkSoft, fontFamily: OUTFIT, letterSpacing: '0.14em' }}>
             {text}
           </p>
         );
@@ -6644,7 +5493,6 @@ export default function SettingsPage() {
           settings/awardsUi.tsx. To re-enable it, change the import at the top
           of this file back to `import { AwardsSettings } from './awardsUi'`
           and render `<AwardsSettings conference={conference} />` here. */}
-      {activeTab === 'awards' && <AwardsComingSoon />}
 
       {confirmModal}
     </div>

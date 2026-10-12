@@ -45,3 +45,4 @@ next-env.d.ts
 
 # Local demo-staging helpers for the LIMUN 2027 showcase (not part of the app)
 limun-*.sql
+scripts/newsletter/out/

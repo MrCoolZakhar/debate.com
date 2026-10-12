@@ -20,22 +20,16 @@ import type { Conference } from '@/app/manage/[slug]/layout';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { useConfirmModal } from '@/components/ConfirmModal';
-import { currencySymbol, formatFeeAmount, roundMoney, USD_FX } from '@/lib/finance';
+import { currencySymbol, formatFeeAmount } from '@/lib/finance';
+import { convertApprox } from '@/lib/fxRates';
 import {
   NEU, NEU_GRADIENTS, OUTFIT, EASE,
   NeuCard, NeuInset, NeuPill, NeuButton, NeuIconDisc, NeuProgress,
 } from '@/components/neu';
 import { DatePicker } from '@/components/DatePicker';
+import { formatMoney } from './shared';
 
-/** Approximate conversion between two known currencies (via finance.ts's
- *  canonical USD_FX table, no local copy); null when either rate is
- *  missing (callers then fall back to the original amount). */
-export function convertApprox(amount: number, from: string, to: string): number | null {
-  const rf = USD_FX[from.toUpperCase()];
-  const rt = USD_FX[to.toUpperCase()];
-  if (!rf || !rt) return null;
-  return roundMoney((amount / rf) * rt);
-}
+// convertApprox lives in src/lib/fxRates.ts (the day's rates, prompt 100).
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -67,7 +61,7 @@ type VoucherKind = 'percent' | 'flat' | 'referral';
  * Reading referral rows is NOT gated: a row that exists always renders as a
  * referral code, so a flag left false can never hide live data.
  */
-const REFERRAL_CODES_LIVE = false;
+const REFERRAL_CODES_LIVE = true;
 
 interface Voucher {
   id: string;
@@ -114,9 +108,9 @@ function discountLabel(v: Voucher, displayCurrency?: string): string {
   const vCur = v.currency ?? '';
   if (displayCurrency && vCur && displayCurrency.toUpperCase() !== vCur.toUpperCase()) {
     const conv = convertApprox(v.amount, vCur, displayCurrency);
-    if (conv !== null) return `≈ ${currencySymbol(displayCurrency)}${formatFeeAmount(conv)} OFF`;
+    if (conv !== null) return `≈\u00A0${formatMoney(conv, displayCurrency)} OFF`;
   }
-  return `${currencySymbol(vCur)}${formatFeeAmount(v.amount)} OFF`;
+  return `${formatMoney(v.amount, vCur || 'USD')} OFF`;
 }
 
 // Neumorphic input well, pressed-in, transparent field inside.
@@ -145,8 +139,11 @@ const fieldLabelStyle: React.CSSProperties = {
 export default function VouchersSection({
   conference,
   displayCurrency,
+  bare = false,
 }: {
   conference: Conference;
+  /** Inside a pop-up (prompt 94): no section header and no top margin. */
+  bare?: boolean;
   /** Display-only currency for flat amounts in the list, creation stays in
    *  the conference currency regardless. */
   displayCurrency?: string;
@@ -353,21 +350,23 @@ export default function VouchersSection({
   const hiddenCount = filtered.length - visible.length;
 
   return (
-    <section className="mt-8">
+    <section className={bare ? undefined : 'mt-8'}>
       {/* Section header */}
+      {!bare && (
       <div className="flex items-center gap-3 mb-4">
-        <NeuIconDisc gradient={NEU_GRADIENTS.gold} icon={Ticket} emoji="Ticket" size={36} />
-        <div>
-          <h2 style={{ fontFamily: OUTFIT, fontWeight: 900, fontSize: 18, color: NEU.ink, lineHeight: 1.15 }}>
-            Vouchers
-          </h2>
-          <p style={{ fontFamily: OUTFIT, fontSize: 11.5, color: NEU.inkSoft }}>
-            {REFERRAL_CODES_LIVE
-              ? `Discount codes, and referral codes that take nothing off, scoped to ${conference.acronym} only.`
-              : `Discount codes scoped to ${conference.acronym} only.`}
-          </p>
+          <NeuIconDisc gradient={NEU_GRADIENTS.gold} icon={Ticket} emoji="Ticket" size={36} />
+          <div>
+            <h2 style={{ fontFamily: OUTFIT, fontWeight: 900, fontSize: 18, color: NEU.ink, lineHeight: 1.15 }}>
+              Vouchers
+            </h2>
+            <p style={{ fontFamily: OUTFIT, fontSize: 11.5, color: NEU.inkSoft }}>
+              {REFERRAL_CODES_LIVE
+                ? `Discount codes, and referral codes that take nothing off, scoped to ${conference.acronym} only.`
+                : `Discount codes scoped to ${conference.acronym} only.`}
+            </p>
+          </div>
         </div>
-      </div>
+      )}
 
       {error && (
         <p className="text-xs font-semibold mb-3" style={{ color: '#8B2020', fontFamily: OUTFIT }}>
@@ -399,15 +398,15 @@ export default function VouchersSection({
                 title="Generate a random code"
                 className="inline-flex items-center gap-1.5 flex-shrink-0 focus:outline-none"
                 style={{
-                  padding: '8px 12px', borderRadius: 999, border: 'none', cursor: 'pointer',
+                  padding: '8px 14px', minHeight: 36, borderRadius: 999, border: 'none', cursor: 'pointer',
                   backgroundColor: NEU.surface, boxShadow: NEU.outSm, color: NEU.forest,
-                  fontFamily: OUTFIT, fontSize: 11, fontWeight: 800,
+                  fontFamily: OUTFIT, fontSize: 13, fontWeight: 800,
                   transition: `box-shadow 200ms ${EASE}`,
                 }}
                 onMouseEnter={e => { (e.currentTarget as HTMLElement).style.boxShadow = NEU.outSmHover; }}
                 onMouseLeave={e => { (e.currentTarget as HTMLElement).style.boxShadow = NEU.outSm; }}
               >
-                <Dices size={13} strokeWidth={2.4} />
+                <Dices size={15} strokeWidth={2.4} />
                 Generate
               </button>
             </div>
@@ -609,7 +608,7 @@ export default function VouchersSection({
                     </span>
 
                     {/* Expiry */}
-                    <span style={{ fontFamily: OUTFIT, fontSize: 11, fontWeight: 600, color: expired ? '#8B2020' : NEU.muted, fontVariantNumeric: 'tabular-nums' }}>
+                    <span style={{ fontFamily: OUTFIT, fontSize: 12, fontWeight: 600, color: expired ? '#8B2020' : NEU.muted, fontVariantNumeric: 'tabular-nums' }}>
                       {v.expires_at ? `${expired ? 'Expired' : 'Expires'} ${formatExpiry(v.expires_at)}` : 'No expiry'}
                     </span>
 
@@ -625,9 +624,9 @@ export default function VouchersSection({
                         : 'Reactivate'}
                       className="focus:outline-none"
                       style={{
-                        padding: '4px 12px', borderRadius: 999, border: 'none',
+                        padding: '6px 14px', minHeight: 36, borderRadius: 999, border: 'none',
                         cursor: rowBusy ? 'default' : 'pointer',
-                        fontFamily: OUTFIT, fontSize: 11, fontWeight: 800,
+                        fontFamily: OUTFIT, fontSize: 13, fontWeight: 800,
                         background: v.active
                           ? `linear-gradient(135deg, ${NEU_GRADIENTS.green[0]}, ${NEU_GRADIENTS.green[1]})`
                           : NEU.base,

@@ -30,17 +30,22 @@ import { getCountryByName, UN_COUNTRIES } from '@/lib/countries';
 import { ageAt } from '@/lib/age';
 import { checkInApplication, undoCheckIn } from '@/lib/checkIn';
 import { isPaymentsLive } from '@/lib/payments';
+import MarkPaidDialog from '../financials/MarkPaidDialog';
+import MarkUnpaidDialog from '../financials/MarkUnpaidDialog';
+import { cents as centsLabel } from '../financials/financialsApi';
 import {
-  NEU, NEU_GRADIENTS, OUTFIT, NeuCard, NeuStatTile, NeuIconDisc,
+  NEU, NEU_GRADIENTS, OUTFIT, NeuCard, NeuStatTile, NeuIconDisc, Emoji3D,
 } from '@/components/neu';
+import { matchPresetEmblem } from '@/lib/presetNames';
 import {
-  poolForRole, fillFreeSpots, releasePoolSpot, POOL_SPOTS_COLUMN, MemberAvatar, markNotAttending, undoNotAttending,
+  poolForRole, fillFreeSpots, releasePoolSpot, MemberAvatar, markNotAttending, undoNotAttending,
 } from '@/app/manage/[slug]/assignment/delegationShared';
 import { LevelInsignia, LEVEL_ACCENT } from '@/app/account/accountUi';
 import { type CustomQuestion, type CustomAnswers, normalizeBlocks, questionsOf, displayAnswer, answerIsEmpty } from '@/lib/customQuestions';
 import { useScrollLock } from '@/hooks/useScrollLock';
 import DelegationsBoard, { PeopleDelegationsSwitch } from './DelegationsBoard';
 import { DelegationIdentity, useDelegationSummaries } from './DelegationAvatar';
+import OpenDelegateApplications from './OpenDelegateApplications';
 // Same vocabulary the team invite wizard in Settings uses — never a parallel
 // list. Only the library, not the wizard component itself.
 import { ORGANIZER_SECTIONS, bundlePermissions } from '@/lib/organizerPermissions';
@@ -51,7 +56,7 @@ import ApplicationSourceMark, { ApplicationSourceChip } from '@/components/confe
 // Advisor/Secretariat/Other), so a chair/secretariat application's listed
 // conferences read consistently with how the applicant's own CV describes them.
 import { ENTRY_TYPE_MAP, type EntryType } from '@/components/CVEntryModal';
-import { friendlyError, UserFacingError } from '@/lib/friendlyError';
+import { friendlyError, plainOrFallback, UserFacingError } from '@/lib/friendlyError';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -71,6 +76,9 @@ interface RoleConfigLite {
   fee_currency: string | null;
   fee_phases: { amount?: number }[] | null;
   allow_resubmission: boolean;
+  is_enabled: boolean;
+  applications_open_at: string | null;
+  applications_close_at: string | null;
 }
 
 /** A role config actually charges something, the flat fee or any phase's
@@ -339,10 +347,9 @@ const MID_BLOCK_H = 92;
 const ALLOCATE_RAIL_W = 152;
 
 /** Bottom padding the list reserves for the sticky bulk-action bar while a
- *  selection is live, so the last row is never trapped under it. Was 96, sized
- *  for a bar that fit on one line; it now carries Remind-to-pay and Email as
- *  well, which wraps to three or four lines on a 375px phone (~34px per line
- *  + 20px bar padding + its 20px offset from the bottom). */
+ *  selection is live, so the last row is never trapped under it. Below 640px
+ *  the bar is one sideways-scrolling row of 44px buttons (44 + 20px padding +
+ *  its 20px offset = 84px); from 640px it may wrap to two or three lines. */
 const BULK_BAR_CLEARANCE = 140;
 
 /** Role as its icon plus the plain word. Chairs read gold, delegates forest,
@@ -385,7 +392,7 @@ function LevelBadge({ level, count }: { level: string; count?: number }) {
         {label}
       </span>
       {count !== undefined && (
-        <span style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: 10, color: NEU.muted, fontVariantNumeric: 'tabular-nums' }}>
+        <span style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: 12, color: NEU.muted, fontVariantNumeric: 'tabular-nums' }}>
           {count} conf{count === 1 ? '' : 's'}
         </span>
       )}
@@ -827,7 +834,7 @@ function QuickAllocate({
                           <LogoDisc src={c.logo_url} size={30} fallbackText={committeeAbbr(c)} alt={c.name} />
                           <span className="flex-1 min-w-0">
                             <span className="block [overflow-wrap:anywhere]" style={{ fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 700, color: NEU.ink }}>{c.name}</span>
-                            <span className="block" style={{ fontFamily: OUTFIT, fontSize: 10.5, fontWeight: 700, color: full ? NEU.muted : NEU.green, fontVariantNumeric: 'tabular-nums' }}>
+                            <span className="block" style={{ fontFamily: OUTFIT, fontSize: 12, fontWeight: 700, color: full ? NEU.muted : NEU.green, fontVariantNumeric: 'tabular-nums' }}>
                               {full ? 'Full' : `${seats} open seat${seats === 1 ? '' : 's'}`}
                             </span>
                           </span>
@@ -909,7 +916,7 @@ function committeeFull(c: { name: string; abbreviation: string | null } | null |
  *  "Disarmament and International Security Committee" → "DISEC" + full name.
  *  Short names (or ones with no distinct abbreviation) stay as-is, name only. */
 function committeeDisplay(c: { name: string; abbreviation: string | null } | null | undefined): { primary: string; secondary: string | null } {
-  if (!c) return { primary: '–', secondary: null };
+  if (!c) return { primary: 'No committee', secondary: null };
   const hasAbbr = !!c.abbreviation && c.abbreviation.toUpperCase() !== c.name.toUpperCase();
   const isLong = c.name.length > 16 || c.name.trim().split(/\s+/).length >= 3;
   if (hasAbbr && isLong) return { primary: c.abbreviation!, secondary: c.name };
@@ -1083,7 +1090,7 @@ function InfoHint({ label, text }: { label: string; text: string }) {
 
 /** Committee shorthand, abbreviation when set, else a monogram of the name. */
 function committeeAbbr(c: { name: string; abbreviation: string | null } | null | undefined): string {
-  if (!c) return '–';
+  if (!c) return '?';
   if (c.abbreviation) return c.abbreviation;
   const mono = c.name
     .split(/\s+/)
@@ -1169,6 +1176,21 @@ const ALLOCATED_GROUP = ['assigned', 'checked-in'];
 // explicitly ticking Chairs / Faculty Advisors in the Participants filter brings
 // them back even inside the allocated view.
 const NON_DELEGATE_ROLES = new Set(['chair', 'faculty-advisor']);
+
+/**
+ * The list's primary order (owner, 11 Oct 2026: "sort by to-be accepted, then
+ * accepted, then rejected"). 0 = still to decide, 1 = accepted or beyond,
+ * 2 = rejected, 3 = withdrawn. A rejected application that is resubmitted goes
+ * back to 'submitted' (resubmit_application), so it rejoins group 0 by itself.
+ * Any status not named here is treated as undecided, so nothing unknown can be
+ * buried at the bottom.
+ */
+function statusSortGroup(status: string): number {
+  if (ACCEPTED_GROUP.includes(status)) return 1;
+  if (status === 'rejected') return 2;
+  if (status === 'withdrawn') return 3;
+  return 0;
+}
 
 /**
  * Query params this page understands, so other surfaces (the dashboard's
@@ -1296,9 +1318,9 @@ function FilterGroup({
       <div className="flex items-center justify-between mb-2">
         <FilterHeading icon={icon}>{title}</FilterHeading>
         <div className="flex items-center gap-2">
-          <button onClick={onAll} className="focus:outline-none" style={{ fontFamily: OUTFIT, fontSize: 9.5, fontWeight: 800, color: NEU.forest, background: 'none', border: 'none', cursor: 'pointer' }}>All</button>
+          <button onClick={onAll} className="focus:outline-none" style={{ fontFamily: OUTFIT, display: 'inline-flex', alignItems: 'center', minHeight: 36, padding: '0 6px', margin: '-9px 0', fontSize: 13, fontWeight: 800, color: NEU.forest, background: 'none', border: 'none', cursor: 'pointer' }}>All</button>
           <span style={{ color: NEU.muted, opacity: 0.5 }}>·</span>
-          <button onClick={onNone} className="focus:outline-none" style={{ fontFamily: OUTFIT, fontSize: 9.5, fontWeight: 800, color: NEU.muted, background: 'none', border: 'none', cursor: 'pointer' }}>None</button>
+          <button onClick={onNone} className="focus:outline-none" style={{ fontFamily: OUTFIT, display: 'inline-flex', alignItems: 'center', minHeight: 36, padding: '0 6px', margin: '-9px 0', fontSize: 13, fontWeight: 800, color: NEU.muted, background: 'none', border: 'none', cursor: 'pointer' }}>None</button>
         </div>
       </div>
       <div className="flex flex-wrap gap-1.5">
@@ -1382,7 +1404,7 @@ function FilterPanel({
               <button
                 onClick={() => setFilters({ status: new Set(), role: new Set(DEFAULT_ROLES), payment: new Set(), dateFrom: '', dateTo: '', notAttending: false, committee: '' })}
                 className="focus:outline-none"
-                style={{ fontFamily: OUTFIT, fontSize: 10, fontWeight: 800, color: '#8B2020', background: 'none', border: 'none', cursor: 'pointer' }}
+                style={{ fontFamily: OUTFIT, display: 'inline-flex', alignItems: 'center', minHeight: 36, padding: '0 6px', margin: '-9px 0', fontSize: 13, fontWeight: 800, color: '#8B2020', background: 'none', border: 'none', cursor: 'pointer' }}
               >
                 Clear all
               </button>
@@ -1458,7 +1480,9 @@ function FilterPanel({
 // it can never be clipped by an ancestor's overflow (same pattern as
 // PaymentMenu / QuickAllocate). '' = "All committees".
 
-interface CommitteeOption { id: string; primary: string; secondary: string | null }
+/** `logo` is already resolved down the emblem chain (own logo, preset emblem,
+ *  conference logo, the UN emblem), so the filter only draws it. */
+interface CommitteeOption { id: string; primary: string; secondary: string | null; logo: string }
 
 function CommitteeFilter({
   options, value, onChange,
@@ -1472,8 +1496,8 @@ function CommitteeFilter({
   const menuRef = useRef<HTMLDivElement | null>(null);
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
 
-  const MENU_W = 272;
-  const MENU_H = 340;
+  const MENU_W = 300;
+  const MENU_H = 380;
 
   const place = useCallback(() => {
     const b = btnRef.current;
@@ -1512,13 +1536,15 @@ function CommitteeFilter({
   const current = options.find(o => o.id === value) ?? null;
   const label = current ? current.primary : 'All committees';
 
-  const row = (id: string, primary: string, secondary: string | null) => {
+  const row = (id: string, primary: string, secondary: string | null, logo: string | null) => {
     const isCurrent = id === value;
     return (
       <button
         key={id || '__all'}
+        role="option"
+        aria-selected={isCurrent}
         onClick={() => { setOpen(false); onChange(id); }}
-        className="inline-flex items-center gap-2 w-full focus:outline-none"
+        className="inline-flex items-center gap-2.5 w-full focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]"
         style={{
           padding: '8px 10px', borderRadius: 11, background: isCurrent ? 'rgba(27,56,40,0.07)' : 'transparent',
           border: 'none', cursor: 'pointer', textAlign: 'start',
@@ -1526,10 +1552,17 @@ function CommitteeFilter({
         onMouseEnter={e => { if (!isCurrent) (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.05)'; }}
         onMouseLeave={e => { if (!isCurrent) (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
       >
+        {logo ? (
+          <LogoDisc src={logo} size={34} fallbackText={primary.slice(0, 3)} alt="" style={{ flexShrink: 0 }} />
+        ) : (
+          <span aria-hidden className="inline-flex items-center justify-center flex-shrink-0" style={{ width: 34, height: 34 }}>
+            <Emoji3D name="Classical building" size={26} />
+          </span>
+        )}
         <span className="flex-1 min-w-0">
-          <span className="block [overflow-wrap:anywhere]" style={{ fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 700, color: NEU.ink }}>{primary}</span>
+          <span className="block [overflow-wrap:anywhere]" style={{ fontFamily: OUTFIT, fontSize: 14, fontWeight: 800, color: NEU.ink, lineHeight: 1.2 }}>{primary}</span>
           {secondary && (
-            <span className="block [overflow-wrap:anywhere]" style={{ fontFamily: OUTFIT, fontSize: 10.5, fontWeight: 600, color: NEU.muted }}>{secondary}</span>
+            <span className="block [overflow-wrap:anywhere]" style={{ fontFamily: OUTFIT, fontSize: 11, fontWeight: 500, color: NEU.inkSoft, lineHeight: 1.3, marginTop: 1 }}>{secondary}</span>
           )}
         </span>
         {isCurrent && <Check size={13} strokeWidth={3} style={{ color: NEU.deepGold, flexShrink: 0 }} />}
@@ -1556,7 +1589,9 @@ function CommitteeFilter({
           transition: `box-shadow 200ms ${EASE_LOCAL}`,
         }}
       >
-        <Landmark size={14} strokeWidth={2.5} />
+        {current
+          ? <LogoDisc src={current.logo} size={20} fallbackText={current.primary.slice(0, 3)} alt="" style={{ flexShrink: 0 }} />
+          : <Landmark size={14} strokeWidth={2.5} />}
         <span className="text-start [overflow-wrap:anywhere]" style={{ maxWidth: 150 }}>{label}</span>
         <ChevronDown size={12} strokeWidth={2.6} style={{ transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 160ms' }} />
       </button>
@@ -1574,8 +1609,8 @@ function CommitteeFilter({
           >
             <style>{`@keyframes neuFadeIn { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: translateY(0); } }`}</style>
             <div className="flex flex-col gap-0.5">
-              {row('', 'All committees', null)}
-              {options.map(o => row(o.id, o.primary, o.secondary))}
+              {row('', 'All committees', null, null)}
+              {options.map(o => row(o.id, o.primary, o.secondary, o.logo))}
             </div>
           </div>
         </Portal>
@@ -1702,6 +1737,97 @@ function reconcileLoaded(
   return out;
 }
 
+// ── ApplicationsSearchPill ────────────────────────────────────────────────────
+// A big white pill in the Explore / Store look, at the top of the page in the
+// header's toolbar beside the filters, so the list starts as high as it did
+// (owner, 11 Oct 2026: "the search bar moves the apps lower"). Presentational only: the parent owns the value, the debounce and the filter.
+// "/" focuses it from anywhere on the page, except while typing in a field or
+// while a dialog is open.
+
+function ApplicationsSearchPill({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [focused, setFocused] = useState(false);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== '/' || e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey) return;
+      const t = e.target as HTMLElement | null;
+      if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return;
+      if (document.querySelector('[aria-modal="true"], [role="dialog"], [role="alertdialog"]')) return;
+      e.preventDefault();
+      inputRef.current?.focus();
+      inputRef.current?.select();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
+  return (
+    <div
+      className="flex items-center gap-2.5 w-full sm:w-[400px]"
+      onClick={() => inputRef.current?.focus()}
+      style={{
+        minHeight: 48, padding: '0 8px 0 6px', borderRadius: 999,
+        backgroundColor: '#FFFFFF', cursor: 'text',
+        boxShadow: focused
+          ? '0 0 0 2px #1B3828, 0 2px 6px rgba(27,56,40,0.08), 0 22px 48px rgba(27,56,40,0.18)'
+          : '0 1px 0 rgba(27,56,40,0.08), 0 2px 6px rgba(27,56,40,0.08), 0 18px 40px -26px rgba(27,56,40,0.45)',
+        transition: 'box-shadow 160ms ease',
+      }}
+    >
+      <span
+        aria-hidden
+        className="inline-flex items-center justify-center flex-shrink-0"
+        style={{ width: 36, height: 36, borderRadius: 999, backgroundColor: '#EEF3EC' }}
+      >
+        <Search size={18} strokeWidth={2.6} style={{ color: '#1B3828' }} />
+      </span>
+      <input
+        ref={inputRef}
+        type="search"
+        value={value}
+        onChange={e => onChange(e.target.value)}
+        onFocus={() => setFocused(true)}
+        onBlur={() => setFocused(false)}
+        onKeyDown={e => {
+          if (e.key === 'Escape') {
+            if (value) { e.preventDefault(); onChange(''); } else inputRef.current?.blur();
+          }
+        }}
+        placeholder="Search name, email, delegation, country"
+        aria-label="Search applications by name, email, delegation, country or committee"
+        aria-keyshortcuts="/"
+        enterKeyHint="search"
+        autoComplete="off"
+        spellCheck={false}
+        className="flex-1 outline-none [&::-webkit-search-cancel-button]:appearance-none"
+        style={{ backgroundColor: 'transparent', border: 'none', color: NEU.ink, fontFamily: OUTFIT, fontSize: 16, fontWeight: 500, minWidth: 0, height: 44 }}
+      />
+      {value ? (
+        <button
+          type="button"
+          onClick={e => { e.stopPropagation(); onChange(''); inputRef.current?.focus(); }}
+          aria-label="Clear search"
+          title="Clear search"
+          className="inline-flex items-center justify-center flex-shrink-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]"
+          style={{ width: 32, height: 32, borderRadius: 999, backgroundColor: 'rgba(28,20,16,0.06)', border: 'none', cursor: 'pointer', color: NEU.ink }}
+        >
+          <X size={16} strokeWidth={2.6} />
+        </button>
+      ) : !focused && (
+        <kbd
+          aria-hidden
+          className="hidden sm:inline-flex items-center justify-center flex-shrink-0"
+          title="Press / to search"
+          style={{ minWidth: 26, height: 26, padding: '0 8px', borderRadius: 7, fontFamily: OUTFIT, fontSize: 13, fontWeight: 600, color: NEU.inkSoft, backgroundColor: '#F6F3EA', boxShadow: 'inset 0 0 0 1px rgba(28,20,16,0.12)' }}
+        >
+          /
+        </kbd>
+      )}
+    </div>
+  );
+}
+
 // ── ApplicationsPage ──────────────────────────────────────────────────────────
 
 export default function ApplicationsPage() {
@@ -1779,6 +1905,11 @@ export default function ApplicationsPage() {
   const [bulkRunning, setBulkRunning] = useState<{ done: number; total: number } | null>(null);
   const { draftNotices, pushDraftNotice, dismissDraftNotice } = useDraftNotices();
   const { confirm, modal: confirmModal } = useConfirmModal();
+  // Mark paid / unpaid go through the Financials dialogs and their RPCs only
+  // (mark_invoices_paid / mark_invoices_unpaid, prompt 93): this page never
+  // writes payment_status, the pool or the receipt email itself any more.
+  const [markPaidFor, setMarkPaidFor] = useState<{ ids: string[]; totalLabel: string; extraLine?: string; clear: boolean } | null>(null);
+  const [markUnpaidFor, setMarkUnpaidFor] = useState<{ ids: string[] } | null>(null);
   // Stale-response guard for background refetches.
   const loadSeq = useRef(0);
   /* ── The optimistic-patch ledger ────────────────────────────────────────
@@ -1892,19 +2023,19 @@ export default function ApplicationsPage() {
   // `silent` refetches never touch the page-level loading flag, they
   // reconcile local optimistic state with what the server actually computed
   // (fillFreeSpots promotions, etc) without wiping the list.
-  /* Which applicants were still undecided when this page was OPENED.
-     Undecided rows sort to the top, but off this frozen snapshot rather than
-     off live status — so accepting someone does not yank their row out from
-     under the cursor mid-triage. They stay put, and the list only reshuffles
-     the next time the page is opened, which is a fresh mount and a fresh
-     snapshot. Deliberately NOT refreshed by the silent reloads that follow an
-     accept or reject, for exactly that reason. */
-  const pendingAtOpen = useRef<Set<string> | null>(null);
-  /* Every id present at open, so an application that ARRIVES while the page is
-     sitting there can be told apart from one that was already decided. A new
+  /* Each application's status GROUP when this page was OPENED
+     (statusSortGroup: to decide, accepted, rejected, withdrawn). Rows sort by
+     this frozen snapshot rather than by live status, so accepting or rejecting
+     someone does not yank their row out from under the cursor mid-triage. They
+     stay put, and the list only reshuffles the next time the page is opened,
+     which is a fresh mount and a fresh snapshot. Deliberately NOT refreshed by
+     the silent reloads that follow an accept or reject, for exactly that
+     reason. Its keys are
+     also every id present at open, so an application that ARRIVES while the
+     page is sitting there is grouped by its live status instead (a new
      submission is undecided and belongs at the top; burying it at the bottom
-     because it missed the snapshot would be the wrong kind of stable. */
-  const idsAtOpen = useRef<Set<string> | null>(null);
+     because it missed the snapshot would be the wrong kind of stable). */
+  const groupAtOpen = useRef<Map<string, number> | null>(null);
 
   const loadApplications = useCallback(async (opts?: { silent?: boolean }) => {
     if (!conference) return;
@@ -1958,7 +2089,7 @@ export default function ApplicationsPage() {
         .range(from, to)),
       supabase
         .from('application_role_configs')
-        .select('role, payment_timing, custom_questions, fee_amount, fee_currency, fee_phases, allow_resubmission')
+        .select('role, payment_timing, custom_questions, fee_amount, fee_currency, fee_phases, allow_resubmission, is_enabled, applications_open_at, applications_close_at')
         .eq('conference_id', conference.id),
       // Unpaid gating invoices block Accept until paid. The only source of
       // gates_acceptance=true is application_surcharges.gates_acceptance, the
@@ -1995,11 +2126,8 @@ export default function ApplicationsPage() {
     setApplications(apps);
     // Seed once per mount. `opts.silent` reloads (post-accept, post-reject)
     // must not re-seed, or the row just acted on would jump away.
-    if (pendingAtOpen.current === null && !opts?.silent) {
-      pendingAtOpen.current = new Set(
-        apps.filter(a => a.status === 'submitted').map(a => a.id),
-      );
-      idsAtOpen.current = new Set(apps.map(a => a.id));
+    if (groupAtOpen.current === null && !opts?.silent) {
+      groupAtOpen.current = new Map(apps.map(a => [a.id, statusSortGroup(a.status)]));
     }
     setRoleConfigs((cfgRes.data ?? []) as unknown as RoleConfigLite[]);
     setGatingInvoices((gatingRes.data ?? []) as { application_id: string | null; society_id: string | null }[]);
@@ -2845,7 +2973,7 @@ export default function ApplicationsPage() {
               // Grey, deliberately quiet against the two decisions — but
               // NEU.inkSoft (6.8:1 on NEU.surface), never NEU.muted, which is
               // decoration-only at 3.15:1.
-              fontFamily: OUTFIT, fontSize: 10.5, fontWeight: 800,
+              fontFamily: OUTFIT, fontSize: 13, fontWeight: 800,
               color: NEU.inkSoft, backgroundColor: NEU.surface, boxShadow: NEU.outSm,
               border: 'none', cursor: 'pointer', transition: `box-shadow 200ms ${EASE_LOCAL}`,
               ...busyStyle,
@@ -3107,7 +3235,7 @@ export default function ApplicationsPage() {
     setActionError('');
     markBusy(app.id, true);
     // Optimistic: exactly what undoNotAttending writes for this row.
-    applyRow(app.id, { attending: true, payment_status: 'unpaid' });
+    applyRow(app.id, { attending: true });
 
     (async () => {
       const supabase = getAuthedClient(session.access_token);
@@ -3187,160 +3315,102 @@ export default function ApplicationsPage() {
       .finally(() => markBusy(appId, false));
   }
 
-  // Returns the settled promise so runBulk can chunk instead of fanning out.
-  function handleMarkPaid(app: Application): Promise<void> {
-    if (!session || !conference || paymentsLive) return Promise.resolve();
-    if (busyIds.has(app.id)) { noteBusyClick(); return Promise.resolve(); }
-    const prevRow = applications.find(a => a.id === app.id) ?? app;
-
+  // Mark paid, single or bulk (prompt 93). Reads the open invoices of the
+  // chosen applications, leaves out any with a proof in review (those are
+  // decided in Financials, Things to do), and opens ONE MarkPaidDialog for all
+  // of them. The dialog calls mark_invoices_paid, which records the payment
+  // lines, settles the items (the delegation pool and coverage follow on the
+  // server), sends each payer one itemised receipt, and the server sends
+  // Payment received itself. Then the rows are read again; no optimistic badge.
+  async function openMarkPaid(apps: Application[], clear: boolean): Promise<void> {
+    if (!session || !conference || paymentsLive || apps.length === 0) return;
     setActionError('');
-    markBusy(app.id, true);
-    // Optimistic: the PAID badge appears immediately.
-    applyRow(app.id, { payment_status: 'paid', self_paid: true });
-
-    const supabase = getAuthedClient(session.access_token);
-    // PRIMARY: the payment mark itself. Invoice settlement, spot accounting
-    // and the receipt email all follow with the row already unlocked.
-    const primary = (async () => {
-      const { error } = await supabase.from('applications').update({ payment_status: 'paid', self_paid: true }).eq('id', app.id);
-      if (error) throw error;
-    })();
-
-    primary.catch(() => {}).then(() => markBusy(app.id, false));
-
-    return primary
-      .then(async () => {
-        // Settle their invoices too. This is NOT optional bookkeeping: the accept
-        // gate reads INVOICES (gates_acceptance, unsettled), never
-        // applications.payment_status, so marking someone paid without settling
-        // left them permanently un-acceptable — the organiser saw a green PAID
-        // badge next to "A required fee is unpaid", with ACCEPT greyed out and no
-        // way forward. It also left the ledger claiming nothing was collected.
-        //
-        // mark_invoice_paid is the same RPC the financials page uses: it writes
-        // the payment + batch rows, settles the invoice and runs
-        // settle_invoice_effects, so manual payments land identically wherever
-        // they are recorded.
-        //
-        // The read and the RPC are both checked explicitly: supabase-js
-        // resolves on a PostgREST error, so the catch below only ever sees a
-        // thrown network fault. Without this check a failed settlement was the
-        // exact symptom described above, silently.
-        try {
-          let settleFailure: string | null = null;
-          const { data: openInvoices, error: invoiceReadError } = await supabase
-            .from('invoices')
-            .select('id')
-            .eq('application_id', app.id)
-            .not('status', 'in', '(settled,waived,void)');
-          if (invoiceReadError) settleFailure = friendlyError(invoiceReadError, 'Please try again.');
-          for (const inv of (openInvoices ?? []) as { id: string }[]) {
-            if (settleFailure) break;
-            const { error: settleError } = await supabase.rpc('mark_invoice_paid', { p_invoice_id: inv.id });
-            if (settleError) settleFailure = friendlyError(settleError, 'Please try again.');
-          }
-          if (settleFailure) {
-            setActionError(`Marked paid, but their invoice could not be settled (${settleFailure}). They may still be blocked from acceptance. Settle it in Financials, under Invoices.`);
-          }
-        } catch {
-          setActionError('Marked paid, but their invoice could not be settled. They may still be blocked from acceptance. Settle it in Financials, under Invoices.');
+    try {
+      const supabase = getAuthedClient(session.access_token);
+      const { data: invs, error: invErr } = await supabase
+        .from('invoices')
+        .select('id, amount_cents, amount_paid_cents, currency')
+        .in('application_id', apps.map(a => a.id))
+        .not('status', 'in', '(settled,waived,void)');
+      if (invErr) throw invErr;
+      const open = ((invs ?? []) as { id: string; amount_cents: number; amount_paid_cents: number; currency: string }[])
+        .filter(i => i.amount_cents - (i.amount_paid_cents ?? 0) > 0);
+      let inReview = new Set<string>();
+      if (open.length > 0) {
+        const { data: pend, error: pendErr } = await supabase
+          .from('payments')
+          .select('invoice_id, batch_id')
+          .in('invoice_id', open.map(i => i.id))
+          .eq('status', 'pending')
+          .eq('method', 'manual');
+        if (pendErr) throw pendErr;
+        const rows = (pend ?? []) as { invoice_id: string; batch_id: string | null }[];
+        const batchIds = Array.from(new Set(rows.map(r => r.batch_id).filter((b): b is string => !!b)));
+        if (batchIds.length > 0) {
+          const { data: batches, error: bErr } = await supabase
+            .from('payment_batches').select('id').in('id', batchIds).eq('status', 'pending');
+          if (bErr) throw bErr;
+          const pendingBatches = new Set(((batches ?? []) as { id: string }[]).map(b => b.id));
+          inReview = new Set(rows.filter(r => r.batch_id && pendingBatches.has(r.batch_id)).map(r => r.invoice_id));
         }
-
-        // Secondary effects, a failure here must NOT roll back the payment mark.
-        try {
-          const pool = poolForRole(app.role);
-          if (app.society_id && pool) {
-            const spotsColumn = POOL_SPOTS_COLUMN[pool];
-            const { data: soc } = await supabase.from('societies').select(spotsColumn).eq('id', app.society_id).single();
-            const current = (soc as Record<string, number> | null)?.[spotsColumn] ?? 0;
-            await supabase.from('societies').update({ [spotsColumn]: current + 1 }).eq('id', app.society_id);
-            await fillFreeSpots(supabase, conference.id, app.society_id, pool);
-          }
-
-          const result = await queueEventEmail(supabase, conference.id, 'payment_received', [app.id]);
-          notifyIfNeeded(result, pushDraftNotice);
-        } catch {
-          setActionError('Marked paid, but a follow-up step (spot update / email) failed. Refresh to verify.');
-        }
-
-        // fillFreeSpots may have promoted OTHER members to paid, reconcile.
-        scheduleReconcile();
-      })
-      .catch(() => {
-        restoreRow(prevRow);
-        setActionError('Could not mark the application paid. The change was reverted. Please try again.');
+      }
+      const markable = open.filter(i => !inReview.has(i.id));
+      if (markable.length === 0) {
+        setActionError(inReview.size > 0
+          ? 'Their payment proof is waiting for review. Accept or deny it in Financials, under Things to do.'
+          : 'There is nothing left to mark paid for this selection.');
+        return;
+      }
+      const total = markable.reduce((s, i) => s + (i.amount_cents - (i.amount_paid_cents ?? 0)), 0);
+      const left = inReview.size;
+      setMarkPaidFor({
+        ids: markable.map(i => i.id),
+        totalLabel: centsLabel(total, markable[0].currency),
+        extraLine: left > 0 ? `${left} item${left === 1 ? ' has' : 's have'} a proof in review, so ${left === 1 ? 'it is' : 'they are'} left out. Review ${left === 1 ? 'it' : 'them'} in Financials, under Things to do.` : undefined,
+        clear,
       });
+    } catch (e) {
+      setActionError(friendlyError(e, 'Their invoices could not be read. Try again in a moment.'));
+    }
   }
 
+  function handleMarkPaid(app: Application): Promise<void> {
+    if (busyIds.has(app.id)) { noteBusyClick(); return Promise.resolve(); }
+    return openMarkPaid([app], false);
+  }
+
+  // Mark unpaid (prompt 93): the application's manually paid items go back to
+  // owed through mark_invoices_unpaid, after the same confirm as before plus
+  // an optional note. Card-paid items are left out (they are refunded, never
+  // marked unpaid); the pool and coverage undo themselves on the server.
   async function handleMarkUnpaid(app: Application) {
     if (!session || paymentsLive) return;
     if (busyIds.has(app.id)) { noteBusyClick(); return; }
-    const { confirmed } = await confirm({
-      title: 'Mark this application unpaid?',
-      body: 'If their payment opened a delegation spot, one spot will be removed.',
-      confirmLabel: 'Mark unpaid',
-      danger: true,
-    });
-    if (!confirmed) return;
-    const prevRow = applications.find(a => a.id === app.id) ?? app;
-
     setActionError('');
-    markBusy(app.id, true);
-    applyRow(app.id, { payment_status: 'unpaid', self_paid: false });
-
-    (async () => {
+    try {
       const supabase = getAuthedClient(session.access_token);
-      const { error } = await supabase.from('applications').update({ payment_status: 'unpaid', self_paid: false }).eq('id', app.id);
-      if (error) throw error;
-
-      // Mirror of handleMarkPaid: reopen anything we settled on their behalf,
-      // so the ledger tracks the payment mark in BOTH directions. Without this
-      // the reverse inconsistency appears — an application reading unpaid while
-      // its invoice still claims the money arrived.
-      // Same explicit checking as handleMarkPaid, and for the same reason: an
-      // RPC that fails on the server resolves here, so the catch is not enough.
-      try {
-        let reopenFailure: string | null = null;
-        const { data: settled, error: settledReadError } = await supabase
-          .from('invoices')
-          .select('id')
-          .eq('application_id', app.id)
-          .eq('status', 'settled');
-        if (settledReadError) reopenFailure = friendlyError(settledReadError, 'Please try again.');
-        for (const inv of (settled ?? []) as { id: string }[]) {
-          if (reopenFailure) break;
-          const { error: reopenError } = await supabase.rpc('mark_invoice_unpaid', { p_invoice_id: inv.id });
-          if (reopenError) reopenFailure = friendlyError(reopenError, 'Please try again.');
-        }
-        if (reopenFailure) {
-          setActionError(`Marked unpaid, but their invoice still shows as settled (${reopenFailure}). Reopen it in Financials, under Invoices.`);
-        }
-      } catch {
-        setActionError('Marked unpaid, but their invoice still shows as settled. Reopen it in Financials, under Invoices.');
+      const { data: invs, error: invErr } = await supabase
+        .from('invoices').select('id').eq('application_id', app.id).in('status', ['settled', 'partial']);
+      if (invErr) throw invErr;
+      const ids = ((invs ?? []) as { id: string }[]).map(i => i.id);
+      if (ids.length === 0) { setActionError('Nothing was marked paid for this application.'); return; }
+      const { data: pays, error: payErr } = await supabase
+        .from('payments').select('invoice_id, method, amount_cents')
+        .in('invoice_id', ids).eq('status', 'succeeded').gt('amount_cents', 0);
+      if (payErr) throw payErr;
+      const rows = (pays ?? []) as { invoice_id: string; method: string | null; amount_cents: number }[];
+      const card = new Set(rows.filter(r => r.method === 'stripe').map(r => r.invoice_id));
+      const manual = ids.filter(id => !card.has(id) && rows.some(r => r.invoice_id === id && r.method === 'manual'));
+      if (manual.length === 0) {
+        setActionError(card.size > 0
+          ? 'Card payments can only be refunded. Refund them in Financials, under Invoices.'
+          : 'Nothing was marked paid for this application.');
+        return;
       }
-
-      try {
-        const pool = poolForRole(app.role);
-        // Only a SELF-FUNDED paid spot ever added to the pool (handleMarkPaid,
-        // settle_invoice_effects), so only that one comes off. A member the
-        // delegation covered used an existing spot; taking one away here
-        // quietly shrank every delegation whose covered member was unmarked.
-        if (app.society_id && pool && prevRow.payment_status === 'paid' && prevRow.self_paid) {
-          const spotsColumn = POOL_SPOTS_COLUMN[pool];
-          const { data: soc } = await supabase.from('societies').select(spotsColumn).eq('id', app.society_id).single();
-          const current = (soc as Record<string, number> | null)?.[spotsColumn] ?? 0;
-          await supabase.from('societies').update({ [spotsColumn]: Math.max(0, current - 1) }).eq('id', app.society_id);
-        }
-      } catch {
-        setActionError('Marked unpaid, but the delegation spot count could not be updated. Refresh to verify.');
-      }
-    })()
-      .then(scheduleReconcile)
-      .catch(() => {
-        restoreRow(prevRow);
-        setActionError('Could not mark the application unpaid. The change was reverted. Please try again.');
-      })
-      .finally(() => markBusy(app.id, false));
+      setMarkUnpaidFor({ ids: manual });
+    } catch (e) {
+      setActionError(friendlyError(e, 'Their invoices could not be read. Try again in a moment.'));
+    }
   }
 
   // Re-send the pay-now email as a reminder (#8). payment_available IS the
@@ -3382,15 +3452,20 @@ export default function ApplicationsPage() {
     markBusy(app.id, true);
     applyRow(app.id, { payment_status: 'unpaid' });
 
+    // remove_fee_waiver is the only way to take a waiver off (prompt 99): it
+    // reopens their Registration invoice at today's price on the server.
     (async () => {
-      const supabase = getAuthedClient(session.access_token);
-      const { error } = await supabase.from('applications').update({ payment_status: 'unpaid' }).eq('id', app.id);
+      const supabase = await getFreshAuthedClient();
+      if (!supabase) throw new UserFacingError('Your session has expired. Please sign in again.');
+      const { data, error } = await supabase.rpc('remove_fee_waiver', { p_application_id: app.id });
       if (error) throw error;
+      const r = (data ?? null) as { ok?: boolean; error?: string } | null;
+      if (!r || r.ok !== true) throw new UserFacingError(plainOrFallback(r?.error, 'Could not remove the waiver. The change was reverted. Please try again.'));
     })()
       .then(scheduleReconcile)
-      .catch(() => {
+      .catch((e) => {
         restoreRow(prevRow);
-        setActionError('Could not remove the waiver. The change was reverted. Please try again.');
+        setActionError(friendlyError(e, 'Could not remove the waiver. The change was reverted. Please try again.'));
       })
       .finally(() => markBusy(app.id, false));
   }
@@ -3742,10 +3817,10 @@ export default function ApplicationsPage() {
   // the joined conference_committees name/abbreviation) — no extra round trip.
   // A committee with no allocations yet simply has nothing to filter to.
   const committeeOptions: CommitteeOption[] = (() => {
-    const seen = new Map<string, { name: string; abbreviation: string | null }>();
+    const seen = new Map<string, { name: string; abbreviation: string | null; logo_url: string | null }>();
     for (const a of applications) {
       if (a.assigned_committee_id && a.assigned_committee && !seen.has(a.assigned_committee_id)) {
-        seen.set(a.assigned_committee_id, { name: a.assigned_committee.name, abbreviation: a.assigned_committee.abbreviation });
+        seen.set(a.assigned_committee_id, { name: a.assigned_committee.name, abbreviation: a.assigned_committee.abbreviation, logo_url: a.assigned_committee.logo_url });
       }
     }
     return Array.from(seen.entries())
@@ -3753,10 +3828,13 @@ export default function ApplicationsPage() {
         // Same naming rule as the row cards: long name → ACRONYM with the full
         // name small beneath it.
         const disp = committeeDisplay(c);
-        return { id, primary: disp.primary, secondary: disp.secondary, sort: c.name };
+        // Emblem chain: the committee's own logo, its preset emblem, the
+        // conference logo, then the UN emblem.
+        const logo = c.logo_url || matchPresetEmblem(c.name, c.abbreviation) || conference?.logo_url || '/logos/un.svg';
+        return { id, primary: disp.primary, secondary: disp.secondary, logo, sort: c.name };
       })
       .sort((a, b) => a.sort.localeCompare(b.sort))
-      .map(({ id, primary, secondary }) => ({ id, primary, secondary }));
+      .map(({ id, primary, secondary, logo }) => ({ id, primary, secondary, logo }));
   })();
 
   // Empty selection = no constraint on that dimension (fresh page shows all)
@@ -3816,28 +3894,26 @@ export default function ApplicationsPage() {
     }
     return true;
   })
-    // Default order = still-to-decide first, then latest applications first.
-    // The DB fetch already orders by submitted_at desc; this keeps that
-    // guarantee after any optimistic in-place patching so the visible default
-    // always matches "newest first" within each group.
+    // Default order = status group first (still to decide, then accepted /
+    // assigned / checked in, then rejected, then withdrawn; statusSortGroup),
+    // then latest applications first inside each group. The DB fetch already
+    // orders by submitted_at desc; this keeps that guarantee after any
+    // optimistic in-place patching.
     //
-    // The top group is keyed on `pendingAtOpen`, the snapshot taken when the
-    // page was opened — not on live status. Accepting someone therefore leaves
-    // their row exactly where it is instead of flinging it down the list while
-    // the organiser is still looking at it; the reshuffle happens on the next
-    // visit. Before the snapshot exists (first paint) everything is treated as
-    // one group, so the order never flickers as it arrives.
+    // The group is keyed on `groupAtOpen`, the snapshot taken when the page
+    // was opened — not on live status. Accepting or rejecting someone therefore
+    // leaves their row exactly where it is instead of flinging it down the list
+    // while the organiser is still looking at it; the reshuffle happens on the
+    // next visit. Rows that arrived since are grouped by their live status.
+    // Before the snapshot exists (first paint) everything is treated as one
+    // group, so the order never flickers as it arrives.
     .sort((a, b) => {
-      const pending = pendingAtOpen.current;
-      const seen = idsAtOpen.current;
-      if (pending && seen) {
-        // Top group: undecided when the page opened, or undecided and arrived
-        // since. Decided-since-open rows stay put, which is the whole point.
-        const top = (x: Application) =>
-          pending.has(x.id) || (x.status === 'submitted' && !seen.has(x.id)) ? 0 : 1;
-        const aP = top(a);
-        const bP = top(b);
-        if (aP !== bP) return aP - bP;
+      const atOpen = groupAtOpen.current;
+      if (atOpen) {
+        const group = (x: Application) => atOpen.get(x.id) ?? statusSortGroup(x.status);
+        const aG = group(a);
+        const bG = group(b);
+        if (aG !== bG) return aG - bG;
       }
       return (b.submitted_at ?? '').localeCompare(a.submitted_at ?? '');
     });
@@ -4012,32 +4088,9 @@ export default function ApplicationsPage() {
           </div>
         </div>
         <div className="flex items-center gap-2.5 flex-wrap">
-          {/* Quick-filter search (#2): debounced, case-insensitive, matches any
-              applicant detail. Neumorphic pressed-in well to match the system. */}
-          <div
-            className="inline-flex items-center gap-2"
-            style={{ padding: '8px 14px', borderRadius: 999, backgroundColor: NEU.base, boxShadow: NEU.inSm, minWidth: 200 }}
-          >
-            <Search size={15} strokeWidth={2.4} style={{ color: NEU.muted, flexShrink: 0 }} />
-            <input
-              value={searchInput}
-              onChange={e => setSearchInput(e.target.value)}
-              placeholder="Search applicants…"
-              aria-label="Search applications"
-              className="flex-1 outline-none"
-              style={{ backgroundColor: 'transparent', color: NEU.ink, fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 600, minWidth: 0 }}
-            />
-            {searchInput && (
-              <button
-                onClick={() => setSearchInput('')}
-                aria-label="Clear search"
-                className="inline-flex items-center justify-center flex-shrink-0 focus:outline-none"
-                style={{ width: 18, height: 18, borderRadius: 999, background: 'transparent', border: 'none', cursor: 'pointer', color: NEU.muted }}
-              >
-                <X size={13} strokeWidth={2.6} />
-              </button>
-            )}
-          </div>
+          {/* Quick-filter search (#2): first in the toolbar, at the top again.
+              Debounced, case-insensitive, matches any applicant detail. */}
+          <ApplicationsSearchPill value={searchInput} onChange={setSearchInput} />
           {/* Per-committee filter, alongside the existing filters. */}
           <CommitteeFilter
             options={committeeOptions}
@@ -4162,19 +4215,35 @@ export default function ApplicationsPage() {
       )}
 
       {/* Empty state */}
-      {listView === 'people' && !draftsView && !loading && filtered.length === 0 && (
-        <NeuCard style={{ padding: '48px 24px' }}>
-          <div className="flex flex-col items-center text-center">
-            <NeuIconDisc gradient={NEU_GRADIENTS.forest} icon={Inbox} emoji="Inbox tray" size={48} />
-            <p className="mt-4" style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 15, color: NEU.ink }}>
-              {applications.length === 0 ? 'No applications yet' : 'No applications match these filters'}
-            </p>
-            <p className="mt-1" style={{ fontFamily: OUTFIT, fontSize: 12.5, color: NEU.muted }}>
-              {applications.length === 0 ? 'Applications will appear here once delegates apply.' : 'Try adjusting your filters.'}
-            </p>
-          </div>
-        </NeuCard>
-      )}
+      {listView === 'people' && !draftsView && !loading && filtered.length === 0 && (() => {
+        const emptyCard = (
+          <NeuCard style={{ padding: '48px 24px' }}>
+            <div className="flex flex-col items-center text-center">
+              <NeuIconDisc gradient={NEU_GRADIENTS.forest} icon={Inbox} emoji="Inbox tray" size={48} />
+              <p className="mt-4" style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 15, color: NEU.ink }}>
+                {applications.length === 0 ? 'No applications yet' : 'No applications match these filters'}
+              </p>
+              <p className="mt-1" style={{ fontFamily: OUTFIT, fontSize: 12.5, color: NEU.muted }}>
+                {applications.length === 0 ? 'Applications will appear here once delegates apply.' : 'Try adjusting your filters.'}
+              </p>
+            </div>
+          </NeuCard>
+        );
+        // A conference with no applications yet: offer to open delegate
+        // applications right here (OpenDelegateApplications draws emptyCard
+        // when they are already open). Not after a partial load, where zero
+        // could be wrong.
+        if (applications.length > 0 || loadIncomplete) return emptyCard;
+        const delegateCfg = roleConfigs.find(rc => rc.role === 'delegate') ?? null;
+        return (
+          <OpenDelegateApplications
+            conference={conference}
+            delegate={delegateCfg}
+            fallback={emptyCard}
+            onOpened={row => setRoleConfigs(prev => prev.map(rc => (rc.role === 'delegate' ? { ...rc, ...row } : rc)))}
+          />
+        );
+      })()}
 
       {/* Select-all bar */}
       {listView === 'people' && !draftsView && !loading && filtered.length > 0 && (
@@ -4486,7 +4555,7 @@ export default function ApplicationsPage() {
                             alt={prefs[0].conference_committees?.name ?? 'Top preference'}
                           />
                           <div className="min-w-0 flex-1">
-                            <p style={{ fontFamily: OUTFIT, fontSize: 9.5, fontWeight: 800, letterSpacing: '0.1em', color: NEU.muted, textTransform: 'uppercase', marginBottom: 4 }}>
+                            <p style={{ fontFamily: OUTFIT, fontSize: 12, fontWeight: 800, letterSpacing: '0.1em', color: NEU.muted, textTransform: 'uppercase', marginBottom: 4 }}>
                               {app.role === 'chair' ? 'Committee preferences' : 'Preferences'}
                             </p>
                             <div className="flex flex-col gap-1">
@@ -4498,7 +4567,7 @@ export default function ApplicationsPage() {
                                   style={{ fontFamily: OUTFIT, fontSize: 12, fontWeight: 700, color: NEU.ink, backgroundColor: NEU.base, boxShadow: NEU.inSm, borderRadius: 999, padding: '4px 10px', fontVariantNumeric: 'tabular-nums' }}
                                 >
                                   <span style={{ color: NEU.deepGold, fontWeight: 900 }}>{p.preference_order}.</span>
-                                  <span className="[overflow-wrap:anywhere]">{committeeAbbr(p.conference_committees)}</span>
+                                  <span className="[overflow-wrap:anywhere]" style={p.conference_committees ? undefined : { color: NEU.inkSoft, fontWeight: 600 }}>{p.conference_committees ? committeeAbbr(p.conference_committees) : 'No committee'}</span>
                                   {app.role !== 'chair' && <CountryFlag name={p.country_name} code={p.country_code} size={15} />}
                                 </span>
                               ))}
@@ -4523,7 +4592,7 @@ export default function ApplicationsPage() {
                         )}
                       </span>
                     ) : (
-                      <span style={{ fontFamily: OUTFIT, fontSize: 12.5, fontStyle: 'italic', color: NEU.inkSoft, minHeight: MID_BLOCK_H, display: 'flex', alignItems: 'center' }}>–</span>
+                      <span style={{ fontFamily: OUTFIT, fontSize: 12.5, fontStyle: 'italic', color: NEU.inkSoft, minHeight: MID_BLOCK_H, display: 'flex', alignItems: 'center' }}>No allocation</span>
                     )}
 
                     {app.status === 'rejected' && app.organizer_note && (
@@ -4543,8 +4612,8 @@ export default function ApplicationsPage() {
                       clicks wholesale, which would have made its empty space
                       the one dead zone on an otherwise clickable card. */}
                   <div
-                    className="p-4 lg:p-5 flex flex-col lg:items-end gap-2.5 justify-center border-t lg:border-t-0 lg:border-l"
-                    style={{ flex: '0 0 248px', minWidth: 248, borderColor: 'rgba(221,212,192,0.6)' }}
+                    className="p-4 lg:p-5 flex flex-col lg:items-end gap-2.5 justify-center border-t lg:border-t-0 lg:border-l lg:flex-[0_0_248px] lg:min-w-[248px]"
+                    style={{ borderColor: 'rgba(221,212,192,0.6)' }}
                   >
                     {/* NOT ATTENDING stays full-strength while everything else
                         in this column fades, so it never gets lost in the dim. */}
@@ -4937,21 +5006,21 @@ export default function ApplicationsPage() {
                           }
                           className="draftRemind inline-flex items-center gap-1.5 focus:outline-none"
                           style={{
-                            padding: '6px 11px', borderRadius: 999,
+                            padding: '8px 14px', minHeight: 36, borderRadius: 999,
                             border: `1.5px solid ${remindDisabled ? DRAFT_DASH : NEU.forest}`,
                             backgroundColor: 'transparent',
                             color: remindDisabled ? NEU.inkSoft : NEU.forest,
                             opacity: remindDisabled ? 0.62 : 1,
                             cursor: remindDisabled ? 'default' : 'pointer',
-                            fontFamily: OUTFIT, fontSize: 10.5, fontWeight: 800, letterSpacing: '0.08em',
+                            fontFamily: OUTFIT, fontSize: 13, fontWeight: 800, letterSpacing: '0.08em',
                             whiteSpace: 'nowrap',
                           }}
                         >
-                          <Send size={11.5} strokeWidth={2.6} />
+                          <Send size={14} strokeWidth={2.6} />
                           {remindLabel}
                         </button>
                         {d.reminders_sent > 0 && !d.reminder_opt_out && (
-                          <span style={{ fontFamily: OUTFIT, fontSize: 10, fontWeight: 600, color: NEU.inkSoft, opacity: 0.85 }}>
+                          <span style={{ fontFamily: OUTFIT, fontSize: 12, fontWeight: 600, color: NEU.inkSoft, opacity: 0.85 }}>
                             {d.reminders_sent} sent
                           </span>
                         )}
@@ -4996,10 +5065,24 @@ export default function ApplicationsPage() {
       {/* Sticky bulk-action bar */}
       {!loading && !bulkRunning && selectedApps.length > 0 && (
         <div className="fixed inset-x-0 z-40 flex justify-center px-4" style={{ bottom: 20, pointerEvents: 'none' }}>
-          <style>{`@keyframes bulkPulse { 0%,100% { transform: scale(1); box-shadow: 0 4px 10px rgba(27,56,40,0.35); } 50% { transform: scale(1.06); box-shadow: 0 8px 20px rgba(27,56,40,0.5); } }`}</style>
+          <style>{`@keyframes bulkPulse { 0%,100% { transform: scale(1); box-shadow: 0 4px 10px rgba(27,56,40,0.35); } 50% { transform: scale(1.06); box-shadow: 0 8px 20px rgba(27,56,40,0.5); } }
+            /* Phones: one row that scrolls sideways, 44px targets, edge fade. */
+            @media (max-width: 639.98px) {
+              .gv-bulk-shell { width: 100%; }
+              .gv-bulk-bar { flex-wrap: nowrap !important; justify-content: flex-start !important; overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: none;
+                -webkit-mask-image: linear-gradient(to right, transparent 0, #000 16px, #000 calc(100% - 16px), transparent 100%);
+                mask-image: linear-gradient(to right, transparent 0, #000 16px, #000 calc(100% - 16px), transparent 100%); }
+              .gv-bulk-bar::-webkit-scrollbar { display: none; }
+              .gv-bulk-bar > * { flex-shrink: 0; white-space: nowrap; }
+              .gv-bulk-bar > button, .gv-bulk-bar > span[title] { min-height: 44px; }
+            }`}</style>
           <div
-            className="flex items-center gap-2 flex-wrap justify-center"
-            style={{ pointerEvents: 'auto', maxWidth: '100%', padding: '10px 14px', borderRadius: 999, backgroundColor: NEU.surface, boxShadow: NEU.out }}
+            className="gv-bulk-shell"
+            style={{ pointerEvents: 'auto', maxWidth: '100%', minWidth: 0, borderRadius: 999, backgroundColor: NEU.surface, boxShadow: NEU.out }}
+          >
+          <div
+            className="gv-bulk-bar flex items-center gap-2 flex-wrap justify-center"
+            style={{ padding: '10px 14px' }}
           >
             <span className="inline-flex items-center gap-2 pl-1 pr-1" style={{ fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 800, color: NEU.ink, fontVariantNumeric: 'tabular-nums' }}>
               <span className="inline-flex items-center justify-center" style={{ minWidth: 22, height: 22, padding: '0 6px', borderRadius: 999, background: `linear-gradient(135deg, ${NEU_GRADIENTS.forest[0]}, ${NEU_GRADIENTS.forest[1]})`, color: '#FFFFFF', fontSize: 11, fontWeight: 900 }}>
@@ -5085,7 +5168,7 @@ export default function ApplicationsPage() {
             )}
             {bulkPayable.length > 0 && (
               <button
-                onClick={() => runBulk(bulkPayable, { title: `Mark ${bulkPayable.length} as paid?`, body: 'Each will be marked paid (self-funded); delegation spot accounting runs per applicant.', confirmLabel: 'Mark all paid' }, a => handleMarkPaid(a))}
+                onClick={() => { void openMarkPaid(bulkPayable, true); }}
                 className="inline-flex items-center gap-1.5 focus:outline-none"
                 style={{
                   padding: '8px 15px', borderRadius: 999, border: 'none', cursor: 'pointer',
@@ -5163,6 +5246,7 @@ export default function ApplicationsPage() {
               <X size={13} strokeWidth={2.6} />
               Clear
             </button>
+          </div>
           </div>
         </div>
       )}
@@ -5835,6 +5919,25 @@ export default function ApplicationsPage() {
       })()}
 
       {confirmModal}
+      {markPaidFor && conference && (
+        <MarkPaidDialog
+          conferenceId={conference.id}
+          invoiceIds={markPaidFor.ids}
+          totalLabel={markPaidFor.totalLabel}
+          extraLine={markPaidFor.extraLine}
+          onClose={() => setMarkPaidFor(null)}
+          onDone={() => { if (markPaidFor.clear) clearSelection(); setMarkPaidFor(null); scheduleReconcile(); }}
+        />
+      )}
+      {markUnpaidFor && (
+        <MarkUnpaidDialog
+          invoiceIds={markUnpaidFor.ids}
+          title="Mark this application unpaid?"
+          body="If their payment opened a delegation spot, one spot will be removed."
+          onClose={() => setMarkUnpaidFor(null)}
+          onDone={() => { setMarkUnpaidFor(null); scheduleReconcile(); }}
+        />
+      )}
     </div>
   );
 }

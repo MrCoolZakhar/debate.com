@@ -29,7 +29,7 @@ const PHONE_QUERY = '(max-width: 743px)';
 const POPOVER_WIDTH = 400;
 const EDGE = 12;
 
-// Labels in the four languages, read from the same `useLanguage()` value the
+// Labels in the five languages, read from the same `useLanguage()` value the
 // nav uses. No full stops on the lines (owner).
 const LABELS: Record<Language, {
   title: string;
@@ -70,6 +70,14 @@ const LABELS: Record<Language, {
     conference: 'إنشاء مؤتمر',
     conferenceLine: 'الطلبات والتوزيعات وكل اللجان، مجاناً للمنظمين',
     close: 'إغلاق',
+  },
+  pt: {
+    title: 'Criar',
+    session: 'Criar uma sessão',
+    sessionLine: 'Uma sala de comitê em segundos, grátis, sem conta',
+    conference: 'Criar uma conferência',
+    conferenceLine: 'Inscrições, alocações e todos os comitês, grátis para organizadores',
+    close: 'Fechar',
   },
 };
 

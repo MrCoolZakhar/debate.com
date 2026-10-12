@@ -540,7 +540,7 @@ export default function DelegationsView({ conference, showFlash, initialSocietyI
 
     // Optimistic: exactly what undoNotAttending writes for this row.
     const snapshot = members.find(m => m.id === member.id) ?? member;
-    patchMember(member.id, { attending: true, payment_status: 'unpaid' });
+    patchMember(member.id, { attending: true });
 
     (async () => {
       const result = await undoNotAttending(supabase, conference.id, member);

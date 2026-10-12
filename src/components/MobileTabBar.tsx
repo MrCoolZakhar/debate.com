@@ -57,7 +57,17 @@ export default function MobileTabBar() {
             </>
           );
           const cls = 'flex flex-col items-center justify-center gap-1 focus:outline-none';
-          const style = { color: on ? '#1B3828' : 'rgba(28,20,16,0.55)', fontFamily: 'var(--font-brand), sans-serif', textDecoration: 'none' } as const;
+          // Inactive labels at 0.72 ink: about 7:1 on the white bar (0.55 was ~3.8:1).
+          const style = { color: on ? '#1B3828' : 'rgba(28,20,16,0.72)', fontFamily: 'var(--font-brand), sans-serif', textDecoration: 'none' } as const;
+          // Signed out, "Conferences" is a way to find conferences, not a login wall:
+          // it goes to Explore. Profile still asks to log in.
+          if (needsAuth && !user && !loading && label === 'Conferences') {
+            return (
+              <Link key={label} href="/conferences/explore" className={cls} style={style}>
+                {inner}
+              </Link>
+            );
+          }
           if (needsAuth && !user && !loading) {
             return <AuthLink key={label} next={href} className={cls} style={style}>{inner}</AuthLink>;
           }

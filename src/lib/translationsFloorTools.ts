@@ -110,4 +110,35 @@ export const floorToolsTranslations = {
     caucus_raised_by: 'اقترحها',
     caucus_raised_by_aria: 'اقترحها {name}',
   },
+  // pt-BR: scaffold, values still English. Translate per .claude/pt-glossary.md.
+  pt: {
+    // Settings → Access → Speaker clock (autoStartSpeakerTimer)
+    stg_speaker_clock: "Cronômetro do orador",
+    stg_auto_start_label: "Iniciar ao chamar o próximo",
+    stg_auto_start_note: "Quando a próxima delegação é chamada, o cronômetro começa na hora. Sem quórum, ele fica pausado.",
+    // Yield (GSL)
+    speaker_ctl_yield: "Ceder",
+    speaker_ctl_yield_short: "Ceder",
+    speaker_ctl_yield_title: "Ceder o tempo restante a outra delegação",
+    speaker_ctl_yield_no_time: "Não há tempo restante para ceder.",
+    yield_title: "Ceder",
+    yield_remaining: "Tempo restante para ceder: {time}",
+    yield_from: "{country} cede o tempo",
+    yield_to_next: "Próximo orador",
+    yield_to_next_hint: "{country} recebe o próprio tempo mais {time}",
+    yield_to_next_none: "Não há ninguém na Lista de Oradores.",
+    yield_to_other: "Outra delegação",
+    yield_grant: "Ceder {time}",
+    yield_start: "Iniciar",
+    yield_pause: "Pausar",
+    yield_done: "Concluído",
+    yield_to_label: "Tempo cedido por {country}",
+    // History (for HistoryTab: a `yield` event)
+    sb_hist_yield: "cedeu {time} a {to}",
+    // Commenter floor clock (CommenterClock) and the caucus proposer (CaucusProposer)
+    commenter_clock_label: "Tempo restante do orador: {time}",
+    commenter_clock_paused: "Pausado",
+    caucus_raised_by: "Proposta por",
+    caucus_raised_by_aria: "Proposta por {name}",
+  },
 };

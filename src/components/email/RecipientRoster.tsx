@@ -87,20 +87,20 @@ export default function RecipientRoster({
     <div>
       <p className="mb-2" style={{ fontFamily: OUTFIT, fontSize: 11.5, color: SOFT, lineHeight: 1.5, textWrap: 'pretty' }}>
         <span style={{ fontWeight: 800, color: INK, fontVariantNumeric: 'tabular-nums' }}>{reachCount.toLocaleString()}</span>
-        {reachCount === 1 ? ' person is' : ' people are'} getting this. Change who with the button at the top.
+        {reachCount === 1 ? ' person is' : ' people are'} getting this.
       </p>
 
       <div className="relative mb-2">
-        <Search size={13} strokeWidth={2.4} style={{ position: 'absolute', left: 11, top: 12, color: SOFT, pointerEvents: 'none' }} />
+        <Search size={13} strokeWidth={2.4} style={{ position: 'absolute', left: 11, top: 14, color: SOFT, pointerEvents: 'none' }} />
         <input
           value={query}
           onChange={e => setQuery(e.target.value)}
-          placeholder="Find someone…"
+          placeholder="Find someone"
           aria-label="Find someone in the list"
           className="w-full focus:outline-none"
           style={{
-            minHeight: 38, borderRadius: 999, padding: '9px 12px 9px 31px',
-            fontFamily: OUTFIT, fontSize: 12, color: INK,
+            minHeight: 42, borderRadius: 999, padding: '9px 12px 9px 31px',
+            fontFamily: OUTFIT, fontSize: 16, color: INK,
             backgroundColor: '#FFFDF8', border: '1px solid rgba(27,56,40,0.13)', boxShadow: NEU.inSm,
           }}
         />
@@ -108,7 +108,7 @@ export default function RecipientRoster({
 
       {groups.length === 0 && (
         <p style={{ fontFamily: OUTFIT, fontSize: 11.5, color: SOFT, lineHeight: 1.5, textWrap: 'pretty' }}>
-          Nobody yet. Pick an audience with CHANGE WHO above.
+          Nobody yet. Pick who gets it with Change who.
         </p>
       )}
       {groups.length > 0 && shown === 0 && (
@@ -132,7 +132,7 @@ export default function RecipientRoster({
                   style={{ width: 24, height: 24, borderRadius: 999, backgroundColor: 'rgba(27,56,40,0.07)' }}
                 />
               )}
-              <span className="min-w-0 flex-1 truncate" title={g.label} style={{ fontFamily: OUTFIT, fontSize: 12, fontWeight: 800, color: INK }}>
+              <span className="min-w-0 flex-1 [overflow-wrap:anywhere]" title={g.label} style={{ fontFamily: OUTFIT, fontSize: 12, fontWeight: 800, color: INK }}>
                 {g.label}
               </span>
               <span className="flex-shrink-0" style={{ fontFamily: OUTFIT, fontSize: 11, fontWeight: 700, color: SOFT, fontVariantNumeric: 'tabular-nums' }}>
@@ -183,11 +183,11 @@ export default function RecipientRoster({
                             third line, where they are next to the delegation
                             they qualify anyway. */}
                         <span className="min-w-0">
-                          <span className="block truncate" title={p.name} style={{ fontFamily: OUTFIT, fontSize: 12, fontWeight: 800, color: p.optedOut ? SOFT : INK }}>
+                          <span className="block [overflow-wrap:anywhere]" title={p.name} style={{ fontFamily: OUTFIT, fontSize: 12, fontWeight: 800, color: p.optedOut ? SOFT : INK }}>
                             {p.name}
                           </span>
                           {email && (
-                            <span className="block truncate" title={email} style={{ fontFamily: OUTFIT, fontSize: 10.5, color: SOFT }}>
+                            <span className="block [overflow-wrap:anywhere]" title={email} style={{ fontFamily: OUTFIT, fontSize: 10.5, color: SOFT }}>
                               {email}
                             </span>
                           )}
@@ -220,7 +220,7 @@ export default function RecipientRoster({
                               </span>
                             )}
                             {detail && detail !== email && (
-                              <span className="truncate" title={detail} style={{ fontFamily: OUTFIT, fontSize: 10.5, color: SOFT }}>
+                              <span className="min-w-0 [overflow-wrap:anywhere]" title={detail} style={{ fontFamily: OUTFIT, fontSize: 10.5, color: SOFT }}>
                                 {detail}
                               </span>
                             )}

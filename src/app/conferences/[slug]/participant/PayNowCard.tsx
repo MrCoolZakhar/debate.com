@@ -109,9 +109,12 @@ function BalanceRow({ b, showConference }: { b: OpenBalance; showConference: boo
   );
 }
 
-/** One conference, on the participant page. */
-export function PayNowCard({ userId, conferenceId }: { userId: string | null; conferenceId: string }) {
-  const rows = useOpenBalances(userId, conferenceId);
+/** One conference, on the participant page. `rows`: the caller already read
+ *  my_open_balances for this conference (the dashboard's Payment section),
+ *  so the card draws those instead of reading again. */
+export function PayNowCard({ userId, conferenceId, rows: given }: { userId: string | null; conferenceId: string; rows?: OpenBalance[] | null }) {
+  const own = useOpenBalances(given === undefined ? userId : null, conferenceId);
+  const rows = given === undefined ? own : given;
   if (!rows || rows.length === 0) return null;
   return (
     <SectionCard>

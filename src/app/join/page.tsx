@@ -35,6 +35,7 @@ import {
   AlertCircle, ArrowRight, BadgeCheck, CheckCircle2, Eye, Gavel, Globe2, KeyRound,
   Loader2, Lock, LogIn, Mail, Plus, RotateCw, UserRound, Users,
 } from 'lucide-react';
+import { chairNameProblem, safeChairName } from '@/lib/chairNameRules';
 import { getCommitteeRosterByCode, addChairName, updateCommitteeHeadChairInDB } from '@/lib/committeeService';
 import { getGavelDeviceId } from '@/lib/gavelDevice';
 import { chairActiveElsewhere } from '@/lib/chairDeviceClaims';
@@ -166,8 +167,35 @@ function JoinPageInner() {
   const returnSeat = (searchParams.get('seat') ?? '').trim().slice(0, 120);
   // The phone's sticky Join bar sits above the on-screen keyboard (visual viewport).
   const joinBarRef = useRef<HTMLDivElement>(null);
+  // The stage (role tiles, seats, chair steps). On a phone it starts near the bottom of
+  // the screen, behind the sticky Join bar and the tab bar, so when a code resolves the
+  // page brings it to the top (once per code). Below lg only: the desktop is one fixed
+  // screen. It only scrolls: focus stays in the code field, so typing goes on.
+  const stageRef = useRef<HTMLDivElement>(null);
+  const stageScrolledForRef = useRef<string | null>(null);
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const resolvedCode = foundCommittee?.code ?? null;
+  useEffect(() => {
+    if (!resolvedCode) { stageScrolledForRef.current = null; return; }
+    if (checkingConference || stageScrolledForRef.current === resolvedCode) return;
+    if (typeof window === 'undefined' || !window.matchMedia('(max-width: 1023px)').matches) return;
+    // A short timer rather than a frame: the step has painted by then, and a timer
+    // also runs in a tab that is not in front.
+    const timer = setTimeout(() => {
+      const el = stageRef.current;
+      if (!el) return;
+      // Marked here, not before: a re-run that cancels this timer must still scroll.
+      stageScrolledForRef.current = resolvedCode;
+      const top = el.getBoundingClientRect().top;
+      // Already near the top (the visitor scrolled there): leave the page alone.
+      if (top >= 0 && top <= 24) return;
+      const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      window.scrollTo({ top: Math.max(0, window.scrollY + top - 12), behavior: reduce ? 'auto' : 'smooth' });
+    }, 60);
+    return () => clearTimeout(timer);
+  }, [resolvedCode, checkingConference]);
 
   // On mount, if code was pre-filled from URL, trigger lookup immediately
   useEffect(() => {
@@ -513,7 +541,8 @@ function JoinPageInner() {
       if (allocationLoading) return;
       // Conference chair: no country allocation — route to the chair view using their profile name.
       if (mode === 'chair') {
-        const chairDisplayName = (profile?.display_name ?? user.email ?? 'Chair').trim();
+        // Never equal to a seat (chat keys chairs by name): "Name (chair)" when it would be.
+        const chairDisplayName = safeChairName((profile?.display_name ?? user.email ?? 'Chair').trim(), foundCommittee!.delegates.map((d) => d.country));
         addChairName(foundCommittee!.id, chairDisplayName, foundCommittee!.code, foundCommittee!.dbChairJoinSuffix ?? undefined);
         const goChair = () => router.push(`/chair/${foundCommittee!.code}?chairName=${encodeURIComponent(chairDisplayName)}`);
         // Claim-at-will Moderator works for conference sessions too; no password required —
@@ -551,6 +580,12 @@ function JoinPageInner() {
     if (mode === 'chair') {
       const name = chairNameMode === 'new' ? newChairName.trim() : chairName;
       if (!name) { setError(t('join_select_name')); return; }
+      // A NEW name may not be a seat of this room or a word the chat reserves. Names already
+      // on the dais list stay selectable.
+      if (chairNameMode === 'new') {
+        const problem = chairNameProblem(name, foundCommittee.delegates.map((d) => d.country));
+        if (problem) { setError(t(problem === 'seat' ? 'join_chair_name_is_seat' : 'join_chair_name_reserved')); return; }
+      }
       const expectedPassword = foundCommittee.dbChairJoinSuffix ?? getSettings(foundCommittee.code).chairJoinSuffix;
       if (expectedPassword && chairPassword !== expectedPassword) {
         setPasswordError(t('join_incorrect_code'));
@@ -881,7 +916,7 @@ function JoinPageInner() {
                 leaves (JOIN_FIT_CSS): a step taller than that scrolls INSIDE the stage,
                 the seat list flexing first, so the page itself never scrolls and the
                 Join button is always on screen. */}
-            <div className="gv-join-stage mt-4 lg:mt-3">
+            <div ref={stageRef} className="gv-join-stage mt-4 lg:mt-3">
               {!foundCommittee ? (
                 <EmptyStage busy={lookingUp} title={t('join_stage_empty_title')} body={t('join_stage_empty_body')} />
               ) : (
@@ -904,11 +939,11 @@ function JoinPageInner() {
                           <CircleFlag code={allocatedCountry.code} country={allocatedCountry.name} size={48} decorative />
                           <div className="min-w-0">
                             <Chip tone="green" icon={<BadgeCheck size={12} strokeWidth={2.6} />}>{returnSeat ? t('join_recommended') : t('join_conf_verified')}</Chip>
-                            <p className="mt-1.5 truncate" style={{ fontFamily: OUTFIT, fontSize: 18, fontWeight: 800, color: C.ink, letterSpacing: '-0.01em' }}>
+                            <p className="mt-1.5 [overflow-wrap:anywhere]" style={{ fontFamily: OUTFIT, fontSize: 18, fontWeight: 800, color: C.ink, letterSpacing: '-0.01em', lineHeight: 1.2 }}>
                               {getCountryDisplayName(allocatedCountry.name, language)}
                             </p>
                             {conferenceCommittee?.name && (
-                              <p className="truncate" style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 700, color: C.forest }}>
+                              <p className="mt-0.5 [overflow-wrap:anywhere]" style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 700, color: C.forest, lineHeight: 1.3 }}>
                                 {conferenceCommittee.name}
                               </p>
                             )}
@@ -1211,7 +1246,7 @@ function JoinPageInner() {
                 disabled={joinDisabled}
                 icon={<ArrowRight size={18} strokeWidth={2.6} className="rtl:-scale-x-100" />}
               >
-                <span className="truncate">{joinLabel}</span>
+                <span className="min-w-0 text-center leading-[1.15] [overflow-wrap:anywhere]">{joinLabel}</span>
               </PrimaryAction>
             </div>
 
@@ -1226,12 +1261,17 @@ function JoinPageInner() {
               </div>
             )}
 
-            <p className="mt-5 text-center lg:mt-3" style={{ fontFamily: OUTFIT, fontSize: 13, color: C.inkSoft }}>
-              {t('join_chair_prompt')}{' '}
-              <Link href="/create/sessions" className="font-bold underline decoration-[1.5px] underline-offset-4 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] focus-visible:ring-offset-2 rounded-sm" style={{ color: C.forest }}>
-                {t('join_create_instead')}
-              </Link>
-            </p>
+            {/* Only before a code resolves: once it has, the visitor is joining that room,
+                and "Are you a chair? Create a committee" read to a chair joining it as the
+                way in. */}
+            {!foundCommittee && (
+              <p className="mt-5 text-center lg:mt-3" style={{ fontFamily: OUTFIT, fontSize: 13, color: C.inkSoft }}>
+                {t('join_chair_prompt')}{' '}
+                <Link href="/create/sessions" className="font-bold underline decoration-[1.5px] underline-offset-4 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] focus-visible:ring-offset-2 rounded-sm" style={{ color: C.forest }}>
+                  {t('join_create_instead')}
+                </Link>
+              </p>
+            )}
           </JoinCard>
         </div>
       </main>
@@ -1366,7 +1406,7 @@ function ReservedHintPanel({ country, hint, t, onClaim }: {
       <div className="flex items-start gap-3">
         <CircleFlag country={country} size={34} decorative />
         <div className="min-w-0 flex-1">
-          <p className="truncate" style={{ fontFamily: OUTFIT, fontSize: 14.5, fontWeight: 800, color: C.ink }}>{country}</p>
+          <p className="[overflow-wrap:anywhere]" style={{ fontFamily: OUTFIT, fontSize: 14.5, fontWeight: 800, color: C.ink, lineHeight: 1.25 }}>{country}</p>
           {hint === undefined ? (
             <p className="mt-1 inline-flex items-center gap-1.5" style={{ fontFamily: OUTFIT, fontSize: 12.5, color: C.inkSoft }}>
               <Loader2 size={13} className="animate-spin" /> {t('join_reserved_loading')}
@@ -1385,7 +1425,7 @@ function ReservedHintPanel({ country, hint, t, onClaim }: {
                     >
                       {h.initial ?? <Mail size={12} strokeWidth={2.6} />}
                     </span>
-                    <span className="min-w-0 truncate" style={{ fontFamily: OUTFIT, fontSize: 13.5, fontWeight: 700, color: C.forest }}>
+                    <span className="min-w-0 [overflow-wrap:anywhere]" style={{ fontFamily: OUTFIT, fontSize: 13.5, fontWeight: 700, color: C.forest, lineHeight: 1.3 }}>
                       {h.email ? t('join_reserved_held_for', { email: h.email }) : t('join_reserved_held_unknown')}
                     </span>
                   </li>
@@ -1475,7 +1515,7 @@ function NoticeCard({ tone, icon, title, body, meta, action, foot }: {
         <div className="min-w-0 flex-1">
           <p style={{ fontFamily: OUTFIT, fontSize: 14.5, fontWeight: 800, color: danger ? C.danger : C.ink }}>{title}</p>
           <p className="mt-1" style={{ fontFamily: OUTFIT, fontSize: 13, lineHeight: 1.55, color: C.inkSoft, textWrap: 'pretty' }}>{body}</p>
-          {meta && <p className="mt-2 truncate" style={{ fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 600, color: C.inkSoft }}>{meta}</p>}
+          {meta && <p className="mt-2 [overflow-wrap:anywhere]" style={{ fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 600, color: C.inkSoft }}>{meta}</p>}
           {action && <div className="mt-3">{action}</div>}
           {foot && <p className="mt-3" style={{ fontFamily: OUTFIT, fontSize: 12, lineHeight: 1.5, color: C.muted }}>{foot}</p>}
         </div>

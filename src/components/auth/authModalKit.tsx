@@ -211,8 +211,8 @@ export const KIT_CSS = `
 .gv-textbtn-quiet{color:${INK_SOFT};font-weight:500}
 .gv-inline{color:${INK};font-weight:600;text-decoration:underline;text-underline-offset:2px}
 .gv-row{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px 12px}
-.gv-chip{display:flex;align-items:center;gap:10px;padding:0 14px;height:56px;border:1px solid ${HAIR};border-radius:12px;background:#F7F7F7}
-.gv-chip-text{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:15px;font-weight:500}
+.gv-chip{display:flex;align-items:center;gap:10px;padding:8px 14px;min-height:56px;border:1px solid ${HAIR};border-radius:12px;background:#F7F7F7}
+.gv-chip-text{min-width:0;overflow-wrap:anywhere;line-height:1.3;font-size:15px;font-weight:500}
 .gv-opt{display:flex;align-items:center;gap:14px;width:100%;text-align:left;padding:14px 16px;border:1px solid ${HAIR};border-radius:12px;background:#FFFFFF;font-family:${OUTFIT};color:${INK};cursor:pointer;transition:border-color 140ms ease,box-shadow 140ms ease,transform 120ms ease}
 .gv-opt:hover{border-color:${INK}}
 .gv-opt:active{transform:scale(0.99)}

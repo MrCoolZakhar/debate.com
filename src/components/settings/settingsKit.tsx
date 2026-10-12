@@ -828,7 +828,7 @@ export function InlineRename({ defaultName, value, onChange, resetValue, resetLa
           className="stg-focus group inline-flex items-center gap-1.5 min-w-0 text-start"
           style={{ fontSize: T.body, fontWeight: W.label, color: K.ink, background: 'transparent', border: 'none', padding: '4px 2px', borderRadius: 8, cursor: 'text' }}
         >
-          <span className="truncate">{shown}</span>
+          <span className="truncate" title={shown}>{shown}</span>
           <Pencil aria-hidden size={12} strokeWidth={2.4} className="shrink-0 opacity-30 group-hover:opacity-80" style={{ color: `var(${ACCENT_VAR}, ${K.forestLight})`, transitionProperty: 'opacity', transitionDuration: '150ms' }} />
         </button>
       )}

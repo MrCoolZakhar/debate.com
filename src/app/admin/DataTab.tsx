@@ -46,6 +46,8 @@ import { getAuthedClient } from '@/lib/supabase-auth';
 import { getCountryByName, countryToContinent, type Continent } from '@/lib/countries';
 import CancellationsCard from './CancellationsCard';
 import UserOriginCard from './UserOriginCard';
+import EmailCampaignsCard from './EmailCampaignsCard';
+import PaidAnnouncementsCard from './PaidAnnouncementsCard';
 import { INTENT_OPTIONS } from '@/lib/conferenceIntent';
 import {
   NEU, NEU_GRADIENTS, OUTFIT, EASE, NeuCard, NeuInset, NeuStatTile, NeuIconDisc, NeuRing,
@@ -1035,6 +1037,12 @@ export default function DataTab() {
 
       {/* ── Where our users are from (27 Sep 2026) ──────────────────────── */}
       <UserOriginCard />
+
+      {/* ── Email campaigns: clicks and conversions (7 Oct 2026) ───────── */}
+      <EmailCampaignsCard />
+
+      {/* ── Paid announcements: the review queue (9 Oct 2026) ─────────── */}
+      <PaidAnnouncementsCard />
 
       {/* ── Health ──────────────────────────────────────────────────────── */}
       <Section

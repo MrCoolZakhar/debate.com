@@ -42,7 +42,7 @@ import { ChevronDown, Handshake, Search } from 'lucide-react';
 import type { Conference } from '@/app/manage/[slug]/layout';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
-import { centsToFee } from '@/lib/invoices';
+import { cents } from './financialsApi';
 import {
   NEU, NEU_GRADIENTS, OUTFIT,
   NeuCard, NeuInset, NeuPill, NeuIconDisc,
@@ -175,7 +175,7 @@ export default function ReferralsSection({ conference }: { conference: Conferenc
       setInvoices((invs ?? []) as InvoiceRow[]);
     })();
     return () => { cancelled = true; };
-  }, [conference.id, session?.access_token]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [conference.id, !!session]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const rows = useMemo<{ rows: Row[]; totalPaidCents: number }>(() => {
     if (!vouchers) return { rows: [], totalPaidCents: 0 };
@@ -281,7 +281,7 @@ export default function ReferralsSection({ conference }: { conference: Conferenc
         <div className="flex items-center gap-8 flex-wrap">
           <Stat value={String(totalPeople)} label={totalPeople === 1 ? 'person referred' : 'people referred'} />
           <Stat value={`${usedCodes}/${codeRows.length}`} label="codes used" />
-          <Stat value={centsToFee(totalPaid, currency)} label="paid in" />
+          <Stat value={cents(totalPaid, currency)} label="paid in" />
         </div>
       </NeuCard>
 
@@ -356,12 +356,12 @@ export default function ReferralsSection({ conference }: { conference: Conferenc
                   </span>
 
                   <span style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 800, color: NEU.forest, fontVariantNumeric: 'tabular-nums', minWidth: 90 }}>
-                    {centsToFee(r.paidCents, currency)}
+                    {cents(r.paidCents, currency)}
                   </span>
 
                   {r.outstandingCents > 0 && (
                     <span style={{ fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 600, color: NEU.inkSoft, fontVariantNumeric: 'tabular-nums' }}>
-                      {centsToFee(r.outstandingCents, currency)} outstanding
+                      {cents(r.outstandingCents, currency)} outstanding
                     </span>
                   )}
 
@@ -389,11 +389,11 @@ export default function ReferralsSection({ conference }: { conference: Conferenc
                               {p.delegation ? ` · ${p.delegation}` : ''}
                             </span>
                           </span>
-                          <span style={{ fontFamily: OUTFIT, fontSize: 11, fontWeight: 700, color: NEU.muted, textTransform: 'capitalize' }}>
+                          <span style={{ fontFamily: OUTFIT, fontSize: 12, fontWeight: 700, color: NEU.muted, textTransform: 'capitalize' }}>
                             {p.status}
                           </span>
                           <span style={{ fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 800, color: NEU.forest, fontVariantNumeric: 'tabular-nums' }}>
-                            {centsToFee(p.paidCents, currency)}
+                            {cents(p.paidCents, currency)}
                           </span>
                         </div>
                       </NeuInset>

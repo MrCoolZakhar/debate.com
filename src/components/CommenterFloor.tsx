@@ -100,7 +100,7 @@ export default function CommenterFloor({
       {header.icon && <span aria-hidden className="shrink-0 inline-flex">{header.icon}</span>}
       <span
         className="min-w-0 truncate text-[15px] tracking-tight"
-        title={header.detail ? `${header.label} - ${header.detail}` : undefined}
+        title={header.detail ? `${header.label} - ${header.detail}` : header.label}
       >
         <span className="font-black">{header.label}</span>
         {header.detail && <span className="font-normal">{' - '}{header.detail}</span>}

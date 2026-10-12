@@ -56,8 +56,8 @@ export default function FooterLegal({
   // of the 44px tap-target floor, on a row where "Terms of Service" and
   // "Privacy Policy" sit two pixels apart. Padding the anchor (rather than
   // growing the type) makes each one thumb-sized on a phone and leaves the
-  // desktop footer exactly as it was.
-  const hubLink = `${t.link} inline-flex items-center px-1.5 min-h-[38px] md:min-h-0 md:px-0`;
+  // desktop footer exactly as it was. 44px on phones and on any touch screen.
+  const hubLink = `${t.link} inline-flex items-center px-1.5 min-h-[44px] md:min-h-0 md:px-0 md:pointer-coarse:min-h-[44px]`;
 
   return (
     <div

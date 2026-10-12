@@ -164,7 +164,7 @@ export default function PeopleTab({ committee, t, language, isViewOnly, myChairN
                   {isHead ? <Gavel size={11} strokeWidth={2.6} /> : <MessageSquareText size={11} strokeWidth={2.4} />}
                 </span>
               </span>
-              <span className="block w-full truncate" title={name} style={{ marginTop: 8, fontSize: T.body, fontWeight: W.section, color: K.ink, lineHeight: LH.body }}>
+              <span className="block w-full [overflow-wrap:anywhere]" style={{ marginTop: 8, fontSize: T.body, fontWeight: W.section, color: K.ink, lineHeight: LH.body }}>
                 {name}
               </span>
               <span className="block" style={{ fontSize: T.caption, fontWeight: W.label, color: isHead ? '#7A5812' : K.inkSoft, lineHeight: LH.body }}>
@@ -218,7 +218,7 @@ export default function PeopleTab({ committee, t, language, isViewOnly, myChairN
                         background: !joined ? 'transparent' : active ? '#3FA268' : K.deepGold,
                         boxShadow: !joined ? 'inset 0 0 0 1.5px rgba(28,20,16,0.30)' : active ? '0 0 0 3px rgba(63,162,104,0.18)' : 'none',
                       }} />
-                      <span className="truncate" style={{ fontSize: T.body, fontWeight: W.label, color: K.ink }} title={people ? `${name} · ${people}` : name}>
+                      <span className="min-w-0 [overflow-wrap:anywhere]" style={{ fontSize: T.body, fontWeight: W.label, color: K.ink, lineHeight: LH.body }}>
                         {name}
                         {people && <span style={{ fontWeight: W.body, color: K.inkSoft }}> · {people}</span>}
                       </span>

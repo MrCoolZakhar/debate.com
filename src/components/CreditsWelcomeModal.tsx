@@ -132,8 +132,8 @@ export default function CreditsWelcomeModal({
           <button
             onClick={onClose}
             aria-label="Close"
-            className="absolute flex items-center justify-center"
-            style={{ top: 14, right: 14, width: 30, height: 30, borderRadius: 999, backgroundColor: NEU.base, boxShadow: NEU.inSm, border: 'none', color: NEU.muted, cursor: 'pointer' }}
+            className="absolute flex items-center justify-center focus:outline-none"
+            style={{ top: 7, right: 7, width: 44, height: 44, borderRadius: 999, backgroundColor: NEU.base, boxShadow: NEU.inSm, border: 'none', color: NEU.muted, cursor: 'pointer' }}
           >
             <X size={15} strokeWidth={2.4} />
           </button>
@@ -156,7 +156,7 @@ export default function CreditsWelcomeModal({
 
           <h2 style={{ margin: '0 0 12px', lineHeight: 1.12, letterSpacing: '-0.01em' }}>
             <span style={{ fontFamily: OUTFIT, fontSize: 26, fontWeight: 900, color: NEU.ink }}>Introducing </span>
-            <span style={{ fontFamily: "'Playfair Display', serif", fontStyle: 'italic', fontWeight: 400, fontSize: 26, color: NEU.amber }}>Credits</span>
+            <span style={{ fontFamily: OUTFIT, fontSize: 26, fontWeight: 900, color: NEU.ink }}>Credits</span>
           </h2>
           {/* inkSoft, not muted: muted is 2.7:1 on this surface and this is
               body copy, not a decorative label (rulebook section 3). */}

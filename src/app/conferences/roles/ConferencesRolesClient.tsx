@@ -780,6 +780,19 @@ function ComingSoonScreen() {
                 />
               ))}
             </div>
+
+            {/* Not a dead end: the conferences are open now. */}
+            <Link
+              href="/conferences/explore"
+              className="mt-7 inline-flex items-center justify-center focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] focus-visible:ring-offset-2"
+              style={{
+                minHeight: 48, padding: '12px 26px', borderRadius: 11, textDecoration: 'none',
+                background: 'linear-gradient(90deg,#1B3828 0%,#2A5A3C 55%,#1E4A31 100%)', color: '#FFFFFF',
+                fontFamily: OUTFIT, fontWeight: 700, fontSize: 15, boxShadow: '0 6px 16px rgba(27,56,40,0.22)',
+              }}
+            >
+              Explore conferences
+            </Link>
           </NeuCard>
         </main>
 
@@ -856,7 +869,7 @@ export default function ConferencesRolesClient() {
     }
     fetchAll();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [authLoading, user?.id, session?.access_token]);
+  }, [authLoading, user?.id]);
 
   // Both sides of every filter comparison are normalised to canonical
   // lowercase keys ('chairs', 'travel-covered').

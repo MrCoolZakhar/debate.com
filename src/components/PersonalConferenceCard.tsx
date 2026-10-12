@@ -227,7 +227,7 @@ export function PersonalConferenceCard({
         <div className="min-w-0 flex-1">
           {secondary && (
             <p
-              className="truncate"
+              className="[overflow-wrap:anywhere]"
               style={{ color: NEU.muted, fontFamily: OUTFIT, fontSize: '10.5px', fontWeight: 600, letterSpacing: '0.01em', margin: 0, lineHeight: 1.35 }}
             >
               {secondary}

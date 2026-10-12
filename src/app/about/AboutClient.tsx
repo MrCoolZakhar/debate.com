@@ -150,7 +150,7 @@ export default function AboutClient() {
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-w-lg"
           style={{ backgroundColor: '#FAF8F3', border: '1px solid rgba(221, 212, 192, 0.8)', borderRadius: '20px', color: '#1C1410' }}>
-          <DialogHeader>
+          <DialogHeader className="max-sm:pr-10">
             <DialogTitle className="text-[#1C1410] text-xl font-black">
               {submitted ? t('about_dialog_title_submitted') : t('about_dialog_title_new')}
             </DialogTitle>
@@ -165,7 +165,7 @@ export default function AboutClient() {
                 style={{ backgroundColor: 'rgba(27, 56, 40, 0.1)', border: '1px solid rgba(27, 56, 40, 0.3)' }}>
                 <span style={{ fontSize: 28, color: '#1B3828' }}>✓</span>
               </div>
-              <Button onClick={() => setOpen(false)} className="uppercase" style={{ backgroundColor: '#1B3828', color: '#EED98A', borderRadius: '12px', fontWeight: 700 }}>
+              <Button onClick={() => setOpen(false)} className="uppercase max-sm:h-11 max-sm:px-6" style={{ backgroundColor: '#1B3828', color: '#EED98A', borderRadius: '12px', fontWeight: 700 }}>
                 {t('about_btn_close')}
               </Button>
             </div>
@@ -173,26 +173,26 @@ export default function AboutClient() {
             <div className="flex flex-col gap-5 pt-2">
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="amb-name" style={{ color: '#6A5A4A', fontSize: 13, fontWeight: 600 }}>{t('about_label_name')}</Label>
-                <Input id="amb-name" placeholder={t('about_placeholder_name')} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} style={inputStyle} />
+                <Input id="amb-name" className="max-sm:h-11" placeholder={t('about_placeholder_name')} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} style={inputStyle} />
               </div>
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="amb-email" style={{ color: '#6A5A4A', fontSize: 13, fontWeight: 600 }}>{t('about_label_email')}</Label>
-                <Input id="amb-email" type="email" placeholder="you@example.com" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} style={inputStyle} />
+                <Input id="amb-email" className="max-sm:h-11" type="email" placeholder="you@example.com" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} style={inputStyle} />
               </div>
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="amb-country" style={{ color: '#6A5A4A', fontSize: 13, fontWeight: 600 }}>{t('about_label_country')}</Label>
-                <Input id="amb-country" placeholder={t('about_placeholder_country')} value={form.country} onChange={(e) => setForm({ ...form, country: e.target.value })} style={inputStyle} />
+                <Input id="amb-country" className="max-sm:h-11" placeholder={t('about_placeholder_country')} value={form.country} onChange={(e) => setForm({ ...form, country: e.target.value })} style={inputStyle} />
               </div>
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="amb-exp" style={{ color: '#6A5A4A', fontSize: 13, fontWeight: 600 }}>{t('about_label_experience')}</Label>
                 <Textarea id="amb-exp" placeholder={t('about_placeholder_experience')} value={form.experience} onChange={(e) => setForm({ ...form, experience: e.target.value })} rows={4} style={{ ...inputStyle, resize: 'none' }} />
               </div>
               <div className="flex gap-3 pt-2">
-                <Button variant="outline" onClick={() => setOpen(false)} className="flex-1 uppercase"
+                <Button variant="outline" onClick={() => setOpen(false)} className="flex-1 uppercase max-sm:h-11"
                   style={{ borderColor: 'rgba(28, 20, 16, 0.2)', color: '#9A8A78', backgroundColor: 'transparent', borderRadius: '12px' }}>
                   {t('about_btn_cancel')}
                 </Button>
-                <Button onClick={handleSubmit} disabled={!form.name || !form.email || !form.country} className="flex-1 uppercase"
+                <Button onClick={handleSubmit} disabled={!form.name || !form.email || !form.country} className="flex-1 uppercase max-sm:h-11"
                   style={{ backgroundColor: '#1B3828', color: '#EED98A', borderRadius: '12px', fontWeight: 800, opacity: (!form.name || !form.email || !form.country) ? 0.45 : 1 }}>
                   {t('about_btn_submit')}
                 </Button>

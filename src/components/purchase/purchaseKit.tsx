@@ -18,13 +18,12 @@
 // card form is never under the keyboard.
 //
 // Icons are Microsoft Fluent 3D emoji through Emoji3D, each with a lucide
-// fallback. Titles end in a GoldWord (the site's title signature).
+// fallback. Titles are plain sans (the gold italic word is for a page's main heading only).
 
 import { useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 import { Emoji3D } from '@/components/neu';
-import { GoldWord } from '@/components/BrandHeading';
 import { useModalEscape } from '@/components/ModalOverlay';
 import { useScrollLock } from '@/hooks/useScrollLock';
 import { OUTFIT } from '@/components/auth/authModalKit';
@@ -100,10 +99,10 @@ export function PurchaseShell({
 }
 
 /**
- * "Gavelling <Word>" on one line, the word in gold (Playfair italic), with an
+ * "Gavelling <Word>" on one line, plain sans (a pop-up title: no gold italic), with an
  * optional picture beside it (the Gavelling mark, the Infinity emoji).
  */
-export function BrandTitle({ word, tone, icon, sub }: {
+export function BrandTitle({ word, icon, sub }: {
   word: string; tone: Tone; icon?: React.ReactNode; sub?: React.ReactNode;
 }) {
   return (
@@ -112,7 +111,7 @@ export function BrandTitle({ word, tone, icon, sub }: {
           start flush with the rest of the column (owner, 25 Sep 2026). */}
       {icon ? <span className="gv-buy-title-icon" aria-hidden>{icon}</span> : null}
       <h2 className="gv-buy-title">
-        <span className="gv-buy-title-text">Gavelling <GoldWord tone={tone}>{word}</GoldWord></span>
+        <span className="gv-buy-title-text">Gavelling {word}</span>
       </h2>
       {sub ? <p className="gv-buy-sub">{sub}</p> : null}
     </div>
@@ -208,7 +207,7 @@ export const PURCHASE_CSS = `
 /* The Credits right column (the Stripe side) is PANEL_GREEN, matching the Stripe brand colour. */
 .gv-buy-right.gv-buy-dark{background:${PANEL_GREEN};color:${DARK_INK}}
 
-/* Title: "Gavelling Word", the word in gold Playfair italic, a picture beside it. */
+/* Title: "Gavelling Word", plain sans, a picture beside it. */
 /* ONE title style for both pop-ups: flush left, large. */
 .gv-buy-title{margin:0;display:block;font-size:38px;font-weight:800;letter-spacing:-0.03em;line-height:1.02;color:${INK};text-wrap:balance}
 .gv-buy-dark .gv-buy-title{color:${DARK_INK}}

@@ -66,6 +66,9 @@ const nextConfig: NextConfig = {
       { source: '/pricing', destination: '/pricing/credits', permanent: true },
       // The conference map is archived (src/app/_archive/conferences-map, 25 Sep 2026).
       { source: '/conferences/map', destination: '/conferences/explore', permanent: false },
+      // Financial aid moved inside Financials (9 Oct 2026). The query is kept;
+      // the old page file still redirects too, as a fallback.
+      { source: '/manage/:slug/financial-aid', destination: '/manage/:slug/financials/aid', permanent: true },
     ];
   },
   async headers() {

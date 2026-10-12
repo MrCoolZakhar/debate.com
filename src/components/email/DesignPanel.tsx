@@ -56,7 +56,7 @@ function SwatchRow({
 }) {
   return (
     <div className="mb-3.5">
-      <p className="mb-1.5" style={{ fontFamily: OUTFIT, fontSize: 10.5, fontWeight: 800, letterSpacing: '0.08em', color: SOFT }}>
+      <p className="mb-1.5" style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 700, color: INK }}>
         {label}
       </p>
       {/* A 3×2 GRID, not a wrapping row. Six 30px swatches with gaps need
@@ -112,8 +112,8 @@ export default function DesignPanel({ design }: { design: DesignControls }) {
   const { theme, onPatch } = design;
   return (
     <div>
-      <p className="mb-1.5" style={{ fontFamily: OUTFIT, fontSize: 10.5, fontWeight: 800, letterSpacing: '0.08em', color: SOFT }}>
-        TOP OF THE EMAIL
+      <p className="mb-1.5" style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 700, color: INK }}>
+        Top of the email
       </p>
       <div
         className="flex items-center gap-0.5 mb-3.5"
@@ -137,7 +137,7 @@ export default function DesignPanel({ design }: { design: DesignControls }) {
                 minHeight: 34, padding: '5px 10px', borderRadius: 999, border: 'none',
                 background: active ? `linear-gradient(135deg, ${FOREST}, #2E6041)` : 'transparent',
                 color: active ? '#EED98A' : SOFT,
-                fontFamily: OUTFIT, fontSize: 11, fontWeight: 800, letterSpacing: '0.04em',
+                fontFamily: OUTFIT, fontSize: 13, fontWeight: 700,
                 cursor: 'pointer',
                 opacity: dead ? 0.6 : 1,
                 boxShadow: active ? '0 3px 8px rgba(27,56,40,0.28)' : 'none',
@@ -153,8 +153,8 @@ export default function DesignPanel({ design }: { design: DesignControls }) {
         })}
       </div>
 
-      <SwatchRow label="ACCENT" value={theme.accentColor} palette={ACCENT_PALETTE} onChange={c => onPatch({ accentColor: c })} />
-      <SwatchRow label="BUTTONS" value={theme.buttonColor} palette={BUTTON_PALETTE} onChange={c => onPatch({ buttonColor: c })} />
+      <SwatchRow label="Accent colour" value={theme.accentColor} palette={ACCENT_PALETTE} onChange={c => onPatch({ accentColor: c })} />
+      <SwatchRow label="Buttons" value={theme.buttonColor} palette={BUTTON_PALETTE} onChange={c => onPatch({ buttonColor: c })} />
 
       <button
         type="button"
@@ -168,7 +168,7 @@ export default function DesignPanel({ design }: { design: DesignControls }) {
           cursor: 'pointer', textAlign: 'left',
         }}
       >
-        <span style={{ fontFamily: OUTFIT, fontSize: 12, fontWeight: 700, color: INK }}>Show the logo</span>
+        <span style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 700, color: INK }}>Show the logo</span>
         <span
           className="inline-flex items-center flex-shrink-0"
           style={{
@@ -184,8 +184,8 @@ export default function DesignPanel({ design }: { design: DesignControls }) {
         </span>
       </button>
 
-      <p className="mb-1.5" style={{ fontFamily: OUTFIT, fontSize: 10.5, fontWeight: 800, letterSpacing: '0.08em', color: SOFT }}>
-        A LINE IN THE FOOTER
+      <p className="mb-1.5" style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 700, color: INK }}>
+        A line in the footer
       </p>
       <input
         value={theme.footerLine}
@@ -194,7 +194,7 @@ export default function DesignPanel({ design }: { design: DesignControls }) {
         className="w-full focus:outline-none"
         style={{
           minHeight: 40, borderRadius: 12, padding: '10px 12px',
-          fontFamily: OUTFIT, fontSize: 12.5, color: INK,
+          fontFamily: OUTFIT, fontSize: 16, color: INK,
           backgroundColor: '#FFFDF8', border: '1px solid rgba(27,56,40,0.13)', boxShadow: NEU.inSm,
         }}
       />
@@ -207,9 +207,6 @@ export default function DesignPanel({ design }: { design: DesignControls }) {
         }}
       >
         {design.error || (design.saving ? 'Saving…' : design.saved ? 'Saved ✓' : '')}
-      </p>
-      <p className="mt-1" style={{ fontFamily: OUTFIT, fontSize: 11, color: SOFT, lineHeight: 1.5, textWrap: 'pretty' }}>
-        Every email this conference sends inherits these. Watch the sheet beside you change as you pick.
       </p>
     </div>
   );

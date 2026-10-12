@@ -22,7 +22,6 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Check, ChevronLeft, ChevronRight, Compass, ExternalLink, Flag, Globe, Home, X } from 'lucide-react';
-import { GoldWord } from '@/components/BrandHeading';
 import { friendlyError, plainOrFallback } from '@/lib/friendlyError';
 import { notifyOk } from '@/lib/appNotify';
 import { PurchaseShell, ErrorLine, GoldButton, Eyebrow, INK, INK_SOFT, FOREST, GOLD, IVORY } from '@/components/purchase/purchaseKit';
@@ -528,7 +527,7 @@ export default function SpotlightPopup(props: SpotlightPopupProps) {
         <div className="gv-sp-tabs-row">{bookmarks}</div>
         <div>
           <h2 className="gv-buy-title" style={{ fontSize: 32 }}>
-            {bundle ? <>{bundle.name} <GoldWord tone="light">Bundle</GoldWord></> : <>{NAMES[placement]} <GoldWord tone="light">Spotlight</GoldWord></>}
+            {bundle ? <>{bundle.name} Bundle</> : <>{NAMES[placement]} Spotlight</>}
           </h2>
           <p className="gv-buy-sub">{bundle ? bundle.items.map(it => `${weeksLabel(it.days)} ${NAMES[it.placement]}`).join(', ') + (bundle.unlimitedEmails ? ', unlimited emails' : '') + (bundle.extraCredits ? `, ${bundle.extraCredits} extra credits` : '') : s.tag}</p>
         </div>

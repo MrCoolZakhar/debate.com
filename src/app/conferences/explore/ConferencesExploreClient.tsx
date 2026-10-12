@@ -29,11 +29,11 @@ import {
   CalendarDays, Ticket, Globe, MapPin, Monitor, School, GraduationCap, Heart, DoorOpen, Plus, X,
 } from 'lucide-react';
 
-/** Country names are matched in English, Spanish and French (localised names
+/** Country names are matched in English, Spanish, French and Portuguese (localised names
  *  and aliases through countryMatchRank), best rank wins. */
 function bestCountryRank(name: string, q: string): number | null {
   let best: number | null = null;
-  for (const lang of ['en', 'es', 'fr']) {
+  for (const lang of ['en', 'es', 'fr', 'pt']) {
     const r = countryMatchRank(name, q, lang);
     if (r !== null && (best === null || r < best)) best = r;
   }
@@ -51,7 +51,7 @@ import { compareStartDate, hasConcluded } from '@/lib/conferenceDates';
 import { ConferenceCard, ConferenceCardSkeleton } from '../ConferenceCard';
 import { GoldWord } from '@/components/BrandHeading';
 import {
-  ChoiceRow, FilterChip, PRIMARY_BUTTON, SCROLL_CSS, SearchPill, SortMenu, ToggleChip, ViewToggle,
+  ChoiceRow, FilterChip, PRIMARY_BUTTON, SCROLL_CSS, SearchPill, SortMenu, ToggleChip, ViewToggle, useEdgeFade,
   type DateTab, type ExploreView, type SuggestConference, type SuggestCountry,
 } from './ExploreChrome';
 import {
@@ -725,6 +725,9 @@ export default function ConferencesExploreClient() {
   const userCode = userCountry ? getCountryByName(userCountry)?.code : undefined;
 
   const resultsRef = useRef<HTMLElement>(null);
+  // The filter chips scroll sideways below 1024px: fade the side(s) with more.
+  const filterBandRef = useRef<HTMLDivElement>(null);
+  useEdgeFade(filterBandRef);
   function scrollToResults() {
     const el = resultsRef.current;
     if (!el) return;
@@ -916,7 +919,7 @@ export default function ConferencesExploreClient() {
                When (on phones, where the pill shows only Where, a When chip
                stands in). */}
           <div className="gv-explore-wrap gv-explore-toolbar" style={{ marginTop: 'clamp(10px, 1.2vw, 14px)', marginBottom: 10 }}>
-            <div role="toolbar" aria-label="Filters" className="gv-explore-scroll gv-explore-band">
+            <div ref={filterBandRef} role="toolbar" aria-label="Filters" className="gv-explore-scroll gv-explore-band">
               <span className="contents sm:hidden">
                 <FilterChip
                   label="When" title="When" icon={CalendarDays}
@@ -1081,7 +1084,7 @@ export default function ConferencesExploreClient() {
             <section className="gv-explore-wrap" aria-labelledby="gv-explore-big" style={{ marginTop: sectionGap }}>
               <div className="flex items-baseline flex-wrap" style={{ columnGap: 12, rowGap: 4, marginBottom: 16 }}>
                 <h2 id="gv-explore-big" style={{ fontWeight: 800, fontSize: 'clamp(22px, 2.2vw, 30px)', color: INK, margin: 0, letterSpacing: '-0.012em' }}>
-                  Bigger Conferences Worth <GoldWord>Travelling</GoldWord>
+                  Bigger Conferences Worth Travelling
                 </h2>
                 <p style={{ fontWeight: 500, fontSize: 14, color: '#6B5F52', margin: 0 }}>
                   Outside your filter, {BIG_CONFERENCE_DELEGATES}+ delegates expected

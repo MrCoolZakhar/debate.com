@@ -188,6 +188,7 @@ export default function PrivacyPage() {
               <li><strong>Crash reports</strong>: when a page breaks in your browser we send ourselves the error message, the technical stack trace, and the address of the page you were on, so we can fix it fast. We do not attach your name to it, but a page address can include a session code.</li>
               <li><strong>Conference page visits</strong>: when you open a conference&apos;s public page, we add one to an anonymous daily count for that conference, grouped by where the visit came from: Google, another search engine, social media, email, a direct link, Gavelling itself, or another website (for which we keep only the website&apos;s name, never the page address). We use no cookies for this and store no IP address, no browser details and nothing that identifies you. Visits by the conference&apos;s own team and by people who already applied to it are not counted. The conference&apos;s organisers see these counts so they can tell where their applicants come from.</li>
               <li><strong>Site page views</strong>: across the rest of Gavelling we also keep an anonymous daily count of views per page (the homepage, Explore, a guide, and so on) and per source (Google, social media, a direct link). It is a number per day, page and source, with no cookie, no IP address and no identifier of any kind, and only Gavelling staff see it.</li>
+              <li><strong>Links in our own emails</strong>: when we send a newsletter or another email to all account holders, its links go through gavelling.com/r/ first. When you click one, we record that the email we sent you was clicked, which link it was, and when. We use this only to see whether an email was useful, in totals and compared with whether people used Gavelling in the following week (for example applying to a conference or creating one). We store no IP address, browser or device details and no cookie, and no third party is involved. We do not track whether you open an email. Every one of these emails has an unsubscribe link at the bottom.</li>
             </ul>
             <p className="mt-3">
               We do not run Google Analytics, advertising pixels, or any third-party tracking on
@@ -556,6 +557,16 @@ export default function PrivacyPage() {
           <li><strong>Service emails</strong>: password resets, payment receipts, application updates, and messages from a conference you applied to about that conference. These are part of the service, so you cannot switch them off while you have an account.</li>
           <li><strong>Announcements and marketing</strong>: these go only to people who have opted in, and every one of them can be turned off in <Link href="/account/profile" style={LINK}>Account → Profile</Link>. Organisers sending a broadcast through Gavelling cannot reach anyone who has opted out; we exclude them automatically.</li>
         </ul>
+        {/* Paid announcements (scratch-paid-announcements.sql, `_paid_announcement_people`).
+            Keep this paragraph true to that function if the audience rule changes. */}
+        <p className="mt-3">
+          Conferences can pay to send one announcement, checked by our team first, to people who
+          opted in. To choose who gets one we use only the cities and countries of conferences you
+          were accepted to or seated at on Gavelling, the conferences on your public MUN CV, and the
+          nationality on your profile. We never use a CV entry you made private, or a CV you made
+          private. You get at most one of these every 14 days, never two from the same conference,
+          and every one has an unsubscribe link.
+        </p>
         <p className="mt-3">
           Emails are delivered by Resend on our behalf. We never sell your email address or pass it
           to anyone for their own marketing.

@@ -236,7 +236,7 @@ export default function SubscriptionPricingClient() {
 
       {/* QUESTIONS: white */}
       <section className="gv-p-block gv-p-block-white" aria-labelledby="gv-su-faq-title" id="questions" style={{ scrollMarginTop: 96 }}>
-        <h2 id="gv-su-faq-title" className="gv-p-h2">Common <GoldWord tone="light">Questions</GoldWord></h2>
+        <h2 id="gv-su-faq-title" className="gv-p-h2">Common Questions</h2>
         <div className="gv-su-faq">
           <FaqList entries={faq} context="pricing" />
         </div>

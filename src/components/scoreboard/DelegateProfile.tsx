@@ -183,7 +183,7 @@ export default function DelegateProfile({ row, rank, rankTotal, slices, speeches
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', rowGap: 6 }}>
         <SeatCircleFlag country={row.country} size={34} decorative />
         <span style={{ flex: '1 1 140px', minWidth: 0 }}>
-          <span style={{ display: 'block', fontFamily: OUTFIT, fontWeight: 800, fontSize: 15.5, color: NEU.ink, lineHeight: 1.2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          <span style={{ display: 'block', fontFamily: OUTFIT, fontWeight: 800, fontSize: 15.5, color: NEU.ink, lineHeight: 1.2, overflowWrap: 'anywhere' }}>
             {getCountryDisplayName(row.country, language)}
           </span>
           {(row.isObserver || row.status === 'absent') && (
@@ -288,7 +288,7 @@ export default function DelegateProfile({ row, rank, rankTotal, slices, speeches
                   style={{ display: 'flex', alignItems: 'center', gap: 8, minHeight: 22 }}
                   title={fmt(f.ratings === 1 ? t('sb_title_factor_avg_one') : t('sb_title_factor_avg_many'), { n: f.ratings })}
                 >
-                  <span style={{ flex: 1, minWidth: 0, fontFamily: OUTFIT, fontSize: 12, color: NEU.ink, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  <span style={{ flex: 1, minWidth: 0, fontFamily: OUTFIT, fontSize: 12, color: NEU.ink, overflowWrap: 'anywhere', lineHeight: 1.25 }}>
                     {f.name}
                   </span>
                   {dots ? (
@@ -333,7 +333,7 @@ export default function DelegateProfile({ row, rank, rankTotal, slices, speeches
                   <Icon size={13} strokeWidth={2.4} aria-hidden style={{ color: SOFT, flexShrink: 0, marginBlockStart: 3 }} />
                   <span style={{ flex: 1, minWidth: 0 }}>
                     <span style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
-                      <span style={{ flex: 1, minWidth: 0, fontFamily: OUTFIT, fontSize: 12.5, color: NEU.ink, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      <span style={{ flex: 1, minWidth: 0, fontFamily: OUTFIT, fontSize: 12.5, color: NEU.ink, overflowWrap: 'anywhere', lineHeight: 1.25 }}>
                         {it.kind === 'speech' ? (
                           <>
                             <span style={{ fontWeight: 700 }}>{ctxLabel(it.speech.context)}</span>

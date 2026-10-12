@@ -128,7 +128,7 @@ const LEAVE_GRACE_MS = 500;
 /** Space kept below the stack when it has to scroll. */
 const BOTTOM_PX = 12;
 
-const LOCALES: Record<string, string> = { en: 'en-GB', es: 'es-ES', fr: 'fr-FR', ar: 'ar' };
+const LOCALES: Record<string, string> = { en: 'en-GB', es: 'es-ES', fr: 'fr-FR', ar: 'ar', pt: 'pt-BR' };
 
 const KIND_ICON: Record<NotificationKind, typeof Hand> = {
   'gsl-request': Hand,

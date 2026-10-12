@@ -223,12 +223,12 @@ function SeatRowInner({
         <CircleFlag country={seat.country} code={seat.countryCode} logoUrl={delegate?.logoUrl ?? null} size={38} decorative />
       </span>
       <span className="min-w-0 flex-1">
-        <span className="block truncate" style={{ fontSize: 15.5, fontWeight: 800, color: C.ink, letterSpacing: '-0.005em', lineHeight: 1.25 }}>
+        <span className="block [overflow-wrap:anywhere]" style={{ fontSize: 15.5, fontWeight: 800, color: C.ink, letterSpacing: '-0.005em', lineHeight: 1.25 }}>
           {title}
           {country && <span style={{ fontWeight: 500, color: C.inkSoft }}>{' '}{country}</span>}
         </span>
         {showWhere && (committee || mode) && (
-          <span className="block truncate" style={{ fontSize: 12.5, fontWeight: 500, color: C.inkSoft, lineHeight: 1.3 }} title={whereTitle || undefined}>
+          <span className="block [overflow-wrap:anywhere]" style={{ fontSize: 12.5, fontWeight: 500, color: C.inkSoft, lineHeight: 1.3 }} title={whereTitle || undefined}>
             {committee && <span style={{ fontWeight: 800, color: C.forestSoft, letterSpacing: '0.02em' }}>{committee.short}</span>}
             {committee && mode && ' · '}
             {mode}

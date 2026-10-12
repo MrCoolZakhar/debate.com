@@ -176,7 +176,7 @@ export function LiveCommitteeIdentity({ src, primary, secondary, placeholder, to
 
       <div className="min-w-0 flex-1">
         <p
-          className="truncate"
+          className="[overflow-wrap:anywhere]"
           title={primary || placeholder}
           style={{
             fontFamily: OUTFIT, fontWeight: 800, letterSpacing: '-0.015em', lineHeight: 1.12,
@@ -187,16 +187,16 @@ export function LiveCommitteeIdentity({ src, primary, secondary, placeholder, to
           {primary || placeholder}
         </p>
         {secondary && (
-          <p className="mt-0.5 truncate" style={{ fontFamily: OUTFIT, fontSize: 14, fontWeight: 500, lineHeight: 1.35, color: C.inkSoft }}>
+          <p className="mt-0.5 [overflow-wrap:anywhere]" style={{ fontFamily: OUTFIT, fontSize: 14, fontWeight: 500, lineHeight: 1.35, color: C.inkSoft }}>
             {secondary}
           </p>
         )}
-        <p className="mt-1 line-clamp-2" style={{ fontFamily: OUTFIT, fontSize: 14, lineHeight: 1.4, color: topic ? C.ink : C.muted, textWrap: 'pretty' }}>
+        <p className="mt-1 line-clamp-2" title={topic || undefined} style={{ fontFamily: OUTFIT, fontSize: 14, lineHeight: 1.4, color: topic ? C.ink : C.muted, textWrap: 'pretty' }}>
           <span style={{ fontWeight: 800, color: C.goldDeep }}>{topicLabel}</span>{' '}
           <span style={{ fontWeight: 500 }}>{topic || topicEmpty}</span>
         </p>
         {chairsLine && (
-          <p className="mt-0.5 truncate" style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 600, color: C.inkSoft }}>
+          <p className="mt-0.5 [overflow-wrap:anywhere]" style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 600, color: C.inkSoft, lineHeight: 1.3 }}>
             {chairsLine}
           </p>
         )}
@@ -330,10 +330,10 @@ export function ChairTokenField({ id, chairs, draft, onDraft, onCommit, onRemove
         {chairs.map((name, i) => (
           <span
             key={`${name}-${i}`}
-            className="flex h-[32px] flex-shrink-0 items-center gap-1 rounded-full ps-3 pe-1"
+            className="flex min-h-[32px] flex-shrink-0 items-center gap-1 rounded-full ps-3 pe-1"
             style={{ backgroundColor: 'rgba(27,56,40,0.08)', boxShadow: 'inset 0 0 0 1px rgba(27,56,40,0.10)', fontFamily: OUTFIT, fontSize: 13.5, fontWeight: 700, color: C.forest }}
           >
-            <span className="max-w-[160px] truncate">{name}</span>
+            <span className="max-w-[160px] leading-[1.1] [overflow-wrap:anywhere]" title={name}>{name}</span>
             <button
               type="button"
               onClick={() => onRemove(i)}

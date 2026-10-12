@@ -499,7 +499,7 @@ const chipStyle: React.CSSProperties = { outline: 'none',
 // handler per control: the whole cluster brightens together when the ROW is
 // hovered, which per-button handlers cannot express.
 const ROSTER_ROW_CSS = `
-.gv-rs-row { display:flex; align-items:center; gap:7px; height:34px; padding:0 4px 0 4px; border-bottom:1px solid #EFE9DB; border-radius:6px; transition:background-color 120ms; }
+.gv-rs-row { display:flex; align-items:center; gap:7px; min-height:34px; padding:2px 4px; border-bottom:1px solid #EFE9DB; border-radius:6px; transition:background-color 120ms; }
 .gv-rs-row:hover { background-color:rgba(27,56,40,0.04); }
 div:last-child > .gv-rs-row { border-bottom-color:transparent; }
 .gv-rs-row.gv-rs-dragging { opacity:0.45; }
@@ -989,7 +989,7 @@ export function ConferenceRosterSelected({
                 {g.logo_url
                   ? <CircleFlag logoUrl={g.logo_url} label={g.name} size={16} logoFit="contain" decorative />
                   : <span style={{ width: 8, height: 8, borderRadius: 999, backgroundColor: g.color ?? '#1B3828', flexShrink: 0 }} />}
-                <span className="truncate" style={{ maxWidth: 120 }}>{g.name}</span>
+                <span className="min-w-0 text-left [overflow-wrap:anywhere]" style={{ maxWidth: 160 }}>{g.name}</span>
                 <span style={{ fontSize: 9.5, color: '#9A8A78', fontVariantNumeric: 'tabular-nums' }}>{groupCounts.get(g.id) ?? 0}</span>
               </button>
             ))}
@@ -1104,7 +1104,7 @@ export function ConferenceRosterSelected({
                   <div className="flex items-center gap-2" style={{ padding: '5px 4px 4px' }}>
                     <span style={{ width: 3, height: 14, borderRadius: 2, backgroundColor: g ? (g.color ?? '#1B3828') : '#C9BEA2', flexShrink: 0 }} />
                     {g?.logo_url && <CircleFlag logoUrl={g.logo_url} label={g.name} size={18} logoFit="contain" decorative />}
-                    <span className="truncate" style={{ fontFamily: "var(--font-brand), sans-serif", fontSize: 10.5, fontWeight: 800, letterSpacing: '0.08em', textTransform: 'uppercase', color: g ? '#1B3828' : '#9A8A78' }}>
+                    <span className="min-w-0 [overflow-wrap:anywhere]" style={{ fontFamily: "var(--font-brand), sans-serif", fontSize: 10.5, fontWeight: 800, letterSpacing: '0.08em', textTransform: 'uppercase', color: g ? '#1B3828' : '#9A8A78' }}>
                       {g ? g.name : 'Ungrouped'}
                     </span>
                     <span style={{ fontFamily: "var(--font-brand), sans-serif", fontSize: 9.5, fontWeight: 700, color: '#9A8A78', fontVariantNumeric: 'tabular-nums' }}>{sec.rows.length}</span>
@@ -1163,7 +1163,7 @@ export function ConferenceRosterSelected({
                             style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif", borderBottom: '1px solid #1B3828' }}
                           />
                         ) : (
-                          <span className="gv-rs-name flex-1 min-w-0 text-[13px] font-semibold truncate" title={row.name} style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>
+                          <span className="gv-rs-name flex-1 min-w-0 text-[13px] font-semibold [overflow-wrap:anywhere]" title={row.name} style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>
                             {row.name}
                           </span>
                         )}
@@ -1279,7 +1279,7 @@ export function ConferenceRosterSelected({
                       onChange={() => setChooser((c) => { const n = new Set(c ?? []); if (n.has(i)) n.delete(i); else n.add(i); return n; })}
                       style={{ accentColor: '#1B3828' }}
                     />
-                    <span className="truncate">{r.name}</span>
+                    <span className="min-w-0 [overflow-wrap:anywhere]">{r.name}</span>
                   </label>
                 );
               })}
@@ -1628,7 +1628,7 @@ export function ConferenceRosterPicker({ mode, value, onChange, showSelected = t
                       ? <CircleFlag code={found.code} size={24} decorative />
                       : <Globe size={18} strokeWidth={1.5} style={{ color: '#6E5F4E', flexShrink: 0 }} />}
                     {found ? (
-                      <span className="text-sm flex-1 truncate font-medium" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>{r.name}</span>
+                      <span className="text-sm flex-1 min-w-0 [overflow-wrap:anywhere] font-medium" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>{r.name}</span>
                     ) : (
                       <input
                         value={r.name}

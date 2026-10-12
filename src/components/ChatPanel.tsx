@@ -1,5 +1,6 @@
 'use client';
 
+import { chairNamesExcludingSeats } from '@/lib/chairNameRules';
 import { useState, useRef, useEffect, useLayoutEffect, useMemo, useCallback } from 'react';
 import { Committee, type ChatMessage } from '@/lib/types';
 import { getCountryDisplayName, compareCountryNames } from '@/lib/countries';
@@ -37,8 +38,12 @@ import { useGifsEnabled, type GifItem } from '@/lib/gifClient';
 import { delegationNameLabel, useSessionDelegationNames } from '@/lib/sessionDelegationNames';
 import NewGroupSheet, { type GroupCandidate } from './chat/NewGroupSheet';
 import { CHAT, type ChatThreadEvent } from './chat/chatTokens';
+import type { SessionBroadcast } from '@/lib/committeeService';
+import {
+  withBroadcastMessages, broadcastOnlyMessages, SECRETARIAT_SENDER, SECRETARIAT_READ_KEY, EMPTY_BROADCASTS,
+} from '@/lib/broadcastMessages';
 
-const LOCALES: Record<string, string> = { en: 'en-GB', es: 'es-ES', fr: 'fr-FR', ar: 'ar' };
+const LOCALES: Record<string, string> = { en: 'en-GB', es: 'es-ES', fr: 'fr-FR', ar: 'ar', pt: 'pt-BR' };
 
 /* Two panes (list + thread) when the PANEL is at least this wide, one pane with a back button
    below it. Measured on the panel itself, not the viewport: the same component lives in a
@@ -73,6 +78,8 @@ export default function ChatPanel({
   onReadCountsChange,
   onClose,
   embedded = false,
+  broadcasts = EMPTY_BROADCASTS,
+  secretariatOnly = false,
 }: {
   committee: Committee;
   senderName: string;
@@ -85,6 +92,14 @@ export default function ChatPanel({
   /** Inside a container that already has a title and a close control (the delegate sheet):
    *  the list header drops its own title and close button. */
   embedded?: boolean;
+  /** Organiser broadcasts of the committee (src/lib/broadcastHistory.ts). They are shown in
+   *  the Everyone thread as messages from the Secretariat (src/lib/broadcastMessages.ts),
+   *  merged in here at render time and never written to `messages`. */
+  broadcasts?: SessionBroadcast[];
+  /** Chat is off for the committee, and a chair opened the chat icon anyway: show ONLY the
+   *  Everyone thread, holding only the Secretariat messages, read only. Its read state lives
+   *  under SECRETARIAT_READ_KEY so it can never lower Everyone's. */
+  secretariatOnly?: boolean;
 }) {
   const t = useT();
   const { language } = useLanguage();
@@ -95,7 +110,7 @@ export default function ChatPanel({
   const [msg, setMsg] = useState('');
   // High-water mark captured when the thread was OPENED, so the "New messages" divider
   // survives the markRead that fires immediately on open.
-  const [unreadAnchor, setUnreadAnchor] = useState(() => readCounts.everyone ?? 0);
+  const [unreadAnchor, setUnreadAnchor] = useState(() => readCounts[secretariatOnly ? SECRETARIAT_READ_KEY : 'everyone'] ?? 0);
   const [groupSheet, setGroupSheet] = useState(false);
   const [groupError, setGroupError] = useState(false);
   // Groups created on this device whose definition row has not come back yet.
@@ -115,7 +130,11 @@ export default function ChatPanel({
   const rootRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
-  const { chairNames } = committee;
+  // Delegations win over a chair with the same name (incident RAAGKK, chairNameRules.ts).
+  const chairNames = useMemo(
+    () => chairNamesExcludingSeats(committee.chairNames ?? [], committee.delegates.map((d) => d.country)),
+    [committee.chairNames, committee.delegates],
+  );
 
   // ── Panel width → one pane or two ────────────────────────────────────────
   const [wide, setWide] = useState<boolean | null>(null);
@@ -135,9 +154,16 @@ export default function ChatPanel({
   const outbox = useOutbox(committee.id);
 
   // ── Messages, plus this device's not-yet-echoed group definitions ────────
-  const messages = useMemo(
-    () => (pendingGroups.length || pendingEdits.length ? [...committee.messages, ...pendingGroups, ...pendingEdits] : committee.messages),
-    [committee.messages, pendingGroups, pendingEdits],
+  // Organiser broadcasts are interleaved by time as Secretariat messages (Everyone thread).
+  const messages = useMemo(() => {
+    if (secretariatOnly) return broadcastOnlyMessages(broadcasts);
+    const base = pendingGroups.length || pendingEdits.length ? [...committee.messages, ...pendingGroups, ...pendingEdits] : committee.messages;
+    return withBroadcastMessages(base, broadcasts);
+  }, [committee.messages, pendingGroups, pendingEdits, broadcasts, secretariatOnly]);
+  /** The read-count key of a conversation (chat off: the Secretariat's own key). */
+  const readKeyOf = useCallback(
+    (key: ChatConvKey): string => (secretariatOnly && key === 'everyone' ? SECRETARIAT_READ_KEY : String(key)),
+    [secretariatOnly],
   );
   // An optimistic edit is retired when its real row (same uuid) arrives.
   useEffect(() => {
@@ -158,8 +184,9 @@ export default function ChatPanel({
   // ── Labels ────────────────────────────────────────────────────────────────
   const groups = useMemo(() => parseChatGroups(messages), [messages]);
   const senderLabel = useCallback(
-    (name: string) => (chairNames.includes(name) ? name : getCountryDisplayName(name, language)),
-    [chairNames, language],
+    (name: string) => (name === SECRETARIAT_SENDER ? t('bc_secretariat')
+      : chairNames.includes(name) ? name : getCountryDisplayName(name, language)),
+    [chairNames, language, t],
   );
   const labelFor = useCallback((key: string): string => {
     if (key === 'everyone') return t('chat_everyone');
@@ -192,7 +219,7 @@ export default function ChatPanel({
     return out;
   }, [outbox]);
 
-  const directory = useMemo<ChatDirectoryEntry[]>(() => buildChatDirectory({
+  const fullDirectory = useMemo<ChatDirectoryEntry[]>(() => buildChatDirectory({
     messages,
     senderName,
     isChair,
@@ -201,6 +228,11 @@ export default function ChatPanel({
     extraActivity: outboxActivity,
     compare: (a, b) => compareCountryNames(labelFor(a), labelFor(b), language),
   }), [messages, senderName, isChair, chairNames, delegations, outboxActivity, labelFor, language]);
+  // Chat off: only Everyone, which then holds only the Secretariat messages.
+  const directory = useMemo(
+    () => (secretariatOnly ? fullDirectory.filter((e) => e.key === 'everyone') : fullDirectory),
+    [fullDirectory, secretariatOnly],
+  );
 
   const activeEntry = directory.find((c) => c.key === activeConv) ?? directory[0];
   const activeKey = activeEntry?.key ?? 'everyone';
@@ -216,14 +248,15 @@ export default function ChatPanel({
   // ── Is the active thread actually on screen? ─────────────────────────────
   // In one-pane mode the panel opens on the LIST. Read-state and banner suppression key off
   // this, never off `activeConv` alone, so a badge is not cleared while the user reads the list.
-  const threadVisible = wide === true || showThread;
+  const threadVisible = wide === true || showThread || (secretariatOnly && wide !== null);
 
   // ── Read state ────────────────────────────────────────────────────────────
   const markRead = useCallback((entry: ChatDirectoryEntry) => {
     if (!onReadCountsChange) return;
     const incoming = chatIncomingCount({ key: entry.key, messages: entry.messages }, senderName);
-    onReadCountsChange((prev) => (prev[entry.key] === incoming ? prev : { ...prev, [entry.key]: incoming }));
-  }, [onReadCountsChange, senderName]);
+    const k = readKeyOf(entry.key);
+    onReadCountsChange((prev) => (prev[k] === incoming ? prev : { ...prev, [k]: incoming }));
+  }, [onReadCountsChange, senderName, readKeyOf]);
 
   // Re-marks on EVERY change to the visible thread's incoming count, so a message that lands
   // while the user is reading it never leaves a badge behind.
@@ -361,12 +394,12 @@ export default function ChatPanel({
 
   // ── Navigation ────────────────────────────────────────────────────────────
   const selectConv = useCallback((key: ChatConvKey) => {
-    setUnreadAnchor(readCounts[key] ?? 0);
+    setUnreadAnchor(readCounts[readKeyOf(key)] ?? 0);
     setActiveConv(key);
     setShowThread(true);
     const entry = directory.find((c) => c.key === key);
     if (entry) markRead(entry);
-  }, [readCounts, directory, markRead]);
+  }, [readCounts, directory, markRead, readKeyOf]);
 
   // ── Groups ────────────────────────────────────────────────────────────────
   const groupCandidates = useMemo<GroupCandidate[]>(() => {
@@ -448,13 +481,13 @@ export default function ChatPanel({
       last,
       lastSenderLabel: !last ? '' : last.sender === senderName ? t('chat_you_prefix') : multi ? senderLabel(last.sender) : '',
       lastAt: e.lastAt,
-      unread: chatConvUnread({ key: e.key, messages: e.messages }, readCounts, senderName),
+      unread: chatConvUnread({ key: readKeyOf(e.key), messages: e.messages }, readCounts, senderName),
       idleLine: e.kind === 'group' ? t('chat_group_member_count', { n: e.group?.members.length ?? 0 })
         : e.kind === 'everyone' ? t('chat_everyone_subtitle')
         : e.kind === 'dais' ? t('chat_dais_subtitle')
         : t('chat_no_messages'),
     };
-  }), [directory, isChair, labelFor, personFor, senderName, senderLabel, readCounts, t]);
+  }), [directory, isChair, labelFor, personFor, senderName, senderLabel, readCounts, t, readKeyOf]);
 
   // ── The open thread ───────────────────────────────────────────────────────
   const thread = activeEntry ? (() => {
@@ -469,7 +502,8 @@ export default function ChatPanel({
     // A delegate thread leads with WHO is in the seat when the conference knows; the message
     // count is what a room without allocations still shows.
     const person = kind === 'delegate' ? personFor(String(activeEntry.key)) : '';
-    const subtitle = kind === 'everyone' ? t('chat_everyone_subtitle')
+    const subtitle = secretariatOnly ? t('bc_chat_off')
+      : kind === 'everyone' ? t('chat_everyone_subtitle')
       : kind === 'dais' ? t('chat_dais_subtitle')
       : g ? g.members.map(memberLabel).join(', ')
       : person ? person
@@ -509,7 +543,8 @@ export default function ChatPanel({
     return { kind, subtitle, info, intro, events };
   })() : null;
 
-  const onePane = wide === false;
+  // Chat off: no list, the Secretariat thread alone.
+  const onePane = wide === false && !secretariatOnly;
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
@@ -522,7 +557,7 @@ export default function ChatPanel({
         ['--chat-bar-shadow' as string]: CHAT.barShadow,
       } as React.CSSProperties}
     >
-      {wide !== null && (!onePane || !showThread) && (
+      {wide !== null && !secretariatOnly && (!onePane || !showThread) && (
         <div
           className="relative z-10 h-full flex min-h-0"
           style={{
@@ -563,7 +598,7 @@ export default function ChatPanel({
             labelForSender={senderLabel}
             unreadAnchor={unreadAnchor}
             onRetry={handleRetry}
-            onBack={onePane ? () => setShowThread(false) : undefined}
+            onBack={onePane && !secretariatOnly ? () => setShowThread(false) : undefined}
             intro={thread.intro}
             events={thread.events}
             onEditGroup={
@@ -579,7 +614,8 @@ export default function ChatPanel({
             value={msg}
             onChange={setMsg}
             onSend={handleSend}
-            readOnly={readOnly}
+            readOnly={readOnly || secretariatOnly}
+            readOnlyNote={secretariatOnly ? t('bc_read_only') : undefined}
             t={t}
             draft={draft}
             onPickFile={(f) => { void handlePickFile(f); }}
@@ -592,7 +628,7 @@ export default function ChatPanel({
         </div>
       )}
 
-      {groupSheet && !readOnly && (
+      {groupSheet && !readOnly && !secretariatOnly && (
         <NewGroupSheet
           candidates={groupCandidates}
           onCancel={() => { setGroupSheet(false); setGroupError(false); }}
@@ -603,7 +639,7 @@ export default function ChatPanel({
         />
       )}
 
-      {editSheet && !readOnly && groups.get(editSheet.groupId) && (() => {
+      {editSheet && !readOnly && !secretariatOnly && groups.get(editSheet.groupId) && (() => {
         const g = groups.get(editSheet.groupId)!;
         return (
           <NewGroupSheet

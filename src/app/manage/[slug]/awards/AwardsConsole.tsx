@@ -1119,7 +1119,7 @@ function HonourRoll({
                       <img src={flagFor(r.country_code, r.country_name)} alt="" width={16} height={16} style={{ width: 16, height: 16, flexShrink: 0 }} />
                     )}
                     <span style={{ color: SOFT, minWidth: 0, flexShrink: 0 }}>{r.award_label}</span>
-                    <span style={{ color: NEU.ink, fontWeight: 700, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    <span style={{ color: NEU.ink, fontWeight: 700, minWidth: 0, overflowWrap: 'anywhere', lineHeight: 1.3 }}>
                       {r.society_id ? r.recipient_name : `${r.country_name ?? ''}, ${recipientNameFor(r, allocationById)}`}
                     </span>
                   </div>

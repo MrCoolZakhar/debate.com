@@ -169,6 +169,22 @@ export interface ChatMessage {
   isPrivate: boolean;
   recipient?: string;
   messageType?: 'general' | 'speech-comment'; // 'speech-comment' = refers to current speech
+  /** Set ONLY on the virtual messages src/lib/broadcastMessages.ts builds from organiser
+   *  broadcasts (`session_broadcasts`) at render time. A row read from `messages` never has
+   *  it, which is what makes the Secretariat look impossible to forge from the chat. */
+  broadcast?: ChatBroadcastInfo;
+}
+
+/** What a Secretariat message (an organiser broadcast) carries besides its text. */
+export interface ChatBroadcastInfo {
+  /** The `session_broadcasts` row id. */
+  id: string;
+  kind: 'informational' | 'actionable';
+  action: 'pause' | 'end' | null;
+  /** When the action runs; null = when a chair acknowledges it. */
+  actionAt: string | null;
+  /** Only ever drawn after trustedBroadcastImageUrl (src/lib/chatAttachments.ts). */
+  imageUrl: string | null;
 }
 
 // Speaking log — stored as system messages, used for statistics

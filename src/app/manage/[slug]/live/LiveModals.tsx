@@ -590,7 +590,7 @@ export function RailTab({
       className="inline-flex items-center gap-2 focus:outline-none"
       style={{
         border: 'none', cursor: 'pointer', fontFamily: OUTFIT,
-        fontSize: 11.5, fontWeight: 800, letterSpacing: '0.03em', color: ink,
+        fontSize: 14.5, fontWeight: 800, letterSpacing: '0.01em', color: ink,
         backgroundColor: active ? NEU.surface : NEU.base,
         boxShadow: active
           ? (side
@@ -600,8 +600,8 @@ export function RailTab({
         ...(side
           ? {
               borderRadius: '0 12px 12px 0',
-              padding: '9px 12px 9px 16px',
-              width: 158, justifyContent: 'flex-start',
+              padding: '12px 14px 12px 18px', minHeight: 48,
+              width: 184, justifyContent: 'flex-start',
               transform: active ? 'translateX(3px)' : 'translateX(0)',
             }
           : {
@@ -609,20 +609,20 @@ export function RailTab({
               // card. 44px tall INCLUDING the 10px that is tucked under the
               // card, so the visible tab is 34px and the touch target is 44.
               borderRadius: '12px 12px 0 0',
-              padding: '11px 13px 22px 13px',
-              minHeight: 46, flexShrink: 0, whiteSpace: 'nowrap',
+              padding: '12px 16px 22px 16px',
+              minHeight: 50, flexShrink: 0, whiteSpace: 'nowrap',
               transform: active ? 'translateY(3px)' : 'translateY(0)',
             }),
         transitionProperty: 'transform, box-shadow, background-color, color',
         transitionDuration: '200ms', transitionTimingFunction: EASE,
       }}
     >
-      <Icon size={13} style={{ flexShrink: 0, color: ink }} />
+      <Icon size={17} style={{ flexShrink: 0, color: ink }} />
       <span className="min-w-0" style={{ overflowWrap: side ? 'anywhere' : 'normal' }}>{label}</span>
       {typeof count === 'number' && count > 0 && (
         <span
           style={{
-            marginInlineStart: 'auto', fontSize: 10.5, fontWeight: 800,
+            marginInlineStart: 'auto', fontSize: 13, fontWeight: 800,
             fontVariantNumeric: 'tabular-nums', color: SOFT, flexShrink: 0,
           }}
         >

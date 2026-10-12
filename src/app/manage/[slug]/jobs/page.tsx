@@ -379,6 +379,7 @@ function PostingCard({
       {posting.description && (
         <p
           className="mt-2 text-xs leading-relaxed"
+          title={posting.description}
           style={{
             color: MUTED,
             fontFamily: "var(--font-brand), sans-serif",

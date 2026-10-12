@@ -180,6 +180,10 @@ function SetupReminderModal({
           className="relative w-full"
           style={{
             maxWidth: 440,
+            // Seven steps on a short phone: the card scrolls inside the
+            // screen so its buttons always stay reachable.
+            maxHeight: 'calc(100dvh - 48px)',
+            overflowY: 'auto',
             borderRadius: 26,
             backgroundColor: NEU.surface,
             boxShadow: NEU.out,
@@ -193,7 +197,7 @@ function SetupReminderModal({
             onClick={onClose}
             aria-label="Close"
             className="absolute flex items-center justify-center focus:outline-none"
-            style={{ top: 14, right: 14, width: 30, height: 30, borderRadius: 999, backgroundColor: NEU.base, boxShadow: NEU.inSm, border: 'none', color: NEU.inkSoft, cursor: 'pointer' }}
+            style={{ top: 7, right: 7, width: 44, height: 44, borderRadius: 999, backgroundColor: NEU.base, boxShadow: NEU.inSm, border: 'none', color: NEU.inkSoft, cursor: 'pointer' }}
           >
             <X size={15} strokeWidth={2.4} />
           </button>

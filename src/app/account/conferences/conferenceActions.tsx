@@ -15,7 +15,7 @@
 // the page. Same reads, same RPCs, same refusal handling as before.
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { useRouter, usePathname, useSearchParams } from 'next/navigation';
+import { usePathname, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { Check, X, Mail, Trash2 } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
@@ -28,6 +28,7 @@ import { committeeDisplayName } from '@/lib/presetNames';
 import { conferenceAcronymLabel } from '@/lib/conferenceLabels';
 import { OUTFIT, MONO } from '@/app/account/accountUi';
 import { NEU, NEU_GRADIENTS, EASE, NeuIconDisc } from '@/components/neu';
+import { replaceUrlInPlace } from '@/lib/replaceUrlInPlace';
 
 const first = <T,>(v: T | T[] | null | undefined): T | null =>
   Array.isArray(v) ? (v[0] ?? null) : (v ?? null);
@@ -103,7 +104,6 @@ const DRAFT_ROLE_LABEL: Record<string, string> = {
 // ── The hook: every read and every response, as the old page had them ────────
 
 export function useConferenceActions(onAccepted: () => void | Promise<void>) {
-  const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const { user, session, profile, loading: authLoading } = useAuth();
@@ -120,7 +120,7 @@ export function useConferenceActions(onAccepted: () => void | Promise<void>) {
     setAcceptedToast(true);
     const params = new URLSearchParams(searchParams.toString());
     params.delete('chairInvite');
-    router.replace(params.toString() ? `${pathname}?${params.toString()}` : pathname, { scroll: false });
+    replaceUrlInPlace(params.toString() ? `${pathname}?${params.toString()}` : pathname);
     const t = setTimeout(() => setAcceptedToast(false), 5000);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -353,11 +353,11 @@ function InviteCardShell({ title, subtitle, responding, onDecline, onAccept }: {
           </p>
         </div>
       </div>
-      <div className="flex gap-2 flex-shrink-0 justify-end sm:justify-start">
+      <div className="flex gap-3 sm:gap-2 flex-shrink-0 justify-end sm:justify-start">
         <button
           onClick={onDecline}
           disabled={busy}
-          className="focus:outline-none inline-flex items-center gap-1.5"
+          className="focus:outline-none inline-flex items-center gap-1.5 min-h-11 sm:min-h-0"
           style={{
             padding: '7px 13px', borderRadius: 999, border: 'none',
             backgroundColor: NEU.surface, boxShadow: busy ? NEU.inSm : NEU.outSm,
@@ -370,7 +370,7 @@ function InviteCardShell({ title, subtitle, responding, onDecline, onAccept }: {
         <button
           onClick={onAccept}
           disabled={busy}
-          className="focus:outline-none inline-flex items-center gap-1.5"
+          className="focus:outline-none inline-flex items-center gap-1.5 min-h-11 sm:min-h-0"
           style={{
             padding: '7px 14px', borderRadius: 999, border: 'none',
             background: busy ? NEU.base : `linear-gradient(135deg, ${NEU_GRADIENTS.forest[0]}, ${NEU_GRADIENTS.forest[1]})`,
@@ -578,7 +578,7 @@ function DraftRowCard({ draft, onDelete }: { draft: DraftRow; onDelete: (draft: 
         </p>
       </div>
 
-      <div className="flex items-center gap-2 flex-shrink-0">
+      <div className="flex items-center gap-3 sm:gap-2 flex-shrink-0">
         <Link
           href={`/conferences/${draft.slug}/apply?role=${encodeURIComponent(draft.role)}`}
           className="inline-flex items-center focus:outline-none min-h-11 sm:min-h-0"
@@ -595,10 +595,10 @@ function DraftRowCard({ draft, onDelete }: { draft: DraftRow; onDelete: (draft: 
         <button
           onClick={async () => { setBusy(true); try { await onDelete(draft); } finally { setBusy(false); } }}
           disabled={busy}
-          className="inline-flex items-center justify-center focus:outline-none"
+          className="inline-flex items-center justify-center focus:outline-none w-11 h-11 sm:w-[34px] sm:h-[34px]"
           aria-label={`Delete ${primary} draft`}
           style={{
-            width: 34, height: 34, borderRadius: 999, border: 'none',
+            borderRadius: 999, border: 'none',
             backgroundColor: NEU.surface, boxShadow: busy ? NEU.inSm : NEU.outSm,
             color: busy ? NEU.inkSoft : '#8B2020', cursor: busy ? 'default' : 'pointer',
             transition: `box-shadow 160ms ${EASE}`,

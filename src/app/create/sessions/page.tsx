@@ -102,7 +102,26 @@ const PRESET_ACRONYM_FR: Record<string, string> = {
   'ASEAN': 'ASEAN',
 };
 
+// Brazilian usage (PiraMUN guide: CSNU, AGNU, OMC). OTAN, not NATO, in Portuguese.
+const PRESET_ACRONYM_PT: Record<string, string> = {
+  'UN Security Council': 'CSNU',
+  'UN Environment Programme': 'PNUMA',
+  'World Health Organization': 'OMS',
+  'International Monetary Fund': 'FMI',
+  'World Bank': 'BM',
+  'UN General Assembly': 'AGNU',
+  'UN Human Rights Council': 'CDH',
+  'Economic and Social Council': 'ECOSOC',
+  'NATO': 'OTAN',
+  'G20': 'G20',
+  'European Union': 'UE',
+  'African Union': 'UA',
+  'Arab League': 'LEA',
+  'ASEAN': 'ASEAN',
+};
+
 function getPresetAcronym(name: string, lang: string): string {
+  if (lang === 'pt') return PRESET_ACRONYM_PT[name] ?? '';
   if (lang === 'fr') return PRESET_ACRONYM_FR[name] ?? '';
   if (lang === 'es') return PRESET_ACRONYM_ES[name] ?? '';
   return '';
@@ -197,7 +216,7 @@ function CommitteeNameInput({ id, value, onChange, onPresetSelect }: {
           }
           if (e.key === 'Escape') setOpen(false);
         }}
-        placeholder={language === 'ar' ? 'مثال: مجلس حقوق الإنسان' : language === 'fr' ? 'ex. Conseil des droits de l\'homme ou CDH' : language === 'es' ? 'ej. Consejo de Seguridad o CSNU' : 'e.g. Human Rights Council or HRC'}
+        placeholder={language === 'ar' ? 'مثال: مجلس حقوق الإنسان' : language === 'fr' ? 'ex. Conseil des droits de l\'homme ou CDH' : language === 'pt' ? 'ex.: Conselho de Direitos Humanos ou CDH' : language === 'es' ? 'ej. Consejo de Seguridad o CSNU' : 'e.g. Human Rights Council or HRC'}
         className={INPUT_CLS}
       />
       {open && matches.length > 0 && (
@@ -207,7 +226,7 @@ function CommitteeNameInput({ id, value, onChange, onPresetSelect }: {
               key={p.name}
               onMouseDown={(e) => { e.preventDefault(); onPresetSelect(p); setOpen(false); }}
               type="button"
-              className={`w-full flex items-center gap-3 px-3 h-11 rounded-xl text-start transition-colors text-[#1C1410] focus:outline-none ${
+              className={`w-full flex items-center gap-3 px-3 min-h-11 py-1.5 rounded-xl text-start transition-colors text-[#1C1410] focus:outline-none ${
                 i === 0 ? '' : 'hover:bg-[#1B3828]/[0.05]'
               }`}
               style={i === 0 ? { backgroundColor: 'rgba(27,56,40,0.07)' } : {}}
@@ -217,8 +236,8 @@ function CommitteeNameInput({ id, value, onChange, onPresetSelect }: {
               ) : (
                 <div className="w-[22px] h-[22px] rounded-md shrink-0" style={{ backgroundColor: 'rgba(27,56,40,0.08)' }} />
               )}
-              <span className="text-[15px] font-semibold flex-1 truncate">{getPresetDisplayName(p.name, language)}</span>
-              <span className="text-[11px] font-extrabold tracking-[0.04em] shrink-0" style={{ color: '#1B3828' }}>{(language === 'es' || language === 'fr') ? (getPresetAcronym(p.name, language) || p.acronym) : p.acronym}</span>
+              <span className="text-[15px] font-semibold flex-1 min-w-0 leading-tight [overflow-wrap:anywhere]">{getPresetDisplayName(p.name, language)}</span>
+              <span className="text-[11px] font-extrabold tracking-[0.04em] shrink-0" style={{ color: '#1B3828' }}>{(language === 'es' || language === 'fr' || language === 'pt') ? (getPresetAcronym(p.name, language) || p.acronym) : p.acronym}</span>
               {i === 0 && <CornerDownLeft size={14} strokeWidth={2.2} className="shrink-0 rtl:-scale-x-100" style={{ color: '#8A7C6B' }} />}
             </button>
           ))}
@@ -340,7 +359,7 @@ function CreatePageInner() {
       review.push({ name, isCountry: !!found });
     }
     if (review.length === 0) {
-      setPasteError(language === 'ar' ? 'لا جديد لإضافته' : language === 'fr' ? 'Rien de nouveau à ajouter' : language === 'es' ? 'Nada nuevo que agregar' : 'Nothing new to add');
+      setPasteError(language === 'ar' ? 'لا جديد لإضافته' : language === 'fr' ? 'Rien de nouveau à ajouter' : language === 'pt' ? 'Nada de novo para adicionar' : language === 'es' ? 'Nada nuevo que agregar' : 'Nothing new to add');
       return;
     }
     setPasteError('');
@@ -389,13 +408,13 @@ function CreatePageInner() {
         <>
           <div className="fixed inset-0 z-40" onClick={() => setShowLangMenu(false)} />
           <div role="menu" className="absolute end-0 top-full mt-2 z-50 rounded-2xl overflow-hidden p-1" style={{ backgroundColor: C.surface, boxShadow: `${SHADOW.card}, inset 0 0 0 1px rgba(27,56,40,0.08)`, minWidth: '160px' }}>
-            {([['en', t('settings_english')], ['es', t('settings_spanish')], ['fr', t('settings_french')], ['ar', 'العربية']] as [string, string][]).map(([code, label]) => (
+            {([['en', t('settings_english')], ['es', t('settings_spanish')], ['fr', t('settings_french')], ['pt', t('settings_portuguese')], ['ar', 'العربية']] as [string, string][]).map(([code, label]) => (
               <button
                 key={code}
                 type="button"
                 role="menuitemradio"
                 aria-checked={language === code}
-                onClick={() => { setLanguage(code as 'en' | 'es' | 'fr' | 'ar'); setShowLangMenu(false); }}
+                onClick={() => { setLanguage(code as 'en' | 'es' | 'fr' | 'ar' | 'pt'); setShowLangMenu(false); }}
                 className="w-full flex items-center gap-2.5 h-10 px-3 rounded-xl text-start transition-colors hover:bg-[#1B3828]/[0.05] focus:outline-none"
                 style={{ fontFamily: OUTFIT, color: language === code ? C.forest : C.inkSoft, fontWeight: language === code ? 800 : 600, fontSize: '13px', backgroundColor: language === code ? 'rgba(27,56,40,0.07)' : undefined }}
               >
@@ -520,7 +539,7 @@ function CreatePageInner() {
             <div className="min-w-0">
               <SmallLabel htmlFor="create-topic">{t('create_topic')}</SmallLabel>
               <input id="create-topic" type="text" value={topic} onChange={(e) => setTopic(e.target.value)}
-                placeholder={language === 'ar' ? 'مثال: الحق في التعليم' : language === 'fr' ? "ex. Le droit à l'éducation" : language === 'es' ? 'ej. El derecho a la educación' : 'e.g. The right to education'}
+                placeholder={language === 'ar' ? 'مثال: الحق في التعليم' : language === 'fr' ? "ex. Le droit à l'éducation" : language === 'pt' ? 'ex.: O direito à educação' : language === 'es' ? 'ej. El derecho a la educación' : 'e.g. The right to education'}
                 className={INPUT_CLS} />
             </div>
             <div className="min-w-0 sm:col-span-2">
@@ -536,7 +555,7 @@ function CreatePageInner() {
                 onRemove={(i) => setChairs((p) => p.filter((_, j) => j !== i))}
                 onPopLast={() => { const last = chairs[chairs.length - 1]; setChairs((p) => p.slice(0, -1)); setChairDraft(last ?? ''); }}
                 max={MAX_CHAIRS}
-                placeholder={language === 'ar' ? 'اسمك' : language === 'fr' ? 'Votre nom' : language === 'es' ? 'Tu nombre' : 'Your name'}
+                placeholder={language === 'ar' ? 'اسمك' : language === 'fr' ? 'Votre nom' : language === 'pt' ? 'Seu nome' : language === 'es' ? 'Tu nombre' : 'Your name'}
                 morePlaceholder={t('create_chair_more')}
                 addLabel={t('create_chair_add')}
                 removeLabel={(name) => t('create_chair_remove', { name })}
@@ -564,7 +583,7 @@ function CreatePageInner() {
                   placeholder={t('create_add_country_placeholder')}
                   className="h-full min-w-0 flex-1 bg-transparent text-base text-[#1C1410] placeholder-[#8A7C6B] focus:outline-none sm:text-[15px]" />
                 <button type="button" onClick={addTyped} disabled={!typedIsAddable} aria-label={t('create_add_btn')}
-                  className="flex h-[36px] min-w-[36px] shrink-0 items-center justify-center gap-1.5 rounded-[10px] px-2.5 text-[13px] font-extrabold tracking-[0.02em] transition-[background-color,transform,opacity] duration-150 enabled:hover:bg-[#2A5A3C] enabled:active:scale-[0.96] disabled:cursor-not-allowed disabled:opacity-35 focus:outline-none sm:px-3.5"
+                  className="relative flex h-[36px] min-w-[36px] shrink-0 items-center justify-center gap-1.5 rounded-[10px] px-2.5 before:absolute before:-inset-1 before:content-[''] text-[13px] font-extrabold tracking-[0.02em] transition-[background-color,transform,opacity] duration-150 enabled:hover:bg-[#2A5A3C] enabled:active:scale-[0.96] disabled:cursor-not-allowed disabled:opacity-35 focus:outline-none sm:px-3.5"
                   style={{ backgroundColor: C.forest, color: C.gold }}>
                   <Plus size={15} strokeWidth={2.8} /> <span className="hidden sm:inline">{t('create_add_btn')}</span>
                 </button>
@@ -574,21 +593,21 @@ function CreatePageInner() {
                   style={{ backgroundColor: C.surface, boxShadow: '0 12px 32px rgba(27,56,40,0.18), 0 2px 8px rgba(27,56,40,0.08), inset 0 0 0 1px rgba(27,56,40,0.10)' }}>
                   {available.slice(0, 5).map((c, i) => (
                     <button key={c.code} type="button" onMouseDown={(e) => { e.preventDefault(); addDelegate(c.name); setSearch(''); }}
-                      className={`flex h-11 w-full items-center gap-3 rounded-xl px-3 text-start text-[#1C1410] transition-colors focus:outline-none ${i === 0 ? '' : 'hover:bg-[#1B3828]/[0.05]'}`}
+                      className={`flex min-h-11 py-1.5 w-full items-center gap-3 rounded-xl px-3 text-start text-[#1C1410] transition-colors focus:outline-none ${i === 0 ? '' : 'hover:bg-[#1B3828]/[0.05]'}`}
                       style={i === 0 ? { backgroundColor: 'rgba(27,56,40,0.07)' } : {}}>
                       <CircleFlag code={c.code} size={26} decorative />
-                      <span className="flex-1 truncate text-[15px] font-semibold">{getCountryDisplayName(c.name, language)}</span>
+                      <span className="flex-1 min-w-0 leading-tight [overflow-wrap:anywhere] text-[15px] font-semibold">{getCountryDisplayName(c.name, language)}</span>
                       {i === 0 && <CornerDownLeft size={14} strokeWidth={2.2} className="shrink-0 rtl:-scale-x-100" style={{ color: C.inkSoft }} />}
                     </button>
                   ))}
                   {/* "Add as custom" only when the text is not already an exact country: rank 0 covers accents, aliases and the localised name. */}
                   {search.trim() && !delegates.includes(search.trim()) && !available.some((c) => countryMatchRank(c.name, search, language) === 0) && (
                     <button type="button" onMouseDown={(e) => { e.preventDefault(); addDelegate(search.trim()); setSearch(''); }}
-                      className="flex h-11 w-full items-center gap-3 rounded-xl px-3 text-start text-[#1C1410] transition-colors hover:bg-[#1B3828]/[0.05] focus:outline-none">
+                      className="flex min-h-11 py-1.5 w-full items-center gap-3 rounded-xl px-3 text-start text-[#1C1410] transition-colors hover:bg-[#1B3828]/[0.05] focus:outline-none">
                       <span className="flex shrink-0 items-center justify-center rounded-full" style={{ width: 26, height: 26, backgroundColor: 'rgba(27,56,40,0.08)', color: C.forest }}>
                         <UserRound size={15} strokeWidth={2} />
                       </span>
-                      <span className="flex-1 truncate text-[15px] font-semibold">{search.trim()}</span>
+                      <span className="flex-1 min-w-0 leading-tight [overflow-wrap:anywhere] text-[15px] font-semibold">{search.trim()}</span>
                       <span className="shrink-0 text-[12px] font-bold" style={{ color: C.forest }}>{t('create_custom_add')}</span>
                     </button>
                   )}
@@ -608,8 +627,11 @@ function CreatePageInner() {
               <div className="-mx-4 flex gap-1.5 overflow-x-auto px-4 pb-1 [scrollbar-width:none] sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0 sm:pb-0 [&::-webkit-scrollbar]:hidden">
                 <div role="group" aria-labelledby="create-presets-label" className="contents">
                   {Object.entries(BUNDLES).map(([key, bundle]) => (
+                    // Below lg the button is a 44px-tall touch target around the same 32px pill
+                    // (the pill is the inner span); from lg the two are the same size again.
                     <button key={key} type="button" onClick={() => addBundle(key)} title={bundle.name ? `${bundle.name} · ${t('create_quick_bundles')}` : t('create_quick_bundles')}
-                      className={`group flex h-8 flex-shrink-0 items-center gap-1.5 rounded-full bg-[#1B3828]/[0.055] ${bundle.logoPath ? 'ps-1' : 'ps-3'} pe-2.5 text-[12.5px] font-bold text-[#1B3828] shadow-[inset_0_0_0_1px_rgba(27,56,40,0.10)] transition-[background-color,color,box-shadow,transform] duration-150 hover:bg-[#1B3828] hover:text-[#EED98A] hover:shadow-[0_4px_14px_rgba(27,56,40,0.22)] active:scale-[0.96] focus:outline-none focus-visible:shadow-[0_0_0_2px_#1B3828]`}>
+                      className="group flex h-11 flex-shrink-0 items-center focus:outline-none lg:h-8">
+                      <span className={`flex h-8 items-center gap-1.5 rounded-full bg-[#1B3828]/[0.055] ${bundle.logoPath ? 'ps-1' : 'ps-3'} pe-2.5 text-[12.5px] font-bold text-[#1B3828] shadow-[inset_0_0_0_1px_rgba(27,56,40,0.10)] transition-[background-color,color,box-shadow,transform] duration-150 group-hover:bg-[#1B3828] group-hover:text-[#EED98A] group-hover:shadow-[0_4px_14px_rgba(27,56,40,0.22)] group-active:scale-[0.96] group-focus-visible:shadow-[0_0_0_2px_#1B3828]`}>
                       {bundle.logoPath && (
                       <span className="flex shrink-0 items-center justify-center rounded-full bg-white" style={{ width: 24, height: 24, boxShadow: 'inset 0 0 0 1px rgba(0,0,0,0.08)' }}>
                         {(
@@ -626,6 +648,7 @@ function CreatePageInner() {
                       )}
                       <span>{bundle.label}</span>
                       <span className="text-[11px] font-semibold tabular-nums text-[#544B3E] transition-colors group-hover:text-[#EED98A]/80">+{bundle.members.length}</span>
+                      </span>
                     </button>
                   ))}
                 </div>
@@ -741,7 +764,7 @@ function CreatePageInner() {
                             onBlur={() => commitRename(editDraft)}
                           />
                         ) : (
-                          <span className="min-w-0 truncate text-[14.5px] font-semibold leading-tight" style={{ color: C.ink }} title={display}>{display}</span>
+                          <span className="min-w-0 [overflow-wrap:anywhere] text-[14.5px] font-semibold leading-tight" style={{ color: C.ink }} title={display}>{display}</span>
                         )}
                       </div>
                       {/* Observer status is the megaphone itself (CLAUDE.md §8: never an "Observer" pill). */}
@@ -807,7 +830,7 @@ function CreatePageInner() {
                       ? <CircleFlag code={found.code} size={26} decorative />
                       : <span className="flex items-center justify-center shrink-0 rounded-full" style={{ width: 26, height: 26, backgroundColor: 'rgba(27,56,40,0.08)', color: C.forest }}><UserRound size={15} strokeWidth={2} /></span>}
                     {found ? (
-                      <span className="text-[14px] flex-1 truncate font-semibold" style={{ color: C.ink }}>{getCountryDisplayName(r.name, language)}</span>
+                      <span className="text-[14px] flex-1 min-w-0 leading-tight [overflow-wrap:anywhere] font-semibold" style={{ color: C.ink }}>{getCountryDisplayName(r.name, language)}</span>
                     ) : (
                       <input value={r.name} onChange={(e) => updateReviewName(idx, e.target.value)}
                         className="text-base sm:text-[14px] flex-1 min-w-0 bg-white rounded-lg px-2.5 h-9 text-[#1C1410] shadow-[inset_0_0_0_1px_rgba(27,56,40,0.18)] focus:outline-none focus:shadow-[inset_0_0_0_2px_#1B3828]" />

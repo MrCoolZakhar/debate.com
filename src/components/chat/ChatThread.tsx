@@ -8,6 +8,8 @@ import type { ChatMessage } from '@/lib/types';
 import type { OutboxMsg } from '@/lib/chatOutbox';
 import type { ChatEntryKind } from '@/lib/chatConversations';
 import ChatMessageGroup from './ChatMessageGroup';
+import SecretariatMessage, { broadcastImageSize } from './SecretariatMessage';
+import { trustedBroadcastImageUrl } from '@/lib/chatAttachments';
 import { ChatAvatar } from './ChatAvatar';
 import ChatLightbox, { type LightboxItem } from './ChatLightbox';
 import { buildChatRows, formatTime, portalFrame, type ChatThreadEvent, type TFn } from './chatTokens';
@@ -211,6 +213,18 @@ export default function ChatThread({
     for (const row of rows) {
       if (row.kind !== 'group') continue;
       for (const it of row.group.items) {
+        // A Secretariat message's image (an organiser broadcast) opens here like a chat photo.
+        if (it.broadcast) {
+          const url = trustedBroadcastImageUrl(it.broadcast.imageUrl);
+          if (!url) continue;
+          const size = broadcastImageSize(url);
+          out.push({
+            id: it.id, kind: 'image', url, name: t('bc_image'),
+            caption: `${t('bc_secretariat')} · ${formatTime(it.timestamp, locale)}`,
+            width: size?.width, height: size?.height,
+          });
+          continue;
+        }
         const a = it.attachment;
         if (!a || a.kind === 'pdf') continue;
         const who = row.group.isMe ? t('chat_you_prefix') : labelForSender(row.group.sender);
@@ -280,11 +294,11 @@ export default function ChatThread({
         )}
         <ChatAvatar kind={kind} name={convKey} size={40} />
         <div className="min-w-0 flex-1" style={{ paddingInlineStart: onBack ? 0 : 2 }}>
-          <h3 className="truncate" style={{ fontFamily: OUTFIT, fontWeight: 750, fontSize: 16.5, color: NEU.ink, lineHeight: 1.2 }}>
+          <h3 className="[overflow-wrap:anywhere]" style={{ fontFamily: OUTFIT, fontWeight: 750, fontSize: 16.5, color: NEU.ink, lineHeight: 1.2 }}>
             {label}
           </h3>
           {subtitle && (
-            <p className="truncate" style={{ fontFamily: OUTFIT, fontSize: 12.5, color: NEU.inkSoft, fontVariantNumeric: 'tabular-nums', lineHeight: 1.3 }}>
+            <p className="[overflow-wrap:anywhere]" style={{ fontFamily: OUTFIT, fontSize: 12.5, color: NEU.inkSoft, fontVariantNumeric: 'tabular-nums', lineHeight: 1.3 }}>
               {subtitle}
             </p>
           )}
@@ -325,6 +339,19 @@ export default function ChatThread({
           if (row.kind === 'day') return <Separator key={row.key} label={row.label} />;
           if (row.kind === 'unread') return <Separator key={row.key} label={t('chat_new_messages')} tone="unread" />;
           if (row.kind === 'event') return <Separator key={row.key} label={row.label} />;
+          if (row.group.secretariat) {
+            return (
+              <SecretariatMessage
+                key={row.key}
+                group={row.group}
+                onOpenImage={setLightboxId}
+                // An image reaching its real size must not leave a reader at the bottom stranded above it.
+                onMediaLoaded={() => { if (atBottomRef.current) scrollToBottom(false); }}
+                t={t}
+                locale={locale}
+              />
+            );
+          }
           const isChairSender = chairNames.includes(row.group.sender);
           return (
             <ChatMessageGroup

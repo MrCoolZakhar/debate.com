@@ -26,6 +26,8 @@ import ChatDisabledNotice from '@/components/ChatDisabledNotice';
 import { getCommitteeFlags, sponsorLabel, motionNames } from '@/lib/committeeFlags';
 import { docName, docCount, docLimit, docLimitReached } from '@/lib/docNames';
 import { chatUnreadTotal, mergeMessagesById } from '@/lib/chatConversations';
+import { useBroadcastHistory } from '@/lib/broadcastHistory';
+import { withBroadcastMessages } from '@/lib/broadcastMessages';
 import { loadChatReadCounts, saveChatReadCounts } from '@/lib/chatReadKey';
 import { startSessionSync, rowFields, withCurrentSpeaker, withLists, type ConnectionState } from '@/lib/sessionSync';
 import ConnectionPill from '@/components/ConnectionPill';
@@ -50,6 +52,7 @@ import DelegateIdleWarning from '@/components/delegate/DelegateIdleWarning';
 import DeviceBallotScreen from '@/components/delegate/DeviceBallotScreen';
 import { safeStorageKey } from '@/lib/storageKey';
 import { UnknownSeatIcon } from '@/components/UnknownSeatIcon';
+import PdfViewer, { type PdfZoom } from '@/components/documents/PdfViewer';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function abbreviateCommitteeName(name: string): string {
@@ -312,12 +315,16 @@ function SponsorsInput({
       {/* Selected sponsors tags */}
       <div className="flex flex-wrap gap-1.5 mb-2 min-h-[24px]">
         <span className="inline-flex items-center gap-1 text-xs bg-[#1B3828]/20 border border-[#1B3828]/30 text-[#6A5A4A] rounded-full px-2.5 py-0.5 font-medium">
-          {<SeatMark country={myCountry} />} {getCountryDisplayName(myCountry, language)} <span className="text-[#9A8A78] ms-0.5">{language === 'ar' ? '(أنت)' : language === 'fr' ? '(vous)' : language === 'es' ? '(tú)' : '(you)'}</span>
+          {<SeatMark country={myCountry} />} {getCountryDisplayName(myCountry, language)} <span className="text-[#9A8A78] ms-0.5">{language === 'ar' ? '(أنت)' : language === 'fr' ? '(vous)' : language === 'pt' ? '(você)' : language === 'es' ? '(tú)' : '(you)'}</span>
         </span>
         {value.map((c) => (
           <span key={c} className="inline-flex items-center gap-1 text-xs bg-[#FAF8F3] border border-[#DDD4C0] text-[#6A5A4A] rounded-full px-2.5 py-0.5">
             {<SeatMark country={c} />} {getCountryDisplayName(c, language)}
-            <button onClick={() => onChange(value.filter((x) => x !== c))} className="ms-1 text-[#9A8A78] hover:text-red-400 font-bold leading-none">×</button>
+            {/* A 32px hit box around the small ×: the negative margins keep the chip its size. */}
+            <button type="button" onClick={() => onChange(value.filter((x) => x !== c))}
+              aria-label={t('delegate_doc_remove_sponsor', { country: getCountryDisplayName(c, language) })}
+              title={t('delegate_doc_remove_sponsor', { country: getCountryDisplayName(c, language) })}
+              className="-my-2 -me-2.5 ms-0 flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[#9A8A78] hover:text-red-400 font-bold leading-none focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]">×</button>
           </span>
         ))}
       </div>
@@ -332,7 +339,7 @@ function SponsorsInput({
             if (e.key === 'Backspace' && !query && value.length > 0) onChange(value.slice(0, -1));
           }}
           placeholder={t('delegate_doc_cosponsor_placeholder')}
-          className="w-full bg-[#FAF8F3] border border-[#DDD4C0] rounded-lg px-3 py-2 text-[#1C1410] text-sm focus:outline-none focus:border-[#1B3828] placeholder-[#9A8A78]"
+          className="w-full bg-[#FAF8F3] border border-[#DDD4C0] rounded-lg px-3 py-2 text-[#1C1410] text-base sm:text-sm focus:outline-none focus:border-[#1B3828] placeholder-[#9A8A78]"
         />
         {matches.length > 0 && (
           <div className="absolute top-full left-0 right-0 mt-1 bg-[#FAF8F3] border border-[#DDD4C0] rounded-xl overflow-hidden z-20 shadow-xl max-h-40 overflow-y-auto">
@@ -355,15 +362,40 @@ function SponsorsInput({
 }
 
 // ── Inline PDF Viewer ─────────────────────────────────────────────────────────
+/* A bare <iframe> could not show a PDF on phones (Android Chrome renders
+   nothing, iOS one page that does not scroll) and gave no way to open the
+   file. The shared pdf.js viewer draws every page (it falls back to the
+   iframe itself), and "Open" always hands the file to the phone's own viewer. */
 function InlinePdfViewer({ fileUrl, fileName }: { fileUrl: string; fileName: string }) {
+  const t = useT();
   const [show, setShow] = useState(false);
+  const [zoom, setZoom] = useState<PdfZoom>('fit');
   return (
     <div className="space-y-1.5">
-      <button onClick={() => setShow((v) => !v)} className="text-xs transition-colors focus:outline-none" style={{ color: '#1B3828' }}>
-        📎 {fileName} {show ? '▲' : '▼'}
-      </button>
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          onClick={() => setShow((v) => !v)}
+          aria-expanded={show}
+          className="min-h-[44px] min-w-0 flex-1 text-start text-xs transition-colors focus:outline-none [overflow-wrap:anywhere]"
+          style={{ color: '#1B3828' }}
+        >
+          📎 {fileName} {show ? '▲' : '▼'}
+        </button>
+        <a
+          href={fileUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label={t('delegate_doc_open_label').replace('{name}', fileName)}
+          className="inline-flex min-h-[44px] shrink-0 items-center px-2 text-xs font-bold underline focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] rounded-md"
+          style={{ color: '#1B3828' }}
+        >
+          {t('delegate_doc_open')}
+        </a>
+      </div>
       {show && (
-        <iframe src={fileUrl} title={fileName} className="w-full rounded-lg border border-[#DDD4C0]" style={{ height: '400px' }} />
+        <PdfViewer url={fileUrl} title={fileName} fileName={fileName} zoom={zoom} onZoomChange={setZoom} compact
+          className="relative w-full h-[420px] rounded-lg overflow-hidden border border-[#DDD4C0]" />
       )}
     </div>
   );
@@ -563,7 +595,7 @@ function DelegateDocumentsTab({ committee, country }: { committee: Committee; co
           <label className="text-xs font-bold mb-1.5 block" style={{ color: '#1B3828', fontFamily: "var(--font-brand), sans-serif" }}>{t('delegate_doc_title_label')}</label>
           <input type="text" value={title} onChange={(e) => setTitle(e.target.value)}
             placeholder={t('delegate_doc_title_placeholder')}
-            className="w-full bg-[#FAF8F3] border border-[#DDD4C0] rounded-lg px-3 py-2 text-[#1C1410] text-sm focus:outline-none focus:border-[#1B3828]" />
+            className="w-full bg-[#FAF8F3] border border-[#DDD4C0] rounded-lg px-3 py-2 text-[#1C1410] text-base sm:text-sm focus:outline-none focus:border-[#1B3828]" />
         </div>
 
         {/* Co-sponsors */}
@@ -581,7 +613,7 @@ function DelegateDocumentsTab({ committee, country }: { committee: Committee; co
           </label>
           <input type="url" inputMode="url" value={link} onChange={(e) => setLink(e.target.value)}
             placeholder="https://docs.google.com/..."
-            className="w-full bg-[#FAF8F3] border border-[#DDD4C0] rounded-lg px-3 py-2 text-[#1C1410] text-sm placeholder-[#9A8A78] focus:outline-none focus:border-[#1B3828] transition-colors" />
+            className="w-full bg-[#FAF8F3] border border-[#DDD4C0] rounded-lg px-3 py-2 text-[#1C1410] text-base sm:text-sm placeholder-[#9A8A78] focus:outline-none focus:border-[#1B3828] transition-colors" />
         </div>
 
         {/* File — a real dropzone, not a text button. The old "+ Attach file"
@@ -590,14 +622,14 @@ function DelegateDocumentsTab({ committee, country }: { committee: Committee; co
           <label className="text-xs font-bold mb-1.5 block" style={{ color: '#1B3828', fontFamily: "var(--font-brand), sans-serif" }}>{t('delegate_doc_attachment_label')} <span className="font-normal" style={{ color: '#9A8A78' }}>{t('delegate_doc_attachment_optional')}</span></label>
           {fileName || uploading ? (
             <div className="flex items-center gap-2 bg-[#FAF8F3] border border-[#DDD4C0] rounded-xl px-3 py-3">
-              <span className="text-sm text-[#1C1410] flex-1 truncate flex items-center gap-2">
+              <span className="text-sm text-[#1C1410] flex-1 min-w-0 truncate flex items-center gap-2" title={fileName || undefined}>
                 {uploading
                   ? <><span className="w-3.5 h-3.5 border-2 border-[#1B3828] border-t-transparent rounded-full animate-spin shrink-0" /> {fileName}</>
                   : <>📎 {fileName}</>}
               </span>
               {!uploading && (
-                <button onClick={clearFile} aria-label={t('delegate_doc_remove')} title={t('delegate_doc_remove')}
-                  className="text-sm text-[#9A8A78] hover:text-red-500 transition-colors focus:outline-none">✕</button>
+                <button type="button" onClick={clearFile} aria-label={t('delegate_doc_remove')} title={t('delegate_doc_remove')}
+                  className="-my-3 -me-2 flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-sm text-[#9A8A78] hover:text-red-500 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]">✕</button>
               )}
             </div>
           ) : (
@@ -848,6 +880,10 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
   const [langOpen, setLangOpen] = useState(false);
   const [requestLangOpen, setRequestLangOpen] = useState(false);
   const [chatReadCounts, setChatReadCounts] = useState<Record<string, number>>({});
+  // Bumped by every `session_broadcasts` realtime event and every catch-up that ends 'done':
+  // organiser broadcasts are read again and shown in Everyone as Secretariat messages
+  // (src/lib/broadcastMessages.ts). Own state, never the committee; never per second.
+  const [broadcastVersion, setBroadcastVersion] = useState(0);
 
   const committeeIdRef = useRef('');
   const wasEverSuspended = useRef(false);
@@ -945,12 +981,18 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
         // approve (insert then delete) all land instead of cancelling each other (R-2). The
         // committees event refetches the committee ROW only (PERF-3), messages land straight
         // from the realtime payload, and a failed read is never applied (P-4). This page
-        // renders neither chair notes nor organiser broadcasts, so it does not subscribe to
-        // `feedback` / `session_broadcasts` at all (PERF-1). Wake, reconnect and back-online
-        // refetch every slice (R-4).
+        // renders no chair notes, so it does not subscribe to `feedback` (PERF-1). Wake, reconnect and back-online
+        // refetch every slice (R-4). Organiser broadcasts (`session_broadcasts`) are bound since
+        // 11 Oct 2026: they are Secretariat messages in the Everyone chat. An event only bumps
+        // `broadcastVersion` (no slice, outside every debounce); the list has its own state.
         const sync = startSessionSync({
           committeeId: found.id,
-          tables: ['committees', 'delegates', 'speakers_list', 'current_speaker', 'motions', 'documents', 'messages'],
+          tables: ['committees', 'delegates', 'speakers_list', 'current_speaker', 'motions', 'documents', 'messages', 'session_broadcasts'],
+          onEvent: (table) => {
+            if (table === 'session_broadcasts') { setBroadcastVersion((v) => v + 1); return true; }
+            return false;
+          },
+          onCatchUp: (phase) => { if (phase === 'done') setBroadcastVersion((v) => v + 1); },
           slices: ['row', 'delegates', 'lists', 'currentSpeaker', 'motions', 'documents', 'messages'],
           onConnection: setConnection,
           onMessage: (m) => setCommittee((prev) => {
@@ -1206,6 +1248,10 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
     if (!committee) return;
     saveChatReadCounts(committee.code, { role: 'delegate', identity: country }, chatReadCounts);
   }, [chatReadCounts, committee?.code, country]);
+
+  // Organiser broadcasts, shown in Everyone as messages from the Secretariat. Read on mount and
+  // per `broadcastVersion` bump; not while the seat is lost (the room is stopped then).
+  const broadcastHistory = useBroadcastHistory(committee?.id, broadcastVersion, seatAllowed);
 
   // Prevent browser back button from leaving an active session.
   // When sessionEnded or sessionSuspended become true the effect re-runs,
@@ -1685,7 +1731,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
   // This seat's own crest, when the conference gave it one. Null everywhere else.
   const mySeatLogo = myDelegate?.logoUrl ?? null;
   const unreadTotal = chatUnreadTotal(
-    committee.messages, country, false, committee.chairNames ?? [], chatReadCounts,
+    withBroadcastMessages(committee.messages, broadcastHistory), country, false, committee.chairNames ?? [], chatReadCounts, committee.delegates.map((d) => d.country),
   );
 
   // Speaking + chat counters. The tiles and StatisticsTab both derive from the same
@@ -1779,13 +1825,12 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
   const header = (
     <header
       className="dgv-hdr sticky top-0 z-30 flex items-center gap-2 px-3 sm:px-5"
-      style={{ height: 56, background: DG.cream, borderBottom: `1px solid ${DG.hairline}` }}
+      style={{ minHeight: 56, paddingBlock: 4, background: DG.cream, borderBottom: `1px solid ${DG.hairline}` }}
     >
       <SessionsHeaderLogo height={24} />
       <div className="min-w-0 flex-1 text-start">
         <div
-          className="truncate"
-          style={{ fontFamily: OUTFIT, fontSize: 14, fontWeight: 800, color: DG.forest, lineHeight: 1.15 }}
+          style={{ fontFamily: OUTFIT, fontSize: getCommitteeDisplayName(committee.name, language).length > 40 ? 12.5 : 14, fontWeight: 800, color: DG.forest, lineHeight: 1.12, overflowWrap: 'anywhere' }}
         >
           {getCommitteeDisplayName(committee.name, language)}
         </div>
@@ -1825,13 +1870,13 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
                 boxShadow: '0 18px 40px rgba(27,56,40,0.24)',
               }}
             >
-              {([['en', t('settings_english')], ['es', t('settings_spanish')], ['fr', t('settings_french')], ['ar', 'العربية']] as [string, string][]).map(([lc, label], i) => {
+              {([['en', t('settings_english')], ['es', t('settings_spanish')], ['fr', t('settings_french')], ['pt', t('settings_portuguese')], ['ar', 'العربية']] as [string, string][]).map(([lc, label], i) => {
                 const on = language === lc;
                 return (
                   <button
                     key={lc}
                     type="button"
-                    onClick={() => { setLanguage(lc as 'en' | 'es' | 'fr' | 'ar'); setLangOpen(false); }}
+                    onClick={() => { setLanguage(lc as 'en' | 'es' | 'fr' | 'ar' | 'pt'); setLangOpen(false); }}
                     className="dgv-focus w-full flex items-center gap-2.5 px-4 text-start"
                     style={{
                       minHeight: 44, border: 'none', cursor: 'pointer',
@@ -1929,7 +1974,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
 
   // ── Waiting Room — chair-approval gate (blocks the session until admitted) ──
   if (requireChairApproval && isAbsent && !sessionEnded) {
-    const waitingHeading = language === 'ar' ? 'غرفة الانتظار' : language === 'fr' ? "Salle d'attente" : language === 'es' ? 'Sala de Espera' : 'Waiting Room';
+    const waitingHeading = language === 'ar' ? 'غرفة الانتظار' : language === 'fr' ? "Salle d'attente" : language === 'pt' ? 'Sala de Espera' : language === 'es' ? 'Sala de Espera' : 'Waiting Room';
     return (
       <div className="min-h-dvh flex flex-col items-center justify-center text-center px-6 py-10" style={{ background: DG.ivory }}>
         <DelegateStyles />
@@ -2086,7 +2131,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
                 ring={DG.ivory}
                 logoUrl={committee.delegates.find((d) => d.country === committee.caucus!.currentSpeaker)?.logoUrl ?? null}
               />
-              <span style={{ minWidth: 0, flex: 1, fontFamily: OUTFIT, fontSize: 13, fontWeight: 800, color: committee.caucus.currentSpeaker === country ? DG.deepGold : DG.forest, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              <span style={{ minWidth: 0, flex: 1, fontFamily: OUTFIT, fontSize: 13, fontWeight: 800, color: committee.caucus.currentSpeaker === country ? DG.deepGold : DG.forest, lineHeight: 1.15, overflowWrap: 'anywhere' }}>
                 {getCountryDisplayName(committee.caucus.currentSpeaker, language)}
                 {committee.caucus.currentSpeaker === country && t('delegate_you_suffix')}
               </span>
@@ -2279,7 +2324,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
                   <span
                     style={{
                       fontFamily: OUTFIT, fontWeight: 800, color: DG.body, textAlign: 'center',
-                      fontSize: 'clamp(7.5px, 2.3vw, 10.5px)', letterSpacing: '0.04em',
+                      fontSize: 'clamp(9px, 2.3vw, 10.5px)', letterSpacing: '0.04em',
                       textTransform: 'uppercase', lineHeight: 1.15,
                     }}
                   >
@@ -2300,7 +2345,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
                     <span
                       style={{
                         fontFamily: OUTFIT, fontWeight: 800, color: DG.body,
-                        fontSize: 'clamp(6.5px, 2vw, 9px)', letterSpacing: '0.04em',
+                        fontSize: '9px', letterSpacing: '0.04em',
                         textTransform: 'uppercase',
                       }}
                     >
@@ -2337,7 +2382,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
                   style={{
                     fontFamily: OUTFIT, fontSize: 'clamp(13px, 4.2vw, 19px)', fontWeight: 900,
                     color: DG.ink, textAlign: 'center', lineHeight: 1.1, maxWidth: '100%',
-                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                    overflowWrap: 'anywhere', textWrap: 'balance',
                   }}
                 >
                   {myName}
@@ -2543,6 +2588,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
               readCounts={chatReadCounts}
               onReadCountsChange={setChatReadCounts}
               readOnly={sessionEnded}
+              broadcasts={broadcastHistory}
             />
           </div>
         )}

@@ -19,6 +19,8 @@ import { ActionButton } from '@/components/PositionPaperButtons';
 import { SectionCard, OUTFIT, useAllocationPartner } from './shared';
 import type { ParticipantAllocation } from './types';
 import { useScrollLock } from '@/hooks/useScrollLock';
+import { friendlyError } from '@/lib/friendlyError';
+import { isNoiseError, reportBlocked } from '@/lib/reportCrash';
 
 interface PositionPaper {
   id: string;
@@ -38,6 +40,24 @@ const ppStatusMap: Record<string, { bg: string; color: string }> = {
 };
 const NOT_SUBMITTED_STYLE = { bg: 'rgba(154,138,120,0.14)', color: '#6B5F52' };
 
+const PP_MAX_BYTES = 5 * 1024 * 1024;
+const PP_NOT_PDF = "That file isn't a PDF. Export or save it as a PDF and try again.";
+const PP_TOO_LARGE = "This PDF is over 5 MB. Compress it (for example with your PDF app's reduce size option) and try again.";
+const PP_SESSION_ENDED = 'Your session has ended. Sign in again and retry.';
+const PP_NETWORK = "The upload didn't finish because the connection dropped. Check your connection and try again.";
+const PP_FALLBACK = 'Your paper could not be uploaded. Try again, and if it keeps failing, contact the organisers.';
+
+// What a failed upload / insert / update tells the delegate. Never raw text.
+function uploadErrorSentence(error: unknown): string {
+  const e = (error ?? {}) as { message?: unknown; error?: unknown; code?: unknown; status?: unknown; statusCode?: unknown };
+  const text = [e.message, e.error, e.code].filter(x => typeof x === 'string').join(' ');
+  const status = Number(e.status ?? e.statusCode);
+  if (status === 413 || /payload too large|too large|maximum allowed size|exceeded the maximum/i.test(text)) return PP_TOO_LARGE;
+  if (status === 401 || /jwt|PGRST30[1-3]|unauthori[sz]ed|invalid token|not authenticated/i.test(text)) return PP_SESSION_ENDED;
+  if (isNoiseError(error, text)) return PP_NETWORK;
+  return friendlyError(error, PP_FALLBACK);
+}
+
 const ppMonths = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 function fmtDate(iso: string): string {
   const d = new Date(iso);
@@ -52,10 +72,14 @@ function storagePathFromUrl(url: string): string | null {
   return i === -1 ? null : url.slice(i + marker.length);
 }
 
-export default function PositionPaperCard({ conferenceId, conferenceSlug, myAllocation }: {
+export default function PositionPaperCard({ conferenceId, conferenceSlug, myAllocation, onPaperState }: {
   conferenceId: string;
   conferenceSlug: string;
   myAllocation: ParticipantAllocation | null;
+  /** Told what this card already read (no extra query), so the phone
+   *  dashboard's "next step" never asks for a paper that is already in, or
+   *  for one the committee is not taking. Null while the read is pending. */
+  onPaperState?: (state: { enabled: boolean; submitted: boolean } | null) => void;
 }) {
   const { user, session } = useAuth();
   const router = useRouter();
@@ -76,6 +100,11 @@ export default function PositionPaperCard({ conferenceId, conferenceSlug, myAllo
   // "NOT SUBMITTED" to a delegate whose paper was on file, whenever the read
   // was refused (an expired token on a tab left open). 'error' shows a retry.
   const [paperLoad, setPaperLoad] = useState<'loading' | 'ok' | 'error'>('loading');
+
+  const paperSubmitted = !!myPositionPaper && myPositionPaper.status !== 'rejected';
+  useEffect(() => {
+    onPaperState?.(paperLoad === 'ok' ? { enabled: ppEnabled, submitted: paperSubmitted } : null);
+  }, [onPaperState, paperLoad, ppEnabled, paperSubmitted]);
 
   // The session captured in React state goes stale on a tab left open (its
   // access_token expires; supabase-js refreshes its own copy). Ask the auth
@@ -154,23 +183,79 @@ export default function PositionPaperCard({ conferenceId, conferenceSlug, myAllo
 
   const partner = useAllocationPartner(myAllocation);
 
-  function handlePPFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
+  async function handlePPFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const input = e.target;
+    const file = input.files?.[0];
+    // Let the same file be picked again after a refusal (onChange would not fire).
+    input.value = '';
     if (!file) return;
-    if (file.type !== 'application/pdf') { setPPError('Only PDF files are accepted.'); return; }
-    if (file.size > 5 * 1024 * 1024) { setPPError('File must be under 5MB.'); return; }
+    // Some Android pickers, Windows set-ups and cloud downloads report '' or
+    // application/x-pdf / octet-stream for a real PDF, so the name counts too,
+    // and the first bytes decide (a renamed .docx never starts with %PDF-).
+    const typeSaysPdf = file.type === 'application/pdf';
+    if (!typeSaysPdf && !/\.pdf$/i.test(file.name)) { setPPFile(null); setPPError(PP_NOT_PDF); return; }
+    if (file.size > PP_MAX_BYTES) { setPPFile(null); setPPError(PP_TOO_LARGE); return; }
+    let magic: string | null = null;
+    try {
+      magic = String.fromCharCode(...new Uint8Array(await file.slice(0, 5).arrayBuffer()));
+    } catch {
+      magic = null; // unreadable here: trust only a browser that said application/pdf
+    }
+    if (magic === null ? !typeSaysPdf : magic !== '%PDF-') { setPPFile(null); setPPError(PP_NOT_PDF); return; }
     setPPError('');
     setPPFile(file);
+  }
+
+  // Points the delegate's existing row at the new file (the chat thread hangs
+  // off its id), then removes the old object and logs the new version. When
+  // the update errors, the row is read back: a write that landed but whose
+  // answer was lost is a success.
+  async function replaceRowFile(
+    supabase: NonNullable<Awaited<ReturnType<typeof client>>>,
+    paperId: string,
+    oldUrl: string,
+    file: File,
+    publicUrl: string,
+  ): Promise<{ ok: true } | { ok: false; error: unknown; unknown: boolean }> {
+    const oldPath = oldUrl === publicUrl ? null : storagePathFromUrl(oldUrl);
+    const { error: updateError } = await supabase.from('position_papers').update({
+      file_url: publicUrl,
+      file_name: file.name,
+      file_size_bytes: file.size,
+      user_id: user!.id,
+      status: 'submitted',
+      submitted_at: new Date().toISOString(),
+      reviewed_by: null,
+      reviewed_at: null,
+    }).eq('id', paperId);
+    if (updateError) {
+      const { data: back, error: readError } = await supabase
+        .from('position_papers').select('file_url').eq('id', paperId).maybeSingle();
+      if (readError) return { ok: false, error: updateError, unknown: true };
+      if ((back as { file_url?: string } | null)?.file_url !== publicUrl) return { ok: false, error: updateError, unknown: false };
+    }
+    if (oldPath) await supabase.storage.from('position-papers').remove([oldPath]);
+    await supabase.rpc('log_paper_system_message', { p_paper_id: paperId, p_body: 'New version uploaded.' });
+    return { ok: true };
+  }
+
+  function uploadFailed(action: string, stage: string, error: unknown, path: string) {
+    // reportBlocked's noise gate drops pure offline / network noise; a storage
+    // or database refusal is reported.
+    reportBlocked(action, error, { stage, path, committee: myAllocation?.conference_committee_id });
+    setPPError(uploadErrorSentence(error));
+    setPPUploading(false);
   }
 
   async function handlePPSubmit() {
     if (!ppFile || !myAllocation || !user || !session) return;
     setPPUploading(true);
+    setPPError('');
     const supabase = await client();
-    if (!supabase) { setPPError('Your session has ended. Sign in again and retry.'); setPPUploading(false); return; }
+    if (!supabase) { setPPError(PP_SESSION_ENDED); setPPUploading(false); return; }
     const path = `${conferenceId}/${myAllocation.conference_committee_id}/${user.id}_${Date.now()}.pdf`;
     const { error: storageError } = await supabase.storage.from('position-papers').upload(path, ppFile, { contentType: 'application/pdf' });
-    if (storageError) { setPPError('Upload failed.'); setPPUploading(false); return; }
+    if (storageError) { uploadFailed('upload position paper', 'storage', storageError, path); return; }
     const { data: { publicUrl } } = supabase.storage.from('position-papers').getPublicUrl(path);
     const { error: insertError } = await supabase.from('position_papers').insert({
       conference_id: conferenceId,
@@ -183,11 +268,35 @@ export default function PositionPaperCard({ conferenceId, conferenceSlug, myAllo
       status: 'submitted',
     });
     if (insertError) {
-      console.error('[PositionPaperCard] position_papers insert failed:', insertError);
-      await supabase.storage.from('position-papers').remove([path]);
-      setPPError('Your paper could not be submitted. Please try again.');
-      setPPUploading(false);
-      return;
+      // A 23505 on (conference_committee_id, user_id), or a lost answer to an
+      // insert that landed: if the delegate's row exists, the save succeeded.
+      const { data: existing, error: readError } = await supabase
+        .from('position_papers')
+        .select('id, file_url')
+        .eq('conference_committee_id', myAllocation.conference_committee_id)
+        .eq('user_id', user.id)
+        .maybeSingle();
+      if (readError) {
+        // Unknown whether the row landed: keep the object (an orphan is
+        // harmless, a paper pointing at a deleted file is not).
+        uploadFailed('upload position paper', 'insert', insertError, path);
+        return;
+      }
+      const row = existing as { id: string; file_url: string } | null;
+      if (!row) {
+        await supabase.storage.from('position-papers').remove([path]);
+        uploadFailed('upload position paper', 'insert', insertError, path);
+        return;
+      }
+      if (row.file_url !== publicUrl) {
+        // An earlier attempt's row: the latest file wins.
+        const res = await replaceRowFile(supabase, row.id, row.file_url, ppFile, publicUrl);
+        if (!res.ok) {
+          if (!res.unknown) await supabase.storage.from('position-papers').remove([path]);
+          uploadFailed('upload position paper', 'insert-then-replace', res.error, path);
+          return;
+        }
+      }
     }
     setPPUploading(false);
     setPPFile(null);
@@ -202,31 +311,17 @@ export default function PositionPaperCard({ conferenceId, conferenceSlug, myAllo
     setPPUploading(true);
     setPPError('');
     const supabase = await client();
-    if (!supabase) { setPPError('Your session has ended. Sign in again and retry.'); setPPUploading(false); return; }
+    if (!supabase) { setPPError(PP_SESSION_ENDED); setPPUploading(false); return; }
     const path = `${conferenceId}/${myAllocation.conference_committee_id}/${user.id}_${Date.now()}.pdf`;
     const { error: storageError } = await supabase.storage.from('position-papers').upload(path, ppFile, { contentType: 'application/pdf' });
-    if (storageError) { setPPError('Upload failed.'); setPPUploading(false); return; }
+    if (storageError) { uploadFailed('replace position paper', 'storage', storageError, path); return; }
     const { data: { publicUrl } } = supabase.storage.from('position-papers').getPublicUrl(path);
-    const oldPath = storagePathFromUrl(myPositionPaper.file_url);
-    const { error: updateError } = await supabase.from('position_papers').update({
-      file_url: publicUrl,
-      file_name: ppFile.name,
-      file_size_bytes: ppFile.size,
-      user_id: user.id,
-      status: 'submitted',
-      submitted_at: new Date().toISOString(),
-      reviewed_by: null,
-      reviewed_at: null,
-    }).eq('id', myPositionPaper.id);
-    if (updateError) {
-      console.error('[PositionPaperCard] replace update failed:', updateError);
-      await supabase.storage.from('position-papers').remove([path]);
-      setPPError('Your paper could not be updated. Please try again.');
-      setPPUploading(false);
+    const res = await replaceRowFile(supabase, myPositionPaper.id, myPositionPaper.file_url, ppFile, publicUrl);
+    if (!res.ok) {
+      if (!res.unknown) await supabase.storage.from('position-papers').remove([path]);
+      uploadFailed('replace position paper', 'update', res.error, path);
       return;
     }
-    if (oldPath) await supabase.storage.from('position-papers').remove([oldPath]);
-    await supabase.rpc('log_paper_system_message', { p_paper_id: myPositionPaper.id, p_body: 'New version uploaded.' });
     setPPUploading(false);
     setPPFile(null);
     setIsReplacing(false);
@@ -280,7 +375,7 @@ export default function PositionPaperCard({ conferenceId, conferenceSlug, myAllo
             <FileText size={16} style={{ color: '#1B3828' }} />
           </div>
           <div className="flex-1 min-w-0">
-            <p className="truncate" title={myPositionPaper.file_name} style={{ fontFamily: OUTFIT, fontWeight: 600, fontSize: 13, color: '#1C1410', margin: 0 }}>{myPositionPaper.file_name}</p>
+            <p className="[overflow-wrap:anywhere]" title={myPositionPaper.file_name} style={{ fontFamily: OUTFIT, fontWeight: 600, fontSize: 13, color: '#1C1410', margin: 0 }}>{myPositionPaper.file_name}</p>
             <p style={{ fontFamily: OUTFIT, fontSize: 11, color: '#9A8A78', margin: '2px 0 0 0' }}>
               Submitted {fmtDate(myPositionPaper.submitted_at)}
               {myPositionPaper.user_id !== user?.id && (
@@ -433,7 +528,7 @@ export default function PositionPaperCard({ conferenceId, conferenceSlug, myAllo
             </p>
           ) : (
             <>
-              <input type="file" accept="application/pdf" onChange={handlePPFileSelect} className="hidden" ref={ppFileInputRef} />
+              <input type="file" accept="application/pdf,.pdf" onChange={handlePPFileSelect} className="hidden" ref={ppFileInputRef} />
               {!ppFile ? (
                 <div
                   onClick={() => ppFileInputRef.current?.click()}
@@ -452,7 +547,7 @@ export default function PositionPaperCard({ conferenceId, conferenceSlug, myAllo
                 <div style={{ borderRadius: 12, padding: '10px 14px', backgroundColor: 'rgba(61,122,82,0.06)', boxShadow: NEU.inSm, display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
                   <FileText size={15} style={{ color: '#2A5A3C', flexShrink: 0 }} />
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <p title={ppFile.name} style={{ fontSize: 13, color: '#1C1410', fontFamily: OUTFIT, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ppFile.name}</p>
+                    <p title={ppFile.name} style={{ fontSize: 13, color: '#1C1410', fontFamily: OUTFIT, fontWeight: 600, overflowWrap: 'anywhere' }}>{ppFile.name}</p>
                   </div>
                   <button
                     onClick={() => ppFileInputRef.current?.click()}

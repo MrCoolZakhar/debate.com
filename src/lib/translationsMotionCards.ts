@@ -51,4 +51,17 @@ export const motionCardsTranslations = {
     motion_card_rank: 'المرتبة {n}',
     motion_card_last_short: 'يحصل المتحدث الأخير على {n} ث',
   },
+  // pt-BR: scaffold, values still English. Translate per .claude/pt-glossary.md.
+  pt: {
+    motion_card_total: "Total",
+    motion_card_per_speaker: "Por orador",
+    motion_card_speakers: "Oradores",
+    motion_card_order: "Ordem",
+    motion_card_topic: "Tema",
+    motion_card_raised_by: "Proposta por",
+    motion_card_no_proposer: "Sem proponente",
+    motion_card_chair: "Mesa",
+    motion_card_rank: "Posição {n}",
+    motion_card_last_short: "O último orador tem {n}s",
+  },
 };

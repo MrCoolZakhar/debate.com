@@ -23,6 +23,7 @@
 // "Live now" section: one read per page load per account, re-read by the menu
 // when the cached answer is more than a minute old.
 
+import { safeChairName } from '@/lib/chairNameRules';
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { supabase } from '@/lib/supabase';
@@ -306,12 +307,23 @@ export async function resolveEntryHref(
   ctx: { accessToken: string | null; chairName: string; chairRole?: 'head' | 'co' },
 ): Promise<string> {
   if (e.role !== 'chair') return liveEntryHref(e);
-  const name = ctx.chairName.trim();
-  if (!ctx.accessToken || !name) return liveEntryHref(e);
+  const raw = ctx.chairName.trim();
+  if (!ctx.accessToken || !raw) return liveEntryHref(e);
+  // Never a seat name (chat keys chairs by name): "Name (chair)" when it would be.
+  const name = safeChairName(raw, await roomSeatNames(e.room.sessionId));
   const res = await enterLiveChairRoom(ctx.accessToken, e.room.sessionCode, name);
   if (!res) return liveEntryHref(e);
   if (ctx.chairRole === 'head' && !res.moderator) await takeGavelForThisDevice(e.room.sessionId, e.room.sessionCode, name);
   return `/chair/${e.room.sessionCode}?chairName=${encodeURIComponent(name)}`;
+}
+
+async function roomSeatNames(committeeId: string): Promise<string[]> {
+  try {
+    const { data } = await supabase.from('delegates').select('country').eq('committee_id', committeeId);
+    return ((data ?? []) as { country: string | null }[]).map((d) => d.country ?? '');
+  } catch {
+    return [];
+  }
 }
 
 async function takeGavelForThisDevice(committeeId: string, code: string, name: string): Promise<boolean> {

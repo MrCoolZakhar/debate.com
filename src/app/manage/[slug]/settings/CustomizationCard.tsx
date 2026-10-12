@@ -305,7 +305,7 @@ export default function CustomizationCard({
       <div className="flex items-center justify-between gap-3 mb-1">
         <p className="font-semibold text-base" style={{ color: '#1C1410', fontFamily: OUTFIT }}>Conference colours</p>
         {saveState !== 'idle' && (
-          <span className="flex items-center gap-1.5 text-xs flex-shrink-0" style={{ color: saveState === 'saved' ? '#3D7A52' : '#9A8A78', fontFamily: OUTFIT }}>
+          <span className="flex items-center gap-1.5 text-xs flex-shrink-0" style={{ color: saveState === 'saved' ? '#3D7A52' : '#6E6152', fontFamily: OUTFIT }}>
             {saveState === 'saving' && (
               <span className="w-3 h-3 rounded-full border-2 border-t-transparent animate-spin" style={{ borderColor: '#9A8A78', borderTopColor: 'transparent' }} />
             )}
@@ -313,7 +313,7 @@ export default function CustomizationCard({
           </span>
         )}
       </div>
-      <p className="text-sm mb-4" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>
+      <p className="text-sm mb-4" style={{ color: '#6E6152', fontFamily: OUTFIT }}>
         Pick your main colour and an accent. Gavelling handles the rest, including text contrast.
       </p>
 
@@ -326,7 +326,7 @@ export default function CustomizationCard({
             <label className="block text-xs font-semibold" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
               {row.label}
             </label>
-            <p className="text-xs mt-0.5" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>
+            <p className="text-xs mt-0.5" style={{ color: '#6E6152', fontFamily: OUTFIT }}>
               {row.helper}
             </p>
             <div className="flex items-center gap-2 flex-wrap mt-2.5">
@@ -377,7 +377,7 @@ export default function CustomizationCard({
                 onBlur={(e) => { e.currentTarget.style.borderColor = '#DDD4C0'; }}
               />
             </div>
-            <p className="text-xs mt-1.5" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>
+            <p className="text-xs mt-1.5" style={{ color: '#6E6152', fontFamily: OUTFIT }}>
               {activePreset ? activePreset.name : value}
             </p>
           </div>

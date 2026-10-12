@@ -235,7 +235,7 @@ function CommitteeAutocomplete({
         value={value}
         onChange={(e) => { onChange(e.target.value); setOpen(true); }}
         placeholder={placeholder}
-        className="w-full rounded-xl px-4 py-3 text-sm focus:outline-none"
+        className="w-full rounded-xl px-4 py-3 text-base sm:text-sm focus:outline-none"
         style={{ ...inputStyle, opacity: disabled ? 0.55 : 1, cursor: disabled ? 'not-allowed' : 'text' }}
         onFocus={(e) => { e.currentTarget.style.borderColor = '#1B3828'; setOpen(true); }}
         onBlur={(e) => { e.currentTarget.style.borderColor = '#DDD4C0'; setTimeout(() => setOpen(false), 150); }}
@@ -259,7 +259,7 @@ function CommitteeAutocomplete({
               >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={p.logoPath} alt="" width={20} height={20} className="rounded-sm shrink-0 object-contain" onError={(e) => { (e.currentTarget as HTMLImageElement).style.visibility = 'hidden'; }} />
-                <span className="flex-1 min-w-0 truncate text-sm" style={{ color: '#1C1410', fontFamily: OUTFIT, fontWeight: 500 }}>{p.name}</span>
+                <span className="flex-1 min-w-0 [overflow-wrap:anywhere] text-sm" style={{ color: '#1C1410', fontFamily: OUTFIT, fontWeight: 500 }}>{p.name}</span>
                 <span style={{ color: '#1B3828', fontFamily: MONO, fontSize: '10px', fontWeight: 700 }}>{p.acronym}</span>
               </button>
             ))}
@@ -314,7 +314,7 @@ function AllocationAutocomplete({
         value={value}
         onChange={(e) => { onChange(e.target.value); setOpen(true); }}
         placeholder="e.g. China, EU Observer"
-        className="w-full rounded-xl py-3 text-sm focus:outline-none"
+        className="w-full rounded-xl py-3 text-base sm:text-sm focus:outline-none"
         style={{ ...inputStyle, paddingLeft: allocFlag ? '46px' : '16px', paddingRight: '16px', opacity: disabled ? 0.55 : 1, cursor: disabled ? 'not-allowed' : 'text' }}
         onFocus={(e) => { e.currentTarget.style.borderColor = '#1B3828'; setOpen(true); }}
         onBlur={(e) => { e.currentTarget.style.borderColor = '#DDD4C0'; setTimeout(() => setOpen(false), 150); }}
@@ -383,7 +383,7 @@ function MonthYearPicker({ value, onChange }: { value: string; onChange: (isoDat
       <select
         value={selMonth}
         onChange={(e) => emit(Number(e.target.value), selYear >= 0 ? selYear : currentYear)}
-        className="w-full rounded-xl px-4 py-3 text-sm focus:outline-none"
+        className="w-full rounded-xl px-4 py-3 text-base sm:text-sm focus:outline-none"
         style={selectStyle}
         onFocus={(e) => { e.currentTarget.style.borderColor = '#1B3828'; }}
         onBlur={(e) => { e.currentTarget.style.borderColor = '#DDD4C0'; }}
@@ -394,7 +394,7 @@ function MonthYearPicker({ value, onChange }: { value: string; onChange: (isoDat
       <select
         value={selYear}
         onChange={(e) => emit(selMonth >= 0 ? selMonth : 0, Number(e.target.value))}
-        className="w-full rounded-xl px-4 py-3 text-sm focus:outline-none"
+        className="w-full rounded-xl px-4 py-3 text-base sm:text-sm focus:outline-none"
         style={selectStyle}
         onFocus={(e) => { e.currentTarget.style.borderColor = '#1B3828'; }}
         onBlur={(e) => { e.currentTarget.style.borderColor = '#DDD4C0'; }}
@@ -428,7 +428,7 @@ function DescriptionField({ value, onChange, placeholder }: { value: string; onC
         onChange={(e) => onChange(e.target.value.slice(0, DESCRIPTION_MAX))}
         rows={3}
         placeholder={placeholder}
-        className="w-full rounded-xl px-4 py-3 text-sm focus:outline-none resize-none"
+        className="w-full rounded-xl px-4 py-3 text-base sm:text-sm focus:outline-none resize-none"
         style={{ ...inputStyle, lineHeight: 1.65 }}
         onFocus={(e) => { e.currentTarget.style.borderColor = '#1B3828'; }}
         onBlur={(e) => { e.currentTarget.style.borderColor = '#DDD4C0'; }}
@@ -987,7 +987,7 @@ export function CVEntryModal({
           backgroundColor: 'rgba(250,248,243,0.97)',
           border: '1px solid #DDD4C0',
           boxShadow: '0 24px 64px rgba(28,20,16,0.24)',
-          maxHeight: 'calc(100vh - 48px)',
+          maxHeight: 'calc(100dvh - 48px)',
           overflowY: 'auto',
           animation: closing ? 'gvWelcomePopOut 160ms cubic-bezier(0.2,0,0,1) forwards' : 'gvWelcomePop 220ms cubic-bezier(0.2,0,0,1)',
         }}
@@ -1006,7 +1006,7 @@ export function CVEntryModal({
           </span>
           <div className="min-w-0">
             <Eyebrow className="mb-1">{existing ? 'Edit Entry' : 'Add Conference'}</Eyebrow>
-            <h2 className="font-black text-lg leading-tight truncate" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
+            <h2 className="font-black text-lg leading-tight [overflow-wrap:anywhere]" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
               {existing ? existing.conference_name : 'New CV entry'}
             </h2>
           </div>
@@ -1027,7 +1027,7 @@ export function CVEntryModal({
             <label className="block text-[13px] font-semibold mb-2" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
               Experience Type
             </label>
-            <div className="grid grid-cols-5 gap-2">
+            <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
               {ENTRY_TYPES.map((t) => {
                 const active = entryType === t.key;
                 return (
@@ -1036,7 +1036,7 @@ export function CVEntryModal({
                     type="button"
                     disabled={isLocked}
                     onClick={() => setEntryType(t.key)}
-                    className="flex flex-col items-center justify-center gap-2 rounded-2xl py-3 focus:outline-none transition-all"
+                    className="min-w-0 flex flex-col items-center justify-center gap-2 rounded-2xl py-3 focus:outline-none transition-all"
                     style={{
                       border: active ? `1.5px solid ${t.accent}` : '1px solid #E4DBC6',
                       background: active
@@ -1056,7 +1056,7 @@ export function CVEntryModal({
                       fallbackColor={active ? t.accent : '#9A8A78'}
                       style={active ? undefined : { filter: 'grayscale(0.35) opacity(0.85)' }}
                     />
-                    <span style={{ fontFamily: OUTFIT, fontSize: '11.5px', fontWeight: 700, color: active ? '#1C1410' : '#9A8A78' }}>
+                    <span className="px-1 text-center [overflow-wrap:anywhere]" style={{ fontFamily: OUTFIT, fontSize: '11.5px', fontWeight: 700, lineHeight: 1.2, color: active ? '#1C1410' : '#9A8A78' }}>
                       {t.label}
                     </span>
                   </button>
@@ -1111,7 +1111,7 @@ export function CVEntryModal({
                   setConferenceId(null);
                 }}
                 placeholder="e.g. Harvard WorldMUN 2026"
-                className="w-full rounded-xl px-4 py-3 text-sm focus:outline-none"
+                className="w-full rounded-xl px-4 py-3 text-base sm:text-sm focus:outline-none"
                 style={{ ...inputStyle, opacity: isLocked ? 0.55 : 1, cursor: isLocked ? 'not-allowed' : 'text' }}
                 onFocus={(e) => { e.currentTarget.style.borderColor = '#1B3828'; }}
                 onBlur={(e) => { e.currentTarget.style.borderColor = '#DDD4C0'; setTimeout(() => setSuggestOpen(false), 150); }}
@@ -1156,7 +1156,7 @@ export function CVEntryModal({
                           {monogramFor(s.name)}
                         </span>
                       )}
-                      <span className="flex-1 min-w-0 truncate text-sm" style={{ color: '#1C1410', fontFamily: OUTFIT, fontWeight: 500 }}>
+                      <span className="flex-1 min-w-0 [overflow-wrap:anywhere] text-sm" style={{ color: '#1C1410', fontFamily: OUTFIT, fontWeight: 500 }}>
                         {s.name}
                         {s.acronym && (
                           <span style={{ color: '#9A8A78', fontFamily: MONO, fontSize: '10px', marginLeft: '8px' }}>{s.acronym}</span>
@@ -1196,7 +1196,7 @@ export function CVEntryModal({
                 maxLength={60}
                 onChange={(e) => setDaisPosition(e.target.value)}
                 placeholder="e.g. Vice Chair"
-                className="w-full rounded-xl px-4 py-3 text-sm focus:outline-none"
+                className="w-full rounded-xl px-4 py-3 text-base sm:text-sm focus:outline-none"
                 style={{ ...inputStyle, opacity: isLocked ? 0.55 : 1, cursor: isLocked ? 'not-allowed' : 'text' }}
                 onFocus={(e) => { e.currentTarget.style.borderColor = '#1B3828'; }}
                 onBlur={(e) => { e.currentTarget.style.borderColor = '#DDD4C0'; }}
@@ -1254,7 +1254,7 @@ export function CVEntryModal({
                   entryType === 'faculty-advisor' ? 'e.g. Springfield High School, Team Canada' :
                   'e.g. Press Corps, Photographer, Tech Team, Volunteer'
                 }
-                className="w-full rounded-xl px-4 py-3 text-sm focus:outline-none"
+                className="w-full rounded-xl px-4 py-3 text-base sm:text-sm focus:outline-none"
                 style={{ ...inputStyle, opacity: isLocked ? 0.55 : 1, cursor: isLocked ? 'not-allowed' : 'text' }}
                 onFocus={(e) => { e.currentTarget.style.borderColor = '#1B3828'; }}
                 onBlur={(e) => { e.currentTarget.style.borderColor = '#DDD4C0'; }}
@@ -1364,7 +1364,7 @@ export function CVEntryModal({
                     onChange={(e) => setSpecialDraft(e.target.value)}
                     onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addSpecialAward(); } }}
                     placeholder={isDelegationAwards ? 'e.g. Best Delegation, Outstanding Delegation' : isChairAwards ? 'e.g. Best Crisis Director, Chair of the Year' : 'e.g. Best Speaker, Spirit of the Committee'}
-                    className="flex-1 rounded-xl px-4 py-2.5 text-sm focus:outline-none"
+                    className="flex-1 rounded-xl px-4 py-2.5 text-base sm:text-sm focus:outline-none"
                     style={inputStyle}
                     onFocus={(e) => { e.currentTarget.style.borderColor = '#2A5A3C'; }}
                     onBlur={(e) => { e.currentTarget.style.borderColor = '#DDD4C0'; }}

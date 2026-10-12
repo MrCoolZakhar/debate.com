@@ -1,5 +1,4 @@
 import Link from 'next/link';
-import { GoldWord } from '@/components/BrandHeading';
 import { formatConferenceDates } from '@/lib/conferenceDates';
 import type { ListedConference } from '@/lib/listedConferences';
 import type { CountryHub } from '@/lib/countryHubs';
@@ -30,7 +29,7 @@ export default function ExploreDirectory({ conferences, hubs }: { conferences: L
       style={{ paddingTop: 'clamp(24px, 3vw, 40px)', paddingBottom: 'clamp(40px, 4vw, 64px)', fontFamily: SANS }}
     >
       <h2 id="gv-explore-directory" style={{ margin: 0, fontWeight: 800, fontSize: 'clamp(22px, 2.2vw, 30px)', letterSpacing: '-0.012em', color: INK }}>
-        All Upcoming <GoldWord>Conferences</GoldWord>
+        All Upcoming Conferences
       </h2>
       <p style={{ margin: '6px 0 16px', fontSize: 14.5, lineHeight: 1.55, color: INK_SOFT, maxWidth: 640 }}>
         {conferences.length > 0

@@ -20,11 +20,14 @@ function hasPassed(ms: number | null): boolean {
   return ms !== null && ms <= Date.now();
 }
 
-export default function AssignmentHero({ committee, myAllocation, conferenceStartDate, independent }: {
+export default function AssignmentHero({ committee, myAllocation, conferenceStartDate, independent, joinFromXlOnly = false }: {
   committee: ParticipantCommittee | null;
   myAllocation: ParticipantAllocation | null;
   conferenceStartDate: string | null;
   independent: boolean;
+  /** The one-page phone dashboard offers "Join session" in its next-step card
+   *  at the top, so this button shows from xl only. */
+  joinFromXlOnly?: boolean;
 }) {
   const crest = useSeatCrest(myAllocation);
   const partner = useAllocationPartner(myAllocation);
@@ -32,7 +35,7 @@ export default function AssignmentHero({ committee, myAllocation, conferenceStar
   if (!committee || !myAllocation) {
     return (
       <DashCard>
-        <CardHeading title="Your assignment" />
+        <CardHeading title="Your assignment" stackedHide />
         <div className="flex items-center gap-3">
           <span className="inline-flex items-center justify-center flex-shrink-0" style={{ width: 44, height: 44, borderRadius: 999, backgroundColor: 'rgba(61,122,82,0.12)' }}>
             <Compass size={20} strokeWidth={2.2} style={{ color: '#1B3828', fill: 'rgba(238,217,138,0.5)' }} aria-hidden />
@@ -52,7 +55,7 @@ export default function AssignmentHero({ committee, myAllocation, conferenceStar
 
   return (
     <DashCard className="@container">
-      <CardHeading title="Your assignment" />
+      <CardHeading title="Your assignment" stackedHide />
       <div className="grid grid-cols-1 @[440px]:grid-cols-2 gap-4">
         {/* Country */}
         <div className="flex items-center gap-4 rounded-2xl p-4" style={{ backgroundColor: 'rgba(237,231,216,0.45)' }}>
@@ -93,12 +96,14 @@ export default function AssignmentHero({ committee, myAllocation, conferenceStar
       </div>
 
       {(independent || (sessionCode && (released || releaseMs !== null))) && (
-        <div className="flex items-center justify-between gap-3 flex-wrap mt-5">
+        <div className={`${joinFromXlOnly && !independent && sessionCode && released ? 'hidden xl:flex' : 'flex'} items-center justify-between gap-3 flex-wrap mt-5`}>
           {independent ? <IconWord icon={Users} word="Independent delegate" color={INK_SOFT} size="sm" /> : <span />}
           {sessionCode && released ? (
-            <ForestLink href={`/join?code=${sessionCode}`}>
-              Join session <ArrowRight size={16} strokeWidth={2.4} aria-hidden />
-            </ForestLink>
+            <span className={joinFromXlOnly ? 'hidden xl:inline-flex' : 'inline-flex'}>
+              <ForestLink href={`/join?code=${sessionCode}`}>
+                Join session <ArrowRight size={16} strokeWidth={2.4} aria-hidden />
+              </ForestLink>
+            </span>
           ) : sessionCode && releaseMs !== null ? (
             <p style={{ fontFamily: OUTFIT, fontSize: 13, color: INK, margin: 0 }}>
               Your session opens {formatReleaseDate(releaseMs)}

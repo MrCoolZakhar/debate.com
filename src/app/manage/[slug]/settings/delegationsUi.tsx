@@ -18,9 +18,10 @@
 // tooltip. Each swap option has its own short "i".
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Info, UserPlus, Users2 } from 'lucide-react';
+import { Info, UserPlus, Repeat2 } from 'lucide-react';
 import Portal from '@/components/Portal';
-import { Emoji3D, NEU } from '@/components/neu';
+import { NEU } from '@/components/neu';
+import { EmojiDisc, TINT_GOLD_BG, TINT_GREEN_BG } from './panelKit';
 import { getFreshAuthedClient } from '@/lib/supabase-auth';
 import { friendlyError } from '@/lib/friendlyError';
 import { notifyErr, clearErr } from '@/lib/appNotify';
@@ -34,13 +35,14 @@ export const SWAP_MODE_OPTIONS: { value: string; label: string; hint: string }[]
   { value: 'self_serve', label: 'Self-serve', hint: 'Leaders swap seats within their own delegation and you are notified. They can never take another delegation’s seat.' },
 ];
 
+// The Settings card (Oct 2026 bookmarks redesign): the Store's white card on
+// ivory, a soft forest-tinted shadow, no hard border.
 const CARD: React.CSSProperties = {
-  backgroundColor: '#FFFDF9',
-  border: '1.5px solid #D8CDB6',
-  borderRadius: '16px',
-  padding: '24px',
+  background: 'radial-gradient(120% 90% at 100% 0%, rgba(61,122,82,0.09) 0%, rgba(61,122,82,0) 55%), #FFFFFF',
+  borderRadius: '20px',
+  padding: 'clamp(16px, 2.6vw, 22px)',
   marginBottom: '20px',
-  boxShadow: '0 1px 2px rgba(27,56,40,0.04)',
+  boxShadow: '0 1px 0 rgba(27,56,40,0.08), 0 18px 40px -32px rgba(27,56,40,0.35)',
 };
 
 function Spinner() {
@@ -215,7 +217,7 @@ export function DelegationsSettings({
       {/* ── Swaps ── */}
       <div style={CARD}>
         <p className="font-semibold text-base mb-1 flex items-center gap-2" style={{ color: '#1C1410', fontFamily: FONT }}>
-          <Emoji3D name="Counterclockwise arrows button" size={20} fallback={Users2} fallbackColor="#1B3828" />
+          <EmojiDisc emoji="Counterclockwise arrows button" icon={Repeat2} size={34} tint={TINT_GOLD_BG} />
           Delegation Allocation Swaps
           <Hint
             label="About allocation swaps"
@@ -265,7 +267,7 @@ export function DelegationsSettings({
         <div className="flex items-start gap-4">
           <div className="min-w-0 flex-1">
             <p className="font-semibold text-base mb-1 flex items-center gap-2" style={{ color: '#1C1410', fontFamily: FONT }}>
-              <Emoji3D name="Busts in silhouette" size={20} fallback={UserPlus} fallbackColor="#1B3828" />
+              <EmojiDisc emoji="Busts in silhouette" icon={UserPlus} size={34} tint={TINT_GREEN_BG} />
               Let delegation leaders import their delegates
               <Hint
                 label="About delegation imports"

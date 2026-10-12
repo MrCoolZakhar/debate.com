@@ -35,7 +35,7 @@ import AwardsTab from '@/components/settings/AwardsTab';
 type Icon = React.ComponentType<{ size?: number; strokeWidth?: number; 'aria-hidden'?: boolean | 'true'; style?: React.CSSProperties }>;
 
 const LANGS: { code: Language; label: string }[] = [
-  { code: 'en', label: 'EN' }, { code: 'es', label: 'ES' }, { code: 'fr', label: 'FR' }, { code: 'ar', label: 'ع' },
+  { code: 'en', label: 'EN' }, { code: 'es', label: 'ES' }, { code: 'fr', label: 'FR' }, { code: 'pt', label: 'PT' }, { code: 'ar', label: 'ع' },
 ];
 
 export function SettingsPanel({ committee, onClose, myChairName, isViewOnly = false, onlineChairs }: {
@@ -277,12 +277,12 @@ export function SettingsPanel({ committee, onClose, myChairName, isViewOnly = fa
               <div className="flex items-center gap-2" style={{ marginBottom: 8, fontSize: T.caption, fontWeight: W.label, color: 'rgba(243,234,208,0.72)' }}>
                 <Languages size={13} strokeWidth={2.4} aria-hidden />{t('settings_language')}
               </div>
-              <div role="radiogroup" aria-label={t('settings_language')} className="grid grid-cols-4 gap-1" style={{ padding: 3, borderRadius: 12, background: 'rgba(0,0,0,0.18)' }}>
+              <div role="radiogroup" aria-label={t('settings_language')} className="grid grid-cols-5 gap-1" style={{ padding: 3, borderRadius: 12, background: 'rgba(0,0,0,0.18)' }}>
                 {LANGS.map((l) => {
                   const on = language === l.code;
                   return (
                     <button key={l.code} type="button" role="radio" aria-checked={on} onClick={() => setLanguage(l.code)} lang={l.code}
-                      aria-label={l.code === 'en' ? 'English' : l.code === 'es' ? 'Español' : l.code === 'fr' ? 'Français' : 'العربية'}
+                      aria-label={l.code === 'en' ? 'English' : l.code === 'es' ? 'Español' : l.code === 'fr' ? 'Français' : l.code === 'pt' ? 'Português' : 'العربية'}
                       className="stg-focus stg-press" style={{ height: 30, borderRadius: 9, border: 'none', cursor: 'pointer', fontSize: T.caption, fontWeight: on ? W.section : W.label, background: on ? K.gold : 'transparent', color: on ? K.forest : 'rgba(243,234,208,0.7)' }}>
                       {l.label}
                     </button>

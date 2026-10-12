@@ -31,6 +31,36 @@ export interface NominationInput {
   position?: number;
 }
 
+/**
+ * Screens show a recipient by their CURRENT profile name, not the name copied
+ * onto the award when it was nominated (someone may rename themselves after a
+ * conference). `conference_awards.recipient_name` stays as the record of what
+ * was written; `award_recipient_live_names` (SECURITY DEFINER, published awards
+ * for everyone, every award for the conference's organisers and the
+ * committee's chairs) answers {award id: live name} for awards held by an
+ * account. Delegation (society) awards and seats nobody claimed keep the stored
+ * name. Until that function exists, or when it fails, the rows are returned
+ * unchanged.
+ */
+async function withLiveRecipientNames(
+  supabase: SupabaseClient,
+  rows: ConferenceAwardRow[],
+): Promise<ConferenceAwardRow[]> {
+  const conferenceId = rows.find((r) => r.conference_id)?.conference_id;
+  if (!conferenceId) return rows;
+  try {
+    const { data, error } = await supabase.rpc('award_recipient_live_names', { p_conference: conferenceId });
+    if (error || !data || typeof data !== 'object') return rows;
+    const names = data as Record<string, string | null>;
+    return rows.map((r) => {
+      const live = names[r.id]?.trim();
+      return live && !r.society_id ? { ...r, recipient_name: live } : r;
+    });
+  } catch {
+    return rows;
+  }
+}
+
 export async function loadConferenceAwards(
   supabase: SupabaseClient,
   conferenceId: string,
@@ -44,7 +74,7 @@ export async function loadConferenceAwards(
     console.error('[awards] load failed:', error);
     return [];
   }
-  return (data ?? []) as unknown as ConferenceAwardRow[];
+  return withLiveRecipientNames(supabase, (data ?? []) as unknown as ConferenceAwardRow[]);
 }
 
 export async function loadCommitteeAwards(
@@ -60,7 +90,7 @@ export async function loadCommitteeAwards(
     console.error('[awards] committee load failed:', error);
     return [];
   }
-  return (data ?? []) as unknown as ConferenceAwardRow[];
+  return withLiveRecipientNames(supabase, (data ?? []) as unknown as ConferenceAwardRow[]);
 }
 
 /** Published honours only (what the RLS exposes to everyone), for the public honour roll. */
@@ -78,7 +108,7 @@ export async function loadPublishedAwards(
     console.error('[awards] published load failed:', error);
     return [];
   }
-  return (data ?? []) as unknown as ConferenceAwardRow[];
+  return withLiveRecipientNames(supabase, (data ?? []) as unknown as ConferenceAwardRow[]);
 }
 
 /** Insert one nomination. `assignedBy` must be the caller (RLS checks it). Returns the row or an error message. */

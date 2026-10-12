@@ -248,7 +248,7 @@ export async function encodeCard(
  * The flag for a country NAME, as a small PNG data URI.
  *
  * Why not the flag emoji: a flag emoji is a pair of regional-indicator
- * codepoints, and Outfit has no glyph for them. Satori would render either the
+ * codepoints, and Inter has no glyph for them. Satori would render either the
  * bare letters ("IN") or tofu — which is worse than no flag at all. Why not an
  * SVG `<img>`: satori's image handling is raster-oriented and an SVG source is
  * the same gamble as the WebP banners were. So it is fetched and rasterised,

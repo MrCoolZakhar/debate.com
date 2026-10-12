@@ -180,7 +180,7 @@ function PartnerPopup({
             <p
               style={{
                 fontFamily: "var(--font-brand), sans-serif", fontWeight: 800, fontSize: 16, color: 'var(--gv-on-surface)', margin: '2px 0 0 0', letterSpacing: '0.01em',
-                display: '-webkit-box', WebkitBoxOrient: 'vertical', WebkitLineClamp: 2, overflow: 'hidden', lineHeight: 1.25,
+                overflowWrap: 'anywhere', lineHeight: 1.25,
               }}
             >
               {entry.name}
@@ -290,10 +290,7 @@ function PartnerButton({
         color: 'var(--gv-on-surface)',
         maxWidth: '100%',
         textAlign: 'left',
-        display: '-webkit-box',
-        WebkitBoxOrient: 'vertical',
-        WebkitLineClamp: 2,
-        overflow: 'hidden',
+        overflowWrap: 'anywhere',
         lineHeight: 1.3,
       }}
     >
