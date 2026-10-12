@@ -36,6 +36,7 @@ import {
   F, INK, INK_SOFT, FOREST, GOLD, AMBER, INPUT,
   SectionHead, Switch, EmojiDisc, BigCount, TINT_GOLD_BG, TINT_GREEN_BG,
 } from './panelKit';
+import { AwardsReview } from './awardsReview';
 
 const SAVE_DEBOUNCE_MS = 600;
 const MAX_PER_COMMITTEE = 10;
@@ -601,6 +602,9 @@ export function AwardsSettings({ conference }: { conference: Conference }) {
           <button type="button" className="gv-st-link" style={{ color: INK_SOFT }} onClick={() => setConfirmOff(true)}>Turn off awards</button>
         )}
       </div>
+
+      {/* Chairs' slates: approve, return with a note, publish (awardsReview.tsx). */}
+      <AwardsReview conference={conference} config={config} />
     </div>
   );
 }

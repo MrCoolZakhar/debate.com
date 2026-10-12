@@ -834,7 +834,7 @@ isModerator = nameHolds && !heldElsewhere;   // setIsViewOnly(!isModerator)
 
 ## FEATURE: AWARDS (conference-linked sessions only)
 
-### CURRENT STATE: SET-UP LIVE, NO PUBLISH SCREEN (11 Oct 2026)
+### CURRENT STATE: SET-UP, REVIEW AND PUBLISH LIVE (12 Oct 2026)
 - Settings → Awards is `settings/awardsUi.tsx` (`AwardsSettings`): blank slate → "Will
   every committee give the same awards?" → the editor (Placements, Other awards,
   Custom awards; shared set or per-committee sets). Full description in CLAUDE.md §5.
@@ -850,10 +850,17 @@ isModerator = nameHolds && !heldElsewhere;   // setIsViewOnly(!isModerator)
   lookup is "not offered". Read per committee with `configForCommittee`. Never add an
   award affordance for chairs that does not pass this gate. Published awards are
   read by status and never gated.
+- **Review and publish** is `settings/awardsReview.tsx` (`AwardsReview` data,
+  `AwardsReviewView` pure view), mounted under the editor in `AwardsSettings` and only
+  once awards are set up: per committee slate state (own `reviewState`, so a late
+  slate is not shown as Published), Approve (`approveSlate`), Return with a required
+  note (`returnSlate`), and one Publish for the conference (`publishAwards`, behind a
+  `ConfirmModal`; approved rows only while `requireApproval`, idempotent, so
+  "Publish new awards" republishes late additions). It sends no email. Details in
+  CLAUDE.md §5.
 - `/manage/[slug]/awards` still redirects to Settings; `AwardsConsole.tsx` stays
-  unrendered (and does not read `perCommittee` yet). There is no approve / publish
-  screen. The database is unchanged; `scratch-awards-setup.sql` is an unapplied
-  draft that enforces the gate in RLS.
+  unrendered (and does not read `perCommittee` yet). The database is unchanged;
+  `scratch-awards-setup.sql` is an unapplied draft that enforces the gate in RLS.
 - The `awards` set-up priority stays out of the dashboard checklist,
   `conference_setup_status()` and `SETUP_STEPS` (since 7 Sep 2026).
 
@@ -873,15 +880,16 @@ and the database. Read it before touching anything awards-related.
   deadline and `requireApproval` are `conferences.awards_config` (jsonb; `{}` = defaults).
 - Publishing mints ONE `mun_cv_entries` row per recipient per conference with
   `source = 'gavelling_verified'` (upgrading a self-reported entry for the same conference in
-  place) and a `points_ledger` row of type `earned_award` at paid conferences. It is
+  place; checked 12 Oct 2026: it no longer writes `points_ledger`, its `points_rows` is
+  always 0). It is
   idempotent: already-published rows are never touched, so late additions republish safely.
 
 ### Surfaces
 - Chair: `conferences/[slug]/participant/AwardsCard.tsx` on their conference page, with the
   session scoreboard (`loadConferenceScoreboard(..., [committeeId])`) beside the slots.
-- Secretariat: `manage/[slug]/awards/AwardsConsole.tsx` (review, return with note, edit,
-  delegation standings, publish, certificates CSV) and Settings → Awards
-  (`settings/awardsUi.tsx`). BOTH are currently unrendered, see CURRENT STATE above.
+- Secretariat: Settings → Awards (`settings/awardsUi.tsx` set-up, `settings/awardsReview.tsx`
+  review, return with note, publish). The old desk `manage/[slug]/awards/AwardsConsole.tsx`
+  (edit, delegation standings, certificates CSV) is unrendered, see CURRENT STATE above.
 - Delegate: `participant/MyAwardsCard.tsx`, `/account/cv`, public `/conferences/[slug]/awards`.
 - Session: `ScoreboardPanel` header link and the End View card on the chair page, both
   resolved through `resolveChairAwardsHref(code)` and both conference-only.
