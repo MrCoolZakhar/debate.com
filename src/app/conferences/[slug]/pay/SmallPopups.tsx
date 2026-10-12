@@ -56,7 +56,7 @@ export function RefundRequestPopup({ items, preselect, onClose, onDone }: {
   };
 
   return (
-    <Shell label="Request a refund" onClose={onClose} busyRef={busyRef}>
+    <Shell label="Request a refund" onClose={onClose} busyRef={busyRef} small>
       <h2 style={{ margin: 0, paddingRight: 40, fontSize: 26, fontWeight: 800, letterSpacing: '-0.02em' }}>Request a Refund</h2>
       <div className="gv-pay-rows">
         {items.map(i => (
@@ -71,9 +71,9 @@ export function RefundRequestPopup({ items, preselect, onClose, onDone }: {
         ))}
       </div>
       <div>
-        <label htmlFor="gv-refund-why" style={{ display: 'block', margin: '0 0 6px', fontSize: 14, fontWeight: 700 }}>Why?</label>
+        <label htmlFor="gv-refund-why" style={{ display: 'block', margin: '0 0 6px', fontSize: 14, fontWeight: 700 }}>Reason for Refund</label>
         <textarea id="gv-refund-why" value={reason} maxLength={REASON_MAX} disabled={busy} onChange={e => setReason(e.target.value)}
-          style={{ width: '100%', minHeight: 96, padding: '12px 14px', borderRadius: 12, border: '1.5px solid rgba(27,56,40,0.28)', background: '#FFFFFF', fontFamily: 'inherit', fontSize: 16, lineHeight: 1.5 }} />
+          style={{ width: '100%', minHeight: 84, padding: '12px 14px', borderRadius: 12, border: '1.5px solid rgba(27,56,40,0.28)', background: '#FFFFFF', fontFamily: 'inherit', fontSize: 16, lineHeight: 1.5 }} />
         <p style={{ margin: '4px 0 0', fontSize: 12, color: INK_SOFT, textAlign: 'right' }}>{reason.length} / {REASON_MAX}</p>
       </div>
       {err && <p role="alert" style={{ margin: 0, fontSize: 14, color: DANGER }}>{err}</p>}

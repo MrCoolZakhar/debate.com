@@ -57,7 +57,7 @@ export default function ThingsToDoPopup({ conferenceId, readOnly, onClose }: {
 
   return (
     <>
-      <PurchaseShell tone="light" label="Things to do" onClose={onClose} panelClass={queue && !current ? 'gv-fd-small' : 'gv-fd-wide'} testId="financials-todo">
+      <PurchaseShell tone="light" label="Things to do" onClose={onClose} panelClass={queue && !current ? 'gv-fd-small' : current && current.type !== 'proof' ? 'gv-fd-mid gv-fd-fit' : 'gv-fd-wide'} testId="financials-todo">
         <div className="gv-fd-pop">
           {queue && current && (
             <p className="gv-fd-sect" aria-live="polite" style={{ margin: 0 }}>{index + 1} of {queue.length}</p>
@@ -147,7 +147,7 @@ function useBusy() {
 function Who({ name, email, extra }: { name: string | null; email?: string | null; extra?: React.ReactNode }) {
   return (
     <div>
-      <p style={{ margin: 0, fontSize: 20, fontWeight: 800, lineHeight: 1.25, overflowWrap: 'anywhere' }}>{name || 'Someone'}</p>
+      <p className="gv-fd-who-name" style={{ margin: 0, fontSize: 20, fontWeight: 800, lineHeight: 1.25, overflowWrap: 'anywhere' }}>{name || 'Someone'}</p>
       {email && <p className="gv-fd-note" style={{ overflowWrap: 'anywhere' }}>{email}</p>}
       {extra}
     </div>
@@ -344,7 +344,7 @@ function TodoStep({ t, conferenceId, readOnly, onDone, onSkip, onRefund }: {
           <>
             <p className="gv-fd-sect">Refund request</p>
             <Who name={t.person_name} email={t.person_email} />
-            {t.note && <p style={{ margin: '12px 0 0', fontSize: 15, lineHeight: 1.55, overflowWrap: 'anywhere' }}>&ldquo;{t.note}&rdquo;</p>}
+            {t.note && <p style={{ margin: '12px 0 0', fontSize: 17, lineHeight: 1.55, overflowWrap: 'anywhere' }}>&ldquo;{t.note}&rdquo;</p>}
             <div className="gv-fd-rows" style={{ marginTop: 14 }}>{itemRowsWithPay}</div>
             {mode === 'decline' && !readOnly && (
               <ReasonField id={`gv-fd-decline-${t.id}`} label="Tell them why. They receive this by email" value={text} onChange={v => { setText(v); setErr(''); }} />
@@ -480,7 +480,8 @@ function TodoStep({ t, conferenceId, readOnly, onDone, onSkip, onRefund }: {
     }
   })();
 
-  return <div style={{ maxWidth: 640 }}>{body}</div>;
+  // A money to-do fills its pop-up (gv-fd-mid gv-fd-fit, prompt 104) with bigger type and buttons.
+  return <div className="gv-fd-todo-body">{body}</div>;
 }
 
 // ── Refund the difference (prompt 94) ──────────────────────────────────────

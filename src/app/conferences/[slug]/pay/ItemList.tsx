@@ -35,7 +35,9 @@ function stateLine(it: PayItem): { icon: LucideIcon; text: string; color: string
     case 'in_review': return { icon: Hourglass, text: 'Waiting for the organizer to review', color: DEEP_GOLD };
     case 'paid': return { icon: CircleCheck, text: 'Paid', color: GREEN };
     case 'rejected': return { icon: XCircle, text: 'Proof not accepted', color: DANGER };
-    case 'refunded': return { icon: Undo2, text: it.refund?.at ? `Refunded on ${shortDate(it.refund.at)} via ${refundVia(it.refund.method)}` : 'Refunded', color: INK_SOFT };
+    case 'refunded':
+    case 'refund_closed':
+      return { icon: Undo2, text: it.refund?.at ? `Refunded on ${shortDate(it.refund.at)} via ${refundVia(it.refund.method)}` : 'Refunded', color: INK_SOFT };
     case 'disputed': return { icon: ShieldAlert, text: 'Your card company is looking into this payment. The organizers will be in touch', color: DANGER };
     case 'refund_requested': return { icon: RotateCcw, text: 'Refund requested', color: INK_SOFT };
     case 'covered': return { icon: Gift, text: 'Covered by your delegation', color: GREEN };
@@ -47,6 +49,7 @@ function stateLine(it: PayItem): { icon: LucideIcon; text: string; color: string
 /** What the amount column says for this line, or nothing. */
 function amountFor(it: PayItem): string | null {
   if (it.state === 'covered' || it.state === 'waived') return null;
+  if (it.state === 'refund_closed') return it.refund ? money(it.refund.amount_cents, it.currency) : null;
   if (it.state === 'paid' || it.state === 'disputed' || it.state === 'refund_requested') return money(it.paid_cents || it.amount_cents, it.currency);
   if (it.state === 'in_review' || it.state === 'started') return money(it.due_cents || it.amount_cents, it.currency);
   return money(it.due_cents, it.currency);
@@ -191,7 +194,7 @@ export default function ItemList({ items, selected, onToggle, onReceipt, onRemov
                   )}
                 </p>
               ))}
-              {it.state === 'refunded' && it.refund && (
+              {(it.state === 'refunded' || it.state === 'refund_closed') && it.refund && (
                 <>
                   {it.refund.note && <p className="gv-pay-sub">{it.refund.note}</p>}
                   <p className="gv-pay-sub" style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }}>

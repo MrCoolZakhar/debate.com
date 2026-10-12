@@ -110,6 +110,17 @@ export const DASH_CSS = `
 /* Pop-ups: a wide panel, and the rows of a breakdown */
 .gv-buy-panel.gv-fd-wide{max-width:1040px}
 .gv-buy-panel.gv-fd-mid{max-width:620px}
+/* A money to-do (prompt 104): 620px, as tall as its content, a bottom sheet on phones, bigger type and buttons. */
+.gv-buy-panel.gv-fd-fit{min-height:0}
+.gv-buy-panel.gv-fd-fit .gv-buy-body{flex-direction:column}
+@media (max-width:743px){.gv-buy-panel.gv-fd-fit{height:auto;max-height:92dvh;margin-top:auto;border-radius:22px 22px 0 0}}
+.gv-fd-todo-body{width:100%}
+.gv-fd-todo-body .gv-fd-rows{width:100%}
+.gv-fd-todo-body .gv-fd-who-name{font-size:22px!important}
+.gv-fd-todo-body .gv-fd-row,.gv-fd-todo-body .gv-fd-row-label,.gv-fd-todo-body .gv-fd-row-amt{font-size:16px}
+.gv-fd-todo-body .gv-fd-row-label small{font-size:13.5px}
+.gv-fd-todo-body .gv-st-btn{min-height:52px;font-size:16px;padding:0 26px}
+.gv-fd-todo-body .gv-st-link{font-size:15px}
 /* A pop-up as small as its content (the cleared Things to do): no 560px minimum, a bottom sheet on phones. */
 .gv-buy-panel.gv-fd-small{max-width:440px;min-height:0}
 .gv-buy-panel.gv-fd-small .gv-buy-body{flex-direction:column}

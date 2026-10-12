@@ -15,7 +15,10 @@ import { extractFunctionErrorMessage } from '@/lib/payments';
 
 export type ItemState =
   | 'unpaid' | 'started' | 'in_review' | 'paid' | 'rejected' | 'refunded'
-  | 'disputed' | 'refund_requested' | 'covered' | 'waived';
+  | 'disputed' | 'refund_requested' | 'covered' | 'waived'
+  /** Refunded in full and closed (prompt 104): a ticket or add-on the owner's
+   *  refund rule cancelled. Not payable, not owed, listed under Refunded. */
+  | 'refund_closed';
 
 export interface PayItem {
   invoice_id: string;

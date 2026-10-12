@@ -372,6 +372,8 @@ export default function PayPage() {
 
   const itemsById = new Map(items.map(i => [i.invoice_id, i]));
   const notCharged = items.filter(i => i.state === 'waived' || i.state === 'covered');
+  // Refunded in full and closed (prompt 104): never owed, never on Outstanding.
+  const refundClosed = items.filter(i => i.state === 'refund_closed');
   const toPayCount = items.filter(i => (i.state === 'unpaid' || i.state === 'rejected' || i.state === 'refunded') && i.due_cents > 0).length;
 
   const docsReady = !!myDocs?.settings_ready;
@@ -513,6 +515,13 @@ export default function PayPage() {
                   <ItemList items={notCharged} selected={selected} onToggle={toggle} onReceipt={setReceiptKey} onRemove={onRemove} />
                 </section>
               )}
+              {refundClosed.length > 0 && (
+                <section aria-labelledby="gv-pay-refunded">
+                  <p className="gv-pay-sect" id="gv-pay-refunded">Refunded</p>
+                  <ItemList items={refundClosed} selected={selected} onToggle={toggle} onReceipt={setReceiptKey} onRemove={onRemove}
+                    onNotReceived={setNotReceived} onViewProof={(path) => { void viewProof(path); }} />
+                </section>
+              )}
               {docsReady && myDocs && (
                 <DocumentsSection
                   docs={myDocs.documents}
@@ -525,7 +534,7 @@ export default function PayPage() {
                 />
               )}
               {!(manual && started && started.payments.length > 0) && overview.payments.length === 0
-                && notCharged.length === 0 && !(docsReady && myDocs && myDocs.documents.length > 0) && (
+                && notCharged.length === 0 && refundClosed.length === 0 && !(docsReady && myDocs && myDocs.documents.length > 0) && (
                 <div className="gv-pay-card" style={{ textAlign: 'center', padding: '28px 20px' }}>
                   <p style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>No payments yet</p>
                 </div>
