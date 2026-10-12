@@ -540,6 +540,7 @@ answer shapes what we lead them with afterwards.
     created, deleted, `?stop=1` (`/conferences/new?draft=<token>&stop=1`, safe on GET,
     disallowed in robots), opted out, a failed address, or an account with reminders off. A
     typed name that looks like a link is replaced by "your conference". `?draft=` is noindex.
+- **The founders' thank-you (owner, 12 Oct 2026).** After Create conference the wizard lands on `/manage/[slug]?welcome=1`; `src/components/conferences/FoundersWelcome.tsx` (mounted on the dashboard) strips the flag with `replaceUrlInPlace`, shows ONCE per conference per browser (`localStorage gavelling-founders-welcome:<conference id>`) a pop-up with the cut-out photo of Peter and Christian rising out of its top edge (`public/founders/peter-christian.webp`), a short thank-you and Peter's personal number (+44 7478 115292: call, WhatsApp, Copy). Writes nothing. The same number is already in every organiser set-up email (`send-setup-nudges`, signature and body; Christian's on the day-7 email).
 - **Intent reorders, it never removes.** `intentRank` sorts the dashboard's *pending*
   checklist rows only. `doneCount`, the ring, the progress bar and `SetupCompletionNotices`
   all keep reading the full unfiltered checklist so they cannot disagree with it, and

@@ -1194,7 +1194,7 @@ export default function NewConferencePage() {
       // Created, intent and all. Straight to the dashboard — `submitting` stays
       // true through the navigation so the button cannot fire a second time
       // while the route loads.
-      router.push('/manage/' + slug);
+      router.push('/manage/' + slug + '?welcome=1');
     } catch (err) {
       setSubmitting(false);
       setError(friendlyError(err, 'Something went wrong. Please try again.'));

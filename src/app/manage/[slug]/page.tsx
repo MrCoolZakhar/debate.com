@@ -1,5 +1,6 @@
 'use client';
 
+import { FoundersWelcome } from '@/components/conferences/FoundersWelcome';
 import EmailIssuesNotice from '@/components/conferences/EmailIssuesNotice';
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { notifyOk } from '@/lib/appNotify';
@@ -1499,6 +1500,7 @@ export default function DashboardPage() {
       style={{ fontFamily: OUTFIT, isolation: 'isolate', overflowX: 'clip' }}
     >
       <style>{DASH_CSS}</style>
+      <FoundersWelcome conferenceId={conference.id} />
       {/* Decorative bleed: faded organiser glyphs off the dashboard edges,
           tucked behind the content (zIndex -1). */}
       <DecorativeBleed
