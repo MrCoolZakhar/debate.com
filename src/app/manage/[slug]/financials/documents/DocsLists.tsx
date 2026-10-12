@@ -9,6 +9,7 @@
 // with the label "Refund receipt".
 
 import { CreditCard, FileText, Landmark, ReceiptText, Search, Undo2 } from 'lucide-react';
+import GSelect from '@/components/GSelect';
 import { docShortDate, kindWord } from '@/components/money/moneyDocument';
 import { FOREST, INK_SOFT } from '../dashboardKit';
 import { KIND_NAME, KIND_ORDER, cents } from '../financialsApi';
@@ -39,16 +40,10 @@ export function PaymentFiltersBar({ f, onChange }: { f: PayFilters; onChange: (p
         <input type="search" value={f.q} placeholder="Name, delegation or number" aria-label="Search payments"
           onChange={e => onChange({ q: e.target.value })} />
       </label>
-      <select className="gv-inv-select" aria-label="How it was paid" value={f.how} onChange={e => onChange({ how: e.target.value as How })}>
-        <option value="">Every way of paying</option>
-        <option value="card">Card</option>
-        <option value="proof">Proof approved</option>
-        <option value="marked">Marked paid</option>
-      </select>
-      <select className="gv-inv-select" aria-label="Item type" value={f.kind} onChange={e => onChange({ kind: e.target.value })}>
-        <option value="">All item types</option>
-        {KIND_ORDER.map(k => <option key={k} value={k}>{KIND_NAME[k]}</option>)}
-      </select>
+      <GSelect<How> className="gv-inv-select" aria-label="How it was paid" value={f.how} onChange={v => onChange({ how: v })}
+        options={[{ value: '', label: 'Every way of paying' }, { value: 'card', label: 'Card' }, { value: 'proof', label: 'Proof approved' }, { value: 'marked', label: 'Marked paid' }]} />
+      <GSelect className="gv-inv-select" aria-label="Item type" value={f.kind} onChange={v => onChange({ kind: v })}
+        options={[{ value: '', label: 'All item types' }, ...KIND_ORDER.map(k => ({ value: k as string, label: KIND_NAME[k] }))]} />
     </div>
   );
 }

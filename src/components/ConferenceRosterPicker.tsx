@@ -14,6 +14,7 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { Globe, Users, PenLine, Megaphone, Info, ArrowDownAZ, X, ImagePlus, Replace, FolderInput, Plus, Check, GripVertical } from 'lucide-react';
 import Portal from '@/components/Portal';
+import GSelect from '@/components/GSelect';
 // One implementation of "where may a fixed layer be drawn" (keyboard-aware).
 import { viewBox, useReposition } from '@/lib/visualViewport';
 import { UN_COUNTRIES, getCountryByName, findCountryFlexible, countryMatchRank } from '@/lib/countries';
@@ -514,7 +515,6 @@ div:last-child > .gv-rs-row { border-bottom-color:transparent; }
 .gv-rs-art-x { outline:none; position:absolute; top:-7px; right:-8px; width:14px; height:14px; border-radius:999px; background:#8B2020; color:#FFFFFF; display:flex; align-items:center; justify-content:center; border:0; padding:0; cursor:pointer; opacity:0; transition:opacity 120ms; }
 .gv-rs-art:hover .gv-rs-art-x, .gv-rs-art-x:focus-visible { opacity:1; }
 .gv-rs-move { position:relative; }
-.gv-rs-move select { position:absolute; inset:0; width:100%; height:100%; opacity:0; cursor:pointer; }
 .gv-rs-pill { display:inline-flex; align-items:center; gap:5px; padding:3px 8px 3px 6px; border-radius:999px; border:1px solid #DDD4C0; background:#FFFDF8; cursor:pointer; font-family:var(--font-brand), sans-serif; font-size:10.5px; font-weight:700; color:#1C1410; line-height:1.3; white-space:nowrap; max-width:100%; }
 .gv-rs-pill:hover, .gv-rs-pill:focus-visible { border-color:#1B3828; outline:none; }
 .gv-rs-menu-btn { display:flex; align-items:center; gap:7px; width:100%; text-align:left; padding:7px 10px; border-radius:8px; border:0; background:transparent; cursor:pointer; font-family:var(--font-brand), sans-serif; font-size:12px; font-weight:600; color:#1C1410; }
@@ -1010,19 +1010,17 @@ export function ConferenceRosterSelected({
                 Group
               </button>
             )}
-            <select
+            <GSelect
               value=""
-              onChange={(e) => { applyPreset(e.target.value); e.target.value = ''; }}
+              onChange={(v) => applyPreset(v)}
               aria-label="Start from a preset"
               title="Append a parliament's groups"
-              className="focus:outline-none"
-              style={{ fontFamily: "var(--font-brand), sans-serif", fontSize: 10.5, fontWeight: 600, color: '#6E5F4E', border: '1px solid #DDD4C0', borderRadius: 999, padding: '3px 8px', backgroundColor: '#FAF8F3', cursor: 'pointer', maxWidth: 150 }}
-            >
-              <option value="">Start from a preset</option>
-              {PARLIAMENT_PRESETS.map((p) => (
-                <option key={p.key} value={p.key}>{p.label}</option>
-              ))}
-            </select>
+              placeholder="Start from a preset"
+              size="sm"
+              panelMinWidth={220}
+              style={{ fontFamily: "var(--font-brand), sans-serif", fontSize: 10.5, fontWeight: 600, color: '#6E5F4E', border: '1px solid #DDD4C0', borderRadius: 999, padding: '3px 8px', backgroundColor: '#FAF8F3', minHeight: 0, width: 'auto', maxWidth: 170 }}
+              options={PARLIAMENT_PRESETS.map((p) => ({ value: p.key, label: p.label }))}
+            />
           </div>
           {groups.length === 0 && (
             <p style={{ margin: 0, fontSize: 10.5, color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}>Add parties or benches, then drag seats under them.</p>
@@ -1199,17 +1197,17 @@ export function ConferenceRosterSelected({
                             )}
                             {/* Move to group: pointer/keyboard fallback for the drag. */}
                             {hasGroups && (
-                              <span className="gv-rs-ctl gv-rs-move" title="Move to a group">
-                                <FolderInput size={13} strokeWidth={1.75} />
-                                <select
-                                  aria-label={`Move ${row.name} to a group`}
-                                  value={row.groupId && groups.some((x) => x.id === row.groupId) ? row.groupId : ''}
-                                  onChange={(e) => setRowGroup(idx, e.target.value || null)}
-                                >
-                                  <option value="">Ungrouped</option>
-                                  {groups.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
-                                </select>
-                              </span>
+                              <GSelect
+                                bare
+                                className="gv-rs-ctl gv-rs-move"
+                                title="Move to a group"
+                                aria-label={`Move ${row.name} to a group`}
+                                value={row.groupId && groups.some((x) => x.id === row.groupId) ? row.groupId : ''}
+                                onChange={(v) => setRowGroup(idx, v || null)}
+                                triggerContent={<FolderInput size={13} strokeWidth={1.75} aria-hidden />}
+                                align="end"
+                                options={[{ value: '', label: 'Ungrouped' }, ...groups.map((x) => ({ value: x.id, label: x.name }))]}
+                              />
                             )}
                             {/* Rename: custom entries and all characters */}
                             {(isCustomName || isCharacter) && (

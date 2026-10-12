@@ -15,6 +15,7 @@ import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { useConfirmModal } from '@/components/ConfirmModal';
 import { CurrencyPicker } from '@/components/CurrencyPicker';
+import GSelect from '@/components/GSelect';
 import {
   NEU, NEU_GRADIENTS, OUTFIT, NeuCard, NeuButton, NeuIconDisc,
 } from '@/components/neu';
@@ -263,14 +264,13 @@ export default function AddonsSection({ conference, bare = false, renderStats }:
 
           <div className="lg:col-span-2">
             <label htmlFor="addon-target" style={fieldLabelStyle}>Offered to</label>
-            <select
+            <GSelect
               id="addon-target"
               value={appliesTo}
-              onChange={e => setAppliesTo(e.target.value)}
-              style={{ ...inputStyle, cursor: 'pointer' }}
-            >
-              {TARGET_OPTIONS.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
-            </select>
+              onChange={setAppliesTo}
+              style={inputStyle}
+              options={TARGET_OPTIONS}
+            />
           </div>
 
           <div className="flex items-end justify-end gap-3">

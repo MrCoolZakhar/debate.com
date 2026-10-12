@@ -3,7 +3,7 @@
 import { CircleFlag } from '@/components/CircleFlag';
 import { committeeLanguageFlag } from '@/lib/committeeLanguage';
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Plus, X, Copy, Check, Building2, CalendarClock, Clock, Trash2, ArrowDown, ArrowUp, ArrowUpDown, Send, LayoutGrid, LayoutList, Settings, UserRound, Languages, Radio } from 'lucide-react';
+import { Plus, X, Copy, Check, Building2, CalendarClock, Clock, Trash2, ArrowDown, ArrowUp, ArrowUpDown, Send, LayoutGrid, LayoutList, UserRound, Languages, Radio } from 'lucide-react';
 import { useManage } from '@/app/manage/[slug]/layout';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { useAuth } from '@/components/AuthProvider';
@@ -26,7 +26,8 @@ import { DifficultyTile } from '@/components/DifficultyTile';
 import { DatePicker } from '@/components/DatePicker';
 import { NEU, NEU_GRADIENTS, OUTFIT, NeuButton, NeuCard, NeuInset } from '@/components/neu';
 import { GoldWord } from '@/components/BrandHeading';
-import { BigSectionTabs, type BigSectionTab } from '../BigSectionTabs';
+import { CommitteeSettingsSheet, CommitteeSettingsButton } from './CommitteeSettingsSheet';
+import { replaceUrlInPlace } from '@/lib/replaceUrlInPlace';
 import ProfileLink from '@/components/ProfileLink';
 import Portal from '@/components/Portal';
 import { ChairCodeChip, loadOpenDaisChairCodes } from './ChairCodeChip';
@@ -1146,12 +1147,6 @@ function isInFuture(iso: string): boolean {
   return new Date(iso).getTime() > Date.now();
 }
 
-// The page's two sections as big cards (11 Oct 2026, owner: tabs were "too small").
-const COMMITTEE_TABS: BigSectionTab<'overview' | 'settings'>[] = [
-  { key: 'overview', label: 'Overview', sub: 'Every committee, its chairs and its room', emoji: 'Classical building', lucide: LayoutGrid, tone: 'gold' },
-  { key: 'settings', label: 'Settings', sub: 'When chairs and delegates get their codes', emoji: 'Gear', lucide: Settings, tone: 'green' },
-];
-
 export default function CommitteesPage() {
   const { conference } = useManage();
   const { session } = useAuth();
@@ -1176,7 +1171,20 @@ export default function CommitteesPage() {
   // Chair codes keyed by committee id, present ONLY for an open dais (ChairCodeChip.tsx).
   const [openDaisCodes, setOpenDaisCodes] = useState<Record<string, string>>({});
   const [deleteTarget, setDeleteTarget] = useState<CommitteeRow | null>(null);
-  const [activeTab, setActiveTab] = useState<'overview' | 'settings'>('overview');
+  // No Overview / Settings sections any more (owner, 12 Oct 2026): the page is
+  // the committees, and the settings open in a pop-up from the Settings button
+  // beside the filters. An old `?section=settings` / `?tab=settings` link opens
+  // the pop-up, and the parameter is then dropped from the address.
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const url = new URL(window.location.href);
+    const keys = ['section', 'tab'].filter(k => url.searchParams.get(k) === 'settings');
+    if (keys.length === 0) return;
+    void Promise.resolve().then(() => setSettingsOpen(true));
+    keys.forEach(k => url.searchParams.delete(k));
+    replaceUrlInPlace(url.pathname + url.search + url.hash);
+  }, []);
   // Cards (default) vs compact list view for the overview grid, remembered locally.
   const [view, setView] = useState<'cards' | 'list'>('cards');
   useEffect(() => {
@@ -2164,9 +2172,7 @@ export default function CommitteesPage() {
 
       {!loading && committees.length > 0 && (
         <>
-          {/* The two sections as big cards (shared organiser BigSectionTabs). */}
-          <BigSectionTabs tabs={COMMITTEE_TABS} value={activeTab} onChange={setActiveTab} label="Committees sections" />
-          <div className="flex items-center gap-2 mb-6 flex-wrap" style={{ marginTop: -10 }}>
+          <div className="flex items-center gap-2 mb-6 flex-wrap">
 
             {/* One press for every committee that has no room yet. Shown only
                 while at least one is codeless, because the page no longer
@@ -2206,12 +2212,12 @@ export default function CommitteesPage() {
           {/* Session release settings — neumorphic, matching Financials'
               settings tab: NEU surface card, gold uppercase eyebrows,
               inset wells for the time pickers, inset rows per committee. */}
-          {activeTab === 'settings' && releaseSettingsLoaded && (
-            <NeuCard style={{ padding: '26px 28px', marginBottom: 24 }}>
-              <h2 style={{ margin: 0, fontFamily: OUTFIT, fontWeight: 800, fontSize: 'clamp(26px, 2.6vw, 32px)', letterSpacing: '-0.02em', lineHeight: 1.1, color: NEU.ink }}>
-                Session Release
-              </h2>
-
+          {settingsOpen && (
+            <CommitteeSettingsSheet onClose={() => setSettingsOpen(false)}>
+              {!releaseSettingsLoaded ? (
+                <p className="mt-5" style={{ fontFamily: OUTFIT, fontSize: 14, color: NEU.inkSoft }}>Loading settings…</p>
+              ) : (
+              <>
               <div className="flex flex-col gap-4 mt-5">
                 <div className="flex items-center justify-between gap-3">
                   <span style={{ fontFamily: OUTFIT, fontSize: 16, color: NEU.ink, fontWeight: 700 }}>
@@ -2325,14 +2331,15 @@ export default function CommitteesPage() {
                   {sendingAllToParticipants ? 'Sending…' : 'Send all to participants'}
                 </NeuButton>
               </div>
-            </NeuCard>
+              </>
+              )}
+            </CommitteeSettingsSheet>
           )}
 
-          {activeTab === 'overview' && (
-          <>
-          {/* Sort bar + cards/list view toggle */}
+          {/* Sort bar + Settings + cards/list view toggle */}
           <div className="flex items-center justify-between gap-3 flex-wrap mb-5">
-            {committees.length > 1 ? (
+            <div className="flex items-center gap-2.5 flex-wrap">
+            {committees.length > 1 && (
               <div
                 className="inline-flex flex-wrap items-center gap-1.5 rounded-full px-2 py-1.5"
                 style={{
@@ -2347,7 +2354,9 @@ export default function CommitteesPage() {
                 <SortButton label="Name" dir={sortKey === 'name' ? sortDir : null} onClick={() => cycleSort('name')} />
                 <SortButton label="GA / Crisis" dir={sortKey === 'type' ? sortDir : null} onClick={() => cycleSort('type')} />
               </div>
-            ) : <span />}
+            )}
+            <CommitteeSettingsButton open={settingsOpen} onClick={() => setSettingsOpen(true)} />
+            </div>
             <ViewToggle value={view} onChange={changeView} />
           </div>
 
@@ -2838,8 +2847,6 @@ export default function CommitteesPage() {
               );
             })}
           </div>
-          )}
-          </>
           )}
         </>
       )}

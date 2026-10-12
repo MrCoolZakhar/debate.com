@@ -85,9 +85,11 @@ export default function PopoverLayer({
       const t = e.target as Node;
       if (anchorRef.current?.contains(t)) return;
       if (layerRef.current?.contains(t)) return;
+      // A dropdown (GSelect) opened from inside this layer is portaled elsewhere.
+      if ((t as Element).closest?.('[data-gsel-popover]')) return;
       onClose();
     };
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape' && !e.defaultPrevented) onClose(); };
     document.addEventListener('mousedown', onDown);
     document.addEventListener('keydown', onKey);
     return () => {

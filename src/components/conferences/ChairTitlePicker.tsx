@@ -2,10 +2,11 @@
 
 // Choosing a chair's display title (src/lib/chairTitles.ts). Two shapes:
 //  - ChairTitleChips: a small optional choice in an invite form.
-//  - ChairTitleSelect: a compact select beside a chair row in an editor.
+//  - ChairTitleSelect: a compact dropdown (GSelect) beside a chair row in an editor.
 // Titles are labels only; nothing here grants or checks a permission.
 
 import { CHAIR_TITLE_OPTIONS, type ChairTitle } from '@/lib/chairTitles';
+import GSelect from '@/components/GSelect';
 
 const FONT = "var(--font-brand), sans-serif";
 
@@ -61,26 +62,27 @@ export function ChairTitleSelect({
   label: string;
 }) {
   return (
-    <select
+    <GSelect<'' | ChairTitle>
       aria-label={label}
       title={label}
-      value={value ?? ''}
+      size="sm"
+      value={(value ?? '') as '' | ChairTitle}
       disabled={disabled}
-      onChange={e => onChange((e.target.value || null) as ChairTitle | null)}
-      onClick={e => e.stopPropagation()}
-      className="rounded-md px-1.5 py-1 text-[11px] font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F]"
+      onChange={v => onChange((v || null) as ChairTitle | null)}
+      options={CHAIR_TITLE_OPTIONS}
+      placeholder="No title"
+      panelMinWidth={170}
       style={{
         fontFamily: FONT,
+        fontSize: 11,
+        fontWeight: 600,
         color: value ? '#1B3828' : '#6B5F52',
         backgroundColor: 'rgba(237,231,216,0.5)',
         border: '1px solid #DDD4C0',
-        cursor: disabled ? 'default' : 'pointer',
-        maxWidth: 118,
+        borderRadius: 6,
+        width: 'auto',
+        maxWidth: 130,
       }}
-    >
-      {CHAIR_TITLE_OPTIONS.map(o => (
-        <option key={o.value || 'none'} value={o.value}>{o.label}</option>
-      ))}
-    </select>
+    />
   );
 }

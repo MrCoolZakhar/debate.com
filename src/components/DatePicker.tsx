@@ -8,6 +8,7 @@
 import { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { ChevronLeft, ChevronRight, CalendarDays, Clock, X as XIcon } from 'lucide-react';
 import Portal from '@/components/Portal';
+import GSelect from '@/components/GSelect';
 
 const OUTFIT = "var(--font-brand), sans-serif";
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
@@ -128,7 +129,7 @@ export function DatePicker({
   // tedious; a phone has no spinners, so the control was completely dead and
   // every mobile user entering a date of birth at sign-up was stuck.
   //
-  // A <select> cannot have an intermediate state, so it cannot reproduce that
+  // A dropdown cannot have an intermediate state, so it cannot reproduce that
   // class of bug, and it is one tap on touch instead of twenty on a spinner.
   // The range follows min/max when they are given (date of birth passes
   // max = today, so it offers a real birth-year span) and always includes the
@@ -205,6 +206,8 @@ export function DatePicker({
     function onDown(e: MouseEvent) {
       const t = e.target as Node;
       if (btnRef.current?.contains(t) || menuRef.current?.contains(t)) return;
+      // The month, year, hour and minute dropdowns (GSelect) portal their own panel.
+      if ((t as Element).closest?.('[data-gsel-popover]')) return;
       setOpen(false);
     }
     document.addEventListener('mousedown', onDown);
@@ -312,15 +315,14 @@ export function DatePicker({
             </button>
             {/* 16px selects: anything smaller makes iOS zoom the page on tap. */}
             <div className="flex items-center gap-2" style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 14, color: '#1C1410' }}>
-              <select value={view.getMonth()} onChange={(e) => setView(new Date(view.getFullYear(), Number(e.target.value), 1))}
-                className="focus:outline-none" style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 16, color: '#1C1410', background: 'transparent', border: 'none', cursor: 'pointer' }}>
-                {MONTHS.map((m, i) => <option key={m} value={i}>{m}</option>)}
-              </select>
-              <select value={view.getFullYear()} onChange={(e) => setView(new Date(Number(e.target.value), view.getMonth(), 1))}
-                aria-label="Year"
-                className="focus:outline-none" style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 16, color: '#1C1410', background: 'transparent', border: 'none', cursor: 'pointer', fontVariantNumeric: 'tabular-nums' }}>
-                {years.map((y) => <option key={y} value={y}>{y}</option>)}
-              </select>
+              <GSelect aria-label="Month" value={String(view.getMonth())} onChange={(v) => setView(new Date(view.getFullYear(), Number(v), 1))}
+                panelMinWidth={170}
+                style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 16, color: '#1C1410', background: 'transparent', border: 'none', width: 'auto', minHeight: 32, padding: '2px 4px 2px 6px' }}
+                options={MONTHS.map((m, i) => ({ value: String(i), label: m }))} />
+              <GSelect aria-label="Year" value={String(view.getFullYear())} onChange={(v) => setView(new Date(Number(v), view.getMonth(), 1))}
+                searchable={false} panelMinWidth={120}
+                style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 16, color: '#1C1410', background: 'transparent', border: 'none', width: 'auto', minHeight: 32, padding: '2px 4px 2px 6px', fontVariantNumeric: 'tabular-nums' }}
+                options={years.map((y) => ({ value: String(y), label: String(y) }))} />
             </div>
             <button type="button" onClick={() => setView(new Date(view.getFullYear(), view.getMonth() + 1, 1))}
               className="rounded-lg p-1.5 focus:outline-none" style={{ color: '#1B3828' }}
@@ -365,29 +367,29 @@ export function DatePicker({
             <div className="mt-3 pt-3" style={{ borderTop: '1px solid #DDD4C0' }}>
               <div className="flex items-center gap-2">
                 <Clock size={15} strokeWidth={2.2} style={{ color: '#B6871F', flexShrink: 0 }} />
-                <select
+                <GSelect
                   aria-label="Hour"
-                  value={hour}
-                  onChange={(e) => setTime(Number(e.target.value), minute)}
-                  className="focus:outline-none rounded-lg px-2 py-1.5"
-                  style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: 13, color: '#1C1410', backgroundColor: '#EDE7D8', border: '1px solid #DDD4C0', cursor: 'pointer', fontVariantNumeric: 'tabular-nums' }}
-                >
-                  {HOURS.map(h => <option key={h} value={h}>{pad2(h)}</option>)}
-                </select>
+                  value={String(hour)}
+                  onChange={(v) => setTime(Number(v), minute)}
+                  searchable={false}
+                  panelMinWidth={96}
+                  style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: 13, color: '#1C1410', backgroundColor: '#EDE7D8', border: '1px solid #DDD4C0', borderRadius: 8, width: 'auto', minHeight: 32, padding: '4px 6px 4px 8px', fontVariantNumeric: 'tabular-nums' }}
+                  options={HOURS.map(h => ({ value: String(h), label: pad2(h) }))}
+                />
                 <span style={{ fontFamily: OUTFIT, fontWeight: 800, color: '#9A8A78' }}>:</span>
-                <select
+                {/* A stored minute off the 5-minute grid (anything written
+                    before this control existed) gets its own option, so the
+                    dropdown never reads :00 while the field says :07. */}
+                <GSelect
                   aria-label="Minute"
-                  value={minute}
-                  onChange={(e) => setTime(hour, Number(e.target.value))}
-                  className="focus:outline-none rounded-lg px-2 py-1.5"
-                  style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: 13, color: '#1C1410', backgroundColor: '#EDE7D8', border: '1px solid #DDD4C0', cursor: 'pointer', fontVariantNumeric: 'tabular-nums' }}
-                >
-                  {/* A stored minute off the 5-minute grid (anything written
-                      before this control existed) gets its own option, so the
-                      dropdown never reads :00 while the field says :07. */}
-                  {(MINUTES.includes(minute) ? MINUTES : [...MINUTES, minute].sort((a, b) => a - b))
-                    .map(m => <option key={m} value={m}>{pad2(m)}</option>)}
-                </select>
+                  value={String(minute)}
+                  onChange={(v) => setTime(hour, Number(v))}
+                  searchable={false}
+                  panelMinWidth={96}
+                  style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: 13, color: '#1C1410', backgroundColor: '#EDE7D8', border: '1px solid #DDD4C0', borderRadius: 8, width: 'auto', minHeight: 32, padding: '4px 6px 4px 8px', fontVariantNumeric: 'tabular-nums' }}
+                  options={(MINUTES.includes(minute) ? MINUTES : [...MINUTES, minute].sort((a, b) => a - b))
+                    .map(m => ({ value: String(m), label: pad2(m) }))}
+                />
                 <button
                   type="button"
                   onClick={() => setOpen(false)}

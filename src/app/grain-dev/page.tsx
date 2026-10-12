@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import GSelect from '@/components/GSelect';
 
 const BLEND_MODES = ['screen', 'overlay', 'multiply', 'soft-light', 'hard-light', 'luminosity'] as const;
 type BlendMode = typeof BLEND_MODES[number];
@@ -176,13 +177,14 @@ export default function GrainDevPage() {
         {/* Blend mode */}
         <label className="flex items-center gap-2">
           <span>Blend</span>
-          <select
+          <GSelect<BlendMode>
+            aria-label="Blend"
+            size="sm"
             value={blendMode}
-            onChange={(e) => setBlendMode(e.target.value as BlendMode)}
-            className="bg-[#222] border border-[#444] rounded px-1.5 py-0.5 text-[#1C1410] text-xs"
-          >
-            {BLEND_MODES.map((b) => <option key={b} value={b}>{b}</option>)}
-          </select>
+            onChange={setBlendMode}
+            style={{ width: 'auto' }}
+            options={BLEND_MODES.map((b) => ({ value: b, label: b }))}
+          />
         </label>
 
         {/* Copy values */}

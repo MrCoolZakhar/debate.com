@@ -4,10 +4,9 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   X, Check, Sparkles, ChevronDown, ChevronUp, Award, Globe2, ArrowRight, GripVertical,
   MousePointerClick, Plus, Info, Layers, Gavel, UserRound, Users, Trash2, Repeat, MoreVertical,
-  CheckCircle2, Clock, Star, Mic, Compass,
+  CheckCircle2, Clock, Star,
 } from 'lucide-react';
 import { GoldWord } from '@/components/BrandHeading';
-import { BigSectionTabs, type BigSectionTab } from '../BigSectionTabs';
 import { createPortal } from 'react-dom';
 import { useManage } from '@/app/manage/[slug]/layout';
 import { getAuthedClient } from '@/lib/supabase-auth';
@@ -3520,13 +3519,12 @@ function mergeLocalMutations(
 
 // ── AssignmentPage ────────────────────────────────────────────────────────────
 
-const ASSIGNMENT_TABS: BigSectionTab<'delegates' | 'chairs' | 'delegations' | 'independents'>[] = [
-  { key: 'delegates', label: 'Delegates', sub: 'Seat each delegate in a committee', emoji: 'Bust in silhouette', lucide: UserRound, tone: 'gold' },
-  { key: 'chairs', label: 'Chairs', sub: 'Put chairs on each dais', emoji: 'Studio microphone', lucide: Mic, tone: 'green' },
-  { key: 'delegations', label: 'Delegations', sub: 'Schools and their seats', emoji: 'Busts in silhouette', lucide: Users, tone: 'gold' },
-  { key: 'independents', label: 'Independents', sub: 'Delegates with no delegation', emoji: 'Compass', lucide: Compass, tone: 'green' },
-];
-
+// No mode selector on the page (12 Oct 2026, owner: "remove the
+// delegates-chairs-delegations-independents completely"). The page opens on the
+// Delegates board. The other three views are still here and reachable ONLY by
+// link: ?mode=chairs (chairs are also managed on the Committees page),
+// ?mode=delegations[&delegation=<society id>] (Applications → Delegations →
+// "Open in Assignment") and ?mode=independents (no link points at it).
 export default function AssignmentPage() {
   const { conference, refreshConferenceQuiet } = useManage();
   const { session, loading: authLoading } = useAuth();
@@ -4801,10 +4799,6 @@ export default function AssignmentPage() {
           await turnOnDefaultEmail(supabase, conference.id, eventKey);
         }}
       />
-
-      {/* Mode: Delegates | Chairs | Delegations | Independents, as big cards
-          (11 Oct 2026, owner: the 11px pill row was "too small"). */}
-      <BigSectionTabs compact tabs={ASSIGNMENT_TABS} value={mode} onChange={setMode} label="What to assign" />
 
       {loading && (
         <div className="flex justify-center py-16">

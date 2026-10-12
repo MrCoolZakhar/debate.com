@@ -48,6 +48,7 @@ import { getAuthedClient } from '@/lib/supabase-auth';
 import { triggerEmailDelivery } from '@/lib/emailDelivery';
 import { Emoji3D, NEU, NEU_GRADIENTS, OUTFIT, EASE } from '@/components/neu';
 import { LogoDisc } from '@/components/LogoDisc';
+import GSelect from '@/components/GSelect';
 import { SOFT, AMBER_INK, GREEN_INK, RED, CARD_BORDER, CARD_SHADOW } from '@/app/manage/[slug]/live/tokens';
 import {
   buildParagraphDom, serializeParagraphDom, insertTextAtRange, insertPillAtRange,
@@ -2540,23 +2541,22 @@ function ButtonProperties({ block, onPatch, calendarUnavailable }: { block: Butt
         className="mb-4"
       />
       <FieldLabel>Where it goes</FieldLabel>
-      <select
-        value={block.destination}
-        onChange={e => onPatch({ destination: e.target.value as ButtonDestination })}
-        style={{ ...FIELD_STYLE, cursor: 'pointer' }}
-        className="mb-3"
-      >
-        {(Object.keys(BUTTON_DESTINATION_LABELS) as ButtonDestination[]).map(d => (
-          <option key={d} value={d}>{BUTTON_DESTINATION_LABELS[d]}</option>
-        ))}
-      </select>
+      <div className="mb-3">
+        <GSelect<ButtonDestination>
+          aria-label="Where it goes"
+          value={block.destination}
+          onChange={v => onPatch({ destination: v })}
+          style={FIELD_STYLE}
+          options={(Object.keys(BUTTON_DESTINATION_LABELS) as ButtonDestination[]).map(d => ({ value: d, label: BUTTON_DESTINATION_LABELS[d] }))}
+        />
+      </div>
       {block.destination === 'apply_page' && (
         <>
           <FieldLabel>Which role</FieldLabel>
-          <select value={block.role ?? ''} onChange={e => onPatch({ role: e.target.value || undefined })} style={{ ...FIELD_STYLE, cursor: 'pointer' }} className="mb-3">
-            <option value="">Any role</option>
-            {ROLE_OPTIONS.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
-          </select>
+          <div className="mb-3">
+            <GSelect aria-label="Which role" value={block.role ?? ''} onChange={v => onPatch({ role: (v || undefined) as typeof block.role })} style={FIELD_STYLE}
+              options={[{ value: '', label: 'Any role' }, ...ROLE_OPTIONS.map(r => ({ value: r.value as string, label: r.label }))]} />
+          </div>
         </>
       )}
       {block.destination === 'custom' && (

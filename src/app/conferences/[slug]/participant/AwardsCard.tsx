@@ -12,6 +12,7 @@ import { ChevronDown, ChevronUp, Clock, Sparkles, Send, Undo2, Lock, Megaphone, 
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { FlagImg } from '@/components/FlagImg';
+import GSelect from '@/components/GSelect';
 import Loader from '@/components/Loader';
 import { getCountryByName } from '@/lib/countries';
 import { supabase as anonSupabase } from '@/lib/supabase';
@@ -699,25 +700,25 @@ export default function AwardsCard({ conferenceId, conferenceSlug, committee, co
 
                     {editable ? (
                       <div className="flex flex-col sm:flex-row gap-2 mt-2">
-                        <select
+                        <GSelect
+                          aria-label="Delegation"
                           value={existing?.country_code ?? ''}
                           disabled={busy}
-                          onChange={e => chooseDelegation(slot, i, existing, e.target.value)}
-                          className="focus:outline-none"
+                          onChange={v => chooseDelegation(slot, i, existing, v)}
                           style={{
                             flex: '0 0 auto', minWidth: 0, width: '100%', maxWidth: 280,
                             padding: '8px 10px', borderRadius: 10, border: '1px solid #DDD4C0',
-                            backgroundColor: '#FFFFFF', fontFamily: OUTFIT, fontSize: 12.5, color: existing ? '#1C1410' : '#9A8A78',
+                            backgroundColor: '#FFFFFF', fontFamily: OUTFIT, fontSize: 12.5, color: existing ? '#1C1410' : '#5B4F42',
                             opacity: busy ? 0.6 : 1,
                           }}
-                        >
-                          <option value="">Choose a delegation</option>
-                          {delegations.map(d => (
-                            <option key={d.code} value={d.code} disabled={takenElsewhere.has(d.code)}>
-                              {d.name}{d.recipientName ? ` · ${d.recipientName}` : ''}
-                            </option>
-                          ))}
-                        </select>
+                          searchPlaceholder="Search delegations"
+                          options={[{ value: '', label: 'Choose a delegation' }, ...delegations.map(d => ({
+                            value: d.code,
+                            label: d.name,
+                            hint: d.recipientName || undefined,
+                            disabled: takenElsewhere.has(d.code),
+                          }))]}
+                        />
                         <input
                           type="text"
                           defaultValue={existing?.rationale ?? ''}

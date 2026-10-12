@@ -2,6 +2,7 @@
 
 import { type FormBlock, type CustomQuestion, type CustomAnswers, type CustomAnswerValue, usableOptions } from '@/lib/customQuestions';
 import { DatePicker } from '@/components/DatePicker';
+import GSelect from '@/components/GSelect';
 import { NEU } from '@/components/neu';
 
 // Correctness floor shared by every input this component renders:
@@ -147,19 +148,15 @@ export default function CustomQuestionsField({ blocks, answers, onChange, missin
             )}
 
             {q.type === 'dropdown' && (
-              <select
+              <GSelect
                 value={(value as string) ?? ''}
-                onChange={(e) => setAnswer(q.id, e.target.value)}
-                className="focus:outline-none"
+                onChange={(v) => setAnswer(q.id, v)}
+                aria-label={q.label}
+                invalid={hasError}
                 style={{ ...inputStyle, ...errorStyle(hasError) }}
-                onFocus={(e) => { e.currentTarget.style.borderColor = INPUT_BORDER_FOCUS; }}
-                onBlur={(e) => { e.currentTarget.style.borderColor = hasError ? INPUT_BORDER_ERROR : INPUT_BORDER; }}
-              >
-                <option value="">Select an option…</option>
-                {options.map(opt => (
-                  <option key={opt} value={opt}>{opt}</option>
-                ))}
-              </select>
+                placeholder="Select an option"
+                options={[{ value: '', label: 'Select an option' }, ...options.map(opt => ({ value: opt, label: opt }))]}
+              />
             )}
 
             {q.type === 'multiple_choice' && (

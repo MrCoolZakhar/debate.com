@@ -18,6 +18,7 @@ import {
   Check, CheckCircle2, Download, FileSpreadsheet, Loader2, MinusCircle, Pencil, Upload as UploadIcon, XCircle, AlertTriangle,
 } from 'lucide-react';
 import { CircleFlag } from '@/components/CircleFlag';
+import GSelect from '@/components/GSelect';
 import type { ClassifiedImportRow, CommitteeLite, ImportableRole, ParsedImportRow } from '@/lib/applicantImport';
 
 export const OUTFIT = "var(--font-brand), sans-serif";
@@ -162,8 +163,8 @@ export const IMPORT_CSS = `
 }
 .gv-imp-fix{display:flex;flex-wrap:wrap;align-items:flex-end;gap:10px;margin-top:8px;padding:12px;border-radius:14px;background:#F7F4EC}
 .gv-imp-field{display:flex;flex-direction:column;gap:4px;flex:1 1 180px;min-width:0;font-size:14px;font-weight:600;color:${INK_SOFT}}
-.gv-imp-field input,.gv-imp-field select{min-height:44px;padding:0 12px;border-radius:10px;border:1.5px solid #DDD4C0;background:#FFFFFF;font-family:${OUTFIT};font-size:16px;color:${INK};width:100%;min-width:0}
-.gv-imp-field input:focus,.gv-imp-field select:focus{outline:none;border-color:${FOREST}}
+.gv-imp-field input,.gv-imp-field select,.gv-imp-field .gv-gsel{min-height:44px;padding:0 12px;border-radius:10px;border:1.5px solid #DDD4C0;background:#FFFFFF;font-family:${OUTFIT};font-size:16px;color:${INK};width:100%;min-width:0}
+.gv-imp-field input:focus,.gv-imp-field select:focus,.gv-imp-field .gv-gsel:focus-visible,.gv-imp-field .gv-gsel[aria-expanded="true"]{outline:none;border-color:${FOREST}}
 .gv-imp-bar{position:sticky;bottom:8px;z-index:5;margin-top:16px;padding:12px 16px;padding-bottom:max(12px,env(safe-area-inset-bottom));border-radius:18px;background:#FFFFFF;border:1px solid rgba(27,56,40,0.08);box-shadow:0 -2px 10px rgba(27,56,40,0.05),0 12px 30px rgba(27,56,40,0.14)}
 .gv-imp-bar-row{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px 16px}
 .gv-imp-actions{display:flex;flex-wrap:wrap;gap:10px;justify-content:flex-end}
@@ -357,39 +358,26 @@ function ImportRowItem({ row, mark, word, reason, committees, onFix }: {
           )}
           {fields.includes('role') && (
             <label className="gv-imp-field" style={{ flexBasis: 160 }}>Role
-              <select value={ROLE_CHOICES.some(o => o.value === draft.role.trim().toLowerCase()) ? draft.role.trim().toLowerCase() : ''} onChange={e => setDraft({ ...draft, role: e.target.value })}>
-                <option value="" disabled>Choose a role</option>
-                {ROLE_CHOICES.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-              </select>
+              <GSelect value={ROLE_CHOICES.some(o => o.value === draft.role.trim().toLowerCase()) ? draft.role.trim().toLowerCase() : ''} onChange={v => setDraft({ ...draft, role: v })}
+                placeholder="Choose a role" options={ROLE_CHOICES.map(o => ({ value: o.value as string, label: o.label }))} />
             </label>
           )}
           {fields.includes('payment') && (
             <label className="gv-imp-field" style={{ flexBasis: 140 }}>Payment
-              <select value={['paid', 'unpaid', 'waived'].includes(draft.payment.trim().toLowerCase()) ? draft.payment.trim().toLowerCase() : 'unpaid'} onChange={e => setDraft({ ...draft, payment: e.target.value })}>
-                <option value="unpaid">Unpaid</option>
-                <option value="paid">Paid</option>
-                <option value="waived">Waived</option>
-              </select>
+              <GSelect value={['paid', 'unpaid', 'waived'].includes(draft.payment.trim().toLowerCase()) ? draft.payment.trim().toLowerCase() : 'unpaid'} onChange={v => setDraft({ ...draft, payment: v })}
+                options={[{ value: 'unpaid', label: 'Unpaid' }, { value: 'paid', label: 'Paid' }, { value: 'waived', label: 'Waived' }]} />
             </label>
           )}
           {fields.includes('committee') && (
             <label className="gv-imp-field">Committee
-              <select value={draft.committee} onChange={e => setDraft({ ...draft, committee: e.target.value })}>
-                <option value="">No committee (no seat)</option>
-                {committees.map(c => {
-                  const v = c.abbreviation ?? c.name;
-                  return <option key={c.id} value={v}>{c.abbreviation ? `${c.abbreviation} (${c.name})` : c.name}</option>;
-                })}
-              </select>
+              <GSelect value={draft.committee} onChange={v => setDraft({ ...draft, committee: v })} searchPlaceholder="Search committees"
+                options={[{ value: '', label: 'No committee (no seat)' }, ...committees.map(c => ({ value: c.abbreviation ?? c.name, label: c.abbreviation ?? c.name, hint: c.abbreviation ? c.name : undefined }))]} />
             </label>
           )}
           {fields.includes('seat') && (
             <label className="gv-imp-field" style={{ flexBasis: 120 }}>Seat
-              <select value={['1', '2'].includes(draft.seat.trim()) ? draft.seat.trim() : ''} onChange={e => setDraft({ ...draft, seat: e.target.value })}>
-                <option value="">Next free</option>
-                <option value="1">1</option>
-                <option value="2">2</option>
-              </select>
+              <GSelect value={['1', '2'].includes(draft.seat.trim()) ? draft.seat.trim() : ''} onChange={v => setDraft({ ...draft, seat: v })}
+                options={[{ value: '', label: 'Next free' }, { value: '1', label: '1' }, { value: '2', label: '2' }]} />
             </label>
           )}
           <div className="flex gap-2" style={{ flex: '0 0 auto' }}>

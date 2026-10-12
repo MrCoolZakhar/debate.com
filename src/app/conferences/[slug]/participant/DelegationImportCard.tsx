@@ -25,6 +25,7 @@ import {
   BadgeCheck, ClipboardPaste, Mail, Plus, RotateCcw, Undo2, UserCheck, UserX, X,
 } from 'lucide-react';
 import { getFreshAuthedClient } from '@/lib/supabase-auth';
+import GSelect from '@/components/GSelect';
 import { refreshCreditsEverywhere } from '@/hooks/useCredits';
 import { openCreditsPopup } from '@/lib/purchasePopup';
 import { leaderImportsArePaid } from '@/app/manage/[slug]/import/importQuote';
@@ -597,17 +598,14 @@ export default function DelegationImportCard({
                     style={inputStyle(!!err)}
                   />
                   {showRolePicker && (
-                    <select
+                    <GSelect
                       value={r.role}
-                      onChange={e => edit(r.key, 'role', e.target.value)}
+                      onChange={v => edit(r.key, 'role', v)}
                       aria-label={`Person ${i + 1} role`}
                       className={FOCUS}
-                      style={{ ...inputStyle(false), paddingRight: 8, cursor: 'pointer' }}
-                    >
-                      {roleChoices.map(role => (
-                        <option key={role} value={role}>{IMPORT_ROLE_LABEL[role]}</option>
-                      ))}
-                    </select>
+                      style={{ ...inputStyle(false), paddingRight: 8 }}
+                      options={roleChoices.map(role => ({ value: role as string, label: IMPORT_ROLE_LABEL[role] }))}
+                    />
                   )}
                 </div>
                 <button

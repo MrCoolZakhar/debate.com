@@ -25,6 +25,7 @@ import {
 import type { Conference } from '@/app/manage/[slug]/layout';
 import { PurchaseShell, PURCHASE_CSS } from '@/components/purchase/purchaseKit';
 import { FlagImg } from '@/components/FlagImg';
+import GSelect from '@/components/GSelect';
 import { UN_COUNTRIES, getCountryByName } from '@/lib/countries';
 import { isStripeCountrySupported } from '@/lib/payments';
 import { SUPABASE_URL } from '@/lib/supabase';
@@ -60,7 +61,7 @@ export const FLOW_CSS = `
 .gv-pf-input{width:100%;height:50px;padding:0 14px;border-radius:12px;border:1.5px solid rgba(27,56,40,0.28);background:#FFFFFF;color:#1C1410;font-family:inherit;font-size:15.5px}
 .gv-pf-input:focus{outline:none;border-color:#1B3828;box-shadow:0 0 0 3px rgba(27,56,40,0.12)}
 .gv-pf-input[aria-invalid="true"]{border-color:#8B2020}
-.gv-pf-select{appearance:auto;cursor:pointer}
+.gv-pf-select{cursor:pointer;flex:1 1 auto;min-width:0}
 .gv-pf-grid{display:grid;grid-template-columns:minmax(0,1fr);gap:14px}
 @media (min-width:640px){.gv-pf-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 .gv-pf-qr{width:180px;height:180px;border-radius:14px;background:#FFFFFF;object-fit:contain;box-shadow:inset 0 0 0 1.5px rgba(27,56,40,0.12)}
@@ -274,11 +275,10 @@ export default function PaymentFlow({ conference, mode, startStep, readOnly, onC
         <label className="gv-fd-label" htmlFor="gv-pf-country">Country</label>
         <div className="flex items-center gap-3">
           {country && <FlagImg code={country} size={24} />}
-          <select id="gv-pf-country" className="gv-pf-input gv-pf-select" value={country} disabled={readOnly} aria-invalid={!!errs.country}
-            onChange={e => { setCountry(e.target.value); setErrs(x => ({ ...x, country: undefined })); }}>
-            <option value="">Choose a country</option>
-            {countries.map(c => <option key={c.code} value={c.code}>{c.name}</option>)}
-          </select>
+          <GSelect id="gv-pf-country" className="gv-pf-input gv-pf-select" value={country} disabled={readOnly} invalid={!!errs.country}
+            onChange={v => { setCountry(v); setErrs(x => ({ ...x, country: undefined })); }}
+            placeholder="Choose a country" searchPlaceholder="Search countries"
+            options={countries.map(c => ({ value: c.code, label: c.name }))} />
         </div>
         {fieldErr('country')}
         <p className="gv-fd-note" style={{ marginTop: 10 }}>This decides which ways to pay you can offer</p>

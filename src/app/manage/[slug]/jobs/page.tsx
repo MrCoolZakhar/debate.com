@@ -17,6 +17,7 @@ const JOB_BOARD_LIVE = false as boolean;
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { useAuth } from '@/components/AuthProvider';
 import Portal from '@/components/Portal';
+import GSelect from '@/components/GSelect';
 import ProfileLink from '@/components/ProfileLink';
 import { useScrollLock } from '@/hooks/useScrollLock';
 import { notifyErr, clearErr } from '@/lib/appNotify';
@@ -568,16 +569,14 @@ function PostingModal({
           {/* Committee */}
           <div>
             <label style={labelStyle}>COMMITTEE (OPTIONAL)</label>
-            <select
+            <GSelect
+              aria-label="Committee"
               value={committeeId}
-              onChange={e => setCommitteeId(e.target.value)}
-              style={{ ...inputStyle, appearance: 'none' }}
-            >
-              <option value="">Not committee-specific</option>
-              {committees.map(c => (
-                <option key={c.id} value={c.id}>{c.name}</option>
-              ))}
-            </select>
+              onChange={setCommitteeId}
+              style={inputStyle}
+              searchPlaceholder="Search committees"
+              options={[{ value: '', label: 'Not committee-specific' }, ...committees.map(c => ({ value: c.id, label: c.name }))]}
+            />
           </div>
 
           {/* Description */}

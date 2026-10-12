@@ -26,6 +26,7 @@ import { UN_COUNTRIES, getCountryByName, getFlagUrl, countryMatchRank } from '@/
 import { CONFERENCE_COMMITTEE_PRESETS } from '@/components/ConferenceRosterPicker';
 import { LogoDisc } from '@/components/LogoDisc';
 import Portal from '@/components/Portal';
+import GSelect from '@/components/GSelect';
 import { friendlyError } from '@/lib/friendlyError';
 import { viewBox, useReposition } from '@/lib/visualViewport';
 import {
@@ -369,39 +370,30 @@ function MonthYearPicker({ value, onChange }: { value: string; onChange: (isoDat
 
   const selectStyle: React.CSSProperties = {
     ...inputStyle,
-    appearance: 'none',
-    WebkitAppearance: 'none',
-    MozAppearance: 'none',
-    backgroundImage: 'url("data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'12\' height=\'12\' viewBox=\'0 0 24 24\' fill=\'none\' stroke=\'%239A8A78\' stroke-width=\'2.4\' stroke-linecap=\'round\' stroke-linejoin=\'round\'><polyline points=\'6 9 12 15 18 9\'/></svg>")',
-    backgroundRepeat: 'no-repeat',
-    backgroundPosition: 'right 14px center',
-    cursor: 'pointer',
+    width: '100%',
+    borderRadius: 12,
+    padding: '12px 14px 12px 16px',
   };
 
   return (
     <div className="grid grid-cols-2 gap-2.5">
-      <select
-        value={selMonth}
-        onChange={(e) => emit(Number(e.target.value), selYear >= 0 ? selYear : currentYear)}
-        className="w-full rounded-xl px-4 py-3 text-base sm:text-sm focus:outline-none"
+      <GSelect
+        aria-label="Month"
+        value={String(selMonth)}
+        onChange={(v) => emit(Number(v), selYear >= 0 ? selYear : currentYear)}
+        className="text-base sm:text-sm"
         style={selectStyle}
-        onFocus={(e) => { e.currentTarget.style.borderColor = '#1B3828'; }}
-        onBlur={(e) => { e.currentTarget.style.borderColor = '#DDD4C0'; }}
-      >
-        <option value={-1}>Month</option>
-        {MONTHS.map((m, i) => <option key={m} value={i}>{m}</option>)}
-      </select>
-      <select
-        value={selYear}
-        onChange={(e) => emit(selMonth >= 0 ? selMonth : 0, Number(e.target.value))}
-        className="w-full rounded-xl px-4 py-3 text-base sm:text-sm focus:outline-none"
+        options={[{ value: '-1', label: 'Month' }, ...MONTHS.map((m, i) => ({ value: String(i), label: m }))]}
+      />
+      <GSelect
+        aria-label="Year"
+        value={String(selYear)}
+        onChange={(v) => emit(selMonth >= 0 ? selMonth : 0, Number(v))}
+        className="text-base sm:text-sm"
         style={selectStyle}
-        onFocus={(e) => { e.currentTarget.style.borderColor = '#1B3828'; }}
-        onBlur={(e) => { e.currentTarget.style.borderColor = '#DDD4C0'; }}
-      >
-        <option value={-1}>Year</option>
-        {years.map((y) => <option key={y} value={y}>{y}</option>)}
-      </select>
+        searchable={false}
+        options={[{ value: '-1', label: 'Year' }, ...years.map((y) => ({ value: String(y), label: String(y) }))]}
+      />
     </div>
   );
 }
