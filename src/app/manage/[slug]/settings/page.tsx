@@ -6,15 +6,14 @@ import {
   Building2, X, Lock, Copy, Check,
   Plus, Crown, Mail as MailIcon, ChevronDown, Info, ArrowLeft,
   Settings2, Globe, Eye, EyeOff, ArrowUp, ArrowDown, Trash2, Briefcase,
-  ClipboardList, CreditCard, Megaphone, Star, CheckCircle2, Clock, Users2, Trophy,
-  ChevronRight as ChevronRightIcon, CalendarDays, FileText, Palette, Handshake, Compass, History, Search,
+  CreditCard, Star, CheckCircle2, Clock, Users2,
+  ChevronRight as ChevronRightIcon, CalendarDays, FileText, Palette, Handshake, History, Search,
   School, ReceiptText, Gift, Ticket, HandHeart, type LucideIcon,
 } from 'lucide-react';
 import { useManage, type Conference } from '@/app/manage/[slug]/layout';
 
 import { getAuthedClient, getFreshAuthedClient } from '@/lib/supabase-auth';
 import { useAuth } from '@/components/AuthProvider';
-import { UN_COUNTRIES } from '@/lib/countries';
 import { Pill } from '@/app/account/accountUi';
 import { useConfirmModal, ConfirmModal } from '@/components/ConfirmModal';
 import Portal from '@/components/Portal';
@@ -50,7 +49,6 @@ import { conferencePaymentsReady, paymentGateBlocks, paymentGateMessage } from '
 import { friendlyError, constraintMessage } from '@/lib/friendlyError';
 import { normaliseRoleTimeline, linkNeighbourPhase } from '@/lib/roleTimeline';
 import { useConferenceTimezone, timelineNotice } from './timelineUi';
-import { INTENT_OPTIONS, getConferenceIntent, intentPayload } from '@/lib/conferenceIntent';
 import ProfileLink from '@/components/ProfileLink';
 import { useNow } from '@/lib/useNow';
 import { ConferencePreview, type SettingsSnapshot } from './settingsHome';
@@ -58,6 +56,7 @@ import { ApplicationsSection } from './controlPanel';
 import { RoleSheet } from './roleSetup';
 import { GENERAL_CSS, IdentityBanner, IdentityLogo, IdField, PlainField, NameField } from './generalUi';
 import { SettingsShell, type ShellSection } from './settingsShell';
+import { CountryPicker } from './countryPicker';
 import {
   SectionHead, Group, Row, SwitchRow, BigCount, Switch as KitSwitch, TINT_GOLD_BG, TINT_GREEN_BG, EmojiDisc,
   listedRoles, generalAnswer, inGeneralScope, GENERAL_FIELDS, type RoleSetupConfig,
@@ -231,19 +230,6 @@ function saveFailMessage(error?: { message: string } | null): string {
 // Exactly one plausible address, no spaces or pipes — catches the "a@x.com |
 // b@y.com" case that silently broke reply-to on every email this conference sent.
 const CONTACT_EMAIL_PATTERN = /^[^\s@|]+@[^\s@|]+\.[^\s@|]+$/;
-
-// Lucide stand-in per intent option, so a row can never be left with an empty
-// icon well when a Fluent asset does not resolve. Same net the creation wizard
-// keeps: the Fluent names in INTENT_OPTIONS are hand-written strings with no
-// compile-time check.
-const INTENT_FALLBACK_ICONS: Record<string, LucideIcon> = {
-  applications: ClipboardList,
-  payments: CreditCard,
-  committees: Building2,
-  emails: MailIcon,
-  chairs: Globe,
-  marketing: Megaphone,
-};
 
 const inputStyle: React.CSSProperties = {
   backgroundColor: '#FAF8F3',
@@ -555,13 +541,6 @@ export default function SettingsPage() {
   const [expectedDelegates, setExpectedDelegates] = useState('');
   const [detailsSaved, setDetailsSaved] = useState(false);
 
-  // What the organiser said they use Gavelling for (`conferences.intent`),
-  // asked once at the end of the creation wizard and editable here. It sorts
-  // the dashboard's pending priority rows and nothing else — see
-  // src/lib/conferenceIntent.ts. Held as the key array only; the rest of the
-  // payload shape is intentPayload's business.
-  const [intentKeys, setIntentKeys] = useState<string[]>([]);
-  const [intentSaved, setIntentSaved] = useState(false);
 
   // Age range (Applications → General). min_age has existed since launch;
   // max_age is its other half, and both are measured on the start date.
@@ -619,28 +598,14 @@ export default function SettingsPage() {
     const t = setTimeout(() => setHighlightPulse(false), 2600);
     return () => clearTimeout(t);
   }, [highlightOrgId, activeTab, organizers]);
-  // ── Intent deep link, from the dashboard's ordering aside ─────────────────
-  // ?tab=conference&focus=intent scrolls the "What you use Gavelling for" card
-  // into view and rings it once. Same shape as the team highlight above: the
-  // Conference tab is long, and a link that only lands at the top of it would
-  // read as a dead end.
+  // ?focus= opens General; ?focus=dates rings the dates (below). An old
+  // ?focus=intent link (the card it pointed at left Settings on 12 Oct 2026)
+  // simply lands on General.
   const focusParam = searchParams.get('focus');
-  const [intentPulse, setIntentPulse] = useState(false);
-  const intentFocusedRef = useRef(false);
-  useEffect(() => {
-    if (focusParam !== 'intent' || activeTab !== 'conference' || intentFocusedRef.current) return;
-    const el = document.getElementById('intent-card');
-    if (!el) return;
-    intentFocusedRef.current = true;
-    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    setIntentPulse(true);
-    const t = setTimeout(() => setIntentPulse(false), 2600);
-    return () => clearTimeout(t);
-  }, [focusParam, activeTab, conference]);
   // ── Dates deep link, from the dashboard's publish gate and setup checklist ─
   // ?tab=conference&focus=dates scrolls the date fields into view and rings
-  // them once, same shape as the intent deep link above. Reuses focusParam,
-  // declared there — never a second copy of the same query read.
+  // them once. Reuses focusParam, declared above: never a second copy of the
+  // same query read.
   const [datesPulse, setDatesPulse] = useState(false);
   const datesFocusedRef = useRef(false);
   useEffect(() => {
@@ -794,7 +759,6 @@ export default function SettingsPage() {
   // zero-row writes reporting false success.
   const [visualSaving, setVisualSaving] = useState(false);
   const [detailsSaving, setDetailsSaving] = useState(false);
-  const [intentSaving, setIntentSaving] = useState(false);
   const [minAgeSaving, setMinAgeSaving] = useState(false);
   const [swapModeSaving, setSwapModeSaving] = useState(false);
   const [publicToggleSaving, setPublicToggleSaving] = useState(false);
@@ -847,7 +811,6 @@ export default function SettingsPage() {
   const detailsBaseline = useRef<string | null>(null);
   const visualBaseline = useRef<string | null>(null);
   const minAgeBaseline = useRef<string | null>(null);
-  const intentBaseline = useRef<string | null>(null);
   const detailsSnap = () => snap({ fullName, acronym, description, studentLevel, startDate, endDate, datesTbd, country, city, format, expectedDelegates });
 
   // ── The name and the acronym MINT THE URL ─────────────────────────────────
@@ -882,7 +845,6 @@ export default function SettingsPage() {
   }, []);
   const visualSnap = () => snap({ contactEmail, instagramUrl, facebookUrl, tiktokUrl, whatsappUrl, websiteUrl });
   const minAgeSnap = () => snap({ minAge, maxAge });
-  const intentSnap = () => snap({ intentKeys });
 
   // Stale-response guards: each loader bumps its counter at call start and
   // bails after every await if a newer call has started since.
@@ -1123,9 +1085,6 @@ export default function SettingsPage() {
     // Read defensively through the shared contract, which drops any key that
     // is not one of the six — a stored value can never put an unknown option
     // on screen or into the next write.
-    const hydratedIntent = getConferenceIntent(conference.intent).keys;
-    setIntentKeys(hydratedIntent);
-    intentBaseline.current = snap({ intentKeys: hydratedIntent });
   }, [conference?.id, loadRoleConfigs, loadRolesWithApplications, loadOrganizers, loadPendingInvites, loadLineage, loadPartners, loadIncomingPartnerClaims]);
 
   // The three public-page visibility switches aren't part of the Conference
@@ -2788,50 +2747,6 @@ export default function SettingsPage() {
     setTimeout(() => setDetailsSaved(false), 2500);
   }
 
-  /**
-   * Writes `conferences.intent`. The payload shape belongs to intentPayload,
-   * which sets `skipped: true` for an empty array — deliberate and preserved
-   * here: clearing every option means "do not reorder my dashboard", which is
-   * a different thing from a conference that was never asked (`intent = '{}'`,
-   * every conference created before the question shipped).
-   */
-  async function handleSaveIntent() {
-    if (!conference || intentSaving) return;
-    setIntentSaving(true);
-    const supabase = await getFreshAuthedClient();
-    if (!supabase) {
-      setIntentSaving(false);
-      notifyErr('Your session has expired, please refresh and sign in again.', 'settings-intent');
-      return;
-    }
-    const { data, error } = await supabase.from('conferences')
-      .update({ intent: intentPayload(intentKeys) })
-      .eq('id', conference.id).select('id');
-    if (error || !data || data.length !== 1) {
-      setIntentSaving(false);
-      notifyErr(saveFailMessage(error), 'settings-intent');
-      return;
-    }
-    await refreshConferenceQuiet();
-    intentBaseline.current = intentSnap();
-    setIntentSaving(false);
-    setIntentSaved(true);
-    setTimeout(() => setIntentSaved(false), 2500);
-  }
-
-  /** Toggle one option, rebuilt in INTENT_OPTIONS order so the stored array is
-   *  canonical and re-picking an option cannot produce a different-looking
-   *  snapshot of the same answer. Order carries no meaning downstream —
-   *  intentRank folds the keys into a Set. */
-  function toggleIntent(key: string) {
-    setIntentKeys(prev => {
-      const next = new Set(prev);
-      if (next.has(key)) next.delete(key); else next.add(key);
-      return INTENT_OPTIONS.filter(o => next.has(o.key)).map(o => o.key);
-    });
-    clearErr('settings-intent');
-  }
-
   // Debounced autosave for the three manual-input sections above: bail while
   // unhydrated (baseline still null) or a save is already in flight, bail if
   // nothing actually changed since the baseline, else save after 800ms of
@@ -2864,17 +2779,6 @@ export default function SettingsPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fullName, acronym, description, studentLevel, startDate, endDate, datesTbd, country, city, format, expectedDelegates, detailsSaving, conference, identityBlurs]);
 
-  // Same debounced autosave as the three above. 800ms of quiet also means a
-  // burst of toggles (picking four of the six is one thought, not four) lands
-  // as a single write rather than four.
-  useEffect(() => {
-    if (!conference || intentBaseline.current === null || intentSaving) return;
-    if (intentSnap() === intentBaseline.current) return;
-    const t = setTimeout(() => { void handleSaveIntent(); }, 800);
-    return () => clearTimeout(t);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [intentKeys, intentSaving, conference]);
-
   if (!conference) return null;
 
   // Alias kept for the render code below, which reads every conference field
@@ -2882,8 +2786,6 @@ export default function SettingsPage() {
   // `conference` only changes once refreshConferenceQuiet() confirms a write.
   const view: Conference = conference;
 
-  /** A field in a settings row: white, 16px so iOS never zooms. */
-  const FIELD: React.CSSProperties = { ...inputStyle, fontSize: 16, backgroundColor: '#FFFFFF', padding: '9px 12px' };
 
 
 
@@ -3042,11 +2944,17 @@ export default function SettingsPage() {
   ) : null;
 
   const extraListed = sheetRole && !addedRoles.includes(sheetRole) ? [...addedRoles, sheetRole] : addedRoles;
-  const shellTitle = <>Settings · {conferenceAcronymLabel(view) || view.full_name}</>;
+  const shellName = <>{conferenceAcronymLabel(view) || view.full_name}{view.acronym && view.full_name ? <> · {view.full_name}</> : null}</>;
+  // With the tabs across the top the sections have the full width. Sections
+  // made of label-and-control rows keep a reading width, so a switch never
+  // drifts far from its label; General, Applications, Team and Awards use the
+  // whole width.
+  const readingCap = activeTab === 'privacy' || activeTab === 'payments' || activeTab === 'delegations' || activeTab === 'partners' ? 1040 : undefined;
 
   return (
-    <div className="px-4 sm:px-6 md:px-10 py-8" style={{ maxWidth: activeTab === 'organizers' ? '1500px' : '1380px' }}>
-      <SettingsShell active={SHELL_OF[activeTab]} onOpen={(k) => openSection(TAB_OF[k])} title={shellTitle}>
+    <div className="px-4 sm:px-6 md:px-10 pt-6 pb-10" style={{ maxWidth: activeTab === 'organizers' ? '1500px' : '1380px' }}>
+      <SettingsShell active={SHELL_OF[activeTab]} onOpen={(k) => openSection(TAB_OF[k])} conferenceName={shellName}>
+      <div style={readingCap ? { maxWidth: readingCap } : undefined}>
 
       {activeTab === 'applications' && (
         <>
@@ -3159,33 +3067,34 @@ export default function SettingsPage() {
                     onBlur={onIdentityBlur}
                   />
                   <div className="gvg-acro">
-                    <label htmlFor="set-acronym" className="gvg-label" style={{ marginBottom: 0 }}>Acronym</label>
-                    <input
-                      id="set-acronym"
-                      type="text"
-                      value={acronym}
-                      onChange={(e) => { setAcronym(e.target.value); if (acronymError) setAcronymError(''); }}
-                      onFocus={(e) => { onIdentityFocus(); e.currentTarget.style.borderColor = '#1B3828'; }}
-                      onBlur={(e) => {
-                        setAcronymError(acronymProblem(e.target.value));
-                        onIdentityBlur();
-                        e.currentTarget.style.borderColor = '#DDD4C0';
-                      }}
-                      placeholder="e.g. LIMUN"
-                      style={{ ...FIELD, width: 'auto', flex: '1 1 160px', maxWidth: 240 }}
-                    />
-                    <span className="gvg-note" style={{ marginTop: 0 }} suppressHydrationWarning>
+                    <div className="min-w-0">
+                      <label htmlFor="set-acronym" className="gvg-label">Acronym</label>
+                      <input
+                        id="set-acronym"
+                        type="text"
+                        className="gvg-input"
+                        value={acronym}
+                        onChange={(e) => { setAcronym(e.target.value); if (acronymError) setAcronymError(''); }}
+                        onFocus={() => { onIdentityFocus(); }}
+                        onBlur={(e) => {
+                          setAcronymError(acronymProblem(e.target.value));
+                          onIdentityBlur();
+                        }}
+                        placeholder="e.g. LIMUN"
+                      />
+                    </div>
+                    <p className="gvg-note gvg-acro-note" suppressHydrationWarning>
                       {acronymError
                         ? <span style={{ color: '#8B2020' }}>{acronymError}</span>
-                        : <>Shown as <strong style={{ color: '#1C1410' }}>{conferenceAcronymLabel({ acronym, start_date: startDate || conference.start_date })}</strong></>}
-                    </span>
+                        : <span>Shown as <strong style={{ color: '#1C1410' }}>{conferenceAcronymLabel({ acronym, start_date: startDate || conference.start_date })}</strong></span>}
+                    </p>
                   </div>
                 </div>
               </div>
 
               <div className="gvg-grid">
                 <IdField
-                  id="dates-card" label="Dates" span={4} ring={datesPulse}
+                  id="dates-card" label="Dates" emoji="Spiral calendar" span={4} ring={datesPulse}
                   note={datesTbd ? 'A conference with dates to be decided stays private until you add them.' : undefined}
                   aside={
                     // Dates TBD: keeps the conference private (no public link) until real
@@ -3205,8 +3114,8 @@ export default function SettingsPage() {
                     </label>
                   }
                 >
-                  <div className="flex gap-2 flex-wrap" style={datesTbd ? { opacity: 0.45, pointerEvents: 'none' } : undefined}>
-                    <div style={{ flex: '1 1 170px', minWidth: 0 }}>
+                  <div className="gvg-dates" style={datesTbd ? { opacity: 0.45, pointerEvents: 'none' } : undefined}>
+                    <div className="gvg-date min-w-0">
                       <DatePicker
                         value={startDate}
                         placeholder="Starts"
@@ -3217,7 +3126,7 @@ export default function SettingsPage() {
                         }}
                       />
                     </div>
-                    <div style={{ flex: '1 1 170px', minWidth: 0 }}>
+                    <div className="gvg-date min-w-0">
                       <DatePicker
                         value={endDate}
                         placeholder="Ends"
@@ -3228,47 +3137,34 @@ export default function SettingsPage() {
                     </div>
                   </div>
                 </IdField>
-                <IdField label="Expected delegates" htmlFor="set-expected" span={2}>
+                <IdField label="Expected delegates" emoji="Busts in silhouette" htmlFor="set-expected" span={2}>
                   <input
                     id="set-expected"
                     type="number"
                     min={0}
+                    className="gvg-input"
                     value={expectedDelegates}
                     onChange={(e) => setExpectedDelegates(e.target.value)}
                     placeholder="1250"
-                    style={{ ...FIELD, fontVariantNumeric: 'tabular-nums' }}
-                    onFocus={fgInput}
-                    onBlur={bgInput}
                   />
                 </IdField>
-                <IdField label="City" htmlFor="set-city" span={2}>
+                <IdField label="City" emoji="Round pushpin" htmlFor="set-city" span={2}>
                   <input
                     id="set-city"
                     type="text"
+                    className="gvg-input"
                     value={city}
                     onChange={(e) => setCity(e.target.value)}
                     placeholder="London"
-                    style={FIELD}
-                    onFocus={fgInput}
-                    onBlur={bgInput}
                   />
                 </IdField>
-                <IdField label="Country" htmlFor="set-country" span={2}>
-                  <select
-                    id="set-country"
-                    value={country}
-                    onChange={(e) => setCountry(e.target.value)}
-                    style={{ ...FIELD, cursor: 'pointer' }}
-                    onFocus={fgInput}
-                    onBlur={bgInput}
-                  >
-                    <option value="">Select a country</option>
-                    {UN_COUNTRIES.map(c => <option key={c.code} value={c.name}>{c.name}</option>)}
-                  </select>
+                <IdField label="Country" emoji="Globe showing europe-africa" htmlFor="set-country" span={2}>
+                  <CountryPicker id="set-country" value={country} onChange={setCountry} />
                 </IdField>
                 <IdField
-                  label="Age of participants" span={2}
+                  label="Age of participants" emoji="Birthday cake" span={2}
                   hint={<InfoHint label="About the age range" text="Both ends are inclusive and both are measured on your conference's start date, so a delegate who turns sixteen the week before still counts as sixteen. Applicants outside the range are told before they fill anything in." />}
+                  aside={(minAgeSaving || minAgeSaved) ? <AutoSaveStatus saving={minAgeSaving} saved={minAgeSaved} /> : undefined}
                   note={minAgeError
                     ? <span style={{ color: '#8B2020' }}>{minAgeError}</span>
                     : (view.min_age != null || view.max_age != null)
@@ -3277,32 +3173,27 @@ export default function SettingsPage() {
                         : view.min_age != null ? `At least ${view.min_age} on the first day.` : `No older than ${view.max_age} on the first day.`)
                       : undefined}
                 >
-                  <div className="flex items-center gap-2">
+                  <div className="gvg-ages">
                     <input
                       type="number" min={10} max={99} step={1}
                       aria-label="Minimum age"
+                      className="gvg-input"
                       value={minAge}
                       onChange={(e) => { setMinAge(e.target.value); setMinAgeError(''); }}
                       placeholder="No min"
-                      style={{ ...FIELD, flex: '1 1 0', fontVariantNumeric: 'tabular-nums' }}
-                      onFocus={fgInput}
-                      onBlur={bgInput}
                     />
-                    <span style={{ fontFamily: "var(--font-brand), sans-serif", fontSize: 14, color: '#5C4F42' }}>to</span>
+                    <span className="gvg-ages-to">to</span>
                     <input
                       type="number" min={10} max={99} step={1}
                       aria-label="Maximum age"
+                      className="gvg-input"
                       value={maxAge}
                       onChange={(e) => { setMaxAge(e.target.value); setMinAgeError(''); }}
                       placeholder="No max"
-                      style={{ ...FIELD, flex: '1 1 0', fontVariantNumeric: 'tabular-nums' }}
-                      onFocus={fgInput}
-                      onBlur={bgInput}
                     />
-                    {(minAgeSaving || minAgeSaved) && <AutoSaveStatus saving={minAgeSaving} saved={minAgeSaved} />}
                   </div>
                 </IdField>
-                <IdField label="Format" span={3}>
+                <IdField label="Format" emoji="Desktop computer" span={3}>
                   <div role="radiogroup" aria-label="Format" className="gv-fd-seg gvg-seg">
                     {([
                       { value: 'in-person', label: 'In person' },
@@ -3313,7 +3204,7 @@ export default function SettingsPage() {
                     ))}
                   </div>
                 </IdField>
-                <IdField label="Student level" span={3}>
+                <IdField label="Student level" emoji="Graduation cap" span={3}>
                   <div role="radiogroup" aria-label="Student level" className="gv-fd-seg gvg-seg">
                     {([
                       { value: 'school', label: 'High school' },
@@ -3329,19 +3220,17 @@ export default function SettingsPage() {
           </section>
 
           {/* ── About ── */}
-          <Group title="About Your Conference" emoji="Memo" icon={FileText} tint={TINT_GREEN_BG}>
+          <Group title="About Your Conference" emoji="Memo" icon={FileText} tint={TINT_GOLD_BG} hang="start">
             <div>
               <label htmlFor="set-description" className="sr-only">Description</label>
               <textarea
                 id="set-description"
                 rows={3}
+                className="gvg-input gvg-area"
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
-                placeholder="Tell delegates about your conference, theme, highlights, what to expect..."
+                placeholder="Tell delegates about your conference, theme, highlights, what to expect"
                 maxLength={1500}
-                style={{ ...FIELD, resize: 'vertical', lineHeight: '1.55' }}
-                onFocus={(e) => { e.currentTarget.style.borderColor = '#1B3828'; }}
-                onBlur={(e) => { e.currentTarget.style.borderColor = '#DDD4C0'; }}
               />
               <div className="flex items-center justify-between gap-3" style={{ marginTop: 5, fontFamily: "var(--font-brand), sans-serif", fontSize: 12.5, color: '#5C4F42' }}>
                 <span>Shown on your public page.</span>
@@ -3351,7 +3240,7 @@ export default function SettingsPage() {
           </Group>
 
           {/* ── Colours ── */}
-          <Group title="Your Colours" emoji="Artist palette" icon={Palette} tint={TINT_GREEN_BG}>
+          <Group title="Your Colours" emoji="Artist palette" icon={Palette} tint={TINT_GREEN_BG} hang="start">
             <div className="gvk-row" style={{ display: 'block' }}>
               <CustomizationCard
                 conferenceId={conference.id}
@@ -3365,7 +3254,7 @@ export default function SettingsPage() {
 
           {/* ── Contact and links ── */}
           <Group
-            id="contact-card" title="Contact and Links" emoji="Envelope" icon={MailIcon} tint={TINT_GREEN_BG}
+            id="contact-card" title="Contact and Links" emoji="Envelope" icon={MailIcon} tint={TINT_GREEN_BG} hang="start"
             aside={<AutoSaveStatus saving={visualSaving} saved={visualSaved} />}
           >
             <div className="gvg-fields">
@@ -3376,16 +3265,14 @@ export default function SettingsPage() {
                 <input
                   id="set-contact-email"
                   type="email"
+                  className="gvg-input"
                   value={contactEmail}
                   onChange={(e) => { setContactEmail(e.target.value); if (contactEmailError) setContactEmailError(''); }}
                   placeholder="hello@yourmun.org"
-                  style={FIELD}
-                  onFocus={(e) => { e.currentTarget.style.borderColor = '#1B3828'; }}
                   onBlur={(e) => {
                     const trimmed = e.target.value.trim();
                     if (trimmed && !CONTACT_EMAIL_PATTERN.test(trimmed)) setContactEmailError('Enter a single email address, e.g. contact@yourmun.org.');
                     else setContactEmailError('');
-                    e.currentTarget.style.borderColor = '#DDD4C0';
                   }}
                 />
               </PlainField>
@@ -3400,66 +3287,19 @@ export default function SettingsPage() {
                   <input
                     id={`set-link-${label}`}
                     type="url"
+                    className="gvg-input"
                     value={value}
                     onChange={(e) => setter(e.target.value)}
                     placeholder="https://"
-                    style={FIELD}
-                    onFocus={fgInput}
-                    onBlur={bgInput}
                   />
                 </PlainField>
               ))}
             </div>
           </Group>
 
-          {/* ── What you use Gavelling for ──────────────────────────────────
-              The creation wizard asks this once; editable here. It only sorts
-              the dashboard's pending priorities (src/lib/conferenceIntent.ts):
-              nothing is switched on or off and nothing is hidden. ── */}
-          <Group
-            id="intent-card" pulse={intentPulse}
-            title="What You Use Gavelling For" emoji="Compass" icon={Compass} tint={TINT_GOLD_BG}
-            hint={<InfoHint label="About this" text="It only changes the order of the priorities on your dashboard. Nothing is switched on or off, and no work is hidden. Pick everything that applies." />}
-            aside={<AutoSaveStatus saving={intentSaving} saved={intentSaved} />}
-          >
-            <div className="grid grid-cols-1 sm:grid-cols-2" style={{ gap: 8 }}>
-              {INTENT_OPTIONS.map(opt => {
-                const on = intentKeys.includes(opt.key);
-                return (
-                  <button
-                    key={opt.key}
-                    type="button"
-                    role="checkbox"
-                    aria-checked={on}
-                    onClick={() => toggleIntent(opt.key)}
-                    className="flex items-center rounded-xl focus:outline-none focus-visible:ring-2 text-left"
-                    style={{
-                      gap: 10, padding: '10px 12px', border: 'none', cursor: 'pointer',
-                      background: on ? 'linear-gradient(150deg, rgba(61,122,82,0.14), rgba(61,122,82,0.05))' : '#FAF8F3',
-                      boxShadow: on ? 'inset 3px 0 0 #2A5A3C' : 'none',
-                      fontFamily: "var(--font-brand), sans-serif",
-                      transition: 'background-color 150ms ease, box-shadow 150ms ease',
-                    }}
-                  >
-                    <EmojiDisc emoji={opt.emoji} icon={INTENT_FALLBACK_ICONS[opt.key] ?? ClipboardList} tint={on ? TINT_GREEN_BG : TINT_GOLD_BG} size={34} />
-                    <span className="min-w-0 flex-1">
-                      <span className="block text-sm font-bold" style={{ color: '#1C1410' }}>{opt.label}</span>
-                    </span>
-                    {on && <CheckCircle2 size={18} strokeWidth={2.6} color="#1B3828" aria-hidden className="flex-shrink-0" />}
-                  </button>
-                );
-              })}
-            </div>
-            {intentKeys.length === 0 && (
-              <p className="text-xs" style={{ color: NEU.inkSoft, fontFamily: "var(--font-brand), sans-serif" }}>
-                Nothing picked. Your dashboard lists the priorities in the normal build order.
-              </p>
-            )}
-          </Group>
-
           {/* ── Editions (lineage) ── */}
           <Group
-            title="Past Editions" emoji="Books" icon={History} tint={TINT_GREEN_BG}
+            title="Past Editions" emoji="Books" icon={History} tint={TINT_GOLD_BG} hang="start"
             hint={<InfoHint label="About editions" text="Link editions of the same conference across years. A link only counts once the previous edition's owner approves it." />}
           >
             <div className="gvk-row" style={{ display: 'block' }}>
@@ -3625,7 +3465,7 @@ export default function SettingsPage() {
         </div>
 
         {sidePreview && (
-          <aside className="hidden min-[1500px]:block flex-shrink-0 sticky" style={{ width: '290px', top: '80px' }} aria-label="Preview of your conference card">
+          <aside className="hidden min-[1500px]:block flex-shrink-0 sticky" style={{ width: '290px', top: '140px' }} aria-label="Preview of your conference card">
             <ConferencePreview snap={settingsSnap} onCopyLink={handleCopyConferenceLink} copied={confLinkCopied} />
           </aside>
         )}
@@ -4736,6 +4576,7 @@ export default function SettingsPage() {
       })()}
 
       {activeTab === 'awards' && <AwardsSettings conference={conference} />}
+      </div>
       </SettingsShell>
 
       {/* Drag-to-fit crop step, flattens the chosen framing into a square

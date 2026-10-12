@@ -1797,14 +1797,9 @@ export default function DashboardPage() {
                     row, so the order never looks arbitrary. */}
                 {intentReordered && (
                   <p className="flex-shrink-0" style={{ fontFamily: OUTFIT, fontSize: 10.5, fontWeight: 600, color: NEU.muted, margin: '0 0 1px 2px' }}>
-                    Ordered around what you told us you need.{' '}
-                    <Link
-                      href={`/manage/${slug}/settings?tab=conference&focus=intent`}
-                      className="focus:outline-none"
-                      style={{ color: NEU.inkSoft, textDecoration: 'underline', textUnderlineOffset: 2 }}
-                    >
-                      Change this
-                    </Link>
+                    {/* No "Change this" link: the answer is asked once at creation
+                        and is no longer edited in Settings (owner, 12 Oct 2026). */}
+                    Ordered around what you told us you need.
                   </p>
                 )}
                 {pendingChecklist.map(item => (

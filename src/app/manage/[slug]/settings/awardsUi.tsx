@@ -429,7 +429,7 @@ export function AwardsSettings({ conference }: { conference: Conference }) {
     update((c) => ({ ...c, perCommittee: { ...c.perCommittee, [id]: { types } } }));
   const giveOwn = (id: string) =>
     update((c) => ({ ...c, perCommittee: { ...c.perCommittee, [id]: { types: c.types.map((t) => ({ ...t })) } } }));
-  const useShared = (id: string) =>
+  const revertToShared = (id: string) =>
     update((c) => {
       const rest = { ...c.perCommittee };
       delete rest[id];
@@ -580,7 +580,7 @@ export function AwardsSettings({ conference }: { conference: Conference }) {
             <p style={{ fontFamily: F, fontSize: 15, fontWeight: 700, color: INK, overflowWrap: 'anywhere' }}>
               Awards for {editingCommittee ? committeeDisplayName(editingCommittee.name, editingCommittee.abbreviation) : 'this committee'}
             </p>
-            <button type="button" className="gv-st-link" onClick={() => useShared(editing)}>Use the shared awards again</button>
+            <button type="button" className="gv-st-link" onClick={() => revertToShared(editing)}>Use the shared awards again</button>
           </div>
           <AwardSetEditor types={config.perCommittee[editing].types} onChange={(t) => setOwn(editing, t)} />
         </>

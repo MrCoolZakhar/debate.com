@@ -536,9 +536,9 @@ export function SectionHead({ emoji, icon, tint, title, line, focal, compact = f
         <div className="flex items-center gap-3.5 min-w-0">
           <EmojiDisc emoji={emoji} icon={icon} tint={tint} size={compact ? 46 : 56} />
           <div className="min-w-0">
-            <h1 style={{ fontFamily: F, fontSize: compact ? 'clamp(22px, 2.2vw, 28px)' : 'clamp(24px, 2.6vw, 32px)', fontWeight: 800, color: INK, lineHeight: 1.1, letterSpacing: '-0.02em', overflowWrap: 'anywhere' }}>
+            <h2 style={{ fontFamily: F, fontSize: compact ? 'clamp(22px, 2.2vw, 28px)' : 'clamp(24px, 2.6vw, 32px)', fontWeight: 800, color: INK, lineHeight: 1.1, letterSpacing: '-0.02em', overflowWrap: 'anywhere' }}>
               {title}
-            </h1>
+            </h2>
             {line && (
               <p className="mt-1" style={{ fontFamily: F, fontSize: 14.5, color: '#3A2E24', lineHeight: 1.45, overflowWrap: 'anywhere' }}>{line}</p>
             )}
@@ -567,7 +567,7 @@ const WASH_GOLD = 'radial-gradient(120% 90% at 100% 0%, rgba(238,217,138,0.28) 0
 
 /** A white card with a 3D emoji disc, a plain Title Case heading
  *  and its rows. */
-export function Group({ id, title, emoji, icon, tint = TINT_GREEN_BG, hint, aside, children, pulse = false }: {
+export function Group({ id, title, emoji, icon, tint = TINT_GREEN_BG, hint, aside, children, pulse = false, hang }: {
   id?: string;
   title: string;
   /** Fluent 3D emoji name; `icon` is its Lucide fallback. */
@@ -581,14 +581,17 @@ export function Group({ id, title, emoji, icon, tint = TINT_GREEN_BG, hint, asid
   children: ReactNode;
   /** A brief gold ring, for deep links that land on this group. */
   pulse?: boolean;
+  /** Hang the emoji disc over the card's top edge (the Financials look,
+   *  .gv-fd-hang in DASH_CSS) instead of drawing it beside the title. */
+  hang?: 'start' | 'end';
 }) {
   return (
     <section
       id={id}
       aria-label={title}
-      className="gv-st-card gv-fd-card gvk-group min-w-0"
+      className={`gv-st-card gv-fd-card gvk-group min-w-0${hang ? ' gv-fd-hung' : ''}`}
       style={{
-        scrollMarginTop: 88, padding: 'clamp(14px, 2.4vw, 20px)',
+        scrollMarginTop: 140, padding: 'clamp(14px, 2.4vw, 20px)',
         background: tint === TINT_GOLD_BG ? WASH_GOLD : WASH_GREEN,
         boxShadow: pulse
           ? '0 0 0 2px #EED98A, 0 0 0 3px rgba(182,135,31,0.35), 0 18px 40px -26px rgba(182,135,31,0.65)'
@@ -596,13 +599,18 @@ export function Group({ id, title, emoji, icon, tint = TINT_GREEN_BG, hint, asid
         transition: 'box-shadow 400ms ease',
       }}
     >
+      {hang && (
+        <span className={`gv-fd-hang gv-fd-hang-${hang}`} aria-hidden style={{ background: `${tint}, #FFFFFF` }}>
+          <Emoji3D name={emoji} size={34} fallback={icon} fallbackColor={FOREST} />
+        </span>
+      )}
       <div className="flex items-center justify-between gap-3 flex-wrap mb-3">
         <div className="flex items-center gap-3 min-w-0">
-          <EmojiDisc emoji={emoji} icon={icon} tint={tint} size={40} />
-          <h2 className="flex items-center gap-1.5 min-w-0" style={{ fontFamily: F, fontSize: 18, fontWeight: 800, color: INK, lineHeight: 1.25, letterSpacing: '-0.01em' }}>
+          {!hang && <EmojiDisc emoji={emoji} icon={icon} tint={tint} size={40} />}
+          <h3 className="flex items-center gap-1.5 min-w-0" style={{ fontFamily: F, fontSize: 18, fontWeight: 800, color: INK, lineHeight: 1.25, letterSpacing: '-0.01em', margin: 0 }}>
             <span style={{ overflowWrap: 'anywhere' }}>{title}</span>
             {hint}
-          </h2>
+          </h3>
         </div>
         {aside}
       </div>
@@ -628,7 +636,7 @@ export function Row({ label, desc, hint, htmlFor, align = 'stretch', id, on, nee
 }) {
   const Label = htmlFor ? 'label' : 'p';
   return (
-    <div id={id} className="gvk-row" data-align={align === 'end' ? 'end' : undefined} data-on={on ? 'true' : undefined} data-need={need ? 'true' : undefined} style={{ scrollMarginTop: 88, ...(children === undefined ? { gridTemplateColumns: 'minmax(0, 1fr)' } : null) }}>
+    <div id={id} className="gvk-row" data-align={align === 'end' ? 'end' : undefined} data-on={on ? 'true' : undefined} data-need={need ? 'true' : undefined} style={{ scrollMarginTop: 140, ...(children === undefined ? { gridTemplateColumns: 'minmax(0, 1fr)' } : null) }}>
       <div className="min-w-0">
         <Label htmlFor={htmlFor} className="flex items-center gap-1.5" style={{ fontFamily: F, fontSize: 15, fontWeight: 700, color: INK, lineHeight: 1.3 }}>
           <span style={{ overflowWrap: 'anywhere' }}>{label}</span>
