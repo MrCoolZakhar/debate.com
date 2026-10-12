@@ -326,7 +326,7 @@ export function Pane({ show, children, gap = 6, title, icon, phone = true, ancho
     );
   }
   return (
-    <div className={base} style={show ? undefined : { display: 'none' }}>
+    <div id={anchor} className={base} style={show ? (anchor ? { scrollMarginTop: 96 } : undefined) : { display: 'none' }}>
       {children}
     </div>
   );

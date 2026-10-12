@@ -8,7 +8,7 @@
  * settings page owns every write and hands its handlers down.
  */
 
-import type { CSSProperties, ReactNode } from 'react';
+import { useId, type CSSProperties, type ReactNode } from 'react';
 import {
   Loader2, Crown, UserRound, GraduationCap, Eye, Gavel, ClipboardList, HardHat, Check, Minus, X, type LucideIcon,
 } from 'lucide-react';
@@ -27,6 +27,31 @@ export const GOLD = '#EED98A';
 export const AMBER = '#8A6614';
 export const DANGER = '#8B2020';
 export const HAIRLINE = 'rgba(27,56,40,0.08)';
+
+// ── One type hierarchy for all of Settings (owner, 12 Oct 2026) ─────────────
+//
+// Written once and used everywhere on /manage/[slug]/settings: the page title
+// (the h1, the only gold italic word), a section title (h2), a card title
+// (h3), a field label, a value or body line, and a hint. Never write a
+// one-off font size on a Settings screen: pick one of these six.
+
+export const TYPE_PX = {
+  page: 'clamp(34px, 3.2vw, 40px)',
+  section: 'clamp(24px, 2vw, 26px)',
+  card: '19px',
+  label: '15px',
+  body: '15px',
+  hint: '13px',
+} as const;
+
+export const TYPE: Record<keyof typeof TYPE_PX, CSSProperties> = {
+  page: { fontFamily: F, fontSize: TYPE_PX.page, fontWeight: 900, letterSpacing: '-0.025em', lineHeight: 1.05, color: INK },
+  section: { fontFamily: F, fontSize: TYPE_PX.section, fontWeight: 800, letterSpacing: '-0.02em', lineHeight: 1.15, color: INK },
+  card: { fontFamily: F, fontSize: TYPE_PX.card, fontWeight: 800, letterSpacing: '-0.01em', lineHeight: 1.25, color: INK },
+  label: { fontFamily: F, fontSize: TYPE_PX.label, fontWeight: 600, lineHeight: 1.3, color: INK },
+  body: { fontFamily: F, fontSize: TYPE_PX.body, fontWeight: 400, lineHeight: 1.5, color: INK },
+  hint: { fontFamily: F, fontSize: TYPE_PX.hint, fontWeight: 400, lineHeight: 1.45, color: INK_SOFT },
+};
 
 export const CARD: CSSProperties = {
   backgroundColor: '#FFFFFF',
@@ -82,7 +107,7 @@ export const INPUT: CSSProperties = {
   border: '1.5px solid #DDD4C0',
   borderRadius: 10,
   padding: '10px 13px',
-  fontSize: 15,
+  fontSize: 16,
   color: INK,
   fontFamily: F,
   outline: 'none',
@@ -268,7 +293,8 @@ export function localZoneLabel(): string {
  * (part of ROW_CSS, mounted once by settingsShell.tsx); all motion is off
  * under prefers-reduced-motion.
  */
-export function Switch({ checked, onChange, label, disabled = false, busy = false, size = 'md', describedBy, mixed = false }: {
+export function Switch({ id, checked, onChange, label, disabled = false, busy = false, size = 'md', describedBy, mixed = false }: {
+  id?: string;
   checked: boolean;
   /** Different per role: the thumb sits in the middle on a gold track, and a
    *  press turns it ON for every role. */
@@ -290,6 +316,7 @@ export function Switch({ checked, onChange, label, disabled = false, busy = fals
   const g = Math.round(t * 0.5);
   return (
     <button
+      id={id}
       type="button"
       role="switch"
       aria-checked={mixed ? 'mixed' : checked}
@@ -367,12 +394,12 @@ export function ToggleRow({ title, desc, checked, onChange, hint }: {
   return (
     <div className="flex items-center justify-between gap-4 py-3.5" style={{ borderTop: `1px solid ${HAIRLINE}` }}>
       <div className="min-w-0">
-        <p className="flex items-center gap-1.5" style={{ fontFamily: F, fontSize: 15, fontWeight: 600, color: INK, lineHeight: 1.3 }}>
+        <p className="flex items-center gap-1.5" style={TYPE.label}>
           <span style={{ overflowWrap: 'anywhere' }}>{title}</span>
           {hint}
         </p>
         {desc && (
-          <p style={{ fontFamily: F, fontSize: 13.5, color: INK_SOFT, lineHeight: 1.45, marginTop: 2, overflowWrap: 'anywhere' }}>{desc}</p>
+          <p style={{ ...TYPE.hint, marginTop: 2, overflowWrap: 'anywhere' }}>{desc}</p>
         )}
       </div>
       <Switch checked={checked} onChange={onChange} label={title} />
@@ -383,7 +410,7 @@ export function ToggleRow({ title, desc, checked, onChange, hint }: {
 /** A field label in the house style. */
 export function FieldLabel({ children, htmlFor }: { children: ReactNode; htmlFor?: string }) {
   return (
-    <label htmlFor={htmlFor} className="flex items-center gap-1.5 mb-1.5" style={{ fontFamily: F, fontSize: 14, fontWeight: 600, color: INK }}>
+    <label htmlFor={htmlFor} className="flex items-center gap-1.5 mb-1.5" style={TYPE.label}>
       {children}
     </label>
   );
@@ -400,7 +427,7 @@ export function Notice({ tone = 'gold', children, role }: { tone?: 'gold' | 'dan
     <div
       role={role}
       className="rounded-xl px-4 py-3"
-      style={{ fontFamily: F, fontSize: 14, lineHeight: 1.5, color: s.color, backgroundColor: s.bg, border: `1px solid ${s.border}`, overflowWrap: 'anywhere' }}
+      style={{ ...TYPE.body, color: s.color, backgroundColor: s.bg, border: `1px solid ${s.border}`, overflowWrap: 'anywhere' }}
     >
       {children}
     </div>
@@ -425,9 +452,10 @@ export const ALWAYS_LISTED_ROLES: readonly string[] = ['head-delegate', 'delegat
  *   - it is switched on, or
  *   - anyone has applied for it (submitted or further), or
  *   - any field differs from the default a fresh row carries: a window, a
- *     limit, a price or prices by date, auto-accept, payment timing, the
- *     dashboard lock, resubmission, preferences, MUN experience, questions,
- *     or an after-applying message.
+ *     limit, a price or prices by date, auto-accept, payment timing,
+ *     preferences, MUN experience, questions, or an after-applying message.
+ *     (Resubmission and the dashboard lock are no longer settings, so they
+ *     no longer count.)
  *
  * The currency is deliberately ignored: a fresh row already carries the
  * conference's currency. This decides only what the UI LISTS. A role that is
@@ -440,7 +468,7 @@ export function roleIsSetUp(cfg: RoleSetupConfig, appliedCount: number | undefin
   if (cfg.max_accepted != null) return true;
   if ((Number(cfg.fee_amount) || 0) > 0) return true;
   if ((cfg.fee_phases ?? []).length > 0) return true;
-  if (cfg.auto_accept || cfg.allow_resubmission || cfg.hide_dashboard_until_paid) return true;
+  if (cfg.auto_accept) return true;
   if (cfg.payment_timing && cfg.payment_timing !== 'anytime') return true;
   if (cfg.preference_mode && cfg.preference_mode !== 'none') return true;
   if (cfg.collect_mun_experience) return true;
@@ -449,19 +477,45 @@ export function roleIsSetUp(cfg: RoleSetupConfig, appliedCount: number | undefin
   return false;
 }
 
-// ── Rows and groups (Oct 2026, bookmarks redesign) ───────────────────────────
+// ── Rows and groups (Oct 2026, bookmarks redesign; 12 Oct 2026 pass) ─────────
 //
 // Every settings section is built from the organiser kit the owner approved
 // (the Conference Store's and Financials' cards: STORE_CSS / DASH_CSS, mounted
-// once by settingsShell.tsx). A Group is a white gv-st-card with a 3D emoji
-// in a tinted disc and a Title Case heading whose last word is gold;
-// inside it, compact rows that read as cards (ivory, separated by gaps, never
-// hairlines), label on the left and the control on the right. A row that is
-// ON carries a forest tint and edge; off has no tint. Below 600px of card
-// width a row stacks, label over control. Changes save in place.
+// once by settingsShell.tsx). A Group is a white gv-st-card with a big 3D
+// emoji disc HANGING off its left edge (owner, 12 Oct 2026: "the 3d icons
+// should be bigger and hanging out on the side without moving anything"): the
+// disc is absolutely placed, about 40% of it outside the card, centred on the
+// title, so it never pushes text or layout; the title only keeps a small
+// start padding so the inside half never covers a letter. On phones, where
+// there is little room outside the card, the disc is smaller and overhangs
+// only a few pixels. Nothing above it clips (.gv-st-card has no overflow and
+// the manage content area does not hide sideways overflow).
+//
+// Inside a Group, compact rows that read as cards (ivory, separated by gaps,
+// never hairlines), label on the left and the control on the right. A row
+// that is ON carries a forest tint and edge; off has no tint. Below 600px of
+// card width a row stacks, label over control. A switch row is different:
+// the switch sits right beside its label (switch, then label), never at the
+// far edge, and consecutive switch rows go in a SwitchGrid, two columns from
+// 700px of card width (owner, 12 Oct 2026: "the toggle is far away from the
+// actual text, meaning you could have two columns"). Changes save in place.
 
 export const ROW_CSS = `
-.gvk-group { container-type: inline-size; }
+.gvk-group { container-type: inline-size; --gvk-pad: clamp(14px, 2.4vw, 20px); padding: var(--gvk-pad) !important; }
+.gvk-head { --gvk-pad: 22px; }
+.gvk-head[data-compact="true"] { --gvk-pad: 20px; padding: 14px 20px !important; }
+.gvk-hcard { --gvk-hang: 46px; --gvk-hang-out: 8px; --gvk-gap: 10px; }
+@media (min-width: 640px) { .gvk-hcard { --gvk-hang: 54px; --gvk-hang-out: 18px; } }
+@media (min-width: 768px) {
+  .gvk-hcard { --gvk-hang: 60px; --gvk-hang-out: 24px; --gvk-gap: 12px; }
+  .gvk-hcard.gvk-head { --gvk-hang: 64px; --gvk-hang-out: 26px; }
+}
+.gvk-hang-host { position: relative; min-width: 0; padding-inline-start: max(0px, calc(var(--gvk-hang) - var(--gvk-hang-out) - var(--gvk-pad) + var(--gvk-gap))); }
+.gvk-hang { position: absolute; top: 50%; inset-inline-start: calc(-1 * (var(--gvk-pad) + var(--gvk-hang-out))); transform: translateY(-50%);
+  width: var(--gvk-hang); height: var(--gvk-hang); border-radius: calc(var(--gvk-hang) * 0.32); z-index: 2; pointer-events: none;
+  display: inline-flex; align-items: center; justify-content: center;
+  box-shadow: 0 0 0 3px #FFFFFF, inset 0 1px 0 rgba(255,255,255,0.8), 0 12px 22px -12px rgba(27,56,40,0.55), 0 3px 8px -4px rgba(27,56,40,0.18); }
+.gvk-hang > img, .gvk-hang > svg { width: 62% !important; height: 62% !important; }
 .gvk-rows { display: flex; flex-direction: column; gap: 8px; }
 .gvk-row { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; padding: 12px 14px; border-radius: 14px; background: #FAF8F3; align-items: center; transition: background-color 160ms ease, box-shadow 160ms ease; }
 .gvk-row[data-on="true"] { background: linear-gradient(150deg, rgba(61,122,82,0.13), rgba(61,122,82,0.05)); box-shadow: inset 3px 0 0 #2A5A3C; }
@@ -472,6 +526,11 @@ export const ROW_CSS = `
   .gvk-row { grid-template-columns: minmax(170px, 0.85fr) minmax(0, 1.5fr); column-gap: 20px; }
   .gvk-row[data-align="end"] { grid-template-columns: minmax(0, 1fr) auto; }
 }
+.gvk-row.gvk-swrow { grid-template-columns: auto minmax(0, 1fr); column-gap: 14px; align-items: start; }
+.gvk-swrow > .gvk-sw { margin-top: 1px; }
+.gvk-swrow-label { cursor: pointer; }
+.gvk-swgrid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; }
+@container (min-width: 700px) { .gvk-swgrid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 ${SWITCH_CSS}`;
 
 /** A Fluent 3D emoji in a soft tinted disc (the Store and Financials look,
@@ -489,6 +548,17 @@ export function EmojiDisc({ emoji, icon, size = 40, tint = TINT_GOLD_BG, active 
       style={{ width: size, height: size, borderRadius: Math.round(size * 0.32), background: active ? 'linear-gradient(150deg, rgba(255,255,255,0.97), rgba(255,255,255,0.82))' : tint }}
     >
       <Emoji3D name={emoji} toned={toned} size={Math.round(size * 0.62)} fallback={icon} fallbackColor={FOREST} />
+    </span>
+  );
+}
+
+/** The big disc that hangs off a card's left edge (see .gvk-hang in ROW_CSS).
+ *  Put it inside a `.gvk-hang-host` in a `.gvk-hcard` card; it is centred on
+ *  the host and sized by the card's CSS variables. */
+export function HangDisc({ emoji, icon, tint = TINT_GOLD_BG }: { emoji: string; icon: LucideIcon; tint?: string }) {
+  return (
+    <span className="gvk-hang" aria-hidden style={{ background: `${tint}, #FFFFFF` }}>
+      <Emoji3D name={emoji} size={40} fallback={icon} fallbackColor={FOREST} />
     </span>
   );
 }
@@ -520,10 +590,11 @@ export function RoleDisc({ role, size = 38, tint = TINT_GREEN_BG, active = false
   return <EmojiDisc emoji={ROLE_EMOJI[role] ?? 'Busts in silhouette'} icon={ROLE_ICON[role] ?? UserRound} size={size} tint={tint} active={active} />;
 }
 
-/** The top of a settings section: a 3D emoji disc, the title
- *  and one plain line. Plain sans: the gold italic word is for a page's main
- *  heading only (owner, 11 Oct 2026). `focal` is the section's one big thing (a number with
- *  its word, or a picture), drawn on the right. */
+/** The top of a settings section: a big 3D emoji disc hanging off the card's
+ *  left edge, the title (TYPE.section) and one plain line. Plain sans: the
+ *  gold italic word is for the page's main heading only (owner, 11 Oct 2026).
+ *  `focal` is the section's one big thing (a number with its word, or a
+ *  picture), drawn on the right. */
 export function SectionHead({ emoji, icon, tint, title, line, focal, compact = false }: {
   emoji: string; icon: LucideIcon; tint: string; title: string; line?: ReactNode; focal?: ReactNode;
   /** A slimmer header with no bottom margin, for a section that sits in a
@@ -531,18 +602,18 @@ export function SectionHead({ emoji, icon, tint, title, line, focal, compact = f
   compact?: boolean;
 }) {
   return (
-    <header className={`gv-st-card gv-fd-card${compact ? '' : ' mb-5'}`} style={{ background: tint === TINT_GOLD_BG ? WASH_GOLD : WASH_GREEN, ...(compact ? { padding: '14px 20px' } : null) }}>
+    <header
+      className={`gv-st-card gv-fd-card gvk-head gvk-hcard${compact ? '' : ' mb-5'}`}
+      data-compact={compact ? 'true' : undefined}
+      style={{ background: tint === TINT_GOLD_BG ? WASH_GOLD : WASH_GREEN }}
+    >
       <div className="flex items-center justify-between gap-x-5 gap-y-3 flex-wrap">
-        <div className="flex items-center gap-3.5 min-w-0">
-          <EmojiDisc emoji={emoji} icon={icon} tint={tint} size={compact ? 46 : 56} />
-          <div className="min-w-0">
-            <h2 style={{ fontFamily: F, fontSize: compact ? 'clamp(22px, 2.2vw, 28px)' : 'clamp(24px, 2.6vw, 32px)', fontWeight: 800, color: INK, lineHeight: 1.1, letterSpacing: '-0.02em', overflowWrap: 'anywhere' }}>
-              {title}
-            </h2>
-            {line && (
-              <p className="mt-1" style={{ fontFamily: F, fontSize: 14.5, color: '#3A2E24', lineHeight: 1.45, overflowWrap: 'anywhere' }}>{line}</p>
-            )}
-          </div>
+        <div className="gvk-hang-host">
+          <HangDisc emoji={emoji} icon={icon} tint={tint} />
+          <h2 style={{ ...TYPE.section, margin: 0, overflowWrap: 'anywhere' }}>{title}</h2>
+          {line && (
+            <p className="mt-1" style={{ ...TYPE.body, color: '#3A2E24', overflowWrap: 'anywhere' }}>{line}</p>
+          )}
         </div>
         {focal && <div className="min-w-0">{focal}</div>}
       </div>
@@ -555,7 +626,7 @@ export function BigCount({ n, word, tone = 'forest' }: { n: number | string; wor
   return (
     <span className="inline-flex items-baseline gap-2" style={{ fontFamily: F }}>
       <span style={{ fontSize: 'clamp(38px, 4.4vw, 54px)', fontWeight: 900, letterSpacing: '-0.04em', lineHeight: 0.95, fontVariantNumeric: 'tabular-nums', color: tone === 'gold' ? '#8A6614' : FOREST }}>{n}</span>
-      <span style={{ fontSize: 16, fontWeight: 800, color: INK }}>{word}</span>
+      <span style={{ ...TYPE.label, fontWeight: 800 }}>{word}</span>
     </span>
   );
 }
@@ -565,9 +636,9 @@ export const TINT_GOLD_BG = 'linear-gradient(150deg, rgba(238,217,138,0.70), rgb
 const WASH_GREEN = 'radial-gradient(120% 90% at 100% 0%, rgba(61,122,82,0.09) 0%, rgba(61,122,82,0) 55%), #FFFFFF';
 const WASH_GOLD = 'radial-gradient(120% 90% at 100% 0%, rgba(238,217,138,0.28) 0%, rgba(238,217,138,0) 55%), #FFFFFF';
 
-/** A white card with a 3D emoji disc, a plain Title Case heading
- *  and its rows. */
-export function Group({ id, title, emoji, icon, tint = TINT_GREEN_BG, hint, aside, children, pulse = false, hang }: {
+/** A white card with a big 3D emoji disc hanging off its left edge, a plain
+ *  Title Case heading (TYPE.card) and its rows. */
+export function Group({ id, title, emoji, icon, tint = TINT_GREEN_BG, hint, aside, children, pulse = false }: {
   id?: string;
   title: string;
   /** Fluent 3D emoji name; `icon` is its Lucide fallback. */
@@ -581,17 +652,14 @@ export function Group({ id, title, emoji, icon, tint = TINT_GREEN_BG, hint, asid
   children: ReactNode;
   /** A brief gold ring, for deep links that land on this group. */
   pulse?: boolean;
-  /** Hang the emoji disc over the card's top edge (the Financials look,
-   *  .gv-fd-hang in DASH_CSS) instead of drawing it beside the title. */
-  hang?: 'start' | 'end';
 }) {
   return (
     <section
       id={id}
       aria-label={title}
-      className={`gv-st-card gv-fd-card gvk-group min-w-0${hang ? ' gv-fd-hung' : ''}`}
+      className="gv-st-card gv-fd-card gvk-group gvk-hcard min-w-0"
       style={{
-        scrollMarginTop: 140, padding: 'clamp(14px, 2.4vw, 20px)',
+        scrollMarginTop: 140,
         background: tint === TINT_GOLD_BG ? WASH_GOLD : WASH_GREEN,
         boxShadow: pulse
           ? '0 0 0 2px #EED98A, 0 0 0 3px rgba(182,135,31,0.35), 0 18px 40px -26px rgba(182,135,31,0.65)'
@@ -599,15 +667,10 @@ export function Group({ id, title, emoji, icon, tint = TINT_GREEN_BG, hint, asid
         transition: 'box-shadow 400ms ease',
       }}
     >
-      {hang && (
-        <span className={`gv-fd-hang gv-fd-hang-${hang}`} aria-hidden style={{ background: `${tint}, #FFFFFF` }}>
-          <Emoji3D name={emoji} size={34} fallback={icon} fallbackColor={FOREST} />
-        </span>
-      )}
       <div className="flex items-center justify-between gap-3 flex-wrap mb-3">
-        <div className="flex items-center gap-3 min-w-0">
-          {!hang && <EmojiDisc emoji={emoji} icon={icon} tint={tint} size={40} />}
-          <h3 className="flex items-center gap-1.5 min-w-0" style={{ fontFamily: F, fontSize: 18, fontWeight: 800, color: INK, lineHeight: 1.25, letterSpacing: '-0.01em', margin: 0 }}>
+        <div className="gvk-hang-host" style={{ minHeight: 34, display: 'flex', alignItems: 'center' }}>
+          <HangDisc emoji={emoji} icon={icon} tint={tint} />
+          <h3 className="flex items-center gap-1.5 min-w-0" style={{ ...TYPE.card, margin: 0 }}>
             <span style={{ overflowWrap: 'anywhere' }}>{title}</span>
             {hint}
           </h3>
@@ -620,9 +683,9 @@ export function Group({ id, title, emoji, icon, tint = TINT_GREEN_BG, hint, asid
 }
 
 /** One setting: label (and a short line) on the left, the control on the
- *  right. `align="end"` keeps a small control (a switch, a button) on the
- *  same line as its label at every width. `on` tints the row forest, `need`
- *  gives it a gold edge (something to do). */
+ *  right. `align="end"` keeps a small control (a button) on the same line as
+ *  its label at every width. `on` tints the row forest, `need` gives it a
+ *  gold edge (something to do). Switches use SwitchRow instead. */
 export function Row({ label, desc, hint, htmlFor, align = 'stretch', id, on, need, children }: {
   label: ReactNode;
   desc?: ReactNode;
@@ -638,12 +701,12 @@ export function Row({ label, desc, hint, htmlFor, align = 'stretch', id, on, nee
   return (
     <div id={id} className="gvk-row" data-align={align === 'end' ? 'end' : undefined} data-on={on ? 'true' : undefined} data-need={need ? 'true' : undefined} style={{ scrollMarginTop: 140, ...(children === undefined ? { gridTemplateColumns: 'minmax(0, 1fr)' } : null) }}>
       <div className="min-w-0">
-        <Label htmlFor={htmlFor} className="flex items-center gap-1.5" style={{ fontFamily: F, fontSize: 15, fontWeight: 700, color: INK, lineHeight: 1.3 }}>
+        <Label htmlFor={htmlFor} className="flex items-center gap-1.5" style={TYPE.label}>
           <span style={{ overflowWrap: 'anywhere' }}>{label}</span>
           {hint}
         </Label>
         {desc && (
-          <p style={{ fontFamily: F, fontSize: 13.5, color: INK_SOFT, lineHeight: 1.45, marginTop: 2, overflowWrap: 'anywhere' }}>{desc}</p>
+          <p style={{ ...TYPE.hint, marginTop: 2, overflowWrap: 'anywhere' }}>{desc}</p>
         )}
       </div>
       {children !== undefined && <div className="gvk-row-ctl" style={align === 'end' ? { justifySelf: 'end' } : undefined}>{children}</div>}
@@ -651,16 +714,37 @@ export function Row({ label, desc, hint, htmlFor, align = 'stretch', id, on, nee
   );
 }
 
-/** A switch row: tinted forest while on. */
-export function SwitchRow({ label, desc, hint, checked, onChange, disabled, mixed, busy }: {
+/** A switch row: the switch right beside its label (switch first), tinted
+ *  forest while on, a gold edge for `need` or "different per role". Pressing
+ *  the label presses the switch. Put several in a SwitchGrid. */
+export function SwitchRow({ label, desc, hint, checked, onChange, disabled, mixed, busy, need, id }: {
   label: string; desc?: ReactNode; hint?: ReactNode; checked: boolean; onChange: (next: boolean) => void;
   disabled?: boolean; mixed?: boolean; busy?: boolean;
+  /** Something to do (a gold edge), e.g. a switch that cannot be turned on yet. */
+  need?: boolean;
+  id?: string;
 }) {
+  const auto = useId();
+  const switchId = `${auto}-sw`;
   return (
-    <Row label={label} desc={desc} hint={hint} align="end" on={checked && !mixed} need={mixed}>
-      <Switch label={label} checked={checked} mixed={mixed} onChange={onChange} disabled={disabled} busy={busy} />
-    </Row>
+    <div id={id} className="gvk-row gvk-swrow" data-on={checked && !mixed && !need ? 'true' : undefined} data-need={mixed || need ? 'true' : undefined} style={{ scrollMarginTop: 140 }}>
+      <Switch id={switchId} label={label} checked={checked} mixed={mixed} onChange={onChange} disabled={disabled} busy={busy} />
+      <div className="min-w-0">
+        <p className="flex items-center gap-1.5" style={TYPE.label}>
+          <label htmlFor={switchId} className="gvk-swrow-label" style={{ overflowWrap: 'anywhere' }}>{label}</label>
+          {hint}
+        </p>
+        {desc && (
+          <div style={{ ...TYPE.hint, marginTop: 2, overflowWrap: 'anywhere' }}>{desc}</div>
+        )}
+      </div>
+    </div>
   );
+}
+
+/** Consecutive switch rows, in two columns from 700px of card width. */
+export function SwitchGrid({ children }: { children: ReactNode }) {
+  return <div className="gvk-swgrid">{children}</div>;
 }
 
 // ── Rules for every role ─────────────────────────────────────────────────────
@@ -670,23 +754,24 @@ export function SwitchRow({ label, desc, hint, checked, onChange, disabled, mixe
 // column per application_role_configs row), so "for every role" means the
 // same value written to every listed role the setting applies to:
 //
-//   payment_timing, hide_dashboard_until_paid   every listed role that has a
-//                                               price (never secretariat, staff)
-//   auto_accept, allow_resubmission             every listed role but the
-//                                               secretariat (accepting one makes
-//                                               them an organiser, so that stays
-//                                               a per-role decision)
-//   preference_mode                             delegates and head delegates
-//                                               (chairs keep their own switch,
-//                                               the database allows them less)
+//   payment_timing      every listed role that has a price (never
+//                       secretariat, staff)
+//   auto_accept         every listed role but the secretariat (accepting one
+//                       makes them an organiser, so that stays a per-role
+//                       decision)
+//   preference_mode     delegates and head delegates (chairs keep their own
+//                       switch, the database allows them less)
+//
+// allow_resubmission and hide_dashboard_until_paid are no longer settings in
+// the UI (owner, 12 Oct 2026); their columns keep the database's defaults.
 
-export type GeneralField = 'payment_timing' | 'hide_dashboard_until_paid' | 'auto_accept' | 'allow_resubmission' | 'preference_mode';
-export const GENERAL_FIELDS: readonly GeneralField[] = ['auto_accept', 'allow_resubmission', 'payment_timing', 'hide_dashboard_until_paid', 'preference_mode'];
+export type GeneralField = 'payment_timing' | 'auto_accept' | 'preference_mode';
+export const GENERAL_FIELDS: readonly GeneralField[] = ['auto_accept', 'payment_timing', 'preference_mode'];
 
 /** Does the rule for every role cover this field on this role? */
 export function inGeneralScope(field: GeneralField, role: string): boolean {
-  if (field === 'payment_timing' || field === 'hide_dashboard_until_paid') return roleHasPrice(role);
-  if (field === 'auto_accept' || field === 'allow_resubmission') return role !== 'secretariat';
+  if (field === 'payment_timing') return roleHasPrice(role);
+  if (field === 'auto_accept') return role !== 'secretariat';
   return role === 'delegate' || role === 'head-delegate';
 }
 
@@ -694,9 +779,7 @@ export function inGeneralScope(field: GeneralField, role: string): boolean {
 export function generalValue(cfg: RoleSetupConfig, field: GeneralField): string | boolean {
   switch (field) {
     case 'payment_timing': return cfg.payment_timing === 'after_acceptance' ? 'after_acceptance' : 'anytime';
-    case 'hide_dashboard_until_paid': return cfg.hide_dashboard_until_paid === true;
     case 'auto_accept': return cfg.auto_accept === true;
-    case 'allow_resubmission': return cfg.allow_resubmission === true;
     case 'preference_mode': return cfg.preference_mode || 'none';
   }
 }

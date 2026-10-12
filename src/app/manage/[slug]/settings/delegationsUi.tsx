@@ -21,7 +21,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Info, UserPlus, Repeat2 } from 'lucide-react';
 import Portal from '@/components/Portal';
 import { NEU } from '@/components/neu';
-import { EmojiDisc, TINT_GOLD_BG, TINT_GREEN_BG } from './panelKit';
+import { EmojiDisc, TINT_GOLD_BG, TINT_GREEN_BG, TYPE_PX } from './panelKit';
 import { getFreshAuthedClient } from '@/lib/supabase-auth';
 import { friendlyError } from '@/lib/friendlyError';
 import { notifyErr, clearErr } from '@/lib/appNotify';
@@ -116,7 +116,7 @@ function Hint({ label, text, size = 16 }: { label: string; text: string; size?: 
               position: 'fixed', left: pos.left, top: pos.top, width: pos.width, zIndex: 9000,
               transform: pos.above ? 'translateY(-100%)' : undefined,
               backgroundColor: '#1C1410', color: '#FAF8F3', borderRadius: 12, padding: '10px 12px',
-              fontFamily: FONT, fontSize: 12.5, lineHeight: 1.5, boxShadow: '0 10px 30px rgba(0,0,0,0.25)',
+              fontFamily: FONT, fontSize: TYPE_PX.hint, lineHeight: 1.5, boxShadow: '0 10px 30px rgba(0,0,0,0.25)',
               pointerEvents: 'none',
             }}
           >
@@ -245,7 +245,7 @@ export function DelegationsSettings({
                       backgroundColor: active ? '#1B3828' : 'transparent',
                       color: active ? NEU.gold : NEU.ink,
                       border: active ? '1.5px solid #1B3828' : '1.5px solid rgba(27,56,40,0.28)',
-                      fontFamily: FONT, fontSize: 13.5, fontWeight: 700,
+                      fontFamily: FONT, fontSize: TYPE_PX.hint, fontWeight: 700,
                       cursor: swapModeSaving ? 'not-allowed' : 'pointer',
                       opacity: swapModeSaving ? 0.7 : 1,
                       transition: 'background-color 140ms ease, color 140ms ease, border-color 140ms ease',
@@ -264,10 +264,19 @@ export function DelegationsSettings({
 
       {/* ── Leader imports ── */}
       <div style={CARD}>
-        <div className="flex items-start gap-4">
+        <div className="flex items-start gap-3.5">
+          <EmojiDisc emoji="Busts in silhouette" icon={UserPlus} size={34} tint={TINT_GREEN_BG} />
+          <div className="flex items-center gap-2 pt-0.5 flex-shrink-0">
+            {importSaving && <Spinner />}
+            <Switch
+              on={importOn}
+              onChange={(next) => { void saveImport(next); }}
+              disabled={importSaving}
+              label="Let delegation leaders import their delegates"
+            />
+          </div>
           <div className="min-w-0 flex-1">
-            <p className="font-semibold text-base mb-1 flex items-center gap-2" style={{ color: '#1C1410', fontFamily: FONT }}>
-              <EmojiDisc emoji="Busts in silhouette" icon={UserPlus} size={34} tint={TINT_GREEN_BG} />
+            <p className="mb-1 flex items-center gap-2" style={{ color: '#1C1410', fontFamily: FONT, fontSize: TYPE_PX.label, fontWeight: 700, lineHeight: 1.3 }}>
               Let delegation leaders import their delegates
               <Hint
                 label="About delegation imports"
@@ -276,18 +285,9 @@ export function DelegationsSettings({
                   : "Faculty advisors and head delegates can add their delegates by name and email, up to the spots they pledged. Importing is free for now: each delegate uses their own credit when they claim their place. Every imported delegate still waits for your acceptance."}
               />
             </p>
-            <p className="text-sm" style={{ color: '#5A5046', fontFamily: FONT }}>
+            <p style={{ color: '#5A5046', fontFamily: FONT, fontSize: TYPE_PX.hint }}>
               {LEADER_IMPORTS_PAID_LAUNCH ? <>Each imported delegate uses one of the leader&apos;s own credits</> : 'Free for now. Each delegate uses their own credit when they claim their place'}
             </p>
-          </div>
-          <div className="flex items-center gap-2 pt-1">
-            {importSaving && <Spinner />}
-            <Switch
-              on={importOn}
-              onChange={(next) => { void saveImport(next); }}
-              disabled={importSaving}
-              label="Let delegation leaders import their delegates"
-            />
           </div>
         </div>
       </div>

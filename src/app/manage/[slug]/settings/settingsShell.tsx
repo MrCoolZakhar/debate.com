@@ -11,10 +11,11 @@
  * with a forest underline. Under the tabs, one section at a time across the
  * full width; every change is saved where it is made.
  *
- *   General        what the conference is: name, dates, place, pictures,
- *                  colours, contact, editions, delete
+ *   General        what the conference is: name, dates, place, about,
+ *                  pictures, visibility (public on Explore, what the page
+ *                  shows; its own tab until 12 Oct 2026), colours, contact,
+ *                  editions, delete
  *   Applications   who can apply, the rules for every role, each role's form
- *   Visibility     who can find it, and what its page shows
  *   Delegations    how schools and societies run themselves
  *   Partners       linked conferences and sponsor companies
  *   Team           who runs it with you
@@ -32,22 +33,21 @@
 
 import { useEffect, useLayoutEffect, useRef, type ReactNode } from 'react';
 import {
-  Building2, Globe, ClipboardList, School, Users2, CreditCard, Trophy, Handshake, type LucideIcon,
+  Building2, ClipboardList, School, Users2, CreditCard, Trophy, Handshake, type LucideIcon,
 } from 'lucide-react';
 import { STORE_CSS } from '../store/storeKit';
 import { DASH_CSS } from '../financials/dashboardKit';
 import { GoldWord } from '@/components/BrandHeading';
-import { F, INK, INK_SOFT, FOREST, ROW_CSS, TINT_GOLD_BG, TINT_GREEN_BG, EmojiDisc } from './panelKit';
+import { F, INK, INK_SOFT, FOREST, ROW_CSS, TINT_GOLD_BG, TINT_GREEN_BG, EmojiDisc, TYPE_PX } from './panelKit';
 
 /** The sections, in tab order. The key is also the ?tab= value written. */
-export type ShellSection = 'general' | 'applications' | 'visibility' | 'delegations' | 'partners' | 'team' | 'payments' | 'awards';
+export type ShellSection = 'general' | 'applications' | 'delegations' | 'partners' | 'team' | 'payments' | 'awards';
 
 /** Each section's Fluent 3D emoji (`emoji`) with the Lucide glyph it falls
  *  back to (`icon`) if the image cannot load. */
 export const SHELL_SECTIONS: { key: ShellSection; label: string; emoji: string; icon: LucideIcon; tint: string }[] = [
   { key: 'general',      label: 'General',      emoji: 'Classical building',          icon: Building2,     tint: TINT_GOLD_BG },
   { key: 'applications', label: 'Applications', emoji: 'Inbox tray',                  icon: ClipboardList, tint: TINT_GOLD_BG },
-  { key: 'visibility',   label: 'Visibility',   emoji: 'Globe showing europe-africa', icon: Globe,         tint: TINT_GREEN_BG },
   { key: 'delegations',  label: 'Delegations',  emoji: 'School',                      icon: School,        tint: TINT_GREEN_BG },
   { key: 'partners',     label: 'Partners',     emoji: 'Handshake',                   icon: Handshake,     tint: TINT_GREEN_BG },
   { key: 'team',         label: 'Team',         emoji: 'Busts in silhouette',         icon: Users2,        tint: TINT_GREEN_BG },
@@ -66,8 +66,13 @@ const GROUND = '#EDE7D8';
 const SHELL_CSS = `
 .gvsh { container-type: inline-size; }
 .gvsh-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 6px 18px; flex-wrap: wrap; margin: 0 0 14px; }
-.gvsh-h1 { margin: 0; font-family: ${F}; font-weight: 900; font-size: clamp(28px, 3.2vw, 40px); letter-spacing: -0.025em; line-height: 1.05; color: ${INK}; }
-.gvsh-conf { margin: 6px 0 0; font-family: ${F}; font-size: 14.5px; font-weight: 600; color: ${INK_SOFT}; line-height: 1.35; overflow-wrap: anywhere; }
+.gvsh-h1 { margin: 0; font-family: ${F}; font-weight: 900; font-size: ${TYPE_PX.page}; letter-spacing: -0.025em; line-height: 1.05; color: ${INK}; }
+.gvsh-conf { margin: 6px 0 0; font-family: ${F}; font-size: ${TYPE_PX.body}; font-weight: 600; color: ${INK_SOFT}; line-height: 1.35; overflow-wrap: anywhere; }
+/* Buttons and segments a size down across Settings (owner, 12 Oct 2026: "some
+   buttons are way too big in there and makes the section unnecessarily too
+   big"): 38px buttons, 40px segments, less padding. */
+.gvsh .gv-st-btn { min-height: 38px; padding: 0 14px; font-size: 14px; border-radius: 11px; gap: 7px; }
+.gvsh .gv-fd-seg button { min-height: 40px; }
 /* The sticky bar: the page's own ground, bled sideways so cards never show at
    its ends, and a short fade at its lower edge instead of a hard line. */
 .gvsh-bar { position: sticky; top: ${MANAGE_BAR_PX}px; z-index: 20; margin: 0 0 18px; padding: 8px 0 6px; }
@@ -79,8 +84,8 @@ const SHELL_CSS = `
   -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 var(--fs), #000 calc(100% - var(--fe)), transparent 100%);
   mask-image: linear-gradient(90deg, transparent 0, #000 var(--fs), #000 calc(100% - var(--fe)), transparent 100%); }
 .gvsh-tabs::-webkit-scrollbar { display: none; }
-.gvsh-tab { position: relative; display: inline-flex; align-items: center; gap: 9px; flex-shrink: 0; min-height: 48px; padding: 6px 16px 6px 7px;
-  border-radius: 16px; border: none; cursor: pointer; white-space: nowrap; font-family: ${F}; font-size: 15px; font-weight: 600;
+.gvsh-tab { position: relative; display: inline-flex; align-items: center; gap: 9px; flex-shrink: 0; min-height: 44px; padding: 5px 15px 5px 6px;
+  border-radius: 15px; border: none; cursor: pointer; white-space: nowrap; font-family: ${F}; font-size: ${TYPE_PX.label}; font-weight: 600;
   color: ${INK_SOFT}; background: transparent; transition: background-color 140ms ease, box-shadow 160ms ease, color 140ms ease, transform 120ms ease; }
 .gvsh-tab:hover { background: rgba(255,255,255,0.6); color: ${INK}; }
 .gvsh-tab:active { transform: scale(0.98); }
@@ -161,7 +166,7 @@ export function SettingsShell({ active, onOpen, conferenceName, children }: {
                 aria-current={on ? 'page' : undefined}
                 onClick={() => onOpen(s.key)}
               >
-                <EmojiDisc emoji={s.emoji} icon={s.icon} tint={s.tint} size={34} />
+                <EmojiDisc emoji={s.emoji} icon={s.icon} tint={s.tint} size={32} />
                 {s.label}
               </button>
             );

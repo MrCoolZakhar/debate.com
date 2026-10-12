@@ -7,7 +7,7 @@ import {
   Plus, Crown, Mail as MailIcon, ChevronDown, Info, ArrowLeft,
   Settings2, Globe, Eye, EyeOff, ArrowUp, ArrowDown, Trash2, Briefcase,
   CreditCard, Star, CheckCircle2, Clock, Users2,
-  ChevronRight as ChevronRightIcon, CalendarDays, FileText, Palette, Handshake, History, Search,
+  ChevronRight as ChevronRightIcon, CalendarDays, Palette, Handshake, History,
   School, ReceiptText, Gift, Ticket, HandHeart, type LucideIcon,
 } from 'lucide-react';
 import { useManage, type Conference } from '@/app/manage/[slug]/layout';
@@ -17,7 +17,7 @@ import { useAuth } from '@/components/AuthProvider';
 import { Pill } from '@/app/account/accountUi';
 import { useConfirmModal, ConfirmModal } from '@/components/ConfirmModal';
 import Portal from '@/components/Portal';
-import { NEU, OUTFIT, EASE } from '@/components/neu';
+import { NEU, OUTFIT, EASE, Emoji3D } from '@/components/neu';
 import { useScrollLock } from '@/hooks/useScrollLock';
 import { LogoDisc } from '@/components/LogoDisc';
 import { LogoCropModal } from '@/components/LogoCropModal';
@@ -54,27 +54,28 @@ import { useNow } from '@/lib/useNow';
 import { ConferencePreview, type SettingsSnapshot } from './settingsHome';
 import { ApplicationsSection } from './controlPanel';
 import { RoleSheet } from './roleSetup';
-import { GENERAL_CSS, IdentityBanner, IdentityLogo, IdField, PlainField, NameField } from './generalUi';
+import { GENERAL_CSS, IdentityBanner, IdentityLogo, IdField, PlainField, NameField, IconInput } from './generalUi';
+import { PlatformLogo } from '@/components/conferences/ApplicationSourceMark';
 import { SettingsShell, type ShellSection } from './settingsShell';
 import { CountryPicker } from './countryPicker';
 import {
-  SectionHead, Group, Row, SwitchRow, BigCount, Switch as KitSwitch, TINT_GOLD_BG, TINT_GREEN_BG, EmojiDisc,
-  listedRoles, generalAnswer, inGeneralScope, GENERAL_FIELDS, type RoleSetupConfig,
+  SectionHead, Group, Row, SwitchRow, SwitchGrid, BigCount, Switch as KitSwitch, TINT_GOLD_BG, TINT_GREEN_BG, EmojiDisc, TYPE,
+  listedRoles, generalAnswer, inGeneralScope, GENERAL_FIELDS, type RoleSetupConfig, TYPE_PX
 } from './panelKit';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
 /** The settings sub-tabs; also the accepted values of the ?tab= deep link. */
-type SettingsTab = 'applications' | 'delegations' | 'conference' | 'partners' | 'organizers' | 'privacy' | 'awards' | 'payments';
+type SettingsTab = 'applications' | 'delegations' | 'conference' | 'partners' | 'organizers' | 'awards' | 'payments';
 
 /** The section each internal tab is drawn as in the bookmarks rail
  *  (settingsShell.tsx), and so the ?tab= value written for it. */
 const SHELL_OF: Record<SettingsTab, ShellSection> = {
-  conference: 'general', partners: 'partners', privacy: 'visibility', applications: 'applications', delegations: 'delegations',
+  conference: 'general', partners: 'partners', applications: 'applications', delegations: 'delegations',
   organizers: 'team', payments: 'payments', awards: 'awards',
 };
 const TAB_OF: Record<ShellSection, SettingsTab> = {
-  general: 'conference', partners: 'partners', visibility: 'privacy', applications: 'applications', delegations: 'delegations',
+  general: 'conference', partners: 'partners', applications: 'applications', delegations: 'delegations',
   team: 'organizers', payments: 'payments', awards: 'awards',
 };
 
@@ -236,7 +237,7 @@ const inputStyle: React.CSSProperties = {
   border: '1.5px solid #DDD4C0',
   borderRadius: '10px',
   padding: '10px 14px',
-  fontSize: '13px',
+  fontSize: TYPE_PX.hint,
   color: '#1C1410',
   fontFamily: "var(--font-brand), sans-serif",
   outline: 'none',
@@ -429,7 +430,9 @@ export default function SettingsPage() {
     // (conference, privacy, organizers, applications, delegations, awards).
     if (tabParam === 'team' || tabParam === 'organizers') return 'organizers';
     if (tabParam === 'general' || tabParam === 'conference') return 'conference';
-    if (tabParam === 'visibility' || tabParam === 'privacy') return 'privacy';
+    // Visibility is a card on General since 12 Oct 2026: the old values open
+    // General and scroll to it (the effect below).
+    if (tabParam === 'visibility' || tabParam === 'privacy') return 'conference';
     // Partners and sponsors left General for a section of their own (11 Oct 2026).
     if (tabParam === 'partners' || tabParam === 'sponsors') return 'partners';
     if (tabParam === 'delegations' || tabParam === 'awards' || tabParam === 'applications' || tabParam === 'payments') return tabParam;
@@ -618,6 +621,21 @@ export default function SettingsPage() {
     const t = setTimeout(() => setDatesPulse(false), 2600);
     return () => clearTimeout(t);
   }, [focusParam, activeTab, conference]);
+  // ── Visibility deep link: ?tab=visibility and the old ?tab=privacy open
+  // General (Visibility became a card there on 12 Oct 2026) and scroll to it.
+  const visibilityLink = tabParam === 'visibility' || tabParam === 'privacy';
+  const [visibilityPulse, setVisibilityPulse] = useState(false);
+  const visibilityFocusedRef = useRef(false);
+  useEffect(() => {
+    if (!visibilityLink || activeTab !== 'conference' || visibilityFocusedRef.current) return;
+    const el = document.getElementById('visibility-card');
+    if (!el) return;
+    visibilityFocusedRef.current = true;
+    el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    setVisibilityPulse(true);
+    const t = setTimeout(() => setVisibilityPulse(false), 2600);
+    return () => clearTimeout(t);
+  }, [visibilityLink, activeTab, conference]);
   // The form builder edits whichever role the tab is on.
   const selectedRole = activeRole;
   const [inviteEmail, setInviteEmail] = useState('');
@@ -2864,7 +2882,7 @@ export default function SettingsPage() {
       afterSlot={
         <>
           <div className="mb-4">
-            <label htmlFor="role-after-message" className="mb-1.5 flex items-center gap-1.5" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif", fontSize: 14, fontWeight: 600 }}>
+            <label htmlFor="role-after-message" className="mb-1.5 flex items-center gap-1.5" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif", fontSize: TYPE_PX.body, fontWeight: 600 }}>
               Message
             </label>
             <textarea
@@ -2880,18 +2898,18 @@ export default function SettingsPage() {
               }}
               onFocus={(e) => { e.currentTarget.style.borderColor = '#1B3828'; }}
               onBlur={(e) => { e.currentTarget.style.borderColor = '#DDD4C0'; }}
-              style={{ ...inputStyle, fontSize: 15, resize: 'vertical', lineHeight: '1.6' }}
+              style={{ ...inputStyle, fontSize: TYPE_PX.body, resize: 'vertical', lineHeight: '1.6' }}
             />
             <p
               className="mt-1"
-              style={{ textAlign: 'right', fontFamily: "var(--font-brand), sans-serif", fontSize: 12, fontWeight: 600, color: '#6E6152', fontVariantNumeric: 'tabular-nums' }}
+              style={{ textAlign: 'right', fontFamily: "var(--font-brand), sans-serif", fontSize: TYPE_PX.hint, fontWeight: 600, color: '#6E6152', fontVariantNumeric: 'tabular-nums' }}
             >
               {submissionMessageInput.length} / 280
             </p>
           </div>
           <div className="flex gap-3 mb-2 flex-wrap">
             <div className="flex-1" style={{ minWidth: 'min(100%, 200px)' }}>
-              <label htmlFor="role-after-label" className="mb-1.5 flex items-center gap-1.5" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif", fontSize: 14, fontWeight: 600 }}>
+              <label htmlFor="role-after-label" className="mb-1.5 flex items-center gap-1.5" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif", fontSize: TYPE_PX.body, fontWeight: 600 }}>
                 Button words (optional)
               </label>
               <input
@@ -2907,11 +2925,11 @@ export default function SettingsPage() {
                 }}
                 onFocus={fgInput}
                 onBlur={bgInput}
-                style={{ ...inputStyle, fontSize: 15 }}
+                style={{ ...inputStyle, fontSize: TYPE_PX.body }}
               />
             </div>
             <div className="flex-1" style={{ minWidth: 'min(100%, 200px)' }}>
-              <label htmlFor="role-after-url" className="mb-1.5 flex items-center gap-1.5" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif", fontSize: 14, fontWeight: 600 }}>
+              <label htmlFor="role-after-url" className="mb-1.5 flex items-center gap-1.5" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif", fontSize: TYPE_PX.body, fontWeight: 600 }}>
                 Button link (optional)
               </label>
               <input
@@ -2926,15 +2944,15 @@ export default function SettingsPage() {
                 }}
                 onFocus={fgInput}
                 onBlur={bgInput}
-                style={{ ...inputStyle, fontSize: 15 }}
+                style={{ ...inputStyle, fontSize: TYPE_PX.body }}
               />
             </div>
           </div>
-          <p style={{ color: '#6E6152', fontFamily: "var(--font-brand), sans-serif", fontSize: 13 }}>
+          <p style={{ color: '#6E6152', fontFamily: "var(--font-brand), sans-serif", fontSize: TYPE_PX.hint }}>
             Fill in both to show a button, or leave both empty for a message with no button. The link must start with https://
           </p>
           {submissionLinkError && (
-            <p role="alert" className="mt-1.5" style={{ color: '#8B2020', fontFamily: "var(--font-brand), sans-serif", fontSize: 13 }}>
+            <p role="alert" className="mt-1.5" style={{ color: '#8B2020', fontFamily: "var(--font-brand), sans-serif", fontSize: TYPE_PX.hint }}>
               {submissionLinkError}
             </p>
           )}
@@ -2943,13 +2961,93 @@ export default function SettingsPage() {
     />
   ) : null;
 
+  // ── Visibility: a card on General since 12 Oct 2026 (it was its own tab).
+  // Every write is unchanged: handlePublicToggle and saveVisibility.
+  const visNoDates = view.dates_tbd || !view.start_date;
+  const visGateBlocks = paymentGateBlocks(view);
+  const visBlockPublic = !view.is_public && (visGateBlocks || visNoDates);
+  const visibilityCard = (
+    <Group
+      id="visibility-card"
+      pulse={visibilityPulse}
+      title="Visibility"
+      emoji={view.is_public ? 'Globe showing europe-africa' : 'Locked'}
+      icon={view.is_public ? Globe : Lock}
+      tint={view.is_public ? TINT_GREEN_BG : TINT_GOLD_BG}
+      aside={
+        <span className="inline-flex items-center gap-3">
+          {visibilityStatus !== 'idle' && <AutoSaveStatus saving={visibilityStatus === 'saving'} saved={visibilityStatus === 'saved'} />}
+          <span style={{ ...TYPE.card, color: view.is_public ? '#1B3828' : '#8A6614' }}>{view.is_public ? 'Public' : 'Private'}</span>
+        </span>
+      }
+    >
+      <SwitchGrid>
+        {/* Only the private->public direction is gated (mirrors the DB
+            trigger), an organizer must always be able to unpublish. */}
+        <SwitchRow
+          label="Public on Explore"
+          need={visBlockPublic}
+          checked={view.is_public}
+          busy={publicToggleSaving}
+          disabled={visBlockPublic}
+          onChange={handlePublicToggle}
+          desc={view.is_public
+            ? 'Anyone can find your page on Gavelling.'
+            : visNoDates
+              ? <>Add your dates before it can go public.{' '}<button type="button" onClick={() => document.getElementById('dates-card')?.scrollIntoView({ behavior: 'smooth', block: 'center' })} style={{ color: '#1B3828', fontWeight: 700, textDecoration: 'underline', textUnderlineOffset: 3, background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontSize: 'inherit', fontFamily: 'inherit' }}>Add dates</button></>
+              : visGateBlocks ? paymentGateMessage(view)
+              : 'Private. Only people with the link can open it.'}
+        />
+        <Row label="Your page link" desc={`gavelling.com/conferences/${view.slug}`} align="end">
+          <div className="flex items-center gap-2 flex-wrap justify-end">
+            <button type="button" onClick={handleCopyConferenceLink} className="gv-st-btn gv-st-outline">
+              {confLinkCopied ? <Check size={15} strokeWidth={3} aria-hidden /> : <Copy size={15} strokeWidth={2.4} aria-hidden />}
+              {confLinkCopied ? 'Copied' : 'Copy link'}
+            </button>
+            <a href={`/conferences/${view.slug}?preview=1`} target="_blank" rel="noopener noreferrer" className="gv-st-btn gv-st-forest">
+              <Eye size={15} strokeWidth={2.4} aria-hidden />
+              Open
+            </a>
+          </div>
+        </Row>
+      </SwitchGrid>
+      <p className="mt-2" style={{ ...TYPE.label, fontWeight: 800 }}>What your page shows</p>
+      <SwitchGrid>
+        <SwitchRow
+          label="The committee list"
+          desc="Turn it off if your committees are not announced yet."
+          checked={showCommittees}
+          busy={visibilitySavingKey === 'show_committees'}
+          disabled={visibilitySavingKey !== null}
+          onChange={(v) => saveVisibility('show_committees', v, setShowCommittees)}
+        />
+        <SwitchRow
+          label="Member counts"
+          desc="How many delegates are in each committee."
+          checked={showCommitteeCounts}
+          busy={visibilitySavingKey === 'show_committee_counts'}
+          disabled={visibilitySavingKey !== null}
+          onChange={(v) => saveVisibility('show_committee_counts', v, setShowCommitteeCounts)}
+        />
+        <SwitchRow
+          label="Taken countries"
+          desc="Which country seats are already allocated."
+          checked={showTakenCountries}
+          busy={visibilitySavingKey === 'show_taken_countries'}
+          disabled={visibilitySavingKey !== null}
+          onChange={(v) => saveVisibility('show_taken_countries', v, setShowTakenCountries)}
+        />
+      </SwitchGrid>
+    </Group>
+  );
+
   const extraListed = sheetRole && !addedRoles.includes(sheetRole) ? [...addedRoles, sheetRole] : addedRoles;
   const shellName = <>{conferenceAcronymLabel(view) || view.full_name}{view.acronym && view.full_name ? <> · {view.full_name}</> : null}</>;
   // With the tabs across the top the sections have the full width. Sections
   // made of label-and-control rows keep a reading width, so a switch never
   // drifts far from its label; General, Applications, Team and Awards use the
   // whole width.
-  const readingCap = activeTab === 'privacy' || activeTab === 'payments' || activeTab === 'delegations' || activeTab === 'partners' ? 1040 : undefined;
+  const readingCap = activeTab === 'payments' || activeTab === 'delegations' || activeTab === 'partners' ? 1040 : undefined;
 
   return (
     <div className="px-4 sm:px-6 md:px-10 pt-6 pb-10" style={{ maxWidth: activeTab === 'organizers' ? '1500px' : '1380px' }}>
@@ -3100,7 +3198,7 @@ export default function SettingsPage() {
                     // Dates TBD: keeps the conference private (no public link) until real
                     // dates are set, mirroring the DB CHECK conferences_tbd_not_public.
                     // Applications can still open while dates are undecided.
-                    <label className="inline-flex items-center gap-2 cursor-pointer" style={{ fontFamily: "var(--font-brand), sans-serif", fontSize: 13, fontWeight: 600, color: '#3A2E24' }}>
+                    <label className="inline-flex items-center gap-2 cursor-pointer" style={{ fontFamily: "var(--font-brand), sans-serif", fontSize: TYPE_PX.hint, fontWeight: 600, color: '#3A2E24' }}>
                       To be decided
                       <KitSwitch
                         label="Dates are to be decided"
@@ -3215,32 +3313,32 @@ export default function SettingsPage() {
                     ))}
                   </div>
                 </IdField>
+                {/* About: moved into the identity card on 12 Oct 2026 (owner:
+                    "the description about the conference could also be in
+                    that section"). Same state, same autosave. */}
+                <IdField
+                  label="About your conference" emoji="Memo" htmlFor="set-description" span={6}
+                  aside={<span className="gvg-note" style={{ margin: 0, fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{description.length} / 1500</span>}
+                  note="Shown on your public page."
+                >
+                  <textarea
+                    id="set-description"
+                    rows={3}
+                    className="gvg-input gvg-area"
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                    placeholder="Tell delegates about your conference, theme, highlights, what to expect"
+                    maxLength={1500}
+                  />
+                </IdField>
               </div>
             </div>
           </section>
 
-          {/* ── About ── */}
-          <Group title="About Your Conference" emoji="Memo" icon={FileText} tint={TINT_GOLD_BG} hang="start">
-            <div>
-              <label htmlFor="set-description" className="sr-only">Description</label>
-              <textarea
-                id="set-description"
-                rows={3}
-                className="gvg-input gvg-area"
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                placeholder="Tell delegates about your conference, theme, highlights, what to expect"
-                maxLength={1500}
-              />
-              <div className="flex items-center justify-between gap-3" style={{ marginTop: 5, fontFamily: "var(--font-brand), sans-serif", fontSize: 12.5, color: '#5C4F42' }}>
-                <span>Shown on your public page.</span>
-                <span style={{ fontWeight: 600, color: '#6E6152', fontVariantNumeric: 'tabular-nums' }}>{description.length} / 1500</span>
-              </div>
-            </div>
-          </Group>
+          {visibilityCard}
 
           {/* ── Colours ── */}
-          <Group title="Your Colours" emoji="Artist palette" icon={Palette} tint={TINT_GREEN_BG} hang="start">
+          <Group title="Your Colours" emoji="Artist palette" icon={Palette} tint={TINT_GREEN_BG}>
             <div className="gvk-row" style={{ display: 'block' }}>
               <CustomizationCard
                 conferenceId={conference.id}
@@ -3254,7 +3352,7 @@ export default function SettingsPage() {
 
           {/* ── Contact and links ── */}
           <Group
-            id="contact-card" title="Contact and Links" emoji="Envelope" icon={MailIcon} tint={TINT_GREEN_BG} hang="start"
+            id="contact-card" title="Contact and Links" emoji="Envelope" icon={MailIcon} tint={TINT_GREEN_BG}
             aside={<AutoSaveStatus saving={visualSaving} saved={visualSaved} />}
           >
             <div className="gvg-fields">
@@ -3262,36 +3360,40 @@ export default function SettingsPage() {
                 label="Contact email" htmlFor="set-contact-email"
                 note={contactEmailError ? <span style={{ color: '#8B2020' }}>{contactEmailError}</span> : 'Where applicants write to you.'}
               >
-                <input
-                  id="set-contact-email"
-                  type="email"
-                  className="gvg-input"
-                  value={contactEmail}
-                  onChange={(e) => { setContactEmail(e.target.value); if (contactEmailError) setContactEmailError(''); }}
-                  placeholder="hello@yourmun.org"
-                  onBlur={(e) => {
-                    const trimmed = e.target.value.trim();
-                    if (trimmed && !CONTACT_EMAIL_PATTERN.test(trimmed)) setContactEmailError('Enter a single email address, e.g. contact@yourmun.org.');
-                    else setContactEmailError('');
-                  }}
-                />
+                <IconInput icon={<Emoji3D name="Envelope" size={22} />}>
+                  <input
+                    id="set-contact-email"
+                    type="email"
+                    className="gvg-input"
+                    value={contactEmail}
+                    onChange={(e) => { setContactEmail(e.target.value); if (contactEmailError) setContactEmailError(''); }}
+                    placeholder="hello@yourmun.org"
+                    onBlur={(e) => {
+                      const trimmed = e.target.value.trim();
+                      if (trimmed && !CONTACT_EMAIL_PATTERN.test(trimmed)) setContactEmailError('Enter a single email address, e.g. contact@yourmun.org.');
+                      else setContactEmailError('');
+                    }}
+                  />
+                </IconInput>
               </PlainField>
               {([
-                { label: 'Website', value: websiteUrl, setter: setWebsiteUrl },
-                { label: 'Instagram', value: instagramUrl, setter: setInstagramUrl },
-                { label: 'WhatsApp', value: whatsappUrl, setter: setWhatsappUrl },
-                { label: 'TikTok', value: tiktokUrl, setter: setTiktokUrl },
-                { label: 'Facebook', value: facebookUrl, setter: setFacebookUrl },
-              ] as { label: string; value: string; setter: (v: string) => void }[]).map(({ label, value, setter }) => (
+                { label: 'Website', platform: null, value: websiteUrl, setter: setWebsiteUrl },
+                { label: 'Instagram', platform: 'instagram', value: instagramUrl, setter: setInstagramUrl },
+                { label: 'WhatsApp', platform: 'whatsapp', value: whatsappUrl, setter: setWhatsappUrl },
+                { label: 'TikTok', platform: 'tiktok', value: tiktokUrl, setter: setTiktokUrl },
+                { label: 'Facebook', platform: 'facebook', value: facebookUrl, setter: setFacebookUrl },
+              ] as { label: string; platform: string | null; value: string; setter: (v: string) => void }[]).map(({ label, platform, value, setter }) => (
                 <PlainField key={label} label={label} htmlFor={`set-link-${label}`}>
-                  <input
-                    id={`set-link-${label}`}
-                    type="url"
-                    className="gvg-input"
-                    value={value}
-                    onChange={(e) => setter(e.target.value)}
-                    placeholder="https://"
-                  />
+                  <IconInput icon={platform ? <PlatformLogo platform={platform} size={20} /> : <Emoji3D name="Globe with meridians" size={22} />}>
+                    <input
+                      id={`set-link-${label}`}
+                      type="url"
+                      className="gvg-input"
+                      value={value}
+                      onChange={(e) => setter(e.target.value)}
+                      placeholder="https://"
+                    />
+                  </IconInput>
                 </PlainField>
               ))}
             </div>
@@ -3299,14 +3401,14 @@ export default function SettingsPage() {
 
           {/* ── Editions (lineage) ── */}
           <Group
-            title="Past Editions" emoji="Books" icon={History} tint={TINT_GOLD_BG} hang="start"
+            title="Past Editions" emoji="Books" icon={History} tint={TINT_GOLD_BG}
             hint={<InfoHint label="About editions" text="Link editions of the same conference across years. A link only counts once the previous edition's owner approves it." />}
           >
             <div className="gvk-row" style={{ display: 'block' }}>
         {/* Outgoing claim: this conference's predecessor */}
         <p
-          className="text-xs font-bold mb-2"
-          style={{ color: '#6E5F4E', fontFamily: "var(--font-brand), sans-serif", letterSpacing: '0.02em' }}
+          className="mb-2"
+          style={{ ...TYPE.label, fontWeight: 700 }}
         >
           Previous edition
         </p>
@@ -3316,10 +3418,10 @@ export default function SettingsPage() {
             style={{ backgroundColor: 'rgba(27,56,40,0.03)', border: '1px solid rgba(27,56,40,0.08)' }}
           >
             <div className="flex-1 min-w-0">
-              <p className="font-semibold text-sm [overflow-wrap:anywhere]" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>
+              <p className="[overflow-wrap:anywhere]" style={TYPE.label}>
                 {predecessorInfo?.full_name ?? 'A private conference'}
               </p>
-              <p className="text-xs" style={{ color: '#6E6152', fontFamily: "var(--font-brand), sans-serif" }}>
+              <p style={TYPE.hint}>
                 {view.predecessor_approved
                   ? 'Confirmed as the previous edition of this conference.'
                   : 'Waiting for its Main Organiser to confirm the link.'}
@@ -3340,20 +3442,20 @@ export default function SettingsPage() {
             </button>
           </div>
         ) : (
-          <p className="text-sm mb-6" style={{ color: '#6E6152', fontFamily: "var(--font-brand), sans-serif" }}>
+          <p className="mb-6" style={TYPE.hint}>
             No previous edition linked. You can link one when creating your next edition on Gavelling.
           </p>
         )}
 
         {/* Incoming claims: conferences claiming this one as their predecessor */}
         <p
-          className="text-xs font-bold mb-2"
-          style={{ color: '#6E5F4E', fontFamily: "var(--font-brand), sans-serif", letterSpacing: '0.02em' }}
+          className="mb-2"
+          style={{ ...TYPE.label, fontWeight: 700 }}
         >
           Incoming claims
         </p>
         {incomingClaims.length === 0 ? (
-          <p className="text-sm" style={{ color: '#6E6152', fontFamily: "var(--font-brand), sans-serif" }}>
+          <p style={TYPE.hint}>
             No conferences currently claim {view.acronym} as their previous edition.
           </p>
         ) : (
@@ -3368,13 +3470,13 @@ export default function SettingsPage() {
                   style={{ borderBottom: isLast ? 'none' : '1px solid #F0EDE6' }}
                 >
                   <div className="flex-1 min-w-0">
-                    <p style={{ fontSize: 12, color: '#B6871F', fontFamily: "var(--font-brand), sans-serif", fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase' }}>
+                    <p style={{ ...TYPE.hint, color: '#8A6614', fontWeight: 700 }}>
                       {claim.acronym}{year ? ' · ' + year : ''}
                     </p>
-                    <p className="font-semibold text-sm [overflow-wrap:anywhere]" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>
+                    <p className="[overflow-wrap:anywhere]" style={TYPE.label}>
                       {claim.full_name}
                     </p>
-                    <p className="text-xs" style={{ color: '#6E6152', fontFamily: "var(--font-brand), sans-serif" }}>
+                    <p style={TYPE.hint}>
                       claims to be the next edition of {view.acronym}
                     </p>
                   </div>
@@ -3437,7 +3539,7 @@ export default function SettingsPage() {
                 type="button"
                 onClick={() => { if (!isOwner) { notifyErr('Only the conference owner can delete this conference.', 'settings-delete'); return; } clearErr('settings-delete'); setConfirmingDelete(true); }}
                 className="gv-st-btn"
-                style={{ minHeight: 40, padding: '0 14px', background: '#FFFFFF', color: '#8B2020', boxShadow: 'inset 0 0 0 1.5px rgba(139,32,32,0.45)' }}
+                style={{ background: '#FFFFFF', color: '#8B2020', boxShadow: 'inset 0 0 0 1.5px rgba(139,32,32,0.45)' }}
               >
                 <Trash2 size={15} strokeWidth={2.4} aria-hidden />
                 Delete
@@ -3709,7 +3811,7 @@ export default function SettingsPage() {
                   <div className="flex-1 min-w-0">
                     <p
                       className="[overflow-wrap:anywhere]"
-                      style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif", fontWeight: 800, fontSize: '14px', fontVariantNumeric: 'tabular-nums' }}
+                      style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif", fontWeight: 800, fontSize: TYPE_PX.body, fontVariantNumeric: 'tabular-nums' }}
                     >
                       {partnerLabel(link)}{!isCompany && year ? ` ${year}` : ''}
                     </p>
@@ -3742,7 +3844,7 @@ export default function SettingsPage() {
                   <span
                     className="flex-shrink-0 inline-flex items-center gap-1 font-bold"
                     style={{
-                      fontSize: '12px',
+                      fontSize: TYPE_PX.hint,
                       fontFamily: "var(--font-brand), sans-serif",
                       color: isCompany ? '#8A6614' : link.approved ? '#2A5A3C' : '#8A6614',
                     }}
@@ -3806,7 +3908,7 @@ export default function SettingsPage() {
                       }}
                       onBlur={() => handleCompanyUrlBlur(link)}
                       placeholder="https://"
-                      style={{ ...inputStyle, padding: '6px 10px', fontSize: '12px', maxWidth: 320 }}
+                      style={{ ...inputStyle, padding: '6px 10px', fontSize: TYPE_PX.hint, maxWidth: 320 }}
                       onFocus={fgInput}
                     />
                     {partnerUrlWarnings[link.id] && (
@@ -3845,7 +3947,7 @@ export default function SettingsPage() {
                   >
                     <PartnerDisc logoUrl={claim.requester_logo_url} acronym={claim.requester_acronym} />
                     <div className="flex-1 min-w-0">
-                      <p style={{ fontSize: 12, color: '#B6871F', fontFamily: "var(--font-brand), sans-serif", fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', fontVariantNumeric: 'tabular-nums' }}>
+                      <p style={{ fontSize: TYPE_PX.hint, color: '#B6871F', fontFamily: "var(--font-brand), sans-serif", fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', fontVariantNumeric: 'tabular-nums' }}>
                         {claim.requester_acronym}{year ? ' · ' + year : ''}
                       </p>
                       <p className="font-semibold text-sm [overflow-wrap:anywhere]" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>
@@ -3994,7 +4096,7 @@ export default function SettingsPage() {
               </p>
               <span
                 style={{
-                  fontSize: 15, fontWeight: 800, lineHeight: 1,
+                  fontSize: TYPE_PX.body, fontWeight: 800, lineHeight: 1,
                   fontFamily: OUTFIT, fontVariantNumeric: 'tabular-nums',
                   color: r.accent,
                 }}
@@ -4366,7 +4468,7 @@ export default function SettingsPage() {
                       <span
                         className="mt-2.5 inline-flex items-center gap-1"
                         style={{
-                          fontSize: 12, fontWeight: 700, fontFamily: OUTFIT, color: '#7A5A10',
+                          fontSize: TYPE_PX.hint, fontWeight: 700, fontFamily: OUTFIT, color: '#7A5A10',
                         }}
                       >
                         <Clock size={14} strokeWidth={2.2} aria-hidden />
@@ -4426,90 +4528,6 @@ export default function SettingsPage() {
         );
       })()}
 
-      {activeTab === 'privacy' && (() => {
-        const noDates = view.dates_tbd || !view.start_date;
-        const gateBlocks = paymentGateBlocks(view);
-        const blockPublic = !view.is_public && (gateBlocks || noDates);
-        return (
-          <div className="flex flex-col gap-5">
-            <SectionHead emoji={view.is_public ? 'Globe showing europe-africa' : 'Locked'} icon={view.is_public ? Globe : Lock}
-              tint={view.is_public ? TINT_GREEN_BG : TINT_GOLD_BG}
-              title="Visibility"
-              line="Who can find your conference, and what its page shows."
-              focal={
-                <span className="inline-flex items-center gap-2.5">
-                  <span style={{ fontFamily: "var(--font-brand), sans-serif", fontSize: 'clamp(30px, 3.6vw, 44px)', fontWeight: 900, letterSpacing: '-0.03em', lineHeight: 1, color: view.is_public ? '#1B3828' : '#8A6614' }}>
-                    {view.is_public ? 'Public' : 'Private'}
-                  </span>
-                </span>
-              }
-            />
-            <Group title="Who Can Find It" emoji="Magnifying glass tilted left" icon={Search} tint={TINT_GREEN_BG}>
-              <Row
-                label="Public on Explore"
-                align="end"
-                on={view.is_public}
-                need={blockPublic}
-                desc={view.is_public
-                  ? 'Anyone can find your page on Gavelling.'
-                  : noDates
-                    ? <>Add your dates before it can go public.{' '}<button type="button" onClick={() => router.push(`${window.location.pathname}?tab=general&focus=dates`)} style={{ color: '#1B3828', fontWeight: 700, textDecoration: 'underline', textUnderlineOffset: 3, background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontSize: 'inherit', fontFamily: 'inherit' }}>Add dates</button></>
-                    : gateBlocks ? paymentGateMessage(view)
-                    : 'Private. Only people with the link can open it.'}
-              >
-                {/* Only the private->public direction is gated (mirrors the DB
-                    trigger), an organizer must always be able to unpublish. */}
-                <KitSwitch
-                  label="Public on Explore"
-                  checked={view.is_public}
-                  busy={publicToggleSaving}
-                  disabled={blockPublic}
-                  onChange={handlePublicToggle}
-                />
-              </Row>
-              <Row label="Your page link" desc={`gavelling.com/conferences/${view.slug}`} align="end">
-                <div className="flex items-center gap-2 flex-wrap justify-end">
-                  <button type="button" onClick={handleCopyConferenceLink} className="gv-st-btn gv-st-outline" style={{ minHeight: 40, padding: '0 14px' }}>
-                    {confLinkCopied ? <Check size={15} strokeWidth={3} aria-hidden /> : <Copy size={15} strokeWidth={2.4} aria-hidden />}
-                    {confLinkCopied ? 'Copied' : 'Copy link'}
-                  </button>
-                  <a href={`/conferences/${view.slug}?preview=1`} target="_blank" rel="noopener noreferrer" className="gv-st-btn gv-st-forest" style={{ minHeight: 40, padding: '0 14px' }}>
-                    <Eye size={15} strokeWidth={2.4} aria-hidden />
-                    Open
-                  </a>
-                </div>
-              </Row>
-            </Group>
-            <Group title="What Your Page Shows" emoji="Eyes" icon={Eye} tint={TINT_GOLD_BG} aside={visibilityStatus !== 'idle' ? <AutoSaveStatus saving={visibilityStatus === 'saving'} saved={visibilityStatus === 'saved'} /> : undefined}>
-              <SwitchRow
-                label="The committee list"
-                desc="Turn it off if your committees are not announced yet."
-                checked={showCommittees}
-                busy={visibilitySavingKey === 'show_committees'}
-                disabled={visibilitySavingKey !== null}
-                onChange={(v) => saveVisibility('show_committees', v, setShowCommittees)}
-              />
-              <SwitchRow
-                label="Member counts"
-                desc="How many delegates are in each committee."
-                checked={showCommitteeCounts}
-                busy={visibilitySavingKey === 'show_committee_counts'}
-                disabled={visibilitySavingKey !== null}
-                onChange={(v) => saveVisibility('show_committee_counts', v, setShowCommitteeCounts)}
-              />
-              <SwitchRow
-                label="Taken countries"
-                desc="Which country seats are already allocated."
-                checked={showTakenCountries}
-                busy={visibilitySavingKey === 'show_taken_countries'}
-                disabled={visibilitySavingKey !== null}
-                onChange={(v) => saveVisibility('show_taken_countries', v, setShowTakenCountries)}
-              />
-            </Group>
-          </div>
-        );
-      })()}
-
       {activeTab === 'payments' && (() => {
         const ready = conferencePaymentsReady(view);
         const note = (view.external_payment_note ?? '').trim().toLowerCase();
@@ -4545,7 +4563,7 @@ export default function SettingsPage() {
                 need={!ready}
                 desc={ready ? method : 'Pick how people pay you. Even a free conference needs one before applications open.'}
               >
-                <a href={`${fin}?open=payment`} className="gv-st-btn gv-st-forest" style={{ minHeight: 40, padding: '0 14px' }}>
+                <a href={`${fin}?open=payment`} className="gv-st-btn gv-st-forest">
                   {ready ? 'Change' : 'Set up payments'}<ChevronRightIcon size={16} strokeWidth={2.4} aria-hidden />
                 </a>
               </Row>
@@ -4556,7 +4574,7 @@ export default function SettingsPage() {
                   label={<span className="inline-flex items-center gap-2.5"><EmojiDisc emoji={d.emoji} icon={d.icon} size={32} tint={TINT_GOLD_BG} />{d.label}</span>}
                   desc={d.desc}
                 >
-                  <a href={d.href} className="gv-st-btn gv-st-outline" style={{ minHeight: 40, padding: '0 14px' }}>
+                  <a href={d.href} className="gv-st-btn gv-st-outline">
                     Open<ChevronRightIcon size={16} strokeWidth={2.4} aria-hidden />
                   </a>
                 </Row>
@@ -4566,7 +4584,7 @@ export default function SettingsPage() {
                 label={<span className="inline-flex items-center gap-2.5"><EmojiDisc emoji="Spiral calendar" icon={CalendarDays} size={32} tint={TINT_GREEN_BG} />Prices for each role</span>}
                 desc="Set in each role under Applications, with prices by date."
               >
-                <button type="button" onClick={() => openSection('applications')} className="gv-st-btn gv-st-outline" style={{ minHeight: 40, padding: '0 14px' }}>
+                <button type="button" onClick={() => openSection('applications')} className="gv-st-btn gv-st-outline">
                   Applications<ChevronRightIcon size={16} strokeWidth={2.4} aria-hidden />
                 </button>
               </Row>
@@ -4639,7 +4657,7 @@ export default function SettingsPage() {
                   onMouseEnter={(e) => { if (!blocked && !active) (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.05)'; }}
                   onMouseLeave={(e) => { if (!active) (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
                 >
-                  <span className="flex items-center gap-1.5" style={{ fontSize: 12, fontWeight: 800, color: '#1C1410' }}>
+                  <span className="flex items-center gap-1.5" style={{ fontSize: TYPE_PX.hint, fontWeight: 800, color: '#1C1410' }}>
                     {b.label}
                     {active && <Check size={13} strokeWidth={3} style={{ color: '#1B3828' }} />}
                   </span>
@@ -4800,11 +4818,11 @@ export default function SettingsPage() {
                           onMouseUp={(e) => { (e.currentTarget as HTMLElement).style.scale = '1'; }}
                           onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.scale = '1'; }}
                         >
-                          <span className="flex items-center gap-2" style={{ fontSize: 12.5, fontWeight: 800, color: '#1C1410' }}>
+                          <span className="flex items-center gap-2" style={{ fontSize: TYPE_PX.hint, fontWeight: 800, color: '#1C1410' }}>
                             {b.label}
                             {active && <Check size={14} strokeWidth={3} style={{ color: '#1B3828' }} />}
                           </span>
-                          <span className="block mt-1" style={{ fontSize: 12.5, color: NEU.inkSoft, lineHeight: 1.5, textWrap: 'pretty' }}>
+                          <span className="block mt-1" style={{ fontSize: TYPE_PX.hint, color: NEU.inkSoft, lineHeight: 1.5, textWrap: 'pretty' }}>
                             {b.summary}
                           </span>
                           {b.caveat && (
@@ -4850,7 +4868,7 @@ export default function SettingsPage() {
                           className="flex items-center gap-1.5 rounded-xl focus:outline-none"
                           style={{
                             minHeight: 40, padding: '9px 12px', fontFamily: OUTFIT,
-                            fontSize: 12, fontWeight: 700,
+                            fontSize: TYPE_PX.hint, fontWeight: 700,
                             color: on ? '#1B3828' : NEU.inkSoft,
                             backgroundColor: on ? 'rgba(27,56,40,0.10)' : 'transparent',
                             border: on ? '1.5px solid rgba(27,56,40,0.30)' : '1.5px dashed #D8CDB6',
@@ -4904,7 +4922,7 @@ export default function SettingsPage() {
                   disabled={inviting}
                   className="flex items-center gap-1.5 rounded-xl focus:outline-none gv-lift"
                   style={{
-                    minHeight: 44, padding: '0 14px', fontFamily: OUTFIT, fontSize: 13, fontWeight: 700,
+                    minHeight: 40, padding: '0 14px', fontFamily: OUTFIT, fontSize: TYPE_PX.hint, fontWeight: 700,
                     color: NEU.inkSoft, background: 'transparent', border: '1.5px solid #DDD4C0',
                     opacity: inviting ? 0.5 : 1,
                     transitionProperty: 'color, border-color, box-shadow, transform', transitionDuration: '140ms',
@@ -4920,7 +4938,7 @@ export default function SettingsPage() {
                     disabled={inviteStep === 1 && !inviteEmail.trim()}
                     className="rounded-xl focus:outline-none gv-lift"
                     style={{
-                      minHeight: 44, padding: '0 20px', fontFamily: OUTFIT, fontSize: 13, fontWeight: 800,
+                      minHeight: 40, padding: '0 18px', fontFamily: OUTFIT, fontSize: TYPE_PX.hint, fontWeight: 800,
                       letterSpacing: 0, border: 'none',
                       backgroundColor: (inviteStep === 1 && !inviteEmail.trim()) ? '#DDD4C0' : '#1B3828',
                       color: (inviteStep === 1 && !inviteEmail.trim()) ? NEU.inkSoft : '#EED98A',
@@ -4940,7 +4958,7 @@ export default function SettingsPage() {
                     disabled={inviting || !inviteEmail.trim()}
                     className="rounded-xl focus:outline-none gv-lift"
                     style={{
-                      minHeight: 44, padding: '0 20px', fontFamily: OUTFIT, fontSize: 13, fontWeight: 800,
+                      minHeight: 40, padding: '0 18px', fontFamily: OUTFIT, fontSize: TYPE_PX.hint, fontWeight: 800,
                       letterSpacing: 0, border: 'none',
                       backgroundColor: (inviting || !inviteEmail.trim()) ? '#DDD4C0' : '#1B3828',
                       color: (inviting || !inviteEmail.trim()) ? NEU.inkSoft : '#EED98A',
@@ -5020,7 +5038,7 @@ export default function SettingsPage() {
                     <div
                       className="flex items-center justify-center rounded-full font-bold flex-shrink-0"
                       style={{
-                        width: 52, height: 52, fontFamily: OUTFIT, fontSize: 17,
+                        width: 52, height: 52, fontFamily: OUTFIT, fontSize: TYPE_PX.card,
                         backgroundColor: orgIsOwner ? 'rgba(182,135,31,0.16)' : 'rgba(27,56,40,0.10)',
                         color: orgIsOwner ? '#7A5A10' : '#1B3828',
                       }}
@@ -5167,7 +5185,7 @@ export default function SettingsPage() {
                             className="flex items-center gap-1.5 focus:outline-none gv-lift"
                             style={{
                               minHeight: 38, padding: '9px 14px', borderRadius: 999, fontFamily: OUTFIT,
-                              fontSize: 12, fontWeight: 800, letterSpacing: 0,
+                              fontSize: TYPE_PX.hint, fontWeight: 800, letterSpacing: 0,
                               color: '#1B3828', backgroundColor: 'rgba(27,56,40,0.09)',
                               border: '1.5px solid rgba(27,56,40,0.28)', cursor: 'pointer',
                               transitionProperty: 'background-color, scale, box-shadow, transform',
@@ -5208,7 +5226,7 @@ export default function SettingsPage() {
                               className="flex items-center gap-1.5 focus:outline-none"
                               style={{
                                 minHeight: 40, padding: '9px 12px', borderRadius: 999, fontFamily: OUTFIT,
-                                fontSize: 12, fontWeight: 700,
+                                fontSize: TYPE_PX.hint, fontWeight: 700,
                                 color: on ? '#1B3828' : NEU.inkSoft,
                                 backgroundColor: on ? 'rgba(27,56,40,0.10)' : 'transparent',
                                 border: on ? '1.5px solid rgba(27,56,40,0.30)' : '1.5px dashed #D8CDB6',
@@ -5251,7 +5269,7 @@ export default function SettingsPage() {
                           className="flex items-center gap-1.5 mt-3 focus:outline-none"
                           style={{
                             minHeight: 40, padding: '9px 12px', borderRadius: 999, fontFamily: OUTFIT,
-                            fontSize: 12, fontWeight: 700,
+                            fontSize: TYPE_PX.hint, fontWeight: 700,
                             color: readOnlyMoney ? '#7A5A10' : NEU.inkSoft,
                             backgroundColor: readOnlyMoney ? 'rgba(182,135,31,0.14)' : 'transparent',
                             border: readOnlyMoney ? '1.5px solid rgba(182,135,31,0.42)' : '1.5px dashed #D8CDB6',
@@ -5278,7 +5296,7 @@ export default function SettingsPage() {
                       onClick={() => { close(); handleRemoveOrganizer(org.id); }}
                       className="flex items-center justify-center gap-2 w-full focus:outline-none gv-lift"
                       style={{
-                        minHeight: 44, borderRadius: 14, fontFamily: OUTFIT, fontSize: 13, fontWeight: 800,
+                        minHeight: 40, borderRadius: 12, fontFamily: OUTFIT, fontSize: TYPE_PX.hint, fontWeight: 800,
                         letterSpacing: 0, color: '#8B2020', background: 'transparent',
                         border: '1.5px solid rgba(139,32,32,0.30)', cursor: 'pointer',
                         transitionProperty: 'background-color, scale, box-shadow, transform', transitionDuration: '140ms',

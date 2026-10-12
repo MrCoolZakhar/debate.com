@@ -136,6 +136,13 @@ const LOGOS: Record<string, { name: string; logo: Logo }> = {
   },
 };
 
+/** A platform's own logo, drawn locally (no third-party request), or null
+ *  when there is none. Used beside the link fields in Settings → General. */
+export function PlatformLogo({ platform, size = 20 }: { platform: string; size?: number }) {
+  const entry = LOGOS[platform];
+  return entry ? <>{entry.logo(size)}</> : null;
+}
+
 const WORD_NAMES: Record<string, string> = {
   threads: 'Threads', snapchat: 'Snapchat', pinterest: 'Pinterest', duckduckgo: 'DuckDuckGo',
   yahoo: 'Yahoo', ecosia: 'Ecosia', yandex: 'Yandex', baidu: 'Baidu', brave: 'Brave Search',

@@ -16,6 +16,8 @@ export interface ParticipantApplication {
   spots_pledged: number | null;
   pledge_confirmed_at: string | null;
   organizer_note: string | null;
+  /** Times turned down (server-owned); after 3 no resubmission. */
+  rejection_count?: number | null;
   /** A delegate who leads their delegation (reads 'head-delegate' documents). */
   is_head_delegate?: boolean | null;
 }

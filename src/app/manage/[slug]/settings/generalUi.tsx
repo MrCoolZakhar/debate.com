@@ -19,7 +19,7 @@ import { useLayoutEffect, useRef, type CSSProperties, type ReactNode } from 'rea
 import { Camera, ImagePlus } from 'lucide-react';
 import { LogoDisc } from '@/components/LogoDisc';
 import { Emoji3D } from '@/components/neu';
-import { F, INK, INK_SOFT, FOREST } from './panelKit';
+import { F, INK, INK_SOFT, FOREST, TYPE_PX } from './panelKit';
 
 export const GENERAL_CSS = `
 .gvg-id { padding: 0 !important; container-type: inline-size; scroll-margin-top: 140px; }
@@ -56,7 +56,7 @@ export const GENERAL_CSS = `
 .gvg-logo-change:active { transform: translateX(-50%) scale(0.97); }
 .gvg-head { min-width: 0; padding-top: 14px; display: flex; flex-direction: column; gap: 4px; }
 .gvg-head-line { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 24px; }
-.gvg-name { display: block; width: 100%; min-width: 0; resize: none; overflow: hidden; field-sizing: content; font-family: ${F}; font-size: clamp(19px, 2.6cqw, 24px); font-weight: 800; letter-spacing: -0.015em;
+.gvg-name { display: block; width: 100%; min-width: 0; resize: none; overflow: hidden; field-sizing: content; font-family: ${F}; font-size: ${TYPE_PX.section}; font-weight: 800; letter-spacing: -0.015em;
   color: ${INK}; line-height: 1.2; padding: 4px 8px; margin-left: -8px; border-radius: 10px; border: 1.5px solid transparent;
   background: transparent; outline: none; transition: border-color 140ms ease, background-color 140ms ease; }
 .gvg-name::placeholder { color: #9A8A78; font-weight: 700; }
@@ -68,21 +68,22 @@ export const GENERAL_CSS = `
 .gvg-acro-note { display: flex; align-items: center; margin: 0 !important; }
 @container (min-width: 440px) {
   .gvg-acro { grid-template-columns: minmax(150px, 220px) minmax(0, 1fr); }
-  .gvg-acro-note { min-height: 46px; }
+  .gvg-acro-note { min-height: 42px; }
 }
 .gvg-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 18px 16px; margin-top: 22px; padding-top: 20px;
   border-top: 1px solid rgba(27,56,40,0.07); align-items: start; }
 .gvg-field { min-width: 0; border-radius: 14px; transition: box-shadow 400ms ease; }
 .gvg-field[data-ring="true"] { box-shadow: 0 0 0 6px rgba(238,217,138,0.55), 0 0 0 7px rgba(182,135,31,0.35); }
-.gvg-label { display: flex; align-items: center; gap: 7px; margin-bottom: 6px; font-family: ${F}; font-size: 13.5px; font-weight: 700; color: #3A2E24; line-height: 1.25; }
+.gvg-label { display: flex; align-items: center; gap: 7px; margin-bottom: 6px; font-family: ${F}; font-size: ${TYPE_PX.label}; font-weight: 600; color: ${INK}; line-height: 1.3; }
 .gvg-label img { flex-shrink: 0; }
 /* Every field's label line is the same height (the Dates switch included), so
    the fields in one grid row start on one line. */
 .gvg-labelrow { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 30px; margin-bottom: 6px; }
-.gvg-note { margin-top: 6px; font-family: ${F}; font-size: 12.5px; color: ${INK_SOFT}; line-height: 1.4; overflow-wrap: anywhere; }
-/* One control look for the whole card: 46px tall, ivory fill, the same edge
-   and radius as the date picker beside it. */
-.gvg-input { display: block; width: 100%; min-width: 0; height: 46px; padding: 0 14px; border-radius: 12px; border: 1.5px solid #D9CFBA;
+.gvg-note { margin-top: 6px; font-family: ${F}; font-size: ${TYPE_PX.hint}; color: ${INK_SOFT}; line-height: 1.45; overflow-wrap: anywhere; }
+/* One control look for the whole card: 42px tall (owner, 12 Oct 2026: some
+   controls were "way too big"), ivory fill, the same edge and radius as the
+   date picker beside it. Inputs stay 16px so iOS never zooms. */
+.gvg-input { display: block; width: 100%; min-width: 0; height: 42px; padding: 0 13px; border-radius: 11px; border: 1.5px solid #D9CFBA;
   background: #FAF8F3; font-family: ${F}; font-size: 16px; color: ${INK}; outline: none; -webkit-appearance: none; appearance: none;
   transition: border-color 140ms ease, background-color 140ms ease, box-shadow 160ms ease; }
 .gvg-input::placeholder { color: #8C7E68; }
@@ -96,7 +97,7 @@ export const GENERAL_CSS = `
 .gvg-country-name[data-empty="true"] { color: #8C7E68; }
 .gvg-country-empty { width: 24px; height: 24px; border-radius: 999px; flex-shrink: 0; border: 1.5px dashed #C4B697; }
 /* The shared DatePicker's trigger, drawn as a .gvg-input. */
-.gvg-date > div > button { height: 46px !important; padding: 0 14px !important; border-radius: 12px !important; font-size: 16px !important;
+.gvg-date > div > button { height: 42px !important; padding: 0 13px !important; border-radius: 11px !important; font-size: 16px !important;
   border: 1.5px solid #D9CFBA !important; background: #FAF8F3 !important; }
 .gvg-date > div > button:hover { border-color: #C4B697 !important; }
 .gvg-date > div > button:focus-visible { border-color: ${FOREST} !important; box-shadow: 0 0 0 3px rgba(27,56,40,0.10) !important; }
@@ -109,7 +110,7 @@ export const GENERAL_CSS = `
 .gvg-seg button[aria-checked="false"]:hover { border-color: #C4B697; background: #FFFFFF; }
 .gvg-seg button:focus { outline: none; }
 .gvg-seg button:focus-visible { outline: 2px solid ${FOREST}; outline-offset: 2px; }
-.gvg-seg button { min-height: 46px !important; height: 46px; font-size: 14px !important; padding: 0 6px; border-radius: 12px !important; line-height: 1.15; }
+.gvg-seg button { min-height: 40px !important; height: 40px; font-size: 14px !important; padding: 0 6px; border-radius: 11px !important; line-height: 1.15; }
 @container (max-width: 520px) {
   .gvg-presets-word { display: none; }
   .gvg-logo { width: 88px; height: 88px; margin-top: -44px; }
@@ -127,6 +128,10 @@ export const GENERAL_CSS = `
   .gvg-span-4 { grid-column: span 4; }
   .gvg-span-6 { grid-column: span 6; }
 }
+/* A field with its platform's icon inside, at the start (Contact and Links). */
+.gvg-icon-field { position: relative; }
+.gvg-icon-field > .gvg-input { padding-left: 44px; }
+.gvg-icon-in { position: absolute; left: 13px; top: 50%; transform: translateY(-50%); display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; pointer-events: none; }
 .gvg-fields { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px 14px; }
 @container (min-width: 520px) { .gvg-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @container (min-width: 760px) { .gvg-fields { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
@@ -286,5 +291,17 @@ export function NameField({ id, value, onChange, placeholder, onFocus, onBlur }:
       onFocus={onFocus}
       onBlur={onBlur}
     />
+  );
+}
+
+/** An input with an icon inside it at the start: a platform's own logo
+ *  (PlatformLogo) or a 3D emoji. The icon is decoration; the label stays the
+ *  field's name. */
+export function IconInput({ icon, children }: { icon: ReactNode; children: ReactNode }) {
+  return (
+    <div className="gvg-icon-field">
+      <span className="gvg-icon-in" aria-hidden>{icon}</span>
+      {children}
+    </div>
   );
 }

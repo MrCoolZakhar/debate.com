@@ -63,6 +63,7 @@ import { reportCrash } from '@/lib/reportCrash';
 const LOAD_WATCHDOG_MS = 12_000;
 import { useServerNow } from '@/lib/applicationWindow';
 import { RoleApplyCards, type RoleTile } from './RoleApplyCards';
+import { ContactOrganisers } from './ContactOrganisers';
 
 const GRAIN = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='grain'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23grain)' opacity='1'/%3E%3C/svg%3E")`;
 
@@ -730,6 +731,10 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
   // than once per tab, and coming back to a tab shows what's already here.
   const [activeTab, setActiveTab] = useState<TabKey>(initialView);
   const [activeRole, setActiveRole] = useState<string | null>(initialRole);
+  // Bumped by the Apply card's Contact the organisers when the conference has
+  // no contact email: ParticipantView opens its Ask the Organisers section,
+  // then resets it to 0.
+  const [askOrganisersRequest, setAskOrganisersRequest] = useState(0);
   /** +1 = the incoming pane slides in from the right, -1 from the left. */
   const [slideDir, setSlideDir] = useState<1 | -1>(1);
   // The pane animation is for *switching*, not for arriving. Without this the
@@ -1359,7 +1364,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
 
       const { data: appsData } = await authedSupabase
         .from('applications')
-        .select('id, role, status, payment_status, society_id, self_paid, pledge_type, spots_pledged, pledge_confirmed_at, organizer_note, is_head_delegate')
+        .select('id, role, status, payment_status, society_id, self_paid, pledge_type, spots_pledged, pledge_confirmed_at, organizer_note, is_head_delegate, rejection_count')
         .eq('conference_id', conf.id)
         .eq('user_id', user.id);
 
@@ -2446,6 +2451,8 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                   onSelectRole={selectRole}
                   participantDataLoading={authLoading || participantDataLoading}
                   justClaimedCount={justClaimedCount}
+                  openSupportRequest={askOrganisersRequest}
+                  onSupportRequestHandled={() => setAskOrganisersRequest(0)}
                   // Patch in place rather than refetching the conference: the
                   // RPC has already committed, and this is the only row that
                   // changed.
@@ -2848,6 +2855,21 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                           }}
                         />
                       </>
+                    )}
+                    {/* Contact the organisers (12 Oct 2026): straight under
+                        Apply, to the conference's own address. Without one,
+                        a signed-in applicant is sent to the dashboard's Ask
+                        the Organisers thread; otherwise nothing shows.
+                        Never for the organising team itself. */}
+                    {!isOrganizerViewer && (
+                      <ContactOrganisers
+                        email={conference.contact_email}
+                        conferenceName={conference.acronym || conference.full_name}
+                        onAsk={user && myApp && !authLoading && !participantDataLoading ? () => {
+                          showTab('participant', myApp.role);
+                          setAskOrganisersRequest(n => n + 1);
+                        } : undefined}
+                      />
                     )}
                   </div>
                 </div>

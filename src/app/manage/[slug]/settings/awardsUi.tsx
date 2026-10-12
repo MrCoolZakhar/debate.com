@@ -34,7 +34,7 @@ import { notifyErr } from '@/lib/appNotify';
 import { committeeDisplayName } from '@/lib/presetNames';
 import {
   F, INK, INK_SOFT, FOREST, GOLD, AMBER, INPUT,
-  SectionHead, Switch, EmojiDisc, BigCount, TINT_GOLD_BG, TINT_GREEN_BG,
+  SectionHead, Switch, EmojiDisc, BigCount, TINT_GOLD_BG, TINT_GREEN_BG, TYPE_PX
 } from './panelKit';
 import { AwardsReview } from './awardsReview';
 
@@ -160,7 +160,7 @@ function LabelField({ value, fallback, onCommit, id }: { value: string; fallback
         if (e.key === 'Enter') { e.preventDefault(); (e.target as HTMLInputElement).blur(); }
         if (e.key === 'Escape') { setDraft(value); (e.target as HTMLInputElement).blur(); }
       }}
-      style={{ ...INPUT, width: '100%', minHeight: 40, fontSize: 14.5 }}
+      style={{ ...INPUT, width: '100%', minHeight: 40, fontSize: TYPE_PX.body }}
     />
   );
 }
@@ -188,7 +188,7 @@ function AwardCard({ type, preset, onPatch, onRemove }: {
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p style={{ fontFamily: F, fontSize: 16, fontWeight: 800, color: INK, lineHeight: 1.25, overflowWrap: 'anywhere' }}>{type.label}</p>
-          <p style={{ fontFamily: F, fontSize: 13, color: INK_SOFT, marginTop: 2 }}>{preset ? preset.line : 'Your own award'}</p>
+          <p style={{ fontFamily: F, fontSize: TYPE_PX.hint, color: INK_SOFT, marginTop: 2 }}>{preset ? preset.line : 'Your own award'}</p>
         </div>
         {preset ? (
           <Switch
@@ -217,13 +217,13 @@ function AwardCard({ type, preset, onPatch, onRemove }: {
             </div>
           )}
           <div>
-            <label htmlFor={fieldId} style={{ fontFamily: F, fontSize: 12.5, fontWeight: 600, color: INK_SOFT }}>Name on the certificate</label>
+            <label htmlFor={fieldId} style={{ fontFamily: F, fontSize: TYPE_PX.hint, fontWeight: 600, color: INK_SOFT }}>Name on the certificate</label>
             <div className="mt-1">
               <LabelField id={fieldId} value={type.label} fallback={preset?.names[0] ?? 'Custom award'} onCommit={(v) => onPatch({ label: v })} />
             </div>
           </div>
           <div className="flex items-center justify-between gap-3">
-            <span style={{ fontFamily: F, fontSize: 13.5, fontWeight: 700, color: INK }}>Per committee</span>
+            <span style={{ fontFamily: F, fontSize: TYPE_PX.hint, fontWeight: 700, color: INK }}>Per committee</span>
             <Stepper label={type.label} value={Math.max(1, type.perCommittee)} onChange={(v) => onPatch({ perCommittee: v })} />
           </div>
         </div>
@@ -265,7 +265,7 @@ function AwardSetEditor({ types, onChange }: { types: AwardTypeConfig[]; onChang
           style={{ background: g.id === 'placements'
             ? 'radial-gradient(120% 90% at 100% 0%, rgba(238,217,138,0.28) 0%, rgba(238,217,138,0) 55%), #FFFFFF'
             : 'radial-gradient(120% 90% at 100% 0%, rgba(61,122,82,0.09) 0%, rgba(61,122,82,0) 55%), #FFFFFF' }}>
-          <h2 style={{ fontFamily: F, fontSize: 18, fontWeight: 800, color: INK, letterSpacing: '-0.01em' }}>{g.title}</h2>
+          <h2 style={{ fontFamily: F, fontSize: TYPE_PX.card, fontWeight: 800, color: INK, letterSpacing: '-0.01em' }}>{g.title}</h2>
           <div className="gv-aw-grid">
             {g.presets.map((p) => {
               const t = byKey.get(p.key);
@@ -277,7 +277,7 @@ function AwardSetEditor({ types, onChange }: { types: AwardTypeConfig[]; onChang
 
       <section className="gv-st-card gv-fd-card" aria-label="Custom awards"
         style={{ background: 'radial-gradient(120% 90% at 100% 0%, rgba(238,217,138,0.22) 0%, rgba(238,217,138,0) 55%), #FFFFFF' }}>
-        <h2 style={{ fontFamily: F, fontSize: 18, fontWeight: 800, color: INK, letterSpacing: '-0.01em' }}>Custom awards</h2>
+        <h2 style={{ fontFamily: F, fontSize: TYPE_PX.card, fontWeight: 800, color: INK, letterSpacing: '-0.01em' }}>Custom awards</h2>
         {customs.length > 0 && (
           <div className="gv-aw-grid">
             {customs.map((t) => (
@@ -293,7 +293,7 @@ function AwardSetEditor({ types, onChange }: { types: AwardTypeConfig[]; onChang
         >
           <span className="shrink-0" style={{ marginBottom: 2 }}><TrophyQuestion size={40} /></span>
           <div className="min-w-0" style={{ flex: '1 1 220px' }}>
-            <label htmlFor="aw-new-custom" style={{ fontFamily: F, fontSize: 12.5, fontWeight: 600, color: INK_SOFT }}>Name your own award</label>
+            <label htmlFor="aw-new-custom" style={{ fontFamily: F, fontSize: TYPE_PX.hint, fontWeight: 600, color: INK_SOFT }}>Name your own award</label>
             <input
               id="aw-new-custom"
               value={newName}
@@ -301,13 +301,13 @@ function AwardSetEditor({ types, onChange }: { types: AwardTypeConfig[]; onChang
               placeholder="Best Crisis Response"
               onChange={(e) => { setNewName(e.target.value); if (addError) setAddError(''); }}
               aria-describedby={addError ? 'aw-new-custom-err' : undefined}
-              style={{ ...INPUT, width: '100%', minHeight: 44, fontSize: 15, marginTop: 4 }}
+              style={{ ...INPUT, width: '100%', minHeight: 44, fontSize: TYPE_PX.body, marginTop: 4 }}
             />
           </div>
           <button type="submit" className="gv-st-btn gv-st-forest">
             <Plus size={16} strokeWidth={2.6} aria-hidden />Add award
           </button>
-          {addError && <p id="aw-new-custom-err" role="alert" className="w-full" style={{ fontFamily: F, fontSize: 13, color: '#8B2020' }}>{addError}</p>}
+          {addError && <p id="aw-new-custom-err" role="alert" className="w-full" style={{ fontFamily: F, fontSize: TYPE_PX.hint, color: '#8B2020' }}>{addError}</p>}
         </form>
       </section>
     </div>
@@ -465,7 +465,7 @@ export function AwardsSettings({ conference }: { conference: Conference }) {
             <PopDisc size={72}><Emoji3D name="Trophy" size={50} fallback={Trophy} fallbackColor={AMBER} /></PopDisc>
           </span>
           <p style={{ fontFamily: F, fontSize: 20, fontWeight: 800, color: INK }}>No awards yet</p>
-          <p className="mt-1" style={{ fontFamily: F, fontSize: 14.5, color: INK_SOFT }}>Pick the honours your committees give, then chairs can nominate.</p>
+          <p className="mt-1" style={{ fontFamily: F, fontSize: TYPE_PX.body, color: INK_SOFT }}>Pick the honours your committees give, then chairs can nominate.</p>
           <button type="button" className="gv-st-btn gv-st-forest mt-5" onClick={() => setAsking(true)}>Set up awards</button>
         </div>
       </div>
@@ -480,20 +480,20 @@ export function AwardsSettings({ conference }: { conference: Conference }) {
         {head}
         <div className="gv-st-card gv-fd-card">
           <h2 style={{ fontFamily: F, fontSize: 22, fontWeight: 800, color: INK, letterSpacing: '-0.01em' }}>Will every committee give the same awards?</h2>
-          <p className="mt-1" style={{ fontFamily: F, fontSize: 14.5, color: INK_SOFT }}>
+          <p className="mt-1" style={{ fontFamily: F, fontSize: TYPE_PX.body, color: INK_SOFT }}>
             You can change this later and give any committee its own awards.
           </p>
           <div className="mt-8 grid gap-x-4 gap-y-9" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))' }}>
             <button type="button" className="gv-aw-choice" onClick={() => answer(true)}>
               <span className="gv-aw-pop"><PopDisc><Emoji3D name="Trophy" size={34} fallback={Trophy} fallbackColor={AMBER} /></PopDisc></span>
-              <span className="absolute" style={{ top: 12, insetInlineEnd: 14, fontFamily: F, fontSize: 12, fontWeight: 700, color: FOREST, background: 'rgba(61,122,82,0.12)', borderRadius: 999, padding: '3px 10px' }}>Recommended</span>
-              <span style={{ fontFamily: F, fontSize: 17, fontWeight: 800, color: INK }}>Yes, the same for all</span>
-              <span style={{ fontFamily: F, fontSize: 13.5, color: INK_SOFT }}>One set of awards for every committee.</span>
+              <span className="absolute" style={{ top: 12, insetInlineEnd: 14, fontFamily: F, fontSize: TYPE_PX.hint, fontWeight: 700, color: FOREST, background: 'rgba(61,122,82,0.12)', borderRadius: 999, padding: '3px 10px' }}>Recommended</span>
+              <span style={{ fontFamily: F, fontSize: TYPE_PX.card, fontWeight: 800, color: INK }}>Yes, the same for all</span>
+              <span style={{ fontFamily: F, fontSize: TYPE_PX.hint, color: INK_SOFT }}>One set of awards for every committee.</span>
             </button>
             <button type="button" className="gv-aw-choice" onClick={() => answer(false)}>
               <span className="gv-aw-pop"><PopDisc tint={TINT_GREEN_BG}><Emoji3D name="Card index dividers" size={34} fallback={Award} fallbackColor={FOREST} /></PopDisc></span>
-              <span style={{ fontFamily: F, fontSize: 17, fontWeight: 800, color: INK }}>No, set them per committee</span>
-              <span style={{ fontFamily: F, fontSize: 13.5, color: INK_SOFT }}>Committees start the same, then change any of them.</span>
+              <span style={{ fontFamily: F, fontSize: TYPE_PX.card, fontWeight: 800, color: INK }}>No, set them per committee</span>
+              <span style={{ fontFamily: F, fontSize: TYPE_PX.hint, color: INK_SOFT }}>Committees start the same, then change any of them.</span>
             </button>
           </div>
           <button type="button" className="gv-st-link mt-6" onClick={() => setAsking(false)}>Not now</button>
@@ -509,44 +509,44 @@ export function AwardsSettings({ conference }: { conference: Conference }) {
       {head}
 
       <div className="gv-st-card gv-fd-card">
-        <div className="flex items-center justify-between gap-4 flex-wrap">
-          <div className="flex items-center gap-3 min-w-0">
+        <div className="flex items-center gap-3.5">
+          <div className="flex items-center gap-3.5 min-w-0">
             <EmojiDisc emoji="Card index dividers" icon={Award} tint={TINT_GREEN_BG} size={40} />
+            <Switch
+              label="Same awards for every committee"
+              checked={config.sameForAll}
+              onChange={(next) => { update((c) => ({ ...c, sameForAll: next })); if (next) setEditing(null); }}
+            />
             <div className="min-w-0">
-              <p style={{ fontFamily: F, fontSize: 15.5, fontWeight: 700, color: INK }}>Same awards for every committee</p>
-              <p style={{ fontFamily: F, fontSize: 13.5, color: INK_SOFT }}>
+              <p style={{ fontFamily: F, fontSize: TYPE_PX.body, fontWeight: 700, color: INK }}>Same awards for every committee</p>
+              <p style={{ fontFamily: F, fontSize: TYPE_PX.hint, color: INK_SOFT }}>
                 {config.sameForAll ? 'Turn off to give a committee its own awards.' : 'Each committee uses the shared awards until you give it its own.'}
               </p>
             </div>
           </div>
-          <Switch
-            label="Same awards for every committee"
-            checked={config.sameForAll}
-            onChange={(next) => { update((c) => ({ ...c, sameForAll: next })); if (next) setEditing(null); }}
-          />
         </div>
 
         {!config.sameForAll && (
           <div className="mt-4">
-            <p style={{ fontFamily: F, fontSize: 13, fontWeight: 600, color: INK_SOFT }}>
+            <p style={{ fontFamily: F, fontSize: TYPE_PX.hint, fontWeight: 600, color: INK_SOFT }}>
               Editing{ownCount > 0 ? ` · ${ownCount} with their own awards` : ''}
             </p>
             <div className="mt-2 flex flex-wrap gap-2" role="group" aria-label="Which awards you are editing">
               <button type="button" className="gv-aw-com" aria-pressed={editing === null} onClick={() => setEditing(null)}>
-                <span style={{ fontFamily: F, fontSize: 15, fontWeight: 800, color: INK }}>All committees</span>
-                <span style={{ fontFamily: F, fontSize: 12, color: INK_SOFT }}>The shared awards</span>
+                <span style={{ fontFamily: F, fontSize: TYPE_PX.body, fontWeight: 800, color: INK }}>All committees</span>
+                <span style={{ fontFamily: F, fontSize: TYPE_PX.hint, color: INK_SOFT }}>The shared awards</span>
               </button>
               {committees === null && (
-                <span style={{ fontFamily: F, fontSize: 13, color: INK_SOFT, alignSelf: 'center' }}>Loading committees</span>
+                <span style={{ fontFamily: F, fontSize: TYPE_PX.hint, color: INK_SOFT, alignSelf: 'center' }}>Loading committees</span>
               )}
               {(committees ?? []).map((c) => {
                 const short = committeeDisplayName(c.name, c.abbreviation);
                 const own = !!config.perCommittee[c.id];
                 return (
                   <button key={c.id} type="button" className="gv-aw-com" aria-pressed={editing === c.id} onClick={() => setEditing(c.id)}>
-                    <span style={{ fontFamily: F, fontSize: 15, fontWeight: 800, color: INK, overflowWrap: 'anywhere' }}>{short}</span>
+                    <span style={{ fontFamily: F, fontSize: TYPE_PX.body, fontWeight: 800, color: INK, overflowWrap: 'anywhere' }}>{short}</span>
                     {short !== c.name && <span style={{ fontFamily: F, fontSize: 11.5, color: INK_SOFT, overflowWrap: 'anywhere' }}>{c.name}</span>}
-                    <span className="inline-flex items-center gap-1 mt-1" style={{ fontFamily: F, fontSize: 12, fontWeight: 700, color: own ? AMBER : FOREST }}>
+                    <span className="inline-flex items-center gap-1 mt-1" style={{ fontFamily: F, fontSize: TYPE_PX.hint, fontWeight: 700, color: own ? AMBER : FOREST }}>
                       {own ? <Award size={12} strokeWidth={2.6} aria-hidden /> : <Check size={12} strokeWidth={2.8} aria-hidden />}
                       {own ? 'Own awards' : 'Same as all'}
                     </span>
@@ -554,7 +554,7 @@ export function AwardsSettings({ conference }: { conference: Conference }) {
                 );
               })}
               {committees !== null && committees.length === 0 && (
-                <span style={{ fontFamily: F, fontSize: 13, color: INK_SOFT, alignSelf: 'center' }}>Add committees first, then give them their own awards.</span>
+                <span style={{ fontFamily: F, fontSize: TYPE_PX.hint, color: INK_SOFT, alignSelf: 'center' }}>Add committees first, then give them their own awards.</span>
               )}
             </div>
           </div>
@@ -568,7 +568,7 @@ export function AwardsSettings({ conference }: { conference: Conference }) {
             <p style={{ fontFamily: F, fontSize: 16, fontWeight: 800, color: INK, overflowWrap: 'anywhere' }}>
               {committeeDisplayName(editingCommittee.name, editingCommittee.abbreviation)} uses the shared awards
             </p>
-            <p style={{ fontFamily: F, fontSize: 13.5, color: INK_SOFT }}>
+            <p style={{ fontFamily: F, fontSize: TYPE_PX.hint, color: INK_SOFT }}>
               {sharedCount === 0 ? 'No awards switched on yet.' : `${sharedCount} ${sharedCount === 1 ? 'award' : 'awards'}, the same as every other committee.`}
             </p>
           </div>
@@ -577,7 +577,7 @@ export function AwardsSettings({ conference }: { conference: Conference }) {
       ) : editing && editingOwn ? (
         <>
           <div className="flex items-center justify-between gap-3 flex-wrap">
-            <p style={{ fontFamily: F, fontSize: 15, fontWeight: 700, color: INK, overflowWrap: 'anywhere' }}>
+            <p style={{ fontFamily: F, fontSize: TYPE_PX.body, fontWeight: 700, color: INK, overflowWrap: 'anywhere' }}>
               Awards for {editingCommittee ? committeeDisplayName(editingCommittee.name, editingCommittee.abbreviation) : 'this committee'}
             </p>
             <button type="button" className="gv-st-link" onClick={() => revertToShared(editing)}>Use the shared awards again</button>
@@ -589,12 +589,12 @@ export function AwardsSettings({ conference }: { conference: Conference }) {
       )}
 
       <div className="flex items-center justify-between gap-3 flex-wrap" style={{ fontFamily: F }}>
-        <p aria-live="polite" style={{ fontSize: 13, color: saved ? '#3D7A52' : INK_SOFT }}>
+        <p aria-live="polite" style={{ fontSize: TYPE_PX.hint, color: saved ? '#3D7A52' : INK_SOFT }}>
           {saving ? 'Saving' : saved ? 'Saved' : 'Changes save by themselves'}
         </p>
         {confirmOff ? (
           <span className="inline-flex items-center gap-3 flex-wrap">
-            <span style={{ fontSize: 13.5, color: INK }}>Chairs will stop seeing awards. Turn them off?</span>
+            <span style={{ fontSize: TYPE_PX.hint, color: INK }}>Chairs will stop seeing awards. Turn them off?</span>
             <button type="button" className="gv-st-btn gv-st-outline" style={{ minHeight: 38 }} onClick={() => setConfirmOff(false)}>Keep awards</button>
             <button type="button" className="gv-st-link" style={{ color: '#8B2020' }} onClick={turnOff}>Turn off</button>
           </span>

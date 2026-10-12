@@ -24,7 +24,7 @@ import { ChevronDown, Search, Check, X } from 'lucide-react';
 import Portal from '@/components/Portal';
 import { CircleFlag } from '@/components/CircleFlag';
 import { UN_COUNTRIES, countryMatchRank } from '@/lib/countries';
-import { F, INK, INK_SOFT, FOREST } from './panelKit';
+import { F, INK, INK_SOFT, FOREST, TYPE_PX } from './panelKit';
 
 const PANEL_MAX_H = 360;
 const PANEL_MIN_W = 300;
@@ -211,7 +211,7 @@ export function CountryPicker({ id, value, onChange, placeholder = 'Select a cou
             </div>
             <div ref={listRef} id={listId} role="listbox" aria-label="Countries" style={{ position: 'relative', overflowY: 'auto', padding: 6, flex: '1 1 auto', minHeight: 0 }}>
               {shown.length === 0 && (
-                <p style={{ margin: 0, padding: '14px 12px', fontSize: 14, color: INK_SOFT }}>No country matches that.</p>
+                <p style={{ margin: 0, padding: '14px 12px', fontSize: TYPE_PX.body, color: INK_SOFT }}>No country matches that.</p>
               )}
               {shown.map((c, i) => {
                 const chosen = c.name === value;
@@ -232,7 +232,7 @@ export function CountryPicker({ id, value, onChange, placeholder = 'Select a cou
                     }}
                   >
                     <CircleFlag code={c.code} size={28} decorative />
-                    <span style={{ flex: 1, minWidth: 0, fontSize: 15, fontWeight: chosen ? 700 : 500, color: INK, overflowWrap: 'anywhere', lineHeight: 1.3 }}>{c.name}</span>
+                    <span style={{ flex: 1, minWidth: 0, fontSize: TYPE_PX.body, fontWeight: chosen ? 700 : 500, color: INK, overflowWrap: 'anywhere', lineHeight: 1.3 }}>{c.name}</span>
                     {chosen && <Check size={17} strokeWidth={2.8} aria-hidden style={{ color: FOREST, flexShrink: 0 }} />}
                   </div>
                 );
@@ -243,7 +243,7 @@ export function CountryPicker({ id, value, onChange, placeholder = 'Select a cou
                 <button
                   type="button"
                   onClick={() => choose('')}
-                  style={{ width: '100%', minHeight: 38, borderRadius: 10, border: 'none', background: 'transparent', fontFamily: F, fontSize: 14, fontWeight: 600, color: INK_SOFT, cursor: 'pointer', textAlign: 'left', padding: '0 10px' }}
+                  style={{ width: '100%', minHeight: 38, borderRadius: 10, border: 'none', background: 'transparent', fontFamily: F, fontSize: TYPE_PX.hint, fontWeight: 600, color: INK_SOFT, cursor: 'pointer', textAlign: 'left', padding: '0 10px' }}
                   onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(27,56,40,0.05)'; }}
                   onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
                 >

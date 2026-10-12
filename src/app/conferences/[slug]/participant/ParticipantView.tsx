@@ -190,12 +190,17 @@ export interface ParticipantViewProps {
    *  owns `myApplications`, so it patches that row to 'withdrawn' in place
    *  rather than this view refetching the whole conference. */
   onApplicationWithdrawn?: (applicationId: string) => void;
+  /** > 0 asks this view to open "Ask the Organisers" (the Apply card's
+   *  Contact the organisers, for a conference with no contact email). */
+  openSupportRequest?: number;
+  /** Called once the request above was taken, so it fires once. */
+  onSupportRequestHandled?: () => void;
 }
 
 export default function ParticipantView({
   conferenceId, conferenceSlug, conferenceStartDate, conferenceName, myApplications, roleConfigs, myAllocation, committees, allocationSwapMode, isOrganizer = false,
   initialRole, onResolveRole, onSelectRole, participantDataLoading, justClaimedCount,
-  onApplicationWithdrawn,
+  onApplicationWithdrawn, openSupportRequest = 0, onSupportRequestHandled,
 }: ParticipantViewProps) {
   const { user, session } = useAuth();
   const holdsInitialRole = !!initialRole && myApplications.some(a => a.role === initialRole);
@@ -213,6 +218,20 @@ export default function ParticipantView({
   // The dashboard section, remembered for the application it was picked on,
   // so switching role opens the other one on Overview.
   const [section, setSection] = useState<{ appId: string; key: string }>({ appId: '', key: 'overview' });
+
+  // "Contact the organisers" on a conference with no contact email: open the
+  // Ask the Organisers section of the application on screen and bring it
+  // into view. The scroll waits a beat so the parent's own tab-switch scroll
+  // correction (which runs after this effect) does not undo it.
+  useEffect(() => {
+    if (!openSupportRequest || myApplications.length === 0) return;
+    const app = (holdsInitialRole ? myApplications.find(a => a.role === initialRole) : null) ?? pickDefault(myApplications);
+    setSection({ appId: app.id, key: 'support' });
+    onSupportRequestHandled?.();
+    window.setTimeout(() => {
+      document.getElementById('ask-organisers')?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+    }, 120);
+  }, [openSupportRequest, myApplications, holdsInitialRole, initialRole, onSupportRequestHandled]);
 
   // The role dashboard's own next step (delegate, chair), reported upward.
   const [roleStep, reportRoleStep] = useNextStepSlot();
@@ -513,7 +532,7 @@ export default function ParticipantView({
               conferenceSlug={conferenceSlug}
               role={selected.role}
               organizerNote={selected.organizer_note}
-              allowResubmission={roleConfig?.allow_resubmission ?? false}
+              allowResubmission={(roleConfig?.allow_resubmission ?? false) && (selected.rejection_count ?? 0) < 3}
             />
           )}
           <RequestsPanel conferenceId={conferenceId} applicationId={selected.id} myApplications={myApplications} activeRole={selected.role} />
@@ -644,7 +663,7 @@ export default function ParticipantView({
             )}
 
             {/* Questions & requests, never gated. */}
-            <Pane show={activeSection === 'support'} title="Ask the Organisers" icon={MessageCircle}>
+            <Pane show={activeSection === 'support'} title="Ask the Organisers" icon={MessageCircle} anchor="ask-organisers">
               <RequestsPanel conferenceId={conferenceId} applicationId={selected.id} myApplications={myApplications} activeRole={selected.role} />
             </Pane>
           </div>

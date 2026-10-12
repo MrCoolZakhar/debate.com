@@ -52,11 +52,11 @@ import { ROLE_BLURB, InfoHint } from './applicationsUi';
 import { TimelineNotice, TimelineWarning } from './timelineUi';
 import { RoleTimelineBar } from './roleTimelineBar';
 import {
-  F, INK, INK_SOFT, FOREST, AMBER, DANGER, HAIRLINE, TEXT_LINK, INPUT, ROW_CSS,
+  F, INK, INK_SOFT, FOREST, AMBER, DANGER, HAIRLINE, TEXT_LINK, INPUT, ROW_CSS, TYPE,
   Switch, FieldLabel, Notice, PREF_MODE_OPTIONS, Row, SwitchRow, TINT_GOLD_BG, TINT_GREEN_BG, EmojiDisc, RoleDisc,
   inGeneralScope, generalValue, type GeneralField,
   roleIsFree, roleHasPrice, roleCanHavePreference, rolePlural, roleTitle, windowState, dateAndTime,
-  toDatetimeLocal, fromDatetimeLocal, localZoneLabel, type RoleSetupConfig, type WindowState,
+  toDatetimeLocal, fromDatetimeLocal, localZoneLabel, type RoleSetupConfig, type WindowState, TYPE_PX
 } from './panelKit';
 
 /** The ?step= values. Old links used all seven; 'review' now means the top. */
@@ -73,6 +73,8 @@ const STATE_MARK: Record<WindowState, { icon: LucideIcon; word: string; color: s
 const SHEET_BG = '#F3EEE2';
 
 const CSS = `
+/* Settings buttons are 38px tall (owner, 12 Oct 2026: some were "way too big"). */
+.gvs-backdrop .gv-st-btn { min-height: 38px; padding: 0 14px; font-size: 14px; border-radius: 11px; }
 .gvs-backdrop { position: fixed; inset: 0; z-index: 50; display: flex; align-items: center; justify-content: center;
   background: rgba(27,20,16,0.42); padding: 24px; }
 .gvs-panel { position: relative; display: flex; flex-direction: column; width: min(880px, 100%); height: min(100%, 980px);
@@ -129,7 +131,7 @@ function Section({ id, emoji, icon, tint = TINT_GREEN_BG, title, hint, children 
       className="gv-st-card gvk-group"
       style={{ padding: 'clamp(14px, 3vw, 20px)', scrollMarginTop: 16 }}
     >
-      <h3 id={`${id}-h`} className="flex items-center gap-2.5 mb-3" style={{ fontFamily: F, fontSize: 18, fontWeight: 800, color: INK, lineHeight: 1.25 }}>
+      <h3 id={`${id}-h`} className="flex items-center gap-2.5 mb-3" style={TYPE.card}>
         <EmojiDisc emoji={emoji} icon={icon} tint={tint} size={36} />
         <span style={{ overflowWrap: 'anywhere' }}>{title}</span>
         {hint}
@@ -282,8 +284,8 @@ export function RoleSheet(props: RoleSheetProps) {
     && props.peers.some(p => p.role !== role && inGeneralScope(f, p.role) && generalValue(p, f) !== generalValue(config, f));
   const showPaying = priced && !free;
   const showRank = roleCanHavePreference(role) && role !== 'chair';
-  const ownFields: GeneralField[] = (['auto_accept', 'allow_resubmission', 'payment_timing', 'hide_dashboard_until_paid', 'preference_mode'] as GeneralField[])
-    .filter(f => (f === 'payment_timing' || f === 'hide_dashboard_until_paid') ? showPaying : f === 'preference_mode' ? showRank : true);
+  const ownFields: GeneralField[] = (['auto_accept', 'payment_timing', 'preference_mode'] as GeneralField[])
+    .filter(f => f === 'payment_timing' ? showPaying : f === 'preference_mode' ? showRank : true);
   const plainFields = ownFields.filter(f => !covered(f));
   const overrideFields = ownFields.filter(f => covered(f));
   const anyDiffers = overrideFields.some(differs);
@@ -316,7 +318,7 @@ export function RoleSheet(props: RoleSheetProps) {
                 <span style={{ overflowWrap: 'anywhere' }}>{roleTitle(role)} Applications</span>
                 {ROLE_BLURB[role] && <InfoHint label={`What a ${roleTitle(role)} is`} text={ROLE_BLURB[role]} size={16} />}
               </h2>
-              <p className="mt-0.5" style={{ fontFamily: F, fontSize: 13.5, color: INK_SOFT }}>
+              <p className="mt-0.5" style={{ fontFamily: F, fontSize: TYPE_PX.hint, color: INK_SOFT }}>
                 {props.appliedCount !== null && (
                   <><b style={{ fontSize: 22, fontWeight: 900, color: FOREST, fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.02em' }}>{props.appliedCount}</b> applied · </>
                 )}
@@ -324,7 +326,7 @@ export function RoleSheet(props: RoleSheetProps) {
               </p>
             </div>
             <div className="flex items-center gap-2 flex-shrink-0">
-              <span className="inline-flex items-center gap-1.5" style={{ fontFamily: F, fontSize: 14, fontWeight: 600, color: mark.color }}>
+              <span className="inline-flex items-center gap-1.5" style={{ fontFamily: F, fontSize: TYPE_PX.body, fontWeight: 600, color: mark.color }}>
                 <mark.icon size={16} strokeWidth={2.4} aria-hidden />
                 <span className="gvs-head-word">{mark.word}</span>
               </span>
@@ -354,10 +356,10 @@ export function RoleSheet(props: RoleSheetProps) {
             <div className="gvs-col">
               {/* ── What the switch means now, the link and the preview ── */}
               <section id="step-review" className="gv-st-card gv-fd-wash-green" style={{ padding: 'clamp(14px, 3vw, 18px)' }}>
-                <p id="role-switch-line" style={{ fontFamily: F, fontSize: 15, color: INK, lineHeight: 1.5, overflowWrap: 'anywhere' }}>
+                <p id="role-switch-line" style={{ fontFamily: F, fontSize: TYPE_PX.body, color: INK, lineHeight: 1.5, overflowWrap: 'anywhere' }}>
                   {blocked
                     ? <>Set up payments before you switch this on. You can still fill in everything below.{' '}
-                      <Link href={`/manage/${c.slug}/financials?open=payment`} style={{ ...TEXT_LINK, fontSize: 15 }}>Set up payments</Link></>
+                      <Link href={`/manage/${c.slug}/financials?open=payment`} style={{ ...TEXT_LINK, fontSize: TYPE_PX.body }}>Set up payments</Link></>
                     : statusLine}
                 </p>
                 {c.payment_gate_exempt && !conferencePaymentsReady(c) && (
@@ -424,7 +426,7 @@ export function RoleSheet(props: RoleSheetProps) {
                         <div className="mt-3"><Notice tone="danger" role="alert">This closes before it opens, so nobody can apply. Move one of the two.</Notice></div>
                       )}
                       {datedPhases && !windowBackwards && (
-                        <p className="mt-2" style={{ fontFamily: F, fontSize: 13, color: INK_SOFT }}>Your prices have dates, so the window follows them.</p>
+                        <p className="mt-2" style={{ fontFamily: F, fontSize: TYPE_PX.hint, color: INK_SOFT }}>Your prices have dates, so the window follows them.</p>
                       )}
                       {timelineMsg?.where === 'window' && <TimelineMsg msg={timelineMsg} />}
                       <TimelineWarning config={config} roleLabel={role} ctx={timelineCtx} onFix={(patch) => props.onSaveTimeline(patch, 'window')} />
@@ -456,9 +458,9 @@ export function RoleSheet(props: RoleSheetProps) {
                             aria-label={`${roleTitle(role)} price`}
                             defaultValue={config.fee_amount}
                             onBlur={(e) => props.onSave({ fee_amount: parseFloat(e.target.value) || 0 })}
-                            style={{ ...INPUT, fontSize: 18, fontWeight: 800, width: 150, flex: '0 1 150px', fontVariantNumeric: 'tabular-nums' }}
+                            style={{ ...INPUT, fontSize: TYPE_PX.card, fontWeight: 800, width: 150, flex: '0 1 150px', fontVariantNumeric: 'tabular-nums' }}
                           />
-                          <span style={{ fontFamily: F, fontSize: 13, color: INK_SOFT }}>
+                          <span style={{ fontFamily: F, fontSize: TYPE_PX.hint, color: INK_SOFT }}>
                             {phases.length > 0 ? 'On days no stage covers. 0 is free.' : '0 is free'}
                           </span>
                         </div>
@@ -485,7 +487,7 @@ export function RoleSheet(props: RoleSheetProps) {
                             <Plus size={15} strokeWidth={2.6} aria-hidden />
                             {phases.length === 0 ? 'Add a price by date' : 'Add a stage'}
                           </button>
-                          <button type="button" onClick={props.onCopyPhases} className="inline-flex items-center gap-1.5 focus:outline-none focus-visible:ring-2 rounded" style={{ ...TEXT_LINK, fontSize: 14 }}>
+                          <button type="button" onClick={props.onCopyPhases} className="inline-flex items-center gap-1.5 focus:outline-none focus-visible:ring-2 rounded" style={{ ...TEXT_LINK, fontSize: TYPE_PX.body }}>
                             <Copy size={14} strokeWidth={2.4} aria-hidden />
                             Use this price for another role
                           </button>
@@ -523,7 +525,7 @@ export function RoleSheet(props: RoleSheetProps) {
 
                   {/* ── After they apply ── */}
                   <Section id="step-after" emoji="Party popper" icon={PartyPopper} tint={TINT_GOLD_BG} title="After They Apply">
-                    <p className="mb-3" style={{ fontFamily: F, fontSize: 13.5, color: INK_SOFT, lineHeight: 1.5 }}>
+                    <p className="mb-3" style={{ fontFamily: F, fontSize: TYPE_PX.hint, color: INK_SOFT, lineHeight: 1.5 }}>
                       A short note on the confirmation screen, like a group chat to join. Optional.
                     </p>
                     {props.afterSlot}
@@ -556,8 +558,8 @@ export function RoleSheet(props: RoleSheetProps) {
                           style={{ padding: '12px 14px', borderRadius: 14, border: 'none', cursor: 'pointer', background: anyDiffers ? 'rgba(238,217,138,0.28)' : '#FAF8F3', boxShadow: anyDiffers ? 'inset 3px 0 0 #B6871F' : undefined, fontFamily: F }}
                         >
                           <span className="min-w-0">
-                            <span className="block" style={{ fontSize: 15, fontWeight: 800, color: INK }}>Different rules for {plural}</span>
-                            <span className="block" style={{ fontSize: 13, color: INK_SOFT, lineHeight: 1.45, overflowWrap: 'anywhere' }}>
+                            <span className="block" style={{ fontSize: TYPE_PX.body, fontWeight: 800, color: INK }}>Different rules for {plural}</span>
+                            <span className="block" style={{ fontSize: TYPE_PX.hint, color: INK_SOFT, lineHeight: 1.45, overflowWrap: 'anywhere' }}>
                               {anyDiffers ? 'This role already differs from the others.' : 'These follow the rules for every role on the Applications page.'}
                             </span>
                           </span>
@@ -573,7 +575,7 @@ export function RoleSheet(props: RoleSheetProps) {
                   </Section>
 
                   <div className="flex flex-wrap items-center justify-end gap-3 pt-1">
-                    <span style={{ fontFamily: F, fontSize: 13.5, color: INK_SOFT }}>Everything saves by itself</span>
+                    <span style={{ fontFamily: F, fontSize: TYPE_PX.hint, color: INK_SOFT }}>Everything saves by itself</span>
                     <button type="button" onClick={props.onClose} className="gv-st-btn gv-st-forest">
                       Done
                     </button>
@@ -617,7 +619,7 @@ function RuleControl({ field, config, onSave, differs = false }: {
                 onClick={() => onSave({ preference_mode: opt.value })}
                 className="focus:outline-none focus-visible:ring-2"
                 style={{
-                  minHeight: 38, padding: '0 12px', borderRadius: 10, cursor: 'pointer', fontFamily: F, fontSize: 13.5, fontWeight: 700,
+                  minHeight: 38, padding: '0 12px', borderRadius: 10, cursor: 'pointer', fontFamily: F, fontSize: TYPE_PX.hint, fontWeight: 700,
                   background: on ? FOREST : '#FFFFFF', color: on ? '#EED98A' : INK, border: 'none',
                   boxShadow: on ? '0 6px 14px -8px rgba(27,56,40,0.7)' : 'inset 0 0 0 1.5px rgba(27,56,40,0.18)',
                 }}
@@ -632,20 +634,18 @@ function RuleControl({ field, config, onSave, differs = false }: {
   }
   const words: Record<Exclude<GeneralField, 'preference_mode'>, [string, string]> = {
     auto_accept: ['Accept everyone straight away', 'Off: you review each application.'],
-    allow_resubmission: ['Let turned-down people try again', 'They change their answers and send it back.'],
     payment_timing: ['Pay only after you accept them', 'Off: they can pay as soon as they apply.'],
-    hide_dashboard_until_paid: ['Hide their dashboard until they pay', 'Waived and sponsored people always see everything.'],
   };
   const [label, desc] = words[field];
   const checked = field === 'payment_timing' ? config.payment_timing === 'after_acceptance' : config[field] === true;
   return (
-    <Row label={label} desc={note ?? desc} align="end" on={checked} need={differs}>
-      <Switch
-        label={label}
-        checked={checked}
-        onChange={(v) => onSave(field === 'payment_timing' ? { payment_timing: v ? 'after_acceptance' : 'anytime' } : { [field]: v } as Partial<RoleSetupConfig>)}
-      />
-    </Row>
+    <SwitchRow
+      label={label}
+      desc={note ?? desc}
+      need={differs}
+      checked={checked}
+      onChange={(v) => onSave(field === 'payment_timing' ? { payment_timing: v ? 'after_acceptance' : 'anytime' } : { [field]: v } as Partial<RoleSetupConfig>)}
+    />
   );
 }
 
@@ -659,8 +659,8 @@ function StageTable({ phases, active, configVersion, onUpdatePhase, onSaveTimeli
   onSaveTimeline: RoleSheetProps['onSaveTimeline'];
 }) {
   if (phases.length === 0) return null;
-  const head: React.CSSProperties = { fontFamily: F, fontSize: 12, fontWeight: 700, color: INK_SOFT };
-  const cell: React.CSSProperties = { ...INPUT, padding: '8px 10px', fontSize: 15 };
+  const head: React.CSSProperties = { fontFamily: F, fontSize: TYPE_PX.hint, fontWeight: 700, color: INK_SOFT };
+  const cell: React.CSSProperties = { ...INPUT, padding: '8px 10px', fontSize: TYPE_PX.body };
   return (
     <div>
       <div className="gvs-stage-head mb-1.5" aria-hidden>
@@ -730,7 +730,7 @@ function StageTable({ phases, active, configVersion, onUpdatePhase, onSaveTimeli
                 </button>
               </div>
               {invalid && (
-                <p className="mt-1" style={{ fontFamily: F, fontSize: 13, color: DANGER }}>This stage needs both dates before it counts.</p>
+                <p className="mt-1" style={{ fontFamily: F, fontSize: TYPE_PX.hint, color: DANGER }}>This stage needs both dates before it counts.</p>
               )}
             </div>
           );

@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import Portal from '@/components/Portal';
 import { NEU, Emoji3D } from '@/components/neu';
+import { TYPE_PX } from './panelKit';
 
 const OUTFIT = "var(--font-brand), sans-serif";
 
@@ -145,7 +146,7 @@ export function InfoHint({ label, text, size = 16 }: { label: string; text: stri
               transform: pos.above ? 'translateY(-100%)' : undefined,
               padding: '12px 14px', borderRadius: 14,
               backgroundColor: NEU.surface, boxShadow: NEU.out,
-              fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 500, lineHeight: 1.55,
+              fontFamily: OUTFIT, fontSize: TYPE_PX.hint, fontWeight: 500, lineHeight: 1.55,
               color: NEU.inkSoft, pointerEvents: 'none',
             }}
           >
@@ -330,8 +331,8 @@ export function SettingsModal({ open, onClose, title, sub, icon, width = 520, ch
               </span>
             )}
             <div className="min-w-0 flex-1">
-              <h3 style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 18, color: NEU.ink, margin: 0, lineHeight: 1.2 }}>{title}</h3>
-              {sub && <p style={{ fontFamily: OUTFIT, fontSize: 13, color: NEU.inkSoft, margin: '5px 0 0', lineHeight: 1.5 }}>{sub}</p>}
+              <h3 style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: TYPE_PX.card, color: NEU.ink, margin: 0, lineHeight: 1.2 }}>{title}</h3>
+              {sub && <p style={{ fontFamily: OUTFIT, fontSize: TYPE_PX.hint, color: NEU.inkSoft, margin: '5px 0 0', lineHeight: 1.5 }}>{sub}</p>}
             </div>
             <button
               type="button"
@@ -373,7 +374,7 @@ export function ModalButton({ children, onClick, tone = 'ghost', disabled, icon:
       className="inline-flex items-center gap-2 rounded-xl focus:outline-none"
       style={{
         padding: '10px 18px',
-        fontFamily: OUTFIT, fontSize: 12, fontWeight: 800, letterSpacing: 0,
+        fontFamily: OUTFIT, fontSize: TYPE_PX.hint, fontWeight: 800, letterSpacing: 0,
         backgroundColor: forest ? '#1B3828' : 'transparent',
         color: forest ? NEU.gold : NEU.inkSoft,
         border: forest ? '1.5px solid #1B3828' : '1.5px solid #DDD4C0',
@@ -482,7 +483,7 @@ function CopyToRolesSheet({
                 {on && <Check size={13} strokeWidth={3.2} style={{ color: NEU.gold }} />}
               </span>
               <Emoji3D name={ROLE_EMOJI[r] ?? 'Bust in silhouette'} size={22} />
-              <span style={{ fontFamily: OUTFIT, fontSize: 14, fontWeight: 700, color: NEU.ink }}>{roleLabel(r)}</span>
+              <span style={{ fontFamily: OUTFIT, fontSize: TYPE_PX.body, fontWeight: 700, color: NEU.ink }}>{roleLabel(r)}</span>
             </button>
           );
         })}
@@ -580,7 +581,7 @@ export function SetupIntro({ role, slides = SETUP_SLIDES, onDone }: {
       </div>
 
       <div className="px-5 py-4">
-        <p style={{ fontFamily: OUTFIT, fontSize: 13.5, lineHeight: 1.65, color: NEU.inkSoft, margin: 0 }}>
+        <p style={{ fontFamily: OUTFIT, fontSize: TYPE_PX.hint, lineHeight: 1.65, color: NEU.inkSoft, margin: 0 }}>
           {slide.body}
         </p>
 
@@ -670,7 +671,7 @@ export function Segmented<T extends string | boolean>({
               color: active ? NEU.gold : NEU.ink,
               border: active ? '1.5px solid #1B3828' : '1.5px solid #DDD4C0',
               boxShadow: active ? '0 4px 12px rgba(27,56,40,0.2)' : 'none',
-              fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 800, letterSpacing: 0,
+              fontFamily: OUTFIT, fontSize: TYPE_PX.hint, fontWeight: 800, letterSpacing: 0,
               opacity: disabled ? 0.55 : 1,
               cursor: disabled ? 'wait' : 'pointer',
               transition: 'background-color 150ms, box-shadow 200ms',

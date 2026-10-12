@@ -35,7 +35,7 @@ import { approveSlate, loadConferenceAwards, publishAwards, returnSlate } from '
 import { friendlyError } from '@/lib/friendlyError';
 import { notifyErr, notifyOk } from '@/lib/appNotify';
 import { committeeDisplayName } from '@/lib/presetNames';
-import { F, INK, INK_SOFT, FOREST, AMBER, DANGER, INPUT, TINT_GOLD_BG, TINT_GREEN_BG } from './panelKit';
+import { F, INK, INK_SOFT, FOREST, AMBER, DANGER, INPUT, TINT_GOLD_BG, TINT_GREEN_BG, TYPE_PX } from './panelKit';
 
 const NOTE_MAX = 500;
 const SCOPE = 'settings-awards-review';
@@ -120,7 +120,7 @@ function OverhangDisc({ emoji, icon, tint = TINT_GOLD_BG, size = 56 }: { emoji: 
 function StateMark({ state }: { state: ReviewState }) {
   const v = STATE_VIEW[state];
   return (
-    <span className="inline-flex items-center gap-1.5" style={{ fontFamily: F, fontSize: 13.5, fontWeight: 700, color: v.color, whiteSpace: 'nowrap' }}>
+    <span className="inline-flex items-center gap-1.5" style={{ fontFamily: F, fontSize: TYPE_PX.hint, fontWeight: 700, color: v.color, whiteSpace: 'nowrap' }}>
       <Emoji3D name={v.emoji} size={20} fallback={v.icon} fallbackColor={v.color} />
       {v.label}
     </span>
@@ -138,14 +138,14 @@ function RecipientCard({ row, awardLabel }: { row: ConferenceAwardRow; awardLabe
         <CircleFlag code={row.country_code} country={place || null} size={40} decorative />
       ) : (
         <span aria-hidden className="inline-flex items-center justify-center shrink-0"
-          style={{ width: 40, height: 40, borderRadius: 999, background: FOREST, color: '#EED98A', fontFamily: F, fontSize: 14, fontWeight: 800 }}>
+          style={{ width: 40, height: 40, borderRadius: 999, background: FOREST, color: '#EED98A', fontFamily: F, fontSize: TYPE_PX.body, fontWeight: 800 }}>
           {flagMonogram(big)}
         </span>
       )}
       <div className="min-w-0" style={{ fontFamily: F }}>
-        <p style={{ fontSize: 12, fontWeight: 700, color: AMBER, overflowWrap: 'anywhere' }}>{awardLabel}</p>
-        <p style={{ fontSize: 15.5, fontWeight: 800, color: INK, lineHeight: 1.25, overflowWrap: 'anywhere' }}>{big}</p>
-        {small && <p style={{ fontSize: 12.5, color: INK_SOFT, overflowWrap: 'anywhere' }}>{small}</p>}
+        <p style={{ fontSize: TYPE_PX.hint, fontWeight: 700, color: AMBER, overflowWrap: 'anywhere' }}>{awardLabel}</p>
+        <p style={{ fontSize: TYPE_PX.body, fontWeight: 800, color: INK, lineHeight: 1.25, overflowWrap: 'anywhere' }}>{big}</p>
+        {small && <p style={{ fontSize: TYPE_PX.hint, color: INK_SOFT, overflowWrap: 'anywhere' }}>{small}</p>}
       </div>
     </div>
   );
@@ -196,12 +196,12 @@ function CommitteeSlate({ committee, rows, config, state, open, onToggle, busy, 
         <span className="min-w-0 flex-1">
           <span className="block" style={{ fontSize: 16.5, fontWeight: 800, color: INK, lineHeight: 1.2, overflowWrap: 'anywhere' }}>{short}</span>
           {short !== committee.name && (
-            <span className="block" style={{ fontSize: 12.5, color: INK_SOFT, overflowWrap: 'anywhere' }}>{committee.name}</span>
+            <span className="block" style={{ fontSize: TYPE_PX.hint, color: INK_SOFT, overflowWrap: 'anywhere' }}>{committee.name}</span>
           )}
         </span>
         <span className="gv-rv-meta">
-          <span style={{ fontFamily: F, fontSize: 13.5, color: INK_SOFT, whiteSpace: 'nowrap' }}>
-            <span style={{ fontSize: 18, fontWeight: 800, color: INK, fontVariantNumeric: 'tabular-nums' }}>{done.filled}</span> of {done.total}
+          <span style={{ fontFamily: F, fontSize: TYPE_PX.hint, color: INK_SOFT, whiteSpace: 'nowrap' }}>
+            <span style={{ fontSize: TYPE_PX.card, fontWeight: 800, color: INK, fontVariantNumeric: 'tabular-nums' }}>{done.filled}</span> of {done.total}
           </span>
           <StateMark state={state} />
           <ChevronDown size={18} strokeWidth={2.4} className="gv-rv-chev" aria-hidden />
@@ -211,13 +211,13 @@ function CommitteeSlate({ committee, rows, config, state, open, onToggle, busy, 
       {open && (
         <div id={bodyId} className="gv-rv-body" style={{ fontFamily: F }}>
           {state === 'returned' && committee.awards_return_note && (
-            <p className="mb-3" style={{ fontSize: 13.5, color: INK, background: 'rgba(139,32,32,0.06)', borderRadius: 10, padding: '8px 12px', overflowWrap: 'anywhere' }}>
+            <p className="mb-3" style={{ fontSize: TYPE_PX.hint, color: INK, background: 'rgba(139,32,32,0.06)', borderRadius: 10, padding: '8px 12px', overflowWrap: 'anywhere' }}>
               <strong style={{ color: DANGER }}>Your note to the chairs: </strong>{committee.awards_return_note}
             </p>
           )}
 
           {sorted.length === 0 ? (
-            <p style={{ fontSize: 14, color: INK_SOFT }}>The chairs have not nominated anyone yet.</p>
+            <p style={{ fontSize: TYPE_PX.body, color: INK_SOFT }}>The chairs have not nominated anyone yet.</p>
           ) : (
             <div className="gv-rv-recs">
               {sorted.map((r) => <RecipientCard key={r.id} row={r} awardLabel={labelFor(r)} />)}
@@ -225,16 +225,16 @@ function CommitteeSlate({ committee, rows, config, state, open, onToggle, busy, 
           )}
 
           {slots.length > 0 && done.missing.length > 0 && rows.length > 0 && (
-            <p className="mt-3" style={{ fontSize: 13, color: INK_SOFT }}>Still empty: {done.missing.join(', ')}</p>
+            <p className="mt-3" style={{ fontSize: TYPE_PX.hint, color: INK_SOFT }}>Still empty: {done.missing.join(', ')}</p>
           )}
           {done.over.length > 0 && (
-            <p className="mt-1" style={{ fontSize: 13, color: DANGER }}>More than the set allows: {done.over.join(', ')}</p>
+            <p className="mt-1" style={{ fontSize: TYPE_PX.hint, color: DANGER }}>More than the set allows: {done.over.join(', ')}</p>
           )}
 
           {state !== 'published' && (canApprove || canReturn) && (
             returning ? (
               <div className="mt-4">
-                <label htmlFor={noteId} style={{ fontSize: 13, fontWeight: 700, color: INK }}>What should the chairs change?</label>
+                <label htmlFor={noteId} style={{ fontSize: TYPE_PX.hint, fontWeight: 700, color: INK }}>What should the chairs change?</label>
                 <textarea
                   id={noteId}
                   value={note}
@@ -246,9 +246,9 @@ function CommitteeSlate({ committee, rows, config, state, open, onToggle, busy, 
                   onKeyDown={(e) => { if (e.key === 'Escape') { e.stopPropagation(); setReturning(false); } }}
                   aria-describedby={noteError ? `${noteId}-err` : undefined}
                   aria-invalid={!!noteError}
-                  style={{ ...INPUT, width: '100%', marginTop: 6, minHeight: 84, fontSize: 14.5, resize: 'vertical' }}
+                  style={{ ...INPUT, width: '100%', marginTop: 6, minHeight: 84, fontSize: TYPE_PX.body, resize: 'vertical' }}
                 />
-                {noteError && <p id={`${noteId}-err`} role="alert" style={{ fontSize: 13, color: DANGER, marginTop: 4 }}>{noteError}</p>}
+                {noteError && <p id={`${noteId}-err`} role="alert" style={{ fontSize: TYPE_PX.hint, color: DANGER, marginTop: 4 }}>{noteError}</p>}
                 <div className="mt-3 flex items-center gap-3 flex-wrap">
                   <button type="button" className="gv-st-btn gv-st-forest" disabled={busy} onClick={() => void sendBack()}>
                     {busy && <Loader2 size={15} className="animate-spin" aria-hidden />}Send back to the chairs
@@ -268,16 +268,16 @@ function CommitteeSlate({ committee, rows, config, state, open, onToggle, busy, 
                   <button type="button" className="gv-st-link" disabled={busy} onClick={() => setReturning(true)}>Return with a note</button>
                 )}
                 {state === 'approved' && (
-                  <span style={{ fontSize: 13.5, color: INK_SOFT }}>Approved. It goes out when you publish.</span>
+                  <span style={{ fontSize: TYPE_PX.hint, color: INK_SOFT }}>Approved. It goes out when you publish.</span>
                 )}
                 {(state === 'nominating' || state === 'returned') && (
-                  <span style={{ fontSize: 13.5, color: INK_SOFT }}>Waiting for the chairs to submit.</span>
+                  <span style={{ fontSize: TYPE_PX.hint, color: INK_SOFT }}>Waiting for the chairs to submit.</span>
                 )}
               </div>
             )
           )}
           {state === 'not-started' && (
-            <p className="mt-2" style={{ fontSize: 13.5, color: INK_SOFT }}>Chairs nominate from their conference page.</p>
+            <p className="mt-2" style={{ fontSize: TYPE_PX.hint, color: INK_SOFT }}>Chairs nominate from their conference page.</p>
           )}
         </div>
       )}
@@ -466,11 +466,11 @@ export function AwardsReviewView({
         style={{ paddingTop: 44, marginTop: 24, background: 'radial-gradient(120% 90% at 100% 0%, rgba(61,122,82,0.10) 0%, rgba(61,122,82,0) 55%), #FFFFFF' }}>
         <OverhangDisc emoji="Clipboard" icon={ClipboardList} tint={TINT_GREEN_BG} />
         <h2 id="rv-title" style={{ fontFamily: F, fontSize: 20, fontWeight: 800, color: INK, letterSpacing: '-0.01em' }}>Review and Publish</h2>
-        <p className="mt-1" style={{ fontFamily: F, fontSize: 14, color: INK_SOFT }}>{summary}</p>
+        <p className="mt-1" style={{ fontFamily: F, fontSize: TYPE_PX.body, color: INK_SOFT }}>{summary}</p>
 
         {loadError ? (
           <div className="mt-4 flex items-center gap-3 flex-wrap">
-            <p role="alert" style={{ fontFamily: F, fontSize: 14, color: DANGER }}>{loadError}</p>
+            <p role="alert" style={{ fontFamily: F, fontSize: TYPE_PX.body, color: DANGER }}>{loadError}</p>
             <button type="button" className="gv-st-link" onClick={onRetry}>Try again</button>
           </div>
         ) : committees === null ? (
@@ -506,10 +506,10 @@ export function AwardsReviewView({
           <h2 id="rv-publish-title" style={{ fontFamily: F, fontSize: 20, fontWeight: 800, color: INK, letterSpacing: '-0.01em' }}>
             {publishedAt ? 'Awards Published' : 'Publish Awards'}
           </h2>
-          <div className="mt-1 flex flex-col gap-1" style={{ fontFamily: F, fontSize: 14, color: INK_SOFT }}>
+          <div className="mt-1 flex flex-col gap-1" style={{ fontFamily: F, fontSize: TYPE_PX.body, color: INK_SOFT }}>
             {publishedAt && (
               <p>
-                <span style={{ fontSize: 18, fontWeight: 800, color: FOREST, fontVariantNumeric: 'tabular-nums' }}>{publishedCount}</span>
+                <span style={{ fontSize: TYPE_PX.card, fontWeight: 800, color: FOREST, fontVariantNumeric: 'tabular-nums' }}>{publishedCount}</span>
                 {' '}{publishedCount === 1 ? 'award' : 'awards'} published on {fmtDate(publishedAt)}. Winners see them on their MUN CV.
               </p>
             )}
