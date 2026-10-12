@@ -1559,11 +1559,11 @@ function CommitteeEditor({ conferenceId, committeeType, existing, initialRoster,
 
 // ── Committee-type choice ─────────────────────────────────────────────────────
 // Drawn by CommitteeTypeChooser (src/components/parliamentSetup.tsx, 12 Oct
-// 2026): four white cards, each a Fluent 3D emoji in a tinted disc, the name and
-// one short line. Order from COMMITTEE_TYPES.
+// 2026): four white cards (MUN, Crisis, Custom, Press), each a big Fluent 3D
+// emoji over the card's edge, the name and one short line. Order from COMMITTEE_TYPES.
 
 // ── CommitteeEditorModal, public API ─────────────────────────────────────────
-// committee = null → create flow (opens with the GA / Specialised / Crisis
+// committee = null → create flow (opens with the MUN / Crisis / Custom / Press
 // type picker); committee set → edit flow (self-loads the committee's slots).
 
 export function CommitteeEditorModal({ conference, committee, onSaved, onClose, draft }: {
@@ -1628,7 +1628,8 @@ export function CommitteeEditorModal({ conference, committee, onSaved, onClose, 
     return () => { cancelled = true; };
   }, [committee, session]);
 
-  // Create flow, choose committee type first (GA / Specialised / Crisis / Custom).
+  // Create flow, choose committee type first (MUN / Crisis / Custom / Press).
+  // 'specialised' is no longer offered; stored rows keep it and read as Custom.
   if (!isEdit && !pendingType) {
     return (
       <ModalOverlay onClose={onClose}>

@@ -6,7 +6,12 @@
  * to more of them, which i think should be general applications settings -
  * paying, who gets in and what do they rank").
  *
- * One section among equals now (settingsShell.tsx), in three cards:
+ * One section among equals now (settingsShell.tsx), in three cards and two
+ * columns from 1000px of section width (owner, 12 Oct 2026): Who Can Apply on
+ * the left, What They Rank with Accepting and Paying under it on the right,
+ * stacked in that order below. There is no section heading of its own (the
+ * applications count was dropped the same day); an sr-only h2 stays.
+ *
  *
  *   Who Can Apply    one row per listed role (price, window, number applied,
  *                    Edit, its own switch) and "Add a role" with copy-from.
@@ -43,16 +48,16 @@
 
 import { useEffect, useRef, useState } from 'react';
 import {
-  CheckCircle2, Clock, MinusCircle, ChevronRight, Plus, X, ArrowLeft, Copy, FilePlus2,
-  ClipboardList, DoorOpen, ListOrdered, Ban, Hand,
+  CheckCircle2, ChevronRight, Plus, X, ArrowLeft, Copy, FilePlus2,
+  DoorOpen, ListOrdered, Ban, Hand,
 } from 'lucide-react';
 import { CircleFlag } from '@/components/CircleFlag';
 import type { Conference } from '@/app/manage/[slug]/layout';
 import { ROLE_ORDER } from './applicationsUi';
 import {
-  F, INK, INK_SOFT, FOREST, AMBER, TEXT_LINK,
+  F, INK, INK_SOFT, FOREST, TEXT_LINK,
   Switch, windowState, shortDate, rolePriceText, rolePlural, roleHasPrice, roleIsFree,
-  PREF_MODE_OPTIONS, SectionHead, Group, Row, SwitchRow, SwitchGrid, BigCount, TINT_GOLD_BG, TINT_GREEN_BG, EmojiDisc, RoleDisc, TYPE, TYPE_PX,
+  PREF_MODE_OPTIONS, Group, Row, SwitchRow, SwitchGrid, TINT_GOLD_BG, TINT_GREEN_BG, EmojiDisc, RoleDisc, TYPE, TYPE_PX,
   generalAnswer, inGeneralScope, listedRoles, type GeneralField, type RoleSetupConfig,
 } from './panelKit';
 
@@ -68,6 +73,16 @@ const ROLE_LINE: Record<string, string> = {
 };
 
 const CSS = `
+/* Two columns from 1000px of section width (owner, 12 Oct 2026: "move
+   basically the entire page in two columns"): Who Can Apply on the left, What
+   They Rank with Accepting and Paying under it on the right, each half the
+   width and aligned at the top; stacked in that order below. The 44px column
+   gap leaves room for the right cards' emoji discs, which hang 24px off their
+   left edge. */
+.gvc-app { container-type: inline-size; }
+.gvc-cols { display: grid; grid-template-columns: minmax(0, 1fr); gap: 20px; align-items: start; }
+.gvc-col { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
+@container (min-width: 1000px) { .gvc-cols:not([data-single]) { grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 44px; } }
 /* Role rows: white raised cards; a role that is taking applications gets the
    green wash and a forest edge (owner, 12 Oct 2026: "slightly bigger icons and
    nicer cards"). */
@@ -79,7 +94,16 @@ const CSS = `
   box-shadow: inset 4px 0 0 #2A5A3C, inset 0 0 0 1px rgba(42,90,60,0.22), 0 1px 0 rgba(27,56,40,0.08), 0 12px 26px -18px rgba(27,56,40,0.55); }
 .gvc-row-name { grid-area: name; } .gvc-row-detail { grid-area: detail; } .gvc-row-count { grid-area: count; }
 .gvc-row-edit { grid-area: edit; justify-self: end; } .gvc-row-switch { grid-area: switch; justify-self: end; }
+/* Half the page (the two-column layout): two lines, the role and its switch,
+   then price and window, the applied count and Edit, the detail lined up
+   under the role's name. */
+@container (min-width: 430px) {
+  .gvc-row { grid-template-columns: minmax(0, 1fr) auto auto; grid-template-areas: "name name switch" "detail count edit"; row-gap: 4px; }
+  .gvc-row-detail { padding-inline-start: 60px; }
+  .gvc-row-count { justify-self: end; }
+}
 @container (min-width: 620px) {
+  .gvc-row-detail { padding-inline-start: 0; }
   .gvc-row { grid-template-columns: minmax(170px, 1.1fr) minmax(0, 1.5fr) 96px auto auto; grid-template-areas: "name detail count edit switch"; column-gap: 14px; }
 }
 .gvc-pick { display: grid; gap: 8px; grid-template-columns: minmax(0, 1fr); }
@@ -291,22 +315,13 @@ export function ApplicationsSection({
   const ordered = ROLE_ORDER.map(r => roles.find(x => x.role === r)).filter((x): x is RoleSetupConfig => !!x);
   const listed = listedRoles(ordered, counts, extraRoles, removedRoles);
   const hidden = ordered.filter(r => !listed.includes(r));
-  const totalApplied = counts ? Object.values(counts).reduce((a, b) => a + b, 0) : null;
-
-  const open = ordered.filter(r => windowState(r, now) === 'open');
-  const scheduled = ordered.filter(r => windowState(r, now) === 'scheduled');
-  const firstClose = open.map(r => r.applications_close_at).filter((x): x is string => !!x).sort()[0];
-  const firstOpen = scheduled.map(r => r.applications_open_at).filter((x): x is string => !!x).sort()[0];
-  const appsMark = open.length > 0
-    ? { icon: CheckCircle2, word: firstClose ? `Open until ${shortDate(firstClose, now)}` : 'Open now', color: FOREST }
-    : scheduled.length > 0 ? { icon: Clock, word: `Opens ${shortDate(firstOpen, now)}`, color: AMBER }
-    : { icon: MinusCircle, word: 'Nobody can apply yet', color: INK_SOFT };
-
   const auto = generalAnswer(listed, 'auto_accept');
   const timing = generalAnswer(listed, 'payment_timing');
   const rank = generalAnswer(listed, 'preference_mode');
   const anyPaid = listed.some(r => roleHasPrice(r.role) && !roleIsFree(r));
   const showTiming = anyPaid && timing.roles.length > 0;
+  const showAccept = auto.roles.length > 0 || showTiming;
+  const showRank = rank.roles.length > 0;
 
   function saveAll(field: GeneralField, value: unknown) {
     const targets = listed.filter(r => inGeneralScope(field, r.role)).map(r => r.role);
@@ -316,121 +331,132 @@ export function ApplicationsSection({
 
   if (ordered.length === 0) {
     return (
-      <div aria-busy="true" className="flex flex-col gap-4">
-        {[0, 1, 2].map(i => <div key={i} className="gv-fd-ph" style={{ height: i === 0 ? 120 : 180 }} />)}
+      <div aria-busy="true" className="gvc-app">
+        <style>{CSS}</style>
+        <div className="gvc-cols">
+          <div className="gv-fd-ph" style={{ height: 320 }} />
+          <div className="gvc-col">
+            <div className="gv-fd-ph" style={{ height: 220 }} />
+            <div className="gv-fd-ph" style={{ height: 140 }} />
+          </div>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col gap-5">
+    <div className="gvc-app">
       <style>{CSS}</style>
-      <SectionHead emoji="Inbox tray" icon={ClipboardList} tint={TINT_GOLD_BG}
-        title="Applications"
-        line={<span className="inline-flex items-center gap-1.5" style={{ color: appsMark.color, fontWeight: 700 }}><appsMark.icon size={16} strokeWidth={2.4} aria-hidden />{appsMark.word}</span>}
-        focal={totalApplied !== null ? <BigCount n={totalApplied} word={totalApplied === 1 ? 'application' : 'applications'} /> : undefined}
-      />
-
-      {/* ── Who can apply ── */}
-      <Group id="who-can-apply" title="Who Can Apply" emoji="Identification card" icon={Hand} tint={TINT_GOLD_BG}>
-        {listed.map(cfg => {
-          const st = windowState(cfg, now);
-          const plural = rolePlural(cfg.role);
-          const count = counts?.[cfg.role];
-          return (
-            <div key={cfg.role} className="gvc-row" data-on={cfg.is_enabled ? 'true' : undefined}>
-              <span className="gvc-row-name flex items-center gap-2.5 min-w-0">
-                <RoleDisc role={cfg.role} tint={cfg.is_enabled ? TINT_GREEN_BG : TINT_GOLD_BG} size={50} />
-                <span style={{ ...TYPE.card, overflowWrap: 'anywhere' }}>{plural}</span>
-              </span>
-              <span className="gvc-row-detail min-w-0" style={{ ...TYPE.body, color: INK_SOFT, overflowWrap: 'anywhere' }}>
-                {st === 'off' ? rowDetail(cfg, now) : <><b style={{ color: INK, fontWeight: 800 }}>{rolePriceText(cfg, c.fee_currency, now)}</b> · {rowDetail(cfg, now)}</>}
-              </span>
-              <span className="gvc-row-count" style={{ ...TYPE.hint, whiteSpace: 'nowrap' }}>
-                {count === undefined ? '' : <><b style={{ fontSize: 20, fontWeight: 900, fontVariantNumeric: 'tabular-nums', color: FOREST }}>{count}</b> applied</>}
-              </span>
-              <span className="gvc-row-edit">
-                <button type="button" aria-label={`Edit ${plural}`} onClick={() => onEditRole(cfg.role)} className="gv-st-btn gv-st-outline" style={{ minHeight: 38, padding: '0 12px' }}>
-                  Edit<ChevronRight size={16} strokeWidth={2.4} aria-hidden />
-                </button>
-              </span>
-              {/* A role opens at any time: applications never wait for payments (owner, 12 Oct 2026). */}
-              <span className="gvc-row-switch">
-                <Switch label={`${plural} taking applications`} checked={cfg.is_enabled} onChange={(next) => onRoleToggle(cfg.role, next)} />
-              </span>
-            </div>
-          );
-        })}
-        <AddRole hidden={hidden} setUp={listed} onAdd={onAddRole} />
-      </Group>
-
-      {/* ── Accepting and paying (every role) ── */}
-      {(auto.roles.length > 0 || showTiming) && (
-        <Group title="Accepting and Paying" emoji="Door" icon={DoorOpen} aside={<EveryRole />}>
-          <SwitchGrid>
-            {auto.roles.length > 0 && (
-              <SwitchRow
-                label="Accept everyone straight away"
-                desc={auto.mixed ? splitLine(auto, 'auto_accept') : 'Off: you review each application.'}
-                checked={auto.value === true}
-                mixed={auto.mixed}
-                onChange={(v) => saveAll('auto_accept', v)}
-              />
-            )}
-            {showTiming && (
-              <SwitchRow
-                label="Pay only after you accept them"
-                desc={timing.mixed ? splitLine(timing, 'payment_timing') : 'Off: they can pay as soon as they apply. Roles with a price only.'}
-                checked={timing.value === 'after_acceptance'}
-                mixed={timing.mixed}
-                onChange={(v) => saveAll('payment_timing', v ? 'after_acceptance' : 'anytime')}
-              />
-            )}
-          </SwitchGrid>
+      {/* The section's own heading with the applications count was removed
+          (owner, 12 Oct 2026: "no need to have the top heading with the
+          amount of delegates"); the h2 stays for screen readers. */}
+      <h2 className="sr-only">Applications</h2>
+      <div className="gvc-cols" data-single={showAccept || showRank ? undefined : 'true'}>
+        {/* ── Who can apply ── */}
+        <Group id="who-can-apply" title="Who Can Apply" emoji="Identification card" icon={Hand} tint={TINT_GOLD_BG}>
+          {listed.map(cfg => {
+            const st = windowState(cfg, now);
+            const plural = rolePlural(cfg.role);
+            const count = counts?.[cfg.role];
+            return (
+              <div key={cfg.role} className="gvc-row" data-on={cfg.is_enabled ? 'true' : undefined}>
+                <span className="gvc-row-name flex items-center gap-2.5 min-w-0">
+                  <RoleDisc role={cfg.role} tint={cfg.is_enabled ? TINT_GREEN_BG : TINT_GOLD_BG} size={50} />
+                  <span style={{ ...TYPE.card, overflowWrap: 'anywhere' }}>{plural}</span>
+                </span>
+                <span className="gvc-row-detail min-w-0" style={{ ...TYPE.body, color: INK_SOFT, overflowWrap: 'anywhere' }}>
+                  {st === 'off' ? rowDetail(cfg, now) : <><b style={{ color: INK, fontWeight: 800 }}>{rolePriceText(cfg, c.fee_currency, now)}</b> · {rowDetail(cfg, now)}</>}
+                </span>
+                <span className="gvc-row-count" style={{ ...TYPE.hint, whiteSpace: 'nowrap' }}>
+                  {count === undefined ? '' : <><b style={{ fontSize: 20, fontWeight: 900, fontVariantNumeric: 'tabular-nums', color: FOREST }}>{count}</b> applied</>}
+                </span>
+                <span className="gvc-row-edit">
+                  <button type="button" aria-label={`Edit ${plural}`} onClick={() => onEditRole(cfg.role)} className="gv-st-btn gv-st-outline" style={{ minHeight: 38, padding: '0 12px' }}>
+                    Edit<ChevronRight size={16} strokeWidth={2.4} aria-hidden />
+                  </button>
+                </span>
+                {/* A role opens at any time: applications never wait for payments (owner, 12 Oct 2026). */}
+                <span className="gvc-row-switch">
+                  <Switch label={`${plural} taking applications`} checked={cfg.is_enabled} onChange={(next) => onRoleToggle(cfg.role, next)} />
+                </span>
+              </div>
+            );
+          })}
+          <AddRole hidden={hidden} setUp={listed} onAdd={onAddRole} />
         </Group>
-      )}
 
-      {/* ── What they rank (delegates and head delegates) ── */}
-      {rank.roles.length > 0 && (
-        <Group
-          title="What They Rank"
-          emoji="Bar chart"
-          icon={ListOrdered}
-          aside={<span style={{ ...TYPE.hint, fontWeight: 600 }}>{joinWords(rank.roles.map(r => rolePlural(r.role)))}</span>}
-        >
-          {rank.mixed && (
-            <Row
-              need
-              label="Different per role"
-              desc={`${rank.roles.map(r => `${rolePlural(r.role)}: ${PREF_MODE_OPTIONS.find(o => o.value === (r.preference_mode || 'none'))?.label.toLowerCase() ?? 'nothing'}`).join('. ')}. Pick one to use it for every role.`}
-            />
-          )}
-          <div role="radiogroup" aria-label="What do they rank?" className="gvc-rank">
-            {PREF_MODE_OPTIONS.map(opt => {
-              const on = !rank.mixed && rank.value === opt.value;
-              return (
-                <button
-                  key={opt.value}
-                  type="button"
-                  role="radio"
-                  aria-checked={on}
-                  onClick={() => saveAll('preference_mode', opt.value)}
-                  className="gvc-rank-card"
-                >
-                  <RankPreview value={opt.value} />
-                  <span className="min-w-0">
-                    <span className="flex items-center gap-1.5" style={{ ...TYPE.label, fontWeight: 800 }}>
-                      {on && <CheckCircle2 size={18} strokeWidth={2.6} color={FOREST} aria-hidden />}
-                      <span style={{ overflowWrap: 'anywhere' }}>{opt.label}</span>
-                    </span>
-                    <span className="block" style={{ ...TYPE.hint, marginTop: 3, overflowWrap: 'anywhere' }}>{opt.desc}</span>
-                  </span>
-                </button>
-              );
-            })}
+        {(showRank || showAccept) && (
+          <div className="gvc-col">
+            {/* ── What they rank (delegates and head delegates) ── */}
+            {showRank && (
+              <Group
+                title="What They Rank"
+                emoji="Bar chart"
+                icon={ListOrdered}
+                aside={<span style={{ ...TYPE.hint, fontWeight: 600 }}>{joinWords(rank.roles.map(r => rolePlural(r.role)))}</span>}
+              >
+                {rank.mixed && (
+                  <Row
+                    need
+                    label="Different per role"
+                    desc={`${rank.roles.map(r => `${rolePlural(r.role)}: ${PREF_MODE_OPTIONS.find(o => o.value === (r.preference_mode || 'none'))?.label.toLowerCase() ?? 'nothing'}`).join('. ')}. Pick one to use it for every role.`}
+                  />
+                )}
+                <div role="radiogroup" aria-label="What do they rank?" className="gvc-rank">
+                  {PREF_MODE_OPTIONS.map(opt => {
+                    const on = !rank.mixed && rank.value === opt.value;
+                    return (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        role="radio"
+                        aria-checked={on}
+                        onClick={() => saveAll('preference_mode', opt.value)}
+                        className="gvc-rank-card"
+                      >
+                        <RankPreview value={opt.value} />
+                        <span className="min-w-0">
+                          <span className="flex items-center gap-1.5" style={{ ...TYPE.label, fontWeight: 800 }}>
+                            {on && <CheckCircle2 size={18} strokeWidth={2.6} color={FOREST} aria-hidden />}
+                            <span style={{ overflowWrap: 'anywhere' }}>{opt.label}</span>
+                          </span>
+                          <span className="block" style={{ ...TYPE.hint, marginTop: 3, overflowWrap: 'anywhere' }}>{opt.desc}</span>
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </Group>
+            )}
+
+            {/* ── Accepting and paying (every role) ── */}
+            {showAccept && (
+              <Group title="Accepting and Paying" emoji="Door" icon={DoorOpen} aside={<EveryRole />}>
+                <SwitchGrid>
+                  {auto.roles.length > 0 && (
+                    <SwitchRow
+                      label="Accept everyone straight away"
+                      desc={auto.mixed ? splitLine(auto, 'auto_accept') : 'Off: you review each application.'}
+                      checked={auto.value === true}
+                      mixed={auto.mixed}
+                      onChange={(v) => saveAll('auto_accept', v)}
+                    />
+                  )}
+                  {showTiming && (
+                    <SwitchRow
+                      label="Pay only after you accept them"
+                      desc={timing.mixed ? splitLine(timing, 'payment_timing') : 'Off: they can pay as soon as they apply. Roles with a price only.'}
+                      checked={timing.value === 'after_acceptance'}
+                      mixed={timing.mixed}
+                      onChange={(v) => saveAll('payment_timing', v ? 'after_acceptance' : 'anytime')}
+                    />
+                  )}
+                </SwitchGrid>
+              </Group>
+            )}
           </div>
-        </Group>
-      )}
+        )}
+      </div>
     </div>
   );
 }

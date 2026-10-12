@@ -28,11 +28,12 @@ import {
   US_SENATE_MEMBERS, PRESS_ROLES, EUROPEAN_PARLIAMENT_MEMBERS,
 } from '@/lib/presets';
 import { useScrollLock } from '@/hooks/useScrollLock';
-import { type SlotGroup, newGroupId, GROUP_COLORS, effectiveSlotArt, PARLIAMENT_PRESETS } from '@/lib/slotGroups';
+import { type SlotGroup, type ParliamentPreset, newGroupId, GROUP_COLORS, effectiveSlotArt, PARLIAMENT_PRESETS, groupShort, groupInk } from '@/lib/slotGroups';
 // The groups bar, the parliament presets and the group menu's colour and
 // add-seats controls (12 Oct 2026). Presentation only; every mutation below
 // stays here.
-import { SeatGroupsBar, GroupColorSwatches, AddSeatsToGroup, PARLIAMENT_CSS } from '@/components/parliamentSetup';
+import { SeatGroupsBar, PresetIcon } from '@/components/parliamentSetup';
+import { ParliamentGroupPopup, type GroupPopupSeat } from '@/components/parliamentGroupPopup';
 
 // ── Importance tiers ──────────────────────────────────────────────────────────
 // Mirrors the assignment page's model so tiers set here round-trip through the
@@ -340,10 +341,17 @@ function useAnchoredDropdown<T extends HTMLElement>(
 }
 
 // ── Committee-name input with preset dropdown ─────────────────────────────────
-export function ConferenceCommitteeNameInput({ value, onChange, onPresetSelect, id, className, style, placeholder }: {
+export function ConferenceCommitteeNameInput({ value, onChange, onPresetSelect, onParliamentSelect, id, className, style, placeholder, onEnter }: {
   value: string;
   onChange: (v: string) => void;
-  onPresetSelect: (preset: CommitteePreset) => void;
+  /** MUN presets. Omit to suggest only parliaments. */
+  onPresetSelect?: (preset: CommitteePreset) => void;
+  /** Custom (parliamentary) committees: suggest PARLIAMENT_PRESETS instead
+   *  (owner, 12 Oct 2026: "if i type it in the committee name, it will show up
+   *  and suggest it"). */
+  onParliamentSelect?: (preset: ParliamentPreset) => void;
+  /** Enter with no suggestion showing. */
+  onEnter?: () => void;
   /** Optional look-and-feel overrides. Omitted, the field is exactly what it
    *  always was, so the creation wizard is untouched; the committee editor
    *  passes the /create input class instead (23 Sep 2026). */
@@ -355,14 +363,20 @@ export function ConferenceCommitteeNameInput({ value, onChange, onPresetSelect, 
   const [open, setOpen] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const matches = value.trim()
-    ? CONFERENCE_COMMITTEE_PRESETS.filter((p) => {
-        const v = value.toLowerCase();
-        return p.name.toLowerCase().includes(v) || p.acronym.toLowerCase().includes(v);
-      })
+  const v = value.trim().toLowerCase();
+  const parliament = !!onParliamentSelect;
+  const matches = v && !parliament
+    ? CONFERENCE_COMMITTEE_PRESETS.filter((p) => p.name.toLowerCase().includes(v) || p.acronym.toLowerCase().includes(v))
+    : [];
+  const pMatches = v && parliament
+    ? PARLIAMENT_PRESETS.filter((p) => {
+        const words = `${p.label} ${p.key} ${p.hint} ${p.groups.map((g) => g.short).join(' ')}`.toLowerCase();
+        return words.includes(v) || (p.key === 'mep' && 'mep'.startsWith(v));
+      }).filter((p) => p.label.toLowerCase() !== v)
     : [];
   const topMatch = matches[0] ?? null;
-  const menuOpen = open && matches.length > 0;
+  const topParliament = pMatches[0] ?? null;
+  const menuOpen = open && (matches.length > 0 || pMatches.length > 0);
   const pos = useAnchoredDropdown(menuOpen, inputRef, 280);
 
   return (
@@ -375,7 +389,11 @@ export function ConferenceCommitteeNameInput({ value, onChange, onPresetSelect, 
         onFocus={() => setOpen(true)}
         onBlur={() => setTimeout(() => setOpen(false), 150)}
         onKeyDown={(e) => {
-          if (e.key === 'Enter' && topMatch) { e.preventDefault(); onPresetSelect(topMatch); setOpen(false); }
+          if (e.key === 'Enter') {
+            if (menuOpen && topParliament && onParliamentSelect) { e.preventDefault(); onParliamentSelect(topParliament); setOpen(false); }
+            else if (menuOpen && topMatch && onPresetSelect) { e.preventDefault(); onPresetSelect(topMatch); setOpen(false); }
+            else if (onEnter) { e.preventDefault(); onEnter(); }
+          }
           if (e.key === 'Escape') setOpen(false);
         }}
         id={id}
@@ -386,10 +404,26 @@ export function ConferenceCommitteeNameInput({ value, onChange, onPresetSelect, 
       {menuOpen && pos && (
         <Portal>
         <div className="rounded-xl overflow-hidden" style={{ position: 'fixed', top: pos.top, left: pos.left, width: pos.width, transform: pos.up ? 'translateY(-100%)' : undefined, zIndex: 9999, backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0', boxShadow: '0 8px 32px rgba(27,56,40,0.14), 0 2px 8px rgba(27,56,40,0.08)', maxHeight: pos.maxHeight, overflowY: 'auto', overscrollBehavior: 'contain' }}>
+          {pMatches.slice(0, 8).map((p, i) => (
+            <button
+              key={p.key}
+              type="button"
+              onMouseDown={(e) => { e.preventDefault(); onParliamentSelect?.(p); setOpen(false); }}
+              className="w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors border-b border-[#DDD4C0]/50 last:border-0 text-[#1C1410] hover:bg-[#EDE7D8]"
+              style={i === 0 ? { backgroundColor: 'rgba(27,56,40,0.07)' } : {}}
+            >
+              <span className="shrink-0 flex"><PresetIcon flag={p.flag} emoji={p.emoji} label={p.label} /></span>
+              <span className="flex min-w-0 flex-1 flex-col">
+                <span className="text-sm font-semibold">{p.label}</span>
+                <span className="text-xs" style={{ color: '#544B3E' }}>{p.groups.length} groups: {p.groups.map((g) => g.short).join(', ')}</span>
+              </span>
+              {i === 0 && <span className="text-[10px] shrink-0" style={{ color: '#9A8A78' }}>↵</span>}
+            </button>
+          ))}
           {matches.slice(0, 8).map((p, i) => (
             <button
               key={p.name}
-              onMouseDown={(e) => { e.preventDefault(); onPresetSelect(p); setOpen(false); }}
+              onMouseDown={(e) => { e.preventDefault(); onPresetSelect?.(p); setOpen(false); }}
               className={`w-full flex items-center gap-3 px-4 py-3 text-left transition-colors border-b border-[#DDD4C0]/50 last:border-0 ${i === 0 ? 'text-[#1C1410]' : 'text-[#1C1410] hover:bg-[#EDE7D8]'}`}
               style={i === 0 ? { backgroundColor: 'rgba(27,56,40,0.07)' } : {}}
             >
@@ -441,10 +475,15 @@ interface ReviewRow { name: string; isCountry: boolean }
 //     others" strip offers to copy it to the same group, every eligible seat,
 //     or a hand-picked set.
 //   - groups (custom committees only): political groups / parties / benches.
-//     The list becomes one section per group plus "Ungrouped"; rows drag
-//     between sections, or move through the row's "Move to" select.
+//     The groups are listed ONCE, as cards above the list (SeatGroupsBar);
+//     the list itself then shows only the Unassigned seats. A seat is dragged
+//     onto a group card (pointer events, so mouse, pen and touch), or moved
+//     with the row's "Move to group" menu. A group card opens the group
+//     pop-up (parliamentGroupPopup.tsx), which lists its members and fills it.
 
 type UploadTarget = { kind: 'seat'; idx: number } | { kind: 'group'; id: string };
+
+const toSeat = (r: RosterEntry, i: number): GroupPopupSeat => ({ idx: i, name: r.name, logoUrl: r.logoUrl ?? null, isObserver: !!r.isObserver });
 
 // Fixed-position anchor for the small floating panels below (flag chooser,
 // group menu). Left-aligned to the anchor, clamped to the viewport, flipped
@@ -524,6 +563,11 @@ div:last-child > .gv-rs-row { border-bottom-color:transparent; }
 .gv-rs-menu-btn { display:flex; align-items:center; gap:7px; width:100%; text-align:left; padding:7px 10px; border-radius:8px; border:0; background:transparent; cursor:pointer; font-family:var(--font-brand), sans-serif; font-size:12px; font-weight:600; color:#1C1410; }
 .gv-rs-menu-btn:hover, .gv-rs-menu-btn:focus-visible { background:rgba(27,56,40,0.06); outline:none; }
 .gv-rs-menu-btn.gv-rs-danger { color:#8B2020; }
+.gv-rs-grip { display:inline-flex; align-items:center; justify-content:center; width:18px; height:28px; margin-right:-4px; flex-shrink:0; color:#C9BDA6; cursor:grab; touch-action:none; border-radius:6px; }
+.gv-rs-row:hover .gv-rs-grip { color:#1B3828; }
+.gv-rs-ghost { position:fixed; left:0; top:0; z-index:10060; pointer-events:none; display:inline-flex; align-items:center; gap:7px; max-width:260px; padding:8px 14px 8px 10px; border-radius:12px; background:#FFFFFF; color:#1C1410; font-family:var(--font-brand), sans-serif; font-size:13.5px; font-weight:700; box-shadow:0 18px 36px -14px rgba(27,56,40,0.55), 0 0 0 1.5px #1B3828; transform:translate3d(-999px,-999px,0); will-change:transform; }
+.gv-rs-ghost svg { color:#1B3828; flex-shrink:0; }
+.gv-rs-ghost span { overflow-wrap:anywhere; }
 
 /* ── The editor's roster card (variant 'panel'), /create's rows ─────────── */
 .gv-rs-panel .gv-rs-row { height:auto; min-height:46px; gap:10px; padding:4px 4px 4px 10px; border-bottom:0; border-radius:12px; background:rgba(255,255,255,0.68); box-shadow:0 1px 2px rgba(27,56,40,0.05); margin-bottom:4px; }
@@ -556,6 +600,7 @@ div:last-child > .gv-rs-row { border-bottom-color:transparent; }
   .gv-rs-ctl.gv-rs-lit { color:#B6871F; }
   .gv-rs-art-x { opacity:1; top:-8px; right:-10px; width:18px; height:18px; }
   .gv-rs-pill { padding:8px 12px; font-size:12px; }
+  .gv-rs-grip { width:36px; height:44px; color:#8A7C6B; margin-right:0; }
   .gv-rs-menu-btn { padding:12px 12px; font-size:13px; }
 }
 `;
@@ -651,28 +696,31 @@ export function ConferenceRosterSelected({
   const chooserPanelRef = useRef<HTMLDivElement>(null);
   const chooserPos = useFloatingPos(!!chooser, applyFor?.idx ?? null, chooserAnchorRef, 240, 280);
 
-  // Groups bar state (the add-group field lives in SeatGroupsBar).
-  const [groupMenuId, setGroupMenuId] = useState<string | null>(null);
-  const [groupRename, setGroupRename] = useState('');
-  const groupMenuAnchorRef = useRef<HTMLElement | null>(null);
-  const groupMenuPanelRef = useRef<HTMLDivElement>(null);
-  const groupMenuPos = useFloatingPos(!!groupMenuId, groupMenuId, groupMenuAnchorRef, 260, 420);
+  // The group pop-up (the add-group field lives in SeatGroupsBar).
+  const [groupOpenId, setGroupOpenId] = useState<string | null>(null);
 
-  // Drag and drop between sections.
+  // Dragging an unassigned seat onto a group card. Pointer events, so it works
+  // with a mouse, a pen and a finger (a finger drags from the grip only, so the
+  // list still scrolls). The ghost follows the pointer by a direct style write
+  // (no render per move); React state changes only on lift, drop and when the
+  // target card changes.
   const [dragIdx, setDragIdx] = useState<number | null>(null);
-  const [dropKey, setDropKey] = useState<string | null>(null);
+  const [dropGroupId, setDropGroupId] = useState<string | null>(null);
+  const ghostRef = useRef<HTMLDivElement>(null);
+  const justDraggedRef = useRef(0);
+  const dragCleanupRef = useRef<(() => void) | null>(null);
+  useEffect(() => () => dragCleanupRef.current?.(), []);
 
-  // Outside click closes the two floating panels.
+  // Outside click closes the "Choose…" panel.
   useEffect(() => {
-    if (!chooser && !groupMenuId) return;
+    if (!chooser) return;
     const onDown = (e: MouseEvent) => {
       const t = e.target as Node;
-      if (chooser && !chooserPanelRef.current?.contains(t) && !chooserAnchorRef.current?.contains(t)) setChooser(null);
-      if (groupMenuId && !groupMenuPanelRef.current?.contains(t) && !groupMenuAnchorRef.current?.contains(t)) setGroupMenuId(null);
+      if (!chooserPanelRef.current?.contains(t) && !chooserAnchorRef.current?.contains(t)) setChooser(null);
     };
     document.addEventListener('mousedown', onDown);
     return () => document.removeEventListener('mousedown', onDown);
-  }, [chooser, groupMenuId]);
+  }, [chooser]);
 
   const removeIdx = (idx: number) => {
     onChange(value.filter((_, i) => i !== idx));
@@ -757,58 +805,60 @@ export function ConferenceRosterSelected({
     mutateGroups((prev) => (
       prev.some((g) => g.name.toLowerCase() === name.toLowerCase())
         ? prev
-        : [...prev, { id: newGroupId(), name, logo_url: null, color: nextColor(prev) }]
+        : [...prev, { id: newGroupId(), name, logo_url: null, color: nextColor(prev), short_name: null }]
     ));
   };
 
   // Presets APPEND. Names already on the bar are skipped, existing groups keep
   // their id and their seats, and nothing is ever cleared. Picking two presets
-  // in a row leaves both sets on the bar.
+  // in a row leaves both sets on the bar. Each preset group brings its party
+  // colour and short name.
   const applyPreset = (key: string) => {
     const preset = PARLIAMENT_PRESETS.find((p) => p.key === key);
     if (!preset) return;
     mutateGroups((prev) => {
       const have = new Set(prev.map((g) => g.name.toLowerCase()));
       const additions: SlotGroup[] = [];
-      for (const n of preset.groups) {
-        if (have.has(n.toLowerCase())) continue;
-        have.add(n.toLowerCase());
-        additions.push({ id: newGroupId(), name: n, logo_url: null, color: nextColor(prev, additions.length) });
+      for (const pg of preset.groups) {
+        if (have.has(pg.name.toLowerCase())) continue;
+        have.add(pg.name.toLowerCase());
+        additions.push({
+          id: newGroupId(), name: pg.name, logo_url: null,
+          color: pg.color || nextColor(prev, additions.length),
+          short_name: pg.short && pg.short !== pg.name ? pg.short : null,
+        });
       }
       return additions.length > 0 ? [...prev, ...additions] : prev;
     });
   };
 
-  // Opens on click or keyboard activation, never on hover: this is a menu with
-  // a destructive item, and it is portaled straight over the rest of the groups
-  // bar. Opening it by passing the pointer across a pill put "Remove group"
-  // under a click aimed at the preset select below it.
-  const openGroupMenu = (id: string, el: HTMLElement) => {
-    groupMenuAnchorRef.current = el;
-    const g = groupsRef.current.find((x) => x.id === id);
-    setGroupRename(g?.name ?? '');
-    setGroupMenuId(id);
+  // Rename in place. The id is deliberately untouched: it is what the seats
+  // point at. False when another group already has the name.
+  const renameGroup = (id: string, raw: string): boolean => {
+    const name = raw.trim();
+    if (!name) return false;
+    if (groupsRef.current.some((g) => g.id !== id && g.name.toLowerCase() === name.toLowerCase())) return false;
+    mutateGroups((prev) => prev.map((g) => (g.id === id ? { ...g, name } : g)));
+    return true;
   };
 
-  const commitGroupRename = (id: string) => {
-    const name = groupRename.trim();
-    if (!name) return;
-    // Rename in place. The id is deliberately untouched: it is what the seats
-    // point at.
-    mutateGroups((prev) => (
-      prev.some((g) => g.id !== id && g.name.toLowerCase() === name.toLowerCase())
-        ? prev
-        : prev.map((g) => (g.id === id ? { ...g, name } : g))
-    ));
+  const setGroupShortName = (id: string, raw: string) => {
+    const short = raw.trim();
+    mutateGroups((prev) => prev.map((g) => (g.id === id ? { ...g, short_name: short || null } : g)));
   };
 
   const removeGroup = (id: string) => {
     if (!onGroupsChange) return;
-    setGroupMenuId(null);
+    setGroupOpenId(null);
     mutateGroups((prev) => prev.filter((g) => g.id !== id));
-    // Seats in the removed group go back to Ungrouped; the editor writes the
+    // Seats in the removed group go back to Unassigned; the editor writes the
     // null through to committee_country_slots.group_id on save.
-    if (value.some((r) => r.groupId === id)) onChange(value.map((r) => (r.groupId === id ? { ...r, groupId: null } : r)));
+    const cur = valueRef.current;
+    if (cur.some((r) => r.groupId === id)) {
+      const next = cur.map((r) => (r.groupId === id ? { ...r, groupId: null } : r));
+      valueRef.current = next;
+      onChange(next);
+    }
   };
 
   const clearGroupLogo = (id: string) => {
@@ -822,26 +872,114 @@ export function ConferenceRosterSelected({
     mutateGroups((prev) => prev.map((g) => (g.id === id ? { ...g, color } : g)));
   };
 
-  // "Add N seats" to a group: a parliament seats MPs by number. Named after
-  // the group ("EPP 1", "EPP 2"), skipping any name already on the list (the
-  // roster is unique by name, case-insensitively), each one renameable.
-  const addSeatsToGroup = (id: string, n: number) => {
-    const g = groupsRef.current.find((x) => x.id === id);
-    if (!g || n < 1) return;
+  // Every roster change from the group pop-up goes through valueRef, so two
+  // changes before a re-render both land (the same reason as mutateGroups).
+  const writeRoster = (next: RosterEntry[]) => { valueRef.current = next; onChange(next); };
+
+  const assignSeats = (idxs: number[], groupId: string | null) => {
+    const set = new Set(idxs);
+    const cur = valueRef.current;
+    if (!cur.some((r, i) => set.has(i) && (r.groupId ?? null) !== groupId)) return;
+    writeRoster(cur.map((r, i) => (set.has(i) ? { ...r, groupId } : r)));
+  };
+
+  // New seats typed by name, created straight into the group. Names already
+  // on the roster (case-insensitively, the roster's own rule) are skipped.
+  const addNamedSeatsToGroup = (id: string, names: string[]): number => {
+    if (!groupsRef.current.some((x) => x.id === id)) return 0;
     const cur = valueRef.current;
     const taken = new Set(cur.map((r) => r.name.toLowerCase()));
     const add: RosterEntry[] = [];
-    for (let k = 1; add.length < Math.min(n, 200) && k < 10000; k++) {
-      const name = `${g.name} ${k}`;
-      if (taken.has(name.toLowerCase())) continue;
+    for (const raw of names) {
+      const name = raw.trim();
+      if (!name || taken.has(name.toLowerCase())) continue;
       taken.add(name.toLowerCase());
       add.push({ name, importance: 'standard', isObserver: false, logoUrl: null, groupId: id });
     }
-    if (add.length === 0) return;
-    const next = [...cur, ...add];
-    valueRef.current = next;
-    onChange(next);
-    setGroupMenuId(null);
+    if (add.length > 0) writeRoster([...cur, ...add]);
+    return add.length;
+  };
+
+  const renameSeat = (idx: number, raw: string): boolean => {
+    const name = raw.trim();
+    const cur = valueRef.current;
+    if (!name || !cur[idx]) return false;
+    if (cur.some((r, i) => i !== idx && r.name.toLowerCase() === name.toLowerCase())) return false;
+    if (cur[idx].name !== name) writeRoster(cur.map((r, i) => (i === idx ? { ...r, name } : r)));
+    return true;
+  };
+
+  // ── Pointer drag: an unassigned seat onto a group card ──
+  const startSeatDrag = (e: React.PointerEvent, idx: number, fromGrip: boolean) => {
+    if (e.button !== 0) return;
+    // A finger drags from the grip only, so the list still scrolls.
+    if (e.pointerType === 'touch' && !fromGrip) return;
+    // Never from a control inside the row.
+    if (!fromGrip && (e.target as HTMLElement).closest('button, input, select, textarea, a, [role="combobox"]')) return;
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const pointerId = e.pointerId;
+    let live = false;
+    let target: string | null = null;
+    const prevSelect = document.body.style.userSelect;
+
+    const place = (x: number, y: number) => {
+      const el = ghostRef.current;
+      if (el) el.style.transform = `translate3d(${x + 12}px, ${y + 10}px, 0)`;
+    };
+    const hit = (x: number, y: number) => {
+      const el = document.elementFromPoint(x, y) as HTMLElement | null;
+      const card = el?.closest<HTMLElement>('[data-group-drop]');
+      const id = card?.dataset.groupDrop ?? null;
+      if (id !== target) { target = id; setDropGroupId(id); }
+    };
+    const onMove = (ev: PointerEvent) => {
+      if (ev.pointerId !== pointerId) return;
+      if (!live) {
+        if (Math.hypot(ev.clientX - startX, ev.clientY - startY) < (fromGrip ? 4 : 6)) return;
+        live = true;
+        document.body.style.userSelect = 'none';
+        setDragIdx(idx);
+        requestAnimationFrame(() => place(ev.clientX, ev.clientY));
+      }
+      ev.preventDefault();
+      place(ev.clientX, ev.clientY);
+      hit(ev.clientX, ev.clientY);
+    };
+    const finish = (drop: boolean) => {
+      cleanup();
+      if (!live) return;
+      justDraggedRef.current = Date.now();
+      if (drop && target) assignSeats([idx], target);
+      setDragIdx(null);
+      setDropGroupId(null);
+    };
+    const onUp = (ev: PointerEvent) => { if (ev.pointerId === pointerId) finish(true); };
+    const onCancel = (ev: PointerEvent) => { if (ev.pointerId === pointerId) finish(false); };
+    const onKey = (ev: KeyboardEvent) => { if (ev.key === 'Escape' && live) { ev.stopPropagation(); ev.preventDefault(); finish(false); } };
+    const onTouchMove = (ev: TouchEvent) => { if (live) ev.preventDefault(); };
+    // A click right after a drop (the release over a group card) must not open it.
+    const onClickCapture = (ev: MouseEvent) => {
+      if (Date.now() - justDraggedRef.current < 350) { ev.stopPropagation(); ev.preventDefault(); }
+    };
+    function cleanup() {
+      window.removeEventListener('pointermove', onMove, true);
+      window.removeEventListener('pointerup', onUp, true);
+      window.removeEventListener('pointercancel', onCancel, true);
+      window.removeEventListener('keydown', onKey, true);
+      window.removeEventListener('touchmove', onTouchMove);
+      document.body.style.userSelect = prevSelect;
+      dragCleanupRef.current = null;
+      window.setTimeout(() => window.removeEventListener('click', onClickCapture, true), 400);
+    }
+    dragCleanupRef.current?.();
+    window.addEventListener('pointermove', onMove, true);
+    window.addEventListener('pointerup', onUp, true);
+    window.addEventListener('pointercancel', onCancel, true);
+    window.addEventListener('keydown', onKey, true);
+    window.addEventListener('touchmove', onTouchMove, { passive: false });
+    window.addEventListener('click', onClickCapture, true);
+    dragCleanupRef.current = cleanup;
   };
 
   // Rows to render, paired with their original index so every handler mutates
@@ -856,14 +994,16 @@ export function ConferenceRosterSelected({
     return rows;
   }, [value, orderMode]);
 
-  // One section per group, then Ungrouped. Without groups: a single flat list.
-  const sections = useMemo(() => {
-    if (!hasGroups) return [{ key: '__all', group: null as SlotGroup | null, rows: displayRows }];
-    const ids = new Set(groups.map((g) => g.id));
-    const out = groups.map((g) => ({ key: g.id, group: g as SlotGroup | null, rows: displayRows.filter((x) => x.r.groupId === g.id) }));
-    out.push({ key: '__ungrouped', group: null, rows: displayRows.filter((x) => !x.r.groupId || !ids.has(x.r.groupId)) });
-    return out;
-  }, [hasGroups, groups, displayRows]);
+  // The list. Without groups: every seat. With groups: only the Unassigned
+  // seats (the groups themselves are listed once, as the cards above, and a
+  // group's members are in its pop-up). A seat whose group_id points at no
+  // group on the bar counts as unassigned.
+  const groupIds = useMemo(() => new Set(groups.map((g) => g.id)), [groups]);
+  const isAssigned = useCallback((r: RosterEntry) => !!r.groupId && groupIds.has(r.groupId), [groupIds]);
+  const listRows = useMemo(
+    () => (hasGroups ? displayRows.filter((x) => !isAssigned(x.r)) : displayRows),
+    [hasGroups, displayRows, isAssigned],
+  );
 
   const groupCounts = useMemo(() => {
     const m = new Map<string, number>();
@@ -882,31 +1022,17 @@ export function ConferenceRosterSelected({
   const sameGroupCount = applyRow?.groupId ? applyTargets.filter(({ r }) => r.groupId === applyRow.groupId).length : 0;
 
   const noun = isCustom ? 'seats' : isCharacter ? 'characters' : 'countries';
-  const menuGroup = groupMenuId ? groups.find((g) => g.id === groupMenuId) ?? null : null;
-
-  // ── Drag and drop (native, same pattern as the assignment board) ──
+  const openGroup = groupOpenId ? groups.find((g) => g.id === groupOpenId) ?? null : null;
   const dragEnabled = hasGroups;
-  const sectionDropProps = (key: string, groupId: string | null) => dragEnabled ? {
-    onDragOver: (e: React.DragEvent) => {
-      if (dragIdx === null) return;
-      e.preventDefault();
-      e.dataTransfer.dropEffect = 'move';
-      if (dropKey !== key) setDropKey(key);
-    },
-    onDragLeave: (e: React.DragEvent) => {
-      if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDropKey((k) => (k === key ? null : k));
-    },
-    onDrop: (e: React.DragEvent) => {
-      e.preventDefault();
-      const data = e.dataTransfer.getData('text/plain');
-      setDropKey(null);
-      setDragIdx(null);
-      if (!data.startsWith('slot:')) return;
-      const i = Number(data.slice(5));
-      if (!Number.isInteger(i) || !value[i]) return;
-      if ((value[i].groupId ?? null) !== groupId) setRowGroup(i, groupId);
-    },
-  } : {};
+  const popupMembers = useMemo(
+    () => (openGroup ? displayRows.filter((x) => x.r.groupId === openGroup.id).map((x) => toSeat(x.r, x.i)) : []),
+    [openGroup, displayRows],
+  );
+  const popupUnassigned = useMemo(
+    () => (openGroup ? displayRows.filter((x) => !isAssigned(x.r)).map((x) => toSeat(x.r, x.i)) : []),
+    [openGroup, displayRows, isAssigned],
+  );
+  const unassignedCount = hasGroups ? value.filter((r) => !isAssigned(r)).length : value.length;
 
   return (
     <div className={`flex flex-col min-h-0 ${panel ? 'gv-rs-panel ' : ''}${className ?? ''}`} style={style}>
@@ -966,7 +1092,7 @@ export function ConferenceRosterSelected({
               <div className="mt-2.5 flex gap-2.5">
                 <span className="shrink-0 mt-0.5"><FolderInput size={14} strokeWidth={1.75} style={{ color: '#B6871F' }} /></span>
                 <p style={{ margin: 0, fontSize: 11.5, color: '#4A3F33', lineHeight: 1.5 }}>
-                  <b style={{ color: '#1C1410' }}>Groups</b> are parties or benches. Drag a seat under a group header, or use the move control on the row.
+                  <b style={{ color: '#1C1410' }}>Groups</b> are parties or benches. Drag an unassigned seat onto a group, or use Move to group on the row. Open a group to see and fill it.
                 </p>
               </div>
             )}
@@ -1007,15 +1133,28 @@ export function ConferenceRosterSelected({
           groups={groups}
           counts={groupCounts}
           seatTotal={value.length}
-          menuOpenId={groupMenuId}
-          onOpenMenu={(id, el) => { if (groupMenuId === id) setGroupMenuId(null); else openGroupMenu(id, el); }}
+          openId={groupOpenId}
+          dragging={dragIdx !== null}
+          dropTargetId={dropGroupId}
+          onOpenGroup={(id) => { if (Date.now() - justDraggedRef.current > 350) setGroupOpenId(id); }}
           onAddGroup={addGroup}
           onApplyPreset={applyPreset}
         />
       )}
 
-      {/* Order toggle. Display-only; sorts inside each section when grouped. */}
-      {value.length > 1 && (
+      {/* With groups, the list below is the Unassigned seats only. */}
+      {hasGroups && (
+        <div className="flex items-baseline gap-2 mb-1.5" style={{ fontFamily: "var(--font-brand), sans-serif" }}>
+          <span style={{ fontSize: 14, fontWeight: 700, color: '#1C1410' }}>Unassigned</span>
+          <span style={{ fontSize: 14, fontWeight: 800, color: '#1B3828', fontVariantNumeric: 'tabular-nums' }}>{unassignedCount}</span>
+          {unassignedCount > 0 && (
+            <span style={{ fontSize: 12, color: '#5A5046' }}>Drag a seat onto a group</span>
+          )}
+        </div>
+      )}
+
+      {/* Order toggle. Display-only. */}
+      {listRows.length > 1 && (
         <div className="flex items-center gap-1 mb-2 rounded-lg p-0.5 self-start" style={{ backgroundColor: '#EFE9DB', border: '1px solid #E1D9C6' }}>
           {([
             { key: 'az' as const, label: 'A-Z', icon: <ArrowDownAZ size={11} strokeWidth={2} /> },
@@ -1069,42 +1208,14 @@ export function ConferenceRosterSelected({
             <p className="text-xs text-center mt-1" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}>{isCharacter ? 'Type or paste names to add' : 'Search, use bundles, or paste'}</p>
           </div>
         ) : (
-          sections.map((sec, sIdx) => {
-            const isDropTarget = dropKey === sec.key;
-            const g = sec.group;
-            const isUngrouped = hasGroups && !g;
-            return (
-              <div
-                key={sec.key}
-                {...sectionDropProps(sec.key, g?.id ?? null)}
-                style={{
-                  borderRadius: 8, marginTop: hasGroups && sIdx > 0 ? 6 : 0, padding: hasGroups ? '2px 2px 4px' : 0,
-                  boxShadow: isDropTarget ? '0 0 0 2px #1B3828 inset' : 'none',
-                  backgroundColor: isDropTarget ? 'rgba(27,56,40,0.05)' : 'transparent',
-                  transition: 'box-shadow 120ms, background-color 120ms',
-                }}
-              >
-                {hasGroups && (
-                  /* The group's header: its crest (or its colour as a disc),
-                     its name in plain sans, and the count beside it. */
-                  <div className="flex items-center gap-2" style={{ padding: '7px 6px 5px' }}>
-                    {g ? (
-                      <CircleFlag logoUrl={g.logo_url} label={g.name} size={20} logoFit="contain" ring={!!g.logo_url} monogramColors={{ bg: g.color ?? '#1B3828', fg: '#FFFFFF' }} decorative />
-                    ) : (
-                      <span aria-hidden style={{ width: 20, height: 20, borderRadius: 999, border: '1.5px dashed #B3A794', flexShrink: 0 }} />
-                    )}
-                    <span className="min-w-0 [overflow-wrap:anywhere]" style={{ fontFamily: "var(--font-brand), sans-serif", fontSize: 13, fontWeight: 700, color: g ? '#1C1410' : '#5A5046' }}>
-                      {g ? g.name : 'Ungrouped'}
-                    </span>
-                    <span style={{ fontFamily: "var(--font-brand), sans-serif", fontSize: 12.5, fontWeight: 800, color: '#1B3828', fontVariantNumeric: 'tabular-nums' }}>{sec.rows.length}</span>
+              <div>
+                {hasGroups && listRows.length === 0 && (
+                  <div className="flex items-center gap-2.5" style={{ padding: '14px 10px', fontFamily: "var(--font-brand), sans-serif" }}>
+                    <Check size={16} strokeWidth={2.6} style={{ color: '#1B3828', flexShrink: 0 }} aria-hidden />
+                    <span style={{ fontSize: 13, color: '#544B3E' }}>Every seat is in a group. Open a group to see its members.</span>
                   </div>
                 )}
-                {hasGroups && sec.rows.length === 0 && (
-                  <p style={{ margin: 0, padding: '4px 8px 6px', fontSize: 10.5, color: '#B3A794', fontFamily: "var(--font-brand), sans-serif", fontStyle: 'italic' }}>
-                    {isUngrouped ? 'Drop a seat here to ungroup it' : 'No seats yet. Drag seats here, or add seats from the group card'}
-                  </p>
-                )}
-                {sec.rows.map(({ r: row, i: idx }) => {
+                {listRows.map(({ r: row, i: idx }) => {
                   const found = isCharacter ? undefined : getCountryByName(row.name);
                   const isCustomName = !found;
                   const isEditing = editingIdx === idx;
@@ -1120,12 +1231,18 @@ export function ConferenceRosterSelected({
                     <div key={`${row.name}-${idx}`}>
                       <div
                         className={`gv-rs-row${isDragging ? ' gv-rs-dragging' : ''}`}
-                        draggable={dragEnabled && !isEditing}
-                        onDragStart={dragEnabled ? (e) => { e.dataTransfer.setData('text/plain', `slot:${idx}`); e.dataTransfer.effectAllowed = 'move'; setDragIdx(idx); } : undefined}
-                        onDragEnd={dragEnabled ? () => { setDragIdx(null); setDropKey(null); } : undefined}
-                        style={dragEnabled ? { cursor: 'grab' } : undefined}
+                        onPointerDown={dragEnabled && !isEditing ? (e) => startSeatDrag(e, idx, false) : undefined}
+                        style={dragEnabled && !isEditing ? { cursor: 'grab' } : undefined}
                       >
-                        {dragEnabled && <GripVertical size={12} style={{ color: '#D5CBB6', flexShrink: 0, marginRight: -3 }} aria-hidden />}
+                        {dragEnabled && !isEditing && (
+                          <span
+                            className="gv-rs-grip"
+                            aria-hidden
+                            onPointerDown={(e) => { e.stopPropagation(); startSeatDrag(e, idx, true); }}
+                          >
+                            <GripVertical size={14} />
+                          </span>
+                        )}
                         {/* Art: the seat's own image, its group's, the national flag, or the mode glyph. */}
                         <span className="gv-rs-art">
                           {art.kind === 'logo' || art.kind === 'flag' ? (
@@ -1133,7 +1250,7 @@ export function ConferenceRosterSelected({
                           ) : hasGroups && row.groupId && groups.some((x) => x.id === row.groupId) ? (
                             /* No crest yet: the seat wears its party's colour, so
                                the list reads by group at a glance. Display only. */
-                            <CircleFlag label={row.name} size={panel ? 30 : 24} ring={false} monogramColors={{ bg: groups.find((x) => x.id === row.groupId)?.color ?? '#1B3828', fg: '#FFFFFF' }} decorative />
+                            <CircleFlag label={row.name} size={panel ? 30 : 24} ring={false} monogramColors={{ bg: groups.find((x) => x.id === row.groupId)?.color ?? '#1B3828', fg: groupInk(groups.find((x) => x.id === row.groupId)?.color) }} decorative />
                           ) : isCharacter ? (
                             <Users size={17} strokeWidth={1.5} style={{ color: '#B6871F' }} />
                           ) : (
@@ -1195,13 +1312,13 @@ export function ConferenceRosterSelected({
                               <GSelect
                                 bare
                                 className="gv-rs-ctl gv-rs-move"
-                                title="Move to a group"
+                                title="Move to group"
                                 aria-label={`Move ${row.name} to a group`}
                                 value={row.groupId && groups.some((x) => x.id === row.groupId) ? row.groupId : ''}
                                 onChange={(v) => setRowGroup(idx, v || null)}
                                 triggerContent={<FolderInput size={13} strokeWidth={1.75} aria-hidden />}
                                 align="end"
-                                options={[{ value: '', label: 'Ungrouped' }, ...groups.map((x) => ({ value: x.id, label: x.name }))]}
+                                options={[{ value: '', label: 'Unassigned' }, ...groups.map((x) => ({ value: x.id, label: groupShort(x) === x.name ? x.name : `${groupShort(x)} · ${x.name}` }))]}
                               />
                             )}
                             {/* Rename: custom entries and all characters */}
@@ -1248,10 +1365,18 @@ export function ConferenceRosterSelected({
                   );
                 })}
               </div>
-            );
-          })
         )}
       </div>
+
+      {/* The dragged seat, following the pointer. */}
+      {dragIdx !== null && value[dragIdx] && (
+        <Portal>
+          <div ref={ghostRef} className="gv-rs-ghost" aria-hidden>
+            <GripVertical size={14} />
+            <span>{value[dragIdx].name}</span>
+          </div>
+        </Portal>
+      )}
 
       {/* "Choose…" checklist, portaled so the rail's scroll box never clips it. */}
       {chooser && applyFor && chooserPos && (
@@ -1292,55 +1417,30 @@ export function ConferenceRosterSelected({
         </Portal>
       )}
 
-      {/* Group pill menu: rename, flag, remove. A menu with actions, so it opens
-          on click and closes on Escape or an outside click. It used to open on
-          hover, and because it is portaled over the rest of the groups bar a
-          click aimed at the preset select underneath landed on "Remove group",
-          which deleted the group and dropped its seats into Ungrouped. */}
-      {menuGroup && groupMenuPos && (
-        <Portal>
-          <div
-            ref={groupMenuPanelRef}
-            onKeyDown={(e) => { if (e.key === 'Escape') setGroupMenuId(null); }}
-            style={{ ...floatingPanelStyle, top: groupMenuPos.top, left: groupMenuPos.left, width: 260, maxWidth: 'calc(100vw - 16px)', maxHeight: 'calc(100dvh - 16px)', overflowY: 'auto', overscrollBehavior: 'contain', transform: groupMenuPos.up ? 'translateY(-100%)' : undefined, padding: 8, backgroundColor: '#FFFFFF', border: 'none', borderRadius: 16 }}
-          >
-            <style>{PARLIAMENT_CSS}</style>
-            <div className="flex items-center gap-2" style={{ padding: '2px 4px 8px' }}>
-              <CircleFlag logoUrl={menuGroup.logo_url} label={menuGroup.name} size={28} logoFit="contain" ring={!!menuGroup.logo_url} monogramColors={{ bg: menuGroup.color ?? '#1B3828', fg: '#FFFFFF' }} decorative />
-              <input
-                value={groupRename}
-                onChange={(e) => setGroupRename(e.target.value)}
-                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); commitGroupRename(menuGroup.id); } else if (e.key === 'Escape') setGroupMenuId(null); }}
-                onBlur={() => commitGroupRename(menuGroup.id)}
-                aria-label="Group name"
-                style={{ ...inputStyle, padding: '7px 10px', fontSize: 16, fontWeight: 600, borderRadius: 10 }}
-              />
-            </div>
-            <div style={{ padding: '2px 6px 10px' }}>
-              <p style={{ margin: '0 0 6px', fontSize: 12.5, fontWeight: 700, color: '#1C1410' }}>Colour</p>
-              <GroupColorSwatches value={menuGroup.color} onPick={(c) => recolorGroup(menuGroup.id, c)} />
-            </div>
-            <div style={{ padding: '2px 6px 10px', borderBottom: '1px solid #EFE9DB', marginBottom: 4 }}>
-              <AddSeatsToGroup key={menuGroup.id} groupName={menuGroup.name} onAdd={(n) => addSeatsToGroup(menuGroup.id, n)} />
-            </div>
-            <button type="button" className="gv-rs-menu-btn" onClick={() => pickFile({ kind: 'group', id: menuGroup.id })} disabled={uploading === `group:${menuGroup.id}`}>
-              {menuGroup.logo_url
-                ? <CircleFlag logoUrl={menuGroup.logo_url} label={menuGroup.name} size={18} logoFit="contain" decorative />
-                : <ImagePlus size={14} strokeWidth={1.75} style={{ color: '#B6871F' }} />}
-              {uploading === `group:${menuGroup.id}` ? 'Uploading…' : menuGroup.logo_url ? 'Replace crest' : 'Set a crest'}
-            </button>
-            {menuGroup.logo_url && (
-              <button type="button" className="gv-rs-menu-btn" onClick={() => clearGroupLogo(menuGroup.id)}>
-                <X size={14} strokeWidth={2} style={{ color: '#9A8A78' }} />
-                Remove crest
-              </button>
-            )}
-            <button type="button" className="gv-rs-menu-btn gv-rs-danger" onClick={() => removeGroup(menuGroup.id)}>
-              <X size={14} strokeWidth={2} />
-              {(() => { const n = groupCounts.get(menuGroup.id) ?? 0; return n > 0 ? `Remove group (${n} seat${n === 1 ? '' : 's'})` : 'Remove group'; })()}
-            </button>
-          </div>
-        </Portal>
+      {/* The group pop-up: customise the group and fill it. */}
+      {openGroup && (
+        <ParliamentGroupPopup
+          key={openGroup.id}
+          group={openGroup}
+          members={popupMembers}
+          unassigned={popupUnassigned}
+          canUpload={canLogo}
+          uploadingCrest={uploading === `group:${openGroup.id}`}
+          onClose={() => setGroupOpenId(null)}
+          onRename={(n) => renameGroup(openGroup.id, n)}
+          onShortName={(v) => setGroupShortName(openGroup.id, v)}
+          onColor={(c) => recolorGroup(openGroup.id, c)}
+          onUploadCrest={() => pickFile({ kind: 'group', id: openGroup.id })}
+          onClearCrest={() => clearGroupLogo(openGroup.id)}
+          onRemoveGroup={() => removeGroup(openGroup.id)}
+          onUnassign={(i) => assignSeats([i], null)}
+          onAssign={(idxs) => assignSeats(idxs, openGroup.id)}
+          onAddNamed={(names) => addNamedSeatsToGroup(openGroup.id, names)}
+          onRenameSeat={renameSeat}
+          onToggleObserver={(i) => writeRoster(valueRef.current.map((r, k) => (k === i ? { ...r, isObserver: !r.isObserver } : r)))}
+          onSeatFlag={canLogo ? (i) => pickFile({ kind: 'seat', idx: i }) : undefined}
+          onRemoveSeat={(i) => removeIdx(i)}
+        />
       )}
     </div>
   );
