@@ -403,3 +403,41 @@ export function rankSocieties<T extends SocietyLike>(
     .sort((a, b) => b.score - a.score || a.society.name.localeCompare(b.society.name))
     .slice(0, limit);
 }
+
+// ── "Looks independent" (prompt 117, 12 Oct 2026) ───────────────────────────
+// Applicants type "Independent Delegate" into the delegation name instead of
+// choosing the Independent card, which creates a real delegation with that name
+// (WORLDMUN, MUNOTR). The apply step warns, never blocks. A name counts when,
+// normalised like every other name here, it IS one of these words or phrases,
+// or starts with one followed only by filler ("Independent Delegate", "Solo
+// applicant"). A real name that merely contains the word is not caught:
+// "Independent School of Lagos", "Independence High School".
+
+const INDEPENDENT_PHRASES: string[][] = [
+  'independent', 'independently', 'indep', 'independant', 'individual', 'individually', 'solo', 'myself', 'just me',
+  'on my own', 'own', 'none', 'no delegation', 'no school', 'no society', 'n a', 'na',
+].map((p) => p.split(' '));
+
+/** Words that may come before the phrase: "I am independent", "applying as an individual". */
+const INDEPENDENT_LEAD = new Set(['i', 'im', 'am', 'applying', 'apply', 'as', 'an', 'a']);
+/** Words that may follow it and still mean "nobody": "Independent Delegate". */
+const INDEPENDENT_FILLER = new Set([
+  'delegate', 'delegates', 'delegation', 'applicant', 'application', 'participant', 'person', 'student',
+  'attendee', 'member', 'me', 'myself', 'only', 'here', 'just', 'individual', 'independent', 'independently', 'self',
+]);
+
+export function looksIndependentName(name: string): boolean {
+  const raw = (name ?? '').trim();
+  if (!raw) return false;
+  const words = normalizeSocietyName(raw).split(' ').filter(Boolean);
+  // Only punctuation: "-", "—", "/", "?".
+  if (words.length === 0) return true;
+  let start = 0;
+  while (start < words.length - 1 && INDEPENDENT_LEAD.has(words[start])) start++;
+  const rest = words.slice(start);
+  return INDEPENDENT_PHRASES.some((phrase) => {
+    if (rest.length < phrase.length) return false;
+    if (!phrase.every((w, i) => rest[i] === w)) return false;
+    return rest.slice(phrase.length).every((w) => INDEPENDENT_FILLER.has(w));
+  });
+}

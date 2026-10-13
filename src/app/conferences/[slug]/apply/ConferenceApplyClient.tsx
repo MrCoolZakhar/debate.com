@@ -53,7 +53,7 @@ import { focusQuestion } from '@/components/ApplicationQuestionCard';
 import { buildQuestionPages, leadTitleBlock } from '@/lib/applyQuestionPages';
 import Loader from '@/components/Loader';
 import ApplyCommitteeCard from './ApplyCommitteeCard';
-import { rankSocieties, isSameSocietyName, societyDedupeKey, MAX_SOCIETY_NAME_CHARS } from './societyMatch';
+import { rankSocieties, isSameSocietyName, societyDedupeKey, looksIndependentName, MAX_SOCIETY_NAME_CHARS } from './societyMatch';
 import {
   NoDelegationMatch, CreateDelegationButton, CreateDelegationRow, CreateDelegationDialog, RoleSwitchedNotice,
   type DelegationSwitchRole, useHeadDelegateAvailability,
@@ -71,7 +71,7 @@ import {
   GraduationCap, Trophy, Crown, Sparkles,
   MapPin, Landmark, Check, X, Plus, ArrowRight, CalendarClock,
   Ticket, Infinity as InfinityIcon, Globe, Lock, ChevronUp, ChevronDown,
-  Info, Coins, Pencil, Ban, Cake,
+  Info, Coins, Pencil, Ban, Cake, CircleAlert,
 } from 'lucide-react';
 import { replaceUrlInPlace } from '@/lib/replaceUrlInPlace';
 
@@ -3632,6 +3632,12 @@ function ConferenceApplyInner() {
           : adoptableSociety)
       : null;
     const ledJoinShown = ledTarget && ledSocietyIds.has(ledTarget.id) && ledTarget.id !== ownPledgedSocietyId ? ledTarget : null;
+    // "Looks independent" (prompt 117): the typed name reads like "no delegation" while
+    // With a delegation is chosen. A warning, never a block. Not for a delegation picked
+    // from the list or reached through an invite. A typed name that matches a delegation
+    // already registered (a fake "Independent Delegate" made earlier) is warned too.
+    const independentWarn = !isIndependent && !invitedSocietyId && !selectedSocietyId
+      && typedSocietyName.length > 0 && looksIndependentName(typedSocietyName);
     const pickSociety = (s: Society) => {
       setSocietyInput(s.name);
       setSelectedSocietyId(s.id);
@@ -3651,8 +3657,8 @@ function ConferenceApplyInner() {
           !showSociety
             ? 'As an observer, no delegation information is required. Just continue.'
             : isInvoicingRole
-            ? 'Which society or high school are you representing?'
-            : 'Are you applying independently or as part of a high school / society?'
+            ? 'Which society or school are you representing?'
+            : 'Are you applying independently or as part of a school or society?'
         }
       >
         {showSociety && (
@@ -3709,7 +3715,7 @@ function ConferenceApplyInner() {
                     key: 'society',
                     label: 'With a delegation',
                     image: '/onboarding/handshake-01.jpg',
-                    sub: role === 'faculty-advisor' ? 'The society or high school you advise' : 'The society or high school you lead',
+                    sub: role === 'faculty-advisor' ? 'The society or school you advise' : 'The society or school you lead',
                   },
                 ]}
               />
@@ -3730,7 +3736,7 @@ function ConferenceApplyInner() {
                     key: 'society',
                     label: 'With a delegation',
                     image: '/onboarding/handshake-01.jpg',
-                    sub: 'Part of a society or high school',
+                    sub: 'Part of a society or school',
                   },
                 ]}
               />
@@ -3761,7 +3767,7 @@ function ConferenceApplyInner() {
               <>
                 <div className="relative">
                   <label className="block font-semibold text-sm mb-1.5" style={{ color: 'var(--gv-on-surface)', fontFamily: "var(--font-brand), sans-serif" }}>
-                    Society / High School Name
+                    Society / School Name
                   </label>
                   <input
                     ref={societyFieldRef}
@@ -3858,6 +3864,42 @@ function ConferenceApplyInner() {
                   <p className="mt-1.5 text-xs" style={{ color: '#8B2020', fontFamily: "var(--font-brand), sans-serif" }}>
                     {societyError}
                   </p>
+                )}
+                {independentWarn && (
+                  <div
+                    role="status"
+                    className="mt-2 flex items-start gap-2 rounded-xl"
+                    style={{
+                      padding: '10px 12px', fontFamily: OUTFIT, fontWeight: 500, fontSize: 12.5, lineHeight: 1.5, color: NEU.ink,
+                      background: 'color-mix(in srgb, var(--gv-accent, #EED98A) 26%, transparent)',
+                      boxShadow: 'inset 0 0 0 1px color-mix(in srgb, #B6871F 32%, transparent)',
+                    }}
+                  >
+                    <CircleAlert size={15} strokeWidth={2.4} style={{ color: '#8A6410', flexShrink: 0, marginTop: 1 }} aria-hidden />
+                    <span className="min-w-0" style={{ overflowWrap: 'anywhere' }}>
+                      {adoptableSociety ? 'This joins' : 'This creates'} a delegation called &quot;{typedSocietyName}&quot;.{' '}
+                      {isInvoicingRole ? (
+                        <>
+                          {role === 'faculty-advisor' ? 'Faculty advisors' : 'Head delegates'} lead a school or society, so type its name here. Applying on your own?{' '}
+                          <a href={`/conferences/${slug}/apply?role=delegate`} style={{ fontWeight: 700, textDecoration: 'underline', color: NEU.forest }}>
+                            Apply as a delegate instead
+                          </a>
+                        </>
+                      ) : (
+                        <>
+                          Applying on your own?{' '}
+                          <button
+                            type="button"
+                            className="focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] rounded"
+                            style={{ fontWeight: 700, textDecoration: 'underline', color: NEU.forest, background: 'none', border: 'none', padding: 0, cursor: 'pointer', font: 'inherit' }}
+                            onClick={() => { setIsIndependent(true); setSocietyError(''); setSocietyDropdownOpen(false); }}
+                          >
+                            Choose Independent above
+                          </button>
+                        </>
+                      )}
+                    </span>
+                  </div>
                 )}
                 {adoptionShown && (
                   <p

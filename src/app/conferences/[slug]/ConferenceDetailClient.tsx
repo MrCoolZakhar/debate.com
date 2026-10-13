@@ -1601,6 +1601,27 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
     return () => { cancelled = true; };
   }, [sponsoredConfId]);
 
+  // The Registration Fee (prompt 117): public_registration_fee answers null when the
+  // conference has none, else { label, amount_cents, currency, applies_to }. Shown under
+  // the price medallion and as the last row of Pricing details. A failed read shows nothing.
+  const [regFee, setRegFee] = useState<{ label: string; amount_cents: number; currency: string; applies_to: string } | null>(null);
+  useEffect(() => {
+    if (!sponsoredConfId) return;
+    let cancelled = false;
+    void Promise.resolve(anonSupabase.rpc('public_registration_fee', { p_conference_id: sponsoredConfId })).then(({ data, error }) => {
+      if (cancelled || error || !data || typeof data !== 'object') return;
+      const f = data as { label?: string | null; amount_cents?: number; currency?: string | null; applies_to?: string | null };
+      if (typeof f.amount_cents !== 'number' || f.amount_cents <= 0) return;
+      setRegFee({
+        label: (f.label ?? '').trim() || 'Registration Fee',
+        amount_cents: f.amount_cents,
+        currency: (f.currency ?? 'USD').toUpperCase(),
+        applies_to: f.applies_to ?? 'per_delegation',
+      });
+    }).catch(() => {});
+    return () => { cancelled = true; };
+  }, [sponsoredConfId]);
+
   // `loadError && !conference` belongs in THIS guard, not the 404 below: the catch
   // clears `loading`, so without it a failed load fell through to "Conference Not
   // Found", which is a lie about a conference that exists. A genuine 404 still
@@ -2932,8 +2953,13 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                         PER DELEGATE
                       </span>
                     </div>
+                    {regFee && heroPrice !== null && (
+                      <p className="text-center" style={{ margin: '12px 0 0', fontFamily: "var(--font-brand), sans-serif", fontSize: '12.5px', fontWeight: 600, color: 'var(--gv-muted)', overflowWrap: 'anywhere' }}>
+                        + {regFee.label}
+                      </p>
+                    )}
                     {creditSponsored && (
-                      <div className="mt-3 flex flex-col items-center gap-1 text-center">
+                      <div className={`${regFee && heroPrice !== null ? 'mt-4' : 'mt-3'} flex flex-col items-center gap-1 text-center`}>
                         <CreditSponsoredMark />
                         <p style={{ margin: 0, fontFamily: "var(--font-brand), sans-serif", fontSize: '12.5px', lineHeight: 1.45, color: 'var(--gv-on-surface)' }}>
                           {creditSponsoredLine(conference.acronym || conference.full_name)}
@@ -3044,6 +3070,21 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                             </div>
                           );
                         })}
+                        {regFee && (
+                          <div style={{ borderTop: enabledRoles.length ? '1px solid color-mix(in srgb, var(--gv-border) 40%, transparent)' : 'none' }}>
+                            <div className="flex items-center justify-between gap-3 py-2">
+                              <span className="text-[13px] font-medium min-w-0 [overflow-wrap:anywhere]" style={{ color: '#4A4238', fontFamily: "var(--font-brand), sans-serif" }}>
+                                {regFee.label}
+                              </span>
+                              <span className="text-[13px] font-bold flex-shrink-0" style={{ color: 'var(--gv-on-surface)', fontFamily: "var(--font-brand), sans-serif", fontVariantNumeric: 'tabular-nums' }}>
+                                {formatFeeCompact(regFee.amount_cents / 100, regFee.currency)}
+                              </span>
+                            </div>
+                            <p className="text-[11px] -mt-1 pb-1.5" style={{ color: 'var(--gv-muted)', fontFamily: "var(--font-brand), sans-serif" }}>
+                              {regFee.applies_to === 'per_delegate' ? 'Per delegate' : 'Per delegation or independent delegate'}
+                            </p>
+                          </div>
+                        )}
                       </div>
                     )}
                     </>)}
