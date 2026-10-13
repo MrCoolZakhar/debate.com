@@ -20,6 +20,7 @@ import { BigSectionTabs, type BigSectionTab } from '../BigSectionTabs';
 import PositionPaperRoster, { type RosterAllocation, type RosterPaper } from '@/components/PositionPaperRoster';
 import { fetchMessageStubsForPapers, type PaperMessageStub } from '@/lib/positionPapers';
 import { safeStorageKey } from '@/lib/storageKey';
+import { replaceUrlInPlace } from '@/lib/replaceUrlInPlace';
 
 const OUTFIT = "var(--font-brand), sans-serif";
 
@@ -419,6 +420,18 @@ export default function DocumentsPage() {
   const accessToken = session?.access_token;
 
   const [activeTab, setActiveTab] = useState<DocsTab>('overview');
+  // ?tab=everyone opens Documents for Everyone; &doc=<id> also opens that
+  // document's Returned copies (prompt 111). Both leave the URL once read.
+  const [deepDocId, setDeepDocId] = useState<string | null>(null);
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    if (url.searchParams.get('tab') !== 'everyone') return;
+    const doc = url.searchParams.get('doc');
+    void Promise.resolve().then(() => { setActiveTab('everyone'); if (doc) setDeepDocId(doc); });
+    url.searchParams.delete('tab');
+    url.searchParams.delete('doc');
+    replaceUrlInPlace(url.pathname + url.search + url.hash);
+  }, []);
   const [committees, setCommittees] = useState<CommitteeTab[]>([]);
   const [selectedCommitteeId, setSelectedCommitteeId] = useState<string | null>(null);
   const [studyGuides, setStudyGuides] = useState<StudyGuide[]>([]);
@@ -796,7 +809,7 @@ export default function DocumentsPage() {
           "For everyone" (conference-wide documents) needs none. */}
       {!loading && <BigSectionTabs tabs={SECTION_TABS} value={activeTab} onChange={setActiveTab} label="Documents sections" />}
 
-      {!loading && activeTab === 'everyone' && <ConferenceDocsTab conferenceId={conference.id} />}
+      {!loading && activeTab === 'everyone' && <ConferenceDocsTab conferenceId={conference.id} initialDocId={deepDocId} onInitialDocUsed={() => setDeepDocId(null)} />}
 
       {!loading && activeTab !== 'everyone' && committees.length === 0 && (
         <div style={{ backgroundColor: '#FAF8F3', border: '1.5px solid #D8CDB6', borderRadius: 16, padding: 40, textAlign: 'center', boxShadow: CARD_SHADOW }}>

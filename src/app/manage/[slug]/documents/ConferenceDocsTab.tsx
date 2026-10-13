@@ -21,84 +21,59 @@ import { useConfirmModal } from '@/components/ConfirmModal';
 import { friendlyError } from '@/lib/friendlyError';
 import { notifyErr, notifyOk } from '@/lib/appNotify';
 import { STORE_CSS } from '../store/storeKit';
-import { DASH_CSS, IconDisc, TINT_GOLD, TINT_GREEN, INK, INK_SOFT, FOREST, DANGER } from '../financials/dashboardKit';
+import { DASH_CSS, IconDisc, TINT_GOLD, TINT_GREEN, INK, INK_SOFT, FOREST } from '../financials/dashboardKit';
+import { CD_CSS as CSS, ROLE_CHOICES, audienceLine, kindIcon } from './docsTabKit';
 import {
   CONFERENCE_DOC_KINDS, CONFERENCE_DOCS_BUCKET, CONFERENCE_DOC_MAX_BYTES, CONFERENCE_DOC_TITLE_MAX,
   conferenceDocPath, formatDocSize, kindInfo, linkHost, loadConferenceDocs, normaliseDocUrl, openConferenceDoc,
-  type ConferenceDoc, type ConferenceDocKind,
+  fetchDocsOverview, type ConferenceDoc, type ConferenceDocKind, type DocsOverview,
 } from '@/lib/conferenceDocuments';
-
-/** Roles an organiser can narrow a document to. Empty = everyone accepted. */
-const ROLE_CHOICES: { key: string; label: string }[] = [
-  { key: 'delegate', label: 'Delegates' },
-  { key: 'head-delegate', label: 'Head delegates' },
-  { key: 'faculty-advisor', label: 'Faculty advisors' },
-  { key: 'observer', label: 'Observers' },
-  { key: 'chair', label: 'Chairs' },
-  { key: 'secretariat', label: 'Secretariat' },
-  { key: 'staff', label: 'Staff' },
-];
-
-function audienceLine(visibleTo: string[]): string {
-  if (!visibleTo || visibleTo.length === 0) return 'Everyone accepted';
-  const names = ROLE_CHOICES.filter(r => visibleTo.includes(r.key)).map(r => r.label);
-  return names.length ? `Only ${names.join(', ')}` : 'Everyone accepted';
-}
-
-function kindIcon(kind: string) {
-  const info = kindInfo(kind);
-  return { emoji: info.emoji, lucide: info.lucide ?? FileText, tint: info.tint === 'green' ? TINT_GREEN : TINT_GOLD };
-}
-
-const CSS = `
-.gv-cd-hero{position:relative;margin-top:30px;padding:46px 28px 26px!important}
-.gv-cd-hero-disc{position:absolute;top:-34px;left:26px}
-.gv-cd-hero-title{margin:0;font-size:clamp(28px,3vw,34px);font-weight:800;letter-spacing:-0.02em;line-height:1.1;color:${INK}}
-.gv-cd-hero-line{margin:8px 0 0;font-size:15px;line-height:1.5;color:${INK_SOFT};max-width:560px}
-.gv-cd-hero-foot{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-top:20px}
-.gv-cd-count{display:inline-flex;align-items:baseline;gap:10px}
-.gv-cd-count-word{font-size:16px;font-weight:700;color:${INK}}
-.gv-cd-hero .gv-st-btn{min-height:50px;padding:0 22px;font-size:15.5px}
-.gv-cd-rows{display:flex;flex-direction:column;gap:14px}
-.gv-cd-row{display:flex;align-items:center;gap:16px;padding:18px 20px;border-radius:20px;background:#FFFFFF;box-shadow:0 1px 0 rgba(27,56,40,0.08),0 18px 40px -30px rgba(27,56,40,0.45)}
-.gv-cd-row-main{flex:1 1 auto;min-width:0}
-.gv-cd-row-title{margin:0;font-size:17.5px;font-weight:800;line-height:1.3;color:${INK};overflow-wrap:anywhere}
-.gv-cd-row-sub{margin:4px 0 0;font-size:14px;line-height:1.45;color:${INK_SOFT};overflow-wrap:anywhere}
-.gv-cd-row-who{display:inline-block;margin-top:8px;padding:4px 10px;border-radius:8px;font-size:13px;font-weight:700;color:${FOREST};background:rgba(61,122,82,0.10)}
-.gv-cd-row-who[data-some="true"]{color:#7A5A10;background:rgba(238,217,138,0.40)}
-.gv-cd-row-actions{display:flex;align-items:center;gap:8px;flex-shrink:0;flex-wrap:wrap;justify-content:flex-end}
-.gv-cd-row-actions .gv-st-btn{min-height:44px;padding:0 16px;font-size:14.5px}
-.gv-cd-move{width:44px;height:44px;border-radius:12px;border:none;background:#F6F3EC;color:${FOREST};display:inline-flex;align-items:center;justify-content:center;cursor:pointer}
-.gv-cd-move:hover:not(:disabled){background:#EFE9DC}
-.gv-cd-move:disabled{opacity:0.35;cursor:default}
-.gv-cd-move:focus{outline:none}
-.gv-cd-move:focus-visible{outline:2px solid ${FOREST};outline-offset:2px}
-.gv-cd-del{color:${DANGER}!important;font-size:14.5px;font-weight:700;text-decoration:underline;text-underline-offset:3px}
-@media (max-width:700px){.gv-cd-row{flex-wrap:wrap}.gv-cd-row-actions{width:100%;justify-content:flex-start;padding-left:68px}}
-.gv-cd-kinds{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px}
-.gv-cd-kind{display:flex;align-items:center;gap:10px;min-height:58px;padding:6px 12px 6px 6px;border-radius:14px;border:1.5px solid rgba(27,56,40,0.18);background:#FFFFFF;color:${INK};font-family:inherit;font-size:14.5px;font-weight:700;text-align:left;cursor:pointer}
-.gv-cd-kind[aria-checked="true"]{border-color:${FOREST};box-shadow:0 0 0 1px ${FOREST};background:rgba(61,122,82,0.06)}
-.gv-cd-kind:focus{outline:none}
-.gv-cd-kind:focus-visible{outline:2px solid ${FOREST};outline-offset:2px}
-.gv-cd-input{width:100%;height:50px;padding:0 14px;border-radius:12px;border:1.5px solid rgba(27,56,40,0.28);background:#FFFFFF;color:${INK};font-family:inherit;font-size:16px}
-.gv-cd-input:focus{outline:none;border-color:${FOREST};box-shadow:0 0 0 3px rgba(27,56,40,0.12)}
-.gv-cd-drop{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;width:100%;min-height:136px;padding:18px;border-radius:14px;border:2px dashed rgba(27,56,40,0.28);background:#FAF8F3;color:${INK};font-family:inherit;cursor:pointer}
-.gv-cd-drop:hover,.gv-cd-drop[data-over="true"]{border-color:${FOREST};background:#F6F3EC}
-.gv-cd-drop:focus{outline:none}
-.gv-cd-drop:focus-visible{outline:2px solid ${FOREST};outline-offset:2px}
-.gv-cd-file{display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:14px;background:rgba(61,122,82,0.08)}
-.gv-cd-chips{display:flex;flex-wrap:wrap;gap:8px}
-.gv-cd-chip{display:inline-flex;align-items:center;gap:6px;min-height:44px;padding:0 16px;border-radius:999px;border:1.5px solid rgba(27,56,40,0.22);background:#FFFFFF;color:${INK};font-family:inherit;font-size:14.5px;font-weight:700;cursor:pointer}
-.gv-cd-chip[aria-checked="true"],.gv-cd-chip[aria-pressed="true"]{background:${FOREST};border-color:${FOREST};color:#EED98A}
-.gv-cd-chip:focus{outline:none}
-.gv-cd-chip:focus-visible{outline:2px solid ${FOREST};outline-offset:2px}
-.gv-cd-empty{display:flex;flex-direction:column;align-items:center;text-align:center;gap:14px;padding:30px 12px 12px}
-.gv-cd-empty-title{margin:0;font-size:22px;font-weight:800;color:${INK}}
-`;
+import DocumentsExtraTab from './DocumentsExtraTab';
 
 type Load = { kind: 'loading' } | { kind: 'error' } | { kind: 'ok'; docs: ConferenceDoc[] };
 
-export default function ConferenceDocsTab({ conferenceId }: { conferenceId: string }) {
+/**
+ * The Documents for Everyone tab. With Document Uploads switched on for the
+ * conference (conference_documents_overview answers enabled) it is the new
+ * DocumentsExtraTab; when it is off, or that read fails, it is the classic tab
+ * below, exactly as before (prompt 111).
+ */
+export default function ConferenceDocsTab({ conferenceId, initialDocId, onInitialDocUsed }: {
+  conferenceId: string;
+  /** From ?doc=: open that document's Returned copies (Document Uploads only). */
+  initialDocId?: string | null;
+  onInitialDocUsed?: () => void;
+}) {
+  const { user } = useAuth();
+  const userId = user?.id ?? null;
+  const [mode, setMode] = useState<{ key: string; overview: DocsOverview | null } | null>(null);
+  const key = `${userId}|${conferenceId}`;
+
+  // Keyed on the user id, never the token.
+  useEffect(() => {
+    if (!userId) return;
+    let alive = true;
+    void fetchDocsOverview(conferenceId).then(res => {
+      if (alive) setMode({ key: `${userId}|${conferenceId}`, overview: res.ok && res.enabled ? res : null });
+    });
+    return () => { alive = false; };
+  }, [userId, conferenceId]);
+
+  if (!mode || mode.key !== key) {
+    return (
+      <div className="flex flex-col gap-4" style={{ maxWidth: 900 }} aria-busy="true">
+        <style>{DASH_CSS}</style>
+        {[0, 1, 2].map(i => <div key={i} className="gv-fd-ph" style={{ height: i === 0 ? 180 : 92 }} />)}
+      </div>
+    );
+  }
+  if (mode.overview) {
+    return <DocumentsExtraTab conferenceId={conferenceId} initial={mode.overview} initialDocId={initialDocId} onInitialDocUsed={onInitialDocUsed} />;
+  }
+  return <ClassicDocsTab conferenceId={conferenceId} />;
+}
+
+function ClassicDocsTab({ conferenceId }: { conferenceId: string }) {
   const { session, user } = useAuth();
   const userId = user?.id ?? null;
   const [load, setLoad] = useState<Load>({ kind: 'loading' });
