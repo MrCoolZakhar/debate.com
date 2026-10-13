@@ -35,7 +35,9 @@ import { readEmailAllowance, emailsShort, emailsShortSentence, emailsUsedLine, i
 import GetMoreEmails from '../store/GetMoreEmails';
 import { summarizeUnresolved, unresolvedFieldLabel } from '@/lib/emailUnresolved';
 import EmailComposer, { type PreviewCandidate } from '@/components/EmailComposer';
+import RecipientRoster from '@/components/email/RecipientRoster';
 import AudienceReach, {
+  SendButton, describeAudience,
   type AudienceSection, type AudienceSectionDef, type DotState, type ReachGroup,
 } from '@/components/email/AudienceReach';
 import { formatFee } from '@/lib/utils';
@@ -44,6 +46,7 @@ import { getDefaultEventEmail } from '@/lib/defaultEmails';
 import DefaultEmailPreviewModal from '@/components/DefaultEmailPreviewModal';
 import EmailIssuesNotice from '@/components/conferences/EmailIssuesNotice';
 import { markEmailsExplored } from '@/lib/emailsExplored';
+import { useOrganiserVisit } from '@/lib/organiserVisits';
 import GuidedWalkthrough, {
   TourGold, TourGreen, OTTER_INTRO, OTTER_OUTRO, type WalkthroughStep,
 } from '@/components/GuidedWalkthrough';
@@ -1479,6 +1482,9 @@ function CommunicationsPageInner() {
   useEffect(() => {
     stampEmailsExplored();
   }, [stampEmailsExplored]);
+  // Checklist step "Go to the Communications page" (checklist v2): the
+  // server stamp comms_visited_at, once per page load, fire-and-forget.
+  useOrganiserVisit(conferenceId, 'communications');
 
   // ── Data state ──
   const [templates, setTemplates] = useState<EmailTemplate[]>([]);
@@ -2516,7 +2522,12 @@ function CommunicationsPageInner() {
   function openBuilderForAdHoc(template?: EmailTemplate) {
     setBuilderFromDefault(false);
     const initialSubject = template?.subject ?? '';
-    const initialBlocks = normalizeBlocks(template?.body_blocks, template?.body ?? '');
+    // A NEW email opens with a headline and a line already in place (empty,
+    // showing "Your headline" and "Write your message here"), so there is
+    // somewhere to type the moment it opens. A saved email opens as saved.
+    const initialBlocks: EmailBlock[] = template
+      ? normalizeBlocks(template.body_blocks, template.body ?? '')
+      : [{ type: 'paragraph', variant: 'heading', content: '' }, { type: 'paragraph', content: '' }];
     setBuilderEventKey(null);
     setBuilderTemplateId(template?.id ?? null);
     setBuilderName(template?.name ?? '');
@@ -3328,7 +3339,6 @@ function CommunicationsPageInner() {
   const sendableCount = finalRecipients.length - unresolvedCount;
   const requireTypedConfirm = sendableCount > 200;
   const confirmDisabled = requireTypedConfirm && sendConfirmText.trim().toUpperCase() !== 'SEND';
-  const namesPreview = finalRecipients.slice(0, 5).map(a => a.profiles?.display_name ?? a.invited_name ?? 'Unknown').join(', ');
 
   // ── Row renderer for ad-hoc templates (SEND lives in the editor and is
   // always visible, so these rows carry no state of their own) ─────────────
@@ -3858,7 +3868,7 @@ function CommunicationsPageInner() {
   // ── Render ────────────────────────────────────────────────────────────────
 
   return (
-    <div className="px-6 md:px-10 py-8">
+    <div className={`px-6 md:px-10 ${builderOpen ? 'pt-4 pb-8' : 'py-8'}`}>
 
 
       {/* Emails the database refused to send because they were empty
@@ -4209,13 +4219,6 @@ function CommunicationsPageInner() {
       ════════════════════════════════════════════════════════════════════════ */}
       {builderOpen && (
         <div>
-          {allowance && conference && (
-            <p className="mb-3 text-xs" style={{ color: SOFT, fontFamily: OUTFIT }}>
-              <Link href={`/manage/${conference.slug}/store`} style={{ color: '#1B3828', fontWeight: 700, textDecoration: 'underline', textUnderlineOffset: 3 }}>
-                {emailsUsedLine(allowance)}
-              </Link>
-            </p>
-          )}
           {builderPairError && (
             <p
               role="alert"
@@ -4400,12 +4403,27 @@ function CommunicationsPageInner() {
                 error: themeError || null,
                 hasBanner: !!conference.banner_url,
               }}
+              /* The sending column (right): "who gets it" on top, Send at its
+                 foot, the free-email count under Send. The header keeps BACK
+                 and SAVE, which are about the draft; sending is about the
+                 audience. */
+              sendSlot={builderEventKey === null ? (
+                <SendButton
+                  block
+                  onClick={handleOpenSendConfirm}
+                  disabled={sending || openingSend || finalRecipients.length === 0}
+                  count={finalRecipients.length}
+                  busy={sending ? 'Queueing…' : openingSend ? 'Saving…' : null}
+                />
+              ) : undefined}
+              sendingNote={allowance && conference ? (
+                <Link href={`/manage/${conference.slug}/store`} className="text-xs" style={{ color: '#1B3828', fontFamily: OUTFIT, fontWeight: 700, textDecoration: 'underline', textUnderlineOffset: 3 }}>
+                  {emailsUsedLine(allowance)}
+                </Link>
+              ) : undefined}
               reachSlot={builderEventKey === null ? (
-                /* "Who gets it" rides ABOVE the three zones, sticky, so the
-                   answer to the only question anybody has is never scrolled
-                   off. It also carries SEND — the header keeps BACK and SAVE,
-                   which are about the draft; sending is about the audience. */
                 <AudienceReach
+                  layout="column"
                   sections={audienceSections}
                   onToggle={toggleAudience}
                   onClearSection={clearAudienceSection}
@@ -4441,7 +4459,29 @@ function CommunicationsPageInner() {
           body={
             <div className="flex flex-col gap-2">
               <p><strong>{builderName || eventDef?.label || '(untitled)'}</strong></p>
-              <p>{finalRecipients.length} recipient{finalRecipients.length !== 1 ? 's' : ''}{namesPreview ? `: ${namesPreview}${finalRecipients.length > 5 ? `, +${finalRecipients.length - 5} more` : ''}` : ''}</p>
+              {/* WHO, answered where it is asked: the count, the same sentence
+                  as the sending column, and the whole list to scroll and
+                  search. (It used to be a "See who gets it" button beside the
+                  email; the confirmation is the moment anybody checks.) */}
+              <p className="flex items-baseline gap-1.5 flex-wrap" style={{ color: '#1C1410' }}>
+                <span style={{ fontSize: 24, fontWeight: 900, fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.02em' }}>{finalRecipients.length.toLocaleString()}</span>
+                <span style={{ fontWeight: 700 }}>{finalRecipients.length === 1 ? 'person' : 'people'}</span>
+              </p>
+              {builderEventKey === null && (
+                <p style={{ color: SOFT, textWrap: 'pretty' }}>
+                  {describeAudience(audienceSections, manuallyAddedIds.size, excludedIds.size)}
+                </p>
+              )}
+              <div
+                onKeyDown={e => {
+                  // The list's search box must never send: the modal's own
+                  // Enter-to-confirm listens on the window, so Enter typed
+                  // here is stopped before it gets there.
+                  if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); }
+                }}
+              >
+                <RecipientRoster groups={reachGroups} reachCount={finalRecipients.length} wide={false} listMaxHeight={240} />
+              </div>
               {unresolvedCount > 0 && (
                 <div role="alert" className="rounded-xl px-3 py-2.5" style={{ backgroundColor: 'rgba(139,32,32,0.08)', border: '1px solid rgba(139,32,32,0.35)' }}>
                   <p className="font-semibold" style={{ color: '#8B2020' }}>
@@ -4475,6 +4515,7 @@ function CommunicationsPageInner() {
               )}
             </div>
           }
+          width={460}
           confirmLabel={sending ? 'Sending' : unresolvedCount > 0 ? `Send to ${sendableCount}` : 'Send'}
           cancelLabel="Cancel"
           loading={sending}

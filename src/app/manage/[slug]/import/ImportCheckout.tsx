@@ -108,7 +108,7 @@ export function GavellingImportPopup({ invoice, busy, err, onClose, onPay }: {
             <span className="gv-imp-num">{invoice.total} {invoice.total === 1 ? 'credit' : 'credits'}</span>
           </div>
           {invoice.free ? (
-            <p className="gv-imp-src">Imports are free until launch, so nothing is taken today.</p>
+            <p className="gv-imp-src">Nothing is taken for this import.</p>
           ) : sources ? (
             <p className="gv-imp-src">{sources}</p>
           ) : null}

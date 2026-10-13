@@ -33,6 +33,7 @@ import { Check, Minus, SkipForward, X } from 'lucide-react';
 import { useLanguage, useT } from '@/contexts/LanguageContext';
 import { SeatCircleFlag } from '@/components/CircleFlag';
 import { getCountryDisplayName } from '@/lib/countries';
+import SeatName from '@/components/SeatName';
 import type { SessionSeat } from '@/lib/sessionFlags';
 import type { VoteChoice } from '@/lib/voteState';
 
@@ -182,7 +183,7 @@ export function VoterCarousel({ seats, current, markOf, hideTally, onPick }: {
                   opacity: step === 1 ? 0.95 : 0.6,
                 }}
               >
-                {getCountryDisplayName(seat.country, language)}
+                <SeatName name={getCountryDisplayName(seat.country, language)} max={14} block align="center" subScale={0.82} />
               </span>
             )}
           </div>

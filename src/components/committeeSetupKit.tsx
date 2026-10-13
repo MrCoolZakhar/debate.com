@@ -35,7 +35,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from 'react';
-import { ImagePlus, RotateCcw, Loader2, Lock, X, Users2, Landmark, Scale, Zap, Minus, Plus, ChevronDown, Check, Languages } from 'lucide-react';
+import { ImagePlus, RotateCcw, Loader2, Lock, X, Users2, Newspaper, Landmark, Zap, Minus, Plus, ChevronDown, Check, Languages } from 'lucide-react';
 import Portal from '@/components/Portal';
 import { CircleFlag } from '@/components/CircleFlag';
 import { viewBox, useReposition } from '@/lib/visualViewport';
@@ -54,7 +54,7 @@ import {
   entry,
   type RosterEntry,
 } from '@/components/ConferenceRosterPicker';
-import { effectiveSlotArt, type SlotGroup } from '@/lib/slotGroups';
+import { effectiveSlotArt, newGroupId, GROUP_COLORS, type SlotGroup } from '@/lib/slotGroups';
 import { getCountryByName } from '@/lib/countries';
 import { LevelInsignia, LEVEL_ACCENT } from '@/app/account/accountUi';
 import {
@@ -460,21 +460,27 @@ export function SetupGhostButton({ label, onClick }: { label: string; onClick: (
 // committee does not exist yet, so it stays in the editor's rail and the wizard
 // step keeps saying chairs come later. That is unchanged from today.
 
-/** The committee type. Governs rostering: GA + Specialised roster by country
- *  slots; Crisis rosters free-text character names; Custom is the parliamentary
- *  type (free-text seats plus seat GROUPS with their own crests). */
-export type CommitteeType = 'general-assembly' | 'specialised' | 'crisis' | 'custom';
+/** The committee type. Governs rostering: MUN ('general-assembly') and the
+ *  legacy 'specialised' roster by country slots; Crisis rosters free-text
+ *  character names; Custom is the parliamentary type (free-text seats plus
+ *  seat GROUPS with their own crests).
+ *
+ *  'specialised' is no longer offered (owner, 12 Oct 2026: merged into
+ *  Custom). Rows already stored with it are never rewritten: they keep their
+ *  stored type and their country roster, and are LABELLED Custom everywhere. */
+export type CommitteeType = 'general-assembly' | 'specialised' | 'crisis' | 'custom' | 'press';
 
 export const COMMITTEE_TYPE_LABEL: Record<string, string> = {
-  'general-assembly': 'General Assembly',
-  specialised: 'Specialised',
+  'general-assembly': 'MUN',
+  specialised: 'Custom',
   crisis: 'Crisis',
   custom: 'Custom',
+  press: 'Press',
 };
 
 /** Declared in the order the editor's type picker offers them, rather than read
  *  off COMMITTEE_TYPE_LABEL's key order, so nothing can silently reshuffle. */
-export const COMMITTEE_TYPES: CommitteeType[] = ['general-assembly', 'specialised', 'crisis', 'custom'];
+export const COMMITTEE_TYPES: CommitteeType[] = ['general-assembly', 'crisis', 'custom', 'press'];
 
 export const DIFFICULTIES = ['beginner', 'intermediate', 'advanced', 'expert'] as const;
 export type Difficulty = (typeof DIFFICULTIES)[number];
@@ -533,12 +539,14 @@ export function effectiveEmblem(draft: CommitteeSetupDraft): string | null {
 
 /** Which roster a draft is building: countries, or free-text characters/members. */
 export function rosterModeOf(draft: CommitteeSetupDraft, type: CommitteeType): 'country' | 'character' {
-  return draft.presetRosterMode ?? ((type === 'crisis' || type === 'custom') ? 'character' : 'country');
+  return draft.presetRosterMode ?? ((type === 'crisis' || type === 'custom' || type === 'press') ? 'character' : 'country');
 }
 
 /** What one row of the roster is called in copy. */
 export function seatNounsOf(type: CommitteeType, isCharacterRoster: boolean): { noun: string; plural: string } {
   if (type === 'custom') return { noun: 'member', plural: 'members' };
+  // Press seats are outlets ("BBC") or journalists' names.
+  if (type === 'press') return { noun: 'outlet', plural: 'outlets' };
   return isCharacterRoster ? { noun: 'character', plural: 'characters' } : { noun: 'country', plural: 'countries' };
 }
 
@@ -547,12 +555,12 @@ export function seatNounsOf(type: CommitteeType, isCharacterRoster: boolean): { 
  *  returned component type, so nothing creates a component during render. */
 export function CommitteeTypeGlyph({ type, size = 14 }: { type: CommitteeType; size?: number }) {
   if (type === 'crisis') return <Zap size={size} strokeWidth={2.2} />;
-  if (type === 'custom') return <Users2 size={size} strokeWidth={2.2} />;
-  if (type === 'specialised') return <Scale size={size} strokeWidth={2.2} />;
+  if (type === 'custom' || type === 'specialised') return <Users2 size={size} strokeWidth={2.2} />;
+  if (type === 'press') return <Newspaper size={size} strokeWidth={2.2} />;
   return <Landmark size={size} strokeWidth={2.2} />;
 }
 export function committeeTypeAccent(type: CommitteeType): string {
-  return type === 'crisis' ? '#8B2020' : type === 'custom' ? '#7A5416' : '#1B3828';
+  return type === 'crisis' ? '#8B2020' : (type === 'custom' || type === 'specialised') ? '#7A5416' : type === 'press' ? '#2F6076' : '#1B3828';
 }
 
 /** Exactly what the chair masthead and every conference card will show for this
@@ -1047,6 +1055,7 @@ export function CommitteeSetupFields({
   const [topicError, setTopicError] = useState('');
   const isCrisis = committeeType === 'crisis';
   const isCustom = committeeType === 'custom';
+  const isPress = committeeType === 'press';
   const { suggestion, emblem } = committeeSetupPreview(draft);
 
   function addTopic() {
@@ -1066,7 +1075,7 @@ export function CommitteeSetupFields({
         <div className="flex flex-col gap-3.5">
           <div>
             <SetupLabel htmlFor={nameInputId}>Name</SetupLabel>
-            {!isCrisis && !isCustom ? (
+            {!isCrisis && !isCustom && !isPress ? (
               <ConferenceCommitteeNameInput
                 id={nameInputId}
                 className={SETUP_INPUT_CLS}
@@ -1088,13 +1097,39 @@ export function CommitteeSetupFields({
                   });
                 }}
               />
+            ) : isCustom ? (
+              <ConferenceCommitteeNameInput
+                id={nameInputId}
+                className={SETUP_INPUT_CLS}
+                value={draft.name}
+                placeholder="e.g. Model European Parliament, Youth Lok Sabha"
+                onChange={(v) => onChange({ name: v })}
+                onEnter={onSubmit}
+                onParliamentSelect={(p) => {
+                  // The parliament's name, plus its groups APPENDED to the bar
+                  // (same rule as the preset cards: a name already there is
+                  // skipped, nothing is cleared).
+                  const have = new Set(draft.groups.map((g) => g.name.toLowerCase()));
+                  const add: SlotGroup[] = [];
+                  for (const pg of p.groups) {
+                    if (have.has(pg.name.toLowerCase())) continue;
+                    have.add(pg.name.toLowerCase());
+                    add.push({
+                      id: newGroupId(), name: pg.name, logo_url: null,
+                      color: pg.color || GROUP_COLORS[(draft.groups.length + add.length) % GROUP_COLORS.length],
+                      short_name: pg.short && pg.short !== pg.name ? pg.short : null,
+                    });
+                  }
+                  onChange({ name: p.label, ...(add.length > 0 ? { groups: [...draft.groups, ...add] } : {}) });
+                }}
+              />
             ) : (
               <input
                 id={nameInputId}
                 value={draft.name}
                 onChange={(e) => onChange({ name: e.target.value })}
                 onKeyDown={(e) => { if (e.key === 'Enter' && onSubmit) { e.preventDefault(); onSubmit(); } }}
-                placeholder={isCustom ? 'e.g. Model European Parliament, Youth Lok Sabha' : 'e.g. The Cuban Missile Crisis, 1962'}
+                placeholder={isPress ? 'e.g. International Press Corps' : isCustom ? 'e.g. Model European Parliament, Youth Lok Sabha' : 'e.g. The Cuban Missile Crisis, 1962'}
                 className={SETUP_INPUT_CLS}
               />
             )}
@@ -1327,6 +1362,7 @@ export function CommitteeSeatsStep({
         onChange={(roster) => onChange({ roster })}
         showSelected={false}
         compact={compactPaste}
+        parliament={isCustom}
       />
       {part === 'all' && (selectedInline || panel) && (
         <ConferenceRosterSelected

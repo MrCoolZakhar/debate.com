@@ -10,6 +10,7 @@ import { useRouter } from 'next/navigation';
 import { useT, useLanguage } from '@/contexts/LanguageContext';
 import { Committee, Delegate, DelegateStatus, CommitteeDocument } from '@/lib/types';
 import { getCountryDisplayName, compareCountryNames } from '@/lib/countries';
+import SeatName from '@/components/SeatName';
 import { SeatArtProvider } from '@/components/SeatFlag';
 import { SeatCircleFlag } from '@/components/CircleFlag';
 import { Emoji } from '@/components/Emoji';
@@ -2276,7 +2277,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
               className="gv-name-in text-[36px] font-bold text-[#1C1410] text-center leading-[1.1] tracking-[-0.015em] mt-3 max-w-4xl [text-wrap:balance]"
               aria-live="polite"
             >
-              {getCountryDisplayName(currentDelegate.country, language)}
+              <SeatName name={getCountryDisplayName(currentDelegate.country, language)} max={30} block align="center" subScale={0.5} subStyle={{ fontWeight: 500, marginTop: 4 }} />
             </h1>
             <div className="h-8 mt-2 flex items-center gap-2">
               {/* The delegation on screen can veto (owner, 18 Sep 2026): said on its card, so the
@@ -2451,7 +2452,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
                 <SeatCircleFlag seat={rightsSeat} size={220} decorative />
               </span>
               <h1 key={`n-${speaker.delegateId}`} className="gv-name-in text-[46px] font-bold text-[#1C1410] text-center mt-8 leading-[1.05] tracking-[-0.018em] [text-wrap:balance]">
-                {getCountryDisplayName(speaker.country, language)}
+                <SeatName name={getCountryDisplayName(speaker.country, language)} max={26} block align="center" subScale={0.46} subStyle={{ fontWeight: 500, marginTop: 6 }} />
               </h1>
               <p className="text-[17px] font-medium mt-2" style={{ color: '#6A5A4A' }}>
                 {hideVotes

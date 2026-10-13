@@ -14,7 +14,8 @@ import { MetadataRoute } from 'next';
 //     claim_delegate_seat (a rendering bot would take a real delegate's seat
 //     for 65 minutes); the chair, advisor and voting pages start the same kind
 //     of per-device claims. They are also noindex by header.
-//   - /unsubscribe and /drafts/...?stop=1 act on GET for a real person.
+//   - /unsubscribe, /drafts/...?stop=1 and /conferences/new?draft=...&stop=1
+//     act on GET for a real person.
 //   - /r/<token>/<key> (campaign email links) counts a click on GET.
 //   - /api/ is not pages (except the OG cards, which image crawlers may fetch).
 // Never add a private PAGE here: add it to NOINDEX_ROUTES in next.config.ts.
@@ -32,6 +33,7 @@ export default function robots(): MetadataRoute.Robots {
           '/advisor/',
           '/unsubscribe',
           '/drafts/*stop=',
+          '/conferences/new*stop=',
           '/r/',
           '/api/',
         ],

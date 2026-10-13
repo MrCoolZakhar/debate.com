@@ -12,8 +12,13 @@
 // attach_proof (or replace_proof in 'replace' mode). X keeps the started
 // payment; it is never cancelled by closing.
 //
+//   in_person (prompt 114)  "How to Pay" on the right: the instructions and the
+//         amount large with a copy button; the proof is optional on the left,
+//         and "Finish without proof" asks first, in place, in the gold accent
+//
 // PaymentWayPopup (prompt 101) is the small pop-up a started payment opens for
-// a QR ("Payment QR") or bank details ("Bank Details").
+// a QR ("Payment QR"), bank details ("Bank Details") or in-person
+// instructions ("Payment Instructions").
 //
 // On a phone (pointer: coarse, or narrower than 768px) the QR block also offers
 // "Save QR image", a line about scanning from a photo, and "Copy amount": most
@@ -21,12 +26,12 @@
 // Shown by CSS only (.gv-pm-touch), so nothing differs between server and client.
 
 import { useEffect, useRef, useState } from 'react';
-import { Check, Copy, Download, ExternalLink } from 'lucide-react';
+import { Check, CircleAlert, Copy, Download, ExternalLink } from 'lucide-react';
 import { PurchaseShell, PURCHASE_CSS } from '@/components/purchase/purchaseKit';
 import { notifyOk } from '@/lib/appNotify';
-import { DANGER, INK_SOFT } from './payKit';
+import { DANGER, DEEP_GOLD, INK_SOFT } from './payKit';
 import { money, type PayOverview } from './payApi';
-import { attachProof, qrLink, replaceProof, resubmitProof } from './manualApi';
+import { attachProof, finishWithoutProof, qrLink, replaceProof, resubmitProof } from './manualApi';
 import ProofDrop from './ProofDrop';
 
 export type ManualMode = 'pay' | 'upload' | 'replace' | 'resubmit';
@@ -42,6 +47,7 @@ export const MANUAL_CSS = `
 .gv-pm-copy:focus{outline:none}
 .gv-pm-copy:focus-visible{outline:2px solid #1B3828;outline-offset:2px}
 .gv-pm-touch{display:none}
+.gv-pm-warn{padding:16px;border-radius:14px;background:rgba(238,217,138,0.3);box-shadow:inset 0 0 0 1.5px rgba(182,135,31,0.35);color:#1C1410}
 @media (pointer:coarse),(max-width:767px){
   .gv-pm-touch{display:flex;flex-direction:column;gap:10px;margin-top:14px;text-align:left}
   .gv-pm-copy{min-height:44px}
@@ -69,7 +75,33 @@ function CopyRow({ label, value, notice }: { label: string; value: string; notic
   );
 }
 
-export default function ManualPayPopup({ conference, batchId, totalCents, currency, mode, tabOpened, reason, onStartNew, onClose, onDone }: {
+/** In-person payment (prompt 114): the instructions and the amount, large, with a copy button. */
+function InPersonBlock({ instructions, total, heading }: { instructions: string | null | undefined; total: string; heading?: string }) {
+  const [copied, setCopied] = useState(false);
+  const copy = async () => {
+    try { await navigator.clipboard.writeText(total); setCopied(true); setTimeout(() => setCopied(false), 1600); notifyOk('Amount copied', 'pay'); }
+    catch { /* the amount is on screen */ }
+  };
+  return (
+    <div style={{ padding: '18px 18px 16px', borderRadius: 14, background: '#FFFFFF', display: 'flex', flexDirection: 'column', gap: 14 }}>
+      {heading && <h3 style={{ margin: 0, fontSize: 19, fontWeight: 800, letterSpacing: '-0.01em' }}>{heading}</h3>}
+      {instructions?.trim()
+        ? <p style={{ margin: 0, fontSize: 15, lineHeight: 1.55, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{instructions.trim()}</p>
+        : <p className="gv-pay-quiet">The organizers have not added their instructions yet</p>}
+      <div style={{ display: 'flex', alignItems: 'flex-end', gap: 12, flexWrap: 'wrap', paddingTop: 12, borderTop: '1px solid rgba(27,56,40,0.12)' }}>
+        <span style={{ flex: 1, minWidth: 0 }}>
+          <span style={{ display: 'block', fontSize: 12.5, color: INK_SOFT }}>Amount to pay</span>
+          <span style={{ display: 'block', fontSize: 30, fontWeight: 800, letterSpacing: '-0.02em', lineHeight: 1.15, fontVariantNumeric: 'tabular-nums', overflowWrap: 'anywhere' }}>{total}</span>
+        </span>
+        <button type="button" className="gv-pm-copy" onClick={() => { void copy(); }} aria-label="Copy the amount to pay">
+          {copied ? <><Check size={15} strokeWidth={2.6} aria-hidden /> Copied</> : <><Copy size={15} strokeWidth={2.2} aria-hidden /> Copy</>}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+export default function ManualPayPopup({ conference, batchId, totalCents, currency, mode, tabOpened, reason, onStartNew, onClose, onDone, askWithoutProof, noProofYet }: {
   conference: PayOverview['conference'];
   batchId: string;
   totalCents: number;
@@ -84,8 +116,16 @@ export default function ManualPayPopup({ conference, batchId, totalCents, curren
   onClose: () => void;
   /** The proof was sent (or replaced): the page re-reads. */
   onDone: () => void;
+  /** In-person 'upload' (prompt 114): open with the "Finish without proof?" question already showing. */
+  askWithoutProof?: boolean;
+  /** In-person 'replace' on a payment sent without a proof: titled "Add a Proof". */
+  noProofYet?: boolean;
 }) {
   const kind = conference.manual_kind ?? 'link';
+  const inPerson = kind === 'in_person';
+  // "Finish without proof" (prompt 114): in-person only, while paying or for an awaiting_proof payment.
+  const canSkipProof = inPerson && (mode === 'pay' || mode === 'upload');
+  const [asking, setAsking] = useState(!!askWithoutProof && canSkipProof);
   const total = money(totalCents, currency);
   const showWay = mode === 'pay';
   const [path, setPath] = useState<string | null>(null);
@@ -115,6 +155,16 @@ export default function ManualPayPopup({ conference, batchId, totalCents, curren
     onDone();
   };
 
+  const finishWithout = async () => {
+    if (busyRef.current) return;
+    busyRef.current = true; setBusy(true); setErr('');
+    const r = await finishWithoutProof(batchId);
+    busyRef.current = false; setBusy(false);
+    if (!r.ok) { setErr(r.error); return; }
+    notifyOk('Sent. The organizers will confirm your payment', 'pay');
+    onDone();
+  };
+
   const instructions = conference.instructions?.trim();
 
   const way = (
@@ -138,10 +188,11 @@ export default function ManualPayPopup({ conference, batchId, totalCents, curren
       )}
       {kind === 'qr' && <QrBlock qr={qr} onEnlarge={() => setQrBig(true)} fileBase={conference.acronym || conference.slug} total={total} />}
       {kind === 'bank' && <BankRows bank={conference.bank} total={total} />}
+      {inPerson && <InPersonBlock instructions={instructions} total={total} heading="How to Pay" />}
     </div>
   );
 
-  const title = mode === 'replace' ? 'Replace Your Proof' : mode === 'resubmit' ? 'Upload a New Proof' : mode === 'upload' ? 'Upload Your Proof' : `Pay ${total}`;
+  const title = mode === 'replace' ? (noProofYet ? 'Add a Proof' : 'Replace Your Proof') : mode === 'resubmit' ? 'Upload a New Proof' : mode === 'upload' ? 'Upload Your Proof' : `Pay ${total}`;
 
   return (
     <>
@@ -161,10 +212,14 @@ export default function ManualPayPopup({ conference, batchId, totalCents, curren
                   Not accepted: {reason.trim()}
                 </p>
               )}
-              {instructions && (
+              {/* In person, the instructions sit on the right in "How to Pay" while paying. */}
+              {instructions && !(inPerson && showWay) && (
                 <p style={{ margin: 0, padding: 14, borderRadius: 14, background: '#FFFFFF', fontSize: 14.5, lineHeight: 1.55, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{instructions}</p>
               )}
               {kind === 'link' && showWay && way}
+              {canSkipProof && (
+                <p style={{ margin: 0, fontSize: 14.5, lineHeight: 1.5, color: INK_SOFT }}>Upload a photo of your receipt if you have one. You can also finish without it</p>
+              )}
               <ProofDrop conferenceId={conference.id} onUploaded={setPath} disabled={busy} />
             </div>
             {showWay && kind !== 'link' && way}
@@ -174,12 +229,30 @@ export default function ManualPayPopup({ conference, batchId, totalCents, curren
           {itemsChanged && onStartNew && (
             <div><button type="button" className="gv-pay-btn gv-pay-outline" onClick={onStartNew}>Start a new payment</button></div>
           )}
-          <div className="flex items-center gap-3 flex-wrap">
-            <button type="button" className="gv-pay-btn gv-pay-forest" disabled={!path || busy || itemsChanged} onClick={() => { void finish(); }}>
-              {busy ? 'Sending' : mode === 'replace' ? 'Replace proof' : 'Finish'}
-            </button>
-            {!path && <span style={{ fontSize: 13.5, color: INK_SOFT }}>Upload your proof to finish</span>}
-          </div>
+          {asking ? (
+            <div className="gv-pm-warn" role="alertdialog" aria-label="Finish without a proof">
+              <p style={{ margin: '0 0 12px', display: 'flex', gap: 10, fontSize: 15, lineHeight: 1.5 }}>
+                <CircleAlert size={20} strokeWidth={2.2} aria-hidden style={{ color: DEEP_GOLD, flexShrink: 0, marginTop: 1 }} />
+                <span>Finish without a proof? The organizers will check that they received {total} from you before your payment counts. Keep any receipt you get</span>
+              </p>
+              <div className="flex items-center gap-3 flex-wrap">
+                <button type="button" className="gv-pay-btn gv-pay-forest" disabled={busy} onClick={() => { void finishWithout(); }} autoFocus>
+                  {busy ? 'Finishing' : 'Finish without proof'}
+                </button>
+                <button type="button" className="gv-pay-btn gv-pay-outline" disabled={busy} onClick={() => setAsking(false)}>Go back</button>
+              </div>
+            </div>
+          ) : (
+            <div className="flex items-center gap-3 flex-wrap">
+              <button type="button" className="gv-pay-btn gv-pay-forest" disabled={!path || busy || itemsChanged} onClick={() => { void finish(); }}>
+                {busy ? 'Sending' : mode === 'replace' ? (noProofYet ? 'Add proof' : 'Replace proof') : 'Finish'}
+              </button>
+              {canSkipProof && (
+                <button type="button" className="gv-pay-btn gv-pay-outline" disabled={busy} onClick={() => { setErr(''); setAsking(true); }}>Finish without proof</button>
+              )}
+              {!path && !canSkipProof && <span style={{ fontSize: 13.5, color: INK_SOFT }}>Upload your proof to finish</span>}
+            </div>
+          )}
         </div>
       </PurchaseShell>
       {qrBig && qr && <QrLightbox qr={qr} onClose={() => setQrBig(false)} />}
@@ -311,7 +384,7 @@ function BankRows({ bank, total }: { bank: PayOverview['conference']['bank']; to
 /** A started payment's QR ("Payment QR") or bank details ("Bank Details"): small, as tall as its content. */
 export function PaymentWayPopup({ conference, kind, totalCents, currency, onClose }: {
   conference: PayOverview['conference'];
-  kind: 'qr' | 'bank';
+  kind: 'qr' | 'bank' | 'in_person';
   totalCents: number;
   currency: string;
   onClose: () => void;
@@ -326,7 +399,7 @@ export function PaymentWayPopup({ conference, kind, totalCents, currency, onClos
     void qrLink(conference.qr_path).then(u => { if (alive) setQr(u); });
     return () => { alive = false; };
   }, [kind, conference.qr_path]);
-  const title = kind === 'qr' ? 'Payment QR' : 'Bank Details';
+  const title = kind === 'qr' ? 'Payment QR' : kind === 'in_person' ? 'Payment Instructions' : 'Bank Details';
 
   return (
     <>
@@ -336,12 +409,12 @@ export function PaymentWayPopup({ conference, kind, totalCents, currency, onClos
         <div style={{ padding: '26px 24px 24px', display: 'flex', flexDirection: 'column', gap: 14, width: '100%' }}>
           <div style={{ paddingRight: 40 }}>
             <h2 style={{ margin: 0, fontSize: 24, fontWeight: 800, letterSpacing: '-0.02em' }}>{title}</h2>
-            <p style={{ margin: '4px 0 0', fontSize: 15, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{total}</p>
+            {kind !== 'in_person' && <p style={{ margin: '4px 0 0', fontSize: 15, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{total}</p>}
           </div>
-          {instructions && (
+          {instructions && kind !== 'in_person' && (
             <p style={{ margin: 0, padding: 14, borderRadius: 14, background: '#FFFFFF', fontSize: 14.5, lineHeight: 1.55, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{instructions}</p>
           )}
-          {kind === 'qr'
+          {kind === 'in_person' ? <InPersonBlock instructions={instructions} total={total} /> : kind === 'qr'
             ? (conference.qr_path ? <QrBlock qr={qr} onEnlarge={() => setQrBig(true)} fileBase={conference.acronym || conference.slug} total={total} /> : <p className="gv-pay-quiet">The organizers have not added a QR code yet</p>)
             : <BankRows bank={conference.bank} total={total} />}
           <div><button type="button" className="gv-pay-btn gv-pay-outline" onClick={onClose}>Close</button></div>

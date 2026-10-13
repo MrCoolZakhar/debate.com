@@ -311,9 +311,15 @@ type MenuState =
   | { kind: 'more'; blockId: string; anchor: HTMLElement }
   | null;
 
-export default function QuestionBuilder({ value, onChange, hasApplications = false }: {
+export default function QuestionBuilder({ value, onChange, hasApplications = false, alwaysOpen = false }: {
   value: FormBlock[];
   onChange: (next: FormBlock[]) => void;
+  /** Google Forms layout (Settings' role pop-up, 12 Oct 2026): every question
+   *  and title is shown in full and editable (its title, type and options
+   *  visible), never folded to one line. Only a SECTION folds, and folding it
+   *  hides the blocks that belong to it (everything up to the next section).
+   *  Off (the aid form): the old click-to-open cards. Writes are identical. */
+  alwaysOpen?: boolean;
   /** True when this role/form already has applications in the pipeline.
    *  Never locks anything — the builder is fully editable regardless — it
    *  only softens the copy shown while rewording an existing question and is
@@ -341,6 +347,13 @@ export default function QuestionBuilder({ value, onChange, hasApplications = fal
   // one of these can never orphan an answer, so it's removed outright instead
   // of archived.
   const [newIds, setNewIds] = useState<Set<string>>(() => new Set());
+  // Folded sections (alwaysOpen only). A view state, never written.
+  const [folded, setFolded] = useState<Set<string>>(() => new Set());
+  const toggleFold = (id: string) => setFolded(prev => {
+    const next = new Set(prev);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    return next;
+  });
   const { modal: confirmModal } = useConfirmModal();
 
   const wrapperRef = useRef<HTMLDivElement | null>(null);
@@ -358,6 +371,17 @@ export default function QuestionBuilder({ value, onChange, hasApplications = fal
   const activeBlocks = value.filter(b => !(b.kind === 'question' && b.archived));
   const archivedBlocks = value.filter((b): b is QuestionBlock => b.kind === 'question' && !!b.archived);
   const sectionIds = activeBlocks.filter(b => b.kind === 'section').map(b => b.id);
+  // Which section each block sits in, and how many blocks each one holds, so
+  // a folded section can hide its blocks and say how many there are.
+  const ownerOf = new Map<string, string>();
+  const heldBy = new Map<string, number>();
+  {
+    let owner: string | null = null;
+    for (const b of activeBlocks) {
+      if (b.kind === 'section') { owner = b.id; heldBy.set(b.id, 0); continue; }
+      if (owner) { ownerOf.set(b.id, owner); heldBy.set(owner, (heldBy.get(owner) ?? 0) + 1); }
+    }
+  }
 
   // Keep the rail beside the selected card. Measured in a frame so the card has
   // already grown into its selected height before we read the offset.
@@ -485,7 +509,13 @@ export default function QuestionBuilder({ value, onChange, hasApplications = fal
               </p>
             ) : (
               activeBlocks.map((block, idx) => {
+                const owner = alwaysOpen ? ownerOf.get(block.id) : undefined;
+                if (owner && folded.has(owner)) return null;
                 const selected = selectedId === block.id;
+                const isFolded = alwaysOpen && block.kind === 'section' && folded.has(block.id);
+                // The full editing face: always in alwaysOpen (but a folded
+                // section), otherwise only for the selected card.
+                const open = alwaysOpen ? !isFolded : selected;
                 const original = block.kind === 'question' ? originals.get(block.id) : undefined;
                 const validOptions = block.kind === 'question' ? usableOptions(block) : [];
                 const choice = block.kind === 'question' && isChoiceType(block.type);
@@ -540,11 +570,11 @@ export default function QuestionBuilder({ value, onChange, hasApplications = fal
                       onClick={() => { if (!selected) setSelectedId(block.id); }}
                       className="relative rounded-xl"
                       style={{
-                        backgroundColor: selected ? '#FFFDF9' : 'rgba(27,56,40,0.03)',
+                        backgroundColor: selected || alwaysOpen ? '#FFFDF9' : 'rgba(27,56,40,0.03)',
                         border: selected ? '1px solid #D8CDB6' : '1px solid rgba(27,56,40,0.1)',
                         borderTopLeftRadius: block.kind === 'section' ? 0 : undefined,
-                        boxShadow: selected ? '0 4px 14px rgba(27,56,40,0.10)' : 'none',
-                        cursor: selected ? 'default' : 'pointer',
+                        boxShadow: selected ? '0 4px 14px rgba(27,56,40,0.10)' : alwaysOpen ? '0 1px 0 rgba(27,56,40,0.05)' : 'none',
+                        cursor: selected || alwaysOpen ? 'default' : 'pointer',
                         transition: 'box-shadow 200ms ease, background-color 200ms ease',
                       }}
                     >
@@ -574,8 +604,24 @@ export default function QuestionBuilder({ value, onChange, hasApplications = fal
                         </span>
                       )}
 
-                      <div style={{ padding: selected ? '18px 18px 0 22px' : '14px 14px 14px 16px' }}>
-                        {!selected ? (
+                      {/* A section folds (alwaysOpen only): its blocks hide
+                          until it is opened again. */}
+                      {alwaysOpen && block.kind === 'section' && (
+                        <button
+                          type="button"
+                          aria-expanded={!isFolded}
+                          aria-label={isFolded ? `Open section ${sectionNumber}` : `Fold section ${sectionNumber}`}
+                          title={isFolded ? 'Open this section' : 'Fold this section'}
+                          onClick={(e) => { e.stopPropagation(); toggleFold(block.id); }}
+                          className="absolute flex items-center justify-center rounded-full focus:outline-none focus-visible:ring-2"
+                          style={{ top: 10, right: 10, width: 34, height: 34, border: 'none', cursor: 'pointer', backgroundColor: 'rgba(27,56,40,0.06)', color: '#1B3828', zIndex: 1 }}
+                        >
+                          <ChevronDown size={18} strokeWidth={2.4} style={{ transform: isFolded ? 'rotate(-90deg)' : 'none', transition: 'transform 180ms ease' }} />
+                        </button>
+                      )}
+
+                      <div style={{ padding: open ? (alwaysOpen && block.kind === 'section' ? '18px 52px 0 22px' : '18px 18px 0 22px') : (isFolded ? '14px 52px 14px 16px' : '14px 14px 14px 16px') }}>
+                        {!open ? (
                           block.kind === 'question' ? (
                             <>
                               <p className="font-semibold text-sm mb-1.5" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>
@@ -594,6 +640,11 @@ export default function QuestionBuilder({ value, onChange, hasApplications = fal
                               {block.description && (
                                 <p className="text-xs mt-0.5 whitespace-pre-wrap" style={{ color: '#9A8A78', fontFamily: "var(--font-brand), sans-serif" }}>
                                   {block.description}
+                                </p>
+                              )}
+                              {isFolded && (
+                                <p className="text-xs mt-1 font-semibold" style={{ color: '#5C4F42', fontFamily: "var(--font-brand), sans-serif" }}>
+                                  {(heldBy.get(block.id) ?? 0) === 0 ? 'Nothing in this section yet' : `${heldBy.get(block.id)} ${heldBy.get(block.id) === 1 ? 'item' : 'items'} folded away`}
                                 </p>
                               )}
                             </>

@@ -39,11 +39,12 @@ import { SettingsPanel } from '@/components/SettingsPanel';
 import ScoreboardPanel from '@/components/ScoreboardPanel';
 import FeedbackLogPanel, { liveCaucus } from '@/components/FeedbackLogPanel';
 import CowDelegationBoard from '@/components/CowDelegationBoard';
+import SeatName from '@/components/SeatName';
 import { useSettingsStore, stripNonHydratedSettings } from '@/lib/settingsStore';
 import { useAuth } from '@/components/AuthProvider';
 import { useSessionAccess } from '@/lib/useSessionAccess';
 import type { ConferenceAccess } from '@/lib/conferenceAccess';
-import { resolveChairAwardsHref } from '@/lib/sessionAwardsLink';
+import { useChairAwards } from '@/lib/sessionAwardsLink';
 import { supabase } from '@/lib/supabase';
 import ChatPanel from '@/components/ChatPanel';
 import ChatDialog from '@/components/chat/ChatDialog';
@@ -201,25 +202,12 @@ function abbreviateCommitteeName(name: string): string {
     .replace(/^UN\s+/i, '');
 }
 
-const COUNTRY_ABBREV: Record<string, string> = {
-  'United Kingdom': 'UK',
-  'United States': 'USA',
-  'United Arab Emirates': 'UAE',
-  'South Korea': 'S. Korea',
-  'North Korea': 'N. Korea',
-  'Democratic Republic of Congo': 'DR Congo',
-  'Dominican Republic': 'D.R.',
-  'Central African Republic': 'CAR',
-  'Papua New Guinea': 'PNG',
-  'Trinidad and Tobago': 'T&T',
-  'Bosnia and Herzegovina': 'BiH',
-  'Saint Kitts and Nevis': 'St. Kitts',
-  'Saint Vincent and the Grenadines': 'St. Vincent',
-  'Antigua and Barbuda': 'Antigua',
-  'Equatorial Guinea': 'Eq. Guinea',
-};
-function abbrevCountry(name: string): string {
-  return COUNTRY_ABBREV[name] ?? name;
+/** The floor speaker's name (GSL and moderated caucus): a long seat, e.g. a crisis character,
+ *  is the short form at the floor size with the full name smaller beneath, wrapping, never
+ *  cut (src/components/SeatName.tsx). The split form eats the h1's own 8px margins (a tighter
+ *  line height and -4px) so the floor still fits 1280x800 with no overflow. Presentation only. */
+function FloorSeatName({ name }: { name: string }) {
+  return <SeatName name={name} max={24} block align="center" subScale={0.5} splitStyle={{ lineHeight: 1.02, marginBlock: -4 }} subStyle={{ fontWeight: 600, opacity: 0.78, marginTop: 3, lineHeight: 1.12 }} />;
 }
 
 type CommitteeSetter = React.Dispatch<React.SetStateAction<Committee | null>>;
@@ -336,7 +324,7 @@ function AddSpeakerInput({ committee, onAdd, onRecognise }: { committee: Committ
           onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); commit(topNotOnList); } if (e.key === 'Escape') setQuery(''); }}
           placeholder={t('gsl_add_to_list')} autoFocus
           className="flex-1 min-w-[7rem] bg-transparent px-4 py-2.5 text-[#1C1410] placeholder-[#9A8A78] focus:outline-none text-sm" />
-        {topNotOnList && query && <span className="text-xs text-[#9A8A78] px-2 max-w-[140px] leading-tight [overflow-wrap:anywhere]">↵ {getCountryDisplayName(topNotOnList.country, language)}</span>}
+        {topNotOnList && query && <span className="text-xs text-[#9A8A78] px-2 max-w-[140px] leading-tight [overflow-wrap:anywhere] inline-flex items-start gap-1"><span aria-hidden>↵</span><SeatName name={getCountryDisplayName(topNotOnList.country, language)} max={16} /></span>}
       </div>
       {query && matches.length > 0 && (
         <div data-tutorial="speakers-autocomplete" className="absolute bottom-full left-0 right-0 mb-1 bg-[#FAF8F3] border border-[#DDD4C0] rounded-xl overflow-hidden shadow-xl z-10 max-h-48 overflow-y-auto">
@@ -348,7 +336,7 @@ function AddSpeakerInput({ committee, onAdd, onRecognise }: { committee: Committ
                   <span className="shrink-0 w-6 h-6 inline-flex items-center justify-center">
                   <SeatFlag country={d.country} size={20} className="object-contain" fallback={<UnknownSeatIcon size={20} />} />
                 </span>
-                  <span className="text-sm flex-1 text-[#9A8A78]">{getCountryDisplayName(d.country, language)}</span>
+                  <SeatName name={getCountryDisplayName(d.country, language)} max={26} className="text-sm flex-1 text-[#9A8A78]" />
                   <span className="text-xs text-[#9A8A78]">{t('gsl_already_on_list')}</span>
                 </div>
               );
@@ -360,7 +348,7 @@ function AddSpeakerInput({ committee, onAdd, onRecognise }: { committee: Committ
                 <span className="shrink-0 w-6 h-6 inline-flex items-center justify-center">
                   <SeatFlag country={d.country} size={20} className="object-contain" fallback={<UnknownSeatIcon size={20} />} />
                 </span>
-                <span className="text-sm">{getCountryDisplayName(d.country, language)}</span>
+                <SeatName name={getCountryDisplayName(d.country, language)} max={26} className="text-sm" />
                 {d.status === 'absent' && <span className="text-[10px] text-[#B6871F] shrink-0">{t('rollcall_absent')}</span>}
                 {isFirst && <span className="ms-auto text-xs text-[#9A8A78]">{t('gsl_enter_hint')}</span>}
               </button>
@@ -445,7 +433,7 @@ function RtrCountryInput({
           className="flex-1 bg-transparent px-3 py-1.5 text-[#1C1410] text-xs placeholder-[#9A8A78] focus:outline-none"
         />
         {topMatch && query && !value && query.toLowerCase() !== topMatch.country.toLowerCase() && (
-          <span className="text-[10px] text-[#9A8A78] px-2 max-w-[110px] leading-tight [overflow-wrap:anywhere]">↵ {getCountryDisplayName(topMatch.country, language)}</span>
+          <span className="text-[10px] text-[#9A8A78] px-2 max-w-[110px] leading-tight [overflow-wrap:anywhere] inline-flex items-start gap-1"><span aria-hidden>↵</span><SeatName name={getCountryDisplayName(topMatch.country, language)} max={14} /></span>
         )}
       </div>
       {listShown && (
@@ -466,7 +454,7 @@ function RtrCountryInput({
                   <span className="shrink-0 w-5 h-5 inline-flex items-center justify-center">
                     <SeatFlag country={d.country} size={16} className="object-contain" fallback={<UnknownSeatIcon size={16} />} />
                   </span>
-                  <span className="flex-1">{getCountryDisplayName(d.country, language)}</span>
+                  <SeatName name={getCountryDisplayName(d.country, language)} max={26} className="flex-1" />
                   {i === 0 && <span className="text-[#9A8A78] shrink-0">{t('gsl_enter_hint')}</span>}
                 </button>
               );
@@ -518,7 +506,7 @@ function DraggableSpeakersQueue({ list, onReorder, onRemove, onRemoveCurrent, la
       onDeckDelegateId={onDeckDelegateId}
       header={header}
       isRoomOrderTdT={isRoomOrderTdT}
-      formatName={(country) => abbrevCountry(getCountryDisplayName(country, language))}
+      formatName={(country) => getCountryDisplayName(country, language)}
     />
   );
 }
@@ -566,7 +554,7 @@ function CaucusQueueSidebar({ committee, onRemove, onReorder, lastSpeakerDelegat
                 <span className="shrink-0 w-6 h-6 inline-flex items-center justify-center">
                   <SeatFlag country={s.country} size={20} className="object-contain" fallback={<UnknownSeatIcon size={20} />} />
               </span>
-                <span className="flex-1 text-sm text-[#1C1410] [overflow-wrap:anywhere] whitespace-normal leading-tight">{getCountryDisplayName(s.country, language)}</span>
+                <SeatName name={getCountryDisplayName(s.country, language)} max={20} className="flex-1 text-sm text-[#1C1410] whitespace-normal leading-tight" />
                 {lastSpeakerDelegateId && s.delegateId === lastSpeakerDelegateId && (
                   <span className="text-xs font-bold text-[#9A8A78] bg-[#DDD4C0] px-1.5 py-0.5 rounded shrink-0">Last</span>
                 )}
@@ -667,7 +655,7 @@ function CaucusAddSpeakerInput({ committee, spokenCountries, onAdd, onAddFirst, 
             {t('caucus_queue_full_title')}
           </span>
         )}
-        {!isFull && topNotOnList && query && <span className="text-xs text-[#9A8A78] px-3 max-w-[140px] leading-tight [overflow-wrap:anywhere]">↵ {getCountryDisplayName(topNotOnList.country, language)}</span>}
+        {!isFull && topNotOnList && query && <span className="text-xs text-[#9A8A78] px-3 max-w-[140px] leading-tight [overflow-wrap:anywhere] inline-flex items-start gap-1"><span aria-hidden>↵</span><SeatName name={getCountryDisplayName(topNotOnList.country, language)} max={16} /></span>}
       </div>
       {!isFull && query && matches.length > 0 && (
         <div className="absolute bottom-full left-0 right-0 mb-1 bg-[#FAF8F3] border border-[#DDD4C0] rounded-xl overflow-hidden shadow-xl z-10 max-h-48 overflow-y-auto">
@@ -681,7 +669,7 @@ function CaucusAddSpeakerInput({ committee, spokenCountries, onAdd, onAddFirst, 
                   <span className="shrink-0 w-6 h-6 inline-flex items-center justify-center">
                     <SeatFlag country={d.country} size={20} className="object-contain" fallback={<UnknownSeatIcon size={20} />} />
                 </span>
-                  <span className="text-sm flex-1 text-[#9A8A78]">{getCountryDisplayName(d.country, language)}</span>
+                  <SeatName name={getCountryDisplayName(d.country, language)} max={26} className="text-sm flex-1 text-[#9A8A78]" />
                   <span className="text-xs text-[#9A8A78]">{isCurrent ? t('caucus_currently_speaking') : t('gsl_already_on_list')}</span>
                 </div>
               );
@@ -695,7 +683,7 @@ function CaucusAddSpeakerInput({ committee, spokenCountries, onAdd, onAddFirst, 
                 <span className="shrink-0 w-6 h-6 inline-flex items-center justify-center">
                   <SeatFlag country={d.country} size={20} className="object-contain" fallback={<UnknownSeatIcon size={20} />} />
                 </span>
-                <span className="text-sm flex-1">{getCountryDisplayName(d.country, language)}</span>
+                <SeatName name={getCountryDisplayName(d.country, language)} max={26} className="text-sm flex-1" />
                 {d.status === 'absent' && <span className="text-[10px] text-[#B6871F] shrink-0">{t('rollcall_absent')}</span>}
                 {spoke && <span className="text-[10px] text-[#B6871F] shrink-0">{t('caucus_already_spoke')}</span>}
                 {isFirst && !spoke && (
@@ -1420,7 +1408,7 @@ function ModeratedCaucusMain({
             {/* No X beside the caucus speaker's name (owner, 15 Sep 2026): taking a delegation
                 off the caucus floor stays on its sidebar row. */}
             <h1 className="font-black text-[#1C1410] text-center" style={{ fontSize: FLOOR_NAME_REM, margin: '8px 0' }}>
-              {getCountryDisplayName(floorCountry, language)}
+              <FloorSeatName name={getCountryDisplayName(floorCountry, language)} />
             </h1>
             {onDeck && (
               <p className="text-center text-xs font-bold uppercase tracking-wide" style={{ color: '#8A6A1F', marginTop: -4 }}>{t('gsl_on_deck')}</p>
@@ -1562,15 +1550,16 @@ function ModeratedCaucusMain({
 // `window.open`) so opening in a new tab never trips a popup blocker; until the
 // lookup lands, or when the conference is private to anon, it points at the chair's
 // conference hub, which lists every committee they chair.
+//
+// Since 11 Oct 2026 it renders NOTHING unless the conference set awards up and
+// this committee gives at least one (`useChairAwards(...).offered`): a
+// conference that never set awards up is never offered them.
 function ChairAwardsCta({ code, label, className, style }: {
   code: string; label: string; className?: string; style?: React.CSSProperties;
 }) {
-  const [href, setHref] = useState('/account/conferences');
-  useEffect(() => {
-    let cancelled = false;
-    resolveChairAwardsHref(code).then((h) => { if (!cancelled) setHref(h); });
-    return () => { cancelled = true; };
-  }, [code]);
+  const target = useChairAwards(code, true);
+  if (!target?.offered) return null;
+  const href = target.href;
   return (
     <a href={href} target="_blank" rel="noopener noreferrer" className={className} style={style}>
       {label}
@@ -1685,6 +1674,7 @@ function SessionEndedContent({ committee, hoursRemaining, canRestart, onRestart,
   const { language } = useLanguage();
   const t = useT();
   const isConferenceSession = committee.sessionOrigin === 'conference';
+  const awardsOffered = useChairAwards(committee.code, isConferenceSession)?.offered === true;
   const keptUntil = roomKeptUntil(committee);
   return (
     <div className="flex-1 flex flex-col items-center justify-center text-center px-8">
@@ -1705,8 +1695,8 @@ function SessionEndedContent({ committee, hoursRemaining, canRestart, onRestart,
           )}
         </p>
       )}
-      {/* Conference-linked sessions only — see ChairAwardsCta. Standalone sessions get nothing here. */}
-      {isConferenceSession && (
+      {/* Conference-linked sessions whose conference set awards up only (see ChairAwardsCta). */}
+      {isConferenceSession && awardsOffered && (
         <div className="mt-8 w-full max-w-md rounded-2xl px-6 py-5 text-start"
           style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0', boxShadow: '0 6px 18px rgba(28,20,16,0.06)' }}>
           <div className="flex items-center gap-2 mb-1.5">
@@ -5622,7 +5612,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
               return (
                 <div key={m.id} className="flex items-center gap-2.5 text-sm rounded-xl px-2.5 py-1" style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0' }}>
                   <span className="font-mono text-lg">{flagEl}</span>
-                  <span className="text-[#1C1410] font-semibold">{getCountryDisplayName(m.proposedBy, language)}</span>
+                  <SeatName name={getCountryDisplayName(m.proposedBy, language)} max={24} className="text-[#1C1410] font-semibold" />
                   <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${desiredStatus === 'present-voting' ? 'bg-[#1B3828] text-[#EED98A]' : 'bg-[#1B3828]/15 text-[#1B3828]'}`}>
                     {desiredStatus === 'present-voting' ? 'P+V' : 'P'}
                   </span>
@@ -5978,7 +5968,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                           className="floor-emblem-anchor"
                           style={{ boxShadow: FLOOR_FLAG_SHADOW }}
                         />
-                        <h1 className="font-black text-[#1C1410] text-center" style={{ fontSize: FLOOR_NAME_REM, margin: '8px 0' }}>{getCountryDisplayName(gslFloor.country, language)}</h1>
+                        <h1 className="font-black text-[#1C1410] text-center" style={{ fontSize: FLOOR_NAME_REM, margin: '8px 0' }}><FloorSeatName name={getCountryDisplayName(gslFloor.country, language)} /></h1>
                         {isViewOnly ? (
                           <div className="font-bold text-[#6A5A4A] text-center" style={{ fontSize: '1.5rem', marginBottom: '8px' }}>
                             {committee.currentSpeaker ? t('view_is_speaking') : t('gsl_on_deck')}
@@ -6317,7 +6307,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
               <>
                 <div className="flex items-center gap-2 mb-3 px-1">
                   <SeatFlag country={rtrCountry} size={24} className="object-contain inline-block" fallback={<UnknownSeatIcon size={24} />} />
-                  <span className="text-sm font-bold flex-1" style={{ color: POPOVER_TONES.reply.ink }}>{getCountryDisplayName(rtrCountry, language)}</span>
+                  <SeatName name={getCountryDisplayName(rtrCountry, language)} max={22} className="text-sm font-bold flex-1" style={{ color: POPOVER_TONES.reply.ink }} />
                 </div>
                 <div className={`text-5xl font-black font-mono text-center mb-3 tabular-nums ${
                   rtrTimeRemaining <= 5 ? 'text-[#8B2020]' : rtrTimeRemaining <= 10 ? 'text-[#964313]' : 'text-[#5A2A08]'

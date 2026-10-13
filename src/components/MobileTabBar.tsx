@@ -18,7 +18,7 @@ const BAR_H = 62;
 type Tab = { label: string; href: string; icon: LucideIcon; active: (p: string) => boolean; needsAuth?: boolean };
 
 const TABS: Tab[] = [
-  { label: 'Explore', href: '/conferences/explore', icon: Search, active: (p) => p.startsWith('/conferences') && !p.startsWith('/conferences/new') },
+  { label: 'Explore', href: '/conferences/explore', icon: Search, active: (p) => p === '/conferences/explore' || p.startsWith('/conferences/explore/') },
   { label: 'Join', href: '/join', icon: Ticket, active: (p) => p === '/join' || p === '/sessions' },
   { label: 'Create', href: '/create', icon: PlusCircle, active: (p) => p.startsWith('/create') || p.startsWith('/conferences/new') },
   { label: 'Conferences', href: '/account/conferences', icon: Landmark, active: (p) => p.startsWith('/account/conferences'), needsAuth: true },

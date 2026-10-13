@@ -44,6 +44,20 @@ export function hasConcluded(
   return lastDay < today;
 }
 
+/**
+ * Dates to be decided: the organiser switched `dates_tbd` on, or there is no
+ * start date at all. Such a conference may be PUBLIC (owner, 12 Oct 2026), so
+ * every public surface must handle it: Explore lists it in its own "Dates to
+ * Be Decided" section at the bottom, never in a month group, a date filter or
+ * a JSON-LD Event (an Event needs a start date).
+ */
+export function hasNoDates(c: { dates_tbd?: boolean | null; start_date?: string | null }): boolean {
+  return !!c.dates_tbd || !c.start_date;
+}
+
+/** What a public card prints instead of a date range for such a conference. */
+export const DATES_TO_BE_DECIDED = 'Dates to be decided';
+
 export function compareStartDate(
   a: string | null | undefined,
   b: string | null | undefined,

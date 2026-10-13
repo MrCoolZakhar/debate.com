@@ -3,7 +3,8 @@
 // my_money_documents says whether the conference has set up its invoice
 // details (settings_ready; nothing about documents shows until it has), the
 // payer's saved billing details and the documents already made for them.
-// create_my_money_document makes one from their OWN payments or open items;
+// create_my_money_document makes one from their OWN payments, open items or
+// refunds (a refund receipt, prompt 109: the keys are refund payment ids);
 // the server refuses anything that is not theirs.
 
 import { getFreshAuthedClient } from '@/lib/supabase-auth';
@@ -23,7 +24,10 @@ export interface MyDocument {
   payment_keys: string[] | null;
 }
 
-export interface MyDocs { settings_ready: boolean; billing: Billing | null; documents: MyDocument[] }
+/** Who a first document is made out to, before anything is saved (prompt 109): the delegation and the person. */
+export interface BillingSuggestion { institution: string | null; attn: string | null }
+
+export interface MyDocs { settings_ready: boolean; billing: Billing | null; billing_suggestion: BillingSuggestion | null; documents: MyDocument[] }
 
 export async function readMyDocs(conferenceId: string): Promise<MyDocs> {
   const c = await getFreshAuthedClient();
@@ -35,6 +39,7 @@ export async function readMyDocs(conferenceId: string): Promise<MyDocs> {
   return {
     settings_ready: a.settings_ready === true,
     billing: (a.billing as Billing | null) ?? null,
+    billing_suggestion: (a.billing_suggestion as BillingSuggestion | null) ?? null,
     documents: Array.isArray(a.documents) ? (a.documents as MyDocument[]) : [],
   };
 }
@@ -62,7 +67,7 @@ export function saveMyBilling(conferenceId: string, b: Billing) {
 export function createMyDocument(conferenceId: string, kind: MoneyDocKind, paymentKeys: string[] | null, invoiceIds: string[] | null) {
   return write<{ document_id: string; number: string }>('create_my_money_document', {
     p_conference_id: conferenceId, p_kind: kind, p_payment_keys: paymentKeys, p_invoice_ids: invoiceIds,
-  }, kind === 'receipt' ? 'Your receipt could not be made. Try again in a moment.' : 'Your invoice could not be made. Try again in a moment.');
+  }, `Your ${kind === 'refund' ? 'refund receipt' : kind} could not be made. Try again in a moment.`);
 }
 
 /** A receipt already made for exactly this one payment, if any. */

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Gavel, MessageSquareText, RefreshCw, Search, Smartphone, UserX } from 'lucide-react';
 import { getCountryByName, getCountryDisplayName } from '@/lib/countries';
+import SeatName from '@/components/SeatName';
 import { seatKey } from '@/lib/seatClaims';
 import { getSessionParticipants, kickDelegateSeat, type SessionParticipants, type ParticipantSeat } from '@/lib/sessionParticipants';
 import { CircleFlag, SeatCircleFlag, flagMonogram } from '@/components/CircleFlag';
@@ -219,7 +220,7 @@ export default function PeopleTab({ committee, t, language, isViewOnly, myChairN
                         boxShadow: !joined ? 'inset 0 0 0 1.5px rgba(28,20,16,0.30)' : active ? '0 0 0 3px rgba(63,162,104,0.18)' : 'none',
                       }} />
                       <span className="min-w-0 [overflow-wrap:anywhere]" style={{ fontSize: T.body, fontWeight: W.label, color: K.ink, lineHeight: LH.body }}>
-                        {name}
+                        <SeatName name={name} max={22} style={{ verticalAlign: 'top' }} subScale={0.85} />
                         {people && <span style={{ fontWeight: W.body, color: K.inkSoft }}> · {people}</span>}
                       </span>
                     </span>

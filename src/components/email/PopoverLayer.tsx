@@ -33,11 +33,15 @@ export interface PopoverLayerProps {
   maxHeight?: number;
   /** `start` aligns the layer's left edge to the trigger's, `end` its right. */
   align?: 'start' | 'end';
+  /** `bottom` (default) opens under the trigger, flipping above it. `right`
+   *  opens beside it, top-aligned and clamped to the window, falling back to
+   *  `bottom` when there is no room on the right (a narrow window). */
+  side?: 'bottom' | 'right';
   children: ReactNode;
 }
 
 export default function PopoverLayer({
-  anchorRef, open, onClose, width, maxHeight = 280, align = 'start', children,
+  anchorRef, open, onClose, width, maxHeight = 280, align = 'start', side = 'bottom', children,
 }: PopoverLayerProps) {
   const layerRef = useRef<HTMLDivElement | null>(null);
 
@@ -46,6 +50,17 @@ export default function PopoverLayer({
     const layer = layerRef.current;
     if (!trigger || !layer) return;
     const r = trigger.getBoundingClientRect();
+    if (side === 'right' && r.right + GAP + width + MARGIN <= window.innerWidth) {
+      const cap = Math.max(160, Math.min(maxHeight, window.innerHeight - MARGIN * 2));
+      const h = Math.min(cap, layer.scrollHeight || cap);
+      const top = Math.max(MARGIN, Math.min(r.top, window.innerHeight - h - MARGIN));
+      layer.style.left = `${Math.round(r.right + GAP)}px`;
+      layer.style.bottom = 'auto';
+      layer.style.top = `${Math.round(top)}px`;
+      layer.style.maxHeight = `${Math.round(cap)}px`;
+      layer.style.visibility = 'visible';
+      return;
+    }
     const below = window.innerHeight - r.bottom - GAP - MARGIN;
     const above = r.top - GAP - MARGIN;
     const wantsUp = below < Math.min(maxHeight, 160) && above > below;
@@ -63,7 +78,7 @@ export default function PopoverLayer({
       layer.style.maxHeight = `${Math.max(120, Math.min(maxHeight, below))}px`;
     }
     layer.style.visibility = 'visible';
-  }, [anchorRef, align, width, maxHeight]);
+  }, [anchorRef, align, side, width, maxHeight]);
 
   /** Placement runs the moment the node ATTACHES, not in an effect: `Portal`
    *  renders null on its first pass (it resolves its mount target in its own
@@ -85,9 +100,11 @@ export default function PopoverLayer({
       const t = e.target as Node;
       if (anchorRef.current?.contains(t)) return;
       if (layerRef.current?.contains(t)) return;
+      // A dropdown (GSelect) opened from inside this layer is portaled elsewhere.
+      if ((t as Element).closest?.('[data-gsel-popover]')) return;
       onClose();
     };
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape' && !e.defaultPrevented) onClose(); };
     document.addEventListener('mousedown', onDown);
     document.addEventListener('keydown', onKey);
     return () => {

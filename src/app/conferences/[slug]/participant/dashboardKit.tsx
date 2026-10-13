@@ -17,6 +17,7 @@
 // as a big number with the word beside it, sentence-case buttons in the forest
 // gradient, no "…" on a name, no em dashes, no tinted band behind anything.
 
+import LockedPayButton from './PaymentsLocked';
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import type { LucideIcon } from 'lucide-react';
@@ -326,7 +327,7 @@ export function Pane({ show, children, gap = 6, title, icon, phone = true, ancho
     );
   }
   return (
-    <div className={base} style={show ? undefined : { display: 'none' }}>
+    <div id={anchor} className={base} style={show ? (anchor ? { scrollMarginTop: 96 } : undefined) : { display: 'none' }}>
       {children}
     </div>
   );
@@ -335,7 +336,7 @@ export function Pane({ show, children, gap = 6, title, icon, phone = true, ancho
 // ── The next step (the first thing on the phone page) ───────────────────────
 
 export type NextStepAction =
-  | { label: string; href: string; external?: boolean }
+  | { label: string; href: string; external?: boolean; /** Payments not set up yet: drawn locked (prompt 108). */ lockedSlug?: string }
   | { label: string; scrollTo: string };
 
 /** What this person should do now, in one line, with at most one button. A
@@ -410,7 +411,10 @@ export function NextStepCard({ step, status }: { step: NextStep; status: string 
       </p>
       {step.kind === 'action' && action && (
         <div className="mt-4">
-          {'href' in action ? (
+          {'href' in action && action.lockedSlug ? (
+            <LockedPayButton slug={action.lockedSlug} label={<>{action.label}</>} className="w-full sm:w-auto"
+              style={{ ...BTN_BASE, background: FOREST_GRADIENT, color: '#FFFFFF', border: 'none' }} />
+          ) : 'href' in action ? (
             <ForestLink href={action.href} external={action.external} className="w-full sm:w-auto">
               {action.label} <ArrowRight size={16} strokeWidth={2.4} aria-hidden />
             </ForestLink>
@@ -462,8 +466,8 @@ function NavItem({ s, on, onSelect, row }: { s: DashSection; on: boolean; onSele
   );
 }
 
-/** Sub-nav on the left from xl (sticky under the fixed site nav), a scrolling
- *  pill row above the content below that. With `stackBelowXl` there is no pill
+/** Sub-nav on the left from xl (sticky under the fixed site nav), a pill row
+ *  above the content below that (wrapping from sm, sideways-scrolling on phones). With `stackBelowXl` there is no pill
  *  row: below xl every pane is shown, one after another, on one page (the
  *  pills hid sections off the edge of a phone, and a delegate could not tell
  *  where anything was). */
@@ -495,17 +499,42 @@ export function DashboardShell({ sections, active, onSelect, children, ariaLabel
     return () => { el.removeEventListener('scroll', update); ro.disconnect(); };
   }, []);
 
-  // Keep the active pill in view on phones.
+  // Keep the active pill in view on phones, by scrolling the ROW only.
+  // It used to be `scrollIntoView({ inline: 'nearest' })`, which (a) also
+  // scrolls the window vertically, and (b) parks the pill flush against the
+  // row's edge, under the 28px fade: picking Payment left "Overview" cut to
+  // "iew" at the start of the row. Now the first pill always sits at the very
+  // start (scrollLeft 0), and any other active pill is brought fully clear of
+  // the fades. RTL is not mirrored here (the conference pages are English).
   useEffect(() => {
-    const el = rowRef.current?.querySelector<HTMLElement>('[aria-current="page"]');
-    el?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    const row = rowRef.current;
+    const pill = row?.querySelector<HTMLElement>('[aria-current="page"]');
+    if (!row || !pill || row.scrollWidth <= row.clientWidth + 2) {
+      if (row) row.scrollLeft = 0;
+      return;
+    }
+    const FADE = 32;
+    const isFirst = pill === row.firstElementChild;
+    const start = pill.getBoundingClientRect().left - row.getBoundingClientRect().left + row.scrollLeft;
+    const end = start + pill.getBoundingClientRect().width;
+    let next = row.scrollLeft;
+    if (isFirst) next = 0;
+    else if (start - FADE < row.scrollLeft) next = Math.max(0, start - FADE);
+    else if (end + FADE > row.scrollLeft + row.clientWidth) next = end + FADE - row.clientWidth;
+    if (next !== row.scrollLeft) row.scrollTo({ left: next, behavior: 'auto' });
   }, [active]);
 
   function select(key: string) {
     onSelect(key);
     // After a switch far down a long pane, bring the top of the dashboard back.
-    const top = rootRef.current?.getBoundingClientRect().top ?? 0;
-    if (top < 0) rootRef.current?.scrollIntoView({ block: 'start' });
+    // Land on the conference page's Overview / You / Reviews bar when it is
+    // there (its scroll-margin clears the fixed site-nav pill), not on this
+    // root: putting the root at 96px left that bar under the pill.
+    const root = rootRef.current;
+    const top = root?.getBoundingClientRect().top ?? 0;
+    if (top >= 0 || !root) return;
+    const views = document.querySelector<HTMLElement>('[data-conference-views]');
+    (views ?? root).scrollIntoView({ block: 'start' });
   }
 
   const mask = `linear-gradient(90deg, ${edges.left ? 'transparent 0, #000 28px' : '#000 0'}, ${edges.right ? '#000 calc(100% - 28px), transparent 100%' : '#000 100%'})`;
@@ -518,7 +547,12 @@ export function DashboardShell({ sections, active, onSelect, children, ariaLabel
         {!stackBelowXl && (
         <div
           ref={rowRef}
-          className="xl:hidden flex items-center gap-1.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          // Phones scroll the row sideways with a fade on the edge that has
+          // more. From sm (640px) there is room to show every pill, so the
+          // row WRAPS instead and is never clipped: at 1024 to 1279px the
+          // content column beside the right rail is narrower than six pills,
+          // and the scrolling row started cut off at its first label.
+          className="xl:hidden flex items-center gap-1.5 overflow-x-auto sm:flex-wrap sm:overflow-x-visible [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
           style={{ WebkitMaskImage: mask, maskImage: mask, padding: '6px 2px 10px' }}
         >
           {sections.map(s => <NavItem key={s.key} s={s} on={s.key === active} onSelect={() => select(s.key)} row />)}

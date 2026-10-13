@@ -28,6 +28,7 @@
 
 import { type ReactNode, useEffect, useRef } from 'react';
 import { useT } from '@/contexts/LanguageContext';
+import SeatName from '@/components/SeatName';
 import { SeatCircleFlag } from '@/components/CircleFlag';
 import type { StripHeader } from '@/components/SpeakerStrip';
 
@@ -145,7 +146,8 @@ export default function CommenterFloor({
               />
             )}
             <h1 className="font-black text-[#1C1410] text-center leading-tight [overflow-wrap:anywhere]" style={{ fontSize: clock ? '1.45rem' : '1.6rem', margin: clock ? '8px 0 2px' : '10px 0 2px' }}>
-              {formatName(floorCountry)}
+              {/* A long seat: short form over the full name, smaller, wrapping (SeatName). */}
+              <SeatName name={formatName(floorCountry)} max={16} block align="center" subScale={0.6} subStyle={{ fontWeight: 600, marginTop: 2 }} />
             </h1>
             {floorLabel && (
               <p className="text-center font-bold" style={{ color: '#8B5A20', fontSize: '0.95rem' }}>{floorLabel}</p>
@@ -199,7 +201,7 @@ export default function CommenterFloor({
                       style={{ color: '#1C1410', fontSize: '0.85rem' }}
                     >
                       <span className="sr-only">{`${i + 1}. `}</span>
-                      {formatName(s.country)}
+                      <SeatName name={formatName(s.country)} max={11} block align="center" subScale={0.82} />
                     </span>
                   </li>
                 ))}

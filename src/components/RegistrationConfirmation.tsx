@@ -40,6 +40,7 @@ import { formatConferenceDates } from '@/lib/conferenceDates';
 // add_to_calendar email button needs it too, and two copies of an exclusive
 // end date is exactly the bug that would only show up in somebody's diary.
 import { googleCalendarDates } from '@/lib/emailBlocks';
+import LockedPayButton, { useConferencePaymentsReady } from '@/app/conferences/[slug]/participant/PaymentsLocked';
 
 const OUTFIT = "var(--font-brand), sans-serif";
 const EASE = 'cubic-bezier(0.22,1,0.36,1)';
@@ -85,6 +86,9 @@ export interface RegistrationConfirmationProps {
   /** Payment surface. Without it the Pay CTA never renders, which is how a
    *  "pay after acceptance" role avoids offering a payment it cannot take. */
   payHref?: string | null;
+  /** The conference's id. With it, the Pay CTA is drawn locked while the
+   *  conference has not set up payments (prompt 108). */
+  conferenceId?: string | null;
   /** Rendered under the two columns (the apply page keeps its timeline). */
   children?: React.ReactNode;
   className?: string;
@@ -118,6 +122,7 @@ export default function RegistrationConfirmation({
   continueHref,
   onContinue,
   payHref = null,
+  conferenceId = null,
   children,
   className,
 }: RegistrationConfirmationProps) {
@@ -185,6 +190,9 @@ export default function RegistrationConfirmation({
   };
 
   const ctaHref = showPay ? (payHref as string) : continueHref;
+  // Applications never wait for payments; paying does (prompt 108).
+  const paymentsReady = useConferencePaymentsReady(showPay ? conferenceId : null);
+  const payLocked = showPay && paymentsReady === false;
 
   return (
     <div className={`rc-root ${className ?? ''}`}>
@@ -468,7 +476,9 @@ export default function RegistrationConfirmation({
             className="rc-actions"
             style={{ display: 'flex', alignItems: 'center', gap: 22, flexWrap: 'wrap' }}
           >
-            {ctaHref ? (
+            {payLocked ? (
+              <LockedPayButton slug={conference.slug} label={ctaInner} className="rc-cta focus:outline-none" style={ctaStyle} />
+            ) : ctaHref ? (
               <Link href={ctaHref} className="rc-cta focus:outline-none" style={ctaStyle}>
                 {ctaInner}
               </Link>

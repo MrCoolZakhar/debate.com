@@ -8,6 +8,7 @@ import { portalFrame } from '@/components/chat/chatTokens';
 import { useT, useLanguage } from '@/contexts/LanguageContext';
 import { Committee, PendingMotion, PendingMotionType } from '@/lib/types';
 import { getCountryDisplayName, compareCountryNames, matchesCountryQuery, startsWithCountryQuery } from '@/lib/countries';
+import SeatName from '@/components/SeatName';
 import { Emoji } from '@/components/Emoji';
 import { useSettingsStore, DEFAULT_MOTION_NAMES, MotionNames } from '@/lib/settingsStore';
 import { logFloorSpeech, creditRoomOrderTour, type FloorClock } from '@/lib/floorSpeech';
@@ -312,7 +313,7 @@ function ProposerInput({ candidates, value, onChange, blockedCountries, optional
           {value === CHAIR_KEY
             ? <span className="text-lg leading-none">🪑</span>
             : <SeatCircleFlag country={value} size={28} decorative fallback="initials" />}
-          <span className="text-sm text-[#1C1410] flex-1 font-semibold">{dName(value)}</span>
+          <SeatName name={dName(value)} max={26} className="text-sm text-[#1C1410] flex-1 font-semibold" />
           <button onClick={() => { setOpen(true); setQuery(''); onChange(''); inputRef.current?.focus(); }} className="text-xs font-bold transition-colors focus:outline-none" style={{ color: '#2A5A3C' }}>{t('motions_change')}</button>
         </div>
       ) : (
@@ -322,7 +323,7 @@ function ProposerInput({ candidates, value, onChange, blockedCountries, optional
             onKeyDown={(e) => { if (e.key === 'Enter' && top) { e.preventDefault(); commit(top); } if (e.key === 'Escape') { setQuery(''); setOpen(false); } }}
             placeholder={optional ? optionalProposerPlaceholder(language) : t('motions_proposer_placeholder')}
             className="flex-1 bg-transparent px-4 py-3 text-[#1C1410] placeholder-[#9A8A78] focus:outline-none text-sm" />
-          {top && query && <span className="text-xs text-[#9A8A78] px-3 max-w-[140px] leading-tight [overflow-wrap:anywhere]">↵ {dName(top)}</span>}
+          {top && query && <span className="text-xs text-[#9A8A78] px-3 max-w-[140px] leading-tight [overflow-wrap:anywhere] inline-flex items-start gap-1"><span aria-hidden>↵</span><SeatName name={dName(top)} max={16} /></span>}
         </div>
       )}
       {open && (query || showChair) && matches.length > 0 && pos && (
@@ -350,7 +351,7 @@ function ProposerInput({ candidates, value, onChange, blockedCountries, optional
                   {isChair
                     ? <span className="text-base leading-none">🪑</span>
                     : <SeatCircleFlag country={country} size={24} decorative fallback="initials" />}
-                  <span className="text-sm flex-1">{dName(country)}</span>
+                  <SeatName name={dName(country)} max={26} className="text-sm flex-1" />
                   {isBlocked
                     ? <span className="text-xs text-[#B8844A] shrink-0 font-semibold">{t('motions_motion_on_floor')}</span>
                     : i === 0 && <span className="ms-auto text-xs text-[#9A8A78]">Enter ↵</span>}
@@ -1432,7 +1433,7 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
           )}
           <p className="text-[18px] font-bold text-start [overflow-wrap:anywhere]" style={{ color: MOTION_SOFT }}>
             <span style={{ color: '#1C1410', fontWeight: 900 }}>{typeMeta[specialVoteMotion.type]?.label ?? specialVoteMotion.type}</span>
-            {specialVoteMotion.proposedBy ? <> · {specialVoteMotion.proposedBy === CHAIR_KEY ? chairDisplayName(language) : getCountryDisplayName(specialVoteMotion.proposedBy, language)}</> : null}
+            {specialVoteMotion.proposedBy ? <> · {specialVoteMotion.proposedBy === CHAIR_KEY ? chairDisplayName(language) : <SeatName name={getCountryDisplayName(specialVoteMotion.proposedBy, language)} max={30} style={{ verticalAlign: 'top' }} />}</> : null}
           </p>
         </div>
         <h1 className={`text-4xl font-black tracking-wide ${isSuspend ? 'mb-4' : 'mb-14'}`} style={{ color: '#1B3828', fontFamily: "var(--font-brand), sans-serif" }}>{t('motions_does_pass')}</h1>

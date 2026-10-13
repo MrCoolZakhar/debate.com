@@ -6,6 +6,7 @@
 // they owe, then name. Filters are pure; the page keeps them in the URL.
 
 import { Search } from 'lucide-react';
+import GSelect from '@/components/GSelect';
 import { OUTFIT } from '@/components/neu';
 import { INK, INK_SOFT, FOREST, DEEP_GOLD, LINE } from '../dashboardKit';
 import { KIND_NAME, KIND_ORDER } from '../financialsApi';
@@ -49,7 +50,7 @@ export const INV_CSS = `
 .gv-inv-search svg{position:absolute;left:14px;top:50%;transform:translateY(-50%);color:${INK_SOFT}}
 .gv-inv-search input{width:100%;height:44px;padding:0 14px 0 40px;border-radius:12px;border:1.5px solid rgba(27,56,40,0.2);background:#FFFFFF;font-family:${OUTFIT};font-size:14.5px;color:${INK}}
 .gv-inv-search input:focus{outline:none;border-color:${FOREST};box-shadow:0 0 0 3px rgba(27,56,40,0.12)}
-.gv-inv-select{height:44px;padding:0 34px 0 14px;border-radius:12px;border:1.5px solid rgba(27,56,40,0.2);background:#FFFFFF;font-family:${OUTFIT};font-size:14px;font-weight:600;color:${INK};cursor:pointer;max-width:100%}
+.gv-inv-select{width:auto;min-height:44px;padding:0 12px 0 14px;border-radius:12px;border:1.5px solid rgba(27,56,40,0.2);background:#FFFFFF;font-family:${OUTFIT};font-size:14px;font-weight:600;color:${INK};cursor:pointer;max-width:100%}
 .gv-inv-select:focus{outline:none;border-color:${FOREST};box-shadow:0 0 0 3px rgba(27,56,40,0.12)}
 .gv-inv-list{display:flex;flex-direction:column;background:#FFFFFF;border-radius:20px;padding:4px 0;box-shadow:0 1px 0 rgba(27,56,40,0.08),0 18px 40px -32px rgba(27,56,40,0.35)}
 .gv-inv-row{display:grid;grid-template-columns:28px minmax(0,1fr) auto;gap:12px;align-items:center;padding:14px 18px;cursor:pointer;transition:background-color 120ms ease}
@@ -89,18 +90,12 @@ export function FiltersBar({ f, delegations, onChange }: {
         <input type="search" value={f.q} placeholder="Name, email or delegation" aria-label="Search people"
           onChange={e => onChange({ q: e.target.value })} />
       </label>
-      <select className="gv-inv-select" aria-label="Delegation" value={f.delegation} onChange={e => onChange({ delegation: e.target.value })}>
-        <option value="">All delegations</option>
-        {delegations.map(d => <option key={d} value={d}>{d}</option>)}
-        <option value={INDEPENDENTS}>Independents</option>
-      </select>
-      <select className="gv-inv-select" aria-label="Status" value={f.status} onChange={e => onChange({ status: e.target.value as StatusFilter })}>
-        {STATUS_OPTIONS.map(o => <option key={o.v} value={o.v}>{o.v === 'all' ? 'All statuses' : o.label}</option>)}
-      </select>
-      <select className="gv-inv-select" aria-label="Ticket type" value={f.type} onChange={e => onChange({ type: e.target.value })}>
-        <option value="">All ticket types</option>
-        {KIND_ORDER.map(k => <option key={k} value={k}>{KIND_NAME[k]}</option>)}
-      </select>
+      <GSelect className="gv-inv-select" aria-label="Delegation" value={f.delegation} onChange={v => onChange({ delegation: v })}
+        options={[{ value: '', label: 'All delegations' }, ...delegations.map(d => ({ value: d, label: d })), { value: INDEPENDENTS, label: 'Independents' }]} />
+      <GSelect<StatusFilter> className="gv-inv-select" aria-label="Status" value={f.status} onChange={v => onChange({ status: v })}
+        options={STATUS_OPTIONS.map(o => ({ value: o.v, label: o.v === 'all' ? 'All statuses' : o.label }))} />
+      <GSelect className="gv-inv-select" aria-label="Ticket type" value={f.type} onChange={v => onChange({ type: v })}
+        options={[{ value: '', label: 'All ticket types' }, ...KIND_ORDER.map(k => ({ value: k as string, label: KIND_NAME[k] }))]} />
     </div>
   );
 }

@@ -27,6 +27,7 @@ import { ArrowLeftRight, CheckCircle2, ChevronLeft, ChevronRight, Compass, Hourg
 import { getFreshAuthedClient } from '@/lib/supabase-auth';
 import { useDelegationImport, LEAD_SWITCH_NOTE } from './DelegationImportCard';
 import DelegationImportPopup from './DelegationImportPopup';
+import DelegationInviteLink from './DelegationInviteLink';
 import MemberLeadMenu from './MemberLeadMenu';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
@@ -708,11 +709,12 @@ export default function DelegationPanel({ conferenceId, conferenceSlug, societyI
   const allocatedCount = [...headDelegates, ...delegates].filter(m => !!m.allocation?.country_code).length;
   const invitedCount = rosterMembers.filter(m => !m.claimed).length;
 
-  // The leader's tools, the same on both views: bring delegates in (while the
-  // conference allows it). There is no delegation portal and no invite link
-  // (owner, 27 Sep 2026); the head delegate's tools are on the member rows.
-  const leaderActions = isLeader ? (
+  // The leader's tools, the same on both views: the delegation's invite link
+  // (always; owners, 11 Oct 2026) and, while the conference allows it,
+  // Import delegates. The head delegate's tools are on the member rows.
+  const leaderActions = isLeader && societyId ? (
     <>
+      <DelegationInviteLink societyId={societyId} conferenceId={conferenceId} />
       {importAvailable && (
         <button
           type="button"

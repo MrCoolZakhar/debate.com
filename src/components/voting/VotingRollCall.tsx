@@ -58,6 +58,7 @@ import { SideQuorumTabs } from '@/components/voting/SideQuorumTabs';
 import { SeatCircleFlag, SIDEBAR_MONOGRAM } from '@/components/CircleFlag';
 import { useT, useLanguage } from '@/contexts/LanguageContext';
 import { getCountryDisplayName, compareCountryNames } from '@/lib/countries';
+import SeatName from '@/components/SeatName';
 import type { CommitteeSettings } from '@/lib/settingsStore';
 import type { Delegate, DelegateStatus } from '@/lib/types';
 import { computeVoteOutcome } from '@/components/VotingRulesPanel';
@@ -531,7 +532,7 @@ export function VotingRollCall({
                         ring="rgba(255,255,255,0.18)"
                         style={{ boxShadow: '0 1px 2px rgba(0,0,0,0.30), 0 2px 7px rgba(0,0,0,0.22)' }}
                       />
-                      <span className="flex-1 min-w-0 [overflow-wrap:anywhere]" style={{ fontSize: 21, fontWeight: 600, lineHeight: 1.2, color: '#F4EFE3' }}>{name}</span>
+                      <SeatName name={name} max={22} className="flex-1 min-w-0" style={{ fontSize: 21, fontWeight: 600, lineHeight: 1.2, color: '#F4EFE3' }} subScale={0.7} />
                       <div className={`shrink-0 flex items-center gap-2.5 ${readOnly ? 'opacity-50' : ''}`}>
                         {/* Fixed width on every row, so the word under an observer's megaphone
                             never shifts the slider column. */}
@@ -864,7 +865,7 @@ function ObserverConfirm({ observers, rtl, onCancel, onStart }: {
             {observers.map((d) => (
               <li key={d.id} className="flex items-center gap-2 h-10 ps-1 pe-3 rounded-full" style={{ backgroundColor: 'rgba(27,56,40,0.06)' }}>
                 <SeatCircleFlag country={d.country} size={32} decorative fallback="initials" />
-                <span className="text-[14.5px] font-semibold" style={{ color: INK }}>{getCountryDisplayName(d.country, language)}</span>
+                <SeatName name={getCountryDisplayName(d.country, language)} max={22} className="text-[14.5px] font-semibold leading-tight" style={{ color: INK }} />
               </li>
             ))}
           </ul>

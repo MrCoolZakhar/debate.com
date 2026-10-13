@@ -8,8 +8,8 @@
 // preview is the PDF made smaller, not a different layout.
 
 import {
-  DOC_INK, DOC_RULE, DOC_SOFT, DOC_TINT, accentOf, accentText, billedLines, detailRows, docDate, docMoney,
-  docShortDate, docTitle, issuerName, paidInFull, totalRows, type MoneyDoc,
+  DOC_INK, DOC_RULE, DOC_SOFT, DOC_TINT, accentOf, accentText, billedLines, detailRows, detailsLabel, docColumns, docDate,
+  docStamp, docTitle, issuerName, totalRows, type MoneyDoc,
 } from './moneyDocument';
 
 /** A design pixel of the 794-wide page, as a CSS length. */
@@ -19,7 +19,9 @@ export default function MoneyDocumentView({ doc, className, style }: { doc: Mone
   const accent = accentOf(doc);
   const ink = accentText(accent);
   const billed = billedLines(doc.billed_to);
-  const invoice = doc.kind === 'invoice';
+  const refund = doc.kind === 'refund';
+  const cols = docColumns(doc);
+  const stamp = docStamp(doc);
   const logo = doc.conference.logo_url;
   const name = issuerName(doc);
   const ed = doc.editable;
@@ -67,7 +69,7 @@ export default function MoneyDocumentView({ doc, className, style }: { doc: Mone
               {billed.rest.map((l, i) => <p key={i} style={{ margin: 0, color: DOC_SOFT, overflowWrap: 'anywhere' }}>{l}</p>)}
             </div>
             <div style={{ flex: '1 1 0', minWidth: 0 }}>
-              <Label>{invoice ? 'Invoice details' : 'Receipt details'}</Label>
+              <Label>{detailsLabel(doc.kind)}</Label>
               {detailRows(doc).map(([k, v]) => (
                 <div key={k} style={{ display: 'flex', gap: u(12), justifyContent: 'space-between' }}>
                   <span style={{ color: DOC_SOFT }}>{k}</span>
@@ -82,17 +84,19 @@ export default function MoneyDocumentView({ doc, className, style }: { doc: Mone
           {/* Lines */}
           <div role="table" aria-label="Items" style={{ marginTop: u(26) }}>
             <div role="row" style={{ display: 'flex', gap: u(12), padding: `${u(8)} ${u(12)}`, background: DOC_TINT, borderRadius: u(4), fontSize: u(9.5), fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: DOC_SOFT }}>
-              <span role="columnheader" style={{ width: u(96), flexShrink: 0 }}>Date</span>
-              <span role="columnheader" style={{ flex: 1 }}>Description</span>
-              {invoice && <span role="columnheader" style={{ width: u(110), textAlign: 'right', flexShrink: 0 }}>Paid</span>}
-              <span role="columnheader" style={{ width: u(120), textAlign: 'right', flexShrink: 0 }}>Amount</span>
+              {cols.map(c => (
+                <span key={c.head} role="columnheader" style={c.width == null ? { flex: 1 } : { width: u(c.width), flexShrink: 0, textAlign: c.align }}>{c.head}</span>
+              ))}
             </div>
             {doc.lines.map((l, i) => (
               <div key={i} role="row" style={{ display: 'flex', gap: u(12), padding: `${u(9)} ${u(12)}`, borderBottom: `${u(1)} solid ${DOC_RULE}` }}>
-                <span role="cell" style={{ width: u(96), flexShrink: 0, color: DOC_SOFT }}>{docShortDate(l.date)}</span>
-                <span role="cell" style={{ flex: 1, minWidth: 0, overflowWrap: 'anywhere' }}>{l.label}</span>
-                {invoice && <span role="cell" style={{ width: u(110), textAlign: 'right', flexShrink: 0, fontVariantNumeric: 'tabular-nums', color: DOC_SOFT }}>{docMoney(l.paid_cents ?? 0, doc.currency)}</span>}
-                <span role="cell" style={{ width: u(120), textAlign: 'right', flexShrink: 0, fontVariantNumeric: 'tabular-nums', fontWeight: 600 }}>{docMoney(l.amount_cents, doc.currency)}</span>
+                {cols.map(c => (
+                  <span key={c.head} role="cell" style={{
+                    ...(c.width == null ? { flex: 1, minWidth: 0, overflowWrap: 'anywhere' } : { width: u(c.width), flexShrink: 0, textAlign: c.align }),
+                    ...(c.align === 'right' ? { fontVariantNumeric: 'tabular-nums' } : {}),
+                    ...(c.soft ? { color: DOC_SOFT } : {}), ...(c.strong ? { fontWeight: 600 } : {}),
+                  }}>{c.cell(l, doc)}</span>
+                ))}
               </div>
             ))}
           </div>
@@ -100,10 +104,10 @@ export default function MoneyDocumentView({ doc, className, style }: { doc: Mone
           {/* Stamp and totals */}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: u(24), marginTop: u(18) }}>
             <div style={{ flex: '1 1 0', display: 'flex', justifyContent: 'center' }}>
-              {paidInFull(doc) && (
-                <div aria-label="Paid in full" style={{ transform: 'rotate(-8deg)', border: `${u(2.5)} solid ${ink}`, borderRadius: u(6), padding: `${u(8)} ${u(16)}`, color: ink, textAlign: 'center', opacity: 0.88 }}>
-                  <p style={{ margin: 0, fontSize: u(18), fontWeight: 800, letterSpacing: '0.12em', lineHeight: 1.2 }}>PAID IN FULL</p>
-                  {doc.payment_date && <p style={{ margin: `${u(3)} 0 0`, fontSize: u(9.5), fontWeight: 600, letterSpacing: '0.04em', lineHeight: 1.3 }}>{docDate(doc.payment_date)}</p>}
+              {stamp && (
+                <div aria-label={stamp.text === 'REFUNDED' ? 'Refunded' : 'Paid in full'} style={{ transform: 'rotate(-8deg)', border: `${u(2.5)} solid ${ink}`, borderRadius: u(6), padding: `${u(8)} ${u(16)}`, color: ink, textAlign: 'center', opacity: 0.88 }}>
+                  <p style={{ margin: 0, fontSize: u(18), fontWeight: 800, letterSpacing: '0.12em', lineHeight: 1.2 }}>{stamp.text}</p>
+                  {stamp.date && <p style={{ margin: `${u(3)} 0 0`, fontSize: u(9.5), fontWeight: 600, letterSpacing: '0.04em', lineHeight: 1.3 }}>{docDate(stamp.date)}</p>}
                 </div>
               )}
             </div>
@@ -120,6 +124,15 @@ export default function MoneyDocumentView({ doc, className, style }: { doc: Mone
             </div>
           </div>
 
+          {refund && ed.reason?.trim() && (
+            <div style={{ marginTop: u(26) }}>
+              <Label>Reason for Refund</Label>
+              <p style={{ margin: 0, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{ed.reason.trim()}</p>
+            </div>
+          )}
+          {refund && ed.status?.trim() && (
+            <p style={{ margin: `${u(14)} 0 0` }}><span style={{ color: DOC_SOFT }}>Refund Status: </span><b>{ed.status.trim()}</b></p>
+          )}
           {ed.receipt_paragraph?.trim() && (
             <p style={{ margin: `${u(26)} 0 0`, padding: `${u(12)} ${u(16)}`, background: DOC_TINT, borderLeft: `${u(3)} solid ${accent}`, fontSize: u(12), whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>
               {ed.receipt_paragraph.trim()}

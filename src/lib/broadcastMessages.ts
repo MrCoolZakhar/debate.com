@@ -20,7 +20,8 @@
  * thread cannot disagree. Pure and memoised on array identity; nothing runs per second.
  */
 
-import type { ChatMessage } from './types';
+import type { ChatBroadcastInfo, ChatMessage } from './types';
+import type { TranslationKey } from './translations';
 import type { SessionBroadcast } from './committeeService';
 
 /** The sender of every Secretariat message. Chair names may not start with `__`
@@ -47,7 +48,10 @@ export function broadcastMessage(b: SessionBroadcast): ChatMessage {
     content: b.message,
     timestamp: new Date(b.createdAt),
     isPrivate: false,
-    broadcast: { id: b.id, kind: b.kind, action: b.action, actionAt: b.actionAt, imageUrl: b.imageUrl },
+    broadcast: {
+      id: b.id, kind: b.kind, action: b.action, actionAt: b.actionAt, imageUrl: b.imageUrl,
+      source: b.source, authorLabel: b.authorLabel,
+    },
   };
   messageCache.set(b, m);
   return m;
@@ -98,6 +102,26 @@ export function broadcastOnlyMessages(broadcasts: SessionBroadcast[] | null | un
   const out = withBroadcastMessages([], broadcasts);
   onlyCache.set(broadcasts, out);
   return out;
+}
+
+/** A press release (source 'press'), as opposed to the Secretariat's own broadcast. */
+export function isPressBroadcast(info: ChatBroadcastInfo | null | undefined): boolean {
+  return info?.source === 'press';
+}
+
+/** Who a broadcast message is from, as the chat shows it: "Secretariat", or
+ *  "Press · BBC" for a press release. */
+export function broadcastAuthor(
+  info: ChatBroadcastInfo | null | undefined,
+  t: (key: TranslationKey, vars?: Record<string, string | number>) => string,
+): string {
+  if (isPressBroadcast(info)) return t('bc_press_from', { name: info?.authorLabel || t('bc_press') });
+  return t('bc_secretariat');
+}
+
+/** The run key: consecutive broadcasts group only while they come from the same author. */
+export function broadcastAuthorKey(info: ChatBroadcastInfo | null | undefined): string {
+  return isPressBroadcast(info) ? `press:${info?.authorLabel ?? ''}` : 'secretariat';
 }
 
 /** Unread Secretariat messages while chat is off (the chair's chat icon count). */

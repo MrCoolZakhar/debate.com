@@ -1,5 +1,6 @@
 'use client';
 
+import SeatName from '@/components/SeatName';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { ArrowDown, ChevronLeft, Pencil } from 'lucide-react';
 import Portal from '@/components/Portal';
@@ -9,6 +10,7 @@ import type { OutboxMsg } from '@/lib/chatOutbox';
 import type { ChatEntryKind } from '@/lib/chatConversations';
 import ChatMessageGroup from './ChatMessageGroup';
 import SecretariatMessage, { broadcastImageSize } from './SecretariatMessage';
+import { broadcastAuthor, isPressBroadcast } from '@/lib/broadcastMessages';
 import { trustedBroadcastImageUrl } from '@/lib/chatAttachments';
 import { ChatAvatar } from './ChatAvatar';
 import ChatLightbox, { type LightboxItem } from './ChatLightbox';
@@ -219,8 +221,8 @@ export default function ChatThread({
           if (!url) continue;
           const size = broadcastImageSize(url);
           out.push({
-            id: it.id, kind: 'image', url, name: t('bc_image'),
-            caption: `${t('bc_secretariat')} · ${formatTime(it.timestamp, locale)}`,
+            id: it.id, kind: 'image', url, name: t(isPressBroadcast(it.broadcast) ? 'bc_press_image' : 'bc_image'),
+            caption: `${broadcastAuthor(it.broadcast, t)} · ${formatTime(it.timestamp, locale)}`,
             width: size?.width, height: size?.height,
           });
           continue;
@@ -295,7 +297,7 @@ export default function ChatThread({
         <ChatAvatar kind={kind} name={convKey} size={40} />
         <div className="min-w-0 flex-1" style={{ paddingInlineStart: onBack ? 0 : 2 }}>
           <h3 className="[overflow-wrap:anywhere]" style={{ fontFamily: OUTFIT, fontWeight: 750, fontSize: 16.5, color: NEU.ink, lineHeight: 1.2 }}>
-            {label}
+            <SeatName name={label} max={kind === 'delegate' ? 26 : 999} block subScale={0.8} />
           </h3>
           {subtitle && (
             <p className="[overflow-wrap:anywhere]" style={{ fontFamily: OUTFIT, fontSize: 12.5, color: NEU.inkSoft, fontVariantNumeric: 'tabular-nums', lineHeight: 1.3 }}>

@@ -1,6 +1,7 @@
 'use client';
 
 import { openAuth } from '@/lib/authModal';
+import { PayLink } from './participant/PaymentsLocked';
 import { Fragment, useEffect, useState, useRef, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -63,6 +64,8 @@ import { reportCrash } from '@/lib/reportCrash';
 const LOAD_WATCHDOG_MS = 12_000;
 import { useServerNow } from '@/lib/applicationWindow';
 import { RoleApplyCards, type RoleTile } from './RoleApplyCards';
+import { useFitSticky } from './useFitSticky';
+import { ContactOrganisers } from './ContactOrganisers';
 
 const GRAIN = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='grain'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23grain)' opacity='1'/%3E%3C/svg%3E")`;
 
@@ -730,6 +733,10 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
   // than once per tab, and coming back to a tab shows what's already here.
   const [activeTab, setActiveTab] = useState<TabKey>(initialView);
   const [activeRole, setActiveRole] = useState<string | null>(initialRole);
+  // Bumped by the Apply card's Contact the organisers when the conference has
+  // no contact email: ParticipantView opens its Ask the Organisers section,
+  // then resets it to 0.
+  const [askOrganisersRequest, setAskOrganisersRequest] = useState(0);
   /** +1 = the incoming pane slides in from the right, -1 from the left. */
   const [slideDir, setSlideDir] = useState<1 | -1>(1);
   // The pane animation is for *switching*, not for arriving. Without this the
@@ -742,6 +749,11 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
   // tab; assigned eagerly in showTab so back-to-back switches read the truth.
   const activeTabRef = useRef<TabKey>(initialView);
   const paneRef = useRef<HTMLDivElement | null>(null);
+  // The Overview / You / Reviews bar. Every scroll that brings the views back
+  // to their top lands on THIS bar, below the fixed site-nav pill (its
+  // scroll-margin is 84px from lg, where the pill exists), never on the pane:
+  // landing the pane at the top left the bar sitting under the pill.
+  const viewsRef = useRef<HTMLElement | null>(null);
 
   const tabHref = useCallback((tab: TabKey, role: string | null) => {
     if (tab === 'reviews') return `/conferences/${slug}/reviews`;
@@ -803,7 +815,13 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
     if (!el) return;
     const top = el.getBoundingClientRect().top;
     if (top >= 0) return;
-    window.scrollTo({ top: Math.max(0, window.scrollY + top - 78), behavior: 'auto' });
+    // Land the views bar itself just below the site-nav pill (its
+    // scroll-margin), so the bar is never left under the pill. It used to put
+    // the PANE at 78px, which parked the 49px bar (plus its 28px margin) at
+    // y 1 to 50: exactly where the fixed pill sits from 1024px.
+    const views = viewsRef.current;
+    if (views) views.scrollIntoView({ block: 'start', behavior: 'auto' });
+    else window.scrollTo({ top: Math.max(0, window.scrollY + top - 161), behavior: 'auto' });
   }, [activeTab, hasSwitchedTab]);
 
   // Stable identities: ParticipantView's role-resolution effect depends on
@@ -968,6 +986,10 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
   const [expandedRoster, setExpandedRoster] = useState<string | null>(null);
   // The committee roster modal is a modal — freeze the conference page behind it.
   useScrollLock(!!expandedRoster);
+  // The right rail sticks below the nav pill only while it fits the window;
+  // taller, it sticks by its bottom edge instead (useFitSticky).
+  const railRef = useRef<HTMLDivElement>(null);
+  useFitSticky(railRef, !loading && !authLoading);
   const [pricingOpen, setPricingOpen] = useState(false);
   // Committee carousel + sorting (click: asc -> desc -> reset)
   const carouselRef = useRef<HTMLDivElement>(null);
@@ -1348,7 +1370,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
 
       const { data: appsData } = await authedSupabase
         .from('applications')
-        .select('id, role, status, payment_status, society_id, self_paid, pledge_type, spots_pledged, pledge_confirmed_at, organizer_note, is_head_delegate')
+        .select('id, role, status, payment_status, society_id, self_paid, pledge_type, spots_pledged, pledge_confirmed_at, organizer_note, is_head_delegate, rejection_count')
         .eq('conference_id', conf.id)
         .eq('user_id', user.id);
 
@@ -1523,6 +1545,29 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
     if (data) setCommitteeEditor({ committee: data as EditableCommittee });
   }
 
+  // ?ask=organisers (prompt 108): opens the participant dashboard's "Ask the
+  // Organisers" thread, the same as ContactOrganisers' onAsk. The locked pay
+  // buttons' "Contact" link uses it (from /pay and from the dashboard itself).
+  // Read from window.location (no useSearchParams, see above); re-checked when
+  // the in-page link changes the URL without a reload.
+  const askHandledFor = useRef<string | null>(null);
+  const firstAppRole = myApplications[0]?.role ?? null;
+  useEffect(() => {
+    if (typeof window === 'undefined' || !user || authLoading || participantDataLoading || !firstAppRole) return;
+    const check = () => {
+      const url = new URL(window.location.href);
+      if (url.searchParams.get('ask') !== 'organisers') return;
+      const key = url.href;
+      if (askHandledFor.current === key) return;
+      askHandledFor.current = key;
+      showTab('participant', firstAppRole, 'replace');
+      setAskOrganisersRequest(n => n + 1);
+    };
+    void Promise.resolve().then(check);
+    window.addEventListener('gv-ask-organisers', check);
+    return () => window.removeEventListener('gv-ask-organisers', check);
+  }, [user, authLoading, participantDataLoading, firstAppRole, showTab]);
+
   // Which palette renders. `conference` can still be null here (before the
   // first fetch resolves for a client-only private conference), so this stays
   // optional-chained — the loading/404 wrappers below need it before the
@@ -1553,6 +1598,27 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
     if (!sponsoredConfId) return;
     let cancelled = false;
     void fetchConferenceCreditSponsored(sponsoredConfId).then(v => { if (!cancelled) setCreditSponsored(v); });
+    return () => { cancelled = true; };
+  }, [sponsoredConfId]);
+
+  // The Registration Fee (prompt 117): public_registration_fee answers null when the
+  // conference has none, else { label, amount_cents, currency, applies_to }. Shown under
+  // the price medallion and as the last row of Pricing details. A failed read shows nothing.
+  const [regFee, setRegFee] = useState<{ label: string; amount_cents: number; currency: string; applies_to: string } | null>(null);
+  useEffect(() => {
+    if (!sponsoredConfId) return;
+    let cancelled = false;
+    void Promise.resolve(anonSupabase.rpc('public_registration_fee', { p_conference_id: sponsoredConfId })).then(({ data, error }) => {
+      if (cancelled || error || !data || typeof data !== 'object') return;
+      const f = data as { label?: string | null; amount_cents?: number; currency?: string | null; applies_to?: string | null };
+      if (typeof f.amount_cents !== 'number' || f.amount_cents <= 0) return;
+      setRegFee({
+        label: (f.label ?? '').trim() || 'Registration Fee',
+        amount_cents: f.amount_cents,
+        currency: (f.currency ?? 'USD').toUpperCase(),
+        applies_to: f.applies_to ?? 'per_delegation',
+      });
+    }).catch(() => {});
     return () => { cancelled = true; };
   }, [sponsoredConfId]);
 
@@ -1915,8 +1981,8 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                       {isOnline ? 'Online' : [(conference.city ?? '').trim(), (countryObj?.code ?? conference.country ?? '').trim().toUpperCase()].filter(Boolean).join(', ')}
                     </span>
                   </span>
-                  {/* Dates are hidden when TBD or missing. The organizer alone
-                      still sees a subtle "Dates: TBD" chip so the state is clear. */}
+                  {/* Dates to be decided: a public TBD conference (allowed since
+                      12 Oct 2026) says so to everyone, never a made-up date. */}
                   {!conference.dates_tbd && conference.start_date ? (
                     <>
                       <span aria-hidden style={{ color: 'rgba(238,217,138,0.5)', fontSize: '10px' }}>◆</span>
@@ -1924,14 +1990,14 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                         {formatDateRange(conference.start_date, conference.end_date)}
                       </span>
                     </>
-                  ) : isOrganizerViewer ? (
+                  ) : (
                     <>
                       <span aria-hidden style={{ color: 'rgba(238,217,138,0.5)', fontSize: '10px' }}>◆</span>
-                      <span style={{ fontFamily: "var(--font-brand), sans-serif", fontWeight: 600, fontSize: '13px', color: 'var(--gv-on-main)' }}>
-                        Dates: TBD
+                      <span style={{ fontFamily: "var(--font-brand), sans-serif", fontWeight: 500, letterSpacing: '0.01em', fontSize: '12px', color: 'rgba(237,231,216,0.78)' }}>
+                        Dates to be decided
                       </span>
                     </>
-                  ) : null}
+                  )}
                   {/* Credit sponsored, beside the dates, so it is seen the
                       moment the page opens (the line under the price
                       medallion stays too). */}
@@ -2094,8 +2160,10 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                   nothing ever scrolls under it. Same three destinations, same
                   state and URLs. */}
               <nav
+                ref={viewsRef}
                 aria-label="Conference views"
-                className="flex items-end gap-6 sm:gap-8 mb-7"
+                data-conference-views=""
+                className="flex items-end gap-6 sm:gap-8 mb-7 scroll-mt-3 lg:scroll-mt-[84px]"
                 style={{ borderBottom: '1px solid color-mix(in srgb, var(--gv-main) 10%, transparent)' }}
               >
                 {/* Real anchors, so the view a visitor is on is still copyable,
@@ -2387,6 +2455,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                         processing={!confirmationPaid && (paymentConfirming || paymentTimedOut || !paymentConfirmed)}
                         onContinue={() => setPaymentReturn(null)}
                         payHref={`/conferences/${conference.slug}/pay`}
+                        conferenceId={conference.id}
                       />
                     </div>
                   )}
@@ -2433,6 +2502,8 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                   onSelectRole={selectRole}
                   participantDataLoading={authLoading || participantDataLoading}
                   justClaimedCount={justClaimedCount}
+                  openSupportRequest={askOrganisersRequest}
+                  onSupportRequestHandled={() => setAskOrganisersRequest(0)}
                   // Patch in place rather than refetching the conference: the
                   // RPC has already committed, and this is the only row that
                   // changed.
@@ -2580,7 +2651,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                 dashboard into a 280px column. Overview keeps it, and from xl
                 (where the dashboard has its sub-nav) it is unchanged. */}
             <div className={`${activeTab === 'participant' && myApp && !isOrganizerViewer && !authLoading && !participantDataLoading ? 'hidden xl:block ' : ''}w-full md:w-[340px] md:flex-shrink-0 order-first md:order-none`}>
-              <div className="flex flex-col gap-4 md:sticky md:top-3 lg:top-[84px]">
+              <div ref={railRef} className="flex flex-col gap-4 md:sticky md:top-3 lg:top-[84px]">
 
                 {/* Apply CTA, always first */}
                 <div
@@ -2710,16 +2781,18 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                               </p>
                             )}
                             {payable && (
-                              <Link
-                                href={`/conferences/${slug}/pay`}
+                              // Locked, with a note, while the conference has not set up payments (prompt 108).
+                              <PayLink
+                                conferenceId={conference.id}
+                                slug={slug}
                                 className="w-full flex items-center justify-center gap-2 rounded-xl py-3 mt-4 font-bold text-sm transition-colors focus:outline-none"
-                                style={{ backgroundColor: 'var(--gv-accent)', color: 'var(--gv-on-accent)', fontFamily: "var(--font-brand), sans-serif", boxShadow: '0 4px 16px rgba(0,0,0,0.2)', textDecoration: 'none' }}
+                                style={{ backgroundColor: 'var(--gv-accent)', color: 'var(--gv-on-accent)', fontFamily: "var(--font-brand), sans-serif", boxShadow: '0 4px 16px rgba(0,0,0,0.2)', textDecoration: 'none', border: 'none' }}
                                 onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'white'; }}
                                 onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--gv-accent)'; }}
                               >
                                 <CreditCard size={15} strokeWidth={2.2} />
                                 {payLabel}
-                              </Link>
+                              </PayLink>
                             )}
                             {myAllocation && (
                               <div
@@ -2796,9 +2869,11 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                         </>
                       )
                     ) : (
-                      /* 3 and 4, no involvement yet: one tile per role. Signed
-                         in, an open tile goes to /apply; signed out it opens
-                         sign-in and comes back to that role's form. */
+                      /* 3 and 4, no involvement yet: one tile per role. An open
+                         tile always goes straight to that role's form, signed
+                         in or not: a guest fills it all in and signs in only at
+                         Submit (Option A; the 12 Oct 2026 regression that
+                         opened sign-in here first is fixed). */
                       <>
                         <div className="flex items-start justify-between gap-2">
                           <p className="font-bold" style={{ color: 'var(--gv-on-main)', fontFamily: "var(--font-brand), sans-serif", margin: 0, fontSize: 19, lineHeight: 1.2 }}>
@@ -2806,13 +2881,12 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                           </p>
                           {(conference.min_age != null || conference.max_age != null) && <MinAgeChip minAge={conference.min_age} maxAge={conference.max_age} />}
                         </div>
-                        <p className="text-xs" style={{ color: 'color-mix(in srgb, var(--gv-on-main) 72%, transparent)', fontFamily: "var(--font-brand), sans-serif", lineHeight: 1.55, margin: '6px 0 0 0' }}>
-                          {!hasOpenRoles
-                            ? 'Check back when applications open.'
-                            : user
-                              ? 'Pick a role to start your application.'
-                              : 'Pick a role. You will sign in with a free account first.'}
-                        </p>
+                        {!hasOpenRoles && (
+                          <p className="text-xs" style={{ color: 'color-mix(in srgb, var(--gv-on-main) 72%, transparent)', fontFamily: "var(--font-brand), sans-serif", lineHeight: 1.55, margin: '6px 0 0 0' }}>
+                            Check back when applications open.
+                          </p>
+                        )}
+                        <div style={{ height: 12 }} aria-hidden />
                         <RoleApplyCards
                           tiles={enabledRoles.map((r): RoleTile => {
                             const windowStatus = getRoleWindowStatus(r);
@@ -2829,12 +2903,25 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                             };
                           })}
                           onPick={(role) => {
-                            const href = `/conferences/${slug}/apply?role=${role}`;
-                            if (user) router.push(href);
-                            else openAuth({ next: href, apply: true });
+                            router.push(`/conferences/${slug}/apply?role=${role}`);
                           }}
                         />
                       </>
+                    )}
+                    {/* Contact the organisers (12 Oct 2026): straight under
+                        Apply, to the conference's own address. Without one,
+                        a signed-in applicant is sent to the dashboard's Ask
+                        the Organisers thread; otherwise nothing shows.
+                        Never for the organising team itself. */}
+                    {!isOrganizerViewer && (
+                      <ContactOrganisers
+                        email={conference.contact_email}
+                        conferenceName={conference.acronym || conference.full_name}
+                        onAsk={user && myApp && !authLoading && !participantDataLoading ? () => {
+                          showTab('participant', myApp.role);
+                          setAskOrganisersRequest(n => n + 1);
+                        } : undefined}
+                      />
                     )}
                   </div>
                 </div>
@@ -2866,8 +2953,13 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                         PER DELEGATE
                       </span>
                     </div>
+                    {regFee && heroPrice !== null && (
+                      <p className="text-center" style={{ margin: '12px 0 0', fontFamily: "var(--font-brand), sans-serif", fontSize: '12.5px', fontWeight: 600, color: 'var(--gv-muted)', overflowWrap: 'anywhere' }}>
+                        + {regFee.label}
+                      </p>
+                    )}
                     {creditSponsored && (
-                      <div className="mt-3 flex flex-col items-center gap-1 text-center">
+                      <div className={`${regFee && heroPrice !== null ? 'mt-4' : 'mt-3'} flex flex-col items-center gap-1 text-center`}>
                         <CreditSponsoredMark />
                         <p style={{ margin: 0, fontFamily: "var(--font-brand), sans-serif", fontSize: '12.5px', lineHeight: 1.45, color: 'var(--gv-on-surface)' }}>
                           {creditSponsoredLine(conference.acronym || conference.full_name)}
@@ -2978,6 +3070,21 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                             </div>
                           );
                         })}
+                        {regFee && (
+                          <div style={{ borderTop: enabledRoles.length ? '1px solid color-mix(in srgb, var(--gv-border) 40%, transparent)' : 'none' }}>
+                            <div className="flex items-center justify-between gap-3 py-2">
+                              <span className="text-[13px] font-medium min-w-0 [overflow-wrap:anywhere]" style={{ color: '#4A4238', fontFamily: "var(--font-brand), sans-serif" }}>
+                                {regFee.label}
+                              </span>
+                              <span className="text-[13px] font-bold flex-shrink-0" style={{ color: 'var(--gv-on-surface)', fontFamily: "var(--font-brand), sans-serif", fontVariantNumeric: 'tabular-nums' }}>
+                                {formatFeeCompact(regFee.amount_cents / 100, regFee.currency)}
+                              </span>
+                            </div>
+                            <p className="text-[11px] -mt-1 pb-1.5" style={{ color: 'var(--gv-muted)', fontFamily: "var(--font-brand), sans-serif" }}>
+                              {regFee.applies_to === 'per_delegate' ? 'Per delegate' : 'Per delegation or independent delegate'}
+                            </p>
+                          </div>
+                        )}
                       </div>
                     )}
                     </>)}
@@ -3170,7 +3277,8 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                             // start-alignment (no clipping, scroll still reaches the first card)
                             // when it overflows — the effect then scrolls to the middle.
                             justifyContent: 'safe center',
-                            scrollSnapType: 'x mandatory',
+                            scrollSnapType: 'x proximity',
+                            overscrollBehaviorX: 'contain',
                             scrollbarWidth: 'none',
                             msOverflowStyle: 'none',
                             padding: '4px 4px 12px 4px',

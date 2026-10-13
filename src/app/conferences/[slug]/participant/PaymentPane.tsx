@@ -3,27 +3,27 @@
 // The dashboard's Payment section. Never gated (you pay to unlock the rest).
 // What it shows, all from data the page already holds or the cards already
 // read: this application's payment state as icon + word, a way to /pay (the
-// single money surface), what is owed today (PayNowCard, my_open_balances),
-// and for a delegation leader the "Pay for your delegates" pool
-// (DelegationCreditsCard, which renders nothing for anyone who does not lead).
+// single money surface), and what is owed today (PayNowCard, my_open_balances).
+// "Open payments" always shows (prompt 105), so everyone can reach /pay for
+// receipts, the delegation and documents; "Pay for your delegates" lives on /pay.
 
 import { ArrowRight, CheckCircle2, Hourglass, MinusCircle } from 'lucide-react';
 import { PayNowCard, useOpenBalances } from './PayNowCard';
-import DelegationCreditsCard from './DelegationCreditsCard';
+import LockedPayButton, { useConferencePaymentsReady } from './PaymentsLocked';
 import { OUTFIT, CHIP_STYLES, derivePaymentChip } from './shared';
 import { DashCard, CardHeading, ForestLink, IconWord, INK, INK_SOFT, useDashStacked } from './dashboardKit';
 import type { ParticipantApplication } from './types';
 
 const PAID = new Set(['paid', 'waived']);
 
-export default function PaymentPane({ application, conferenceId, conferenceSlug, userId, feeToday, paymentTiming, isLeader }: {
+export default function PaymentPane({ application, conferenceId, conferenceSlug, userId, feeToday, paymentTiming }: {
   application: ParticipantApplication;
   conferenceId: string;
   conferenceSlug: string;
   userId: string | null;
   feeToday: number;
   paymentTiming: string;
-  /** A faculty advisor or head delegate with a delegation: shows the pool. */
+  /** Kept for ParticipantView; the delegation pool moved to /pay (prompt 105). */
   isLeader: boolean;
 }) {
   const free = feeToday === 0;
@@ -36,6 +36,8 @@ export default function PaymentPane({ application, conferenceId, conferenceSlug,
   const balances = useOpenBalances(userId, conferenceId);
   const stacked = useDashStacked();
   const dueCardShows = !!balances && balances.length > 0;
+  // Paying waits until the conference sets up how it gets paid (prompt 108); applying never does.
+  const paymentsReady = useConferencePaymentsReady(conferenceId);
 
   let line: string;
   if (free) line = 'Your role has no registration fee.';
@@ -58,21 +60,26 @@ export default function PaymentPane({ application, conferenceId, conferenceSlug,
             )}
             <p style={{ fontFamily: OUTFIT, fontSize: 14, color: INK, margin: '8px 0 0 0', lineHeight: 1.5 }}>{line}</p>
           </div>
-          {!(free && settled) && !waitingForAcceptance && (
-            <span className={stacked && dueCardShows ? 'hidden xl:inline-flex' : 'inline-flex'}>
+          <span className={stacked && dueCardShows ? 'hidden xl:inline-flex' : 'inline-flex'}>
+            {paymentsReady === false ? (
+              <LockedPayButton
+                slug={conferenceSlug}
+                label={<>Open payments</>}
+                className="inline-flex items-center gap-1.5 rounded-xl px-4 focus:outline-none"
+                style={{ minHeight: 44, backgroundColor: '#1B3828', color: '#EED98A', fontFamily: OUTFIT, fontSize: 14, fontWeight: 700, border: 'none' }}
+              />
+            ) : (
               <ForestLink href={`/conferences/${conferenceSlug}/pay`}>
                 Open payments <ArrowRight size={16} strokeWidth={2.4} aria-hidden />
               </ForestLink>
-            </span>
-          )}
+            )}
+          </span>
         </div>
       </DashCard>
 
       {/* What is owed right now across this conference (own + delegation
           invoices), with the due date when set and a way to /pay. */}
       <PayNowCard userId={userId} conferenceId={conferenceId} rows={balances} />
-
-      {isLeader && application.society_id && <DelegationCreditsCard societyId={application.society_id} />}
     </>
   );
 }

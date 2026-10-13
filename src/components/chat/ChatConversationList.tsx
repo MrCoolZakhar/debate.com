@@ -1,5 +1,6 @@
 'use client';
 
+import SeatName from '@/components/SeatName';
 import { memo, useMemo, useState } from 'react';
 import { Plus, Search, X } from 'lucide-react';
 import { NEU, OUTFIT } from '@/components/neu';
@@ -162,9 +163,9 @@ const Row = memo(function Row({ row, active, onSelect, t, locale }: {
           {/* The delegation is the identity and keeps its weight; the person sitting in it is
               a quieter second half of the same line, and gives up room first. */}
           <span className="min-w-0 flex flex-wrap items-baseline gap-x-1.5">
-            <span className="min-w-0 [overflow-wrap:anywhere]" style={{ fontFamily: OUTFIT, fontSize: 15.5, fontWeight: showBadge ? 800 : 650, color: NEU.ink }}>
-              {row.label}
-            </span>
+            {/* A long delegation (a crisis character) is two rows, short form over the full
+                name (src/components/SeatName.tsx). Groups and chairs are shown as named. */}
+            <SeatName name={row.label} max={row.kind === 'delegate' ? 24 : 999} className="min-w-0" style={{ fontFamily: OUTFIT, fontSize: 15.5, fontWeight: showBadge ? 800 : 650, color: NEU.ink }} subScale={0.8} />
             {row.personLabel && (
               <span className="min-w-0 [overflow-wrap:anywhere]" style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 500, color: NEU.inkSoft }}>
                 {row.personLabel}

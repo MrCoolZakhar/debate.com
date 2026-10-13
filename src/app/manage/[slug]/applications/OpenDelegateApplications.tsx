@@ -15,9 +15,9 @@
 // missing row is a failure, never a silent success. Nothing else is written.
 //
 // Before offering the button it checks what would refuse it, so the database
-// rarely has to: the delegate row must exist (Settings seeds it), the payment
-// gate (`trg_role_config_payment_gate`, mirrored by paymentGateBlocks) and the
-// conference dates (TBD dates keep the conference off Explore). A dated window
+// rarely has to: the delegate row must exist (Settings seeds it) and the
+// conference dates (TBD dates keep the conference off Explore). Payments never
+// block opening a role (owner, 12 Oct 2026). A dated window
 // that has closed, or opens later, is explained and linked to the role's When
 // step rather than rewritten here.
 // ─────────────────────────────────────────────────────────────────────────────
@@ -28,7 +28,7 @@ import { Check, Copy, Loader2 } from 'lucide-react';
 import { NEU, OUTFIT, NeuCard, Emoji3D } from '@/components/neu';
 import { getFreshAuthedClient } from '@/lib/supabase-auth';
 import { friendlyError } from '@/lib/friendlyError';
-import { paymentGateBlocks, type PaymentReadinessConference } from '@/lib/payments';
+import type { PaymentReadinessConference } from '@/lib/payments';
 import { roleWindowState, useServerNow, formatWindowInstant } from '@/lib/applicationWindow';
 
 export interface DelegateRoleWindow {
@@ -125,8 +125,6 @@ export default function OpenDelegateApplications({
   let blocker: { line: string; href: string; label: string } | null = null;
   if (!delegate) {
     blocker = { line: 'Set up delegate applications first.', href: settingsRole, label: 'Set up delegates' };
-  } else if (paymentGateBlocks(conference)) {
-    blocker = { line: 'Choose how delegates pay first. Even a free conference needs one.', href: `/manage/${slug}/financials?open=payment`, label: 'Set up payments' };
   } else if (conference.dates_tbd || !conference.start_date) {
     blocker = { line: 'Set your conference dates first.', href: `/manage/${slug}/settings?tab=general&focus=dates`, label: 'Add dates' };
   } else if (state === 'closed') {

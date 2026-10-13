@@ -33,6 +33,7 @@ import YourPurchases from './YourPurchases';
 import { IMPORTS_PAID_LAUNCH } from '../import/importQuote';
 import EmailPacks from './EmailPacks';
 import { openCreditsPopup } from '@/lib/purchasePopup';
+import { useOrganiserVisit } from '@/lib/organiserVisits';
 
 // Pictures from the site's own library for now; public/store/<placement>.jpg
 // would be the owner's replacements (see the report).
@@ -65,6 +66,8 @@ type Popup =
 
 export default function StorePage() {
   const { conference } = useManage();
+  // Checklist step "Visit the Store": stamped once per page load, silently.
+  useOrganiserVisit(conference?.id, 'store');
   const { data, loading, error, reload } = useStoreData(conference?.id ?? null, conference?.country ?? null);
   const [popup, setPopup] = useState<Popup>(null);
   // After a Country or Region booking: "Add your pop-up" (29 Sep 2026).
@@ -238,12 +241,11 @@ export default function StorePage() {
 
             <StoreCard
               title="Bulk Import"
-              line={IMPORTS_PAID_LAUNCH ? 'Importing costs 1 credit per delegate imported, paid when you import' : 'Bring your whole roster in from a spreadsheet. Free while we grow.'}
+              line={IMPORTS_PAID_LAUNCH ? 'Importing costs 1 credit per delegate imported, paid when you import' : 'Bring your whole roster in from a spreadsheet'}
               hint={IMPORTS_PAID_LAUNCH
                 ? 'Bring a spreadsheet of delegates in at once and send each of them a claim link. Each imported delegate uses one conference credit at the moment you import.'
-                : 'Bring a spreadsheet of delegates in at once and send each of them a claim link. Imports are free for now; paid imports come later in 2026.'}
+                : 'Bring a spreadsheet of delegates in at once and send each of them a claim link'}
             >
-              {!IMPORTS_PAID_LAUNCH && <p className="gv-st-soon-tag">Paid imports: coming late 2026</p>}
               <div className="flex flex-wrap gap-2">
                 <Link href={`/manage/${conference.slug}/applications`} className="gv-st-btn gv-st-outline">Imported delegates</Link>
                 <Link href={`/manage/${conference.slug}/import`} className="gv-st-btn gv-st-forest">Go to importer</Link>

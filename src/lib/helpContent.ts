@@ -182,8 +182,8 @@ const ORGANIZERS: FaqEntry[] = [
   },
   {
     id: 'payment-method',
-    question: 'Why must I set a payment method before applications open?',
-    answer: 'Because delegates need a way to pay you, applications cannot open and the page cannot be published until a method is set. That is true for a free conference too: choose Manual and write "This conference is free" in the instructions. Card payments go to your own Stripe account. Manual payment, with proof you review, is a first-class option.',
+    question: 'Do I need a payment method before applications open?',
+    answer: 'No. You can open applications and publish your page at any time. People can pay you once you set up how you get paid in Financials: card payments go to your own Stripe account, or use a payment link, a QR code or bank transfer, with a proof you review. Until then their payments page shows everything they owe, and only the pay button waits.',
     actions: [{ kind: 'link', label: 'List your conference', href: '/conferences/new' }],
     pages: [],
     keywords: ['payment method', 'stripe', 'manual', 'free conference', 'publish', 'applications open', 'proof'],

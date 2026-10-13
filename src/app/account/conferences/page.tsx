@@ -18,6 +18,7 @@ import {
   useConferenceActions, AcceptedNotice, ChairInvitesSection, OrganizerInvitesSection,
   PendingImportInvitesSection, DraftsToCompleteSection,
 } from './conferenceActions';
+import { ConferenceDraftsSection } from './ConferenceDraftsSection';
 import { CircleFlag } from '@/components/CircleFlag';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
@@ -137,7 +138,7 @@ function MyConferencesInner() {
           // conference_committees, so a bare `conference_committees (name)`
           // failed with PGRST201 and EVERY application was lost; a faculty
           // advisor (no allocation, not an organiser) then saw no conference.
-          .select(`id, role, status, is_head_delegate, society_id, assigned_country_name, conferences (${CONF}), conference_committees!applications_assigned_committee_id_fkey (name)`)
+          .select(`id, role, status, is_head_delegate, society_id, assigned_country_name, rejection_count, conferences (${CONF}), conference_committees!applications_assigned_committee_id_fkey (name)`)
           .eq('user_id', user!.id),
         supabase
           .from('conference_allocations')
@@ -170,6 +171,7 @@ function MyConferencesInner() {
       type AppRow = {
         role: string; status: string; is_head_delegate: boolean | null; society_id: string | null;
         assigned_country_name: string | null;
+        rejection_count: number | null;
         conferences: ConferenceRow | ConferenceRow[] | null;
         conference_committees: { name: string } | { name: string }[] | null;
       };
@@ -223,7 +225,7 @@ function MyConferencesInner() {
         const e = conf?.id ? byConf.get(conf.id) : undefined;
         if (e) {
           e.participant = true;
-          if (row.status === 'rejected' && allowResubmit.get(`${conf!.id}:${row.role}`) && !e.resubmitHref) {
+          if (row.status === 'rejected' && allowResubmit.get(`${conf!.id}:${row.role}`) && (row.rejection_count ?? 0) < 3 && !e.resubmitHref) {
             e.resubmitHref = `/conferences/${conf!.slug}/apply?role=${row.role}&edit=1`;
           }
         }
@@ -345,6 +347,7 @@ function MyConferencesInner() {
         {actions.acceptedToast && <AcceptedNotice />}
         {user && <PaymentsDueSection userId={user.id} />}
         <PendingImportInvitesSection invites={actions.importInvites} />
+        <ConferenceDraftsSection />
         <DraftsToCompleteSection drafts={actions.drafts} onDelete={actions.deleteDraft} />
         <ChairInvitesSection invites={actions.chairInvites} onRespond={actions.respondChair} />
         <OrganizerInvitesSection invites={actions.organizerInvites} onRespond={actions.respondOrganizer} />

@@ -12,12 +12,13 @@
 
 import { useEffect, useState } from 'react';
 import { CreditCard, Landmark } from 'lucide-react';
+import GSelect from '@/components/GSelect';
 import { useManage } from '@/app/manage/[slug]/layout';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { invoiceLabel } from '@/lib/invoices';
 import { NEU, OUTFIT, NeuCard, NeuInset } from '@/components/neu';
-import { inputStyle, mutedCaption, chipStyle, formatRowDate, roleLabel, formatCents } from '../shared';
+import { mutedCaption, chipStyle, formatRowDate, roleLabel, formatCents } from '../shared';
 
 interface PaymentInvoice {
   id: string;
@@ -123,21 +124,13 @@ export default function FinancialsHistoryPage() {
       {/* The title ("Transactions") and its caption come from the Financials layout. */}
       {rows.length > 0 && (
         <div className="flex flex-wrap items-center gap-3 mb-4">
-          <select aria-label="Money in or out" value={direction} onChange={e => setDirection(e.target.value as 'all' | 'in' | 'out')} style={{ ...inputStyle, width: 'auto', cursor: 'pointer' }}>
-            <option value="all">Money in and out</option>
-            <option value="in">Money in</option>
-            <option value="out">Money out</option>
-          </select>
-          <select aria-label="What happened" value={whatFilter} onChange={e => setWhatFilter(e.target.value)} style={{ ...inputStyle, width: 'auto', cursor: 'pointer' }}>
-            <option value="all">Everything</option>
-            {availableWhat.map(w => <option key={w} value={w}>{WHAT_LABEL[w]}</option>)}
-          </select>
+          <GSelect<'all' | 'in' | 'out'> aria-label="Money in or out" value={direction} onChange={setDirection} style={{ width: 'auto' }}
+            options={[{ value: 'all', label: 'Money in and out' }, { value: 'in', label: 'Money in' }, { value: 'out', label: 'Money out' }]} />
+          <GSelect aria-label="What happened" value={whatFilter} onChange={setWhatFilter} style={{ width: 'auto' }}
+            options={[{ value: 'all', label: 'Everything' }, ...availableWhat.map(w => ({ value: w as string, label: WHAT_LABEL[w] }))]} />
           {hasCard && hasManual && (
-            <select aria-label="How" value={howFilter} onChange={e => setHowFilter(e.target.value)} style={{ ...inputStyle, width: 'auto', cursor: 'pointer' }}>
-              <option value="all">Card and manual</option>
-              <option value="card">Card</option>
-              <option value="manual">Manual</option>
-            </select>
+            <GSelect aria-label="How" value={howFilter} onChange={setHowFilter} style={{ width: 'auto' }}
+              options={[{ value: 'all', label: 'Card and manual' }, { value: 'card', label: 'Card' }, { value: 'manual', label: 'Manual' }]} />
           )}
         </div>
       )}

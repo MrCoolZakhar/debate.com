@@ -6,6 +6,7 @@ import type { ChatMessage, ChatBroadcastInfo } from '@/lib/types';
 import type { OutboxMsg } from '@/lib/chatOutbox';
 import type { TranslationKey } from '@/lib/translations';
 import { parseAttachment, attachmentPreview, type ChatAttachment } from '@/lib/chatAttachments';
+import { broadcastAuthorKey } from '@/lib/broadcastMessages';
 
 /** The app's translation function, shared by every chat component. */
 export type TFn = (key: TranslationKey, vars?: Record<string, string | number>) => string;
@@ -108,6 +109,8 @@ export interface ChatGroup {
   items: ChatItem[];
   /** A run of Secretariat messages (organiser broadcasts), drawn by SecretariatMessage. */
   secretariat?: boolean;
+  /** broadcastAuthorKey of the run: 'secretariat' or 'press:<outlet>'. */
+  authorKey?: string;
 }
 
 export type ChatRow =
@@ -214,14 +217,18 @@ export function buildChatRows(
     }
     const ts = it.timestamp.getTime();
     const secretariat = !!it.broadcast;
-    const sameGroup = current && current.sender === it.sender && !!current.secretariat === secretariat && ts - lastTs <= GROUP_WINDOW_MS;
+    // Broadcasts group only while the author stays the same: the Secretariat, or one press
+    // outlet ("Press · BBC"). A press release never joins a Secretariat run or another outlet's.
+    const authorKey = secretariat ? broadcastAuthorKey(it.broadcast) : undefined;
+    const sameGroup = current && current.sender === it.sender && !!current.secretariat === secretariat
+      && current.authorKey === authorKey && ts - lastTs <= GROUP_WINDOW_MS;
     if (!sameGroup) {
       flush();
       current = {
         key: `g-${it.id}`, sender: it.sender,
         // The Secretariat is never the reader, whatever a seat happens to be called.
         isMe: !secretariat && it.sender === senderName,
-        items: [], secretariat,
+        items: [], secretariat, authorKey,
       };
     }
     current!.items.push(it);

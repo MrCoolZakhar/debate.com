@@ -31,11 +31,21 @@ import { useConfirmModal } from '@/components/ConfirmModal';
 import { friendlyError } from '@/lib/friendlyError';
 import { notifyErr, clearErr } from '@/lib/appNotify';
 import { InfoHint } from './applicationsUi';
+import { TYPE, TYPE_PX } from './panelKit';
 import {
   type ConferenceTheme, GAVELLING_THEME, themeCssVars, themeWarnings,
 } from '@/lib/theme';
 
 const OUTFIT = "var(--font-brand), sans-serif";
+
+/** Two columns from 640px of card width (owner, 12 Oct 2026: "Your Colours in
+ *  two columns, lots of empty space there"): the two colour pickers on the
+ *  left, the live preview and the publish buttons on the right. */
+const CC_CSS = `
+.gvcc { container-type: inline-size; }
+.gvcc-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 18px 28px; align-items: start; }
+@container (min-width: 640px) { .gvcc-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } }
+`;
 
 type ThemeKey = 'main' | 'accent';
 
@@ -301,9 +311,12 @@ export default function CustomizationCard({
   const previewVars = themeCssVars(draft);
 
   return (
-    <div style={cardStyle}>
-      <div className="flex items-center justify-between gap-3 mb-1">
-        <p className="font-semibold text-base" style={{ color: '#1C1410', fontFamily: OUTFIT }}>Conference colours</p>
+    <div style={cardStyle} className="gvcc">
+      <style>{CC_CSS}</style>
+      <div className="flex items-start justify-between gap-3 mb-4">
+        <p style={{ ...TYPE.hint, margin: 0 }}>
+          Pick your main colour and an accent. Gavelling handles the rest, including text contrast.
+        </p>
         {saveState !== 'idle' && (
           <span className="flex items-center gap-1.5 text-xs flex-shrink-0" style={{ color: saveState === 'saved' ? '#3D7A52' : '#6E6152', fontFamily: OUTFIT }}>
             {saveState === 'saving' && (
@@ -313,20 +326,17 @@ export default function CustomizationCard({
           </span>
         )}
       </div>
-      <p className="text-sm mb-4" style={{ color: '#6E6152', fontFamily: OUTFIT }}>
-        Pick your main colour and an accent. Gavelling handles the rest, including text contrast.
-      </p>
-
-
+      <div className="gvcc-grid">
+      <div className="min-w-0">
       {ROWS.map((row) => {
         const value = fieldValue(draft, row.key);
         const activePreset = row.presets.find((p) => p.hex.toLowerCase() === value.toLowerCase());
         return (
-          <div key={row.key} className="mb-5">
-            <label className="block text-xs font-semibold" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
+          <div key={row.key} className="mb-5 last:mb-0">
+            <label className="block" style={TYPE.label}>
               {row.label}
             </label>
-            <p className="text-xs mt-0.5" style={{ color: '#6E6152', fontFamily: OUTFIT }}>
+            <p className="mt-0.5" style={TYPE.hint}>
               {row.helper}
             </p>
             <div className="flex items-center gap-2 flex-wrap mt-2.5">
@@ -369,21 +379,23 @@ export default function CustomizationCard({
                 aria-label={`${row.label} hex value`}
                 className="focus:outline-none"
                 style={{
-                  width: 104, padding: '6px 10px', borderRadius: 8,
-                  border: '1.5px solid #DDD4C0', fontFamily: OUTFIT, fontSize: 12,
+                  width: 112, padding: '6px 10px', borderRadius: 8,
+                  border: '1.5px solid #DDD4C0', fontFamily: OUTFIT, fontSize: 16,
                   color: '#1C1410', backgroundColor: '#FFFDF9',
                 }}
                 onFocus={(e) => { e.currentTarget.style.borderColor = '#1B3828'; }}
                 onBlur={(e) => { e.currentTarget.style.borderColor = '#DDD4C0'; }}
               />
             </div>
-            <p className="text-xs mt-1.5" style={{ color: '#6E6152', fontFamily: OUTFIT }}>
+            <p className="mt-1.5" style={TYPE.hint}>
               {activePreset ? activePreset.name : value}
             </p>
           </div>
         );
       })}
+      </div>
 
+      <div className="min-w-0">
       {/* Live preview: the SAME functions the real pages use, so this can
           never disagree with what an applicant or visitor actually sees. */}
       <div
@@ -425,7 +437,7 @@ export default function CustomizationCard({
       {warnings.length > 0 && (
         <div className="mb-4 flex flex-col gap-1.5">
           {warnings.map((warning) => (
-            <p key={warning} className="flex items-center gap-1.5 text-xs" style={{ color: '#B8844A', fontFamily: OUTFIT }}>
+            <p key={warning} className="flex items-center gap-1.5" style={{ ...TYPE.hint, color: '#8A6614' }}>
               <AlertTriangle size={13} strokeWidth={2.4} className="flex-shrink-0" />
               {warning}
             </p>
@@ -441,8 +453,8 @@ export default function CustomizationCard({
           rel="noopener noreferrer"
           className="inline-flex items-center gap-1.5 rounded-[10px] focus:outline-none transition-colors"
           style={{
-            padding: '7px 12px',
-            fontFamily: OUTFIT, fontSize: '11px', fontWeight: 800,
+            minHeight: 38, padding: '0 13px',
+            fontFamily: OUTFIT, fontSize: 14, fontWeight: 700,
             letterSpacing: 0,
             color: '#1B3828', backgroundColor: 'transparent',
             border: '1.5px solid #DDD4C0', cursor: 'pointer',
@@ -462,8 +474,8 @@ export default function CustomizationCard({
             disabled={publishing || isPublished}
             className="inline-flex items-center gap-2 rounded-[10px] font-bold focus:outline-none transition-colors"
             style={{
-              padding: '8px 16px',
-              fontFamily: OUTFIT, fontSize: '11px', fontWeight: 800, letterSpacing: 0,
+              minHeight: 38, padding: '0 15px',
+              fontFamily: OUTFIT, fontSize: 14, fontWeight: 700, letterSpacing: 0,
               backgroundColor: publishing || isPublished ? '#DDD4C0' : '#1B3828',
               color: publishing || isPublished ? '#9A8A78' : '#EED98A',
               border: 'none',
@@ -485,13 +497,15 @@ export default function CustomizationCard({
         <button
           type="button"
           onClick={handleReset}
-          className="text-xs font-semibold focus:outline-none transition-colors"
-          style={{ color: '#8B2020', fontFamily: OUTFIT, background: 'none', border: 'none', cursor: 'pointer', marginLeft: 'auto' }}
+          className="focus:outline-none transition-colors"
+          style={{ fontSize: TYPE_PX.hint, fontWeight: 600, color: '#8B2020', fontFamily: OUTFIT, background: 'none', border: 'none', cursor: 'pointer', marginLeft: 'auto' }}
           onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.opacity = '0.72'; }}
           onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.opacity = '1'; }}
         >
           Reset to default
         </button>
+      </div>
+      </div>
       </div>
 
       {confirmModal}

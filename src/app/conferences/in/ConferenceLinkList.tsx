@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { formatConferenceDates } from '@/lib/conferenceDates';
+import { formatConferenceDates, hasNoDates, DATES_TO_BE_DECIDED } from '@/lib/conferenceDates';
 import { delegatePriceLabel } from '@/lib/publicFees';
 import type { ListedConference } from '@/lib/listedConferences';
 
@@ -29,7 +29,7 @@ export default function ConferenceLinkList({ conferences }: { conferences: Liste
   return (
     <ul className="grid grid-cols-1 md:grid-cols-2 gap-3" style={{ listStyle: 'none', margin: 0, padding: 0 }}>
       {conferences.map(c => {
-        const dates = c.dates_tbd ? 'Dates to be announced' : formatConferenceDates(c.start_date, c.end_date, { style: 'dmy-end-year' });
+        const dates = hasNoDates(c) ? DATES_TO_BE_DECIDED : formatConferenceDates(c.start_date, c.end_date, { style: 'dmy-end-year' });
         const place = [c.city, c.country].filter(Boolean).join(', ');
         const windowLabel = WINDOW_LABEL[c.window];
         return (

@@ -166,55 +166,29 @@ export interface PaymentReadinessConference {
   payment_gate_exempt?: boolean | null;
   /** Gavelling's own Stripe account collects (no Connect needed). Ready. */
   platform_collects?: boolean | null;
+  /** Prompt 94: a manual conference's kind and what that kind needs. */
+  manual_kind?: 'link' | 'qr' | 'bank' | 'in_person' | null;
+  payment_qr_path?: string | null;
+  bank_details?: { account_number?: string | null } | null;
 }
 
 /** Mirrors conference_payments_ready(uuid) exactly. Deliberately does not
- *  consider payment_gate_exempt, the SQL function doesn't either. */
+ *  consider payment_gate_exempt, the SQL function doesn't either. Since 12 Oct
+ *  2026 it never decides whether applications open or a conference publishes;
+ *  it only says whether payers can pay yet (prompt 108). */
 export function conferencePaymentsReady(conf: PaymentReadinessConference): boolean {
   if (conf.platform_collects) return true;
   if (conf.payment_method === 'manual') {
+    const kind = conf.manual_kind ?? 'link';
+    if (kind === 'qr') return !!conf.payment_qr_path?.trim();
+    if (kind === 'bank') return !!conf.bank_details?.account_number?.trim();
+    if (kind === 'in_person') return !!conf.external_payment_note?.trim();
     return !!(conf.external_payment_url?.trim() || conf.external_payment_note?.trim());
   }
   if (conf.payment_method === 'stripe') {
     return conf.connect_onboarding_status === 'complete';
   }
   return false;
-}
-
-/** Mirrors conference_payment_gate_message(uuid) character for character. */
-export function paymentGateMessage(conf: PaymentReadinessConference): string {
-  if (conf.payment_method === null) {
-    return 'Choose how your conference gets paid in Financial Settings first. Even a free conference needs a method on file, so pick Manual and write that it is free.';
-  }
-  if (conf.payment_method === 'manual') {
-    return 'Add a payment link or written payment instructions in Financial Settings first, so delegates have somewhere to pay.';
-  }
-  if (conf.payment_method === 'stripe') {
-    return 'Finish your Stripe onboarding in Financial Settings first. Stripe still has your account marked as incomplete.';
-  }
-  return 'Finish your financial onboarding in Financial Settings first.';
-}
-
-/** Same four cases as paymentGateMessage, worded for a surface that IS
- *  Financial Settings, so it doesn't tell the organizer to go to the page
- *  they're already reading. Use paymentGateMessage everywhere else. */
-export function paymentGateMessageHere(conf: PaymentReadinessConference): string {
-  if (conf.payment_method === null) {
-    return 'Choose how your conference gets paid. Even a free conference needs a method on file, so pick Manual and write that it is free.';
-  }
-  if (conf.payment_method === 'manual') {
-    return 'Add a payment link or written payment instructions below, so delegates have somewhere to pay.';
-  }
-  if (conf.payment_method === 'stripe') {
-    return 'Finish your Stripe onboarding below. Stripe still has your account marked as incomplete.';
-  }
-  return 'Finish your financial onboarding below.';
-}
-
-/** True when the conference is neither ready nor exempt. This is the one
- *  every UI call site should use to decide whether to block. */
-export function paymentGateBlocks(conf: PaymentReadinessConference): boolean {
-  return !conf.payment_gate_exempt && !conferencePaymentsReady(conf);
 }
 
 export type CheckoutKind = 'role_fee' | 'pledge_spots';

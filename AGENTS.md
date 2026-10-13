@@ -487,6 +487,7 @@ The Moderator's laptop on laggy / dropped venue Wi-Fi. **Kill switch:** `OFFLINE
 - **The look** (`src/components/chat/SecretariatMessage.tsx`, chosen in `ChatThread` when `group.secretariat`; `buildChatRows` never groups a broadcast with a real row and never marks it `isMe`): a forest disc with a gold megaphone beside the run, `bc_secretariat` ("Secretariat") in forest above it, white bubbles with a faint forest ring; per message the action an actionable broadcast asks for (`PauseCircle` / `Flag` + `bc_pause` / `bc_end`, then `bc_at` with `action_at`, or `bc_on_ack`), the message (pre-wrap), the attached image and the time.
 - **Images.** `image_url` lives in the PUBLIC `conference-assets` bucket at `broadcasts/<conference uuid>-<epoch ms>.<ext>` (`uploadBroadcastImage`), a different bucket from chat attachments, so `parseAttachment` does not cover it and is NOT loosened. `trustedBroadcastImageUrl` (`chatAttachments.ts`, its own function) accepts exactly that path on this project's origin, https, no query, fragment, backslash or dot segment, raw string equal to origin + parsed pathname; anything else draws no image. The image renders inline at its REAL aspect (natural size measured on load, fitted into 280 x 320, cached by URL; `referrerPolicy="no-referrer"`), the thread re-pins to the bottom when it lands, and a plain left click opens the chat's own photo viewer (`ChatLightbox`, caption "Secretariat · time", `bc_image` as its name) exactly like a chat photo; other clicks keep the link.
 - **Who sees them: everyone in the room.** `useBroadcastHistory(committeeId, version, enabled)` (`getBroadcastHistory`: anon client, newest 200, oldest first, `null` on a failed read so the list keeps what it showed) on the chair, delegate and voting pages, in its OWN state, never the committee. Each page bumps its `broadcastVersion` on a `session_broadcasts` realtime event (handled in the sync's `onEvent`, returns true, no slice, outside RULE 4's debounce) and on every catch-up that ends `'done'`. The delegate page now binds `session_broadcasts` (eight tables) and reads only while its seat is allowed; the voting page binds it too (six tables). Nothing is written, nothing runs per second, no `updateLocal` / `localUpdateTime`. The composer's line "Delegates and chairs will see it with the message" is now true.
+- **Press releases (12 Oct 2026, `scratch-press.sql` PENDING).** A press seat holder or press chair (a `committee_type = 'press'` committee, CLAUDE.md "Press committees") sends a release from the Press Desk through `send_press_release` (SECURITY DEFINER; 600 characters; an image only in `conference-assets/broadcasts/<conference uuid>-<epoch ms>.<ext>`, the shape `trustedBroadcastImageUrl` already accepts; 3 per person per conference in any 24 hours). It writes ONE informational `session_broadcasts` row per open room with `source = 'press'`, `author_label` = the outlet, `created_by` = the sender and `expires_at = now()`. On the client: `SessionBroadcast.source` / `authorLabel` (`rowToBroadcast`; a row without the column reads `'organiser'`), carried into `ChatBroadcastInfo`; `broadcastAuthor()` / `broadcastAuthorKey()` (`broadcastMessages.ts`) label it `bc_press_from` ("Press · BBC") in the bubble run, the list preview and the photo viewer caption; `buildChatRows` groups broadcasts only while the author is the same, so a release never joins a Secretariat run or another outlet's; `SecretariatMessage` draws a press run with a slate newspaper disc (`PressAvatar`) and a slate ring. **Releases are never chair cards**: `getActiveBroadcasts` filters `source === 'press'` out on the client (works before and after the column exists), and `expires_at = now()` keeps them off the cards of a bundle that predates the filter. The organiser live page's sent list leaves them out too. Organiser broadcasts, their cards, `runBroadcastEffect` and `markBroadcastReadInChat` are unchanged. The organiser insert policy is tightened to `source = 'organiser' and author_label is null`, so nobody can forge a press row from the client. There is no reply and no chat with the press.
 - **Chat off** (`disableChat`). Delegates: no chat at all, unchanged. Chairs (chair and voting pages): when the room is a conference room or has received any broadcast, the chat icon opens `ChatPanel secretariatOnly` (keyed `secretariat-only` so it never inherits the normal panel's state): no list, the Everyone thread holding ONLY the Secretariat messages, `bc_chat_off` as its subtitle and `bc_read_only` where the composer would be. Its read state lives under `SECRETARIAT_READ_KEY` (`__secretariat__`) in the same read counts, so it can never lower Everyone's, and the icon's count is `secretariatUnread(broadcasts, readCounts)`. Otherwise `ChatDisabledNotice` as before. Known limit: the chair's chat icon is not drawn in pre-session or once ended (the cards still show in pre-session).
 
 ### Close button (chair dialog)
@@ -834,27 +835,35 @@ isModerator = nameHolds && !heldElsewhere;   // setIsViewOnly(!isModerator)
 
 ## FEATURE: AWARDS (conference-linked sessions only)
 
-### CURRENT STATE: HIDDEN BEHIND A COMING-SOON SCREEN (7 Sep 2026)
-The organiser-facing half of awards is switched off in the UI. Nothing was deleted
-and no data was migrated:
-- Settings → Awards renders `settings/awardsComingSoon.tsx`. `settings/awardsUi.tsx`
-  is untouched on disk; re-enabling is one import and one render line in
-  `settings/page.tsx`, both marked with comments.
-- `/manage/[slug]/awards` is now a redirect to `/manage/[slug]/settings?tab=awards`.
-  The secretariat desk is preserved unrendered as
-  `manage/[slug]/awards/AwardsConsole.tsx`. Its rail entry is gone, and so are the
-  two links into it from `manage/[slug]/scoreboard` and `live/LiveModals.tsx`.
-- The `awards` set-up priority was removed from the dashboard checklist, from
-  `conference_setup_status()` (setup_total 9 → 8) and from `SETUP_STEPS` in
-  `admin/ConferencesTab.tsx`; `admin_conference_overview()`'s setup_total fallback
-  moved 9 → 8. Verification is untouched: `awards` was never in `v_ver_keys`.
-- The DATABASE IS UNCHANGED. `conference_awards`, `awards_config`,
-  `awards_published_at`, the RLS policies and every RPC still exist and still work.
-  Anything already published is still published and still visible to its recipient.
-- Participant and public surfaces were deliberately left alone: `MyAwardsCard`,
-  `/account/cv`, the public honour roll, the chair-side `AwardsCard` and the session
-  signposts through `resolveChairAwardsHref`. None of them 404 and none of them can
-  leak an unpublished nomination (the RLS is unchanged).
+### CURRENT STATE: SET-UP, REVIEW AND PUBLISH LIVE (12 Oct 2026)
+- Settings → Awards is `settings/awardsUi.tsx` (`AwardsSettings`): blank slate → "Will
+  every committee give the same awards?" → the editor (Placements, Other awards,
+  Custom awards; shared set or per-committee sets). Full description in CLAUDE.md §5.
+  `awardsComingSoon.tsx` was deleted.
+- `conferences.awards_config` gained `setUp`, `sameForAll` and `perCommittee`
+  (`{ [conference_committee_id]: { types } }`, replacing the shared `types` for that
+  committee). `getAwardsConfig` reports `enabled` only when `setUp === true`: `{}`
+  and every config saved before 11 Oct 2026 read as NOT set up.
+- **The chair gate is `awardsOfferedFor(config, conferenceCommitteeId)`** and nothing
+  else: the chair's `AwardsCard`, and in a session `useChairAwards` /
+  `resolveChairAwards` (`src/lib/sessionAwardsLink.ts`) for the ScoreboardPanel link,
+  the End View card, the top-bar CTA and the session Settings → Awards tab. A failed
+  lookup is "not offered". Read per committee with `configForCommittee`. Never add an
+  award affordance for chairs that does not pass this gate. Published awards are
+  read by status and never gated.
+- **Review and publish** is `settings/awardsReview.tsx` (`AwardsReview` data,
+  `AwardsReviewView` pure view), mounted under the editor in `AwardsSettings` and only
+  once awards are set up: per committee slate state (own `reviewState`, so a late
+  slate is not shown as Published), Approve (`approveSlate`), Return with a required
+  note (`returnSlate`), and one Publish for the conference (`publishAwards`, behind a
+  `ConfirmModal`; approved rows only while `requireApproval`, idempotent, so
+  "Publish new awards" republishes late additions). It sends no email. Details in
+  CLAUDE.md §5.
+- `/manage/[slug]/awards` still redirects to Settings; `AwardsConsole.tsx` stays
+  unrendered (and does not read `perCommittee` yet). The database is unchanged;
+  `scratch-awards-setup.sql` is an unapplied draft that enforces the gate in RLS.
+- The `awards` set-up priority stays out of the dashboard checklist,
+  `conference_setup_status()` and `SETUP_STEPS` (since 7 Sep 2026).
 
 Everything below still describes the feature as built and is still true of the code
 and the database. Read it before touching anything awards-related.
@@ -872,15 +881,16 @@ and the database. Read it before touching anything awards-related.
   deadline and `requireApproval` are `conferences.awards_config` (jsonb; `{}` = defaults).
 - Publishing mints ONE `mun_cv_entries` row per recipient per conference with
   `source = 'gavelling_verified'` (upgrading a self-reported entry for the same conference in
-  place) and a `points_ledger` row of type `earned_award` at paid conferences. It is
+  place; checked 12 Oct 2026: it no longer writes `points_ledger`, its `points_rows` is
+  always 0). It is
   idempotent: already-published rows are never touched, so late additions republish safely.
 
 ### Surfaces
 - Chair: `conferences/[slug]/participant/AwardsCard.tsx` on their conference page, with the
   session scoreboard (`loadConferenceScoreboard(..., [committeeId])`) beside the slots.
-- Secretariat: `manage/[slug]/awards/AwardsConsole.tsx` (review, return with note, edit,
-  delegation standings, publish, certificates CSV) and Settings → Awards
-  (`settings/awardsUi.tsx`). BOTH are currently unrendered, see CURRENT STATE above.
+- Secretariat: Settings → Awards (`settings/awardsUi.tsx` set-up, `settings/awardsReview.tsx`
+  review, return with note, publish). The old desk `manage/[slug]/awards/AwardsConsole.tsx`
+  (edit, delegation standings, certificates CSV) is unrendered, see CURRENT STATE above.
 - Delegate: `participant/MyAwardsCard.tsx`, `/account/cv`, public `/conferences/[slug]/awards`.
 - Session: `ScoreboardPanel` header link and the End View card on the chair page, both
   resolved through `resolveChairAwardsHref(code)` and both conference-only.
@@ -1164,6 +1174,7 @@ and the database. Read it before touching anything awards-related.
 - All other positions → ivory number badge on the flag's inline-end corner
 
 ### Row design (15 Sep 2026)
+- **Long seat names are two rows, never cut (Oct 2026, owner: "when there is a country or especially character with multiple names, it still cuts off ... the multiple line with a smaller font below", flagged in a crisis Consultation of the Whole).** Every delegation / character name in the session runtime renders through `<SeatName>` (`src/components/SeatName.tsx`, rule in `splitSeatName`, `src/lib/seatName.ts`): a name over the surface's `max` characters shows its short form at the surface's size with the full name smaller beneath (`subScale` em), wrapping; a short name renders once, exactly as before. Short form, first hit wins: a country's short name (`COUNTRY_SHORT`, moved from the chair page's old `abbrevCountry`, which showed "UK" in the strip with no full name), an acronym the name states, the part before a comma / bracket / colon / dash, a person without the title else the surname with its particles ("de Gaulle"), the initials of an "X of Y" title ("MFARF"), the first words of a name of 4+ words; anything else wraps whole. Wired into: the roll call rows (this panel), the caucus queue sidebar, `SpeakerStrip` chips, the GSL and caucus floor name (`FloorSeatName`, which eats the h1's margins when split so the floor still fits 1280x800 and 1024x768, measured), `CommenterFloor` (floor and queue), `CowDelegationBoard` tiles and its "Speaking:" line, `CaucusProposer`, `MotionCard` (Raised by), the Suspend / End pass screen, the typed add bars and `RtrCountryInput` rows and "↵" hints, `ProposerInput`, the waiting-room chips, the comment dock cards and capsules (`minHeight` 54 now, not a fixed height), History speech rows, `DelegateProfile`, `ScoreboardTable` (organiser board too) and the Matrix, Settings → People, sponsor notes, the voting carousel, ballot and rights-speaker names, `RightsQueue`, `VotingRollCall` and its observer confirm, `VetoCountryPicker`, `DeviceVotingPanel`, the chat list and thread header (delegations only), the join seat picker and allocated seat, the create roster, and on the delegate phone `QueueRow`, the hero name and the caucus floor line. The delegate phone's queue box and its caucus / Consultation wrappers now scroll (no visible bar) instead of `overflow: hidden`, which clipped the last rows and the bottom of the Consultation board. Presentational only: no state, no writes.
 - **Queue rows are 10% larger (17 Sep 2026, owner: "make their entire field 10% bigger").** Outside slider mode every size in the row is multiplied by `q` (`useQueueRowScale` in `RollCallPanel.tsx`): flag 42 → 46.2 (floor holder 50 → 55), name 17 → 18.7 (19.5 → 21.5), row min-height 54 → 59.4 (64 → 70.4), padding, gap, number / microphone / observer badges, captions, the absent word and the grip. `q` = `QUEUE_ROW_SCALE` 1.1, or `QUEUE_ROW_SCALE_SHORT_SCREEN` 1.155 when FitToScreen's scale is under 0.95 (window under ~780px tall: 1280x720, 1366x768, 1024x768), because FitToScreen already draws everything physically larger on tall screens (x1.32 at 1080p, x1.76 at 1440p) and smaller on short ones. The full-screen roll call and the Roll Call tab keep the sizes below. Measured with 25 delegations: 10 rows fully visible in the 677px list at EVERY size tested (1024x768 to 2560x1440; 11 before); physical row height 55px at 1280x720, 58 at 1280x800, 59 at 1366x768, 62 at 1536x864, 65 at 1440x900, 78 at 1920x1080, 104 at 2560x1440. The numbers below are the 1.0 design sizes.
 - Round flags through `SeatCircleFlag` (crest, flag, then the unknown-user glyph): 42px, 50px for the speaker at #1, 34px in the mid-session Roll Call tab (room for the megaphone toggle at the 288px minimum sidebar width), 54px in the full-screen roll call. Names 17px (19.5px for #1, 15.5px in the Roll Call tab, 21px in the full-screen roll call).
 - **A seat that is not a country and has no crest** (a custom speaker, "European Commission") draws `UnknownSeatIcon` (`src/components/UnknownSeatIcon.tsx`, Lucide `UserRound`), never the blue 🌐 emoji: `SeatCircleFlag`'s default fallback (bare glyph in the disc), `FlagImg` with no code (round badge, which covers every `SeatFlag` without a `fallback`), and every explicit `fallback=` that used 🌐 (chair page, MotionsModal, DocumentsModal, delegate, voting, CowDelegationBoard, the roster add input). Conference-side `CircleFlag` calls keep the monogram.

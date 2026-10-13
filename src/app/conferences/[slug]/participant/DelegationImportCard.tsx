@@ -25,6 +25,7 @@ import {
   BadgeCheck, ClipboardPaste, Mail, Plus, RotateCcw, Undo2, UserCheck, UserX, X,
 } from 'lucide-react';
 import { getFreshAuthedClient } from '@/lib/supabase-auth';
+import GSelect from '@/components/GSelect';
 import { refreshCreditsEverywhere } from '@/hooks/useCredits';
 import { openCreditsPopup } from '@/lib/purchasePopup';
 import { leaderImportsArePaid } from '@/app/manage/[slug]/import/importQuote';
@@ -597,17 +598,14 @@ export default function DelegationImportCard({
                     style={inputStyle(!!err)}
                   />
                   {showRolePicker && (
-                    <select
+                    <GSelect
                       value={r.role}
-                      onChange={e => edit(r.key, 'role', e.target.value)}
+                      onChange={v => edit(r.key, 'role', v)}
                       aria-label={`Person ${i + 1} role`}
                       className={FOCUS}
-                      style={{ ...inputStyle(false), paddingRight: 8, cursor: 'pointer' }}
-                    >
-                      {roleChoices.map(role => (
-                        <option key={role} value={role}>{IMPORT_ROLE_LABEL[role]}</option>
-                      ))}
-                    </select>
+                      style={{ ...inputStyle(false), paddingRight: 8 }}
+                      options={roleChoices.map(role => ({ value: role as string, label: IMPORT_ROLE_LABEL[role] }))}
+                    />
                   )}
                 </div>
                 <button
@@ -665,11 +663,7 @@ export default function DelegationImportCard({
             ? (count === 1 ? 'Import 1 person' : `Import ${count} people`)
             : (count === 1 ? 'Import 1 delegate' : `Import ${count} delegates`)}
         </button>
-        {!paid ? (
-          <p style={{ fontFamily: OUTFIT, fontSize: 13, color: INK_SOFT, margin: 0, maxWidth: 420, lineHeight: 1.45 }}>
-            Free for now. Each delegate uses their own credit when they claim their place, or applies free if the conference sponsors them.
-          </p>
-        ) : count > 0 && !spotsShort && (
+        {paid && count > 0 && !spotsShort && (
           creditsShort ? (
             <p style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 700, color: DANGER, margin: 0 }}>Not enough credits</p>
           ) : (

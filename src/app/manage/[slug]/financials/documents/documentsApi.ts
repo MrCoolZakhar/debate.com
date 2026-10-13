@@ -79,11 +79,18 @@ export interface MoneyPayment {
   name: string;
   delegation: string | null;
   total_cents: number;
+  /** refunded_cents + undone_cents; kept for older readers, never shown. */
   returned_cents: number;
+  /** Refunds and disputes only: money that went back (prompt 107). */
+  refunded_cents?: number;
+  /** Mark unpaid only: a record undone, no money moved. */
+  undone_cents?: number;
   currency: string;
   kinds: string[];
   items: { invoice_id: string; label: string; kind: string; amount_cents: number }[];
   documents: { document_id: string; number: string }[];
+  /** The refunds made against this payment (prompt 109): the keys a refund receipt is made from. */
+  refunds?: { key: string; at: string; amount_cents: number; label: string; method: string | null; document_id: string | null }[];
 }
 
 export async function readPayments(conferenceId: string): Promise<MoneyPayment[]> {
@@ -114,7 +121,7 @@ export function createDocument(conferenceId: string, kind: MoneyDocKind, applica
   return rpcWrite<{ ok: true; document_id: string; number: string }>('create_money_document', {
     p_conference_id: conferenceId, p_kind: kind, p_application_id: applicationId,
     p_payment_keys: paymentKeys, p_invoice_ids: invoiceIds,
-  }, kind === 'receipt' ? 'The receipt could not be made. Try again in a moment.' : 'The invoice could not be made. Try again in a moment.');
+  }, `The ${kind === 'refund' ? 'refund receipt' : kind} could not be made. Try again in a moment.`);
 }
 
 export function updateDocument(documentId: string, editable: Editable, billedTo: BilledTo) {

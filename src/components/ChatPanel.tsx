@@ -26,6 +26,7 @@ import {
   reconcileOutbox, newOutboxId, type OutboxMsg,
 } from '@/lib/chatOutbox';
 import { setViewingChatConversation, clearViewingChatConversation } from '@/lib/chatViewing';
+import { chatOpenKey, claimChatOpen, readChatOpen, releaseChatOpen, writeChatOpen } from '@/lib/chatOpenConversation';
 import { dismissWhere, notifyKey } from '@/lib/sessionNotifications';
 import { useT, useLanguage } from '@/contexts/LanguageContext';
 import ChatConversationList, { type ConvRow } from './chat/ChatConversationList';
@@ -40,15 +41,20 @@ import NewGroupSheet, { type GroupCandidate } from './chat/NewGroupSheet';
 import { CHAT, type ChatThreadEvent } from './chat/chatTokens';
 import type { SessionBroadcast } from '@/lib/committeeService';
 import {
-  withBroadcastMessages, broadcastOnlyMessages, SECRETARIAT_SENDER, SECRETARIAT_READ_KEY, EMPTY_BROADCASTS,
+  withBroadcastMessages, broadcastOnlyMessages, SECRETARIAT_SENDER, SECRETARIAT_READ_KEY, EMPTY_BROADCASTS, broadcastAuthor,
 } from '@/lib/broadcastMessages';
 
 const LOCALES: Record<string, string> = { en: 'en-GB', es: 'es-ES', fr: 'fr-FR', ar: 'ar', pt: 'pt-BR' };
 
 /* Two panes (list + thread) when the PANEL is at least this wide, one pane with a back button
    below it. Measured on the panel itself, not the viewport: the same component lives in a
-   centred dialog on the chair laptop and in a phone-width sheet on the delegate page. */
+   centred dialog on the chair laptop and in a phone-width sheet on the delegate page.
+   Once measured it only flips with a margin (prompt 116): to two panes at 660 or wider, back
+   to one pane under 620, so a scrollbar, the keyboard or a growing composer near 640 can
+   never move the layout while someone types. */
 const WIDE_PX = 640;
+const WIDE_ON_PX = 660;
+const WIDE_OFF_PX = 620;
 
 /** A v4 UUID: it becomes the definition row's primary key (messages.id is uuid). */
 function newGroupId(): string {
@@ -105,9 +111,19 @@ export default function ChatPanel({
   const { language } = useLanguage();
   const locale = LOCALES[language] ?? 'en-GB';
 
-  const [activeConv, setActiveConv] = useState<ChatConvKey>('everyone');
-  const [showThread, setShowThread] = useState(false); // one-pane: false = list, true = thread
-  const [msg, setMsg] = useState('');
+  // The open conversation and its unsent text survive a remount while the chat stays open
+  // (src/lib/chatOpenConversation.ts, prompt 116); closing the chat forgets them.
+  const openId = chatOpenKey(committee.id, secretariatOnly ? `${senderName}|secretariat` : senderName);
+  const [activeConv, setActiveConv] = useState<ChatConvKey>(() => readChatOpen(openId)?.key ?? 'everyone');
+  const [showThread, setShowThread] = useState(() => readChatOpen(openId)?.showThread ?? false); // one-pane: false = list, true = thread
+  const [msg, setMsg] = useState(() => readChatOpen(openId)?.text ?? '');
+  useEffect(() => {
+    claimChatOpen(openId);
+    return () => releaseChatOpen(openId);
+  }, [openId]);
+  useEffect(() => {
+    writeChatOpen(openId, { key: activeConv, showThread, text: msg });
+  }, [openId, activeConv, showThread, msg]);
   // High-water mark captured when the thread was OPENED, so the "New messages" divider
   // survives the markRead that fires immediately on open.
   const [unreadAnchor, setUnreadAnchor] = useState(() => readCounts[secretariatOnly ? SECRETARIAT_READ_KEY : 'everyone'] ?? 0);
@@ -144,7 +160,10 @@ export default function ChatPanel({
     // offsetWidth ignores transforms, so a dialog mid-scale still measures its resting width.
     setWide(el.offsetWidth >= WIDE_PX);
     if (typeof ResizeObserver === 'undefined') return;
-    const ro = new ResizeObserver(() => setWide(el.offsetWidth >= WIDE_PX));
+    const ro = new ResizeObserver(() => {
+      const w = el.offsetWidth;
+      setWide((cur) => (cur === null ? w >= WIDE_PX : cur ? w >= WIDE_OFF_PX : w >= WIDE_ON_PX));
+    });
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
@@ -234,7 +253,22 @@ export default function ChatPanel({
     [fullDirectory, secretariatOnly],
   );
 
-  const activeEntry = directory.find((c) => c.key === activeConv) ?? directory[0];
+  // The chosen conversation stays open even when it misses the directory for a render (a
+  // chair joining with a clashing name, a group row not back yet): it is drawn empty rather
+  // than dropping the reader onto Everyone (prompt 116).
+  const fallbackEntry = useMemo<ChatDirectoryEntry | null>(() => {
+    const key = String(activeConv);
+    if (key === 'everyone' || secretariatOnly) return null;
+    if (isGroupKey(key)) {
+      const g = groups.get(key.slice('group:'.length));
+      return g ? { key, kind: 'group', messages: [], lastAt: null, group: g } : null;
+    }
+    if (key === 'chairs' && !isChair) return { key, kind: 'dais', messages: [], lastAt: null };
+    if (delegations.includes(key)) return { key, kind: 'delegate', messages: [], lastAt: null };
+    if (isChair && (committee.chairNames ?? []).includes(key)) return { key, kind: 'chair', messages: [], lastAt: null };
+    return null;
+  }, [activeConv, secretariatOnly, groups, isChair, delegations, committee.chairNames]);
+  const activeEntry = directory.find((c) => c.key === activeConv) ?? fallbackEntry ?? directory[0];
   const activeKey = activeEntry?.key ?? 'everyone';
   const activeOutbox = useMemo(() => outbox.filter((p) => p.convKey === activeKey), [outbox, activeKey]);
 
@@ -395,11 +429,13 @@ export default function ChatPanel({
   // ── Navigation ────────────────────────────────────────────────────────────
   const selectConv = useCallback((key: ChatConvKey) => {
     setUnreadAnchor(readCounts[readKeyOf(key)] ?? 0);
+    // Picking ANOTHER conversation drops the unsent text of the one being left (prompt 116).
+    if (key !== activeConv) setMsg('');
     setActiveConv(key);
     setShowThread(true);
     const entry = directory.find((c) => c.key === key);
     if (entry) markRead(entry);
-  }, [readCounts, directory, markRead, readKeyOf]);
+  }, [readCounts, directory, markRead, readKeyOf, activeConv]);
 
   // ── Groups ────────────────────────────────────────────────────────────────
   const groupCandidates = useMemo<GroupCandidate[]>(() => {
@@ -427,6 +463,7 @@ export default function ChatPanel({
     setGroupError(false);
     setGroupSheet(false);
     setUnreadAnchor(0);
+    setMsg('');
     setActiveConv(key);
     setShowThread(true);
     markDelegateActivity();
@@ -479,7 +516,8 @@ export default function ChatPanel({
       // Searching the dais for a person by name, not only by delegation.
       search: `${label} ${person} ${String(e.key)}`.toLowerCase(),
       last,
-      lastSenderLabel: !last ? '' : last.sender === senderName ? t('chat_you_prefix') : multi ? senderLabel(last.sender) : '',
+      lastSenderLabel: !last ? '' : last.sender === senderName ? t('chat_you_prefix')
+        : last.broadcast ? broadcastAuthor(last.broadcast, t) : multi ? senderLabel(last.sender) : '',
       lastAt: e.lastAt,
       unread: chatConvUnread({ key: readKeyOf(e.key), messages: e.messages }, readCounts, senderName),
       idleLine: e.kind === 'group' ? t('chat_group_member_count', { n: e.group?.members.length ?? 0 })
@@ -598,7 +636,8 @@ export default function ChatPanel({
             labelForSender={senderLabel}
             unreadAnchor={unreadAnchor}
             onRetry={handleRetry}
-            onBack={onePane && !secretariatOnly ? () => setShowThread(false) : undefined}
+            // Back to the list drops the unsent text too (prompt 116).
+            onBack={onePane && !secretariatOnly ? () => { setShowThread(false); setMsg(''); } : undefined}
             intro={thread.intro}
             events={thread.events}
             onEditGroup={

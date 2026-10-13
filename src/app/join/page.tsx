@@ -49,6 +49,7 @@ import { conferenceAcronymLabel } from '@/lib/conferenceLabels';
 import { useT, useLanguage } from '@/contexts/LanguageContext';
 import SessionLanguageMenu from '@/components/SessionLanguageMenu';
 import { getCountryDisplayName } from '@/lib/countries';
+import SeatName from '@/components/SeatName';
 import { supabase, supabase as anonSupabase } from '@/lib/supabase';
 import { PRESET_LOGOS, deriveCommitteeAcronym, matchPresetEmblem } from '@/lib/presetNames';
 import { CircleFlag } from '@/components/CircleFlag';
@@ -940,7 +941,7 @@ function JoinPageInner() {
                           <div className="min-w-0">
                             <Chip tone="green" icon={<BadgeCheck size={12} strokeWidth={2.6} />}>{returnSeat ? t('join_recommended') : t('join_conf_verified')}</Chip>
                             <p className="mt-1.5 [overflow-wrap:anywhere]" style={{ fontFamily: OUTFIT, fontSize: 18, fontWeight: 800, color: C.ink, letterSpacing: '-0.01em', lineHeight: 1.2 }}>
-                              {getCountryDisplayName(allocatedCountry.name, language)}
+                              <SeatName name={getCountryDisplayName(allocatedCountry.name, language)} max={26} block subScale={0.72} />
                             </p>
                             {conferenceCommittee?.name && (
                               <p className="mt-0.5 [overflow-wrap:anywhere]" style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 700, color: C.forest, lineHeight: 1.3 }}>

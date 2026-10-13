@@ -31,6 +31,7 @@ import VotingTab from '@/components/settings/VotingTab';
 import PointsTab from '@/components/settings/PointsTab';
 import PeopleTab, { type ConfirmRequest } from '@/components/settings/PeopleTab';
 import AwardsTab from '@/components/settings/AwardsTab';
+import { useChairAwards } from '@/lib/sessionAwardsLink';
 
 type Icon = React.ComponentType<{ size?: number; strokeWidth?: number; 'aria-hidden'?: boolean | 'true'; style?: React.CSSProperties }>;
 
@@ -61,6 +62,8 @@ export function SettingsPanel({ committee, onClose, myChairName, isViewOnly = fa
   const s = getSettings(committee.code);
   const headChairName = committee.dbHeadChair || committee.chairNames?.[0] || '';
   const isConference = committee.sessionOrigin === 'conference';
+  // Awards tab only when the conference set awards up for this committee (11 Oct 2026).
+  const awardsOffered = useChairAwards(committee.code, isConference)?.offered === true;
   const rtl = language === 'ar';
   const scrollRef = useRef<HTMLDivElement>(null);
   const tabRefs = useRef<Partial<Record<SettingsTab, HTMLButtonElement | null>>>({});
@@ -155,10 +158,11 @@ export function SettingsPanel({ committee, onClose, myChairName, isViewOnly = fa
       { id: 'points', label: t('settings_tab_points'), title: t('stg_points_title'), desc: t('stg_points_desc'), icon: Star, tone: 'points' },
       { id: 'people', label: t('stg_tab_people'), title: t('stg_people_title'), desc: t('stg_people_desc'), icon: Users, tone: 'people' },
     ];
-    // Awards only exist for a committee run through a conference (PRD rule 8).
-    if (isConference) list.push({ id: 'awards', label: t('stg_tab_awards'), title: t('stg_awards_title'), desc: t('stg_awards_desc'), icon: Award, tone: 'awards' });
+    // Awards only exist for a committee run through a conference (PRD rule 8),
+    // and only once that conference set them up for this committee.
+    if (isConference && awardsOffered) list.push({ id: 'awards', label: t('stg_tab_awards'), title: t('stg_awards_title'), desc: t('stg_awards_desc'), icon: Award, tone: 'awards' });
     return list;
-  }, [t, isConference]);
+  }, [t, isConference, awardsOffered]);
   const active = tabs.find((x) => x.id === tab) ?? tabs[0];
 
   const selectTab = (id: SettingsTab, focus = false) => {
@@ -354,7 +358,7 @@ export function SettingsPanel({ committee, onClose, myChairName, isViewOnly = fa
                 {active.id === 'voting' && <VotingTab {...tabProps} />}
                 {active.id === 'points' && <PointsTab {...tabProps} />}
                 {active.id === 'people' && <PeopleTab {...tabProps} onlineChairs={onlineChairs} requestConfirm={requestConfirm} />}
-                {active.id === 'awards' && isConference && <AwardsTab {...tabProps} requestConfirm={requestConfirm} />}
+                {active.id === 'awards' && isConference && awardsOffered && <AwardsTab {...tabProps} requestConfirm={requestConfirm} />}
               </div>
             </div>
           </div>

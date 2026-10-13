@@ -3,7 +3,7 @@
 import { CircleFlag } from '@/components/CircleFlag';
 import { committeeLanguageFlag } from '@/lib/committeeLanguage';
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Plus, X, Copy, Check, Building2, CalendarClock, Clock, Trash2, ArrowDown, ArrowUp, ArrowUpDown, Send, LayoutGrid, LayoutList, Settings, UserRound, Languages, Radio } from 'lucide-react';
+import { Plus, X, Copy, Check, Building2, CalendarClock, Clock, Trash2, ArrowDown, ArrowUp, ArrowUpDown, Send, LayoutGrid, LayoutList, UserRound, Languages, Radio } from 'lucide-react';
 import { useManage } from '@/app/manage/[slug]/layout';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { useAuth } from '@/components/AuthProvider';
@@ -26,7 +26,7 @@ import { DifficultyTile } from '@/components/DifficultyTile';
 import { DatePicker } from '@/components/DatePicker';
 import { NEU, NEU_GRADIENTS, OUTFIT, NeuButton, NeuCard, NeuInset } from '@/components/neu';
 import { GoldWord } from '@/components/BrandHeading';
-import { BigSectionTabs, type BigSectionTab } from '../BigSectionTabs';
+import { replaceUrlInPlace } from '@/lib/replaceUrlInPlace';
 import ProfileLink from '@/components/ProfileLink';
 import Portal from '@/components/Portal';
 import { ChairCodeChip, loadOpenDaisChairCodes } from './ChairCodeChip';
@@ -90,8 +90,9 @@ interface ChairApplicant {
 // ── Design constants ──────────────────────────────────────────────────────────
 
 const DIFF_ORDER: Record<string, number> = { beginner: 0, intermediate: 1, advanced: 2, expert: 3 };
-// Type sort: GA, Specialised, Custom (parliamentary), Crisis last.
-const TYPE_RANK: Record<string, number> = { 'general-assembly': 0, specialised: 1, custom: 2, crisis: 3 };
+// Type sort: MUN, Custom (parliamentary; legacy 'specialised' rows read as
+// Custom), Crisis last.
+const TYPE_RANK: Record<string, number> = { 'general-assembly': 0, specialised: 2, custom: 2, crisis: 3 };
 
 const ROMAN = ['I', 'II', 'III'];
 
@@ -1146,12 +1147,6 @@ function isInFuture(iso: string): boolean {
   return new Date(iso).getTime() > Date.now();
 }
 
-// The page's two sections as big cards (11 Oct 2026, owner: tabs were "too small").
-const COMMITTEE_TABS: BigSectionTab<'overview' | 'settings'>[] = [
-  { key: 'overview', label: 'Overview', sub: 'Every committee, its chairs and its room', emoji: 'Classical building', lucide: LayoutGrid, tone: 'gold' },
-  { key: 'settings', label: 'Settings', sub: 'When chairs and delegates get their codes', emoji: 'Gear', lucide: Settings, tone: 'green' },
-];
-
 export default function CommitteesPage() {
   const { conference } = useManage();
   const { session } = useAuth();
@@ -1176,7 +1171,9 @@ export default function CommitteesPage() {
   // Chair codes keyed by committee id, present ONLY for an open dais (ChairCodeChip.tsx).
   const [openDaisCodes, setOpenDaisCodes] = useState<Record<string, string>>({});
   const [deleteTarget, setDeleteTarget] = useState<CommitteeRow | null>(null);
-  const [activeTab, setActiveTab] = useState<'overview' | 'settings'>('overview');
+  // No Overview / Settings sections and no settings pop-up (owner, 12 Oct
+  // 2026: session codes go out automatically, so the release settings were
+  // removed). An old `?section=settings` / `?tab=settings` link just opens the page.
   // Cards (default) vs compact list view for the overview grid, remembered locally.
   const [view, setView] = useState<'cards' | 'list'>('cards');
   useEffect(() => {
@@ -2081,9 +2078,9 @@ export default function CommitteesPage() {
   };
 
   return (
-    <div className="px-6 md:px-10 py-8">
+    <div className="px-6 md:px-10 pt-4 pb-8">
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-4">
         <div>
           <p style={{ color: NEU.inkSoft, fontFamily: OUTFIT, fontSize: 13, fontWeight: 700, letterSpacing: '0.06em', marginBottom: 6 }}>
             {conference.acronym} / Committees
@@ -2164,9 +2161,8 @@ export default function CommitteesPage() {
 
       {!loading && committees.length > 0 && (
         <>
-          {/* The two sections as big cards (shared organiser BigSectionTabs). */}
-          <BigSectionTabs tabs={COMMITTEE_TABS} value={activeTab} onChange={setActiveTab} label="Committees sections" />
-          <div className="flex items-center gap-2 mb-6 flex-wrap" style={{ marginTop: -10 }}>
+          {codelessCount > 0 && (
+          <div className="flex items-center gap-2 mb-4 flex-wrap">
 
             {/* One press for every committee that has no room yet. Shown only
                 while at least one is codeless, because the page no longer
@@ -2202,137 +2198,12 @@ export default function CommitteesPage() {
               </button>
             )}
           </div>
-
-          {/* Session release settings — neumorphic, matching Financials'
-              settings tab: NEU surface card, gold uppercase eyebrows,
-              inset wells for the time pickers, inset rows per committee. */}
-          {activeTab === 'settings' && releaseSettingsLoaded && (
-            <NeuCard style={{ padding: '26px 28px', marginBottom: 24 }}>
-              <h2 style={{ margin: 0, fontFamily: OUTFIT, fontWeight: 800, fontSize: 'clamp(26px, 2.6vw, 32px)', letterSpacing: '-0.02em', lineHeight: 1.1, color: NEU.ink }}>
-                Session Release
-              </h2>
-
-              <div className="flex flex-col gap-4 mt-5">
-                <div className="flex items-center justify-between gap-3">
-                  <span style={{ fontFamily: OUTFIT, fontSize: 16, color: NEU.ink, fontWeight: 700 }}>
-                    Chairs and delegates receive session codes at the same time
-                  </span>
-                  <PillToggle value={releaseSameTime} onChange={saveSameTime} />
-                </div>
-                <div className="flex items-center justify-between gap-3">
-                  <span style={{ fontFamily: OUTFIT, fontSize: 16, color: NEU.ink, fontWeight: 700 }}>
-                    Release all committee sessions at once
-                  </span>
-                  <PillToggle value={releaseAllAtOnce} onChange={saveAllAtOnce} />
-                </div>
-              </div>
-
-              <div className="mt-6 pt-6" style={{ borderTop: '1px solid rgba(27,56,40,0.08)' }}>
-                {releaseAllAtOnce ? (
-                  releaseSameTime ? (
-                    <div>
-                      <label style={labelStyle}>Release sessions at</label>
-                      <ReleaseTimePicker
-                        value={committees[0]?.released_to_chairs_at ?? null}
-                        onSave={iso => saveReleaseTimestamp(['released_to_chairs_at', 'released_to_delegates_at'], committees, iso)}
-                        placeholder={`Defaults to ${fmtConferenceStart(conference.start_date)}`}
-                      />
-                    </div>
-                  ) : (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <div>
-                        <label style={labelStyle}>Release to chairs at</label>
-                        <ReleaseTimePicker
-                          value={committees[0]?.released_to_chairs_at ?? null}
-                          onSave={iso => saveReleaseTimestamp(['released_to_chairs_at'], committees, iso)}
-                          placeholder={`Defaults to ${fmtConferenceStart(conference.start_date)}`}
-                        />
-                      </div>
-                      <div>
-                        <label style={labelStyle}>Release to delegates at</label>
-                        <ReleaseTimePicker
-                          value={committees[0]?.released_to_delegates_at ?? null}
-                          onSave={iso => saveReleaseTimestamp(['released_to_delegates_at'], committees, iso)}
-                          placeholder={`Defaults to ${fmtConferenceStart(conference.start_date)}`}
-                        />
-                      </div>
-                    </div>
-                  )
-                ) : (
-                  <div className="flex flex-col gap-2.5">
-                    {committees.map(c => (
-                      <div
-                        key={c.id}
-                        className="flex items-center gap-3 flex-wrap rounded-xl px-4 py-3"
-                        style={{ backgroundColor: NEU.base, boxShadow: NEU.inSm }}
-                      >
-                        <span className="[overflow-wrap:anywhere]" title={c.name} style={{ width: 150, flexShrink: 0, fontFamily: OUTFIT, fontSize: 13.5, fontWeight: 800, color: NEU.ink }}>
-                          {c.abbreviation || c.name}
-                        </span>
-                        {releaseSameTime ? (
-                          <div style={{ flex: 1, minWidth: 220 }}>
-                            <ReleaseTimePicker
-                              value={c.released_to_chairs_at}
-                              onSave={iso => saveReleaseTimestamp(['released_to_chairs_at', 'released_to_delegates_at'], [c], iso)}
-                              placeholder={`Defaults to ${fmtConferenceStart(conference.start_date)}`}
-                            />
-                          </div>
-                        ) : (
-                          <>
-                            <div style={{ flex: 1, minWidth: 200 }}>
-                              <ReleaseTimePicker
-                                value={c.released_to_chairs_at}
-                                onSave={iso => saveReleaseTimestamp(['released_to_chairs_at'], [c], iso)}
-                                placeholder={`Chairs, defaults to ${fmtConferenceStart(conference.start_date)}`}
-                              />
-                            </div>
-                            <div style={{ flex: 1, minWidth: 200 }}>
-                              <ReleaseTimePicker
-                                value={c.released_to_delegates_at}
-                                onSave={iso => saveReleaseTimestamp(['released_to_delegates_at'], [c], iso)}
-                                placeholder={`Delegates, defaults to ${fmtConferenceStart(conference.start_date)}`}
-                              />
-                            </div>
-                          </>
-                        )}
-                        <CompactSendButton
-                          releasedAt={c.released_to_delegates_at}
-                          busy={sendingToParticipants === c.id}
-                          onSend={() => handleSendToParticipants(c)}
-                        />
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              <div className="mt-6 pt-6" style={{ borderTop: '1px solid rgba(27,56,40,0.08)' }}>
-                <label style={labelStyle}>Observer and advisor access</label>
-                <ReleaseTimePicker
-                  value={releaseAdvisorsAt}
-                  onSave={saveAdvisorsAt}
-                  placeholder={`Defaults to ${fmtConferenceStart(conference.start_date)}`}
-                />
-              </div>
-
-              <div className="mt-6 pt-6" style={{ borderTop: '1px solid rgba(27,56,40,0.08)' }}>
-                <NeuButton
-                  icon={Send}
-                  gradient={NEU_GRADIENTS.forest}
-                  disabled={sendingAllToParticipants}
-                  onClick={handleSendAllToParticipants}
-                >
-                  {sendingAllToParticipants ? 'Sending…' : 'Send all to participants'}
-                </NeuButton>
-              </div>
-            </NeuCard>
           )}
 
-          {activeTab === 'overview' && (
-          <>
-          {/* Sort bar + cards/list view toggle */}
+          {/* Sort bar + Settings + cards/list view toggle */}
           <div className="flex items-center justify-between gap-3 flex-wrap mb-5">
-            {committees.length > 1 ? (
+            <div className="flex items-center gap-2.5 flex-wrap">
+            {committees.length > 1 && (
               <div
                 className="inline-flex flex-wrap items-center gap-1.5 rounded-full px-2 py-1.5"
                 style={{
@@ -2345,9 +2216,10 @@ export default function CommitteesPage() {
               >
                 <SortButton label="Difficulty" dir={sortKey === 'difficulty' ? sortDir : null} onClick={() => cycleSort('difficulty')} />
                 <SortButton label="Name" dir={sortKey === 'name' ? sortDir : null} onClick={() => cycleSort('name')} />
-                <SortButton label="GA / Crisis" dir={sortKey === 'type' ? sortDir : null} onClick={() => cycleSort('type')} />
+                <SortButton label="MUN / Crisis" dir={sortKey === 'type' ? sortDir : null} onClick={() => cycleSort('type')} />
               </div>
-            ) : <span />}
+            )}
+            </div>
             <ViewToggle value={view} onChange={changeView} />
           </div>
 
@@ -2838,8 +2710,6 @@ export default function CommitteesPage() {
               );
             })}
           </div>
-          )}
-          </>
           )}
         </>
       )}

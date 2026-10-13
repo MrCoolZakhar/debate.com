@@ -22,7 +22,7 @@ import {
 import { fetchPendingChairInvites, pendingInviteName } from '@/lib/chairInvites';
 import {
   BroadcastComposer, RecentBroadcasts, broadcastTargets, groupBroadcasts,
-  mapBroadcastRow, deleteBroadcastGroup, BROADCAST_COLUMNS,
+  mapBroadcastRow, deleteBroadcastGroup,
   type BroadcastRow, type BroadcastGroup,
 } from './BroadcastComposer';
 import { CommitteeCard, GridFootnote } from './CommitteeCard';
@@ -536,11 +536,14 @@ export default function LiveStatusPage() {
     if (!authed) return;
     const { data } = await authed
       .from('session_broadcasts')
-      .select(BROADCAST_COLUMNS)
+      // '*' rather than BROADCAST_COLUMNS: press releases (source 'press', scratch-press.sql)
+      // share the table and are not the organisers' sends, so they are left out of this list.
+      // The column may not exist yet; a row without it is the organisers'.
+      .select('*')
       .eq('conference_id', conference.id)
       .order('created_at', { ascending: false })
       .limit(120);
-    setBroadcasts(((data ?? []) as Record<string, unknown>[]).map(mapBroadcastRow));
+    setBroadcasts(((data ?? []) as Record<string, unknown>[]).filter((r) => r.source !== 'press').map(mapBroadcastRow));
   }, [conference?.id, authUserId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Initial load + 10s polling (kept simple + robust for N committees, no per-committee channels).

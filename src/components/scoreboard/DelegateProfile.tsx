@@ -46,6 +46,7 @@ import { NEU, OUTFIT } from '@/components/neu';
 import { SOFT, RED, CARD_BORDER_COLOR } from '@/components/scoreboardTokens';
 import { SeatCircleFlag } from '@/components/CircleFlag';
 import { getCountryDisplayName } from '@/lib/countries';
+import SeatName from '@/components/SeatName';
 import { formatSpeakingTime, type ScoreboardDelegateRow } from '@/lib/conferenceScoreboard';
 import { manualAuthorKey, type PointSlice } from '@/lib/sessionScoreboard';
 import { speechKey, type HistorySpeech, type HistoryNote } from '@/lib/sessionHistory';
@@ -183,9 +184,13 @@ export default function DelegateProfile({ row, rank, rankTotal, slices, speeches
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', rowGap: 6 }}>
         <SeatCircleFlag country={row.country} size={34} decorative />
         <span style={{ flex: '1 1 140px', minWidth: 0 }}>
-          <span style={{ display: 'block', fontFamily: OUTFIT, fontWeight: 800, fontSize: 15.5, color: NEU.ink, lineHeight: 1.2, overflowWrap: 'anywhere' }}>
-            {getCountryDisplayName(row.country, language)}
-          </span>
+          <SeatName
+            name={getCountryDisplayName(row.country, language)}
+            max={24}
+            block
+            style={{ display: 'block', fontFamily: OUTFIT, fontWeight: 800, fontSize: 15.5, color: NEU.ink, lineHeight: 1.2 }}
+            subScale={0.74}
+          />
           {(row.isObserver || row.status === 'absent') && (
             <span style={{ display: 'block', fontFamily: OUTFIT, fontSize: 11, color: SOFT }}>
               {row.isObserver ? t('sb_observer') : t('sb_absent')}

@@ -17,6 +17,8 @@ import { type FormBlock } from '@/lib/customQuestions';
 import { SectionCardSkeleton } from '@/components/Skeleton';
 import { SectionCard, OUTFIT, CARD_SHADOW, getGateState, roleLabel, statusPriority } from './shared';
 import { RejectedCard, WithdrawnCard } from './PayGate';
+import { useConferencePaymentsReady } from './PaymentsLocked';
+import PressDeskEntry from './PressDeskEntry';
 import { DashboardShell, DashCard, OutlineLink, Pane, StatusRow, NextStepCard, NextStepReportProvider, useNextStepSlot, appStatusMark, type DashSection, type NextStep } from './dashboardKit';
 import PaymentPane from './PaymentPane';
 import DelegateParticipant from './DelegateParticipant';
@@ -96,6 +98,9 @@ function roleSections(app: ParticipantApplication): DashSection[] {
   }
 }
 
+// Roles that can hold the Press Desk: a press seat (delegate), a press chair, an observer.
+const PRESS_DESK_ROLES = new Set(['delegate', 'head-delegate', 'chair', 'observer']);
+
 // Roles whose own dashboard reports its next step (useReportNextStep): the
 // delegate (seat, room, paper) and the chair (the room, loaded inside).
 const ROLES_WITH_OWN_STEP = new Set(['delegate', 'head-delegate', 'chair']);
@@ -110,8 +115,10 @@ function pageNextStep(o: {
   locked: boolean;
   payNow: boolean;
   roleStep: NextStep | null;
+  /** False while the conference has not set up payments: Pay now is drawn locked. */
+  paymentsReady?: boolean | null;
 }): NextStep | null {
-  const pay = { label: 'Pay now', href: `/conferences/${o.conferenceSlug}/pay` };
+  const pay = { label: 'Pay now', href: `/conferences/${o.conferenceSlug}/pay`, lockedSlug: o.paymentsReady === false ? o.conferenceSlug : undefined };
   if (o.locked) {
     return { kind: 'action', line: `Pay your registration fee to open your ${o.conferenceName} dashboard.`, action: pay };
   }
@@ -190,12 +197,17 @@ export interface ParticipantViewProps {
    *  owns `myApplications`, so it patches that row to 'withdrawn' in place
    *  rather than this view refetching the whole conference. */
   onApplicationWithdrawn?: (applicationId: string) => void;
+  /** > 0 asks this view to open "Ask the Organisers" (the Apply card's
+   *  Contact the organisers, for a conference with no contact email). */
+  openSupportRequest?: number;
+  /** Called once the request above was taken, so it fires once. */
+  onSupportRequestHandled?: () => void;
 }
 
 export default function ParticipantView({
   conferenceId, conferenceSlug, conferenceStartDate, conferenceName, myApplications, roleConfigs, myAllocation, committees, allocationSwapMode, isOrganizer = false,
   initialRole, onResolveRole, onSelectRole, participantDataLoading, justClaimedCount,
-  onApplicationWithdrawn,
+  onApplicationWithdrawn, openSupportRequest = 0, onSupportRequestHandled,
 }: ParticipantViewProps) {
   const { user, session } = useAuth();
   const holdsInitialRole = !!initialRole && myApplications.some(a => a.role === initialRole);
@@ -214,8 +226,24 @@ export default function ParticipantView({
   // so switching role opens the other one on Overview.
   const [section, setSection] = useState<{ appId: string; key: string }>({ appId: '', key: 'overview' });
 
+  // "Contact the organisers" on a conference with no contact email: open the
+  // Ask the Organisers section of the application on screen and bring it
+  // into view. The scroll waits a beat so the parent's own tab-switch scroll
+  // correction (which runs after this effect) does not undo it.
+  useEffect(() => {
+    if (!openSupportRequest || myApplications.length === 0) return;
+    const app = (holdsInitialRole ? myApplications.find(a => a.role === initialRole) : null) ?? pickDefault(myApplications);
+    setSection({ appId: app.id, key: 'support' });
+    onSupportRequestHandled?.();
+    window.setTimeout(() => {
+      document.getElementById('ask-organisers')?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+    }, 120);
+  }, [openSupportRequest, myApplications, holdsInitialRole, initialRole, onSupportRequestHandled]);
+
   // The role dashboard's own next step (delegate, chair), reported upward.
   const [roleStep, reportRoleStep] = useNextStepSlot();
+  // Paying waits until the conference sets up how it gets paid (prompt 108); applying never does.
+  const paymentsReady = useConferencePaymentsReady(conferenceId);
 
   // Conference-wide documents (Documents → For everyone). Read only when one
   // of this person's applications here is accepted, assigned or checked in.
@@ -389,6 +417,7 @@ export default function ParticipantView({
     payNow,
     // A role step only counts while that role's dashboard is on the page.
     roleStep: gateOpen ? roleStep : null,
+    paymentsReady,
   });
   const paymentPane = (
     <Pane show={activeSection === 'payment'} title="Payment" icon={CreditCard}>
@@ -513,7 +542,7 @@ export default function ParticipantView({
               conferenceSlug={conferenceSlug}
               role={selected.role}
               organizerNote={selected.organizer_note}
-              allowResubmission={roleConfig?.allow_resubmission ?? false}
+              allowResubmission={(roleConfig?.allow_resubmission ?? false) && (selected.rejection_count ?? 0) < 3}
             />
           )}
           <RequestsPanel conferenceId={conferenceId} applicationId={selected.id} myApplications={myApplications} activeRole={selected.role} />
@@ -565,6 +594,13 @@ export default function ParticipantView({
             <NextStepReportProvider value={reportRoleStep}>
               {gateOpen ? roleContent : null}
             </NextStepReportProvider>
+
+            {/* Press Desk (12 Oct 2026): only for the press of this conference (a press
+                committee's seat holders and chairs) and accepted observers; the card asks
+                the database and draws nothing for anyone else, or while the SQL is pending. */}
+            {gateOpen && PRESS_DESK_ROLES.has(selected.role) && (
+              <PressDeskEntry conferenceId={conferenceId} conferenceSlug={conferenceSlug} show={activeSection === 'overview'} />
+            )}
 
             {/* Conference Documents: the Rules of Procedure, logistics and the
                 rest the organisers shared with everyone accepted. In the
@@ -644,7 +680,7 @@ export default function ParticipantView({
             )}
 
             {/* Questions & requests, never gated. */}
-            <Pane show={activeSection === 'support'} title="Ask the Organisers" icon={MessageCircle}>
+            <Pane show={activeSection === 'support'} title="Ask the Organisers" icon={MessageCircle} anchor="ask-organisers">
               <RequestsPanel conferenceId={conferenceId} applicationId={selected.id} myApplications={myApplications} activeRole={selected.role} />
             </Pane>
           </div>

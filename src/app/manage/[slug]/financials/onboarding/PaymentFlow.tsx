@@ -8,30 +8,40 @@
 //   4 Registration fee              (welcome only, skippable)
 //   5 Add-ons                       (welcome only, skippable)
 //   Done                            (welcome only)
+// Since prompt 106 the welcome flow opened at step 1 starts on an intro card
+// ("Welcome to Financials", not counted as a step), and Done is a real success
+// screen with a summary of what was set up. The intro, Done and the
+// platform-collects screen are sized to their content.
 // The Payment Method pop-up is the same flow opened at step 2 with the
 // current method chosen and its details filled in; it ends after step 3.
 // Card OR one manual kind, never both: switching asks first and is one call.
+// Since prompt 114: a fifth way, In-person payment (its instructions are
+// required, payers can finish without a proof), and in the Payment Method
+// pop-up a quiet "Set up later" under the cards while a way is in use: it asks
+// first, then nothing is in use and every saved detail stays for later.
 // Each step saves on Continue, so closing halfway keeps what was saved.
 
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import {
-  ArrowLeft, Building2, Check, CircleCheck, CreditCard, ImageUp, Link2, QrCode, X,
+  ArrowLeft, Building2, Check, CircleCheck, CreditCard, Gift, HandCoins, ImageUp, Link2, QrCode, ReceiptText, Wallet, X,
 } from 'lucide-react';
 import type { Conference } from '@/app/manage/[slug]/layout';
 import { PurchaseShell, PURCHASE_CSS } from '@/components/purchase/purchaseKit';
 import { FlagImg } from '@/components/FlagImg';
+import GSelect from '@/components/GSelect';
 import { UN_COUNTRIES, getCountryByName } from '@/lib/countries';
 import { isStripeCountrySupported } from '@/lib/payments';
 import { SUPABASE_URL } from '@/lib/supabase';
 import { notifyOk } from '@/lib/appNotify';
 import { STORE_CSS } from '../../store/storeKit';
-import { DASH_CSS, READ_ONLY_LINE } from '../dashboardKit';
+import { DASH_CSS, READ_ONLY_LINE, paymentMethodWords } from '../dashboardKit';
+import { cents, readDashboard, type FinancialsDashboard } from '../financialsApi';
 import ApplicationFeeSection from '../ApplicationFeeSection';
 import AddonsSection from '../AddonsSection';
 import StripeState from './StripeState';
 import {
-  METHOD_NAME, currentMethod, setPaymentSetup, uploadPaymentQr, sessionSet, welcomeMarkerKey,
+  METHOD_NAME, currentMethod, setPaymentSetup, setUpLater, uploadPaymentQr, sessionSet, welcomeMarkerKey,
   connectStart, type BankDetails, type MethodKey,
 } from './paymentApi';
 
@@ -55,11 +65,29 @@ export const FLOW_CSS = `
 .gv-pf-input{width:100%;height:50px;padding:0 14px;border-radius:12px;border:1.5px solid rgba(27,56,40,0.28);background:#FFFFFF;color:#1C1410;font-family:inherit;font-size:15.5px}
 .gv-pf-input:focus{outline:none;border-color:#1B3828;box-shadow:0 0 0 3px rgba(27,56,40,0.12)}
 .gv-pf-input[aria-invalid="true"]{border-color:#8B2020}
-.gv-pf-select{appearance:auto;cursor:pointer}
+.gv-pf-select{cursor:pointer;flex:1 1 auto;min-width:0}
 .gv-pf-grid{display:grid;grid-template-columns:minmax(0,1fr);gap:14px}
 @media (min-width:640px){.gv-pf-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 .gv-pf-qr{width:180px;height:180px;border-radius:14px;background:#FFFFFF;object-fit:contain;box-shadow:inset 0 0 0 1.5px rgba(27,56,40,0.12)}
-.gv-pf-done{display:flex;flex-direction:column;align-items:flex-start;gap:14px;padding:16px 0 8px}
+.gv-pf-done{display:flex;flex-direction:column;align-items:center;text-align:center;gap:14px;padding:12px 0 4px}
+/* The success screen (prompt 106): a check that pops in with a burst of gold and forest */
+.gv-pf-win{position:relative;width:72px;height:72px;margin:6px 0 4px}
+.gv-pf-win-disc{position:relative;z-index:1;width:72px;height:72px;border-radius:999px;display:inline-flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#1B3828 0%,#2A5A3C 100%);color:#EED98A;box-shadow:0 14px 30px -14px rgba(27,56,40,0.6);animation:gvPfPop 520ms cubic-bezier(0.2,1.4,0.4,1) both}
+.gv-pf-bit{position:absolute;left:50%;top:50%;width:8px;height:8px;margin:-4px 0 0 -4px;border-radius:2px;opacity:0;animation:gvPfBurst 900ms ease-out 180ms both}
+@keyframes gvPfPop{0%{transform:scale(0.3);opacity:0}70%{transform:scale(1.12);opacity:1}100%{transform:scale(1)}}
+@keyframes gvPfBurst{0%{opacity:1;transform:rotate(var(--a)) translateY(0) scale(1)}100%{opacity:0;transform:rotate(var(--a)) translateY(-64px) scale(0.6)}}
+@media (prefers-reduced-motion:reduce){.gv-pf-win-disc{animation:none}.gv-pf-bit{display:none}}
+.gv-pf-win-title{margin:0;font-size:32px;font-weight:900;letter-spacing:-0.02em;line-height:1.1;color:#1C1410}
+.gv-pf-sum{width:100%;max-width:420px;display:flex;flex-direction:column;border-radius:16px;background:#FFFFFF;padding:4px 16px;text-align:left}
+.gv-pf-sum-row{display:flex;align-items:center;gap:12px;padding:12px 0}
+.gv-pf-sum-row + .gv-pf-sum-row{border-top:1px solid rgba(27,56,40,0.12)}
+.gv-pf-sum-icon{width:36px;height:36px;border-radius:10px;display:inline-flex;align-items:center;justify-content:center;background:rgba(238,217,138,0.45);color:#1B3828;flex-shrink:0}
+.gv-pf-sum-row b{display:block;font-size:15px;color:#1C1410}
+.gv-pf-sum-row small{display:block;font-size:13px;color:#5A5046}
+.gv-pf-intro{display:flex;flex-direction:column;gap:0;margin:-30px -28px -26px;overflow:hidden}
+.gv-pf-intro-photo{height:170px;background:#E4DCCA}
+.gv-pf-intro-photo img{width:100%;height:100%;object-fit:cover;display:block}
+.gv-pf-intro-body{padding:26px 28px 28px;display:flex;flex-direction:column;align-items:flex-start;gap:12px}
 `;
 
 type Step = 1 | 2 | 3 | 4 | 5 | 6;
@@ -74,7 +102,11 @@ const METHOD_CARDS: { key: MethodKey; title: string; desc: string; icon: React.R
     desc: 'Show a QR code payers scan with their banking app (for example UPI). You confirm payments by reviewing the proofs payers upload.' },
   { key: 'bank', title: 'Bank transfer', icon: <Building2 size={24} strokeWidth={2.2} />,
     desc: 'Show your bank details with copy buttons. You confirm payments by reviewing the proofs payers upload.' },
+  { key: 'in_person', title: 'In-person payment', icon: <HandCoins size={24} strokeWidth={2.2} />,
+    desc: 'Payers pay you in person, for example in cash at registration. They see your instructions and can finish without a proof. You confirm each payment yourself.' },
 ];
+
+const IN_PERSON_NOTE_NEEDED = 'Add the instructions for paying in person, for example where and when to pay.';
 
 const qrUrl = (path: string) => `${SUPABASE_URL}/storage/v1/object/public/conference-assets/${path.split('/').map(encodeURIComponent).join('/')}`;
 
@@ -90,6 +122,10 @@ export default function PaymentFlow({ conference, mode, startStep, readOnly, onC
 }) {
   const current = currentMethod(conference);
   const [step, setStep] = useState<Step>(startStep ?? (mode === 'payment' ? 2 : 1));
+  // The intro card before step 1 (prompt 106): only the welcome flow opened from the start.
+  const [intro, setIntro] = useState(mode === 'welcome' && startStep === undefined && !conference.platform_collects);
+  // The success screen's summary, read fresh when Done is reached.
+  const [summary, setSummary] = useState<FinancialsDashboard['settings'] | null>(null);
   const [country, setCountry] = useState(conference.payout_country || getCountryByName(conference.country)?.code || '');
   const [method, setMethod] = useState<MethodKey | null>(current);
   const [url, setUrl] = useState(conference.external_payment_url ?? '');
@@ -106,6 +142,15 @@ export default function PaymentFlow({ conference, mode, startStep, readOnly, onC
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
   const [askSwitch, setAskSwitch] = useState(false);
+  const [askLater, setAskLater] = useState(false);
+
+  // What was set up, for the success screen. A failed read only leaves the summary out.
+  useEffect(() => {
+    if (step !== 6) return;
+    let alive = true;
+    readDashboard(conference.id).then(d => { if (alive) setSummary(d.settings); }).catch(() => {});
+    return () => { alive = false; };
+  }, [step, conference.id]);
   const busyRef = useRef(false);
   const qrInput = useRef<HTMLInputElement | null>(null);
 
@@ -138,6 +183,7 @@ export default function PaymentFlow({ conference, mode, startStep, readOnly, onC
       const sw = bank.swift.trim().toUpperCase();
       if (sw && !/^[A-Z0-9]{8}([A-Z0-9]{3})?$/.test(sw)) e.swift = 'A SWIFT or BIC code has 8 or 11 letters and numbers.';
     }
+    if (method === 'in_person' && !note.trim()) e.note = IN_PERSON_NOTE_NEEDED;
     if (note.trim().length > NOTE_MAX) e.note = 'Keep the instructions under 500 characters.';
     return e;
   };
@@ -195,6 +241,16 @@ export default function PaymentFlow({ conference, mode, startStep, readOnly, onC
     if (await save()) afterSave();
   });
 
+  // "Set up later" (prompt 114): one call, then nothing is in use; the details stay.
+  const later = () => busyRun(async () => {
+    const r = await setUpLater(conference.id);
+    if (!r.ok) { setErr(r.error); return; }
+    setAskLater(false);
+    notifyOk('Payments set up later', 'financials');
+    onChanged();
+    onClose();
+  });
+
   const pickQr = (f: File | null) => {
     setErrs(e => ({ ...e, qr: undefined }));
     if (!f) return;
@@ -206,10 +262,12 @@ export default function PaymentFlow({ conference, mode, startStep, readOnly, onC
 
   const fieldErr = (k: keyof FieldErrs) => errs[k] ? <p className="gv-st-err" role="alert">{errs[k]}</p> : null;
 
+  const inPerson = method === 'in_person';
   const notesField = (
     <div>
-      <label className="gv-fd-label" htmlFor="gv-pf-note">Instructions for payers (optional)</label>
-      <textarea id="gv-pf-note" className="gv-fd-text" maxLength={NOTE_MAX} value={note} disabled={readOnly}
+      <label className="gv-fd-label" htmlFor="gv-pf-note">{inPerson ? 'Instructions for payment' : 'Instructions for payers (optional)'}</label>
+      <textarea id="gv-pf-note" className="gv-fd-text" maxLength={NOTE_MAX} value={note} disabled={readOnly} required={inPerson}
+        placeholder={inPerson ? 'For example: Pay in cash at the registration desk on day one' : undefined}
         onChange={e => { setNote(e.target.value); setErrs(x => ({ ...x, note: undefined })); }} aria-invalid={!!errs.note} />
       <p className="gv-fd-count">{note.length} / {NOTE_MAX}</p>
       {fieldErr('note')}
@@ -239,11 +297,10 @@ export default function PaymentFlow({ conference, mode, startStep, readOnly, onC
         <label className="gv-fd-label" htmlFor="gv-pf-country">Country</label>
         <div className="flex items-center gap-3">
           {country && <FlagImg code={country} size={24} />}
-          <select id="gv-pf-country" className="gv-pf-input gv-pf-select" value={country} disabled={readOnly} aria-invalid={!!errs.country}
-            onChange={e => { setCountry(e.target.value); setErrs(x => ({ ...x, country: undefined })); }}>
-            <option value="">Choose a country</option>
-            {countries.map(c => <option key={c.code} value={c.code}>{c.name}</option>)}
-          </select>
+          <GSelect id="gv-pf-country" className="gv-pf-input gv-pf-select" value={country} disabled={readOnly} invalid={!!errs.country}
+            onChange={v => { setCountry(v); setErrs(x => ({ ...x, country: undefined })); }}
+            placeholder="Choose a country" searchPlaceholder="Search countries"
+            options={countries.map(c => ({ value: c.code, label: c.name }))} />
         </div>
         {fieldErr('country')}
         <p className="gv-fd-note" style={{ marginTop: 10 }}>This decides which ways to pay you can offer</p>
@@ -258,7 +315,7 @@ export default function PaymentFlow({ conference, mode, startStep, readOnly, onC
         <div className="gv-pf-cards" role="radiogroup" aria-label="How people pay you">
           {cards.map(m => (
             <button key={m.key} type="button" role="radio" aria-checked={method === m.key} className="gv-pf-card"
-              onClick={() => { setMethod(m.key); setErrs({}); setAskSwitch(false); }}>
+              onClick={() => { setMethod(m.key); setErrs({}); setAskSwitch(false); setAskLater(false); }}>
               {method === m.key && <span className="gv-pf-tick" aria-hidden><Check size={15} strokeWidth={3} /></span>}
               <span className="gv-pf-icon" aria-hidden>{m.icon}</span>
               <p className="gv-pf-title">{m.title}</p>
@@ -275,6 +332,11 @@ export default function PaymentFlow({ conference, mode, startStep, readOnly, onC
           <button type="button" className="gv-st-link" onClick={() => setStep(1)}>Change</button>
         </p>
         {fieldErr('method')}{fieldErr('manual_kind')}
+        {mode === 'payment' && current && !readOnly && !askLater && (
+          <p className="gv-fd-note" style={{ marginTop: 14 }}>
+            <button type="button" className="gv-st-link" onClick={() => { setErr(''); setAskLater(true); }}>Set up later</button>
+          </p>
+        )}
       </div>
     );
     primary = { label: 'Continue', disabled: !method || (method === 'card' && !cardOk), onClick: () => { if (method) setStep(3); } };
@@ -338,6 +400,10 @@ export default function PaymentFlow({ conference, mode, startStep, readOnly, onC
         </div>
       );
       primary = { label: 'Save', onClick: () => { void continueStep3(); } };
+    } else if (method === 'in_person') {
+      title = 'In-Person Payment';
+      body = <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>{notesField}</div>;
+      primary = { label: 'Save', onClick: () => { void continueStep3(); } };
     } else if (method === 'bank') {
       title = 'Bank Transfer';
       body = (
@@ -368,7 +434,7 @@ export default function PaymentFlow({ conference, mode, startStep, readOnly, onC
     title = 'Add-ons';
     body = (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-        <p className="gv-fd-note" style={{ fontSize: 15 }}>Extras payers can add, like a gala ticket or a T-shirt</p>
+        <p className="gv-fd-note" style={{ fontSize: 15 }}>Extras payers can add, like a socials ticket or a T-shirt</p>
         <AddonsSection conference={conference} bare />
       </div>
     );
@@ -377,6 +443,7 @@ export default function PaymentFlow({ conference, mode, startStep, readOnly, onC
   }
 
   const showBack = step > 1 && step < 6;
+  const fitted = intro || step === 6 || !!conference.platform_collects;
 
   return (
     <>
@@ -384,20 +451,48 @@ export default function PaymentFlow({ conference, mode, startStep, readOnly, onC
       <style>{DASH_CSS}</style>
       <style>{FLOW_CSS}</style>
       <style>{PURCHASE_CSS}</style>
-      <PurchaseShell tone="light" label={mode === 'welcome' ? 'Welcome to Financials' : 'Payment method'} onClose={onClose} panelClass="gv-fd-wide" testId="financials-payment-flow">
+      <PurchaseShell tone="light" label={mode === 'welcome' ? 'Welcome to Financials' : 'Payment method'} onClose={onClose} panelClass={fitted ? 'gv-fd-mid gv-fd-fit' : 'gv-fd-wide gv-fd-fit'} testId="financials-payment-flow">
         <div className="gv-fd-pop gv-st">
           {conference.platform_collects ? (
             <div className="gv-pf-done">
-              <span className="gv-fd-clear-disc" aria-hidden><CircleCheck size={24} strokeWidth={2.2} /></span>
-              <h2 className="gv-fd-pop-title">Gavelling Collects Payments for You</h2>
+              <span className="gv-pf-win"><span className="gv-pf-win-disc" aria-hidden><CircleCheck size={34} strokeWidth={2.2} /></span></span>
+              <h2 className="gv-pf-win-title">Gavelling Collects Payments for You</h2>
               <p className="gv-fd-note" style={{ fontSize: 15 }}>Payers pay by card and there is nothing to set up</p>
               <button type="button" className="gv-st-btn gv-st-forest" onClick={onClose}>Close</button>
             </div>
+          ) : intro ? (
+            <div className="gv-pf-intro">
+              <div className="gv-pf-intro-photo">
+                {/* The photo of the Welcome card on the Financials page. */}
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src="/landing/organiser-desk.jpg" alt="" aria-hidden />
+              </div>
+              <div className="gv-pf-intro-body">
+                <h2 className="gv-fd-pop-title">Welcome to Financials</h2>
+                <p className="gv-fd-note" style={{ fontSize: 15.5, lineHeight: 1.55 }}>
+                  Set up how you get paid, your registration fee and any extras in a few short steps. Payments then land straight in your account and every receipt is made for you.
+                </p>
+                <button type="button" className="gv-st-btn gv-st-forest" style={{ marginTop: 6 }} onClick={() => setIntro(false)} autoFocus>Let&apos;s get started</button>
+              </div>
+            </div>
           ) : step === 6 ? (
             <div className="gv-pf-done">
-              <span className="gv-fd-clear-disc" aria-hidden><CircleCheck size={24} strokeWidth={2.2} /></span>
-              <h2 className="gv-fd-pop-title">You&apos;re Ready to Take Payments</h2>
-              <button type="button" className="gv-st-btn gv-st-forest" onClick={onClose}>Go to Financials</button>
+              <span className="gv-pf-win" aria-hidden>
+                {BURST.map((b, i) => (
+                  <span key={i} className="gv-pf-bit" style={{ ['--a' as string]: `${b.a}deg`, background: b.c, animationDelay: `${180 + (i % 3) * 40}ms` } as React.CSSProperties} />
+                ))}
+                <span className="gv-pf-win-disc"><Check size={36} strokeWidth={3} /></span>
+              </span>
+              <h2 className="gv-pf-win-title">You&apos;re Ready to Take Payments</h2>
+              {summary && (
+                <div className="gv-pf-sum">
+                  <SummaryRow icon={<Wallet size={18} strokeWidth={2.2} />} title={summaryMethod(summary)} />
+                  <SummaryRow icon={<ReceiptText size={18} strokeWidth={2.2} />} title={summaryFee(summary)} />
+                  <SummaryRow icon={<Gift size={18} strokeWidth={2.2} />}
+                    title={summary.addons_active > 0 ? `${summary.addons_active} add-on${summary.addons_active === 1 ? '' : 's'}` : 'No add-ons'} />
+                </div>
+              )}
+              <button type="button" className="gv-st-btn gv-st-forest" style={{ marginTop: 4 }} onClick={onClose}>Go to Financials</button>
               <Link href={`/manage/${conference.slug}/settings?tab=applications`} className="gv-st-link" onClick={onClose}>Set fees for each role</Link>
             </div>
           ) : (
@@ -419,6 +514,17 @@ export default function PaymentFlow({ conference, mode, startStep, readOnly, onC
                   </div>
                 </div>
               )}
+              {askLater && step === 2 && (
+                <div className="gv-fd-warn" role="alertdialog" aria-label="Set up payments later">
+                  <p style={{ margin: '0 0 12px' }}>Set up payments later? Nobody can pay until you choose how people pay you. What you added is kept for when you come back</p>
+                  <div className="flex items-center gap-3 flex-wrap">
+                    <button type="button" className="gv-st-btn gv-st-forest" disabled={busy} onClick={() => { void later(); }} autoFocus>
+                      {busy ? 'Saving' : 'Set up later'}
+                    </button>
+                    <button type="button" className="gv-st-btn gv-st-outline" disabled={busy} onClick={() => setAskLater(false)}>Go back</button>
+                  </div>
+                </div>
+              )}
               {err && <p className="gv-st-err" role="alert">{err}</p>}
               <div className="gv-fd-footbar">
                 {showBack && (
@@ -426,7 +532,7 @@ export default function PaymentFlow({ conference, mode, startStep, readOnly, onC
                     <ArrowLeft size={16} strokeWidth={2.4} aria-hidden /> Back
                   </button>
                 )}
-                {primary && !askSwitch && (
+                {primary && !askSwitch && !(askLater && step === 2) && (
                   <button type="button" className="gv-st-btn gv-st-forest" disabled={readOnly || busy || primary.disabled} onClick={primary.onClick}>
                     {busy ? 'Saving' : primary.label}
                   </button>
@@ -444,4 +550,33 @@ export default function PaymentFlow({ conference, mode, startStep, readOnly, onC
       </PurchaseShell>
     </>
   );
+}
+
+// ── The success screen's bits ──────────────────────────────────────────────
+
+/** Twelve flecks of gold and forest, spread round the check. */
+const BURST = Array.from({ length: 12 }, (_, i) => ({ a: i * 30, c: i % 2 ? '#EED98A' : '#2A5A3C' }));
+
+function SummaryRow({ icon, title }: { icon: React.ReactNode; title: string }) {
+  return (
+    <div className="gv-pf-sum-row">
+      <span className="gv-pf-sum-icon" aria-hidden>{icon}</span>
+      <b>{title}</b>
+    </div>
+  );
+}
+
+/** How people pay, in the Payment method card's words. */
+function summaryMethod(s: FinancialsDashboard['settings']): string {
+  if (s.platform_collects || s.payment_method === 'stripe') return 'Card payments (Stripe)';
+  if (s.payment_method === 'manual') return paymentMethodWords(s).fact;
+  return 'Not set up yet';
+}
+
+function summaryFee(s: FinancialsDashboard['settings']): string {
+  const f = s.registration_fee;
+  if (!f || !f.active) return 'No registration fee';
+  // applies_to is 'per_delegation' / 'per_delegate' on the row ('delegation' / 'delegate' in older reads).
+  const perDelegate = !!f.applies_to && /delegate$/.test(f.applies_to);
+  return `${cents(f.amount_cents, f.currency)} registration fee ${perDelegate ? 'per delegate' : 'per delegation'}`;
 }

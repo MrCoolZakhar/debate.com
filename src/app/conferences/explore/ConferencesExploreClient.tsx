@@ -47,7 +47,7 @@ import { getCountryByName, getCountryByCode, UN_COUNTRIES, fold, countryIdentity
 import { conferenceAcronymLabel } from '@/lib/conferenceLabels';
 import { CircleFlag } from '@/components/CircleFlag';
 import { fetchDelegatePrices, withDelegatePrice } from '@/lib/publicFees';
-import { compareStartDate, hasConcluded } from '@/lib/conferenceDates';
+import { compareStartDate, hasConcluded, hasNoDates } from '@/lib/conferenceDates';
 import { ConferenceCard, ConferenceCardSkeleton } from '../ConferenceCard';
 import { GoldWord } from '@/components/BrandHeading';
 import {
@@ -301,7 +301,7 @@ export default function ConferencesExploreClient() {
       setLoading(true);
       const { data } = await supabase
         .from('conferences')
-        .select('id, slug, full_name, acronym, country, city, start_date, end_date, expected_delegates, fee_amount, fee_currency, format, student_level, logo_url, banner_url, is_public, is_verified, organizer_id, is_demo')
+        .select('id, slug, full_name, acronym, country, city, start_date, end_date, dates_tbd, expected_delegates, fee_amount, fee_currency, format, student_level, logo_url, banner_url, is_public, is_verified, organizer_id, is_demo')
         .eq('is_public', true)
         .order('start_date', { ascending: true });
       // Test and demo conferences are never listed (src/lib/publicConferences.ts).
@@ -627,12 +627,23 @@ export default function ConferencesExploreClient() {
   const spotlightRows = useMemo(() => (spotTarget && regionSpots.key === spotTarget ? regionSpots.rows : []), [spotTarget, regionSpots]);
 
   const sorted = useMemo(() => {
-    const copy = [...filtered];
-    // Undated (TBD) conferences sort last in BOTH directions, and a null
-    // start_date must never reach .localeCompare — see compareStartDate.
+    // Dated conferences only: those whose dates are to be decided have their
+    // own section at the very bottom (`undated`), never a month group, the
+    // date order or a spotlight slot. A null start_date must never reach
+    // .localeCompare — see compareStartDate.
+    const copy = filtered.filter(c => !hasNoDates(c));
     copy.sort((a, b) => compareStartDate(a.start_date, b.start_date, dateSort === 'asc' ? 'asc' : 'desc'));
     return copy;
   }, [filtered, dateSort]);
+  // "Dates to Be Decided" (owner, 12 Oct 2026): public conferences with no
+  // dates yet, after every dated one, by name. Every filter applies to them
+  // (place, format, level, roles, price, sponsored); When drops them, because
+  // matchesDateBucket / matchesDateRange never match a missing start date.
+  const undated = useMemo(
+    () => filtered.filter(hasNoDates).sort((a, b) =>
+      (a.acronym || a.full_name || '').localeCompare(b.acronym || b.full_name || '', undefined, { sensitivity: 'base' })),
+    [filtered],
+  );
 
   // The spotlight conferences (27 Sep 2026): first the Country / Region
   // Spotlight of the place in force, then the Explore Spotlight bookings.
@@ -642,7 +653,9 @@ export default function ConferencesExploreClient() {
   // grid and stay in their date place in the list. (The Explore row is never
   // REPLACED by the Country row: both are read and merged here.)
   const spotItems = useMemo<SpotlightItem[]>(() => {
-    const inFilter = new Map(filtered.map(c => [c.id, c]));
+    // A spotlight needs dates (the database refuses to book one without), so
+    // an undated conference is never looked up here.
+    const inFilter = new Map(filtered.filter(c => !hasNoDates(c)).map(c => [c.id, c]));
     const out: SpotlightItem[] = [];
     const seen = new Set<string>();
     const push = (r: FeaturedRow, conf: Conference | undefined) => {
@@ -695,13 +708,13 @@ export default function ConferencesExploreClient() {
     if (!countryFilterActive) return [];
     const shown = new Set(sorted.map(c => c.id));
     return conferences
-      .filter(c => !shown.has(c.id) && !hasConcluded(c) && (c.expected_delegates ?? 0) >= BIG_CONFERENCE_DELEGATES)
+      .filter(c => !shown.has(c.id) && !hasConcluded(c) && !hasNoDates(c) && (c.expected_delegates ?? 0) >= BIG_CONFERENCE_DELEGATES)
       .sort((a, b) => compareStartDate(a.start_date, b.start_date, 'asc'))
       .slice(0, BIG_CONFERENCE_LIMIT);
   }, [conferences, sorted, countryFilterActive]);
   // Only when the filter is genuinely narrowing: never under the full directory.
   const showBigElsewhere =
-    !loading && countryFilterActive && bigElsewhere.length > 0 && sorted.length < upcomingCount;
+    !loading && countryFilterActive && bigElsewhere.length > 0 && sorted.length + undated.length < upcomingCount;
 
   function clearFilters() {
     setFormatFilter('');
@@ -1008,7 +1021,7 @@ export default function ConferencesExploreClient() {
                   {Array.from({ length: 10 }).map((_, i) => <ConferenceCardSkeleton key={i} variant="listing" />)}
                 </div>
               )
-            ) : displayed.length === 0 && spotItems.length === 0 ? (
+            ) : displayed.length === 0 && spotItems.length === 0 && undated.length === 0 ? (
               // Empty: one line and one button.
               <div className="flex flex-col items-center justify-center text-center" style={{ padding: 'clamp(40px, 7vw, 88px) 0', gap: 16 }}>
                 {countryMode && !searchQuery && !formatFilter && !levelFilter ? (
@@ -1062,6 +1075,41 @@ export default function ConferencesExploreClient() {
                   </section>
                 ))}
               </div>
+            )}
+
+            {/* Dates to Be Decided: public conferences with no dates yet, after
+                every dated one, as the same cards (grid) or rows (list). */}
+            {!loading && undated.length > 0 && (
+              <section aria-label="Dates to Be Decided" style={{ marginTop: displayed.length + spotItems.length > 0 ? sectionGap : 0 }}>
+                {view === 'grid' ? (
+                  <>
+                    <div className="flex items-baseline flex-wrap" style={{ columnGap: 12, rowGap: 4, marginBottom: 16 }}>
+                      <h2 style={{ fontWeight: 800, fontSize: 'clamp(22px, 2.2vw, 30px)', color: INK, margin: 0, letterSpacing: '-0.012em' }}>
+                        Dates to Be Decided
+                      </h2>
+                      <p style={{ fontWeight: 500, fontSize: 14, color: '#6B5F52', margin: 0 }}>
+                        <span style={{ fontWeight: 800, color: INK, fontVariantNumeric: 'tabular-nums' }}>{undated.length}</span>{' '}
+                        {undated.length === 1 ? 'conference' : 'conferences'}
+                      </p>
+                    </div>
+                    <div className={GRID} style={GRID_GAP}>
+                      {undated.map(conf => cardFor(conf))}
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <MonthHeader label="Dates to Be Decided" count={undated.length} />
+                    <FeedRows
+                      items={undated}
+                      facets={facets}
+                      facetsLoaded={facetsLoaded}
+                      sponsoredIds={sponsoredIds}
+                      appliedIds={appliedIds}
+                      isMember={isMember}
+                    />
+                  </>
+                )}
+              </section>
             )}
 
             {/* Country tab: a quiet way back to the whole directory */}

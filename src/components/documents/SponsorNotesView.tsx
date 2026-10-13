@@ -30,6 +30,7 @@ import { ArrowLeft, ChevronLeft, ChevronRight, Info } from 'lucide-react';
 import { useT, useLanguage } from '@/contexts/LanguageContext';
 import { SeatCircleFlag } from '@/components/CircleFlag';
 import { getCountryDisplayName } from '@/lib/countries';
+import SeatName from '@/components/SeatName';
 import type { Committee, CommitteeDocument } from '@/lib/types';
 import { insertDocumentNote, loadDocumentNotes, updateDocumentNote, type DocumentNote } from '@/lib/documentNotes';
 
@@ -280,7 +281,7 @@ export default function SponsorNotesView({ committee, doc, chairName, readOnly, 
                   <SeatCircleFlag country={country} size={30} decorative />
                   {/* The delegation's name is never cut: it wraps instead. */}
                   <label htmlFor={fieldId} className="flex-1 min-w-0 text-[15px] font-semibold leading-tight pt-[5px] [overflow-wrap:anywhere]" style={{ color: '#1C1410' }}>
-                    {label}
+                    <SeatName name={label} max={22} block subScale={0.78} />
                   </label>
                   <SaveState status={m?.status ?? 'idle'} onRetry={() => { dirty.current.add(country); void save(country); }} />
                 </div>

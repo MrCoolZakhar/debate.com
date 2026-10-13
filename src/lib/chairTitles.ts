@@ -28,7 +28,7 @@ export function chairTitleLabel(v: unknown): string | null {
   return CHAIR_TITLES.find(t => t.key === v)?.label ?? null;
 }
 
-/** Options for a <select>: "No title" first, then every title. */
+/** Options for the title dropdown (GSelect): "No title" first, then every title. */
 export const CHAIR_TITLE_OPTIONS: { value: '' | ChairTitle; label: string }[] = [
   { value: '', label: 'No title' },
   ...CHAIR_TITLES.map(t => ({ value: t.key, label: t.label })),

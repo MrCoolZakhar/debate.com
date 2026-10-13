@@ -1,17 +1,20 @@
 // paymentApi.ts — how a conference is paid (prompt 94).
 //
 // set_payment_setup is the ONE write for the payment method: card (Stripe) or
-// ONE manual kind (a link, a QR code, bank details). Setting one keeps the
+// ONE manual kind (a link, a QR code, bank details, or in person since prompt
+// 114, which needs its instructions). Setting one keeps the
 // other's details dormant, so switching back is one call. connect-onboard is
 // unchanged: 'start' answers a Stripe onboarding url, 'status' the account's
 // state. Every refusal is a sentence for people, with the field it is about.
+// setUpLater (prompt 114) is p_method 'later': nothing in use, every detail
+// kept dormant for when the organizer comes back.
 
 import { getFreshAuthedClient } from '@/lib/supabase-auth';
 import { friendlyError, plainOrFallback } from '@/lib/friendlyError';
 import { extractFunctionErrorMessage } from '@/lib/payments';
 import type { Conference } from '@/app/manage/[slug]/layout';
 
-export type MethodKey = 'card' | 'link' | 'qr' | 'bank';
+export type MethodKey = 'card' | 'link' | 'qr' | 'bank' | 'in_person';
 export type BankDetails = { account_name: string; account_number: string; swift: string; bank_name: string; reference: string };
 
 export type SetupResult = { ok: true; ready: boolean; connectStatus?: string } | { ok: false; error: string; field?: string };
@@ -28,6 +31,7 @@ export const METHOD_NAME: Record<MethodKey, string> = {
   link: 'a payment link',
   qr: 'a payment QR code',
   bank: 'bank transfer',
+  in_person: 'in-person payment',
 };
 
 export async function setPaymentSetup(args: {
@@ -60,6 +64,25 @@ export async function setPaymentSetup(args: {
       return { ok: false, error: plainOrFallback(a?.error, fallback), field: typeof a?.field === 'string' ? a.field : undefined };
     }
     return { ok: true, ready: a.ready === true, connectStatus: typeof a.connect_status === 'string' ? a.connect_status : undefined };
+  } catch (e) {
+    return { ok: false, error: friendlyError(e, fallback) };
+  }
+}
+
+/** "Set up later" (prompt 114): no way to pay is in use; the link, QR, bank details and instructions are kept. */
+export async function setUpLater(conferenceId: string): Promise<SetupResult> {
+  const fallback = 'Your payment set-up could not be saved. Try again in a moment.';
+  try {
+    const c = await getFreshAuthedClient();
+    if (!c) return { ok: false, error: 'Your session has expired. Please sign in again.' };
+    const { data, error } = await c.rpc('set_payment_setup', {
+      p_conference_id: conferenceId, p_payout_country: null, p_method: 'later', p_manual_kind: null,
+      p_url: null, p_note: null, p_qr_path: null, p_bank: null,
+    });
+    if (error) return { ok: false, error: friendlyError(error, fallback) };
+    const a = (data ?? null) as Record<string, unknown> | null;
+    if (!a || a.ok !== true) return { ok: false, error: plainOrFallback(a?.error, fallback) };
+    return { ok: true, ready: false };
   } catch (e) {
     return { ok: false, error: friendlyError(e, fallback) };
   }

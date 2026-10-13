@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { formatConferenceDates } from '@/lib/conferenceDates';
+import { formatConferenceDates, hasNoDates } from '@/lib/conferenceDates';
 import type { ListedConference } from '@/lib/listedConferences';
 import type { CountryHub } from '@/lib/countryHubs';
 import { conferenceTitle } from '../in/ConferenceLinkList';
@@ -21,7 +21,40 @@ const LINK: React.CSSProperties = {
   color: FOREST, fontWeight: 700, textDecoration: 'underline', textUnderlineOffset: 3,
 };
 
+/** One plain link: short name big, full name beneath, place and (when known) dates. */
+function DirectoryItem({ c, withDates }: { c: ListedConference; withDates: boolean }) {
+  const dates = withDates ? formatConferenceDates(c.start_date, c.end_date, { style: 'dmy-end-year' }) : '';
+  const place = c.format === 'online' ? 'Online' : [c.city, c.country].filter(Boolean).join(', ');
+  const title = conferenceTitle(c);
+  return (
+    <li style={{ breakInside: 'avoid', padding: '7px 8px' }}>
+      <Link href={`/conferences/${c.slug}`} className="gv-explore-dir-link focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] rounded" style={{ textDecoration: 'none', display: 'block' }}>
+        <span className="block [overflow-wrap:anywhere]" style={{ fontWeight: 800, fontSize: 15, color: INK, lineHeight: 1.3 }}>
+          {title}
+        </span>
+        {c.full_name && c.full_name !== title && (
+          <span className="block [overflow-wrap:anywhere]" style={{ fontSize: 12.5, color: INK_SOFT, lineHeight: 1.35 }}>{c.full_name}</span>
+        )}
+        {(place || dates) && (
+          <span className="block" style={{ fontSize: 12.5, color: INK_SOFT, lineHeight: 1.4, marginTop: 2, fontVariantNumeric: 'tabular-nums' }}>
+            {[place, dates].filter(Boolean).join(' · ')}
+          </span>
+        )}
+      </Link>
+    </li>
+  );
+}
+
+const LIST_CARD: React.CSSProperties = {
+  listStyle: 'none', margin: 0, padding: 'clamp(14px, 1.6vw, 22px)', borderRadius: 22, backgroundColor: '#FFFFFF',
+  boxShadow: '0 1px 2px rgba(27,56,40,0.06), 0 10px 26px rgba(27,56,40,0.08)',
+};
+
 export default function ExploreDirectory({ conferences, hubs }: { conferences: ListedConference[]; hubs: CountryHub[] }) {
+  // Dated conferences soonest first; public conferences whose dates are to be
+  // decided in their own short block after them, never with a made-up date.
+  const dated = conferences.filter(c => !hasNoDates(c));
+  const undated = conferences.filter(hasNoDates);
   return (
     <section
       aria-labelledby="gv-explore-directory"
@@ -32,39 +65,24 @@ export default function ExploreDirectory({ conferences, hubs }: { conferences: L
         All Upcoming Conferences
       </h2>
       <p style={{ margin: '6px 0 16px', fontSize: 14.5, lineHeight: 1.55, color: INK_SOFT, maxWidth: 640 }}>
-        {conferences.length > 0
-          ? `${conferences.length} Model UN conferences you can apply to on Gavelling, soonest first.`
+        {dated.length > 0
+          ? `${dated.length} Model UN conferences you can apply to on Gavelling, soonest first.`
           : 'Model UN conferences you can apply to on Gavelling.'}
       </p>
-      {conferences.length > 0 && (
-        <ul
-          className="gv-explore-dir"
-          style={{
-            listStyle: 'none', margin: 0, padding: 'clamp(14px, 1.6vw, 22px)', borderRadius: 22, backgroundColor: '#FFFFFF',
-            boxShadow: '0 1px 2px rgba(27,56,40,0.06), 0 10px 26px rgba(27,56,40,0.08)',
-          }}
-        >
-          {conferences.map(c => {
-            const dates = c.dates_tbd ? 'Dates to be announced' : formatConferenceDates(c.start_date, c.end_date, { style: 'dmy-end-year' });
-            const place = c.format === 'online' ? 'Online' : [c.city, c.country].filter(Boolean).join(', ');
-            const title = conferenceTitle(c);
-            return (
-              <li key={c.id} style={{ breakInside: 'avoid', padding: '7px 8px' }}>
-                <Link href={`/conferences/${c.slug}`} className="gv-explore-dir-link focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] rounded" style={{ textDecoration: 'none', display: 'block' }}>
-                  <span className="block [overflow-wrap:anywhere]" style={{ fontWeight: 800, fontSize: 15, color: INK, lineHeight: 1.3 }}>
-                    {title}
-                  </span>
-                  {c.full_name && c.full_name !== title && (
-                    <span className="block [overflow-wrap:anywhere]" style={{ fontSize: 12.5, color: INK_SOFT, lineHeight: 1.35 }}>{c.full_name}</span>
-                  )}
-                  <span className="block" style={{ fontSize: 12.5, color: INK_SOFT, lineHeight: 1.4, marginTop: 2, fontVariantNumeric: 'tabular-nums' }}>
-                    {[place, dates].filter(Boolean).join(' · ')}
-                  </span>
-                </Link>
-              </li>
-            );
-          })}
+      {dated.length > 0 && (
+        <ul className="gv-explore-dir" style={LIST_CARD}>
+          {dated.map(c => <DirectoryItem key={c.id} c={c} withDates />)}
         </ul>
+      )}
+      {undated.length > 0 && (
+        <>
+          <h3 style={{ margin: '22px 0 10px', fontWeight: 800, fontSize: 'clamp(18px, 1.7vw, 22px)', letterSpacing: '-0.01em', color: INK }}>
+            Dates to Be Decided
+          </h3>
+          <ul className="gv-explore-dir" style={LIST_CARD}>
+            {undated.map(c => <DirectoryItem key={c.id} c={c} withDates={false} />)}
+          </ul>
+        </>
       )}
       <p style={{ margin: '18px 0 0', fontSize: 14.5, lineHeight: 1.9, color: INK_SOFT }}>
         {hubs.length > 0 && (

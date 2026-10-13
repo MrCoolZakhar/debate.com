@@ -32,6 +32,7 @@ import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { ModalOverlay } from '@/components/ModalOverlay';
 import { LogoDisc } from '@/components/LogoDisc';
+import GSelect from '@/components/GSelect';
 import { NEU, NeuCard, OUTFIT, EASE } from '@/components/neu';
 import { SOFT, RED, AMBER_INK, GREEN_INK, CARD_BORDER_COLOR } from '@/app/manage/[slug]/live/tokens';
 import { committeeDisplayName } from '@/lib/presetNames';
@@ -831,20 +832,17 @@ export default function AwardsPage() {
                                 {slot.label}{slot.perCommittee > 1 ? ` ${i + 1}` : ''}
                               </span>
                             </div>
-                            <select
+                            <GSelect
                               value={d.allocationId}
-                              onChange={(e) => setDraft((prev) => ({ ...prev, [key]: { ...d, allocationId: e.target.value } }))}
+                              onChange={(v) => setDraft((prev) => ({ ...prev, [key]: { ...d, allocationId: v } }))}
                               aria-label={`${slot.label} recipient`}
-                              className="focus:outline-none"
                               style={{ fontFamily: OUTFIT, fontSize: 12.5, color: NEU.ink, backgroundColor: NEU.surface, border: `1px solid ${CARD_BORDER_COLOR}`, borderRadius: 10, padding: '7px 10px', width: '100%' }}
-                            >
-                              <option value="">Nobody</option>
-                              {committeeAllocs.map((a) => (
-                                <option key={a.id} value={a.id}>
-                                  {a.country_name ?? a.country_code ?? 'Seat'}{allocationDisplayName(a) ? ` (${allocationDisplayName(a)})` : ' (unclaimed)'}
-                                </option>
-                              ))}
-                            </select>
+                              options={[{ value: '', label: 'Nobody' }, ...committeeAllocs.map((a) => ({
+                                value: a.id,
+                                label: a.country_name ?? a.country_code ?? 'Seat',
+                                hint: allocationDisplayName(a) || 'Unclaimed',
+                              }))]}
+                            />
                             <input
                               value={d.rationale}
                               onChange={(e) => setDraft((prev) => ({ ...prev, [key]: { ...d, rationale: e.target.value } }))}

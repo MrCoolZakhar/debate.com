@@ -5,6 +5,7 @@ import { Committee } from '@/lib/types';
 import { useCommitteeStore } from '@/lib/store';
 import { useT, useLanguage } from '@/contexts/LanguageContext';
 import { getCountryDisplayName } from '@/lib/countries';
+import GSelect from '@/components/GSelect';
 
 function formatTime(seconds: number): string {
   const m = Math.floor(seconds / 60);
@@ -101,16 +102,14 @@ export default function CaucusPanel({ committee }: { committee: Committee }) {
           )}
 
           <div className="flex gap-2">
-            <select
+            <GSelect
+              aria-label={t('caucus_add_placeholder')}
               value={selectedSpeaker}
-              onChange={(e) => setSelectedSpeaker(e.target.value)}
-              className="flex-1 bg-[#1B3828] border border-[#3D7A52]/30 rounded-lg px-3 py-2 text-[#1C1410] text-sm focus:outline-none focus:border-[#3D7A52]"
-            >
-              <option value="">{t('caucus_add_placeholder')}</option>
-              {committee.delegates.filter((d) => d.status !== 'absent').map((d) => (
-                <option key={d.id} value={d.country}>{getCountryDisplayName(d.country, language)}</option>
-              ))}
-            </select>
+              onChange={setSelectedSpeaker}
+              placeholder={t('caucus_add_placeholder')}
+              style={{ flex: 1 }}
+              options={committee.delegates.filter((d) => d.status !== 'absent').map((d) => ({ value: d.country, label: getCountryDisplayName(d.country, language) }))}
+            />
             <button
               onClick={() => { if (selectedSpeaker) { nextCaucusSpeaker(committee.id, selectedSpeaker); setSelectedSpeaker(''); } }}
               disabled={!selectedSpeaker}

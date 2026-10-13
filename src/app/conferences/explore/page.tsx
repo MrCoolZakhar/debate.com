@@ -5,6 +5,7 @@ import { absoluteUrl, pageMetadata, SITE_URL } from '@/lib/seo';
 import { exploreOgImageUrl } from '@/lib/ogVersion';
 import { fetchListedConferences, isUpcoming, type ListedConference } from '@/lib/listedConferences';
 import { countryHubs } from '@/lib/countryHubs';
+import { hasNoDates } from '@/lib/conferenceDates';
 import ConferencesExploreClient from './ConferencesExploreClient';
 import ExploreDirectory from './ExploreDirectory';
 import SiteFooter from '@/components/SiteFooter';
@@ -114,8 +115,9 @@ function ld(obj: object): string {
 
 export default async function ConferencesExplorePage() {
   const { upcoming, hubs } = await load();
-  // Events need a start date (Google's minimum for the type).
-  const dated = upcoming.filter(c => !c.dates_tbd && !!c.start_date);
+  // Events need a start date (Google's minimum for the type): public
+  // conferences whose dates are to be decided are never an Event.
+  const dated = upcoming.filter(c => !hasNoDates(c));
   const collection = {
     '@context': 'https://schema.org',
     '@type': 'CollectionPage',

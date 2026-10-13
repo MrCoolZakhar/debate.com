@@ -6,6 +6,8 @@
  *   Payments   financials_payments, filterable, ticked, then "Generate receipt"
  *              (one person at a time) → create_money_document → the editor
  *   Documents  financials_documents, each opening the editor
+ * A payment with refunds offers "Generate refund receipt" (prompt 109):
+ * create_money_document('refund', application, refund keys) → the editor.
  * The first visit opens "Your Invoice Details" (get / save_invoice_settings);
  * the "Invoice details" button reopens it. ?doc=<id> opens that document.
  * Invoices for open items are made from the Invoices page's person pop-up.
@@ -17,6 +19,7 @@ import { FileText, Settings2 } from 'lucide-react';
 import { useManage } from '@/app/manage/[slug]/layout';
 import { PURCHASE_CSS } from '@/components/purchase/purchaseKit';
 import { friendlyError } from '@/lib/friendlyError';
+import { notifyErr } from '@/lib/appNotify';
 import { STORE_CSS } from '../../store/storeKit';
 import { DASH_CSS, READ_ONLY_LINE } from '../dashboardKit';
 import { INV_CSS, PAGE_SIZE } from '../invoices/PeopleList';
@@ -60,6 +63,7 @@ export default function InvoicesAndReceiptsPage() {
   const [editor, setEditor] = useState<{ id: string; name: string | null } | null>(null);
   const [busy, setBusy] = useState(false);
   const [createErr, setCreateErr] = useState('');
+  const [refundBusy, setRefundBusy] = useState<string | null>(null);
   const busyRef = useRef(false);
   const autoOpened = useRef(false);
   const docParamDone = useRef(false);
@@ -152,6 +156,23 @@ export default function InvoicesAndReceiptsPage() {
     reload();
   };
 
+  // A refund receipt for every refund of one payment (prompt 109).
+  const generateRefund = async (p: MoneyPayment) => {
+    const keys = (p.refunds ?? []).map(r => r.key);
+    if (busyRef.current || keys.length === 0) return;
+    if (!ready) { setDetailsOpen(true); return; }
+    busyRef.current = true; setRefundBusy(p.key); setError('');
+    const r = await createDocument(conference.id, 'refund', p.application_id, keys, null);
+    busyRef.current = false; setRefundBusy(null);
+    if (!r.ok) {
+      if (r.code === 'no_settings') { setDetailsOpen(true); return; }
+      notifyErr(r.error, 'financials');
+      return;
+    }
+    setEditor({ id: r.data.document_id, name: p.name });
+    reload();
+  };
+
   const loading = !settings || !payments || !docs;
 
   return (
@@ -211,7 +232,9 @@ export default function InvoicesAndReceiptsPage() {
                   <div className="gv-inv-list">
                     {page.map(p => (
                       <PaymentLine key={p.key} p={p} selected={selected.has(p.key)} canTick={!financialsReadOnly}
-                        onToggle={() => toggle(p.key)} onOpenDoc={id => setEditor({ id, name: p.name })} />
+                        onToggle={() => toggle(p.key)} onOpenDoc={id => setEditor({ id, name: p.name })}
+                        onRefundReceipt={financialsReadOnly ? undefined : () => { void generateRefund(p); }}
+                        refundBusy={refundBusy === p.key} />
                     ))}
                   </div>
                 )}

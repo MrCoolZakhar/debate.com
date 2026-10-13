@@ -235,7 +235,7 @@ export default function MymunAlternative() {
           <li>Separate invoices, payments and payment-batch records with transaction, ledger and history views: an actual ledger, not a paid/unpaid flag.</li>
           <li><strong>Manual payment-proof review.</strong> A delegate uploads a bank transfer receipt; an organiser opens it through a short-lived signed URL and approves or rejects it. Only 44 countries have Stripe Connect, so for a large share of the world this is not a nice-to-have.</li>
           <li>Phased fees, per-role fees, percentage and flat vouchers, an application fee, arbitrary add-ons, and financial aid with partial grants surfaced in the review modal where the accept/reject decision is actually made.</li>
-          <li>A hard readiness gate: applications cannot open and the conference cannot publish until delegates have somewhere to pay, including the free-conference case.</li>
+          <li>Applications and payments set up apart: open applications and publish whenever you are ready, and paying unlocks the moment you choose how you get paid.</li>
         </ul>
 
         <H3>Sessions that survive the day</H3>

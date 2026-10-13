@@ -6,44 +6,58 @@
  * to more of them, which i think should be general applications settings -
  * paying, who gets in and what do they rank").
  *
- * One section among equals now (settingsShell.tsx), in four cards:
+ * One section among equals now (settingsShell.tsx), in three cards and two
+ * columns from 1000px of section width (owner, 12 Oct 2026): Who Can Apply on
+ * the left, What They Rank with Accepting and Paying under it on the right,
+ * stacked in that order below. There is no section heading of its own (the
+ * applications count was dropped the same day); an sr-only h2 stays.
+ *
  *
  *   Who Can Apply    one row per listed role (price, window, number applied,
  *                    Edit, its own switch) and "Add a role" with copy-from.
  *                    Head delegates and Delegates are listed by default
  *                    (panelKit.listedRoles / roleIsSetUp).
- *   Who Gets In      accept everyone straight away, let turned-down people
- *                    try again: one answer for every listed role but the
- *                    secretariat (panelKit.inGeneralScope).
- *   Paying           when people can pay, the dashboard lock: one answer for
- *                    every listed role with a price; hidden when no listed role
- *                    charges anything (Owner Decisions: payment settings that
- *                    do not apply are hidden).
- *   What They Rank   preference_mode for delegates and head delegates, drawn
- *                    as four small previews of what the applicant will see.
+ *   Accepting and Paying
+ *                    accept everyone straight away (every listed role but the
+ *                    secretariat, panelKit.inGeneralScope) and, when a listed
+ *                    role charges anything, pay only after you accept them
+ *                    (every listed role with a price; Owner Decisions: payment
+ *                    settings that do not apply are hidden). Two switches side
+ *                    by side, each right beside its words. "Let turned-down
+ *                    people try again", "Hide their dashboard until they pay"
+ *                    and the "Most you will accept" pointer were removed on
+ *                    12 Oct 2026, and the per-role cap left the role pop-up
+ *                    the same day.
+ *   What They Rank   preference_mode for delegates and head delegates, a
+ *                    vertical list: each choice a row with a preview of what
+ *                    the applicant will see, its name and one line.
  *
  * When the roles disagree, the control says so ("Different per role", a gold
  * edge and a switch with its thumb in the middle) and one press uses one
- * answer for every role. A role can still differ: its pop-up keeps these
- * fields under "Different rules for this role".
+ * answer for every role. These are the only place the rules are set: the
+ * role pop-up no longer has per-role overrides (owner, 12 Oct 2026: "remove
+ * all of this from the individual apps"). A role whose stored value already
+ * differs still reads "Different per role" here until one answer is pressed.
+ *
+ * A role leaves the list through "Remove this role" in its pop-up
+ * (`removedRoles`, see panelKit.listedRoles) and comes back through Add a
+ * role.
  *
  * Presentation only. Every write is the settings page's own handler.
  */
 
-import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
 import {
-  CheckCircle2, Clock, MinusCircle, ChevronRight, Plus, X, ArrowLeft, Copy, FilePlus2,
-  ClipboardList, DoorOpen, Wallet, ListOrdered, Ban, Hand,
+  CheckCircle2, ChevronRight, Plus, X, ArrowLeft, Copy, FilePlus2,
+  DoorOpen, ListOrdered, Ban, Hand,
 } from 'lucide-react';
 import { CircleFlag } from '@/components/CircleFlag';
-import { paymentGateBlocks } from '@/lib/payments';
 import type { Conference } from '@/app/manage/[slug]/layout';
 import { ROLE_ORDER } from './applicationsUi';
 import {
-  F, INK, INK_SOFT, FOREST, AMBER, TEXT_LINK,
+  F, INK, INK_SOFT, FOREST, TEXT_LINK,
   Switch, windowState, shortDate, rolePriceText, rolePlural, roleHasPrice, roleIsFree,
-  PREF_MODE_OPTIONS, SectionHead, Group, Row, SwitchRow, BigCount, TINT_GOLD_BG, TINT_GREEN_BG, EmojiDisc, RoleDisc,
+  PREF_MODE_OPTIONS, Group, Row, SwitchRow, SwitchGrid, TINT_GOLD_BG, TINT_GREEN_BG, EmojiDisc, RoleDisc, TYPE, TYPE_PX,
   generalAnswer, inGeneralScope, listedRoles, type GeneralField, type RoleSetupConfig,
 } from './panelKit';
 
@@ -59,31 +73,55 @@ const ROLE_LINE: Record<string, string> = {
 };
 
 const CSS = `
+/* Two columns from 1000px of section width (owner, 12 Oct 2026: "move
+   basically the entire page in two columns"): Who Can Apply on the left, What
+   They Rank with Accepting and Paying under it on the right, each half the
+   width and aligned at the top; stacked in that order below. The 44px column
+   gap leaves room for the right cards' emoji discs, which hang 24px off their
+   left edge. */
+.gvc-app { container-type: inline-size; }
+.gvc-cols { display: grid; grid-template-columns: minmax(0, 1fr); gap: 20px; align-items: start; }
+.gvc-col { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
+@container (min-width: 1000px) { .gvc-cols:not([data-single]) { grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 44px; } }
+/* Role rows: white raised cards; a role that is taking applications gets the
+   green wash and a forest edge (owner, 12 Oct 2026: "slightly bigger icons and
+   nicer cards"). */
 .gvc-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "name switch" "detail detail" "count edit";
-  column-gap: 12px; row-gap: 6px; align-items: center; padding: 12px 14px; border-radius: 14px; background: #FAF8F3;
+  column-gap: 12px; row-gap: 6px; align-items: center; padding: 12px 16px 12px 12px; border-radius: 16px; background: #FFFFFF;
+  box-shadow: 0 1px 0 rgba(27,56,40,0.08), 0 10px 24px -18px rgba(27,56,40,0.45), inset 0 0 0 1px rgba(27,56,40,0.06);
   transition: background-color 160ms ease, box-shadow 160ms ease; }
-.gvc-row[data-on="true"] { background: linear-gradient(150deg, rgba(61,122,82,0.13), rgba(61,122,82,0.05)); box-shadow: inset 3px 0 0 #2A5A3C; }
+.gvc-row[data-on="true"] { background: radial-gradient(90% 140% at 0% 0%, rgba(238,217,138,0.22) 0%, rgba(238,217,138,0) 55%), linear-gradient(150deg, rgba(61,122,82,0.14), rgba(61,122,82,0.04)), #FFFFFF;
+  box-shadow: inset 4px 0 0 #2A5A3C, inset 0 0 0 1px rgba(42,90,60,0.22), 0 1px 0 rgba(27,56,40,0.08), 0 12px 26px -18px rgba(27,56,40,0.55); }
 .gvc-row-name { grid-area: name; } .gvc-row-detail { grid-area: detail; } .gvc-row-count { grid-area: count; }
 .gvc-row-edit { grid-area: edit; justify-self: end; } .gvc-row-switch { grid-area: switch; justify-self: end; }
+/* Half the page (the two-column layout): two lines, the role and its switch,
+   then price and window, the applied count and Edit, the detail lined up
+   under the role's name. */
+@container (min-width: 430px) {
+  .gvc-row { grid-template-columns: minmax(0, 1fr) auto auto; grid-template-areas: "name name switch" "detail count edit"; row-gap: 4px; }
+  .gvc-row-detail { padding-inline-start: 60px; }
+  .gvc-row-count { justify-self: end; }
+}
 @container (min-width: 620px) {
-  .gvc-row { grid-template-columns: minmax(150px, 1.1fr) minmax(0, 1.5fr) 96px auto auto; grid-template-areas: "name detail count edit switch"; column-gap: 14px; }
+  .gvc-row-detail { padding-inline-start: 0; }
+  .gvc-row { grid-template-columns: minmax(170px, 1.1fr) minmax(0, 1.5fr) 96px auto auto; grid-template-areas: "name detail count edit switch"; column-gap: 14px; }
 }
 .gvc-pick { display: grid; gap: 8px; grid-template-columns: minmax(0, 1fr); }
 @container (min-width: 520px) { .gvc-pick { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-.gvc-rank { display: grid; gap: 10px; grid-template-columns: minmax(0, 1fr); }
-@container (min-width: 480px) { .gvc-rank { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-@container (min-width: 760px) { .gvc-rank { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
-.gvc-rank-card { display: flex; flex-direction: column; gap: 10px; padding: 12px; border-radius: 16px; border: none; cursor: pointer; text-align: left;
+/* What they rank: one choice per row, a preview on the left. */
+.gvc-rank { display: flex; flex-direction: column; gap: 8px; }
+.gvc-rank-card { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; align-items: center; padding: 12px; border-radius: 16px; border: none; cursor: pointer; text-align: left;
   background: #FAF8F3; font-family: ${F}; box-shadow: inset 0 0 0 1.5px rgba(27,56,40,0.10); transition: box-shadow 160ms ease, background-color 160ms ease, transform 120ms ease; }
+@container (min-width: 480px) { .gvc-rank-card { grid-template-columns: 240px minmax(0, 1fr); column-gap: 16px; } }
 .gvc-rank-card:hover { background: #F5F0E4; }
-.gvc-rank-card:active { transform: scale(0.99); }
+.gvc-rank-card:active { transform: scale(0.995); }
 .gvc-rank-card:focus { outline: none; }
 .gvc-rank-card:focus-visible { box-shadow: 0 0 0 2px #FFFFFF, 0 0 0 4px ${FOREST}; }
 .gvc-rank-card[aria-checked="true"] { background: linear-gradient(150deg, rgba(61,122,82,0.14), rgba(61,122,82,0.05)); box-shadow: inset 0 0 0 2px ${FOREST}, 0 10px 22px -16px rgba(27,56,40,0.6); }
-.gvc-mini { display: flex; flex-direction: column; gap: 5px; padding: 8px; border-radius: 10px; background: #FFFFFF; box-shadow: 0 1px 0 rgba(27,56,40,0.06); min-height: 70px; }
-.gvc-mini-row { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; color: ${INK}; line-height: 1.2; }
-.gvc-mini-n { width: 17px; height: 17px; border-radius: 6px; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;
-  font-size: 10.5px; font-weight: 800; background: rgba(238,217,138,0.55); color: #6B4F12; }
+.gvc-mini { display: flex; flex-direction: column; justify-content: center; gap: 7px; padding: 10px 12px; border-radius: 12px; background: #FFFFFF; box-shadow: 0 1px 0 rgba(27,56,40,0.06); min-height: 86px; }
+.gvc-mini-row { display: flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 600; color: ${INK}; line-height: 1.2; }
+.gvc-mini-n { width: 20px; height: 20px; border-radius: 7px; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;
+  font-size: 11.5px; font-weight: 800; background: rgba(238,217,138,0.55); color: #6B4F12; }
 `;
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -151,7 +189,7 @@ function AddRole({ hidden, setUp, onAdd }: {
       onKeyDown={(e) => { if (e.key === 'Escape') { e.stopPropagation(); close(); } }}
     >
       <div className="flex items-center justify-between gap-3 mb-3">
-        <p style={{ fontFamily: F, fontSize: 16, fontWeight: 800, color: INK }}>
+        <p style={TYPE.card}>
           {target ? `Set Up ${rolePlural(target.role)}` : 'Which Role?'}
         </p>
         <button type="button" onClick={close} aria-label="Cancel adding a role" className="flex items-center justify-center flex-shrink-0 focus:outline-none focus-visible:ring-2 rounded-full" style={{ width: 40, height: 40, border: 'none', background: '#FFFFFF', cursor: 'pointer', color: INK }}>
@@ -172,8 +210,8 @@ function AddRole({ hidden, setUp, onAdd }: {
             >
               <RoleDisc role={r.role} tint={TINT_GREEN_BG} size={38} />
               <span className="min-w-0">
-                <span className="block" style={{ fontFamily: F, fontSize: 15, fontWeight: 700, color: INK, lineHeight: 1.3 }}>{rolePlural(r.role)}</span>
-                <span className="block" style={{ fontFamily: F, fontSize: 13, color: INK_SOFT, lineHeight: 1.4, overflowWrap: 'anywhere' }}>{ROLE_LINE[r.role]}</span>
+                <span className="block" style={{ ...TYPE.label, fontWeight: 700 }}>{rolePlural(r.role)}</span>
+                <span className="block" style={{ ...TYPE.hint, overflowWrap: 'anywhere' }}>{ROLE_LINE[r.role]}</span>
               </span>
             </button>
           ))}
@@ -189,8 +227,8 @@ function AddRole({ hidden, setUp, onAdd }: {
           >
             <EmojiDisc emoji="Sparkles" icon={FilePlus2} tint={TINT_GOLD_BG} size={38} />
             <span className="min-w-0">
-              <span className="block" style={{ fontFamily: F, fontSize: 15, fontWeight: 700, color: INK }}>Start from scratch</span>
-              <span className="block" style={{ fontFamily: F, fontSize: 13, color: INK_SOFT }}>An empty form, switched off, with your rules for every role</span>
+              <span className="block" style={{ ...TYPE.label, fontWeight: 700 }}>Start from scratch</span>
+              <span className="block" style={TYPE.hint}>An empty form, switched off, with your rules for every role</span>
             </span>
           </button>
           {templates.map(s => {
@@ -207,13 +245,13 @@ function AddRole({ hidden, setUp, onAdd }: {
               >
                 <EmojiDisc emoji="Card index dividers" icon={Copy} tint={TINT_GREEN_BG} size={38} />
                 <span className="min-w-0">
-                  <span className="block" style={{ fontFamily: F, fontSize: 15, fontWeight: 700, color: INK, overflowWrap: 'anywhere' }}>Copy from {rolePlural(s.role)}</span>
-                  <span className="block" style={{ fontFamily: F, fontSize: 13, color: INK_SOFT }}>{withQuestions && withPrice ? 'Copies the questions and the prices' : withQuestions ? 'Copies the questions' : 'Copies the prices'}</span>
+                  <span className="block" style={{ ...TYPE.label, fontWeight: 700, overflowWrap: 'anywhere' }}>Copy from {rolePlural(s.role)}</span>
+                  <span className="block" style={TYPE.hint}>{withQuestions && withPrice ? 'Copies the questions and the prices' : withQuestions ? 'Copies the questions' : 'Copies the prices'}</span>
                 </span>
               </button>
             );
           })}
-          <button type="button" onClick={() => setPicked(null)} className="inline-flex items-center gap-1.5 self-start mt-1 focus:outline-none focus-visible:ring-2 rounded" style={{ ...TEXT_LINK, fontSize: 14 }}>
+          <button type="button" onClick={() => setPicked(null)} className="inline-flex items-center gap-1.5 self-start mt-1 focus:outline-none focus-visible:ring-2 rounded" style={{ ...TEXT_LINK, fontSize: TYPE_PX.hint }}>
             <ArrowLeft size={14} strokeWidth={2.5} aria-hidden />
             Pick another role
           </button>
@@ -230,7 +268,7 @@ function RankPreview({ value }: { value: string }) {
   if (value === 'none') {
     return (
       <div className="gvc-mini" style={{ alignItems: 'center', justifyContent: 'center' }}>
-        <EmojiDisc emoji="Prohibited" icon={Ban} tint={TINT_GOLD_BG} size={30} />
+        <EmojiDisc emoji="Prohibited" icon={Ban} tint={TINT_GOLD_BG} size={36} />
         <span className="gvc-mini-row" style={{ color: INK_SOFT, textAlign: 'center' }}>No ranking step</span>
       </div>
     );
@@ -246,7 +284,7 @@ function RankPreview({ value }: { value: string }) {
           {n(i + 1)}
           {r.com && <span style={{ fontWeight: 800 }}>{r.com}</span>}
           {r.com && r.country && <span style={{ color: INK_SOFT }}>·</span>}
-          {r.country && <><CircleFlag code={r.country.code} size={15} decorative /><span>{r.country.name}</span></>}
+          {r.country && <><CircleFlag code={r.country.code} size={18} decorative /><span>{r.country.name}</span></>}
         </span>
       ))}
     </div>
@@ -256,7 +294,7 @@ function RankPreview({ value }: { value: string }) {
 // ── The section ──────────────────────────────────────────────────────────────
 
 export function ApplicationsSection({
-  conference: c, roles, counts, now, extraRoles,
+  conference: c, roles, counts, now, extraRoles, removedRoles = [],
   onRoleToggle, onEditRole, onAddRole, onSaveAll,
 }: {
   conference: Conference;
@@ -266,34 +304,24 @@ export function ApplicationsSection({
   now: number;
   /** Roles the organiser added on this browser (or has open right now). */
   extraRoles: readonly string[];
+  /** Roles removed with "Remove this role" on this browser. */
+  removedRoles?: readonly string[];
   onRoleToggle: (role: string, next: boolean) => void;
   onEditRole: (role: string, step?: string) => void;
   onAddRole: (role: string, copyFrom: string | null) => void;
   /** One value for every covered role (the page writes them in one update). */
   onSaveAll: (updates: Partial<RoleSetupConfig>, roles: string[]) => void;
 }) {
-  const gate = paymentGateBlocks(c);
   const ordered = ROLE_ORDER.map(r => roles.find(x => x.role === r)).filter((x): x is RoleSetupConfig => !!x);
-  const listed = listedRoles(ordered, counts, extraRoles);
+  const listed = listedRoles(ordered, counts, extraRoles, removedRoles);
   const hidden = ordered.filter(r => !listed.includes(r));
-  const totalApplied = counts ? Object.values(counts).reduce((a, b) => a + b, 0) : null;
-
-  const open = ordered.filter(r => windowState(r, now) === 'open');
-  const scheduled = ordered.filter(r => windowState(r, now) === 'scheduled');
-  const firstClose = open.map(r => r.applications_close_at).filter((x): x is string => !!x).sort()[0];
-  const firstOpen = scheduled.map(r => r.applications_open_at).filter((x): x is string => !!x).sort()[0];
-  const appsMark = open.length > 0
-    ? { icon: CheckCircle2, word: firstClose ? `Open until ${shortDate(firstClose, now)}` : 'Open now', color: FOREST }
-    : scheduled.length > 0 ? { icon: Clock, word: `Opens ${shortDate(firstOpen, now)}`, color: AMBER }
-    : { icon: MinusCircle, word: 'Nobody can apply yet', color: INK_SOFT };
-
   const auto = generalAnswer(listed, 'auto_accept');
-  const resub = generalAnswer(listed, 'allow_resubmission');
   const timing = generalAnswer(listed, 'payment_timing');
-  const lock = generalAnswer(listed, 'hide_dashboard_until_paid');
   const rank = generalAnswer(listed, 'preference_mode');
   const anyPaid = listed.some(r => roleHasPrice(r.role) && !roleIsFree(r));
-  const secretariatListed = listed.some(r => r.role === 'secretariat');
+  const showTiming = anyPaid && timing.roles.length > 0;
+  const showAccept = auto.roles.length > 0 || showTiming;
+  const showRank = rank.roles.length > 0;
 
   function saveAll(field: GeneralField, value: unknown) {
     const targets = listed.filter(r => inGeneralScope(field, r.role)).map(r => r.role);
@@ -303,159 +331,140 @@ export function ApplicationsSection({
 
   if (ordered.length === 0) {
     return (
-      <div aria-busy="true" className="flex flex-col gap-4">
-        {[0, 1, 2].map(i => <div key={i} className="gv-fd-ph" style={{ height: i === 0 ? 120 : 180 }} />)}
+      <div aria-busy="true" className="gvc-app">
+        <style>{CSS}</style>
+        <div className="gvc-cols">
+          <div className="gv-fd-ph" style={{ height: 320 }} />
+          <div className="gvc-col">
+            <div className="gv-fd-ph" style={{ height: 220 }} />
+            <div className="gv-fd-ph" style={{ height: 140 }} />
+          </div>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col gap-5">
+    <div className="gvc-app">
       <style>{CSS}</style>
-      <SectionHead emoji="Inbox tray" icon={ClipboardList} tint={TINT_GOLD_BG}
-        title="Applications"
-        line={<span className="inline-flex items-center gap-1.5" style={{ color: appsMark.color, fontWeight: 700 }}><appsMark.icon size={16} strokeWidth={2.4} aria-hidden />{appsMark.word}</span>}
-        focal={totalApplied !== null ? <BigCount n={totalApplied} word={totalApplied === 1 ? 'application' : 'applications'} /> : undefined}
-      />
-
-      {gate && (
-        <div className="gv-fd-warn" role="note">
-          Set up payments before you switch a role on. Even a free conference needs one. You can still set every role up now.{' '}
-          <Link href={`/manage/${c.slug}/financials?open=payment`} style={{ ...TEXT_LINK, fontSize: 13.5 }}>Set up payments</Link>
-        </div>
-      )}
-
-      {/* ── Who can apply ── */}
-      <Group id="who-can-apply" title="Who Can Apply" emoji="Identification card" icon={Hand} tint={TINT_GOLD_BG}>
-        {listed.map(cfg => {
-          const st = windowState(cfg, now);
-          const blocked = gate && !cfg.is_enabled;
-          const plural = rolePlural(cfg.role);
-          const count = counts?.[cfg.role];
-          return (
-            <div key={cfg.role} className="gvc-row" data-on={cfg.is_enabled ? 'true' : undefined}>
-              <span className="gvc-row-name flex items-center gap-2.5 min-w-0">
-                <RoleDisc role={cfg.role} tint={cfg.is_enabled ? TINT_GREEN_BG : TINT_GOLD_BG} size={36} />
-                <span style={{ fontFamily: F, fontSize: 16, fontWeight: 800, color: INK, lineHeight: 1.25, overflowWrap: 'anywhere' }}>{plural}</span>
-              </span>
-              <span className="gvc-row-detail min-w-0" style={{ fontFamily: F, fontSize: 14, color: INK_SOFT, lineHeight: 1.4, overflowWrap: 'anywhere' }}>
-                {st === 'off' ? rowDetail(cfg, now) : <><b style={{ color: INK, fontWeight: 800 }}>{rolePriceText(cfg, c.fee_currency, now)}</b> · {rowDetail(cfg, now)}</>}
-              </span>
-              <span className="gvc-row-count" style={{ fontFamily: F, fontSize: 13.5, color: INK_SOFT, whiteSpace: 'nowrap' }}>
-                {count === undefined ? '' : <><b style={{ fontSize: 20, fontWeight: 900, fontVariantNumeric: 'tabular-nums', color: FOREST }}>{count}</b> applied</>}
-              </span>
-              <span className="gvc-row-edit">
-                <button type="button" aria-label={`Edit ${plural}`} onClick={() => onEditRole(cfg.role)} className="gv-st-btn gv-st-outline" style={{ minHeight: 40, padding: '0 14px' }}>
-                  Edit<ChevronRight size={16} strokeWidth={2.4} aria-hidden />
-                </button>
-              </span>
-              <span className="gvc-row-switch" title={blocked ? 'Set up payments before you switch a role on' : undefined}>
-                <Switch label={`${plural} taking applications`} checked={cfg.is_enabled} disabled={blocked} onChange={(next) => onRoleToggle(cfg.role, next)} />
-              </span>
-            </div>
-          );
-        })}
-        <AddRole hidden={hidden} setUp={listed} onAdd={onAddRole} />
-      </Group>
-
-      {/* ── Who gets in (every role) ── */}
-      <Group title="Who Gets In" emoji="Door" icon={DoorOpen} aside={<EveryRole />}>
-        {auto.roles.length > 0 && (
-          <SwitchRow
-            label="Accept everyone straight away"
-            desc={auto.mixed ? splitLine(auto, 'auto_accept') : 'Off: you review each application.'}
-            checked={auto.value === true}
-            mixed={auto.mixed}
-            onChange={(v) => saveAll('auto_accept', v)}
-          />
-        )}
-        {resub.roles.length > 0 && (
-          <SwitchRow
-            label="Let turned-down people try again"
-            desc={resub.mixed ? splitLine(resub, 'allow_resubmission') : 'They change their answers and send it back.'}
-            checked={resub.value === true}
-            mixed={resub.mixed}
-            onChange={(v) => saveAll('allow_resubmission', v)}
-          />
-        )}
-        <Row
-          label="Most you will accept"
-          desc={secretariatListed ? 'Set in each role. The secretariat also keeps its own acceptance rules, since accepting makes them an organiser.' : 'Set in each role, under Edit.'}
-        />
-      </Group>
-
-      {/* ── Paying (every role with a price) ── */}
-      {anyPaid && (
-        <Group title="Paying" emoji="Money bag" icon={Wallet} tint={TINT_GOLD_BG} aside={<EveryRole paid />}>
-          <SwitchRow
-            label="Pay only after you accept them"
-            desc={timing.mixed ? splitLine(timing, 'payment_timing') : 'Off: they can pay as soon as they apply.'}
-            checked={timing.value === 'after_acceptance'}
-            mixed={timing.mixed}
-            onChange={(v) => saveAll('payment_timing', v ? 'after_acceptance' : 'anytime')}
-          />
-          <SwitchRow
-            label="Hide their dashboard until they pay"
-            desc={lock.mixed ? splitLine(lock, 'hide_dashboard_until_paid') : 'Waived and sponsored people always see everything.'}
-            checked={lock.value === true}
-            mixed={lock.mixed}
-            onChange={(v) => saveAll('hide_dashboard_until_paid', v)}
-          />
+      {/* The section's own heading with the applications count was removed
+          (owner, 12 Oct 2026: "no need to have the top heading with the
+          amount of delegates"); the h2 stays for screen readers. */}
+      <h2 className="sr-only">Applications</h2>
+      <div className="gvc-cols" data-single={showAccept || showRank ? undefined : 'true'}>
+        {/* ── Who can apply ── */}
+        <Group id="who-can-apply" title="Who Can Apply" emoji="Identification card" icon={Hand} tint={TINT_GOLD_BG}>
+          {listed.map(cfg => {
+            const st = windowState(cfg, now);
+            const plural = rolePlural(cfg.role);
+            const count = counts?.[cfg.role];
+            return (
+              <div key={cfg.role} className="gvc-row" data-on={cfg.is_enabled ? 'true' : undefined}>
+                <span className="gvc-row-name flex items-center gap-2.5 min-w-0">
+                  <RoleDisc role={cfg.role} tint={cfg.is_enabled ? TINT_GREEN_BG : TINT_GOLD_BG} size={50} />
+                  <span style={{ ...TYPE.card, overflowWrap: 'anywhere' }}>{plural}</span>
+                </span>
+                <span className="gvc-row-detail min-w-0" style={{ ...TYPE.body, color: INK_SOFT, overflowWrap: 'anywhere' }}>
+                  {st === 'off' ? rowDetail(cfg, now) : <><b style={{ color: INK, fontWeight: 800 }}>{rolePriceText(cfg, c.fee_currency, now)}</b> · {rowDetail(cfg, now)}</>}
+                </span>
+                <span className="gvc-row-count" style={{ ...TYPE.hint, whiteSpace: 'nowrap' }}>
+                  {count === undefined ? '' : <><b style={{ fontSize: 20, fontWeight: 900, fontVariantNumeric: 'tabular-nums', color: FOREST }}>{count}</b> applied</>}
+                </span>
+                <span className="gvc-row-edit">
+                  <button type="button" aria-label={`Edit ${plural}`} onClick={() => onEditRole(cfg.role)} className="gv-st-btn gv-st-outline" style={{ minHeight: 38, padding: '0 12px' }}>
+                    Edit<ChevronRight size={16} strokeWidth={2.4} aria-hidden />
+                  </button>
+                </span>
+                {/* A role opens at any time: applications never wait for payments (owner, 12 Oct 2026). */}
+                <span className="gvc-row-switch">
+                  <Switch label={`${plural} taking applications`} checked={cfg.is_enabled} onChange={(next) => onRoleToggle(cfg.role, next)} />
+                </span>
+              </div>
+            );
+          })}
+          <AddRole hidden={hidden} setUp={listed} onAdd={onAddRole} />
         </Group>
-      )}
 
-      {/* ── What they rank (delegates and head delegates) ── */}
-      {rank.roles.length > 0 && (
-        <Group
-          title="What They Rank"
-          emoji="Bar chart"
-          icon={ListOrdered}
-          aside={<span style={{ fontFamily: F, fontSize: 13, fontWeight: 700, color: INK_SOFT }}>{joinWords(rank.roles.map(r => rolePlural(r.role)))}</span>}
-        >
-          {rank.mixed && (
-            <Row
-              need
-              label="Different per role"
-              desc={`${rank.roles.map(r => `${rolePlural(r.role)}: ${PREF_MODE_OPTIONS.find(o => o.value === (r.preference_mode || 'none'))?.label.toLowerCase() ?? 'nothing'}`).join('. ')}. Pick one to use it for every role.`}
-            />
-          )}
-          <div role="radiogroup" aria-label="What do they rank?" className="gvc-rank">
-            {PREF_MODE_OPTIONS.map(opt => {
-              const on = !rank.mixed && rank.value === opt.value;
-              return (
-                <button
-                  key={opt.value}
-                  type="button"
-                  role="radio"
-                  aria-checked={on}
-                  title={opt.desc}
-                  onClick={() => saveAll('preference_mode', opt.value)}
-                  className="gvc-rank-card"
-                >
-                  <RankPreview value={opt.value} />
-                  <span className="flex items-center gap-1.5" style={{ fontSize: 14, fontWeight: 800, color: INK, lineHeight: 1.25 }}>
-                    {on && <CheckCircle2 size={16} strokeWidth={2.6} color={FOREST} aria-hidden />}
-                    <span style={{ overflowWrap: 'anywhere' }}>{opt.label}</span>
-                  </span>
-                </button>
-              );
-            })}
+        {(showRank || showAccept) && (
+          <div className="gvc-col">
+            {/* ── What they rank (delegates and head delegates) ── */}
+            {showRank && (
+              <Group
+                title="What They Rank"
+                emoji="Bar chart"
+                icon={ListOrdered}
+                aside={<span style={{ ...TYPE.hint, fontWeight: 600 }}>{joinWords(rank.roles.map(r => rolePlural(r.role)))}</span>}
+              >
+                {rank.mixed && (
+                  <Row
+                    need
+                    label="Different per role"
+                    desc={`${rank.roles.map(r => `${rolePlural(r.role)}: ${PREF_MODE_OPTIONS.find(o => o.value === (r.preference_mode || 'none'))?.label.toLowerCase() ?? 'nothing'}`).join('. ')}. Pick one to use it for every role.`}
+                  />
+                )}
+                <div role="radiogroup" aria-label="What do they rank?" className="gvc-rank">
+                  {PREF_MODE_OPTIONS.map(opt => {
+                    const on = !rank.mixed && rank.value === opt.value;
+                    return (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        role="radio"
+                        aria-checked={on}
+                        onClick={() => saveAll('preference_mode', opt.value)}
+                        className="gvc-rank-card"
+                      >
+                        <RankPreview value={opt.value} />
+                        <span className="min-w-0">
+                          <span className="flex items-center gap-1.5" style={{ ...TYPE.label, fontWeight: 800 }}>
+                            {on && <CheckCircle2 size={18} strokeWidth={2.6} color={FOREST} aria-hidden />}
+                            <span style={{ overflowWrap: 'anywhere' }}>{opt.label}</span>
+                          </span>
+                          <span className="block" style={{ ...TYPE.hint, marginTop: 3, overflowWrap: 'anywhere' }}>{opt.desc}</span>
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </Group>
+            )}
+
+            {/* ── Accepting and paying (every role) ── */}
+            {showAccept && (
+              <Group title="Accepting and Paying" emoji="Door" icon={DoorOpen} aside={<EveryRole />}>
+                <SwitchGrid>
+                  {auto.roles.length > 0 && (
+                    <SwitchRow
+                      label="Accept everyone straight away"
+                      desc={auto.mixed ? splitLine(auto, 'auto_accept') : 'Off: you review each application.'}
+                      checked={auto.value === true}
+                      mixed={auto.mixed}
+                      onChange={(v) => saveAll('auto_accept', v)}
+                    />
+                  )}
+                  {showTiming && (
+                    <SwitchRow
+                      label="Pay only after you accept them"
+                      desc={timing.mixed ? splitLine(timing, 'payment_timing') : 'Off: they can pay as soon as they apply. Roles with a price only.'}
+                      checked={timing.value === 'after_acceptance'}
+                      mixed={timing.mixed}
+                      onChange={(v) => saveAll('payment_timing', v ? 'after_acceptance' : 'anytime')}
+                    />
+                  )}
+                </SwitchGrid>
+              </Group>
+            )}
           </div>
-          {!rank.mixed && (
-            <p style={{ fontFamily: F, fontSize: 13.5, color: INK_SOFT, lineHeight: 1.5 }}>
-              {PREF_MODE_OPTIONS.find(o => o.value === rank.value)?.desc}
-            </p>
-          )}
-        </Group>
-      )}
+        )}
+      </div>
     </div>
   );
 }
 
-function EveryRole({ paid = false }: { paid?: boolean }) {
+function EveryRole() {
   return (
-    <span className="inline-flex items-center gap-1.5" style={{ fontFamily: F, fontSize: 13, fontWeight: 700, color: '#6B4F12', background: 'rgba(238,217,138,0.4)', padding: '3px 10px', borderRadius: 8 }}>
-      {paid ? 'Every paid role' : 'Every role'}
+    <span className="inline-flex items-center gap-1.5" style={{ ...TYPE.hint, fontWeight: 700, color: '#6B4F12', background: 'rgba(238,217,138,0.4)', padding: '3px 10px', borderRadius: 8 }}>
+      Every role
     </span>
   );
 }

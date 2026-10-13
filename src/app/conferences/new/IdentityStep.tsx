@@ -432,9 +432,10 @@ export function IdentityStep(p: IdentityStepProps) {
           </div>
           {datesBackwards && <Problem>The end date cannot be before the start date.</Problem>}
 
-          {/* Dates TBD: create now, decide later. A TBD conference stays
-              private (no public listing) until dates are set, but can still
-              open delegate applications. */}
+          {/* Dates TBD: create now, decide later. A TBD conference is public
+              like any other (owner, 12 Oct 2026): Explore lists it under
+              "Dates to Be Decided" until dates are set. It can still open
+              delegate applications. */}
           <button
             type="button"
             role="checkbox"
@@ -459,7 +460,7 @@ export function IdentityStep(p: IdentityStepProps) {
                 Dates are to be decided
               </span>
               <span className="block" style={{ fontFamily: OUTFIT, fontSize: 12.5, lineHeight: 1.45, color: NEU.inkSoft, marginTop: 1 }}>
-                It stays private until you add dates. You can still open applications.
+                Explore lists it under Dates to be decided until you add them. You can still open applications.
               </span>
             </span>
           </button>

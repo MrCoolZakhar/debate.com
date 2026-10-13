@@ -10,13 +10,17 @@
  * the attached image at its real aspect (opens in the chat's own photo viewer, ChatLightbox,
  * exactly like a chat photo) and the time.
  *
+ * Press releases (12 Oct 2026, source 'press') use the same bubble signed "Press · <outlet>"
+ * beside a slate newspaper disc (PressAvatar).
+ *
  * Presentation only: no write, no committee state.
  */
 
 import { useState } from 'react';
-import { Flag, Megaphone, PauseCircle } from 'lucide-react';
+import { Flag, Megaphone, Newspaper, PauseCircle } from 'lucide-react';
 import { NEU, OUTFIT } from '@/components/neu';
 import { trustedBroadcastImageUrl } from '@/lib/chatAttachments';
+import { broadcastAuthor, isPressBroadcast } from '@/lib/broadcastMessages';
 import { CHAT, formatTime, type ChatGroup, type TFn } from './chatTokens';
 
 const MAX_W = 280;
@@ -34,6 +38,24 @@ function fit(n?: { width: number; height: number }): { width: number; height: nu
   if (!n) return { width: 240, height: 160 };
   const s = Math.min(1, MAX_W / n.width, MAX_H / n.height);
   return { width: Math.max(60, Math.round(n.width * s)), height: Math.max(40, Math.round(n.height * s)) };
+}
+
+/** A press release's disc: a slate disc with an ivory newspaper, so it never reads as
+ *  the Secretariat's forest-and-gold megaphone. */
+export function PressAvatar({ size = 30 }: { size?: number }) {
+  return (
+    <span
+      aria-hidden
+      className="inline-flex items-center justify-center"
+      style={{
+        width: size, height: size, borderRadius: 999, flexShrink: 0,
+        background: 'linear-gradient(135deg, #2F6076, #1F4456)', color: '#FFF6E0',
+        boxShadow: 'inset 0 0 0 1px rgba(28,20,16,0.08)',
+      }}
+    >
+      <Newspaper size={Math.round(size * 0.5)} strokeWidth={2.2} />
+    </span>
+  );
 }
 
 export function SecretariatAvatar({ size = 30 }: { size?: number }) {
@@ -123,15 +145,18 @@ export default function SecretariatMessage({
   locale: string;
 }) {
   const { items } = group;
+  // A run is one author (chatTokens groups by broadcastAuthorKey): the Secretariat, or one
+  // press outlet signed "Press · BBC".
+  const press = isPressBroadcast(items[0]?.broadcast);
   return (
     <div className="flex items-end gap-2 justify-start" style={{ marginTop: 10 }}>
-      <SecretariatAvatar size={30} />
+      {press ? <PressAvatar size={30} /> : <SecretariatAvatar size={30} />}
       <div className="flex flex-col items-start" style={{ maxWidth: 'min(80%, 560px)', minWidth: 0 }}>
         <span
           className="max-w-full [overflow-wrap:anywhere]"
-          style={{ fontFamily: OUTFIT, fontSize: 12, fontWeight: 750, marginBottom: 3, paddingInlineStart: 12, color: NEU.forest }}
+          style={{ fontFamily: OUTFIT, fontSize: 12, fontWeight: 750, marginBottom: 3, paddingInlineStart: 12, color: press ? '#2F6076' : NEU.forest }}
         >
-          {t('bc_secretariat')}
+          {broadcastAuthor(items[0]?.broadcast, t)}
         </span>
         {items.map((it, i) => {
           const b = it.broadcast;
@@ -149,8 +174,11 @@ export default function SecretariatMessage({
                 borderStartStartRadius: isFirst ? 18 : 6,
                 borderEndStartRadius: 6,
                 backgroundColor: CHAT.bubbleIn,
-                // A faint forest ring marks it as the organisers', not a delegation's.
-                boxShadow: '0 1px 1px rgba(28,20,16,0.08), 0 0 0 1px rgba(27,56,40,0.16)',
+                // A faint forest ring marks it as the organisers', not a delegation's; a slate
+                // ring marks a press release.
+                boxShadow: press
+                  ? '0 1px 1px rgba(28,20,16,0.08), 0 0 0 1px rgba(47,96,118,0.22)'
+                  : '0 1px 1px rgba(28,20,16,0.08), 0 0 0 1px rgba(27,56,40,0.16)',
               }}
             >
               {action && (
@@ -172,7 +200,7 @@ export default function SecretariatMessage({
               {image && (
                 <BroadcastImage
                   url={image}
-                  alt={t('bc_image')}
+                  alt={t(press ? 'bc_press_image' : 'bc_image')}
                   onOpen={onOpenImage ? () => onOpenImage(it.id) : undefined}
                   onLoaded={onMediaLoaded}
                 />

@@ -66,6 +66,16 @@ export const PAY_CSS = `
 /* Bottom pay bar */
 .gv-pay-bar{position:sticky;bottom:calc(12px + env(safe-area-inset-bottom,0px));z-index:30;margin-top:14px;display:flex;flex-wrap:wrap;align-items:center;gap:10px 16px;padding:12px 14px 12px 18px;border-radius:18px;background:#FFFFFF;box-shadow:0 2px 0 rgba(27,56,40,0.06),0 18px 40px -16px rgba(27,56,40,0.5)}
 .gv-pay-bar-sum{margin-right:auto;font-size:16px;font-weight:800;font-variant-numeric:tabular-nums}
+/* Discount codes (prompt 107): the link under Pay (under the total on phones) and the applied chip */
+.gv-pay-bar-pay{display:inline-flex;flex-direction:column;align-items:center;gap:0}
+.gv-pay-bar .gv-pay-link.gv-pay-code-link{min-height:32px;font-size:13px;font-weight:700}
+.gv-pay-code-phone{display:none!important}
+.gv-pay-code-chip{display:inline-flex;align-items:center;gap:4px;margin-left:8px;padding:2px 4px 2px 10px;border-radius:999px;background:rgba(238,217,138,0.45);color:${FOREST};font-size:12.5px;font-weight:800;letter-spacing:0.04em;vertical-align:2px}
+.gv-pay-code-chip button{width:24px;height:24px;display:inline-flex;align-items:center;justify-content:center;border:none;border-radius:999px;background:transparent;color:${FOREST};cursor:pointer}
+.gv-pay-code-chip button:hover{background:rgba(27,56,40,0.1)}
+.gv-pay-code-chip button:focus{outline:none}
+.gv-pay-code-chip button:focus-visible{outline:2px solid ${FOREST}}
+@media (max-width:639px){.gv-pay-code-desk{display:none!important}.gv-pay-code-phone{display:inline-flex!important;margin-left:-6px}}
 @media (max-width:1023px){.gv-pay-bar{bottom:calc(74px + env(safe-area-inset-bottom,0px))}}
 .gv-pay-bar span.gv-pay-bar-aux{display:contents}
 /* Item list header: the bar's Select all, Clear and Upload proof, phones only */
@@ -127,6 +137,14 @@ export const PAY_CSS = `
 @media (max-width:743px){.gv-buy-panel.gv-pay-small{height:auto;max-height:92dvh;margin-top:auto;border-radius:22px 22px 0 0}}
 .gv-buy-panel.gv-pay-pop{max-width:640px}
 .gv-buy-panel.gv-pay-mid{max-width:560px}
+/* Every /pay pop-up is as tall as its content (prompt 106): no 560px minimum, a
+   bottom sheet on phones. A pop-up panel with gv-pay-mid must stay a box: the
+   one-column page rule above (.gv-pay-mid{display:contents}) is for the middle
+   column, not for a panel that shares the class name. */
+.gv-buy-panel.gv-pay-pop,.gv-buy-panel.gv-pay-mid,.gv-buy-panel.gv-pay-manual,.gv-buy-panel.gv-pd-view{min-height:0}
+.gv-buy-panel.gv-pay-pop .gv-buy-body,.gv-buy-panel.gv-pay-mid .gv-buy-body,.gv-buy-panel.gv-pay-manual .gv-buy-body,.gv-buy-panel.gv-pd-view .gv-buy-body{flex-direction:column}
+@media (max-width:1023px){.gv-buy-panel.gv-pay-mid{display:flex}}
+@media (max-width:743px){.gv-buy-panel.gv-pay-pop,.gv-buy-panel.gv-pay-mid,.gv-buy-panel.gv-pay-manual,.gv-buy-panel.gv-pd-view{height:auto;max-height:92dvh;margin-top:auto;border-radius:22px 22px 0 0}}
 .gv-pay-rows{display:flex;flex-direction:column;border-radius:14px;background:#FFFFFF;padding:4px 14px}
 .gv-pay-row{display:flex;justify-content:space-between;gap:16px;padding:10px 0;font-size:14.5px}
 .gv-pay-row + .gv-pay-row{border-top:1px solid ${LINE}}

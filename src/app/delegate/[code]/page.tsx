@@ -22,6 +22,7 @@ import { SeatFlag, SeatArtProvider } from '@/components/SeatFlag';
 import { getCommitteeDisplayName } from '@/lib/presetNames';
 import { supabase } from '@/lib/supabase';
 import CowDelegationBoard from '@/components/CowDelegationBoard';
+import SeatName from '@/components/SeatName';
 import ChatDisabledNotice from '@/components/ChatDisabledNotice';
 import { getCommitteeFlags, sponsorLabel, motionNames } from '@/lib/committeeFlags';
 import { docName, docCount, docLimit, docLimitReached } from '@/lib/docNames';
@@ -1988,7 +1989,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
 
         <div className="dgv-rise" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, margin: '26px 0' }}>
           <FlagDisc code={myIso} name={myName} size={104} ring={DG.hairline} logoUrl={mySeatLogo} />
-          <p style={{ margin: 0, fontFamily: OUTFIT, fontSize: 22, fontWeight: 900, color: DG.ink }}>{myName}</p>
+          <p style={{ margin: 0, fontFamily: OUTFIT, fontSize: 22, fontWeight: 900, color: DG.ink, textAlign: 'center' }}><SeatName name={myName} max={22} block align="center" subScale={0.62} /></p>
         </div>
 
         <Panel className="w-full max-w-sm">
@@ -2132,13 +2133,13 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
                 logoUrl={committee.delegates.find((d) => d.country === committee.caucus!.currentSpeaker)?.logoUrl ?? null}
               />
               <span style={{ minWidth: 0, flex: 1, fontFamily: OUTFIT, fontSize: 13, fontWeight: 800, color: committee.caucus.currentSpeaker === country ? DG.deepGold : DG.forest, lineHeight: 1.15, overflowWrap: 'anywhere' }}>
-                {getCountryDisplayName(committee.caucus.currentSpeaker, language)}
+                <SeatName name={getCountryDisplayName(committee.caucus.currentSpeaker, language)} max={22} style={{ verticalAlign: 'top' }} subScale={0.8} />
                 {committee.caucus.currentSpeaker === country && t('delegate_you_suffix')}
               </span>
             </div>
           )}
           {isMod && (committee.caucusQueue ?? []).length > 0 && (
-            <div style={{ marginTop: 10, minHeight: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column', gap: 1 }}>
+            <div className="dgv-noscroll" style={{ marginTop: 10, minHeight: 0, overflowX: 'hidden', overflowY: 'auto', scrollbarWidth: 'none', display: 'flex', flexDirection: 'column', gap: 1 }}>
               {committee.caucusQueue.slice(0, 5).map((s, i) => (
                 <QueueRow
                   key={s.delegateId}
@@ -2155,7 +2156,9 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
             </div>
           )}
           {!isMod && committee.caucus.isConsultation && (
-            <div style={{ marginTop: 12, minHeight: 0, overflow: 'hidden' }}>
+            // Scrolls (no visible bar) instead of clipping: a hidden overflow here cut the bottom
+            // of the Consultation board off on a phone, long character names included.
+            <div className="dgv-noscroll" style={{ marginTop: 12, minHeight: 0, overflowX: 'hidden', overflowY: 'auto', scrollbarWidth: 'none' }}>
               <CowDelegationBoard committee={committee} />
             </div>
           )}
@@ -2171,7 +2174,10 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
     const overflow = Math.max(0, committee.speakersList.length - shown);
     return (
       <Panel className="dgv-queue dgv-rise" style={{ padding: 10 }}>
-        <div ref={queueBox} style={{ flex: 1, minHeight: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column', gap: 1 }}>
+        {/* Scrolls (no visible bar) rather than clipping: the fitted count assumes 44px rows,
+            and a long seat drawn on two rows (SeatName) is taller, so a hidden overflow cut
+            the last name off. */}
+        <div ref={queueBox} className="dgv-noscroll" style={{ flex: 1, minHeight: 0, overflowX: 'hidden', overflowY: 'auto', scrollbarWidth: 'none', display: 'flex', flexDirection: 'column', gap: 1 }}>
           {!committee.currentSpeaker && committee.speakersList.length === 0 ? (
             <p style={{ margin: 'auto', fontFamily: OUTFIT, fontSize: 13, color: DG.faint, textAlign: 'center' }}>
               {t('delegate_no_speakers')}
@@ -2385,7 +2391,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
                     overflowWrap: 'anywhere', textWrap: 'balance',
                   }}
                 >
-                  {myName}
+                  <SeatName name={myName} max={16} block align="center" subScale={0.66} />
                 </span>
               </div>
 
