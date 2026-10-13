@@ -28,6 +28,7 @@ import ObserverParticipant from './ObserverParticipant';
 import RequestsPanel from './RequestsPanel';
 import ApplyPointer from './ApplyPointer';
 import ConferenceDocsSection, { useConferenceDocs, docForRole, DOC_READER_STATUSES } from './ConferenceDocsSection';
+import ConferenceDocsExtra, { useMyConferenceDocs, requiredOutstanding, DocsRequiredNotice } from './ConferenceDocsExtra';
 import type { ParticipantApplication, ParticipantRoleConfig, ParticipantAllocation, ParticipantCommittee } from './types';
 import { friendlyError, UserFacingError } from '@/lib/friendlyError';
 
@@ -252,6 +253,14 @@ export default function ParticipantView({
     !!user && myApplications.some(a => DOC_READER_STATUSES.has(a.status)),
   );
 
+  // Document Uploads (prompt 112): the documents of the application on screen,
+  // as the server decides them. 'off' (switch off, or a failed read) keeps the
+  // classic card above exactly as it was. Read here, above every early return.
+  const docsApp = myApplications.length > 0
+    ? ((holdsInitialRole ? myApplications.find(a => a.role === initialRole) : null) ?? pickDefault(myApplications))
+    : null;
+  const myDocs = useMyConferenceDocs(conferenceId, docsApp?.id ?? null, !!user);
+
   // Resolver (/role) and "not holding that role" fallback (/role/[role] for
   // a role the viewer doesn't actually have) both land here: once
   // applications are known, settle on the default role's real URL.
@@ -354,13 +363,17 @@ export default function ParticipantView({
   const isDelegateRole = DELEGATE_ROLES.has(selected.role);
   const isLeader = (selected.role === 'faculty-advisor' || selected.role === 'head-delegate') && !!selected.society_id;
   const gateOpen = gateState === 'full';
-  const roleDocs = gateOpen && DOC_READER_STATUSES.has(selected.status)
+  const docsExtraOn = myDocs.state.status === 'on';
+  const extraDocs = myDocs.state.status === 'on' ? myDocs.state.data : null;
+  const roleDocs = gateOpen && myDocs.state.status === 'off' && DOC_READER_STATUSES.has(selected.status)
     ? conferenceDocs.filter(d => docForRole(d, selected.role, {
         isHeadDelegate: selected.is_head_delegate === true,
         isChair: !!user && committees.some(c => (c.chair_user_ids ?? []).includes(user.id)),
       }))
     : [];
-  const sections = sectionsFor(selected, gateOpen, roleDocs.length > 0);
+  const hasDocs = docsExtraOn ? gateOpen && (extraDocs?.documents.length ?? 0) > 0 : roleDocs.length > 0;
+  const docsDue = gateOpen && extraDocs && extraDocs.warnings > 0 ? requiredOutstanding(extraDocs.documents) : [];
+  const sections = sectionsFor(selected, gateOpen, hasDocs);
   // A section that no longer exists for this application (a role switch, the
   // gate closing) falls back to Overview.
   const activeSection = section.appId === selected.id && sections.some(x => x.key === section.key) ? section.key : 'overview';
@@ -562,6 +575,18 @@ export default function ParticipantView({
                 "what happens next" as its one line), so nothing repeats. */}
             <Pane show={activeSection === 'overview'}>
               {nextStep && <NextStepCard step={nextStep} status={selected.status} />}
+              {docsDue.length > 0 && (
+                <DocsRequiredNotice
+                  conferenceName={conferenceName || 'This conference'}
+                  docs={docsDue}
+                  onGo={() => {
+                    selectSection('documents');
+                    window.setTimeout(() => {
+                      document.getElementById('conference-documents')?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+                    }, 60);
+                  }}
+                />
+              )}
               <div className="hidden xl:block">
               <StatusRow
                 input={{
@@ -605,9 +630,11 @@ export default function ParticipantView({
             {/* Conference Documents: the Rules of Procedure, logistics and the
                 rest the organisers shared with everyone accepted. In the
                 Documents section; its own heading on the phone page. */}
-            {roleDocs.length > 0 && (
-              <Pane show={activeSection === 'documents'} title="Conference Documents" icon={FolderOpen}>
-                <ConferenceDocsSection docs={roleDocs} />
+            {hasDocs && (
+              <Pane show={activeSection === 'documents'} title="Conference Documents" icon={FolderOpen} anchor="conference-documents">
+                {extraDocs
+                  ? <ConferenceDocsExtra conferenceId={conferenceId} data={extraDocs} onChanged={() => { void myDocs.reload(); }} />
+                  : <ConferenceDocsSection docs={roleDocs} />}
               </Pane>
             )}
 

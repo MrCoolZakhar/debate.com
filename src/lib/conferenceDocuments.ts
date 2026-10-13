@@ -286,7 +286,8 @@ export interface MyConferenceDoc {
   visible_to: string[]; ask_back: boolean; required: boolean; due_at: string | null; due_label: string | null; overdue: boolean;
   application_id: string | null; can_send_back: boolean; my_return: MyReturn | null;
 }
-export interface MyConferenceDocs { enabled: boolean; warnings: unknown[]; documents: MyConferenceDoc[] }
+/** `warnings` = how many REQUIRED documents this application still has to send back. */
+export interface MyConferenceDocs { enabled: boolean; warnings: number; documents: MyConferenceDoc[] }
 
 /** One RPC, the server's object as is; an error or ok:false becomes a plain sentence. */
 async function docRpc<T>(fn: string, args: Record<string, unknown>, fallback: string): Promise<DocAnswer<T>> {

@@ -20,6 +20,11 @@
 //   org_proofs        organiser: manual payment proofs waiting for review      -> /manage/<slug>/financials/invoices
 //   org_inbox         organiser: unread participant messages                  -> /manage/<slug>/communications[?inbox=<id>]
 //   org_aid           organiser: financial aid requests pending               -> /manage/<slug>/financials/aid
+//   document_due      a document the caller still has to send back (required,
+//                     due within 7 days, or sent back)                         -> /conferences/<slug>/role
+//   document_sent_back the organisers sent the caller's copy back, with a note -> /conferences/<slug>/role
+//   org_document_returns organiser: returned copies waiting for review         -> /manage/<slug>/documents?tab=everyone
+//   (the three document kinds come only for conferences with Document Uploads on, or demo ones)
 //
 // THE TWO COLOURS (owner, 24 Sep 2026). The avatar badge carries two counts:
 //   RED    = messages and drafts: an unread secretariat reply (1 per thread),
@@ -59,7 +64,8 @@ import { DRAFTS_CHANGED_EVENT } from '@/hooks/useDraftCount';
 export type ActivityKind =
   | 'chair_invite' | 'organiser_invite' | 'import_invite'
   | 'proof_rejected' | 'payment_due' | 'reply' | 'draft' | 'allocation' | 'accepted'
-  | 'org_applications' | 'org_proofs' | 'org_inbox' | 'org_aid';
+  | 'org_applications' | 'org_proofs' | 'org_inbox' | 'org_aid'
+  | 'document_due' | 'document_sent_back' | 'org_document_returns';
 
 export type ActivityTone = 'red' | 'orange';
 
@@ -106,6 +112,7 @@ interface Raw {
   due_cents?: number | null; currency?: string | null; subject?: string | null;
   country_name?: string | null; country_code?: string | null; count?: number | null; new_count?: number | null;
   request_id?: string | null;
+  document_id?: string | null; due_at?: string | null; required?: boolean | null; note?: string | null;
 }
 
 const ROLE_WORD: Record<string, string> = {
@@ -117,6 +124,13 @@ const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one :
 const roleHref = (slug: string, role: string | null | undefined) =>
   role ? `/conferences/${slug}/role/${encodeURIComponent(role)}` : `/conferences/${slug}`;
 const idTail = (id: string) => id.slice(id.indexOf(':') + 1);
+/** "14 Oct" in the reader's locale, or '' for no or a bad date. */
+function shortDate(iso: string | null | undefined): string {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  try { return d.toLocaleDateString(undefined, { day: 'numeric', month: 'short' }); } catch { return ''; }
+}
 
 function shape(r: Raw): ActivityItem | null {
   const c = r.conference;
@@ -196,6 +210,22 @@ function shape(r: Raw): ActivityItem | null {
       if (n <= 0) return null;
       return { ...base, organiser: true, kind: 'org_aid', title: plural(n, 'aid request to decide', 'aid requests to decide'),
         detail: conf, href: `/manage/${slug}/financials/aid` };
+    case 'document_due': {
+      const name = (r.title ?? '').trim() || 'a document';
+      const due = shortDate(r.due_at);
+      return { ...base, kind: 'document_due', title: `Send back ${name}`,
+        detail: due ? `${conf} · due ${due}` : conf, href: `/conferences/${slug}/role` };
+    }
+    case 'document_sent_back': {
+      const name = (r.title ?? '').trim() || 'Your document';
+      return { ...base, kind: 'document_sent_back', tone: 'red', title: `${name} was sent back`,
+        detail: (r.note ?? '').trim() || conf, href: `/conferences/${slug}/role` };
+    }
+    case 'org_document_returns':
+      if (n <= 0) return null;
+      return { ...base, organiser: true, kind: 'org_document_returns',
+        title: plural(n, 'returned copy to review', 'returned copies to review'),
+        detail: conf, href: `/manage/${slug}/documents?tab=everyone` };
     default:
       return null;
   }

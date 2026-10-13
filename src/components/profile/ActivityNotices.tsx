@@ -27,7 +27,7 @@ import Link from 'next/link';
 import { useState } from 'react';
 import {
   Gavel, UserPlus, Ticket, CreditCard, FileWarning, MessageSquareText, FileClock, MapPin, BadgeCheck,
-  ClipboardList, Receipt, Inbox, HandCoins, ChevronRight, Check, X, type LucideIcon,
+  ClipboardList, Receipt, Inbox, HandCoins, FileUp, FileX2, FileCheck2, ChevronRight, Check, X, type LucideIcon,
 } from 'lucide-react';
 import { CircleFlag } from '@/components/CircleFlag';
 import { useAuth } from '@/components/AuthProvider';
@@ -62,6 +62,9 @@ const LOOK: Record<ActivityKind, KindLook> = {
   org_proofs: { icon: Receipt, fg: '#1B3828', bg: 'rgba(27,56,40,0.10)' },
   org_inbox: { icon: Inbox, fg: '#1B3828', bg: 'rgba(27,56,40,0.10)' },
   org_aid: { icon: HandCoins, fg: '#1B3828', bg: 'rgba(27,56,40,0.10)' },
+  document_due: { icon: FileUp, fg: '#8A6614', bg: 'rgba(182,135,31,0.16)' },
+  document_sent_back: { icon: FileX2, fg: '#8B2020', bg: 'rgba(139,32,32,0.10)' },
+  org_document_returns: { icon: FileCheck2, fg: '#1B3828', bg: 'rgba(27,56,40,0.10)' },
 };
 
 function RoundPicture({ src, size, onFail }: { src: string; size: number; onFail: () => void }) {
