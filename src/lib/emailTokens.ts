@@ -35,6 +35,11 @@ export const EMAIL_TOKEN_KEYS = [
   // trigger, which substitutes these itself.
   'co_delegate',
   'co_delegate_email',
+  // Document Uploads only. Substituted by the server (event_email_queue ctx).
+  'document_title',
+  'document_due',
+  'review_note',
+  'days_left',
 ] as const;
 
 export type EmailTokenKey = (typeof EMAIL_TOKEN_KEYS)[number];
@@ -58,7 +63,30 @@ export const EMAIL_TOKEN_LABELS: Record<EmailTokenKey, string> = {
   invited_by: 'Invited By',
   co_delegate: 'Co-delegate',
   co_delegate_email: 'Co-delegate Email',
+  document_title: 'Document Title',
+  document_due: 'Due Date',
+  review_note: "Organizer's Note",
+  days_left: 'Days Left',
 };
+
+/** Sample values for the document tokens in previews and "Send test to me": a real
+ *  applicant has none (the server fills them per email), so a preview never shows a gap. */
+export const DOCUMENT_TOKEN_SAMPLES: Partial<Record<EmailTokenKey, string>> = {
+  document_title: 'Consent Form',
+  document_due: '20 Oct 2026',
+  review_note: 'Please sign page 2',
+  days_left: 'in 3 days',
+};
+
+/** The context with a sample for every document token it leaves empty. */
+export function withDocumentSamples(ctx: EmailTokenContext): EmailTokenContext {
+  const out: EmailTokenContext = { ...ctx };
+  for (const [k, v] of Object.entries(DOCUMENT_TOKEN_SAMPLES) as [EmailTokenKey, string][]) {
+    const cur = out[k];
+    if (cur === null || cur === undefined || cur === '') out[k] = v;
+  }
+  return out;
+}
 
 export type EmailTokenContext = Partial<Record<EmailTokenKey, string | null>>;
 

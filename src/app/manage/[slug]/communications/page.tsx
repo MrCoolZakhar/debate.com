@@ -15,7 +15,7 @@ import { getAuthedClient, getFreshAuthedClient } from '@/lib/supabase-auth';
 import { useAuth } from '@/components/AuthProvider';
 import { ConfirmModal, useConfirmModal } from '@/components/ConfirmModal';
 import {
-  EMAIL_TOKEN_KEYS, EMAIL_TOKEN_LABELS,
+  EMAIL_TOKEN_KEYS, EMAIL_TOKEN_LABELS, DOCUMENT_TOKEN_SAMPLES,
   type EmailTokenContext, type EmailTokenKey,
 } from '@/lib/emailTokens';
 import { ALWAYS_ON_EMAILS, ALWAYS_ON_LINE } from './alwaysOnEmails';
@@ -2406,6 +2406,7 @@ function CommunicationsPageInner() {
       conference_name: conference.full_name,
       conference_dates: formatDateRange(conference.start_date, conference.end_date),
       fee: resolveFeeToken('delegate'),
+      ...DOCUMENT_TOKEN_SAMPLES,
     };
     const ctx: EmailTokenContext = {};
     for (const key of EMAIL_TOKEN_KEYS) {

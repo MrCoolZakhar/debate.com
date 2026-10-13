@@ -57,6 +57,14 @@ export const EVENT_REGISTRY = [
   { key: 'not_attending', label: 'Marked Not Attending', description: 'Sent when a delegate is marked not attending.', defaultDelivery: 'manual' },
   { key: 'attendance_restored', label: 'Attendance Restored', description: "Sent when a delegate's attendance is restored.", defaultDelivery: 'immediate' },
   { key: 'documents_published', label: 'Study guide released', description: "Sent automatically to a committee's delegates when its study guide release time passes.", defaultDelivery: 'immediate' },
+  // Document Uploads (12 Oct 2026): sent ONLY by the server (event_email_queue, drained by the
+  // event-emails edge function v2). Nothing on the client queues them; the rows exist so
+  // Communications lists them and an organizer can write their own copy or switch one off.
+  { key: 'document_shared', label: 'Document shared', description: "Sent when organisers share a document and choose to email the people it is for.", defaultDelivery: 'immediate' },
+  { key: 'document_return_requested', label: 'Document to send back', description: "Sent when organisers share a document people must send back, and choose to email them.", defaultDelivery: 'immediate' },
+  { key: 'document_return_accepted', label: 'Returned copy accepted', description: "Sent when organisers accept a copy someone sent back.", defaultDelivery: 'immediate' },
+  { key: 'document_return_sent_back', label: 'Returned copy sent back', description: "Sent when organisers send a copy back with a note.", defaultDelivery: 'immediate' },
+  { key: 'document_return_reminder', label: 'Document due reminder', description: "Sent 3 days before a send-back document is due and on the day, to people who have not sent it.", defaultDelivery: 'immediate' },
   { key: 'position_paper_due', label: 'Position paper due', description: 'Sent to delegates who have not submitted a position paper yet, pointing them at the deadline. Send it by hand when you want it; it does not repeat on its own.', defaultDelivery: 'manual' },
   { key: 'chair_assigned', label: 'Chair Assigned', description: 'Sent when someone is assigned as a committee chair.', defaultDelivery: 'immediate' },
   { key: 'committee_chair_invite', label: 'Chair invite', description: 'Sent when an organizer invites someone to chair a committee. Always sends, clicking INVITE is the consent, using your draft if enabled, otherwise our default.', defaultDelivery: 'immediate', functional: true },
@@ -141,6 +149,11 @@ export const NOTIFICATION_CATEGORY: Record<EventKey, NotificationCategory> = {
   not_attending: 'applications',
   attendance_restored: 'applications',
   documents_published: 'documents',
+  document_shared: 'documents',
+  document_return_requested: 'documents',
+  document_return_accepted: 'documents',
+  document_return_sent_back: 'documents',
+  document_return_reminder: 'documents',
   position_paper_due: 'documents',
   chair_assigned: 'applications',
   committee_chair_invite: 'applications',
@@ -279,6 +292,8 @@ export const ESSENTIAL_DEFAULT_ON_EVENTS = new Set<string>([
   'co_delegate_assigned',
   // Money answers (owner, 7 Oct 2026).
   'aid_approved', 'aid_denied', 'fee_waived', 'spot_received', 'spot_lost',
+  // Document Uploads (owner, 12 Oct 2026): sent by the server only; a missing row means on.
+  'document_shared', 'document_return_requested', 'document_return_accepted', 'document_return_sent_back', 'document_return_reminder',
 ]);
 
 /** Whether an event with NO template row still sends (our default copy). */

@@ -25,7 +25,7 @@
 
 import { useMemo, useState } from 'react';
 import { X, Send, PenLine } from 'lucide-react';
-import { resolveTokens, type EmailTokenContext } from '@/lib/emailTokens';
+import { resolveTokens, withDocumentSamples, type EmailTokenContext } from '@/lib/emailTokens';
 import { flattenBlocksToPlainText } from '@/lib/emailBlocks';
 import type { EmailRenderConference } from '@/lib/emailHtml';
 import { eventEmailSource, eventEmailHtml, eventEmailSubject, type PreviewTemplate } from '@/lib/eventEmailPreview';
@@ -87,7 +87,8 @@ export default function DefaultEmailPreviewModal({
     return previewCandidates.filter(c => c.label.toLowerCase().includes(q)).slice(0, 6);
   }, [previewCandidates, search]);
   const candidate = candidateId ? previewCandidates.find(c => c.id === candidateId) ?? null : null;
-  const ctx: EmailTokenContext = candidate?.ctx ?? testSendContext;
+  // A real applicant has no document tokens (the server fills them per email): sample them.
+  const ctx: EmailTokenContext = candidate ? withDocumentSamples(candidate.ctx) : testSendContext;
 
   const html = useMemo(() => eventEmailHtml(src, eventKey, conference, ctx), [src, eventKey, conference, ctx]);
   const subject = eventEmailSubject(src, conference, ctx);

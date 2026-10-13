@@ -21,7 +21,7 @@
 
 import {
   UserRound, BadgeCheck, Users, Landmark, Globe, Wallet, Building2, CalendarDays,
-  CreditCard, Mail, MessageSquare, KeyRound, Link2, Ban, Trophy,
+  CreditCard, Mail, MessageSquare, KeyRound, Link2, Ban, Trophy, FileText, CalendarClock, Hourglass,
 } from 'lucide-react';
 import { EMAIL_TOKEN_LABELS, type EmailTokenKey } from '@/lib/emailTokens';
 
@@ -65,6 +65,11 @@ export const TOKEN_IDENTITY: Record<EmailTokenKey, TokenIdentity> = {
   invited_by: { emoji: 'Bust in silhouette', glyph: '🧑', icon: UserRound, short: 'Who invited', family: 'person', becomes: 'The organizer who sent the invitation.' },
   co_delegate: { emoji: 'Busts in silhouette', glyph: '🧑‍🤝‍🧑', icon: Users, short: 'Co-delegate', family: 'person', becomes: 'On a double delegation, the other delegate sharing their seat.' },
   co_delegate_email: { emoji: 'Envelope', glyph: '✉️', icon: Mail, short: 'Co-delegate email', family: 'person', becomes: "On a double delegation, the co-delegate's email address." },
+  // Document Uploads (prompt 110): filled by the server in the five document emails only.
+  document_title: { emoji: 'Page facing up', glyph: '📄', icon: FileText, short: 'Document', family: 'conference', becomes: 'The title of the document, such as Consent Form.' },
+  document_due: { emoji: 'Spiral calendar', glyph: '🗓️', icon: CalendarClock, short: 'Due date', family: 'conference', becomes: 'When the document is due, such as 20 Oct 2026.' },
+  review_note: { emoji: 'Speech balloon', glyph: '💬', icon: MessageSquare, short: 'Your note', family: 'thread', becomes: 'The note you wrote when you sent a copy back.' },
+  days_left: { emoji: 'Hourglass done', glyph: '⏳', icon: Hourglass, short: 'Days left', family: 'conference', becomes: 'How long until it is due, such as in 3 days.' },
 };
 
 export const TOKEN_FAMILY_LABEL: Record<TokenFamily, string> = {

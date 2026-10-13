@@ -299,6 +299,53 @@ export const DEFAULT_EVENT_EMAILS: Record<string, DefaultEventEmail> = {
       VIEW_CONFERENCE_BUTTON,
     ],
   },
+  // Document Uploads (12 Oct 2026). A mirror of the server's copy in the event-emails edge
+  // function (v2), which is what actually sends them: keep the two word for word.
+  document_shared: {
+    subject: 'New document: {{document_title}}',
+    blocks: [
+      { type: 'paragraph', variant: 'heading', content: 'A new document for you' },
+      { type: 'paragraph', content: 'Hi {{delegate_name}},\n\n{{conference_name}} shared a document with you: **{{document_title}}**.' },
+      { type: 'button', label: 'Open on Gavelling', destination: 'documents' },
+    ],
+  },
+  document_return_requested: {
+    subject: 'Please send back: {{document_title}}',
+    blocks: [
+      { type: 'paragraph', variant: 'heading', content: 'Please send this back' },
+      { type: 'paragraph', content: 'Hi {{delegate_name}},\n\n{{conference_name}} shared **{{document_title}}** and asks you to send it back, filled in or signed.' },
+      { type: 'facts', items: [{ label: 'Due', value: '{{document_due}}' }] },
+      { type: 'paragraph', content: 'Download it, fill it in, then upload your copy on Gavelling.' },
+      { type: 'button', label: 'Open on Gavelling', destination: 'documents' },
+    ],
+  },
+  document_return_accepted: {
+    subject: 'Accepted: {{document_title}}',
+    blocks: [
+      { type: 'paragraph', variant: 'heading', content: 'Your copy was accepted' },
+      { type: 'paragraph', content: 'Hi {{delegate_name}},\n\n{{conference_name}} accepted the copy of **{{document_title}}** you sent. There is nothing more to do.' },
+      { type: 'button', label: 'Open on Gavelling', destination: 'documents' },
+    ],
+  },
+  document_return_sent_back: {
+    subject: 'Please send {{document_title}} again',
+    blocks: [
+      { type: 'paragraph', variant: 'heading', content: 'Your copy was sent back' },
+      { type: 'paragraph', content: 'Hi {{delegate_name}},\n\n{{conference_name}} looked at the copy of **{{document_title}}** you sent and asked for a new one.' },
+      { type: 'facts', items: [{ label: 'Their note', value: '{{review_note}}' }] },
+      { type: 'paragraph', content: 'Upload a new copy on Gavelling.' },
+      { type: 'button', label: 'Upload a new copy', destination: 'documents' },
+    ],
+  },
+  document_return_reminder: {
+    subject: 'Reminder: {{document_title}} is due {{days_left}}',
+    blocks: [
+      { type: 'paragraph', variant: 'heading', content: 'Due {{days_left}}' },
+      { type: 'paragraph', content: 'Hi {{delegate_name}},\n\n{{conference_name}} is still waiting for your copy of **{{document_title}}**.' },
+      { type: 'facts', items: [{ label: 'Due', value: '{{document_due}}' }] },
+      { type: 'button', label: 'Send it back', destination: 'documents' },
+    ],
+  },
   chair_assigned: {
     subject: "You've been assigned as a chair: {{conference_name}}",
     blocks: [

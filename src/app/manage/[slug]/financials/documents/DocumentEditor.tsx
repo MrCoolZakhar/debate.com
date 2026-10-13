@@ -34,7 +34,7 @@ const SENT_FOR_MS = 4000;
  * reason, status and original receipt numbers. Until then a refund receipt is
  * shown read only. Flip this together with that server change (prompt 109).
  */
-const REFUND_WORDS_EDITABLE = false;
+const REFUND_WORDS_EDITABLE = true;
 
 /** The words of a refund receipt that can be written. */
 const REFUND_KEYS = ['title', 'reason', 'footer'] as const;
