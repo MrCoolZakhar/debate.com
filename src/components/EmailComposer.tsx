@@ -84,6 +84,7 @@ import ConferenceFilesPanel, {
 import DesignPanel, { type DesignControls } from '@/components/email/DesignPanel';
 import type { ReachGroup } from '@/components/email/AudienceReach';
 import { friendlyError } from '@/lib/friendlyError';
+import { outboxAttachments, withDocumentsButton, type EmailAttachment } from '@/lib/emailAttachments';
 
 const FOREST = '#1B3828';
 const GOLD = '#EED98A';
@@ -155,6 +156,13 @@ interface EmailComposerProps {
   sendSlot?: React.ReactNode;
   /** A quiet line under Send (the page's "N of 1,000 free emails used"). */
   sendingNote?: React.ReactNode;
+  /** Files attached to this one-off send (prompt 113), drawn under "who gets
+   *  it" in the sending column. Absent = nothing drawn. */
+  attachmentsSlot?: React.ReactNode;
+  /** Drawn under the real email in "See it for real" (the attachment chips). */
+  previewFooter?: React.ReactNode;
+  /** The attachments "Send me a test" carries, so the organiser can check them. */
+  testAttachments?: EmailAttachment[];
 
   // ── The builder's own header ──────────────────────────────────────────────
   // These three exist so the page can STOP rendering a header row of its own.
@@ -663,7 +671,7 @@ type AddTab = 'blocks' | 'details' | 'files' | 'starters';
 
 export default function EmailComposer({
   conference, conferenceId, initialSubject, initialBlocks, previewCandidates, onChange, unresolvedRecipients,
-  testSendContext, accessToken, organizerEmail, reachSlot, sendSlot, sendingNote,
+  testSendContext, accessToken, organizerEmail, reachSlot, sendSlot, sendingNote, attachmentsSlot, previewFooter, testAttachments,
   backSlot, actionsSlot, name, onNameChange, design, eventKey,
 }: EmailComposerProps) {
   /** How "See it for real" and the test send render: like the real send. */
@@ -1140,7 +1148,8 @@ export default function EmailComposer({
     setSendingTest(true);
     setTestMessage(null);
     const ctx = asCandidate?.ctx ?? testSendContext;
-    const liveBlocks = stripIds(blocks);
+    const testFiles = testAttachments && testAttachments.length > 0 ? testAttachments : null;
+    const liveBlocks = testFiles ? withDocumentsButton(stripIds(blocks), testFiles) : stripIds(blocks);
     const supabase = getAuthedClient(accessToken);
     const { error } = await supabase.from('email_outbox').insert({
       conference_id: conferenceId,
@@ -1151,6 +1160,7 @@ export default function EmailComposer({
       body: resolveTokens(flattenBlocksToPlainText(liveBlocks, previewConference), ctx),
       body_html: renderEmailHtml({ blocks: liveBlocks, conference: previewConference, ctx, ...renderAs }),
       status: 'pending',
+      ...(testFiles ? { attachments: outboxAttachments(testFiles) } : {}),
     });
     setSendingTest(false);
     if (error) { setTestMessage(friendlyError(error, "Couldn't send the test email. Please try again.")); return; }
@@ -1945,6 +1955,12 @@ export default function EmailComposer({
           <div style={{ height: 1, backgroundColor: 'rgba(27,56,40,0.1)', margin: '16px 0 14px' }} />
         </>
       )}
+      {attachmentsSlot && (
+        <>
+          {attachmentsSlot}
+          <div style={{ height: 1, backgroundColor: 'rgba(27,56,40,0.1)', margin: '16px 0 14px' }} />
+        </>
+      )}
       <PanelTitle emoji="Check mark button" hint="Click any part of the email to change it. When everything is ticked, send it from the bottom of this column.">
         Before You Send
       </PanelTitle>
@@ -2413,6 +2429,11 @@ export default function EmailComposer({
                 boxShadow: '0 1px 2px rgba(27,56,40,0.12), 0 14px 34px rgba(27,56,40,0.20)',
               }}
             />
+            {previewFooter && (
+              <div style={{ width: previewWidth === 'desktop' ? '100%' : 390, maxWidth: previewWidth === 'desktop' ? 620 : '100%', marginTop: 12 }}>
+                {previewFooter}
+              </div>
+            )}
           </div>
         )}
       </div>

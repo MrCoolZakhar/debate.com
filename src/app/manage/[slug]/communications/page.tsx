@@ -31,6 +31,8 @@ import { type EmailBlock, normalizeBlocks, flattenBlocksToPlainText, blocksHaveC
 import { renderEmailHtml, resolveEmailTheme, type EmailTheme } from '@/lib/emailHtml';
 import { triggerEmailDelivery } from '@/lib/emailDelivery';
 import { queueAdHocEmail } from '@/lib/adHocEmail';
+import EmailAttachments, { AttachmentChipsReadOnly, useEmailAttachmentsSupport } from './EmailAttachments';
+import { attachmentsProblem, withDocumentsButton, type EmailAttachment } from '@/lib/emailAttachments';
 import { readEmailAllowance, emailsShort, emailsShortSentence, emailsUsedLine, isEmailAllowanceMessage, type EmailAllowance } from '@/lib/emailAllowance';
 import GetMoreEmails from '../store/GetMoreEmails';
 import { summarizeUnresolved, unresolvedFieldLabel } from '@/lib/emailUnresolved';
@@ -1548,6 +1550,10 @@ function CommunicationsPageInner() {
   const [builderBlocks, setBuilderBlocks] = useState<EmailBlock[]>([]);
   const [builderDelivery, setBuilderDelivery] = useState<'immediate' | 'manual'>('manual');
   const [builderError, setBuilderError] = useState('');
+  // Files attached to THIS one-off send (prompt 113). Never saved with the
+  // template; cleared whenever the builder opens or closes.
+  const [builderAttachments, setBuilderAttachments] = useState<EmailAttachment[]>([]);
+  const attachSupport = useEmailAttachmentsSupport(conference?.id ?? null);
   const [savingTemplate, setSavingTemplate] = useState(false);
   const [sending, setSending] = useState(false);
   // The bulk email allowance (src/lib/emailAllowance.ts): 1,000 free per
@@ -2517,6 +2523,7 @@ function CommunicationsPageInner() {
     builderJustOpenedRef.current = true;
     builderInitialRef.current = JSON.stringify({ subject: initialSubject, blocks: initialBlocks });
     setPickerOpen(false);
+    setBuilderAttachments([]);
     setBuilderOpen(true);
   }, [templatesByEvent]);
 
@@ -2542,6 +2549,7 @@ function CommunicationsPageInner() {
     builderJustOpenedRef.current = true;
     builderInitialRef.current = JSON.stringify({ subject: initialSubject, blocks: initialBlocks });
     setPickerOpen(false);
+    setBuilderAttachments([]);
     setBuilderOpen(true);
   }
 
@@ -2567,6 +2575,7 @@ function CommunicationsPageInner() {
     clearErr('communications-builder');
     builderJustOpenedRef.current = true;
     setPickerOpen(false);
+    setBuilderAttachments([]);
     setBuilderOpen(true);
   }
 
@@ -2575,6 +2584,7 @@ function CommunicationsPageInner() {
   }
 
   function closeBuilder() {
+    setBuilderAttachments([]);
     setBuilderPairError('');
     setBuilderOpen(false);
   }
@@ -2888,6 +2898,7 @@ function CommunicationsPageInner() {
     setBuilderError('');
     clearErr('communications-builder');
     if (finalRecipients.length === 0) { notifyErr('No recipients selected.', 'communications-builder'); return; }
+    if (attachProblem) { notifyErr(attachProblem, 'communications-builder'); return; }
     // Awaited on purpose: we must have the real template id + a validated save
     // before offering to send. Busy-state is scoped to the SEND button only.
     setOpeningSend(true);
@@ -2928,6 +2939,7 @@ function CommunicationsPageInner() {
     // opt-outs, instead of reading notify_email_marketing itself. (The
     // sidebar's `finalRecipients` preview applies the same `!== false`
     // semantics, so the numbers agree; the shared path is authoritative.)
+    const sendAttachments = builderEventKey === null && attachSupport.enabled ? builderAttachments : [];
     const result = await queueAdHocEmail(supabase, {
       conferenceId: conference.id,
       sentBy: user.id,
@@ -2935,8 +2947,18 @@ function CommunicationsPageInner() {
       blocks: builderBlocks,
       applicationIds: matchedRecipients.map(a => a.id),
       recipientFilter: recipientFilterPayload,
+      attachments: sendAttachments,
     });
 
+    if (result.error && result.attachmentRefused) {
+      // The outbox trigger's own sentence about the files: shown in the page
+      // like the allowance sentence, and the attachments stay to be fixed.
+      setBuilderError(result.error);
+      setEmailsBlocked(false);
+      setSending(false);
+      setSendConfirmOpen(false);
+      return;
+    }
     if (result.error) {
       // The database's own cap ("This conference has used its N emails…")
       // stays in the page: it carries the Get more emails button.
@@ -2974,7 +2996,7 @@ function CommunicationsPageInner() {
         sent_at: sentAtIso,
         status: 'sent' as const,
         created_at: sentAtIso,
-        body_html: renderEmailHtml({ blocks: builderBlocks, conference, ctx: {} }),
+        body_html: renderEmailHtml({ blocks: withDocumentsButton(builderBlocks, sendAttachments), conference, ctx: {} }),
       }, ...prev]);
     }
     setOutboxPending(p => p + result.queued);
@@ -3340,6 +3362,10 @@ function CommunicationsPageInner() {
   const sendableCount = finalRecipients.length - unresolvedCount;
   const requireTypedConfirm = sendableCount > 200;
   const confirmDisabled = requireTypedConfirm && sendConfirmText.trim().toUpperCase() !== 'SEND';
+  // Attachments only on a one-off email, and only where the conference has them on.
+  const attachOn = builderEventKey === null && attachSupport.enabled;
+  const attachProblem = attachOn ? attachmentsProblem(builderAttachments) : null;
+  const shownAttachments = attachOn ? builderAttachments : [];
 
   // ── Row renderer for ad-hoc templates (SEND lives in the editor and is
   // always visible, so these rows carry no state of their own) ─────────────
@@ -4412,7 +4438,7 @@ function CommunicationsPageInner() {
                 <SendButton
                   block
                   onClick={handleOpenSendConfirm}
-                  disabled={sending || openingSend || finalRecipients.length === 0}
+                  disabled={sending || openingSend || finalRecipients.length === 0 || !!attachProblem}
                   count={finalRecipients.length}
                   busy={sending ? 'Queueing…' : openingSend ? 'Saving…' : null}
                 />
@@ -4422,6 +4448,17 @@ function CommunicationsPageInner() {
                   {emailsUsedLine(allowance)}
                 </Link>
               ) : undefined}
+              attachmentsSlot={attachOn ? (
+                <EmailAttachments
+                  conferenceId={conference.id}
+                  docs={attachSupport.docs}
+                  value={builderAttachments}
+                  onChange={setBuilderAttachments}
+                  savedAsTemplate={!!builderTemplateId}
+                />
+              ) : undefined}
+              previewFooter={shownAttachments.length > 0 ? <AttachmentChipsReadOnly value={shownAttachments} /> : undefined}
+              testAttachments={shownAttachments.length > 0 && !attachProblem ? shownAttachments : undefined}
               reachSlot={builderEventKey === null ? (
                 <AudienceReach
                   layout="column"
@@ -4445,7 +4482,7 @@ function CommunicationsPageInner() {
                   excludedCount={excludedIds.size}
                   restored={audienceRestored}
                   onSend={handleOpenSendConfirm}
-                  sendDisabled={sending || openingSend || finalRecipients.length === 0}
+                  sendDisabled={sending || openingSend || finalRecipients.length === 0 || !!attachProblem}
                   sendBusyLabel={sending ? 'Queueing…' : openingSend ? 'Saving…' : null}
                 />
               ) : undefined}
@@ -4483,6 +4520,7 @@ function CommunicationsPageInner() {
               >
                 <RecipientRoster groups={reachGroups} reachCount={finalRecipients.length} wide={false} listMaxHeight={240} />
               </div>
+              {shownAttachments.length > 0 && <AttachmentChipsReadOnly value={shownAttachments} />}
               {unresolvedCount > 0 && (
                 <div role="alert" className="rounded-xl px-3 py-2.5" style={{ backgroundColor: 'rgba(139,32,32,0.08)', border: '1px solid rgba(139,32,32,0.35)' }}>
                   <p className="font-semibold" style={{ color: '#8B2020' }}>
@@ -4520,7 +4558,7 @@ function CommunicationsPageInner() {
           confirmLabel={sending ? 'Sending' : unresolvedCount > 0 ? `Send to ${sendableCount}` : 'Send'}
           cancelLabel="Cancel"
           loading={sending}
-          confirmDisabled={confirmDisabled || sendableCount === 0}
+          confirmDisabled={confirmDisabled || sendableCount === 0 || !!attachProblem}
           onConfirm={handleConfirmSend}
           onCancel={() => { if (!sending) setSendConfirmOpen(false); }}
         />

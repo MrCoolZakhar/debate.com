@@ -28,7 +28,8 @@ import { triggerEmailDelivery } from '@/lib/emailDelivery';
 import { unresolvedFields } from '@/lib/emailUnresolved';
 import { formatFee } from '@/lib/utils';
 import { activePhaseFee, type FeePhase } from '@/lib/finance';
-import { friendlyError } from '@/lib/friendlyError';
+import { friendlyError, plainOrFallback } from '@/lib/friendlyError';
+import { outboxAttachments, withDocumentsButton, type EmailAttachment } from '@/lib/emailAttachments';
 import { formatConferenceDates } from '@/lib/conferenceDates';
 
 interface ConferenceRow {
@@ -80,6 +81,9 @@ export interface QueueAdHocEmailArgs {
   /** Free-form provenance stored on email_sends.recipient_filter, so History
    *  can say where a send came from rather than showing an empty audience. */
   recipientFilter?: Record<string, unknown>;
+  /** Files sent with every email of this send (prompt 113). Absent or empty =
+   *  exactly the send as before. The outbox trigger checks them. */
+  attachments?: Pick<EmailAttachment, 'path' | 'file_name' | 'size' | 'isConferenceDocument'>[];
 }
 
 export interface QueueAdHocEmailResult {
@@ -95,6 +99,8 @@ export interface QueueAdHocEmailResult {
   unresolvedFields: string[];
   emailSendId: string | null;
   error?: string;
+  /** The outbox trigger refused the attachments; `error` is its sentence. */
+  attachmentRefused?: boolean;
 }
 
 function roleLabel(role: string): string {
@@ -158,7 +164,11 @@ export async function queueAdHocEmail(
   supabase: ReturnType<typeof getAuthedClient>,
   args: QueueAdHocEmailArgs
 ): Promise<QueueAdHocEmailResult> {
-  const { conferenceId, sentBy, subject, blocks, applicationIds } = args;
+  const { conferenceId, sentBy, subject, applicationIds } = args;
+  const attachments = args.attachments && args.attachments.length > 0 ? args.attachments : null;
+  // A conference document attached adds one "Open on Gavelling" button to THIS
+  // send's blocks (body, HTML and the History copy); the template is untouched.
+  const blocks = attachments ? withDocumentsButton(args.blocks, attachments.map(a => ({ ...a }))) : args.blocks;
   const empty: QueueAdHocEmailResult = { queued: 0, optedOut: 0, skippedUnresolved: 0, unresolvedFields: [], emailSendId: null };
   if (applicationIds.length === 0) return empty;
   if (!subject.trim() || blocks.length === 0) {
@@ -300,6 +310,7 @@ export async function queueAdHocEmail(
       body: resolveTokens(flatBody, ctx),
       body_html: renderEmailHtml({ blocks, conference: renderConf, ctx }),
       status: 'pending' as const,
+      ...(attachments ? { attachments: outboxAttachments(attachments.map(a => ({ ...a }))) } : {}),
     };
   })
   // Never a blank email. A one-off has no default copy to fall back to, so a
@@ -309,6 +320,12 @@ export async function queueAdHocEmail(
 
   const { error: outboxError } = await supabase.from('email_outbox').insert(rows);
   if (outboxError) {
+    // The attachment trigger answers a plain sentence (hint 'email_attachments'),
+    // shown as written, like the allowance sentence.
+    if ((outboxError as { hint?: string | null }).hint === 'email_attachments') {
+      return { queued: 0, optedOut, skippedUnresolved, unresolvedFields: unresolvedList, emailSendId, attachmentRefused: true,
+        error: plainOrFallback(outboxError.message, 'The attachments could not be sent. Check them and try again.') };
+    }
     return { queued: 0, optedOut, skippedUnresolved, unresolvedFields: unresolvedList, emailSendId, error: friendlyError(outboxError, 'Could not queue this send. Please try again.') };
   }
 
