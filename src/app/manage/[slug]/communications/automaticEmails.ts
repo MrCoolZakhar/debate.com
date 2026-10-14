@@ -106,7 +106,7 @@ export const EVENT_COPY: Record<EventKey, { name: string; when: string }> = {
   document_return_reminder: { name: 'Document due', when: '3 days before the due date and on the day, if not sent' },
   position_paper_due: { name: 'Position paper due', when: 'Only when you send it, to delegates without a paper' },
   session_join_invite: { name: 'Session code', when: 'Only when you send it, with the code to join their room' },
-  session_chair_invite: { name: 'Chair session code', when: 'Only when you send it, with the chair code' },
+  session_chair_invite: { name: 'Chair session code', when: 'Only when you send it, with the chair password' },
   not_attending: { name: 'Not attending', when: 'When you mark someone as not attending' },
   attendance_restored: { name: 'Attending again', when: 'When you mark them as attending again' },
   awards_open: { name: 'Award nominations open', when: 'Only when you send it, to your chairs' },

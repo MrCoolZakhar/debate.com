@@ -123,6 +123,11 @@ function JoinPageInner() {
   // Chair name selection — after committee found in chair mode
   const [chairName, setChairName] = useState('');
   const [chairNameMode, setChairNameMode] = useState<'select' | 'new'>('select');
+  // A room nobody has chaired yet has no names to pick from, so the page shows only the
+  // "new name" field (13 Oct 2026, Omni MUNC'26 HY62XX: the Join button never turned on,
+  // because the button and the join still read the empty pick list in 'select' mode).
+  // Derived, never stored: the mode is 'new' whenever there is nothing to select.
+  const effectiveNameMode: 'select' | 'new' = foundCommittee && foundCommittee.chairNames.length === 0 ? 'new' : chairNameMode;
   // Moderator (holds the gavel) vs Commenter (view-only, writes feedback). Asked FIRST in
   // the chair tab, as two big cards (26 Sep 2026, owner), so it starts unanswered (null):
   // nothing below it (name, chair code) shows and Join stays off until it is answered.
@@ -579,16 +584,18 @@ function JoinPageInner() {
     // ── Existing anonymous flow continues unchanged below ──
     if (!foundCommittee) { setError(t('join_not_found')); return; }
     if (mode === 'chair') {
-      const name = chairNameMode === 'new' ? newChairName.trim() : chairName;
+      const name = effectiveNameMode === 'new' ? newChairName.trim() : chairName;
       if (!name) { setError(t('join_select_name')); return; }
       // A NEW name may not be a seat of this room or a word the chat reserves. Names already
       // on the dais list stay selectable.
-      if (chairNameMode === 'new') {
+      if (effectiveNameMode === 'new') {
         const problem = chairNameProblem(name, foundCommittee.delegates.map((d) => d.country));
         if (problem) { setError(t(problem === 'seat' ? 'join_chair_name_is_seat' : 'join_chair_name_reserved')); return; }
       }
-      const expectedPassword = foundCommittee.dbChairJoinSuffix ?? getSettings(foundCommittee.code).chairJoinSuffix;
-      if (expectedPassword && chairPassword !== expectedPassword) {
+      // The room's own chair password (committees.settings.chairJoinSuffix) wins; this device's
+      // local copy is only a fallback for a row that carries none. Both sides trimmed.
+      const expectedPassword = (foundCommittee.dbChairJoinSuffix ?? getSettings(foundCommittee.code).chairJoinSuffix ?? '').trim();
+      if (expectedPassword && chairPassword.trim() !== expectedPassword) {
         setPasswordError(t('join_incorrect_code'));
         return;
       }
@@ -642,7 +649,7 @@ function JoinPageInner() {
     takeoverOkRef.current = null;
   }
 
-  const selectedChairName = chairNameMode === 'new' ? newChairName.trim() : chairName;
+  const selectedChairName = effectiveNameMode === 'new' ? newChairName.trim() : chairName;
   // The chair's name as the chair page will know it: the profile name on the verified
   // conference path, else the name picked or typed below.
   const myChairIdentity = isConferenceSession && !openPath
@@ -672,8 +679,8 @@ function JoinPageInner() {
         ? (!foundCommittee || !country || seatBlocked(country))
         : mode === 'chair'
         ? (!foundCommittee || chairRoleMissing ||
-            (chairNameMode === 'select' ? !chairName : !newChairName.trim()) ||
-            (requiresChairCode && !chairPassword) ||
+            (effectiveNameMode === 'select' ? !chairName : !newChairName.trim()) ||
+            (requiresChairCode && !chairPassword.trim()) ||
             chairAlreadyActive)
         : !foundCommittee
     );
@@ -1024,6 +1031,14 @@ function JoinPageInner() {
                             <RoleTile key={key} icon={icon} label={label} desc={desc} active={mode === key} onClick={() => resetMode(key)} />
                           ))}
                         </div>
+                        {/* A conference room with no countries at all offers no Delegate tile (there is
+                            no seat to take); say why instead of leaving it missing (13 Oct 2026). Rooms
+                            whose countries are all reserved keep today's behaviour. */}
+                        {openPath && foundCommittee && foundCommittee.delegates.length === 0 && (
+                          <p className="mt-2" style={{ fontFamily: OUTFIT, fontSize: 12.5, lineHeight: 1.5, color: C.inkSoft, textWrap: 'pretty' }}>
+                            {t('join_no_countries_yet')}
+                          </p>
+                        )}
                       </div>
                     );
                   })()}

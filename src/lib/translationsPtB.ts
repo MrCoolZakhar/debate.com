@@ -241,7 +241,7 @@ export const ptTranslationsB = {
   voting_roster_joined: "Entraram neste comitê: {names}.",
   voting_roster_open_roll_call: "Abra a chamada para dar assento a elas.",
   voting_roster_not_in_vote: "Esta votação não as inclui.",
-  voting_observer_write_failed: "Não foi possível alterar a placa de observadora. Verifique o código da Mesa e tente novamente.",
+  voting_observer_write_failed: "Não foi possível alterar a placa de observadora. Verifique a senha da Mesa e tente novamente.",
   voting_mark_present: "Marque pelo menos 1 delegação como presente",
   voting_end_debate: "Encerrar Debate",
   voting_sponsors: "Patrocinadores",

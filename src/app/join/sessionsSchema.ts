@@ -55,7 +55,7 @@ function breadcrumbs(items: [string, string][]) {
 export const JOIN_SCHEMAS = [
   webApplication(
     '/join',
-    'Join a Model UN committee with the session code your chair shares. Delegates follow the speakers list, ask to speak, chat, submit papers and vote from their own phone. Chairs join with the chair code.',
+    'Join a Model UN committee with the session code your chair shares. Delegates follow the speakers list, ask to speak, chat, submit papers and vote from their own phone. Chairs join with the 4-digit chair password.',
   ),
   {
     '@context': 'https://schema.org',

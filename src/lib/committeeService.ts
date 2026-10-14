@@ -261,7 +261,12 @@ function rowToCommittee(
     endedAt: (row.ended_at as string | null) ?? null,
     expiresAt: (row.expires_at as string | null) ?? null,
     resumingChair: (row.resuming_chair as string | null) ?? null,
-    dbChairJoinSuffix: ((row.settings as Record<string, unknown>)?.chairJoinSuffix as string) ?? null,
+    // Always a string (13 Oct 2026): a suffix stored as a JSON number would otherwise never
+    // equal the typed chair password. Not trimmed: the RLS check compares the header exactly.
+    dbChairJoinSuffix: (() => {
+      const v = (row.settings as Record<string, unknown>)?.chairJoinSuffix;
+      return v === null || v === undefined ? null : String(v);
+    })(),
     dbHeadChair: ((row.settings as Record<string, unknown>)?.headChair as string) ?? null,
     dbHeadChairDevice: ((row.settings as Record<string, unknown>)?.headChairDevice as string) || null,
     dbSeparateChairCode: ((row.settings as Record<string, unknown>)?.separateChairCode as boolean) ?? false,

@@ -384,14 +384,14 @@ export const DEFAULT_EVENT_EMAILS: Record<string, DefaultEventEmail> = {
     subject: 'Your session details for {{committee}}: {{conference_name}}',
     blocks: [
       { type: 'paragraph', variant: 'heading', content: '{{conference_name}} is live' },
-      { type: 'paragraph', content: "Hi {{delegate_name}},\n\nYour session code and chair code are ready in your chair dashboard. Use them to open your committee room when it's time to gavel in." },
+      { type: 'paragraph', content: "Hi {{delegate_name}},\n\nYour session code and chair password are ready in your chair dashboard. Use them to open your committee room when it's time to gavel in." },
       // Same reason as chair_assigned: no emblem, a chair application rarely
       // has an assigned committee to draw one from.
       { type: 'facts', items: [
         { label: 'Committee', value: '{{committee}}' },
         { label: 'Your role', value: '{{role}}' },
       ] },
-      { type: 'paragraph', content: 'Delegates join with the session code. The chair code is what gives you the dais.' },
+      { type: 'paragraph', content: 'Delegates join with the session code. The chair password is what gives you the dais.' },
       VIEW_CONFERENCE_BUTTON,
     ],
   },

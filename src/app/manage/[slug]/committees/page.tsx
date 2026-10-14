@@ -2240,7 +2240,11 @@ export default function CommitteesPage() {
               // ConferenceDetailClient.tsx and handleRemoveChair above.
               const daisIds = c.chair_user_ids ?? [];
               const daisLinkable = daisIds.length === dais.length;
-              const seatLabel = !isCrisis && c.delegation_size === 2
+              // A room with no countries yet (13 Oct 2026): slotCount 0 used to fall back to
+              // total_slots (1) and read "1 seat".
+              const seatLabel = c.slotCount === 0
+                ? (isCrisis ? 'No roles yet' : isCustom ? 'No members yet' : 'No countries yet')
+                : !isCrisis && c.delegation_size === 2
                 ? `${seats} ${isCustom ? 'members' : 'countries'} · ${seats * 2} seats`
                 : `${seats} ${isCrisis ? (seats === 1 ? 'role' : 'roles') : isCustom ? (seats === 1 ? 'member' : 'members') : (seats === 1 ? 'seat' : 'seats')}`;
               return (
@@ -2529,7 +2533,9 @@ export default function CommitteesPage() {
                     {/* Meta row — seats (the rank insignia moved to the corner) */}
                     <div className="flex flex-wrap items-center justify-center gap-1.5 mt-1">
                       <span className="text-[11px] font-semibold" style={{ color: '#6B5F52', fontFamily: "var(--font-brand), sans-serif", fontVariantNumeric: 'tabular-nums' }}>
-                        {!isCrisis && c.delegation_size === 2
+                        {c.slotCount === 0
+                          ? (isCrisis ? 'No roles yet' : isCustom ? 'No members yet' : 'No countries yet')
+                          : !isCrisis && c.delegation_size === 2
                           ? (isCustom ? `${seats} members × 2 seats` : `${seats} × 2 seats`)
                           : `${seats} ${isCrisis ? (seats === 1 ? 'role' : 'roles') : isCustom ? (seats === 1 ? 'member' : 'members') : (seats === 1 ? 'seat' : 'seats')}`}
                       </span>

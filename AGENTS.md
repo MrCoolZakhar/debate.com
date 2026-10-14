@@ -594,6 +594,7 @@ The Moderator's laptop on laggy / dropped venue Wi-Fi. **Kill switch:** `OFFLINE
 - `chairJoinSuffix`: 4-digit string, generated at committee creation (`committeeService.ts:100`) and stored in `committees.settings`.
 - `SettingsPanel.tsx:415-425` regenerates it **only** when the store copy is `''`, and otherwise re-syncs the existing one to the DB via `updateCommitteeChairSuffixInDB`.
 - Full chair code format: `{code}-{suffix}` e.g. "UNSC2026-4821".
+- **People see it as the "chair password" (13 Oct 2026):** the 4 digits alone (the organiser chip on the committees page shows and copies only the suffix; the join page field is "Chair password", placeholder "4-digit chair password", compared trimmed against `dbChairJoinSuffix`, which `rowToCommittee` now always maps to a string). Typing the full form still works. In a room with no chair names the join page derives its name mode as `new` (`effectiveNameMode`), so Join turns on.
 - Join page validates against `foundCommittee.dbChairJoinSuffix` (from DB), falling back to localStorage only if the DB value is missing (`join/page.tsx:281`).
 - Landing page: if code contains dash with 4-char suffix → auto-routes to chair tab.
 - Chair code NOT shown in the top bar (only the 6-char session code is, as a copy button) — only visible in Settings → Access panel.

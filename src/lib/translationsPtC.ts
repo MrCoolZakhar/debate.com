@@ -557,7 +557,7 @@ export const ptTranslationsC = {
   srp_conf_eyebrow: 'Seu comitê está em sessão',
   srp_conf_title: '{name}, sua sala está esperando.',
   srp_conf_title_anon: 'Sua sala está esperando.',
-  srp_conf_note: 'Você está na Mesa deste comitê, então não precisa do código da Mesa.',
+  srp_conf_note: 'Você está na Mesa deste comitê, então não precisa da senha da Mesa.',
   srp_rejoin_eyebrow: 'Sua sessão continua aberta',
   srp_rejoin_title: 'Continue de onde parou.',
   srp_chooser_title: '{n} salas estão esperando por você',

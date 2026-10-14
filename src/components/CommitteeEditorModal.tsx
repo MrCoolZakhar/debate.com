@@ -197,7 +197,7 @@ export async function sessionCommitteeClient(
   // The suffix is the only credential `is_session_chair` accepts. Without it
   // deletes and committees updates are rejected, so refuse rather than half-write.
   if (typeof suffix !== 'string' || !suffix) {
-    return { error: 'the live session has no chair code, so it cannot be updated' };
+    return { error: 'the live session has no chair password, so it cannot be updated' };
   }
   // `settings` and `topic` ride along because the organiser re-sync needs the
   // chair's agenda choice from them. Read-only; never write settings back.
