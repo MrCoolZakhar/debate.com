@@ -65,7 +65,7 @@ import { useCredits } from '@/hooks/useCredits';
 import { openCreditsPopup, openUnlimitedPopup } from '@/lib/purchasePopup';
 import LiveNowMenuSection from '@/components/liveRooms/LiveNowMenuSection';
 import ActivityNotices from '@/components/profile/ActivityNotices';
-import { useMyActivity, useOpenSeenState, markActivitySeen, isVisibleActivity } from '@/lib/myActivity';
+import { useMyActivity, useOpenSeenState, markActivitySeen, attentionRows, endActivityOpening } from '@/lib/myActivity';
 import { conferenceAcronymLabel } from '@/lib/conferenceLabels';
 import { invoiceDueCents, isInvoicePayable, type InvoiceStatus } from '@/lib/invoices';
 import { CircleFlag } from '@/components/CircleFlag';
@@ -179,7 +179,12 @@ export default function ProfileDropdown({ trigger, panelStyle }: ProfileDropdown
   const openSeen = useOpenSeenState(uid);
   const stampedOpen = useRef(false);
   useEffect(() => {
-    if (!open) { stampedOpen.current = false; return; }
+    if (!open) {
+      // Closing ends the opening: rows seen in it leave the list and the bubble together.
+      if (stampedOpen.current && uid) endActivityOpening(uid);
+      stampedOpen.current = false;
+      return;
+    }
     // Once per opening (StrictMode re-runs effects; a second stamp would hide
     // the new items during the very opening that is meant to show them).
     // Waits for the first answer, so what is marked is what is on screen.
@@ -188,7 +193,7 @@ export default function ProfileDropdown({ trigger, panelStyle }: ProfileDropdown
     markActivitySeen(uid, activityToken);
   }, [open, uid, activity, activityToken]);
   const attention = useMemo(
-    () => (activity ?? []).filter((i) => isVisibleActivity(i, openSeen)),
+    () => attentionRows(activity, openSeen),
     [activity, openSeen],
   );
   /** Something of the person's own is in flight (a draft, an imported place),

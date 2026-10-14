@@ -41,7 +41,6 @@ import { usePathname } from 'next/navigation';
 import { useAuth } from '@/components/AuthProvider';
 import ProfileDropdown from '@/components/ProfileDropdown';
 import { useMyActivity, markActivityKeySeen, activityWeight } from '@/lib/myActivity';
-import { useLiveRooms } from '@/lib/liveRooms';
 
 const OUTFIT = "var(--font-brand), sans-serif";
 
@@ -147,25 +146,21 @@ export function ProfileAvatar({
 
 const RED_BG = '#C81E1E';
 const RED_INK = '#FFFFFF';
-const ORANGE_BG = '#EA6A12';
-const ORANGE_INK = '#1C1410';
 
-/** One round counter on the avatar's edge. Plain numerals, 9+ past nine. */
-function Counter({ n, bg, ink, size, ring, place }: {
-  n: number; bg: string; ink: string; size: number; ring: string; place: 'top' | 'bottom';
-}) {
+/** The one bubble on the avatar's top right corner. Plain numerals, 9+ past nine. */
+function Counter({ n, size, ring }: { n: number; size: number; ring: string }) {
   return (
     <span
       aria-hidden
       className="pointer-events-none absolute flex items-center justify-center rounded-full"
       style={{
-        ...(place === 'top' ? { top: 0 } : { bottom: 0 }),
+        top: 0,
         right: 0,
         minWidth: size,
         height: size,
         padding: '0 3px',
-        backgroundColor: bg,
-        color: ink,
+        backgroundColor: RED_BG,
+        color: RED_INK,
         boxShadow: `0 0 0 2px ${ring}`,
         fontFamily: OUTFIT,
         fontWeight: 700,
@@ -179,14 +174,10 @@ function Counter({ n, bg, ink, size, ring, place }: {
   );
 }
 
-const count = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
-
-/** The avatar badges' accessible text, e.g. ", 2 messages or drafts, 5 new notifications". */
-export function attentionLabel(red: number, orange: number): string {
-  const parts: string[] = [];
-  if (red > 0) parts.push(count(red, 'unread message or draft', 'unread messages or drafts'));
-  if (orange > 0) parts.push(count(orange, 'new notification', 'new notifications'));
-  return parts.length ? `, ${parts.join(', ')}` : '';
+/** The bubble's accessible text, e.g. ", 2 things need your attention". */
+export function attentionLabel(n: number): string {
+  if (n <= 0) return '';
+  return `, ${n} ${n === 1 ? 'thing needs' : 'things need'} your attention`;
 }
 
 /** The signed-in user's avatar as the account-menu trigger. Renders nothing while signed out. */
@@ -202,8 +193,7 @@ export default function ProfileAvatarMenu({
   const { user, profile, session, loading } = useAuth();
   const uid = loading ? null : user?.id ?? null;
   const token = session?.access_token ?? null;
-  const { items, counts, seen } = useMyActivity(uid, token);
-  const { entries: live } = useLiveRooms(uid, token);
+  const { items, rows, seen } = useMyActivity(uid, token);
 
   // Opening a conference's applications page counts as seeing its new ones.
   const pathname = usePathname();
@@ -219,10 +209,11 @@ export default function ProfileAvatarMenu({
   }, [uid, appsKey]);
 
   if (!user) return null;
-  const red = counts.red;
-  const orange = counts.orange + (live?.length ?? 0);
+  // ONE bubble: the number of Needs Your Attention rows, the menu header's own
+  // number (attentionRows in myActivity.ts). Live rooms are not counted.
+  const attention = rows.length;
   const name = profile?.display_name || null;
-  const label = `Account menu${name ? `, ${name}` : ''}${attentionLabel(red, orange)}`;
+  const label = `Account menu${name ? `, ${name}` : ''}${attentionLabel(attention)}`;
   const badge = Math.max(16, Math.round(size * 0.34));
   const ring = tone === 'dark' ? '#1B3828' : '#EDE7D8';
   const offset = tone === 'dark' ? 'focus-visible:ring-offset-[#1B3828]' : 'focus-visible:ring-offset-[#EDE7D8]';
@@ -241,18 +232,7 @@ export default function ProfileAvatarMenu({
           style={{ width: size, height: size, padding: 0, border: 'none', background: 'transparent', cursor: 'pointer', transitionProperty: 'transform, filter', transitionDuration: '150ms' }}
         >
           <ProfileAvatar url={profile?.avatar_url} name={name} email={profile?.email ?? user.email} size={size} tone={tone} />
-          {red > 0 && <Counter n={red} bg={RED_BG} ink={RED_INK} size={badge} ring={ring} place="top" />}
-          {orange > 0 && (
-            <Counter
-              n={orange}
-              bg={ORANGE_BG}
-              ink={ORANGE_INK}
-              // Beside a red counter it is a size smaller, so red still reads first.
-              size={red > 0 ? Math.max(14, Math.round(badge * 0.84)) : badge}
-              ring={ring}
-              place={red > 0 ? 'bottom' : 'top'}
-            />
-          )}
+          {attention > 0 && <Counter n={attention} size={badge} ring={ring} />}
         </button>
       )}
     />

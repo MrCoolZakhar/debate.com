@@ -26,20 +26,21 @@
 //   org_document_returns organiser: returned copies waiting for review         -> /manage/<slug>/documents?tab=everyone
 //   (the three document kinds come only for conferences with Document Uploads on, or demo ones)
 //
-// THE TWO COLOURS (owner, 24 Sep 2026). The avatar badge carries two counts:
-//   RED    = messages and drafts: an unread secretariat reply (1 per thread),
-//            the organiser's unread inbox threads (their number), an unfinished
-//            application (1 each). They count until they are dealt with.
-//   ORANGE = everything else that is new or waiting: invites (chair, co-organiser,
-//            imported place), payment due / proof refused, an application
-//            accepted, a seat allocated, NEW applications for an organiser (the
-//            number submitted since they last looked), proofs and aid requests
-//            to review (1 per conference), and live rooms (added by the avatar).
+// ONE BUBBLE (owner, 13 Oct 2026, replacing the two colours of 24 Sep): the
+// avatar carries ONE red bubble, top right, whose number is the number of rows
+// in Needs Your Attention, exactly the number the menu header shows.
+// `attentionRows(items, seen)` is the one rule: the menu and the phone sheet
+// render its rows, the avatar shows its length. A row keeps its own count in its
+// text ("3 unread messages"); the bubble counts rows, not messages. Live rooms
+// are NOT rows and never add to the bubble (they have their own menu section).
+// `tone` only colours a row's dot now.
 //
-// "SEEN". Actionable items count until resolved (pending invite, unpaid, draft,
+// "SEEN". Actionable items stay listed until resolved (pending invite, unpaid, draft,
 // unread message, a proof or aid request to review). Informational ones
-// (accepted, allocated, the NEW part of the applications queue) stop counting
-// once seen: opening the menu or the phone sheet marks every one on screen, and
+// (accepted, allocated) leave the list once seen, and the NEW part of the
+// applications queue stops being news: opening the menu or the phone sheet marks
+// every one on screen (they stay for that opening, `openShown`, and leave when it
+// closes, `endActivityOpening`), and
 // opening /manage/<slug>/applications marks that conference's applications. The
 // mark is stored in the DATABASE (`user_seen_markers` through `mark_items_seen`,
 // own rows only), so it syncs across devices, and mirrored in `localStorage
@@ -86,7 +87,7 @@ export interface ActivityItem {
   countryName: string | null;
   /** The organiser side (drives the icon / tone). */
   organiser: boolean;
-  /** Which of the avatar's two counts this item feeds. */
+  /** The colour of the row's dot in the menu. */
   tone: ActivityTone;
   /** The server says the caller already saw it (informational items only). */
   serverSeen: boolean;
@@ -343,7 +344,7 @@ function isSeen(i: ActivityItem, s: SeenState): boolean {
   return false;
 }
 
-/** How much this item adds to its colour's count right now. */
+/** How much news this item carries right now (0 once its news was seen). */
 export function activityWeight(i: ActivityItem, s: SeenState): number {
   switch (i.kind) {
     case 'org_inbox': return i.newCount;
@@ -358,6 +359,20 @@ export function activityWeight(i: ActivityItem, s: SeenState): number {
 export function isVisibleActivity(i: ActivityItem, s: SeenState): boolean {
   if (i.action) return true;
   return !isSeen(i, s) || s.openShown.has(i.id);
+}
+
+/** The rows of Needs Your Attention. The menu and the phone sheet render them;
+ *  the avatar's one bubble shows how many there are. */
+export function attentionRows(items: ActivityItem[] | null, s: SeenState): ActivityItem[] {
+  return (items ?? []).filter((i) => isVisibleActivity(i, s));
+}
+
+/** The menu or sheet closed: informational rows seen during that opening leave
+ *  the list (and the bubble) now, not at the next opening. */
+export function endActivityOpening(uid: string) {
+  const s = readSeen(uid);
+  if (s.openShown.size === 0) return;
+  writeSeen(uid, { ...s, openShown: new Set() });
 }
 
 /** Stamp everything informational on screen as seen (call once per opening,
@@ -400,30 +415,16 @@ function useSeenState(uid: string | null): SeenState {
 /** The seen state an open menu should filter with (isVisibleActivity). */
 export const useOpenSeenState = useSeenState;
 
-export interface ActivityCounts { red: number; orange: number }
-
-/** The two badge counts for a list of items under a seen state. */
-export function activityCounts(items: ActivityItem[] | null, s: SeenState): ActivityCounts {
-  let red = 0;
-  let orange = 0;
-  for (const i of items ?? []) {
-    const w = activityWeight(i, s);
-    if (w <= 0) continue;
-    if (i.tone === 'red') red += w; else orange += w;
-  }
-  return { red, orange };
-}
-
 /**
  * The caller's attention items. `items` is null until this account's first
- * answer. `counts` are the avatar's red and orange numbers (live rooms not
- * included). `maxAgeMs`: re-read when the cached answer is older.
+ * answer. `rows` are the Needs Your Attention rows (`attentionRows`), the
+ * avatar's bubble is their count. `maxAgeMs`: re-read when the cached answer is older.
  */
 export function useMyActivity(
   userId: string | null,
   accessToken: string | null,
   opts: { enabled?: boolean; maxAgeMs?: number } = {},
-): { items: ActivityItem[] | null; counts: ActivityCounts; seen: SeenState } {
+): { items: ActivityItem[] | null; rows: ActivityItem[]; seen: SeenState } {
   const { enabled = true, maxAgeMs = Infinity } = opts;
   const snap = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
   const seen = useSeenState(userId);
@@ -437,8 +438,10 @@ export function useMyActivity(
     const fresh = cache && cache.uid === userId && Date.now() - cache.at < maxAgeMs;
     if (!fresh) void load(userId, token);
   }, [enabled, userId, maxAgeMs, hasToken]);
-  if (!userId || !snap || snap.uid !== userId) return { items: null, counts: { red: 0, orange: 0 }, seen };
-  return { items: snap.items, counts: activityCounts(snap.items, seen), seen };
+  if (!userId || !snap || snap.uid !== userId) return { items: null, rows: NO_ROWS, seen };
+  return { items: snap.items, rows: attentionRows(snap.items, seen), seen };
 }
+
+const NO_ROWS: ActivityItem[] = [];
 
 export type { SeenState as ActivitySeenState };

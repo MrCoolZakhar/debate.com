@@ -16,7 +16,7 @@ import { useCredits } from '@/hooks/useCredits';
 import { CreditCoin } from '@/components/CreditCoin';
 import { openCreditsPopup } from '@/lib/purchasePopup';
 import ActivityNotices from '@/components/profile/ActivityNotices';
-import { useMyActivity, useOpenSeenState, markActivitySeen, isVisibleActivity } from '@/lib/myActivity';
+import { useMyActivity, useOpenSeenState, markActivitySeen, attentionRows, endActivityOpening } from '@/lib/myActivity';
 
 // Five one-word items, in this order (owner, 25 Sep 2026): Sessions, Create,
 // Explore, Pricing, Help. Sentence case since the owner's taste boards (25 Sep
@@ -118,13 +118,18 @@ export default function SiteNav(props: SiteNavProps = {}) {
   const sheetSeen = useOpenSeenState(activityUid);
   const sheetStamped = useRef(false);
   useEffect(() => {
-    if (!menuOpen) { sheetStamped.current = false; return; }
+    if (!menuOpen) {
+      // Closing ends the opening: rows seen in it leave the list and the bubble together.
+      if (sheetStamped.current && activityUid) endActivityOpening(activityUid);
+      sheetStamped.current = false;
+      return;
+    }
     if (!activityUid || sheetStamped.current || !activity) return;
     sheetStamped.current = true;
     markActivitySeen(activityUid, activityToken);
   }, [menuOpen, activityUid, activity, activityToken]);
   const sheetAttention = useMemo(
-    () => (activity ?? []).filter((i) => isVisibleActivity(i, sheetSeen)),
+    () => attentionRows(activity, sheetSeen),
     [activity, sheetSeen],
   );
   const t = useT();
