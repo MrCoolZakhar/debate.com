@@ -853,7 +853,8 @@ isModerator = nameHolds && !heldElsewhere;   // setIsViewOnly(!isModerator)
   award affordance for chairs that does not pass this gate. Published awards are
   read by status and never gated.
 - **Review and publish** is `settings/awardsReview.tsx` (`AwardsReview` data,
-  `AwardsReviewView` pure view), mounted under the editor in `AwardsSettings` and only
+  `AwardsReviewView` pure view), the right column of `AwardsSettings` (13 Oct 2026, each
+  committee's slate in a pop-up) and only
   once awards are set up: per committee slate state (own `reviewState`, so a late
   slate is not shown as Published), Approve (`approveSlate`), Return with a required
   note (`returnSlate`), and one Publish for the conference (`publishAwards`, behind a

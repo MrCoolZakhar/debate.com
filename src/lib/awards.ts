@@ -69,6 +69,10 @@ export interface AwardTypeConfig {
   builtin: boolean;
   /** One line shown to chairs beside the slot. */
   description: string;
+  /** Custom awards only (13 Oct 2026): the conference_committee ids that give
+   *  it. Absent or empty = every committee. `configForCommittee` drops the
+   *  award for any committee not listed, so its chairs are never offered it. */
+  committees?: string[];
 }
 
 /** One committee's own awards (Settings → Awards, "No, set them per committee"). */
@@ -256,6 +260,9 @@ function parseTypes(raw: unknown): AwardTypeConfig[] {
       enabled: s.enabled !== false,
       builtin: false,
       description: typeof s.description === 'string' ? s.description : '',
+      ...(Array.isArray(s.committees) && s.committees.some((x) => typeof x === 'string')
+        ? { committees: s.committees.filter((x): x is string => typeof x === 'string') }
+        : {}),
     });
   }
   return types;
@@ -312,8 +319,38 @@ export function committeeHasOwnAwards(config: AwardsConfig, committeeId: string 
  * Everything else (slots, completeness, suggestions) then works unchanged.
  */
 export function configForCommittee(config: AwardsConfig, committeeId: string | null | undefined): AwardsConfig {
-  if (!committeeHasOwnAwards(config, committeeId)) return config;
-  return { ...config, types: config.perCommittee[committeeId as string].types };
+  const base = committeeHasOwnAwards(config, committeeId) ? config.perCommittee[committeeId as string].types : config.types;
+  if (!committeeId) return base === config.types ? config : { ...config, types: base };
+  return { ...config, types: base.filter((t) => awardGivenBy(t, committeeId)) };
+}
+
+/** Does this committee give this award? A custom award may name its committees. */
+export function awardGivenBy(t: AwardTypeConfig, committeeId: string): boolean {
+  return !t.committees || t.committees.length === 0 || t.committees.includes(committeeId);
+}
+
+/**
+ * Committees whose chairs sent their slate for approval and are waiting on the
+ * organisers (13 Oct 2026): submitted, not approved, and not already published
+ * (a committee is published when it has awards and all of them are). A return
+ * clears both stamps, so it stops counting at once.
+ */
+export function awardsWaitingCount(
+  committees: { id: string; awards_submitted_at: string | null; awards_approved_at: string | null }[],
+  rows: { conference_committee_id: string | null; status: string }[],
+): number {
+  const byCommittee = new Map<string, string[]>();
+  for (const r of rows) {
+    if (!r.conference_committee_id) continue;
+    const list = byCommittee.get(r.conference_committee_id) ?? [];
+    list.push(r.status);
+    byCommittee.set(r.conference_committee_id, list);
+  }
+  return committees.filter((c) => {
+    if (!c.awards_submitted_at || c.awards_approved_at) return false;
+    const st = byCommittee.get(c.id) ?? [];
+    return !(st.length > 0 && st.every((x) => x === 'published'));
+  }).length;
 }
 
 /**

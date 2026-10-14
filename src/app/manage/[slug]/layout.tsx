@@ -13,6 +13,7 @@ import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { LogoDisc } from '@/components/LogoDisc';
 import Loader from '@/components/Loader';
+import { loadAwardsWaiting } from '@/lib/awardsWaiting';
 import { listedProblemCount, SETTINGS_FLAGS_EVENT, fixLabel, fixBadgeText } from '@/lib/roleSetupProblems';
 import ProfileAvatarMenu from '@/components/ProfileAvatar';
 import type { EmailTheme } from '@/lib/emailHtml';
@@ -205,7 +206,8 @@ export interface NavBadges {
   financialAid: number;
   /** Proofs waiting plus open money to-dos (money_things_to_do_count). */
   financials: number;
-  /** Role set-ups that need fixing (src/lib/roleSetupProblems.ts), 13 Oct 2026. */
+  /** Role set-ups that need fixing (src/lib/roleSetupProblems.ts) plus award
+   *  slates waiting for approval (src/lib/awardsWaiting.ts), 13 Oct 2026. */
   settings: number;
 }
 
@@ -822,7 +824,7 @@ export default function ManageLayout({ children }: { children: React.ReactNode }
   const loadWorkBadges = useCallback(async () => {
     if (!conferenceId || !accessToken) return;
     const supabase = getAuthedClient(accessToken);
-    const [pendingApps, unallocated, pendingAid, moneyTodo, roleRows] = await Promise.all([
+    const [pendingApps, unallocated, pendingAid, moneyTodo, roleRows, awardsWaiting] = await Promise.all([
       supabase.from('applications').select('id', { count: 'exact', head: true })
         .eq('conference_id', conferenceId).eq('status', 'submitted'),
       supabase.from('applications').select('id', { count: 'exact', head: true })
@@ -836,6 +838,8 @@ export default function ManageLayout({ children }: { children: React.ReactNode }
       supabase.from('application_role_configs')
         .select('role, is_enabled, applications_open_at, applications_close_at, fee_phases')
         .eq('conference_id', conferenceId),
+      // Settings: award slates the chairs sent for approval (13 Oct 2026).
+      loadAwardsWaiting(supabase, conferenceId).catch(() => 0),
     ]);
     // Roles taken off with "Remove this role" on this browser are not listed.
     let removedRoles: string[] = [];
@@ -850,7 +854,7 @@ export default function ManageLayout({ children }: { children: React.ReactNode }
       assignment: unallocated.count ?? 0,
       financialAid: pendingAid.count ?? 0,
       financials: !moneyTodo.error && typeof moneyTodo.data === 'number' ? moneyTodo.data : 0,
-      settings: !roleRows.error && roleRows.data ? listedProblemCount(roleRows.data, removedRoles) : 0,
+      settings: (!roleRows.error && roleRows.data ? listedProblemCount(roleRows.data, removedRoles) : 0) + awardsWaiting,
     });
   }, [conferenceId, accessToken]);
 

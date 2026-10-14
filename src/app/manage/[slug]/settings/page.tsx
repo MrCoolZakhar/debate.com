@@ -51,7 +51,8 @@ import { useNow } from '@/lib/useNow';
 import { ConferencePreview, type SettingsSnapshot } from './settingsHome';
 import { ApplicationsSection } from './controlPanel';
 import { RoleSheet } from './roleSetup';
-import { roleSetupProblems, notifySettingsFlagsChanged } from '@/lib/roleSetupProblems';
+import { roleSetupProblems, notifySettingsFlagsChanged, SETTINGS_FLAGS_EVENT } from '@/lib/roleSetupProblems';
+import { loadAwardsWaiting } from '@/lib/awardsWaiting';
 import { rolePossessive, type CopySource } from './roleCopy';
 import { PartnerEditPanel, type PartnerEditPatch } from './partnerEdit';
 import { GENERAL_CSS, IdentityBanner, IdentityLogo, IdField, PlainField, NameField, IconInput } from './generalUi';
@@ -417,6 +418,24 @@ export default function SettingsPage() {
   // Roles taken off the list with "Remove this role", per browser like
   // addedRoles (there is no column for it; see removeRole below).
   const [removedRoles, setRemovedRoles] = useState<string[]>([]);
+  // Award slates the chairs sent for approval (the Awards tab's badge, 13 Oct
+  // 2026). Re-read on the flags event Review and Publish fires after Approve,
+  // Return and Publish.
+  const [awardsWaiting, setAwardsWaiting] = useState(0);
+  const awardsConfId = conference?.id ?? null;
+  useEffect(() => {
+    if (!awardsConfId) return;
+    let cancelled = false;
+    const read = async () => {
+      const s = await getFreshAuthedClient();
+      if (!s) return;
+      const n = await loadAwardsWaiting(s, awardsConfId).catch(() => 0);
+      if (!cancelled) setAwardsWaiting(n);
+    };
+    void read();
+    window.addEventListener(SETTINGS_FLAGS_EVENT, read);
+    return () => { cancelled = true; window.removeEventListener(SETTINGS_FLAGS_EVENT, read); };
+  }, [awardsConfId]);
   /** Bumps when the questions are replaced from outside the builder (Copy
    *  from another role), so QuestionBuilder remounts on the stored form. */
   const [formVersion, setFormVersion] = useState(0);
@@ -3190,7 +3209,7 @@ export default function SettingsPage() {
 
   return (
     <div className="px-4 sm:px-6 md:px-10 pt-6 pb-10" style={{ maxWidth: activeTab === 'organizers' ? '1500px' : '1380px' }}>
-      <SettingsShell active={SHELL_OF[activeTab]} onOpen={(k) => openSection(TAB_OF[k])} conferenceName={shellName} fixes={{ applications: settingsFixCount }}>
+      <SettingsShell active={SHELL_OF[activeTab]} onOpen={(k) => openSection(TAB_OF[k])} conferenceName={shellName} fixes={{ applications: settingsFixCount, awards: awardsWaiting }}>
       <div>
 
       {activeTab === 'applications' && (

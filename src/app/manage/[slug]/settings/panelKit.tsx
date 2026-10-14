@@ -830,12 +830,12 @@ export function listedRoles(
 
 /** The count of role set-up problems (src/lib/roleSetupProblems.ts), in the
  *  manage sidebar's own badge colours. Nothing at 0; 9+ past nine. */
-export function FixBadge({ n, size = 21 }: { n: number; size?: number }) {
+export function FixBadge({ n, size = 21, label }: { n: number; size?: number; label?: (n: number) => string }) {
   if (n <= 0) return null;
   return (
     <span
       role="img"
-      aria-label={fixLabel(n)}
+      aria-label={(label ?? fixLabel)(n)}
       className="inline-flex items-center justify-center rounded-full flex-shrink-0"
       style={{
         minWidth: size, height: size, padding: '0 6px', fontSize: Math.round(size * 0.57), fontWeight: 700,
@@ -846,4 +846,9 @@ export function FixBadge({ n, size = 21 }: { n: number; size?: number }) {
       {fixBadgeText(n)}
     </span>
   );
+}
+
+/** "1 slate waiting for you" (award slates the chairs sent for approval). */
+export function slatesWaitingLabel(n: number): string {
+  return `${n} ${n === 1 ? 'slate' : 'slates'} waiting for you`;
 }

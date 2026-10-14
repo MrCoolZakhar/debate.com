@@ -1,7 +1,9 @@
 'use client';
 
 // ── Settings → Awards → Review and Publish (12 Oct 2026) ────────────────────
-// The secretariat's half of awards, under the award editor. Chairs nominate
+// The secretariat's half of awards, the right column of the Awards tab (13
+// Oct 2026; it sat under the award editor and organisers missed it). A press
+// on a committee opens its slate in a pop-up (AwardsSheet). Chairs nominate
 // and submit a slate per committee (participant/AwardsCard.tsx); here the
 // organisers read each slate, approve it or return it with a note, and then
 // publish the whole conference at once.
@@ -18,7 +20,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import {
-  Award, CheckCircle2, ChevronDown, CircleDashed, ClipboardList, ExternalLink, Inbox,
+  Award, CheckCircle2, ChevronRight, CircleDashed, ClipboardList, ExternalLink, Inbox,
   Loader2, PartyPopper, PenLine, Undo2,
 } from 'lucide-react';
 import { useManage, type Conference } from '@/app/manage/[slug]/layout';
@@ -36,6 +38,8 @@ import { friendlyError } from '@/lib/friendlyError';
 import { notifyErr, notifyOk } from '@/lib/appNotify';
 import { committeeDisplayName } from '@/lib/presetNames';
 import { F, INK, INK_SOFT, FOREST, AMBER, DANGER, INPUT, TINT_GOLD_BG, TINT_GREEN_BG, TYPE_PX } from './panelKit';
+import { AwardsSheet } from './awardsSheet';
+import { notifySettingsFlagsChanged } from '@/lib/roleSetupProblems';
 
 const NOTE_MAX = 500;
 const SCOPE = 'settings-awards-review';
@@ -99,14 +103,16 @@ const REVIEW_CSS = `
 .gv-rv-head{display:flex;align-items:center;gap:12px;width:100%;text-align:start;background:none;border:none;cursor:pointer;padding:12px 14px;border-radius:16px;font-family:${F}}
 .gv-rv-head:focus{outline:none}
 .gv-rv-head:focus-visible{outline:2px solid ${FOREST};outline-offset:2px}
-.gv-rv-chev{transition:transform 180ms ease;color:${INK_SOFT};flex-shrink:0}
-.gv-rv-head[aria-expanded="true"] .gv-rv-chev{transform:rotate(180deg)}
-.gv-rv-body{padding:2px 16px 16px}
+.gv-rv-chev{color:${INK_SOFT};flex-shrink:0}
+.gv-rv-head:hover{background:rgba(27,56,40,0.03)}
+.gv-rv-wait{display:inline-flex;align-items:center;gap:5px;border-radius:999px;padding:3px 9px;font-family:${F};font-size:12px;font-weight:800;
+  background:rgba(182,135,31,0.16);color:#8A6614;white-space:nowrap}
 .gv-rv-rec{display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:12px;background:#FBF8F0}
 .gv-rv-recs{display:grid;gap:8px;grid-template-columns:repeat(auto-fill,minmax(250px,1fr))}
 .gv-rv-meta{display:flex;align-items:center;gap:14px;flex-shrink:0}
 @media (max-width:620px){.gv-rv-head{flex-wrap:wrap}.gv-rv-meta{width:100%;justify-content:space-between;padding-inline-start:56px}}
-@media (prefers-reduced-motion: reduce){.gv-rv-chev,.gv-rv-row{transition:none}}
+@container (max-width:520px){.gv-rv-head{flex-wrap:wrap}.gv-rv-meta{width:100%;justify-content:space-between;padding-inline-start:56px}}
+@media (prefers-reduced-motion: reduce){.gv-rv-row{transition:none}}
 `;
 
 function OverhangDisc({ emoji, icon, tint = TINT_GOLD_BG, size = 56 }: { emoji: string; icon: typeof Award; tint?: string; size?: number }) {
@@ -176,7 +182,6 @@ function CommitteeSlate({ committee, rows, config, state, open, onToggle, busy, 
   const [returning, setReturning] = useState(false);
   const [note, setNote] = useState('');
   const [noteError, setNoteError] = useState('');
-  const bodyId = `rv-body-${committee.id}`;
   const noteId = `rv-note-${committee.id}`;
 
   const sendBack = async () => {
@@ -190,8 +195,8 @@ function CommitteeSlate({ committee, rows, config, state, open, onToggle, busy, 
   const canReturn = state === 'submitted' || state === 'approved';
 
   return (
-    <li className="gv-rv-row" data-needs={state === 'submitted' ? 'true' : undefined} data-open={open ? 'true' : undefined}>
-      <button type="button" className="gv-rv-head" aria-expanded={open} aria-controls={bodyId} onClick={onToggle}>
+    <li className="gv-rv-row" data-needs={state === 'submitted' ? 'true' : undefined}>
+      <button type="button" className="gv-rv-head" aria-haspopup="dialog" onClick={onToggle}>
         <LogoDisc src={committee.logo_url} size={44} fallbackText={(committee.abbreviation || short).slice(0, 3)} alt="" />
         <span className="min-w-0 flex-1">
           <span className="block" style={{ fontSize: 16.5, fontWeight: 800, color: INK, lineHeight: 1.2, overflowWrap: 'anywhere' }}>{short}</span>
@@ -203,13 +208,28 @@ function CommitteeSlate({ committee, rows, config, state, open, onToggle, busy, 
           <span style={{ fontFamily: F, fontSize: TYPE_PX.hint, color: INK_SOFT, whiteSpace: 'nowrap' }}>
             <span style={{ fontSize: TYPE_PX.card, fontWeight: 800, color: INK, fontVariantNumeric: 'tabular-nums' }}>{done.filled}</span> of {done.total}
           </span>
-          <StateMark state={state} />
-          <ChevronDown size={18} strokeWidth={2.4} className="gv-rv-chev" aria-hidden />
+          {state === 'submitted' ? (
+            // The chairs sent it for approval (13 Oct 2026): it waits on you.
+            <span className="gv-rv-wait"><Inbox size={13} strokeWidth={2.6} aria-hidden />Waiting for you</span>
+          ) : <StateMark state={state} />}
+          <ChevronRight size={18} strokeWidth={2.4} className="gv-rv-chev" aria-hidden />
         </span>
       </button>
 
       {open && (
-        <div id={bodyId} className="gv-rv-body" style={{ fontFamily: F }}>
+        <AwardsSheet
+          title={<>{short}{short !== committee.name && <span className="block" style={{ fontSize: TYPE_PX.hint, fontWeight: 500, color: INK_SOFT }}>{committee.name}</span>}</>}
+          onClose={onToggle}
+          width={760}
+          closeOnEscape={!returning}
+        >
+        <div style={{ fontFamily: F }}>
+          <div className="mb-3 flex items-center gap-3 flex-wrap">
+            <StateMark state={state} />
+            <span style={{ fontSize: TYPE_PX.hint, color: INK_SOFT }}>
+              <span style={{ fontSize: TYPE_PX.card, fontWeight: 800, color: INK, fontVariantNumeric: 'tabular-nums' }}>{done.filled}</span> of {done.total} filled
+            </span>
+          </div>
           {state === 'returned' && committee.awards_return_note && (
             <p className="mb-3" style={{ fontSize: TYPE_PX.hint, color: INK, background: 'rgba(139,32,32,0.06)', borderRadius: 10, padding: '8px 12px', overflowWrap: 'anywhere' }}>
               <strong style={{ color: DANGER }}>Your note to the chairs: </strong>{committee.awards_return_note}
@@ -280,6 +300,7 @@ function CommitteeSlate({ committee, rows, config, state, open, onToggle, busy, 
             <p className="mt-2" style={{ fontSize: TYPE_PX.hint, color: INK_SOFT }}>Chairs nominate from their conference page.</p>
           )}
         </div>
+        </AwardsSheet>
       )}
     </li>
   );
@@ -329,6 +350,7 @@ export function AwardsReview({ conference, config }: { conference: Conference; c
       if (err) { notifyErr(humanize(err, 'The slate was not approved. Try again in a moment.'), SCOPE); return; }
       notifyOk(`${committeeDisplayName(c.name, c.abbreviation)} approved`, SCOPE);
       await load();
+      notifySettingsFlagsChanged();
     } catch (e) {
       notifyErr(friendlyError(e, 'The slate was not approved. Try again in a moment.'), SCOPE);
     } finally {
@@ -344,6 +366,7 @@ export function AwardsReview({ conference, config }: { conference: Conference; c
       if (err) { notifyErr(humanize(err, 'The slate was not sent back. Try again in a moment.'), SCOPE); return false; }
       notifyOk(`Sent back to the ${committeeDisplayName(c.name, c.abbreviation)} chairs`, SCOPE);
       await load();
+      notifySettingsFlagsChanged();
       return true;
     } catch (e) {
       notifyErr(friendlyError(e, 'The slate was not sent back. Try again in a moment.'), SCOPE);
@@ -364,6 +387,7 @@ export function AwardsReview({ conference, config }: { conference: Conference; c
       setLocalPublishedAt((p) => p ?? new Date().toISOString());
       notifyOk(result.awards === 1 ? '1 award published' : `${result.awards} awards published`, SCOPE);
       await Promise.all([load(), refreshConferenceQuiet()]);
+      notifySettingsFlagsChanged();
       return true;
     } catch (e) {
       notifyErr(friendlyError(e, 'The awards were not published. Try again in a moment.'), SCOPE);
@@ -459,7 +483,7 @@ export function AwardsReviewView({
   else summary = 'Open a committee to see who its chairs nominated.';
 
   return (
-    <div className="flex flex-col gap-5" style={{ marginTop: 14 }}>
+    <div className="flex flex-col gap-5" style={{ containerType: 'inline-size' }}>
       <style>{REVIEW_CSS}</style>
 
       <section className="gv-st-card gv-fd-card relative" aria-labelledby="rv-title"
