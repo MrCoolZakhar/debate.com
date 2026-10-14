@@ -248,7 +248,8 @@ export function dayRange(start: string, end: string, now: number = Date.now()): 
 export function rolePriceText(cfg: RoleSetupConfig, fallbackCurrency: string, now: number): string {
   if (!roleHasPrice(cfg.role)) return 'Free';
   const { amount } = currentStageAmount(cfg, priceDate(cfg, new Date(now)));
-  return amount > 0 ? formatFee(amount, cfg.fee_currency || fallbackCurrency || 'USD') : 'Free';
+  // The conference's ONE currency (prompt 126); the role's own only when the conference is not loaded.
+  return amount > 0 ? formatFee(amount, fallbackCurrency || cfg.fee_currency) : 'Free';
 }
 
 export function moneyText(amount: number | string | null | undefined, currency: string): string {

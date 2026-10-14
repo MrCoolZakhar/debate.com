@@ -246,7 +246,7 @@ export default function ReferralsSection({ conference }: { conference: Conferenc
     return { rows: out, totalPaidCents };
   }, [vouchers, redemptions, apps, invoices]);
 
-  const currency = conference.fee_currency || 'USD';
+  const currency = conference.fee_currency;
   const codeRows = rows.rows;
   const shown = useMemo(() => {
     const q = query.trim().toUpperCase().replace(/\s+/g, '');

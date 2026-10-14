@@ -68,7 +68,8 @@ export default function FinancialsDashboardPage() {
   const pathname = usePathname();
   const params = useSearchParams();
   // The payment flow (welcome or Payment method) and the three settings pop-ups.
-  const [flow, setFlow] = useState<{ mode: 'welcome' | 'payment'; start?: 4 } | null>(null);
+  // start 5 resumes the welcome flow after Stripe; start 2 is the currency step (Settings, Payments).
+  const [flow, setFlow] = useState<{ mode: 'welcome' | 'payment'; start?: 2 | 5 } | null>(null);
   const [setting, setSetting] = useState<'fee' | 'addons' | 'vouchers' | null>(null);
   const openParamDone = useRef(false);
   const autoWelcomeDone = useRef(false);
@@ -99,7 +100,8 @@ export default function FinancialsDashboardPage() {
   /** After anything in the payment flow or a settings pop-up was saved. */
   const afterChange = useCallback(() => { refreshConferenceQuiet(); reload(); }, [refreshConferenceQuiet, reload]);
 
-  // ?open=payment | fee | addons | vouchers | welcome4 | todo opens that pop-up once, then leaves the URL.
+  // ?open=payment | currency | fee | addons | vouchers | welcome4 | todo opens that pop-up once, then leaves the URL.
+  // welcome4 keeps its old name (the Stripe return writes it) and now resumes at step 5.
   // ?open=todo is the link in the owner's email to organizers (prompt 114).
   const openParam = params.get('open');
   useEffect(() => {
@@ -110,7 +112,8 @@ export default function FinancialsDashboardPage() {
     // Opened on a microtask: the effect only reacts to the URL, it never sets state in its own body.
     void Promise.resolve().then(() => {
       if (which === 'payment') setFlow({ mode: 'payment' });
-      else if (which === 'welcome4') setFlow({ mode: 'welcome', start: 4 });
+      else if (which === 'currency') setFlow({ mode: 'payment', start: 2 });
+      else if (which === 'welcome4') setFlow({ mode: 'welcome', start: 5 });
       else if (which === 'fee' || which === 'addons' || which === 'vouchers') setSetting(which);
       else if (which === 'todo') setPopup('todo');
     });

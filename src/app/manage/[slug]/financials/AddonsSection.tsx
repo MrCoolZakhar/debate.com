@@ -14,7 +14,7 @@ import type { Conference } from '@/app/manage/[slug]/layout';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { useConfirmModal } from '@/components/ConfirmModal';
-import { CurrencyPicker } from '@/components/CurrencyPicker';
+import { CurrencyChip, ConferenceCurrencyLine } from '@/components/ConferenceCurrency';
 import GSelect from '@/components/GSelect';
 import {
   NEU, NEU_GRADIENTS, OUTFIT, NeuCard, NeuButton, NeuIconDisc,
@@ -63,7 +63,6 @@ export default function AddonsSection({ conference, bare = false, renderStats }:
   const [label, setLabel] = useState('');
   const [description, setDescription] = useState('');
   const [amount, setAmount] = useState('');
-  const [currency, setCurrency] = useState(conference.fee_currency ?? 'USD');
   const [appliesTo, setAppliesTo] = useState<string>('per_delegate');
   const [creating, setCreating] = useState(false);
 
@@ -102,7 +101,7 @@ export default function AddonsSection({ conference, bare = false, renderStats }:
     const tempId = `temp-${Date.now()}`;
     const optimistic: Addon = {
       id: tempId, label: label.trim(), description: description.trim() || null,
-      amount_cents: Math.round(amt * 100), currency: currency.toUpperCase(),
+      amount_cents: Math.round(amt * 100), currency: conference.fee_currency,
       // New add-ons are always offered (prompt 106): there is no active switch.
       applies_to: appliesTo, active: true, created_at: new Date().toISOString(),
     };
@@ -117,7 +116,8 @@ export default function AddonsSection({ conference, bare = false, renderStats }:
           label: optimistic.label,
           description: optimistic.description,
           amount_cents: optimistic.amount_cents,
-          currency: optimistic.currency,
+          // No currency: the database gives a new add-on the conference's
+          // currency (prompt 126).
           applies_to: optimistic.applies_to,
           active: optimistic.active,
         })
@@ -253,13 +253,9 @@ export default function AddonsSection({ conference, bare = false, renderStats }:
                 placeholder="15.00"
                 style={inputStyle}
               />
-              <CurrencyPicker
-                value={currency}
-                onChange={setCurrency}
-                ariaLabel="Add-on currency"
-                style={{ width: 118, flexShrink: 0 }}
-              />
+              <CurrencyChip code={conference.fee_currency} width={118} />
             </div>
+            <ConferenceCurrencyLine code={conference.fee_currency} slug={conference.slug} style={{ marginTop: 6 }} />
           </div>
 
           <div className="lg:col-span-2">

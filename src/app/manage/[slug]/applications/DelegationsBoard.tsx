@@ -111,7 +111,7 @@ export default function DelegationsBoard<M extends DelegationMemberLite>(props: 
   const { conference, applications, drafts, search, focusId } = props;
   const { session } = useAuth();
   const accessToken = session?.access_token;
-  const cur = (conference.fee_currency || 'USD').toUpperCase();
+  const cur = conference.fee_currency.toUpperCase();
   const { confirm, modal: confirmModal } = useConfirmModal();
 
   const [societies, setSocieties] = useState<SocietyLite[] | null>(null);

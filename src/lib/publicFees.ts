@@ -128,7 +128,8 @@ export function displayRolePrice(
   if (!cfg || !applicationsSetUp(cfg)) return TBD_PRICE;
   const { amount, phase } = currentStageAmount(cfg, priceDate(cfg, today));
   if (!(amount > 0)) return { kind: 'free' };
-  return { kind: 'paid', amount, currency: cfg.fee_currency || fallbackCurrency || 'USD', phase };
+  // The conference's ONE currency (prompt 126) first; the role's own only without it.
+  return { kind: 'paid', amount, currency: fallbackCurrency || cfg.fee_currency || 'USD', phase };
 }
 
 /**

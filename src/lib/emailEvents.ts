@@ -524,7 +524,7 @@ function resolveFeeToken(
   const config = roleConfigs.find(rc => rc.role === role);
   if (config) {
     const { amount } = activePhaseFee({ fee_amount: config.fee_amount, fee_phases: config.fee_phases });
-    return formatFee(amount, config.fee_currency ?? conference?.fee_currency ?? 'USD');
+    return formatFee(amount, conference?.fee_currency || config.fee_currency || 'USD');
   }
   return conference?.fee_amount ? formatFee(conference.fee_amount, conference.fee_currency) : null;
 }

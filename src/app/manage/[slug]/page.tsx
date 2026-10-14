@@ -1258,7 +1258,7 @@ export default function DashboardPage() {
   // a stale denormalised column: NMUN 2026 read 0 GBP there while its delegate
   // fee was a 150 INR phase, so the dashboard said "No delegate fee set".
   const fee = delegatePrice.kind === 'paid' ? delegatePrice.amount : 0;
-  const feeCurrency = delegatePrice.kind === 'paid' ? delegatePrice.currency : (conference.fee_currency ?? 'USD');
+  const feeCurrency = delegatePrice.kind === 'paid' ? delegatePrice.currency : conference.fee_currency;
 
   // Applied and accepted per role (delegates, faculty advisors, observers,
   // chairs), against the expected head count. The definitions are written at

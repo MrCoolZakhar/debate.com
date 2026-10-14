@@ -185,3 +185,42 @@ export function sessionDel(key: string): void {
 export const welcomeMarkerKey = (conferenceId: string) => `gavelling-fin-welcome-resume:${conferenceId}`;
 /** The welcome flow opens by itself once per browser session. */
 export const welcomeSeenKey = (conferenceId: string) => `gavelling-fin-welcome-seen:${conferenceId}`;
+
+// ── The conference's one currency (prompt 126) ──────────────────────────────
+// conference_currency_state answers the base currency, whether money has moved
+// (locked: it can no longer change) and whether anything has a price yet.
+// set_conference_currency moves the conference and, by its triggers, every
+// role, the Registration Fee, every add-on, every voucher and every OPEN
+// invoice to the new code (numbers unchanged). Refusals are sentences.
+
+export type CurrencyState = { currency: string; locked: boolean; priced: boolean };
+
+export async function readCurrencyState(conferenceId: string): Promise<CurrencyState | { error: string }> {
+  const fallback = 'Your currency could not be read. Try again in a moment.';
+  try {
+    const c = await getFreshAuthedClient();
+    if (!c) return { error: 'Your session has expired. Please sign in again.' };
+    const { data, error } = await c.rpc('conference_currency_state', { p_conference_id: conferenceId });
+    if (error) return { error: friendlyError(error, fallback) };
+    const a = (data ?? null) as Record<string, unknown> | null;
+    if (!a || a.ok !== true || typeof a.currency !== 'string') return { error: plainOrFallback(a?.error, fallback) };
+    return { currency: a.currency.toUpperCase(), locked: a.locked === true, priced: a.priced === true };
+  } catch (e) {
+    return { error: friendlyError(e, fallback) };
+  }
+}
+
+export async function setConferenceCurrency(conferenceId: string, currency: string): Promise<{ ok: true; currency: string; changed: boolean } | { ok: false; error: string }> {
+  const fallback = 'Your currency could not be saved. Try again in a moment.';
+  try {
+    const c = await getFreshAuthedClient();
+    if (!c) return { ok: false, error: 'Your session has expired. Please sign in again.' };
+    const { data, error } = await c.rpc('set_conference_currency', { p_conference_id: conferenceId, p_currency: currency });
+    if (error) return { ok: false, error: friendlyError(error, fallback) };
+    const a = (data ?? null) as Record<string, unknown> | null;
+    if (!a || a.ok !== true) return { ok: false, error: plainOrFallback(a?.error, fallback) };
+    return { ok: true, currency: typeof a.currency === 'string' ? a.currency : currency, changed: a.changed === true };
+  } catch (e) {
+    return { ok: false, error: friendlyError(e, fallback) };
+  }
+}

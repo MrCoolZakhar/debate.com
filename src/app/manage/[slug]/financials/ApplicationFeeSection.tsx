@@ -15,7 +15,7 @@ import { ShieldAlert } from 'lucide-react';
 import type { Conference } from '@/app/manage/[slug]/layout';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
-import { CurrencyPicker } from '@/components/CurrencyPicker';
+import { CurrencyChip, ConferenceCurrencyLine } from '@/components/ConferenceCurrency';
 import { PillToggle } from '@/app/account/accountUi';
 import {
   NEU, NEU_GRADIENTS, OUTFIT, NeuCard, NeuButton, NeuIconDisc, NeuPill,
@@ -55,7 +55,6 @@ export default function ApplicationFeeSection({ conference, bare = false }: {
   const [label, setLabel] = useState('Conference Registration Fee');
   const [description, setDescription] = useState('A registration charge, collected in addition to any conference fees.');
   const [amount, setAmount] = useState('');
-  const [currency, setCurrency] = useState(conference.fee_currency ?? 'USD');
   const [appliesTo, setAppliesTo] = useState<'per_delegation' | 'per_delegate'>('per_delegation');
   // A NEW fee starts Inactive (prompt 106); a saved row keeps its own value below.
   const [active, setActive] = useState(false);
@@ -78,7 +77,6 @@ export default function ApplicationFeeSection({ conference, bare = false }: {
         setLabel(row.label);
         setDescription(row.description ?? '');
         setAmount(row.amount_cents ? String(row.amount_cents / 100) : '');
-        setCurrency(row.currency);
         setAppliesTo(row.applies_to);
         setActive(row.active);
         setGatesAcceptance(row.gates_acceptance);
@@ -126,7 +124,8 @@ export default function ApplicationFeeSection({ conference, bare = false }: {
       label: label.trim(),
       description: description.trim(),
       amount_cents: Math.round(amt * 100),
-      currency: currency.toUpperCase(),
+      // No currency: the database gives a new fee the conference's currency
+      // and a fee is never moved off it from here (prompt 126).
       applies_to: appliesTo,
       active,
       // Default-off is guaranteed by useState(false) above, so the toggle's
@@ -228,13 +227,9 @@ export default function ApplicationFeeSection({ conference, bare = false }: {
                   placeholder="25.00"
                   style={inputStyle}
                 />
-                <CurrencyPicker
-                  value={currency}
-                  onChange={setCurrency}
-                  ariaLabel="Application fee currency"
-                  style={{ width: 118, flexShrink: 0 }}
-                />
+                <CurrencyChip code={existing?.currency || conference.fee_currency} width={118} />
               </div>
+              <ConferenceCurrencyLine code={existing?.currency || conference.fee_currency} slug={conference.slug} style={{ marginTop: 6 }} />
             </div>
 
             <div className="sm:col-span-2">

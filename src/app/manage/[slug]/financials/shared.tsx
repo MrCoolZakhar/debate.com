@@ -405,7 +405,7 @@ interface FinancialsCurrencyContextValue {
 const FinancialsCurrencyContext = createContext<FinancialsCurrencyContextValue | null>(null);
 
 export function FinancialsCurrencyProvider({ conference, children }: { conference: Conference; children: ReactNode }) {
-  const currency = conference.fee_currency ?? 'USD';
+  const currency = conference.fee_currency;
   // Displayed currency, '' until the per-conference localStorage choice is
   // loaded; falls back to the conference currency. Display-only: stored
   // values and voucher creation always stay in the conference currency.

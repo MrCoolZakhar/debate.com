@@ -2,18 +2,21 @@
 
 // PaymentFlow — "Welcome to Financials" and the Payment Method pop-up
 // (prompt 94). One pop-up with steps, like creating a conference:
-//   1 Where is your bank account?   (a country, saved with step 3's call)
-//   2 How will people pay you?      (card, payment link, QR code, bank transfer)
-//   3 The chosen method's set-up    (ONE set_payment_setup call; card goes on to Stripe)
-//   4 Registration fee              (welcome only, skippable)
-//   5 Add-ons                       (welcome only, skippable)
-//   Done                            (welcome only)
+//   1 Where is your bank account?   (a country, saved with step 4's call)
+//   2 What's your currency of choice? (prompt 126: the conference's ONE currency,
+//                                    set_conference_currency; fixed text once money moved)
+//   3 How will people pay you?      (card, payment link, QR code, bank transfer)
+//   4 The chosen method's set-up    (ONE set_payment_setup call; card goes on to Stripe)
+//   5 Registration fee              (welcome only, skippable)
+//   6 Add-ons                       (welcome only, skippable)
+//   Done (7)                        (welcome only)
 // Since prompt 106 the welcome flow opened at step 1 starts on an intro card
 // ("Welcome to Financials", not counted as a step), and Done is a real success
 // screen with a summary of what was set up. The intro, Done and the
 // platform-collects screen are sized to their content.
-// The Payment Method pop-up is the same flow opened at step 2 with the
-// current method chosen and its details filled in; it ends after step 3.
+// The Payment Method pop-up is the same flow opened at step 3 with the
+// current method chosen and its details filled in; it ends after step 4. The
+// currency Change in Settings, Payments opens it at step 2.
 // Card OR one manual kind, never both: switching asks first and is one call.
 // Since prompt 114: a fifth way, In-person payment (its instructions are
 // required, payers can finish without a proof), and in the Payment Method
@@ -24,12 +27,15 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import {
-  ArrowLeft, Building2, Check, CircleCheck, CreditCard, Gift, HandCoins, ImageUp, Link2, QrCode, ReceiptText, Wallet, X,
+  ArrowLeft, Building2, Check, CircleCheck, Coins, CreditCard, Gift, HandCoins, ImageUp, Link2, QrCode, ReceiptText, Wallet, X,
 } from 'lucide-react';
 import type { Conference } from '@/app/manage/[slug]/layout';
 import { PurchaseShell, PURCHASE_CSS } from '@/components/purchase/purchaseKit';
 import { FlagImg } from '@/components/FlagImg';
 import GSelect from '@/components/GSelect';
+import { CurrencyPicker } from '@/components/CurrencyPicker';
+import { currencyForCountry, findCurrency } from '@/lib/currencies';
+import { loadFxRates } from '@/lib/fxRates';
 import { UN_COUNTRIES, getCountryByName } from '@/lib/countries';
 import { isStripeCountrySupported } from '@/lib/payments';
 import { SUPABASE_URL } from '@/lib/supabase';
@@ -42,7 +48,7 @@ import AddonsSection from '../AddonsSection';
 import StripeState from './StripeState';
 import {
   METHOD_NAME, currentMethod, setPaymentSetup, setUpLater, uploadPaymentQr, sessionSet, welcomeMarkerKey,
-  connectStart, type BankDetails, type MethodKey,
+  connectStart, readCurrencyState, setConferenceCurrency, type BankDetails, type CurrencyState, type MethodKey,
 } from './paymentApi';
 
 const NOTE_MAX = 500;
@@ -88,9 +94,12 @@ export const FLOW_CSS = `
 .gv-pf-intro-photo{height:170px;background:#E4DCCA}
 .gv-pf-intro-photo img{width:100%;height:100%;object-fit:cover;display:block}
 .gv-pf-intro-body{padding:26px 28px 28px;display:flex;flex-direction:column;align-items:flex-start;gap:12px}
+.gv-pf-cur-fixed{display:flex;align-items:center;gap:12px;margin:0;height:50px;padding:0 14px;border-radius:12px;background:rgba(27,56,40,0.05);box-shadow:inset 0 0 0 1.5px rgba(27,56,40,0.14);font-size:15.5px;color:#1C1410}
+.gv-pf-cur-fixed b{font-weight:800;letter-spacing:0.02em}
+.gv-pf-cur-fixed span{color:#5A5046}
 `;
 
-type Step = 1 | 2 | 3 | 4 | 5 | 6;
+type Step = 1 | 2 | 3 | 4 | 5 | 6 | 7;
 type FieldErrs = Partial<Record<'country' | 'method' | 'manual_kind' | 'url' | 'qr' | 'note' | 'account_name' | 'account_number' | 'swift' | 'bank_name' | 'reference', string>>;
 
 const METHOD_CARDS: { key: MethodKey; title: string; desc: string; icon: React.ReactNode }[] = [
@@ -112,7 +121,7 @@ const qrUrl = (path: string) => `${SUPABASE_URL}/storage/v1/object/public/confer
 
 export default function PaymentFlow({ conference, mode, startStep, readOnly, onClose, onChanged }: {
   conference: Conference;
-  /** 'welcome' runs all the steps; 'payment' is the Payment Method pop-up (steps 1 to 3). */
+  /** 'welcome' runs all the steps; 'payment' is the Payment Method pop-up (steps 1 to 4). */
   mode: 'welcome' | 'payment';
   startStep?: Step;
   readOnly: boolean;
@@ -121,7 +130,7 @@ export default function PaymentFlow({ conference, mode, startStep, readOnly, onC
   onChanged: () => void;
 }) {
   const current = currentMethod(conference);
-  const [step, setStep] = useState<Step>(startStep ?? (mode === 'payment' ? 2 : 1));
+  const [step, setStep] = useState<Step>(startStep ?? (mode === 'payment' ? 3 : 1));
   // The intro card before step 1 (prompt 106): only the welcome flow opened from the start.
   const [intro, setIntro] = useState(mode === 'welcome' && startStep === undefined && !conference.platform_collects);
   // The success screen's summary, read fresh when Done is reached.
@@ -143,10 +152,35 @@ export default function PaymentFlow({ conference, mode, startStep, readOnly, onC
   const [busy, setBusy] = useState(false);
   const [askSwitch, setAskSwitch] = useState(false);
   const [askLater, setAskLater] = useState(false);
+  // Step 2, the conference's one currency (prompt 126). `cur` is what the
+  // database says (re-read each time the step opens), `pick` what is chosen.
+  const [cur, setCur] = useState<CurrencyState | null>(null);
+  const [curFor, setCurFor] = useState('');
+  const [codes, setCodes] = useState<string[] | null>(null);
+  const [pick, setPick] = useState('');
+  const [curErr, setCurErr] = useState('');
+  useEffect(() => {
+    if (step !== 2) return;
+    let alive = true;
+    void Promise.all([readCurrencyState(conference.id), loadFxRates().catch(() => new Map<string, number>())]).then(([st, rates]) => {
+      if (!alive) return;
+      const list = [...rates.keys()].map(k => k.toUpperCase());
+      setCodes(list);
+      if ('error' in st) { setCurErr(st.error); return; }
+      setCurErr('');
+      setCur(st);
+      setCurFor(country);
+      // Locked or priced: the currency in use. No prices yet: the bank country's
+      // currency when the rates know it, else the conference's current one.
+      const local = currencyForCountry(country)?.code ?? null;
+      setPick(st.locked || st.priced || !local || (list.length > 0 && !list.includes(local)) ? st.currency : local);
+    });
+    return () => { alive = false; };
+  }, [step, conference.id, country]);
 
   // What was set up, for the success screen. A failed read only leaves the summary out.
   useEffect(() => {
-    if (step !== 6) return;
+    if (step !== 7) return;
     let alive = true;
     readDashboard(conference.id).then(d => { if (alive) setSummary(d.settings); }).catch(() => {});
     return () => { alive = false; };
@@ -157,7 +191,7 @@ export default function PaymentFlow({ conference, mode, startStep, readOnly, onC
   const countries = useMemo(() => [...UN_COUNTRIES].sort((a, b2) => a.name.localeCompare(b2.name)), []);
   const countryName = countries.find(c => c.code === country)?.name ?? country;
   const cardOk = isStripeCountrySupported(country);
-  const total = mode === 'welcome' ? 5 : 3;
+  const total = mode === 'welcome' ? 6 : 4;
   const hasStripeAccount = !!conference.stripe_account_id
     || conference.connect_onboarding_status === 'pending' || conference.connect_onboarding_status === 'complete';
 
@@ -188,7 +222,7 @@ export default function PaymentFlow({ conference, mode, startStep, readOnly, onC
     return e;
   };
 
-  /** Step 3's one write. Returns true when it landed. */
+  /** Step 4's one write. Returns true when it landed. */
   const save = async (): Promise<boolean> => {
     if (!method) return false;
     const local = localErrors();
@@ -210,7 +244,7 @@ export default function PaymentFlow({ conference, mode, startStep, readOnly, onC
       if (r.field) {
         setErrs({ [r.field]: r.error } as FieldErrs);
         if (r.field === 'country') setStep(1);
-        if (r.field === 'method' || r.field === 'manual_kind') setStep(2);
+        if (r.field === 'method' || r.field === 'manual_kind') setStep(3);
       } else setErr(r.error);
       return false;
     }
@@ -220,18 +254,18 @@ export default function PaymentFlow({ conference, mode, startStep, readOnly, onC
 
   /** After a manual method saved: on to the fee (welcome) or done (payment). */
   const afterSave = () => {
-    if (mode === 'welcome') setStep(4);
+    if (mode === 'welcome') setStep(5);
     else { notifyOk('Payment method saved', 'financials'); onClose(); }
   };
 
-  const continueStep3 = () => busyRun(async () => {
+  const continueSetup = () => busyRun(async () => {
     if (mode === 'payment' && current && method !== current && !askSwitch) { setAskSwitch(true); return; }
     setAskSwitch(false);
     if (method === 'card') {
       const ok = await save();
       if (!ok) return;
       if (hasStripeAccount) { afterSave(); return; }
-      // No account yet: on to Stripe. The welcome flow resumes at step 4 on return.
+      // No account yet: on to Stripe. The welcome flow resumes at step 5 on return.
       if (mode === 'welcome') sessionSet(welcomeMarkerKey(conference.id), '1');
       const r = await connectStart(conference.id, country || null);
       if ('error' in r) { setErr(r.error); return; }
@@ -308,6 +342,49 @@ export default function PaymentFlow({ conference, mode, startStep, readOnly, onC
     );
     primary = { label: 'Continue', disabled: !country, onClick: () => { if (country) setStep(2); } };
   } else if (step === 2) {
+    title = "What's Your Currency of Choice?";
+    const acronym = conference.acronym || conference.full_name;
+    const ready = !!cur && curFor === country && codes !== null;
+    const curName = (code: string) => findCurrency(code)?.name ?? code;
+    body = !ready || !cur ? (
+      curErr ? <p className="gv-st-err" role="alert">{curErr}</p> : <div className="gv-fd-ph" style={{ height: 50, borderRadius: 12 }} aria-busy="true" />
+    ) : cur.locked ? (
+      <div>
+        <span className="gv-fd-label">Currency</span>
+        <p className="gv-pf-cur-fixed"><b>{cur.currency}</b><span>{curName(cur.currency)}</span></p>
+        <p className="gv-fd-note" style={{ marginTop: 10 }}>Payments have already been made in {cur.currency}, so {cur.currency} stays your conference&apos;s currency</p>
+      </div>
+    ) : (
+      <div>
+        <label className="gv-fd-label" htmlFor="gv-pf-currency">Currency</label>
+        <CurrencyPicker id="gv-pf-currency" value={pick} onChange={(v) => { setPick(v); setCurErr(''); }} variant="bordered" showName
+          options={codes && codes.length > 0 ? codes : undefined} disabled={readOnly} style={{ width: '100%', height: 50 }} />
+        {curErr && <p className="gv-st-err" role="alert">{curErr}</p>}
+        <p className="gv-fd-note" style={{ marginTop: 10 }}>Every price, fee and receipt for {acronym} uses this currency</p>
+        {cur.priced && pick === cur.currency && (
+          <p className="gv-fd-note" style={{ marginTop: 6 }}>Your prices are already in {cur.currency}</p>
+        )}
+        {cur.priced && pick !== cur.currency && (
+          <p className="gv-fd-note" style={{ marginTop: 6, fontWeight: 700, color: '#6B4F12' }}>Your prices keep their numbers and will be shown in {pick}</p>
+        )}
+      </div>
+    );
+    primary = {
+      label: 'Continue',
+      disabled: !ready,
+      onClick: () => {
+        if (!cur || cur.locked || !pick || pick === cur.currency) { setStep(3); return; }
+        void busyRun(async () => {
+          const r = await setConferenceCurrency(conference.id, pick);
+          if (!r.ok) { setCurErr(r.error); return; }
+          const st = await readCurrencyState(conference.id);
+          if (!('error' in st)) { setCur(st); setPick(st.currency); }
+          onChanged();
+          setStep(3);
+        });
+      },
+    };
+  } else if (step === 3) {
     title = 'How Will People Pay You?';
     const cards = METHOD_CARDS.filter(m => m.key !== 'card' || cardOk);
     body = (
@@ -328,8 +405,10 @@ export default function PaymentFlow({ conference, mode, startStep, readOnly, onC
           <p className="gv-fd-note" style={{ marginTop: 12 }}>Card payments are not available for bank accounts in {countryName} yet</p>
         )}
         <p className="gv-fd-note" style={{ marginTop: 10 }}>
-          Bank account in {countryName || 'no country yet'}.{' '}
+          Bank account in {countryName || 'no country yet'}{' '}
           <button type="button" className="gv-st-link" onClick={() => setStep(1)}>Change</button>
+          , prices in {(cur?.currency ?? conference.fee_currency ?? '').toUpperCase() || 'no currency yet'}{' '}
+          <button type="button" className="gv-st-link" onClick={() => setStep(2)}>Change</button>
         </p>
         {fieldErr('method')}{fieldErr('manual_kind')}
         {mode === 'payment' && current && !readOnly && !askLater && (
@@ -339,8 +418,8 @@ export default function PaymentFlow({ conference, mode, startStep, readOnly, onC
         )}
       </div>
     );
-    primary = { label: 'Continue', disabled: !method || (method === 'card' && !cardOk), onClick: () => { if (method) setStep(3); } };
-  } else if (step === 3) {
+    primary = { label: 'Continue', disabled: !method || (method === 'card' && !cardOk), onClick: () => { if (method) setStep(4); } };
+  } else if (step === 4) {
     if (method === 'card') {
       title = 'Pay by Card';
       body = (
@@ -357,7 +436,7 @@ export default function PaymentFlow({ conference, mode, startStep, readOnly, onC
       );
       primary = {
         label: hasStripeAccount ? (current === 'card' ? (mode === 'welcome' ? 'Continue' : 'Done') : 'Use card payments') : 'Continue to Stripe',
-        onClick: () => { if (mode === 'payment' && current === 'card' && hasStripeAccount) { onClose(); return; } void continueStep3(); },
+        onClick: () => { if (mode === 'payment' && current === 'card' && hasStripeAccount) { onClose(); return; } void continueSetup(); },
       };
     } else if (method === 'link') {
       title = 'Payment Link';
@@ -372,7 +451,7 @@ export default function PaymentFlow({ conference, mode, startStep, readOnly, onC
           {notesField}
         </div>
       );
-      primary = { label: 'Save', onClick: () => { void continueStep3(); } };
+      primary = { label: 'Save', onClick: () => { void continueSetup(); } };
     } else if (method === 'qr') {
       title = 'Payment QR Code';
       const preview = qrPreview ?? (qrPath ? qrUrl(qrPath) : null);
@@ -399,11 +478,11 @@ export default function PaymentFlow({ conference, mode, startStep, readOnly, onC
           {notesField}
         </div>
       );
-      primary = { label: 'Save', onClick: () => { void continueStep3(); } };
+      primary = { label: 'Save', onClick: () => { void continueSetup(); } };
     } else if (method === 'in_person') {
       title = 'In-Person Payment';
       body = <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>{notesField}</div>;
-      primary = { label: 'Save', onClick: () => { void continueStep3(); } };
+      primary = { label: 'Save', onClick: () => { void continueSetup(); } };
     } else if (method === 'bank') {
       title = 'Bank Transfer';
       body = (
@@ -418,9 +497,9 @@ export default function PaymentFlow({ conference, mode, startStep, readOnly, onC
           {notesField}
         </div>
       );
-      primary = { label: 'Save', onClick: () => { void continueStep3(); } };
+      primary = { label: 'Save', onClick: () => { void continueSetup(); } };
     }
-  } else if (step === 4) {
+  } else if (step === 5) {
     title = 'Registration Fee';
     body = (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -428,9 +507,9 @@ export default function PaymentFlow({ conference, mode, startStep, readOnly, onC
         <ApplicationFeeSection conference={conference} bare />
       </div>
     );
-    primary = { label: 'Continue', onClick: () => setStep(5) };
-    skip = () => setStep(5);
-  } else if (step === 5) {
+    primary = { label: 'Continue', onClick: () => setStep(6) };
+    skip = () => setStep(6);
+  } else if (step === 6) {
     title = 'Add-ons';
     body = (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -438,12 +517,12 @@ export default function PaymentFlow({ conference, mode, startStep, readOnly, onC
         <AddonsSection conference={conference} bare />
       </div>
     );
-    primary = { label: 'Continue', onClick: () => setStep(6) };
-    skip = () => setStep(6);
+    primary = { label: 'Continue', onClick: () => setStep(7) };
+    skip = () => setStep(7);
   }
 
-  const showBack = step > 1 && step < 6;
-  const fitted = intro || step === 6 || !!conference.platform_collects;
+  const showBack = step > 1 && step < 7;
+  const fitted = intro || step === 7 || !!conference.platform_collects;
 
   return (
     <>
@@ -475,7 +554,7 @@ export default function PaymentFlow({ conference, mode, startStep, readOnly, onC
                 <button type="button" className="gv-st-btn gv-st-forest" style={{ marginTop: 6 }} onClick={() => setIntro(false)} autoFocus>Let&apos;s get started</button>
               </div>
             </div>
-          ) : step === 6 ? (
+          ) : step === 7 ? (
             <div className="gv-pf-done">
               <span className="gv-pf-win" aria-hidden>
                 {BURST.map((b, i) => (
@@ -486,6 +565,8 @@ export default function PaymentFlow({ conference, mode, startStep, readOnly, onC
               <h2 className="gv-pf-win-title">You&apos;re Ready to Take Payments</h2>
               {summary && (
                 <div className="gv-pf-sum">
+                  <SummaryRow icon={<Coins size={18} strokeWidth={2.2} />}
+                    title={`Prices in ${(cur?.currency ?? conference.fee_currency ?? '').toUpperCase()} · ${findCurrency(cur?.currency ?? conference.fee_currency)?.name ?? ''}`} />
                   <SummaryRow icon={<Wallet size={18} strokeWidth={2.2} />} title={summaryMethod(summary)} />
                   <SummaryRow icon={<ReceiptText size={18} strokeWidth={2.2} />} title={summaryFee(summary)} />
                   <SummaryRow icon={<Gift size={18} strokeWidth={2.2} />}
@@ -507,14 +588,14 @@ export default function PaymentFlow({ conference, mode, startStep, readOnly, onC
                 <div className="gv-fd-warn" role="alertdialog" aria-label="Switch how people pay">
                   <p style={{ margin: '0 0 12px' }}>Switch to {METHOD_NAME[method]}? Payers will see the new way to pay straight away</p>
                   <div className="flex items-center gap-3 flex-wrap">
-                    <button type="button" className="gv-st-btn gv-st-forest" disabled={busy} onClick={() => { void continueStep3(); }} autoFocus>
+                    <button type="button" className="gv-st-btn gv-st-forest" disabled={busy} onClick={() => { void continueSetup(); }} autoFocus>
                       {busy ? 'Switching' : 'Switch'}
                     </button>
                     <button type="button" className="gv-st-btn gv-st-outline" disabled={busy} onClick={() => setAskSwitch(false)}>Go back</button>
                   </div>
                 </div>
               )}
-              {askLater && step === 2 && (
+              {askLater && step === 3 && (
                 <div className="gv-fd-warn" role="alertdialog" aria-label="Set up payments later">
                   <p style={{ margin: '0 0 12px' }}>Set up payments later? Nobody can pay until you choose how people pay you. What you added is kept for when you come back</p>
                   <div className="flex items-center gap-3 flex-wrap">
@@ -532,13 +613,13 @@ export default function PaymentFlow({ conference, mode, startStep, readOnly, onC
                     <ArrowLeft size={16} strokeWidth={2.4} aria-hidden /> Back
                   </button>
                 )}
-                {primary && !askSwitch && !(askLater && step === 2) && (
+                {primary && !askSwitch && !(askLater && step === 3) && (
                   <button type="button" className="gv-st-btn gv-st-forest" disabled={readOnly || busy || primary.disabled} onClick={primary.onClick}>
                     {busy ? 'Saving' : primary.label}
                   </button>
                 )}
                 {skip && <button type="button" className="gv-st-link" onClick={skip}>Skip for now</button>}
-                {step === 3 && method === 'qr' && !readOnly && !busy && qrFile && qrPath && (
+                {step === 4 && method === 'qr' && !readOnly && !busy && qrFile && qrPath && (
                   <button type="button" className="gv-st-link" onClick={() => { setQrFile(null); setQrPreview(null); }}>
                     <X size={13} strokeWidth={2.4} style={{ display: 'inline', verticalAlign: '-2px' }} aria-hidden /> Keep the old image
                   </button>

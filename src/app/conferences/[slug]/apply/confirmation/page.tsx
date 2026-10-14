@@ -119,7 +119,7 @@ function ConfirmationInner({ conference }: { conference: ConfRow }) {
       const { amount } = activePhaseFee({ fee_amount: row.fee_amount, fee_phases: row.fee_phases });
       setRoleFee({
         amount: Number(amount) || 0,
-        currency: row.fee_currency || conference.fee_currency || 'USD',
+        currency: conference.fee_currency || row.fee_currency || 'USD',
       });
     })();
     return () => { cancelled = true; };
@@ -208,7 +208,7 @@ function ConfirmationInner({ conference }: { conference: ConfRow }) {
           // allocation-date column to promise one from.
           committee={null}
           amount={paid ? paidAmount : outstanding}
-          currency={roleFee?.currency || conference.fee_currency || 'USD'}
+          currency={conference.fee_currency || roleFee?.currency || 'USD'}
           continueHref={portalHref}
           payHref={payable ? `/conferences/${slug}/pay` : null}
           conferenceId={conference.id}

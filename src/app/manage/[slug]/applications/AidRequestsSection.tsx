@@ -100,7 +100,7 @@ function DelegationChip() {
   );
 }
 
-export default function AidRequestsSection({ conferenceId, conferenceSlug, aidBlocks }: { conferenceId: string; conferenceSlug: string; aidBlocks: unknown[] }) {
+export default function AidRequestsSection({ conferenceId, conferenceSlug, aidBlocks, currency }: { conferenceId: string; conferenceSlug: string; aidBlocks: unknown[]; /** The conference's ONE currency (prompt 126). */ currency?: string }) {
   const { session } = useAuth();
   const { draftNotices, pushDraftNotice, dismissDraftNotice } = useDraftNotices();
   const { confirm, modal: confirmModal } = useConfirmModal();
@@ -149,7 +149,7 @@ export default function AidRequestsSection({ conferenceId, conferenceSlug, aidBl
   function roleFeeFor(role: string): { amount: number; currency: string } {
     const rc = roleFees.find(r => r.role === role);
     const { amount } = activePhaseFee({ fee_amount: rc?.fee_amount ?? 0, fee_phases: rc?.fee_phases ?? null });
-    return { amount: amount ?? 0, currency: rc?.fee_currency ?? 'GBP' };
+    return { amount: amount ?? 0, currency: currency || rc?.fee_currency || '' };
   }
 
   const filtered = requests.filter(r => statusFilter === 'all' || r.status === statusFilter);

@@ -1762,7 +1762,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
     fee_phases: confirmationRoleConfig?.fee_phases ?? null,
   }).amount;
   const confirmationCurrency =
-    confirmationRoleConfig?.fee_currency || conference.fee_currency || 'USD';
+    conference.fee_currency || confirmationRoleConfig?.fee_currency || 'USD';
   const confirmationPaid = confirmationApp?.payment_status === 'paid';
   const confirmationAmount = confirmationPaid
     ? Number(confirmationApp?.amount_paid ?? 0)

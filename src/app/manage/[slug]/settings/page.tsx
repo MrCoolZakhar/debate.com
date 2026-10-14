@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { findCurrency } from '@/lib/currencies';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
   Building2, X, Lock, Copy, Check, Pencil,
@@ -971,7 +972,7 @@ export default function SettingsPage() {
       // trigger lets every role open, with or without payments set up.
       is_enabled: role === 'delegate' || role === 'chair',
       fee_amount: 0,
-      fee_currency: conference.fee_currency ?? 'GBP',
+      fee_currency: conference.fee_currency,
       auto_accept: false,
       payment_timing: 'anytime' as const,
       hide_dashboard_until_paid: false,
@@ -1041,6 +1042,17 @@ export default function SettingsPage() {
     // is not one of the six — a stored value can never put an unknown option
     // on screen or into the next write.
   }, [conference?.id, loadRoleConfigs, loadRolesWithApplications, loadOrganizers, loadPendingInvites, loadLineage, loadPartners, loadIncomingPartnerClaims]);
+
+  // The conference's currency moved (Payments, prompt 126): the database moved
+  // every role's price with it, so read the roles again. The first value is
+  // the load above, so only a later change re-reads.
+  const seenCurrency = useRef<string | null>(null);
+  useEffect(() => {
+    const code = conference?.fee_currency ?? null;
+    if (!code) return;
+    if (seenCurrency.current && seenCurrency.current !== code) void loadRoleConfigs();
+    seenCurrency.current = code;
+  }, [conference?.fee_currency, loadRoleConfigs]);
 
   // The three public-page visibility switches aren't part of the Conference
   // type (see the state declarations above), so they get their own fetch
@@ -2470,7 +2482,7 @@ export default function SettingsPage() {
    *  roles that actually have that thing set up. */
   function copySourcesFor(target: string): { price: CopySource[]; questions: CopySource[]; window: CopySource[] } {
     const others = ROLES.map(r => roleConfigs.find(rc => rc.role === r)).filter((x): x is RoleConfig => !!x && x.role !== target);
-    const currency = conference?.fee_currency || 'USD';
+    const currency = conference?.fee_currency ?? '';
     const price = !roleHasPrice(target) ? [] : others
       .filter(o => roleHasPrice(o.role) && (!roleIsFree(o) || (o.fee_phases ?? []).length > 0))
       .map(o => {
@@ -4706,6 +4718,15 @@ export default function SettingsPage() {
               >
                 <a href={`${fin}?open=payment`} className="gv-st-btn gv-st-forest">
                   {ready ? 'Change' : 'Set up payments'}<ChevronRightIcon size={16} strokeWidth={2.4} aria-hidden />
+                </a>
+              </Row>
+              <Row
+                label="Currency"
+                align="end"
+                desc={`${view.fee_currency} · ${findCurrency(view.fee_currency)?.name ?? view.fee_currency}`}
+              >
+                <a href={`${fin}?open=currency`} className="gv-st-btn gv-st-outline">
+                  Change<ChevronRightIcon size={16} strokeWidth={2.4} aria-hidden />
                 </a>
               </Row>
               {doors.map(d => (

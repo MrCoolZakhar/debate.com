@@ -5299,7 +5299,7 @@ export default function ApplicationsPage() {
         const hasAidRequest = !!previewAid || app.aid_requested || !!aidStatus;
         const aidStatement = previewAid?.statement ?? app.aid_statement;
         const aidRequestedAmount = previewAid?.requested_amount ?? app.aid_requested_amount;
-        const aidCurrency = roleConfig?.fee_currency ?? 'GBP';
+        const aidCurrency = conference.fee_currency;
         const closeReview = () => { setReviewId(null); setRejectingId(null); setRejectNote(''); };
         // Double-click guard, the row's controls grey out while its write is in flight.
         const rowBusy = busyIds.has(app.id);

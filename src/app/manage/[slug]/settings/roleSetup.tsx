@@ -54,7 +54,7 @@ import {
 } from 'lucide-react';
 import Portal from '@/components/Portal';
 import { DatePicker } from '@/components/DatePicker';
-import { CurrencyPicker } from '@/components/CurrencyPicker';
+import { CurrencyChip, ConferenceCurrencyLine } from '@/components/ConferenceCurrency';
 import { useScrollLock } from '@/hooks/useScrollLock';
 import { activeFeePhase, type FeePhase } from '@/lib/finance';
 import { conferencePaymentsReady } from '@/lib/payments';
@@ -252,7 +252,7 @@ export interface RoleSheetProps {
 
 export function RoleSheet(props: RoleSheetProps) {
   const { conference: c, role, config, now, configVersion, timelineCtx, timelineMsg } = props;
-  const currency = c.fee_currency || 'USD';
+  const currency = c.fee_currency;
   const priced = roleHasPrice(role);
   const plural = rolePlural(role);
   const st = windowState(config, now);
@@ -599,13 +599,7 @@ export function RoleSheet(props: RoleSheetProps) {
                     >
                       <div key={configVersion}>
                         <div className="flex items-center gap-2 flex-wrap">
-                          <CurrencyPicker
-                            value={config.fee_currency}
-                            onChange={(code) => props.onSave({ fee_currency: code })}
-                            ariaLabel={`${roleTitle(role)} fee currency`}
-                            variant="bordered"
-                            style={{ width: 112, flexShrink: 0 }}
-                          />
+                          <CurrencyChip code={c.fee_currency} width={112} />
                           <input
                             type="number"
                             min={0}
@@ -620,6 +614,7 @@ export function RoleSheet(props: RoleSheetProps) {
                             {phases.length > 0 ? 'On days no stage covers. 0 is free.' : '0 is free'}
                           </span>
                         </div>
+                        <ConferenceCurrencyLine code={c.fee_currency} slug={c.slug} style={{ marginTop: 6 }} />
 
                         <div className="mt-3">
                           <StageTable

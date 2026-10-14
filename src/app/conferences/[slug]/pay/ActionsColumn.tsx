@@ -188,7 +188,7 @@ export default function ActionsColumn({
           <PledgeInvoicingCard
             applicationId={leader.id}
             societyId={leader.society_id}
-            currency={delegateConfig?.fee_currency ?? currency}
+            currency={currency}
             financialAidEnabled={conference.financial_aid_enabled}
             aidBlocks={aidBlocks}
             aidIntro={conference.aid_intro}
@@ -202,6 +202,7 @@ export default function ActionsColumn({
           applicationId={leader.id}
           accessToken={session?.access_token}
           advisorRoleConfig={advisorConfig}
+          currency={currency}
           onAdded={onChanged}
           summary={<TicketsRequested d={myDelegation} kind="advisor" />}
         />

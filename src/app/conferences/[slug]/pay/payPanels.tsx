@@ -545,13 +545,15 @@ export function AddSpotsPanel({
 // onAdded triggers a refetch.
 
 export function AdvisorTicketsModal({
-  open, onClose, applicationId, accessToken, advisorRoleConfig, onAdded, summary,
+  open, onClose, applicationId, accessToken, advisorRoleConfig, currency: conferenceCurrency, onAdded, summary,
 }: {
   open: boolean;
   onClose: () => void;
   applicationId: string;
   accessToken: string | undefined;
   advisorRoleConfig: PayRoleConfig | null;
+  /** The conference's ONE currency (prompt 126). */
+  currency: string;
   onAdded: () => void;
   /** Drawn at the top: the advisor tickets the delegation's leaders have requested (prompt 101). */
   summary?: React.ReactNode;
@@ -573,7 +575,7 @@ export function AdvisorTicketsModal({
 
   if (!open) return null;
 
-  const currency = advisorRoleConfig?.fee_currency ?? 'USD';
+  const currency = conferenceCurrency || advisorRoleConfig?.fee_currency || '';
   const { amount: fee, phase } = activePhaseFee({
     fee_amount: advisorRoleConfig?.fee_amount ?? 0,
     fee_phases: advisorRoleConfig?.fee_phases ?? null,

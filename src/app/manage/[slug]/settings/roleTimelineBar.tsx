@@ -45,7 +45,7 @@ export function RoleTimelineBar({ config, now, fallbackCurrency, timeZone, compa
   compact?: boolean;
 }) {
   const tz = timeZone;
-  const currency = config.fee_currency || fallbackCurrency || 'USD';
+  const currency = fallbackCurrency || config.fee_currency;
   const priced = roleHasPrice(config.role);
   const phases: FeePhase[] = priced
     ? [...(config.fee_phases ?? [])].filter(p => p.start_date && p.end_date).sort((a, b) => a.start_date.localeCompare(b.start_date))

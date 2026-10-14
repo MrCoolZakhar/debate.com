@@ -91,7 +91,7 @@ export function ConferencePreview({ snap, onCopyLink, copied }: {
 }) {
   const c = snap.conference;
   const delegate = snap.roles.find(r => r.role === 'delegate') ?? null;
-  const price = displayRolePrice(delegate, c.fee_currency || 'USD', new Date(snap.now));
+  const price = displayRolePrice(delegate, c.fee_currency, new Date(snap.now));
   const priceText = price.kind === 'paid' ? formatFee(price.amount, price.currency) : price.kind === 'free' ? 'Free' : 'Price to be set';
   const state = delegate ? roleState(delegate, snap.now) : 'off';
   const applyLine = state === 'open' ? 'Applications open'
