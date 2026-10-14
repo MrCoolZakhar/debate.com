@@ -51,7 +51,7 @@ import { useNow } from '@/lib/useNow';
 import { ConferencePreview, type SettingsSnapshot } from './settingsHome';
 import { ApplicationsSection } from './controlPanel';
 import { RoleSheet } from './roleSetup';
-import { CopyFromMenu, rolePossessive, type CopySource } from './roleCopy';
+import { rolePossessive, type CopySource } from './roleCopy';
 import { PartnerEditPanel, type PartnerEditPatch } from './partnerEdit';
 import { GENERAL_CSS, IdentityBanner, IdentityLogo, IdField, PlainField, NameField, IconInput } from './generalUi';
 import { PlatformLogo } from '@/components/conferences/ApplicationSourceMark';
@@ -2971,7 +2971,6 @@ export default function SettingsPage() {
       timelineCtx={timelineCtx}
       timelineMsg={timelineMsg?.role === sheetRole ? timelineMsg : null}
       initialStep={searchParams.get('step')}
-      linkCopied={linkCopied}
       onClose={closeRoleSheet}
       onSave={(updates) => {
         if ((updates as Partial<RoleConfig>).is_enabled === true && Object.keys(updates).length === 1) { handleRoleToggle(sheetRole, true); return; }
@@ -2982,15 +2981,11 @@ export default function SettingsPage() {
         : null}
       onSaveTimeline={(change, where) => { saveTimeline(sheetRole, change, where); }}
       onUpdatePhase={(phases, idx, patch) => updateFeePhase(sheetRole, phases, idx, patch)}
-      copySources={{ price: sheetCopy.price, window: sheetCopy.window }}
+      copySources={{ price: sheetCopy.price, window: sheetCopy.window, questions: sheetCopy.questions }}
       onCopyFrom={(what, from) => { void handleCopyFrom(what, from); }}
-      onCopyLink={() => handleCopyApplicationLink()}
       onRemove={() => { void removeRole(sheetRole); }}
       formSlot={
         <>
-          <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">
-            <CopyFromMenu what="questions" sources={sheetCopy.questions} onPick={(from) => { void handleCopyFrom('questions', from); }} />
-          </div>
           {blocksBlocked && (
             <p
               role="alert"

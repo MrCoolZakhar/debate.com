@@ -12,22 +12,29 @@
  *
  *   header             the role, how many applied, the save state, its
  *                      Taking applications switch and the X
- *   title card         what the switch means right now, Copy application link,
- *                      Preview the form
- *   When               opens / closes, the timeline bar
- *   When               opens / closes, and "Copy from another role"
- *   Price              one price, prices by date as a small table, and "Copy
- *                      from another role" (priced roles only)
- *   Questions          preferences, MUN experience, "Copy from another role"
- *                      and the question builder (every question in full)
- *   After They Apply   the message shown once after submitting
+ *   section rail       (13 Oct 2026, owner: "a left tab to signalize each
+ *                      section ... it will still be scrollable") the section
+ *                      names on the cream ground at the left, the one in view
+ *                      bold forest (an IntersectionObserver on the headings);
+ *                      a sticky row across the top at 720px and below
+ *   title card         what the switch means right now (Copy application link
+ *                      and Preview the form moved to the role row, prompt 122)
+ *   Dates              opens / closes, the timeline bar
+ *   Prices             one price, prices by date as a small table (priced roles)
+ *   Preferences        what delegates and head delegates rank, for THIS role
+ *                      (preference_mode), four cards in a 2 by 2 grid
+ *   Questions          chair committee / MUN experience switches and the
+ *                      question builder (every question in full)
+ *   Final Message      the message shown once after submitting
  *   footer             Remove this role, Done
+ * Dates, Prices and Questions each carry "Copy from another role" right under
+ * their title; with nothing to copy it stays visible, aria-disabled, and says
+ * why in a tooltip.
  *
- * Accepting, paying and ranking are the rules for every role on the
- * Applications page only (owner, 12 Oct 2026: "remove all of this from the
- * individual apps"): the pop-up has no per-role "Who Gets In" section, no
- * "Most people you will accept" cap and no "Different rules for {role}"
- * block any more. The columns are untouched.
+ * Accepting and paying are the rules for every role on the Applications page
+ * only (owner, 12 Oct 2026). What they rank came back into the pop-up per role
+ * on 13 Oct 2026 (owner: "move the what they rank back inside the pop up for
+ * delegates and head delegates"). The columns are untouched.
  *
  * The URL stays ?tab=applications&role=<role> (and ?step=<section> scrolls to
  * a section), so every old deep link opens this sheet. Escape and the X close
@@ -38,12 +45,12 @@
  * the settings page's own, passed in unchanged.
  */
 
-import { useEffect, useRef, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import {
-  Check, Copy, Eye, Plus, Star, X, Trash2,
+  Check, Plus, Star, X, Trash2,
   CheckCircle2, Clock, MinusCircle, XCircle, CalendarDays, Wallet,
-  ListChecks, PartyPopper, type LucideIcon,
+  ListChecks, PartyPopper, ListOrdered, type LucideIcon,
 } from 'lucide-react';
 import Portal from '@/components/Portal';
 import { DatePicker } from '@/components/DatePicker';
@@ -59,10 +66,11 @@ import { ROLE_BLURB, InfoHint } from './applicationsUi';
 import { TimelineNotice, TimelineWarning } from './timelineUi';
 import { RoleTimelineBar } from './roleTimelineBar';
 import { CopyFromMenu, type CopySource } from './roleCopy';
+import { RankPreview, RANK_PREVIEW_CSS } from './controlPanel';
 import {
   F, INK, INK_SOFT, FOREST, AMBER, DANGER, HAIRLINE, TEXT_LINK, INPUT, ROW_CSS, TYPE,
   Switch, FieldLabel, Notice, SwitchRow, TINT_GOLD_BG, TINT_GREEN_BG, EmojiDisc, RoleDisc,
-  roleHasPrice, rolePlural, roleTitle, windowState, dateAndTime,
+  roleHasPrice, rolePlural, roleTitle, windowState, dateAndTime, PREF_MODE_OPTIONS,
   toDatetimeLocal, fromDatetimeLocal, localZoneLabel, type RoleSetupConfig, type WindowState, TYPE_PX
 } from './panelKit';
 
@@ -81,12 +89,15 @@ const STATE_MARK: Record<WindowState, { icon: LucideIcon; word: string; color: s
 
 const SHEET_BG = '#F3EEE2';
 
+/** The rail's sections, in order. Ids stay the ?step= ids. */
+interface RailSection { id: string; label: string }
+
 const CSS = `
 /* Settings buttons are 38px tall (owner, 12 Oct 2026: some were "way too big"). */
 .gvs-backdrop .gv-st-btn { min-height: 38px; padding: 0 14px; font-size: 14px; border-radius: 11px; }
 .gvs-backdrop { position: fixed; inset: 0; z-index: 50; display: flex; align-items: center; justify-content: center;
   background: rgba(27,20,16,0.42); padding: 24px; }
-.gvs-panel { position: relative; display: flex; flex-direction: column; width: min(880px, 100%); height: min(100%, 980px);
+.gvs-panel { position: relative; display: flex; flex-direction: column; width: min(1080px, 100%); height: min(100%, 980px);
   background: ${SHEET_BG}; border-radius: 24px; overflow: hidden; box-shadow: 0 30px 90px rgba(27,20,16,0.35); }
 @media (max-width: 720px) {
   .gvs-backdrop { padding: 0; }
@@ -95,8 +106,46 @@ const CSS = `
 }
 .gvs-body { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch;
   container-type: inline-size; }
-.gvs-col { width: 100%; max-width: 760px; margin: 0 auto; padding: 16px clamp(10px, 3vw, 22px) 36px;
+.gvs-layout { display: grid; grid-template-columns: 170px minmax(0, 1fr); gap: 8px; max-width: 1000px; margin: 0 auto;
+  padding: 0 clamp(10px, 2.4vw, 22px) 0 clamp(10px, 2vw, 18px); }
+.gvs-col { width: 100%; max-width: 800px; min-width: 0; padding: 16px 0 36px clamp(4px, 1.2vw, 12px);
   display: flex; flex-direction: column; gap: 12px; }
+/* The section rail: names on the cream ground, the one in view bold forest. */
+.gvs-rail { position: sticky; top: 0; align-self: start; padding: 18px 0 18px; display: flex; flex-direction: column; gap: 2px; }
+.gvs-rail-item { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; border: none; background: none; cursor: pointer;
+  padding: 9px 12px; border-radius: 12px; font-family: ${F}; font-size: ${TYPE_PX.body}px; font-weight: 500; color: ${INK_SOFT};
+  white-space: nowrap; transition: color 160ms ease, background-color 160ms ease; }
+.gvs-rail-item::before { content: ""; width: 3px; height: 18px; border-radius: 3px; background: transparent; flex-shrink: 0; transition: background-color 160ms ease; }
+.gvs-rail-item:hover { color: ${INK}; background: rgba(27,56,40,0.04); }
+.gvs-rail-item:focus { outline: none; }
+.gvs-rail-item:focus-visible { box-shadow: 0 0 0 2px ${FOREST}; }
+.gvs-rail-item[aria-current="true"] { color: ${FOREST}; font-weight: 800; }
+.gvs-rail-item[aria-current="true"]::before { background: ${FOREST}; }
+@media (max-width: 720px) {
+  .gvs-layout { grid-template-columns: minmax(0, 1fr); gap: 0; padding: 0 clamp(10px, 3vw, 16px); }
+  .gvs-col { padding: 12px 0 36px; }
+  .gvs-rail { z-index: 2; flex-direction: row; gap: 4px; padding: 8px 0; margin: 0 calc(-1 * clamp(10px, 3vw, 16px));
+    padding-inline: clamp(10px, 3vw, 16px); overflow-x: auto; scrollbar-width: none; background: ${SHEET_BG};
+    box-shadow: 0 1px 0 ${HAIRLINE}; }
+  .gvs-rail::-webkit-scrollbar { display: none; }
+  .gvs-rail-item { width: auto; padding: 8px 12px; }
+  .gvs-rail-item::before { display: none; }
+  .gvs-rail-item[aria-current="true"] { background: #FFFFFF; box-shadow: inset 0 -2px 0 ${FOREST}; }
+}
+/* Preferences: four short cards, two by two (one column on a phone). */
+.gvs-prefs { display: grid; gap: 10px; grid-template-columns: minmax(0, 1fr); }
+@container (min-width: 440px) { .gvs-prefs { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.gvs-pref { position: relative; border-radius: 16px; background: #FAF8F3; box-shadow: inset 0 0 0 1.5px rgba(27,56,40,0.10);
+  transition: box-shadow 160ms ease, background-color 160ms ease; }
+.gvs-pref:hover { background: #F5F0E4; }
+.gvs-pref[data-on="true"] { background: linear-gradient(150deg, rgba(61,122,82,0.14), rgba(61,122,82,0.05)); box-shadow: inset 0 0 0 2px ${FOREST}; }
+.gvs-pref-btn { display: flex; flex-direction: column; gap: 8px; width: 100%; padding: 10px; border: none; background: none; cursor: pointer;
+  text-align: left; border-radius: 16px; font-family: ${F}; }
+.gvs-pref-btn:focus { outline: none; }
+.gvs-pref-btn:focus-visible { box-shadow: 0 0 0 2px #FFFFFF, 0 0 0 4px ${FOREST}; }
+.gvs-pref-btn:active { transform: scale(0.99); }
+.gvs-pref .gvc-mini { min-height: 72px; padding: 8px 10px; gap: 5px; }
+.gvs-pref-info { position: absolute; right: 10px; bottom: 10px; }
 .gvs-two { display: grid; gap: 10px; grid-template-columns: minmax(0, 1fr); }
 @container (min-width: 480px) { .gvs-two { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 /* Fee stages: a compact table. On a phone one stage is the name, then from
@@ -123,8 +172,10 @@ const CSS = `
 
 /** One card of the form: the Store's white card, a 3D emoji in a tinted disc,
  *  a Title Case heading with its last word gold. */
-function Section({ id, emoji, icon, tint = TINT_GREEN_BG, title, hint, children }: {
+function Section({ id, emoji, icon, tint = TINT_GREEN_BG, title, hint, aside, children }: {
   id: string;
+  /** Right under the title: "Copy from another role" (13 Oct 2026). */
+  aside?: ReactNode;
   /** Fluent 3D emoji name; `icon` is its Lucide fallback. */
   emoji: string;
   icon: LucideIcon;
@@ -140,11 +191,12 @@ function Section({ id, emoji, icon, tint = TINT_GREEN_BG, title, hint, children 
       className="gv-st-card gvk-group"
       style={{ padding: 'clamp(14px, 3vw, 20px)', scrollMarginTop: 16 }}
     >
-      <h3 id={`${id}-h`} className="flex items-center gap-2.5 mb-3" style={TYPE.card}>
+      <h3 id={`${id}-h`} tabIndex={-1} data-rail-heading={id} className="flex items-center gap-2.5 mb-3 focus:outline-none" style={TYPE.card}>
         <EmojiDisc emoji={emoji} icon={icon} tint={tint} size={36} />
         <span style={{ overflowWrap: 'anywhere' }}>{title}</span>
         {hint}
       </h3>
+      {aside && <div className="mb-3" style={{ marginTop: -4 }}>{aside}</div>}
       {children}
     </section>
   );
@@ -176,7 +228,6 @@ export interface RoleSheetProps {
   timelineMsg: { where: 'window' | 'phases'; kind: 'info' | 'error'; text: string } | null;
   /** ?step=, scrolled into view once on open. */
   initialStep: string | null;
-  linkCopied: boolean;
   /** The role was switched on after its closing date passed (13 Oct 2026): the line shown at
    *  the top of When, asking for a new closing date first. Null when nothing to say. */
   closedNotice?: string | null;
@@ -185,12 +236,11 @@ export interface RoleSheetProps {
   onSaveTimeline: (change: Partial<TimelineInput>, where: 'window' | 'phases') => void;
   onUpdatePhase: (phases: FeePhase[], idx: number, patch: Partial<FeePhase>) => void;
   /** "Copy from another role": the roles that have each thing set up. */
-  copySources: { price: CopySource[]; window: CopySource[] };
-  onCopyFrom: (what: 'price' | 'window', sourceRole: string) => void;
-  onCopyLink: () => void;
+  copySources: { price: CopySource[]; window: CopySource[]; questions: CopySource[] };
+  onCopyFrom: (what: 'price' | 'window' | 'questions', sourceRole: string) => void;
   /** "Remove this role" (the page confirms, switches it off and unlists it). */
   onRemove: () => void;
-  /** The copy-form menu, the refusal line and the question builder. */
+  /** The refusal line and the question builder. */
   formSlot: ReactNode;
   /** The after-submitting message fields (their state lives in the page). */
   afterSlot: ReactNode;
@@ -207,6 +257,18 @@ export function RoleSheet(props: RoleSheetProps) {
   const phases = config?.fee_phases ?? [];
   const active = activeFeePhase(phases);
   const datedPhases = phases.some(p => p.start_date && p.end_date);
+
+  const prefs = role === 'delegate' || role === 'head-delegate';
+  const railSections: RailSection[] = [
+    { id: 'step-when', label: 'Dates' },
+    ...(priced ? [{ id: 'step-price', label: 'Prices' }] : []),
+    ...(prefs ? [{ id: 'step-prefs', label: 'Preferences' }] : []),
+    { id: 'step-form', label: 'Questions' },
+    { id: 'step-after', label: 'Final Message' },
+  ];
+  const railKey = railSections.map(r => r.id).join('|');
+  const [activeSection, setActiveSection] = useState(railSections[0].id);
+  const loaded = !!config;
 
   const rootRef = useRef<HTMLDivElement | null>(null);
   const panelRef = useRef<HTMLDivElement | null>(null);
@@ -237,6 +299,71 @@ export function RoleSheet(props: RoleSheetProps) {
     }, 160);
     return () => window.clearTimeout(t);
   }, [startStep]);
+
+  // Scroll-spy: an IntersectionObserver on the section headings, no scroll
+  // listener and no layout reads. A heading in the top 45% of the body is "in";
+  // the first one in wins, else the last one scrolled past.
+  useEffect(() => {
+    const body = bodyRef.current;
+    if (!body || !loaded || typeof IntersectionObserver === 'undefined') return;
+    const ids = railKey.split('|');
+    const where = new Map<string, 'in' | 'above' | 'below'>();
+    const io = new IntersectionObserver((entries) => {
+      for (const e of entries) {
+        const id = (e.target as HTMLElement).dataset.railHeading ?? '';
+        const top = e.rootBounds?.top ?? 0;
+        where.set(id, e.isIntersecting ? 'in' : e.boundingClientRect.top < top ? 'above' : 'below');
+      }
+      const inView = ids.find(id => where.get(id) === 'in');
+      const passed = [...ids].reverse().find(id => where.get(id) === 'above');
+      const next = inView ?? passed ?? ids[0];
+      setActiveSection(prev => (prev === next ? prev : next));
+    }, { root: body, rootMargin: '0px 0px -55% 0px', threshold: 0 });
+    for (const id of ids) {
+      const h = body.querySelector<HTMLElement>(`[data-rail-heading="${id}"]`);
+      if (h) io.observe(h);
+    }
+    return () => io.disconnect();
+  }, [railKey, loaded]);
+
+  // On a phone the rail is a sideways row: keep the active name in view.
+  // Runs when the active section changes, never per scroll event.
+  const railRef = useRef<HTMLElement | null>(null);
+  useEffect(() => {
+    const rail = railRef.current;
+    if (!rail || rail.scrollWidth <= rail.clientWidth + 1) return;
+    const btn = rail.querySelector<HTMLElement>('[aria-current="true"]');
+    if (!btn) return;
+    const left = btn.offsetLeft - 16;
+    const right = btn.offsetLeft + btn.offsetWidth + 16 - rail.clientWidth;
+    if (rail.scrollLeft > left) rail.scrollLeft = left;
+    else if (rail.scrollLeft < right) rail.scrollLeft = right;
+  }, [activeSection]);
+
+  // One measurement on the click (never on scroll), then the body scrolls
+  // itself; the heading takes focus when the scroll ends, because a focus
+  // call during a smooth scroll can cancel it.
+  function goToSection(id: string) {
+    const body = bodyRef.current;
+    const sec = body?.querySelector<HTMLElement>(`#${id}`);
+    if (!body || !sec) return;
+    setActiveSection(id);
+    const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    const rail = body.querySelector<HTMLElement>('.gvs-rail');
+    const railOnTop = window.matchMedia?.('(max-width: 720px)').matches;
+    const gap = railOnTop && rail ? rail.offsetHeight + 8 : 16;
+    const top = Math.max(0, sec.getBoundingClientRect().top - body.getBoundingClientRect().top + body.scrollTop - gap);
+    const heading = body.querySelector<HTMLElement>(`#${id}-h`);
+    let done = false;
+    const focus = () => { if (done) return; done = true; body.removeEventListener('scrollend', focus); heading?.focus({ preventScroll: true }); };
+    if (reduce || Math.abs(body.scrollTop - top) < 2) { body.scrollTop = top; focus(); return; }
+    const from = body.scrollTop;
+    body.addEventListener('scrollend', focus);
+    // A browser that never animates (a background frame, some embedded views)
+    // still lands on the section.
+    window.setTimeout(() => { if (!done && body.scrollTop === from) body.scrollTop = top; focus(); }, 900);
+    body.scrollTo({ top, behavior: 'smooth' });
+  }
 
   // Escape closes the sheet only while it is the top layer. Anything portaled
   // after it (a confirm, the copy-prices pop-up, a date or currency picker, a
@@ -291,6 +418,7 @@ export function RoleSheet(props: RoleSheetProps) {
         <style>{STORE_CSS}</style>
         <style>{DASH_CSS}</style>
         <style>{ROW_CSS}</style>
+        <style>{RANK_PREVIEW_CSS}</style>
         <style>{CSS}</style>
         <div
           ref={panelRef}
@@ -347,6 +475,20 @@ export function RoleSheet(props: RoleSheetProps) {
           </header>
 
           <div ref={bodyRef} className="gvs-body">
+            <div className="gvs-layout">
+            <nav ref={railRef} className="gvs-rail" aria-label="Sections">
+              {railSections.map(r => (
+                <button
+                  key={r.id}
+                  type="button"
+                  className="gvs-rail-item"
+                  aria-current={activeSection === r.id ? 'true' : undefined}
+                  onClick={() => goToSection(r.id)}
+                >
+                  {r.label}
+                </button>
+              ))}
+            </nav>
             <div className="gvs-col">
               {/* ── What the switch means now, the link and the preview ── */}
               <section id="step-review" className="gv-st-card gv-fd-wash-green" style={{ padding: 'clamp(14px, 3vw, 18px)' }}>
@@ -362,16 +504,6 @@ export function RoleSheet(props: RoleSheetProps) {
                     </Notice>
                   </div>
                 )}
-                <div className="mt-3 flex flex-wrap items-center gap-2">
-                  <button type="button" onClick={props.onCopyLink} className="gv-st-btn gv-st-outline" style={{ minHeight: 40, padding: '0 14px' }}>
-                    {props.linkCopied ? <Check size={15} strokeWidth={3} aria-hidden /> : <Copy size={15} strokeWidth={2.3} aria-hidden />}
-                    {props.linkCopied ? 'Link copied' : 'Copy application link'}
-                  </button>
-                  <a href={`/conferences/${c.slug}/apply?role=${role}&preview=1`} target="_blank" rel="noopener noreferrer" className="gv-st-btn gv-st-outline" style={{ minHeight: 40, padding: '0 14px' }}>
-                    <Eye size={15} strokeWidth={2.3} aria-hidden />
-                    Preview the form
-                  </a>
-                </div>
               </section>
 
               {!config ? (
@@ -381,7 +513,10 @@ export function RoleSheet(props: RoleSheetProps) {
               ) : (
                 <>
                   {/* ── When: one row ── */}
-                  <Section id="step-when" emoji="Spiral calendar" icon={CalendarDays} tint={TINT_GOLD_BG} title="When">
+                  <Section
+                    id="step-when" emoji="Spiral calendar" icon={CalendarDays} tint={TINT_GOLD_BG} title="Dates"
+                    aside={<CopyFromMenu what="dates" emptyText="No other role has dates yet" sources={props.copySources.window} onPick={(r) => props.onCopyFrom('window', r)} />}
+                  >
                     {props.closedNotice && (
                       <p role="alert" className="mb-3 rounded-xl px-3 py-2.5" style={{ fontFamily: F, fontSize: TYPE_PX.body, fontWeight: 600, lineHeight: 1.45, color: '#8B2020', backgroundColor: 'rgba(139,32,32,0.07)', boxShadow: 'inset 3px 0 0 #8B2020', overflowWrap: 'anywhere' }}>
                         {props.closedNotice}
@@ -432,15 +567,15 @@ export function RoleSheet(props: RoleSheetProps) {
                           <RoleTimelineBar config={config} now={now} fallbackCurrency={currency} timeZone={timelineCtx.timeZone} compact />
                         </div>
                       )}
-                      <div className="mt-3">
-                        <CopyFromMenu what="dates" sources={props.copySources.window} onPick={(r) => props.onCopyFrom('window', r)} />
-                      </div>
                     </div>
                   </Section>
 
                   {/* ── Price: one row, then the stages as a small table ── */}
                   {priced && (
-                    <Section id="step-price" emoji="Money bag" icon={Wallet} tint={TINT_GOLD_BG} title="Price">
+                    <Section
+                      id="step-price" emoji="Money bag" icon={Wallet} tint={TINT_GOLD_BG} title="Prices"
+                      aside={<CopyFromMenu what="prices" emptyText="No other role has a price yet" sources={props.copySources.price} onPick={(r) => props.onCopyFrom('price', r)} />}
+                    >
                       <div key={configVersion}>
                         <div className="flex items-center gap-2 flex-wrap">
                           <CurrencyPicker
@@ -487,14 +622,26 @@ export function RoleSheet(props: RoleSheetProps) {
                             <Plus size={15} strokeWidth={2.6} aria-hidden />
                             {phases.length === 0 ? 'Add a price by date' : 'Add a stage'}
                           </button>
-                          <CopyFromMenu what="prices" sources={props.copySources.price} onPick={(r) => props.onCopyFrom('price', r)} />
                         </div>
                       </div>
                     </Section>
                   )}
 
+                  {/* ── Preferences: delegates and head delegates, THIS role only ── */}
+                  {prefs && (
+                    <Section id="step-prefs" emoji="Bar chart" icon={ListOrdered} title="Preferences">
+                      <PreferencePicker
+                        value={config.preference_mode ?? 'none'}
+                        onPick={(v) => { if (v !== (config.preference_mode ?? 'none')) props.onSave({ preference_mode: v }); }}
+                      />
+                    </Section>
+                  )}
+
                   {/* ── Questions ── */}
-                  <Section id="step-form" emoji="Memo" icon={ListChecks} title="Questions">
+                  <Section
+                    id="step-form" emoji="Memo" icon={ListChecks} title="Questions"
+                    aside={<CopyFromMenu what="questions" emptyText="No other role has questions yet" sources={props.copySources.questions} onPick={(r) => props.onCopyFrom('questions', r)} />}
+                  >
                     <div key={configVersion}>
                       {(role === 'chair' || role === 'secretariat') && (
                         <div className="gvk-rows mb-3">
@@ -521,7 +668,7 @@ export function RoleSheet(props: RoleSheetProps) {
                   </Section>
 
                   {/* ── After they apply ── */}
-                  <Section id="step-after" emoji="Party popper" icon={PartyPopper} tint={TINT_GOLD_BG} title="After They Apply">
+                  <Section id="step-after" emoji="Party popper" icon={PartyPopper} tint={TINT_GOLD_BG} title="Final Message">
                     <p className="mb-3" style={{ fontFamily: F, fontSize: TYPE_PX.hint, color: INK_SOFT, lineHeight: 1.5 }}>
                       A short note on the confirmation screen, like a group chat to join. Optional.
                     </p>
@@ -546,10 +693,61 @@ export function RoleSheet(props: RoleSheetProps) {
                 </>
               )}
             </div>
+            </div>
           </div>
         </div>
       </div>
     </Portal>
+  );
+}
+
+// ── Preferences: four short cards, two by two ─────────────────────────────────
+
+function PreferencePicker({ value, onPick }: { value: string; onPick: (v: string) => void }) {
+  const refs = useRef<(HTMLButtonElement | null)[]>([]);
+  function onKey(e: React.KeyboardEvent, i: number) {
+    const step = e.key === 'ArrowRight' || e.key === 'ArrowDown' ? 1 : e.key === 'ArrowLeft' || e.key === 'ArrowUp' ? -1 : 0;
+    if (!step) return;
+    e.preventDefault();
+    const n = (i + step + PREF_MODE_OPTIONS.length) % PREF_MODE_OPTIONS.length;
+    refs.current[n]?.focus();
+    onPick(PREF_MODE_OPTIONS[n].value);
+  }
+  return (
+    <div role="radiogroup" aria-label="What they rank" className="gvs-prefs">
+      {PREF_MODE_OPTIONS.map((o, i) => {
+        const on = value === o.value;
+        return (
+          <div key={o.value} className="gvs-pref" data-on={on ? 'true' : undefined}>
+            <button
+              ref={(el) => { refs.current[i] = el; }}
+              type="button"
+              role="radio"
+              aria-checked={on}
+              tabIndex={on || (!PREF_MODE_OPTIONS.some(x => x.value === value) && i === 0) ? 0 : -1}
+              onClick={() => onPick(o.value)}
+              onKeyDown={(e) => onKey(e, i)}
+              className="gvs-pref-btn"
+            >
+              <RankPreview value={o.value} />
+              <span className="flex items-center gap-2" style={{ paddingInlineEnd: 26 }}>
+                <span
+                  aria-hidden
+                  className="inline-flex items-center justify-center flex-shrink-0 rounded-full"
+                  style={{ width: 20, height: 20, backgroundColor: on ? FOREST : 'transparent', boxShadow: on ? 'none' : 'inset 0 0 0 1.5px rgba(27,56,40,0.28)', color: '#FFFFFF' }}
+                >
+                  {on && <Check size={13} strokeWidth={3.2} />}
+                </span>
+                <span style={{ fontSize: TYPE_PX.body, fontWeight: 700, color: INK, overflowWrap: 'anywhere' }}>{o.label}</span>
+              </span>
+            </button>
+            <span className="gvs-pref-info">
+              <InfoHint label={o.label} text={o.desc} size={18} />
+            </span>
+          </div>
+        );
+      })}
+    </div>
   );
 }
 

@@ -34,17 +34,38 @@ export function rolePossessive(role: string): string {
 
 const MENU_W = 280;
 
-export function CopyFromMenu({ what, sources, onPick }: {
-  /** "questions", "prices", "dates": names the empty state. */
+export function CopyFromMenu({ what, sources, onPick, emptyText }: {
+  /** "questions", "prices", "dates": names the menu. */
   what: string;
   sources: CopySource[];
   onPick: (role: string) => void;
+  /** Why it is off when no other role has this set up (13 Oct 2026): a real
+   *  tooltip on hover, focus and tap, never only a native title. */
+  emptyText?: string;
 }) {
   const [open, setOpen] = useState(false);
+  const [tip, setTip] = useState<{ top: number; left: number } | null>(null);
   const btnRef = useRef<HTMLButtonElement | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
   const empty = sources.length === 0;
+  const reason = emptyText ?? `No other role has ${what} yet`;
+
+  function showTip() {
+    const b = btnRef.current;
+    if (!b) return;
+    const r = b.getBoundingClientRect();
+    const width = Math.min(260, window.innerWidth - 16);
+    setTip({ top: r.top - 8, left: Math.max(8, Math.min(r.left, window.innerWidth - width - 8)) });
+  }
+  // The tooltip follows nothing: any scroll or resize just hides it.
+  useEffect(() => {
+    if (!tip) return;
+    const hide = () => setTip(null);
+    window.addEventListener('scroll', hide, true);
+    window.addEventListener('resize', hide);
+    return () => { window.removeEventListener('scroll', hide, true); window.removeEventListener('resize', hide); };
+  }, [tip]);
 
   const place = useCallback(() => {
     const b = btnRef.current;
@@ -106,17 +127,40 @@ export function CopyFromMenu({ what, sources, onPick }: {
       <button
         ref={btnRef}
         type="button"
-        disabled={empty}
-        aria-haspopup="menu"
-        aria-expanded={open}
-        title={empty ? `No other role has ${what} yet` : undefined}
-        onClick={() => setOpen(o => !o)}
+        // aria-disabled, never disabled: it stays focusable, so keyboard and
+        // screen-reader users get the reason too.
+        aria-disabled={empty || undefined}
+        aria-haspopup={empty ? undefined : 'menu'}
+        aria-expanded={empty ? undefined : open}
+        aria-describedby={empty ? `copy-why-${what}` : undefined}
+        onClick={() => { if (empty) { if (tip) setTip(null); else showTip(); return; } setOpen(o => !o); }}
+        onMouseEnter={empty ? showTip : undefined}
+        onMouseLeave={empty ? () => setTip(null) : undefined}
+        onFocus={empty ? showTip : undefined}
+        onBlur={empty ? () => setTip(null) : undefined}
         className="inline-flex items-center gap-1.5 focus:outline-none focus-visible:ring-2 rounded"
         style={{ ...TEXT_LINK, fontSize: TYPE_PX.body, opacity: empty ? 0.45 : 1, cursor: empty ? 'default' : 'pointer', textDecoration: empty ? 'none' : TEXT_LINK.textDecoration }}
       >
         <Copy size={14} strokeWidth={2.4} aria-hidden />
         Copy from another role
+        {empty && <span id={`copy-why-${what}`} className="sr-only">{reason}</span>}
       </button>
+      {empty && tip && (
+        <Portal>
+          <div
+            role="tooltip"
+            aria-hidden
+            style={{
+              position: 'fixed', top: tip.top, left: tip.left, transform: 'translateY(-100%)', zIndex: 9500,
+              maxWidth: 260, padding: '8px 12px', borderRadius: 12, pointerEvents: 'none',
+              background: '#1B3828', color: '#FFFFFF', fontFamily: F, fontSize: TYPE_PX.hint, fontWeight: 600, lineHeight: 1.4,
+              boxShadow: '0 10px 24px -12px rgba(27,56,40,0.6)',
+            }}
+          >
+            {reason}
+          </div>
+        </Portal>
+      )}
       {open && (
         <Portal>
           <div

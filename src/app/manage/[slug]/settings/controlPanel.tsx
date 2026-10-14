@@ -70,6 +70,14 @@ const ROLE_LINE: Record<string, string> = {
   staff: 'Volunteers and helpers on the day',
 };
 
+/** RankPreview's look, also mounted by the role pop-up's Preferences (13 Oct 2026). */
+export const RANK_PREVIEW_CSS = `
+.gvc-mini { display: flex; flex-direction: column; justify-content: center; gap: 7px; padding: 10px 12px; border-radius: 12px; background: #FFFFFF; box-shadow: 0 1px 0 rgba(27,56,40,0.06); min-height: 86px; }
+.gvc-mini-row { display: flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 600; color: ${INK}; line-height: 1.2; }
+.gvc-mini-n { width: 20px; height: 20px; border-radius: 7px; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;
+  font-size: 11.5px; font-weight: 800; background: rgba(238,217,138,0.55); color: #6B4F12; }
+`;
+
 const CSS = `
 /* One full-width column (13 Oct 2026): Who Can Apply, then Accepting and Paying. */
 .gvc-app { container-type: inline-size; }
@@ -117,10 +125,7 @@ const CSS = `
 .gvc-rank-card:focus { outline: none; }
 .gvc-rank-card:focus-visible { box-shadow: 0 0 0 2px #FFFFFF, 0 0 0 4px ${FOREST}; }
 .gvc-rank-card[aria-checked="true"] { background: linear-gradient(150deg, rgba(61,122,82,0.14), rgba(61,122,82,0.05)); box-shadow: inset 0 0 0 2px ${FOREST}, 0 10px 22px -16px rgba(27,56,40,0.6); }
-.gvc-mini { display: flex; flex-direction: column; justify-content: center; gap: 7px; padding: 10px 12px; border-radius: 12px; background: #FFFFFF; box-shadow: 0 1px 0 rgba(27,56,40,0.06); min-height: 86px; }
-.gvc-mini-row { display: flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 600; color: ${INK}; line-height: 1.2; }
-.gvc-mini-n { width: 20px; height: 20px; border-radius: 7px; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;
-  font-size: 11.5px; font-weight: 800; background: rgba(238,217,138,0.55); color: #6B4F12; }
+${RANK_PREVIEW_CSS}
 `;
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -362,7 +367,6 @@ export function ApplicationsSection({
         {/* ── Who can apply ── */}
         <Group id="who-can-apply" title="Who Can Apply" emoji="Identification card" icon={Hand} tint={TINT_GOLD_BG}>
           {listed.map(cfg => {
-            const st = windowState(cfg, now);
             const plural = rolePlural(cfg.role);
             const count = counts?.[cfg.role];
             const detail = rowDetail(cfg, now);

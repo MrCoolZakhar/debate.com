@@ -8,6 +8,7 @@ import {
 import Portal from '@/components/Portal';
 import { Pill, PillToggle } from '@/app/account/accountUi';
 import { useConfirmModal } from '@/components/ConfirmModal';
+import { InfoHint } from '@/app/manage/[slug]/settings/applicationsUi';
 import {
   type QuestionType, type FormBlock, type QuestionBlock, type TitleBlock, type SectionBlock,
   isChoiceType, QUESTION_TYPE_LABELS, usableOptions,
@@ -248,26 +249,36 @@ function AnswerPreview({ block, onPatch }: {
 // ── Right rail ───────────────────────────────────────────────────────────────
 
 const RAIL_ACTIONS = [
-  { key: 'question', icon: Plus, label: 'Add question' },
-  { key: 'title', icon: Heading, label: 'Add title and description' },
-  { key: 'section', icon: Rows3, label: 'Add section' },
+  { key: 'question', icon: Plus, label: 'Add question',
+    hint: 'Adds a question each applicant answers: short or long text, a choice from options, a number or a date.' },
+  { key: 'title', icon: Heading, label: 'Add title and description',
+    hint: 'Adds a heading with an optional description to introduce the questions below it. There is nothing to answer.' },
+  { key: 'section', icon: Rows3, label: 'Add section',
+    hint: 'Starts a new part of the form with its own title. Applicants see the sections one after another, each on its own page.' },
 ] as const;
 
-function RailButton({ icon: Icon, label, horizontal, onClick }: {
+/** What a section is, beside its "Section 1 of 2" tab. */
+const SECTION_HINT = 'A part of the form with its own title. Applicants fill in the sections in this order, one page each.';
+
+function RailButton({ icon: Icon, label, hint, horizontal, onClick }: {
   icon: typeof Plus;
   label: string;
+  /** One plain sentence on what the control adds, as an "i" beside it. */
+  hint: string;
   horizontal: boolean;
   onClick: () => void;
 }) {
   const [hovered, setHovered] = useState(false);
   return (
-    <div className="relative">
+    <div className="relative flex items-center gap-1">
       <button
         type="button"
         onClick={onClick}
         aria-label={label}
         onMouseEnter={() => setHovered(true)}
         onMouseLeave={() => setHovered(false)}
+        onFocus={() => setHovered(true)}
+        onBlur={() => setHovered(false)}
         className="flex items-center justify-center gap-2 rounded-[10px] focus:outline-none transition-colors"
         style={{
           width: horizontal ? 'auto' : '36px',
@@ -286,6 +297,7 @@ function RailButton({ icon: Icon, label, horizontal, onClick }: {
           <span style={{ fontFamily: "var(--font-brand), sans-serif", fontSize: '12px', fontWeight: 700 }}>{label}</span>
         )}
       </button>
+      <InfoHint label={label} text={hint} size={15} />
       {hovered && !horizontal && (
         <span
           role="tooltip"
@@ -554,7 +566,10 @@ export default function QuestionBuilder({ value, onChange, hasApplications = fal
                           textTransform: 'uppercase',
                         }}
                       >
-                        Section {sectionNumber} of {sectionIds.length}
+                        <span className="inline-flex items-center gap-1.5">
+                          Section {sectionNumber} of {sectionIds.length}
+                          <InfoHint label="What a section is" text={SECTION_HINT} size={14} />
+                        </span>
                       </div>
                     )}
 
@@ -849,13 +864,13 @@ export default function QuestionBuilder({ value, onChange, hasApplications = fal
             style={{ backgroundColor: '#FFFDF9', border: '1px solid #D8CDB6', boxShadow: '0 4px 14px rgba(27,56,40,0.10)', padding: '6px' }}
           >
             {RAIL_ACTIONS.map(a => (
-              <RailButton key={a.key} icon={a.icon} label={a.label} horizontal onClick={() => addBlock(a.key)} />
+              <RailButton key={a.key} icon={a.icon} label={a.label} hint={a.hint} horizontal onClick={() => addBlock(a.key)} />
             ))}
           </div>
         </div>
 
         {/* The rail tracks the selected card, so "add" always means "add here". */}
-        <div className="hidden md:block relative flex-shrink-0" style={{ width: '48px' }}>
+        <div className="hidden md:block relative flex-shrink-0" style={{ width: '68px' }}>
           <div
             className="flex flex-col rounded-2xl"
             style={{
@@ -868,7 +883,7 @@ export default function QuestionBuilder({ value, onChange, hasApplications = fal
             }}
           >
             {RAIL_ACTIONS.map(a => (
-              <RailButton key={a.key} icon={a.icon} label={a.label} horizontal={false} onClick={() => addBlock(a.key)} />
+              <RailButton key={a.key} icon={a.icon} label={a.label} hint={a.hint} horizontal={false} onClick={() => addBlock(a.key)} />
             ))}
           </div>
         </div>
