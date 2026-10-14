@@ -14,6 +14,7 @@ import {
 import { liveCaucus } from '@/components/FeedbackLogPanel';
 import { GripVertical, Megaphone, Mic } from 'lucide-react';
 import { useLanguage, useT } from '@/contexts/LanguageContext';
+import { notifyDelegationAbsent } from '@/lib/absentNotice';
 
 // ── FlagCircle ────────────────────────────────────────────────────────────────
 export function FlagCircle({ country, size = 'md' }: { country: string; size?: 'xs' | 'sm' | 'md' | 'lg' | 'xl' | 'hero' }) {
@@ -102,24 +103,6 @@ function StatusSlider({ status, onCycle, isObserver = false, large = false }: { 
       />
     </button>
   );
-}
-
-// ── Recognising an absent delegate ───────────────────────────────────────────
-// The status a recognised delegate gets: the one their waiting-room request asked for,
-// never Present-and-Voting for an observer, Present otherwise. Shared by this panel's row
-// click and the chair page's typed add bars, so both paths answer a request identically.
-export function recognisedStatus(
-  pendingMotions: Committee['pendingMotions'] | undefined,
-  country: string,
-  isObserver: boolean,
-): DelegateStatus {
-  if (isObserver) return 'present';
-  const joinReq = (pendingMotions ?? []).find(
-    (m) => (m.type as string) === 'join-request' && m.proposedBy === country,
-  );
-  if (!joinReq) return 'present';
-  try { if (JSON.parse(joinReq.topic)?.desiredStatus === 'present-voting') return 'present-voting'; } catch { /* keep present */ }
-  return 'present';
 }
 
 // ── Add a seat ────────────────────────────────────────────────────────────────
@@ -315,16 +298,17 @@ function RollCallPanelInner({
    */
   readyDelegateId?: string | null;
   /**
-   * An absent delegate was recognised from this panel (clicked onto a list). The parent
-   * drops that country's pending join-request motions from local state; the DB delete is
-   * done here, after the status write lands (see handleRowClick).
+   * Roll Call (the status slider) moved an absent delegation with a waiting-room request
+   * to Present or Present and Voting. The parent drops that country's pending join-request
+   * motions from local state; the DB delete is done here, after the status write lands
+   * (see cycleStatus).
    */
   onJoinRequestResolved?: (country: string) => void;
   /**
-   * Asked BEFORE an absent delegate is recognised: can the list take them right now? The
-   * caucus queue answers with caucusQueueCapacity and raises the queue-full notification
-   * (top right) itself when it cannot. Without it a click marked the delegate Present and then the add was
-   * silently refused. Omitted = the list always has room (the GSL).
+   * Can the list take this delegate right now? The caucus queue answers with
+   * caucusQueueCapacity and raises the queue-full notification (top right) itself when it
+   * cannot. Omitted = the list always has room (the GSL). Kept on the props (and in the
+   * memo comparator) for the chair page; an absent row never reaches a list (13 Oct 2026).
    */
   canAddToList?: (delegateId: string) => boolean;
 }) {
@@ -352,7 +336,7 @@ function RollCallPanelInner({
     /** Screen px per layout px (FitToScreen's scale). */ scale: number;
     /** Pointer travel before the row lifts: 4 on the grip, 6 on the row (a click stays a click). */ slop: number;
   } | null>(null);
-  // A drag must never end in a row click (add / remove / recognise): true for 400 ms after one.
+  // A drag must never end in a row click (add / remove / absent notice): true for 400 ms after one.
   const justDraggedRef = useRef(false);
   // Every optimistic status override, with the value we set and when we set it.
   // Mutated synchronously on click so rapid taps cycle off the latest value
@@ -489,6 +473,20 @@ function RollCallPanelInner({
       ? (base === 'absent' ? 'present' : 'absent')
       : (base === 'absent' ? 'present' : base === 'present' ? 'present-voting' : 'absent');
     applyStatus(id, next);
+    // Roll Call is now the only way an absent delegation becomes present (13 Oct 2026), so
+    // it also answers that delegation's waiting-room request, as adding them to a list used
+    // to: dropped locally now, the motion deleted only AFTER the status write lands, so the
+    // delegate's phone never sees the request vanish while it still reads absent ("denied").
+    // Only when such a request exists, so an ordinary roll call writes nothing extra.
+    if (base === 'absent' && next !== 'absent' && delegate) {
+      const asked = (committee.pendingMotions ?? []).some(
+        (m) => (m.type as string) === 'join-request' && m.proposedBy === delegate.country,
+      );
+      if (asked) {
+        onJoinRequestResolved?.(delegate.country);
+        resolveJoinRequestsOnAdmit(committee.id, id, delegate.country, next, committee.code, committee.dbChairJoinSuffix ?? undefined);
+      }
+    }
   };
 
   const toggleObserver = (id: string, current: boolean) => {
@@ -544,8 +542,8 @@ function RollCallPanelInner({
   // - Everywhere else: the speaker holding the floor (#1), then the list in order, then
   //   every PRESENT delegate not on the list, A-Z, then every ABSENT one, A-Z (16 Sep 2026,
   //   owner: absent delegations sink to the bottom so the room in front of the chair reads
-  //   first). Status is the optimistic one (localStatuses), so a recognised or marked-absent
-  //   row moves at once.
+  //   first). Status is the optimistic one (localStatuses), so a row marked present or
+  //   absent moves at once.
   const alphabetical = [...committee.delegates].sort((a, b) => compareCountryNames(a.country, b.country, language));
 
   const inQueue = (committee.speakersList ?? [])
@@ -894,11 +892,12 @@ function RollCallPanelInner({
           // Removable from the floor from this row (chair page, onRemoveCurrentSpeaker).
           const holdsFloor = !isRollCallPhase && !showStatusSliders && !isReadOnly && !isViewOnly && !committee.endedAt
             && (isCurrentSpeaker || (!!caucus?.currentSpeaker && caucus.currentSpeaker === d.country));
-          // Recognising an absent delegate: clicking them onto a list marks them Present
-          // in the same action. Not in roll call and not in the mid-session Roll Call tab
-          // (showStatusSliders): the slider owns status there, so an absent row is a status
-          // row only and never lands on a list. Not when read-only or ended.
-          const canRecognise = !!onAddToList && !isRollCallPhase && !showStatusSliders && !isReadOnly && !committee.endedAt;
+          // An ABSENT row is never added to a list and its attendance never changes here
+          // (owner, 13 Oct 2026): attendance changes only through Roll Call. A tap answers
+          // with the "This delegation is Absent" notice instead. Not in roll call and not in
+          // the mid-session Roll Call tab (showStatusSliders), where the slider owns status
+          // and the row is a status row only. Not when read-only or ended.
+          const canNoticeAbsent = !!onAddToList && !isRollCallPhase && !showStatusSliders && !isReadOnly && !committee.endedAt;
 
           const handleRowClick = () => {
             // A Commenter's press on a ROW does nothing and says nothing (Oct 2026, owner: the
@@ -916,31 +915,14 @@ function RollCallPanelInner({
               else if (onRemoveFromList) onRemoveFromList(d.id);
               return;
             }
-            if (!canRecognise) return;
-            // Room first, status second: if the list cannot take them (a caucus with no
-            // time left), leave the status alone. canAddToList shows the reason.
-            if (!isOnList && canAddToList && !canAddToList(d.id)) return;
-            // A waiting-room request from this delegation is answered by this click, the
-            // same way Approve answers it: the status they asked for (never PV for an
-            // observer), then the motion goes. Best effort on reading the desired status,
-            // since this panel can hold a slightly older pendingMotions snapshot.
-            const desired = recognisedStatus(committee.pendingMotions, d.country, isObserver);
-            // 1) Status, optimistic: localStatuses here, updateLocal + setDelegateStatusInDB
-            //    in the parent's onStatusChange. Must precede the add, because the parent's
-            //    absent handling strips absent delegates from both lists.
-            applyStatus(d.id, desired);
-            // 2) The list add, optimistic then fire-and-forget, owned by the parent.
-            if (!isOnList) onAddToList(d.id);
-            // 3) Any pending join-request for this country: dropped locally now, deleted in
-            //    the DB only AFTER a status write lands, so the delegate's phone never sees
-            //    the request vanish while it still reads absent (it would show "denied").
-            onJoinRequestResolved?.(d.country);
-            resolveJoinRequestsOnAdmit(committee.id, d.id, d.country, desired, committee.code, committee.dbChairJoinSuffix ?? undefined);
+            if (!canNoticeAbsent) return;
+            // Absent: nothing is added and the status stays as it is.
+            notifyDelegationAbsent(t, d.id);
           };
 
-          // The row is the button: keyboard users get the same add / remove / recognise
+          // The row is the button: keyboard users get the same add / remove / absent notice
           // action as a click. Only when the click would do something for this chair.
-          const rowActionable = !!onAddToList && !isViewOnly && (!isAbsent || canRecognise);
+          const rowActionable = !!onAddToList && !isViewOnly && (!isAbsent || canNoticeAbsent);
           // The speaker holding the floor, in the queue view (#1) or the A-Z views.
           const isSpeakingRow = isUpNext || isCurrentSpeaker;
           // The status slider (roll call, Roll Call tab) takes ~120px of the row, so that mode
@@ -1004,7 +986,7 @@ function RollCallPanelInner({
                 } : undefined}
                 className={`group/seat flex items-center ${bigRoll ? 'gap-3.5 px-3 rounded-2xl' : sliderMode ? 'gap-2 px-2.5 rounded-xl' : 'rounded-xl'} focus:outline-none focus-visible:ring-2 focus-visible:ring-[#EED98A]/80 transition-[background-color,box-shadow] duration-150 motion-reduce:transition-none bg-[var(--row-bg)] hover:bg-[var(--row-bg-hover)] ${
                   isViewOnly ? ''
-                  : (!isRollCallPhase && !showStatusSliders && onAddToList && (!isAbsent || canRecognise)) || isRollCallPhase || showStatusSliders
+                  : (!isRollCallPhase && !showStatusSliders && onAddToList && (!isAbsent || canNoticeAbsent)) || isRollCallPhase || showStatusSliders
                     ? 'cursor-pointer'
                     : isAbsent && !isRollCallPhase && !showStatusSliders
                     ? 'cursor-not-allowed'

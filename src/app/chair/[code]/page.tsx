@@ -11,6 +11,7 @@ import SeatAddField from '@/components/SeatAddField';
 import { TopBarTab, TopBarIconButton, TOP_BAR_ROW_PX, useTopBarTwoRows } from '@/components/ChairTopBar';
 import SpeakerControls, { FloorProgress, SpeakerClock, POPOVER_TONES, type ControlLock } from '@/components/SpeakerControls';
 import { moderatorNameOf, notifyCommenterOnly } from '@/lib/commenterNotice';
+import { notifyDelegationAbsent } from '@/lib/absentNotice';
 import DraggablePopover from '@/components/DraggablePopover';
 import SpeakerStrip, { type StripHeader } from '@/components/SpeakerStrip';
 import CommenterFloor from '@/components/CommenterFloor';
@@ -25,7 +26,7 @@ import { Ban, ClockPlus, FileSpreadsheet, ListOrdered, Maximize2, MessageCircle,
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { CaucusState, Committee, Delegate, DelegateStatus } from '@/lib/types';
-import RollCallPanel, { FlagCircle, recognisedStatus } from '@/components/RollCallPanel';
+import RollCallPanel, { FlagCircle } from '@/components/RollCallPanel';
 import MotionsModal from '@/components/MotionsModal';
 import MotionFlightNotice from '@/components/MotionFlightNotice';
 import { logFloorSpeech, logTimedSpeech, cowTurnKey, floorSpeechSeconds, creditRoomOrderTour, logYield } from '@/lib/floorSpeech';
@@ -117,7 +118,6 @@ import {
   denyGslRequest,
   resumeSession as resumeSessionInDB,
   claimResumeSession as claimResumeSessionInDB,
-  resolveJoinRequestsOnAdmit,
   startResumeRollCall as startResumeRollCallInDB,
   releaseResumeClaim as releaseResumeClaimInDB,
   takeOverResumeClaim as takeOverResumeClaimInDB,
@@ -286,15 +286,16 @@ function resolveQuery(raw: string): string {
 }
 
 // ── Add Speaker Input ─────────────────────────────────────────────────────────
-// `onRecognise` (optional): absent delegates are offered too, tagged, and picking one marks
-// them Present in the same action, exactly like clicking their row in the sidebar. Without it
-// (below quorum, where the add itself is a no-op) absent delegates stay out of the list, so
-// nobody is ever marked Present without being added.
+// `showAbsent` (optional): absent delegates are offered too, tagged, but picking one never
+// adds them and never changes their attendance (owner, 13 Oct 2026: attendance changes only
+// through Roll Call). It raises the "This delegation is Absent" notice and leaves the field
+// as it was, exactly like tapping their row in the sidebar. Without it (below quorum, where
+// the add itself is a no-op) absent delegates stay out of the list.
 //
 // 16 Sep 2026 (owner): the quick-add chips and the + disc that led the field were removed
 // again ("remove the suggested speakers and the plus button"). It is the plain search field:
-// typeahead, Enter shortcut and the recognise-absent path.
-function AddSpeakerInput({ committee, onAdd, onRecognise }: { committee: Committee; onAdd: (id: string) => void; onRecognise?: (id: string) => void }) {
+// typeahead, Enter shortcut and the absent notice.
+function AddSpeakerInput({ committee, onAdd, showAbsent = false }: { committee: Committee; onAdd: (id: string) => void; showAbsent?: boolean }) {
   const { language } = useLanguage();
   const t = useT();
   const [query, setQuery] = useState('');
@@ -304,7 +305,7 @@ function AddSpeakerInput({ committee, onAdd, onRecognise }: { committee: Committ
     ...(committee.currentSpeaker ? [committee.currentSpeaker.delegateId] : []),
   ]);
   const eligible = committee.delegates.filter(
-    (d) => (d.status !== 'absent' || !!onRecognise) && d.id !== committee.currentSpeaker?.delegateId
+    (d) => (d.status !== 'absent' || showAbsent) && d.id !== committee.currentSpeaker?.delegateId
   );
   const q = resolveQuery(query).toLowerCase();
   const matches = q
@@ -314,7 +315,8 @@ function AddSpeakerInput({ committee, onAdd, onRecognise }: { committee: Committ
   const topNotOnList = matches.find((d) => !onList.has(d.id)) ?? null;
   const commit = (d: typeof topNotOnList) => {
     if (!d || onList.has(d.id)) return;
-    if (d.status === 'absent') { if (!onRecognise) return; onRecognise(d.id); }   // status before the add
+    // Absent: never added, attendance untouched, the field stays as it was.
+    if (d.status === 'absent') { notifyDelegationAbsent(t, d.id); return; }
     onAdd(d.id); setQuery('');
   };
   return (
@@ -587,12 +589,11 @@ function notifyCaucusQueueFull(t: ReturnType<typeof useT>) {
 }
 
 // ── Caucus Add Speaker Input ──────────────────────────────────────────────────
-function CaucusAddSpeakerInput({ committee, spokenCountries, onAdd, onAddFirst, onAddLast, maxSpeakers, currentQueueLength, currentSpeakerCountry, onEndCaucus, onRecognise }: {
+function CaucusAddSpeakerInput({ committee, spokenCountries, onAdd, onAddFirst, onAddLast, maxSpeakers, currentQueueLength, currentSpeakerCountry, onEndCaucus, showAbsent = false }: {
   committee: Committee; spokenCountries: string[]; onAdd: (id: string) => void;
-  /** Same as AddSpeakerInput. Recognition runs only after the capacity check passed (a full
-   *  queue raises the queue-full notification instead), and the add handlers use the same
-   *  capacity, so a recognised delegate is always queued. */
-  onRecognise?: (id: string) => void;
+  /** Same as AddSpeakerInput: absent delegates are listed, tagged, and picking one raises the
+   *  "This delegation is Absent" notice (after the queue-full check) and adds nobody. */
+  showAbsent?: boolean;
   onAddFirst?: (id: string) => void; onAddLast?: (id: string) => void;
   maxSpeakers?: number; currentQueueLength?: number;
   currentSpeakerCountry?: string | null;
@@ -603,7 +604,7 @@ function CaucusAddSpeakerInput({ committee, spokenCountries, onAdd, onAddFirst, 
   const [query, setQuery] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
   const onList = new Set((committee.caucusQueue ?? committee.speakersList).map((s) => s.delegateId));
-  const eligible = committee.delegates.filter((d) => d.status !== 'absent' || !!onRecognise);
+  const eligible = committee.delegates.filter((d) => d.status !== 'absent' || showAbsent);
   const isFull = maxSpeakers !== undefined && currentQueueLength !== undefined && currentQueueLength >= maxSpeakers;
   const cq = resolveQuery(query).toLowerCase();
   const matches = cq
@@ -612,11 +613,11 @@ function CaucusAddSpeakerInput({ committee, spokenCountries, onAdd, onAddFirst, 
     : [];
   const isCurrentSpeaker = (d: { country: string }) => !!currentSpeakerCountry && d.country === currentSpeakerCountry;
   const topNotOnList = matches.find((d) => !onList.has(d.id) && !isCurrentSpeaker(d)) ?? null;
-  // Absent delegates are recognised (status first) only once every refusal check passed.
-  const recogniseIfAbsent = (d: { id: string; status: DelegateStatus }) => {
-    if (d.status !== 'absent') return true;
-    if (!onRecognise) return false;
-    onRecognise(d.id);
+  // Absent delegates are never added and their attendance never changes here (13 Oct 2026):
+  // the notice says to use Roll Call. False = stop.
+  const refuseIfAbsent = (d: { id: string; status: DelegateStatus }) => {
+    if (d.status !== 'absent') return false;
+    notifyDelegationAbsent(t, d.id);
     return true;
   };
   // Full: the bar stays in place and the refusal is a short top-right notification
@@ -625,7 +626,7 @@ function CaucusAddSpeakerInput({ committee, spokenCountries, onAdd, onAddFirst, 
   const commit = (d: typeof topNotOnList) => {
     if (!d || onList.has(d.id) || isCurrentSpeaker(d)) return;
     if (refuseIfFull()) return;
-    if (!recogniseIfAbsent(d)) return;
+    if (refuseIfAbsent(d)) return;
     onAdd(d.id); setQuery('');
   };
   // Full (owner, 17 Sep 2026): the field cannot even be typed in. It is disabled (so it is
@@ -689,13 +690,13 @@ function CaucusAddSpeakerInput({ committee, spokenCountries, onAdd, onAddFirst, 
                 {isFirst && !spoke && (
                   <div className="flex items-center gap-1 shrink-0">
                     {onAddFirst && (
-                      <button onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); if (refuseIfFull() || !recogniseIfAbsent(d)) return; onAddFirst(d.id); setQuery(''); }}
+                      <button onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); if (refuseIfFull() || refuseIfAbsent(d)) return; onAddFirst(d.id); setQuery(''); }}
                         className="text-[10px] px-1.5 py-0.5 rounded bg-[#DDD4C0] hover:bg-[#C8BAA8] text-[#B6871F] font-bold border border-[#C8BAA8] transition-colors gv-lift">
                         {t('caucus_add_first')}
                       </button>
                     )}
                     {onAddLast && (
-                      <button onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); if (refuseIfFull() || !recogniseIfAbsent(d)) return; onAddLast(d.id); setQuery(''); }}
+                      <button onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); if (refuseIfFull() || refuseIfAbsent(d)) return; onAddLast(d.id); setQuery(''); }}
                         className="text-[10px] px-1.5 py-0.5 rounded bg-[#DDD4C0] hover:bg-[#C8BAA8] text-[#B6871F] font-bold border border-[#C8BAA8] transition-colors gv-lift">
                         {t('caucus_add_last')}
                       </button>
@@ -1119,7 +1120,7 @@ function ModeratedCaucusMain({
   speakerTimeRemaining, timerRunning, caucusSeconds,
   openPopovers, setPopover, extraTimeAdded,
   handleToggleTimer, handleRestartTime, handleNextCaucusSpeaker, handleEndCaucus, handleStartOnDeck,
-  sessionEnded, isViewOnly = false, onRecognise, commenterLock = null, onRemoveFloorSpeaker,
+  sessionEnded, isViewOnly = false, showAbsent = false, commenterLock = null, onRemoveFloorSpeaker,
   speakerAnchor = null,
 }: {
   committee: Committee; setCommittee: CommitteeSetter;
@@ -1136,7 +1137,8 @@ function ModeratedCaucusMain({
    *  press (the page's `handleStartCaucusOnDeck`). */
   handleStartOnDeck: () => Promise<void>;
   /** Marks an absent delegate Present before the typed bar queues them (see AddSpeakerInput). */
-  onRecognise?: (id: string) => void;
+  /** List absent delegations in the caucus add bar (tagged; picking one only raises the notice). */
+  showAbsent?: boolean;
   /** Live seconds on the TOTAL caucus clock, derived from the anchor by the page. */
   caucusSeconds: number;
   speakerTimeRemaining: number; timerRunning: boolean;
@@ -1529,7 +1531,7 @@ function ModeratedCaucusMain({
             currentQueueLength={queue.length}
             currentSpeakerCountry={committee.currentSpeaker?.country ?? null}
             onEndCaucus={isTdT ? handleEndCaucus : undefined}
-            onRecognise={onRecognise}
+            showAbsent={showAbsent}
           />}
         </FloorBarExtent>
       )}
@@ -3376,9 +3378,10 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [floorAbsentId, catchUpTick, floorRemovalAllowed]);
 
-  // RollCallPanel recognised an absent delegate (clicked onto a list): drop that country's
-  // waiting-room request from local state. The panel deletes the motion row itself, after
-  // the status write lands. Functional updater, so no stale committee is captured.
+  // Roll Call (RollCallPanel's status slider) made an absent delegation with a waiting-room
+  // request present: drop that country's request from local state. The panel deletes the
+  // motion row itself, after the status write lands. Functional updater, so no stale
+  // committee is captured.
   const handleJoinRequestResolved = useCallback((country: string) => {
     updateLocal(setCommittee, (c) => {
       const pm = c.pendingMotions ?? [];
@@ -3388,18 +3391,6 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // The typed add bars recognise an absent delegate the same way the sidebar row click does:
-  // the status their waiting-room request asked for, the request dropped locally, and the
-  // motion deleted only after the status write lands. The caller adds them to the list next.
-  const recogniseAbsentDelegate = useCallback((delegateId: string) => {
-    if (!committee || committee.endedAt) return;
-    const d = committee.delegates.find((x) => x.id === delegateId);
-    if (!d || d.status !== 'absent') return;
-    const desired = recognisedStatus(committee.pendingMotions, d.country, d.isObserver === true);
-    handleStatusChange(d.id, desired);
-    handleJoinRequestResolved(d.country);
-    resolveJoinRequestsOnAdmit(committee.id, d.id, d.country, desired, committee.code, committee.dbChairJoinSuffix ?? undefined);
-  }, [committee, handleStatusChange, handleJoinRequestResolved]);
 
   // Can the moderated-caucus queue take this delegate right now? The sidebar asks BEFORE it
   // marks an absent delegate Present, so a full queue never leaves someone Present but not
@@ -5382,6 +5373,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
               onCycleStatus={handleCycleStatus}
               onStatusChange={handleStatusChange}
               showStatusSliders={showSliders}
+              onJoinRequestResolved={handleJoinRequestResolved}
               isReadOnly={sessionEnded}
               isViewOnly={isViewOnly} onCommenterAttempt={isCommenter ? notifyCommenter : undefined} />
           ) : (
@@ -5759,6 +5751,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                 onPhaseChange={handlePhaseChange}
                 isRollCallPhase={true}
                 showBulkActions={true}
+                onJoinRequestResolved={handleJoinRequestResolved}
                 isReadOnly={sessionEnded}
                 isViewOnly={isViewOnly} onCommenterAttempt={isCommenter ? notifyCommenter : undefined} />
               </div>
@@ -5863,7 +5856,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                     sessionEnded={sessionEnded}
                     isViewOnly={isViewOnly}
                     commenterLock={commenterLock}
-                    onRecognise={recogniseAbsentDelegate}
+                    showAbsent
                     onRemoveFloorSpeaker={stableRemoveFloorSpeaker}
                     speakerAnchor={speakerAnchor}
                   />
@@ -6031,7 +6024,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                   {!isViewOnly && (
                   <div className="flex items-center gap-3" data-tutorial="speakers-bottom-bar">
                     <div className="flex-1 min-w-0">
-                      <AddSpeakerInput committee={committee} onAdd={belowQuorum ? () => {} : handleAddToSpeakersList} onRecognise={belowQuorum ? undefined : recogniseAbsentDelegate} />
+                      <AddSpeakerInput committee={committee} onAdd={belowQuorum ? () => {} : handleAddToSpeakersList} showAbsent={!belowQuorum} />
                     </div>
                     <div className="shrink-0 flex items-center gap-1.5">
                       <span className="text-[10px] font-black uppercase tracking-widest text-[#9A8A78] shrink-0 me-0.5">{t('gsl_time')}</span>

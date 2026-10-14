@@ -371,6 +371,8 @@ export const ptTranslationsA = {
   caucus_queue_full: 'Fila cheia: cabem {n} oradores no tempo restante',
   caucus_queue_full_title: 'Fila cheia',
   caucus_queue_full_body: 'O debate não tem mais tempo para outro orador.',
+  absent_add_title: 'Esta delegação está Ausente',
+  absent_add_body: 'Marque-a como presente pela Chamada.',
   commenter_only_title: 'Você está comentando',
   commenter_only_body: 'Só o Moderador pode fazer isso, e apenas um membro da Mesa modera por vez. {name} está com o martelo. Para assumir o controle, abra o martelo na barra superior e escolha Pegar o martelo.',
   commenter_only_hint: 'Só o Moderador. Você está comentando.',
