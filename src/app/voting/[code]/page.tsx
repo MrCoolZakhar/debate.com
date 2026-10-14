@@ -120,6 +120,52 @@ type VotingPhase = VoteStatus;
  * (see the standing error on RollCallPanel's `applyStatus`). The timestamps below
  * are receipts for optimistic writes, so they must be taken at click time.
  */
+// ── The voting line: what has been asked (13 Oct 2026) ─────────────────────────
+// Line position i is the main ballot below `order.length` (`order[i]`), then the delegations
+// that passed, asked again (`passedIds[i - order.length]`). A main-ballot seat is DONE when it
+// holds a vote or a Pass; a second-ask seat when it holds a vote. The first seat that is not
+// done is the frontier: the chair can move freely among done seats and onto the frontier,
+// never past it (nobody is skipped).
+function lineSeatDone(v: Pick<VoteStateV1, 'order' | 'passedIds' | 'votes'>, i: number): boolean {
+  const n = v.order.length;
+  if (i < n) {
+    const id = v.order[i].id;
+    return v.passedIds.includes(id) || v.votes.some((x) => x.delegateId === id);
+  }
+  const id = v.passedIds[i - n];
+  return !!id && v.votes.some((x) => x.delegateId === id);
+}
+/** The first line position at or after `from` that is not done; the line length when none. */
+function firstOpenSeat(v: Pick<VoteStateV1, 'order' | 'passedIds' | 'votes'>, from: number): number {
+  const len = v.order.length + v.passedIds.length;
+  for (let i = Math.max(0, from); i < len; i++) if (!lineSeatDone(v, i)) return i;
+  return len;
+}
+
+/** Left / Right on the ballot screen (13 Oct 2026): Previous / Next country, mirrored in Arabic.
+ *  Never while a text field has focus, the roll call is open or any dialog is over the page. */
+function BallotKeyNav({ onPrev, onNext, rtl }: { onPrev: (() => void) | null; onNext: (() => void) | null; rtl: boolean }) {
+  const latest = useRef({ onPrev, onNext, rtl });
+  useEffect(() => { latest.current = { onPrev, onNext, rtl }; });
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+      if (e.defaultPrevented || e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+      const el = document.activeElement as HTMLElement | null;
+      if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || el.isContentEditable)) return;
+      if (document.querySelector('.gv-rc, [role="dialog"], [role="alertdialog"], [aria-modal="true"]')) return;
+      const { onPrev: prev, onNext: next, rtl: r } = latest.current;
+      const fn = (e.key === 'ArrowLeft') !== r ? prev : next;
+      if (!fn) return;
+      e.preventDefault();
+      fn();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+  return null;
+}
+
 function nowMs(): number {
   return Date.now();
 }
@@ -957,18 +1003,29 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
   // (a stored state is either a vote in progress or a recorded result), and no vote is open.
   // With two or more the Moderator chooses one on the list first. Decided once per page load,
   // after the vote states have loaded, so Back from the roll call lands on the list and stays.
-  const autoRollCallRef = useRef(false);
-  useEffect(() => {
-    if (autoRollCallRef.current || loading || !accessGranted || !committee) return;
-    autoRollCallRef.current = true;
-    // Never over a suspended or ended room: no ballot can start there.
-    if (isViewOnly || committee.endedAt || committee.suspendedAt || selectedDocId) return;
-    if (Object.values(voteStates).some(isVoteOpen)) return;
+  //
+  // DERIVED DURING RENDER, then pinned (13 Oct 2026, owner: "quickly flashed the actual voting
+  // screen"). It used to be decided in an effect AFTER the first post-loading render, so the
+  // list of papers was painted for a frame or two before the roll call replaced it. Now the
+  // render that first has the data already shows the roll call (`autoDocId` stands in for
+  // `pendingDocId`), and the effect below only makes that choice permanent, once.
+  const [autoRollDone, setAutoRollDone] = useState(false);
+  const autoDocId: string | null = (() => {
+    if (autoRollDone || loading || !accessGranted || !committee) return null;
+    if (isViewOnly || committee.endedAt || committee.suspendedAt || selectedDocId) return null;
+    if (Object.values(voteStates).some(isVoteOpen)) return null;
     const ready = (committee.documents ?? []).filter(
       (d) => d.type === 'draft-resolution' && d.status === 'introduced' && !voteStates[d.id],
     );
-    if (ready.length === 1) setPendingDocId(ready[0].id);
-  // Once, when the room and its vote states are first on screen.
+    return ready.length === 1 ? ready[0].id : null;
+  })();
+  useEffect(() => {
+    if (autoRollDone || loading || !accessGranted || !committee) return;
+    // Once per page load, when the room and its vote states are first on screen.
+    void Promise.resolve().then(() => {
+      setAutoRollDone(true);
+      if (autoDocId) setPendingDocId((prev) => prev ?? autoDocId);
+    });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading, accessGranted, committee?.id]);
 
@@ -1504,10 +1561,13 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
       const nextVotes = existing
         ? prev.votes.map((v) => (v.delegateId === delegateId ? { ...v, choice } : v))
         : [...prev.votes, { delegateId, country, choice }];
+      const nextPassed = mainRound ? prev.passedIds.filter((id) => id !== delegateId) : prev.passedIds;
+      // On to the next delegation that has not voted (13 Oct 2026): after going back and
+      // changing a vote, the delegations ahead that already voted are not asked again.
       return {
         votes: nextVotes,
-        passedIds: mainRound ? prev.passedIds.filter((id) => id !== delegateId) : prev.passedIds,
-        currentVoterIndex: prev.currentVoterIndex + 1,
+        passedIds: nextPassed,
+        currentVoterIndex: firstOpenSeat({ order: prev.order, passedIds: nextPassed, votes: nextVotes }, prev.currentVoterIndex + 1),
       };
     });
   };
@@ -1528,10 +1588,12 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
   const handlePass = (delegateId: string) => {
     advance((prev) => {
       if (prev.currentVoterIndex >= prev.order.length) return { votes: prev.votes, passedIds: prev.passedIds, currentVoterIndex: prev.currentVoterIndex };
+      const nextPassed = prev.passedIds.includes(delegateId) ? prev.passedIds : [...prev.passedIds, delegateId];
+      const nextVotes = prev.votes.filter((v) => v.delegateId !== delegateId);
       return {
-        passedIds: prev.passedIds.includes(delegateId) ? prev.passedIds : [...prev.passedIds, delegateId],
-        votes: prev.votes.filter((v) => v.delegateId !== delegateId),
-        currentVoterIndex: prev.currentVoterIndex + 1,
+        passedIds: nextPassed,
+        votes: nextVotes,
+        currentVoterIndex: firstOpenSeat({ order: prev.order, passedIds: nextPassed, votes: nextVotes }, prev.currentVoterIndex + 1),
       };
     });
   };
@@ -1580,8 +1642,11 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
    * 2026: "make sure you are able to click on previous voters and move back in the queue").
    * Exactly Back's semantics, only further: ONE `updateVote`, so the seq grows and every chair
    * device follows; nothing is removed, so the seat arrives with its recorded choice shown and
-   * Keep and continue on offer. Moderator only, ballot only, never a device ballot, and never
-   * forwards (that would skip a delegation that has not been asked).
+   * Keep and continue on offer. Moderator only, ballot only, never a device ballot. Since 13
+   * Oct 2026 it goes FORWARD too, to any delegation that already voted and to the first one
+   * that has not (owner: "I can click countries to go back but not forward"), never past that
+   * one, so nobody is skipped. It never recomputes the position on its own: the chair stays on
+   * the delegation they picked.
    */
   const goToVoter = (index: number) => {
     if (isViewOnly || !vote || !selectedDoc) return;
@@ -1592,7 +1657,8 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
       if (prev.status !== 'voting') return {};
       const lineLen = prev.order.length + prev.passedIds.length;
       const to = Math.max(0, Math.min(index, lineLen - 1));
-      if (to >= prev.currentVoterIndex) return {};
+      if (to === prev.currentVoterIndex) return {};
+      if (to > firstOpenSeat(prev, 0)) return {};
       return { currentVoterIndex: to };
     });
   };
@@ -1889,7 +1955,9 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
   // abandoning a vote in progress. Commenters never get it: it writes delegate statuses.
   // It opens for a chosen document (`pendingDocId`: confirming starts that ballot) or on its
   // own (`rollCallOpen`: confirming just closes it).
-  const pendingDoc = pendingDocId ? allDRs.find((d) => d.id === pendingDocId) ?? null : null;
+  // Until the auto choice is pinned (the effect above), the render-time choice stands in.
+  const effectivePendingDocId = pendingDocId ?? autoDocId;
+  const pendingDoc = effectivePendingDocId ? allDRs.find((d) => d.id === effectivePendingDocId) ?? null : null;
   const showRollCall = !isViewOnly && (rollCallOpen || !!pendingDoc);
   const closeRollCall = () => { setRollCallOpen(false); setPendingDocId(null); };
   const rollCallModal = showRollCall ? (
@@ -2158,6 +2226,19 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
   // A device ballot not yet revealed: the delegations vote on their own devices (DeviceVotingPanel).
   const deviceBallotOpen = vote.method === 'device' && phase === 'voting' && currentVoterIndex < mainCount;
   const canStepBack = !isViewOnly && !(vote.method === 'device' && phase === 'voting') && (phase !== 'voting' || currentVoterIndex > 0);
+  // Moving along the line (13 Oct 2026): any delegation that already voted, either way, and
+  // the first one that has not; never past it. Moderator, roll-call ballot, while voting only.
+  const lineNav = !isViewOnly && phase === 'voting' && vote.method !== 'device';
+  const frontier = lineNav ? firstOpenSeat(vote, 0) : 0;
+  const navCurrent = Math.min(currentVoterIndex, Math.max(0, lineLength - 1));
+  const canPickSeat = (i: number) => lineNav && i !== navCurrent && i <= frontier && i < lineLength;
+  const prevSeat = lineNav && navCurrent > 0 ? navCurrent - 1 : null;
+  const nextSeat = !lineNav ? null
+    : navCurrent + 1 < lineLength && lineSeatDone(vote, navCurrent + 1) ? navCurrent + 1
+    : frontier > navCurrent && frontier < lineLength ? frontier
+    : null;
+  const goPrev = prevSeat !== null ? () => goToVoter(prevSeat) : null;
+  const goNext = nextSeat !== null ? () => goToVoter(nextSeat) : null;
 
   const stage = phase === 'result' ? t('voting_stage_result')
     : phase === 'rights-speakers' ? t('voting_stage_rights')
@@ -2270,8 +2351,12 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
               current={Math.min(currentVoterIndex, Math.max(0, lineLength - 1))}
               markOf={markOf}
               hideTally={hideVotes}
-              onPick={canStepBack ? goToVoter : undefined}
+              onPick={lineNav ? goToVoter : undefined}
+              canPick={canPickSeat}
+              onPrev={lineNav ? goPrev : undefined}
+              onNext={lineNav ? goNext : undefined}
             />
+            {lineNav && <BallotKeyNav onPrev={goPrev} onNext={goNext} rtl={language === 'ar'} />}
             <h1
               key={`${currentDelegate.key}`}
               className="gv-name-in text-[36px] font-bold text-[#1C1410] text-center leading-[1.1] tracking-[-0.015em] mt-3 max-w-4xl [text-wrap:balance]"

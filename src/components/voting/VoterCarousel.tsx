@@ -13,23 +13,28 @@
  * (a vote, a Pass, Back) each flag glides to its new place: transform and opacity only,
  * interruptible CSS transitions, off under prefers-reduced-motion.
  *
- * Past voters wear a small badge with what they did. A recorded choice is the tally, so
- * with the tally hidden no choice badge is drawn; a Pass is not a vote and stays visible,
- * because the chair needs to see who comes back at the end of the line.
+ * Every delegation with something on record wears a small badge with what it did, wherever
+ * it sits in the line (13 Oct 2026: after going back, the delegations ahead that already voted
+ * show their vote too). A recorded choice is the tally, so with the tally hidden no choice
+ * badge is drawn; a Pass is not a vote and stays visible, because the chair needs to see who
+ * comes back at the end of the line.
  *
  * The line is the ballot order followed by every delegation that passed, asked once more
  * (17 Sep 2026: no separate pass round). A delegation that passed therefore appears twice,
  * so each seat carries its own `key` and marks are asked by line position.
  *
- * With `onPick` (the Moderator, on a roll-call ballot) a delegation that has ALREADY voted is
- * a button: pressing it takes the ballot back to that seat (owner, 17 Sep 2026: "make sure you
- * are able to click on previous voters and move back in the queue"). Only backwards, never
- * forwards, so no delegation can be skipped. Delegations still to vote and the one voting now
- * stay decorative; the whole line is otherwise hidden from screen readers, because the seat on
- * the floor is announced by the heading beneath.
+ * With `onPick` (the Moderator, on a roll-call ballot) a delegation is a button when `canPick`
+ * allows it: every delegation that already has a vote (or a Pass) on record, BEFORE or AFTER
+ * the one on screen, and the first delegation that has not voted yet (owner, 13 Oct 2026: "I
+ * can click countries to go back but not forward, once a country has voted"; on 17 Sep 2026
+ * it was backwards only). Delegations beyond the first unvoted one are never pickable, so
+ * nobody can be skipped. The one voting now and the rest stay decorative; the whole line is
+ * otherwise hidden from screen readers, because the seat on the floor is announced by the
+ * heading beneath. `onPrev` / `onNext` draw the two arrows beside the line (Previous country,
+ * Next country); null draws that arrow disabled.
  */
 
-import { Check, Minus, SkipForward, X } from 'lucide-react';
+import { Check, ChevronLeft, ChevronRight, Minus, SkipForward, X } from 'lucide-react';
 import { useLanguage, useT } from '@/contexts/LanguageContext';
 import { SeatCircleFlag } from '@/components/CircleFlag';
 import { getCountryDisplayName } from '@/lib/countries';
@@ -81,7 +86,7 @@ function ChoiceBadge({ mark }: { mark: Exclude<SeatMark, null> }) {
   );
 }
 
-export function VoterCarousel({ seats, current, markOf, hideTally, onPick }: {
+export function VoterCarousel({ seats, current, markOf, hideTally, onPick, canPick, onPrev, onNext }: {
   /** The voting line: the ballot order, then the delegations that passed. */
   seats: CarouselSeat[];
   /** Index of the delegation voting now. */
@@ -89,8 +94,13 @@ export function VoterCarousel({ seats, current, markOf, hideTally, onPick }: {
   /** What the seat at line position `index` did. */
   markOf: (id: string, index: number) => SeatMark;
   hideTally: boolean;
-  /** Moderator only: take the ballot back to the seat at this line position. */
+  /** Moderator only: take the ballot to the seat at this line position. */
   onPick?: (index: number) => void;
+  /** Which line positions `onPick` may take (voted ones and the first unvoted). Absent: backwards only. */
+  canPick?: (index: number) => boolean;
+  /** The arrows beside the line. Undefined: no arrows; null: that arrow is disabled. */
+  onPrev?: (() => void) | null;
+  onNext?: (() => void) | null;
 }) {
   const { language } = useLanguage();
   const t = useT();
@@ -115,11 +125,12 @@ export function VoterCarousel({ seats, current, markOf, hideTally, onPick }: {
       {windowed.map(({ seat, i, d }) => {
         const step = Math.min(Math.abs(d), VISIBLE);
         const x = Math.sign(d) * OFFSETS[step] * dir;
-        const mark = d < 0 ? markOf(seat.id, i) : null;
+        const mark = markOf(seat.id, i);
         const showMark = mark !== null && (mark === 'pass' || !hideTally);
         const centre = d === 0;
-        // Backwards only, and never the invisible outermost step.
-        const pickable = !!onPick && d < 0 && step < VISIBLE;
+        // Never the seat on screen or the invisible outermost step; the page decides the rest.
+        const pickable = !!onPick && d !== 0 && step < VISIBLE && (canPick ? canPick(i) : d < 0);
+        const pickLabel = t(d < 0 ? 'voting_go_back_to' : 'voting_go_to', { name: getCountryDisplayName(seat.country, language) });
         const face = (
           <>
             {/* Eager, not lazy: at most 11 tiny same-origin SVGs, and a seat enters the window
@@ -161,8 +172,8 @@ export function VoterCarousel({ seats, current, markOf, hideTally, onPick }: {
                 <button
                   type="button"
                   onClick={() => onPick?.(i)}
-                  title={t('voting_go_back_to', { name: getCountryDisplayName(seat.country, language) })}
-                  aria-label={t('voting_go_back_to', { name: getCountryDisplayName(seat.country, language) })}
+                  title={pickLabel}
+                  aria-label={pickLabel}
                   className="gv-seat-pick absolute inset-0 rounded-full cursor-pointer focus:outline-none"
                 >
                   {face}
@@ -189,6 +200,40 @@ export function VoterCarousel({ seats, current, markOf, hideTally, onPick }: {
           </div>
         );
       })}
+      {(onPrev !== undefined || onNext !== undefined) && (
+        <>
+          <ArrowKey side="start" onPress={onPrev ?? null} label={t('voting_prev_country')} rtl={dir < 0} />
+          <ArrowKey side="end" onPress={onNext ?? null} label={t('voting_next_country')} rtl={dir < 0} />
+        </>
+      )}
     </div>
+  );
+}
+
+/** Previous / Next beside the line, at the centre flag's height. The quiet round style of the
+ *  ballot's Back control. */
+function ArrowKey({ side, onPress, label, rtl }: { side: 'start' | 'end'; onPress: (() => void) | null; label: string; rtl: boolean }) {
+  // Previous sits on the inline-start side (where voted delegations recede), Next on the end.
+  const Icon = (side === 'start') !== rtl ? ChevronLeft : ChevronRight;
+  return (
+    <button
+      type="button"
+      onClick={onPress ?? undefined}
+      disabled={!onPress}
+      aria-label={label}
+      title={label}
+      className="absolute w-12 h-12 rounded-full flex items-center justify-center focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] transition-[background-color,transform,opacity] duration-150 active:scale-[0.94] motion-reduce:transition-none disabled:opacity-30 disabled:cursor-not-allowed enabled:hover:bg-[rgba(27,56,40,0.13)]"
+      style={{
+        top: D / 2 - 24,
+        // Physical sides: the line itself mirrors by transform (`dir`), not by the document's direction.
+        ...((side === 'start') !== rtl ? { left: 8 } : { right: 8 }),
+        zIndex: 30,
+        backgroundColor: 'rgba(246,241,233,0.92)',
+        boxShadow: 'inset 0 0 0 1px rgba(27,56,40,0.12), 0 2px 8px rgba(27,56,40,0.10)',
+        color: '#1B3828',
+      }}
+    >
+      <Icon size={24} strokeWidth={2.5} aria-hidden />
+    </button>
   );
 }

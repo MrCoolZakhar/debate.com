@@ -50,7 +50,7 @@
  * still disables every control.
  */
 
-import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { CircleSlash, Megaphone, Scale, ShieldCheck, Smartphone, X, type LucideIcon } from 'lucide-react';
 import Portal from '@/components/Portal';
 import QuorumRings from '@/components/QuorumRings';
@@ -264,13 +264,22 @@ export function VotingRollCall({
   const [shownTab, setShownTab] = useState<RuleTab>('threshold');
   /** Start voting was pressed with observers in the room: the confirmation is open. */
   const [askObservers, setAskObservers] = useState(false);
+  /** The drawer's controls are built only once a bookmark has been opened (13 Oct 2026, the
+   *  first render's cost); afterwards they stay mounted so the drawer can fold with its content. */
+  const [drawerUsed, setDrawerUsed] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
+  // Portal mounts its children a render after this component, so focus is given when the
+  // root actually exists (a callback ref), not by the mount effect, which runs before it does.
+  const focusedRef = useRef(false);
+  const attachRoot = (el: HTMLDivElement | null) => {
+    rootRef.current = el;
+    if (el && !focusedRef.current) { focusedRef.current = true; el.focus({ preventScroll: true }); }
+  };
 
   // Focus lands inside the roll call, so Escape and Tab start here, and goes back to whatever
   // opened it (the Vote Again button, a picker card) when it closes.
   useEffect(() => {
     const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    rootRef.current?.focus({ preventScroll: true });
     return () => {
       if (opener && opener.isConnected && opener !== document.body) opener.focus({ preventScroll: true });
     };
@@ -303,7 +312,12 @@ export function VotingRollCall({
   }, []);
 
   const statusOf = (d: Delegate): DelegateStatus => rollCallStatuses[d.id] ?? d.status;
-  const seats = [...delegates].sort((a, b) => compareCountryNames(a.country, b.country, language));
+  // Memoised (13 Oct 2026): sorting every seat by name on every render (each status tap, each
+  // realtime echo) was part of the cost of opening the roll call on a 30-seat room.
+  const seats = useMemo(
+    () => [...delegates].sort((a, b) => compareCountryNames(a.country, b.country, language)),
+    [delegates, language],
+  );
   const votable = seats.filter((d) => !isObserverSeat(d));
   const presentCount = votable.filter((d) => statusOf(d) !== 'absent').length;
   const roomPresent = seats.filter((d) => statusOf(d) !== 'absent').length;
@@ -315,6 +329,8 @@ export function VotingRollCall({
     ? Math.ceil(roomQuorumFraction * seats.length)
     : null;
 
+  // A few comparisons (no list work), so it is not memoised: the React Compiler lint refuses a
+  // manual memo over `settings`, and the cost of opening the roll call was the rows, not this.
   const outcome = computeVoteOutcome({
     tally: { forCount: presentCount, againstCount: 0, abstainCount: 0 },
     rules: settings,
@@ -368,6 +384,7 @@ export function VotingRollCall({
     if (tab === key) { setTab(null); return; }
     setShownTab(key);
     setTab(key);
+    setDrawerUsed(true);
   };
   const onTabKey = (e: React.KeyboardEvent, i: number) => {
     let next = -1;
@@ -381,7 +398,7 @@ export function VotingRollCall({
     // Within the tablist the key was pressed in: below lg the ribbons (which carry the ids) are
     // hidden, so an id lookup focused nothing there.
     (e.currentTarget as HTMLElement).closest('[role="tablist"]')?.querySelectorAll<HTMLButtonElement>('[role="tab"]')[next]?.focus();
-    if (tab !== null) { setShownTab(key); setTab(key); }
+    if (tab !== null) { setShownTab(key); setTab(key); setDrawerUsed(true); }
   };
 
   const canConfirm = presentCount > 0 && !readOnly && !(doc && confirmBlocked);
@@ -404,9 +421,18 @@ export function VotingRollCall({
     : 'polygon(0 0, 100% 0, calc(100% - 10px) 50%, 100% 100%, 0 100%)';
 
   return (
+    <>
+    {/* The first frame (13 Oct 2026, owner: "quickly flashed the actual voting screen"): Portal
+        mounts its children one render after this component, so for that frame nothing covered
+        the screen underneath. This cover is drawn in place, in the same commit, at the roll
+        call's own position and colour with the card's outline, so the very first frame is
+        already the roll call (its loading state). The portaled roll call lands on top of it. */}
+    <div aria-hidden className="gv-rc-loading fixed inset-x-0 bottom-0 top-11 z-50 flex justify-center px-4 sm:px-6 pt-4 sm:pt-5 pb-4 sm:pb-5" style={{ backgroundColor: '#EDE7D8' }}>
+      <div className="w-full max-w-[672px] h-full rounded-3xl" style={{ backgroundColor: FOREST, border: '1.5px solid #3D7A52', boxShadow: '0 32px 80px rgba(27,56,40,0.40)' }} />
+    </div>
     <Portal>
       <div
-        ref={rootRef}
+        ref={attachRoot}
         tabIndex={-1}
         // Below the page's 44px top bar, never over it: the session code, Chat, Scoreboard and
         // Settings stay on screen through the roll call too (owner, 17 Sep 2026).
@@ -417,9 +443,6 @@ export function VotingRollCall({
         aria-label={t('voting_roll_call_heading')}
       >
         <style>{`
-          @keyframes gvRcIn { from { opacity: 0; transform: translateY(10px) } to { opacity: 1; transform: none } }
-          .gv-rc .gv-rc-in { animation: gvRcIn 360ms ${EASE} backwards }
-          .gv-rc .gv-rc-in-2 { animation-delay: 80ms }
           .gv-rc-list { scrollbar-width: none } .gv-rc-list::-webkit-scrollbar { display: none }
           .gv-rc-drawer { display: none }
           .gv-rc-drawer[data-open="true"] { display: block; max-height: 46% }
@@ -438,13 +461,15 @@ export function VotingRollCall({
             .gv-rc-drawer[data-open="true"] { width: calc(var(--gv-rc-d) + ${TUCK}px) }
           }
           @media (min-width: 1536px) { .gv-rc { --gv-rc-d: ${DRAWER_W_2XL}px } }
-          @media (prefers-reduced-motion: reduce) { .gv-rc .gv-rc-in { animation: none } .gv-rc-drawer, .gv-rc-drawer[data-open="true"] { transition: none } }
+          @media (prefers-reduced-motion: reduce) { .gv-rc-drawer, .gv-rc-drawer[data-open="true"] { transition: none } }
         `}</style>
 
         {/* No top line of its own: the page's top bar above carries the one Back and names the
             paper (owner, 17 Sep 2026). */}
         <div className="flex-1 min-h-0 px-4 sm:px-6 pt-4 sm:pt-5 pb-4 sm:pb-5 flex justify-center">
-          <div className="gv-rc-in gv-rc-in-2 h-full min-h-0 w-full max-w-[720px] xl:max-w-none flex flex-col xl:flex-row xl:justify-center items-stretch">
+          {/* No entry animation (13 Oct 2026): the card used to start transparent and slide in
+              over 440 ms, so the roll call was not readable until it finished. */}
+          <div className="gv-rc-in h-full min-h-0 w-full max-w-[720px] xl:max-w-none flex flex-col xl:flex-row xl:justify-center items-stretch">
 
             {/* Bookmarks, small screens: a row above the card */}
             <div role="tablist" aria-label={t('voting_rules_title')} className="xl:hidden shrink-0 flex gap-1.5 overflow-x-auto pb-2 [scrollbar-width:none]">
@@ -479,7 +504,7 @@ export function VotingRollCall({
               style={{ minWidth: 0, backgroundColor: FOREST, border: '1.5px solid #3D7A52', boxShadow: '0 32px 80px rgba(27,56,40,0.40)' }}
               aria-label={t('voting_roll_call_heading')}
             >
-              <div className="pointer-events-none absolute inset-0 z-[1]" style={{ backgroundImage: GRAIN, backgroundSize: '300px 300px', mixBlendMode: 'overlay', opacity: 0.07 }} />
+              <div className="pointer-events-none absolute inset-0 z-[1]" style={{ backgroundImage: GRAIN, backgroundSize: '300px 300px', opacity: 0.05 }} />
               {/* The masthead: the same lifted strip the chair sidebar uses, so the quorum tabs
                   read as growing out of the list below rather than floating on it. No bottom
                   padding, because the tabs sit flush on its edge. */}
@@ -521,7 +546,9 @@ export function VotingRollCall({
                     <div
                       key={d.id}
                       className="flex items-center gap-3.5 px-3 rounded-2xl transition-[background-color] duration-150 motion-reduce:transition-none bg-[var(--row-bg)] hover:bg-[var(--row-bg-hover)]"
-                      style={{ ['--row-bg' as string]: bg, ['--row-bg-hover' as string]: bgHover, minHeight: 70, paddingBlock: 8 } as CSSProperties}
+                      // content-visibility (13 Oct 2026): rows below the fold are not laid out or painted
+                      // until they scroll into view, so a 200-seat roll call opens as fast as a 10-seat one.
+                      style={{ ['--row-bg' as string]: bg, ['--row-bg-hover' as string]: bgHover, minHeight: 70, paddingBlock: 8, contentVisibility: 'auto', containIntrinsicSize: 'auto 70px' } as CSSProperties}
                     >
                       <SeatCircleFlag
                         country={d.country}
@@ -628,7 +655,7 @@ export function VotingRollCall({
                   </button>
                 </div>
                 <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain ps-6 pe-5 pt-3 pb-6">
-                  {shownTab === 'threshold' && (
+                  {drawerUsed && shownTab === 'threshold' && (
                     <>
                       <div className="flex items-baseline gap-2 mb-4" aria-live="polite">
                         <span className="text-[13px] font-semibold" style={{ color: INK_SOFT }}>{t('voting_rc_to_pass')}</span>
@@ -668,7 +695,7 @@ export function VotingRollCall({
                       </div>
                     </>
                   )}
-                  {shownTab === 'abstentions' && (
+                  {drawerUsed && shownTab === 'abstentions' && (
                     <>
                       <div className="divide-y divide-[rgba(27,56,40,0.08)]">
                         <Switch label={t('settings_allow_abstentions_label')} checked={settings.allowAbstentions} disabled={readOnly}
@@ -692,7 +719,7 @@ export function VotingRollCall({
                       </div>
                     </>
                   )}
-                  {shownTab === 'veto' && (
+                  {drawerUsed && shownTab === 'veto' && (
                     <>
                       <Choice
                         label={t('voting_rules_veto_mode')}
@@ -725,7 +752,7 @@ export function VotingRollCall({
                       <Note warn={vetoFact.warn}>{vetoFact.text}</Note>
                     </>
                   )}
-                  {shownTab === 'voting' && votingPanel}
+                  {drawerUsed && shownTab === 'voting' && votingPanel}
                 </div>
               </div>
             </div>
@@ -788,6 +815,7 @@ export function VotingRollCall({
         />
       )}
     </Portal>
+    </>
   );
 }
 
