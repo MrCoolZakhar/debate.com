@@ -177,6 +177,9 @@ export interface RoleSheetProps {
   /** ?step=, scrolled into view once on open. */
   initialStep: string | null;
   linkCopied: boolean;
+  /** The role was switched on after its closing date passed (13 Oct 2026): the line shown at
+   *  the top of When, asking for a new closing date first. Null when nothing to say. */
+  closedNotice?: string | null;
   onClose: () => void;
   onSave: (updates: Partial<RoleSetupConfig>) => void;
   onSaveTimeline: (change: Partial<TimelineInput>, where: 'window' | 'phases') => void;
@@ -379,6 +382,11 @@ export function RoleSheet(props: RoleSheetProps) {
                 <>
                   {/* ── When: one row ── */}
                   <Section id="step-when" emoji="Spiral calendar" icon={CalendarDays} tint={TINT_GOLD_BG} title="When">
+                    {props.closedNotice && (
+                      <p role="alert" className="mb-3 rounded-xl px-3 py-2.5" style={{ fontFamily: F, fontSize: TYPE_PX.body, fontWeight: 600, lineHeight: 1.45, color: '#8B2020', backgroundColor: 'rgba(139,32,32,0.07)', boxShadow: 'inset 3px 0 0 #8B2020', overflowWrap: 'anywhere' }}>
+                        {props.closedNotice}
+                      </p>
+                    )}
                     <div key={configVersion}>
                       <div className="gvs-two">
                         <div>

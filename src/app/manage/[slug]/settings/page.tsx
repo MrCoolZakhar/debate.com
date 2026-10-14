@@ -60,7 +60,7 @@ import { CountryPicker } from './countryPicker';
 import {
   SectionHead, Group, Row, SwitchRow, SwitchGrid, BigCount, Switch as KitSwitch, TINT_GOLD_BG, TINT_GREEN_BG, EmojiDisc, TYPE,
   listedRoles, generalAnswer, inGeneralScope, GENERAL_FIELDS, type RoleSetupConfig, TYPE_PX,
-  rolePlural, roleHasPrice, roleIsFree, rolePriceText, shortDate,
+  rolePlural, roleHasPrice, roleIsFree, rolePriceText, shortDate, closedByDate,
 } from './panelKit';
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -420,6 +420,10 @@ export default function SettingsPage() {
    *  from another role), so QuestionBuilder remounts on the stored form. */
   const [formVersion, setFormVersion] = useState(0);
   const [linkCopied, setLinkCopied] = useState(false);
+  /** The role whose switch was pressed ON after its closing date passed (13 Oct 2026). */
+  const [closedAsk, setClosedAsk] = useState<string | null>(null);
+  /** Which role's "Copy application link" on the Applications list was pressed last. */
+  const [linkCopiedRole, setLinkCopiedRole] = useState<string | null>(null);
   const [confLinkCopied, setConfLinkCopied] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -2188,9 +2192,22 @@ export default function SettingsPage() {
     submissionDebounceRef.current = setTimeout(run, 800);
   }
 
-  function handleCopyApplicationLink() {
+  /** Switching a role ON after its closing date passed does not flip the switch (the hourly
+   *  job switch-off-closed-roles would turn it off again): the role's pop-up opens on When,
+   *  asking for a new closing date first (13 Oct 2026). Anything else saves as before. */
+  function handleRoleToggle(role: string, next: boolean) {
+    const cfg = roleConfigs.find(rc => rc.role === role);
+    if (next && closedByDate(cfg, Date.now())) {
+      setClosedAsk(role);
+      if (sheetRole !== role) openRoleSetup(role, 'when');
+      return;
+    }
+    void saveRoleConfig(role, { is_enabled: next });
+  }
+
+  function handleCopyApplicationLink(forRole?: string) {
     if (!conference) return;
-    const url = `${window.location.origin}/conferences/${conference.slug}/apply?role=${activeRole}`;
+    const url = `${window.location.origin}/conferences/${conference.slug}/apply?role=${forRole ?? activeRole}`;
     navigator.clipboard.writeText(url).then(
       () => {
         setLinkCopied(true);
@@ -2956,12 +2973,18 @@ export default function SettingsPage() {
       initialStep={searchParams.get('step')}
       linkCopied={linkCopied}
       onClose={closeRoleSheet}
-      onSave={(updates) => { void saveRoleConfig(sheetRole, updates as Partial<RoleConfig>); }}
+      onSave={(updates) => {
+        if ((updates as Partial<RoleConfig>).is_enabled === true && Object.keys(updates).length === 1) { handleRoleToggle(sheetRole, true); return; }
+        void saveRoleConfig(sheetRole, updates as Partial<RoleConfig>);
+      }}
+      closedNotice={closedAsk === sheetRole && sheetConfig && closedByDate(sheetConfig, nowMs)
+        ? `This role closed on ${shortDate(sheetConfig.applications_close_at, nowMs)}. Move the closing date, then switch it on`
+        : null}
       onSaveTimeline={(change, where) => { saveTimeline(sheetRole, change, where); }}
       onUpdatePhase={(phases, idx, patch) => updateFeePhase(sheetRole, phases, idx, patch)}
       copySources={{ price: sheetCopy.price, window: sheetCopy.window }}
       onCopyFrom={(what, from) => { void handleCopyFrom(what, from); }}
-      onCopyLink={handleCopyApplicationLink}
+      onCopyLink={() => handleCopyApplicationLink()}
       onRemove={() => { void removeRole(sheetRole); }}
       formSlot={
         <>
@@ -3160,16 +3183,13 @@ export default function SettingsPage() {
 
   const extraListed = sheetRole && !addedRoles.includes(sheetRole) ? [...addedRoles, sheetRole] : addedRoles;
   const shellName = <>{conferenceAcronymLabel(view) || view.full_name}{view.acronym && view.full_name ? <> · {view.full_name}</> : null}</>;
-  // With the tabs across the top the sections have the full width. Sections
-  // made of label-and-control rows keep a reading width, so a switch never
-  // drifts far from its label; General, Applications, Team and Awards use the
-  // whole width.
-  const readingCap = activeTab === 'payments' || activeTab === 'delegations' || activeTab === 'partners' ? 1040 : undefined;
+  // Every section uses the whole width (13 Oct 2026: the 1040px reading cap on
+  // Payments, Delegations and Partners left an empty band on the right).
 
   return (
     <div className="px-4 sm:px-6 md:px-10 pt-6 pb-10" style={{ maxWidth: activeTab === 'organizers' ? '1500px' : '1380px' }}>
       <SettingsShell active={SHELL_OF[activeTab]} onOpen={(k) => openSection(TAB_OF[k])} conferenceName={shellName}>
-      <div style={readingCap ? { maxWidth: readingCap } : undefined}>
+      <div>
 
       {activeTab === 'applications' && (
         <>
@@ -3180,7 +3200,10 @@ export default function SettingsPage() {
             now={nowMs}
             extraRoles={extraListed}
             removedRoles={removedRoles}
-            onRoleToggle={(r, next) => { void saveRoleConfig(r, { is_enabled: next }); }}
+            onRoleToggle={handleRoleToggle}
+            linkCopied={linkCopied}
+            copiedRole={linkCopiedRole}
+            onCopyLink={(r) => { setLinkCopiedRole(r); handleCopyApplicationLink(r); }}
             onEditRole={openRoleSetup}
             onAddRole={(r, from) => { void handleAddRole(r, from); }}
             onSaveAll={(updates, roles) => { void saveRolesTogether(roles, updates as Partial<RoleConfig>); }}

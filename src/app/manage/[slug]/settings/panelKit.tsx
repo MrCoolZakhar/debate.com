@@ -206,6 +206,13 @@ export function windowState(cfg: Pick<RoleSetupConfig, 'is_enabled' | 'applicati
   return 'open';
 }
 
+/** The role's closing date has passed (13 Oct 2026). The hourly job switch-off-closed-roles
+ *  turns such a role off, so the page never switches it back on until the date moves. */
+export function closedByDate(cfg: Pick<RoleSetupConfig, 'applications_close_at'> | undefined, now: number): boolean {
+  const closes = cfg?.applications_close_at ? new Date(cfg.applications_close_at).getTime() : null;
+  return closes !== null && closes < now;
+}
+
 // ── Dates and prices ─────────────────────────────────────────────────────────
 
 /** "20 Feb", or "20 Feb 2027" when it is not this year (or when asked). */
@@ -512,8 +519,11 @@ export const ROW_CSS = `
   .gvk-hcard { --gvk-hang: 60px; --gvk-hang-out: 24px; --gvk-gap: 12px; }
   .gvk-hcard.gvk-head { --gvk-hang: 64px; --gvk-hang-out: 26px; }
 }
-.gvk-hang-host { position: relative; min-width: 0; padding-inline-start: max(0px, calc(var(--gvk-hang) - var(--gvk-hang-out) - var(--gvk-pad) + var(--gvk-gap))); }
-.gvk-hang { position: absolute; top: 50%; inset-inline-start: calc(-1 * (var(--gvk-pad) + var(--gvk-hang-out))); transform: translateY(-50%);
+/* The disc sits INSIDE its card (owner, 13 Oct 2026: "the icon sits half in and half out on
+   the white background"): at the host's start, the title after it, the host at least as tall
+   as the disc so it never pokes above or below the card. --gvk-hang-out is no longer used. */
+.gvk-hang-host { position: relative; min-width: 0; min-height: var(--gvk-hang); padding-inline-start: calc(var(--gvk-hang) + var(--gvk-gap) + 4px); display: flex; flex-direction: column; justify-content: center; }
+.gvk-hang { position: absolute; top: 50%; inset-inline-start: 0; transform: translateY(-50%);
   width: var(--gvk-hang); height: var(--gvk-hang); border-radius: calc(var(--gvk-hang) * 0.32); z-index: 2; pointer-events: none;
   display: inline-flex; align-items: center; justify-content: center;
   box-shadow: 0 0 0 3px #FFFFFF, inset 0 1px 0 rgba(255,255,255,0.8), 0 12px 22px -12px rgba(27,56,40,0.55), 0 3px 8px -4px rgba(27,56,40,0.18); }
@@ -554,7 +564,8 @@ export function EmojiDisc({ emoji, icon, size = 40, tint = TINT_GOLD_BG, active 
   );
 }
 
-/** The big disc that hangs off a card's left edge (see .gvk-hang in ROW_CSS).
+/** The big disc at the start of a card's title (see .gvk-hang in ROW_CSS); inside the card
+ *  since 13 Oct 2026 (it used to hang half off the left edge).
  *  Put it inside a `.gvk-hang-host` in a `.gvk-hcard` card; it is centred on
  *  the host and sized by the card's CSS variables. */
 export function HangDisc({ emoji, icon, tint = TINT_GOLD_BG }: { emoji: string; icon: LucideIcon; tint?: string }) {
@@ -670,7 +681,7 @@ export function Group({ id, title, emoji, icon, tint = TINT_GREEN_BG, hint, asid
       }}
     >
       <div className="flex items-center justify-between gap-3 flex-wrap mb-3">
-        <div className="gvk-hang-host" style={{ minHeight: 34, display: 'flex', alignItems: 'center' }}>
+        <div className="gvk-hang-host">
           <HangDisc emoji={emoji} icon={icon} tint={tint} />
           <h3 className="flex items-center gap-1.5 min-w-0" style={{ ...TYPE.card, margin: 0 }}>
             <span style={{ overflowWrap: 'anywhere' }}>{title}</span>

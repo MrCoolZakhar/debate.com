@@ -6,11 +6,12 @@
  * to more of them, which i think should be general applications settings -
  * paying, who gets in and what do they rank").
  *
- * One section among equals now (settingsShell.tsx), in three cards and two
- * columns from 1000px of section width (owner, 12 Oct 2026): Who Can Apply on
- * the left, What They Rank with Accepting and Paying under it on the right,
- * stacked in that order below. There is no section heading of its own (the
- * applications count was dropped the same day); an sr-only h2 stays.
+ * One section among equals now (settingsShell.tsx), ONE full-width column since
+ * 13 Oct 2026 (owner: "eliminate that extra cream space we have for no
+ * reason"): Who Can Apply, then Accepting and Paying under it. What They Rank
+ * left this screen the same day (it moves into the delegate and head delegate
+ * pop-ups as Preferences; PREF_MODE_OPTIONS and RankPreview stay exported for
+ * that). There is no section heading of its own; an sr-only h2 stays.
  *
  *
  *   Who Can Apply    one row per listed role (price, window, number applied,
@@ -28,9 +29,6 @@
  *                    and the "Most you will accept" pointer were removed on
  *                    12 Oct 2026, and the per-role cap left the role pop-up
  *                    the same day.
- *   What They Rank   preference_mode for delegates and head delegates, a
- *                    vertical list: each choice a row with a preview of what
- *                    the applicant will see, its name and one line.
  *
  * When the roles disagree, the control says so ("Different per role", a gold
  * edge and a switch with its thumb in the middle) and one press uses one
@@ -48,16 +46,16 @@
 
 import { useEffect, useRef, useState } from 'react';
 import {
-  CheckCircle2, ChevronRight, Plus, X, ArrowLeft, Copy, FilePlus2,
-  DoorOpen, ListOrdered, Ban, Hand,
+  ChevronRight, Plus, X, ArrowLeft, Copy, FilePlus2,
+  DoorOpen, Ban, Hand, Check, Eye,
 } from 'lucide-react';
 import { CircleFlag } from '@/components/CircleFlag';
 import type { Conference } from '@/app/manage/[slug]/layout';
 import { ROLE_ORDER } from './applicationsUi';
 import {
   F, INK, INK_SOFT, FOREST, TEXT_LINK,
-  Switch, windowState, shortDate, rolePriceText, rolePlural, roleHasPrice, roleIsFree,
-  PREF_MODE_OPTIONS, Group, Row, SwitchRow, SwitchGrid, TINT_GOLD_BG, TINT_GREEN_BG, EmojiDisc, RoleDisc, TYPE, TYPE_PX,
+  Switch, windowState, closedByDate, shortDate, rolePriceText, rolePlural, roleHasPrice, roleIsFree,
+  Group, SwitchRow, SwitchGrid, TINT_GOLD_BG, TINT_GREEN_BG, EmojiDisc, RoleDisc, TYPE, TYPE_PX,
   generalAnswer, inGeneralScope, listedRoles, type GeneralField, type RoleSetupConfig,
 } from './panelKit';
 
@@ -73,20 +71,14 @@ const ROLE_LINE: Record<string, string> = {
 };
 
 const CSS = `
-/* Two columns from 1000px of section width (owner, 12 Oct 2026: "move
-   basically the entire page in two columns"): Who Can Apply on the left, What
-   They Rank with Accepting and Paying under it on the right, each half the
-   width and aligned at the top; stacked in that order below. The 44px column
-   gap leaves room for the right cards' emoji discs, which hang 24px off their
-   left edge. */
+/* One full-width column (13 Oct 2026): Who Can Apply, then Accepting and Paying. */
 .gvc-app { container-type: inline-size; }
-.gvc-cols { display: grid; grid-template-columns: minmax(0, 1fr); gap: 20px; align-items: start; }
-.gvc-col { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
-@container (min-width: 1000px) { .gvc-cols:not([data-single]) { grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 44px; } }
+.gvc-cols { display: flex; flex-direction: column; gap: 20px; }
 /* Role rows: white raised cards; a role that is taking applications gets the
    green wash and a forest edge (owner, 12 Oct 2026: "slightly bigger icons and
-   nicer cards"). */
-.gvc-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "name switch" "detail detail" "count edit";
+   nicer cards"). Phone: the role and its switch, then price and window, then the
+   applied count and Edit, then the two link actions folded under the main line. */
+.gvc-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "name switch" "detail detail" "count edit" "links links";
   column-gap: 12px; row-gap: 6px; align-items: center; padding: 12px 16px 12px 12px; border-radius: 16px; background: #FFFFFF;
   box-shadow: 0 1px 0 rgba(27,56,40,0.08), 0 10px 24px -18px rgba(27,56,40,0.45), inset 0 0 0 1px rgba(27,56,40,0.06);
   transition: background-color 160ms ease, box-shadow 160ms ease; }
@@ -94,17 +86,24 @@ const CSS = `
   box-shadow: inset 4px 0 0 #2A5A3C, inset 0 0 0 1px rgba(42,90,60,0.22), 0 1px 0 rgba(27,56,40,0.08), 0 12px 26px -18px rgba(27,56,40,0.55); }
 .gvc-row-name { grid-area: name; } .gvc-row-detail { grid-area: detail; } .gvc-row-count { grid-area: count; }
 .gvc-row-edit { grid-area: edit; justify-self: end; } .gvc-row-switch { grid-area: switch; justify-self: end; }
-/* Half the page (the two-column layout): two lines, the role and its switch,
-   then price and window, the applied count and Edit, the detail lined up
-   under the role's name. */
-@container (min-width: 430px) {
-  .gvc-row { grid-template-columns: minmax(0, 1fr) auto auto; grid-template-areas: "name name switch" "detail count edit"; row-gap: 4px; }
-  .gvc-row-detail { padding-inline-start: 60px; }
+.gvc-row-links { grid-area: links; display: flex; flex-wrap: wrap; gap: 6px; }
+.gvc-link { display: inline-flex; align-items: center; gap: 6px; min-height: 36px; padding: 0 12px; border-radius: 10px; border: none; cursor: pointer;
+  background: rgba(27,56,40,0.05); color: ${FOREST}; font-family: ${F}; font-size: 13.5px; font-weight: 700; text-decoration: none; white-space: nowrap;
+  transition: background-color 150ms ease, transform 120ms ease; }
+.gvc-link:hover { background: rgba(27,56,40,0.10); }
+.gvc-link:active { transform: scale(0.97); }
+.gvc-link:focus { outline: none; }
+.gvc-link:focus-visible { box-shadow: 0 0 0 2px #FFFFFF, 0 0 0 4px ${FOREST}; }
+@container (min-width: 560px) {
+  .gvc-row { grid-template-columns: minmax(0, 1fr) auto auto; grid-template-areas: "name name switch" "detail count edit" "links links links"; row-gap: 4px; }
+  .gvc-row-detail { padding-inline-start: 60px; } .gvc-row-links { padding-inline-start: 60px; }
   .gvc-row-count { justify-self: end; }
 }
-@container (min-width: 620px) {
-  .gvc-row-detail { padding-inline-start: 0; }
-  .gvc-row { grid-template-columns: minmax(170px, 1.1fr) minmax(0, 1.5fr) 96px auto auto; grid-template-areas: "name detail count edit switch"; column-gap: 14px; }
+/* The full width: one line, the two links between the window and the count. */
+@container (min-width: 1000px) {
+  .gvc-row-detail, .gvc-row-links { padding-inline-start: 0; }
+  .gvc-row { grid-template-columns: minmax(180px, 1fr) minmax(0, 1.6fr) auto 96px auto auto; grid-template-areas: "name detail links count edit switch"; column-gap: 16px; }
+  .gvc-row-links { justify-content: flex-end; }
 }
 .gvc-pick { display: grid; gap: 8px; grid-template-columns: minmax(0, 1fr); }
 @container (min-width: 520px) { .gvc-pick { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
@@ -126,12 +125,21 @@ const CSS = `
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-function rowDetail(cfg: RoleSetupConfig, now: number): string {
+/** The role's window in words, and its colour (13 Oct 2026): closed in the danger red, open in
+ *  the success green, opening later muted. A role switched off BECAUSE its closing date passed
+ *  (the hourly switch-off-closed-roles job) still reads "closed {date}"; one switched off by
+ *  hand reads "Not taking applications". */
+const TONE = { closed: '#8B2020', open: '#2A5A3C', muted: INK_SOFT } as const;
+function rowDetail(cfg: RoleSetupConfig, now: number): { text: string; tone: keyof typeof TONE; price: boolean } {
   const st = windowState(cfg, now);
-  if (st === 'off') return 'Not taking applications';
-  if (st === 'scheduled') return `opens ${shortDate(cfg.applications_open_at, now)}`;
-  if (st === 'closed') return `closed ${shortDate(cfg.applications_close_at, now)}`;
-  return cfg.applications_close_at ? `open until ${shortDate(cfg.applications_close_at, now)}` : 'open, no closing date';
+  if (st === 'off') {
+    return closedByDate(cfg, now)
+      ? { text: `closed ${shortDate(cfg.applications_close_at, now)}`, tone: 'closed', price: true }
+      : { text: 'Not taking applications', tone: 'muted', price: false };
+  }
+  if (st === 'scheduled') return { text: `opens ${shortDate(cfg.applications_open_at, now)}`, tone: 'muted', price: true };
+  if (st === 'closed') return { text: `closed ${shortDate(cfg.applications_close_at, now)}`, tone: 'closed', price: true };
+  return { text: cfg.applications_close_at ? `open until ${shortDate(cfg.applications_close_at, now)}` : 'open, no closing date', tone: 'open', price: true };
 }
 
 function joinWords(words: string[]): string {
@@ -263,7 +271,7 @@ function AddRole({ hidden, setUp, onAdd }: {
 
 // ── What they rank: a small preview of the applicant's form per choice ───────
 
-function RankPreview({ value }: { value: string }) {
+export function RankPreview({ value }: { value: string }) {
   const n = (i: number) => <span className="gvc-mini-n">{i}</span>;
   if (value === 'none') {
     return (
@@ -295,7 +303,7 @@ function RankPreview({ value }: { value: string }) {
 
 export function ApplicationsSection({
   conference: c, roles, counts, now, extraRoles, removedRoles = [],
-  onRoleToggle, onEditRole, onAddRole, onSaveAll,
+  onRoleToggle, onEditRole, onAddRole, onSaveAll, linkCopied = false, copiedRole = null, onCopyLink,
 }: {
   conference: Conference;
   roles: RoleSetupConfig[];
@@ -311,17 +319,19 @@ export function ApplicationsSection({
   onAddRole: (role: string, copyFrom: string | null) => void;
   /** One value for every covered role (the page writes them in one update). */
   onSaveAll: (updates: Partial<RoleSetupConfig>, roles: string[]) => void;
+  /** The page's copied-feedback for "Copy application link", and which role it was for. */
+  linkCopied?: boolean;
+  copiedRole?: string | null;
+  onCopyLink?: (role: string) => void;
 }) {
   const ordered = ROLE_ORDER.map(r => roles.find(x => x.role === r)).filter((x): x is RoleSetupConfig => !!x);
   const listed = listedRoles(ordered, counts, extraRoles, removedRoles);
   const hidden = ordered.filter(r => !listed.includes(r));
   const auto = generalAnswer(listed, 'auto_accept');
   const timing = generalAnswer(listed, 'payment_timing');
-  const rank = generalAnswer(listed, 'preference_mode');
   const anyPaid = listed.some(r => roleHasPrice(r.role) && !roleIsFree(r));
   const showTiming = anyPaid && timing.roles.length > 0;
   const showAccept = auto.roles.length > 0 || showTiming;
-  const showRank = rank.roles.length > 0;
 
   function saveAll(field: GeneralField, value: unknown) {
     const targets = listed.filter(r => inGeneralScope(field, r.role)).map(r => r.role);
@@ -335,10 +345,7 @@ export function ApplicationsSection({
         <style>{CSS}</style>
         <div className="gvc-cols">
           <div className="gv-fd-ph" style={{ height: 320 }} />
-          <div className="gvc-col">
-            <div className="gv-fd-ph" style={{ height: 220 }} />
-            <div className="gv-fd-ph" style={{ height: 140 }} />
-          </div>
+          <div className="gv-fd-ph" style={{ height: 140 }} />
         </div>
       </div>
     );
@@ -351,13 +358,15 @@ export function ApplicationsSection({
           (owner, 12 Oct 2026: "no need to have the top heading with the
           amount of delegates"); the h2 stays for screen readers. */}
       <h2 className="sr-only">Applications</h2>
-      <div className="gvc-cols" data-single={showAccept || showRank ? undefined : 'true'}>
+      <div className="gvc-cols">
         {/* ── Who can apply ── */}
         <Group id="who-can-apply" title="Who Can Apply" emoji="Identification card" icon={Hand} tint={TINT_GOLD_BG}>
           {listed.map(cfg => {
             const st = windowState(cfg, now);
             const plural = rolePlural(cfg.role);
             const count = counts?.[cfg.role];
+            const detail = rowDetail(cfg, now);
+            const copied = linkCopied && copiedRole === cfg.role;
             return (
               <div key={cfg.role} className="gvc-row" data-on={cfg.is_enabled ? 'true' : undefined}>
                 <span className="gvc-row-name flex items-center gap-2.5 min-w-0">
@@ -365,7 +374,21 @@ export function ApplicationsSection({
                   <span style={{ ...TYPE.card, overflowWrap: 'anywhere' }}>{plural}</span>
                 </span>
                 <span className="gvc-row-detail min-w-0" style={{ ...TYPE.body, color: INK_SOFT, overflowWrap: 'anywhere' }}>
-                  {st === 'off' ? rowDetail(cfg, now) : <><b style={{ color: INK, fontWeight: 800 }}>{rolePriceText(cfg, c.fee_currency, now)}</b> · {rowDetail(cfg, now)}</>}
+                  {detail.price && <><b style={{ color: INK, fontWeight: 800 }}>{rolePriceText(cfg, c.fee_currency, now)}</b> · </>}
+                  <span style={{ color: TONE[detail.tone], fontWeight: detail.tone === 'muted' ? undefined : 700 }}>{detail.text}</span>
+                </span>
+                {/* Moved out of the pop-up's notice card (13 Oct 2026): the same link and preview. */}
+                <span className="gvc-row-links">
+                  {onCopyLink && (
+                    <button type="button" className="gvc-link" onClick={() => onCopyLink(cfg.role)} aria-label={`Copy the application link for ${plural}`}>
+                      {copied ? <Check size={15} strokeWidth={3} aria-hidden /> : <Copy size={15} strokeWidth={2.3} aria-hidden />}
+                      {copied ? 'Link copied' : 'Copy application link'}
+                    </button>
+                  )}
+                  <a href={`/conferences/${c.slug}/apply?role=${cfg.role}&preview=1`} target="_blank" rel="noopener noreferrer" className="gvc-link" aria-label={`Preview the form for ${plural}`}>
+                    <Eye size={15} strokeWidth={2.3} aria-hidden />
+                    Preview the form
+                  </a>
                 </span>
                 <span className="gvc-row-count" style={{ ...TYPE.hint, whiteSpace: 'nowrap' }}>
                   {count === undefined ? '' : <><b style={{ fontSize: 20, fontWeight: 900, fontVariantNumeric: 'tabular-nums', color: FOREST }}>{count}</b> applied</>}
@@ -385,51 +408,7 @@ export function ApplicationsSection({
           <AddRole hidden={hidden} setUp={listed} onAdd={onAddRole} />
         </Group>
 
-        {(showRank || showAccept) && (
-          <div className="gvc-col">
-            {/* ── What they rank (delegates and head delegates) ── */}
-            {showRank && (
-              <Group
-                title="What They Rank"
-                emoji="Bar chart"
-                icon={ListOrdered}
-                aside={<span style={{ ...TYPE.hint, fontWeight: 600 }}>{joinWords(rank.roles.map(r => rolePlural(r.role)))}</span>}
-              >
-                {rank.mixed && (
-                  <Row
-                    need
-                    label="Different per role"
-                    desc={`${rank.roles.map(r => `${rolePlural(r.role)}: ${PREF_MODE_OPTIONS.find(o => o.value === (r.preference_mode || 'none'))?.label.toLowerCase() ?? 'nothing'}`).join('. ')}. Pick one to use it for every role.`}
-                  />
-                )}
-                <div role="radiogroup" aria-label="What do they rank?" className="gvc-rank">
-                  {PREF_MODE_OPTIONS.map(opt => {
-                    const on = !rank.mixed && rank.value === opt.value;
-                    return (
-                      <button
-                        key={opt.value}
-                        type="button"
-                        role="radio"
-                        aria-checked={on}
-                        onClick={() => saveAll('preference_mode', opt.value)}
-                        className="gvc-rank-card"
-                      >
-                        <RankPreview value={opt.value} />
-                        <span className="min-w-0">
-                          <span className="flex items-center gap-1.5" style={{ ...TYPE.label, fontWeight: 800 }}>
-                            {on && <CheckCircle2 size={18} strokeWidth={2.6} color={FOREST} aria-hidden />}
-                            <span style={{ overflowWrap: 'anywhere' }}>{opt.label}</span>
-                          </span>
-                          <span className="block" style={{ ...TYPE.hint, marginTop: 3, overflowWrap: 'anywhere' }}>{opt.desc}</span>
-                        </span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </Group>
-            )}
-
-            {/* ── Accepting and paying (every role) ── */}
+        {/* ── Accepting and paying (every role), full width under Who Can Apply ── */}
             {showAccept && (
               <Group title="Accepting and Paying" emoji="Door" icon={DoorOpen} aside={<EveryRole />}>
                 <SwitchGrid>
@@ -454,8 +433,6 @@ export function ApplicationsSection({
                 </SwitchGrid>
               </Group>
             )}
-          </div>
-        )}
       </div>
     </div>
   );
