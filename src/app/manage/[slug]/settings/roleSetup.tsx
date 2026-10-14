@@ -67,10 +67,11 @@ import { TimelineNotice, TimelineWarning } from './timelineUi';
 import { RoleTimelineBar } from './roleTimelineBar';
 import { CopyFromMenu, type CopySource } from './roleCopy';
 import { RankPreview, RANK_PREVIEW_CSS } from './controlPanel';
+import { roleSetupProblems, OPEN_DATE_MESSAGE, STAGE_PRICE_MESSAGE } from '@/lib/roleSetupProblems';
 import {
   F, INK, INK_SOFT, FOREST, AMBER, DANGER, HAIRLINE, TEXT_LINK, INPUT, ROW_CSS, TYPE,
   Switch, FieldLabel, Notice, SwitchRow, TINT_GOLD_BG, TINT_GREEN_BG, EmojiDisc, RoleDisc,
-  roleHasPrice, rolePlural, roleTitle, windowState, dateAndTime, PREF_MODE_OPTIONS,
+  roleHasPrice, rolePlural, roleTitle, windowState, dateAndTime, PREF_MODE_OPTIONS, FixBadge,
   toDatetimeLocal, fromDatetimeLocal, localZoneLabel, type RoleSetupConfig, type WindowState, TYPE_PX
 } from './panelKit';
 
@@ -90,7 +91,7 @@ const STATE_MARK: Record<WindowState, { icon: LucideIcon; word: string; color: s
 const SHEET_BG = '#F3EEE2';
 
 /** The rail's sections, in order. Ids stay the ?step= ids. */
-interface RailSection { id: string; label: string }
+interface RailSection { id: string; label: string; fixes?: number }
 
 const CSS = `
 /* Settings buttons are 38px tall (owner, 12 Oct 2026: some were "way too big"). */
@@ -172,8 +173,10 @@ const CSS = `
 
 /** One card of the form: the Store's white card, a 3D emoji in a tinted disc,
  *  a Title Case heading with its last word gold. */
-function Section({ id, emoji, icon, tint = TINT_GREEN_BG, title, hint, aside, children }: {
+function Section({ id, emoji, icon, tint = TINT_GREEN_BG, title, hint, aside, fixes = 0, children }: {
   id: string;
+  /** Things to fix in this section (roleSetupProblems), as a badge by the title. */
+  fixes?: number;
   /** Right under the title: "Copy from another role" (13 Oct 2026). */
   aside?: ReactNode;
   /** Fluent 3D emoji name; `icon` is its Lucide fallback. */
@@ -195,6 +198,7 @@ function Section({ id, emoji, icon, tint = TINT_GREEN_BG, title, hint, aside, ch
         <EmojiDisc emoji={emoji} icon={icon} tint={tint} size={36} />
         <span style={{ overflowWrap: 'anywhere' }}>{title}</span>
         {hint}
+        <FixBadge n={fixes} size={22} />
       </h3>
       {aside && <div className="mb-3" style={{ marginTop: -4 }}>{aside}</div>}
       {children}
@@ -259,9 +263,24 @@ export function RoleSheet(props: RoleSheetProps) {
   const datedPhases = phases.some(p => p.start_date && p.end_date);
 
   const prefs = role === 'delegate' || role === 'head-delegate';
+  // Things to fix (src/lib/roleSetupProblems.ts), plus stage prices left blank
+  // in this open pop-up (never stored, so only counted here).
+  const problems = roleSetupProblems(config);
+  // Keyed on the stage list and the field remount, which both refill the fields.
+  const blankScope = `${phases.length}:${configVersion}`;
+  const [blankPrices, setBlankPrices] = useState<{ scope: string; idx: number[] }>({ scope: '', idx: [] });
+  const blankIdx = blankPrices.scope === blankScope ? blankPrices.idx : [];
+  const setBlankPrice = (i: number, blank: boolean) => setBlankPrices(prev => {
+    const base = prev.scope === blankScope ? prev.idx : [];
+    const next = blank ? (base.includes(i) ? base : [...base, i]) : base.filter(x => x !== i);
+    return { scope: blankScope, idx: next };
+  });
+  const dateFixes = problems.filter(p => p.section === 'dates').length;
+  const priceFixes = problems.filter(p => p.section === 'prices').length + blankIdx.length;
+  const openDateMissing = problems.some(p => p.key === 'open-date');
   const railSections: RailSection[] = [
-    { id: 'step-when', label: 'Dates' },
-    ...(priced ? [{ id: 'step-price', label: 'Prices' }] : []),
+    { id: 'step-when', label: 'Dates', fixes: dateFixes },
+    ...(priced ? [{ id: 'step-price', label: 'Prices', fixes: priceFixes }] : []),
     ...(prefs ? [{ id: 'step-prefs', label: 'Preferences' }] : []),
     { id: 'step-form', label: 'Questions' },
     { id: 'step-after', label: 'Final Message' },
@@ -486,6 +505,7 @@ export function RoleSheet(props: RoleSheetProps) {
                   onClick={() => goToSection(r.id)}
                 >
                   {r.label}
+                  <FixBadge n={r.fixes ?? 0} size={20} />
                 </button>
               ))}
             </nav>
@@ -514,7 +534,7 @@ export function RoleSheet(props: RoleSheetProps) {
                 <>
                   {/* ── When: one row ── */}
                   <Section
-                    id="step-when" emoji="Spiral calendar" icon={CalendarDays} tint={TINT_GOLD_BG} title="Dates"
+                    id="step-when" emoji="Spiral calendar" icon={CalendarDays} tint={TINT_GOLD_BG} title="Dates" fixes={dateFixes}
                     aside={<CopyFromMenu what="dates" emptyText="No other role has dates yet" sources={props.copySources.window} onPick={(r) => props.onCopyFrom('window', r)} />}
                   >
                     {props.closedNotice && (
@@ -537,6 +557,7 @@ export function RoleSheet(props: RoleSheetProps) {
                             placeholder="When you switch it on"
                             zoneNote={`Times are in ${localZoneLabel()}.`}
                           />
+                          {openDateMissing && <FixLine>{OPEN_DATE_MESSAGE}</FixLine>}
                         </div>
                         <div>
                           <FieldLabel>
@@ -573,7 +594,7 @@ export function RoleSheet(props: RoleSheetProps) {
                   {/* ── Price: one row, then the stages as a small table ── */}
                   {priced && (
                     <Section
-                      id="step-price" emoji="Money bag" icon={Wallet} tint={TINT_GOLD_BG} title="Prices"
+                      id="step-price" emoji="Money bag" icon={Wallet} tint={TINT_GOLD_BG} title="Prices" fixes={priceFixes}
                       aside={<CopyFromMenu what="prices" emptyText="No other role has a price yet" sources={props.copySources.price} onPick={(r) => props.onCopyFrom('price', r)} />}
                     >
                       <div key={configVersion}>
@@ -605,6 +626,8 @@ export function RoleSheet(props: RoleSheetProps) {
                             phases={phases}
                             active={active}
                             configVersion={configVersion}
+                            blankIdx={blankIdx}
+                            onBlank={setBlankPrice}
                             onUpdatePhase={props.onUpdatePhase}
                             onSaveTimeline={props.onSaveTimeline}
                           />
@@ -751,12 +774,25 @@ function PreferencePicker({ value, onPick }: { value: string; onPick: (v: string
   );
 }
 
+/** A thing to fix, said next to the field it is about. */
+function FixLine({ children }: { children: ReactNode }) {
+  return (
+    <p className="mt-1.5 inline-flex items-center gap-1.5" style={{ fontFamily: F, fontSize: TYPE_PX.hint, fontWeight: 700, color: '#8A6614' }}>
+      <span aria-hidden className="inline-block rounded-full" style={{ width: 7, height: 7, backgroundColor: '#B6871F' }} />
+      {children}
+    </p>
+  );
+}
+
 // ── Prices by date: a compact table ───────────────────────────────────────────
 
-function StageTable({ phases, active, configVersion, onUpdatePhase, onSaveTimeline }: {
+function StageTable({ phases, active, configVersion, blankIdx, onBlank, onUpdatePhase, onSaveTimeline }: {
   phases: FeePhase[];
   active: FeePhase | null;
   configVersion: number;
+  /** Stages whose price field is blank right now (never written). */
+  blankIdx: number[];
+  onBlank: (index: number, blank: boolean) => void;
   onUpdatePhase: RoleSheetProps['onUpdatePhase'];
   onSaveTimeline: RoleSheetProps['onSaveTimeline'];
 }) {
@@ -798,8 +834,15 @@ function StageTable({ phases, active, configVersion, onUpdatePhase, onSaveTimeli
                   aria-label="Stage price"
                   placeholder="0"
                   defaultValue={phase.amount}
+                  // A blank price is never saved as free (13 Oct 2026): it stays
+                  // blank and flagged until a number is typed; 0 on purpose is free.
+                  onChange={(e) => onBlank(pi, e.target.value.trim() === '')}
                   onBlur={(e) => {
-                    const next = parseFloat(e.target.value) || 0;
+                    const raw = e.target.value.trim();
+                    if (raw === '') { onBlank(pi, true); return; }
+                    const next = parseFloat(raw);
+                    if (!Number.isFinite(next)) return;
+                    onBlank(pi, false);
                     if (next !== phase.amount) onUpdatePhase(phases, pi, { amount: next });
                   }}
                   style={{ ...cell, fontWeight: 800, fontVariantNumeric: 'tabular-nums' }}
@@ -834,6 +877,7 @@ function StageTable({ phases, active, configVersion, onUpdatePhase, onSaveTimeli
               {invalid && (
                 <p className="mt-1" style={{ fontFamily: F, fontSize: TYPE_PX.hint, color: DANGER }}>This stage needs both dates before it counts.</p>
               )}
+              {blankIdx.includes(pi) && <FixLine>{STAGE_PRICE_MESSAGE}</FixLine>}
             </div>
           );
         })}

@@ -38,7 +38,7 @@ import {
 import { STORE_CSS } from '../store/storeKit';
 import { DASH_CSS } from '../financials/dashboardKit';
 import { GoldWord } from '@/components/BrandHeading';
-import { F, INK, INK_SOFT, FOREST, ROW_CSS, TINT_GOLD_BG, TINT_GREEN_BG, EmojiDisc, TYPE_PX } from './panelKit';
+import { F, INK, INK_SOFT, FOREST, ROW_CSS, TINT_GOLD_BG, TINT_GREEN_BG, EmojiDisc, TYPE_PX, FixBadge } from './panelKit';
 
 /** The sections, in tab order. The key is also the ?tab= value written. */
 export type ShellSection = 'general' | 'applications' | 'delegations' | 'partners' | 'team' | 'payments' | 'awards';
@@ -98,8 +98,10 @@ const SHELL_CSS = `
 @media (prefers-reduced-motion: reduce) { .gvsh-tab { transition: none; } }
 `;
 
-export function SettingsShell({ active, onOpen, conferenceName, children }: {
+export function SettingsShell({ active, onOpen, conferenceName, fixes, children }: {
   active: ShellSection;
+  /** Things to fix per tab (roleSetupProblems): Applications shows its count. */
+  fixes?: Partial<Record<ShellSection, number>>;
   onOpen: (key: ShellSection) => void;
   /** The conference's name, the small line under the page title. */
   conferenceName: ReactNode;
@@ -168,6 +170,7 @@ export function SettingsShell({ active, onOpen, conferenceName, children }: {
               >
                 <EmojiDisc emoji={s.emoji} icon={s.icon} tint={s.tint} size={32} />
                 {s.label}
+                <FixBadge n={fixes?.[s.key] ?? 0} size={20} />
               </button>
             );
           })}

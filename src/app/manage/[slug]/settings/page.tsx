@@ -51,6 +51,7 @@ import { useNow } from '@/lib/useNow';
 import { ConferencePreview, type SettingsSnapshot } from './settingsHome';
 import { ApplicationsSection } from './controlPanel';
 import { RoleSheet } from './roleSetup';
+import { roleSetupProblems, notifySettingsFlagsChanged } from '@/lib/roleSetupProblems';
 import { rolePossessive, type CopySource } from './roleCopy';
 import { PartnerEditPanel, type PartnerEditPatch } from './partnerEdit';
 import { GENERAL_CSS, IdentityBanner, IdentityLogo, IdField, PlainField, NameField, IconInput } from './generalUi';
@@ -1153,6 +1154,7 @@ export default function SettingsPage() {
         ? { ...rc, applications_open_at: row.applications_open_at, applications_close_at: row.applications_close_at, fee_phases: row.fee_phases }
         : rc)));
       markStep(step, 'saved');
+      notifySettingsFlagsChanged();
       return true;
     }
   }
@@ -1263,6 +1265,7 @@ export default function SettingsPage() {
       return r ? { ...rc, applications_open_at: r.applications_open_at, applications_close_at: r.applications_close_at, fee_phases: r.fee_phases } : rc;
     }));
     setConfigVersion(v => v + 1);
+    notifySettingsFlagsChanged();
     notifyOk(`Copied ${rolePossessive(sourceRole)} prices`, 'settings-copy');
   }
 
@@ -1297,6 +1300,7 @@ export default function SettingsPage() {
       return;
     }
     markStep(1, 'saved');
+    notifySettingsFlagsChanged();
   }
 
   /** The roles the Applications page lists (panelKit.listedRoles). */
@@ -2494,6 +2498,7 @@ export default function SettingsPage() {
 
   function storeRoleList(key: string | null, next: string[]) {
     try { if (key) window.localStorage.setItem(key, JSON.stringify(next)); } catch { /* per-browser convenience only */ }
+    notifySettingsFlagsChanged();
   }
 
   /**
@@ -3177,13 +3182,15 @@ export default function SettingsPage() {
   );
 
   const extraListed = sheetRole && !addedRoles.includes(sheetRole) ? [...addedRoles, sheetRole] : addedRoles;
+  // Things to fix on the roles the Applications tab lists (roleSetupProblems).
+  const settingsFixCount = listedRoleConfigs().reduce((n, rc) => n + roleSetupProblems(rc).length, 0);
   const shellName = <>{conferenceAcronymLabel(view) || view.full_name}{view.acronym && view.full_name ? <> · {view.full_name}</> : null}</>;
   // Every section uses the whole width (13 Oct 2026: the 1040px reading cap on
   // Payments, Delegations and Partners left an empty band on the right).
 
   return (
     <div className="px-4 sm:px-6 md:px-10 pt-6 pb-10" style={{ maxWidth: activeTab === 'organizers' ? '1500px' : '1380px' }}>
-      <SettingsShell active={SHELL_OF[activeTab]} onOpen={(k) => openSection(TAB_OF[k])} conferenceName={shellName}>
+      <SettingsShell active={SHELL_OF[activeTab]} onOpen={(k) => openSection(TAB_OF[k])} conferenceName={shellName} fixes={{ applications: settingsFixCount }}>
       <div>
 
       {activeTab === 'applications' && (

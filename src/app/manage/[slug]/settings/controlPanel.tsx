@@ -57,7 +57,9 @@ import {
   Switch, windowState, closedByDate, shortDate, rolePriceText, rolePlural, roleHasPrice, roleIsFree,
   Group, SwitchRow, SwitchGrid, TINT_GOLD_BG, TINT_GREEN_BG, EmojiDisc, RoleDisc, TYPE, TYPE_PX,
   generalAnswer, inGeneralScope, listedRoles, type GeneralField, type RoleSetupConfig,
+  FixBadge,
 } from './panelKit';
+import { roleSetupProblems } from '@/lib/roleSetupProblems';
 
 /** One line per role for the Add a role picker. */
 const ROLE_LINE: Record<string, string> = {
@@ -92,6 +94,7 @@ const CSS = `
   transition: background-color 160ms ease, box-shadow 160ms ease; }
 .gvc-row[data-on="true"] { background: radial-gradient(90% 140% at 0% 0%, rgba(238,217,138,0.22) 0%, rgba(238,217,138,0) 55%), linear-gradient(150deg, rgba(61,122,82,0.14), rgba(61,122,82,0.04)), #FFFFFF;
   box-shadow: inset 4px 0 0 #2A5A3C, inset 0 0 0 1px rgba(42,90,60,0.22), 0 1px 0 rgba(27,56,40,0.08), 0 12px 26px -18px rgba(27,56,40,0.55); }
+.gvc-row[data-fix="true"] { box-shadow: inset 4px 0 0 #B6871F, inset 0 0 0 1px rgba(182,135,31,0.35), 0 1px 0 rgba(27,56,40,0.08), 0 10px 24px -18px rgba(27,56,40,0.45); }
 .gvc-row-name { grid-area: name; } .gvc-row-detail { grid-area: detail; } .gvc-row-count { grid-area: count; }
 .gvc-row-edit { grid-area: edit; justify-self: end; } .gvc-row-switch { grid-area: switch; justify-self: end; }
 .gvc-row-links { grid-area: links; display: flex; flex-wrap: wrap; gap: 6px; }
@@ -371,11 +374,13 @@ export function ApplicationsSection({
             const count = counts?.[cfg.role];
             const detail = rowDetail(cfg, now);
             const copied = linkCopied && copiedRole === cfg.role;
+            const fixes = roleSetupProblems(cfg).length;
             return (
-              <div key={cfg.role} className="gvc-row" data-on={cfg.is_enabled ? 'true' : undefined}>
+              <div key={cfg.role} className="gvc-row" data-on={cfg.is_enabled ? 'true' : undefined} data-fix={fixes > 0 ? 'true' : undefined}>
                 <span className="gvc-row-name flex items-center gap-2.5 min-w-0">
                   <RoleDisc role={cfg.role} tint={cfg.is_enabled ? TINT_GREEN_BG : TINT_GOLD_BG} size={50} />
                   <span style={{ ...TYPE.card, overflowWrap: 'anywhere' }}>{plural}</span>
+                  <FixBadge n={fixes} />
                 </span>
                 <span className="gvc-row-detail min-w-0" style={{ ...TYPE.body, color: INK_SOFT, overflowWrap: 'anywhere' }}>
                   {detail.price && <><b style={{ color: INK, fontWeight: 800 }}>{rolePriceText(cfg, c.fee_currency, now)}</b> · </>}

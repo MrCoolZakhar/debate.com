@@ -8,6 +8,7 @@
  * settings page owns every write and hands its handlers down.
  */
 
+import { fixLabel, fixBadgeText } from '@/lib/roleSetupProblems';
 import { useId, type CSSProperties, type ReactNode } from 'react';
 import {
   Loader2, Crown, UserRound, GraduationCap, Eye, Gavel, ClipboardList, HardHat, Check, Minus, X, type LucideIcon,
@@ -823,4 +824,26 @@ export function listedRoles(
     if (removedRoles.includes(r.role) && !r.is_enabled) return false;
     return ALWAYS_LISTED_ROLES.includes(r.role) || roleIsSetUp(r, counts?.[r.role]);
   });
+}
+
+// ── Things to fix (13 Oct 2026) ──────────────────────────────────────────────
+
+/** The count of role set-up problems (src/lib/roleSetupProblems.ts), in the
+ *  manage sidebar's own badge colours. Nothing at 0; 9+ past nine. */
+export function FixBadge({ n, size = 21 }: { n: number; size?: number }) {
+  if (n <= 0) return null;
+  return (
+    <span
+      role="img"
+      aria-label={fixLabel(n)}
+      className="inline-flex items-center justify-center rounded-full flex-shrink-0"
+      style={{
+        minWidth: size, height: size, padding: '0 6px', fontSize: Math.round(size * 0.57), fontWeight: 700,
+        fontFamily: F, fontVariantNumeric: 'tabular-nums', lineHeight: 1,
+        backgroundColor: 'rgba(182,135,31,0.16)', color: '#8A6614',
+      }}
+    >
+      {fixBadgeText(n)}
+    </span>
+  );
 }

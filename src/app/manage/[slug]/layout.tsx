@@ -13,6 +13,7 @@ import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { LogoDisc } from '@/components/LogoDisc';
 import Loader from '@/components/Loader';
+import { listedProblemCount, SETTINGS_FLAGS_EVENT, fixLabel, fixBadgeText } from '@/lib/roleSetupProblems';
 import ProfileAvatarMenu from '@/components/ProfileAvatar';
 import type { EmailTheme } from '@/lib/emailHtml';
 import type { ConferenceTheme } from '@/lib/theme';
@@ -204,9 +205,11 @@ export interface NavBadges {
   financialAid: number;
   /** Proofs waiting plus open money to-dos (money_things_to_do_count). */
   financials: number;
+  /** Role set-ups that need fixing (src/lib/roleSetupProblems.ts), 13 Oct 2026. */
+  settings: number;
 }
 
-const NO_BADGES: NavBadges = { applications: 0, assignment: 0, communications: 0, financialAid: 0, financials: 0 };
+const NO_BADGES: NavBadges = { applications: 0, assignment: 0, communications: 0, financialAid: 0, financials: 0, settings: 0 };
 
 interface NavItem {
   icon: LucideIcon;
@@ -214,6 +217,8 @@ interface NavItem {
   href: string;
   external: boolean;
   badge: number;
+  /** Settings' count is things to fix (13 Oct 2026): its own wording and 9+. */
+  fixes?: boolean;
   /** A small gold tag at the end of the row (e.g. COMING SOON). Uppercase, no full stop. */
   tag?: string;
 }
@@ -270,7 +275,7 @@ const NAV_SECTIONS = (slug: string, badges: NavBadges = NO_BADGES): NavSection[]
   {
     header: 'SETTINGS',
     items: [
-      { icon: Settings,  label: 'Settings',  href: `/manage/${slug}/settings`, external: false, badge: 0 },
+      { icon: Settings,  label: 'Settings',  href: `/manage/${slug}/settings`, external: false, badge: badges.settings, fixes: true },
       // The public job board is not open yet, so a posting would reach nobody.
       // The entry stays a link (the page shows a coming-soon panel) with a tag.
       { icon: Briefcase, label: 'Job Board', href: `/manage/${slug}/jobs`,     external: false, badge: 0, tag: 'Coming soon' },
@@ -453,7 +458,7 @@ function SideRail({
                     <Icon size={19} strokeWidth={2} />
                     {item.badge > 0 && (
                       <span
-                        aria-label={`${item.badge} needing attention`}
+                        aria-label={item.fixes ? fixLabel(item.badge) : `${item.badge} needing attention`}
                         className="absolute rounded-full"
                         style={{ top: -3, right: -4, width: 8, height: 8, backgroundColor: '#B6871F', border: '1.5px solid #FAF8F3' }}
                       />
@@ -481,8 +486,9 @@ function SideRail({
                         backgroundColor: active ? '#EED98A' : 'rgba(182,135,31,0.16)',
                         color: active ? '#1B3828' : '#8A6614',
                       }}
+                      aria-label={item.fixes ? fixLabel(item.badge) : undefined}
                     >
-                      {item.badge}
+                      {item.fixes ? fixBadgeText(item.badge) : item.badge}
                     </span>
                   )}
                   {expanded && item.tag && (
@@ -662,8 +668,9 @@ function SidebarContent({
                         fontFamily: "var(--font-brand), sans-serif", fontVariantNumeric: 'tabular-nums',
                         backgroundColor: 'rgba(182,135,31,0.16)', color: '#8A6614',
                       }}
+                      aria-label={item.fixes ? fixLabel(item.badge) : undefined}
                     >
-                      {item.badge}
+                      {item.fixes ? fixBadgeText(item.badge) : item.badge}
                     </span>
                   )}
                   {item.tag && (
@@ -765,7 +772,7 @@ export default function ManageLayout({ children }: { children: React.ReactNode }
    *  delegates with no committee yet, pending financial aid requests. Their own
    *  state, refreshed on navigation, so a stale count never outlives the page
    *  the organiser just cleared. */
-  const [workBadges, setWorkBadges] = useState({ applications: 0, assignment: 0, financialAid: 0, financials: 0 });
+  const [workBadges, setWorkBadges] = useState({ applications: 0, assignment: 0, financialAid: 0, financials: 0, settings: 0 });
 
   // Nav badge: threads WAITING ON A REPLY (waitingOnReply.ts, the same
   // definition the Communications inbox rows use). Open, not a swap notice,
@@ -815,7 +822,7 @@ export default function ManageLayout({ children }: { children: React.ReactNode }
   const loadWorkBadges = useCallback(async () => {
     if (!conferenceId || !accessToken) return;
     const supabase = getAuthedClient(accessToken);
-    const [pendingApps, unallocated, pendingAid, moneyTodo] = await Promise.all([
+    const [pendingApps, unallocated, pendingAid, moneyTodo, roleRows] = await Promise.all([
       supabase.from('applications').select('id', { count: 'exact', head: true })
         .eq('conference_id', conferenceId).eq('status', 'submitted'),
       supabase.from('applications').select('id', { count: 'exact', head: true })
@@ -825,13 +832,25 @@ export default function ManageLayout({ children }: { children: React.ReactNode }
         .eq('conference_id', conferenceId).eq('status', 'pending'),
       // Financials: proofs waiting plus open money to-dos (1 Oct 2026).
       supabase.rpc('money_things_to_do_count', { p_conference_id: conferenceId }),
+      // Settings: role set-ups that need fixing (roleSetupProblems, 13 Oct 2026).
+      supabase.from('application_role_configs')
+        .select('role, is_enabled, applications_open_at, applications_close_at, fee_phases')
+        .eq('conference_id', conferenceId),
     ]);
+    // Roles taken off with "Remove this role" on this browser are not listed.
+    let removedRoles: string[] = [];
+    try {
+      const raw = window.localStorage.getItem(`gavelling-settings-removed-roles:${conferenceId}`);
+      const parsed: unknown = raw ? JSON.parse(raw) : [];
+      if (Array.isArray(parsed)) removedRoles = parsed.filter((r): r is string => typeof r === 'string');
+    } catch { /* storage blocked: count every role */ }
     // A failed read leaves that badge at zero rather than inventing a number.
     setWorkBadges({
       applications: pendingApps.count ?? 0,
       assignment: unallocated.count ?? 0,
       financialAid: pendingAid.count ?? 0,
       financials: !moneyTodo.error && typeof moneyTodo.data === 'number' ? moneyTodo.data : 0,
+      settings: !roleRows.error && roleRows.data ? listedProblemCount(roleRows.data, removedRoles) : 0,
     });
   }, [conferenceId, accessToken]);
 
@@ -851,6 +870,13 @@ export default function ManageLayout({ children }: { children: React.ReactNode }
     window.addEventListener('gv-inbox-read-changed', onInboxReadChanged);
     return () => window.removeEventListener('gv-inbox-read-changed', onInboxReadChanged);
   }, [loadInboxBadge]);
+
+  // Every role save on Settings nudges the rail (the Settings count).
+  useEffect(() => {
+    function onFlagsChanged() { void loadWorkBadges(); }
+    window.addEventListener(SETTINGS_FLAGS_EVENT, onFlagsChanged);
+    return () => window.removeEventListener(SETTINGS_FLAGS_EVENT, onFlagsChanged);
+  }, [loadWorkBadges]);
 
   // The Financials Things to do pop-up nudges the rail after each action.
   useEffect(() => {
