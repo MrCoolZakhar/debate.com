@@ -8,8 +8,24 @@ import { KIND_GROUP, KIND_ORDER, money, type PayOverview } from './payApi';
 
 const OWED_STATES = new Set(['unpaid', 'rejected', 'refunded', 'started']);
 
+/** The currency most of this person's items are in, owed items first. */
+function itemsCurrency(o: PayOverview): string | null {
+  const count = new Map<string, number>();
+  const owed = o.items.filter(it => OWED_STATES.has(it.state) && it.due_cents > 0);
+  for (const it of owed.length > 0 ? owed : o.items) {
+    const c = (it.currency || '').toUpperCase();
+    if (c) count.set(c, (count.get(c) ?? 0) + 1);
+  }
+  let best: string | null = null;
+  for (const [c, n] of count) if (best === null || n > (count.get(best) ?? 0)) best = c;
+  return best;
+}
+
 export default function BalanceHeader({ o }: { o: PayOverview }) {
-  const cur = o.conference.currency;
+  // The items' own currency wins over the conference's (OAKMUN, 14 Oct 2026:
+  // fees in INR on a conference still saved as GBP drew "£1,800" over "₹1,800"
+  // lines). Invoices carry the currency the person is really charged in.
+  const cur = itemsCurrency(o) ?? o.conference.currency;
   const t = o.totals;
   const byKind = new Map<string, number>();
   for (const it of o.items) {

@@ -274,7 +274,9 @@ export default function PayPage() {
   }, [selectedKey, appliedCode]);
 
   const items = useMemo(() => overview?.items ?? [], [overview]);
-  const outstandingItems = items.filter(i => OUTSTANDING_STATES.has(i.state));
+  // An item that costs nothing is never something to pay (OAKMUN, 14 Oct 2026:
+  // a "Conference Registration Fee ₹0" sat on Outstanding).
+  const outstandingItems = items.filter(i => OUTSTANDING_STATES.has(i.state) && (i.amount_cents > 0 || i.due_cents > 0));
   const tickable = outstandingItems.filter(i => canTick(i, started?.locked));
   const chosen = items.filter(i => selected.has(i.invoice_id));
   const chosenCur = chosen[0]?.currency ?? overview?.conference.currency ?? 'USD';
