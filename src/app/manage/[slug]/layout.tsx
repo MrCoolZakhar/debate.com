@@ -342,7 +342,9 @@ function SideRail({
       <div
         className="flex-shrink-0"
         style={{
-          padding: expanded ? '16px 16px 14px' : '14px 0',
+          // The same vertical padding open or closed (owner, 16 Oct 2026: the
+          // rail must not get taller when it opens); only the sides change.
+          padding: expanded ? '14px 16px' : '14px 0',
           borderBottom: '1px solid rgba(221,212,192,0.65)',
           transition: 'padding 280ms cubic-bezier(0.22,1,0.36,1)',
         }}
@@ -412,10 +414,12 @@ function SideRail({
                   color: '#9A6E14',
                   padding: '5px 10px 3px',
                   margin: 0,
-                  maxHeight: expanded ? '24px' : '0px',
+                  // Always 24px tall, only faded out when closed, so opening
+                  // the rail never pushes the icons down.
+                  height: '24px', boxSizing: 'border-box',
                   opacity: expanded ? 1 : 0,
                   overflow: 'hidden',
-                  transition: 'max-height 280ms cubic-bezier(0.22,1,0.36,1), opacity 200ms ease 60ms',
+                  transition: 'opacity 200ms ease 60ms',
                   whiteSpace: 'nowrap',
                 }}
               >
@@ -435,7 +439,8 @@ function SideRail({
                   className="flex items-center rounded-xl transition-colors"
                   style={{
                     gap: expanded ? '12px' : '0px',
-                    padding: '10px 11px',
+                    padding: '0 11px',
+                    height: '42px', boxSizing: 'border-box',
                     margin: '2px 0',
                     justifyContent: expanded ? 'flex-start' : 'center',
                     backgroundColor: active ? '#1B3828' : 'transparent',
@@ -483,7 +488,7 @@ function SideRail({
                     <span
                       className="flex-shrink-0 flex items-center justify-center rounded-full"
                       style={{
-                        minWidth: 21, height: 21, padding: '0 6px', fontSize: 12, fontWeight: 700,
+                        minWidth: 20, height: 20, padding: '0 6px', fontSize: 12, fontWeight: 700,
                         fontFamily: "var(--font-brand), sans-serif", fontVariantNumeric: 'tabular-nums',
                         backgroundColor: active ? '#EED98A' : 'rgba(182,135,31,0.16)',
                         color: active ? '#1B3828' : '#8A6614',
@@ -532,7 +537,8 @@ function SideRail({
               backgroundColor: statusStyle.bg,
               border: `1px solid ${statusStyle.border}`,
               color: statusStyle.color,
-              padding: expanded ? '3px 10px' : '5px',
+              height: '20px', boxSizing: 'border-box',
+              padding: expanded ? '0 10px' : '0 6px',
               fontFamily: "var(--font-brand), sans-serif",
               fontSize: '9.5px', fontWeight: 800,
               textTransform: 'uppercase', letterSpacing: '0.1em',
