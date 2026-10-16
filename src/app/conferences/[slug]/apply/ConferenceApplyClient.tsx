@@ -992,7 +992,10 @@ function ConferenceApplyInner() {
   // Parallel question, same step: paying for advisor tickets for the
   // delegation, priced and materialized server-side exactly like delegate
   // spots (see add_pledged_advisor_spots).
-  const [willPledgeAdvisors, setWillPledgeAdvisors] = useState<boolean | null>(null);
+  // A faculty advisor's own ticket is always their own role fee, so the
+  // question only counts the ADDITIONAL advisors coming with them (prompt 127)
+  // and starts on "No, just me": nobody buys an extra ticket by accident.
+  const [willPledgeAdvisors, setWillPledgeAdvisors] = useState<boolean | null>(role === 'faculty-advisor' ? false : null);
   const [advisorsPledged, setAdvisorsPledged] = useState<number | ''>('');
   const [invoicingError, setInvoicingError] = useState('');
 
@@ -1657,7 +1660,7 @@ function ConferenceApplyInner() {
     if (a.delegationInviteToken) draftInviteTokenRef.current = a.delegationInviteToken;
     setWillPledgeSpots(a.willPledgeSpots);
     setSpotsPledged(a.spotsPledged);
-    setWillPledgeAdvisors(a.willPledgeAdvisors);
+    setWillPledgeAdvisors(a.willPledgeAdvisors ?? (role === 'faculty-advisor' ? false : null));
     setAdvisorsPledged(a.advisorsPledged);
     setPreferences(a.preferences);
     setExperienceEntries(a.experienceEntries ?? []);
@@ -1879,7 +1882,7 @@ function ConferenceApplyInner() {
     if (a.inviteSocietyName) setInviteSocietyName(a.inviteSocietyName);
     setWillPledgeSpots(a.willPledgeSpots);
     setSpotsPledged(a.spotsPledged);
-    setWillPledgeAdvisors(a.willPledgeAdvisors);
+    setWillPledgeAdvisors(a.willPledgeAdvisors ?? (role === 'faculty-advisor' ? false : null));
     setAdvisorsPledged(a.advisorsPledged);
     setPreferences(a.preferences);
     setExperienceEntries(a.experienceEntries ?? []);
@@ -2810,7 +2813,9 @@ function ConferenceApplyInner() {
         return;
       }
       if (willPledgeAdvisors && (advisorsPledged === '' || advisorsPledged < 1)) {
-        setInvoicingError('Please enter how many advisor tickets you will pay for.');
+        setInvoicingError(role === 'faculty-advisor'
+          ? 'Please enter how many other advisors are coming with you.'
+          : 'Please enter how many advisor tickets you will pay for.');
         return;
       }
       setInvoicingError('');
@@ -3975,6 +3980,97 @@ function ConferenceApplyInner() {
     );
   }
 
+  /**
+   * The faculty advisor's version of the advisor question (prompt 127). Their
+   * own ticket is always their own role fee; advisors_pledged counts only the
+   * advisors coming WITH them, each an Advisor Ticket at the advisor fee.
+   */
+  function renderAdditionalAdvisors() {
+    const fee = roleConfig ? activePhaseFee(roleConfig).amount : 0;
+    const cur = roleConfig?.fee_currency ?? conference?.fee_currency ?? '';
+    const extra = willPledgeAdvisors === true && typeof advisorsPledged === 'number' ? advisorsPledged : 0;
+    const font = "var(--font-brand), sans-serif";
+    const choice = (on: boolean) => ({
+      border: on ? `1.5px solid ${NEU.forest}` : '1.5px solid var(--gv-border)',
+      backgroundColor: on ? 'color-mix(in srgb, var(--gv-main) 6%, transparent)' : 'transparent',
+      color: on ? NEU.forest : '#6E5F4E',
+      fontFamily: font,
+    });
+    return (
+      <div className="pt-6 mb-2" style={{ borderTop: '1px solid #F0EDE6' }}>
+        <h3 className="flex items-center gap-2 mb-3" style={{ fontSize: 17, fontWeight: 800, lineHeight: 1.3, color: 'var(--gv-on-surface)', fontFamily: font }}>
+          <GraduationCap size={18} style={{ color: NEU.forest, flexShrink: 0 }} aria-hidden />
+          Are Any Other Faculty Advisors Coming With You?
+        </h3>
+        <div className="flex gap-3" role="radiogroup" aria-label="Are any other faculty advisors coming with you?">
+          <button
+            type="button"
+            role="radio"
+            aria-checked={willPledgeAdvisors !== true}
+            onClick={() => { setWillPledgeAdvisors(false); setInvoicingError(''); }}
+            className="flex-1 rounded-xl py-2.5 text-sm font-bold focus:outline-none transition-colors"
+            style={choice(willPledgeAdvisors !== true)}
+          >
+            No, just me
+          </button>
+          <button
+            type="button"
+            role="radio"
+            aria-checked={willPledgeAdvisors === true}
+            onClick={() => {
+              setWillPledgeAdvisors(true);
+              setAdvisorsPledged(prev => (prev === '' || prev < 1 ? 1 : prev));
+              setInvoicingError('');
+            }}
+            className="flex-1 rounded-xl py-2.5 text-sm font-bold focus:outline-none transition-colors"
+            style={choice(willPledgeAdvisors === true)}
+          >
+            Yes
+          </button>
+        </div>
+
+        {willPledgeAdvisors === true && (
+          <div className="mt-4">
+            <label htmlFor="gv-apply-extra-advisors" className="block font-semibold text-sm mb-1.5" style={{ color: 'var(--gv-on-surface)', fontFamily: font }}>
+              How many other advisors?
+            </label>
+            <input
+              id="gv-apply-extra-advisors"
+              type="number"
+              min={1}
+              step={1}
+              value={advisorsPledged}
+              onChange={(e) => {
+                const raw = e.target.value;
+                setAdvisorsPledged(raw === '' ? '' : Math.max(1, Math.floor(Number(raw))));
+                setInvoicingError('');
+              }}
+              className="w-full rounded-xl px-4 py-3 text-base sm:text-sm focus:outline-none"
+              style={{ border: '1.5px solid var(--gv-border)', backgroundColor: 'var(--gv-surface)', color: 'var(--gv-on-surface)', fontFamily: font }}
+              onFocus={(e) => { (e.currentTarget as HTMLElement).style.borderColor = 'var(--gv-main)'; }}
+              onBlur={(e) => { (e.currentTarget as HTMLElement).style.borderColor = 'var(--gv-border)'; }}
+            />
+            <p className="mt-1.5 text-xs leading-relaxed" style={{ color: 'var(--gv-muted)', fontFamily: font }}>
+              Your own ticket is already included. Only count the advisors coming with you
+            </p>
+          </div>
+        )}
+
+        {fee > 0 && (
+          <p className="mt-4 flex flex-wrap items-baseline gap-x-2 gap-y-1 rounded-xl px-4 py-3" style={{ backgroundColor: 'color-mix(in srgb, var(--gv-main) 5%, transparent)', color: 'var(--gv-on-surface)', fontFamily: font, fontSize: 14, fontVariantNumeric: 'tabular-nums' }}>
+            <span>Your ticket <b>{formatFee(fee, cur)}</b></span>
+            {extra > 0 && (
+              <>
+                <span aria-hidden style={{ color: 'var(--gv-muted)' }}>+</span>
+                <span>{extra} Advisor Ticket{extra === 1 ? '' : 's'} <b>{formatFee(fee * extra, cur)}</b></span>
+              </>
+            )}
+          </p>
+        )}
+      </div>
+    );
+  }
+
   function renderStepInvoicing() {
     const showSpots = willPledgeSpots === true;
     const pledgeValue = willPledgeSpots === null ? null : willPledgeSpots ? 'yes' : 'no';
@@ -4038,67 +4134,70 @@ function ConferenceApplyInner() {
         )}
 
         {/* Parallel question, quieter treatment than the big yes/no above —
-            same step, a second decision rather than a second full screen. */}
-        <div className="pt-6 mb-2" style={{ borderTop: '1px solid #F0EDE6' }}>
-          <label className="flex items-center gap-2 font-semibold text-sm mb-3" style={{ color: 'var(--gv-on-surface)', fontFamily: "var(--font-brand), sans-serif" }}>
-            <GraduationCap size={16} style={{ color: NEU.forest }} />
-            Paying for advisor tickets?
-          </label>
-          <div className="flex gap-3">
-            <button
-              type="button"
-              onClick={() => { setWillPledgeAdvisors(true); setInvoicingError(''); }}
-              className="flex-1 rounded-xl py-2.5 text-sm font-bold focus:outline-none transition-colors"
-              style={{
-                border: willPledgeAdvisors === true ? `1.5px solid ${NEU.forest}` : '1.5px solid var(--gv-border)',
-                backgroundColor: willPledgeAdvisors === true ? 'color-mix(in srgb, var(--gv-main) 6%, transparent)' : 'transparent',
-                color: willPledgeAdvisors === true ? NEU.forest : '#6E5F4E',
-                fontFamily: "var(--font-brand), sans-serif",
-              }}
-            >
-              Yes
-            </button>
-            <button
-              type="button"
-              onClick={() => { setWillPledgeAdvisors(false); setInvoicingError(''); }}
-              className="flex-1 rounded-xl py-2.5 text-sm font-bold focus:outline-none transition-colors"
-              style={{
-                border: willPledgeAdvisors === false ? `1.5px solid ${NEU.forest}` : '1.5px solid var(--gv-border)',
-                backgroundColor: willPledgeAdvisors === false ? 'color-mix(in srgb, var(--gv-main) 6%, transparent)' : 'transparent',
-                color: willPledgeAdvisors === false ? NEU.forest : '#6E5F4E',
-                fontFamily: "var(--font-brand), sans-serif",
-              }}
-            >
-              No
-            </button>
-          </div>
-
-          {willPledgeAdvisors === true && (
-            <div className="mt-4">
-              <label className="block font-semibold text-sm mb-1.5" style={{ color: 'var(--gv-on-surface)', fontFamily: "var(--font-brand), sans-serif" }}>
-                How many advisor tickets will you pay for?
-              </label>
-              <input
-                type="number"
-                min={1}
-                step={1}
-                value={advisorsPledged}
-                onChange={(e) => {
-                  const raw = e.target.value;
-                  setAdvisorsPledged(raw === '' ? '' : Math.max(1, Math.floor(Number(raw))));
-                  setInvoicingError('');
+            same step, a second decision rather than a second full screen.
+            A faculty advisor is asked only about the advisors coming with them. */}
+        {role === 'faculty-advisor' ? renderAdditionalAdvisors() : (
+          <div className="pt-6 mb-2" style={{ borderTop: '1px solid #F0EDE6' }}>
+            <label className="flex items-center gap-2 font-semibold text-sm mb-3" style={{ color: 'var(--gv-on-surface)', fontFamily: "var(--font-brand), sans-serif" }}>
+              <GraduationCap size={16} style={{ color: NEU.forest }} />
+              Paying for advisor tickets?
+            </label>
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => { setWillPledgeAdvisors(true); setInvoicingError(''); }}
+                className="flex-1 rounded-xl py-2.5 text-sm font-bold focus:outline-none transition-colors"
+                style={{
+                  border: willPledgeAdvisors === true ? `1.5px solid ${NEU.forest}` : '1.5px solid var(--gv-border)',
+                  backgroundColor: willPledgeAdvisors === true ? 'color-mix(in srgb, var(--gv-main) 6%, transparent)' : 'transparent',
+                  color: willPledgeAdvisors === true ? NEU.forest : '#6E5F4E',
+                  fontFamily: "var(--font-brand), sans-serif",
                 }}
-                className="w-full rounded-xl px-4 py-3 text-base sm:text-sm focus:outline-none"
-                style={{ border: '1.5px solid var(--gv-border)', backgroundColor: 'var(--gv-surface)', color: 'var(--gv-on-surface)', fontFamily: "var(--font-brand), sans-serif" }}
-                onFocus={(e) => { (e.currentTarget as HTMLElement).style.borderColor = 'var(--gv-main)'; }}
-                onBlur={(e) => { (e.currentTarget as HTMLElement).style.borderColor = 'var(--gv-border)'; }}
-              />
-              <p className="mt-1.5 text-xs leading-relaxed" style={{ color: 'var(--gv-muted)', fontFamily: "var(--font-brand), sans-serif" }}>
-                Tickets stay with your delegation once purchased, pooled the same way as delegate spots.
-              </p>
+              >
+                Yes
+              </button>
+              <button
+                type="button"
+                onClick={() => { setWillPledgeAdvisors(false); setInvoicingError(''); }}
+                className="flex-1 rounded-xl py-2.5 text-sm font-bold focus:outline-none transition-colors"
+                style={{
+                  border: willPledgeAdvisors === false ? `1.5px solid ${NEU.forest}` : '1.5px solid var(--gv-border)',
+                  backgroundColor: willPledgeAdvisors === false ? 'color-mix(in srgb, var(--gv-main) 6%, transparent)' : 'transparent',
+                  color: willPledgeAdvisors === false ? NEU.forest : '#6E5F4E',
+                  fontFamily: "var(--font-brand), sans-serif",
+                }}
+              >
+                No
+              </button>
             </div>
-          )}
-        </div>
+
+            {willPledgeAdvisors === true && (
+              <div className="mt-4">
+                <label className="block font-semibold text-sm mb-1.5" style={{ color: 'var(--gv-on-surface)', fontFamily: "var(--font-brand), sans-serif" }}>
+                  How many advisor tickets will you pay for?
+                </label>
+                <input
+                  type="number"
+                  min={1}
+                  step={1}
+                  value={advisorsPledged}
+                  onChange={(e) => {
+                    const raw = e.target.value;
+                    setAdvisorsPledged(raw === '' ? '' : Math.max(1, Math.floor(Number(raw))));
+                    setInvoicingError('');
+                  }}
+                  className="w-full rounded-xl px-4 py-3 text-base sm:text-sm focus:outline-none"
+                  style={{ border: '1.5px solid var(--gv-border)', backgroundColor: 'var(--gv-surface)', color: 'var(--gv-on-surface)', fontFamily: "var(--font-brand), sans-serif" }}
+                  onFocus={(e) => { (e.currentTarget as HTMLElement).style.borderColor = 'var(--gv-main)'; }}
+                  onBlur={(e) => { (e.currentTarget as HTMLElement).style.borderColor = 'var(--gv-border)'; }}
+                />
+                <p className="mt-1.5 text-xs leading-relaxed" style={{ color: 'var(--gv-muted)', fontFamily: "var(--font-brand), sans-serif" }}>
+                  Tickets stay with your delegation once purchased, pooled the same way as delegate spots.
+                </p>
+              </div>
+            )}
+          </div>
+        )}
 
         {invoicingError && (
           <p className="mt-3 text-xs text-center" style={{ color: '#8B2020', fontFamily: "var(--font-brand), sans-serif" }}>

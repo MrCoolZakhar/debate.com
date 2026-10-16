@@ -7,7 +7,7 @@
 // that review flow; this tab links there. Mark paid / reminder / mark unpaid
 // are the page's own PaymentMenu, rendered here unchanged.
 
-import { useState, type ReactNode } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import {
   ArrowUpRight, CircleCheck, CircleDashed, Clock, CreditCard, FileImage, HandCoins, HeartHandshake, Landmark,
@@ -18,6 +18,7 @@ import { centsToFee, invoiceLabel } from '@/lib/invoices';
 import { formatFee } from '@/lib/utils';
 import { friendlyError } from '@/lib/friendlyError';
 import { notifyErr } from '@/lib/appNotify';
+import { aidLeftLabel, useAidPool } from '@/lib/aidPool';
 import type { ApplicantApp, Ledger, LedgerInvoice, LedgerPayment, LedgerTotals } from './data';
 import { proofUrl } from './data';
 import { MoneyStrip } from './tabs';
@@ -200,6 +201,11 @@ export default function PaymentTab({
   aid: AidInfo | null;
 }) {
   const aidTint = aid?.status === 'approved' ? C.forestLight : aid?.status === 'denied' ? C.inkSoft : C.amber;
+  // One pool of aid per person (prompt 127): read again whenever the ledger or
+  // the aid decision is re-read, so what is left always matches the money.
+  const aidKey = useMemo(() => ({}), [ledger, aid?.status, aid?.grantedAmount]); // eslint-disable-line react-hooks/exhaustive-deps
+  const aidPool = useAidPool(aid?.status === 'approved' ? app.id : null, aidKey);
+  const aidLeft = aidLeftLabel(aidPool, (c, cur) => centsToFee(c, cur || aid?.currency || ''));
   return (
     <div className="flex flex-col" style={{ gap: 24 }}>
       <div className="flex items-center gap-2 flex-wrap">
@@ -270,6 +276,12 @@ export default function PaymentTab({
               Asked for <strong>{formatFee(aid.requestedAmount, aid.currency)}</strong>
               {aid.status === 'approved' && aid.grantedAmount != null && <> · granted <strong>{formatFee(aid.grantedAmount, aid.currency)}</strong></>}
             </p>
+          )}
+          {aidLeft && (
+            <div className="mt-2.5" style={{ padding: '10px 12px', borderRadius: 14, background: C.cream, boxShadow: `inset 0 0 0 1.5px ${aidTint}40` }}>
+              <p style={{ fontFamily: OUTFIT, fontSize: 18, fontWeight: 800, lineHeight: 1.2, color: C.ink, ...NUM }}>{aidLeft}</p>
+              <p className="mt-0.5" style={{ fontFamily: OUTFIT, fontSize: 12.5, color: C.inkSoft }}>Used by itself on anything they add</p>
+            </div>
           )}
           <p className="mt-1.5 whitespace-pre-wrap" style={{ fontFamily: OUTFIT, fontSize: 13.5, lineHeight: 1.6, color: aid.statement ? C.ink : C.inkSoft, fontStyle: aid.statement ? 'normal' : 'italic', overflowWrap: 'anywhere', maxWidth: '68ch' }}>
             {aid.statement || 'No statement given.'}

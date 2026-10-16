@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { PurchaseShell } from '@/components/purchase/purchaseKit';
 import { friendlyError } from '@/lib/friendlyError';
+import { aidLeftLabel, useAidPool } from '@/lib/aidPool';
 import { cents, signedProofUrl, type RefundItem } from '../financialsApi';
 import { READ_ONLY_LINE, formatDate } from '../dashboardKit';
 import MarkPaidDialog from '../MarkPaidDialog';
@@ -116,6 +117,10 @@ export default function PersonPopup({ applicationId, conferenceId, slug, readOnl
   const [invErr, setInvErr] = useState<{ text: string; noSettings?: boolean } | null>(null);
   const [docId, setDocId] = useState<string | null>(null);
   const invBusyRef = useRef(false);
+  // One pool of aid per person (prompt 127), read again after every re-read of
+  // this person. Shown in the aid's own (conference) currency, like every
+  // amount on this card: the display-currency picker never converts it.
+  const aidPool = useAidPool(applicationId, detail);
 
   useEffect(() => {
     let alive = true;
@@ -131,6 +136,7 @@ export default function PersonPopup({ applicationId, conferenceId, slug, readOnl
   const invoices = detail?.invoices ?? [];
   const byId = new Map(invoices.map(i => [i.invoice_id, i]));
   const currency = invoices[0]?.currency ?? detail?.payments[0]?.currency ?? 'USD';
+  const aidLeft = aidLeftLabel(aidPool, (c, cur) => cents(c, cur || currency));
   const outstanding = invoices.filter(i => i.status !== 'waived' && (i.due_cents > 0 || i.status === 'open' || i.status === 'partial'));
   const waived = invoices.filter(i => i.status === 'waived' || i.aid_cents > 0);
   const owed = outstanding.reduce((s, i) => s + i.due_cents, 0);
@@ -191,6 +197,13 @@ export default function PersonPopup({ applicationId, conferenceId, slug, readOnl
                   {refunded > 0 && <Num label="Refunded" value={cents(refunded, currency)} tone="ink" />}
                 </div>
               </div>
+
+              {aidLeft && (
+                <div style={{ padding: '12px 16px', borderRadius: 16, background: 'rgba(31,122,77,0.07)', boxShadow: 'inset 0 0 0 1.5px rgba(31,122,77,0.22)' }}>
+                  <p style={{ margin: 0, fontSize: 18, fontWeight: 700, lineHeight: 1.25, color: '#1C1410', fontVariantNumeric: 'tabular-nums' }}>{aidLeft}</p>
+                  <p className="gv-fd-note" style={{ marginTop: 2 }}>Used by itself on anything they add</p>
+                </div>
+              )}
 
               {readOnly && <p className="gv-fd-note">{READ_ONLY_LINE}</p>}
 

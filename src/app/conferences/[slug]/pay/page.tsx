@@ -654,7 +654,7 @@ export default function PayPage() {
             conference={conference}
             aidOpen={c.aid_open}
             primaryAppId={primary.application_id}
-            leader={leaderMe ? { id: leaderMe.application_id, society_id: leaderMe.society_id as string } : null}
+            leader={leaderMe ? { id: leaderMe.application_id, society_id: leaderMe.society_id as string, role: leaderMe.role } : null}
             addons={addons}
             addonInvoices={addonInvoices}
             delegateConfig={roleCfg('delegate')}
@@ -666,6 +666,7 @@ export default function PayPage() {
             onChanged={reload}
             onAidSubmitted={reload}
             delegation={overview.delegation}
+            moneyKey={overview}
           />
           </div>
         )}

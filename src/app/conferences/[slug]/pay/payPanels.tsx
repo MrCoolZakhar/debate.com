@@ -545,7 +545,7 @@ export function AddSpotsPanel({
 // onAdded triggers a refetch.
 
 export function AdvisorTicketsModal({
-  open, onClose, applicationId, accessToken, advisorRoleConfig, currency: conferenceCurrency, onAdded, summary,
+  open, onClose, applicationId, accessToken, advisorRoleConfig, currency: conferenceCurrency, onAdded, summary, forAdvisor = false,
 }: {
   open: boolean;
   onClose: () => void;
@@ -557,6 +557,9 @@ export function AdvisorTicketsModal({
   onAdded: () => void;
   /** Drawn at the top: the advisor tickets the delegation's leaders have requested (prompt 101). */
   summary?: React.ReactNode;
+  /** The buyer is a faculty advisor: their own ticket is already theirs, so this adds
+   *  only the advisors coming WITH them (prompt 127). The tickets are the same. */
+  forAdvisor?: boolean;
 }) {
   // '' while the field is momentarily empty — see AddSpotsPanel above.
   const [count, setCount] = useState<number | ''>(1);
@@ -602,8 +605,8 @@ export function AdvisorTicketsModal({
 
   return (
     <PayActionPopup
-      title="Buy Advisor Tickets"
-      line="Tickets for the faculty advisors travelling with your delegation."
+      title={forAdvisor ? 'Add Advisors Coming With You' : 'Buy Advisor Tickets'}
+      line={forAdvisor ? 'Tickets for the other faculty advisors travelling with you.' : 'Tickets for the faculty advisors travelling with your delegation.'}
       onClose={() => { if (!adding) onClose(); }}
       testId="pay-advisors"
     >
@@ -628,9 +631,15 @@ export function AdvisorTicketsModal({
         </p>
 
         <div>
-          <label className="block mb-1.5" style={{ fontSize: 11, fontWeight: 700, color: 'var(--gv-muted)', fontFamily: OUTFIT, letterSpacing: '0.06em' }}>
-            HOW MANY TICKETS
-          </label>
+          {forAdvisor ? (
+            <label className="block mb-1.5" style={{ fontSize: 13.5, fontWeight: 700, color: NEU.ink, fontFamily: OUTFIT }}>
+              How many other advisors?
+            </label>
+          ) : (
+            <label className="block mb-1.5" style={{ fontSize: 11, fontWeight: 700, color: 'var(--gv-muted)', fontFamily: OUTFIT, letterSpacing: '0.06em' }}>
+              HOW MANY TICKETS
+            </label>
+          )}
           <div className="flex items-center gap-1">
             <button
               type="button"
@@ -676,6 +685,11 @@ export function AdvisorTicketsModal({
               </span>
             )}
           </div>
+          {forAdvisor && (
+            <p style={{ fontFamily: OUTFIT, fontSize: 12.5, color: 'var(--gv-muted)', lineHeight: 1.5, margin: '6px 0 0' }}>
+              Your own ticket is already included. Only count the advisors coming with you
+            </p>
+          )}
         </div>
 
         {error && <Note tone="red">{error}</Note>}

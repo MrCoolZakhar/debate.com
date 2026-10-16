@@ -15,6 +15,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Coins, GraduationCap, HandCoins, ShoppingBag, Users2, type LucideIcon } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { openCreditsPopup } from '@/lib/purchasePopup';
+import { aidLeftLabel, useAidPool } from '@/lib/aidPool';
 import { normalizeBlocks, type FormBlock } from '@/lib/customQuestions';
 import type { InvoiceRow } from '@/lib/invoices';
 import AidRequestModal from '../participant/AidRequestModal';
@@ -81,12 +82,12 @@ function TicketsRequested({ d, kind }: { d: PayDelegation | null; kind: 'delegat
 
 export default function ActionsColumn({
   conference, aidOpen, primaryAppId, leader, addons, addonInvoices, delegateConfig, advisorConfig,
-  delegateOpen, advisorOpen, aidRequest, currency, onChanged, onAidSubmitted, delegation,
+  delegateOpen, advisorOpen, aidRequest, currency, onChanged, onAidSubmitted, delegation, moneyKey,
 }: {
   conference: PayConference;
   aidOpen: boolean;
   primaryAppId: string;
-  leader: { id: string; society_id: string } | null;
+  leader: { id: string; society_id: string; role?: string } | null;
   addons: ActiveAddon[];
   /** The primary application's invoices, so the add-ons pop-up knows what is already chosen. */
   addonInvoices: InvoiceRow[];
@@ -100,6 +101,8 @@ export default function ActionsColumn({
   onAidSubmitted: () => void;
   /** my_pay_overview's `delegation`: what the leaders of each delegation the caller leads have requested. */
   delegation: PayDelegation[] | null;
+  /** Changes whenever the page re-reads its money (my_pay_overview), so the aid pool is read again. */
+  moneyKey?: unknown;
 }) {
   const { session } = useAuth();
   const aidBlocks: FormBlock[] = normalizeBlocks(conference.aid_questions);
@@ -110,6 +113,10 @@ export default function ActionsColumn({
   const [credits, setCredits] = useState(false);
 
   const showAid = aidOpen && !aidRequest;
+  // One pool of aid per person (prompt 127): what is not used yet is spent by
+  // itself on the next ticket or add-on, so it is shown, never hidden.
+  const aidPool = useAidPool(aidRequest?.status === 'approved' ? primaryAppId : null, moneyKey);
+  const aidLeft = aidLeftLabel(aidPool, (c, cur) => money(c, cur || currency));
   const showAddons = addons.length > 0;
   const showSpots = !!leader && delegateOpen;
   const showAdvisors = !!leader && advisorOpen;
@@ -139,19 +146,29 @@ export default function ActionsColumn({
   return (
     <div className="flex flex-col gap-3">
       {showAid && <Action icon={HandCoins} title="Apply for Financial Aid" line="Ask for a reduced fee" onClick={() => setAid(true)} />}
-      {aidOpen && aidRequest && (
+      {aidRequest && (aidOpen || aidLeft) && (
         <div className="gv-pay-card" style={{ padding: '14px 16px' }}>
           <p style={{ margin: 0, fontSize: 14.5, fontWeight: 800 }}>Financial Aid</p>
           <p style={{ margin: '4px 0 0', fontSize: 13.5, color: aidRequest.status === 'approved' ? GREEN : INK_SOFT }}>
             {aidRequest.status === 'pending' && 'Your request is under review'}
-            {aidRequest.status === 'approved' && `Approved. ${money(Math.round((aidRequest.granted_amount ?? 0) * 100), currency)} applied`}
+            {aidRequest.status === 'approved' && (aidPool
+              ? `Approved. ${money(aidPool.appliedCents, aidPool.currency || currency)} applied`
+              : `Approved. ${money(Math.round((aidRequest.granted_amount ?? 0) * 100), currency)} applied`)}
             {aidRequest.status === 'denied' && 'Not approved this time'}
           </p>
+          {aidLeft && (
+            <div style={{ marginTop: 10, paddingTop: 10, borderTop: `1px solid ${LINE}` }}>
+              <p style={{ margin: 0, fontSize: 20, fontWeight: 800, letterSpacing: '-0.01em', lineHeight: 1.2, color: INK, fontVariantNumeric: 'tabular-nums' }}>{aidLeft}</p>
+              <p style={{ margin: '4px 0 0', fontSize: 13, lineHeight: 1.45, color: INK_SOFT }}>Used by itself on any ticket or add-on you add. Aid can&apos;t be refunded</p>
+            </div>
+          )}
         </div>
       )}
       {showAddons && <Action icon={ShoppingBag} title="Buy Add-ons" line="Optional extras" onClick={() => setAddonsOpen(true)} />}
       {showSpots && <Action icon={Users2} title="Add Delegation Tickets" line="Pay for more delegate places" onClick={() => setSpots(true)} />}
-      {showAdvisors && <Action icon={GraduationCap} title="Buy Advisor Tickets" line="Tickets for your faculty advisors" onClick={() => setAdvisors(true)} />}
+      {showAdvisors && (leader?.role === 'faculty-advisor'
+        ? <Action icon={GraduationCap} title="Add advisors coming with you" line="Your own ticket is already included" onClick={() => setAdvisors(true)} />
+        : <Action icon={GraduationCap} title="Buy Advisor Tickets" line="Tickets for your faculty advisors" onClick={() => setAdvisors(true)} />)}
       {leader
         ? <Action icon={Coins} title="Pay for Your Delegates" line="Credits your delegates apply with" onClick={() => setCredits(true)} />
         : <Action icon={Coins} title="Buy Credits" line="Credits for your own applications" onClick={() => openCreditsPopup({ context: 'pay' })} />}
@@ -205,6 +222,7 @@ export default function ActionsColumn({
           currency={currency}
           onAdded={onChanged}
           summary={<TicketsRequested d={myDelegation} kind="advisor" />}
+          forAdvisor={leader.role === 'faculty-advisor'}
         />
       )}
       {leader && credits && (
