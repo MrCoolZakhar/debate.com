@@ -1,1142 +1,265 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
-import { useNow } from '@/lib/useNow';
-import { FileText, Upload, X, Check, LayoutGrid, Settings as SettingsIcon, CircleCheck, PencilLine, Users, BookOpen, ScrollText, type LucideIcon } from 'lucide-react';
-import ConferenceDocsTab from './ConferenceDocsTab';
+// Conference Documents (prompt 129, 16 Oct 2026): ONE page, no tabs. From a
+// wide screen up it is two columns that fit the viewport with no page scroll:
+//   LEFT   Position Papers and Study Guides: one card per committee, six to a
+//          page (Page 1 of N with up / down arrows), each opening its pop-up
+//          (CommitteeDocsPopup: Submissions and Settings).
+//   RIGHT  Additional Documents: today's Documents for Everyone
+//          (ConferenceDocsTab), until prompt 130 replaces it.
+// Below the breakpoint the columns stack and the page scrolls.
+//
+// Deep links: ?committee=<id> (with &pane=settings) opens that committee's
+// pop-up; ?tab=everyone&doc=<id> opens that document's returned copies. Both
+// leave the URL once read (replaceUrlInPlace).
+
+import { useState, useEffect, useCallback } from 'react';
+import { ChevronDown, ChevronUp, FileText } from 'lucide-react';
 import Link from 'next/link';
+import ConferenceDocsTab from './ConferenceDocsTab';
+import CommitteeDocsPopup, { CommitteeLogo, formatDate, shortName, type CommitteeDoc, type DocsPane } from './CommitteeDocsPopup';
 import { useManage } from '@/app/manage/[slug]/layout';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
-import { ModalOverlay as SharedModalOverlay } from '@/components/ModalOverlay';
-import { DatePicker } from '@/components/DatePicker';
-import { PillToggle } from '@/app/account/accountUi';
-import { MonogramMedallion } from '@/components/CommitteeEditorModal';
-import { useConfirmModal } from '@/components/ConfirmModal';
-import { notifyErr, clearErr } from '@/lib/appNotify';
-import { NEU, EASE, Emoji3D } from '@/components/neu';
+import { useNow } from '@/lib/useNow';
+import { NEU } from '@/components/neu';
 import { GoldWord } from '@/components/BrandHeading';
-import { BigSectionTabs, type BigSectionTab } from '../BigSectionTabs';
-import PositionPaperRoster, { type RosterAllocation, type RosterPaper } from '@/components/PositionPaperRoster';
-import { fetchMessageStubsForPapers, type PaperMessageStub } from '@/lib/positionPapers';
-import { safeStorageKey } from '@/lib/storageKey';
 import { replaceUrlInPlace } from '@/lib/replaceUrlInPlace';
 
 const OUTFIT = "var(--font-brand), sans-serif";
+const PER_PAGE = 6;
+const GREEN = '#2F6644';
 
-// ── Types ──────────────────────────────────────────────────────────────────────
+interface GuideMark { conference_committee_id: string; is_published: boolean }
 
-interface CommitteeTab {
-  id: string;
-  name: string;
-  abbreviation: string | null;
-  logo_url: string | null;
-  committee_type: string;
-  position_paper_deadline: string | null;
-  pp_submissions_enabled: boolean;
-  study_guides_publish_at: string | null;
-  notification_email: string | null;
+/** The three lines on a committee card. */
+function studyGuideLine(c: CommitteeDoc, guides: GuideMark[], now: number): { text: string; on: boolean } {
+  const mine = guides.filter(g => g.conference_committee_id === c.id);
+  const at = c.study_guides_publish_at ? new Date(c.study_guides_publish_at).getTime() : null;
+  if (mine.some(g => g.is_published) || (mine.length > 0 && at !== null && at <= now)) return { text: 'Study guide published', on: true };
+  if (mine.length > 0 && at !== null && at > now) return { text: `Study guide releases ${formatDate(c.study_guides_publish_at!)}`, on: false };
+  return { text: 'Study guide not published', on: false };
 }
 
-interface StudyGuide {
-  id: string;
-  title: string;
-  file_url: string;
-  file_name: string;
-  file_size_bytes: number;
-  is_published: boolean;
-  published_at: string | null;
-  created_at: string;
-}
-
-interface RosterAllocationRow {
-  country_code: string;
-  user_id: string | null;
-  profiles: { display_name: string } | null;
-  applications: { invited_name: string | null } | null;
-}
-
-// ── Helpers ────────────────────────────────────────────────────────────────────
-
-function formatFileSize(bytes: number): string {
-  if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-  return `${Math.round(bytes / 1024)} KB`;
-}
-
-function formatDate(iso: string): string {
-  const d = new Date(iso);
-  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-  return `${months[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
-}
-
-function isoToDatePart(iso: string | null): string {
-  if (!iso) return '';
-  const d = new Date(iso);
-  const mm = String(d.getMonth() + 1).padStart(2, '0');
-  const dd = String(d.getDate()).padStart(2, '0');
-  return `${d.getFullYear()}-${mm}-${dd}`;
-}
-function isoToTimePart(iso: string | null): string {
-  if (!iso) return '';
-  const d = new Date(iso);
-  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
-}
-
-// Shared card language, thick 1.5px border + layered warm shadow (rulebook F6).
-const CARD_SHADOW = '0 2px 8px rgba(27,56,40,0.05), 0 12px 32px rgba(27,56,40,0.06)';
-
-// ── Modal overlay ──────────────────────────────────────────────────────────────
-
-function ModalOverlay({ children, onClose }: { children: React.ReactNode; onClose: () => void }) {
-  // Thin wrapper over the shared house backdrop (@/components/ModalOverlay),
-  // which owns the background scroll lock, Escape-to-close and the dialog ARIA.
-  // `px-4` (no vertical padding) preserves this page's original spacing.
-  return <SharedModalOverlay onClose={onClose} paddingClassName="px-4">{children}</SharedModalOverlay>;
-}
-
-// ── UploadStudyGuideModal (unchanged) ───────────────────────────────────────────
-
-function UploadStudyGuideModal({
-  conferenceId, selectedCommitteeId, userId, onClose, onUploaded,
-}: {
-  conferenceId: string;
-  selectedCommitteeId: string;
-  userId: string;
-  onClose: () => void;
-  onUploaded: () => void;
+function CommitteeCard({ c, guides, now, onOpen }: {
+  c: CommitteeDoc;
+  guides: GuideMark[];
+  now: number;
+  onOpen: (pane: DocsPane) => void;
 }) {
-  const { session } = useAuth();
-  const [title, setTitle] = useState('');
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [fileError, setFileError] = useState('');
-  const [uploading, setUploading] = useState(false);
-  const [uploadError, setUploadError] = useState('');
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
-  function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    if (file.type !== 'application/pdf') { setFileError('Only PDF files are accepted.'); return; }
-    if (file.size > 5 * 1024 * 1024) { setFileError('File must be under 5MB.'); return; }
-    setFileError('');
-    setSelectedFile(file);
-  }
-
-  async function handleUpload() {
-    if (!selectedFile || !title.trim() || uploading) return;
-    if (!session) return;
-    setUploading(true);
-    setUploadError('');
-    const supabase = getAuthedClient(session.access_token);
-    const path = safeStorageKey(`${conferenceId}/${selectedCommitteeId}`, String(Date.now()), selectedFile.name);
-    const { error: storageError } = await supabase.storage
-      .from('study-guides')
-      .upload(path, selectedFile, { contentType: 'application/pdf' });
-    if (storageError) { setUploadError('Upload failed. Please try again.'); setUploading(false); return; }
-    const { data: { publicUrl } } = supabase.storage.from('study-guides').getPublicUrl(path);
-    const { error: insertError } = await supabase.from('study_guides').insert({
-      conference_committee_id: selectedCommitteeId,
-      uploaded_by: userId,
-      title: title.trim(),
-      file_url: publicUrl,
-      file_name: selectedFile.name,
-      file_size_bytes: selectedFile.size,
-      mime_type: 'application/pdf',
-      is_published: false,
-    });
-    if (insertError) { setUploadError('Upload failed. Please try again.'); setUploading(false); return; }
-    setUploading(false);
-    onUploaded();
-    onClose();
-  }
-
-  const disabled = !selectedFile || !title.trim() || uploading;
-
+  const sg = studyGuideLine(c, guides, now);
+  const label = shortName(c);
   return (
-    <ModalOverlay onClose={onClose}>
-      <div style={{ backgroundColor: '#FAF8F3', border: '1.5px solid #D8CDB6', borderRadius: 16, padding: 24, maxWidth: 448, width: '100%', maxHeight: '90dvh', overflowY: 'auto', boxShadow: '0 20px 60px rgba(27,56,40,0.18)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
-          <h2 style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 24, letterSpacing: '-0.02em', color: '#1C1410' }}>Upload Study Guide</h2>
-          <button onClick={onClose} aria-label="Close" className="focus:outline-none inline-flex items-center justify-center" style={{ color: NEU.inkSoft, width: 40, height: 40, borderRadius: 999, background: 'none', border: 'none', cursor: 'pointer' }}><X size={20} /></button>
-        </div>
-
-        <div style={{ marginBottom: 16 }}>
-          <label style={{ display: 'block', fontSize: 14, fontWeight: 700, color: '#1C1410', fontFamily: OUTFIT, marginBottom: 6 }}>
-            Title *
-          </label>
-          <input
-            value={title}
-            onChange={e => setTitle(e.target.value)}
-            placeholder="e.g. UNHRC Background Guide 2026"
-            style={{ width: '100%', border: '1.5px solid #DDD4C0', borderRadius: 12, padding: '0 14px', height: 48, fontSize: 16, color: '#1C1410', backgroundColor: '#FAF8F3', outline: 'none', fontFamily: OUTFIT, boxSizing: 'border-box' }}
-          />
-        </div>
-
-        <div style={{ marginBottom: 16 }}>
-          <label style={{ display: 'block', fontSize: 14, fontWeight: 700, color: '#1C1410', fontFamily: OUTFIT, marginBottom: 6 }}>
-            File (PDF · max 5MB)
-          </label>
-          <input type="file" accept="application/pdf" onChange={handleFileSelect} className="hidden" ref={fileInputRef} />
-          {!selectedFile ? (
-            <div
-              onClick={() => fileInputRef.current?.click()}
-              style={{ border: '2px dashed #DDD4C0', borderRadius: 12, padding: '32px 16px', textAlign: 'center', cursor: 'pointer', transition: 'border-color 0.15s' }}
-              onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = '#1B3828'; }}
-              onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = '#DDD4C0'; }}
-            >
-              <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 8 }}>
-                <Upload size={24} style={{ color: '#9A8A78' }} />
-              </div>
-              <p style={{ fontSize: 15, fontWeight: 700, color: '#1C1410', fontFamily: OUTFIT, marginBottom: 4 }}>Click to select PDF</p>
-              <p style={{ fontSize: 13, color: NEU.inkSoft, fontFamily: OUTFIT }}>Max 5MB</p>
-            </div>
-          ) : (
-            <div style={{ border: '1px solid rgba(61,122,82,0.3)', borderRadius: 12, padding: '12px 16px', backgroundColor: 'rgba(61,122,82,0.04)', display: 'flex', alignItems: 'center', gap: 10 }}>
-              <Check size={16} style={{ color: '#3D7A52', flexShrink: 0 }} />
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <p style={{ fontSize: 13, color: '#1C1410', fontFamily: OUTFIT, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={selectedFile.name}>{selectedFile.name}</p>
-                <p style={{ fontSize: 11, color: '#9A8A78', fontFamily: OUTFIT, fontWeight: 500, fontVariantNumeric: 'tabular-nums' }}>{formatFileSize(selectedFile.size)}</p>
-              </div>
-              <button onClick={() => fileInputRef.current?.click()} className="focus:outline-none" style={{ fontSize: 11, color: '#9A8A78', fontFamily: OUTFIT, textDecoration: 'underline', cursor: 'pointer', background: 'none', border: 'none', flexShrink: 0 }}>
-                Change file
-              </button>
-            </div>
-          )}
-          {fileError && <p style={{ fontSize: 13, color: '#8B2020', fontFamily: OUTFIT, marginTop: 4 }}>{fileError}</p>}
-        </div>
-
-        {uploadError && <p style={{ fontSize: 13.5, color: '#8B2020', fontFamily: OUTFIT, marginBottom: 12 }}>{uploadError}</p>}
-
-        <div style={{ display: 'flex', gap: 10 }}>
-          <button onClick={onClose} className="focus:outline-none gv-lift" style={{ flex: 1, border: '1.5px solid #DDD4C0', borderRadius: 12, padding: '0', minHeight: 48, fontFamily: OUTFIT, fontWeight: 700, fontSize: 15, color: '#1C1410', backgroundColor: 'transparent', cursor: 'pointer' }}>
-            Cancel
-          </button>
-          <button
-            onClick={handleUpload}
-            disabled={disabled}
-            className="focus:outline-none gv-lift"
-            style={{ flex: 1, border: 'none', borderRadius: 12, padding: '0', minHeight: 48, fontFamily: OUTFIT, fontWeight: 700, fontSize: 15, backgroundColor: disabled ? '#DDD4C0' : '#1B3828', color: disabled ? '#9A8A78' : '#EED98A', cursor: disabled ? 'default' : 'pointer' }}
-          >
-            {uploading ? 'Uploading…' : 'Upload'}
-          </button>
+    <article className="gv-docs-ccard">
+      <div className="flex items-start gap-3 min-w-0">
+        <CommitteeLogo c={c} size={48} />
+        <div className="min-w-0">
+          <h3 className="gv-docs-cname">{label}</h3>
+          {c.abbreviation && c.abbreviation !== c.name && <p className="gv-docs-cfull">{c.name}</p>}
         </div>
       </div>
-    </ModalOverlay>
-  );
-}
-
-// ── DateTimeField, a DatePicker + time input committing a verified write ───────
-// on every change, same recipe as the committees page's ReleaseTimePicker.
-
-function DateTimeField({ value, onSave, placeholder }: {
-  value: string | null;
-  onSave: (iso: string | null) => Promise<boolean>;
-  placeholder: string;
-}) {
-  const [datePart, setDatePart] = useState(isoToDatePart(value));
-  const [timePart, setTimePart] = useState(isoToTimePart(value));
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState('');
-
-  useEffect(() => {
-    setDatePart(isoToDatePart(value));
-    setTimePart(isoToTimePart(value));
-  }, [value]);
-
-  async function commit(nextDate: string, nextTime: string) {
-    const prevDate = datePart, prevTime = timePart;
-    setDatePart(nextDate);
-    setTimePart(nextTime);
-    let iso: string | null = null;
-    if (nextDate) {
-      const [y, mo, da] = nextDate.split('-').map(Number);
-      const [h, m] = (nextTime || '00:00').split(':').map(Number);
-      iso = new Date(y, mo - 1, da, h, m).toISOString();
-    }
-    setSaving(true);
-    setError('');
-    const ok = await onSave(iso);
-    setSaving(false);
-    if (!ok) {
-      setDatePart(prevDate);
-      setTimePart(prevTime);
-      setError("Couldn't save, please try again.");
-    }
-  }
-
-  return (
-    <div>
-      <div className="flex gap-2 items-center">
-        <div style={{ flex: 1, minWidth: 160 }}>
-          <DatePicker
-            value={datePart}
-            onChange={iso => commit(iso, timePart || '00:00')}
-            placeholder={placeholder}
-            disabled={saving}
-          />
-        </div>
-        <input
-          type="time"
-          value={timePart}
-          onChange={e => commit(datePart, e.target.value)}
-          disabled={saving || !datePart}
-          className="focus:outline-none"
-          style={{
-            border: 'none', borderRadius: 12, padding: '11px 12px',
-            fontFamily: OUTFIT, fontSize: 15, fontWeight: 600,
-            color: datePart ? NEU.ink : NEU.muted, backgroundColor: NEU.base, boxShadow: NEU.inSm,
-          }}
-        />
-        {datePart && (
-          <button
-            type="button"
-            onClick={() => commit('', '')}
-            disabled={saving}
-            title="Clear"
-            className="flex-shrink-0 focus:outline-none"
-            style={{ color: NEU.muted, background: 'none', border: 'none', cursor: 'pointer' }}
-          >
-            <X size={16} />
-          </button>
-        )}
+      <ul className="gv-docs-lines">
+        <li style={{ color: sg.on ? GREEN : NEU.inkSoft }}>{sg.text}</li>
+        <li style={{ color: c.pp_submissions_enabled ? GREEN : NEU.inkSoft }}>
+          {c.pp_submissions_enabled ? 'Position papers enabled' : 'Position papers disabled'}
+        </li>
+        {c.position_paper_deadline && <li style={{ color: NEU.ink }}>Due {formatDate(c.position_paper_deadline)}</li>}
+      </ul>
+      <div className="gv-docs-cactions">
+        <button type="button" className="gv-docs-btn gv-docs-btn-primary" onClick={() => onOpen('submissions')}>View submissions</button>
+        <button type="button" className="gv-docs-btn gv-docs-btn-outline" onClick={() => onOpen('settings')}>Edit</button>
       </div>
-      {error && <p style={{ fontSize: 13, color: '#8B2020', fontFamily: OUTFIT, marginTop: 4 }}>{error}</p>}
-    </div>
+    </article>
   );
 }
-
-// ── Vertical committee rail ─────────────────────────────────────────────────────
-// Text is the primary identifier here, a small logo or monogram is only a
-// leading accent, since committees sharing the default UN logo are
-// otherwise indistinguishable by icon alone. Full name available on hover.
-
-function CommitteeRail({ committees, selectedId, onSelect }: {
-  committees: CommitteeTab[];
-  selectedId: string | null;
-  onSelect: (id: string) => void;
-}) {
-  return (
-    <div className="flex md:flex-col gap-2.5 overflow-x-auto md:overflow-visible flex-shrink-0 md:w-[250px] pb-1 md:pb-0" role="tablist" aria-label="Committees">
-      {committees.map(c => {
-        const active = c.id === selectedId;
-        const label = c.abbreviation || c.name;
-        return (
-          <button
-            key={c.id}
-            type="button"
-            onClick={() => onSelect(c.id)}
-            title={c.name}
-            role="tab"
-            aria-selected={active}
-            className="flex items-center gap-3 flex-shrink-0 md:w-full focus:outline-none text-left"
-            style={{
-              padding: '12px 14px', minHeight: 60, borderRadius: 16, border: 'none', cursor: 'pointer',
-              backgroundColor: active ? NEU.base : NEU.surface,
-              boxShadow: active ? `0 0 0 2px ${NEU.deepGold}, ${NEU.in}` : NEU.outSm,
-              transition: `box-shadow 200ms ${EASE}`,
-              minWidth: 0,
-            }}
-          >
-            <span className="flex-shrink-0 flex items-center justify-center overflow-hidden" style={{ width: 38, height: 38, borderRadius: 10 }}>
-              {c.logo_url ? (
-                <img src={c.logo_url} alt="" style={{ width: 38, height: 38, objectFit: 'contain', borderRadius: 10 }} />
-              ) : (
-                <MonogramMedallion text={label} isCrisis={c.committee_type === 'crisis'} size={38} />
-              )}
-            </span>
-            <span className="min-w-0 flex flex-col" style={{ lineHeight: 1.2 }}>
-              <span className="[overflow-wrap:anywhere]" style={{ fontFamily: OUTFIT, fontSize: 15.5, fontWeight: 800, color: NEU.ink }}>
-                {label}
-              </span>
-              {c.abbreviation && c.abbreviation !== c.name && (
-                <span className="hidden md:block [overflow-wrap:anywhere]" style={{ fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 500, color: NEU.inkSoft, marginTop: 2 }}>
-                  {c.name}
-                </span>
-              )}
-            </span>
-          </button>
-        );
-      })}
-    </div>
-  );
-}
-
-// A small subheading plus one clarifying sentence, ahead of a settings
-// control block so its purpose reads before its switches do.
-function SectionIntro({ title, description }: { title: string; description: string }) {
-  return (
-    <div style={{ marginBottom: 12 }}>
-      <p style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 17, color: '#1C1410', margin: '0 0 4px 0' }}>{title}</p>
-      <p style={{ fontFamily: OUTFIT, fontSize: 14, color: NEU.inkSoft, margin: 0, lineHeight: 1.5 }}>{description}</p>
-    </div>
-  );
-}
-
-// ── Big section tabs (11 Oct 2026, owner: "make the sections for overview,
-// everyone and settings bigger, cmon its too small"): the shared organiser
-// BigSectionTabs, three white cards with a 3D emoji disc over their top edge.
-
-type DocsTab = 'overview' | 'everyone' | 'settings';
-
-const SECTION_TABS: BigSectionTab<DocsTab>[] = [
-  { key: 'overview', label: 'Overview', sub: 'Study guides and position papers', emoji: 'Card index dividers', lucide: LayoutGrid, tone: 'gold' },
-  { key: 'everyone', label: 'For everyone', sub: 'Rules of Procedure, logistics, schedules', emoji: 'Books', lucide: Users, tone: 'green' },
-  { key: 'settings', label: 'Settings', sub: 'Deadlines and release times', emoji: 'Gear', lucide: SettingsIcon, tone: 'gold' },
-];
-
-/** A section card's title: a 3D emoji disc and a plain Title Case heading. */
-function SectionTitle({ emoji, lucide, lead, last, right }: {
-  emoji: string; lucide: LucideIcon; lead: string; last: string; right?: React.ReactNode;
-}) {
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 14, flexWrap: 'wrap', marginBottom: 18 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 14, minWidth: 0 }}>
-        <span aria-hidden className="inline-flex items-center justify-center flex-shrink-0" style={{ width: 56, height: 56, borderRadius: 18, background: 'linear-gradient(150deg, rgba(238,217,138,0.75), rgba(238,217,138,0.32))', boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.8), 0 8px 18px -12px rgba(27,56,40,0.5)' }}>
-          <Emoji3D name={emoji} size={36} fallback={lucide} fallbackColor="#1B3828" />
-        </span>
-        <h2 style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 'clamp(26px, 2.6vw, 32px)', letterSpacing: '-0.02em', lineHeight: 1.1, color: '#1C1410', margin: 0 }}>
-          {lead}{lead ? ' ' : ''}{last}
-        </h2>
-      </div>
-      {right}
-    </div>
-  );
-}
-
-// ── DocumentsPage ──────────────────────────────────────────────────────────────
 
 export default function DocumentsPage() {
-  // Released / scheduled checks read this, ticking every minute (react-hooks/purity).
   const now = useNow();
   const { conference } = useManage();
-  const { user, session } = useAuth();
-  /** The stable half of `session`. AuthProvider replaces the session OBJECT on
-   *  every auth event (token refresh, tab focus), so any loader that depends on
-   *  `session` refetches on each of those; the token is a string and only
-   *  changes when it really changes — including the first time it arrives,
-   *  which is the transition a loader guarded on auth has to catch. The action
-   *  handlers below keep using `session`; they run on a click, not off a
-   *  dependency array. */
+  const { session } = useAuth();
+  /** The stable half of `session`: loaders key on the token string, never the
+   *  session object (CLAUDE.md §6, "No page reloads by itself"). */
   const accessToken = session?.access_token;
 
-  const [activeTab, setActiveTab] = useState<DocsTab>('overview');
-  // ?tab=everyone opens Documents for Everyone; &doc=<id> also opens that
-  // document's Returned copies (prompt 111). Both leave the URL once read.
+  const [committees, setCommittees] = useState<CommitteeDoc[]>([]);
+  const [guides, setGuides] = useState<GuideMark[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(0);
+  const [open, setOpen] = useState<{ id: string; pane: DocsPane } | null>(null);
   const [deepDocId, setDeepDocId] = useState<string | null>(null);
+  const [deepCommittee, setDeepCommittee] = useState<{ id: string; pane: DocsPane } | null>(null);
+
+  // Deep links, read once.
   useEffect(() => {
     const url = new URL(window.location.href);
-    if (url.searchParams.get('tab') !== 'everyone') return;
-    const doc = url.searchParams.get('doc');
-    void Promise.resolve().then(() => { setActiveTab('everyone'); if (doc) setDeepDocId(doc); });
-    url.searchParams.delete('tab');
-    url.searchParams.delete('doc');
+    const committee = url.searchParams.get('committee');
+    const pane: DocsPane = url.searchParams.get('pane') === 'settings' ? 'settings' : 'submissions';
+    const doc = url.searchParams.get('tab') === 'everyone' ? url.searchParams.get('doc') : null;
+    if (!committee && !doc && !url.searchParams.has('tab')) return;
+    void Promise.resolve().then(() => {
+      if (committee) setDeepCommittee({ id: committee, pane });
+      if (doc) setDeepDocId(doc);
+    });
+    ['committee', 'pane', 'tab', 'doc'].forEach(k => url.searchParams.delete(k));
     replaceUrlInPlace(url.pathname + url.search + url.hash);
   }, []);
-  const [committees, setCommittees] = useState<CommitteeTab[]>([]);
-  const [selectedCommitteeId, setSelectedCommitteeId] = useState<string | null>(null);
-  const [studyGuides, setStudyGuides] = useState<StudyGuide[]>([]);
-  const [allocations, setAllocations] = useState<RosterAllocationRow[]>([]);
-  const [papers, setPapers] = useState<RosterPaper[]>([]);
-  const [messagesByPaper, setMessagesByPaper] = useState<Record<string, PaperMessageStub[]>>({});
-  const [loading, setLoading] = useState(true);
-  const [filterStatus, setFilterStatus] = useState('ALL');
-  const [showUploadModal, setShowUploadModal] = useState(false);
-  // Failures go to the corner notification stack, not a strip above the page —
-  // same store and renderer as the live committee session. The `setX('')` call
-  // shape is preserved so no call site changed; only where it lands did.
-  const setActionError = useCallback((msg: string) => {
-    if (msg) notifyErr(msg, 'documents'); else clearErr('documents');
-  }, []);
-  const [papersError, setPapersError] = useState(false);
-  // Ids with a write in flight, disables that row's controls (double-click guard).
-  const [busyIds, setBusyIds] = useState<Set<string>>(new Set());
-  const didSetInitialTab = useRef(false);
-  // Stale-response guard: bump per committee-tab switch; late responses for an
-  // older tab are dropped instead of clobbering the current one.
-  const paperReqSeq = useRef(0);
-  const guideReqSeq = useRef(0);
-
-  // ── Settings tab state (Position Papers + Study Guides sections) ───────────
-  const [ppPerCommittee, setPpPerCommittee] = useState(false);
-  const [ppGlobalDeadline, setPpGlobalDeadline] = useState<string | null>(null);
-  const [sgPerCommittee, setSgPerCommittee] = useState(false);
-  const [sgGlobalPublishAt, setSgGlobalPublishAt] = useState<string | null>(null);
-  const [settingsLoaded, setSettingsLoaded] = useState(false);
-  // Failures go to the corner notification stack, not a strip above the page —
-  // same store and renderer as the live committee session. The `setX('')` call
-  // shape is preserved so no call site changed; only where it lands did.
-  const setSettingsError = useCallback((msg: string) => {
-    if (msg) notifyErr(msg, 'documents-settings'); else clearErr('documents-settings');
-  }, []);
-  const { confirm, modal: confirmModal } = useConfirmModal();
-
-  function markBusy(id: string, busy: boolean) {
-    setBusyIds(prev => {
-      const next = new Set(prev);
-      if (busy) next.add(id); else next.delete(id);
-      return next;
-    });
-  }
-
-  // ── Data loading ─────────────────────────────────────────────────────────────
 
   const loadCommittees = useCallback(async () => {
-    if (!conference) return [];
-    if (!accessToken) return [];
+    if (!conference || !accessToken) return;
     const supabase = getAuthedClient(accessToken);
     const { data } = await supabase
       .from('conference_committees')
       .select('id, name, abbreviation, logo_url, committee_type, position_paper_deadline, pp_submissions_enabled, study_guides_publish_at, notification_email')
       .eq('conference_id', conference.id)
       .order('name', { ascending: true });
-    const rows = (data ?? []) as CommitteeTab[];
+    const rows = (data ?? []) as CommitteeDoc[];
     setCommittees(rows);
+    if (rows.length > 0) {
+      const { data: g } = await supabase
+        .from('study_guides')
+        .select('conference_committee_id, is_published')
+        .in('conference_committee_id', rows.map(r => r.id));
+      setGuides((g ?? []) as GuideMark[]);
+    } else {
+      setGuides([]);
+    }
     setLoading(false);
-    return rows;
-    // Keyed on the TOKEN, not the session object: with `[conference]` alone
-    // this callback is built once against whatever session existed when the
-    // conference resolved, and if auth had not landed the guard above returns
-    // early with nothing left to re-trigger the effect. The session object is
-    // the wrong dep — its identity changes on every auth event.
   }, [conference, accessToken]);
 
-  useEffect(() => {
-    void Promise.resolve().then(() => loadCommittees()).then(rows => {
-      if (rows && !didSetInitialTab.current && rows.length > 0) {
-        setSelectedCommitteeId(rows[0].id);
-        didSetInitialTab.current = true;
-      }
-    });
-  }, [loadCommittees]);
+  useEffect(() => { void Promise.resolve().then(() => loadCommittees()); }, [loadCommittees]);
 
-  const loadConferenceSettings = useCallback(async () => {
-    if (!conference || !accessToken) return;
-    const supabase = getAuthedClient(accessToken);
-    const { data } = await supabase
-      .from('conferences')
-      .select('pp_deadline_per_committee, position_paper_deadline, sg_publish_per_committee, study_guides_publish_at')
-      .eq('id', conference.id)
-      .maybeSingle();
-    const row = data as {
-      pp_deadline_per_committee: boolean | null; position_paper_deadline: string | null;
-      sg_publish_per_committee: boolean | null; study_guides_publish_at: string | null;
-    } | null;
-    setPpPerCommittee(row?.pp_deadline_per_committee ?? false);
-    setPpGlobalDeadline(row?.position_paper_deadline ?? null);
-    setSgPerCommittee(row?.sg_publish_per_committee ?? false);
-    setSgGlobalPublishAt(row?.study_guides_publish_at ?? null);
-    setSettingsLoaded(true);
-  }, [conference, accessToken]);
-
-  // Started a microtask later so no state is set synchronously in the effect.
-  useEffect(() => { void Promise.resolve().then(() => loadConferenceSettings()); }, [loadConferenceSettings]);
-
-  const loadStudyGuides = useCallback(async () => {
-    if (!selectedCommitteeId) return;
-    if (!accessToken) return;
-    const seq = ++guideReqSeq.current;
-    const supabase = getAuthedClient(accessToken);
-    const { data } = await supabase
-      .from('study_guides')
-      .select('id, title, file_url, file_name, file_size_bytes, is_published, published_at, created_at')
-      .eq('conference_committee_id', selectedCommitteeId)
-      .order('created_at', { ascending: false });
-    if (seq !== guideReqSeq.current) return; // stale response, a newer load superseded this one
-    setStudyGuides((data ?? []) as StudyGuide[]);
-    // accessToken, not session: the token is a string, so this re-runs when
-    // auth first arrives (or genuinely rotates) and not on the session-object
-    // churn AuthProvider produces on every auth event.
-  }, [selectedCommitteeId, accessToken]);
-
-  const loadPapers = useCallback(async () => {
-    if (!selectedCommitteeId) return;
-    if (!accessToken) return;
-    const seq = ++paperReqSeq.current;
-    const supabase = getAuthedClient(accessToken);
-    const [{ data: allocData, error: allocError }, { data: paperData, error: paperError }] = await Promise.all([
-      supabase
-        .from('conference_allocations')
-        .select('country_code, user_id, profiles (display_name), applications:application_id (invited_name)')
-        .eq('conference_committee_id', selectedCommitteeId),
-      supabase
-        .from('position_papers')
-        .select('id, country_code, status, submitted_at, reviewer_seen_at')
-        .eq('conference_committee_id', selectedCommitteeId),
-    ]);
-    if (seq !== paperReqSeq.current) return; // stale response
-    if (allocError || paperError) {
-      console.error('[DocumentsPage] roster load failed:', allocError || paperError);
-      setPapersError(true);
-      setAllocations([]);
-      setPapers([]);
-      setMessagesByPaper({});
-      return;
+  // A committee opened from a deep link: its pop-up, and the page that holds it.
+  if (deepCommittee && committees.length > 0) {
+    const ix = committees.findIndex(c => c.id === deepCommittee.id);
+    setDeepCommittee(null);
+    if (ix >= 0) {
+      setPage(Math.floor(ix / PER_PAGE));
+      setOpen(deepCommittee);
     }
-    setPapersError(false);
-    setAllocations((allocData ?? []) as unknown as RosterAllocationRow[]);
-    const paperRows = (paperData ?? []) as RosterPaper[];
-    setPapers(paperRows);
-    setMessagesByPaper(await fetchMessageStubsForPapers(supabase, paperRows.map(p => p.id)));
-    // accessToken, not session — see loadStudyGuides above.
-  }, [selectedCommitteeId, accessToken]);
-
-  useEffect(() => {
-    void Promise.resolve().then(() => { void loadStudyGuides(); void loadPapers(); });
-  }, [loadStudyGuides, loadPapers]);
-  // A different committee starts on the "All" filter (the "previous value in
-  // state" pattern, compared during render).
-  const [filterFor, setFilterFor] = useState(selectedCommitteeId);
-  if (filterFor !== selectedCommitteeId) {
-    setFilterFor(selectedCommitteeId);
-    setFilterStatus('ALL');
-  }
-
-  // ── Actions ──────────────────────────────────────────────────────────────────
-
-  // Optimistic-first pattern (house style, AGENTS.md Rule 5): mutate local
-  // state immediately, persist in the background, roll back + surface an
-  // inline error if the write fails.
-  function handlePublishGuide(guideId: string, publish: boolean) {
-    if (!session || busyIds.has(guideId)) return;
-    const previous = studyGuides;
-    const publishedAt = publish ? new Date().toISOString() : null;
-    setStudyGuides(prev => prev.map(g => g.id === guideId ? { ...g, is_published: publish, published_at: publishedAt } : g));
-    setActionError('');
-    markBusy(guideId, true);
-    const supabase = getAuthedClient(session.access_token);
-    supabase.from('study_guides').update({
-      is_published: publish,
-      published_at: publishedAt,
-    }).eq('id', guideId).then(({ error }) => {
-      markBusy(guideId, false);
-      if (error) {
-        setStudyGuides(previous);
-        setActionError("Couldn't save, the change was reverted.");
-      }
-    });
-  }
-
-  // A guide that's only visible because its committee's release schedule
-  // already passed can't be hidden by flipping its own is_published (it was
-  // never true), the schedule itself is what's showing it. Clearing the
-  // schedule hides every guide in the committee relying on it, hence the
-  // confirm step.
-  async function handleUnscheduleGuide(guideId: string, committeeId: string) {
-    if (!session || busyIds.has(guideId)) return;
-    const { confirmed } = await confirm({
-      title: 'Unpublish this guide?',
-      body: 'This clears the scheduled release for this committee and hides its guides.',
-      confirmLabel: 'Unpublish',
-      danger: true,
-    });
-    if (!confirmed) return;
-    handlePublishGuide(guideId, false);
-    await savePerCommitteeSgPublishAt(committeeId, null);
-  }
-
-  function handleDeleteGuide(guideId: string) {
-    if (!session || busyIds.has(guideId)) return;
-    const previous = studyGuides;
-    setStudyGuides(prev => prev.filter(g => g.id !== guideId));
-    setActionError('');
-    markBusy(guideId, true);
-    const supabase = getAuthedClient(session.access_token);
-    supabase.from('study_guides').delete().eq('id', guideId).then(({ error }) => {
-      markBusy(guideId, false);
-      if (error) {
-        setStudyGuides(previous);
-        setActionError("Couldn't delete, the guide was restored.");
-      }
-    });
-  }
-
-  function updatePaperStatus(paperId: string, status: string) {
-    if (!user || !session || busyIds.has(paperId)) return;
-    const previous = papers;
-    setPapers(prev => prev.map(p => p.id === paperId ? { ...p, status } : p));
-    setActionError('');
-    markBusy(paperId, true);
-    const supabase = getAuthedClient(session.access_token);
-    supabase.from('position_papers').update({
-      status,
-      reviewed_by: user.id,
-      reviewed_at: new Date().toISOString(),
-    }).eq('id', paperId).then(({ error }) => {
-      markBusy(paperId, false);
-      if (error) {
-        setPapers(previous);
-        setActionError("Couldn't update the paper status. The change was reverted.");
-      }
-    });
-  }
-
-  // Per-committee pp_submissions_enabled toggle, optimistic.
-  function togglePpEnabled(committeeId: string, enabled: boolean) {
-    if (!session) return;
-    const previous = committees;
-    setCommittees(prev => prev.map(c => c.id === committeeId ? { ...c, pp_submissions_enabled: enabled } : c));
-    setSettingsError('');
-    const supabase = getAuthedClient(session.access_token);
-    supabase.from('conference_committees').update({ pp_submissions_enabled: enabled }).eq('id', committeeId).then(({ error }) => {
-      if (error) {
-        setCommittees(previous);
-        setSettingsError("Couldn't save that toggle. Please try again.");
-      }
-    });
-  }
-
-  async function togglePpPerCommittee(next: boolean) {
-    if (!session || !conference) return;
-    const previous = ppPerCommittee;
-    setPpPerCommittee(next);
-    setSettingsError('');
-    const supabase = getAuthedClient(session.access_token);
-    const { error } = await supabase.rpc('set_conference_pp_deadline', {
-      p_conference_id: conference.id,
-      p_per_committee: next,
-      p_deadline: next ? null : ppGlobalDeadline,
-    });
-    if (error) {
-      setPpPerCommittee(previous);
-      setSettingsError("Couldn't save that setting. Please try again.");
-      return;
-    }
-    if (!next) await loadCommittees();
-  }
-
-  async function saveGlobalPpDeadline(iso: string | null): Promise<boolean> {
-    if (!session || !conference) return false;
-    setPpGlobalDeadline(iso);
-    const supabase = getAuthedClient(session.access_token);
-    const { error } = await supabase.rpc('set_conference_pp_deadline', {
-      p_conference_id: conference.id,
-      p_per_committee: false,
-      p_deadline: iso,
-    });
-    if (error) return false;
-    await loadCommittees();
-    return true;
-  }
-
-  async function savePerCommitteePpDeadline(committeeId: string, iso: string | null): Promise<boolean> {
-    if (!session) return false;
-    const previous = committees;
-    setCommittees(prev => prev.map(c => c.id === committeeId ? { ...c, position_paper_deadline: iso } : c));
-    const supabase = getAuthedClient(session.access_token);
-    const { error } = await supabase.from('conference_committees').update({ position_paper_deadline: iso }).eq('id', committeeId);
-    if (error) { setCommittees(previous); return false; }
-    return true;
-  }
-
-  async function toggleSgPerCommittee(next: boolean) {
-    if (!session || !conference) return;
-    const previous = sgPerCommittee;
-    setSgPerCommittee(next);
-    setSettingsError('');
-    const supabase = getAuthedClient(session.access_token);
-    const { error } = await supabase.rpc('set_conference_sg_publish', {
-      p_conference_id: conference.id,
-      p_per_committee: next,
-      p_publish_at: next ? null : sgGlobalPublishAt,
-    });
-    if (error) {
-      setSgPerCommittee(previous);
-      setSettingsError("Couldn't save that setting. Please try again.");
-      return;
-    }
-    if (!next) await loadCommittees();
-  }
-
-  async function saveGlobalSgPublishAt(iso: string | null): Promise<boolean> {
-    if (!session || !conference) return false;
-    setSgGlobalPublishAt(iso);
-    const supabase = getAuthedClient(session.access_token);
-    const { error } = await supabase.rpc('set_conference_sg_publish', {
-      p_conference_id: conference.id,
-      p_per_committee: false,
-      p_publish_at: iso,
-    });
-    if (error) return false;
-    await loadCommittees();
-    return true;
-  }
-
-  async function savePerCommitteeSgPublishAt(committeeId: string, iso: string | null): Promise<boolean> {
-    if (!session) return false;
-    const previous = committees;
-    setCommittees(prev => prev.map(c => c.id === committeeId ? { ...c, study_guides_publish_at: iso } : c));
-    const supabase = getAuthedClient(session.access_token);
-    const { error } = await supabase.from('conference_committees').update({ study_guides_publish_at: iso }).eq('id', committeeId);
-    if (error) { setCommittees(previous); return false; }
-    return true;
   }
 
   if (!conference) return null;
 
-  // ── Derived ───────────────────────────────────────────────────────────────────
-
-  const selectedCommittee = committees.find(c => c.id === selectedCommitteeId) ?? null;
-  const totalCount = papers.length;
-  const approvedCount = papers.filter(p => p.status === 'approved').length;
-  const pendingCount = papers.filter(p => p.status === 'submitted').length;
-  const rejectedCount = papers.filter(p => p.status === 'rejected').length;
-
-  const rosterAllocations: RosterAllocation[] = allocations.map(a => ({
-    country_code: a.country_code, user_id: a.user_id,
-    display_name: a.profiles?.display_name ?? null,
-    invited_name: a.applications?.invited_name ?? null,
-  }));
-
-  // ── Render ────────────────────────────────────────────────────────────────────
+  const pages = Math.max(1, Math.ceil(committees.length / PER_PAGE));
+  const safePage = Math.min(page, pages - 1);
+  const shown = committees.slice(safePage * PER_PAGE, safePage * PER_PAGE + PER_PAGE);
+  const openCommittee = open ? committees.find(c => c.id === open.id) ?? null : null;
 
   return (
-    <div className="px-6 md:px-10 py-8">
-      {/* Header */}
-      <p style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: 13, color: NEU.inkSoft, letterSpacing: '0.06em', marginBottom: 6 }}>
-        {conference.acronym} / Documents
-      </p>
-      <h1 style={{ fontFamily: OUTFIT, fontWeight: 900, fontSize: 'clamp(32px, 3.4vw, 42px)', letterSpacing: '-0.025em', lineHeight: 1.05, color: '#1C1410', margin: 0 }}>
-        Conference <GoldWord>Documents</GoldWord>
-      </h1>
+    <div className="gv-docs-page px-6 md:px-10 py-8">
+      <style>{PAGE_CSS}</style>
+      <header className="gv-docs-head">
+        <p style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: 13, color: NEU.inkSoft, letterSpacing: '0.06em', marginBottom: 6 }}>
+          {conference.acronym} / Documents
+        </p>
+        <h1 style={{ fontFamily: OUTFIT, fontWeight: 900, fontSize: 'clamp(32px, 3.4vw, 42px)', letterSpacing: '-0.025em', lineHeight: 1.05, color: '#1C1410', margin: 0 }}>
+          Conference <GoldWord>Documents</GoldWord>
+        </h1>
+      </header>
 
-      {loading && (
-        <div className="flex justify-center py-16">
-          <div className="w-6 h-6 rounded-full border-2 animate-spin" style={{ borderColor: '#1B3828', borderTopColor: 'transparent' }} />
-        </div>
-      )}
-
-      {/* The three sections as big cards. Shown even with no committees:
-          "For everyone" (conference-wide documents) needs none. */}
-      {!loading && <BigSectionTabs tabs={SECTION_TABS} value={activeTab} onChange={setActiveTab} label="Documents sections" />}
-
-      {!loading && activeTab === 'everyone' && <ConferenceDocsTab conferenceId={conference.id} initialDocId={deepDocId} onInitialDocUsed={() => setDeepDocId(null)} />}
-
-      {!loading && activeTab !== 'everyone' && committees.length === 0 && (
-        <div style={{ backgroundColor: '#FAF8F3', border: '1.5px solid #D8CDB6', borderRadius: 16, padding: 40, textAlign: 'center', boxShadow: CARD_SHADOW }}>
-          <span className="inline-flex items-center justify-center" style={{ width: 56, height: 56, borderRadius: 16, background: 'linear-gradient(150deg, rgba(27,56,40,0.1), rgba(27,56,40,0.04))', border: '1px solid rgba(27,56,40,0.18)', marginBottom: 16 }}>
-            <FileText size={26} strokeWidth={1.8} style={{ color: '#1B3828' }} />
-          </span>
-          <p style={{ fontFamily: OUTFIT, fontSize: 22, fontWeight: 800, color: '#1C1410', marginBottom: 6 }}>No committees yet</p>
-          <p style={{ fontFamily: OUTFIT, fontSize: 15, color: NEU.inkSoft, marginBottom: 20 }}>Add committees before managing documents.</p>
-          <Link
-            href={`/manage/${conference.slug}/committees`}
-            style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: 15, color: '#EED98A', background: 'linear-gradient(90deg,#1B3828 0%,#2A5A3C 100%)', borderRadius: 12, padding: '0 22px', minHeight: 48, lineHeight: '48px', textDecoration: 'none', display: 'inline-block' }}
-          >
-            Add committees
-          </Link>
-        </div>
-      )}
-
-      {!loading && committees.length > 0 && (
-        <>
-          {activeTab === 'overview' && (
-            <div className="flex flex-col md:flex-row gap-6 items-start">
-              <CommitteeRail committees={committees} selectedId={selectedCommitteeId} onSelect={setSelectedCommitteeId} />
-
-              <div className="flex-1 min-w-0 w-full flex flex-col gap-6">
-                {/* ── Section A: Study Guides ─────────────────────────────── */}
-                <div style={{ backgroundColor: '#FFFFFF', borderRadius: 22, padding: '26px 28px', boxShadow: CARD_SHADOW }}>
-                  <SectionTitle
-                    emoji="Books"
-                    lucide={BookOpen}
-                    lead="Study"
-                    last="Guides"
-                    right={(
-                      <button
-                        onClick={() => setShowUploadModal(true)}
-                        className="focus:outline-none gv-lift"
-                        style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: 15, color: '#EED98A', background: 'linear-gradient(90deg,#1B3828 0%,#2A5A3C 100%)', border: 'none', borderRadius: 12, padding: '0 20px', minHeight: 46, cursor: 'pointer' }}
-                      >
-                        Upload study guide
-                      </button>
-                    )}
-                  />
-
-                  {studyGuides.length === 0 ? (
-                    <p style={{ fontFamily: OUTFIT, fontSize: 15, color: NEU.inkSoft, textAlign: 'center', padding: '32px 0' }}>No study guides yet.</p>
-                  ) : (
-                    <div>
-                      {studyGuides.map((guide, i) => {
-                        const releaseAt = selectedCommittee?.study_guides_publish_at ?? null;
-                        const released = !guide.is_published && !!releaseAt && new Date(releaseAt).getTime() <= now;
-                        const scheduled = !guide.is_published && !!releaseAt && new Date(releaseAt).getTime() > now;
-                        return (
-                        <div
-                          key={guide.id}
-                          style={{
-                            display: 'flex', alignItems: 'center', gap: 14, padding: '16px 0',
-                            borderBottom: i < studyGuides.length - 1 ? '1px solid #F0EDE6' : 'none',
-                          }}
-                        >
-                          <FileText size={22} style={{ color: NEU.forest, flexShrink: 0 }} />
-                          <div style={{ flex: 1, minWidth: 0 }}>
-                            <p className="[overflow-wrap:anywhere]" style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: 16, color: '#1C1410' }}>{guide.title}</p>
-                            <p className="[overflow-wrap:anywhere]" style={{ fontFamily: OUTFIT, fontWeight: 500, fontVariantNumeric: 'tabular-nums', fontSize: 13.5, color: NEU.inkSoft, marginTop: 3 }}>
-                              {guide.file_name} · {formatFileSize(guide.file_size_bytes)}
-                            </p>
-                          </div>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-                            {guide.is_published ? (
-                              <>
-                                <span className="inline-flex items-center gap-1" style={{ fontFamily: OUTFIT, fontSize: 14, fontWeight: 700, color: '#2F6644' }}>
-                                  <CircleCheck size={16} strokeWidth={2.4} aria-hidden />
-                                  Published
-                                </span>
-                                {guide.published_at && (
-                                  <span style={{ fontFamily: OUTFIT, fontSize: 13.5, color: NEU.inkSoft }}>
-                                    {formatDate(guide.published_at)}
-                                  </span>
-                                )}
-                                <button
-                                  onClick={() => handlePublishGuide(guide.id, false)}
-                                  title={releaseAt && new Date(releaseAt).getTime() <= now ? "Won't hide it, the schedule already released it. Clear the schedule in Settings to fully unpublish." : undefined}
-                                  className="focus:outline-none gv-lift"
-                                  style={{ border: '1.5px solid #DDD4C0', borderRadius: 10, padding: '0 16px', minHeight: 40, fontSize: 14, fontFamily: OUTFIT, fontWeight: 700, color: '#1C1410', backgroundColor: 'transparent', cursor: 'pointer' }}
-                                  onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.04)'; }}
-                                  onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
-                                >
-                                  Unpublish
-                                </button>
-                              </>
-                            ) : released ? (
-                              <>
-                                <span className="inline-flex items-center gap-1" style={{ fontFamily: OUTFIT, fontSize: 14, fontWeight: 700, color: '#2F6644' }}>
-                                  <CircleCheck size={16} strokeWidth={2.4} aria-hidden />
-                                  Released
-                                </span>
-                                <button
-                                  onClick={() => selectedCommitteeId && handleUnscheduleGuide(guide.id, selectedCommitteeId)}
-                                  className="focus:outline-none gv-lift"
-                                  style={{ border: '1.5px solid #DDD4C0', borderRadius: 10, padding: '0 16px', minHeight: 40, fontSize: 14, fontFamily: OUTFIT, fontWeight: 700, color: '#1C1410', backgroundColor: 'transparent', cursor: 'pointer' }}
-                                  onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.04)'; }}
-                                  onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
-                                >
-                                  Unpublish
-                                </button>
-                              </>
-                            ) : (
-                              <>
-                                <span className="inline-flex items-center gap-1" style={{ fontFamily: OUTFIT, fontSize: 14, fontWeight: 700, color: '#7A5A10' }}>
-                                  <PencilLine size={16} strokeWidth={2.4} aria-hidden />
-                                  Draft
-                                </span>
-                                {scheduled && (
-                                  <span style={{ fontFamily: OUTFIT, fontSize: 13.5, color: NEU.inkSoft }}>
-                                    Releases {formatDate(releaseAt!)}
-                                  </span>
-                                )}
-                                <button
-                                  onClick={() => handlePublishGuide(guide.id, true)}
-                                  className="focus:outline-none gv-lift"
-                                  style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: 14, color: '#EED98A', backgroundColor: '#1B3828', border: 'none', borderRadius: 10, padding: '0 16px', minHeight: 40, cursor: 'pointer' }}
-                                >
-                                  Publish
-                                </button>
-                              </>
-                            )}
-                            <button
-                              onClick={() => handleDeleteGuide(guide.id)}
-                              className="focus:outline-none"
-                              style={{ fontSize: 14, fontWeight: 700, color: '#8B2020', fontFamily: OUTFIT, background: 'none', border: 'none', cursor: 'pointer', minHeight: 40, padding: '0 6px' }}
-                              onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = '#8B2020'; (e.currentTarget as HTMLElement).style.textDecoration = 'underline'; }}
-                              onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = '#8B2020'; (e.currentTarget as HTMLElement).style.textDecoration = 'none'; }}
-                            >
-                              Delete
-                            </button>
-                          </div>
-                        </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-
-                {/* ── Section B: Position Papers ──────────────────────────── */}
-                <div style={{ backgroundColor: '#FFFFFF', borderRadius: 22, padding: '26px 28px', boxShadow: CARD_SHADOW }}>
-                  <SectionTitle
-                    emoji="Scroll"
-                    lucide={ScrollText}
-                    lead="Position"
-                    last="Papers"
-                    right={(
-                      <span style={{ fontFamily: OUTFIT, fontWeight: 700, fontVariantNumeric: 'tabular-nums', fontSize: 15, color: selectedCommittee?.position_paper_deadline ? '#7A5A10' : NEU.inkSoft }}>
-                        {selectedCommittee?.position_paper_deadline
-                          ? `Due ${formatDate(selectedCommittee.position_paper_deadline)}`
-                          : 'No deadline set'}
-                      </span>
-                    )}
-                  />
-
-                  {/* Stats: a big number with the word beside it. */}
-                  <div style={{ display: 'flex', gap: 26, marginBottom: 20, flexWrap: 'wrap', alignItems: 'baseline' }}>
-                    {([
-                      [totalCount, 'submitted', NEU.ink],
-                      [approvedCount, 'approved', '#2F6644'],
-                      [pendingCount, 'awaiting review', '#7A5A10'],
-                      [rejectedCount, 'rejected', '#8B2020'],
-                    ] as const).map(([n, word, color]) => (
-                      <span key={word} style={{ fontFamily: OUTFIT, display: 'inline-flex', alignItems: 'baseline', gap: 7 }}>
-                        <span style={{ fontSize: 32, fontWeight: 900, letterSpacing: '-0.02em', color, fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>{n}</span>
-                        <span style={{ fontSize: 15, fontWeight: 600, color: NEU.inkSoft }}>{word}</span>
-                      </span>
-                    ))}
-                  </div>
-
-                  {/* Filter pills */}
-                  <div style={{ display: 'flex', gap: 10, marginBottom: 18, flexWrap: 'wrap' }}>
-                    {['ALL', 'SUBMITTED', 'REVIEWED', 'APPROVED', 'REJECTED'].map(f => {
-                      const filterLabel = f.charAt(0) + f.slice(1).toLowerCase();
-                      const isActive = filterStatus === f;
-                      return (
-                        <button
-                          key={f}
-                          onClick={() => setFilterStatus(f)}
-                          className="focus:outline-none gv-lift"
-                          style={{
-                            fontFamily: OUTFIT, fontSize: 14, fontWeight: 700,
-                            padding: '0 18px', minHeight: 40, borderRadius: 9999, cursor: 'pointer',
-                            border: isActive ? '1.5px solid #1B3828' : '1.5px solid #DDD4C0',
-                            backgroundColor: isActive ? '#1B3828' : '#FFFFFF',
-                            color: isActive ? '#EED98A' : NEU.ink,
-                          }}
-                        >
-                          {filterLabel}
-                        </button>
-                      );
-                    })}
-                  </div>
-
-                  {papersError ? (
-                    <p style={{ fontFamily: OUTFIT, fontSize: 15, color: '#8B2020', textAlign: 'center', padding: '32px 0' }}>
-                      Couldn&apos;t load position papers.
-                    </p>
-                  ) : (
-                    <PositionPaperRoster
-                      conferenceSlug={conference.slug}
-                      conferenceCommitteeId={selectedCommitteeId ?? null}
-                      currentUserId={user?.id ?? ''}
-                      deadline={selectedCommittee?.position_paper_deadline ?? null}
-                      allocations={rosterAllocations}
-                      papers={papers}
-                      messagesByPaper={messagesByPaper}
-                      busyIds={busyIds}
-                      onApprove={id => updatePaperStatus(id, 'approved')}
-                      onReject={id => updatePaperStatus(id, 'rejected')}
-                      statusFilter={filterStatus}
-                    />
-                  )}
-                </div>
+      <div className="gv-docs-grid">
+        {/* LEFT: Position Papers and Study Guides */}
+        <section className="gv-docs-col gv-docs-card" aria-labelledby="gv-docs-left">
+          <div className="gv-docs-card-head">
+            <h2 id="gv-docs-left" className="gv-docs-title">Position Papers and Study Guides</h2>
+            {pages > 1 && (
+              <div className="flex items-center gap-1.5 flex-shrink-0">
+                <span style={{ fontFamily: OUTFIT, fontSize: 13.5, fontWeight: 600, color: NEU.inkSoft, fontVariantNumeric: 'tabular-nums' }}>
+                  Page {safePage + 1} of {pages}
+                </span>
+                <button type="button" className="gv-docs-arrow" aria-label="Previous committees" disabled={safePage === 0} onClick={() => setPage(safePage - 1)}>
+                  <ChevronUp size={18} strokeWidth={2.4} aria-hidden />
+                </button>
+                <button type="button" className="gv-docs-arrow" aria-label="More committees" disabled={safePage >= pages - 1} onClick={() => setPage(safePage + 1)}>
+                  <ChevronDown size={18} strokeWidth={2.4} aria-hidden />
+                </button>
               </div>
+            )}
+          </div>
+
+          {loading ? (
+            <div className="flex justify-center py-16">
+              <div className="w-6 h-6 rounded-full border-2 animate-spin" style={{ borderColor: '#1B3828', borderTopColor: 'transparent' }} />
+            </div>
+          ) : committees.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '32px 12px' }}>
+              <span className="inline-flex items-center justify-center" style={{ width: 56, height: 56, borderRadius: 16, background: 'linear-gradient(150deg, rgba(27,56,40,0.1), rgba(27,56,40,0.04))', border: '1px solid rgba(27,56,40,0.18)', marginBottom: 16 }}>
+                <FileText size={26} strokeWidth={1.8} style={{ color: '#1B3828' }} />
+              </span>
+              <p style={{ fontFamily: OUTFIT, fontSize: 22, fontWeight: 800, color: '#1C1410', marginBottom: 6 }}>No committees yet</p>
+              <p style={{ fontFamily: OUTFIT, fontSize: 15, color: NEU.inkSoft, marginBottom: 20 }}>Add committees before managing documents.</p>
+              <Link
+                href={`/manage/${conference.slug}/committees`}
+                style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: 15, color: '#EED98A', background: 'linear-gradient(90deg,#1B3828 0%,#2A5A3C 100%)', borderRadius: 12, padding: '0 22px', minHeight: 48, lineHeight: '48px', textDecoration: 'none', display: 'inline-block' }}
+              >
+                Add committees
+              </Link>
+            </div>
+          ) : (
+            <div className="gv-docs-committees">
+              {shown.map(c => (
+                <CommitteeCard key={c.id} c={c} guides={guides} now={now} onOpen={pane => setOpen({ id: c.id, pane })} />
+              ))}
             </div>
           )}
+        </section>
 
-          {activeTab === 'settings' && settingsLoaded && (
-            <div className="flex flex-col gap-6" style={{ maxWidth: 760 }}>
-              {/* Position Papers settings */}
-              <div style={{ backgroundColor: '#FFFFFF', borderRadius: 22, padding: '26px 28px', boxShadow: CARD_SHADOW }}>
-                <SectionTitle emoji="Scroll" lucide={ScrollText} lead="Position" last="Papers" />
+        {/* RIGHT: Additional Documents (prompt 130 replaces this column). */}
+        <section className="gv-docs-col gv-docs-card" aria-labelledby="gv-docs-right">
+          <div className="gv-docs-card-head">
+            <h2 id="gv-docs-right" className="gv-docs-title">Additional Documents</h2>
+          </div>
+          <div className="gv-docs-scroll">
+            <ConferenceDocsTab conferenceId={conference.id} initialDocId={deepDocId} onInitialDocUsed={() => setDeepDocId(null)} />
+          </div>
+        </section>
+      </div>
 
-                <SectionIntro title="Submissions" description="Choose which committees delegates can submit position papers for." />
-                <div className="flex flex-col gap-2.5 mb-6">
-                  {committees.map(c => (
-                    <div key={c.id} className="flex items-center justify-between gap-3 rounded-2xl px-5 py-4" style={{ backgroundColor: NEU.base, boxShadow: NEU.inSm }}>
-                      <div className="min-w-0">
-                        <p className="[overflow-wrap:anywhere]" style={{ fontFamily: OUTFIT, fontSize: 16, fontWeight: 800, color: NEU.ink, margin: 0 }}>
-                          {c.abbreviation || c.name}
-                        </p>
-                        {c.abbreviation && c.abbreviation !== c.name && (
-                          <p className="[overflow-wrap:anywhere]" style={{ fontFamily: OUTFIT, fontSize: 13, color: NEU.inkSoft, margin: '2px 0 0 0' }}>{c.name}</p>
-                        )}
-                        <p style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 600, color: c.pp_submissions_enabled ? '#2F6644' : NEU.inkSoft, margin: '4px 0 0 0' }}>
-                          {c.pp_submissions_enabled ? 'Submissions open' : 'Submissions closed'}
-                        </p>
-                      </div>
-                      <PillToggle value={c.pp_submissions_enabled} onChange={v => togglePpEnabled(c.id, v)} />
-                    </div>
-                  ))}
-                </div>
-
-                <div className="pt-4" style={{ borderTop: '1px solid rgba(27,56,40,0.08)' }}>
-                  <SectionIntro title="Deadline" description="Set when position paper submissions are due, the same time for every committee or a different one for each." />
-                  <div className="flex items-center justify-between gap-3 mb-4">
-                    <span style={{ fontFamily: OUTFIT, fontSize: 15.5, color: '#1C1410', fontWeight: 700 }}>
-                      Different Position Paper Deadline per Committee
-                    </span>
-                    <PillToggle value={ppPerCommittee} onChange={togglePpPerCommittee} />
-                  </div>
-
-                  {ppPerCommittee ? (
-                    <div className="flex flex-col gap-2.5">
-                      {committees.map(c => (
-                        <div key={c.id} className="flex items-center gap-3 flex-wrap rounded-xl px-4 py-3" style={{ backgroundColor: NEU.base, boxShadow: NEU.inSm }}>
-                          <span className="[overflow-wrap:anywhere]" style={{ width: 150, flexShrink: 0, fontFamily: OUTFIT, fontSize: 15.5, fontWeight: 800, color: NEU.ink }} title={c.name}>
-                            {c.abbreviation || c.name}
-                          </span>
-                          <div style={{ flex: 1, minWidth: 220 }}>
-                            <DateTimeField value={c.position_paper_deadline} onSave={iso => savePerCommitteePpDeadline(c.id, iso)} placeholder="No deadline" />
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <DateTimeField value={ppGlobalDeadline} onSave={saveGlobalPpDeadline} placeholder="No deadline" />
-                  )}
-                </div>
-              </div>
-
-              {/* Study Guides settings */}
-              <div style={{ backgroundColor: '#FFFFFF', borderRadius: 22, padding: '26px 28px', boxShadow: CARD_SHADOW }}>
-                <SectionTitle emoji="Books" lucide={BookOpen} lead="Study" last="Guides" />
-
-                <SectionIntro title="Release" description="Choose when study guides become visible to delegates, the same time for every committee or a different one for each." />
-                <div className="flex items-center justify-between gap-3 mb-4">
-                  <span style={{ fontFamily: OUTFIT, fontSize: 15.5, color: '#1C1410', fontWeight: 700 }}>
-                    Different Study Guide Release per Committee
-                  </span>
-                  <PillToggle value={sgPerCommittee} onChange={toggleSgPerCommittee} />
-                </div>
-
-                {sgPerCommittee ? (
-                  <div className="flex flex-col gap-2.5">
-                    {committees.map(c => (
-                      <div key={c.id} className="flex items-center gap-3 flex-wrap rounded-xl px-4 py-3" style={{ backgroundColor: NEU.base, boxShadow: NEU.inSm }}>
-                        <span className="[overflow-wrap:anywhere]" style={{ width: 150, flexShrink: 0, fontFamily: OUTFIT, fontSize: 15.5, fontWeight: 800, color: NEU.ink }} title={c.name}>
-                          {c.abbreviation || c.name}
-                        </span>
-                        <div style={{ flex: 1, minWidth: 220 }}>
-                          <DateTimeField value={c.study_guides_publish_at} onSave={iso => savePerCommitteeSgPublishAt(c.id, iso)} placeholder="No scheduled release" />
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <DateTimeField value={sgGlobalPublishAt} onSave={saveGlobalSgPublishAt} placeholder="No scheduled release" />
-                )}
-                {/* 29 Sep 2026: a scheduled release now sends the release email
-                    at that time too (before, only a manual publish did). */}
-                <p style={{ fontFamily: OUTFIT, fontSize: 14.5, color: '#5A5046', marginTop: 14, lineHeight: 1.55 }}>
-                  At this time delegates can see the study guide and get an email that it is out. Publishing a guide by hand releases it straight away.
-                </p>
-                <p style={{ fontFamily: OUTFIT, fontSize: 13.5, color: NEU.inkSoft, marginTop: 6, lineHeight: 1.6 }}>
-                  Clear a schedule here if you need to pull an already-released draft back out of sight.
-                </p>
-              </div>
-            </div>
-          )}
-        </>
-      )}
-
-      {/* Modals */}
-      {showUploadModal && selectedCommitteeId && user && (
-        <UploadStudyGuideModal
+      {open && openCommittee && (
+        <CommitteeDocsPopup
+          key={openCommittee.id}
           conferenceId={conference.id}
-          selectedCommitteeId={selectedCommitteeId}
-          userId={user.id}
-          onClose={() => setShowUploadModal(false)}
-          onUploaded={loadStudyGuides}
+          conferenceSlug={conference.slug}
+          committee={openCommittee}
+          committees={committees}
+          initialPane={open.pane}
+          onCommitteeChange={next => setCommittees(prev => prev.map(c => (c.id === next.id ? next : c)))}
+          onClose={() => { setOpen(null); void loadCommittees(); }}
         />
       )}
-      {confirmModal}
     </div>
   );
 }
+
+// From 1100px wide the page is the viewport: the header, then the two columns
+// filling what is left (no page scroll at 1280x800 and up); each column's
+// inside scrolls if it must. Below that the columns stack and the page scrolls.
+const PAGE_CSS = `
+.gv-docs-page{display:flex;flex-direction:column;gap:22px;width:100%;box-sizing:border-box}
+.gv-docs-grid{display:grid;grid-template-columns:1fr;gap:20px;min-height:0}
+.gv-docs-card{background:#FFFFFF;border-radius:22px;padding:20px 22px;box-shadow:0 2px 8px rgba(27,56,40,0.05),0 12px 32px rgba(27,56,40,0.06);display:flex;flex-direction:column;min-width:0;min-height:0}
+.gv-docs-card-head{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:16px}
+.gv-docs-title{margin:0;font-family:${OUTFIT};font-weight:800;font-size:clamp(20px,1.6vw,24px);letter-spacing:-0.015em;line-height:1.15;color:#1C1410}
+.gv-docs-committees{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px;align-content:start}
+.gv-docs-ccard{display:flex;flex-direction:column;gap:10px;padding:14px;border-radius:18px;background:#FAF8F3;box-shadow:inset 0 0 0 1px rgba(27,56,40,0.07)}
+.gv-docs-cname{margin:0;font-family:${OUTFIT};font-size:19px;font-weight:800;letter-spacing:-0.01em;line-height:1.15;color:#1C1410;overflow-wrap:anywhere}
+.gv-docs-cfull{margin:2px 0 0;font-family:${OUTFIT};font-size:12.5px;line-height:1.35;color:${NEU.inkSoft};overflow-wrap:anywhere}
+.gv-docs-lines{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:3px;font-family:${OUTFIT};font-size:13.5px;font-weight:600;line-height:1.35}
+.gv-docs-cactions{display:flex;gap:8px;flex-wrap:wrap;margin-top:auto}
+.gv-docs-btn{flex:1 1 auto;min-height:38px;padding:0 12px;border-radius:10px;font-family:${OUTFIT};font-size:13.5px;font-weight:700;cursor:pointer;white-space:nowrap}
+.gv-docs-btn:focus{outline:none}
+.gv-docs-btn:focus-visible{outline:2px solid #1B3828;outline-offset:2px}
+.gv-docs-btn-primary{border:none;background:linear-gradient(90deg,#1B3828 0%,#2A5A3C 100%);color:#FFFFFF}
+.gv-docs-btn-outline{border:none;background:#FFFFFF;color:#1C1410;box-shadow:inset 0 0 0 1.5px rgba(28,20,16,0.55)}
+.gv-docs-arrow{display:inline-flex;align-items:center;justify-content:center;width:36px;height:36px;border:none;border-radius:999px;background:#FAF8F3;color:#1B3828;cursor:pointer;box-shadow:inset 0 0 0 1px rgba(27,56,40,0.12)}
+.gv-docs-arrow:disabled{opacity:0.35;cursor:default}
+.gv-docs-arrow:focus{outline:none}
+.gv-docs-arrow:focus-visible{outline:2px solid #1B3828;outline-offset:2px}
+@media (min-width:1100px){
+  .gv-docs-page{height:calc(100dvh - 56px);overflow:hidden}
+  .gv-docs-grid{flex:1 1 auto;grid-template-columns:minmax(0,2fr) minmax(0,3fr)}
+  .gv-docs-col{overflow:hidden}
+  .gv-docs-committees{flex:1 1 auto;overflow-y:auto;min-height:0;grid-template-columns:repeat(2,minmax(0,1fr))}
+  .gv-docs-scroll{flex:1 1 auto;overflow-y:auto;min-height:0}
+}
+`;
