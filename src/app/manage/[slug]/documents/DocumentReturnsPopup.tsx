@@ -50,10 +50,12 @@ function personKey(p: ReturnPerson) { return p.application_id; }
 
 type Load = { kind: 'loading' } | { kind: 'error'; error: string } | { kind: 'ok'; data: DocumentReturns };
 
-export default function DocumentReturnsPopup({ documentId, title, onClose, onBack }: {
+export default function DocumentReturnsPopup({ documentId, title, onClose, onBack, embedded = false }: {
   documentId: string; title: string; onClose: () => void;
   /** From View Documents: a back arrow returns to the list of documents. */
   onBack?: () => void;
+  /** Drawn inside the Documents pop-up (prompt 131): no shell of its own. */
+  embedded?: boolean;
 }) {
   const [load, setLoad] = useState<Load>({ kind: 'loading' });
   const [filter, setFilter] = useState<Filter | null>(null);
@@ -108,19 +110,12 @@ export default function DocumentReturnsPopup({ documentId, title, onClose, onBac
     setSelected(after ? personKey(after) : doneId);
   }
 
-  return (
-    <>
-      <style>{PURCHASE_CSS}</style>
-      <style>{STORE_CSS}</style>
-      <style>{DASH_CSS}</style>
-      <style>{CD_CSS}</style>
-      <style>{EXTRA_CSS}</style>
-      <PurchaseShell tone="light" label={`Returned copies of ${title}`} onClose={() => { if (!busyRef.current) onClose(); }} panelClass="gv-cd-rev" testId="document-returns-popup">
+  const body = (
         <div className="gv-st" style={{ display: 'flex', flexDirection: 'column', minHeight: 0, height: '100%', width: '100%' }}>
           <div style={{ padding: '26px 28px 12px' }}>
             {onBack && (
               <button type="button" className="gv-st-link inline-flex items-center gap-1.5" style={{ marginBottom: 8 }} onClick={() => { if (!busyRef.current) onBack(); }}>
-                <ArrowLeft size={16} strokeWidth={2.4} aria-hidden /> All documents
+                <ArrowLeft size={16} strokeWidth={2.4} aria-hidden /> Back to Documents
               </button>
             )}
             <h2 className="gv-fd-pop-title">Returned Copies</h2>
@@ -226,6 +221,23 @@ export default function DocumentReturnsPopup({ documentId, title, onClose, onBac
             </div>
           )}
         </div>
+  );
+
+  const styles = (
+    <>
+      <style>{PURCHASE_CSS}</style>
+      <style>{STORE_CSS}</style>
+      <style>{DASH_CSS}</style>
+      <style>{CD_CSS}</style>
+      <style>{EXTRA_CSS}</style>
+    </>
+  );
+  if (embedded) return <>{styles}{body}</>;
+  return (
+    <>
+      {styles}
+      <PurchaseShell tone="light" label={`Returned copies of ${title}`} onClose={() => { if (!busyRef.current) onClose(); }} panelClass="gv-cd-rev" testId="document-returns-popup">
+        {body}
       </PurchaseShell>
     </>
   );

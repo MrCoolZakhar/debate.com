@@ -39,7 +39,7 @@ export const CD_CSS = `
 .gv-cd-count-word{font-size:16px;font-weight:700;color:${INK}}
 .gv-cd-hero .gv-st-btn{min-height:50px;padding:0 22px;font-size:15.5px}
 .gv-cd-rows{display:flex;flex-direction:column;gap:14px}
-.gv-cd-row{display:flex;align-items:center;gap:16px;padding:18px 20px;border-radius:20px;background:#FFFFFF;box-shadow:0 1px 0 rgba(27,56,40,0.08),0 18px 40px -30px rgba(27,56,40,0.45)}
+.gv-cd-row{display:flex;flex-wrap:wrap;align-items:center;gap:16px;padding:18px 20px;border-radius:20px;background:#FFFFFF;box-shadow:0 1px 0 rgba(27,56,40,0.08),0 18px 40px -30px rgba(27,56,40,0.45)}
 .gv-cd-row-main{flex:1 1 auto;min-width:0}
 .gv-cd-row-title{margin:0;font-size:17.5px;font-weight:800;line-height:1.3;color:${INK};overflow-wrap:anywhere}
 .gv-cd-row-sub{margin:4px 0 0;font-size:14px;line-height:1.45;color:${INK_SOFT};overflow-wrap:anywhere}
@@ -53,6 +53,10 @@ export const CD_CSS = `
 .gv-cd-move:focus{outline:none}
 .gv-cd-move:focus-visible{outline:2px solid ${FOREST};outline-offset:2px}
 .gv-cd-del{color:${DANGER}!important;font-size:14.5px;font-weight:700;text-decoration:underline;text-underline-offset:3px}
+.gv-cd-row-main{flex:1 1 220px}
+.gv-cd-ask{flex:1 1 100%;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:12px 14px;border-radius:14px;background:#FBF1EF;font-size:14px;font-weight:600;color:#1C1410;overflow-wrap:anywhere}
+.gv-cd-ask-btns{display:flex;gap:8px}
+.gv-st-btn.gv-cd-ask-yes{background:#8B2020;color:#fff;border:none}
 @media (max-width:700px){.gv-cd-row{flex-wrap:wrap}.gv-cd-row-actions{width:100%;justify-content:flex-start;padding-left:68px}}
 .gv-cd-kinds{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px}
 .gv-cd-kind{display:flex;align-items:center;gap:10px;min-height:58px;padding:6px 12px 6px 6px;border-radius:14px;border:1.5px solid rgba(27,56,40,0.18);background:#FFFFFF;color:${INK};font-family:inherit;font-size:14.5px;font-weight:700;text-align:left;cursor:pointer}

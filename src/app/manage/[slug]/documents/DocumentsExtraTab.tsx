@@ -26,13 +26,15 @@ import { CD_CSS, EXTRA_CSS, audienceLine, kindIcon } from './docsTabKit';
 import DocumentPopup from './DocumentPopup';
 import DocumentReturnsPopup from './DocumentReturnsPopup';
 
-export default function DocumentsExtraTab({ conferenceId, initial, initialDocId, onInitialDocUsed, inPopup = false, onViewSubmissions }: {
+export default function DocumentsExtraTab({ conferenceId, initial, initialDocId, onInitialDocUsed, inPopup = false, onViewSubmissions, onEdit }: {
   conferenceId: string;
   initial: DocsOverview;
   /** Drawn inside the View Documents pop-up (prompt 130). */
   inPopup?: boolean;
   /** View submissions: the caller shows that document's copies. */
   onViewSubmissions?: (doc: DocsOverviewItem) => void;
+  /** Edit: the caller turns its pop-up into the edit flow (prompt 131). */
+  onEdit?: (doc: DocsOverviewItem) => void;
   /** From ?doc=: open that document's Returned copies once. */
   initialDocId?: string | null;
   onInitialDocUsed?: () => void;
@@ -41,6 +43,8 @@ export default function DocumentsExtraTab({ conferenceId, initial, initialDocId,
   const [dialog, setDialog] = useState<{ mode: 'add' } | { mode: 'edit'; doc: DocsOverviewItem } | null>(null);
   const [returnsOf, setReturnsOf] = useState<DocsOverviewItem | null>(null);
   const [busy, setBusy] = useState(false);
+  /** In the pop-up, Remove asks on the row itself (never a pop-up on a pop-up). */
+  const [asking, setAsking] = useState<string | null>(null);
   const { confirm, modal: confirmModal } = useConfirmModal();
 
   const reload = useCallback(async () => {
@@ -83,15 +87,18 @@ export default function DocumentsExtraTab({ conferenceId, initial, initialDocId,
     }
   }
 
-  async function remove(doc: DocsOverviewItem) {
+  async function remove(doc: DocsOverviewItem, asked = false) {
     if (busy) return;
-    const { confirmed } = await confirm({
-      title: 'Remove This Document?',
-      body: `"${doc.title}" disappears from every participant's page. Copies people already sent back are kept.`,
-      confirmLabel: 'Remove',
-      danger: true,
-    });
-    if (!confirmed) return;
+    if (!asked) {
+      if (inPopup) { setAsking(doc.id); return; }
+      const { confirmed } = await confirm({
+        title: 'Remove This Document?',
+        body: `"${doc.title}" disappears from every participant's page. Copies people already sent back are kept.`,
+        confirmLabel: 'Remove',
+        danger: true,
+      });
+      if (!confirmed) return;
+    }
     setBusy(true);
     const res = await removeConferenceDocument(doc.id);
     setBusy(false);
@@ -179,7 +186,7 @@ export default function DocumentsExtraTab({ conferenceId, initial, initialDocId,
                 </div>
                 <div className="gv-cd-row-actions">
                   {!inPopup && <button type="button" className="gv-st-btn gv-st-outline" onClick={() => open(doc)}>Open</button>}
-                  <button type="button" className="gv-st-btn gv-st-outline" disabled={busy} onClick={() => setDialog({ mode: 'edit', doc })}>Edit</button>
+                  <button type="button" className="gv-st-btn gv-st-outline" disabled={busy} onClick={() => { if (onEdit) onEdit(doc); else setDialog({ mode: 'edit', doc }); }}>Edit</button>
                   {doc.ask_back && (
                     <button type="button" className="gv-st-btn gv-st-outline" onClick={() => { if (onViewSubmissions) onViewSubmissions(doc); else setReturnsOf(doc); }}>
                       {inPopup ? 'View submissions' : 'Returned copies'}
@@ -193,6 +200,15 @@ export default function DocumentsExtraTab({ conferenceId, initial, initialDocId,
                   </button>
                   <button type="button" className="gv-st-link gv-cd-del" style={{ padding: '0 8px', minHeight: 44 }} disabled={busy} onClick={() => remove(doc)}>Remove</button>
                 </div>
+                {asking === doc.id && (
+                  <div className="gv-cd-ask" role="alert">
+                    <span>Remove &ldquo;{doc.title}&rdquo;? It leaves every participant&apos;s page. Copies already sent back are kept.</span>
+                    <span className="gv-cd-ask-btns">
+                      <button type="button" className="gv-st-btn gv-st-outline" disabled={busy} onClick={() => setAsking(null)}>Keep</button>
+                      <button type="button" className="gv-st-btn gv-cd-ask-yes" disabled={busy} onClick={() => { setAsking(null); void remove(doc, true); }} autoFocus>Remove</button>
+                    </span>
+                  </div>
+                )}
               </li>
             );
           })}

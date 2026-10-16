@@ -1,12 +1,14 @@
 'use client';
 
-// Conference Documents (prompt 129, 16 Oct 2026): ONE page, no tabs. From a
-// wide screen up it is two columns that fit the viewport with no page scroll:
-//   LEFT   Position Papers and Study Guides: one card per committee, six to a
-//          page (Page 1 of N with up / down arrows), each opening its pop-up
-//          (CommitteeDocsPopup: Submissions and Settings).
-//   RIGHT  Things to Do (DocumentsTodo: what waits for an organizer's
-//          decision) and, under it, Additional Documents (prompt 130).
+// Conference Documents (prompt 129, 16 Oct 2026; Financials look since prompt
+// 131): ONE page, no tabs. From a wide screen up it is two equal columns that
+// fit the viewport with no page scroll, every card a Financials DashCard (3D
+// emoji hanging over its top-left corner, an "i" beside the title):
+//   LEFT   Position Papers and Study Guides: six committee tiles in view (three
+//          by two from 1280px, two a row below), no inner scroll, Page 1 of N
+//          with arrows; each tile opens its pop-up (CommitteeDocsPopup).
+//   RIGHT  Things to Do (DocumentsTodo) and Additional Documents, stacked,
+//          sharing the column's height.
 // Below the breakpoint the columns stack and the page scrolls.
 //
 // Deep links: ?committee=<id> (with &pane=settings) opens that committee's
@@ -14,7 +16,7 @@
 // leave the URL once read (replaceUrlInPlace).
 
 import { useState, useEffect, useCallback } from 'react';
-import { ChevronDown, ChevronUp, FileText } from 'lucide-react';
+import { ChevronLeft, ChevronRight, FileText, ScrollText } from 'lucide-react';
 import Link from 'next/link';
 import DocumentsTodo from './DocumentsTodo';
 import AdditionalDocuments from './AdditionalDocuments';
@@ -27,6 +29,8 @@ import { useNow } from '@/lib/useNow';
 import { NEU } from '@/components/neu';
 import { GoldWord } from '@/components/BrandHeading';
 import { replaceUrlInPlace } from '@/lib/replaceUrlInPlace';
+import { STORE_CSS } from '../store/storeKit';
+import { DASH_CSS, DashCard, TINT_GOLD } from '../financials/dashboardKit';
 
 const OUTFIT = "var(--font-brand), sans-serif";
 const PER_PAGE = 6;
@@ -53,8 +57,8 @@ function CommitteeCard({ c, guides, now, onOpen }: {
   const label = shortName(c);
   return (
     <article className="gv-docs-ccard">
-      <div className="flex items-start gap-3 min-w-0">
-        <CommitteeLogo c={c} size={48} />
+      <div className="flex items-start gap-2.5 min-w-0">
+        <CommitteeLogo c={c} size={40} />
         <div className="min-w-0">
           <h3 className="gv-docs-cname">{label}</h3>
           {c.abbreviation && c.abbreviation !== c.name && <p className="gv-docs-cfull">{c.name}</p>}
@@ -159,9 +163,12 @@ export default function DocumentsPage() {
   const safePage = Math.min(page, pages - 1);
   const shown = committees.slice(safePage * PER_PAGE, safePage * PER_PAGE + PER_PAGE);
   const openCommittee = open ? committees.find(c => c.id === open.id) ?? null : null;
+  const guideIds = new Set(guides.map(g => g.conference_committee_id));
 
   return (
     <div className="gv-docs-page px-6 md:px-10 py-8">
+      <style>{STORE_CSS}</style>
+      <style>{DASH_CSS}</style>
       <style>{PAGE_CSS}</style>
       <header className="gv-docs-head">
         <p style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: 13, color: NEU.inkSoft, letterSpacing: '0.06em', marginBottom: 6 }}>
@@ -174,24 +181,13 @@ export default function DocumentsPage() {
 
       <div className="gv-docs-grid">
         {/* LEFT: Position Papers and Study Guides */}
-        <section className="gv-docs-col gv-docs-card" aria-labelledby="gv-docs-left">
-          <div className="gv-docs-card-head">
-            <h2 id="gv-docs-left" className="gv-docs-title">Position Papers and Study Guides</h2>
-            {pages > 1 && (
-              <div className="flex items-center gap-1.5 flex-shrink-0">
-                <span style={{ fontFamily: OUTFIT, fontSize: 13.5, fontWeight: 600, color: NEU.inkSoft, fontVariantNumeric: 'tabular-nums' }}>
-                  Page {safePage + 1} of {pages}
-                </span>
-                <button type="button" className="gv-docs-arrow" aria-label="Previous committees" disabled={safePage === 0} onClick={() => setPage(safePage - 1)}>
-                  <ChevronUp size={18} strokeWidth={2.4} aria-hidden />
-                </button>
-                <button type="button" className="gv-docs-arrow" aria-label="More committees" disabled={safePage >= pages - 1} onClick={() => setPage(safePage + 1)}>
-                  <ChevronDown size={18} strokeWidth={2.4} aria-hidden />
-                </button>
-              </div>
-            )}
-          </div>
-
+        <DashCard
+          title="Position Papers and Study Guides"
+          hint="Each committee's study guide and position papers. Open a committee to see its papers or change its release date, submissions and deadline"
+          icon={{ emoji: 'Scroll', lucide: ScrollText, tint: TINT_GOLD }}
+          hang="start"
+          className="gv-docs-dash gv-docs-left"
+        >
           {loading ? (
             <div className="flex justify-center py-16">
               <div className="w-6 h-6 rounded-full border-2 animate-spin" style={{ borderColor: '#1B3828', borderTopColor: 'transparent' }} />
@@ -211,13 +207,26 @@ export default function DocumentsPage() {
               </Link>
             </div>
           ) : (
-            <div className="gv-docs-committees">
-              {shown.map(c => (
-                <CommitteeCard key={c.id} c={c} guides={guides} now={now} onOpen={pane => setOpen({ id: c.id, pane })} />
-              ))}
-            </div>
+            <>
+              <div className="gv-docs-committees">
+                {shown.map(c => (
+                  <CommitteeCard key={c.id} c={c} guides={guides} now={now} onOpen={pane => setOpen({ id: c.id, pane })} />
+                ))}
+              </div>
+              {pages > 1 && (
+                <div className="gv-docs-pager">
+                  <span>Page {safePage + 1} of {pages}</span>
+                  <button type="button" className="gv-docs-arrow" aria-label="Previous committees" disabled={safePage === 0} onClick={() => setPage(safePage - 1)}>
+                    <ChevronLeft size={18} strokeWidth={2.4} aria-hidden />
+                  </button>
+                  <button type="button" className="gv-docs-arrow" aria-label="More committees" disabled={safePage >= pages - 1} onClick={() => setPage(safePage + 1)}>
+                    <ChevronRight size={18} strokeWidth={2.4} aria-hidden />
+                  </button>
+                </div>
+              )}
+            </>
           )}
-        </section>
+        </DashCard>
 
         {/* RIGHT: Things to Do, then Additional Documents (prompt 130). */}
         <div className="gv-docs-col gv-docs-right">
@@ -244,6 +253,7 @@ export default function DocumentsPage() {
           conferenceSlug={conference.slug}
           committee={openCommittee}
           committees={committees}
+          guideCommitteeIds={guideIds}
           initialPane={open.pane}
           onCommitteeChange={next => setCommittees(prev => prev.map(c => (c.id === next.id ? next : c)))}
           onClose={() => { setOpen(null); void loadCommittees(); setTodoVersion(v => v + 1); }}
@@ -253,36 +263,45 @@ export default function DocumentsPage() {
   );
 }
 
-// From 1100px wide the page is the viewport: the header, then the two columns
-// filling what is left (no page scroll at 1280x800 and up); each column's
-// inside scrolls if it must. Below that the columns stack and the page scrolls.
+// From 1100px wide the page is the viewport: the header, then two equal
+// columns filling what is left (no page scroll at 1280x800 and up). The six
+// committee tiles share the left card's height in rows (three by two from
+// 1280px); the right column's two cards share its height. Below that the
+// columns stack and the page scrolls.
 const PAGE_CSS = `
 .gv-docs-page{display:flex;flex-direction:column;gap:22px;width:100%;box-sizing:border-box}
 .gv-docs-grid{display:grid;grid-template-columns:1fr;gap:20px;min-height:0}
-.gv-docs-card{background:#FFFFFF;border-radius:22px;padding:20px 22px;box-shadow:0 2px 8px rgba(27,56,40,0.05),0 12px 32px rgba(27,56,40,0.06);display:flex;flex-direction:column;min-width:0;min-height:0}
-.gv-docs-card-head{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:16px}
-.gv-docs-title{margin:0;font-family:${OUTFIT};font-weight:800;font-size:clamp(20px,1.6vw,24px);letter-spacing:-0.015em;line-height:1.15;color:#1C1410}
-.gv-docs-committees{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px;align-content:start}
-.gv-docs-ccard{display:flex;flex-direction:column;gap:10px;padding:14px;border-radius:18px;background:#FAF8F3;box-shadow:inset 0 0 0 1px rgba(27,56,40,0.07)}
-.gv-docs-cname{margin:0;font-family:${OUTFIT};font-size:19px;font-weight:800;letter-spacing:-0.01em;line-height:1.15;color:#1C1410;overflow-wrap:anywhere}
-.gv-docs-cfull{margin:2px 0 0;font-family:${OUTFIT};font-size:12.5px;line-height:1.35;color:${NEU.inkSoft};overflow-wrap:anywhere}
-.gv-docs-lines{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:3px;font-family:${OUTFIT};font-size:13.5px;font-weight:600;line-height:1.35}
-.gv-docs-cactions{display:flex;gap:8px;flex-wrap:wrap;margin-top:auto}
-.gv-docs-btn{flex:1 1 auto;min-height:38px;padding:0 12px;border-radius:10px;font-family:${OUTFIT};font-size:13.5px;font-weight:700;cursor:pointer;white-space:nowrap}
+.gv-docs-dash{min-width:0;min-height:0}
+.gv-docs-dash .gv-st-card-head{margin-bottom:12px}
+.gv-docs-dash .gv-st-card-title{font-size:clamp(20px,1.6vw,24px);letter-spacing:-0.015em;line-height:1.15}
+.gv-docs-committees{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;align-content:start}
+.gv-docs-ccard{display:flex;flex-direction:column;gap:8px;padding:12px;border-radius:16px;background:#FAF8F3;box-shadow:inset 0 0 0 1px rgba(27,56,40,0.07);min-width:0;min-height:0}
+.gv-docs-cname{margin:0;font-family:${OUTFIT};font-size:17px;font-weight:800;letter-spacing:-0.01em;line-height:1.15;color:#1C1410;overflow-wrap:anywhere}
+.gv-docs-cfull{margin:2px 0 0;font-family:${OUTFIT};font-size:12px;line-height:1.3;color:${NEU.inkSoft};overflow-wrap:anywhere}
+.gv-docs-lines{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:2px;font-family:${OUTFIT};font-size:12.5px;font-weight:600;line-height:1.3}
+.gv-docs-cactions{display:flex;gap:6px;flex-wrap:wrap;margin-top:auto}
+.gv-docs-btn{flex:1 1 auto;min-height:34px;padding:0 10px;border-radius:10px;font-family:${OUTFIT};font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap}
 .gv-docs-btn:focus{outline:none}
 .gv-docs-btn:focus-visible{outline:2px solid #1B3828;outline-offset:2px}
 .gv-docs-btn-primary{border:none;background:linear-gradient(90deg,#1B3828 0%,#2A5A3C 100%);color:#FFFFFF}
 .gv-docs-btn-outline{border:none;background:#FFFFFF;color:#1C1410;box-shadow:inset 0 0 0 1.5px rgba(28,20,16,0.55)}
 .gv-docs-right{display:flex;flex-direction:column;gap:20px;min-width:0;min-height:0}
-.gv-docs-arrow{display:inline-flex;align-items:center;justify-content:center;width:36px;height:36px;border:none;border-radius:999px;background:#FAF8F3;color:#1B3828;cursor:pointer;box-shadow:inset 0 0 0 1px rgba(27,56,40,0.12)}
+.gv-docs-pager{display:flex;align-items:center;justify-content:flex-end;gap:6px;padding-top:12px;font-family:${OUTFIT};font-size:13.5px;font-weight:600;color:${NEU.inkSoft};font-variant-numeric:tabular-nums}
+.gv-docs-pager span{margin-right:4px}
+.gv-docs-arrow{display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;border:none;border-radius:999px;background:#FAF8F3;color:#1B3828;cursor:pointer;box-shadow:inset 0 0 0 1px rgba(27,56,40,0.12)}
 .gv-docs-arrow:disabled{opacity:0.35;cursor:default}
 .gv-docs-arrow:focus{outline:none}
 .gv-docs-arrow:focus-visible{outline:2px solid #1B3828;outline-offset:2px}
 @media (min-width:1100px){
   .gv-docs-page{height:calc(100dvh - 56px);overflow:hidden}
-  .gv-docs-grid{flex:1 1 auto;grid-template-columns:minmax(0,2fr) minmax(0,3fr)}
-  .gv-docs-col{overflow:hidden}
-  .gv-docs-committees{flex:1 1 auto;overflow-y:auto;min-height:0;grid-template-columns:repeat(2,minmax(0,1fr))}
-  .gv-docs-scroll{flex:1 1 auto;overflow-y:auto;min-height:0}
+  .gv-docs-grid{flex:1 1 auto;grid-template-columns:minmax(0,1fr) minmax(0,1fr);grid-template-rows:minmax(0,1fr);padding-top:4px}
+  .gv-docs-committees{flex:1 1 auto;min-height:0;grid-template-rows:repeat(3,minmax(0,1fr));align-content:stretch}
+  .gv-docs-right{height:100%}
+  .gv-docs-right>.gv-docs-dash{flex:1 1 0;box-sizing:border-box}
+}
+@media (min-width:1280px){
+  .gv-docs-committees{grid-template-columns:repeat(3,minmax(0,1fr));grid-template-rows:repeat(2,minmax(0,1fr))}
+  .gv-docs-cactions{flex-direction:column}
+  .gv-docs-btn{flex:0 0 auto;width:100%}
 }
 `;

@@ -18,6 +18,8 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Bell, CheckCircle2 } from 'lucide-react';
+import { Emoji3D } from '@/components/neu';
 import { getFreshAuthedClient } from '@/lib/supabase-auth';
 import { friendlyError, plainOrFallback } from '@/lib/friendlyError';
 import { notifyOk } from '@/lib/appNotify';
@@ -27,7 +29,7 @@ import { PurchaseShell, PURCHASE_CSS } from '@/components/purchase/purchaseKit';
 import PdfViewer, { type PdfZoom } from '@/components/documents/PdfViewer';
 import { InfoHint } from '../settings/applicationsUi';
 import { STORE_CSS } from '../store/storeKit';
-import { DASH_CSS, INK, INK_SOFT, FOREST, DANGER } from '../financials/dashboardKit';
+import { DASH_CSS, DashCard, TINT_GOLD, INK, INK_SOFT, FOREST, DANGER } from '../financials/dashboardKit';
 import { CD_CSS, EXTRA_CSS } from './docsTabKit';
 import ReturnFileViewer from './ReturnFileViewer';
 
@@ -120,31 +122,48 @@ export default function DocumentsTodo({ conferenceId, extraOn, version, onReview
   const count = items?.length ?? 0;
 
   return (
-    <section className="gv-docs-card gv-todo-card" aria-labelledby="gv-todo-title">
+    <>
       <style>{TODO_CSS}</style>
-      <div className="gv-docs-card-head">
-        <h2 id="gv-todo-title" className="gv-docs-title">
-          Things to Do{items && <span className="gv-todo-count">{count}</span>}
-        </h2>
-      </div>
-      <div className="gv-todo-list">
-        {items === null && !failed && [0, 1].map(i => <div key={i} className="gv-todo-ph" aria-hidden />)}
+      <DashCard
+        title="Things to Do"
+        hint="Position papers and returned documents waiting for your decision. They leave this list once you accept, reject or pass them to the chairs"
+        icon={{ emoji: 'Bell', lucide: Bell, tint: TINT_GOLD }}
+        hang="start"
+        className={`gv-docs-dash gv-todo-card${count > 0 ? ' gv-fd-todo' : ''}`}
+      >
+        {items === null && !failed && <div className="gv-fd-ph" style={{ height: 64, marginTop: 8 }} aria-hidden />}
         {items === null && failed && <p className="gv-todo-empty">Things to do could not be read. They will show when the page reloads.</p>}
-        {items && items.length === 0 && <p className="gv-todo-empty">Nothing to review right now</p>}
-        {items && items.length > 0 && (
-          <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 6 }}>
-            {items.map(t => (
-              <li key={`${t.kind}:${t.id}`}>
-                <button type="button" className="gv-todo-row" onClick={() => setOpenId(`${t.kind}:${t.id}`)}>
-                  <span className="gv-todo-dot" data-kind={t.kind} aria-hidden />
-                  <span className="gv-todo-label">{itemLabel(t)}</span>
-                  <span className="gv-todo-when">{ago(t.submitted_at, now)}</span>
-                </button>
-              </li>
-            ))}
-          </ul>
+        {items && items.length === 0 && (
+          <div className="gv-fd-clear">
+            <span className="gv-fd-clear-disc" aria-hidden>
+              <Emoji3D name="Check mark button" size={30} fallback={CheckCircle2} fallbackColor="#1B3828" />
+            </span>
+            <span className="gv-fd-clear-text">You&apos;re all caught up</span>
+          </div>
         )}
-      </div>
+        {items && items.length > 0 && (
+          <>
+            <div>
+              <span className="gv-fd-todo-num">{count}</span>
+              <span className="gv-fd-todo-word">{count === 1 ? 'thing to do' : 'things to do'}</span>
+            </div>
+            <ul className="gv-todo-list">
+              {items.map(t => (
+                <li key={`${t.kind}:${t.id}`}>
+                  <button type="button" className="gv-todo-row" onClick={() => setOpenId(`${t.kind}:${t.id}`)}>
+                    <span className="gv-todo-dot" data-kind={t.kind} aria-hidden />
+                    <span className="gv-todo-label">{itemLabel(t)}</span>
+                    <span className="gv-todo-when">{ago(t.submitted_at, now)}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+            <div className="gv-fd-foot">
+              <button type="button" className="gv-st-btn gv-st-forest" onClick={() => setOpenId(keyOf(items[0]))}>Review now</button>
+            </div>
+          </>
+        )}
+      </DashCard>
 
       {openId && items && (
         <ReviewPopup
@@ -155,7 +174,7 @@ export default function DocumentsTodo({ conferenceId, extraOn, version, onReview
           onClose={() => { setOpenId(null); void reload(); }}
         />
       )}
-    </section>
+    </>
   );
 }
 
@@ -359,9 +378,7 @@ function PaperFile({ url, name }: { url: string | null; name: string | null }) {
 }
 
 const TODO_CSS = `
-.gv-todo-card{flex:0 1 auto;min-height:0}
-.gv-todo-count{display:inline-block;margin-left:10px;font-size:0.9em;font-weight:800;color:#8A6410;font-variant-numeric:tabular-nums}
-.gv-todo-list{flex:1 1 auto;min-height:0;overflow-y:auto;margin:0 -6px;padding:0 6px}
+.gv-todo-list{list-style:none;flex:1 1 auto;min-height:0;overflow-y:auto;margin:12px -6px 0;padding:0 6px;display:flex;flex-direction:column;gap:6px}
 .gv-todo-row{width:100%;display:flex;align-items:center;gap:10px;padding:11px 12px;border:none;border-radius:12px;background:#FAF8F3;box-shadow:inset 0 0 0 1px rgba(27,56,40,0.07);cursor:pointer;text-align:left;font-family:${FONT}}
 .gv-todo-row:hover{background:#F3EEE2}
 .gv-todo-row:focus{outline:none}

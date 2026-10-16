@@ -28,7 +28,7 @@ import {
   fetchDocsOverview, type ConferenceDoc, type DocsOverview, type DocsOverviewItem,
 } from '@/lib/conferenceDocuments';
 import DocumentsExtraTab from './DocumentsExtraTab';
-import DocumentPopup from './DocumentPopup';
+import DocumentPopup, { type EditableDoc } from './DocumentPopup';
 
 type Load = { kind: 'loading' } | { kind: 'error' } | { kind: 'ok'; docs: ConferenceDoc[] };
 
@@ -38,7 +38,7 @@ type Load = { kind: 'loading' } | { kind: 'error' } | { kind: 'ok'; docs: Confer
  * DocumentsExtraTab; when it is off, or that read fails, it is the classic tab
  * below, exactly as before (prompt 111).
  */
-export default function ConferenceDocsTab({ conferenceId, initialDocId, onInitialDocUsed, inPopup = false, onViewSubmissions }: {
+export default function ConferenceDocsTab({ conferenceId, initialDocId, onInitialDocUsed, inPopup = false, onViewSubmissions, onEdit }: {
   conferenceId: string;
   /** From ?doc=: open that document's Returned copies (Document Uploads only). */
   initialDocId?: string | null;
@@ -47,6 +47,8 @@ export default function ConferenceDocsTab({ conferenceId, initialDocId, onInitia
   inPopup?: boolean;
   /** View submissions on a document that asks for copies back (Document Uploads only). */
   onViewSubmissions?: (doc: DocsOverviewItem) => void;
+  /** Edit: the caller turns its pop-up into the edit flow (prompt 131). */
+  onEdit?: (doc: EditableDoc) => void;
 }) {
   const { user } = useAuth();
   const userId = user?.id ?? null;
@@ -72,17 +74,19 @@ export default function ConferenceDocsTab({ conferenceId, initialDocId, onInitia
     );
   }
   if (mode.overview) {
-    return <DocumentsExtraTab conferenceId={conferenceId} initial={mode.overview} initialDocId={initialDocId} onInitialDocUsed={onInitialDocUsed} inPopup={inPopup} onViewSubmissions={onViewSubmissions} />;
+    return <DocumentsExtraTab conferenceId={conferenceId} initial={mode.overview} initialDocId={initialDocId} onInitialDocUsed={onInitialDocUsed} inPopup={inPopup} onViewSubmissions={onViewSubmissions} onEdit={onEdit} />;
   }
-  return <ClassicDocsTab conferenceId={conferenceId} inPopup={inPopup} />;
+  return <ClassicDocsTab conferenceId={conferenceId} inPopup={inPopup} onEdit={onEdit} />;
 }
 
-function ClassicDocsTab({ conferenceId, inPopup }: { conferenceId: string; inPopup: boolean }) {
+function ClassicDocsTab({ conferenceId, inPopup, onEdit }: { conferenceId: string; inPopup: boolean; onEdit?: (doc: EditableDoc) => void }) {
   const { session, user } = useAuth();
   const userId = user?.id ?? null;
   const [load, setLoad] = useState<Load>({ kind: 'loading' });
   const [dialog, setDialog] = useState<{ mode: 'add' } | { mode: 'edit'; doc: ConferenceDoc } | null>(null);
   const [busy, setBusy] = useState(false);
+  /** In the pop-up, Delete asks on the row itself (never a pop-up on a pop-up). */
+  const [asking, setAsking] = useState<string | null>(null);
   const { confirm, modal: confirmModal } = useConfirmModal();
   const tokenRef = useRef<string | undefined>(session?.access_token);
   useEffect(() => { tokenRef.current = session?.access_token; }, [session?.access_token]);
@@ -126,15 +130,18 @@ function ClassicDocsTab({ conferenceId, inPopup }: { conferenceId: string; inPop
     }
   }
 
-  async function remove(doc: ConferenceDoc) {
+  async function remove(doc: ConferenceDoc, asked = false) {
     if (!session || busy) return;
-    const { confirmed } = await confirm({
-      title: 'Delete This Document?',
-      body: `"${doc.title}" disappears from every participant's page.`,
-      confirmLabel: 'Delete',
-      danger: true,
-    });
-    if (!confirmed) return;
+    if (!asked) {
+      if (inPopup) { setAsking(doc.id); return; }
+      const { confirmed } = await confirm({
+        title: 'Delete This Document?',
+        body: `"${doc.title}" disappears from every participant's page.`,
+        confirmLabel: 'Delete',
+        danger: true,
+      });
+      if (!confirmed) return;
+    }
     const previous = docs;
     setLoad({ kind: 'ok', docs: docs.filter(d => d.id !== doc.id) });
     setBusy(true);
@@ -243,7 +250,7 @@ function ClassicDocsTab({ conferenceId, inPopup }: { conferenceId: string; inPop
                       Open
                     </button>
                   )}
-                  <button type="button" className="gv-st-btn gv-st-outline" disabled={busy} onClick={() => setDialog({ mode: 'edit', doc })}>
+                  <button type="button" className="gv-st-btn gv-st-outline" disabled={busy} onClick={() => { if (onEdit) onEdit(doc); else setDialog({ mode: 'edit', doc }); }}>
                     Edit
                   </button>
                   <button type="button" className="gv-cd-move" disabled={busy || i === 0} onClick={() => move(i, -1)} aria-label={`Move ${doc.title} up`} title="Move up">
@@ -256,6 +263,15 @@ function ClassicDocsTab({ conferenceId, inPopup }: { conferenceId: string; inPop
                     Delete
                   </button>
                 </div>
+                {asking === doc.id && (
+                  <div className="gv-cd-ask" role="alert">
+                    <span>Delete &ldquo;{doc.title}&rdquo;? It leaves every participant&apos;s page.</span>
+                    <span className="gv-cd-ask-btns">
+                      <button type="button" className="gv-st-btn gv-st-outline" disabled={busy} onClick={() => setAsking(null)}>Keep</button>
+                      <button type="button" className="gv-st-btn gv-cd-ask-yes" disabled={busy} onClick={() => { setAsking(null); void remove(doc, true); }} autoFocus>Delete</button>
+                    </span>
+                  </div>
+                )}
               </li>
             );
           })}

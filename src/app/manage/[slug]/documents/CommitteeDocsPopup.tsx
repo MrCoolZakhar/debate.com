@@ -26,10 +26,8 @@ import Portal from '@/components/Portal';
 import { useNow } from '@/lib/useNow';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient, getFreshAuthedClient } from '@/lib/supabase-auth';
-import { ModalOverlay as SharedModalOverlay } from '@/components/ModalOverlay';
 import { DatePicker } from '@/components/DatePicker';
 import { MonogramMedallion } from '@/components/CommitteeEditorModal';
-import { useConfirmModal } from '@/components/ConfirmModal';
 import { NEU } from '@/components/neu';
 import { notifyErr, clearErr } from '@/lib/appNotify';
 import { friendlyError, plainOrFallback } from '@/lib/friendlyError';
@@ -139,9 +137,10 @@ export async function saveCommitteeDocuments(committeeId: string, patch: SavePat
   }
 }
 
-// ── UploadStudyGuideModal (moved unchanged from the page) ───────────────────
+// ── The study guide upload (prompt 131: drawn IN the Settings pane, never a
+// pop-up on the pop-up; the upload itself is unchanged) ─────────────────────
 
-function UploadStudyGuideModal({
+function UploadStudyGuideForm({
   conferenceId, selectedCommitteeId, userId, onClose, onUploaded,
 }: {
   conferenceId: string;
@@ -192,18 +191,14 @@ function UploadStudyGuideModal({
     if (insertError) { setUploadError('Upload failed. Please try again.'); setUploading(false); return; }
     setUploading(false);
     onUploaded();
-    onClose();
   }
 
   const disabled = !selectedFile || !title.trim() || uploading;
 
   return (
-    <SharedModalOverlay onClose={onClose} paddingClassName="px-4">
-      <div style={{ backgroundColor: '#FAF8F3', border: '1.5px solid #D8CDB6', borderRadius: 16, padding: 24, maxWidth: 448, width: '100%', maxHeight: '90dvh', overflowY: 'auto', boxShadow: '0 20px 60px rgba(27,56,40,0.18)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
-          <h2 style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 24, letterSpacing: '-0.02em', color: '#1C1410' }}>Upload Study Guide</h2>
-          <button onClick={onClose} aria-label="Close" className="focus:outline-none inline-flex items-center justify-center" style={{ color: NEU.inkSoft, width: 40, height: 40, borderRadius: 999, background: 'none', border: 'none', cursor: 'pointer' }}><X size={20} /></button>
-        </div>
+    <section className="gv-cdp-card" aria-labelledby="gv-cdp-up" style={{ maxWidth: 520, width: '100%', margin: '0 auto' }}>
+      <div>
+        <h3 id="gv-cdp-up" style={{ ...TYPE.card, margin: '0 0 16px' }}>Upload Study Guide</h3>
 
         <div style={{ marginBottom: 16 }}>
           <label style={{ display: 'block', fontSize: 14, fontWeight: 700, color: '#1C1410', fontFamily: OUTFIT, marginBottom: 6 }}>
@@ -253,7 +248,7 @@ function UploadStudyGuideModal({
         {uploadError && <p style={{ fontSize: 13.5, color: '#8B2020', fontFamily: OUTFIT, marginBottom: 12 }}>{uploadError}</p>}
 
         <div style={{ display: 'flex', gap: 10 }}>
-          <button onClick={onClose} className="focus:outline-none gv-lift" style={{ flex: 1, border: '1.5px solid #DDD4C0', borderRadius: 12, padding: '0', minHeight: 48, fontFamily: OUTFIT, fontWeight: 700, fontSize: 15, color: '#1C1410', backgroundColor: 'transparent', cursor: 'pointer' }}>
+          <button type="button" onClick={onClose} disabled={uploading} className="focus:outline-none gv-lift" style={{ flex: 1, border: '1.5px solid #DDD4C0', borderRadius: 12, padding: '0', minHeight: 48, fontFamily: OUTFIT, fontWeight: 700, fontSize: 15, color: '#1C1410', backgroundColor: 'transparent', cursor: 'pointer' }}>
             Cancel
           </button>
           <button
@@ -266,7 +261,7 @@ function UploadStudyGuideModal({
           </button>
         </div>
       </div>
-    </SharedModalOverlay>
+    </section>
   );
 }
 
@@ -366,20 +361,22 @@ function DateTimeField({ id, value, onSave, placeholder }: {
 
 interface CommitteeCopySource { id: string; c: CommitteeDoc; detail: string }
 
-const MENU_W = 300;
+const MENU_W = 280;
 
-function settingsLine(c: CommitteeDoc): string {
+/** One short line per committee. A committee with no study guide never shows
+ *  a release date (prompt 131). */
+function settingsLine(c: CommitteeDoc, hasGuide: boolean): string {
   return [
-    c.study_guides_publish_at ? `Releases ${formatDate(c.study_guides_publish_at)}` : 'No release date',
-    c.pp_submissions_enabled ? 'Submissions open' : 'Submissions closed',
-    c.position_paper_deadline ? `Due ${formatDate(c.position_paper_deadline)}` : 'No deadline',
-  ].join(' · ');
+    !hasGuide ? 'No study guide' : c.study_guides_publish_at ? `Releases ${formatDate(c.study_guides_publish_at)}` : 'Guide, no date',
+    c.pp_submissions_enabled ? 'Open' : 'Closed',
+    c.position_paper_deadline ? `Due ${formatDate(c.position_paper_deadline)}` : null,
+  ].filter(Boolean).join(' · ');
 }
 
 function CopyFromCommitteeMenu({ sources, onPick }: { sources: CommitteeCopySource[]; onPick: (c: CommitteeDoc) => void }) {
   const [open, setOpen] = useState(false);
   const [tip, setTip] = useState<{ top: number; left: number } | null>(null);
-  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
+  const [pos, setPos] = useState<{ top: number; left: number; maxH: number } | null>(null);
   const btnRef = useRef<HTMLButtonElement | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
   const empty = sources.length === 0;
@@ -404,11 +401,17 @@ function CopyFromCommitteeMenu({ sources, onPick }: { sources: CommitteeCopySour
     const b = btnRef.current;
     if (!b) return;
     const r = b.getBoundingClientRect();
-    const h = menuRef.current?.offsetHeight ?? 60 + sources.length * 62;
-    const left = Math.min(Math.max(8, r.right - MENU_W), window.innerWidth - MENU_W - 8);
-    const below = r.bottom + 6;
-    const top = below + h > window.innerHeight - 8 && r.top - h - 6 > 8 ? r.top - h - 6 : below;
-    setPos(prev => (prev && prev.top === top && prev.left === left ? prev : { top, left }));
+    // The menu stays inside the pop-up it belongs to (never over its edges).
+    const panel = b.closest('[role="dialog"]')?.getBoundingClientRect();
+    const box = panel ?? { top: 0, left: 0, right: window.innerWidth, bottom: window.innerHeight };
+    const h = Math.min(menuRef.current?.offsetHeight ?? 44 + sources.length * 46, 300);
+    const left = Math.min(Math.max(box.left + 8, r.right - MENU_W), box.right - MENU_W - 8);
+    const roomBelow = box.bottom - r.bottom - 14;
+    const roomAbove = r.top - box.top - 14;
+    const up = roomBelow < h && roomAbove > roomBelow;
+    const maxH = Math.max(120, Math.min(300, up ? roomAbove : roomBelow));
+    const top = up ? r.top - 6 - Math.min(h, maxH) : r.bottom + 6;
+    setPos(prev => (prev && prev.top === top && prev.left === left && prev.maxH === maxH ? prev : { top, left, maxH }));
   }, [sources.length]);
 
   useLayoutEffect(() => { if (open) place(); }, [open, place]);
@@ -497,26 +500,25 @@ function CopyFromCommitteeMenu({ sources, onPick }: { sources: CommitteeCopySour
             onKeyDown={moveFocus}
             style={{
               position: 'fixed', top: pos?.top ?? -9999, left: pos?.left ?? -9999, zIndex: 60, width: MENU_W,
-              maxHeight: 'min(420px, calc(100dvh - 32px))', overflowY: 'auto',
-              background: '#FFFFFF', borderRadius: 16, padding: 6,
+              maxHeight: pos?.maxH ?? 300, overflowY: 'auto',
+              background: '#FFFFFF', borderRadius: 14, padding: 4,
               boxShadow: '0 1px 0 rgba(27,56,40,0.08), 0 18px 40px -14px rgba(27,56,40,0.45), inset 0 0 0 1px rgba(27,56,40,0.08)',
             }}
           >
-            <p className="px-2.5 pt-1.5 pb-1" style={{ ...TYPE.hint, fontWeight: 700 }}>Copy settings from</p>
+            <p className="px-2 pt-1 pb-0.5" style={{ ...TYPE.hint, fontWeight: 700 }}>Copy settings from</p>
             {sources.map(s => (
               <button
                 key={s.id}
                 type="button"
                 role="menuitem"
                 onClick={() => { setOpen(false); onPick(s.c); }}
-                className="w-full flex items-center gap-2.5 text-left rounded-xl focus:outline-none focus-visible:ring-2 hover:bg-[#FAF8F3]"
-                style={{ padding: '8px 10px', border: 'none', background: 'transparent', cursor: 'pointer', fontFamily: F }}
+                title={`${shortName(s.c)}: ${s.detail}`}
+                className="w-full flex items-center gap-2 text-left rounded-lg focus:outline-none focus-visible:ring-2 hover:bg-[#FAF8F3]"
+                style={{ padding: '6px 8px', border: 'none', background: 'transparent', cursor: 'pointer', fontFamily: F }}
               >
-                <CommitteeLogo c={s.c} size={36} />
-                <span className="min-w-0">
-                  <span className="block" style={{ fontSize: TYPE_PX.body, fontWeight: 700, color: INK, overflowWrap: 'anywhere' }}>{shortName(s.c)}</span>
-                  <span className="block" style={{ fontSize: TYPE_PX.hint, color: INK_SOFT, overflowWrap: 'anywhere' }}>{s.detail}</span>
-                </span>
+                <CommitteeLogo c={s.c} size={26} />
+                <span style={{ fontSize: 14, fontWeight: 700, color: INK, flexShrink: 0 }}>{shortName(s.c)}</span>
+                <span style={{ flex: 1, minWidth: 0, fontSize: 12.5, color: INK_SOFT, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{s.detail}</span>
               </button>
             ))}
           </div>
@@ -529,13 +531,15 @@ function CopyFromCommitteeMenu({ sources, onPick }: { sources: CommitteeCopySour
 // ── The pop-up ───────────────────────────────────────────────────────────────
 
 export default function CommitteeDocsPopup({
-  conferenceId, conferenceSlug, committee, committees, initialPane, onClose, onCommitteeChange,
+  conferenceId, conferenceSlug, committee, committees, guideCommitteeIds, initialPane, onClose, onCommitteeChange,
 }: {
   conferenceId: string;
   conferenceSlug: string;
   committee: CommitteeDoc;
   /** Every committee of the conference, for "Copy from another committee". */
   committees: CommitteeDoc[];
+  /** Committees that have a study guide (the copy menu says "No study guide" otherwise). */
+  guideCommitteeIds: Set<string>;
   initialPane: DocsPane;
   onClose: () => void;
   /** A save landed: the committee as the server now holds it. */
@@ -551,6 +555,7 @@ export default function CommitteeDocsPopup({
   const [papersError, setPapersError] = useState(false);
   const [filterStatus, setFilterStatus] = useState('ALL');
   const [showUploadModal, setShowUploadModal] = useState(false);
+  const [copyAsk, setCopyAsk] = useState<CommitteeDoc | null>(null);
   const [busyIds, setBusyIds] = useState<Set<string>>(new Set());
   const [ppBusy, setPpBusy] = useState(false);
   const [ppErr, setPpErr] = useState('');
@@ -558,7 +563,6 @@ export default function CommitteeDocsPopup({
   const [copyErr, setCopyErr] = useState('');
   const ppBusyRef = useRef(false);
   const copyBusyRef = useRef(false);
-  const { confirm, modal: confirmModal } = useConfirmModal();
   // "Released on" or "Releases on": the clock ticks every minute (react-hooks/purity).
   const now = useNow();
   const committeeId = committee.id;
@@ -688,16 +692,12 @@ export default function CommitteeDocsPopup({
 
   const copySources: CommitteeCopySource[] = committees
     .filter(c => c.id !== committeeId && (!!c.study_guides_publish_at || c.pp_submissions_enabled || !!c.position_paper_deadline))
-    .map(c => ({ id: c.id, c, detail: settingsLine(c) }));
+    .map(c => ({ id: c.id, c, detail: settingsLine(c, guideCommitteeIds.has(c.id)) }));
 
+  /** Asked in the pane itself, never a pop-up on the pop-up (prompt 131). */
   async function copyFrom(source: CommitteeDoc) {
     if (copyBusyRef.current) return;
-    const { confirmed } = await confirm({
-      title: `Copy ${shortName(source)}'s Settings?`,
-      body: `This replaces ${shortName(committee)}'s study guide release date, position paper submissions and deadline. The study guide file is not copied.`,
-      confirmLabel: 'Copy settings',
-    });
-    if (!confirmed) return;
+    setCopyAsk(null);
     copyBusyRef.current = true;
     setCopyBusy(true);
     setCopyErr('');
@@ -827,12 +827,33 @@ export default function CommitteeDocsPopup({
         </div>
       )}
 
-      {pane === 'settings' && (
+      {pane === 'settings' && showUploadModal && user && (
+        <UploadStudyGuideForm
+          conferenceId={conferenceId}
+          selectedCommitteeId={committeeId}
+          userId={user.id}
+          onClose={() => setShowUploadModal(false)}
+          onUploaded={() => { setShowUploadModal(false); void loadStudyGuides(); }}
+        />
+      )}
+
+      {pane === 'settings' && !(showUploadModal && user) && (
         <div className="flex flex-col" style={{ gap: 16 }}>
           <div className="flex items-center justify-end gap-3 flex-wrap">
             {copyBusy && <span style={{ ...TYPE.hint }}>Copying…</span>}
-            <CopyFromCommitteeMenu sources={copySources} onPick={src => { void copyFrom(src); }} />
+            <CopyFromCommitteeMenu sources={copySources} onPick={src => setCopyAsk(src)} />
           </div>
+          {copyAsk && (
+            <div className="gv-cdp-ask" role="alert">
+              <span>
+                <b>Copy {shortName(copyAsk)}&apos;s settings?</b> This replaces {shortName(committee)}&apos;s study guide release date, position paper submissions and deadline. The study guide file is not copied.
+              </span>
+              <span className="flex gap-2 flex-shrink-0">
+                <button type="button" className="gv-cdp-secondary" disabled={copyBusy} onClick={() => setCopyAsk(null)}>Cancel</button>
+                <button type="button" className="gv-cdp-primary" disabled={copyBusy} onClick={() => { void copyFrom(copyAsk); }} autoFocus>Copy settings</button>
+              </span>
+            </div>
+          )}
           {copyErr && <p role="alert" style={{ ...TYPE.hint, color: DANGER, margin: 0, textAlign: 'right' }}>{copyErr}</p>}
 
           <div className="gv-cdp-cols">
@@ -907,16 +928,6 @@ export default function CommitteeDocsPopup({
         </div>
       )}
 
-      {showUploadModal && user && (
-        <UploadStudyGuideModal
-          conferenceId={conferenceId}
-          selectedCommitteeId={committeeId}
-          userId={user.id}
-          onClose={() => setShowUploadModal(false)}
-          onUploaded={() => { void loadStudyGuides(); }}
-        />
-      )}
-      {confirmModal}
     </AwardsSheet>
   );
 }
@@ -934,6 +945,8 @@ const POPUP_CSS = `
 .gv-cdp-link{background:none;border:none;padding:0;cursor:pointer;font-family:${F};font-size:inherit;font-weight:700;color:${FOREST};text-decoration:underline;text-underline-offset:3px}
 .gv-cdp-link:focus{outline:none}
 .gv-cdp-link:focus-visible{outline:2px solid ${FOREST};outline-offset:2px;border-radius:4px}
+.gv-cdp-ask{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:12px 14px;border-radius:14px;background:rgba(238,217,138,0.30);font-family:${F};font-size:14px;line-height:1.45;color:${INK}}
+.gv-cdp-secondary{display:inline-flex;align-items:center;min-height:38px;padding:0 14px;border:none;border-radius:11px;background:#FFFFFF;box-shadow:inset 0 0 0 1.5px rgba(28,20,16,0.55);color:${INK};font-family:${F};font-size:14px;font-weight:700;cursor:pointer}
 .gv-cdp-primary{display:inline-flex;align-items:center;gap:6px;min-height:38px;padding:0 14px;border:none;border-radius:11px;background:linear-gradient(90deg,#1B3828 0%,#2A5A3C 100%);color:#FFFFFF;font-family:${F};font-size:14px;font-weight:700;cursor:pointer}
 .gv-cdp-primary:focus{outline:none}
 .gv-cdp-primary:focus-visible{outline:2px solid ${FOREST};outline-offset:2px}

@@ -67,7 +67,7 @@ export interface EditableDoc {
 
 const STEP_FIELD: Record<Field, Step> = { file: 1, url: 1, title: 2, description: 2, audience: 3, ask_back: 4, due_at: 4 };
 
-export default function DocumentPopup({ conferenceId, editing, extra, onClose, onSaved }: {
+export default function DocumentPopup({ conferenceId, editing, extra, onClose, onSaved, embedded = false, onBackToList, onPanelChange }: {
   conferenceId: string;
   /** The document being edited (opens on Review), or null to add one. */
   editing: EditableDoc | null;
@@ -75,6 +75,13 @@ export default function DocumentPopup({ conferenceId, editing, extra, onClose, o
   extra: boolean;
   onClose: () => void;
   onSaved: () => void;
+  /** Drawn inside the Documents pop-up (prompt 131: no pop-up on top of a
+   *  pop-up): no shell of its own; the host's pop-up holds it. */
+  embedded?: boolean;
+  /** "Back to Documents" at the bottom left of step 1 (embedded only). */
+  onBackToList?: () => void;
+  /** The host sizes its pop-up: 'narrow' on step 1, 'wide' with the document beside. */
+  onPanelChange?: (size: 'narrow' | 'wide') => void;
 }) {
   const { user } = useAuth();
   const isEdit = !!editing;
@@ -121,6 +128,9 @@ export default function DocumentPopup({ conferenceId, editing, extra, onClose, o
     })();
     return () => { alive = false; };
   }, [conferenceId, editing?.due_at, extra]);
+
+  // The host pop-up widens once the document sits on the right (embedded).
+  useEffect(() => { onPanelChange?.(step >= 2 ? 'wide' : 'narrow'); }, [step, onPanelChange]);
 
   // A file uploaded but never saved does not stay behind in the bucket.
   useEffect(() => () => {
@@ -294,15 +304,7 @@ export default function DocumentPopup({ conferenceId, editing, extra, onClose, o
     />
   ) : null;
 
-  return (
-    <>
-      <style>{PURCHASE_CSS}</style>
-      <style>{STORE_CSS}</style>
-      <style>{DASH_CSS}</style>
-      <style>{CD_CSS}</style>
-      <style>{EXTRA_CSS}</style>
-      <style>{FLOW_CSS}</style>
-      <PurchaseShell tone="light" label={isEdit ? 'Edit the document' : 'Add a document'} onClose={() => { if (!busyRef.current) onClose(); }} panelClass={step >= 2 ? 'gv-cd-rev' : 'gv-cd-pop'} testId="conference-docs-popup">
+  const body = (
         <div className="gv-st gv-dflow" data-split={step >= 2 || undefined}>
           <div className="gv-dflow-left">
             <p className="gv-dflow-step">Step {stepNo} of {steps.length}</p>
@@ -478,6 +480,11 @@ export default function DocumentPopup({ conferenceId, editing, extra, onClose, o
             {formErr && <p className="gv-st-err" role="alert">{formErr}</p>}
 
             <div className="gv-dflow-foot">
+              {stepNo === 1 && onBackToList && (
+                <button type="button" className="gv-st-btn gv-st-outline" disabled={busy} onClick={onBackToList}>
+                  <ArrowLeft size={15} strokeWidth={2.4} aria-hidden /> Back to Documents
+                </button>
+              )}
               {stepNo > 1 && (
                 <button type="button" className="gv-st-btn gv-st-outline" disabled={busy} onClick={() => setStep(prevOf(step))}>
                   <ArrowLeft size={15} strokeWidth={2.4} aria-hidden /> Back
@@ -502,6 +509,24 @@ export default function DocumentPopup({ conferenceId, editing, extra, onClose, o
           </div>
           {preview && <div className="gv-dflow-right">{preview}</div>}
         </div>
+  );
+
+  const styles = (
+    <>
+      <style>{PURCHASE_CSS}</style>
+      <style>{STORE_CSS}</style>
+      <style>{DASH_CSS}</style>
+      <style>{CD_CSS}</style>
+      <style>{EXTRA_CSS}</style>
+      <style>{FLOW_CSS}</style>
+    </>
+  );
+  if (embedded) return <>{styles}{body}</>;
+  return (
+    <>
+      {styles}
+      <PurchaseShell tone="light" label={isEdit ? 'Edit the document' : 'Add a document'} onClose={() => { if (!busyRef.current) onClose(); }} panelClass={step >= 2 ? 'gv-cd-rev' : 'gv-cd-pop'} testId="conference-docs-popup">
+        {body}
       </PurchaseShell>
     </>
   );
