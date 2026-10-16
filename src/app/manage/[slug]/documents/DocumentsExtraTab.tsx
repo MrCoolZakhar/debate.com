@@ -7,6 +7,9 @@
 // remove_conference_document (the row stops showing, the stored file and every
 // returned copy are kept), and "Returned copies" opens DocumentReturnsPopup.
 // The move arrows write sort_order exactly as the classic tab does.
+// Since prompt 130 it is drawn inside the View Documents pop-up (`inPopup`):
+// no hero, rows with "{n} of {m} sent back", Edit, View submissions (the
+// caller swaps the pop-up to that document's copies), the arrows and Remove.
 
 import { useCallback, useEffect, useState } from 'react';
 import { ArrowDown, ArrowUp, FileText, Library } from 'lucide-react';
@@ -23,9 +26,13 @@ import { CD_CSS, EXTRA_CSS, audienceLine, kindIcon } from './docsTabKit';
 import DocumentPopup from './DocumentPopup';
 import DocumentReturnsPopup from './DocumentReturnsPopup';
 
-export default function DocumentsExtraTab({ conferenceId, initial, initialDocId, onInitialDocUsed }: {
+export default function DocumentsExtraTab({ conferenceId, initial, initialDocId, onInitialDocUsed, inPopup = false, onViewSubmissions }: {
   conferenceId: string;
   initial: DocsOverview;
+  /** Drawn inside the View Documents pop-up (prompt 130). */
+  inPopup?: boolean;
+  /** View submissions: the caller shows that document's copies. */
+  onViewSubmissions?: (doc: DocsOverviewItem) => void;
   /** From ?doc=: open that document's Returned copies once. */
   initialDocId?: string | null;
   onInitialDocUsed?: () => void;
@@ -45,7 +52,7 @@ export default function DocumentsExtraTab({ conferenceId, initial, initialDocId,
   useEffect(() => {
     if (!initialDocId) return;
     const doc = overview.documents.find(d => d.id === initialDocId);
-    if (doc) void Promise.resolve().then(() => setReturnsOf(doc));
+    if (doc) void Promise.resolve().then(() => { if (onViewSubmissions) onViewSubmissions(doc); else setReturnsOf(doc); });
     onInitialDocUsed?.();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialDocId]);
@@ -102,13 +109,13 @@ export default function DocumentsExtraTab({ conferenceId, initial, initialDocId,
   const toReview = overview.to_review;
 
   return (
-    <div className="gv-st flex flex-col gap-6" style={{ maxWidth: 900 }}>
+    <div className="gv-st flex flex-col gap-6">
       <style>{STORE_CSS}</style>
       <style>{DASH_CSS}</style>
       <style>{CD_CSS}</style>
       <style>{EXTRA_CSS}</style>
 
-      <section className="gv-st-card gv-fd-card gv-fd-wash-gold gv-cd-hero" aria-label="Documents for everyone">
+      {!inPopup && <section className="gv-st-card gv-fd-card gv-fd-wash-gold gv-cd-hero" aria-label="Documents for everyone">
         <span className="gv-cd-hero-disc"><IconDisc icon={{ emoji: 'Books', lucide: Library, tint: TINT_GOLD }} size={68} /></span>
         <h2 className="gv-cd-hero-title">Documents for Everyone</h2>
         <p className="gv-cd-hero-line">Rules of Procedure, schedules, forms to fill in and anything else your participants need. They find them on their You tab.</p>
@@ -131,16 +138,18 @@ export default function DocumentsExtraTab({ conferenceId, initial, initialDocId,
             </button>
           </div>
         )}
-      </section>
+      </section>}
 
       {docs.length === 0 ? (
         <section className="gv-st-card gv-fd-card">
           <div className="gv-cd-empty">
             <IconDisc icon={{ emoji: 'Scroll', lucide: FileText, tint: TINT_GOLD }} size={72} />
             <p className="gv-cd-empty-title">No documents yet</p>
-            <button type="button" className="gv-st-btn gv-st-forest" style={{ minHeight: 50, padding: '0 22px', fontSize: 15.5 }} onClick={() => setDialog({ mode: 'add' })}>
-              Add a document
-            </button>
+            {!inPopup && (
+              <button type="button" className="gv-st-btn gv-st-forest" style={{ minHeight: 50, padding: '0 22px', fontSize: 15.5 }} onClick={() => setDialog({ mode: 'add' })}>
+                Add a document
+              </button>
+            )}
           </div>
         </section>
       ) : (
@@ -154,11 +163,11 @@ export default function DocumentsExtraTab({ conferenceId, initial, initialDocId,
                 <IconDisc icon={kindIcon(doc.kind)} size={54} />
                 <div className="gv-cd-row-main">
                   <p className="gv-cd-row-title">{doc.title}</p>
-                  <p className="gv-cd-row-sub">{info.label}{source ? ` · ${source}` : ''}</p>
+                  <p className="gv-cd-row-sub">{inPopup ? (source || 'No file') : `${info.label}${source ? ` · ${source}` : ''}`}</p>
                   {doc.description && <p className="gv-cd-row-desc" title={doc.description}>{doc.description}</p>}
                   {doc.ask_back && (
                     <p className="gv-cd-row-ret">
-                      <span><b>{doc.returned}</b> of {doc.audience} returned</span>
+                      <span><b>{doc.returned}</b> of {doc.audience} {inPopup ? 'sent back' : 'returned'}</span>
                       {doc.to_review > 0 && <span className="gv-cd-gold">{doc.to_review} to review</span>}
                       {doc.due_label && <span>Due {doc.due_label}</span>}
                       {doc.required && <span style={{ fontWeight: 700 }}>Required</span>}
@@ -169,10 +178,12 @@ export default function DocumentsExtraTab({ conferenceId, initial, initialDocId,
                   </span>
                 </div>
                 <div className="gv-cd-row-actions">
-                  <button type="button" className="gv-st-btn gv-st-outline" onClick={() => open(doc)}>Open</button>
+                  {!inPopup && <button type="button" className="gv-st-btn gv-st-outline" onClick={() => open(doc)}>Open</button>}
                   <button type="button" className="gv-st-btn gv-st-outline" disabled={busy} onClick={() => setDialog({ mode: 'edit', doc })}>Edit</button>
                   {doc.ask_back && (
-                    <button type="button" className="gv-st-btn gv-st-outline" onClick={() => setReturnsOf(doc)}>Returned copies</button>
+                    <button type="button" className="gv-st-btn gv-st-outline" onClick={() => { if (onViewSubmissions) onViewSubmissions(doc); else setReturnsOf(doc); }}>
+                      {inPopup ? 'View submissions' : 'Returned copies'}
+                    </button>
                   )}
                   <button type="button" className="gv-cd-move" disabled={busy || i === 0} onClick={() => move(i, -1)} aria-label={`Move ${doc.title} up`} title="Move up">
                     <ArrowUp size={19} strokeWidth={2.4} />
@@ -191,6 +202,7 @@ export default function DocumentsExtraTab({ conferenceId, initial, initialDocId,
       {dialog && (
         <DocumentPopup
           conferenceId={conferenceId}
+          extra
           editing={dialog.mode === 'edit' ? dialog.doc : null}
           onClose={() => setDialog(null)}
           onSaved={() => { setDialog(null); void reload(); }}

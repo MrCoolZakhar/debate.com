@@ -5,8 +5,8 @@
 //   LEFT   Position Papers and Study Guides: one card per committee, six to a
 //          page (Page 1 of N with up / down arrows), each opening its pop-up
 //          (CommitteeDocsPopup: Submissions and Settings).
-//   RIGHT  Additional Documents: today's Documents for Everyone
-//          (ConferenceDocsTab), until prompt 130 replaces it.
+//   RIGHT  Things to Do (DocumentsTodo: what waits for an organizer's
+//          decision) and, under it, Additional Documents (prompt 130).
 // Below the breakpoint the columns stack and the page scrolls.
 //
 // Deep links: ?committee=<id> (with &pane=settings) opens that committee's
@@ -16,7 +16,9 @@
 import { useState, useEffect, useCallback } from 'react';
 import { ChevronDown, ChevronUp, FileText } from 'lucide-react';
 import Link from 'next/link';
-import ConferenceDocsTab from './ConferenceDocsTab';
+import DocumentsTodo from './DocumentsTodo';
+import AdditionalDocuments from './AdditionalDocuments';
+import { fetchDocsOverview } from '@/lib/conferenceDocuments';
 import CommitteeDocsPopup, { CommitteeLogo, formatDate, shortName, type CommitteeDoc, type DocsPane } from './CommitteeDocsPopup';
 import { useManage } from '@/app/manage/[slug]/layout';
 import { useAuth } from '@/components/AuthProvider';
@@ -88,6 +90,19 @@ export default function DocumentsPage() {
   const [open, setOpen] = useState<{ id: string; pane: DocsPane } | null>(null);
   const [deepDocId, setDeepDocId] = useState<string | null>(null);
   const [deepCommittee, setDeepCommittee] = useState<{ id: string; pane: DocsPane } | null>(null);
+  // docs_extra on for the conference (returned copies, View submissions, step 4).
+  const [extraOn, setExtraOn] = useState(false);
+  // Bumped after anything that may change Things to Do.
+  const [todoVersion, setTodoVersion] = useState(0);
+  const conferenceIdForMode = conference?.id ?? null;
+  useEffect(() => {
+    if (!conferenceIdForMode || !accessToken) return;
+    let alive = true;
+    void fetchDocsOverview(conferenceIdForMode).then(res => { if (alive) setExtraOn(res.ok && res.enabled); });
+    return () => { alive = false; };
+    // Keyed on whether a token exists, never on its value (a refresh must not refetch).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [conferenceIdForMode, !!accessToken]);
 
   // Deep links, read once.
   useEffect(() => {
@@ -204,15 +219,22 @@ export default function DocumentsPage() {
           )}
         </section>
 
-        {/* RIGHT: Additional Documents (prompt 130 replaces this column). */}
-        <section className="gv-docs-col gv-docs-card" aria-labelledby="gv-docs-right">
-          <div className="gv-docs-card-head">
-            <h2 id="gv-docs-right" className="gv-docs-title">Additional Documents</h2>
-          </div>
-          <div className="gv-docs-scroll">
-            <ConferenceDocsTab conferenceId={conference.id} initialDocId={deepDocId} onInitialDocUsed={() => setDeepDocId(null)} />
-          </div>
-        </section>
+        {/* RIGHT: Things to Do, then Additional Documents (prompt 130). */}
+        <div className="gv-docs-col gv-docs-right">
+          <DocumentsTodo
+            conferenceId={conference.id}
+            extraOn={extraOn}
+            version={todoVersion}
+            onReviewed={() => { void loadCommittees(); }}
+          />
+          <AdditionalDocuments
+            conferenceId={conference.id}
+            extra={extraOn}
+            initialDocId={deepDocId}
+            onInitialDocUsed={() => setDeepDocId(null)}
+            onChanged={() => setTodoVersion(v => v + 1)}
+          />
+        </div>
       </div>
 
       {open && openCommittee && (
@@ -224,7 +246,7 @@ export default function DocumentsPage() {
           committees={committees}
           initialPane={open.pane}
           onCommitteeChange={next => setCommittees(prev => prev.map(c => (c.id === next.id ? next : c)))}
-          onClose={() => { setOpen(null); void loadCommittees(); }}
+          onClose={() => { setOpen(null); void loadCommittees(); setTodoVersion(v => v + 1); }}
         />
       )}
     </div>
@@ -251,6 +273,7 @@ const PAGE_CSS = `
 .gv-docs-btn:focus-visible{outline:2px solid #1B3828;outline-offset:2px}
 .gv-docs-btn-primary{border:none;background:linear-gradient(90deg,#1B3828 0%,#2A5A3C 100%);color:#FFFFFF}
 .gv-docs-btn-outline{border:none;background:#FFFFFF;color:#1C1410;box-shadow:inset 0 0 0 1.5px rgba(28,20,16,0.55)}
+.gv-docs-right{display:flex;flex-direction:column;gap:20px;min-width:0;min-height:0}
 .gv-docs-arrow{display:inline-flex;align-items:center;justify-content:center;width:36px;height:36px;border:none;border-radius:999px;background:#FAF8F3;color:#1B3828;cursor:pointer;box-shadow:inset 0 0 0 1px rgba(27,56,40,0.12)}
 .gv-docs-arrow:disabled{opacity:0.35;cursor:default}
 .gv-docs-arrow:focus{outline:none}

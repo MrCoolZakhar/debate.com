@@ -245,7 +245,8 @@ function SendBackBlock({ doc, viewing, onView, onSend }: {
         </div>
       )}
 
-      {doc.can_send_back && state !== 'accepted' && (
+      {/* A new copy can always be sent, even after it was accepted (prompt 130). */}
+      {doc.can_send_back && (
         <div className="gv-cdx-actions">
           <button type="button" className={`gv-st-btn ${state === 'submitted' ? 'gv-st-outline' : 'gv-st-forest'}`} onClick={onSend}>
             {state === 'none' ? 'Send it back' : state === 'submitted' ? 'Replace' : 'Send a new copy'}
@@ -284,8 +285,8 @@ function SendBackPopup({ conferenceId, doc, onClose, onSent }: {
       const { error: upErr } = await client.storage.from(DOCUMENT_RETURNS_BUCKET)
         .upload(path, file, { contentType: docMimeFor(file) ?? undefined, upsert: false });
       if (upErr) { setErr(friendlyError(upErr, "Your file couldn't be uploaded. Try again in a moment.")); return; }
-      // Replace while the copy waits or was sent back; otherwise a first send.
-      const res = doc.my_return && doc.my_return.status !== 'accepted'
+      // Replace an existing copy in any state (accepted too, since prompt 130); otherwise a first send.
+      const res = doc.my_return
         ? await replaceDocumentReturn(doc.my_return.id, path, file.name)
         : await submitDocumentReturn(doc.id, path, file.name);
       if (!res.ok) { setErr(res.error); return; }

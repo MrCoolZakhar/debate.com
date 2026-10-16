@@ -3,11 +3,13 @@
 // DocumentReturnsPopup.tsx — "Returned copies" of one document (prompt 111).
 // Reads document_returns_overview, lists the people the document is for with
 // where their copy stands, shows the chosen copy (ReturnFileViewer), and lets
-// the organiser Accept it or Send it back with a note, then moves on to the
-// next copy waiting. Every review fires 'gv-documents-returns-changed'.
+// the organiser Accept it or Reject it (the note is optional since prompt 130),
+// then moves on to the next copy waiting. Every review fires
+// 'gv-documents-returns-changed'. Since prompt 130 it opens on Submitted, lists
+// copies waiting for review first, and (from View Documents) has a back arrow.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { CheckCircle2, Circle, Clock, CornerUpLeft, PartyPopper } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, Circle, Clock, CornerUpLeft, PartyPopper } from 'lucide-react';
 import { PurchaseShell, PURCHASE_CSS } from '@/components/purchase/purchaseKit';
 import { notifyOk } from '@/lib/appNotify';
 import {
@@ -22,7 +24,7 @@ const NOTE_MAX = 500;
 type Filter = 'all' | 'submitted' | 'accepted' | 'sent_back' | 'not_yet';
 const FILTERS: { key: Filter; label: string }[] = [
   { key: 'all', label: 'All' },
-  { key: 'submitted', label: 'Waiting for review' },
+  { key: 'submitted', label: 'Submitted' },
   { key: 'accepted', label: 'Accepted' },
   { key: 'sent_back', label: 'Sent back' },
   { key: 'not_yet', label: 'Not yet' },
@@ -48,8 +50,10 @@ function personKey(p: ReturnPerson) { return p.application_id; }
 
 type Load = { kind: 'loading' } | { kind: 'error'; error: string } | { kind: 'ok'; data: DocumentReturns };
 
-export default function DocumentReturnsPopup({ documentId, title, onClose }: {
+export default function DocumentReturnsPopup({ documentId, title, onClose, onBack }: {
   documentId: string; title: string; onClose: () => void;
+  /** From View Documents: a back arrow returns to the list of documents. */
+  onBack?: () => void;
 }) {
   const [load, setLoad] = useState<Load>({ kind: 'loading' });
   const [filter, setFilter] = useState<Filter | null>(null);
@@ -70,9 +74,13 @@ export default function DocumentReturnsPopup({ documentId, title, onClose }: {
   useEffect(() => { void Promise.resolve().then(() => reload()); }, [reload]);
 
   const data = load.kind === 'ok' ? load.data : null;
-  const people = useMemo(() => data?.people ?? [], [data]);
-  // Waiting for review is the default view whenever someone is waiting.
-  const activeFilter: Filter = filter ?? ((data?.counts.to_review ?? 0) > 0 ? 'submitted' : 'all');
+  // Copies waiting for review are always listed first, as payment proofs are.
+  const people = useMemo(() => {
+    const list = data?.people ?? [];
+    return [...list.filter(p => p.state === 'submitted'), ...list.filter(p => p.state !== 'submitted')];
+  }, [data]);
+  // Submitted is selected when it opens.
+  const activeFilter: Filter = filter ?? 'submitted';
   const shown = useMemo(() => people.filter(p => activeFilter === 'all' || p.state === activeFilter), [people, activeFilter]);
   const counts = data?.counts;
   const countFor = (f: Filter) => !counts ? 0 : f === 'all' ? people.length : f === 'submitted' ? counts.to_review : f === 'accepted' ? counts.accepted : f === 'sent_back' ? counts.sent_back : counts.not_yet;
@@ -84,14 +92,13 @@ export default function DocumentReturnsPopup({ documentId, title, onClose }: {
 
   async function review(accept: boolean) {
     if (!current?.return_id || busyRef.current) return;
-    if (!accept && !note.trim()) { setErr('Write what they should fix.'); return; }
     busyRef.current = true; setBusy(true); setErr('');
     const doneId = personKey(current);
-    const res = await reviewDocumentReturn(current.return_id, accept, accept ? null : note.trim());
+    const res = await reviewDocumentReturn(current.return_id, accept, accept || !note.trim() ? null : note.trim());
     busyRef.current = false; setBusy(false);
     if (!res.ok) { setErr(res.error); return; }
     window.dispatchEvent(new Event('gv-documents-returns-changed'));
-    notifyOk(accept ? 'Copy accepted' : 'Sent back with your note', 'conference-docs');
+    notifyOk(accept ? 'Copy accepted' : 'Copy rejected', 'conference-docs');
     setSendBack(false); setNote('');
     const fresh = await reload();
     // On to the next person waiting, in list order after this one.
@@ -111,6 +118,11 @@ export default function DocumentReturnsPopup({ documentId, title, onClose }: {
       <PurchaseShell tone="light" label={`Returned copies of ${title}`} onClose={() => { if (!busyRef.current) onClose(); }} panelClass="gv-cd-rev" testId="document-returns-popup">
         <div className="gv-st" style={{ display: 'flex', flexDirection: 'column', minHeight: 0, height: '100%', width: '100%' }}>
           <div style={{ padding: '26px 28px 12px' }}>
+            {onBack && (
+              <button type="button" className="gv-st-link inline-flex items-center gap-1.5" style={{ marginBottom: 8 }} onClick={() => { if (!busyRef.current) onBack(); }}>
+                <ArrowLeft size={16} strokeWidth={2.4} aria-hidden /> All documents
+              </button>
+            )}
             <h2 className="gv-fd-pop-title">Returned Copies</h2>
             <p style={{ margin: '6px 0 0', fontSize: 15, fontWeight: 700, color: INK, overflowWrap: 'anywhere' }}>{title}</p>
             {counts && (
@@ -192,18 +204,18 @@ export default function DocumentReturnsPopup({ documentId, title, onClose }: {
                       )}
                       {current.state === 'submitted' && (sendBack ? (
                         <div className="gv-cd-field">
-                          <label className="gv-fd-label" htmlFor="gv-cdx-note">What should they fix? They read this</label>
+                          <label className="gv-fd-label" htmlFor="gv-cdx-note">Note for the delegate (optional)</label>
                           <textarea id="gv-cdx-note" className="gv-cd-area" style={{ minHeight: 70 }} value={note} maxLength={NOTE_MAX} disabled={busy} onChange={e => { setNote(e.target.value); setErr(''); }} autoFocus />
                           <div className="gv-cd-count-line"><span /><span>{note.length} / {NOTE_MAX}</span></div>
                           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                            <button type="button" className="gv-st-btn gv-st-forest" disabled={busy || !note.trim()} onClick={() => review(false)}>{busy ? 'Sending' : 'Send back'}</button>
+                            <button type="button" className="gv-st-btn gv-st-forest" disabled={busy} onClick={() => review(false)}>{busy ? 'Saving' : 'Reject'}</button>
                             <button type="button" className="gv-st-btn gv-st-outline" disabled={busy} onClick={() => { setSendBack(false); setNote(''); setErr(''); }}>Cancel</button>
                           </div>
                         </div>
                       ) : (
                         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                           <button type="button" className="gv-st-btn gv-st-forest" disabled={busy} onClick={() => review(true)}>{busy ? 'Saving' : 'Accept'}</button>
-                          <button type="button" className="gv-st-btn gv-st-outline" disabled={busy} onClick={() => { setSendBack(true); setErr(''); }}>Send back</button>
+                          <button type="button" className="gv-st-btn gv-st-outline" disabled={busy} onClick={() => { setSendBack(true); setErr(''); }}>Reject</button>
                         </div>
                       ))}
                       {err && <p className="gv-st-err" role="alert" style={{ margin: 0 }}>{err}</p>}
