@@ -85,7 +85,7 @@ function allocationLabel(m: PoolMember): string | null {
 
 type RosterRole = 'faculty-advisor' | 'head-delegate' | 'delegate';
 
-interface RosterMember {
+export interface RosterMember {
   application_id: string;
   is_me: boolean;
   claimed: boolean;
@@ -127,7 +127,7 @@ const GOLD_EDGE = '#B6871F';
 
 const ROW_GRID = '@[520px]:grid @[520px]:grid-cols-[minmax(0,1.35fr)_minmax(0,1.2fr)_minmax(0,0.85fr)] @[520px]:items-center';
 
-function RosterRow({ member, pool, swapMode, swapSelectable, swapSelected, onToggleSwap, covered, seatLogo, canSeeAllocation, leadMenu }: {
+export function RosterRow({ member, pool, swapMode, swapSelectable, swapSelected, onToggleSwap, covered, seatLogo, canSeeAllocation, leadMenu }: {
   member: RosterMember;
   /** The head delegate's "…" menu for this row (MemberLeadMenu), else nothing. */
   leadMenu?: React.ReactNode;
@@ -261,7 +261,7 @@ function RosterRow({ member, pool, swapMode, swapSelectable, swapSelected, onTog
 
 /** One role group, paged so the card never overfills. The roster arrives
  *  with the viewer first, so their row is always on page 1. */
-function RosterGroup({ title, members, pageSize, page, onPage, empty, renderRow }: {
+export function RosterGroup({ title, members, pageSize, page, onPage, empty, renderRow }: {
   title: string;
   members: RosterMember[];
   pageSize: number;
