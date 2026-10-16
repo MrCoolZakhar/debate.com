@@ -1311,6 +1311,18 @@ function CommitteeEditor({ conferenceId, committeeType, existing, initialRoster,
     : missingName ? 'Needs a committee name'
     : missingRoster ? `Needs at least one ${seatNoun}`
     : null;
+  // Leaving with seats added but not saved asks first (owner, 16 Oct 2026):
+  // the X, Cancel, Escape and a click outside all come through here. A save
+  // that lands closes directly, without asking.
+  const [confirmLeave, setConfirmLeave] = useState(false);
+  const baselineSeatNames = new Set(baselineRoster.map(r => r.name.trim().toLowerCase()));
+  const addedSeats = roster.filter(r => !baselineSeatNames.has(r.name.trim().toLowerCase())).length;
+  const requestClose = () => {
+    if (saving) return;
+    if (addedSeats > 0) { setConfirmLeave(true); return; }
+    onClose();
+  };
+
   const onPrimary = () => {
     if (saving || createHalted) return;
     if (missingName) { document.getElementById('ced-name')?.focus(); return; }
@@ -1319,7 +1331,7 @@ function CommitteeEditor({ conferenceId, committeeType, existing, initialRoster,
 
   return (
     <>
-    <ModalOverlay onClose={onClose} labelledBy="ced-title">
+    <ModalOverlay onClose={requestClose} labelledBy="ced-title">
       {/* TWO PANELS, SIDE BY SIDE (23 Sep 2026, owner: "one panel should be
           the set-up, the other, outside of it, should be the list of
           countries"; then, the same day: "once again the ENTIRE right side
@@ -1382,7 +1394,7 @@ function CommitteeEditor({ conferenceId, committeeType, existing, initialRoster,
               </span>
             </div>
             <button
-              onClick={onClose}
+              onClick={requestClose}
               aria-label="Close"
               title="Close"
               className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full transition-[background-color,transform] duration-150 hover:bg-[#1B3828]/[0.07] active:scale-[0.96] focus:outline-none focus-visible:shadow-[0_0_0_2px_#1B3828]"
@@ -1476,7 +1488,7 @@ function CommitteeEditor({ conferenceId, committeeType, existing, initialRoster,
           <div className="mt-auto flex-shrink-0 pt-4">
             {error && <p role="alert" className="mb-2.5" style={{ color: '#8B2020', fontFamily: OUTFIT, fontSize: 12.5, lineHeight: 1.5, margin: '0 0 10px' }}>{error}</p>}
             <div className="grid gap-2.5" style={{ gridTemplateColumns: 'minmax(0,1fr) minmax(0,1.6fr)' }}>
-              <SetupGhostButton label="Cancel" onClick={onClose} />
+              <SetupGhostButton label="Cancel" onClick={requestClose} />
               <SetupPrimaryButton
                 label={saving ? 'Saving…' : isEdit ? 'Save changes' : 'Add committee'}
                 sub={saveSub}
@@ -1502,6 +1514,37 @@ function CommitteeEditor({ conferenceId, committeeType, existing, initialRoster,
         </div>
       </div>
     </ModalOverlay>
+    {confirmLeave && (
+      <ModalOverlay onClose={() => setConfirmLeave(false)} labelledBy="ced-leave-title">
+        <div className="flex flex-col gap-4 rounded-[24px] p-6" style={{ backgroundColor: '#FFFFFF', boxShadow: '0 30px 70px -28px rgba(27,56,40,0.55), 0 0 0 1px rgba(27,56,40,0.06)', width: 420, maxWidth: 'calc(100vw - 32px)' }}>
+          <h2 id="ced-leave-title" style={{ margin: 0, fontFamily: OUTFIT, fontSize: 20, fontWeight: 800, letterSpacing: '-0.01em', color: '#1C1410' }}>
+            Leave Without Saving?
+          </h2>
+          <p style={{ margin: 0, fontFamily: OUTFIT, fontSize: 15, lineHeight: 1.5, color: '#544B3E' }}>
+            You added {addedSeats} {addedSeats === 1 ? seatNoun : seatNounPlural} to this committee. If you leave now, {addedSeats === 1 ? 'it is' : 'they are'} not saved.
+          </p>
+          <div className="grid gap-2.5" style={{ gridTemplateColumns: 'minmax(0,1fr) minmax(0,1fr)' }}>
+            <button
+              type="button"
+              onClick={() => { setConfirmLeave(false); onClose(); }}
+              className="rounded-xl py-3 focus:outline-none focus-visible:shadow-[0_0_0_2px_#8B2020]"
+              style={{ border: 'none', boxShadow: 'inset 0 0 0 1.5px rgba(139,32,32,0.45)', backgroundColor: 'transparent', color: '#8B2020', fontFamily: OUTFIT, fontSize: 15, fontWeight: 700, cursor: 'pointer' }}
+            >
+              Leave
+            </button>
+            <button
+              type="button"
+              autoFocus
+              onClick={() => setConfirmLeave(false)}
+              className="rounded-xl py-3 focus:outline-none focus-visible:shadow-[0_0_0_3px_#FFFFFF,0_0_0_5px_#1B3828]"
+              style={{ border: 'none', backgroundImage: 'linear-gradient(90deg,#1B3828,#2A5A3C)', color: '#FFFFFF', fontFamily: OUTFIT, fontSize: 15, fontWeight: 700, cursor: 'pointer' }}
+            >
+              Keep editing
+            </button>
+          </div>
+        </div>
+      </ModalOverlay>
+    )}
     {pendingRemovalCount !== null && (
       <ModalOverlay onClose={() => setPendingRemovalCount(null)}>
         <div className="rounded-2xl p-6 flex flex-col gap-4" style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0', width: 380, maxWidth: 'calc(100vw - 32px)' }}>
