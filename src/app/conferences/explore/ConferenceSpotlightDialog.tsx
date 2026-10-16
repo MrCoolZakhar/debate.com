@@ -40,9 +40,12 @@ const ROLE_NAMES: Record<string, string> = {
 };
 const ROLE_ORDER = ['delegate', 'head-delegate', 'faculty-advisor', 'observer', 'chair'];
 
-export default function ConferenceSpotlightDialog({ rows, onClose, openRolesFor }: {
+export default function ConferenceSpotlightDialog({ rows, onClose, openRolesFor, preview = false }: {
   rows: FeaturedRow[];
   onClose: () => void;
+  /** The organiser's "Preview Spotlight" (prompt 128): records nothing, the
+   *  buttons do nothing and say so. */
+  preview?: boolean;
   /** The roles whose applications are open now (Explore's facets); null
    *  while unknown. One role: Apply goes straight to it. Several: Apply opens
    *  a choice in the card. None: no Apply, only View conference (27 Sep 2026). */
@@ -54,6 +57,7 @@ export default function ConferenceSpotlightDialog({ rows, onClose, openRolesFor 
   const [choosing, setChoosing] = useState<string | null>(null);
 
   useEffect(() => {
+    if (preview) return;
     for (const r of shown) recordSpotlightView(r.booking_id);
     // Once, for the rows shown at open.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -94,6 +98,12 @@ export default function ConferenceSpotlightDialog({ rows, onClose, openRolesFor 
                   {showFull ? <p className="gv-cs-full">{r.full_name}</p> : null}
                   {r.description ? <p className="gv-cs-desc" title={r.description}>{r.description}</p> : null}
                   <div className="gv-cs-actions">
+                    {preview ? (
+                      <>
+                        <span className="gv-cs-btn gv-cs-primary" aria-disabled="true" title="Visitors can click this">Apply</span>
+                        <span className="gv-cs-btn gv-cs-secondary" aria-disabled="true" title="Visitors can click this">View conference</span>
+                      </>
+                    ) : (<>
                     {(() => {
                       const known = openRolesFor ? openRolesFor(r.conference_id) : null;
                       const roles = (known ?? []).filter(k => ROLE_NAMES[k]).sort((a, b) => ROLE_ORDER.indexOf(a) - ROLE_ORDER.indexOf(b));
@@ -131,6 +141,7 @@ export default function ConferenceSpotlightDialog({ rows, onClose, openRolesFor 
                     >
                       View conference
                     </Link>
+                    </>)}
                   </div>
                   {choosing === r.conference_id && (
                     <div className="gv-cs-roles" role="group" aria-label={`Apply to ${label} as`}>

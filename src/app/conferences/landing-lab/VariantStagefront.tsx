@@ -45,6 +45,7 @@ import {
   isConcluded, pickHeadliner,
 } from './shared';
 import { recordSpotlightClick, recordSpotlightView, type FeaturedRow } from '@/lib/spotlight';
+import { PREVIEW_CLICK_HINT, SpotlightPreviewBar, previewFeaturedRow, useSpotlightPreview } from '@/lib/spotlightPreview';
 import { SessionsSection, AboutCards, LearnMunSection, type HomeGuide } from './HomeSections';
 
 // Ink-on-cream tokens for the light slabs.
@@ -185,9 +186,18 @@ export default function VariantStagefront({
   // not jump. Each row is matched to the listed conference by id for its
   // delegate price and delegate count; a row not in the list (a private one
   // with a booking, say) is drawn from the row's own fields.
+  // "Preview Spotlight" (prompt 128): ?spotlight_preview=<id> for the people
+  // who manage that conference puts its Spotlight first in the rail, the other
+  // slots today's rows minus it. Nobody else sees any of it.
+  const spotPreview = useSpotlightPreview('homepage');
+  const previewing = spotPreview.status === 'checking' || spotPreview.status === 'active';
+  const previewId = spotPreview.preview?.conference.id ?? null;
   const upcomingTrio = useMemo(() => {
     const byId = new Map(conferences.map(c => [c.id, c]));
-    return featured.slice(0, 3).map(f => {
+    const rows = spotPreview.preview
+      ? [previewFeaturedRow(spotPreview.preview), ...featured.filter(f => f.conference_id !== spotPreview.preview!.conference.id)]
+      : featured;
+    return rows.slice(0, 3).map(f => {
       const listed = byId.get(f.conference_id);
       const conf: LabConference = listed ?? {
         id: f.conference_id, slug: f.slug, full_name: f.full_name ?? '', acronym: f.acronym ?? '',
@@ -196,12 +206,14 @@ export default function VariantStagefront({
       };
       return { conf, spotlight: !!f.is_spotlight, bookingId: f.booking_id };
     });
-  }, [conferences, featured]);
+  }, [conferences, featured, spotPreview.preview]);
 
-  // One 'view' per browser session per spotlight booking shown here.
+  // One 'view' per browser session per spotlight booking shown here. A
+  // preview (or a flag still being checked) records nothing.
   useEffect(() => {
+    if (previewing) return;
     for (const t of upcomingTrio) if (t.spotlight) recordSpotlightView(t.bookingId);
-  }, [upcomingTrio]);
+  }, [upcomingTrio, previewing]);
 
   // ── Geolocation ────────────────────────────────────────────────────────────
   // /api/geo only: Vercel's IP-country header, first party. There is NO
@@ -244,6 +256,7 @@ export default function VariantStagefront({
 
   return (
     <div style={{ backgroundColor: CREAM, minHeight: '100vh', position: 'relative' }}>
+      {spotPreview.preview && <SpotlightPreviewBar placement="homepage" preview={spotPreview.preview} onClose={spotPreview.close} />}
       <style>{`
         /* Hero "up next" rail: horizontal snap on narrow screens, vertical stack ≥lg. */
         .sf-hero-rail { scroll-snap-type: x mandatory; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
@@ -394,6 +407,7 @@ export default function VariantStagefront({
                       key={c.id}
                       className="w-[280px] lg:w-auto flex-shrink-0 lg:flex-shrink"
                       style={{ filter: 'drop-shadow(0 14px 30px rgba(0,0,0,0.40))', scrollSnapAlign: 'start' }}
+                      title={c.id === previewId ? PREVIEW_CLICK_HINT : undefined}
                     >
                       {/* A booked Spotlight wears the tag and the bright gold
                           edge; a filled slot is today's plain card. */}
@@ -407,7 +421,12 @@ export default function VariantStagefront({
                         hovered={hoveredId === c.id}
                         onHover={() => setHoveredId(c.id)}
                         onLeave={() => setHoveredId(null)}
-                        onClick={() => { if (spotlight) recordSpotlightClick(bookingId); goTo(c.slug); }}
+                        onClick={() => {
+                          // The previewed card does nothing; no click is recorded during a preview.
+                          if (c.id === previewId) return;
+                          if (spotlight && !previewing) recordSpotlightClick(bookingId);
+                          goTo(c.slug);
+                        }}
                       />
                     </div>
                   ))}

@@ -59,7 +59,8 @@ import {
   type ExploreConference, type SpotlightItem,
 } from './ExploreFeed';
 import { isListedConference } from '@/lib/publicConferences';
-import { fetchFeatured, recordSpotlightClick, recordSpotlightView, type FeaturedRow } from '@/lib/spotlight';
+import { fetchFeatured, recordSpotlightClick, recordSpotlightView, type FeaturedRow, type SpotlightPlacement } from '@/lib/spotlight';
+import { PREVIEW_CLICK_HINT, SpotlightPreviewBar, previewFeaturedRow, useSpotlightPreview } from '@/lib/spotlightPreview';
 import { fetchCreditSponsoredIds } from '@/lib/creditSponsored';
 import ConferenceSpotlightDialog, { claimSpotlightDialog } from './ConferenceSpotlightDialog';
 import SpotlightPlacePopup, { claimPlacePopup, fetchSpotlightPopups, type PlacePopupPlacement, type PlacePopupRow } from './SpotlightPlacePopup';
@@ -197,6 +198,19 @@ export default function ConferencesExploreClient() {
   // filtered view can be shared (src/app/conferences/explore/exploreFilters.ts).
   // Read once, on the first render (a lazy initial state, the same as the old empty-deps memo).
   const [initialQuery] = useState(() => readExploreQuery(searchParams));
+  // "Preview Spotlight" (prompt 128): ?spotlight_preview=<id> shows that
+  // conference's Explore, Region or Country Spotlight to the people who manage
+  // it. While the flag is being checked or the preview is shown, nothing is
+  // recorded and the once-per-visit pop-ups are not claimed; a flag the viewer
+  // may not use leaves the page exactly as today.
+  const [previewPlacement] = useState<SpotlightPlacement>(() =>
+    searchParams.get('continent') ? 'region' : searchParams.get('country') ? 'country' : 'explore');
+  const spotPreview = useSpotlightPreview(previewPlacement);
+  const previewing = spotPreview.status === 'checking' || spotPreview.status === 'active';
+  const previewingRef = useRef(previewing);
+  useEffect(() => { previewingRef.current = previewing; }, [previewing]);
+  const [previewPopupOpen, setPreviewPopupOpen] = useState(true);
+  const previewId = spotPreview.preview?.conference.id ?? null;
   const [searchQuery, setSearchQuery] = useState(initialQuery.search);
   const [formatFilter, setFormatFilter] = useState<FormatFilter>(
     initialQuery.format === 'in-person' || initialQuery.format === 'online' ? initialQuery.format : '',
@@ -219,6 +233,9 @@ export default function ConferencesExploreClient() {
   // dialogs at once) and opens the moment that one closes.
   const [placePopup, setPlacePopup] = useState<PlacePopup | null>(null);
   const placePendingRef = useRef<PlacePopup | null>(null);
+  // Held while a preview flag is being checked; let go as today when it is refused.
+  const pendingSpotDialogRef = useRef<FeaturedRow[] | null>(null);
+  const previewPlacePendingRef = useRef<PlacePopup | null>(null);
   const spotlightDialogOpenRef = useRef(false);
   useEffect(() => { spotlightDialogOpenRef.current = !!spotlightDialog; }, [spotlightDialog]);
   const [dateFilter, setDateFilter] = useState<DateFilter>(initialQuery.when);
@@ -321,7 +338,10 @@ export default function ConferencesExploreClient() {
         setExploreSpots(booked);
         // The Conference Spotlight pop-up, once per site visit, only when a
         // booking is live today.
-        if (booked.length > 0 && claimSpotlightDialog()) setSpotlightDialog(booked);
+        if (booked.length > 0) {
+          if (previewingRef.current) pendingSpotDialogRef.current = booked;
+          else if (claimSpotlightDialog()) setSpotlightDialog(booked);
+        }
       });
 
       // One call for every listed id: which roles are open right now and the
@@ -619,12 +639,28 @@ export default function ConferencesExploreClient() {
     void fetchSpotlightPopups(placement, target).then(rows => {
       if (cancelled || rows.length === 0) return;
       const next = { placement, target, rows };
+      if (previewingRef.current) { previewPlacePendingRef.current = next; return; }
       if (spotlightDialogOpenRef.current) { placePendingRef.current = next; return; }
       if (claimPlacePopup(placement, target)) setPlacePopup(next);
     });
     return () => { cancelled = true; placePendingRef.current = null; };
   }, [spotTarget]);
   const spotlightRows = useMemo(() => (spotTarget && regionSpots.key === spotTarget ? regionSpots.rows : []), [spotTarget, regionSpots]);
+  // A preview flag this viewer may not use: the pop-ups held while it was
+  // checked open exactly as they would have (same once-per-visit claims).
+  useEffect(() => {
+    if (spotPreview.status !== 'denied') return;
+    const dialog = pendingSpotDialogRef.current;
+    pendingSpotDialogRef.current = null;
+    const place = previewPlacePendingRef.current;
+    previewPlacePendingRef.current = null;
+    if (dialog && claimSpotlightDialog()) {
+      setSpotlightDialog(dialog);
+      if (place) placePendingRef.current = place;
+    } else if (place && claimPlacePopup(place.placement, place.target)) {
+      setPlacePopup(place);
+    }
+  }, [spotPreview.status]);
 
   const sorted = useMemo(() => {
     // Dated conferences only: those whose dates are to be decided have their
@@ -663,15 +699,28 @@ export default function ConferencesExploreClient() {
       seen.add(conf.id);
       out.push({ conf, spot: r });
     };
+    // The previewed conference sits first with the Spotlight tag (its own row,
+    // no booking), even when it is not public yet.
+    if (spotPreview.preview) {
+      const p = spotPreview.preview.conference;
+      const listed = conferences.find(c => c.id === p.id);
+      const conf: Conference = listed ?? {
+        id: p.id, slug: p.slug, full_name: p.full_name ?? '', acronym: p.acronym ?? '', country: p.country ?? '', city: p.city ?? '',
+        start_date: p.start_date ?? '', end_date: p.end_date ?? '', expected_delegates: 0, fee_amount: 0, fee_currency: '',
+        format: p.format ?? '', student_level: '', logo_url: p.logo_url, banner_url: p.banner_url, is_public: false, organizer_id: null,
+      };
+      push(previewFeaturedRow(spotPreview.preview), conf);
+    }
     for (const r of spotlightRows) if (spotTarget) push(r, inFilter.get(r.conference_id));
     for (const r of exploreSpots) push(r, inFilter.get(r.conference_id));
     return out;
-  }, [filtered, spotlightRows, spotTarget, exploreSpots]);
+  }, [filtered, spotlightRows, spotTarget, exploreSpots, spotPreview.preview, conferences]);
 
   // One 'view' per session per spotlight booking that is on screen.
   useEffect(() => {
+    if (previewing) return;
     for (const s of spotItems) recordSpotlightView(s.spot.booking_id);
-  }, [spotItems]);
+  }, [spotItems, previewing]);
   const feed = useMemo(() => {
     if (spotItems.length === 0) return sorted;
     const ids = new Set(spotItems.map(s => s.conf.id));
@@ -695,8 +744,8 @@ export default function ConferencesExploreClient() {
   const spotById = useMemo(() => new Map(spotItems.map(s => [s.conf.id, s.spot])), [spotItems]);
   const spotInPlace = useMemo(() => ({
     spotFor: (c: { id: string }) => spotById.get(c.id),
-    onOpen: (spot: FeaturedRow) => recordSpotlightClick(spot.booking_id),
-  }), [spotById]);
+    onOpen: (spot: FeaturedRow) => { if (!previewing) recordSpotlightClick(spot.booking_id); },
+  }), [spotById, previewing]);
 
   // When a country filter has narrowed the page down, the end of the list is
   // the honest moment to say: there are much bigger rooms elsewhere. Upcoming
@@ -756,7 +805,23 @@ export default function ConferencesExploreClient() {
   const GRID = 'gv-explore-grid';
   const GRID_GAP: React.CSSProperties = { columnGap: 'clamp(14px, 1.3vw, 20px)', rowGap: 'clamp(16px, 1.5vw, 22px)' };
 
-  const cardFor = (conf: Conference, spot?: FeaturedRow) => (
+  const cardFor = (conf: Conference, spot?: FeaturedRow) => conf.id === previewId ? (
+    // The previewed conference's own card does nothing (it is a preview).
+    <div key={conf.id} title={PREVIEW_CLICK_HINT}>
+      <ConferenceCard
+        conf={conf}
+        variant="listing"
+        spotlight
+        creditSponsored={sponsoredIds.has(conf.id)}
+        applied={appliedIds.has(conf.id)}
+        member={isMember(conf)}
+        hovered={hoveredId === conf.id}
+        onHover={() => setHoveredId(conf.id)}
+        onLeave={() => setHoveredId(null)}
+        onClick={() => {}}
+      />
+    </div>
+  ) : (
     <ConferenceCard
       key={conf.id}
       conf={conf}
@@ -770,7 +835,7 @@ export default function ConferencesExploreClient() {
       onHover={() => setHoveredId(conf.id)}
       onLeave={() => setHoveredId(null)}
       // A real link navigates; this only records the spotlight click.
-      onClick={() => { if (spot) recordSpotlightClick(spot.booking_id); }}
+      onClick={() => { if (spot && !previewing) recordSpotlightClick(spot.booking_id); }}
     />
   );
 
@@ -808,6 +873,7 @@ export default function ConferencesExploreClient() {
     // footer belong to page.tsx (so they are in the raw HTML); this is the
     // interactive top of the page on that ground.
     <div className="flex flex-col relative" style={{ minHeight: '100vh', fontFamily: FONT }}>
+      {spotPreview.preview && <SpotlightPreviewBar placement={previewPlacement} preview={spotPreview.preview} onClose={spotPreview.close} />}
       <style>{`
         ${SCROLL_CSS}
         ${FEED_CSS}
@@ -1165,6 +1231,40 @@ export default function ConferencesExploreClient() {
           rows={placePopup.rows}
           placement={placePopup.placement}
           onClose={() => setPlacePopup(null)}
+        />
+      )}
+
+      {/* "Preview Spotlight": the pop-up visitors get, with only this conference. */}
+      {spotPreview.preview && previewPopupOpen && previewPlacement === 'explore' && (
+        <ConferenceSpotlightDialog
+          preview
+          rows={[previewFeaturedRow(spotPreview.preview)]}
+          onClose={() => setPreviewPopupOpen(false)}
+        />
+      )}
+      {spotPreview.preview && previewPopupOpen && previewPlacement !== 'explore' && (
+        <SpotlightPlacePopup
+          preview
+          previewHint={PREVIEW_CLICK_HINT}
+          placement={previewPlacement === 'country' ? 'country' : 'region'}
+          onClose={() => setPreviewPopupOpen(false)}
+          rows={[{
+            booking_id: null,
+            conference_id: spotPreview.preview.conference.id,
+            slug: spotPreview.preview.conference.slug,
+            acronym: spotPreview.preview.conference.acronym,
+            full_name: spotPreview.preview.conference.full_name,
+            banner_url: spotPreview.preview.conference.banner_url,
+            logo_url: spotPreview.preview.conference.logo_url,
+            city: spotPreview.preview.conference.city,
+            country: spotPreview.preview.conference.country,
+            start_date: spotPreview.preview.conference.start_date,
+            end_date: spotPreview.preview.conference.end_date,
+            format: spotPreview.preview.conference.format,
+            description: spotPreview.preview.description,
+            pitch: spotPreview.preview.pitch,
+            highlights: spotPreview.preview.highlights,
+          }]}
         />
       )}
     </div>

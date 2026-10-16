@@ -21,9 +21,10 @@
 // and finishes the SAME booking once after payment.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Check, ChevronLeft, ChevronRight, Compass, ExternalLink, Flag, Globe, Home, X } from 'lucide-react';
+import { Check, ChevronLeft, ChevronRight, Compass, ExternalLink, Eye, Flag, Globe, Home, X } from 'lucide-react';
 import { friendlyError, plainOrFallback } from '@/lib/friendlyError';
 import { notifyOk } from '@/lib/appNotify';
+import { spotlightPreviewHref, storePreviewDescription } from '@/lib/spotlightPreview';
 import { PurchaseShell, ErrorLine, GoldButton, Eyebrow, INK, INK_SOFT, FOREST, GOLD, IVORY } from '@/components/purchase/purchaseKit';
 import {
   addDays, authedClient, credits as creditsWord, CONTINENT_LABELS, daysBetween, fmtDay, isoDay, PLACEMENTS,
@@ -473,12 +474,12 @@ export default function SpotlightPopup(props: SpotlightPopupProps) {
   };
 
   const r = reach[placement];
-  // "See where it shows": the page this placement appears on, with the filter
-  // Explore reads today (?continent=<key>, ?country=<name>). New tab.
-  const seeHref = placement === 'homepage' ? '/'
-    : placement === 'explore' ? '/conferences/explore'
-    : placement === 'region' ? (continent ? `/conferences/explore?continent=${encodeURIComponent(continent)}` : '/conferences/explore')
-    : (conference.country?.trim() ? `/conferences/explore?country=${encodeURIComponent(conference.country.trim())}` : '/conferences/explore');
+  // "Preview Spotlight" (prompt 128): the REAL page this placement appears on
+  // (with the filter Explore reads, ?continent=<key> / ?country=<name>) and
+  // ?spotlight_preview=<id>, which draws THIS conference's Spotlight there for
+  // its organizers only, recording nothing. New tab; the description typed in
+  // step 2 rides along in localStorage (src/lib/spotlightPreview.tsx).
+  const seeHref = spotlightPreviewHref(placement, conference.id, { continent, country: conference.country });
   const s = sell(placement, conference, continent);
   const needsTarget = target === null;
   const bookable = conference.is_public && !conference.dates_tbd && !!conference.start_date && lastDay >= today;
@@ -535,9 +536,16 @@ export default function SpotlightPopup(props: SpotlightPopupProps) {
           <Eyebrow>Where it shows</Eyebrow>
           <p className="gv-sp-p">{s.where}</p>
           {seeHref && (
-            <a href={seeHref} target="_blank" rel="noopener noreferrer" className="gv-sp-see">
-              See where it shows
-              <ExternalLink size={13} strokeWidth={2.4} aria-hidden />
+            <a
+              href={seeHref}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="gv-sp-see"
+              onClick={() => storePreviewDescription(conference.id, description)}
+            >
+              <Eye size={16} strokeWidth={2.3} aria-hidden />
+              Preview Spotlight
+              <ExternalLink size={14} strokeWidth={2.4} aria-hidden />
             </a>
           )}
         </div>
@@ -711,10 +719,12 @@ const SPOT_CSS = `
 .gv-sp-right{padding-bottom:0!important;display:flex;flex-direction:column}
 .gv-sp-steps{flex:1 1 auto;display:flex;flex-direction:column;gap:12px;padding-bottom:16px}
 .gv-sp-p{margin:0;font-size:14px;line-height:1.55;color:${INK_SOFT}}
-.gv-sp-see{display:inline-flex;align-items:center;gap:5px;margin-top:8px;padding:6px 12px;border-radius:9px;background:#FFFFFF;box-shadow:inset 0 0 0 1.5px rgba(27,56,40,0.22);color:#1B3828;font-size:13px;font-weight:700;text-decoration:none}
-.gv-sp-see:hover{box-shadow:inset 0 0 0 1.5px #1B3828}
+.gv-sp-see{display:inline-flex;align-items:center;gap:7px;margin-top:10px;padding:10px 16px;border-radius:12px;background:#FFFFFF;box-shadow:inset 0 0 0 1px rgba(27,56,40,0.14),0 2px 4px rgba(27,56,40,0.06),0 10px 24px -10px rgba(27,56,40,0.32);color:#1B3828;font-size:15px;font-weight:700;text-decoration:none;transition:transform 160ms ease,box-shadow 160ms ease}
+.gv-sp-see:hover{transform:translateY(-1px);box-shadow:inset 0 0 0 1px rgba(27,56,40,0.22),0 4px 8px rgba(27,56,40,0.08),0 16px 32px -12px rgba(27,56,40,0.42)}
+.gv-sp-see:active{transform:translateY(0)}
 .gv-sp-see:focus{outline:none}
-.gv-sp-see:focus-visible{outline:2px solid #1B3828;outline-offset:2px}
+.gv-sp-see:focus-visible{outline:2px solid #1B3828;outline-offset:3px}
+@media (prefers-reduced-motion:reduce){.gv-sp-see{transition:none}.gv-sp-see:hover{transform:none}}
 .gv-sp-reach{font-size:22px;font-weight:800;color:${INK};font-variant-numeric:tabular-nums}
 .gv-sp-price{margin-top:auto;padding-top:16px;border-top:1px solid rgba(28,20,16,0.12);display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
 .gv-sp-price-big{font-size:46px;font-weight:800;letter-spacing:-0.03em;line-height:1;font-variant-numeric:tabular-nums;color:${FOREST}}

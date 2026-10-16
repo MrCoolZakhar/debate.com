@@ -79,12 +79,14 @@ function TitleWithGold({ name }: { name: string }) {
   return <>{name.trim()}</>;
 }
 
-export default function SpotlightPlacePopup({ rows, placement, onClose, preview = false }: {
+export default function SpotlightPlacePopup({ rows, placement, onClose, preview = false, previewHint }: {
   rows: PlacePopupRow[];
   placement: PlacePopupPlacement;
   onClose: () => void;
   /** The organiser's preview: records nothing, the buttons do nothing. */
   preview?: boolean;
+  /** A tooltip on the preview's buttons (Explore's "Preview Spotlight"; the Store editor passes none). */
+  previewHint?: string;
 }) {
   const shown = rows.slice(0, 2);
 
@@ -151,8 +153,8 @@ export default function SpotlightPlacePopup({ rows, placement, onClose, preview 
                   <div className="gv-sp-actions">
                     {preview ? (
                       <>
-                        <span className="gv-sp-btn gv-sp-primary" aria-disabled="true">Apply now</span>
-                        <span className="gv-sp-btn gv-sp-secondary" aria-disabled="true">View conference</span>
+                        <span className="gv-sp-btn gv-sp-primary" aria-disabled="true" title={previewHint}>Apply now</span>
+                        <span className="gv-sp-btn gv-sp-secondary" aria-disabled="true" title={previewHint}>View conference</span>
                       </>
                     ) : (
                       <>
