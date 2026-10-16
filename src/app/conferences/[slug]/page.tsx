@@ -2,7 +2,8 @@ import type { Metadata } from 'next';
 import { cache } from 'react';
 import { notFound } from 'next/navigation';
 import { absoluteUrl, pageMetadata } from '@/lib/seo';
-import { conferenceOgImageUrl } from '@/lib/ogVersion';
+import { conferenceOgImageUrl, ogVersion } from '@/lib/ogVersion';
+import { conferenceCardPath, storedCardExists, storedCardUrl } from '@/lib/ogStore';
 import { warmOgImage } from '@/lib/ogWarm';
 import { supabase } from '@/lib/supabase';
 import ConferenceDetailClient from './ConferenceDetailClient';
@@ -234,10 +235,15 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
      The JSON-LD `image` below deliberately still points at the raw artwork —
      Google's Event rich result wants the event's own picture, not a card with
      our branding across it. */
-  const image = conferenceOgImageUrl(slug, conf);
-  // Render the card now, after this response, so the CDN holds it before the
-  // next WhatsApp share asks for it (src/lib/ogWarm.ts).
-  warmOgImage(image);
+  const routeImage = conferenceOgImageUrl(slug, conf);
+  // The finished card stored on Supabase's CDN, when the route has saved it
+  // (src/lib/ogStore.ts): served from anywhere without a render, so a sender
+  // far from our server no longer waits ~2 s for the picture. Until then, the
+  // route URL, rendered now after this response so it renders and saves.
+  const cardPath = conferenceCardPath(slug, ogVersion(conf));
+  const stored = await storedCardExists(cardPath, 400);
+  const image = stored ? storedCardUrl(cardPath) : routeImage;
+  if (!stored) warmOgImage(routeImage);
 
   return pageMetadata({
     // Absolute: the brand is part of the template, so the root `%s | Gavelling`

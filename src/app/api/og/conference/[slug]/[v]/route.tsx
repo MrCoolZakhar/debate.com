@@ -26,7 +26,9 @@
 import { conferenceLabels } from '@/lib/conferenceLabels';
 import { formatConferenceDates } from '@/lib/conferenceDates';
 import { supabase } from '@/lib/supabase';
-import { versionToken } from '@/lib/ogVersion';
+import { after } from 'next/server';
+import { ogVersion, versionToken } from '@/lib/ogVersion';
+import { conferenceCardPath, saveStoredCard } from '@/lib/ogStore';
 import {
   CARD_HEIGHT,
   CARD_WIDTH,
@@ -185,5 +187,15 @@ export async function GET(
 
   res.headers.set('X-Og-Version', token);
   res.headers.set('X-Og-Source', backdrop ? 'banner' : logo ? 'logo' : 'flat');
+
+  // A complete card for the conference's CURRENT version is saved to Storage
+  // once, so the page can point og:image at it and no sender anywhere waits
+  // for a render again (src/lib/ogStore.ts). Never a degraded card, never a
+  // made-up token; after the response, so this request is not slowed.
+  if (!degraded && token === ogVersion(conf)) {
+    const bytes = new Uint8Array(await res.clone().arrayBuffer());
+    const path = conferenceCardPath(slug, token);
+    try { after(() => saveStoredCard(path, bytes)); } catch { /* outside a request scope */ }
+  }
   return res;
 }
