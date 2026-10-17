@@ -17,6 +17,8 @@
 //   updated_at >= now() - 24h          … used in the last day
 //   updated_at - created_at > 30 min   … lived long enough to be a real session
 //   ended_at is null                   … not gavelled out
+// and, on this screen only (owner, 17 Oct 2026), the room went past roll call
+// (wentPastRollCall): a room opened and never started is not listed or counted.
 // The lifespan filter is the important one: hundreds of committees get created
 // and abandoned within a minute or two, and without it the board is noise.
 //
@@ -62,6 +64,13 @@ const SURFACE = '#F0EBDD';
 // The neumorphic dent: the page ground pressed into the card.
 const WELL = NEU.base;
 const WELL_EDGE = NEU.in;
+
+/** True for a room that got past roll call: any phase but roll call, or a resumed room
+ *  back in roll call that already has speakers on record. */
+function wentPastRollCall(r: { phase: string; gsl_queue: number; speaker_country: string | null; suspended_at: string | null }): boolean {
+  if (r.phase !== 'pre-session' && r.phase !== 'roll-call') return true;
+  return (r.gsl_queue ?? 0) > 0 || !!r.speaker_country;
+}
 
 // ── Row shape, mirrors admin_live_committees() exactly ──────────────────────
 
@@ -673,7 +682,10 @@ export default function LiveCommitteesTab() {
     return () => clearInterval(t);
   }, []);
 
-  const all = useMemo(() => rows ?? [], [rows]);
+  // Only rooms that went past roll call (owner, 17 Oct 2026: the board was full of rooms
+  // that were opened and never started). A room still in roll call is left out, unless it
+  // is a resumed room that already debated (a GSL queue or a speaker on record).
+  const all = useMemo(() => (rows ?? []).filter(wentPastRollCall), [rows]);
 
   const stats = useMemo(() => ({
     total: all.length,

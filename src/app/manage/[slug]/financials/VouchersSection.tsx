@@ -33,35 +33,10 @@ import { formatMoney } from './shared';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
-/** 'referral' is an ambassador attribution code: amount 0, currency null,
- *  discounts nothing (see scratchpad/ambassadors/referral-vouchers.sql).
- *  Never render it as "0% OFF" — it takes nothing off and nobody should read
- *  it as money off. */
-type VoucherKind = 'percent' | 'flat' | 'referral';
-
-/**
- * Referral codes are OFF until the database accepts them.
- *
- * The migration that makes them possible has not been applied: `vouchers_kind_check`
- * still allows only 'percent' and 'flat', and `vouchers_amount_check` still demands
- * `amount > 0`, so every insert of a referral row is refused — and
- * `vouchers_kind_check` has no sentence in CONSTRAINT_MESSAGES, so the organiser
- * would get the generic fallback from a button that can never work. Offering a
- * control that always fails is worse than not offering it.
- *
- * To switch them on, do BOTH, in this order:
- *   1. apply scratchpad/ambassadors/referral-vouchers.sql (widen
- *      vouchers_kind_check, relax vouchers_amount_check, add
- *      vouchers_referral_zero, the signup-once index, my_referral_code)
- *   2. flip this to true.
- * Everything else below (the Referral pill, the REFERRAL chip, the 40-character
- * code cap, the Referrals card, the /pay and apply paths) is already built and
- * stays on disk, so flipping it is the whole change.
- *
- * Reading referral rows is NOT gated: a row that exists always renders as a
- * referral code, so a flag left false can never hide live data.
- */
-const REFERRAL_CODES_LIVE = true;
+/** Discount codes only. Referral codes (kind 'referral', amount 0) were removed on
+ *  17 Oct 2026 (owner: referrals are counted only through WorldMUN's own application
+ *  question). Any referral rows left in the table are not listed here. */
+type VoucherKind = 'percent' | 'flat';
 
 interface Voucher {
   id: string;
@@ -88,10 +63,7 @@ function generateCode(): string {
   return out;
 }
 
-/** 40, not 24: a referral code is FIRSTNAMELASTNAME, and real names run past
- *  24 characters (MUHAMMADHAKIMBINIRMIEYUHAZNI is 28). The column has no
- *  length limit, so the editor should not be the thing that truncates a
- *  person's name. */
+/** Up to 40 characters, upper case, letters, digits and dashes. */
 function sanitizeCode(raw: string): string {
   return raw.toUpperCase().replace(/[^A-Z0-9-]/g, '').slice(0, 40);
 }
@@ -103,7 +75,6 @@ function formatExpiry(iso: string): string {
 /** Voucher chip label, flat amounts re-display in the chosen currency
  *  (≈-prefixed) when it differs from the voucher's own currency. */
 function discountLabel(v: Voucher, displayCurrency?: string): string {
-  if (v.kind === 'referral') return 'REFERRAL';
   if (v.kind === 'percent') return `${formatFeeAmount(v.amount)}% OFF`;
   const vCur = v.currency ?? '';
   if (displayCurrency && vCur && displayCurrency.toUpperCase() !== vCur.toUpperCase()) {
@@ -191,7 +162,9 @@ export default function VouchersSection({
       .eq('scope', 'conference')
       .eq('conference_id', conference.id)
       .order('created_at', { ascending: false });
-    setVouchers((data ?? []) as Voucher[]);
+    // Referral rows (removed 17 Oct 2026) are never listed.
+    setVouchers(((data ?? []) as Array<Voucher | (Omit<Voucher, 'kind'> & { kind: string })>)
+      .filter((v): v is Voucher => v.kind === 'percent' || v.kind === 'flat'));
     setLoading(false);
   }, [conference.id, voucherToken]);
 
@@ -204,17 +177,9 @@ export default function VouchersSection({
   function handleCreate() {
     if (!session || !user || creating) return;
     const trimmed = sanitizeCode(code.trim());
-    // A referral code carries no amount at all. The database pins it to 0 and
-    // currency to null (vouchers_referral_zero), so the client must never
-    // send anything else.
-    const isReferral = kind === 'referral';
-    // Backstop for the switch above: the pill is not rendered, so `kind` can
-    // never be 'referral' here, but a refused insert is the one thing this
-    // must not do.
-    if (isReferral && !REFERRAL_CODES_LIVE) return;
-    const amt = isReferral ? 0 : Number(amount);
+    const amt = Number(amount);
     if (trimmed.length < 3) { setError('Voucher codes need at least 3 characters.'); return; }
-    if (!isReferral && (!Number.isFinite(amt) || amt <= 0)) { setError('Enter a discount amount greater than zero.'); return; }
+    if (!Number.isFinite(amt) || amt <= 0) { setError('Enter a discount amount greater than zero.'); return; }
     if (kind === 'percent' && amt > 100) { setError('Percentage discounts can be at most 100%.'); return; }
     if (vouchers.some(v => v.code === trimmed)) { setError(`Code ${trimmed} already exists on this conference.`); return; }
     const maxRed = maxRedemptions.trim() === '' ? null : Math.floor(Number(maxRedemptions));
@@ -333,13 +298,10 @@ export default function VouchersSection({
 
   const symbol = currencySymbol(conference.fee_currency);
   const codeValid = sanitizeCode(code.trim()).length >= 3;
-  const amountValid = kind === 'referral'
-    || (Number(amount) > 0 && (kind !== 'percent' || Number(amount) <= 100));
+  const amountValid = Number(amount) > 0 && (kind !== 'percent' || Number(amount) <= 100);
   const canCreate = codeValid && amountValid && !creating;
 
-  // Search is a plain substring on the code, which is all a referral row has
-  // to be found by (the code IS the ambassador's name). Case-insensitive, so
-  // typing a name in sentence case still finds it.
+  // Search is a plain, case-insensitive substring on the code.
   const PAGE_SIZE = 12;
   const filtered = useMemo(() => {
     const q = query.trim().toUpperCase().replace(/\s+/g, '');
@@ -360,9 +322,7 @@ export default function VouchersSection({
               Vouchers
             </h2>
             <p style={{ fontFamily: OUTFIT, fontSize: 11.5, color: NEU.inkSoft }}>
-              {REFERRAL_CODES_LIVE
-                ? `Discount codes, and referral codes that take nothing off, scoped to ${conference.acronym} only.`
-                : `Discount codes scoped to ${conference.acronym} only.`}
+              {`Discount codes scoped to ${conference.acronym} only.`}
             </p>
           </div>
         </div>
@@ -422,25 +382,10 @@ export default function VouchersSection({
               <NeuPill active={kind === 'flat'} gradient={NEU_GRADIENTS.forest} onClick={() => setKind('flat')}>
                 Flat {conference.fee_currency}
               </NeuPill>
-              {REFERRAL_CODES_LIVE && (
-                <NeuPill active={kind === 'referral'} gradient={NEU_GRADIENTS.forest} onClick={() => setKind('referral')}>
-                  Referral
-                </NeuPill>
-              )}
             </div>
           </div>
 
-          {/* Amount, or the referral note in its place. A referral code has
-              no amount to ask for, so the field is replaced rather than
-              shown disabled with a zero in it. */}
-          {kind === 'referral' ? (
-            <div>
-              <span style={fieldLabelStyle}>Takes off</span>
-              <p style={{ fontFamily: OUTFIT, fontSize: 12.5, color: NEU.inkSoft, lineHeight: 1.5, paddingTop: 5 }}>
-                Nothing. A referral code only tells you who sent the applicant.
-              </p>
-            </div>
-          ) : (
+          {/* Amount */}
           <div>
             <label htmlFor="voucher-amount" style={fieldLabelStyle}>
               {kind === 'percent' ? 'Amount (%)' : `Amount (${symbol || conference.fee_currency})`}
@@ -465,7 +410,6 @@ export default function VouchersSection({
               </span>
             </div>
           </div>
-          )}
 
           {/* Max redemptions */}
           <div>
@@ -507,7 +451,7 @@ export default function VouchersSection({
               </div>
             </div>
             <NeuButton icon={Plus} onClick={handleCreate} disabled={!canCreate}>
-              {creating ? 'Creating…' : kind === 'referral' ? 'Create referral code' : 'Create voucher'}
+              {creating ? 'Creating…' : 'Create voucher'}
             </NeuButton>
           </div>
         </div>
@@ -681,7 +625,6 @@ export default function VouchersSection({
       {/* Footnote */}
       <p className="mt-3" style={{ fontFamily: OUTFIT, fontSize: 10.5, color: NEU.inkSoft, lineHeight: 1.6 }}>
         Discounts apply at signup.
-        {REFERRAL_CODES_LIVE && ' A referral code never changes a price, it records who referred the applicant.'}
       </p>
 
       {confirmModal}

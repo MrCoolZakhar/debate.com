@@ -4694,7 +4694,7 @@ export default function SettingsPage() {
         const doors: { emoji: string; icon: LucideIcon; label: string; desc: string; href: string }[] = [
           { emoji: 'Receipt', icon: ReceiptText, label: 'Registration fee', desc: 'A fee on top of the ticket, if you charge one.', href: `${fin}?open=fee` },
           { emoji: 'Wrapped gift', icon: Gift, label: 'Add-ons', desc: 'Extras people buy with their ticket.', href: `${fin}?open=addons` },
-          { emoji: 'Ticket', icon: Ticket, label: 'Vouchers and referrals', desc: 'Discount and referral codes.', href: `${fin}?open=vouchers` },
+          { emoji: 'Ticket', icon: Ticket, label: 'Vouchers', desc: 'Discount codes.', href: `${fin}?open=vouchers` },
           { emoji: 'Heart with ribbon', icon: HandHeart, label: 'Financial aid', desc: 'The aid form and the requests waiting.', href: `${fin}/aid` },
         ];
         return (

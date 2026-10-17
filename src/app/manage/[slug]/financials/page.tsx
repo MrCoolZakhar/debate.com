@@ -8,8 +8,7 @@
  *   row 2    Invoices, Generate invoices (opens Invoices and Receipts), Financial aid
  *   row 3    four settings cards (payment method, registration fee, add-ons, vouchers)
  * Every number is from financials_dashboard, read on mount and again after any
- * action. The things-to-do line is from money_things_to_do. The Referrals
- * section stays at the foot (it renders nothing without referral codes).
+ * action. The things-to-do line is from money_things_to_do.
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -24,7 +23,6 @@ import { CurrencyPicker } from '@/components/CurrencyPicker';
 import { PURCHASE_CSS } from '@/components/purchase/purchaseKit';
 import { friendlyError } from '@/lib/friendlyError';
 import { STORE_CSS, Big } from '../store/storeKit';
-import ReferralsSection from './ReferralsSection';
 import { conversionLine, useFinancialsCurrency } from './shared';
 import {
   cents, readDashboard, readThingsToDo, type FinancialsDashboard, type ThingsToDo, type TodoKind,
@@ -334,11 +332,6 @@ export default function FinancialsDashboardPage() {
           onOpenPaymentMethod={() => { setPopup(null); setFlow(needsSetup ? { mode: 'welcome' } : { mode: 'payment' }); }}
         />
       )}
-
-      {/* Referrals: who referred whom. Renders nothing for a conference with no referral codes. */}
-      <div style={{ marginTop: 32 }}>
-        <ReferralsSection conference={conference} />
-      </div>
     </div>
   );
 }
