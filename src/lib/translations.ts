@@ -9,6 +9,7 @@ import { placeholderTranslations } from './translationsPlaceholders';
 import { floorToolsTranslations } from './translationsFloorTools';
 import { createJoinTranslations } from './translationsCreateJoin';
 import { restartTranslations } from './translationsRestart';
+import { seatAdmissionTranslations } from './translationsSeatAdmission';
 import { broadcastsTranslations } from './translationsBroadcasts';
 import { ptTranslationsA } from './translationsPtA';
 import { ptTranslationsB } from './translationsPtB';
@@ -28,6 +29,7 @@ export const translations = {
     ...floorToolsTranslations.en,
     ...createJoinTranslations.en,
     ...restartTranslations.en,
+    ...seatAdmissionTranslations.en,
     ...broadcastsTranslations.en,
     ...placeholderTranslations.en,
     // --- session surfaces, added 17 Sep 2026 (tutorial + translations pass) ---
@@ -1729,6 +1731,7 @@ export const translations = {
     ...floorToolsTranslations.es,
     ...createJoinTranslations.es,
     ...restartTranslations.es,
+    ...seatAdmissionTranslations.es,
     ...broadcastsTranslations.es,
     ...placeholderTranslations.es,
     // --- session surfaces, added 17 Sep 2026 (tutorial + translations pass) ---
@@ -3427,6 +3430,7 @@ export const translations = {
     ...floorToolsTranslations.fr,
     ...createJoinTranslations.fr,
     ...restartTranslations.fr,
+    ...seatAdmissionTranslations.fr,
     ...broadcastsTranslations.fr,
     ...placeholderTranslations.fr,
     // --- session surfaces, added 17 Sep 2026 (tutorial + translations pass) ---
@@ -5125,6 +5129,7 @@ export const translations = {
     ...floorToolsTranslations.ar,
     ...createJoinTranslations.ar,
     ...restartTranslations.ar,
+    ...seatAdmissionTranslations.ar,
     ...broadcastsTranslations.ar,
     ...placeholderTranslations.ar,
     // --- session surfaces, added 17 Sep 2026 (tutorial + translations pass) ---
@@ -6826,6 +6831,7 @@ export const translations = {
     ...floorToolsTranslations.pt,
     ...createJoinTranslations.pt,
     ...restartTranslations.pt,
+    ...seatAdmissionTranslations.pt,
     ...broadcastsTranslations.pt,
     ...placeholderTranslations.pt,
     ...ptTranslationsA,

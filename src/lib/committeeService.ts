@@ -1829,8 +1829,54 @@ export async function approveJoinRequest(
   code: string, chairSuffix?: string,
 ): Promise<void> {
   await setDelegateStatus(delegateId, desiredStatus, code, chairSuffix);
-  const { error } = await sessionClient(code, chairSuffix).from('motions').delete().eq('id', motionId);
-  if (error) console.error('Error approving join request:', error);
+  await answerJoinRequest(motionId, 'approved', code, chairSuffix);
+}
+
+/**
+ * The chair's answer to a waiting-room request is written ON the row (status 'approved' /
+ * 'denied') rather than by deleting it, so the phone that asked can tell a yes from a no
+ * even when its delegation is already Present (src/lib/seatAdmission.ts). Every motion read
+ * filters on status 'pending', so an answered row leaves every list exactly as a delete
+ * did. A refused update falls back to the delete.
+ */
+async function answerJoinRequest(motionId: string, answer: 'approved' | 'denied', code: string, chairSuffix?: string): Promise<void> {
+  const { data, error } = await sessionClient(code, chairSuffix).from('motions')
+    .update({ status: answer }).eq('id', motionId).select('id');
+  if (!error && (data?.length ?? 0) > 0) return;
+  if (error) console.error(`Error marking join request ${answer}:`, error);
+  const { error: delErr } = await sessionClient(code, chairSuffix).from('motions').delete().eq('id', motionId);
+  if (delErr) console.error('Error removing join request:', delErr);
+}
+
+/** A phone asks to be admitted to its seat. The id is chosen by the phone so it can follow
+ *  its own request; a second press of the same request is a no-op (23505). */
+export async function requestSeatAdmission(
+  committeeId: string, delegateId: string, country: string,
+  desiredStatus: 'present' | 'present-voting', code: string, requestId: string,
+): Promise<boolean> {
+  const { error } = await sessionClient(code).from('motions').insert({
+    id: requestId,
+    committee_id: committeeId,
+    type: 'join-request',
+    proposed_by: country,
+    total_time: 0,
+    speaking_time: 0,
+    topic: JSON.stringify({ delegateId, desiredStatus }),
+    status: 'pending',
+    disruptiveness: 99_000_000, // shown at very top
+  });
+  if (error && error.code !== '23505') { console.error('Error requesting admission:', error); return false; }
+  return true;
+}
+
+/** Where a waiting-room request stands: 'gone' = deleted (an older chair bundle, or Roll
+ *  Call admitted the delegation), null = could not ask. */
+export async function readJoinRequestStatus(requestId: string): Promise<'pending' | 'approved' | 'denied' | 'gone' | null> {
+  const { data, error } = await supabase.from('motions').select('status').eq('id', requestId).maybeSingle();
+  if (error) return null;
+  if (!data) return 'gone';
+  const s = (data as { status?: string }).status;
+  return s === 'approved' || s === 'denied' ? s : 'pending';
 }
 
 /**
@@ -1847,14 +1893,14 @@ export async function resolveJoinRequestsOnAdmit(
 ): Promise<void> {
   const ok = await setDelegateStatus(delegateId, status, code, chairSuffix);
   if (!ok) return;
-  const { error } = await sessionClient(code, chairSuffix).from('motions').delete()
-    .eq('committee_id', committeeId).eq('type', 'join-request').eq('proposed_by', country);
+  // Answered, not deleted: the phone that asked reads 'approved' and is let in.
+  const { error } = await sessionClient(code, chairSuffix).from('motions').update({ status: 'approved' })
+    .eq('committee_id', committeeId).eq('type', 'join-request').eq('proposed_by', country).eq('status', 'pending');
   if (error) console.error('Error resolving join request on admit:', error);
 }
 
 export async function denyJoinRequest(motionId: string, code: string, chairSuffix?: string): Promise<void> {
-  const { error } = await sessionClient(code, chairSuffix).from('motions').delete().eq('id', motionId);
-  if (error) console.error('Error denying join request:', error);
+  await answerJoinRequest(motionId, 'denied', code, chairSuffix);
 }
 
 // ============================================================

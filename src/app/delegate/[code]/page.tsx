@@ -40,7 +40,8 @@ import {
   caucusRemainingNow,
   moderatedCaucusRemainingNow,
   addDocument as addDocumentInDB,
-  requestJoinSession,
+  requestSeatAdmission,
+  readJoinRequestStatus,
   requestGslSpot,
   setDelegateStatus as setDelegateStatusInDB,
 } from '@/lib/committeeService';
@@ -52,6 +53,7 @@ import { useDelegateIdleLogout, markDelegateActivity } from '@/lib/delegateIdle'
 import DelegateIdleWarning from '@/components/delegate/DelegateIdleWarning';
 import DeviceBallotScreen from '@/components/delegate/DeviceBallotScreen';
 import { safeStorageKey } from '@/lib/storageKey';
+import { initialAdmission, writeAdmission, clearAdmission, newRequestId, type AdmissionRecord } from '@/lib/seatAdmission';
 import { UnknownSeatIcon } from '@/components/UnknownSeatIcon';
 import PdfViewer, { type PdfZoom } from '@/components/documents/PdfViewer';
 
@@ -924,10 +926,18 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
     });
   };
 
+  // Seat admission (src/lib/seatAdmission.ts): with "Join without approval" blocked, every
+  // join of this seat from this tab waits for the chair, Present or not. Kept across a
+  // reload of this page only; any other way in is a new join.
+  const [admission, setAdmission] = useState<AdmissionRecord | null>(() => initialAdmission(code, country));
+  const admitted = admission?.state === 'admitted';
+  const pendingReqId = admission?.state === 'pending' ? admission.id : null;
+
   // Join request state
   const [joinRequesting, setJoinRequesting] = useState(false);
-  const [joinStatus, setJoinStatus] = useState<DelegateStatus | null>(null);
+  const [joinStatus, setJoinStatus] = useState<DelegateStatus | null>(() => (admission?.state === 'pending' ? admission.desired : null));
   const [joinDenied, setJoinDenied] = useState(false);
+  const [joinError, setJoinError] = useState(false);
 
   // GSL denial state
   const [gslDenied, setGslDenied] = useState(false);
@@ -1377,20 +1387,64 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
         return {};
       });
     }
-    // Waiting room: a join request that vanished while still absent = the chair declined it.
-    const admitted = (committee.delegates.find((d) => d.country === country)?.status ?? 'absent') !== 'absent';
-    const hadJoinReq = (prev ?? []).some((m) => (m.type as string) === 'join-request' && m.proposedBy === country);
-    const hasJoinReq = (committee.pendingMotions ?? []).some((m) => (m.type as string) === 'join-request' && m.proposedBy === country);
-    if (hadJoinReq && !hasJoinReq && !admitted) {
-      setJoinDenied(true);
-      setJoinStatus(null);
-    }
-    if (admitted) {
-      setJoinDenied(false);
-      setJoinStatus(null);
-    }
     prevPendingRef.current = committee.pendingMotions;
   }, [committee?.pendingMotions, committee?.speakersList, committee?.currentSpeaker, committee?.delegates, country]);
+
+  // ── Seat admission (src/lib/seatAdmission.ts) ──
+  const approvalOn = !!committee && getCommitteeFlags(committee).requireChairApproval;
+  // With approval off, the device that is in is in: switching approval on later never sends
+  // a phone already in the room back to the Waiting Room.
+  useEffect(() => {
+    if (!committee || !seatAllowed || approvalOn || !country || admitted) return;
+    const rec: AdmissionRecord = { state: 'admitted', at: Date.now() };
+    writeAdmission(code, country, rec);
+    setAdmission(rec);
+    setJoinStatus(null);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [committee?.id, seatAllowed, approvalOn, country, admitted]);
+  // Losing the seat (removed, taken, opened elsewhere) ends the admission: coming back is a
+  // new join.
+  useEffect(() => {
+    if (!seatLost) return;
+    clearAdmission(code, country);
+    setAdmission(null);
+    setJoinStatus(null);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [seatLost]);
+  // Follow this device's own request. It leaves the pending list when the chair answers;
+  // the row then says 'approved' or 'denied'. A row that is gone was answered by an older
+  // chair bundle or by Roll Call: Present means yes. Re-checked every 5 s as well, in case
+  // a realtime event was missed.
+  const [admissionTick, setAdmissionTick] = useState(0);
+  useEffect(() => {
+    if (!pendingReqId) return;
+    const id = window.setInterval(() => setAdmissionTick((n) => n + 1), 5000);
+    return () => window.clearInterval(id);
+  }, [pendingReqId]);
+  useEffect(() => {
+    if (!pendingReqId || !committee) return;
+    if ((committee.pendingMotions ?? []).some((m) => m.id === pendingReqId)) return;
+    let alive = true;
+    (async () => {
+      const s = await readJoinRequestStatus(pendingReqId);
+      if (!alive || s === null || s === 'pending') return;
+      const c = committeeRef.current;
+      const present = (c?.delegates.find((d) => d.country === country)?.status ?? 'absent') !== 'absent';
+      if (s === 'approved' || (s === 'gone' && present)) {
+        const rec: AdmissionRecord = { state: 'admitted', at: Date.now() };
+        writeAdmission(code, country, rec);
+        setAdmission(rec);
+        setJoinDenied(false);
+      } else {
+        clearAdmission(code, country);
+        setAdmission(null);
+        setJoinDenied(true);
+      }
+      setJoinStatus(null);
+    })();
+    return () => { alive = false; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingReqId, committee?.pendingMotions, committee?.delegates, admissionTick]);
 
   // Rehydrate the GSL clocks from localStorage. A reload must not clear a lockout,
   // so the stored timestamps — not component state — are the source of truth.
@@ -1688,11 +1742,18 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
       setDelegateStatusInDB(myDelegate.id, desiredStatus, committee.code);
       return;
     }
-    // Chair approval ON → request a seat and wait in the waiting room.
+    // Chair approval ON → ask for this device to be let in, and wait in the waiting room.
+    // The request carries an id chosen here, so this phone follows ITS answer.
     setJoinRequesting(true);
-    setJoinStatus(desiredStatus);
-    await requestJoinSession(committee.id, myDelegate.id, country, desiredStatus, committee.code);
+    setJoinError(false);
+    const id = newRequestId();
+    const ok = await requestSeatAdmission(committee.id, myDelegate.id, country, desiredStatus, committee.code, id);
     setJoinRequesting(false);
+    if (!ok) { setJoinError(true); return; }
+    const rec: AdmissionRecord = { state: 'pending', id, desired: desiredStatus, at: Date.now() };
+    writeAdmission(code, country, rec);
+    setAdmission(rec);
+    setJoinStatus(desiredStatus);
   };
 
   // ── Request to be added to speakers list (chair must approve)
@@ -1974,7 +2035,11 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
   }
 
   // ── Waiting Room — chair-approval gate (blocks the session until admitted) ──
-  if (requireChairApproval && isAbsent && !sessionEnded) {
+  if (requireChairApproval && (isAbsent || !admitted) && !sessionEnded) {
+    // Present already (roll call marked the delegation in): ask to join as that status;
+    // the chair's Approve changes nothing about attendance.
+    const presentStatus: 'present' | 'present-voting' | null = !isAbsent && myDelegate
+      ? (myDelegate.status === 'present-voting' ? 'present-voting' : 'present') : null;
     const waitingHeading = language === 'ar' ? 'غرفة الانتظار' : language === 'fr' ? "Salle d'attente" : language === 'pt' ? 'Sala de Espera' : language === 'es' ? 'Sala de Espera' : 'Waiting Room';
     return (
       <div className="min-h-dvh flex flex-col items-center justify-center text-center px-6 py-10" style={{ background: DG.ivory }}>
@@ -2006,15 +2071,24 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
             </div>
           ) : (
             <>
-              <p style={{ margin: '0 0 16px', fontFamily: OUTFIT, fontSize: 14, color: DG.body }}>{t('delegate_absent_desc')}</p>
-              <div className="flex flex-col gap-2.5">
-                <ChunkyButton tone="outline" disabled={joinRequesting} onClick={() => handleRequestJoin('present')}>
-                  {t('delegate_present_btn')}
+              <p style={{ margin: '0 0 16px', fontFamily: OUTFIT, fontSize: 14, color: DG.body }}>{t(presentStatus ? 'delegate_admit_present_desc' : 'delegate_absent_desc')}</p>
+              {presentStatus ? (
+                <ChunkyButton tone="primary" disabled={joinRequesting} onClick={() => handleRequestJoin(presentStatus)}>
+                  {t('delegate_admit_ask')}
                 </ChunkyButton>
-                <ChunkyButton tone="primary" disabled={joinRequesting} onClick={() => handleRequestJoin('present-voting')}>
-                  {t('delegate_pv_btn')}
-                </ChunkyButton>
-              </div>
+              ) : (
+                <div className="flex flex-col gap-2.5">
+                  <ChunkyButton tone="outline" disabled={joinRequesting} onClick={() => handleRequestJoin('present')}>
+                    {t('delegate_present_btn')}
+                  </ChunkyButton>
+                  <ChunkyButton tone="primary" disabled={joinRequesting} onClick={() => handleRequestJoin('present-voting')}>
+                    {t('delegate_pv_btn')}
+                  </ChunkyButton>
+                </div>
+              )}
+              {joinError && (
+                <p role="alert" style={{ margin: '12px 0 0', fontFamily: OUTFIT, fontSize: 13, fontWeight: 700, color: DG.danger }}>{t('delegate_admit_failed')}</p>
+              )}
             </>
           )}
         </Panel>
