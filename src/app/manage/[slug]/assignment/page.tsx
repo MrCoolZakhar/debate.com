@@ -15,7 +15,7 @@ import { useAuth } from '@/components/AuthProvider';
 import { getCountryByName } from '@/lib/countries';
 import { CircleFlag } from '@/components/CircleFlag';
 import { FitTip, explainReason, missingSignals, type ReasonContext } from '@/app/manage/[slug]/assignment/fitReasons';
-import { CountryName, StackedName, committeeShortName, byPersonName } from '@/app/manage/[slug]/assignment/displayNames';
+import { CountryName, StackedName, committeeShortName, byAppliedAt } from '@/app/manage/[slug]/assignment/displayNames';
 import { effectiveSlotArt, parseGroups, type SlotGroup } from '@/lib/slotGroups';
 import { friendlyError } from '@/lib/friendlyError';
 import { ageAt } from '@/lib/age';
@@ -52,6 +52,7 @@ interface AppPref {
 
 interface AcceptedApp {
   id: string;
+  submitted_at?: string | null;
   role: string;
   experience_level: string | null;
   is_head_delegate: boolean;
@@ -295,6 +296,7 @@ interface ChairApp {
   assigned_committee_id: string | null;
   experience_level: string | null;
   attending: boolean;
+  submitted_at?: string | null;
   profiles: { id: string; display_name: string; email: string; avatar_url: string | null } | null;
 }
 
@@ -3662,7 +3664,7 @@ export default function AssignmentPage() {
         .from('applications')
         .select(`
           id, role, experience_level, is_head_delegate, society_id, payment_status,
-          attending, invited_email, invited_name,
+          attending, invited_email, invited_name, submitted_at,
           profiles (id, display_name, email, nationality, date_of_birth, mun_experience_level, avatar_url),
           societies (name),
           application_preferences (
@@ -3694,7 +3696,7 @@ export default function AssignmentPage() {
       supabase
         .from('applications')
         .select(`
-          id, user_id, status, assigned_committee_id, experience_level, attending,
+          id, user_id, status, assigned_committee_id, experience_level, attending, submitted_at,
           profiles (id, display_name, email, avatar_url)
         `)
         .eq('conference_id', conference.id)
@@ -4736,10 +4738,10 @@ export default function AssignmentPage() {
     openDropModal(committeeId, payload);
   }
 
-  // Left rail: search, alphabetical
+  // Left rail: search, in the order they applied (latest at the bottom)
   const filteredApps = [...accepted]
     .filter(app => (app.profiles?.display_name ?? app.invited_name ?? '').toLowerCase().includes(search.toLowerCase()))
-    .sort(byPersonName);
+    .sort(byAppliedAt);
 
   // Delegations rail source: every society, searchable by name.
   const filteredSocieties = [...societies]
@@ -4753,7 +4755,7 @@ export default function AssignmentPage() {
   const unassignedChairs = [...chairApps]
     .filter(ca => !allChairIdsOnDais.has(ca.user_id))
     .filter(ca => (ca.profiles?.display_name ?? '').toLowerCase().includes(search.toLowerCase()))
-    .sort(byPersonName);
+    .sort(byAppliedAt);
   const invitesByCommittee = new Map<string, PendingChairInvite[]>();
   for (const inv of chairInvites) {
     const list = invitesByCommittee.get(inv.committee_id) ?? [];

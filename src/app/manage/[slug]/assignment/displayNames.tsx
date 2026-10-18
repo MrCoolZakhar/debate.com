@@ -157,14 +157,14 @@ export function StackedName({
   return <>{children ? children(body) : body}</>;
 }
 
-/** A to Z by the name shown on the card (live display name, else the invited
- *  name), ignoring case, accents and stray spaces; nameless people last. */
-export function byPersonName(
-  a: { profiles?: { display_name?: string | null } | null; invited_name?: string | null },
-  b: { profiles?: { display_name?: string | null } | null; invited_name?: string | null },
+/** In the order people applied, the latest at the bottom (owner, 18 Oct
+ *  2026). Submission time; undated last. */
+export function byAppliedAt(
+  a: { submitted_at?: string | null },
+  b: { submitted_at?: string | null },
 ): number {
-  const na = (a.profiles?.display_name || a.invited_name || '').trim();
-  const nb = (b.profiles?.display_name || b.invited_name || '').trim();
-  if (!na || !nb) return na ? -1 : nb ? 1 : 0;
-  return na.localeCompare(nb, undefined, { sensitivity: 'base' });
+  const ta = a.submitted_at || '';
+  const tb = b.submitted_at || '';
+  if (!ta || !tb) return ta ? -1 : tb ? 1 : 0;
+  return ta.localeCompare(tb);
 }
