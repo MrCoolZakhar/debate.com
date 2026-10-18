@@ -18,7 +18,7 @@ import {
 } from '@/app/manage/[slug]/assignment/delegationShared';
 import { PersonAvatar } from '@/app/manage/[slug]/assignment/page';
 import { NEU, NEU_GRADIENTS, NeuCard, NeuInset, NeuButton, NeuIconDisc } from '@/components/neu';
-import { StackedName, committeeShortName, byPersonName } from '@/app/manage/[slug]/assignment/displayNames';
+import { StackedName, committeeShortName, byAppliedAt } from '@/app/manage/[slug]/assignment/displayNames';
 import { Users } from 'lucide-react';
 
 function isHeadDelegate(m: PoolMember): boolean {
@@ -824,22 +824,22 @@ export default function DelegationsView({ conference, showFlash, initialSocietyI
 
   const society = expandedSociety;
   const advisors = [...expandedMembers.filter(m => m.role === 'faculty-advisor')]
-    .sort(byPersonName);
+    .sort(byAppliedAt);
   const advisorPaidCount = advisors.filter(a => a.attending && a.payment_status === 'paid').length;
   const delegatePool = expandedMembers.filter(m => m.role === 'delegate' || m.role === 'head-delegate');
   // Head delegates keep counting toward every fill/accounting figure below, but
   // their own row is their home in the UI (F17), pulled out of the generic lists.
   const headDelegates = [...delegatePool.filter(isHeadDelegate)]
-    .sort(byPersonName);
+    .sort(byAppliedAt);
   const nonHDPool = delegatePool.filter(m => !isHeadDelegate(m));
   const paidAttending = [...delegatePool.filter(m => m.attending && m.payment_status === 'paid')]
-    .sort(byPersonName);
+    .sort(byAppliedAt);
   const unpaidAttending = [...nonHDPool.filter(m => m.attending && m.payment_status === 'unpaid')]
-    .sort(byPersonName);
+    .sort(byAppliedAt);
   const waivedMembers = [...nonHDPool.filter(m => m.payment_status === 'waived')]
-    .sort(byPersonName);
+    .sort(byAppliedAt);
   const notAttendingMembers = [...nonHDPool.filter(m => !m.attending && m.payment_status !== 'waived')]
-    .sort(byPersonName);
+    .sort(byAppliedAt);
   const pledgingMembers = expandedMembers.filter(m => m.pledge_type);
   const openCount = Math.max(0, society.spots_purchased - paidAttending.length);
 

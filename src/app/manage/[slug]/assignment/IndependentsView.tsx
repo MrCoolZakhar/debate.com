@@ -26,7 +26,7 @@ import {
 } from '@/app/manage/[slug]/assignment/delegationShared';
 import { PersonAvatar } from '@/app/manage/[slug]/assignment/page';
 import { NEU, NeuCard, NeuInset, NeuButton } from '@/components/neu';
-import { StackedName, committeeShortName, byPersonName } from '@/app/manage/[slug]/assignment/displayNames';
+import { StackedName, committeeShortName, byAppliedAt } from '@/app/manage/[slug]/assignment/displayNames';
 
 // ── Transfer / give-spot picker ─────────────────────────────────────────────
 // Searchable list of the conference's accepted/assigned delegates and head
@@ -234,7 +234,7 @@ export default function IndependentsView({ conference, showFlash }: Independents
     if (seq !== loadSeqRef.current) return; // stale response, a newer load superseded this one
 
     const list = ((indepRes.data ?? []) as unknown as PoolMember[])
-      .sort(byPersonName);
+      .sort(byAppliedAt);
     setIndependents(list);
     setSearchPool(search);
     setLoading(false);
