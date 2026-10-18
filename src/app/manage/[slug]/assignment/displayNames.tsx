@@ -156,3 +156,15 @@ export function StackedName({
   );
   return <>{children ? children(body) : body}</>;
 }
+
+/** A to Z by the name shown on the card (live display name, else the invited
+ *  name), ignoring case, accents and stray spaces; nameless people last. */
+export function byPersonName(
+  a: { profiles?: { display_name?: string | null } | null; invited_name?: string | null },
+  b: { profiles?: { display_name?: string | null } | null; invited_name?: string | null },
+): number {
+  const na = (a.profiles?.display_name || a.invited_name || '').trim();
+  const nb = (b.profiles?.display_name || b.invited_name || '').trim();
+  if (!na || !nb) return na ? -1 : nb ? 1 : 0;
+  return na.localeCompare(nb, undefined, { sensitivity: 'base' });
+}

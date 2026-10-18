@@ -15,7 +15,7 @@ import { useAuth } from '@/components/AuthProvider';
 import { getCountryByName } from '@/lib/countries';
 import { CircleFlag } from '@/components/CircleFlag';
 import { FitTip, explainReason, missingSignals, type ReasonContext } from '@/app/manage/[slug]/assignment/fitReasons';
-import { CountryName, StackedName, committeeShortName } from '@/app/manage/[slug]/assignment/displayNames';
+import { CountryName, StackedName, committeeShortName, byPersonName } from '@/app/manage/[slug]/assignment/displayNames';
 import { effectiveSlotArt, parseGroups, type SlotGroup } from '@/lib/slotGroups';
 import { friendlyError } from '@/lib/friendlyError';
 import { ageAt } from '@/lib/age';
@@ -4739,12 +4739,12 @@ export default function AssignmentPage() {
   // Left rail: search, alphabetical
   const filteredApps = [...accepted]
     .filter(app => (app.profiles?.display_name ?? app.invited_name ?? '').toLowerCase().includes(search.toLowerCase()))
-    .sort((a, b) => (a.profiles?.display_name ?? a.invited_name ?? '').localeCompare(b.profiles?.display_name ?? b.invited_name ?? ''));
+    .sort(byPersonName);
 
   // Delegations rail source: every society, searchable by name.
   const filteredSocieties = [...societies]
     .filter(s => s.name.toLowerCase().includes(search.toLowerCase()))
-    .sort((a, b) => a.name.localeCompare(b.name));
+    .sort((a, b) => a.name.trim().localeCompare(b.name.trim(), undefined, { sensitivity: 'base' }));
 
   // Chairs mode, unassigned pool is anyone not currently on any committee's
   // dais (chair_user_ids), mirroring how the delegates pool is everyone not
@@ -4753,7 +4753,7 @@ export default function AssignmentPage() {
   const unassignedChairs = [...chairApps]
     .filter(ca => !allChairIdsOnDais.has(ca.user_id))
     .filter(ca => (ca.profiles?.display_name ?? '').toLowerCase().includes(search.toLowerCase()))
-    .sort((a, b) => (a.profiles?.display_name ?? '').localeCompare(b.profiles?.display_name ?? ''));
+    .sort(byPersonName);
   const invitesByCommittee = new Map<string, PendingChairInvite[]>();
   for (const inv of chairInvites) {
     const list = invitesByCommittee.get(inv.committee_id) ?? [];
