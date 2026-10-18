@@ -38,6 +38,7 @@ import { friendlyError } from '@/lib/friendlyError';
 import { notifyErr, notifyOk } from '@/lib/appNotify';
 import { committeeDisplayName } from '@/lib/presetNames';
 import { F, INK, INK_SOFT, FOREST, AMBER, DANGER, INPUT, TINT_GOLD_BG, TINT_GREEN_BG, TYPE_PX } from './panelKit';
+import { HangingDisc, TINT_GREEN } from '../financials/dashboardKit';
 import { AwardsSheet } from './awardsSheet';
 import { notifySettingsFlagsChanged } from '@/lib/roleSetupProblems';
 
@@ -152,6 +153,12 @@ function RecipientCard({ row, awardLabel }: { row: ConferenceAwardRow; awardLabe
         <p style={{ fontSize: TYPE_PX.hint, fontWeight: 700, color: AMBER, overflowWrap: 'anywhere' }}>{awardLabel}</p>
         <p style={{ fontSize: TYPE_PX.body, fontWeight: 800, color: INK, lineHeight: 1.25, overflowWrap: 'anywhere' }}>{big}</p>
         {small && <p style={{ fontSize: TYPE_PX.hint, color: INK_SOFT, overflowWrap: 'anywhere' }}>{small}</p>}
+        {/* The chair's reason, when they wrote one (prompt 134). */}
+        {row.rationale?.trim() && (
+          <p style={{ marginTop: 4, fontSize: 12.5, lineHeight: 1.45, color: INK_SOFT, fontStyle: 'italic', overflowWrap: 'anywhere', whiteSpace: 'pre-wrap' }}>
+            {row.rationale.trim()}
+          </p>
+        )}
       </div>
     </div>
   );
@@ -483,12 +490,14 @@ export function AwardsReviewView({
   else summary = 'Open a committee to see who its chairs nominated.';
 
   return (
-    <div className="flex flex-col gap-5" style={{ containerType: 'inline-size' }}>
+    // display: contents (prompt 134): the two cards are items of the Awards
+    // tab's grid, so Review and Publish sits level with Conference Awards.
+    <div className="gv-rv-wrap" style={{ display: 'contents' }}>
       <style>{REVIEW_CSS}</style>
 
-      <section className="gv-st-card gv-fd-card relative" aria-labelledby="rv-title"
-        style={{ paddingTop: 44, marginTop: 24, background: 'radial-gradient(120% 90% at 100% 0%, rgba(61,122,82,0.10) 0%, rgba(61,122,82,0) 55%), #FFFFFF' }}>
-        <OverhangDisc emoji="Clipboard" icon={ClipboardList} tint={TINT_GREEN_BG} />
+      <section className="gv-st-card gv-fd-card gv-fd-hung relative gv-rv-main" aria-labelledby="rv-title"
+        style={{ containerType: 'inline-size', background: 'radial-gradient(120% 90% at 100% 0%, rgba(61,122,82,0.10) 0%, rgba(61,122,82,0) 55%), #FFFFFF' }}>
+        <HangingDisc icon={{ emoji: 'Clipboard', lucide: ClipboardList, tint: TINT_GREEN }} side="start" />
         <h2 id="rv-title" style={{ fontFamily: F, fontSize: 20, fontWeight: 800, color: INK, letterSpacing: '-0.01em' }}>Review and Publish</h2>
         <p className="mt-1" style={{ fontFamily: F, fontSize: TYPE_PX.body, color: INK_SOFT }}>{summary}</p>
 
@@ -522,8 +531,8 @@ export function AwardsReviewView({
       </section>
 
       {committees !== null && committees.length > 0 && !loadError && (
-        <section className="gv-st-card gv-fd-card relative" aria-labelledby="rv-publish-title"
-          style={{ paddingTop: 44, marginTop: 24, background: publishedAt
+        <section className="gv-st-card gv-fd-card relative gv-rv-pub" aria-labelledby="rv-publish-title"
+          style={{ containerType: 'inline-size', paddingTop: 44, marginTop: 24, background: publishedAt
             ? 'radial-gradient(120% 90% at 100% 0%, rgba(61,122,82,0.14) 0%, rgba(61,122,82,0) 55%), #FFFFFF'
             : 'radial-gradient(120% 90% at 100% 0%, rgba(238,217,138,0.30) 0%, rgba(238,217,138,0) 55%), #FFFFFF' }}>
           <OverhangDisc emoji="Party popper" icon={PartyPopper} tint={publishedAt ? TINT_GREEN_BG : TINT_GOLD_BG} />

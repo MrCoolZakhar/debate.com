@@ -34,8 +34,9 @@ import { notifyErr } from '@/lib/appNotify';
 import { committeeDisplayName } from '@/lib/presetNames';
 import {
   F, INK, INK_SOFT, FOREST, GOLD, AMBER, INPUT,
-  SectionHead, Switch, BigCount, Group, SwitchRow, TINT_GOLD_BG, TINT_GREEN_BG, TYPE_PX
+  SectionHead, Switch, BigCount, Group, SwitchRow, TINT_GOLD_BG, TINT_GREEN_BG, TYPE, TYPE_PX
 } from './panelKit';
+import { HangingDisc, TINT_GOLD } from '../financials/dashboardKit';
 import { AwardsReview } from './awardsReview';
 import { AwardsSheet } from './awardsSheet';
 import { ConfirmModal } from '@/components/ConfirmModal';
@@ -84,8 +85,15 @@ const AWARDS_CSS = `
 .gv-aw-com:focus-visible{outline:2px solid ${FOREST};outline-offset:2px}
 .gv-aw-wrap{container-type:inline-size}
 .gv-aw-layout{display:grid;gap:20px;grid-template-columns:minmax(0,1fr);align-items:start}
-.gv-aw-right{order:-1}
-@container (min-width: 960px){.gv-aw-layout{grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:24px}.gv-aw-right{order:0}}
+.gv-aw-layout>.gv-rv-wrap>.gv-rv-main{order:-2}
+.gv-aw-layout>.gv-rv-wrap>.gv-rv-pub{order:-1}
+@container (min-width: 960px){
+  .gv-aw-layout{grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:24px;align-items:stretch}
+  .gv-aw-a{grid-column:1;grid-row:1}
+  .gv-aw-layout>.gv-rv-wrap>.gv-rv-main{grid-column:2;grid-row:1;order:0}
+  .gv-aw-c{grid-column:1;grid-row:2;align-self:start}
+  .gv-aw-layout>.gv-rv-wrap>.gv-rv-pub{grid-column:2;grid-row:2;order:0;align-self:start}
+}
 .gv-aw-row{border:none;cursor:pointer;padding:12px 14px;background:#FFFFFF;box-shadow:inset 0 0 0 1px rgba(27,56,40,0.10);transition:box-shadow 160ms ease}
 .gv-aw-row:hover{box-shadow:inset 0 0 0 1.5px rgba(27,56,40,0.35)}
 .gv-aw-row:focus{outline:none}
@@ -775,13 +783,22 @@ export function AwardsSettings({ conference }: { conference: Conference }) {
       {head}
 
       <div className="gv-aw-layout">
-        <div className="gv-aw-left flex flex-col gap-5 min-w-0">
-          <Group
-            id="conference-awards" title="Conference Awards" emoji="Trophy" icon={Trophy} tint={TINT_GOLD_BG}
-            aside={<button type="button" className="gv-st-btn gv-st-outline" onClick={() => setEditOpen(true)}><PenLine size={15} strokeWidth={2.4} aria-hidden />Edit awards</button>}
-          >
+        {/* Conference Awards, level with Review and Publish (prompt 134): the
+            two share the grid's first row, each with its 3D emoji hanging over
+            the top-left corner (dashboardKit's HangingDisc). */}
+        <section id="conference-awards" aria-label="Conference Awards"
+          className="gv-st-card gv-fd-card gv-fd-hung gv-fd-wash-gold relative min-w-0 gv-aw-a" style={{ scrollMarginTop: 140 }}>
+          <HangingDisc icon={{ emoji: 'Trophy', lucide: Trophy, tint: TINT_GOLD }} side="start" />
+          <div className="flex items-center justify-between gap-3 flex-wrap mb-3">
+            <h3 style={{ ...TYPE.card, margin: 0, overflowWrap: 'anywhere' }}>Conference Awards</h3>
+            <button type="button" className="gv-st-btn gv-st-outline" onClick={() => setEditOpen(true)}><PenLine size={15} strokeWidth={2.4} aria-hidden />Edit awards</button>
+          </div>
+          <div className="gvk-rows">
             <ConferenceAwardsList types={config.types} committees={committees ?? []} />
-          </Group>
+          </div>
+        </section>
+
+        <div className="gv-aw-c flex flex-col gap-5 min-w-0">
 
           <Group id="awards-per-committee" title="Awards per Committee" emoji="Card index dividers" icon={Award} tint={TINT_GREEN_BG}>
             <SwitchRow
@@ -832,10 +849,9 @@ export function AwardsSettings({ conference }: { conference: Conference }) {
           </div>
         </div>
 
-        {/* Chairs' slates: approve, return with a note, publish (awardsReview.tsx). */}
-        <div className="gv-aw-right min-w-0">
-          <AwardsReview conference={conference} config={config} />
-        </div>
+        {/* Chairs' slates: approve, return with a note, publish (awardsReview.tsx).
+            Its two cards (.gv-rv-main, .gv-rv-pub) are items of this grid. */}
+        <AwardsReview conference={conference} config={config} />
       </div>
 
       {editOpen && (

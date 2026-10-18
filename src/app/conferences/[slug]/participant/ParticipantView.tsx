@@ -7,9 +7,9 @@
 // Deliberately has no conference summary card: the page around this tab
 // already is one.
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import Link from 'next/link';
-import { Briefcase, ClipboardList, CreditCard, FileText, FolderOpen, Gavel, Landmark, LayoutDashboard, LifeBuoy, LogOut, MessageCircle, Pencil, Radio, Users, X } from 'lucide-react';
+import { Briefcase, ClipboardList, CreditCard, FileText, FolderOpen, Gavel, Landmark, LayoutDashboard, LifeBuoy, LogOut, MessageCircle, Pencil, Radio, Trophy, Users, X } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { roleFeeToday } from '@/lib/freeRegistration';
@@ -59,9 +59,14 @@ const DOCUMENTS: DashSection = { key: 'documents', label: 'Documents', icon: Fil
 const DELEGATION: DashSection = { key: 'delegation', label: 'Delegation', icon: Users };
 const COMMITTEES: DashSection = { key: 'committees', label: 'Committees', icon: Landmark };
 
-function sectionsFor(app: ParticipantApplication, gateOpen: boolean, hasConferenceDocs = false): DashSection[] {
+function sectionsFor(app: ParticipantApplication, gateOpen: boolean, hasConferenceDocs = false, chairAwards = false): DashSection[] {
   if (!gateOpen) return [OVERVIEW, PAYMENT, SUPPORT];
   const list = roleSections(app);
+  // A chair's Awards tab (prompt 134), after Committee, only while it is open.
+  if (app.role === 'chair' && chairAwards) {
+    const at = list.findIndex(x => x.key === 'committee');
+    list.splice(at + 1, 0, { key: 'awards', label: 'Awards', icon: Trophy });
+  }
   // Conference Documents (11 Oct 2026) live in the Documents section; a role
   // without one (advisor, observer, staff) gets it, before Payment, only while
   // there is something to read.
@@ -226,6 +231,17 @@ export default function ParticipantView({
   // The dashboard section, remembered for the application it was picked on,
   // so switching role opens the other one on Overview.
   const [section, setSection] = useState<{ appId: string; key: string }>({ appId: '', key: 'overview' });
+  // The chair's Awards tab is open (ChairParticipant reports it, prompt 134).
+  const [chairAwardsTab, setChairAwardsTab] = useState(false);
+  // The session's awards links end in #awards: open the chair's Awards tab once it exists.
+  const awardsHashUsed = useRef(false);
+  const onChairAwardsTab = useCallback((open: boolean) => {
+    setChairAwardsTab(open);
+    if (!open || awardsHashUsed.current || typeof window === 'undefined' || window.location.hash !== '#awards') return;
+    awardsHashUsed.current = true;
+    const chairApp = myApplications.find(a => a.role === 'chair');
+    if (chairApp) setSection({ appId: chairApp.id, key: 'awards' });
+  }, [myApplications]);
 
   // "Contact the organisers" on a conference with no contact email: open the
   // Ask the Organisers section of the application on screen and bring it
@@ -373,7 +389,7 @@ export default function ParticipantView({
     : [];
   const hasDocs = docsExtraOn ? gateOpen && (extraDocs?.documents.length ?? 0) > 0 : roleDocs.length > 0;
   const docsDue = gateOpen && extraDocs && extraDocs.warnings > 0 ? requiredOutstanding(extraDocs.documents) : [];
-  const sections = sectionsFor(selected, gateOpen, hasDocs);
+  const sections = sectionsFor(selected, gateOpen, hasDocs, chairAwardsTab);
   // A section that no longer exists for this application (a role switch, the
   // gate closing) falls back to Overview.
   const activeSection = section.appId === selected.id && sections.some(x => x.key === section.key) ? section.key : 'overview';
@@ -401,7 +417,7 @@ export default function ParticipantView({
       onSelectSection={selectSection}
     />
   ) : selected.role === 'chair' ? (
-    <ChairParticipant conferenceId={conferenceId} conferenceSlug={conferenceSlug} section={activeSection} />
+    <ChairParticipant conferenceId={conferenceId} conferenceSlug={conferenceSlug} section={activeSection} onAwardsTab={onChairAwardsTab} />
   ) : selected.role === 'observer' ? (
     <ObserverParticipant conferenceId={conferenceId} conferenceStartDate={conferenceStartDate} section={activeSection} />
   ) : (

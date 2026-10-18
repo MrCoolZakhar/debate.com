@@ -7,7 +7,7 @@
 // committees they actually chair) and stacks a full block per committee.
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Copy, Check, FileText, Gavel, Landmark, Radio, Signal, Users } from 'lucide-react';
+import { Copy, Check, FileText, Gavel, Landmark, Radio, Signal, Trophy, Users } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { friendlyError } from '@/lib/friendlyError';
@@ -17,6 +17,8 @@ import PositionPaperRoster, { type RosterAllocation, type RosterPaper } from '@/
 import { fetchMessageStubsForPapers, type PaperMessageStub } from '@/lib/positionPapers';
 import StudyGuideCard from './StudyGuideCard';
 import AwardsCard, { type AwardsCardConference } from './AwardsCard';
+import { awardsOfferedFor, getAwardsConfig } from '@/lib/awards';
+import { dayInZone } from '@/lib/applicationWindow';
 import Loader from '@/components/Loader';
 import { SectionCard, OUTFIT, capitalize, effectiveReleaseTime } from './shared';
 import { DashCard, CardHeading, CommitteeEmblem, TwoRowName, ForestLink, IconWord, BigCount, Pane, committeeShort, useDashStacked, useReportNextStep, type NextStep, FOREST, FOREST_GRADIENT, INK, INK_SOFT } from './dashboardKit';
@@ -53,6 +55,31 @@ interface ChairCommittee {
  *  awards_published_at the ceremony moment). */
 interface ChairConference extends AwardsCardConference {
   start_date: string | null;
+  timezone: string | null;
+}
+
+/** Today in the conference's timezone (else UTC), as YYYY-MM-DD. */
+function conferenceToday(timeZone: string | null): string {
+  return dayInZone(new Date().toISOString(), timeZone);
+}
+
+/** YYYY-MM-DD moved by n days (date-only arithmetic, no timezone). */
+function shiftDay(day: string, n: number): string {
+  const [y, m, d] = day.slice(0, 10).split('-').map(Number);
+  const t = new Date(Date.UTC(y, (m || 1) - 1, d || 1) + n * 86400000);
+  return t.toISOString().slice(0, 10);
+}
+
+/** The chair's Awards tab (prompt 134): from 7 days before the conference's
+ *  start date (its timezone), and only where the card would show today (awards
+ *  set up and offered for one of these committees, or already published). */
+function awardsTabState(conference: ChairConference, committees: { id: string }[]): { open: boolean; started: boolean } {
+  const start = conference.start_date?.slice(0, 10) ?? null;
+  if (!start) return { open: false, started: false };
+  const today = conferenceToday(conference.timezone);
+  const cfg = getAwardsConfig(conference.awards_config);
+  const offered = !!conference.awards_published_at || committees.some(c => awardsOfferedFor(cfg, c.id));
+  return { open: offered && today >= shiftDay(start, -7), started: today >= start };
 }
 
 interface RosterAllocationRow {
@@ -350,8 +377,10 @@ function AssignmentTile({ committee, chairDisplayName, conferenceStartDate, dele
 
 // ── One committee's full block ──────────────────────────────────────────────
 
-function ChairCommitteeBlock({ conferenceId, conferenceSlug, committee, chairDisplayName, conference, section, showCommittee, onSessionCreated, joinInNextStep }: {
+function ChairCommitteeBlock({ conferenceId, conferenceSlug, committee, chairDisplayName, conference, section, showCommittee, onSessionCreated, joinInNextStep, awardsTab }: {
   conferenceId: string;
+  /** The Awards tab is open (7 days before the start, awards set up) and whether the conference has started. */
+  awardsTab: { open: boolean; started: boolean };
   /** This room's "Join as chair" is the phone page's next step. */
   joinInNextStep: boolean;
   conferenceSlug: string;
@@ -496,7 +525,12 @@ function ChairCommitteeBlock({ conferenceId, conferenceSlug, committee, chairDis
           )}
         </DashCard>
 
-        {/* Awards slate: renders nothing while awards are off for the conference.
+      </Pane>
+
+      {awardsTab.open && (
+        <Pane show={section === 'awards'} title={heading('Awards')} icon={Trophy}>
+        {/* Awards (prompt 134: a tab of its own, from 7 days before the start).
+            The card renders nothing while awards are off for the conference.
             Fed the roster and papers this block already loaded, so the card
             never refetches them. Waits for `loading` so the delegation picker
             is never briefly empty. */}
@@ -511,9 +545,11 @@ function ChairCommitteeBlock({ conferenceId, conferenceSlug, committee, chairDis
               display_name: a.profiles?.display_name ?? null, invited_name: a.applications?.invited_name ?? null,
             }))}
             papers={papers.map(p => ({ country_code: p.country_code, status: p.status }))}
+            conferenceStarted={awardsTab.started}
           />
         )}
-      </Pane>
+        </Pane>
+      )}
 
       <Pane show={section === 'documents'} title={heading('Documents')} icon={FileText}>
         <StudyGuideCard committeeId={committee.id} />
@@ -524,10 +560,14 @@ function ChairCommitteeBlock({ conferenceId, conferenceSlug, committee, chairDis
 
 // ── ChairParticipant ─────────────────────────────────────────────────────────
 
-export default function ChairParticipant({ conferenceId, conferenceSlug, section }: { conferenceId: string; conferenceSlug: string; section: string }) {
+export default function ChairParticipant({ conferenceId, conferenceSlug, section, onAwardsTab }: {
+  conferenceId: string; conferenceSlug: string; section: string;
+  /** Tells the dashboard whether to show the Awards tab (prompt 134). */
+  onAwardsTab?: (open: boolean) => void;
+}) {
   const { user, session, profile } = useAuth();
   const [committees, setCommittees] = useState<ChairCommittee[]>([]);
-  const [conference, setConference] = useState<ChairConference>({ start_date: null, end_date: null, awards_config: null, awards_published_at: null });
+  const [conference, setConference] = useState<ChairConference>({ start_date: null, end_date: null, awards_config: null, awards_published_at: null, timezone: null });
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
@@ -543,7 +583,7 @@ export default function ChairParticipant({ conferenceId, conferenceSlug, section
         .order('name', { ascending: true }),
       supabase
         .from('conferences')
-        .select('start_date, end_date, awards_config, awards_published_at')
+        .select('start_date, end_date, awards_config, awards_published_at, timezone')
         .eq('id', conferenceId)
         .maybeSingle(),
     ]);
@@ -554,6 +594,7 @@ export default function ChairParticipant({ conferenceId, conferenceSlug, section
       end_date: conf?.end_date ?? null,
       awards_config: conf?.awards_config ?? null,
       awards_published_at: conf?.awards_published_at ?? null,
+      timezone: conf?.timezone ?? null,
     });
     setLoading(false);
   }, [user, session, conferenceId]);
@@ -611,6 +652,10 @@ export default function ChairParticipant({ conferenceId, conferenceSlug, section
   }
   useReportNextStep(stacked ? step : null);
 
+  // The Awards tab (prompt 134): reported to the dashboard's rail.
+  const awardsTab = awardsTabState(conference, committees);
+  useEffect(() => { onAwardsTab?.(!loading && awardsTab.open); }, [onAwardsTab, loading, awardsTab.open]);
+
   if (loading) {
     return (
       <SectionCard>
@@ -647,6 +692,7 @@ export default function ChairParticipant({ conferenceId, conferenceSlug, section
           section={section}
           showCommittee={committees.length > 1}
           joinInNextStep={joinable?.id === c.id}
+          awardsTab={awardsTab}
           onSessionCreated={() => { void refreshCommittee(c.id); }}
         />
       ))}

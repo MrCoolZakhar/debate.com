@@ -1,10 +1,12 @@
 'use client';
 
-// The chair's awards slate for one committee, mounted per committee inside
-// ChairCommitteeBlock. Three parts, top to bottom: the slate's state and the
-// deadline; the quantitative record from the session scoreboard as EVIDENCE
-// (never the verdict); and the slate editor itself, one row per configured
-// slot, saving every change straight away. Nothing here is visible to
+// The chair's awards for one committee, mounted per committee in the chair's
+// Awards tab (prompt 134, from 7 days before the conference starts). Under the
+// state and the deadline, three sections: Awards Selection (the editor, one
+// row per configured slot, saving every change straight away, "Send Awards"),
+// Committee Scores (the session scoreboard as EVIDENCE, never the verdict;
+// only a line before the conference starts) and the Decision Guide (collapsed
+// by default). Nothing here is visible to
 // delegates: the RLS on conference_awards only exposes published rows.
 
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
@@ -121,7 +123,7 @@ function buildDelegations(allocations: AwardsCardAllocation[]): DelegationOption
 const STATE_COPY: Record<SlateState, string> = {
   off: '',
   open: "Decide your committee's awards.",
-  returned: 'The secretariat returned this slate.',
+  returned: 'The secretariat returned your Awards Selection.',
   submitted: 'Submitted to the secretariat. You can withdraw until it is approved.',
   approved: 'Approved by the secretariat. Locked.',
   published: 'Announced.',
@@ -137,13 +139,16 @@ const GUIDE_DIMENSIONS: { name: string; text: string }[] = [
 
 // ── Component ────────────────────────────────────────────────────────────────
 
-export default function AwardsCard({ conferenceId, conferenceSlug, committee, conference, allocations, papers }: {
+export default function AwardsCard({ conferenceId, conferenceSlug, committee, conference, allocations, papers, conferenceStarted = true }: {
   conferenceId: string;
   conferenceSlug: string;
   committee: AwardsCardCommittee;
   conference: AwardsCardConference;
   allocations: AwardsCardAllocation[];
   papers: PaperEvidence[];
+  /** The conference has started (its timezone): until then Committee Scores
+   *  shows only a line (prompt 134). */
+  conferenceStarted?: boolean;
 }) {
   const { user, session } = useAuth();
   // The conference's awards as THIS committee sees them: its own set when the
@@ -212,8 +217,8 @@ export default function AwardsCard({ conferenceId, conferenceSlug, committee, co
   // the card only mounts client-side after the roster has loaded.
   const guideKey = `awards-guide-${committee.id}`;
   const [guideOpen, setGuideOpen] = useState<boolean>(() => {
-    if (typeof window === 'undefined') return true;
-    try { return localStorage.getItem(guideKey) !== 'closed'; } catch { return true; }
+    if (typeof window === 'undefined') return false;
+    try { return localStorage.getItem(guideKey) === 'open'; } catch { return false; }
   });
   function toggleGuide() {
     setGuideOpen(prev => {
@@ -493,140 +498,10 @@ export default function AwardsCard({ conferenceId, conferenceSlug, committee, co
         )}
       </div>
 
-      {/* Guidance */}
-      {editable && (
-        <div className="mt-5 rounded-xl" style={{ border: '1px solid rgba(221,212,192,0.8)', backgroundColor: 'rgba(238,217,138,0.08)' }}>
-          <button
-            type="button"
-            onClick={toggleGuide}
-            className="w-full flex items-center justify-between px-4 py-3 focus:outline-none"
-            style={{ background: 'none', border: 'none', cursor: 'pointer' }}
-            aria-expanded={guideOpen}
-          >
-            <span style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: 12.5, color: '#1C1410' }}>How chairs decide</span>
-            {guideOpen ? <ChevronUp size={15} style={{ color: '#9A8A78' }} /> : <ChevronDown size={15} style={{ color: '#9A8A78' }} />}
-          </button>
-          {guideOpen && (
-            <div className="px-4 pb-4">
-              <ul className="m-0 p-0" style={{ listStyle: 'none' }}>
-                {GUIDE_DIMENSIONS.map(d => (
-                  <li key={d.name} className="flex items-baseline gap-2 py-0.5">
-                    <span style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: 12.5, color: '#1B3828', minWidth: 96 }}>{d.name}</span>
-                    <span style={{ fontFamily: OUTFIT, fontSize: 12.5, color: '#6B5F52' }}>{d.text}</span>
-                  </li>
-                ))}
-              </ul>
-              <p style={{ fontFamily: OUTFIT, fontSize: 12.5, color: '#2E2820', margin: '10px 0 0 0', lineHeight: 1.55, fontStyle: 'italic' }}>
-                Ten average speeches rarely beat three exceptional ones combined with drafting leadership.
-              </p>
-              <a
-                href="/blog/mun-awards-guide"
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex items-center gap-1 mt-2"
-                style={{ fontFamily: OUTFIT, fontSize: 12, fontWeight: 700, color: '#2A5A3C', textDecoration: 'underline', textUnderlineOffset: 3 }}
-              >
-                Full guide <ExternalLink size={11} />
-              </a>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Evidence */}
-      {editable && (
-        <div className="mt-5">
-          <button
-            type="button"
-            onClick={() => setEvidenceOpen(o => !o)}
-            className="w-full flex items-center justify-between focus:outline-none"
-            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
-            aria-expanded={evidenceOpen}
-          >
-            <span style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: '9px', letterSpacing: '0.14em', color: '#9A8A78' }}>THE RECORD</span>
-            {evidenceOpen ? <ChevronUp size={14} style={{ color: '#9A8A78' }} /> : <ChevronDown size={14} style={{ color: '#9A8A78' }} />}
-          </button>
-          {evidenceOpen && (
-            <div className="mt-2">
-              {evidenceLoading ? (
-                <div className="flex justify-center py-5"><Loader size={28} /></div>
-              ) : evidenceEmpty ? (
-                <p style={{ fontFamily: OUTFIT, fontSize: 12.5, color: '#9A8A78', margin: 0 }}>
-                  No session record yet. Awards can still be decided by hand.
-                </p>
-              ) : (
-                <>
-                  <p style={{ fontFamily: OUTFIT, fontSize: 11.5, color: '#9A8A78', margin: '0 0 8px 0' }}>
-                    The numbers are evidence, not the verdict. Sorted by the session&apos;s blended score.
-                  </p>
-                  {/* The table is 640px wide at minimum, so on a phone it is
-                      already a horizontal pan. Capping its HEIGHT as well made
-                      it a two-axis nested scroller in which every vertical
-                      swipe was captured instead of moving the page. Below
-                      `sm` the height cap is dropped and the page scrolls it. */}
-                  <div className="rounded-xl max-h-none sm:max-h-[360px] overflow-y-visible sm:overflow-y-auto" style={{ overflowX: 'auto', border: '1px solid rgba(221,212,192,0.8)' }}>
-                    <table style={{ borderCollapse: 'collapse', width: '100%', minWidth: 640, fontFamily: OUTFIT, fontSize: 12 }}>
-                      <thead>
-                        <tr style={{ position: 'sticky', top: 0, backgroundColor: '#F3EFE6', zIndex: 1 }}>
-                          {['#', 'Delegation', 'Score', 'Speeches', 'Time', 'WP/DR', 'Paper', 'Factors', 'Notes'].map((h, i) => (
-                            <th key={h} style={{ textAlign: i < 2 ? 'left' : 'right', padding: '7px 10px', fontSize: 9.5, letterSpacing: '0.1em', fontWeight: 700, color: '#9A8A78', whiteSpace: 'nowrap', borderBottom: '1px solid rgba(221,212,192,0.8)' }}>
-                              {h.toUpperCase()}
-                            </th>
-                          ))}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {sortedEvidence.map((r) => {
-                          const code = codeFor(r.country);
-                          const paper = code ? paperByCode.get(code) : undefined;
-                          const ps = paper ? (PAPER_STYLES[paper] ?? PAPER_STYLES.submitted) : null;
-                          const factorAvg = r.factors.length
-                            ? r.factors.reduce((s, f) => s + f.average, 0) / r.factors.length
-                            : null;
-                          const scaleMax = r.factors[0]?.scaleMax ?? 10;
-                          const num: React.CSSProperties = { textAlign: 'right', padding: '6px 10px', fontVariantNumeric: 'tabular-nums', color: '#2E2820', whiteSpace: 'nowrap' };
-                          return (
-                            <tr key={r.key} style={{ borderBottom: '1px solid rgba(221,212,192,0.5)' }}>
-                              <td style={{ padding: '6px 10px', color: '#9A8A78', fontVariantNumeric: 'tabular-nums' }}>{ranks.get(r.country) ?? ''}</td>
-                              <td style={{ padding: '6px 10px', whiteSpace: 'nowrap' }}>
-                                <span className="inline-flex items-center gap-2">
-                                  <FlagImg code={code ?? ''} size={16} logoUrl={seatLogoFor(code)} label={r.country} />
-                                  <span style={{ fontWeight: 600, color: '#1C1410' }}>{r.country}</span>
-                                  {r.status === 'absent' && <span style={{ fontSize: 10, color: '#8B2020', fontWeight: 700 }}>ABSENT</span>}
-                                </span>
-                              </td>
-                              <td style={{ ...num, fontWeight: 700, color: '#1B3828' }}>{Math.round(r.headline)}</td>
-                              <td style={num}>{r.gslSpeeches + r.caucusSpeeches}</td>
-                              <td style={num}>{formatSpeakingTime(r.speakingSeconds)}</td>
-                              <td style={num}>{r.workingPapers}/{r.draftResolutions}</td>
-                              <td style={{ ...num }}>
-                                {ps && paper ? (
-                                  <span style={{ color: ps.color, fontSize: 12, fontWeight: 700 }}>
-                                    {paper.charAt(0).toUpperCase() + paper.slice(1)}
-                                  </span>
-                                ) : <span style={{ color: '#C9BFAE' }}>none</span>}
-                              </td>
-                              <td style={num}>{factorAvg === null ? <span style={{ color: '#C9BFAE' }}>none</span> : `${factorAvg.toFixed(1)}/${scaleMax}`}</td>
-                              <td style={num}>{r.comments.length}</td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                </>
-              )}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Slate */}
+      {/* Awards Selection (prompt 134: was the slate) */}
       <div className="mt-5">
         <div className="flex items-center justify-between gap-3 flex-wrap mb-2">
-          <span style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: '9px', letterSpacing: '0.14em', color: '#9A8A78' }}>
-            {editable ? 'YOUR SLATE' : 'NOMINATIONS'}
-          </span>
+          <h3 style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 16, color: '#1C1410', margin: 0 }}>Awards Selection</h3>
           {editable && evidence && evidence.length > 0 && !completeness.complete && (
             <button
               type="button"
@@ -724,7 +599,8 @@ export default function AwardsCard({ conferenceId, conferenceSlug, committee, co
                           defaultValue={existing?.rationale ?? ''}
                           key={existing?.id ?? 'empty'}
                           disabled={!existing || busy}
-                          placeholder="Why (the secretariat reads this)"
+                          placeholder="Reason..."
+                          aria-label="Reason (optional)"
                           onChange={e => { if (existing) drafts.current[existing.id] = e.target.value; }}
                           onBlur={() => { if (existing) saveRationale(existing); }}
                           onKeyDown={e => { if (e.key === 'Enter') (e.currentTarget as HTMLInputElement).blur(); }}
@@ -781,7 +657,7 @@ export default function AwardsCard({ conferenceId, conferenceSlug, committee, co
               onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
               onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
             >
-              <Send size={13} /> {state === 'returned' ? 'Resubmit slate' : 'Submit slate'}
+              <Send size={13} /> Send Awards
             </button>
           ) : (
             <button
@@ -796,6 +672,138 @@ export default function AwardsCard({ conferenceId, conferenceSlug, committee, co
             >
               {justSubmitted ? <Check size={13} style={{ color: '#3D7A52' }} /> : <Undo2 size={13} />} {justSubmitted ? 'Submitted' : 'Withdraw'}
             </button>
+          )}
+        </div>
+      )}
+
+      {/* Committee Scores (prompt 134: was The Record) */}
+      {(
+        <div className="mt-6 pt-5" style={{ borderTop: '1px solid rgba(221,212,192,0.55)' }}>
+          <button
+            type="button"
+            onClick={() => setEvidenceOpen(o => !o)}
+            className="w-full flex items-center justify-between focus:outline-none"
+            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+            aria-expanded={evidenceOpen}
+          >
+            <span style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 16, color: '#1C1410' }}>Committee Scores</span>
+            {evidenceOpen ? <ChevronUp size={14} style={{ color: '#9A8A78' }} /> : <ChevronDown size={14} style={{ color: '#9A8A78' }} />}
+          </button>
+          {evidenceOpen && (
+            <div className="mt-2">
+              {!conferenceStarted ? (
+                <p style={{ fontFamily: OUTFIT, fontSize: 12.5, color: '#6B5F52', margin: 0 }}>
+                  Score delegates in committee once the conference starts
+                </p>
+              ) : evidenceLoading ? (
+                <div className="flex justify-center py-5"><Loader size={28} /></div>
+              ) : evidenceEmpty ? (
+                <p style={{ fontFamily: OUTFIT, fontSize: 12.5, color: '#9A8A78', margin: 0 }}>
+                  No session record yet. Awards can still be decided by hand.
+                </p>
+              ) : (
+                <>
+                  <p style={{ fontFamily: OUTFIT, fontSize: 11.5, color: '#9A8A78', margin: '0 0 8px 0' }}>
+                    The numbers are evidence, not the verdict. Sorted by the session&apos;s blended score.
+                  </p>
+                  {/* The table is 640px wide at minimum, so on a phone it is
+                      already a horizontal pan. Capping its HEIGHT as well made
+                      it a two-axis nested scroller in which every vertical
+                      swipe was captured instead of moving the page. Below
+                      `sm` the height cap is dropped and the page scrolls it. */}
+                  <div className="rounded-xl max-h-none sm:max-h-[360px] overflow-y-visible sm:overflow-y-auto" style={{ overflowX: 'auto', border: '1px solid rgba(221,212,192,0.8)' }}>
+                    <table style={{ borderCollapse: 'collapse', width: '100%', minWidth: 640, fontFamily: OUTFIT, fontSize: 12 }}>
+                      <thead>
+                        <tr style={{ position: 'sticky', top: 0, backgroundColor: '#F3EFE6', zIndex: 1 }}>
+                          {['#', 'Delegation', 'Score', 'Speeches', 'Time', 'WP/DR', 'Paper', 'Factors', 'Notes'].map((h, i) => (
+                            <th key={h} style={{ textAlign: i < 2 ? 'left' : 'right', padding: '7px 10px', fontSize: 9.5, letterSpacing: '0.1em', fontWeight: 700, color: '#9A8A78', whiteSpace: 'nowrap', borderBottom: '1px solid rgba(221,212,192,0.8)' }}>
+                              {h.toUpperCase()}
+                            </th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {sortedEvidence.map((r) => {
+                          const code = codeFor(r.country);
+                          const paper = code ? paperByCode.get(code) : undefined;
+                          const ps = paper ? (PAPER_STYLES[paper] ?? PAPER_STYLES.submitted) : null;
+                          const factorAvg = r.factors.length
+                            ? r.factors.reduce((s, f) => s + f.average, 0) / r.factors.length
+                            : null;
+                          const scaleMax = r.factors[0]?.scaleMax ?? 10;
+                          const num: React.CSSProperties = { textAlign: 'right', padding: '6px 10px', fontVariantNumeric: 'tabular-nums', color: '#2E2820', whiteSpace: 'nowrap' };
+                          return (
+                            <tr key={r.key} style={{ borderBottom: '1px solid rgba(221,212,192,0.5)' }}>
+                              <td style={{ padding: '6px 10px', color: '#9A8A78', fontVariantNumeric: 'tabular-nums' }}>{ranks.get(r.country) ?? ''}</td>
+                              <td style={{ padding: '6px 10px', whiteSpace: 'nowrap' }}>
+                                <span className="inline-flex items-center gap-2">
+                                  <FlagImg code={code ?? ''} size={16} logoUrl={seatLogoFor(code)} label={r.country} />
+                                  <span style={{ fontWeight: 600, color: '#1C1410' }}>{r.country}</span>
+                                  {r.status === 'absent' && <span style={{ fontSize: 10, color: '#8B2020', fontWeight: 700 }}>ABSENT</span>}
+                                </span>
+                              </td>
+                              <td style={{ ...num, fontWeight: 700, color: '#1B3828' }}>{Math.round(r.headline)}</td>
+                              <td style={num}>{r.gslSpeeches + r.caucusSpeeches}</td>
+                              <td style={num}>{formatSpeakingTime(r.speakingSeconds)}</td>
+                              <td style={num}>{r.workingPapers}/{r.draftResolutions}</td>
+                              <td style={{ ...num }}>
+                                {ps && paper ? (
+                                  <span style={{ color: ps.color, fontSize: 12, fontWeight: 700 }}>
+                                    {paper.charAt(0).toUpperCase() + paper.slice(1)}
+                                  </span>
+                                ) : <span style={{ color: '#C9BFAE' }}>none</span>}
+                              </td>
+                              <td style={num}>{factorAvg === null ? <span style={{ color: '#C9BFAE' }}>none</span> : `${factorAvg.toFixed(1)}/${scaleMax}`}</td>
+                              <td style={num}>{r.comments.length}</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Decision Guide (prompt 134: was How chairs decide), collapsed by default */}
+      {(
+        <div className="mt-6 rounded-xl" style={{ border: '1px solid rgba(221,212,192,0.8)', backgroundColor: 'rgba(238,217,138,0.08)' }}>
+          <button
+            type="button"
+            onClick={toggleGuide}
+            className="w-full flex items-center justify-between px-4 py-3 focus:outline-none"
+            style={{ background: 'none', border: 'none', cursor: 'pointer' }}
+            aria-expanded={guideOpen}
+          >
+            <span style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: 12.5, color: '#1C1410' }}>Decision Guide</span>
+            {guideOpen ? <ChevronUp size={15} style={{ color: '#9A8A78' }} /> : <ChevronDown size={15} style={{ color: '#9A8A78' }} />}
+          </button>
+          {guideOpen && (
+            <div className="px-4 pb-4">
+              <ul className="m-0 p-0" style={{ listStyle: 'none' }}>
+                {GUIDE_DIMENSIONS.map(d => (
+                  <li key={d.name} className="flex items-baseline gap-2 py-0.5">
+                    <span style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: 12.5, color: '#1B3828', minWidth: 96 }}>{d.name}</span>
+                    <span style={{ fontFamily: OUTFIT, fontSize: 12.5, color: '#6B5F52' }}>{d.text}</span>
+                  </li>
+                ))}
+              </ul>
+              <p style={{ fontFamily: OUTFIT, fontSize: 12.5, color: '#2E2820', margin: '10px 0 0 0', lineHeight: 1.55, fontStyle: 'italic' }}>
+                Ten average speeches rarely beat three exceptional ones combined with drafting leadership.
+              </p>
+              <a
+                href="/blog/mun-awards-guide"
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-1 mt-2"
+                style={{ fontFamily: OUTFIT, fontSize: 12, fontWeight: 700, color: '#2A5A3C', textDecoration: 'underline', textUnderlineOffset: 3 }}
+              >
+                Full guide <ExternalLink size={11} />
+              </a>
+            </div>
           )}
         </div>
       )}

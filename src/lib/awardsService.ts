@@ -153,7 +153,7 @@ export async function updateNomination(
     .maybeSingle();
   if (error) return friendlyAwardError(error.message);
   // Zero rows back = RLS refused (slate locked or not our committee).
-  if (!data) return 'This slate is locked, so the nomination could not be changed.';
+  if (!data) return 'This Awards Selection is locked, so the nomination could not be changed.';
   return null;
 }
 
@@ -165,7 +165,7 @@ export async function deleteNomination(supabase: SupabaseClient, id: string): Pr
     .select('id')
     .maybeSingle();
   if (error) return friendlyAwardError(error.message);
-  if (!data) return 'This slate is locked, so the nomination could not be removed.';
+  if (!data) return 'This Awards Selection is locked, so the nomination could not be removed.';
   return null;
 }
 
@@ -249,8 +249,8 @@ function friendlyAwardError(message: string): string {
   const m = message.toLowerCase();
   if (m.includes('conference_awards_seat_type_uniq')) return 'That delegation already holds this award in this committee.';
   if (m.includes('conference_awards_society_type_uniq')) return 'That delegation already holds this award.';
-  if (m.includes('slate is locked')) return 'This slate has been approved and can no longer be changed.';
+  if (m.includes('slate is locked')) return 'This Awards Selection has been approved and can no longer be changed.';
   if (m.includes('not authorised')) return 'You are not allowed to do that for this committee.';
-  if (m.includes('row-level security')) return 'This slate is locked, or you are not a chair of this committee.';
+  if (m.includes('row-level security')) return 'This Awards Selection is locked, or you are not a chair of this committee.';
   return message;
 }

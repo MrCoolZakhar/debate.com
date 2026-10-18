@@ -2,15 +2,20 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { X, ArrowRight, TicketCheck, BadgePercent, RotateCcw } from 'lucide-react';
+import { X, ArrowRight, TicketCheck, BadgePercent, BookOpen, Users, Store } from 'lucide-react';
 import { NEU, OUTFIT } from '@/components/neu';
 import Portal from '@/components/Portal';
 import { useScrollLock } from '@/hooks/useScrollLock';
 
+// What credits are for (prompt 134), checked against what the site offers:
+// the credits pop-up's "What they're for" (applying, the Store, guides), the
+// delegation pool (fund_delegation_pool) and the refund on a rejection.
 const WELL_ROWS = [
-  { Icon: TicketCheck, bold: '1 credit covers 1 application', muted: 'to any conference' },
-  { Icon: BadgePercent, bold: 'No processing fees', muted: 'on anything you pay' },
-  { Icon: RotateCcw, bold: 'Refunded', muted: 'if your application is not accepted' },
+  { Icon: TicketCheck, bold: 'Apply to conferences', muted: '1 credit per conference, however many times you edit. Refunded if you are not accepted' },
+  { Icon: BookOpen, bold: 'Unlock premium MUN guides', muted: '1 credit each, yours forever' },
+  { Icon: Users, bold: 'Bring your delegation', muted: 'Head delegates and advisors can top up a delegation pool so their delegates apply free' },
+  { Icon: Store, bold: 'Run your conference', muted: 'Organizers use credits in the Store for spotlights, bulk emails and sponsoring delegates' },
+  { Icon: BadgePercent, bold: 'No processing fees', muted: 'Nothing extra on what you pay a conference' },
 ];
 
 // Expansion around the measured navbar credits chip before it's punched out
@@ -127,7 +132,7 @@ export default function CreditsWelcomeModal({
         <div
           onClick={(e) => e.stopPropagation()}
           className="relative w-full text-center"
-          style={{ maxWidth: 420, maxHeight: 'calc(100dvh - 32px)', overflowY: 'auto', borderRadius: 26, backgroundColor: NEU.surface, boxShadow: NEU.out, padding: '0 30px 30px', animation: 'gvWelcomePop 260ms cubic-bezier(0.2,0.7,0.2,1)' }}
+          style={{ maxWidth: 420, maxHeight: 'calc(100dvh - 32px)', overflowY: 'auto', borderRadius: 26, backgroundColor: NEU.surface, boxShadow: NEU.out, padding: '0 26px 22px', animation: 'gvWelcomePop 260ms cubic-bezier(0.2,0.7,0.2,1)' }}
         >
           <button
             onClick={onClose}
@@ -149,43 +154,44 @@ export default function CreditsWelcomeModal({
             src="/Otter.Tutorial.Intro.png"
             alt=""
             aria-hidden
-            width={176}
-            height={176}
-            style={{ width: 176, height: 176, display: 'block', margin: '8px auto -2px', filter: 'drop-shadow(0 10px 22px rgba(27,56,40,0.24))' }}
+            width={132}
+            height={132}
+            // Sized to the screen's height so the whole card fits a 390 x 844
+            // phone and 1280 x 800 without its own scroll (prompt 134).
+            style={{ width: 'clamp(80px, 13dvh, 132px)', height: 'clamp(80px, 13dvh, 132px)', display: 'block', margin: '6px auto -2px', filter: 'drop-shadow(0 10px 22px rgba(27,56,40,0.24))' }}
           />
 
-          <h2 style={{ margin: '0 0 12px', lineHeight: 1.12, letterSpacing: '-0.01em' }}>
-            <span style={{ fontFamily: OUTFIT, fontSize: 26, fontWeight: 900, color: NEU.ink }}>Introducing </span>
-            <span style={{ fontFamily: OUTFIT, fontSize: 26, fontWeight: 900, color: NEU.ink }}>Credits</span>
+          <h2 style={{ margin: '0 0 8px', lineHeight: 1.12, letterSpacing: '-0.01em', fontFamily: OUTFIT, fontSize: 26, fontWeight: 900, color: NEU.ink }}>
+            Introducing Credits
           </h2>
           {/* inkSoft, not muted: muted is 2.7:1 on this surface and this is
               body copy, not a decorative label (rulebook section 3). */}
-          <p style={{ fontFamily: OUTFIT, fontSize: 14, lineHeight: 1.6, color: NEU.inkSoft, margin: '0 0 20px' }}>
-            Credits are how applying works on Gavelling. They keep the site free of processing fees and automate every step for your organizers.
+          <p style={{ fontFamily: OUTFIT, fontSize: 14, lineHeight: 1.5, color: NEU.inkSoft, margin: '0 0 14px' }}>
+            Credits are how you apply and unlock things on Gavelling. One balance for everything
           </p>
 
-          <div style={{ borderRadius: 18, backgroundColor: NEU.base, boxShadow: NEU.in, padding: '4px 16px', marginBottom: 18, textAlign: 'left' }}>
+          <div style={{ borderRadius: 18, backgroundColor: NEU.base, boxShadow: NEU.in, padding: '2px 14px', marginBottom: 14, textAlign: 'left' }}>
             {WELL_ROWS.map((row, i) => (
               <div
                 key={row.bold}
-                className="flex items-center"
-                style={{ gap: 12, padding: '12px 0', borderTop: i > 0 ? '1px solid #DDD4C0' : 'none' }}
+                className="flex items-start"
+                style={{ gap: 11, padding: '9px 0', borderTop: i > 0 ? '1px solid #DDD4C0' : 'none' }}
               >
                 <span
                   className="inline-flex items-center justify-center flex-shrink-0"
-                  style={{ width: 34, height: 34, borderRadius: 10, backgroundColor: NEU.surface, boxShadow: NEU.outSm }}
+                  style={{ width: 30, height: 30, borderRadius: 9, backgroundColor: NEU.surface, boxShadow: NEU.outSm, marginTop: 1 }}
                 >
-                  <row.Icon size={16} strokeWidth={2.2} style={{ color: NEU.forest }} />
+                  <row.Icon size={15} strokeWidth={2.2} style={{ color: NEU.forest }} />
                 </span>
-                <p style={{ fontFamily: OUTFIT, fontSize: 13, lineHeight: 1.4 }}>
-                  <span style={{ fontWeight: 700, color: NEU.ink }}>{row.bold}</span>{' '}
-                  <span style={{ color: NEU.muted }}>{row.muted}</span>
+                <p style={{ fontFamily: OUTFIT, fontSize: 12, lineHeight: 1.38, margin: 0, minWidth: 0 }}>
+                  <span style={{ display: 'block', fontWeight: 700, fontSize: 13.5, color: NEU.ink }}>{row.bold}</span>
+                  <span style={{ display: 'block', color: NEU.inkSoft }}>{row.muted}</span>
                 </p>
               </div>
             ))}
           </div>
 
-          <p style={{ fontFamily: OUTFIT, fontSize: 13.5, marginBottom: 20 }}>
+          <p style={{ fontFamily: OUTFIT, fontSize: 13.5, lineHeight: 1.45, margin: '0 0 16px', padding: '10px 14px', borderRadius: 14, background: 'rgba(238,217,138,0.28)', boxShadow: 'inset 0 0 0 1px rgba(182,135,31,0.35)' }}>
             {preRegistered ? (
               <>
                 <span style={{ fontWeight: 800, color: NEU.ink }}>Thank you for pre-registering. Your first two credits are on us.</span>{' '}
@@ -193,7 +199,7 @@ export default function CreditsWelcomeModal({
               </>
             ) : (
               <>
-                <span style={{ fontWeight: 800, color: NEU.ink }}>The first credit is on us.</span>{' '}
+                <span style={{ fontWeight: 800, color: NEU.ink }}>Your first credit is on us.</span>{' '}
                 <span style={{ fontWeight: 700, color: NEU.deepGold }}>Apply to a conference today!</span>
               </>
             )}
@@ -203,13 +209,13 @@ export default function CreditsWelcomeModal({
             href="/conferences/explore"
             onClick={onClose}
             className="inline-flex items-center justify-center gap-2 w-full"
-            style={{ borderRadius: 14, padding: '13px 18px', backgroundColor: '#1B3828', color: '#EED98A', fontFamily: OUTFIT, fontWeight: 800, fontSize: 14, letterSpacing: '0.04em', textTransform: 'uppercase', textDecoration: 'none', boxShadow: NEU.outSm }}
+            style={{ borderRadius: 14, padding: '13px 18px', backgroundColor: '#1B3828', color: '#EED98A', fontFamily: OUTFIT, fontWeight: 800, fontSize: 14.5, textDecoration: 'none', boxShadow: NEU.outSm }}
           >
             Explore conferences <ArrowRight size={16} strokeWidth={2.4} />
           </Link>
           <button
             onClick={onClose}
-            style={{ marginTop: 12, background: 'none', border: 'none', color: NEU.muted, fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 600, cursor: 'pointer' }}
+            style={{ marginTop: 8, minHeight: 36, background: 'none', border: 'none', color: NEU.muted, fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 600, cursor: 'pointer' }}
           >
             Maybe later
           </button>
