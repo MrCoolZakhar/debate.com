@@ -18,7 +18,7 @@ import {
 } from '@/app/manage/[slug]/assignment/delegationShared';
 import { PersonAvatar } from '@/app/manage/[slug]/assignment/page';
 import { NEU, NEU_GRADIENTS, NeuCard, NeuInset, NeuButton, NeuIconDisc } from '@/components/neu';
-import { StackedName, committeeShortName } from '@/app/manage/[slug]/assignment/displayNames';
+import { StackedName, committeeShortName, byPersonName } from '@/app/manage/[slug]/assignment/displayNames';
 import { Users } from 'lucide-react';
 
 function isHeadDelegate(m: PoolMember): boolean {
@@ -824,22 +824,22 @@ export default function DelegationsView({ conference, showFlash, initialSocietyI
 
   const society = expandedSociety;
   const advisors = [...expandedMembers.filter(m => m.role === 'faculty-advisor')]
-    .sort((a, b) => a.submitted_at.localeCompare(b.submitted_at));
+    .sort(byPersonName);
   const advisorPaidCount = advisors.filter(a => a.attending && a.payment_status === 'paid').length;
   const delegatePool = expandedMembers.filter(m => m.role === 'delegate' || m.role === 'head-delegate');
   // Head delegates keep counting toward every fill/accounting figure below, but
   // their own row is their home in the UI (F17), pulled out of the generic lists.
   const headDelegates = [...delegatePool.filter(isHeadDelegate)]
-    .sort((a, b) => a.submitted_at.localeCompare(b.submitted_at));
+    .sort(byPersonName);
   const nonHDPool = delegatePool.filter(m => !isHeadDelegate(m));
   const paidAttending = [...delegatePool.filter(m => m.attending && m.payment_status === 'paid')]
-    .sort((a, b) => a.submitted_at.localeCompare(b.submitted_at));
+    .sort(byPersonName);
   const unpaidAttending = [...nonHDPool.filter(m => m.attending && m.payment_status === 'unpaid')]
-    .sort((a, b) => a.submitted_at.localeCompare(b.submitted_at));
+    .sort(byPersonName);
   const waivedMembers = [...nonHDPool.filter(m => m.payment_status === 'waived')]
-    .sort((a, b) => a.submitted_at.localeCompare(b.submitted_at));
+    .sort(byPersonName);
   const notAttendingMembers = [...nonHDPool.filter(m => !m.attending && m.payment_status !== 'waived')]
-    .sort((a, b) => a.submitted_at.localeCompare(b.submitted_at));
+    .sort(byPersonName);
   const pledgingMembers = expandedMembers.filter(m => m.pledge_type);
   const openCount = Math.max(0, society.spots_purchased - paidAttending.length);
 
