@@ -1000,7 +1000,7 @@ export async function queueChairInviteEmail(
 
   const { error } = await supabase.from('email_outbox').insert({
     conference_id: conferenceId,
-    template_id: useTemplate ? template!.id : null,
+    template_id: template && template.enabled ? template.id : null, // even with our default wording, so its attachments ride along (prompt 133)
     recipient_application_id: null,
     recipient_email: invitedEmail,
     subject,
@@ -1147,7 +1147,7 @@ export async function queueOrganizerInviteEmail(
 
   const { error } = await supabase.from('email_outbox').insert({
     conference_id: conferenceId,
-    template_id: useTemplate ? template!.id : null,
+    template_id: template && template.enabled ? template.id : null, // even with our default wording, so its attachments ride along (prompt 133)
     recipient_application_id: null,
     recipient_email: invitedEmail,
     subject,
@@ -1313,7 +1313,7 @@ export async function queueImportJoinInviteEmails(
     if (!outboxContentOk('import_join_invite', subject, body)) return [];
     return [{
       conference_id: conferenceId,
-      template_id: useTemplate ? template!.id : null,
+      template_id: template && template.enabled ? template.id : null, // even with our default wording, so its attachments ride along (prompt 133)
       recipient_application_id: r.applicationId,
       recipient_email: r.invitedEmail,
       subject,
@@ -1472,7 +1472,7 @@ export async function queueRequestReceivedEmail(
       if (!outboxContentOk(eventKey, subject, body)) return [];
       return [{
         conference_id: conferenceId,
-        template_id: useDraft ? template!.id : null,
+        template_id: template ? template.id : null, // even with our default wording, so its attachments ride along (prompt 133)
         recipient_application_id: null,
         recipient_email: email,
         subject,

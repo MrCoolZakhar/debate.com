@@ -4,9 +4,9 @@
 // 131): ONE page, no tabs. From a wide screen up it is two equal columns that
 // fit the viewport with no page scroll, every card a Financials DashCard (3D
 // emoji hanging over its top-left corner, an "i" beside the title):
-//   LEFT   Position Papers and Study Guides: six committee tiles in view (three
-//          by two from 1280px, two a row below), no inner scroll, Page 1 of N
-//          with arrows; each tile opens its pop-up (CommitteeDocsPopup).
+//   LEFT   Position Papers and Study Guides: six committees in view, one full-
+//          width row each (prompt 133), no inner scroll, Page 1 of N with
+//          arrows; each row opens its pop-up (CommitteeDocsPopup).
 //   RIGHT  Things to Do (DocumentsTodo) and Additional Documents, stacked,
 //          sharing the column's height.
 // Below the breakpoint the columns stack and the page scrolls.
@@ -16,7 +16,7 @@
 // leave the URL once read (replaceUrlInPlace).
 
 import { useState, useEffect, useCallback } from 'react';
-import { ChevronLeft, ChevronRight, FileText, ScrollText } from 'lucide-react';
+import { CalendarClock, ChevronLeft, ChevronRight, FileText, ScrollText } from 'lucide-react';
 import Link from 'next/link';
 import DocumentsTodo from './DocumentsTodo';
 import AdditionalDocuments from './AdditionalDocuments';
@@ -38,13 +38,31 @@ const GREEN = '#2F6644';
 
 interface GuideMark { conference_committee_id: string; is_published: boolean }
 
-/** The three lines on a committee card. */
-function studyGuideLine(c: CommitteeDoc, guides: GuideMark[], now: number): { text: string; on: boolean } {
+/** The three lines on a committee row: the full sentence (its tooltip and
+ *  accessible name) and the short word drawn beside the line's icon, so six
+ *  rows fit the card at 1280x800 (prompt 133). */
+function studyGuideLine(c: CommitteeDoc, guides: GuideMark[], now: number): { text: string; short: string; on: boolean } {
   const mine = guides.filter(g => g.conference_committee_id === c.id);
   const at = c.study_guides_publish_at ? new Date(c.study_guides_publish_at).getTime() : null;
-  if (mine.some(g => g.is_published) || (mine.length > 0 && at !== null && at <= now)) return { text: 'Study guide published', on: true };
-  if (mine.length > 0 && at !== null && at > now) return { text: `Study guide releases ${formatDate(c.study_guides_publish_at!)}`, on: false };
-  return { text: 'Study guide not published', on: false };
+  if (mine.some(g => g.is_published) || (mine.length > 0 && at !== null && at <= now)) return { text: 'Study guide published', short: 'Published', on: true };
+  if (mine.length > 0 && at !== null && at > now) return { text: `Study guide releases ${formatDate(c.study_guides_publish_at!)}`, short: `Releases ${shortDate(c.study_guides_publish_at!)}`, on: false };
+  return { text: 'Study guide not published', short: 'Not published', on: false };
+}
+
+/** "Oct 3" (the year only when it is not this year). */
+function shortDate(iso: string): string {
+  const full = formatDate(iso);
+  const y = String(new Date().getFullYear());
+  return full.endsWith(`, ${y}`) ? full.slice(0, -(y.length + 2)) : full;
+}
+
+function StatusLine({ icon: Icon, text, short, color }: { icon: typeof ScrollText; text: string; short: string; color: string }) {
+  return (
+    <li title={text} aria-label={text} style={{ color }}>
+      <Icon size={13} strokeWidth={2.4} aria-hidden style={{ flexShrink: 0 }} />
+      <span aria-hidden>{short}</span>
+    </li>
+  );
 }
 
 function CommitteeCard({ c, guides, now, onOpen }: {
@@ -57,19 +75,24 @@ function CommitteeCard({ c, guides, now, onOpen }: {
   const label = shortName(c);
   return (
     <article className="gv-docs-ccard">
-      <div className="flex items-start gap-2.5 min-w-0">
-        <CommitteeLogo c={c} size={40} />
+      <div className="gv-docs-cid">
+        <CommitteeLogo c={c} size={36} />
         <div className="min-w-0">
           <h3 className="gv-docs-cname">{label}</h3>
           {c.abbreviation && c.abbreviation !== c.name && <p className="gv-docs-cfull">{c.name}</p>}
         </div>
       </div>
       <ul className="gv-docs-lines">
-        <li style={{ color: sg.on ? GREEN : NEU.inkSoft }}>{sg.text}</li>
-        <li style={{ color: c.pp_submissions_enabled ? GREEN : NEU.inkSoft }}>
-          {c.pp_submissions_enabled ? 'Position papers enabled' : 'Position papers disabled'}
-        </li>
-        {c.position_paper_deadline && <li style={{ color: NEU.ink }}>Due {formatDate(c.position_paper_deadline)}</li>}
+        <StatusLine icon={ScrollText} text={sg.text} short={sg.short} color={sg.on ? GREEN : NEU.inkSoft} />
+        <StatusLine
+          icon={FileText}
+          text={c.pp_submissions_enabled ? 'Position papers enabled' : 'Position papers disabled'}
+          short={c.pp_submissions_enabled ? 'Papers enabled' : 'Papers disabled'}
+          color={c.pp_submissions_enabled ? GREEN : NEU.inkSoft}
+        />
+        {c.position_paper_deadline && (
+          <StatusLine icon={CalendarClock} text={`Due ${formatDate(c.position_paper_deadline)}`} short={`Due ${shortDate(c.position_paper_deadline)}`} color={NEU.ink} />
+        )}
       </ul>
       <div className="gv-docs-cactions">
         <button type="button" className="gv-docs-btn gv-docs-btn-primary" onClick={() => onOpen('submissions')}>View submissions</button>
@@ -265,22 +288,25 @@ export default function DocumentsPage() {
 
 // From 1100px wide the page is the viewport: the header, then two equal
 // columns filling what is left (no page scroll at 1280x800 and up). The six
-// committee tiles share the left card's height in rows (three by two from
-// 1280px); the right column's two cards share its height. Below that the
-// columns stack and the page scrolls.
+// committees are six full-width rows sharing the left card's height (prompt
+// 133: one committee per row); the right column's two cards share its height.
+// Below that the columns stack, the rows keep their order and the buttons may
+// wrap under the names.
 const PAGE_CSS = `
 .gv-docs-page{display:flex;flex-direction:column;gap:22px;width:100%;box-sizing:border-box}
 .gv-docs-grid{display:grid;grid-template-columns:1fr;gap:20px;min-height:0}
 .gv-docs-dash{min-width:0;min-height:0}
 .gv-docs-dash .gv-st-card-head{margin-bottom:12px}
 .gv-docs-dash .gv-st-card-title{font-size:clamp(20px,1.6vw,24px);letter-spacing:-0.015em;line-height:1.15}
-.gv-docs-committees{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;align-content:start}
-.gv-docs-ccard{display:flex;flex-direction:column;gap:8px;padding:12px;border-radius:16px;background:#FAF8F3;box-shadow:inset 0 0 0 1px rgba(27,56,40,0.07);min-width:0;min-height:0}
-.gv-docs-cname{margin:0;font-family:${OUTFIT};font-size:17px;font-weight:800;letter-spacing:-0.01em;line-height:1.15;color:#1C1410;overflow-wrap:anywhere}
-.gv-docs-cfull{margin:2px 0 0;font-family:${OUTFIT};font-size:12px;line-height:1.3;color:${NEU.inkSoft};overflow-wrap:anywhere}
-.gv-docs-lines{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:2px;font-family:${OUTFIT};font-size:12.5px;font-weight:600;line-height:1.3}
-.gv-docs-cactions{display:flex;gap:6px;flex-wrap:wrap;margin-top:auto}
-.gv-docs-btn{flex:1 1 auto;min-height:34px;padding:0 10px;border-radius:10px;font-family:${OUTFIT};font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap}
+.gv-docs-committees{display:grid;grid-template-columns:minmax(0,1fr);gap:8px;align-content:start}
+.gv-docs-ccard{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px;padding:8px 12px;border-radius:14px;background:#FAF8F3;box-shadow:inset 0 0 0 1px rgba(27,56,40,0.07);min-width:0;min-height:0}
+.gv-docs-cid{display:flex;align-items:center;gap:10px;min-width:0;flex:1 1 200px}
+.gv-docs-cname{margin:0;font-family:${OUTFIT};font-size:16px;font-weight:800;letter-spacing:-0.01em;line-height:1.15;color:#1C1410;overflow-wrap:anywhere}
+.gv-docs-cfull{margin:1px 0 0;font-family:${OUTFIT};font-size:11.5px;line-height:1.25;color:${NEU.inkSoft};overflow-wrap:anywhere}
+.gv-docs-lines{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:1px;font-family:${OUTFIT};font-size:12px;font-weight:600;line-height:1.25;flex:0 1 auto;min-width:0}
+.gv-docs-lines li{display:flex;align-items:center;gap:5px;white-space:nowrap}
+.gv-docs-cactions{display:flex;gap:6px;flex-wrap:nowrap;flex:0 0 auto}
+.gv-docs-btn{flex:0 0 auto;min-height:32px;padding:0 10px;border-radius:10px;font-family:${OUTFIT};font-size:12.5px;font-weight:700;cursor:pointer;white-space:nowrap}
 .gv-docs-btn:focus{outline:none}
 .gv-docs-btn:focus-visible{outline:2px solid #1B3828;outline-offset:2px}
 .gv-docs-btn-primary{border:none;background:linear-gradient(90deg,#1B3828 0%,#2A5A3C 100%);color:#FFFFFF}
@@ -295,13 +321,10 @@ const PAGE_CSS = `
 @media (min-width:1100px){
   .gv-docs-page{height:calc(100dvh - 56px);overflow:hidden}
   .gv-docs-grid{flex:1 1 auto;grid-template-columns:minmax(0,1fr) minmax(0,1fr);grid-template-rows:minmax(0,1fr);padding-top:4px}
-  .gv-docs-committees{flex:1 1 auto;min-height:0;grid-template-rows:repeat(3,minmax(0,1fr));align-content:stretch}
+  .gv-docs-committees{flex:1 1 auto;min-height:0;grid-template-rows:repeat(6,minmax(0,1fr));align-content:stretch}
+  .gv-docs-ccard{flex-wrap:nowrap}
+  .gv-docs-cid{flex:1 1 0}
   .gv-docs-right{height:100%}
   .gv-docs-right>.gv-docs-dash{flex:1 1 0;box-sizing:border-box}
-}
-@media (min-width:1280px){
-  .gv-docs-committees{grid-template-columns:repeat(3,minmax(0,1fr));grid-template-rows:repeat(2,minmax(0,1fr))}
-  .gv-docs-cactions{flex-direction:column}
-  .gv-docs-btn{flex:0 0 auto;width:100%}
 }
 `;

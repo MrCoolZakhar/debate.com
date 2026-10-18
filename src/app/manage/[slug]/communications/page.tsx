@@ -32,7 +32,7 @@ import { renderEmailHtml, resolveEmailTheme, type EmailTheme } from '@/lib/email
 import { triggerEmailDelivery } from '@/lib/emailDelivery';
 import { queueAdHocEmail } from '@/lib/adHocEmail';
 import EmailAttachments, { AttachmentChipsReadOnly, useEmailAttachmentsSupport } from './EmailAttachments';
-import { attachmentsProblem, withDocumentsButton, type EmailAttachment } from '@/lib/emailAttachments';
+import { attachmentsProblem, fromTemplateAttachments, templateAttachments, withDocumentsButton, type EmailAttachment } from '@/lib/emailAttachments';
 import { readEmailAllowance, emailsShort, emailsShortSentence, emailsUsedLine, isEmailAllowanceMessage, type EmailAllowance } from '@/lib/emailAllowance';
 import GetMoreEmails from '../store/GetMoreEmails';
 import { summarizeUnresolved, unresolvedFieldLabel } from '@/lib/emailUnresolved';
@@ -130,6 +130,8 @@ interface EmailTemplate {
   recurring_enabled: boolean;
   recurring_interval_days: number | null;
   recurring_max_sends: number | null;
+  /** Automatic emails only (prompt 133): files sent with every email from this template. */
+  attachments?: unknown;
 }
 
 interface AppRow {
@@ -1554,6 +1556,12 @@ function CommunicationsPageInner() {
   // template; cleared whenever the builder opens or closes.
   const [builderAttachments, setBuilderAttachments] = useState<EmailAttachment[]>([]);
   const attachSupport = useEmailAttachmentsSupport(conference?.id ?? null);
+  // Automatic emails save their attachments on the template (prompt 133). The
+  // ref is what the next save writes; the saved ref is what the row holds, so a
+  // refused save puts the chips back as they were.
+  const builderAttachmentsRef = useRef<EmailAttachment[]>([]);
+  const autoAttachSavedRef = useRef<EmailAttachment[]>([]);
+  useEffect(() => { builderAttachmentsRef.current = builderAttachments; }, [builderAttachments]);
   const [savingTemplate, setSavingTemplate] = useState(false);
   const [sending, setSending] = useState(false);
   // The bulk email allowance (src/lib/emailAllowance.ts): 1,000 free per
@@ -1673,7 +1681,7 @@ function CommunicationsPageInner() {
     const supabase = getAuthedClient(accessToken);
     const { data } = await supabase
       .from('email_templates')
-      .select('id, conference_id, event_key, name, subject, body, body_blocks, enabled, delivery, updated_at, audience, recurring_enabled, recurring_interval_days, recurring_max_sends')
+      .select('id, conference_id, event_key, name, subject, body, body_blocks, enabled, delivery, updated_at, audience, recurring_enabled, recurring_interval_days, recurring_max_sends, attachments')
       .eq('conference_id', conferenceId);
     if (!fresh()) return;
     setTemplates((data ?? []) as EmailTemplate[]);
@@ -2523,9 +2531,12 @@ function CommunicationsPageInner() {
     builderJustOpenedRef.current = true;
     builderInitialRef.current = JSON.stringify({ subject: initialSubject, blocks: initialBlocks });
     setPickerOpen(false);
-    setBuilderAttachments([]);
+    const saved = fromTemplateAttachments(existing?.attachments, new Set(attachSupport.docs.map(d => d.file_path ?? '')));
+    autoAttachSavedRef.current = saved;
+    builderAttachmentsRef.current = saved;
+    setBuilderAttachments(saved);
     setBuilderOpen(true);
-  }, [templatesByEvent]);
+  }, [templatesByEvent, attachSupport.docs]);
 
   function openBuilderForAdHoc(template?: EmailTemplate) {
     setBuilderFromDefault(false);
@@ -2663,10 +2674,27 @@ function CommunicationsPageInner() {
       updated_at: new Date().toISOString(),
     };
     if (isAdHoc) payload.audience = buildAudienceState();
+    // Automatic emails carry their attachments on the template (prompt 133);
+    // builder templates never do (their files are for one send only).
+    const autoAttach = !isAdHoc && attachSupport.enabled;
+    const attachList = builderAttachmentsRef.current;
+    if (autoAttach) payload.attachments = templateAttachments(attachList);
+    const attachRefused = (error: unknown) => {
+      // The row keeps its old attachments: show them again with the sentence.
+      builderAttachmentsRef.current = autoAttachSavedRef.current;
+      setBuilderAttachments(autoAttachSavedRef.current);
+      const msg = error && typeof error === 'object' && 'message' in error ? String((error as { message?: unknown }).message ?? '') : '';
+      notifyErr(plainOrFallback(msg, friendlyError(error, "Couldn't save the attachments. Please try again.")), 'communications-builder');
+    };
 
     if (builderTemplateId) {
-      const { error } = await supabase.from('email_templates').update(payload).eq('id', builderTemplateId);
-      if (error) { if (!opts.silent) notifyErr(friendlyError(error, "Couldn't save this email. Please try again."), 'communications-builder'); return null; }
+      const { data: rows, error } = await supabase.from('email_templates').update(payload).eq('id', builderTemplateId).select('id');
+      if (error || (autoAttach && (rows ?? []).length === 0)) {
+        if (autoAttach) attachRefused(error);
+        else if (!opts.silent) notifyErr(friendlyError(error, "Couldn't save this email. Please try again."), 'communications-builder');
+        return null;
+      }
+      if (autoAttach) autoAttachSavedRef.current = attachList;
       void loadTemplates(); // silent background refresh, never blocks the builder
       return builderTemplateId;
     }
@@ -2685,7 +2713,12 @@ function CommunicationsPageInner() {
       enabled: newTemplateStartsEnabled(builderEventKey),
       ...payload,
     }).select('id').single();
-    if (error) { if (!opts.silent) notifyErr(friendlyError(error, "Couldn't save this email. Please try again."), 'communications-builder'); return null; }
+    if (error) {
+      if (autoAttach) attachRefused(error);
+      else if (!opts.silent) notifyErr(friendlyError(error, "Couldn't save this email. Please try again."), 'communications-builder');
+      return null;
+    }
+    if (autoAttach) autoAttachSavedRef.current = attachList;
     const newId = (data as { id: string }).id;
     setBuilderTemplateId(newId);
     void loadTemplates(); // silent background refresh, never blocks the builder
@@ -2704,6 +2737,22 @@ function CommunicationsPageInner() {
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [builderSubject, builderBlocks, builderOpen]);
+
+  // An automatic email's attachments save as soon as they change (prompt 133),
+  // through the same template save. Opened on our default wording and left as
+  // it was, the email is saved as the default stub ('' / '' / []) with them.
+  useEffect(() => {
+    if (!builderOpen || builderEventKey === null || !attachSupport.enabled) return;
+    const same = (a: EmailAttachment[], b: EmailAttachment[]) => a.map(x => x.path).join('|') === b.map(x => x.path).join('|');
+    if (same(builderAttachments, autoAttachSavedRef.current)) return;
+    const t = setTimeout(() => {
+      const untouched = JSON.stringify({ subject: builderSubject, blocks: builderBlocks }) === builderInitialRef.current;
+      if (untouched && builderFromDefault) void persistTemplate('', [], { silent: false });
+      else void persistTemplate(builderSubject, builderBlocks, { silent: false });
+    }, 600);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [builderAttachments, builderOpen, builderEventKey, attachSupport.enabled]);
 
   async function handleSaveAndClose() {
     // Opened on our default wording and left as it was: save it exactly as a
@@ -3362,8 +3411,10 @@ function CommunicationsPageInner() {
   const sendableCount = finalRecipients.length - unresolvedCount;
   const requireTypedConfirm = sendableCount > 200;
   const confirmDisabled = requireTypedConfirm && sendConfirmText.trim().toUpperCase() !== 'SEND';
-  // Attachments only on a one-off email, and only where the conference has them on.
-  const attachOn = builderEventKey === null && attachSupport.enabled;
+  // Attachments where the conference has them on: a one-off email (for that
+  // send only) or an automatic email (saved with it, prompt 133).
+  const attachOn = attachSupport.enabled;
+  const attachAuto = builderEventKey !== null;
   const attachProblem = attachOn ? attachmentsProblem(builderAttachments) : null;
   const shownAttachments = attachOn ? builderAttachments : [];
 
@@ -4454,10 +4505,10 @@ function CommunicationsPageInner() {
                   docs={attachSupport.docs}
                   value={builderAttachments}
                   onChange={setBuilderAttachments}
-                  savedAsTemplate={!!builderTemplateId}
+                  savedAsTemplate={!attachAuto && !!builderTemplateId}
                 />
               ) : undefined}
-              previewFooter={shownAttachments.length > 0 ? <AttachmentChipsReadOnly value={shownAttachments} /> : undefined}
+              previewFooter={shownAttachments.length > 0 ? <AttachmentChipsReadOnly value={shownAttachments} line={attachAuto ? 'Sent as attachments with every one of these emails' : undefined} /> : undefined}
               testAttachments={shownAttachments.length > 0 && !attachProblem ? shownAttachments : undefined}
               reachSlot={builderEventKey === null ? (
                 <AudienceReach

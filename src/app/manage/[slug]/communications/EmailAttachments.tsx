@@ -1,6 +1,8 @@
 'use client';
 
-// EmailAttachments.tsx — "Attachments" in the email builder (prompt 113).
+// EmailAttachments.tsx — "Attachments" in the email builder (prompt 113), and
+// since prompt 133 in the automatic email editor too, where they ARE saved
+// (email_templates.attachments; the page writes them, this row only edits).
 // Only for one-off builder emails, and only when the conference has
 // attachments switched on (conference_documents_overview().attachments_enabled).
 // The list lives in the page's builder state for ONE send: it is never saved
@@ -94,7 +96,7 @@ function Chip({ a, onRemove, disabled }: { a: EmailAttachment; onRemove?: () => 
 }
 
 /** The chips read only, for "See it for real" and the send confirmation. */
-export function AttachmentChipsReadOnly({ value }: { value: EmailAttachment[] }) {
+export function AttachmentChipsReadOnly({ value, line }: { value: EmailAttachment[]; line?: string }) {
   if (value.length === 0) return null;
   return (
     <div style={{ width: '100%' }}>
@@ -102,7 +104,7 @@ export function AttachmentChipsReadOnly({ value }: { value: EmailAttachment[] })
         {value.map(a => <Chip key={a.path} a={a} />)}
       </ul>
       <p style={{ margin: '8px 0 0', fontFamily: OUTFIT, fontSize: 12.5, color: SOFT, lineHeight: 1.45, textWrap: 'pretty' }}>
-        Sent as attachments. Emails with attachments go out one by one, so a big send can take a few minutes
+        {line ?? 'Sent as attachments. Emails with attachments go out one by one, so a big send can take a few minutes'}
       </p>
     </div>
   );

@@ -1,4 +1,5 @@
-// emailAttachments.ts — files attached to a one-off builder email (prompt 113).
+// emailAttachments.ts — files attached to a one-off builder email (prompt 113),
+// and since prompt 133 to an automatic email (saved on email_templates.attachments).
 //
 // The builder keeps a list of attachments for ONE send (never saved with the
 // template). Every outbox row of the send carries them as
@@ -33,6 +34,36 @@ export interface OutboxAttachment { bucket: 'conference-documents'; path: string
 
 export function outboxAttachments(list: EmailAttachment[]): OutboxAttachment[] {
   return list.map(a => ({ bucket: 'conference-documents', path: a.path, file_name: a.file_name }));
+}
+
+/** What goes on email_templates.attachments (automatic emails only, prompt
+ *  133): the same files, with type and size; the template trigger checks and
+ *  normalises them, and every outbox row queued from the template copies them. */
+export interface TemplateAttachment { bucket: 'conference-documents'; path: string; file_name: string; mime_type: string | null; size: number }
+
+export function templateAttachments(list: EmailAttachment[]): TemplateAttachment[] | null {
+  if (list.length === 0) return null;
+  return list.map(a => ({ bucket: 'conference-documents', path: a.path, file_name: a.file_name, mime_type: a.mime ?? null, size: Number(a.size) || 0 }));
+}
+
+/** A template's saved attachments back into the picker's chips. A file that is
+ *  one of the conference's documents (`docPaths`) counts as one. */
+export function fromTemplateAttachments(raw: unknown, docPaths: Set<string>): EmailAttachment[] {
+  if (!Array.isArray(raw)) return [];
+  const out: EmailAttachment[] = [];
+  for (const r of raw) {
+    if (!r || typeof r !== 'object') continue;
+    const o = r as Record<string, unknown>;
+    if (typeof o.path !== 'string' || !o.path) continue;
+    out.push({
+      path: o.path,
+      file_name: typeof o.file_name === 'string' && o.file_name ? o.file_name : o.path.split('/').pop() ?? 'File',
+      size: Number(o.size) || 0,
+      isConferenceDocument: docPaths.has(o.path),
+      mime: typeof o.mime_type === 'string' ? o.mime_type : null,
+    });
+  }
+  return out;
 }
 
 export function attachmentsTotalBytes(list: EmailAttachment[]): number {
