@@ -16,7 +16,9 @@ export type GuideIconName =
   | 'TrendingUp'
   | 'ScrollText'
   | 'LayoutGrid'
-  | 'Scale';
+  | 'Scale'
+  | 'Network'
+  | 'Briefcase';
 
 /**
  * A contributor credit. The owner will supply real contributor credits;
@@ -81,4 +83,11 @@ export interface GuideMeta {
   words: number;
   readingMinutes: number;
   toc: TocEntry[];
+  /** The opening of the public teaser (its first paragraph, markup stripped,
+   *  cut at a sentence near 190 characters) for the cards. Teaser text only,
+   *  which the guide page already renders publicly. */
+  preview: string;
+  /** The whole first teaser paragraph, markup stripped (the card's title
+   *  attribute when `preview` was cut). */
+  previewFull: string;
 }

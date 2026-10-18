@@ -15,7 +15,7 @@
 // committee (rules 3 to 5).
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Maximize2, Smartphone, MonitorSmartphone } from 'lucide-react';
 import { useT } from '@/contexts/LanguageContext';
 import { encodeQr } from '@/lib/qrCode';
@@ -36,6 +36,44 @@ function Qr({ text, size }: { text: string; size: number }) {
       style={{ display: 'block', borderRadius: 10, backgroundColor: '#FFFFFF' }}>
       <path d={d} fill="#1C1410" />
     </svg>
+  );
+}
+
+/**
+ * The session code, never cut off (owner, 18 Oct 2026: wide codes like WWMMWW ended in "…").
+ * One line, never wrapped mid-code: the text is measured at `max` px and scaled down so it
+ * fits the width the panel gives it, like SessionCodePresenter. Written straight to the node
+ * (no state), again when the box resizes and once the web font has loaded. Layout widths
+ * (clientWidth / scrollWidth) ignore FitToScreen's transform, so the scale cannot skew it.
+ */
+function FitCode({ code, max, min = 14, className = '', style }: {
+  code: string; max: number; min?: number; className?: string; style?: React.CSSProperties;
+}) {
+  const boxRef = useRef<HTMLParagraphElement>(null);
+  const textRef = useRef<HTMLSpanElement>(null);
+  useLayoutEffect(() => {
+    const box = boxRef.current;
+    const text = textRef.current;
+    if (!box || !text) return;
+    const fit = () => {
+      const avail = box.clientWidth;
+      if (avail <= 0) return;
+      box.style.fontSize = `${max}px`;
+      const need = text.scrollWidth || 1;
+      box.style.fontSize = `${Math.max(min, Math.min(max, Math.floor((avail / need) * max)))}px`;
+    };
+    fit();
+    const ro = new ResizeObserver(fit);
+    ro.observe(box);
+    let alive = true;
+    void document.fonts?.ready.then(() => { if (alive) fit(); });
+    return () => { alive = false; ro.disconnect(); };
+  }, [code, max, min]);
+  return (
+    <p ref={boxRef} className={`tabular-nums w-full ${className}`} title={code}
+      style={{ ...style, fontSize: max, whiteSpace: 'nowrap', overflow: 'visible' }}>
+      <span ref={textRef} style={{ display: 'inline-block' }}>{code}</span>
+    </p>
   );
 }
 
@@ -120,7 +158,7 @@ export default function RollCallJoinPanel({ code, onPresent, compact = false }: 
         </div>
         <div className="min-w-0 flex-1">
           <p className="text-xs font-bold" style={{ color: '#6A5A4A' }}>{JOIN_HOST}/join</p>
-          <p className="tabular-nums truncate" style={{ fontWeight: 900, fontSize: 34, letterSpacing: '0.08em', color: '#1B3828', lineHeight: 1.1 }}>{code}</p>
+          <FitCode code={code} max={34} style={{ fontWeight: 900, letterSpacing: '0.06em', color: '#1B3828', lineHeight: 1.1 }} />
           <div className="flex items-center gap-3 mt-1">
             <button type="button" onClick={present} className={`${btn} h-9 px-3 text-sm gv-lift-dark`} style={{ backgroundColor: '#1B3828', color: '#EED98A' }}>
               <Maximize2 size={14} strokeWidth={2.4} aria-hidden />{t('rc_phones_present')}
@@ -135,8 +173,8 @@ export default function RollCallJoinPanel({ code, onPresent, compact = false }: 
     <section aria-label={t('rc_phones_join_title')} className="w-full p-5 flex flex-col items-center text-center" style={card}>
       <p className="text-xs font-black uppercase" style={{ letterSpacing: '0.12em', color: '#6A5A4A' }}>{t('rc_phones_join_title')}</p>
       <p className="mt-1 text-sm font-bold" style={{ color: '#1C1410' }}>{JOIN_HOST}/join</p>
-      <p className="tabular-nums mt-1 max-w-full truncate" title={code}
-        style={{ fontWeight: 900, fontSize: code.length > 8 ? 30 : 46, letterSpacing: '0.08em', color: '#1B3828', lineHeight: 1.05 }}>{code}</p>
+      <FitCode code={code} max={46} className="mt-1"
+        style={{ fontWeight: 900, letterSpacing: '0.06em', color: '#1B3828', lineHeight: 1.05 }} />
       <div className="mt-4" role="img" aria-label={t('code_present_qr', { url: `${JOIN_HOST}/join` })} style={{ lineHeight: 0 }}>
         <Qr text={joinUrl} size={188} />
       </div>

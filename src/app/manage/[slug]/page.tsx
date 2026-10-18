@@ -1580,6 +1580,10 @@ export default function DashboardPage() {
               <h2 style={{ fontFamily: OUTFIT, fontSize: 15, fontWeight: 900, color: NEU.ink }}>Set-up Priorities</h2>
               <p style={{ fontFamily: OUTFIT, fontSize: 11, color: NEU.muted, marginTop: 1, fontVariantNumeric: 'tabular-nums' }}>
                 {doneCount} of {checklist.length} done{doneCount === checklist.length ? '. You are all set.' : ''}
+                {' · '}Stuck? See the{' '}
+                <Link href="/help#organizers" className="rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]" style={{ color: NEU.forest, fontWeight: 700, textDecoration: 'underline', textUnderlineOffset: 2 }}>
+                  help desk
+                </Link>
               </p>
             </div>
             <NeuRing value={doneCount} max={checklist.length} size={44} strokeWidth={6} gradient={NEU_GRADIENTS.gold}>

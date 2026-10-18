@@ -24,9 +24,55 @@ import growth from './content/regional-growth-playbook';
 import clauseBank from './content/clause-bank';
 import committeeDesign from './content/committee-design';
 import specialised from './content/specialised-committees';
+import partnerships from './content/partnerships-playbook';
+import paidChairing from './content/paid-chairing-playbook';
 
-/** Display order on /blog and /guides. */
-const SOURCES: GuideSource[] = [bestDelegate, chairing, sponsorship, growth, clauseBank, committeeDesign, specialised];
+/** Display order on /blog and /guides. /blog's three picks are the first
+ *  guide of each audience (GuideCardGrid), so the lead guide per audience
+ *  comes first: best delegate, chairing, sponsorship. */
+const SOURCES: GuideSource[] = [
+  bestDelegate, chairing, sponsorship, paidChairing, partnerships, growth, clauseBank, committeeDesign, specialised,
+];
+
+/** A card's preview runs to about PREVIEW_MAX characters and is never
+ *  shorter than PREVIEW_MIN when the teaser has that much to give. */
+const PREVIEW_MIN = 120;
+const PREVIEW_MAX = 200;
+
+/**
+ * The card preview: the opening paragraphs of the PUBLIC teaser, **markup**
+ * stripped, whole sentences up to about PREVIEW_MAX (adding one more while the
+ * preview is under PREVIEW_MIN). A preview that still runs long is cut at a
+ * word and ends in an ellipsis
+ * (free text, never an identity: CLAUDE.md §8 rule 11; the card carries the
+ * paragraphs it drew from as its title). Never reads the premium blocks.
+ */
+function buildPreview(teaser: Block[]): { preview: string; previewFull: string } {
+  const paras: string[] = [];
+  for (const b of teaser) {
+    if (b.t !== 'p') continue;
+    paras.push(b.text.replace(/\*\*/g, '').replace(/\s+/g, ' ').trim());
+    if (paras.join(' ').length > PREVIEW_MAX) break;
+  }
+  const full = paras.join(' ');
+  if (full.length <= PREVIEW_MAX) return { preview: full, previewFull: full };
+  const sentences = full.match(/[^.!?]+[.!?]+(?:\s+|$)/g) ?? [full];
+  let out = '';
+  for (const s of sentences) {
+    if (out.trim().length >= PREVIEW_MIN && (out + s).trim().length > PREVIEW_MAX) break;
+    out += s;
+    if (out.trim().length >= PREVIEW_MAX) break;
+  }
+  out = out.trim();
+  if (out.length > PREVIEW_MAX + 30) {
+    const cut = out.slice(0, PREVIEW_MAX);
+    // Prefer a clause break; else the last whole word.
+    const comma = cut.lastIndexOf(', ');
+    const end = comma >= PREVIEW_MIN ? comma : cut.lastIndexOf(' ');
+    out = `${cut.slice(0, end).replace(/[,;:]$/, '')}…`;
+  }
+  return { preview: out, previewFull: full };
+}
 
 export interface Guide {
   meta: GuideMeta;
@@ -62,6 +108,7 @@ function build(src: GuideSource): Guide {
       words,
       readingMinutes: Math.max(1, Math.round(words / 220)),
       toc,
+      ...buildPreview(teaser),
     },
     teaser,
     premium,

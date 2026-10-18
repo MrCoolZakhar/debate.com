@@ -5,7 +5,7 @@ import { PayLink } from './participant/PaymentsLocked';
 import { Fragment, useEffect, useState, useRef, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Globe, MessageCircle, Music, Users, GraduationCap, Monitor, Mail, Landmark, ChevronDown, ChevronLeft, ChevronRight, Check, Circle, X, Plus, ArrowUp, ArrowDown, ArrowUpDown, Star, LayoutDashboard, UserRound, Gavel, ScrollText, CreditCard, Languages, Cake, Clock, CheckCircle2, Hourglass, XCircle, MinusCircle } from 'lucide-react';
+import { Globe, MessageCircle, Music, Users, GraduationCap, Monitor, Mail, Landmark, ChevronDown, ChevronLeft, ChevronRight, Check, Circle, X, Plus, ArrowUp, ArrowDown, ArrowUpDown, Star, LayoutDashboard, UserRound, CreditCard, Languages, Cake, Clock, CheckCircle2, Hourglass, XCircle, MinusCircle } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { committeeLanguageCode, committeeLanguageFlag } from '@/lib/committeeLanguage';
 import { CircleFlag } from '@/components/CircleFlag';
@@ -14,7 +14,6 @@ import SiteFooter from '@/components/SiteFooter';
 import Portal from '@/components/Portal';
 import { DifficultyTile, levelAccent } from '@/components/DifficultyTile';
 import { CardTopic, CommitteeDais, CommitteeInfoDialog, PersonAvatar, committeeHasMore } from '@/app/conferences/[slug]/CommitteeInfoDialog';
-import DecorativeBleed from '@/components/DecorativeBleed';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { supabase as anonSupabase } from '@/lib/supabase';
@@ -65,7 +64,8 @@ const LOAD_WATCHDOG_MS = 12_000;
 import { useServerNow } from '@/lib/applicationWindow';
 import { RoleApplyCards, type RoleTile } from './RoleApplyCards';
 import { useFitSticky } from './useFitSticky';
-import { ContactOrganisers } from './ContactOrganisers';
+import { ContactOrganisers, conferenceContactEmails, copyEmailWithToast } from './ContactOrganisers';
+import { BottomToastHost } from './BottomToast';
 
 const GRAIN = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='grain'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23grain)' opacity='1'/%3E%3C/svg%3E")`;
 
@@ -733,9 +733,8 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
   // than once per tab, and coming back to a tab shows what's already here.
   const [activeTab, setActiveTab] = useState<TabKey>(initialView);
   const [activeRole, setActiveRole] = useState<string | null>(initialRole);
-  // Bumped by the Apply card's Contact the organisers when the conference has
-  // no contact email: ParticipantView opens its Ask the Organisers section,
-  // then resets it to 0.
+  // Bumped by ?ask=organisers (the locked pay buttons' Contact link):
+  // ParticipantView opens its Ask the Organisers section, then resets it to 0.
   const [askOrganisersRequest, setAskOrganisersRequest] = useState(0);
   /** +1 = the incoming pane slides in from the right, -1 from the left. */
   const [slideDir, setSlideDir] = useState<1 | -1>(1);
@@ -1546,7 +1545,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
   }
 
   // ?ask=organisers (prompt 108): opens the participant dashboard's "Ask the
-  // Organisers" thread, the same as ContactOrganisers' onAsk. The locked pay
+  // Organisers" thread. The locked pay
   // buttons' "Contact" link uses it (from /pay and from the dashboard itself).
   // Read from window.location (no useSearchParams, see above); re-checked when
   // the in-page link changes the URL without a reload.
@@ -1881,16 +1880,6 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                   opacity: 0.08,
                 }}
               />
-              <span
-                aria-hidden
-                style={{
-                  position: 'absolute', right: '4%', bottom: '-24px',
-                  fontFamily: "var(--font-brand), sans-serif", fontWeight: 800, fontVariantNumeric: 'tabular-nums', fontSize: 'clamp(120px, 18vw, 240px)', lineHeight: 1,
-                  color: 'rgba(238,217,138,0.07)', userSelect: 'none', pointerEvents: 'none',
-                }}
-              >
-                {conference.acronym.slice(0, 5)}
-              </span>
             </>
           )}
 
@@ -2088,15 +2077,9 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
 
         {/* ── Main content ───────────────────────────────────────────── */}
         <div style={{ maxWidth: '1200px', margin: '0 auto', width: '100%', isolation: 'isolate' }} className="relative px-6 md:px-14 pt-10 pb-14 flex-1">
-          {/* Decorative bleed — faded MUN glyphs tucked behind the main content
-              column (zIndex -1; the page root already clips overflow-x). */}
-          <DecorativeBleed
-            zIndex={-1}
-            items={[
-              { Icon: Gavel, size: 160, top: '10px', right: '-30px', opacity: 0.045, rotate: -10 },
-              { Icon: ScrollText, size: 130, bottom: '80px', left: '-34px', opacity: 0.04 },
-            ]}
-          />
+          {/* No decorative glyphs here (owner, 18 Oct 2026: the faded gavel
+              and scroll behind the columns read as random floating icons on a
+              phone, peeking out wherever the cards left a gap). */}
           <div className="relative flex flex-col md:flex-row gap-8" style={{ zIndex: 1 }}>
 
             {/* Left column */}
@@ -2296,18 +2279,23 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                     <div className="min-w-0">
                       <p className="font-semibold text-[15px]" style={{ color: 'var(--gv-on-surface)', fontFamily: "var(--font-brand), sans-serif", margin: 0 }}>{conference.full_name}</p>
                       <p className="text-[11px] mt-0.5" style={{ color: 'var(--gv-muted)', fontFamily: "var(--font-brand), sans-serif", fontWeight: 500, margin: 0 }}>{conferenceAcronymLabel(conference)}</p>
-                      {conference.contact_email && (
-                        <a
-                          href={`mailto:${conference.contact_email}`}
-                          className="flex items-center gap-1.5 text-xs mt-1 transition-colors min-h-11 sm:min-h-0"
-                          style={{ color: 'var(--gv-muted)', fontFamily: "var(--font-brand), sans-serif", textDecoration: 'none', overflowWrap: 'anywhere' }}
+                      {/* Copies like the Apply card's email (18 Oct 2026). */}
+                      {conferenceContactEmails(conference.contact_email).map(address => (
+                        <button
+                          key={address}
+                          type="button"
+                          onClick={(e) => { void copyEmailWithToast(address, e.currentTarget.querySelector<HTMLElement>('[data-contact-address]')); }}
+                          title="Copy email address"
+                          aria-label={`Copy the organisers' email, ${address}`}
+                          className="flex items-center gap-1.5 text-xs mt-1 transition-colors min-h-11 sm:min-h-0 text-left focus:outline-none"
+                          style={{ color: 'var(--gv-muted)', fontFamily: "var(--font-brand), sans-serif", background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}
                           onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = 'var(--gv-main)'; }}
                           onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = 'var(--gv-muted)'; }}
                         >
-                          <Mail size={12} />
-                          {conference.contact_email}
-                        </a>
-                      )}
+                          <Mail size={12} className="shrink-0" aria-hidden />
+                          <span data-contact-address className="min-w-0 [overflow-wrap:anywhere]">{address}</span>
+                        </button>
+                      ))}
                     </div>
                   </div>
                   {(conference.instagram_url || conference.facebook_url || conference.tiktok_url || conference.whatsapp_url || conference.website_url) && (
@@ -2908,21 +2896,11 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                         />
                       </>
                     )}
-                    {/* Contact the organisers (12 Oct 2026): straight under
-                        Apply, to the conference's own address. Without one,
-                        a signed-in applicant is sent to the dashboard's Ask
-                        the Organisers thread; otherwise nothing shows.
-                        Never for the organising team itself. */}
-                    {!isOrganizerViewer && (
-                      <ContactOrganisers
-                        email={conference.contact_email}
-                        conferenceName={conference.acronym || conference.full_name}
-                        onAsk={user && myApp && !authLoading && !participantDataLoading ? () => {
-                          showTab('participant', myApp.role);
-                          setAskOrganisersRequest(n => n + 1);
-                        } : undefined}
-                      />
-                    )}
+                    {/* The organisers' email (18 Oct 2026): straight under
+                        Apply, a white card per address that copies it with
+                        "Email copied" from the bottom. Nothing without a
+                        public address. Never for the organising team. */}
+                    {!isOrganizerViewer && <ContactOrganisers email={conference.contact_email} />}
                   </div>
                 </div>
 
@@ -3970,6 +3948,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
 
         <SiteFooter />
       </div>
+      <BottomToastHost />
     </div>
   );
 }

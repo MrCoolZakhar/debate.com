@@ -1,23 +1,25 @@
 'use client';
 
 /**
- * "Contact the organisers", directly under the Apply button in the Apply card
- * of the public conference page (owner, 12 Oct 2026: "we get a lot of emails
- * from people that's meant for a specific conference and this should lead
- * them directly to their email").
+ * The organisers' email, directly under the roles in the Apply card of the
+ * public conference page (owner, 12 Oct 2026: "we get a lot of emails from
+ * people that's meant for a specific conference and this should lead them
+ * directly to their email").
  *
- * Leads to the conference's OWN address (`conferences.contact_email`) by
- * mailto, with a subject naming the conference, and prints the address under
- * the button with a copy key for a device without a mail app. Without a valid
- * address it falls back to the participant dashboard's "Ask the Organisers"
- * thread, but only when the caller passes `onAsk` (signed in, with an
- * application here). With neither it renders nothing. It never points at a
- * Gavelling address.
+ * 18 Oct 2026 (owner: the "Contact the organiser" button was "weird"): no
+ * button. A white card per address: the 3D email picture with "Contact" small
+ * beneath it, the address beside it. A press anywhere on the card copies the
+ * address and slides "Email copied" up from the bottom of the screen
+ * (`BottomToast.tsx`; the page mounts the one host). Only the conference's OWN
+ * address (`conferences.contact_email`); several separated by commas or spaces
+ * each get their own card. With no valid address it renders nothing (the old
+ * fallback to the dashboard's Ask the Organisers thread is gone from here). It
+ * never points at a Gavelling address.
  */
 
-import { useEffect, useRef, useState } from 'react';
-import { Check, Copy, Mail, MessageCircle } from 'lucide-react';
+import { Mail } from 'lucide-react';
 import { Emoji3D } from '@/components/neu';
+import { showBottomToast } from './BottomToast';
 
 const FONT = 'var(--font-brand), sans-serif';
 const INK = '#1C1410';
@@ -30,40 +32,18 @@ export function conferenceContactEmail(raw: string | null | undefined): string |
   return email;
 }
 
-const BUTTON_CSS = `
-.gv-contact-btn{transition:transform 200ms cubic-bezier(.32,.72,0,1),box-shadow 200ms cubic-bezier(.32,.72,0,1)}
-.gv-contact-btn:hover{transform:translateY(-2px);box-shadow:0 2px 0 rgba(255,255,255,0.9) inset,0 14px 28px rgba(0,0,0,0.28)}
-.gv-contact-btn:active{transform:translateY(0) scale(0.98)}
-.gv-contact-btn:focus-visible{outline:2px solid #EED98A;outline-offset:3px}
-.gv-contact-copy:focus-visible{outline:2px solid #EED98A;outline-offset:2px}
-@media (prefers-reduced-motion: reduce){.gv-contact-btn,.gv-contact-btn:hover,.gv-contact-btn:active{transition:none;transform:none}}
-`;
-
-const BUTTON_STYLE: React.CSSProperties = {
-  minHeight: 54,
-  padding: '0 18px',
-  borderRadius: 14,
-  border: 'none',
-  backgroundColor: '#FFFFFF',
-  color: INK,
-  fontFamily: FONT,
-  fontWeight: 700,
-  fontSize: 15.5,
-  textDecoration: 'none',
-  cursor: 'pointer',
-  boxShadow: '0 2px 0 rgba(255,255,255,0.9) inset, 0 10px 24px rgba(0,0,0,0.22)',
-};
-
-function ButtonFace({ fallbackIcon }: { fallbackIcon: typeof Mail }) {
-  return (
-    <>
-      <Emoji3D name="E-mail" size={30} fallback={fallbackIcon} fallbackColor="#1B3828" style={{ flexShrink: 0 }} />
-      <span>Contact the organisers</span>
-    </>
-  );
+/** Every valid address in the stored field (one, or several separated by
+ *  commas, semicolons or spaces), each once. */
+export function conferenceContactEmails(raw: string | null | undefined): string[] {
+  const out: string[] = [];
+  for (const part of (raw ?? '').split(/[,;\s]+/)) {
+    const email = conferenceContactEmail(part);
+    if (email && !out.some(e => e.toLowerCase() === email.toLowerCase())) out.push(email);
+  }
+  return out;
 }
 
-async function copyText(text: string): Promise<boolean> {
+export async function copyText(text: string): Promise<boolean> {
   try {
     if (navigator.clipboard?.writeText) {
       await navigator.clipboard.writeText(text);
@@ -86,107 +66,80 @@ async function copyText(text: string): Promise<boolean> {
   }
 }
 
-export function ContactOrganisers({ email, conferenceName, onAsk }: {
+/** Copies the address and says so at the bottom of the screen. When the
+ *  clipboard refuses (an old browser, an embedded view) the address on screen
+ *  is selected instead so one more press copies it by hand. */
+export async function copyEmailWithToast(address: string, select?: HTMLElement | null) {
+  const ok = await copyText(address);
+  if (ok) {
+    showBottomToast('Email copied');
+    return;
+  }
+  if (select) {
+    const range = document.createRange();
+    range.selectNodeContents(select);
+    const sel = window.getSelection();
+    sel?.removeAllRanges();
+    sel?.addRange(range);
+  }
+  showBottomToast('Select the email to copy it');
+}
+
+const CARD_CSS = `
+.gv-contact-card{transition:transform 200ms cubic-bezier(.32,.72,0,1),box-shadow 200ms cubic-bezier(.32,.72,0,1)}
+.gv-contact-card:hover{transform:translateY(-1px);box-shadow:0 2px 0 rgba(255,255,255,0.9) inset,0 10px 20px rgba(0,0,0,0.24)}
+.gv-contact-card:active{transform:scale(0.98)}
+.gv-contact-card:focus-visible{outline:2px solid #EED98A;outline-offset:3px}
+@media (prefers-reduced-motion: reduce){.gv-contact-card,.gv-contact-card:hover,.gv-contact-card:active{transition:none;transform:none}}
+`;
+
+function ContactEmailCard({ address }: { address: string }) {
+  return (
+    <button
+      type="button"
+      onClick={(e) => {
+        const node = (e.currentTarget as HTMLElement).querySelector<HTMLElement>('[data-contact-address]');
+        void copyEmailWithToast(address, node);
+      }}
+      className="gv-contact-card w-full flex items-center gap-3 text-left rounded-[12px] focus:outline-none"
+      aria-label={`Copy the organisers' email, ${address}`}
+      title="Copy email address"
+      style={{
+        minHeight: 60,
+        padding: '8px 14px 8px 10px',
+        border: 'none',
+        backgroundColor: '#FFFFFF',
+        boxShadow: '0 2px 0 rgba(255,255,255,0.9) inset, 0 4px 12px rgba(0,0,0,0.18)',
+        cursor: 'pointer',
+      }}
+    >
+      <span className="shrink-0 flex flex-col items-center" style={{ minWidth: 48 }}>
+        <Emoji3D name="E-mail" size={28} fallback={Mail} fallbackColor="#1B3828" />
+        <span style={{ fontFamily: FONT, fontSize: 10.5, fontWeight: 600, lineHeight: 1.2, color: '#5A4A3C', marginTop: 2 }}>
+          Contact
+        </span>
+      </span>
+      <span
+        data-contact-address
+        className="flex-1 min-w-0 [overflow-wrap:anywhere]"
+        style={{ fontFamily: FONT, fontSize: 14.5, fontWeight: 700, lineHeight: 1.3, color: INK }}
+      >
+        {address}
+      </span>
+    </button>
+  );
+}
+
+export function ContactOrganisers({ email }: {
   /** `conferences.contact_email` as stored. */
   email: string | null | undefined;
-  /** The acronym (or full name) for the mail subject. */
-  conferenceName: string;
-  /** Opens the dashboard's "Ask the Organisers" thread. Pass it only when
-   *  the viewer is signed in and has an application here. */
-  onAsk?: () => void;
 }) {
-  const address = conferenceContactEmail(email);
-  const [copied, setCopied] = useState<'idle' | 'copied' | 'failed'>('idle');
-  const timer = useRef<number | null>(null);
-  const addressRef = useRef<HTMLSpanElement | null>(null);
-  useEffect(() => () => { if (timer.current) window.clearTimeout(timer.current); }, []);
-
-  if (!address && !onAsk) return null;
-
-  if (!address) {
-    return (
-      <div className="mt-5">
-        <style>{BUTTON_CSS}</style>
-        <button
-          type="button"
-          onClick={onAsk}
-          className="gv-contact-btn w-full flex items-center justify-center gap-2.5 focus:outline-none"
-          style={BUTTON_STYLE}
-        >
-          <ButtonFace fallbackIcon={MessageCircle} />
-        </button>
-        <p className="text-center" style={{ margin: '8px 0 0 0', fontFamily: FONT, fontSize: 12.5, lineHeight: 1.45, color: 'color-mix(in srgb, var(--gv-on-main) 78%, transparent)' }}>
-          Send them a message from your dashboard
-        </p>
-      </div>
-    );
-  }
-
-  const subject = `Question about ${conferenceName}`.trim();
-  const href = `mailto:${address}?subject=${encodeURIComponent(subject)}`;
-
-  const onCopy = async () => {
-    const ok = await copyText(address);
-    setCopied(ok ? 'copied' : 'failed');
-    // The clipboard refused (an old browser, an embedded view): select the
-    // address instead so one more press copies it by hand.
-    if (!ok && addressRef.current) {
-      const range = document.createRange();
-      range.selectNodeContents(addressRef.current);
-      const sel = window.getSelection();
-      sel?.removeAllRanges();
-      sel?.addRange(range);
-    }
-    if (timer.current) window.clearTimeout(timer.current);
-    timer.current = window.setTimeout(() => setCopied('idle'), 2200);
-  };
-
+  const addresses = conferenceContactEmails(email);
+  if (addresses.length === 0) return null;
   return (
-    <div className="mt-5">
-      <style>{BUTTON_CSS}</style>
-      <a
-        href={href}
-        className="gv-contact-btn w-full flex items-center justify-center gap-2.5 focus:outline-none"
-        style={BUTTON_STYLE}
-        aria-label={`Contact the organisers by email at ${address}`}
-      >
-        <ButtonFace fallbackIcon={Mail} />
-      </a>
-      <div className="mt-2 flex items-center justify-center gap-1">
-        <span
-          ref={addressRef}
-          className="min-w-0 text-center [overflow-wrap:anywhere] select-all"
-          style={{ fontFamily: FONT, fontSize: 12.5, lineHeight: 1.4, color: 'color-mix(in srgb, var(--gv-on-main) 82%, transparent)' }}
-        >
-          {address}
-        </span>
-        <button
-          type="button"
-          onClick={onCopy}
-          className="gv-contact-copy flex-shrink-0 inline-flex items-center justify-center gap-1 rounded-lg focus:outline-none"
-          aria-label={copied === 'copied' ? 'Email address copied' : 'Copy email address'}
-          title={copied === 'copied' ? 'Copied' : 'Copy email address'}
-          style={{
-            minWidth: 36,
-            minHeight: 36,
-            padding: '0 8px',
-            border: 'none',
-            background: 'transparent',
-            cursor: 'pointer',
-            color: 'var(--gv-on-main)',
-            fontFamily: FONT,
-            fontSize: 12,
-            fontWeight: 700,
-          }}
-        >
-          {copied === 'copied'
-            ? <><Check size={15} strokeWidth={2.4} aria-hidden /><span>Copied</span></>
-            : <Copy size={15} strokeWidth={2.2} aria-hidden />}
-        </button>
-      </div>
-      <span className="sr-only" aria-live="polite">
-        {copied === 'copied' ? 'Email address copied' : copied === 'failed' ? 'Could not copy. Select the address to copy it.' : ''}
-      </span>
+    <div className="mt-4 flex flex-col gap-2">
+      <style>{CARD_CSS}</style>
+      {addresses.map(a => <ContactEmailCard key={a} address={a} />)}
     </div>
   );
 }

@@ -8,7 +8,7 @@ import GuideCardGrid from './GuideCardGrid';
 export const metadata: Metadata = pageMetadata({
   title: 'Premium MUN Guides',
   description:
-    'In-depth Model UN playbooks for delegates, chairs and organisers: award-winning habits, chairing, sponsorship, growth, clauses and committee design.',
+    'In-depth Model UN playbooks for delegates, chairs and organisers: chairing, paid chairing, sponsorship, partnerships, growth, clauses and committee design.',
   path: '/guides',
   ogTitle: 'Premium MUN Guides: Gavelling',
 });
@@ -38,7 +38,7 @@ export default function GuidesIndexPage() {
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(itemList) }} />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumb) }} />
       <BlogChrome>
-        <div className="gvg-wrap">
+        <div className="gvg-wrap gvg-wrap-wide">
           <nav className="gvg-crumbs" aria-label="Breadcrumb">
             <Link href="/blog">Blog</Link>
             <span aria-hidden="true">/</span>

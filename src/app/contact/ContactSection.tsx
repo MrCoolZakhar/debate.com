@@ -1,16 +1,19 @@
 'use client';
 
-// Contact: "Pick who you are". Rendered at the very top of /help (owner, 18 Oct
-// 2026: the nav item reads Contact and opens /help, so people can contact the
-// team at once; the help center follows below).
-// "Pick who you are": three cards; choosing one opens a short form in place,
-// already tagged for that topic. It posts to /api/contact with the same payload
-// the old /contact form sent ({ name, email, message, subject }); the route
-// saves it and the database queues the team alert, and files it in a
-// conference's inbox when the message names a conference the sender applied to.
+// The contact block of /contact (owner, 18 Oct 2026: the top bar's Contact
+// opens /contact again and this block moved here from the top of /help; the
+// old /contact form is gone, so there is ONE contact UI).
+// "Pick who you are": three cards on the left tag the message; the form on the
+// right is always open (an unpicked card sends a general enquiry). It posts to
+// /api/contact with { name, email, message, subject }; the route saves it and
+// the database queues the team alert, and files it in a conference's inbox
+// when the message names a conference the sender applied to.
+// Compact on purpose: /contact fits one screen at 1280x800 with the founders
+// band under this block.
 
 import { useId, useState } from 'react';
 import { Building2, Gavel, Newspaper, Check, Copy, type LucideIcon } from 'lucide-react';
+import Link from 'next/link';
 import { GoldWord } from '@/components/BrandHeading';
 
 const FOREST = '#1B3828';
@@ -46,7 +49,7 @@ const TOPICS: { id: TopicId; icon: LucideIcon; title: string; line: string; subj
 
 export const CONTACT_CSS = `
 .gv-who{display:flex;flex-direction:row;align-items:center;gap:14px;text-align:start;width:100%;
-  padding:14px 16px;border-radius:16px;border:none;cursor:pointer;background:#FFFFFF;
+  padding:11px 16px;border-radius:16px;border:none;cursor:pointer;background:#FFFFFF;
   box-shadow:0 1px 2px rgba(27,56,40,0.08),0 10px 28px -12px rgba(27,56,40,0.30);
   transition:transform 180ms cubic-bezier(0.22,1,0.36,1),box-shadow 180ms ease}
 .gv-who:hover{transform:translateY(-2px);box-shadow:0 2px 4px rgba(27,56,40,0.10),0 16px 34px -12px rgba(27,56,40,0.38)}
@@ -56,13 +59,13 @@ export const CONTACT_CSS = `
 .gv-who[aria-checked="true"]{box-shadow:inset 0 0 0 2px ${FOREST},0 16px 34px -12px rgba(27,56,40,0.38)}
 .gv-who-disc{width:44px;height:44px;flex-shrink:0;border-radius:50%;display:flex;align-items:center;justify-content:center;
   background:rgba(191,219,199,0.55)}
-.gv-contact-grid{display:grid;gap:20px;margin-top:22px}
+.gv-contact-grid{display:grid;gap:20px;margin-top:18px}
 @media (min-width:900px){.gv-contact-grid{grid-template-columns:minmax(0,5fr) minmax(0,7fr);gap:28px;align-items:start}}
 .gv-reveal{display:grid;grid-template-rows:0fr;transition:grid-template-rows 280ms cubic-bezier(0.22,1,0.36,1)}
 .gv-reveal[data-open="true"]{grid-template-rows:1fr}
 .gv-reveal>div{overflow:hidden;min-height:0}
 .gv-field{width:100%;border-radius:12px;border:1.5px solid rgba(28,20,16,0.16);background:#FFFFFF;color:${INK};
-  font-size:16px;padding:12px 14px;font-family:inherit;transition:border-color 140ms ease,box-shadow 140ms ease}
+  font-size:16px;padding:10px 14px;font-family:inherit;transition:border-color 140ms ease,box-shadow 140ms ease}
 .gv-field:focus{outline:none;border-color:${FOREST};box-shadow:0 0 0 3px rgba(27,56,40,0.14)}
 .gv-label{display:block;color:${INK};font-size:14px;font-weight:700;margin-bottom:6px}
 .gv-forest-btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:48px;padding:0 22px;
@@ -92,7 +95,7 @@ function DuoIcon({ icon: Icon, size = 26 }: { icon: LucideIcon; size?: number })
   return <Icon size={size} strokeWidth={1.7} fill="rgba(238,217,138,0.8)" style={{ color: FOREST }} aria-hidden />;
 }
 
-export default function ContactSection({ eyebrow = 'About and contact' }: { eyebrow?: string | null } = {}) {
+export default function ContactSection() {
   const formId = useId();
   const [topic, setTopic] = useState<TopicId | null>(null);
   const [form, setForm] = useState({ name: '', email: '', message: '' });
@@ -142,11 +145,9 @@ export default function ContactSection({ eyebrow = 'About and contact' }: { eyeb
   };
 
   return (
-    <section id="contact" aria-labelledby="contact-title" className="relative z-10 w-full max-w-6xl mx-auto px-4 sm:px-6"
-      style={{ paddingTop: 'clamp(32px, 3.5vw, 52px)', paddingBottom: 0, scrollMarginTop: 80 }}>
+    <section id="contact" aria-labelledby="contact-title" className="relative z-10 w-full">
       <style>{CONTACT_CSS}</style>
-      {eyebrow && <p style={{ margin: 0, color: INK_SOFT, fontSize: 12, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase' }}>{eyebrow}</p>}
-      <h1 id="contact-title" className="font-black tracking-tight" style={{ color: INK, fontSize: 'clamp(30px, 3.4vw, 44px)', lineHeight: 1.05, margin: '8px 0 0' }}>
+      <h1 id="contact-title" className="font-black tracking-tight" style={{ color: INK, fontSize: 'clamp(30px, 3.4vw, 44px)', lineHeight: 1.05, margin: 0 }}>
         Talk to <GoldWord>Us</GoldWord>
       </h1>
       <p style={{ color: INK_SOFT, fontSize: 16, lineHeight: 1.5, margin: '8px 0 0', maxWidth: 560 }}>
@@ -175,7 +176,7 @@ export default function ContactSection({ eyebrow = 'About and contact' }: { eyeb
             ))}
           </div>
 
-          <div className="flex flex-col gap-3" style={{ marginTop: 18 }}>
+          <div className="flex flex-col gap-2" style={{ marginTop: 14 }}>
             <div className="flex flex-wrap items-center gap-3">
               <span style={{ color: INK_SOFT, fontSize: 14 }}>Or email</span>
               <span style={{ color: INK, fontSize: 15, fontWeight: 700, userSelect: 'all', overflowWrap: 'anywhere' }}>{TEAM_EMAIL}</span>
@@ -188,6 +189,9 @@ export default function ContactSection({ eyebrow = 'About and contact' }: { eyeb
               <span>Instagram</span>
               <a className="gv-inline-link" href="https://instagram.com/wearegavelling" target="_blank" rel="noopener noreferrer">@wearegavelling</a>
             </div>
+            <p style={{ margin: 0, fontSize: 15, color: INK_SOFT, lineHeight: 1.5 }}>
+              Have a general question? See the <Link className="gv-inline-link" href="/help">help desk</Link>
+            </p>
           </div>
         </div>
 
@@ -222,7 +226,7 @@ export default function ContactSection({ eyebrow = 'About and contact' }: { eyeb
               </div>
               <div>
                 <label className="gv-label" htmlFor={`${formId}-message`}>Message</label>
-                <textarea id={`${formId}-message`} className="gv-field" rows={5} style={{ resize: 'vertical' }}
+                <textarea id={`${formId}-message`} className="gv-field" rows={4} style={{ resize: 'vertical' }}
                   placeholder={current?.placeholder ?? 'How can we help?'} value={form.message}
                   onChange={(e) => setForm({ ...form, message: e.target.value })} />
               </div>

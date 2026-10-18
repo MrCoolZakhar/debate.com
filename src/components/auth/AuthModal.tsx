@@ -839,6 +839,7 @@ function CodeStep({
           : <TextButton onClick={() => void resend()}>{resending ? 'Sending…' : 'Send a new code'}</TextButton>}
       </p>
       <Hint>The link in the email works too. It brings you back here, signed in.</Hint>
+      <Hint>Still stuck? Visit the <Link href="/help" target="_blank" rel="noopener" className={`gv-inline ${FOCUS}`}>help desk</Link></Hint>
     </form>
   );
 }
@@ -882,6 +883,7 @@ function CheckEmailStep({ email, onResend, onBackToLogin }: { email: string; onR
         {sent ? 'Sent again. ' : 'Nothing yet? Check spam, or '}
         {active ? <>send another in {remaining}s.</> : <TextButton onClick={async () => { await onResend(); setSent(true); start(); }}>send it again</TextButton>}
       </p>
+      <Hint>Still stuck? Visit the <Link href="/help" target="_blank" rel="noopener" className={`gv-inline ${FOCUS}`}>help desk</Link></Hint>
     </div>
   );
 }

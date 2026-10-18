@@ -177,7 +177,7 @@ Whatever the argument is called. Testing is a rolled-back transaction (`begin; s
 
 ## 7. Sessions runtime in one screen
 
-- `speakersList` is the GSL: permanent, never touched by a caucus. `caucusQueue` is temporary. `currentSpeaker` is its own row and never in either list.
+- `speakersList` is the GSL: permanent, never wiped by a caucus; a GSL floor holder with time left interrupted by a caucus or a suspension goes back to its front (`src/lib/gslFloorReturn.ts`). `caucusQueue` is temporary. `currentSpeaker` is its own row and never in either list.
 - Optimistic writes: `updateLocal()` first, DB write fire-and-forget; realtime echoes are ignored for 3 s after a structural local write; the Commenter never debounces. Every write reports whether it landed (`runWrite`); parkable writes survive offline (`OFFLINE_RESILIENCE`).
 - Timers are anchored on the DATABASE clock (`serverNow()`): persist `started_at` + duration once; there is no per-second write and there must never be one.
 - List writes go through the `speakers_list_add` / `speakers_list_reorder` RPCs; never a client-computed position.
@@ -259,7 +259,7 @@ Client constants:
 - Referral codes: the database objects remain unshown; removing them is the chat's Supabase work. The old "step 6" ownership check is moot.
 - `www.gavelling.com` must 308 to `https://gavelling.com` at the Vercel domain level with a valid certificate (Peter or Christian).
 
-**Dead code to delete:** `account/manage/{ManageAccount,CreditsSection,SubscriptionSection,PromoSection}.tsx`, `SpotlightRow` in `ExploreFeed.tsx`, `about/ContactSection.tsx`, `awards/AwardsConsole.tsx`, `src/lib/store.ts` with `SpeakersListPanel`, `CaucusPanel`, `ResolutionsPanel`, the `BrandLogo` fallback, `src/app/_archive/*`.
+**Dead code to delete:** `account/manage/{ManageAccount,CreditsSection,SubscriptionSection,PromoSection}.tsx`, `SpotlightRow` in `ExploreFeed.tsx`, `awards/AwardsConsole.tsx`, `src/lib/store.ts` with `SpeakersListPanel`, `CaucusPanel`, `ResolutionsPanel`, the `BrandLogo` fallback, `src/app/_archive/*`.
 
 ---
 

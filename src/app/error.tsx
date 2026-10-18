@@ -91,6 +91,13 @@ export default function Error({
           </Link>
         </div>
 
+        <p className="mt-5" style={{ color: '#5A5046', fontFamily: OUTFIT, fontSize: 13.5 }}>
+          Still stuck? Visit the{' '}
+          <Link href="/help" className="rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]" style={{ color: '#1B3828', fontWeight: 700, textDecoration: 'underline', textUnderlineOffset: 3 }}>
+            help desk
+          </Link>
+        </p>
+
         {error?.digest && (
           <p className="mt-5" style={{ color: '#B6A88E', fontFamily: 'ui-monospace, monospace', fontSize: 10.5 }}>
             Reference: {error.digest}

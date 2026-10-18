@@ -64,6 +64,7 @@ import { startSessionSync, rowFields, withCurrentSpeaker, withLists, ALL_SYNC_SL
 import { OFFLINE_RESILIENCE, createPendingSliceGuard, PENDING_RECHECK_MS } from '@/lib/offlineResilience';
 import { dropParkedWrites } from '@/lib/writeStatus';
 import { endModeratedCaucusIfAnchorUnchanged } from '@/lib/caucusExpiryWrite';
+import { interruptedGslSpeaker, returnSpeakerToGslFront } from '@/lib/gslFloorReturn';
 import ConnectionPill from '@/components/ConnectionPill';
 import TutorialOverlay from '@/components/TutorialOverlay';
 import { useAgendaPicker } from '@/components/AgendaPicker';
@@ -3942,11 +3943,15 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
     // Optimistic first, DB write fire-and-forget (RULE 5) — exactly the shape MotionsModal
     // uses for the same two transitions, so the two paths cannot drift.
     // The speaker holding the floor spoke too (G-1): log it before the clocks freeze.
-    void logFloorSpeech(committee, {
+    const pauseClock = {
       base: speakerAnchorRef.current.base,
       startedAt: speakerAnchorRef.current.startedAt,
       extraSecs: extraTimeAddedSecsRef.current,
-    });
+    };
+    // A pause keeps an interrupted GSL speaker's place (src/lib/gslFloorReturn.ts), like the
+    // Suspend motion. Read before the clear below.
+    const backToGsl = b.action === 'pause' ? interruptedGslSpeaker(committee, pauseClock) : null;
+    void logFloorSpeech(committee, pauseClock);
     extraTimeAddedSecsRef.current = 0;
     // An organiser END finishes a Room Order Tour de Table for good (a pause only freezes it).
     if (b.action !== 'pause') void creditRoomOrderTour(committee);
@@ -3960,6 +3965,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
     if (floor) {
       updateLocal(setCommittee, (c) => ({ ...c, currentSpeaker: null }), true);
       clearCurrentSpeakerIfUnchanged(committee.id, floor.delegateId, floor.country, code, suffix);
+      if (backToGsl) returnSpeakerToGslFront(committee, backToGsl, (u) => updateLocal(setCommittee, u, true));
     }
     // Remembered, so a write that still fails after its retries can be rolled back (R-5):
     // otherwise this laptop sits on a suspended / ended screen while the room carries on.

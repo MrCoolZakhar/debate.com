@@ -9,6 +9,12 @@
  * No pictures (owner, 12 Oct 2026). Presentation only: the caller decides
  * which roles show, whether each is open, the price (publicFees) and what a
  * press does.
+ *
+ * 18 Oct 2026 (owner): the order is Head Delegate, Delegate, Faculty Advisor,
+ * Observer, then every other role in the order given (`orderRoleTiles`). On a
+ * phone (below md) the rows become small square tiles, three a row from 360px
+ * (two below), the glyph on top and the name beneath, wrapping, never cut;
+ * from md the stacked rows are unchanged.
  */
 
 import { ArrowRight, CalendarClock, Lock, UserRound, Users, Eye, GraduationCap, Gavel, Newspaper, Siren, IdCard, type LucideIcon } from 'lucide-react';
@@ -27,14 +33,14 @@ const ROLE_GLYPH: Record<string, LucideIcon> = {
   secretariat: IdCard,
 };
 
-function RoleGlyph({ role, open }: { role: string; open: boolean }) {
+function RoleGlyph({ role, open, size = 36 }: { role: string; open: boolean; size?: number }) {
   const ink = open ? '#1B3828' : '#8A7A66';
   const Icon = ROLE_GLYPH[role] ?? UserRound;
   return (
     <span
       className="shrink-0 relative inline-flex items-center justify-center rounded-full"
       aria-hidden
-      style={{ width: 36, height: 36, background: open ? 'rgba(238,217,138,0.45)' : 'rgba(27,56,40,0.06)' }}
+      style={{ width: size, height: size, background: open ? 'rgba(238,217,138,0.45)' : 'rgba(27,56,40,0.06)' }}
     >
       {role === 'chair' ? (
         <>
@@ -46,6 +52,21 @@ function RoleGlyph({ role, open }: { role: string; open: boolean }) {
       )}
     </span>
   );
+}
+
+/** Head Delegate, Delegate, Faculty Advisor, Observer first; every other
+ *  role (chair, press, custom ones) after them in the order given. */
+const ROLE_ORDER: Record<string, number> = {
+  'head-delegate': 0,
+  delegate: 1,
+  'faculty-advisor': 2,
+  observer: 3,
+};
+
+export function orderRoleTiles<T extends { role: string }>(tiles: T[]): T[] {
+  const rank = (r: string) => ROLE_ORDER[r] ?? Object.keys(ROLE_ORDER).length;
+  // Array.prototype.sort is stable, so the rest keep their order.
+  return [...tiles].sort((a, b) => rank(a.role) - rank(b.role));
 }
 
 export type RoleTileState = 'open' | 'opens-soon' | 'closed';
@@ -74,20 +95,70 @@ const TILE_CSS = `
 }
 `;
 
-export function RoleApplyCards({ tiles, onPick }: { tiles: RoleTile[]; onPick: (role: string) => void }) {
+function stateLineOf(t: RoleTile): string {
+  return t.state === 'open'
+    ? 'Open now'
+    : t.state === 'opens-soon'
+      ? (t.opensLabel ?? 'Not yet open')
+      : 'Applications closed';
+}
+
+export function RoleApplyCards({ tiles: given, onPick }: { tiles: RoleTile[]; onPick: (role: string) => void }) {
+  const tiles = orderRoleTiles(given);
   return (
     <>
       <style>{TILE_CSS}</style>
-      {/* One role per row, stacked (owner, 12 Oct 2026: tiles side by side
-          with 3D pictures were "still ugly"; no pictures). */}
-      <ul className="flex flex-col gap-2 list-none p-0 m-0">
+      {/* Phone: small square tiles (owner, 18 Oct 2026: the full-width rows
+          took a lot of space). Same press as the rows. */}
+      <ul className="grid md:hidden grid-cols-2 min-[360px]:grid-cols-3 gap-2 list-none p-0 m-0">
         {tiles.map(t => {
           const open = t.state === 'open';
-          const stateLine = t.state === 'open'
-            ? 'Open now'
-            : t.state === 'opens-soon'
-              ? (t.opensLabel ?? 'Not yet open')
-              : 'Applications closed';
+          const stateLine = stateLineOf(t);
+          const StateIcon = t.state === 'opens-soon' ? CalendarClock : Lock;
+          return (
+            <li key={t.role} className="min-w-0">
+              <button
+                type="button"
+                className="gv-role-tile w-full h-full aspect-square flex flex-col items-center justify-center gap-1.5 text-center rounded-[12px] focus:outline-none"
+                data-open={open ? 'true' : 'false'}
+                disabled={!open}
+                aria-label={open ? `Apply as ${t.label}, ${t.price}` : `${t.label}: ${stateLine}`}
+                onClick={() => { if (open) onPick(t.role); }}
+                style={{
+                  padding: '10px 6px',
+                  border: 'none',
+                  backgroundColor: open ? '#FFFFFF' : 'rgba(255,255,255,0.78)',
+                  boxShadow: '0 2px 0 rgba(255,255,255,0.9) inset, 0 4px 12px rgba(0,0,0,0.18)',
+                  cursor: open ? 'pointer' : 'default',
+                }}
+              >
+                <RoleGlyph role={t.role} open={open} size={34} />
+                <span
+                  className="block w-full [overflow-wrap:anywhere]"
+                  style={{ fontFamily: 'var(--font-brand), sans-serif', fontWeight: 700, fontSize: 13, lineHeight: 1.2, color: open ? '#1C1410' : '#5A4A3C' }}
+                >
+                  {t.label}
+                </span>
+                {!open && (
+                  <span
+                    className="inline-flex items-start justify-center gap-1 w-full [overflow-wrap:anywhere]"
+                    style={{ fontFamily: 'var(--font-brand), sans-serif', fontWeight: 600, fontSize: 10.5, lineHeight: 1.25, color: '#5A4A3C' }}
+                  >
+                    <StateIcon size={11} strokeWidth={2.4} aria-hidden style={{ flexShrink: 0, marginTop: 1 }} />
+                    <span className="min-w-0">{stateLine}</span>
+                  </span>
+                )}
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+      {/* From md: one role per row, stacked (owner, 12 Oct 2026: tiles side
+          by side with 3D pictures were "still ugly"; no pictures). */}
+      <ul className="hidden md:flex flex-col gap-2 list-none p-0 m-0">
+        {tiles.map(t => {
+          const open = t.state === 'open';
+          const stateLine = stateLineOf(t);
           const StateIcon = t.state === 'opens-soon' ? CalendarClock : Lock;
           return (
             <li key={t.role}>

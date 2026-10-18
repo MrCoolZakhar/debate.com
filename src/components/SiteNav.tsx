@@ -19,7 +19,7 @@ import ActivityNotices from '@/components/profile/ActivityNotices';
 import { useMyActivity, useOpenSeenState, markActivitySeen, attentionRows, endActivityOpening } from '@/lib/myActivity';
 
 // Five one-word items, in this order (owner, 25 Sep 2026): Sessions, Create,
-// Explore, Pricing, Help. Sentence case since the owner's taste boards (25 Sep
+// Explore, Pricing, Contact (Help until 18 Oct 2026). Sentence case since the owner's taste boards (25 Sep
 // 2026: no tracked capitals; the active item is ink with a short forest
 // underline, Airbnb's category-rail manner, not a forest pill). No stacked
 // kicker words any more. CREATE is a plain link to /create, the chooser page
@@ -40,15 +40,16 @@ const NAV_LINKS_CONFIG: ReadonlyArray<{
   { en: 'Conference', es: 'Conferencia', fr: 'Conférence', ar: 'مؤتمر', pt: 'Conferência', kicker: { en: 'List your', es: 'Publica tu', fr: 'Publiez votre', ar: 'أضف', pt: 'Publique sua' }, href: '/conferences/new' },
   { en: 'Explore',  es: 'Explorar', fr: 'Explorer', ar: 'استكشف', pt: 'Explorar', href: '/conferences/explore' },
   { en: 'Pricing',  es: 'Precios',  fr: 'Tarifs',   ar: 'الأسعار', pt: 'Preços', href: '/pricing/credits' },
-  // Reads Contact and opens /help, whose very top is the contact block (owner, 18 Oct 2026).
-  { en: 'Contact',  es: 'Contacto', fr: 'Contact',  ar: 'اتصل بنا', pt: 'Contato', href: '/help' },
+  // Reads Contact and opens the contact page; the help desk is linked from
+  // there and from every footer (owner, 18 Oct 2026).
+  { en: 'Contact',  es: 'Contacto', fr: 'Contact',  ar: 'اتصل بنا', pt: 'Contato', href: '/contact' },
 ];
 
 /** SESSIONS lights on every sessions path (isSessionsPath), CREATE on the
  *  chooser and the creator under it, EXPLORE on /conferences/explore only
  *  (owner, 12 Oct 2026: it stayed lit on a conference's own page; a
  *  conference page, /conferences/all, /conferences/in/* and /conferences/roles
- *  light nothing), PRICING on every /pricing page, HELP on /help. */
+ *  light nothing), PRICING on every /pricing page, CONTACT on /contact only. */
 function isExplorePath(pathname: string): boolean {
   return pathname === '/conferences/explore' || pathname.startsWith('/conferences/explore/');
 }
@@ -59,7 +60,7 @@ function isNavLinkActive(pathname: string | null, href: string | null): boolean 
   if (href === '/conferences/new') return pathname.startsWith('/conferences/new');
   if (href === '/conferences/explore') return isExplorePath(pathname);
   if (href === '/pricing/credits') return pathname.startsWith('/pricing');
-  if (href === '/help') return pathname === '/help' || pathname.startsWith('/help/') || pathname === '/contact';
+  if (href === '/contact') return pathname === '/contact';
   return pathname === href;
 }
 

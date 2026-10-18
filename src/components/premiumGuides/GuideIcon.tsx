@@ -1,4 +1,4 @@
-import { Gavel, Handshake, LayoutGrid, Scale, ScrollText, TrendingUp, Trophy, type LucideIcon } from 'lucide-react';
+import { Briefcase, Gavel, Handshake, LayoutGrid, Network, Scale, ScrollText, TrendingUp, Trophy, type LucideIcon } from 'lucide-react';
 import type { GuideIconName } from '@/lib/premiumGuides/types';
 
 const ICONS: Record<GuideIconName, LucideIcon> = {
@@ -9,6 +9,8 @@ const ICONS: Record<GuideIconName, LucideIcon> = {
   ScrollText,
   LayoutGrid,
   Scale,
+  Network,
+  Briefcase,
 };
 
 export default function GuideIcon({ name, size = 22, color }: { name: GuideIconName; size?: number; color?: string }) {

@@ -47,7 +47,7 @@ Long form: docs/sessions/database-tables.md
 ### RULE 1: GSL and Caucus Queue are STRICTLY SEPARATE
 - `speakersList` (list_type='gsl') = General Speakers List. PERMANENT. Survives caucuses, never wiped by any motion.
 - `caucusQueue` (list_type='caucus') = caucus speaker queue. TEMPORARY. Wiped when the caucus ends.
-- **NEVER** add GSL delegates to caucusQueue or vice versa. **NEVER** touch speakersList when accepting a caucus motion. When a caucus ends, ONLY caucusQueue is cleared.
+- **NEVER** add GSL delegates to caucusQueue or vice versa. **NEVER** wipe, reorder or remove from speakersList when accepting a caucus motion; the one write is putting an interrupted GSL floor holder back at its FRONT (see MOTIONS MODAL, `src/lib/gslFloorReturn.ts`). When a caucus ends, ONLY caucusQueue is cleared.
 
 ### RULE 2: currentSpeaker is NOT in speakersList
 - `handleNextSpeaker` POPS the next delegate from speakersList into currentSpeaker, a separate row in `current_speaker`.
@@ -158,7 +158,7 @@ Long form: docs/sessions/gsl.md
 ## FEATURE: MODERATED CAUCUS
 
 ### How it works
-- Accepting a moderated caucus motion: MotionsModal calls onCommitteeUpdate with phase='moderated-caucus', the caucus object, pendingMotions=[], caucusQueue=[], currentSpeaker=null. speakersList is PRESERVED.
+- Accepting a moderated caucus motion: MotionsModal calls onCommitteeUpdate with phase='moderated-caucus', the caucus object, pendingMotions=[], caucusQueue=[], currentSpeaker=null. speakersList is PRESERVED (plus an interrupted GSL floor holder with time left back at its front, see MOTIONS MODAL).
 - The `caucus` JSONB stores type, purpose, motionLabel, totalTime, remainingTime, totalStartedAt, speakingTime, speakerTimeRemaining, currentSpeaker (a string), proposedBy, spokenCountries. `ModeratedCaucusMain` draws it; `handleNextCaucusSpeaker` advances through caucusQueue and updates the JSONB + current_speaker.
 
 ### Rules
@@ -207,6 +207,7 @@ Long form: docs/sessions/unmoderated-caucus-consultation-tour-de-table.md
 - One floor motion per delegation (`motions_proposer_has_motion`).
 - **Every motion is on the ledger** (`src/lib/motionLog.ts`): `motions` rows are hard-deleted on accept and reject, so the `__log__` channel is the only record. `motion-raised` when the INSERT lands (real UUID in `motionId`, scored by `motionRaised`); `motion-passed` on every accept (a caucus is logged LAST inside `clearFloorForCaucus`, after the interrupted speech; scored by `motionPassed`); `motion-failed` scores nothing and carries `outcome` `rejected` | `failed` | `fell`; `motion-edited` links the new id to the old (`prevMotionId`) so it never scores a second raise. Every event carries `motionType`, `topic`, `totalTime`, `speakingTime`, `tourOrder`. The chair's own motions log country `__chair__` (no points). Nothing here touches committee state.
 - **The floor speaker's speech is logged when a motion passes**: caucus accept, Suspend Yes and End Yes call `logFloorSpeech` with the chair page's `floorClock` BEFORE clearing the floor; Suspend and End also clear `current_speaker` (conditional clear).
+- **An interrupted GSL speaker keeps their GSL place** (owner, 18 Oct 2026: "the GSL should stay absolutely the same, even if they have time remaining"). A seated delegation is no longer a `speakers_list` row (RULE 2), so clearing the floor used to drop them from the GSL. On caucus accept, Suspend Yes and an organiser pause, when the floor holder is a GSL speaker (phase `speakers-list`, no caucus), not absent, with time left on the live clock, `interruptedGslSpeaker` + `returnSpeakerToGslFront` (`src/lib/gslFloorReturn.ts`) put them back at the FRONT of the GSL: optimistic first, then ONE idempotent `speakers_list_add` at `'start'` on the GSL chain. They are on deck when the room returns to the GSL. Trade-off: the interrupted part stays logged as its own speech and the next turn is a fresh seating with the full slot, not the seconds left. A clock already at zero, a caucus speaker and End Debate put nobody back.
 - On chair page load, stale suspend-debate / end-debate motions are auto-deleted.
 
 Long form: docs/sessions/motions-modal.md
@@ -215,7 +216,7 @@ Long form: docs/sessions/motions-modal.md
 ## FEATURE: SUSPEND DEBATE
 
 ### How it works
-- Motion passes (or an organiser broadcast pauses the room) → the floor speech is logged (`logFloorSpeech`) and the floor is cleared (`clearCurrentSpeakerIfUnchanged`) → `suspendDebateInDB` reads the row fresh and writes ONE update: `suspended_at` (database clock), `phase='adjourned'`, and the caucus with its TOTAL frozen at the live value and NOBODY on its floor (`freezeCaucusForBreak` = `pauseCaucusLive` + `currentSpeaker: null`, `floorSince: null`; queue rows kept). Conditional on `ended_at is null`, `suspended_at is null` and the phase it read; then `pauseSpeakerClockLive`. Resolves true when the committee IS suspended afterwards, false otherwise (an ended committee can never be suspended); on false the caller rolls back. The optimistic suspend in MotionsModal and the broadcast pause null `caucus.currentSpeaker` locally too.
+- Motion passes (or an organiser broadcast pauses the room) → the floor speech is logged (`logFloorSpeech`) and the floor is cleared (`clearCurrentSpeakerIfUnchanged`); a GSL floor holder with time left goes back to the front of the GSL (`src/lib/gslFloorReturn.ts`, see MOTIONS MODAL) → `suspendDebateInDB` reads the row fresh and writes ONE update: `suspended_at` (database clock), `phase='adjourned'`, and the caucus with its TOTAL frozen at the live value and NOBODY on its floor (`freezeCaucusForBreak` = `pauseCaucusLive` + `currentSpeaker: null`, `floorSince: null`; queue rows kept). Conditional on `ended_at is null`, `suspended_at is null` and the phase it read; then `pauseSpeakerClockLive`. Resolves true when the committee IS suspended afterwards, false otherwise (an ended committee can never be suspended); on false the caller rolls back. The optimistic suspend in MotionsModal and the broadcast pause null `caucus.currentSpeaker` locally too.
 - The chair page stops its own speaker tick whenever `sessionSuspended` or `sessionEnded` turns on.
 - Chairs see a two-tab overlay (Suspend View + Session View); delegates see a waiting screen. "Resume Session" → `claimResumeSession` (first chair wins) → `startResumeRollCall` → phase='pre-session', suspended_at=null; chairs take roll again; delegates wait until the phase leaves pre-session. Co-chairs see "{name} is resuming…".
 

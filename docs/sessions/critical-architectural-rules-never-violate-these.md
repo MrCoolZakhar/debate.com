@@ -6,7 +6,7 @@
 - `speakersList` (list_type='gsl') = General Speakers List — PERMANENT, survives caucuses, never wiped by any motion
 - `caucusQueue` (list_type='caucus') = Caucus speaker queue — TEMPORARY, wiped when caucus ends
 - **NEVER** add GSL delegates to caucusQueue or vice versa
-- **NEVER** touch speakersList when accepting a caucus motion
+- **NEVER** touch speakersList when accepting a caucus motion, with ONE exception: an interrupted GSL floor holder with time left goes back to the FRONT of the GSL (18 Oct 2026, `src/lib/gslFloorReturn.ts`, see motions-modal.md)
 - When a caucus ends, ONLY caucusQueue is cleared — speakersList stays intact
 
 ### RULE 2: currentSpeaker is NOT in speakersList

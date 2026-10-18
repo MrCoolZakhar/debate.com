@@ -18,7 +18,7 @@ import { Search, X, Landmark, GraduationCap, Gavel, Briefcase, Wallet, type Luci
 import SiteNav from '@/components/SiteNav';
 import SiteFooter from '@/components/SiteFooter';
 import { Emoji3D, OUTFIT } from '@/components/neu';
-import ContactSection from '@/app/about/ContactSection';
+import { GoldWord } from '@/components/BrandHeading';
 import { FaqList } from '@/components/pricing/FaqList';
 import { HELP_SECTIONS, searchHelp, sectionForEntry, type HelpFallbackIcon, type HelpSection } from '@/lib/helpContent';
 
@@ -136,7 +136,7 @@ export default function HelpClient() {
         .gv-help-wrap{width:100%;max-width:1120px;margin:0 auto;padding:0 20px}
 
         /* Header block: ivory, ink title with the gold word, one line, the search row. */
-        .gv-help-hero{background:${IVORY};color:${INK};padding:clamp(28px,2.6vw,40px) 0 clamp(28px,2.6vw,40px);border-bottom:1px solid ${CREAM}}
+        .gv-help-hero{background:${IVORY};color:${INK};padding:clamp(32px,3vw,48px) 0 clamp(28px,2.6vw,40px);border-bottom:1px solid ${CREAM}}
         .gv-help-h1{margin:0;font-size:clamp(32px,4vw,48px);font-weight:900;letter-spacing:-0.02em;line-height:1.05;color:${INK}}
         .gv-help-lead{margin:10px 0 0;font-size:16px;line-height:1.55;color:${INK_SOFT}}
         .gv-help-lead a{color:${FOREST};font-weight:700;text-decoration:underline;text-underline-offset:3px;text-decoration-thickness:1.5px;border-radius:4px}
@@ -193,16 +193,13 @@ export default function HelpClient() {
       <SiteNav />
 
       <main className="relative z-10 flex-1 w-full">
-        {/* Contact first, so people can reach the team at once (owner, 18 Oct 2026).
-            It carries the page's one h1 and gold word; the help center follows. */}
-        <div style={{ background: IVORY }}>
-          <ContactSection eyebrow={null} />
-        </div>
         <header className="gv-help-hero">
           <div className="gv-help-wrap">
-            <h2 className="gv-help-h1">How Can We Help</h2>
+            {/* The contact block moved to /contact (owner, 18 Oct 2026): /help is
+                the help desk again and links there. */}
+            <h1 className="gv-help-h1">How Can We <GoldWord tone="light">Help</GoldWord></h1>
             <p className="gv-help-lead">
-              Search or browse by section
+              Search or browse by section, or <Link href="/contact" className={FOCUS_ON_IVORY}>contact us</Link>
             </p>
             <div className="gv-help-row">
               <div className="gv-help-search">
@@ -227,7 +224,7 @@ export default function HelpClient() {
                   </button>
                 )}
               </div>
-              <a href="#contact" className={`gv-help-contact ${FOCUS_ON_IVORY}`}>Contact us</a>
+              <Link href="/contact" className={`gv-help-contact ${FOCUS_ON_IVORY}`}>Contact us</Link>
             </div>
           </div>
         </header>
@@ -265,7 +262,7 @@ export default function HelpClient() {
                 <section className="gv-help-results" aria-label="Search results">
                   {hits.length === 0 ? (
                     <p className="gv-help-empty" aria-live="polite">
-                      No matches. <a href="#contact" className={FOCUS}>Contact us</a> and a person answers
+                      No matches. <Link href="/contact" className={FOCUS}>Contact us</Link> and a person answers
                     </p>
                   ) : (
                     <>
