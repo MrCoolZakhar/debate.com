@@ -271,3 +271,14 @@ export async function uploadPressImage(conferenceId: string, file: File): Promis
   const { data } = supabase.storage.from('conference-assets').getPublicUrl(path);
   return { url: data.publicUrl };
 }
+
+/** A committee whose name or abbreviation is about the press (International
+ *  Press Corps, Press Room, IPC, Journalism, Media Corps) is created as a press
+ *  committee whatever type was picked (owner, 18 Oct 2026), so its seats get
+ *  the Press Desk. Custom committees keep their groups and are left alone. */
+const PRESS_NAME = /\bpress\b|\bjournalis|\bmedia\s+(corps|room|desk)\b|\bnewsroom\b/i;
+export function pressAwareCommitteeType<T extends string>(type: T, name: string, abbreviation?: string | null): T | 'press' {
+  if (type === 'press' || type === 'custom') return type;
+  if (PRESS_NAME.test(name) || /^IPC$/i.test((abbreviation ?? '').trim())) return 'press';
+  return type;
+}

@@ -23,6 +23,7 @@
  * behaves as before: sign in first, progress in component state only.
  */
 
+import { pressAwareCommitteeType } from '@/lib/press';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { AlertTriangle, Mail, Pencil, Check, Camera, ThumbsUp, Music2, MessageCircle, Globe, Plus, ClipboardList, CreditCard, Building2, Megaphone, Trash2, Gift, Banknote, type LucideIcon } from 'lucide-react';
@@ -1048,7 +1049,7 @@ export default function NewConferencePage() {
             conference_id: conferenceId,
             name: c.name,
             abbreviation: c.abbreviation || null,
-            committee_type: c.type,
+            committee_type: pressAwareCommitteeType(c.type, c.name, c.abbreviation),
             difficulty: c.difficulty,
             topics: c.topics,
             total_slots: Math.max(1, c.roster.length),

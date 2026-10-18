@@ -9,7 +9,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { X, UserPlus, Mail, Send } from 'lucide-react';
 import { NEU, OUTFIT, NeuButton } from '@/components/neu';
-import { usePressCommitteesAvailable } from '@/lib/press';
+import { usePressCommitteesAvailable, pressAwareCommitteeType } from '@/lib/press';
 import { CommitteeTypeChooser, CommitteeTypeEmoji, COMMITTEE_TYPE_TITLE } from '@/components/parliamentSetup';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { sessionClient } from '@/lib/sessionClient';
@@ -918,7 +918,7 @@ function CommitteeEditor({ conferenceId, committeeType, existing, initialRoster,
       abbreviation: abbreviation.trim() || null,
       topics,
       difficulty,
-      committee_type: committeeType,
+      committee_type: pressAwareCommitteeType(committeeType, name, abbreviation),
       total_slots: roster.length,
       notification_email: null,
       logo_url: previewEmblem,
