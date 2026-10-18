@@ -5,18 +5,22 @@
 //   1 Where is your bank account?   (a country, saved with step 4's call)
 //   2 What's your currency of choice? (prompt 126: the conference's ONE currency,
 //                                    set_conference_currency; fixed text once money moved)
-//   3 How will people pay you?      (card, payment link, QR code, bank transfer)
-//   4 The chosen method's set-up    (ONE set_payment_setup call; card goes on to Stripe)
-//   5 Registration fee              (welcome only, skippable)
-//   6 Add-ons                       (welcome only, skippable)
-//   Done (7)                        (welcome only)
+//   3 How Payments Work             (prompt 132, welcome only: card payments update by
+//                                    themselves, every other way comes with a proof the
+//                                    payer uploads and the organizer accepts)
+//   4 How will people pay you?      (card, payment link, QR code, bank transfer, in person)
+//   5 The chosen method's set-up    (ONE set_payment_setup call; card goes on to Stripe)
+//   6 Registration fee              (welcome only, skippable)
+//   7 Add-ons                       (welcome only, skippable)
+//   Done (8)                        (welcome only)
 // Since prompt 106 the welcome flow opened at step 1 starts on an intro card
 // ("Welcome to Financials", not counted as a step), and Done is a real success
 // screen with a summary of what was set up. The intro, Done and the
 // platform-collects screen are sized to their content.
-// The Payment Method pop-up is the same flow opened at step 3 with the
-// current method chosen and its details filled in; it ends after step 4. The
-// currency Change in Settings, Payments opens it at step 2.
+// The Payment Method pop-up is the same flow opened at step 4 with the
+// current method chosen and its details filled in; it never shows step 3 (its
+// steps read 1, 2, 3, 4) and ends after step 5. The currency Change in
+// Settings, Payments opens it at step 2.
 // Card OR one manual kind, never both: switching asks first and is one call.
 // Since prompt 114: a fifth way, In-person payment (its instructions are
 // required, payers can finish without a proof), and in the Payment Method
@@ -67,6 +71,12 @@ export const FLOW_CSS = `
 .gv-pf-icon{width:48px;height:48px;border-radius:14px;display:inline-flex;align-items:center;justify-content:center;background:rgba(238,217,138,0.45);color:#1B3828}
 .gv-pf-title{margin:0;font-size:18px;font-weight:800;letter-spacing:-0.01em}
 .gv-pf-desc{margin:0;font-size:14px;line-height:1.5;color:#5A5046}
+.gv-pf-how{display:grid;grid-template-columns:minmax(0,1fr);gap:12px}
+@media (min-width:720px){.gv-pf-how{grid-template-columns:repeat(auto-fit,minmax(260px,1fr))}}
+.gv-pf-how-card{display:flex;flex-direction:column;gap:10px;padding:18px 18px 20px;border-radius:18px;background:#FFFFFF;color:#1C1410;box-shadow:0 1px 0 rgba(27,56,40,0.08),0 14px 30px -26px rgba(27,56,40,0.5),inset 0 0 0 1.5px rgba(27,56,40,0.1);min-width:0}
+.gv-pf-how-head{display:flex;align-items:center;gap:12px}
+.gv-pf-how-head .gv-pf-title{font-size:17px}
+.gv-pf-how-p{margin:0;font-size:14px;line-height:1.55;color:#5A5046;overflow-wrap:anywhere}
 .gv-pf-tick{position:absolute;top:14px;right:14px;width:26px;height:26px;border-radius:999px;display:inline-flex;align-items:center;justify-content:center;background:#1B3828;color:#EED98A}
 .gv-pf-input{width:100%;height:50px;padding:0 14px;border-radius:12px;border:1.5px solid rgba(27,56,40,0.28);background:#FFFFFF;color:#1C1410;font-family:inherit;font-size:15.5px}
 .gv-pf-input:focus{outline:none;border-color:#1B3828;box-shadow:0 0 0 3px rgba(27,56,40,0.12)}
@@ -99,7 +109,7 @@ export const FLOW_CSS = `
 .gv-pf-cur-fixed span{color:#5A5046}
 `;
 
-type Step = 1 | 2 | 3 | 4 | 5 | 6 | 7;
+type Step = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8;
 type FieldErrs = Partial<Record<'country' | 'method' | 'manual_kind' | 'url' | 'qr' | 'note' | 'account_name' | 'account_number' | 'swift' | 'bank_name' | 'reference', string>>;
 
 const METHOD_CARDS: { key: MethodKey; title: string; desc: string; icon: React.ReactNode }[] = [
@@ -121,7 +131,7 @@ const qrUrl = (path: string) => `${SUPABASE_URL}/storage/v1/object/public/confer
 
 export default function PaymentFlow({ conference, mode, startStep, readOnly, onClose, onChanged }: {
   conference: Conference;
-  /** 'welcome' runs all the steps; 'payment' is the Payment Method pop-up (steps 1 to 4). */
+  /** 'welcome' runs all the steps; 'payment' is the Payment Method pop-up (steps 1, 2, 4 and 5). */
   mode: 'welcome' | 'payment';
   startStep?: Step;
   readOnly: boolean;
@@ -130,7 +140,7 @@ export default function PaymentFlow({ conference, mode, startStep, readOnly, onC
   onChanged: () => void;
 }) {
   const current = currentMethod(conference);
-  const [step, setStep] = useState<Step>(startStep ?? (mode === 'payment' ? 3 : 1));
+  const [step, setStep] = useState<Step>(startStep ?? (mode === 'payment' ? 4 : 1));
   // The intro card before step 1 (prompt 106): only the welcome flow opened from the start.
   const [intro, setIntro] = useState(mode === 'welcome' && startStep === undefined && !conference.platform_collects);
   // The success screen's summary, read fresh when Done is reached.
@@ -191,7 +201,9 @@ export default function PaymentFlow({ conference, mode, startStep, readOnly, onC
   const countries = useMemo(() => [...UN_COUNTRIES].sort((a, b2) => a.name.localeCompare(b2.name)), []);
   const countryName = countries.find(c => c.code === country)?.name ?? country;
   const cardOk = isStripeCountrySupported(country);
-  const total = mode === 'welcome' ? 6 : 4;
+  const total = mode === 'welcome' ? 7 : 4;
+  // The Payment Method pop-up skips How Payments Work (step 3), so its later steps read one lower.
+  const shownStep = mode === 'payment' && step > 3 ? step - 1 : step;
   const hasStripeAccount = !!conference.stripe_account_id
     || conference.connect_onboarding_status === 'pending' || conference.connect_onboarding_status === 'complete';
 
@@ -222,7 +234,7 @@ export default function PaymentFlow({ conference, mode, startStep, readOnly, onC
     return e;
   };
 
-  /** Step 4's one write. Returns true when it landed. */
+  /** Step 5's one write. Returns true when it landed. */
   const save = async (): Promise<boolean> => {
     if (!method) return false;
     const local = localErrors();
@@ -244,7 +256,7 @@ export default function PaymentFlow({ conference, mode, startStep, readOnly, onC
       if (r.field) {
         setErrs({ [r.field]: r.error } as FieldErrs);
         if (r.field === 'country') setStep(1);
-        if (r.field === 'method' || r.field === 'manual_kind') setStep(3);
+        if (r.field === 'method' || r.field === 'manual_kind') setStep(4);
       } else setErr(r.error);
       return false;
     }
@@ -254,7 +266,7 @@ export default function PaymentFlow({ conference, mode, startStep, readOnly, onC
 
   /** After a manual method saved: on to the fee (welcome) or done (payment). */
   const afterSave = () => {
-    if (mode === 'welcome') setStep(5);
+    if (mode === 'welcome') setStep(6);
     else { notifyOk('Payment method saved', 'financials'); onClose(); }
   };
 
@@ -304,6 +316,7 @@ export default function PaymentFlow({ conference, mode, startStep, readOnly, onC
         placeholder={inPerson ? 'For example: Pay in cash at the registration desk on day one' : undefined}
         onChange={e => { setNote(e.target.value); setErrs(x => ({ ...x, note: undefined })); }} aria-invalid={!!errs.note} />
       <p className="gv-fd-count">{note.length} / {NOTE_MAX}</p>
+      <p className="gv-fd-note" style={{ marginTop: 4 }}>No need to ask for screenshots. Payers upload their proof on Gavelling and you accept it in Financials</p>
       {fieldErr('note')}
     </div>
   );
@@ -373,18 +386,51 @@ export default function PaymentFlow({ conference, mode, startStep, readOnly, onC
       label: 'Continue',
       disabled: !ready,
       onClick: () => {
-        if (!cur || cur.locked || !pick || pick === cur.currency) { setStep(3); return; }
+        if (!cur || cur.locked || !pick || pick === cur.currency) { setStep(mode === 'payment' ? 4 : 3); return; }
         void busyRun(async () => {
           const r = await setConferenceCurrency(conference.id, pick);
           if (!r.ok) { setCurErr(r.error); return; }
           const st = await readCurrencyState(conference.id);
           if (!('error' in st)) { setCur(st); setPick(st.currency); }
           onChanged();
-          setStep(3);
+          setStep(mode === 'payment' ? 4 : 3);
         });
       },
     };
   } else if (step === 3) {
+    title = 'How Payments Work';
+    body = (
+      <div>
+        <div className="gv-pf-how">
+          {cardOk && (
+            <section className="gv-pf-how-card" aria-labelledby="gv-pf-how-card">
+              <div className="gv-pf-how-head">
+                <span className="gv-pf-icon" aria-hidden><CreditCard size={22} strokeWidth={2.2} /></span>
+                <h3 id="gv-pf-how-card" className="gv-pf-title">Card payments with Stripe</h3>
+              </div>
+              <p className="gv-pf-how-p">Participants pay by card on Gavelling. The money goes to your own Stripe account and from there to your bank.</p>
+              <p className="gv-pf-how-p">Everything updates by itself: the invoice is marked paid, the participant gets a receipt and Financials shows the payment. Nothing to check.</p>
+              <p className="gv-pf-how-p">
+                Stripe takes about 2.9% + 30¢ per card payment (it depends on your country). Gavelling takes nothing.{' '}
+                <a href="https://stripe.com/pricing" target="_blank" rel="noopener noreferrer" className="gv-st-link">See Stripe&apos;s pricing</a>
+              </p>
+            </section>
+          )}
+          <section className="gv-pf-how-card" aria-labelledby="gv-pf-how-proof">
+            <div className="gv-pf-how-head">
+              <span className="gv-pf-icon" aria-hidden><ImageUp size={22} strokeWidth={2.2} /></span>
+              <h3 id="gv-pf-how-proof" className="gv-pf-title">Payment links, bank transfers and in person</h3>
+            </div>
+            <p className="gv-pf-how-p">Participants pay you directly, then upload proof of their payment on Gavelling (a receipt or a screenshot). You never need to collect screenshots yourself.</p>
+            <p className="gv-pf-how-p">Each proof appears in Things to Do in Financials. Check it, then accept it and the invoice is marked paid, or reject it with a note so they can send a new one.</p>
+            <p className="gv-pf-how-p">For in-person payments the proof is optional. You still confirm each payment in Things to Do.</p>
+          </section>
+        </div>
+        <p className="gv-fd-note" style={{ marginTop: 14 }}>You can change how people pay at any time in Settings, Payments</p>
+      </div>
+    );
+    primary = { label: 'Continue', onClick: () => setStep(4) };
+  } else if (step === 4) {
     title = 'How Will People Pay You?';
     const cards = METHOD_CARDS.filter(m => m.key !== 'card' || cardOk);
     body = (
@@ -418,8 +464,8 @@ export default function PaymentFlow({ conference, mode, startStep, readOnly, onC
         )}
       </div>
     );
-    primary = { label: 'Continue', disabled: !method || (method === 'card' && !cardOk), onClick: () => { if (method) setStep(4); } };
-  } else if (step === 4) {
+    primary = { label: 'Continue', disabled: !method || (method === 'card' && !cardOk), onClick: () => { if (method) setStep(5); } };
+  } else if (step === 5) {
     if (method === 'card') {
       title = 'Pay by Card';
       body = (
@@ -499,7 +545,7 @@ export default function PaymentFlow({ conference, mode, startStep, readOnly, onC
       );
       primary = { label: 'Save', onClick: () => { void continueSetup(); } };
     }
-  } else if (step === 5) {
+  } else if (step === 6) {
     title = 'Registration Fee';
     body = (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -507,9 +553,9 @@ export default function PaymentFlow({ conference, mode, startStep, readOnly, onC
         <ApplicationFeeSection conference={conference} bare />
       </div>
     );
-    primary = { label: 'Continue', onClick: () => setStep(6) };
-    skip = () => setStep(6);
-  } else if (step === 6) {
+    primary = { label: 'Continue', onClick: () => setStep(7) };
+    skip = () => setStep(7);
+  } else if (step === 7) {
     title = 'Add-ons';
     body = (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -517,12 +563,12 @@ export default function PaymentFlow({ conference, mode, startStep, readOnly, onC
         <AddonsSection conference={conference} bare />
       </div>
     );
-    primary = { label: 'Continue', onClick: () => setStep(7) };
-    skip = () => setStep(7);
+    primary = { label: 'Continue', onClick: () => setStep(8) };
+    skip = () => setStep(8);
   }
 
-  const showBack = step > 1 && step < 7;
-  const fitted = intro || step === 7 || !!conference.platform_collects;
+  const showBack = step > 1 && step < 8;
+  const fitted = intro || step === 8 || !!conference.platform_collects;
 
   return (
     <>
@@ -554,7 +600,7 @@ export default function PaymentFlow({ conference, mode, startStep, readOnly, onC
                 <button type="button" className="gv-st-btn gv-st-forest" style={{ marginTop: 6 }} onClick={() => setIntro(false)} autoFocus>Let&apos;s get started</button>
               </div>
             </div>
-          ) : step === 7 ? (
+          ) : step === 8 ? (
             <div className="gv-pf-done">
               <span className="gv-pf-win" aria-hidden>
                 {BURST.map((b, i) => (
@@ -579,7 +625,7 @@ export default function PaymentFlow({ conference, mode, startStep, readOnly, onC
           ) : (
             <>
               <div style={{ paddingRight: 40 }}>
-                <p className="gv-pf-step">Step {step} of {total}</p>
+                <p className="gv-pf-step">Step {shownStep} of {total}</p>
                 <h2 className="gv-fd-pop-title" style={{ paddingRight: 0 }}>{title}</h2>
               </div>
               {readOnly && <p className="gv-fd-note">{READ_ONLY_LINE}</p>}
@@ -595,7 +641,7 @@ export default function PaymentFlow({ conference, mode, startStep, readOnly, onC
                   </div>
                 </div>
               )}
-              {askLater && step === 3 && (
+              {askLater && step === 4 && (
                 <div className="gv-fd-warn" role="alertdialog" aria-label="Set up payments later">
                   <p style={{ margin: '0 0 12px' }}>Set up payments later? Nobody can pay until you choose how people pay you. What you added is kept for when you come back</p>
                   <div className="flex items-center gap-3 flex-wrap">
@@ -609,17 +655,17 @@ export default function PaymentFlow({ conference, mode, startStep, readOnly, onC
               {err && <p className="gv-st-err" role="alert">{err}</p>}
               <div className="gv-fd-footbar">
                 {showBack && (
-                  <button type="button" className="gv-st-btn gv-st-outline" disabled={busy} onClick={() => { setAskSwitch(false); setErr(''); setStep((step - 1) as Step); }}>
+                  <button type="button" className="gv-st-btn gv-st-outline" disabled={busy} onClick={() => { setAskSwitch(false); setErr(''); setStep((mode === 'payment' && step === 4 ? 2 : step - 1) as Step); }}>
                     <ArrowLeft size={16} strokeWidth={2.4} aria-hidden /> Back
                   </button>
                 )}
-                {primary && !askSwitch && !(askLater && step === 3) && (
+                {primary && !askSwitch && !(askLater && step === 4) && (
                   <button type="button" className="gv-st-btn gv-st-forest" disabled={readOnly || busy || primary.disabled} onClick={primary.onClick}>
                     {busy ? 'Saving' : primary.label}
                   </button>
                 )}
                 {skip && <button type="button" className="gv-st-link" onClick={skip}>Skip for now</button>}
-                {step === 4 && method === 'qr' && !readOnly && !busy && qrFile && qrPath && (
+                {step === 5 && method === 'qr' && !readOnly && !busy && qrFile && qrPath && (
                   <button type="button" className="gv-st-link" onClick={() => { setQrFile(null); setQrPreview(null); }}>
                     <X size={13} strokeWidth={2.4} style={{ display: 'inline', verticalAlign: '-2px' }} aria-hidden /> Keep the old image
                   </button>

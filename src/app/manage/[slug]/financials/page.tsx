@@ -66,8 +66,8 @@ export default function FinancialsDashboardPage() {
   const pathname = usePathname();
   const params = useSearchParams();
   // The payment flow (welcome or Payment method) and the three settings pop-ups.
-  // start 5 resumes the welcome flow after Stripe; start 2 is the currency step (Settings, Payments).
-  const [flow, setFlow] = useState<{ mode: 'welcome' | 'payment'; start?: 2 | 5 } | null>(null);
+  // start 6 resumes the welcome flow after Stripe (the registration fee step); start 2 is the currency step (Settings, Payments).
+  const [flow, setFlow] = useState<{ mode: 'welcome' | 'payment'; start?: 2 | 6 } | null>(null);
   const [setting, setSetting] = useState<'fee' | 'addons' | 'vouchers' | null>(null);
   const openParamDone = useRef(false);
   const autoWelcomeDone = useRef(false);
@@ -111,7 +111,7 @@ export default function FinancialsDashboardPage() {
     void Promise.resolve().then(() => {
       if (which === 'payment') setFlow({ mode: 'payment' });
       else if (which === 'currency') setFlow({ mode: 'payment', start: 2 });
-      else if (which === 'welcome4') setFlow({ mode: 'welcome', start: 5 });
+      else if (which === 'welcome4') setFlow({ mode: 'welcome', start: 6 });
       else if (which === 'fee' || which === 'addons' || which === 'vouchers') setSetting(which);
       else if (which === 'todo') setPopup('todo');
     });
