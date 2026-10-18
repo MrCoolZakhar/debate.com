@@ -136,7 +136,7 @@ export default function HelpClient() {
         .gv-help-wrap{width:100%;max-width:1120px;margin:0 auto;padding:0 20px}
 
         /* Header block: ivory, ink title with the gold word, one line, the search row. */
-        .gv-help-hero{background:${IVORY};color:${INK};padding:clamp(40px,4vw,64px) 0 clamp(32px,3vw,44px);border-bottom:1px solid ${CREAM}}
+        .gv-help-hero{background:${IVORY};color:${INK};padding:clamp(28px,2.6vw,40px) 0 clamp(28px,2.6vw,40px);border-bottom:1px solid ${CREAM}}
         .gv-help-h1{margin:0;font-size:clamp(32px,4vw,48px);font-weight:900;letter-spacing:-0.02em;line-height:1.05;color:${INK}}
         .gv-help-lead{margin:10px 0 0;font-size:16px;line-height:1.55;color:${INK_SOFT}}
         .gv-help-lead a{color:${FOREST};font-weight:700;text-decoration:underline;text-underline-offset:3px;text-decoration-thickness:1.5px;border-radius:4px}
