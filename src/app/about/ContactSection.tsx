@@ -1,6 +1,8 @@
 'use client';
 
-// Contact, at the very top of /about (/contact 308s here since 26 Sep 2026).
+// Contact: "Pick who you are". Rendered at the very top of /help (owner, 18 Oct
+// 2026: the nav item reads Contact and opens /help, so people can contact the
+// team at once; the help center follows below).
 // "Pick who you are": three cards; choosing one opens a short form in place,
 // already tagged for that topic. It posts to /api/contact with the same payload
 // the old /contact form sent ({ name, email, message, subject }); the route
@@ -88,7 +90,7 @@ function DuoIcon({ icon: Icon, size = 26 }: { icon: LucideIcon; size?: number })
   return <Icon size={size} strokeWidth={1.7} fill="rgba(238,217,138,0.8)" style={{ color: FOREST }} aria-hidden />;
 }
 
-export default function ContactSection() {
+export default function ContactSection({ eyebrow = 'About and contact' }: { eyebrow?: string | null } = {}) {
   const formId = useId();
   const [topic, setTopic] = useState<TopicId | null>(null);
   const [form, setForm] = useState({ name: '', email: '', message: '' });
@@ -137,9 +139,9 @@ export default function ContactSection() {
 
   return (
     <section id="contact" aria-labelledby="contact-title" className="relative z-10 w-full max-w-6xl mx-auto px-4 sm:px-6"
-      style={{ paddingTop: 'clamp(40px, 4vw, 64px)', paddingBottom: 'clamp(32px, 3vw, 48px)' }}>
+      style={{ paddingTop: 'clamp(40px, 4vw, 64px)', paddingBottom: 'clamp(32px, 3vw, 48px)', scrollMarginTop: 80 }}>
       <style>{CONTACT_CSS}</style>
-      <p style={{ margin: 0, color: INK_SOFT, fontSize: 12, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase' }}>About and contact</p>
+      {eyebrow && <p style={{ margin: 0, color: INK_SOFT, fontSize: 12, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase' }}>{eyebrow}</p>}
       <h1 id="contact-title" className="font-black tracking-tight" style={{ color: INK, fontSize: 'clamp(32px, 4vw, 52px)', lineHeight: 1.05, margin: '8px 0 0' }}>
         Talk to <GoldWord>Us</GoldWord>
       </h1>

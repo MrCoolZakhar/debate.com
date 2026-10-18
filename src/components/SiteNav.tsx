@@ -40,7 +40,8 @@ const NAV_LINKS_CONFIG: ReadonlyArray<{
   { en: 'Conference', es: 'Conferencia', fr: 'Conférence', ar: 'مؤتمر', pt: 'Conferência', kicker: { en: 'List your', es: 'Publica tu', fr: 'Publiez votre', ar: 'أضف', pt: 'Publique sua' }, href: '/conferences/new' },
   { en: 'Explore',  es: 'Explorar', fr: 'Explorer', ar: 'استكشف', pt: 'Explorar', href: '/conferences/explore' },
   { en: 'Pricing',  es: 'Precios',  fr: 'Tarifs',   ar: 'الأسعار', pt: 'Preços', href: '/pricing/credits' },
-  { en: 'Help',     es: 'Ayuda',    fr: 'Aide',     ar: 'المساعدة', pt: 'Ajuda', href: '/help' },
+  // Reads Contact and opens /help, whose very top is the contact block (owner, 18 Oct 2026).
+  { en: 'Contact',  es: 'Contacto', fr: 'Contact',  ar: 'اتصل بنا', pt: 'Contato', href: '/help' },
 ];
 
 /** SESSIONS lights on every sessions path (isSessionsPath), CREATE on the
@@ -58,7 +59,7 @@ function isNavLinkActive(pathname: string | null, href: string | null): boolean 
   if (href === '/conferences/new') return pathname.startsWith('/conferences/new');
   if (href === '/conferences/explore') return isExplorePath(pathname);
   if (href === '/pricing/credits') return pathname.startsWith('/pricing');
-  if (href === '/help') return pathname === '/help' || pathname.startsWith('/help/');
+  if (href === '/help') return pathname === '/help' || pathname.startsWith('/help/') || pathname === '/contact';
   return pathname === href;
 }
 
