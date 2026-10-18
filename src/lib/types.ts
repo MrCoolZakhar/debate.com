@@ -199,6 +199,23 @@ export interface SpeakingLogEntry {
   timestamp: string;
 }
 
+/** A GSL speaker interrupted with time on their clock (a caucus accepted, Suspend passed, an
+ *  organiser pause), held in `committees.settings.gslHeldFloors` until they are seated again
+ *  (src/lib/gslFloorReturn.ts). Resuming seats them with `remaining` left, `granted` as the
+ *  turn's grant and the ORIGINAL `seatedAt`, so the whole speech is one turn (one turnKey). */
+export interface HeldGslFloor {
+  delegateId: string;
+  country: string;
+  /** Seconds left on their clock at the press (database clock). */
+  remaining: number;
+  /** current_speaker.time_granted at the press: the slot plus every +time / yield bonus. */
+  granted: number;
+  /** The original current_speaker.seated_at (ISO), the turn's identity (floorTurnKey). */
+  seatedAt: string;
+  /** When the hold was taken (serverNowIso()). */
+  heldAt: string;
+}
+
 export interface Committee {
   id: string;
   code: string;
@@ -235,6 +252,9 @@ export interface Committee {
   dbSeparateChairCode?: boolean;
   dbSettings?: Record<string, unknown> | null;
   dbScoring?: ScoringConfig | null;
+  /** settings.gslHeldFloors: GSL speakers interrupted with time left, held for their resume
+   *  (src/lib/gslFloorReturn.ts). Parsed defensively; [] when none. Never in the settings store. */
+  dbGslHeldFloors?: HeldGslFloor[];
   /** committees.session_origin — 'conference' when the session was created from a conference
    *  committee. Gates the award signposts: an anonymous standalone session must never show them. */
   sessionOrigin?: 'conference' | 'standalone';

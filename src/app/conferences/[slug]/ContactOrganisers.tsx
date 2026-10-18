@@ -7,7 +7,7 @@
  * directly to their email").
  *
  * 18 Oct 2026 (owner: the "Contact the organiser" button was "weird"): no
- * button. A white card per address: the 3D email picture with "Contact" small
+ * button. A see-through gold card per address (white role rows above it): the 3D email picture with "Contact" small
  * beneath it, the address beside it. A press anywhere on the card copies the
  * address and slides "Email copied" up from the bottom of the screen
  * (`BottomToast.tsx`; the page mounts the one host). Only the conference's OWN
@@ -20,9 +20,9 @@
 import { Mail } from 'lucide-react';
 import { Emoji3D } from '@/components/neu';
 import { showBottomToast } from './BottomToast';
+import { useFitOneLine } from '@/lib/useFitOneLine';
 
 const FONT = 'var(--font-brand), sans-serif';
-const INK = '#1C1410';
 
 /** A plain, sendable address that is not ours. */
 export function conferenceContactEmail(raw: string | null | undefined): string | null {
@@ -87,42 +87,43 @@ export async function copyEmailWithToast(address: string, select?: HTMLElement |
 
 const CARD_CSS = `
 .gv-contact-card{transition:transform 200ms cubic-bezier(.32,.72,0,1),box-shadow 200ms cubic-bezier(.32,.72,0,1)}
-.gv-contact-card:hover{transform:translateY(-1px);box-shadow:0 2px 0 rgba(255,255,255,0.9) inset,0 10px 20px rgba(0,0,0,0.24)}
+.gv-contact-card:hover{transform:translateY(-1px);background-color:rgba(238,217,138,0.2)!important}
 .gv-contact-card:active{transform:scale(0.98)}
 .gv-contact-card:focus-visible{outline:2px solid #EED98A;outline-offset:3px}
 @media (prefers-reduced-motion: reduce){.gv-contact-card,.gv-contact-card:hover,.gv-contact-card:active{transition:none;transform:none}}
 `;
 
 function ContactEmailCard({ address }: { address: string }) {
+  // One line: the address shrinks from 14 to 11px to fit, wraps only below that.
+  const addressRef = useFitOneLine<HTMLSpanElement>(address, 14, 11);
   return (
     <button
       type="button"
-      onClick={(e) => {
-        const node = (e.currentTarget as HTMLElement).querySelector<HTMLElement>('[data-contact-address]');
-        void copyEmailWithToast(address, node);
-      }}
-      className="gv-contact-card w-full flex items-center gap-3 text-left rounded-[12px] focus:outline-none"
+      onClick={() => { void copyEmailWithToast(address, addressRef.current); }}
+      className="gv-contact-card w-full flex items-center gap-2.5 text-left rounded-[12px] focus:outline-none"
       aria-label={`Copy the organisers' email, ${address}`}
       title="Copy email address"
+      // Told apart from the white role rows above (owner, 18 Oct 2026): a
+      // see-through gold card on the forest, ivory text, not another white row.
       style={{
-        minHeight: 60,
-        padding: '8px 14px 8px 10px',
-        border: 'none',
-        backgroundColor: '#FFFFFF',
-        boxShadow: '0 2px 0 rgba(255,255,255,0.9) inset, 0 4px 12px rgba(0,0,0,0.18)',
+        minHeight: 54,
+        padding: '7px 12px 7px 8px',
+        border: '1px solid rgba(238,217,138,0.45)',
+        backgroundColor: 'rgba(238,217,138,0.1)',
         cursor: 'pointer',
       }}
     >
-      <span className="shrink-0 flex flex-col items-center" style={{ minWidth: 48 }}>
-        <Emoji3D name="E-mail" size={28} fallback={Mail} fallbackColor="#1B3828" />
-        <span style={{ fontFamily: FONT, fontSize: 10.5, fontWeight: 600, lineHeight: 1.2, color: '#5A4A3C', marginTop: 2 }}>
+      <span className="shrink-0 flex flex-col items-center" style={{ minWidth: 44 }}>
+        <Emoji3D name="E-mail" size={26} fallback={Mail} fallbackColor="#EED98A" />
+        <span style={{ fontFamily: FONT, fontSize: 10.5, fontWeight: 600, lineHeight: 1.2, color: 'rgba(250,246,234,0.82)', marginTop: 2 }}>
           Contact
         </span>
       </span>
       <span
+        ref={addressRef}
         data-contact-address
-        className="flex-1 min-w-0 [overflow-wrap:anywhere]"
-        style={{ fontFamily: FONT, fontSize: 14.5, fontWeight: 700, lineHeight: 1.3, color: INK }}
+        className="flex-1 min-w-0"
+        style={{ fontFamily: FONT, fontSize: 14, fontWeight: 700, lineHeight: 1.3, color: '#FAF6EA' }}
       >
         {address}
       </span>
@@ -137,7 +138,7 @@ export function ContactOrganisers({ email }: {
   const addresses = conferenceContactEmails(email);
   if (addresses.length === 0) return null;
   return (
-    <div className="mt-4 flex flex-col gap-2">
+    <div className="flex flex-col gap-2" style={{ marginTop: 14, paddingTop: 14, borderTop: '1px solid rgba(238,217,138,0.22)' }}>
       <style>{CARD_CSS}</style>
       {addresses.map(a => <ContactEmailCard key={a} address={a} />)}
     </div>

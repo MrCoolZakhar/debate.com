@@ -177,7 +177,7 @@ Whatever the argument is called. Testing is a rolled-back transaction (`begin; s
 
 ## 7. Sessions runtime in one screen
 
-- `speakersList` is the GSL: permanent, never wiped by a caucus; a GSL floor holder with time left interrupted by a caucus or a suspension goes back to its front (`src/lib/gslFloorReturn.ts`). `caucusQueue` is temporary. `currentSpeaker` is its own row and never in either list.
+- `speakersList` is the GSL: permanent, never wiped by a caucus; a GSL floor holder with time left interrupted by a caucus or a suspension goes back to its front, HELD in `settings.gslHeldFloors` with the seconds left and the original seat nonce, so the resumed turn is one speech of every second spoken (`src/lib/gslFloorReturn.ts`). `caucusQueue` is temporary. `currentSpeaker` is its own row and never in either list.
 - Optimistic writes: `updateLocal()` first, DB write fire-and-forget; realtime echoes are ignored for 3 s after a structural local write; the Commenter never debounces. Every write reports whether it landed (`runWrite`); parkable writes survive offline (`OFFLINE_RESILIENCE`).
 - Timers are anchored on the DATABASE clock (`serverNow()`): persist `started_at` + duration once; there is no per-second write and there must never be one.
 - List writes go through the `speakers_list_add` / `speakers_list_reorder` RPCs; never a client-computed position.

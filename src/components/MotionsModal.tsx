@@ -12,7 +12,7 @@ import SeatName from '@/components/SeatName';
 import { Emoji } from '@/components/Emoji';
 import { useSettingsStore, DEFAULT_MOTION_NAMES, MotionNames } from '@/lib/settingsStore';
 import { logFloorSpeech, creditRoomOrderTour, type FloorClock } from '@/lib/floorSpeech';
-import { interruptedGslSpeaker, returnSpeakerToGslFront } from '@/lib/gslFloorReturn';
+import { interruptedGslSpeaker, returnSpeakerToGslFront, holdInterruptedGslSpeaker, settleHeldFloors } from '@/lib/gslFloorReturn';
 import {
   useTempMotionIds, isTempMotionId, raiseMotionOptimistic, removeMotionEverywhere,
   fellOtherFloorMotions, showMotionNotice,
@@ -1223,7 +1223,8 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
     // deleted and a one-line notice offers Undo for ~8 s (fellOtherFloorMotions, M-1).
     // Custom motions never make anything fall. The GSL (speakersList) is never wiped or
     // reordered here; the one addition is an interrupted GSL floor holder with time left going
-    // back to its front (src/lib/gslFloorReturn.ts), so the GSL is exactly as it was.
+    // back to its front, held with the time they had left (src/lib/gslFloorReturn.ts), so the
+    // GSL is exactly as it was.
     // Never act on a temp id (M-2): the buttons are disabled, this is the backstop.
     if (isTempMotionId(motion.id)) return;
 
@@ -1279,10 +1280,12 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
       void creditRoomOrderTour(committee);
       if (floorSpeaker) {
         const clock = floorClock?.();
-        // A GSL speaker with time left keeps their GSL place: back at the front, on deck when
-        // the room returns to the GSL (src/lib/gslFloorReturn.ts). Read before the clear.
+        // A GSL speaker with time left keeps their GSL place AND their time: back at the
+        // front, on deck when the room returns to the GSL, and HELD (not logged) so the resumed
+        // turn is one speech with every second (src/lib/gslFloorReturn.ts). Before the clear.
         const backToGsl = interruptedGslSpeaker(committee, clock);
-        void logFloorSpeech(committee, clock);
+        const held = !!backToGsl && holdInterruptedGslSpeaker(committee, backToGsl, clock);
+        if (!held) void logFloorSpeech(committee, clock);
         clearCurrentSpeakerIfUnchanged(
           committee.id, floorSpeaker.delegateId, floorSpeaker.country,
           committee.code, committee.dbChairJoinSuffix ?? undefined,
@@ -1487,12 +1490,16 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
               const logFell = fellOtherFloorMotions({ committee, passedId: motionId, passedType: specialVoteMotion!.type, update, motionOrder, rank: rankMotion, deferFellLogs: OFFLINE_RESILIENCE });
               // End Debate ends a Room Order Tour de Table for good (Suspend only pauses it).
               if (!isSuspend) void creditRoomOrderTour(committee);
+              // End Debate: every held GSL part (src/lib/gslFloorReturn.ts) is logged now, once.
+              if (!isSuspend) settleHeldFloors(committee, 'all');
               const floor = committee.currentSpeaker;
               if (floor) {
                 // Suspend only: a GSL speaker with time left is back at the front of the GSL
-                // after the resume (src/lib/gslFloorReturn.ts). End Debate closes the room.
-                const backToGsl = isSuspend ? interruptedGslSpeaker(committee, pressedClock) : null;
-                void logFloorSpeech(committee, pressedClock, pressedAt);
+                // after the resume, HELD with the time they had left (src/lib/gslFloorReturn.ts).
+                // End Debate closes the room: the speech is logged.
+                const backToGsl = isSuspend ? interruptedGslSpeaker(committee, pressedClock, pressedAt) : null;
+                const held = !!backToGsl && holdInterruptedGslSpeaker(committee, backToGsl, pressedClock, pressedAt);
+                if (!held) void logFloorSpeech(committee, pressedClock, pressedAt);
                 update((c) => ({ ...c, currentSpeaker: null }));
                 clearCurrentSpeakerIfUnchanged(committee.id, floor.delegateId, floor.country, committee.code, committee.dbChairJoinSuffix ?? undefined);
                 if (backToGsl) returnSpeakerToGslFront(committee, backToGsl, update);

@@ -71,7 +71,7 @@ export interface SliceData {
 export const ROW_FIELDS = [
   'id', 'code', 'name', 'topic', 'chairName', 'chairNames', 'phase', 'speakerTimeLimit', 'caucus',
   'createdAt', 'suspendedAt', 'endedAt', 'expiresAt', 'resumingChair', 'dbChairJoinSuffix',
-  'dbHeadChair', 'dbHeadChairDevice', 'dbSeparateChairCode', 'dbSettings', 'dbScoring', 'sessionOrigin',
+  'dbHeadChair', 'dbHeadChairDevice', 'dbSeparateChairCode', 'dbSettings', 'dbScoring', 'dbGslHeldFloors', 'sessionOrigin',
 ] as const satisfies readonly (keyof Committee)[];
 
 export type CommitteeRowFields = Pick<Committee, (typeof ROW_FIELDS)[number]>;

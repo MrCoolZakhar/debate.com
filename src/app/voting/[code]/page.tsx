@@ -36,6 +36,7 @@ import { loadChatReadCounts, saveChatReadCounts } from '@/lib/chatReadKey';
 import { serverNowIso } from '@/lib/serverClock';
 import { startSessionSync, rowFields } from '@/lib/sessionSync';
 import { overlayPendingRollCall } from '@/lib/pendingRollCall';
+import { settleHeldFloors } from '@/lib/gslFloorReturn';
 import { getCommitteeByCodeWithRetry, resumePendingRollCall, setDelegateStatus as setDelegateStatusInDB, setDelegateStatusesBulk, setDelegateObserver as setDelegateObserverInDB, updateDocumentStatus as updateDocumentStatusInDB, saveCommitteeSettings, endDebate as endDebateInDB } from '@/lib/committeeService';
 import { useSettingsStore, DEFAULT_SETTINGS, impliedSettings, stripNonHydratedSettings, type CommitteeSettings } from '@/lib/settingsStore';
 import { supabase } from '@/lib/supabase';
@@ -1771,6 +1772,8 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
   const handleEndDebate = async () => {
     if (isViewOnly) return;
     setEndDebateState('working');
+    // Every held GSL part (src/lib/gslFloorReturn.ts) is logged once before the room ends.
+    settleHeldFloors(committee, 'all');
     await endDebateInDB(committee.id, committee.code, suffix);
     const { data } = await supabase.from('committees').select('ended_at').eq('id', committee.id).maybeSingle();
     if (!data?.ended_at) { setEndDebateState('failed'); return; }

@@ -22,6 +22,7 @@ import { noteFlushedSettings } from './settingsEcho';
 import { ENDED_KEEP_HOURS, REOPEN_WINDOW_HOURS } from './roomRetention';
 import {
   Committee,
+  type HeldGslFloor,
   Delegate,
   DelegateStatus,
   SessionPhase,
@@ -223,6 +224,29 @@ export function pauseCaucusLive(
 
 type DbRow = Record<string, unknown>;
 
+/** `committees.settings.gslHeldFloors`, parsed defensively (src/lib/gslFloorReturn.ts): every
+ *  entry must carry a delegate id, a country, finite seconds and a parseable seat nonce, or it
+ *  is dropped; anything that is not an array is []. One entry per delegation (the first). */
+export function parseGslHeldFloors(raw: unknown): HeldGslFloor[] {
+  if (!Array.isArray(raw)) return [];
+  const out: HeldGslFloor[] = [];
+  for (const v of raw) {
+    if (!v || typeof v !== 'object') continue;
+    const o = v as Record<string, unknown>;
+    const delegateId = typeof o.delegateId === 'string' ? o.delegateId : '';
+    const country = typeof o.country === 'string' ? o.country : '';
+    const remaining = typeof o.remaining === 'number' && Number.isFinite(o.remaining) ? Math.max(0, Math.round(o.remaining)) : NaN;
+    const granted = typeof o.granted === 'number' && Number.isFinite(o.granted) ? Math.max(0, Math.round(o.granted)) : NaN;
+    const seatedAt = typeof o.seatedAt === 'string' ? o.seatedAt : '';
+    const heldAt = typeof o.heldAt === 'string' ? o.heldAt : '';
+    if (!delegateId || !country || !Number.isFinite(remaining) || !Number.isFinite(granted)) continue;
+    if (!seatedAt || !Number.isFinite(new Date(seatedAt).getTime())) continue;
+    if (out.some((h) => h.delegateId === delegateId)) continue;
+    out.push({ delegateId, country, remaining, granted: Math.max(granted, remaining), seatedAt, heldAt });
+  }
+  return out;
+}
+
 function rowToCommittee(
   row: DbRow,
   delegates: Delegate[] = [],
@@ -272,6 +296,7 @@ function rowToCommittee(
     dbSeparateChairCode: ((row.settings as Record<string, unknown>)?.separateChairCode as boolean) ?? false,
     dbSettings: (row.settings as Record<string, unknown>) ?? null,
     dbScoring: ((row.settings as Record<string, unknown>)?.scoring as Committee['dbScoring']) ?? null,
+    dbGslHeldFloors: parseGslHeldFloors((row.settings as Record<string, unknown> | null)?.gslHeldFloors),
     sessionOrigin: row.session_origin === 'conference' ? 'conference' : 'standalone',
   };
 }
@@ -564,7 +589,7 @@ let settingsPatchSeq = 0;
 
 export async function saveCommitteeSettings(committeeId: string, settings: object, code: string, chairSuffix?: string): Promise<boolean> {
   const patch: Record<string, unknown> = { ...(settings as Record<string, unknown>) };
-  for (const k of ['chairJoinSuffix', 'separateChairCode', 'headChair', 'headChairDevice', 'agendaTopicIndex', 'votingReturnPhase']) delete patch[k];
+  for (const k of ['chairJoinSuffix', 'separateChairCode', 'headChair', 'headChairDevice', 'agendaTopicIndex', 'votingReturnPhase', 'gslHeldFloors']) delete patch[k];
   if (Object.keys(patch).length === 0) return true;
   return patchCommitteeSettings(committeeId, patch, code, chairSuffix);
 }
@@ -1089,6 +1114,11 @@ export async function nextSpeaker(
    *  is on deck, so no other current_speaker write can ever land between the seat and the
    *  start (a pause or Next pressed while the seat is in flight). */
   startedAt: string | null = null,
+  /** The turn's grant (`time_granted`) when it differs from the clock seated: a GSL speaker
+   *  RESUMED from a hold (src/lib/gslFloorReturn.ts) is seated with what they had left as
+   *  `speakerTimeLimit` and their original grant here, so `time_granted - live` is the whole
+   *  speech. Omitted (every other seating): the grant is the slot, as always. */
+  timeGranted?: number,
 ): Promise<boolean> {
   // HAPPENS-BEFORE GUARD (MUST NEVER HAPPEN #5). Rule #5 forbids firing a blind
   // clearCurrentSpeaker when entering a caucus because it races nextSpeakerInDB: two
@@ -1123,7 +1153,8 @@ export async function nextSpeaker(
             delegate_id: nextDelegateId,
             country: nextCountry,
             time_remaining: limit,
-            time_granted: limit,
+            time_granted: typeof timeGranted === 'number' && Number.isFinite(timeGranted)
+              ? Math.max(limit, Math.round(timeGranted)) : limit,
             started_at: nextCountry ? startedAt : null,
             seated_at: nextCountry ? seatedAt : null,
           })
@@ -1246,6 +1277,28 @@ export async function readSpokenSeconds(committeeId: string): Promise<{
     const seconds = spokenSecondsFromAnchor(row.time_granted as number | null, row.time_remaining as number, row.started_at as string | null);
     if (seconds === null) return null;
     return { delegateId: (row.delegate_id as string | null) ?? null, country: row.country as string, seconds };
+  }, null);
+}
+
+/** The current speaker's persisted grant and seat nonce, read on the current_speaker chain
+ *  (so it sees every clock write this device issued before it and none issued after). Used
+ *  when an interrupted GSL speaker is HELD (src/lib/gslFloorReturn.ts): the hold keeps the
+ *  turn's real `time_granted` (+time survives a reload there, not in local refs). Null when
+ *  the row cannot be read or names nobody. A read: never a write. */
+export async function readSpeakerGrant(committeeId: string): Promise<{
+  country: string; timeGranted: number | null; seatedAt: string | null;
+} | null> {
+  return chained(currentSpeakerChainKey(committeeId), async () => {
+    const { data: row, error } = await readDb().from('current_speaker')
+      .select('country, time_granted, seated_at')
+      .eq('committee_id', committeeId).maybeSingle();
+    if (error || !row?.country) return null;
+    const g = row.time_granted as number | null;
+    return {
+      country: row.country as string,
+      timeGranted: typeof g === 'number' && Number.isFinite(g) ? g : null,
+      seatedAt: (row.seated_at as string | null) ?? null,
+    };
   }, null);
 }
 

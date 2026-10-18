@@ -64,7 +64,10 @@ import { startSessionSync, rowFields, withCurrentSpeaker, withLists, ALL_SYNC_SL
 import { OFFLINE_RESILIENCE, createPendingSliceGuard, PENDING_RECHECK_MS } from '@/lib/offlineResilience';
 import { dropParkedWrites } from '@/lib/writeStatus';
 import { endModeratedCaucusIfAnchorUnchanged } from '@/lib/caucusExpiryWrite';
-import { interruptedGslSpeaker, returnSpeakerToGslFront } from '@/lib/gslFloorReturn';
+import {
+  interruptedGslSpeaker, returnSpeakerToGslFront, holdInterruptedGslSpeaker, heldFloorFor, releaseHeldFloor,
+  settleHeldFloors, heldFloorsCheckKey, HELD_FLOOR_SETTLE_DELAY_MS,
+} from '@/lib/gslFloorReturn';
 import ConnectionPill from '@/components/ConnectionPill';
 import TutorialOverlay from '@/components/TutorialOverlay';
 import { useAgendaPicker } from '@/components/AgendaPicker';
@@ -2052,6 +2055,9 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
   // so a refresh does not burst a card for every historical message.
   const seenChatIdsRef = useRef<Set<string> | null>(null);
   const seenChatCommitteeRef = useRef<string | null>(null);
+  // The committee as of the last render, for timers that must judge the CURRENT state (the
+  // held-floor orphan check, src/lib/gslFloorReturn.ts). Assigned during render below.
+  const committeeNowRef = useRef<Committee | null>(null);
   timerRunningRef.current = timerRunning;
   speakerTurnKeyRef.current = speakerTurnKey(committee);
   isViewOnlyRef.current = isViewOnly;
@@ -2059,6 +2065,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
   committeePhaseRef.current = committee?.phase ?? '';
   committeeCodeRef.current = committee?.code ?? '';
   chairSuffixRef.current = committee?.dbChairJoinSuffix ?? undefined;
+  committeeNowRef.current = committee;
 
   // Merge a freshly fetched delegates array over this chair's still-unconfirmed status writes.
   // Only rows this device just wrote are pinned; every other row is taken from the DB, so a
@@ -2993,6 +3000,30 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
     reanchorCaucusAtSpeakerZero(committee, base, startedAt);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [timerRunning, catchUpTick]);
+
+  // A HELD GSL part is never lost (src/lib/gslFloorReturn.ts): when the held delegation is no
+  // longer on the GSL and not on the floor (the chair removed it, it went absent, Begin Session
+  // dropped it), the Moderator logs the held part once (same turn key, logTimedSpeech) and
+  // drops the hold. Only on the GSL, never in a caucus, a break or roll call; only on fresh
+  // state and outside this device's debounce window; judged on the CURRENT committee a few
+  // seconds after the state that armed it. Idempotent by turn key, so a double fire is harmless.
+  const heldCheckKey = heldFloorsCheckKey(committee);
+  useEffect(() => {
+    if (!heldCheckKey) return;
+    let timer = 0;
+    const check = () => {
+      const c = committeeNowRef.current;
+      if (!c || isViewOnlyRef.current || !gavelRoleOf(c).isModerator) return;
+      if (c.phase !== 'speakers-list' || c.caucus || c.endedAt || c.suspendedAt) return;
+      if (syncRef.current && !syncRef.current.isFresh()) return;   // runs again on catchUpTick
+      const left = 3000 - (Date.now() - localUpdateTime.current);
+      if (left > 0) { timer = window.setTimeout(check, left + 250); return; }
+      settleHeldFloors(c, 'orphaned');
+    };
+    timer = window.setTimeout(check, HELD_FLOOR_SETTLE_DELAY_MS);
+    return () => window.clearTimeout(timer);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [heldCheckKey, catchUpTick]);
 
   // The same re-anchor when NO Moderator was watching the zero: the speaker's clock ran
   // out during a reload or while the gavel was changing hands, so the tick above never
@@ -3948,13 +3979,15 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
       startedAt: speakerAnchorRef.current.startedAt,
       extraSecs: extraTimeAddedSecsRef.current,
     };
-    // A pause keeps an interrupted GSL speaker's place (src/lib/gslFloorReturn.ts), like the
-    // Suspend motion. Read before the clear below.
+    // A pause keeps an interrupted GSL speaker's place AND time (src/lib/gslFloorReturn.ts),
+    // like the Suspend motion: held, not logged. Read before the clear below.
     const backToGsl = b.action === 'pause' ? interruptedGslSpeaker(committee, pauseClock) : null;
-    void logFloorSpeech(committee, pauseClock);
+    const held = !!backToGsl && holdInterruptedGslSpeaker(committee, backToGsl, pauseClock);
+    if (!held) void logFloorSpeech(committee, pauseClock);
     extraTimeAddedSecsRef.current = 0;
-    // An organiser END finishes a Room Order Tour de Table for good (a pause only freezes it).
-    if (b.action !== 'pause') void creditRoomOrderTour(committee);
+    // An organiser END finishes a Room Order Tour de Table for good (a pause only freezes it),
+    // and logs every held GSL part once.
+    if (b.action !== 'pause') { void creditRoomOrderTour(committee); settleHeldFloors(committee, 'all'); }
     // ...and then LEAVES the floor, exactly like the Suspend / End motion path. Without this
     // the current_speaker row kept them through the break, and the first Next after a resume
     // logged the same turn again (hours later, so no duplicate window could catch it).
@@ -4353,20 +4386,28 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
       });
     }
     const bonus = Math.max(0, Math.round(opts?.yieldBonus ?? 0));
-    // The legacy local fallback (`slot + extraSecs - live`) counts a yielded bonus like +time.
-    extraTimeAddedSecsRef.current = bonus;
-    setExtraTimeAdded(bonus > 0);
 
     const removeDelegateId = committee.speakersList[0]?.delegateId ?? null;
     const [next, ...rest] = committee.speakersList;
-    const timeToUse = speakerTimeLimit + bonus;
+    // A delegation HELD from an interruption resumes its own turn (src/lib/gslFloorReturn.ts):
+    // the seconds it had left, its grant and its ORIGINAL seat nonce, so the whole speech is
+    // one turn key and logFloorSpeech's `time_granted - live` counts both parts. A yielded
+    // bonus adds to what they had left.
+    const hold = next ? heldFloorFor(committee, next.delegateId) : null;
+    const timeToUse = (hold ? hold.remaining : speakerTimeLimit) + bonus;
+    const grantToUse = hold ? hold.granted + bonus : timeToUse;
+    // The legacy local fallback (`slot + extraSecs - live`) counts a yielded bonus (and a
+    // resumed turn's grant above the limit) like +time.
+    extraTimeAddedSecsRef.current = Math.max(0, grantToUse - speakerTimeLimit);
+    setExtraTimeAdded(grantToUse > speakerTimeLimit);
 
     // S7: the seat nonce, identical in local state and in the row, names this floor turn.
-    const seatedAt = serverNowIso();
+    const stamp = serverNowIso();
+    const seatedAt = hold ? hold.seatedAt : stamp;
     // Auto start: seat AND start in the SAME current_speaker update, with one stamp (the seat
     // nonce doubles as the clock anchor, like handleStartOnDeck), so nothing can land between.
     const run = !!next && timeToUse > 0 && (opts?.run === true || autoStartOn());
-    const startedAt = run ? seatedAt : null;
+    const startedAt = run ? stamp : null;
 
     // nextSpeakerInDB writes { time_remaining: timeToUse, started_at } — seat the local anchor
     // to exactly that so this device and every reader agree immediately. A fresh seat bumps
@@ -4384,7 +4425,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
       speakerTimeRemaining: timeToUse,
     }));
 
-    await nextSpeakerInDB(
+    const seated = nextSpeakerInDB(
       committee.id,
       timeToUse,
       next?.delegateId ?? null,
@@ -4394,7 +4435,10 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
       committee.dbChairJoinSuffix ?? undefined,
       seatedAt,
       startedAt,
+      hold ? grantToUse : undefined,
     );
+    if (hold) releaseHeldFloor(committee, hold.delegateId);
+    await seated;
     localUpdateTime.current = Date.now();
   };
 
@@ -5125,6 +5169,10 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
   // and the drag for that. Add time works on deck (`onDeckGrant`).
   const onDeck = !committee.currentSpeaker ? (committee.speakersList[0] ?? null) : null;
   const onDeckGrantSecs = onDeck && onDeckGrant?.id === onDeck.delegateId ? onDeckGrant.secs : 0;
+  // A delegation held from an interruption is on deck with the time it had left, not a fresh
+  // slot (src/lib/gslFloorReturn.ts); on-deck Add time adds on top.
+  const onDeckHold = onDeck ? heldFloorFor(committee, onDeck.delegateId) : null;
+  const onDeckBase = onDeckHold ? onDeckHold.remaining : speakerTimeLimit;
 
   // The GSL speaker buttons, rendered with AND without a speaker on the floor (the owner's
   // rule: they never disappear). With nobody seated, Start calls the delegation on deck and
@@ -5155,26 +5203,34 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
     // speech is logged against the extended slot (T-3). The local fallback accounting
     // (`startBase` = the time limit + extraSecs) gets the same number.
     const grant = onDeckGrant?.id === next.delegateId ? onDeckGrant.secs : 0;
-    const timeToUse = speakerTimeLimit + grant;
+    // A HELD delegation resumes its own turn (src/lib/gslFloorReturn.ts): what it had left
+    // plus any on-deck grant, its grant, and its ORIGINAL seat nonce (one turn key, one speech).
+    const hold = heldFloorFor(committee, next.delegateId);
+    const timeToUse = (hold ? hold.remaining : speakerTimeLimit) + grant;
+    const grantToUse = hold ? hold.granted + grant : timeToUse;
     if (timeToUse <= 0) return;
     const startedAt = serverNowIso();          // database clock (RULE 6b)
+    const seatedAt = hold ? hold.seatedAt : startedAt;
     setTimerRunning(true);
-    setExtraTimeAdded(grant > 0);
-    extraTimeAddedSecsRef.current = grant;
+    setExtraTimeAdded(grantToUse > speakerTimeLimit);
+    extraTimeAddedSecsRef.current = Math.max(0, grantToUse - speakerTimeLimit);
     setOnDeckGrant(null);
     seatSpeakerClock(timeToUse, startedAt);
     localUpdateTime.current = Date.now();
     updateLocal(setCommittee, (c) => ({
       ...c,
       currentSpeaker: next,
-      speakerSeatedAt: startedAt,
+      speakerSeatedAt: seatedAt,
       speakersList: c.speakersList.filter((s) => s.delegateId !== next.delegateId),
       speakerTimeRemaining: timeToUse,
     }));
-    await nextSpeakerInDB(
+    const seated = nextSpeakerInDB(
       committee.id, timeToUse, next.delegateId, next.country, next.delegateId,
-      committee.code, committee.dbChairJoinSuffix ?? undefined, startedAt, startedAt,
+      committee.code, committee.dbChairJoinSuffix ?? undefined, seatedAt, startedAt,
+      hold ? grantToUse : undefined,
     );
+    if (hold) releaseHeldFloor(committee, hold.delegateId);
+    await seated;
     localUpdateTime.current = Date.now();
   };
   const handleGslToggleTimer = () => {
@@ -5933,7 +5989,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                       // the speaking time Start will give them, not running.
                       clock={gslFloor && !sessionEnded ? (
                         <CommenterClock
-                          base={committee.currentSpeaker ? speakerAnchor.base : speakerTimeLimit}
+                          base={committee.currentSpeaker ? speakerAnchor.base : onDeckBase}
                           startedAt={committee.currentSpeaker ? speakerAnchor.startedAt : null}
                           showPaused={!!committee.currentSpeaker}
                           gavelAt={clampGavelSeconds(committee.dbSettings?.gavelSoundAtSeconds)}
@@ -5984,7 +6040,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                             >
                               {/* On deck nothing is seated, so the clock the row still holds may
                                   belong to the last turn: show the slot Start will give them. */}
-                              {formatTime(committee.currentSpeaker ? speakerTimeRemaining : speakerTimeLimit + onDeckGrantSecs)}
+                              {formatTime(committee.currentSpeaker ? speakerTimeRemaining : onDeckBase + onDeckGrantSecs)}
                               {(committee.currentSpeaker ? extraTimeAdded : onDeckGrantSecs > 0) && <span className="text-base ms-2 font-normal text-[#1C1410]">{t('gsl_plus_time')}</span>}
                             </SpeakerClock>
                             <FloorProgress

@@ -259,6 +259,8 @@ export function impliedSettings(
  *   • `headChair` / `headChairDevice`: the gavel. A copy captured earlier reverts it (rule 12).
  *   • `agendaTopicIndex`: written only by the agenda picker.
  *   • `votingReturnPhase`: written only by `set_committee_voting_phase`.
+ *   • `gslHeldFloors`: interrupted GSL speakers held for their resume, written only by
+ *     src/lib/gslFloorReturn.ts (key-level patches) and read from `committee.dbGslHeldFloors`.
  */
 export const NON_HYDRATED_SETTING_KEYS = [
   'chairJoinSuffix',
@@ -267,6 +269,7 @@ export const NON_HYDRATED_SETTING_KEYS = [
   'headChairDevice',
   'agendaTopicIndex',
   'votingReturnPhase',
+  'gslHeldFloors',
 ] as const;
 
 /** The DB settings blob minus every key in NON_HYDRATED_SETTING_KEYS. */
