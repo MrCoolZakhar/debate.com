@@ -12,6 +12,7 @@ How Claude adds Gavelling listings (owner, 19 Oct 2026: "adding listings should 
 
 - Use web search (Claude's search tool) for things like "Model United Nations 2026 Lahore", "MUN conference Mumbai January 2027", "MUN Cairo 2027", "university Model UN conference 2027".
 - **mymun pages may appear in results. Use them only to learn that a conference exists**, with one exception: the expected delegate number when the conference's own site gives none (see `expected_delegates`). Never copy anything else from mymun (their text, images, fees, dates). Go to the conference's OWN website (or its own Linktree / public page) and take every fact from there. If a conference has no website or public page of its own, skip it.
+- **Never list IEUMUN** (IE University, Madrid; owner, 20 Oct 2026), in any edition. It is hidden and the job must not add it again.
 - Never list a conference run by mymun itself (MUN London, MUN Paris, MUN Bruxelles, MUN Rome, and any "mymun" branded event).
 - Check robots.txt of the conference's site before fetching pages; respect it.
 - **Instagram:** only use what is visible without logging in; do not log in, do not scrape feeds. If committees and topics are only on Instagram behind a login, leave them out.
