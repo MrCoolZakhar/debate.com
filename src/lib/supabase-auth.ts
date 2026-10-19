@@ -1,9 +1,25 @@
 import { createBrowserClient } from '@supabase/ssr';
 
+// The SDK's default lock is navigator.locks, shared across every tab. A tab that
+// holds it through a hung token refresh (or a lock the browser never releases)
+// blocks getSession() everywhere, so a person who had just signed in with Google
+// waited 12 s on a blank page and was shown "Log in" again (GISCMUN, 19 Oct 2026).
+// This lock serialises auth work inside the tab only and can never wait forever.
+const lockChains = new Map<string, Promise<unknown>>();
+async function inTabLock<R>(name: string, _acquireTimeout: number, fn: () => Promise<R>): Promise<R> {
+  const prev = lockChains.get(name) ?? Promise.resolve();
+  // Wait for the previous holder, but never more than 5 s.
+  const waited = Promise.race([prev.catch(() => {}), new Promise((r) => setTimeout(r, 5000))]);
+  const run = waited.then(() => fn());
+  lockChains.set(name, run.catch(() => {}));
+  return run;
+}
+
 export function createAuthClient() {
   return createBrowserClient(
     'https://luruhkwrgisytejswlas.supabase.co',
-    'sb_publishable_k7NdduzaXK358z8ew18ZKA_vBSieDlV'
+    'sb_publishable_k7NdduzaXK358z8ew18ZKA_vBSieDlV',
+    { auth: { lock: inTabLock } },
   );
 }
 
