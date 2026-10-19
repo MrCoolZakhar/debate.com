@@ -109,7 +109,12 @@ export default function AdminClient() {
       setPledged(Object.fromEntries(map));
     })();
 
-    const { data: confRows } = await supabase.from('conferences').select('id, logo_url, organizer_id');
+    // Gavelling listings (listed_by = 'gavelling') never appear anywhere in
+    // the admin dashboard (Peter, 20 Oct 2026); the RPCs exclude them too.
+    const { data: confRows } = await supabase
+      .from('conferences')
+      .select('id, logo_url, organizer_id')
+      .eq('listed_by', 'organiser');
     if (!confRows) return;
 
     const logoMap: Record<string, string | null> = {};
