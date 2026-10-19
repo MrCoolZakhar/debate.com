@@ -51,6 +51,8 @@ interface ConfCard {
   country: string | null;
   start_date: string | null;
   end_date: string | null;
+  /** 'gavelling' for a listing: its images may be third party and go through the guarded fetch. */
+  listed_by: string | null;
 }
 
 /* The same columns `ogVersion()` hashes, which is the point: everything the
@@ -62,7 +64,7 @@ interface ConfCard {
    should get the same card the tags promise rather than a mismatched generic
    one. If the metadata side ever starts gating on `is_public`, gate here too. */
 const CARD_COLUMNS =
-  'full_name, acronym, banner_url, logo_url, city, country, start_date, end_date';
+  'full_name, acronym, banner_url, logo_url, city, country, start_date, end_date, listed_by';
 
 /** `undefined` = the database could not be asked (a hiccup, not an answer). */
 async function loadConference(slug: string): Promise<ConfCard | null | undefined> {
@@ -145,9 +147,10 @@ export async function GET(
     degraded = true;
   };
   const place = [conf.city?.trim(), conf.country?.trim()].filter(Boolean).join(', ');
+  const isListing = conf.listed_by === 'gavelling';
   const [backdrop, logo, flagUri] = await Promise.all([
-    withinBudget(loadBannerDataUri(conf.banner_url, CARD_WIDTH, CARD_HEIGHT), markLate),
-    withinBudget(loadLogo(conf.logo_url, 176), markLate),
+    withinBudget(loadBannerDataUri(conf.banner_url, CARD_WIDTH, CARD_HEIGHT, isListing), markLate),
+    withinBudget(loadLogo(conf.logo_url, 176, isListing), markLate),
     // Resolved from our own country table, so an unrecognisable "country" (a
     // crisis committee's invented state, a typo) simply yields no flag.
     place ? withinBudget(loadFlagDataUri(conf.country), markLate) : Promise.resolve(null),

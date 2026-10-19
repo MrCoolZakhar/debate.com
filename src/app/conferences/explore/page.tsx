@@ -6,6 +6,8 @@ import { exploreOgImageUrl } from '@/lib/ogVersion';
 import { fetchListedConferences, isUpcoming, type ListedConference } from '@/lib/listedConferences';
 import { countryHubs } from '@/lib/countryHubs';
 import { hasNoDates } from '@/lib/conferenceDates';
+import { isGavellingListing } from '@/lib/listings';
+import { conferenceImageSrc } from '@/lib/listingImage';
 import ConferencesExploreClient from './ConferencesExploreClient';
 import ExploreDirectory from './ExploreDirectory';
 import SiteFooter from '@/components/SiteFooter';
@@ -64,8 +66,14 @@ export async function generateMetadata(): Promise<Metadata> {
   });
 }
 
-/** schema.org Event for one listed conference. Offers only with a known price. */
+/** schema.org Event for one listed conference. Offers only with a known price, never for a
+ *  Gavelling listing (src/lib/listings.ts: nobody applies to it on Gavelling); its image is our
+ *  proxied address, never the third-party one. */
 function eventLd(c: ListedConference) {
+  const listing = isGavellingListing(c);
+  const image = c.banner_url
+    ? conferenceImageSrc(c, 'banner', c.banner_url)
+    : conferenceImageSrc(c, 'logo', c.logo_url);
   const url = `${SITE_URL}/conferences/${c.slug}`;
   const mode = c.format === 'online'
     ? 'https://schema.org/OnlineEventAttendanceMode'
@@ -82,7 +90,7 @@ function eventLd(c: ListedConference) {
     eventAttendanceMode: mode,
     eventStatus: 'https://schema.org/EventScheduled',
     url,
-    ...(c.banner_url || c.logo_url ? { image: [absoluteUrl(c.banner_url || c.logo_url || '')] } : {}),
+    ...(image ? { image: [absoluteUrl(image)] } : {}),
     location: c.format === 'online'
       ? { '@type': 'VirtualLocation', url }
       : {
@@ -94,7 +102,7 @@ function eventLd(c: ListedConference) {
             ...(c.country ? { addressCountry: c.country } : {}),
           },
         },
-    ...(price.kind !== 'tbd'
+    ...(price.kind !== 'tbd' && !listing
       ? {
           offers: {
             '@type': 'Offer',
@@ -123,7 +131,10 @@ export default async function ConferencesExplorePage() {
     '@type': 'CollectionPage',
     name: 'Explore Model UN Conferences',
     url: `${SITE_URL}/conferences/explore`,
-    description: 'Upcoming Model UN conferences worldwide, with dates, places and delegate fees, open to apply on Gavelling.',
+    // Gavelling listings are in the list but not on Gavelling yet, so no "apply on Gavelling" then.
+    description: upcoming.some(c => isGavellingListing(c))
+      ? 'Upcoming Model UN conferences worldwide, with dates, places and committees.'
+      : 'Upcoming Model UN conferences worldwide, with dates, places and delegate fees, open to apply on Gavelling.',
     isPartOf: { '@type': 'WebSite', name: 'Gavelling', url: SITE_URL },
     mainEntity: {
       '@type': 'ItemList',

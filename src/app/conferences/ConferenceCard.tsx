@@ -58,6 +58,9 @@ import { formatConferenceDates, DATES_TO_BE_DECIDED } from '@/lib/conferenceDate
 import VerifiedCheck from '@/components/VerifiedCheck';
 import { CircleFlag } from '@/components/CircleFlag';
 import { CreditSponsoredMark, SpotlightTag, SPOTLIGHT_GLOW, SPOTLIGHT_GLOW_HOVER } from '@/components/conferences/SpotlightTag';
+import { NotOnGavellingMark } from '@/components/conferences/NotOnGavellingMark';
+import { isGavellingListing, listingMeta } from '@/lib/listings';
+import { conferenceImageSrc } from '@/lib/listingImage';
 
 // Photo-forward hero cards: kill the Ken Burns zoom + hover lift for users who
 // asked the OS for less motion. Scoped to the hero tier's own class names.
@@ -114,6 +117,20 @@ export interface CardConference {
   banner_url: string | null;
   /** Blue seal beside the name when true; nothing at all otherwise. */
   is_verified?: boolean;
+  /** 'gavelling' = a Gavelling listing (src/lib/listings.ts). */
+  listed_by?: string | null;
+  listing_meta?: unknown;
+}
+
+/** What the card draws for a Gavelling listing: its images through our origin (never the
+ *  third-party address, src/lib/listingImage.ts) and no delegates count unless the conference
+ *  publishes one. Organiser conferences come back unchanged. */
+function forCard<C extends CardConference>(c: C): C {
+  const logo = conferenceImageSrc(c, 'logo', c.logo_url);
+  const banner = conferenceImageSrc(c, 'banner', c.banner_url);
+  const hideDelegates = isGavellingListing(c) && !listingMeta(c)?.delegates_known;
+  if (logo === c.logo_url && banner === c.banner_url && !hideDelegates) return c;
+  return { ...c, logo_url: logo, banner_url: banner, expected_delegates: hideDelegates ? 0 : c.expected_delegates };
 }
 
 // Deterministic forest-tone gradient per conference (used when no banner art exists)
@@ -135,7 +152,7 @@ function formatDateRange(start: string | null, end: string | null): string {
 }
 
 export function ConferenceCard({
-  conf, hovered, onHover, onLeave, onClick, compact = false, heroCompact = false, goldGlow = false, applied = false, member = false,
+  conf: rawConf, hovered, onHover, onLeave, onClick, compact = false, heroCompact = false, goldGlow = false, applied = false, member = false,
   showFlag = true, spotlight = false, creditSponsored = false, href, variant = 'card',
 }: {
   /** 'listing' = Explore's photo-forward soft 3D card: the photo flush across
@@ -175,6 +192,8 @@ export function ConferenceCard({
    *  never cut a name), so this no longer changes anything. */
   wrapTitle?: boolean;
 }) {
+  const conf = forCard(rawConf);
+  const listingRow = isGavellingListing(conf);
   const countryObj = getCountryByName(conf.country);
   // "Oxford, GB", ISO country code instead of the full country name (or flag)
   const countryCode = countryObj ? countryObj.code.toUpperCase() : conf.country;
@@ -582,7 +601,7 @@ export function ConferenceCard({
 
         {/* Price in bold with the role in grey; the viewer's own state beside it */}
         <div className="flex items-end justify-between flex-wrap" style={{ marginTop: 'auto', paddingTop: '10px', columnGap: '10px', rowGap: '4px' }}>
-          <p style={{ margin: 0, fontSize: '15px', lineHeight: 1.3, color: '#1C1410', fontVariantNumeric: 'tabular-nums' }}>
+          {listingRow ? <NotOnGavellingMark size="xs" /> : <p style={{ margin: 0, fontSize: '15px', lineHeight: 1.3, color: '#1C1410', fontVariantNumeric: 'tabular-nums' }}>
             {price.kind === 'tbd' ? (
               <span title="Price to be announced" style={{ fontWeight: 600, color: '#6B5F52' }}>Price to be announced</span>
             ) : price.kind === 'free' ? (
@@ -593,7 +612,7 @@ export function ConferenceCard({
                 <span style={{ fontWeight: 500, color: '#6B5F52' }}> delegate</span>
               </>
             )}
-          </p>
+          </p>}
           {member ? (
             <span className="inline-flex items-center" style={{ gap: '4px', fontSize: '12.5px', fontWeight: 700, color: '#1B3828' }}>
               <Check size={14} strokeWidth={2.75} aria-hidden /> You&apos;re in
@@ -809,7 +828,8 @@ function ListingCard({
           className="flex items-center flex-wrap"
           style={{ marginTop: 'auto', paddingTop: '8px', columnGap: '12px', rowGap: '3px', fontSize: '12.5px', fontWeight: 500, color: '#5C5140' }}
         >
-          <span style={{ fontSize: '14px', color: '#1C1410', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
+          {/* A Gavelling listing: the mark in the price's place (no price is ours to state) */}
+          {isGavellingListing(conf) ? <NotOnGavellingMark size="xs" /> : <span style={{ fontSize: '14px', color: '#1C1410', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
             {price.kind === 'tbd' ? (
               <span title="Price to be announced" style={{ fontWeight: 600, color: '#6B5F52', fontSize: '12.5px' }}>TBD</span>
             ) : price.kind === 'free' ? (
@@ -817,7 +837,7 @@ function ListingCard({
             ) : (
               <span style={{ fontWeight: 800 }}>{currencySymbol(price.currency)}{formatFeeAmountCompact(price.amount)}</span>
             )}
-          </span>
+          </span>}
           {formatLabel && (
             <span className="inline-flex items-center" style={{ gap: '4px' }}>
               {FormatIcon && <FormatIcon size={13} strokeWidth={2} fill="rgba(207,227,211,0.9)" style={{ color: '#2A5A3C', flexShrink: 0 }} aria-hidden />}

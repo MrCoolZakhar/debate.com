@@ -2,10 +2,15 @@ import Link from 'next/link';
 import { formatConferenceDates, hasNoDates, DATES_TO_BE_DECIDED } from '@/lib/conferenceDates';
 import { delegatePriceLabel } from '@/lib/publicFees';
 import type { ListedConference } from '@/lib/listedConferences';
+import { isGavellingListing } from '@/lib/listings';
+import { conferenceImageSrc } from '@/lib/listingImage';
+import { NotOnGavellingMark } from '@/components/conferences/NotOnGavellingMark';
 
 // A server-rendered list of conferences as plain <a href> rows: logo, name,
 // dates, city (or Online) and the public delegate price (publicFees.ts). Used
 // by the hubs (/conferences/in/*) and /organisers, where the links must be in the raw HTML.
+// A Gavelling listing (src/lib/listings.ts) carries the "Not on Gavelling yet" mark in place of
+// the price and the window, and its logo is drawn through our origin (conferenceImageSrc).
 
 const SANS = "var(--font-brand), sans-serif";
 const FOREST = '#1B3828';
@@ -32,7 +37,9 @@ export default function ConferenceLinkList({ conferences, wide = false }: { conf
       {conferences.map(c => {
         const dates = hasNoDates(c) ? DATES_TO_BE_DECIDED : formatConferenceDates(c.start_date, c.end_date, { style: 'dmy-end-year' });
         const place = c.format === 'online' ? ['Online', c.country].filter(Boolean).join(', ') : [c.city, c.country].filter(Boolean).join(', ');
-        const windowLabel = WINDOW_LABEL[c.window];
+        const listing = isGavellingListing(c);
+        const windowLabel = listing ? null : WINDOW_LABEL[c.window];
+        const logo = conferenceImageSrc(c, 'logo', c.logo_url);
         return (
           <li key={c.id}>
             <Link
@@ -44,9 +51,9 @@ export default function ConferenceLinkList({ conferences, wide = false }: { conf
                 className="flex shrink-0 items-center justify-center overflow-hidden rounded-full"
                 style={{ width: 48, height: 48, backgroundColor: FOREST, color: '#EED98A', fontFamily: SANS, fontWeight: 800, fontSize: 13 }}
               >
-                {c.logo_url ? (
+                {logo ? (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={c.logo_url} alt="" width={48} height={48} loading="lazy" decoding="async" style={{ width: '100%', height: '100%', objectFit: 'cover', backgroundColor: '#FFFFFF' }} />
+                  <img src={logo} alt="" width={48} height={48} loading="lazy" decoding="async" style={{ width: '100%', height: '100%', objectFit: 'cover', backgroundColor: '#FFFFFF' }} />
                 ) : (
                   (c.acronym || c.full_name).slice(0, 3).toUpperCase()
                 )}
@@ -63,15 +70,16 @@ export default function ConferenceLinkList({ conferences, wide = false }: { conf
                 <span className="block" style={{ fontFamily: SANS, fontSize: 13, color: INK_SOFT, marginTop: 3, fontVariantNumeric: 'tabular-nums' }}>
                   {[dates, place].filter(Boolean).join(' · ')}
                 </span>
+                {listing && <NotOnGavellingMark size="sm" style={{ marginTop: 5 }} />}
               </span>
-              <span className="hidden sm:flex shrink-0 flex-col items-end gap-1 text-right">
+              {!listing && <span className="hidden sm:flex shrink-0 flex-col items-end gap-1 text-right">
                 <span style={{ fontFamily: SANS, fontWeight: 800, fontSize: 14, color: FOREST, fontVariantNumeric: 'tabular-nums' }}>
                   {delegatePriceLabel(c.delegate_price)}
                 </span>
                 {windowLabel && (
                   <span style={{ fontFamily: SANS, fontSize: 11.5, color: INK_SOFT }}>{windowLabel}</span>
                 )}
-              </span>
+              </span>}
             </Link>
           </li>
         );

@@ -48,6 +48,10 @@ export interface AboutConference extends ConferenceSeoInput {
   expected_delegates?: number | null;
   min_age?: number | null;
   max_age?: number | null;
+  /** Set on a Gavelling listing (src/lib/listings.ts): a conference we list from its own website.
+   *  It takes no applications on Gavelling, so the section says how to apply on its own site
+   *  (`outboundUrl`, its website or else its Instagram; null when neither is usable). */
+  listing?: { outboundUrl: string | null } | null;
 }
 
 export interface AboutCommittee {
@@ -91,9 +95,14 @@ export interface ConferenceAboutContent {
   rolesNote: string | null;
   /** The apply steps and the line about Gavelling; empty once it has ended. */
   steps: string[];
+  /** "How to Apply on Gavelling", or "How to Apply" on a listing. */
+  stepsHeading: string;
   gavellingLine: string;
+  /** '' when there is nowhere to send the reader (a listing with no website). */
   applyHref: string;
   applyLabel: string;
+  /** True when applyHref is the conference's own site (a listing), opened in a new tab. */
+  applyExternal: boolean;
   concluded: boolean;
   faq: FaqEntry[];
 }
@@ -242,6 +251,7 @@ export function buildConferenceAbout(
   const tbd = hasNoDates(conf);
   const says = SAYS_MUN.test(`${tidy(conf.acronym)} ${tidy(conf.full_name)}`);
   const v = variantOf(conf.id || conf.slug, 3);
+  const listing = conf.listing ?? null;
   const where = wherePhrase(conf);
   const when = whenPhrase(conf);
 
@@ -313,8 +323,12 @@ export function buildConferenceAbout(
     if (topicLines.length) first.push(`${topicLines.join(', and ')}.`);
   }
 
-  // 4. Where you apply.
-  if (!past && roles.length) {
+  // 4. Where you apply. A listing takes no applications on Gavelling: say where it does.
+  if (!past && listing) {
+    first.push(listing.outboundUrl
+      ? (v === 1 ? `Applications for ${short} run on its own website.` : `You apply to ${short} on its own website.`)
+      : `${short} takes applications through its organisers, not on Gavelling.`);
+  } else if (!past && roles.length) {
     first.push(v === 1 ? `Applications for ${short} run on Gavelling.` : `You can apply to ${short} on Gavelling.`);
   }
 
@@ -335,20 +349,31 @@ export function buildConferenceAbout(
   const roleItems: AboutRoleItem[] = past
     ? []
     : roles.map((r) => ({ label: roleLabel(r.role), price: priceText(r.price), window: windowText(r.window, conf.timezone) }));
-  const rolesNote = !past && !roles.length ? `The organisers have not opened applications to ${short} yet.` : null;
+  const rolesNote = past
+    ? null
+    : listing
+      ? `${short} publishes its roles, fees and deadlines on its own website.`
+      : !roles.length ? `The organisers have not opened applications to ${short} yet.` : null;
 
   /* ── How to apply ──────────────────────────────────────────────────── */
   const anyPaid = roles.some((r) => r.price.kind === 'paid');
   const steps = past
     ? []
-    : [
+    : listing
+      ? [
+          listing.outboundUrl ? `Visit the official website of ${short}.` : `Find the official pages of ${short}.`,
+          'Follow the application steps, deadlines and fees the organisers publish there.',
+        ]
+      : [
         'Create a free Gavelling account, or sign in to yours.',
         `Open the Apply page for ${short}, choose your role and fill in the application.`,
         anyPaid || !roles.length
           ? 'Pay any fee the way the organisers set out on Gavelling. Some conferences ask for payment only after accepting you.'
           : 'The organisers review your application, and your conference dashboard shows their decision.',
       ];
-  const gavellingLine = 'On Gavelling, committees can run as live sessions where you follow motions and the speakers list on your phone. Every conference you attend as a delegate is added to your MUN CV once it ends.';
+  const gavellingLine = listing
+    ? `Gavelling lists ${short} from its public website. If you run it, you can claim this page for free and take applications here.`
+    : 'On Gavelling, committees can run as live sessions where you follow motions and the speakers list on your phone. Every conference you attend as a delegate is added to your MUN CV once it ends.';
 
   /* ── FAQ (also the FAQPage JSON-LD, word for word) ─────────────────── */
   const faq: FaqEntry[] = [];
@@ -376,7 +401,12 @@ export function buildConferenceAbout(
     }
     faq.push({ question: `How much does ${short} cost?`, answer: `${head}${tail}` });
   }
-  if (!past && roles.length) {
+  if (!past && listing && listing.outboundUrl) {
+    faq.push({
+      question: `How do I apply to ${short}?`,
+      answer: `${short} takes applications on its own website. Its roles, fees and deadlines are published there.`,
+    });
+  } else if (!past && !listing && roles.length) {
     const window = delegate ? delegateWindowSentence(conf, delegate.window) : '';
     faq.push({
       question: `How do I apply to ${short}?`,
@@ -400,9 +430,11 @@ export function buildConferenceAbout(
     roles: roleItems,
     rolesNote,
     steps,
+    stepsHeading: listing ? 'How to Apply' : 'How to Apply on Gavelling',
     gavellingLine,
-    applyHref: `/conferences/${conf.slug}/apply`,
-    applyLabel: `Apply to ${short}`,
+    applyHref: listing ? (listing.outboundUrl ?? '') : `/conferences/${conf.slug}/apply`,
+    applyLabel: listing ? `Visit the ${short} website` : `Apply to ${short}`,
+    applyExternal: !!listing,
     concluded: past,
     faq,
   };

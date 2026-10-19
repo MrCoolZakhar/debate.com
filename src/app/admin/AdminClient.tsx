@@ -13,7 +13,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { Activity, BarChart3, Building2, Radio, ShieldCheck, Users, TrendingUp } from 'lucide-react';
+import { Activity, BarChart3, Building2, ListPlus, Radio, ShieldCheck, Users, TrendingUp } from 'lucide-react';
 import SiteNav from '@/components/SiteNav';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
@@ -34,13 +34,15 @@ import LiveCommitteesTab from './LiveCommitteesTab';
 // (admin_platform_metrics / admin_data_lists, both is_platform_admin).
 import DataTab from './DataTab';
 import TrafficTab from './TrafficTab';
+// Gavelling's own conference listings: hand over to the organiser, hide, show again.
+import ListingsTab from './ListingsTab';
 
 // Shared branded spinner (Gavelling green), built by a sibling agent.
 import Loader from '@/components/Loader';
 
 const MONO = 'ui-monospace, monospace';
 
-type TabKey = 'data' | 'traffic' | 'conferences' | 'users' | 'activity' | 'live';
+type TabKey = 'data' | 'traffic' | 'conferences' | 'listings' | 'users' | 'activity' | 'live';
 
 // Data is first and is the default: this console is opened every morning to
 // read the numbers, and the other four tabs are what you go to afterwards.
@@ -48,6 +50,7 @@ const TABS: { key: TabKey; label: string; icon: typeof Building2 }[] = [
   { key: 'data',        label: 'Data',        icon: BarChart3 },
   { key: 'traffic',     label: 'Traffic',     icon: TrendingUp },
   { key: 'conferences', label: 'Conferences', icon: Building2 },
+  { key: 'listings',    label: 'Listings',    icon: ListPlus },
   { key: 'users',       label: 'Users',       icon: Users },
   { key: 'activity',    label: 'Activity',    icon: Activity },
   { key: 'live',        label: 'Live',        icon: Radio },
@@ -250,6 +253,7 @@ export default function AdminClient() {
           {tab === 'data' && <DataTab />}
           {tab === 'traffic' && <TrafficTab />}
           {tab === 'conferences' && <ConferencesTab rows={rows} logos={logos} avatars={avatars} pledged={pledged} organizerIds={organizerIds} onChanged={() => void load()} />}
+          {tab === 'listings' && <ListingsTab />}
           {tab === 'users' && <UsersTab />}
           {tab === 'activity' && <ActivityTab />}
           {tab === 'live' && <LiveCommitteesTab />}

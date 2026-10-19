@@ -54,6 +54,8 @@ export interface LabConference {
   format?: string;
   /** Delegate application window (listedConferences.ts), for the near-you row. */
   window?: 'open' | 'not_open' | 'closed' | 'disabled';
+  /** 'gavelling' = a Gavelling listing (src/lib/listings.ts). */
+  listed_by?: string | null;
 }
 
 export interface LabReview {

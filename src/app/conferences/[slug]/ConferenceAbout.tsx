@@ -107,18 +107,26 @@ export default function ConferenceAbout({
             about.rolesNote && <p style={textStyle}>{about.rolesNote}</p>
           )}
 
-          <h3 style={h3Style}>How to Apply on Gavelling</h3>
+          <h3 style={h3Style}>{about.stepsHeading}</h3>
           <ol style={{ margin: 0, paddingLeft: 22, listStyle: 'decimal' }}>
             {about.steps.map((s) => (
               <li key={s} style={{ fontSize: 15, lineHeight: 1.7, paddingLeft: 2 }}>{s}</li>
             ))}
           </ol>
           <p style={{ ...textStyle, marginTop: 12 }}>{about.gavellingLine}</p>
-          <p style={{ ...textStyle, marginTop: 12 }}>
-            <Link href={about.applyHref} className="focus:outline-none" style={linkStyle}>
-              {about.applyLabel}
-            </Link>
-          </p>
+          {about.applyHref && (
+            <p style={{ ...textStyle, marginTop: 12 }}>
+              {about.applyExternal ? (
+                <a href={about.applyHref} target="_blank" rel="noopener noreferrer" className="focus:outline-none" style={linkStyle}>
+                  {about.applyLabel}
+                </a>
+              ) : (
+                <Link href={about.applyHref} className="focus:outline-none" style={linkStyle}>
+                  {about.applyLabel}
+                </Link>
+              )}
+            </p>
+          )}
         </>
       )}
 

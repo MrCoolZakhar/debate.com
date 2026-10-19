@@ -31,6 +31,8 @@
  */
 
 import { getCountryByName, getFlagUrl } from '@/lib/countries';
+import { fetchListingImage } from '@/lib/listingImageFetch';
+import { isThirdPartyImage } from '@/lib/listingImage';
 
 /** Never spend more than this on one organiser asset. Two of them plus the
  *  render still has to finish inside a serverless invocation. */
@@ -77,7 +79,14 @@ function loadSharp(): Promise<SharpModule | null> {
 
 /** Fetch raw bytes, with a timeout and a size ceiling. `null` on any problem —
  *  a missing banner is a design case here, not an error. */
-async function fetchBytes(url: string): Promise<Buffer | null> {
+async function fetchBytes(url: string, listing = false): Promise<Buffer | null> {
+  // A Gavelling listing's image may live on the conference's own site or Wikimedia
+  // (src/lib/listingImage.ts). Those go through the one guarded fetcher (https, public hosts,
+  // image/* without SVG, 5 MB); every other row stays limited to our own storage.
+  if (listing && isThirdPartyImage(url)) {
+    const image = await fetchListingImage(url, { timeoutMs: FETCH_TIMEOUT_MS });
+    return image?.bytes ?? null;
+  }
   if (!isAllowedAssetUrl(url)) return null;
 
   const controller = new AbortController();
@@ -112,12 +121,14 @@ export async function loadBannerDataUri(
   url: string | null | undefined,
   width: number,
   height: number,
+  /** True for a Gavelling listing (`listed_by = 'gavelling'`), whose image may be third party. */
+  listing = false,
 ): Promise<string | null> {
   if (!url) return null;
   const sharp = await loadSharp();
   if (!sharp) return null;
 
-  const bytes = await fetchBytes(url);
+  const bytes = await fetchBytes(url, listing);
   if (!bytes) return null;
 
   try {
@@ -157,12 +168,14 @@ export interface LoadedLogo {
 export async function loadLogo(
   url: string | null | undefined,
   box: number,
+  /** True for a Gavelling listing (`listed_by = 'gavelling'`), whose image may be third party. */
+  listing = false,
 ): Promise<LoadedLogo | null> {
   if (!url) return null;
   const sharp = await loadSharp();
   if (!sharp) return null;
 
-  const bytes = await fetchBytes(url);
+  const bytes = await fetchBytes(url, listing);
   if (!bytes) return null;
 
   try {

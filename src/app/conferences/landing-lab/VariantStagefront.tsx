@@ -47,6 +47,8 @@ import {
 import { recordSpotlightClick, recordSpotlightView, type FeaturedRow } from '@/lib/spotlight';
 import { PREVIEW_CLICK_HINT, SpotlightPreviewBar, previewFeaturedRow, useSpotlightPreview } from '@/lib/spotlightPreview';
 import { SessionsSection, AboutCards, LearnMunSection, type HomeGuide } from './HomeSections';
+import { isGavellingListing } from '@/lib/listings';
+import { conferenceImageSrc } from '@/lib/listingImage';
 
 // Ink-on-cream tokens for the light slabs.
 const INK = '#1C1410';
@@ -242,7 +244,8 @@ export default function VariantStagefront({
   // crawler, this is the no-country answer, which the server rendered too, so
   // hydration never disagrees.
   const nearby = useMemo(() => {
-    const upcoming = conferences.filter(c => !isConcluded(c));
+    // Gavelling listings (src/lib/listings.ts) stay in Explore: this row is about taking applications.
+    const upcoming = conferences.filter(c => !isConcluded(c) && !isGavellingListing(c));
     return recommendNearby(upcoming, geo?.code ?? null, 3);
   }, [conferences, geo]);
 
@@ -453,7 +456,7 @@ export default function VariantStagefront({
               // only the published ones these cards are drawn from. The
               // delegates figure keeps its display-only launch offset.
               { n: stats?.total_conferences ?? (conferences.length || null), label: 'conferences' },
-              { n: conferences.reduce((s, c) => s + (c.expected_delegates || 0), 0) + 20000, label: 'delegates' },
+              { n: conferences.reduce((s, c) => s + (isGavellingListing(c) ? 0 : c.expected_delegates || 0), 0) + 20000, label: 'delegates' },
               { n: stats?.countries ?? (new Set(conferences.map(c => c.country)).size || null), label: 'countries' },
             ].map((stat, i) => (
               <div
@@ -705,7 +708,7 @@ function HeroSearchBar({ conferences }: { conferences: LabConference[] }) {
               onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
             >
               <LogoDisc
-                src={c.logo_url}
+                src={conferenceImageSrc(c, 'logo', c.logo_url)}
                 size={34}
                 fallbackText={(c.acronym || c.full_name).slice(0, 3)}
                 style={{ boxShadow: 'none', border: '1px solid rgba(0,0,0,0.08)' }}

@@ -7,6 +7,8 @@ import SiteNav from '@/components/SiteNav';
 import SiteFooter from '@/components/SiteFooter';
 import { isListedConference } from '@/lib/publicConferences';
 import { allHubs, hubPath, HUB_INDEX_PATH } from '@/lib/countryHubs';
+import { isGavellingListing } from '@/lib/listings';
+import { NOT_ON_GAVELLING } from '@/components/conferences/NotOnGavellingMark';
 
 // /conferences/all: the plain directory of every listed conference and every
 // country hub, as server-rendered <a href>s.
@@ -47,13 +49,15 @@ interface DirectoryConf {
   start_date: string | null;
   end_date: string | null;
   updated_at: string | null;
+  /** 'gavelling' = a Gavelling listing (src/lib/listings.ts), marked "Not on Gavelling yet". */
+  listed_by: string | null;
 }
 
 async function loadConferences(): Promise<DirectoryConf[]> {
   try {
     const { data } = await supabase
       .from('conferences')
-      .select('slug, full_name, city, country, format, dates_tbd, is_demo, start_date, end_date, updated_at')
+      .select('slug, full_name, city, country, format, dates_tbd, is_demo, start_date, end_date, updated_at, listed_by')
       .eq('is_public', true)
       .order('full_name', { ascending: true });
     // Test and demo conferences are never listed (src/lib/publicConferences.ts).
@@ -101,6 +105,7 @@ export default async function AllConferencesPage() {
   const hubs = indexableHubs.filter((h) => h.kind === 'country');
   const datedHubs = indexableHubs.filter((h) => h.kind !== 'country');
   const groups = groupByInitial(confs);
+  const anyListing = confs.some((c) => isGavellingListing(c));
 
   const breadcrumbs = {
     '@context': 'https://schema.org',
@@ -153,8 +158,10 @@ export default async function AllConferencesPage() {
           {confs.length > 0
             ? `Every conference listed on Gavelling, ${confs.length} in all, from A to Z. `
             : 'Every conference listed on Gavelling, from A to Z. '}
-          Each page has the committees, dates and fees, and you apply as a delegate, chair or advisor with one
-          profile. To filter by date, fee or level,{' '}
+          {anyListing
+            ? `Each page has the committees and dates. You apply as a delegate, chair or advisor with one profile, except at conferences marked ${NOT_ON_GAVELLING}, which take applications on their own website. `
+            : 'Each page has the committees, dates and fees, and you apply as a delegate, chair or advisor with one profile. '}
+          To filter by date, fee or level,{' '}
           <Link href="/conferences/explore" className="hover:text-[#0F3A28]" style={{ color: FOREST, fontWeight: 700, textDecoration: 'underline', textUnderlineOffset: 3 }}>
             explore conferences
           </Link>
@@ -289,6 +296,8 @@ export default async function AllConferencesPage() {
                         .map((s) => (s ?? '').replace(/\s+/g, ' ').trim())
                         .filter(Boolean)
                         .join(', ');
+                      // A Gavelling listing says so in plain text after its place.
+                      const line = [place, isGavellingListing(c) ? NOT_ON_GAVELLING : ''].filter(Boolean).join(' · ');
                       return (
                         <li key={c.slug} style={{ lineHeight: 1.45 }}>
                           <Link
@@ -298,8 +307,8 @@ export default async function AllConferencesPage() {
                           >
                             {c.full_name}
                           </Link>
-                          {place && (
-                            <span style={{ display: 'block', fontSize: 13, color: INK_SOFT }}>{place}</span>
+                          {line && (
+                            <span style={{ display: 'block', fontSize: 13, color: INK_SOFT }}>{line}</span>
                           )}
                         </li>
                       );

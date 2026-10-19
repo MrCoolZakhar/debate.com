@@ -66,6 +66,10 @@ import { RoleApplyCards, type RoleTile } from './RoleApplyCards';
 import { useFitSticky } from './useFitSticky';
 import { ContactOrganisers, conferenceContactEmails, copyEmailWithToast } from './ContactOrganisers';
 import { BottomToastHost } from './BottomToast';
+import { isGavellingListing, isPastListing, listingMeta } from '@/lib/listings';
+import { conferenceImageSrc } from '@/lib/listingImage';
+import { NotOnGavellingMark } from '@/components/conferences/NotOnGavellingMark';
+import { BannerCreditLine, ListingCta, ListingSourceNote } from './ListingParts';
 
 const GRAIN = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='grain'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23grain)' opacity='1'/%3E%3C/svg%3E")`;
 
@@ -151,6 +155,9 @@ interface Conference {
   show_committees: boolean;
   show_committee_counts: boolean;
   show_taken_countries: boolean;
+  /** 'gavelling' on a listing (src/lib/listings.ts): no Apply, our inbox as contact_email. */
+  listed_by?: string | null;
+  listing_meta?: unknown;
 }
 
 interface SecretariatMember {
@@ -1123,7 +1130,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
         contact_email, organizer_id, min_age, max_age, allocation_swap_mode, display_secretariat,
         connect_onboarding_status, payment_method, external_payment_url, external_payment_note,
         financial_aid_enabled, aid_questions, aid_intro, theme, theme_draft, is_verified,
-        show_committees, show_committee_counts, show_taken_countries
+        show_committees, show_committee_counts, show_taken_countries, listed_by, listing_meta
       `)
       .eq('slug', slug)
       .single();
@@ -1142,7 +1149,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
             contact_email, organizer_id, min_age, max_age, allocation_swap_mode, display_secretariat,
             connect_onboarding_status, payment_method, external_payment_url, external_payment_note,
             financial_aid_enabled, aid_questions, aid_intro, theme, theme_draft, is_verified,
-            show_committees, show_committee_counts, show_taken_countries
+            show_committees, show_committee_counts, show_taken_countries, listed_by, listing_meta
           `)
           .eq('slug', slug)
           .single();
@@ -1699,6 +1706,16 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
 
   // Derived
   const isOrganizer = user?.id === conference.organizer_id;
+  // A Gavelling listing (src/lib/listings.ts): a real conference we list from its own website.
+  // It shows only the Overview, "Visit their website" and "Claim it free" instead of Apply, no
+  // prices, no organiser email (it is our inbox), no secretariat, no reviews, and the Delegates
+  // stat only when the conference publishes its head count.
+  const isListing = isGavellingListing(conference);
+  const listingInfo = isListing ? listingMeta(conference) : null;
+  const pane: TabKey = isListing ? 'overview' : activeTab;
+  // A listing's images may be third party: drawn through our own route (src/lib/listingImage.ts).
+  const bannerSrc = conferenceImageSrc(conference, 'banner', conference.banner_url);
+  const logoSrc = conferenceImageSrc(conference, 'logo', conference.logo_url);
   const countryObj = getCountryByName((conference.country ?? "").trim());
   const flagUrl = countryObj ? getFlagUrl(countryObj.code) : null;
   const enabledRoles = roleConfigs.filter(r => r.is_enabled);
@@ -1858,10 +1875,10 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
           className="relative w-full overflow-hidden flex-shrink-0"
           style={{ height: 'clamp(392px, 44vw, 512px)' }}
         >
-          {conference.banner_url ? (
+          {bannerSrc ? (
             <>
               <img
-                src={conference.banner_url}
+                src={bannerSrc}
                 alt={conference.full_name}
                 style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }}
               />
@@ -1895,6 +1912,13 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
             </>
           )}
 
+          {/* A free city photo used as a listing's banner carries its credit (owner, 19 Oct 2026). */}
+          {isListing && bannerSrc && listingInfo?.banner_credit && (
+            <div className="absolute right-6 md:right-14 z-10" style={{ bottom: '52px', color: 'rgba(255,255,255,0.78)', textShadow: '0 1px 6px rgba(0,0,0,0.5)' }}>
+              <BannerCreditLine credit={listingInfo.banner_credit} />
+            </div>
+          )}
+
           {/* Top-right pills */}
           <div className="absolute right-6 md:right-14 flex gap-2 z-10" style={{ top: '84px' }}>
             <span
@@ -1919,10 +1943,10 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
           {/* Bottom-left content */}
           <div className="absolute bottom-0 left-0 right-0 px-6 md:px-14 z-10" style={{ paddingBottom: '68px' }}>
             <div className="flex items-end gap-5">
-              {conference.logo_url ? (
+              {logoSrc ? (
                 <div className="hidden sm:block relative flex-shrink-0" style={{ width: '150px', height: '150px' }}>
                   <LogoDisc
-                    src={conference.logo_url}
+                    src={logoSrc}
                     alt={conference.acronym}
                     size={150}
                     fallbackText={conference.acronym.slice(0, 3)}
@@ -1965,7 +1989,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                 <h1 style={{ fontFamily: "var(--font-brand), sans-serif", fontWeight: 900, color: 'white', fontSize: 'clamp(26px, 4vw, 54px)', lineHeight: 1.05, marginBottom: '10px', textShadow: '0 2px 24px rgba(0,0,0,0.3)' }}>
                   {conferenceFullNameLabel(conference)}
                   {/* Inline after the last word, so it rides the final line of a wrapped title instead of dropping beneath it. */}
-                  <VerifiedCheck verified={!!conference.is_verified} size={32} title="Verified conference" style={{ marginLeft: '0.3em', verticalAlign: '-0.08em', filter: 'drop-shadow(0 2px 6px rgba(0,0,0,0.35))' }} />
+                  <VerifiedCheck verified={!isListing && !!conference.is_verified} size={32} title="Verified conference" style={{ marginLeft: '0.3em', verticalAlign: '-0.08em', filter: 'drop-shadow(0 2px 6px rgba(0,0,0,0.35))' }} />
                 </h1>
                 <div className="flex items-center flex-wrap gap-x-4 gap-y-1.5">
                   <span className="flex items-center gap-2">
@@ -2021,7 +2045,13 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                   {/* Credit sponsored, beside the dates, so it is seen the
                       moment the page opens (the line under the price
                       medallion stays too). */}
-                  {creditSponsored && (
+                  {isListing && (
+                    <>
+                      <span aria-hidden style={{ color: 'rgba(238,217,138,0.5)', fontSize: '10px' }}>◆</span>
+                      <NotOnGavellingMark tone="dark" size="md" />
+                    </>
+                  )}
+                  {creditSponsored && !isListing && (
                     <>
                       <span aria-hidden style={{ color: 'rgba(238,217,138,0.5)', fontSize: '10px' }}>◆</span>
                       <span
@@ -2063,7 +2093,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
               {[
                 { icon: Monitor, gradient: NEU_GRADIENTS.forest, label: 'Format', value: capitalize(conference.format.replace('-', ' ')) },
                 { icon: GraduationCap, gradient: NEU_GRADIENTS.amber, label: 'Level', value: conference.student_level === 'school' ? 'High School' : capitalize(conference.student_level) },
-                ...(conference.expected_delegates > 0
+                ...(conference.expected_delegates > 0 && (!isListing || listingInfo?.delegates_known)
                   ? [{ icon: Users, gradient: NEU_GRADIENTS.green, label: 'Delegates', value: conference.expected_delegates.toLocaleString() }]
                   : []),
               ].map((cell) => (
@@ -2117,7 +2147,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
             <div className="flex-1 min-w-0">
 
               {/* Review prompt, attendees who haven't reviewed yet */}
-              {showReviewPrompt && (
+              {showReviewPrompt && !isListing && (
                 <div
                   className="relative flex items-center gap-4 rounded-[18px] px-5 py-4 mb-5"
                   style={{
@@ -2173,6 +2203,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                   a short forest underline. No band, no pill, not sticky, so
                   nothing ever scrolls under it. Same three destinations, same
                   state and URLs. */}
+              {!isListing && (
               <nav
                 ref={viewsRef}
                 aria-label="Conference views"
@@ -2189,7 +2220,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                   { key: 'participant' as const, label: 'You', icon: UserRound },
                   { key: 'reviews' as const, label: 'Reviews', icon: Star },
                 ]).map(({ key, label, icon: TabIcon }) => {
-                  const on = activeTab === key;
+                  const on = pane === key;
                   return (
                     <a
                       key={key}
@@ -2232,6 +2263,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                   );
                 })}
               </nav>
+              )}
 
               {/* Tab panes. Only the active one is mounted (as before), but the
                   swap is now a state change rather than a navigation, so the
@@ -2241,13 +2273,13 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                   slide from widening the page on a narrow screen. */}
               <div ref={paneRef} style={{ overflowX: 'clip' }}>
               <div
-                key={activeTab}
+                key={pane}
                 className={hasSwitchedTab ? 'conf-tab-pane' : undefined}
                 style={{ '--conf-slide-from': slideDir > 0 ? '26px' : '-26px' } as React.CSSProperties}
               >
 
               {/* About */}
-              {activeTab === 'overview' && (conference.description || isOrganizerViewer) && (
+              {pane === 'overview' && (conference.description || isOrganizerViewer) && (
                 <SectionCard className="mb-6 relative">
                   {isOrganizerViewer && conference.description && (
                     <OrganizerPencil
@@ -2279,11 +2311,11 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                   )}
                 </SectionCard>
               )}
-              {activeTab === 'overview' && aboutFallback}
+              {pane === 'overview' && aboutFallback}
 
 
               {/* Organiser */}
-              {activeTab === 'overview' && (
+              {pane === 'overview' && (
                 <SectionCard className="mb-6 relative">
                   {isOrganizerViewer && (
                     <OrganizerPencil
@@ -2300,9 +2332,9 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                     className="flex items-center gap-4"
                     style={{ backgroundColor: NEU.base, borderRadius: 16, boxShadow: NEU.inSm, padding: '14px 16px' }}
                   >
-                    {conference.logo_url && (
+                    {logoSrc && (
                       <LogoDisc
-                        src={conference.logo_url}
+                        src={logoSrc}
                         alt={conference.acronym}
                         size={80}
                         fallbackText={conference.acronym.slice(0, 3)}
@@ -2312,7 +2344,8 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                       <p className="font-semibold text-[15px]" style={{ color: 'var(--gv-on-surface)', fontFamily: "var(--font-brand), sans-serif", margin: 0 }}>{conference.full_name}</p>
                       <p className="text-[11px] mt-0.5" style={{ color: 'var(--gv-muted)', fontFamily: "var(--font-brand), sans-serif", fontWeight: 500, margin: 0 }}>{conferenceAcronymLabel(conference)}</p>
                       {/* Copies like the Apply card's email (18 Oct 2026). */}
-                      {conferenceContactEmails(conference.contact_email).map(address => (
+                      {/* A listing's contact_email is our own inbox: never shown as the organisers'. */}
+                      {(isListing ? [] : conferenceContactEmails(conference.contact_email)).map(address => (
                         <button
                           key={address}
                           type="button"
@@ -2412,7 +2445,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
               )}
 
               {/* The Secretariat, trigger-maintained public roster */}
-              {activeTab === 'overview' && (conference.display_secretariat?.length ?? 0) > 0 && (
+              {pane === 'overview' && !isListing && (conference.display_secretariat?.length ?? 0) > 0 && (
                 <SectionCard className="mb-6">
                   <p style={{ fontFamily: "var(--font-brand), sans-serif", fontWeight: 700, fontSize: '9px', letterSpacing: '0.14em', color: 'var(--gv-accent)', margin: '0 0 18px 0' }}>
                     THE SECRETARIAT
@@ -2458,7 +2491,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
               )}
 
               {/* Person tab, participant view */}
-              {activeTab === 'participant' && (
+              {pane === 'participant' && (
                 <>
                   {showPaymentConfirmation && confirmationApp && (
                     <div className="py-6 mb-2">
@@ -2538,7 +2571,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
               )}
 
               {/* Reviews tab */}
-              {activeTab === 'reviews' && (
+              {pane === 'reviews' && (
                 <div className="flex flex-col gap-6">
                   <SectionCard>
                     <p style={{ fontFamily: "var(--font-brand), sans-serif", fontWeight: 700, fontSize: '9px', letterSpacing: '0.14em', color: 'var(--gv-accent)', margin: '0 0 14px 0' }}>
@@ -2670,9 +2703,21 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                 on the wrong things, and on a tablet it squeezed the one-page
                 dashboard into a 280px column. Overview keeps it, and from xl
                 (where the dashboard has its sub-nav) it is unchanged. */}
-            <div className={`${activeTab === 'participant' && myApp && !isOrganizerViewer && !authLoading && !participantDataLoading ? 'hidden xl:block ' : ''}w-full md:w-[340px] md:flex-shrink-0 order-first md:order-none`}>
+            <div className={`${pane === 'participant' && myApp && !isOrganizerViewer && !authLoading && !participantDataLoading ? 'hidden xl:block ' : ''}w-full md:w-[340px] md:flex-shrink-0 order-first md:order-none`}>
               <div ref={railRef} className="flex flex-col gap-4 md:sticky md:top-3 lg:top-[84px]">
 
+                {/* A listing: "Visit their website" and "Claim it free" instead of Apply, and no prices
+                    (its roles are closed and its fees are not ours to show). */}
+                {isListing ? (
+                  <ListingCta
+                    fullName={conference.full_name}
+                    shortName={conferenceAcronymLabel(conference) || conference.full_name}
+                    slug={conference.slug}
+                    website_url={conference.website_url}
+                    instagram_url={conference.instagram_url}
+                    past={isPastListing(conference)}
+                  />
+                ) : (<>
                 {/* Apply CTA, always first */}
                 <div
                   className="relative rounded-[20px] p-6 overflow-hidden"
@@ -3100,6 +3145,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                     </>)}
                   </div>
                 </SectionCard>
+                </>)}
 
               </div>
             </div>
@@ -3107,7 +3153,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
 
               {/* The rest of Overview, full width below the two columns. Fades
                   rather than slides — see .conf-tab-fade in globals.css. */}
-              {activeTab === 'overview' && (
+              {pane === 'overview' && (
               <div className={hasSwitchedTab ? 'conf-tab-fade' : undefined}>
 
               {/* Committees, sortable horizontal slider */}
@@ -3765,6 +3811,9 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
 
               {overviewFooter}
 
+              {/* A listing says where its facts came from and how to fix them (owner, 19 Oct 2026). */}
+              {isListing && <ListingSourceNote meta={listingInfo} fullName={conference.full_name} slug={conference.slug} />}
+
               </div>
               )}
         </div>
@@ -3863,8 +3912,8 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                 >
                   {assetUploading ? (
                     <Loader size={48} />
-                  ) : conference.logo_url ? (
-                    <LogoDisc src={conference.logo_url} alt={conference.acronym} size={80} fallbackText={conference.acronym.slice(0, 3)} />
+                  ) : logoSrc ? (
+                    <LogoDisc src={logoSrc} alt={conference.acronym} size={80} fallbackText={conference.acronym.slice(0, 3)} />
                   ) : (
                     <Plus size={20} strokeWidth={2.2} style={{ color: 'var(--gv-muted)' }} />
                   )}

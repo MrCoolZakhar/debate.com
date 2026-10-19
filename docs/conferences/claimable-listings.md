@@ -1,6 +1,6 @@
 # Claimable Conference Listings: Plan
 
-Status: APPROVED with changes (Peter, 19 Oct 2026); being built. Draft SQL: `scratch-claimable-listings.sql`.
+Status: BUILT (19 Oct 2026). Database applied (migration `gavelling_listings`; `scratch-claimable-listings.sql`); the site side is in: the conference page ("Not on Gavelling yet", "Visit their website", "Claim it free" by email, the source line, the banner credit), Explore, hubs and /conferences/all marked, listing images through `/api/listing-image`, and /admin → Listings (hand over, hide, show again). Listings stay private until an owner turns `listings_live()` on. The data-model sections below (a separate `conference_listings` table, automatic claims) are superseded by the owner decisions and the applied design: a listing is a `conferences` row with `listed_by = 'gavelling'`.
 
 ## Owner decisions (19 Oct 2026), these override anything below
 

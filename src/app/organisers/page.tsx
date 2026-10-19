@@ -8,6 +8,7 @@ import { pageMetadata, SITE_URL, JSONLD_PUBLISHER } from '@/lib/seo';
 import SiteNav from '@/components/SiteNav';
 import SiteFooter from '@/components/SiteFooter';
 import { fetchListedConferences, fetchPlatformStats, isUpcoming } from '@/lib/listedConferences';
+import { isGavellingListing } from '@/lib/listings';
 import { conferenceTitle } from '@/app/conferences/in/ConferenceLinkList';
 
 // /organisers — the landing page for secretariats. Server-rendered, self
@@ -77,16 +78,18 @@ const COMPARISON: { label: string; typical: string; ours: string }[] = [
 export default async function OrganisersPage() {
   const [all, stats] = await Promise.all([fetchListedConferences(), fetchPlatformStats()]);
   // Named conferences: real public ones, verified first, then those with a
-  // logo, upcoming before past.
+  // logo, upcoming before past. Never a Gavelling listing (src/lib/listings.ts):
+  // it is not run on Gavelling, so it is no proof to an organiser.
   const named = [...all]
-    .filter(c => c.logo_url)
+    .filter(c => c.logo_url && !isGavellingListing(c))
     .sort((a, b) =>
       Number(!a.is_verified) - Number(!b.is_verified)
       || Number(!isUpcoming(a)) - Number(!isUpcoming(b))
       || (a.start_date ?? '').localeCompare(b.start_date ?? ''))
     .slice(0, 12);
-  const countries = stats?.countries ?? new Set(all.map(c => c.country)).size;
-  const total = stats?.total_conferences ?? all.length;
+  const onGavelling = all.filter(c => !isGavellingListing(c));
+  const countries = stats?.countries ?? new Set(onGavelling.map(c => c.country)).size;
+  const total = stats?.total_conferences ?? onGavelling.length;
 
   const schema = {
     '@context': 'https://schema.org',

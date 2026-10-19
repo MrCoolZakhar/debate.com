@@ -24,6 +24,8 @@ import {
 import ConferenceFacts from './ConferenceFacts';
 import ConferenceAbout, { ConferenceFaq } from './ConferenceAbout';
 import { buildConferenceAbout, conferenceFaqJsonLd, type AboutRole } from '@/lib/conferenceAbout';
+import { isGavellingListing, listingMeta } from '@/lib/listings';
+import { listingOutboundLink } from './ListingParts';
 
 // ISR (19 Oct 2026). Server-rendered shell only; the client always does its
 // own live fetch on mount (ConferenceDetailClient's fetchAll, unconditional)
@@ -68,6 +70,10 @@ interface ConfMeta {
   website_url: string | null;
   published_at: string | null;
   show_committees: boolean | null;
+  instagram_url: string | null;
+  /** 'gavelling' on a listing (src/lib/listings.ts): no roles, no fees, applications on their site. */
+  listed_by: string | null;
+  listing_meta: unknown;
 }
 
 
@@ -83,7 +89,7 @@ interface ConfMeta {
 const readConference = cache(async (slug: string): Promise<ConfMeta | null> => {
   const { data, error } = await supabase
     .from('conferences')
-    .select('id, fee_currency, full_name, acronym, description, banner_url, logo_url, city, country, start_date, end_date, is_public, format, dates_tbd, timezone, website_url, published_at, show_committees')
+    .select('id, fee_currency, full_name, acronym, description, banner_url, logo_url, city, country, start_date, end_date, is_public, format, dates_tbd, timezone, website_url, published_at, show_committees, instagram_url, listed_by, listing_meta')
     .eq('slug', slug)
     .maybeSingle();
   if (error) throw new Error(`Conference read failed: ${error.code ?? 'unknown'}`);
@@ -117,7 +123,8 @@ const CONFERENCE_COLUMNS = `
   instagram_url, facebook_url, tiktok_url, whatsapp_url, website_url,
   contact_email, organizer_id, min_age, max_age, allocation_swap_mode, display_secretariat,
   connect_onboarding_status, payment_method, external_payment_url, external_payment_note,
-  financial_aid_enabled, aid_questions, aid_intro, theme, theme_draft, is_verified
+  financial_aid_enabled, aid_questions, aid_intro, theme, theme_draft, is_verified,
+  listed_by, listing_meta
 `;
 
 export const getConferenceFull = cache(async (slug: string) => {
@@ -273,10 +280,15 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   const name = conf.full_name || conf.acronym || 'Conference';
   // Committees and the public delegate role are read for PUBLIC conferences
   // only (a private one is noindex and must not leak its set-up into HTML).
+  // A listing has no roles or fees of ours to describe (its roles are closed): no role read.
+  const listing = isGavellingListing(conf);
   const [committees, role] = conf.is_public
-    ? await Promise.all([getCommittees(conf.id), getDelegateRole(conf.id, conf.fee_currency)])
+    ? await Promise.all([
+        getCommittees(conf.id),
+        listing ? Promise.resolve({ price: TBD_PRICE as DelegatePrice, window: NO_WINDOW }) : getDelegateRole(conf.id, conf.fee_currency),
+      ])
     : [[], { price: TBD_PRICE as DelegatePrice, window: NO_WINDOW }];
-  const description = conferenceSeoDescription(conf, committees, role.price, role.window);
+  const description = conferenceSeoDescription(conf, committees, role.price, role.window, { listing });
   /* The share card is RENDERED, not the raw banner.
    
      Pointing og:image at the organiser's upload had two failure modes that
@@ -376,7 +388,11 @@ function eventSchema(
     },
   };
   const virtual = { '@type': 'VirtualLocation', url: website || pageUrl };
-  const images = [...new Set([conf.banner_url, conf.logo_url].filter((u): u is string => !!u).map((u) => absoluteUrl(u)))];
+  const listing = isGavellingListing(conf);
+  // A listing's banner may be a free city photo (it carries a credit): that is not the event's
+  // own picture, so only its own logo and banner are offered.
+  const listingBannerIsCityPhoto = listing && !!listingMeta(conf)?.banner_credit;
+  const images = [...new Set([listingBannerIsCityPhoto ? null : conf.banner_url, conf.logo_url].filter((u): u is string => !!u).map((u) => absoluteUrl(u)))];
   const availability = window.state === 'open'
     ? 'https://schema.org/InStock'
     : window.state === 'not_open'
@@ -424,7 +440,8 @@ function eventSchema(
     },
     // The delegate price, only once it is set (publicFees.ts): never a
     // guessed or stale number. validThrough is the delegate closing instant.
-    ...(price.kind !== 'tbd'
+    // Never an offer on a listing: it sells nothing on Gavelling.
+    ...(price.kind !== 'tbd' && !listing
       ? {
           offers: {
             '@type': 'Offer',
@@ -467,27 +484,38 @@ export default async function ConferenceDetailPage({ params }: { params: Promise
   // Server-fetched seed for the client view. Public rows only; null for a
   // private conference, which leaves the client's existing authed path intact.
   const full = conf?.is_public ? await getConferenceFull(slug) : null;
+  // A listing (src/lib/listings.ts): no role, fee or window is read or described, it applies on
+  // its own website, and its delegate count is a placeholder unless it publishes one.
+  const listing = isGavellingListing(conf);
+  const listingInfo = listing ? listingMeta(conf) : null;
+  const noRole = { price: TBD_PRICE as DelegatePrice, window: NO_WINDOW };
   const [committees, role, placeHubs, aboutRoles] = full
     ? await Promise.all([
         getCommittees((full as { id: string }).id),
-        getDelegateRole(conf.id, conf.fee_currency),
+        listing ? Promise.resolve(noRole) : getDelegateRole(conf.id, conf.fee_currency),
         getPlaceHubs(conf),
-        getAboutRoles(conf.id, conf.fee_currency),
+        listing ? Promise.resolve([] as AboutRole[]) : getAboutRoles(conf.id, conf.fee_currency),
       ])
     : [[], { price: TBD_PRICE as DelegatePrice, window: NO_WINDOW }, [] as Hub[], [] as AboutRole[]];
   const countryHub = placeHubs.find((h) => h.kind === 'country') ?? null;
   const onlineHub = placeHubs.find((h) => h.kind === 'online') ?? null;
   const typedCommittees = committees as { name: string; abbreviation: string | null; topics: unknown }[];
-  const description = conferenceSeoDescription(conf, typedCommittees, role.price, role.window);
+  const description = conferenceSeoDescription(conf, typedCommittees, role.price, role.window, { listing });
   const schema = full ? eventSchema(slug, conf, typedCommittees, role.price, role.window, description) : null;
   const breadcrumbs = full ? breadcrumbSchema(slug, conf, countryHub) : null;
-  const fullRow = full as { student_level?: string | null; expected_delegates?: number | null; min_age?: number | null; max_age?: number | null } | null;
+  const fullRowRaw = full as { student_level?: string | null; expected_delegates?: number | null; min_age?: number | null; max_age?: number | null } | null;
+  const fullRow = fullRowRaw && listing && !listingInfo?.delegates_known
+    ? { ...fullRowRaw, expected_delegates: null }
+    : fullRowRaw;
   // The About section (thin description) and the FAQ, built from the same
   // facts; the FAQ strings are also the FAQPage JSON-LD, word for word.
   // Committees the organiser hid from the page stay out of both.
   const about = full
     ? buildConferenceAbout(
-        { ...conf, slug, student_level: fullRow?.student_level, expected_delegates: fullRow?.expected_delegates, min_age: fullRow?.min_age, max_age: fullRow?.max_age },
+        {
+          ...conf, slug, student_level: fullRow?.student_level, expected_delegates: fullRow?.expected_delegates, min_age: fullRow?.min_age, max_age: fullRow?.max_age,
+          listing: listing ? { outboundUrl: listingOutboundLink(conf)?.href ?? null } : null,
+        },
         conf.show_committees === false ? [] : (committees as { name: string; abbreviation: string | null; topics: unknown; committee_type?: string | null }[]),
         aboutRoles,
       )
@@ -536,7 +564,7 @@ export default async function ConferenceDetailPage({ params }: { params: Promise
           <>
             <ConferenceFaq items={about.faq} />
             <ConferenceFacts
-              summary={conferenceSummary({ ...conf, student_level: fullRow?.student_level, expected_delegates: fullRow?.expected_delegates }, typedCommittees, role.price, role.window)}
+              summary={conferenceSummary({ ...conf, student_level: fullRow?.student_level, expected_delegates: fullRow?.expected_delegates }, typedCommittees, role.price, role.window, { listing })}
               links={hubLinks}
             />
           </>

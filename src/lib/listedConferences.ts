@@ -15,6 +15,7 @@ import { supabase } from '@/lib/supabase';
 import { fetchDelegatePrices, withDelegatePrice, type DelegatePrice } from '@/lib/publicFees';
 import { isListedConference } from '@/lib/publicConferences';
 import { fetchFeatured, type FeaturedRow } from '@/lib/spotlight';
+import { isGavellingListing } from '@/lib/listings';
 
 export interface ListedConference {
   id: string;
@@ -35,14 +36,18 @@ export interface ListedConference {
   is_verified: boolean;
   is_demo: boolean | null;
   updated_at: string | null;
+  /** 'gavelling' = a Gavelling listing (src/lib/listings.ts): not on Gavelling, no applications here. */
+  listed_by: string | null;
+  /** `conferences.listing_meta` (null on organiser rows); read it with `listingMeta()`. */
+  listing_meta: unknown;
   delegate_price: DelegatePrice;
   /** Delegate applications: 'open' now, 'not_open' yet (set up, opening later),
-   *  'closed', or 'disabled' (not set up). */
+   *  'closed', or 'disabled' (not set up). Always 'disabled' for a Gavelling listing. */
   window: 'open' | 'not_open' | 'closed' | 'disabled';
 }
 
 const COLUMNS =
-  'id, slug, full_name, acronym, city, country, start_date, end_date, dates_tbd, fee_amount, fee_currency, expected_delegates, logo_url, banner_url, format, is_verified, is_demo, updated_at';
+  'id, slug, full_name, acronym, city, country, start_date, end_date, dates_tbd, fee_amount, fee_currency, expected_delegates, logo_url, banner_url, format, is_verified, is_demo, updated_at, listed_by, listing_meta';
 
 export interface WindowRow {
   conference_id: string;
@@ -94,7 +99,8 @@ export async function fetchListedConferences(): Promise<ListedConference[]> {
     const now = Date.now();
     return rows.map(r => ({
       ...withDelegatePrice(r, prices),
-      window: windowState(windows.get(r.id), now),
+      // A listing never takes applications on Gavelling, whatever its role rows say.
+      window: isGavellingListing(r) ? 'disabled' as const : windowState(windows.get(r.id), now),
     }));
   } catch {
     return [];

@@ -59,6 +59,8 @@ import {
   type ExploreConference, type SpotlightItem,
 } from './ExploreFeed';
 import { isListedConference } from '@/lib/publicConferences';
+import { isGavellingListing } from '@/lib/listings';
+import { conferenceImageSrc } from '@/lib/listingImage';
 import { fetchFeatured, recordSpotlightClick, recordSpotlightView, type FeaturedRow, type SpotlightPlacement } from '@/lib/spotlight';
 import { PREVIEW_CLICK_HINT, SpotlightPreviewBar, previewFeaturedRow, useSpotlightPreview } from '@/lib/spotlightPreview';
 import { fetchCreditSponsoredIds } from '@/lib/creditSponsored';
@@ -318,7 +320,7 @@ export default function ConferencesExploreClient() {
       setLoading(true);
       const { data } = await supabase
         .from('conferences')
-        .select('id, slug, full_name, acronym, country, city, start_date, end_date, dates_tbd, expected_delegates, fee_amount, fee_currency, format, student_level, logo_url, banner_url, is_public, is_verified, organizer_id, is_demo')
+        .select('id, slug, full_name, acronym, country, city, start_date, end_date, dates_tbd, expected_delegates, fee_amount, fee_currency, format, student_level, logo_url, banner_url, is_public, is_verified, organizer_id, is_demo, listed_by, listing_meta')
         .eq('is_public', true)
         .order('start_date', { ascending: true });
       // Test and demo conferences are never listed (src/lib/publicConferences.ts).
@@ -334,7 +336,9 @@ export default function ConferencesExploreClient() {
       // Credit sponsored and the Explore Spotlight row, in the background.
       void fetchCreditSponsoredIds().then(setSponsoredIds);
       void fetchFeatured(supabase, 'explore', '').then(rows => {
-        const booked = rows.filter(r => r.is_spotlight);
+        // A Gavelling listing (src/lib/listings.ts) is never a spotlight, whatever a row says.
+        const listingIds = new Set(confs.filter(isGavellingListing).map(c => c.id));
+        const booked = rows.filter(r => r.is_spotlight && !listingIds.has(r.conference_id));
         setExploreSpots(booked);
         // The Conference Spotlight pop-up, once per site visit, only when a
         // booking is live today.
@@ -513,12 +517,14 @@ export default function ConferencesExploreClient() {
     if (!matchesFormat(c.format, formatFilter)) return false;
     if (!matchesLevel(c.student_level, levelFilter)) return false;
     // Open applications, price and dates, AND across groups like the rest.
-    const facet = facets.get(c.id);
+    // A Gavelling listing takes no applications on Gavelling and has no price here: it is given
+    // no facet, so it never matches a role or price filter (and matches when none is set).
+    const facet = isGavellingListing(c) ? undefined : facets.get(c.id);
     if (!matchesRoles(facet, roleFilter)) return false;
     if (!matchesPrice(facet, priceFilter)) return false;
     if (!matchesDateBucket(c.start_date, dateFilter)) return false;
     if (!matchesDateRange(c.start_date, dateFrom, dateTo)) return false;
-    if (sponsoredFilter && !sponsoredIds.has(c.id)) return false;
+    if (sponsoredFilter && (isGavellingListing(c) || !sponsoredIds.has(c.id))) return false;
     return true;
   }), [conferences, searchQuery, formatFilter, levelFilter, facets, roleFilter, priceFilter, dateFilter, dateFrom, dateTo, sponsoredFilter, sponsoredIds]);
 
@@ -596,7 +602,7 @@ export default function ConferencesExploreClient() {
       const label = conferenceAcronymLabel(c) || c.full_name;
       const place = [c.city?.trim(), c.country?.trim()].filter(Boolean).join(', ');
       const sub = [label !== c.full_name ? c.full_name : '', place].filter(Boolean).join(' · ');
-      out.push({ id: c.id, slug: c.slug, label, sub, logo_url: c.logo_url });
+      out.push({ id: c.id, slug: c.slug, label, sub, logo_url: conferenceImageSrc(c, 'logo', c.logo_url) });
       if (out.length >= 4) break;
     }
     return out;
@@ -695,7 +701,8 @@ export default function ConferencesExploreClient() {
     const out: SpotlightItem[] = [];
     const seen = new Set<string>();
     const push = (r: FeaturedRow, conf: Conference | undefined) => {
-      if (!conf || seen.has(conf.id)) return;
+      // Never a Gavelling listing: it cannot be booked, and no path may draw it as a spotlight.
+      if (!conf || seen.has(conf.id) || isGavellingListing(conf)) return;
       seen.add(conf.id);
       out.push({ conf, spot: r });
     };

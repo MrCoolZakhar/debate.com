@@ -232,6 +232,9 @@ export function conferenceSeoDescription(
   committees: readonly CommitteeLite[],
   price: DelegatePrice,
   w: DelegateWindow,
+  /** A Gavelling listing (src/lib/listings.ts): it takes no applications or fees on Gavelling, so
+   *  the description never mentions either and says it applies on its own website. */
+  opts?: { listing?: boolean },
 ): string {
   const says = SAYS_MUN.test(`${tidy(c.acronym)} ${tidy(c.full_name)}`);
   const name = nameForSentence(c);
@@ -240,12 +243,16 @@ export function conferenceSeoDescription(
   const add = (s: string) => {
     if (s && `${out} ${s}`.length <= DESCRIPTION_MAX) out = `${out} ${s}`;
   };
-  add(delegateWindowSentence(c, w));
-  if (!over) add(delegateFeeSentence(price));
+  if (opts?.listing) {
+    if (!over) add('Applications on its own website.');
+  } else {
+    add(delegateWindowSentence(c, w));
+    if (!over) add(delegateFeeSentence(price));
+  }
   // The most committees that still fit, named; else the bare count.
   const sentence = [2, 1, 0].map((k) => committeesSentence(committees, k)).find((s) => s && `${out} ${s}`.length <= DESCRIPTION_MAX);
   if (sentence) add(sentence);
-  if (!over && w.state === 'open') add('Apply on Gavelling.');
+  if (!over && !opts?.listing && w.state === 'open') add('Apply on Gavelling.');
   return out;
 }
 
@@ -260,6 +267,8 @@ export function conferenceSummary(
   committees: readonly CommitteeLite[],
   price: DelegatePrice,
   w: DelegateWindow,
+  /** A Gavelling listing: no window or fee sentence; it applies on its own website. */
+  opts?: { listing?: boolean },
 ): string {
   const says = SAYS_MUN.test(`${tidy(c.acronym)} ${tidy(c.full_name)}`);
   const parts: string[] = [`${nameForSentence(c)}${says ? '' : ', a Model UN conference,'} ${whereAndWhen(c)}.`];
@@ -283,6 +292,10 @@ export function conferenceSummary(
     }).filter(Boolean);
     const list = labels.length === 1 ? labels[0] : `${labels.slice(0, -1).join(', ')} and ${labels[labels.length - 1]}`;
     parts.push(`${committees.length === 1 ? 'Its committee is' : `Its ${committees.length} committees are`} ${list}.`);
+  }
+  if (opts?.listing) {
+    if (!hasConcluded(c)) parts.push('It takes applications on its own website, not on Gavelling.');
+    return parts.join(' ');
   }
   const window = delegateWindowSentence(c, w);
   if (window) parts.push(window);

@@ -3,6 +3,8 @@ import { formatConferenceDates, hasNoDates } from '@/lib/conferenceDates';
 import type { ListedConference } from '@/lib/listedConferences';
 import type { CountryHub } from '@/lib/countryHubs';
 import { conferenceTitle } from '../in/ConferenceLinkList';
+import { isGavellingListing } from '@/lib/listings';
+import { NOT_ON_GAVELLING } from '@/components/conferences/NotOnGavellingMark';
 
 // The bottom of /conferences/explore: every upcoming conference as a plain,
 // server-rendered <a href> (name, city and country, dates), then the country
@@ -35,9 +37,10 @@ function DirectoryItem({ c, withDates }: { c: ListedConference; withDates: boole
         {c.full_name && c.full_name !== title && (
           <span className="block [overflow-wrap:anywhere]" style={{ fontSize: 12.5, color: INK_SOFT, lineHeight: 1.35 }}>{c.full_name}</span>
         )}
-        {(place || dates) && (
+        {(place || dates || isGavellingListing(c)) && (
           <span className="block" style={{ fontSize: 12.5, color: INK_SOFT, lineHeight: 1.4, marginTop: 2, fontVariantNumeric: 'tabular-nums' }}>
-            {[place, dates].filter(Boolean).join(' · ')}
+            {/* A Gavelling listing (src/lib/listings.ts) says so in plain text. */}
+            {[place, dates, isGavellingListing(c) ? NOT_ON_GAVELLING : ''].filter(Boolean).join(' · ')}
           </span>
         )}
       </Link>
@@ -65,9 +68,12 @@ export default function ExploreDirectory({ conferences, hubs }: { conferences: L
         All Upcoming Conferences
       </h2>
       <p style={{ margin: '6px 0 16px', fontSize: 14.5, lineHeight: 1.55, color: INK_SOFT, maxWidth: 640 }}>
-        {dated.length > 0
-          ? `${dated.length} Model UN conferences you can apply to on Gavelling, soonest first.`
-          : 'Model UN conferences you can apply to on Gavelling.'}
+        {/* Listings are here but not on Gavelling yet: with any of them, the line no longer says "apply on Gavelling". */}
+        {conferences.some(c => isGavellingListing(c))
+          ? (dated.length > 0 ? `${dated.length} upcoming Model UN conferences, soonest first.` : 'Upcoming Model UN conferences.')
+          : dated.length > 0
+            ? `${dated.length} Model UN conferences you can apply to on Gavelling, soonest first.`
+            : 'Model UN conferences you can apply to on Gavelling.'}
       </p>
       {dated.length > 0 && (
         <ul className="gv-explore-dir" style={LIST_CARD}>

@@ -6,6 +6,7 @@ import { pageMetadata, SITE_URL } from '@/lib/seo';
 import { fetchListedConferences, type ListedConference } from '@/lib/listedConferences';
 import { hubPath, HUB_INDEX_PATH, isRecentOn, isUpcomingOn, MONTH_NAMES, resolveHub, todayUtc, type Hub } from '@/lib/countryHubs';
 import { getCountryByName } from '@/lib/countries';
+import { isGavellingListing } from '@/lib/listings';
 import ConferenceLinkList, { conferenceTitle } from '../ConferenceLinkList';
 import {
   Breadcrumbs, breadcrumbSchema, countPhrase, H2, HubGrid, HubShell, HubTitle, INLINE_LINK, INK_SOFT, JsonLd, Lead, RectFlag, sayList,
@@ -101,8 +102,11 @@ function pageTitle(hub: Hub, upcoming: ListedConference[], today: string): strin
 /** The server-written paragraph of facts. Plain sentences, no em dashes. */
 function intro(hub: Hub, upcoming: ListedConference[], past: ListedConference[]): string[] {
   const out: string[] = [];
-  const open = upcoming.filter(c => c.window === 'open').length;
-  const free = upcoming.filter(c => c.delegate_price.kind === 'free').length;
+  // Gavelling listings (src/lib/listings.ts) count as conferences, never as taking applications
+  // on Gavelling or as free: their window and price are not ours to state.
+  const onGavelling = upcoming.filter(c => !isGavellingListing(c));
+  const open = onGavelling.filter(c => c.window === 'open').length;
+  const free = onGavelling.filter(c => c.delegate_price.kind === 'free').length;
   const online = upcoming.filter(c => c.format === 'online').length;
   const hybrid = upcoming.filter(c => c.format === 'hybrid').length;
   const months = monthsOf(upcoming);
@@ -151,8 +155,16 @@ function intro(hub: Hub, upcoming: ListedConference[], past: ListedConference[])
   }
   if (openLine) out.push(openLine);
   if (freeLine) out.push(freeLine);
-  out.push('Each conference page has the committees, dates and delegate fees, and you apply as a delegate, chair or faculty advisor with one Gavelling profile.');
+  out.push(applyLine([...upcoming, ...past]));
   return out;
+}
+
+/** How people apply, true for every conference on the page: listings are not on Gavelling yet. */
+function applyLine(confs: ListedConference[]): string {
+  const listings = confs.filter(c => isGavellingListing(c)).length;
+  if (listings === 0) return 'Each conference page has the committees, dates and delegate fees, and you apply as a delegate, chair or faculty advisor with one Gavelling profile.';
+  if (listings === confs.length) return 'These conferences are not on Gavelling yet: each page has the committees and dates, and you apply on the conference\'s own website.';
+  return 'Each conference page has the committees and dates. Conferences marked Not on Gavelling yet take applications on their own website; on the others you apply as a delegate, chair or faculty advisor with one Gavelling profile.';
 }
 
 /** The hubs this one links to: neighbours first, then the date and online hubs. */
@@ -186,7 +198,8 @@ export async function generateMetadata({ params }: { params: Promise<{ hub: stri
   const lines = intro(hub, upcoming, past);
   return pageMetadata({
     title: pageTitle(hub, upcoming, today),
-    description: `${(lines[0] + (lines[1] && lines[0].length + lines[1].length < 200 ? ` ${lines[1]}` : ''))} See dates, cities and delegate fees, then apply on Gavelling.`,
+    description: `${(lines[0] + (lines[1] && lines[0].length + lines[1].length < 200 ? ` ${lines[1]}` : ''))} ${
+      [...upcoming, ...past].some(c => !isGavellingListing(c)) ? 'See dates, cities and delegate fees, then apply on Gavelling.' : 'See dates, cities and committees.'}`,
     path: hubPath(hub.slug),
     // A hub with nothing upcoming answers, but stays out of search.
     ...(hub.indexable ? {} : { robots: { index: false, follow: true } }),

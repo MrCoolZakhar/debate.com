@@ -24,6 +24,9 @@ import { TBD_PRICE, type DelegatePrice } from '@/lib/publicFees';
 import type { FeaturedRow } from '@/lib/spotlight';
 import { ROLE_OPTIONS, parseDateOnly, type ConferenceFacet } from './exploreFilters';
 import { DuoIcon } from './ExploreChrome';
+import { isGavellingListing } from '@/lib/listings';
+import { conferenceImageSrc } from '@/lib/listingImage';
+import { NotOnGavellingMark } from '@/components/conferences/NotOnGavellingMark';
 
 const FONT = "var(--font-brand), sans-serif";
 const INK = '#1C1410';
@@ -54,6 +57,11 @@ export interface ExploreConference {
   is_public: boolean;
   is_verified?: boolean;
   organizer_id: string | null;
+  /** 'gavelling' = a Gavelling listing (src/lib/listings.ts): marked "Not on Gavelling yet", no
+   *  price, no open roles, never a spotlight, images through conferenceImageSrc. */
+  listed_by?: string | null;
+  /** `conferences.listing_meta`; read with `listingMeta()`. */
+  listing_meta?: unknown;
 }
 
 /** The soft 3D white surface the owner loves, on the ivory ground. */
@@ -380,26 +388,29 @@ function DateBlock({ start }: { start: string | null }) {
 
 function RowThumb({ conf }: { conf: ExploreConference }) {
   const [p0, p1] = paleFor(conf.acronym);
+  // A listing's third-party image comes through our origin (src/lib/listingImage.ts).
+  const banner = conferenceImageSrc(conf, 'banner', conf.banner_url);
+  const logo = conferenceImageSrc(conf, 'logo', conf.logo_url);
   return (
     <div className="gv-row-thumb" style={{ position: 'relative', flexShrink: 0 }}>
       <div
         style={{
           position: 'absolute', inset: 0, borderRadius: 14, overflow: 'hidden',
-          background: conf.banner_url ? '#EFEBE3' : `linear-gradient(135deg, ${p0} 0%, ${p1} 100%)`,
+          background: banner ? '#EFEBE3' : `linear-gradient(135deg, ${p0} 0%, ${p1} 100%)`,
           boxShadow: '0 0 0 1px rgba(27,56,40,0.06), 0 3px 10px rgba(27,56,40,0.10)',
         }}
       >
-        {conf.banner_url ? (
-          <img src={conf.banner_url} alt="" loading="lazy" decoding="async" className="gv-row-img" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+        {banner ? (
+          <img src={banner} alt="" loading="lazy" decoding="async" className="gv-row-img" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
         ) : (
           <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <LogoDisc src={conf.logo_url} alt={conf.acronym} size={72} fallbackText={initialsOf(conf)} style={{ border: '2px solid #FFFFFF' }} />
+            <LogoDisc src={logo} alt={conf.acronym} size={72} fallbackText={initialsOf(conf)} style={{ border: '2px solid #FFFFFF' }} />
           </div>
         )}
       </div>
-      {conf.banner_url && (
+      {banner && (
         <div className="gv-row-logo" style={{ position: 'absolute', left: -8, bottom: -10, zIndex: 1 }}>
-          <LogoDisc src={conf.logo_url} alt={conf.acronym} size={64} fallbackText={initialsOf(conf)} style={{ border: '2px solid #FFFFFF', boxShadow: '0 3px 8px rgba(16,28,21,0.20)' }} />
+          <LogoDisc src={logo} alt={conf.acronym} size={64} fallbackText={initialsOf(conf)} style={{ border: '2px solid #FFFFFF', boxShadow: '0 3px 8px rgba(16,28,21,0.20)' }} />
         </div>
       )}
     </div>
@@ -444,6 +455,8 @@ function FeedRow({
   const FormatIcon = FORMAT_GLYPHS[conf.format];
   const levelWord = LEVEL_WORDS[conf.student_level];
   const LevelIcon = LEVEL_GLYPHS[conf.student_level];
+  // A Gavelling listing: the mark in the price's place, no open roles line.
+  const listing = isGavellingListing(conf);
   return (
     <Link href={`/conferences/${conf.slug}`} className="gv-row focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#1B3828]" style={{ fontFamily: FONT }}>
       <DateBlock start={conf.start_date} />
@@ -477,17 +490,17 @@ function FeedRow({
               {levelWord}
             </span>
           )}
-          <OpenRoles facet={facet} facetsLoaded={facetsLoaded} />
+          {!listing && <OpenRoles facet={facet} facetsLoaded={facetsLoaded} />}
         </p>
         {/* Phones: the price rides under the facts */}
         <div className="gv-row-inline flex items-center flex-wrap" style={{ marginTop: 10, columnGap: 12, rowGap: 4 }}>
-          <PriceLine price={conf.delegate_price} size={15} />
+          {listing ? <NotOnGavellingMark size="xs" /> : <PriceLine price={conf.delegate_price} size={15} />}
           {creditSponsored && <CreditSponsoredMark size="xs" />}
           <ViewerState applied={applied} member={member} />
         </div>
       </div>
       <div className="gv-row-side flex-col items-end" style={{ gap: 6, textAlign: 'right', paddingTop: 2 }}>
-        <PriceLine price={conf.delegate_price} size={16} />
+        {listing ? <NotOnGavellingMark size="xs" /> : <PriceLine price={conf.delegate_price} size={16} />}
         {creditSponsored && <CreditSponsoredMark size="xs" />}
         <ViewerState applied={applied} member={member} />
       </div>
