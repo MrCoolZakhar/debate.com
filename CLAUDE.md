@@ -257,6 +257,7 @@ Client constants:
 
 - `scratch-awards-setup.sql`: an unapplied draft enforcing the awards gate in the chair INSERT policy and `submit_committee_awards`. Owners decide.
 - `scratch-tbd-public.sql`: the commented UPDATE publishing existing never-published TBD conferences. Owners' call, not run.
+- `scratch-study-guides-storage.sql`: the `study-guides` bucket lets ANY signed-in account upload, overwrite, delete and list every conference's files; the draft limits writes and listing to the conference's organisers (same test as the `study_guides` table), public-URL reads unchanged, no client change. Apply soon (owners).
 - `scratch-delegations-rebuild.sql`: the delegations rebuild's database side (role moves, remove, open seats, placing, organiser seat grants with the seat limit, committee roster, member seats, leader papers, delegation money, chair names). Not applied; its `DECISION NEEDED (Christian)` blocks need answers first. Then flip both `DELEGATIONS_V2_DB`.
 - Cron `paid-announcements`: not scheduled; nothing reaches recipients until it is. Schedule after the first approval in /admin (commented in `scratch-paid-announcements.sql`). Owners.
 - Cron `conference-draft-reminders` (`queue_conference_draft_reminders(false)`): not scheduled; needs Peter's go.
