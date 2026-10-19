@@ -63,3 +63,6 @@ Taste board: https://claude.ai/artifact/CAVUg2YLKyTj5Y6yuVmLup
 - Leader's card: **1A, the roster** ("definitely 1A is the best"), with bigger person circles, round crests, cards that lift like Airbnb, a Financials section (fees paid by kind, members who owe, left to pay, Pay / Add or remove spots / Receipts) and every open seat listed in columns (flag + country, committee logo + name, no invite links).
 - Organiser: **2B, the table with meters** ("love this honestly"), names larger.
 - Every country shows its flag and every committee its logo, everywhere. Clicking a member's committee opens that committee (its roster of countries and names).
+- The leader's card lives in the conference page's **You** view (`ConferenceDetailClient` switcher Overview / You / Reviews → `ParticipantView`'s left sub-nav → the Delegation section), never a page of its own.
+- The delegation pop-up's People tab (3B) stays as drawn. The Seats tab (3A) is one-tap: the progress of paid spots seated, ONE suggested set of countries that fits exactly, then countries with their free committees and "Give N", plus a link to the allocation page.
+- The allocation page (3C): pick a delegation on the left (each shows paid spots still needing a seat), tap free seats in a countries × committees grid, "Give row" fills a country, tapping again takes a seat back; double seats count as 2.
