@@ -2,7 +2,7 @@
 
 import { openAuth } from '@/lib/authModal';
 import { PayLink } from './participant/PaymentsLocked';
-import { Fragment, useEffect, useState, useRef, useCallback } from 'react';
+import { Fragment, useEffect, useLayoutEffect, useState, useRef, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Globe, MessageCircle, Music, Users, GraduationCap, Monitor, Mail, Landmark, ChevronDown, ChevronLeft, ChevronRight, Check, Circle, X, Plus, ArrowUp, ArrowDown, ArrowUpDown, Star, LayoutDashboard, UserRound, CreditCard, Languages, Cake, Clock, CheckCircle2, Hourglass, XCircle, MinusCircle } from 'lucide-react';
@@ -772,6 +772,23 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
   // scroll-margin is 84px from lg, where the pill exists), never on the pane:
   // landing the pane at the top left the bar sitting under the pill.
   const viewsRef = useRef<HTMLElement | null>(null);
+  // The segmented switcher's sliding white segment, measured from the active
+  // tab (owner, 19 Oct 2026: the plain text tabs did not read as sections).
+  const [viewsThumb, setViewsThumb] = useState<{ left: number; width: number } | null>(null);
+  useLayoutEffect(() => {
+    const nav = viewsRef.current;
+    if (!nav) return;
+    const measure = () => {
+      const on = nav.querySelector<HTMLElement>('[aria-current="page"]');
+      if (!on) return;
+      setViewsThumb((prev) => (prev && prev.left === on.offsetLeft && prev.width === on.offsetWidth
+        ? prev : { left: on.offsetLeft, width: on.offsetWidth }));
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(nav);
+    return () => ro.disconnect();
+  });
 
   const tabHref = useCallback((tab: TabKey, role: string | null) => {
     if (tab === 'reviews') return `/conferences/${slug}/reviews`;
@@ -896,6 +913,20 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+  // Someone who has applied lands on You (owner, 19 Oct 2026): once their
+  // applications are read, a plain visit to the landing URL opens their
+  // dashboard in place. Once per visit, never after the reader picked a tab,
+  // never for the organising team or on a ?tab= link.
+  const autoYouDoneRef = useRef(false);
+  useEffect(() => {
+    if (autoYouDoneRef.current || participantDataLoading) return;
+    if (initialView !== 'overview' || hasSwitchedTab || activeTabRef.current !== 'overview') return;
+    if (new URLSearchParams(window.location.search).has('tab')) return;
+    autoYouDoneRef.current = true;
+    if (myApplications.length === 0 || organizerRole || (!!user && user.id === conference?.organizer_id)) return;
+    showTab('participant', null, 'replace');
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [participantDataLoading, myApplications]);
   // Perceived-perf: warm the apply route's JS chunk + loading UI so the "Apply"
   // CTA (which navigates via router.push) feels instant. Prefetch is a no-op in
   // dev and safe/idempotent in prod; does not change any data semantics.
@@ -1756,6 +1787,11 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
 
   // Role-aware sidebar state
   const isOrganizerViewer = !!organizerRole || isOrganizer;
+  // The rail rides up over the banner beside the stat tiles (owner, 19 Oct
+  // 2026). Where it is hidden (below xl on an applicant's You tab) the tiles
+  // keep the full width instead of leaving an empty band.
+  const railHiddenBelowXl = pane === 'participant' && !!myApplications[0] && !isOrganizerViewer && !authLoading && !participantDataLoading;
+  const railBesideHero = !railHiddenBelowXl;
 
   // The three public-page visibility switches (Settings → Conference →
   // "What people can see"). An organiser sees everything on their own page,
@@ -1919,26 +1955,6 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
             </div>
           )}
 
-          {/* Top-right pills */}
-          <div className="absolute right-6 md:right-14 flex gap-2 z-10" style={{ top: '84px' }}>
-            <span
-              style={{
-                fontFamily: "var(--font-brand), sans-serif",
-                fontWeight: 700,
-                fontSize: '10px',
-                letterSpacing: '0.12em',
-                color: 'white',
-                backgroundColor: 'rgba(16,28,21,0.4)',
-                backdropFilter: 'blur(10px)',
-                WebkitBackdropFilter: 'blur(10px)',
-                border: '1px solid rgba(255,255,255,0.18)',
-                padding: '5px 14px',
-                borderRadius: '9999px',
-              }}
-            >
-              {conference.format.toUpperCase().replace('-', ' ')}
-            </span>
-          </div>
 
           {/* Bottom-left content */}
           <div className="absolute bottom-0 left-0 right-0 px-6 md:px-14 z-10" style={{ paddingBottom: '68px' }}>
@@ -2082,8 +2098,8 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
 
         {/* ── Neu stat strip, three soft tiles overlapping the hero ──── */}
         <div className="relative z-20 px-6 md:px-14" style={{ marginTop: '-44px' }}>
-          <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
-            <div className="grid grid-cols-3 gap-2 sm:gap-4">
+          <div style={{ maxWidth: '1200px', margin: '0 auto' }} className={railBesideHero ? 'md:pr-[372px]' : undefined}>
+            <div className="grid grid-cols-3 gap-2 sm:gap-3">
               {/* Dates + location live in the hero overlay (flag, city, date
                   range), only facts NOT already shown above appear here.
                   Each fact is its own extruded neu tile. On phones the tiles
@@ -2096,13 +2112,14 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                 ...(conference.expected_delegates > 0 && (!isListing || listingInfo?.delegates_known)
                   ? [{ icon: Users, gradient: NEU_GRADIENTS.green, label: 'Delegates', value: conference.expected_delegates.toLocaleString() }]
                   : []),
-              ].map((cell) => (
+              ].map((cell, i) => (
                 <div
                   key={cell.label}
-                  className="flex flex-col sm:flex-row items-center sm:items-center gap-1.5 sm:gap-3.5 text-center sm:text-left px-1.5 py-2.5 sm:px-4 sm:py-3.5"
+                  className="conf-rise flex flex-col sm:flex-row items-center sm:items-center gap-1.5 sm:gap-3 text-center sm:text-left px-1.5 py-2 sm:px-3.5 sm:py-2.5"
                   style={{
+                    animationDelay: `${i * 60}ms`,
                     backgroundColor: NEU.surface,
-                    borderRadius: 18,
+                    borderRadius: 16,
                     boxShadow: NEU.outSm,
                     minWidth: 0,
                   }}
@@ -2111,7 +2128,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                     <NeuIconDisc gradient={cell.gradient} icon={cell.icon} size={30} />
                   </span>
                   <span className="hidden sm:block">
-                    <NeuIconDisc gradient={cell.gradient} icon={cell.icon} size={46} />
+                    <NeuIconDisc gradient={cell.gradient} icon={cell.icon} size={38} />
                   </span>
                   <div className="min-w-0">
                     <p
@@ -2124,7 +2141,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                       {cell.label}
                     </p>
                     <p
-                      className="text-[12px] sm:text-[16px] font-extrabold leading-tight"
+                      className="text-[12px] sm:text-[15px] font-extrabold leading-tight"
                       style={{ color: NEU.ink, fontFamily: "var(--font-brand), sans-serif", fontVariantNumeric: 'tabular-nums', margin: 0 }}
                     >
                       {cell.value}
@@ -2137,7 +2154,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
         </div>
 
         {/* ── Main content ───────────────────────────────────────────── */}
-        <div style={{ maxWidth: '1200px', margin: '0 auto', width: '100%', isolation: 'isolate' }} className="relative px-6 md:px-14 pt-10 pb-14 flex-1">
+        <div style={{ maxWidth: '1200px', margin: '0 auto', width: '100%', isolation: 'isolate', zIndex: 21 }} className="relative px-6 md:px-14 pt-5 pb-14 flex-1">
           {/* No decorative glyphs here (owner, 18 Oct 2026: the faded gavel
               and scroll behind the columns read as random floating icons on a
               phone, peeking out wherever the cards left a gap). */}
@@ -2208,9 +2225,26 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                 ref={viewsRef}
                 aria-label="Conference views"
                 data-conference-views=""
-                className="flex items-end gap-6 sm:gap-8 mb-7 scroll-mt-3 lg:scroll-mt-[84px]"
-                style={{ borderBottom: '1px solid color-mix(in srgb, var(--gv-main) 10%, transparent)' }}
+                className="relative inline-flex items-center gap-1 mb-5 scroll-mt-3 lg:scroll-mt-[84px] max-w-full"
+                style={{
+                  padding: 5, borderRadius: 16,
+                  backgroundColor: 'color-mix(in srgb, var(--gv-main) 7%, transparent)',
+                  boxShadow: 'inset 0 1px 2px color-mix(in srgb, var(--gv-main) 10%, transparent)',
+                }}
               >
+                {/* The white segment slides to the active view. */}
+                {viewsThumb && (
+                  <span
+                    aria-hidden
+                    style={{
+                      position: 'absolute', top: 5, bottom: 5, left: 0,
+                      width: viewsThumb.width, transform: `translateX(${viewsThumb.left}px)`,
+                      borderRadius: 12, backgroundColor: '#FFFFFF',
+                      boxShadow: '0 1px 2px rgba(27,56,40,0.10), 0 4px 12px rgba(27,56,40,0.10)',
+                      transition: `transform 320ms ${EASE}, width 320ms ${EASE}`,
+                    }}
+                  />
+                )}
                 {/* Real anchors, so the view a visitor is on is still copyable,
                     middle-clickable and openable in a new tab, but a plain
                     left click is handled in place by showTab and never
@@ -2233,32 +2267,23 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                       aria-current={on ? 'page' : undefined}
                       onMouseEnter={(e) => { if (!on) (e.currentTarget as HTMLElement).style.color = 'var(--gv-on-surface)'; }}
                       onMouseLeave={(e) => { if (!on) (e.currentTarget as HTMLElement).style.color = '#6B5F52'; }}
-                      className="relative inline-flex items-center gap-2 rounded-md focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[#B6871F]"
+                      className="relative inline-flex items-center gap-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] active:scale-[0.97]"
                       style={{
-                        minHeight: 48, padding: '0 2px',
+                        minHeight: 40, padding: '0 18px', borderRadius: 12,
+                        backgroundColor: on && !viewsThumb ? '#FFFFFF' : 'transparent',
                         color: on ? 'var(--gv-on-surface)' : '#6B5F52',
-                        fontFamily: "var(--font-brand), sans-serif", fontSize: 15, fontWeight: on ? 800 : 600,
-                        textDecoration: 'none',
-                        transition: `color 180ms ${EASE}`,
+                        fontFamily: "var(--font-brand), sans-serif", fontSize: 14.5, fontWeight: on ? 800 : 600,
+                        textDecoration: 'none', whiteSpace: 'nowrap',
+                        transition: `color 180ms ${EASE}, transform 120ms ${EASE}`,
                       }}
                     >
                       <TabIcon
-                        size={18}
+                        size={17}
                         strokeWidth={2.1}
                         aria-hidden
-                        style={{ color: on ? 'var(--gv-main)' : 'currentColor', fill: on ? 'color-mix(in srgb, var(--gv-on-main) 55%, transparent)' : 'none' }}
+                        style={{ color: on ? 'var(--gv-main)' : 'currentColor', transition: `color 180ms ${EASE}` }}
                       />
                       {label}
-                      {/* The short underline, sitting on the row's hairline. */}
-                      <span
-                        aria-hidden
-                        style={{
-                          position: 'absolute', left: '50%', bottom: -1, height: 3, borderRadius: 3,
-                          width: on ? 28 : 0, transform: 'translateX(-50%)',
-                          backgroundColor: 'var(--gv-main)',
-                          transition: `width 220ms ${EASE}`,
-                        }}
-                      />
                     </a>
                   );
                 })}
@@ -2703,7 +2728,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                 on the wrong things, and on a tablet it squeezed the one-page
                 dashboard into a 280px column. Overview keeps it, and from xl
                 (where the dashboard has its sub-nav) it is unchanged. */}
-            <div className={`${pane === 'participant' && myApp && !isOrganizerViewer && !authLoading && !participantDataLoading ? 'hidden xl:block ' : ''}w-full md:w-[340px] md:flex-shrink-0 order-first md:order-none`}>
+            <div className={`${railHiddenBelowXl ? 'hidden xl:block ' : ''}${railBesideHero ? 'md:-mt-[96px] ' : ''}conf-rise w-full md:w-[340px] md:flex-shrink-0 order-first md:order-none`} style={{ animationDelay: '120ms' }}>
               <div ref={railRef} className="flex flex-col gap-4 md:sticky md:top-3 lg:top-[84px]">
 
                 {/* A listing: "Visit their website" and "Claim it free" instead of Apply, and no prices
