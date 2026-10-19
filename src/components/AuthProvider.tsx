@@ -115,10 +115,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // key) can block it FOREVER, wedging every page behind an eternal authLoading spinner.
     // Same failure class as the signOut hang below, bound it the same way: on timeout,
     // render logged-out; if the SDK resolves later, onAuthStateChange still updates state.
+    // A browser that holds a stored session waits longer before rendering signed-out:
+    // getSession() waits behind a token refresh, and rendering "Log in" while it runs
+    // made a signed-in organiser sign in with Google three times in 13 minutes
+    // (19 Oct 2026). With nothing stored there is nothing to wait for.
     let resolved = false;
+    const hasStoredSession = (() => {
+      try { return document.cookie.includes('sb-luruhkwrgisytejswlas-auth-token'); } catch { return false; }
+    })();
     const failsafe = setTimeout(() => {
       if (!resolved) setLoading(false);
-    }, 2500);
+    }, hasStoredSession ? 12000 : 2500);
 
     supabase.auth.getSession().then(({ data: { session } }) => {
       resolved = true;
