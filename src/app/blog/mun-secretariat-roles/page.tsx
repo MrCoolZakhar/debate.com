@@ -3,24 +3,45 @@ import Link from 'next/link';
 import { pageMetadata, JSONLD_PUBLISHER } from '@/lib/seo';
 import ArticleLayout from '@/components/blog/ArticleLayout';
 import { H2, Callout, FactCard, TableWrap } from '@/components/blog/prose';
+import Faq, { type FaqItem } from '@/components/blog/Faq';
+
+const TITLE = 'MUN Secretariat Roles: Who Does What, and Team Size';
+const DESCRIPTION =
+  'A MUN secretariat is the student team that runs a conference: the Secretary-General, Director-General and USGs. Every role, team size and handover.';
+
+const FAQ: FaqItem[] = [
+  {
+    question: 'What is the secretariat in MUN?',
+    answer:
+      'The secretariat is the team that organises and runs a Model UN conference, led by the Secretary-General. Chairs and crisis staff work alongside it but are counted separately.',
+  },
+  {
+    question: 'What does the Secretary-General do in MUN?',
+    answer:
+      'The Secretary-General owns the vision and the final decision: the committee slate, the conference\'s character, signing off the budget and the award policy, and being the external face to schools and the host institution.',
+  },
+  {
+    question: 'How big should a MUN secretariat be?',
+    answer:
+      'About 4 to 6 people up to 150 delegates, 7 to 10 for 150 to 400, 12 to 18 for 400 to 800, and 20 to 35 above that, not counting chairs and crisis staff.',
+  },
+];
 
 export const metadata: Metadata = pageMetadata({
-  title: 'Recruiting and Running a MUN Secretariat: Roles, Team Size and Handover',
-  description:
-    'Every secretariat role, what it actually does week by week, how big a team you need at your size, and the handover that decides whether the conference survives.',
+  title: TITLE,
+  description: DESCRIPTION,
   path: '/blog/mun-secretariat-roles',
-  ogDescription: 'Every MUN secretariat role, team size by conference size, and handover.',
   type: 'article',
 });
 
 const articleSchema = {
   '@context': 'https://schema.org',
   '@type': 'Article',
-  headline: 'Recruiting and Running a MUN Secretariat: Roles, Team Size and Handover',
-  description: 'Every MUN secretariat role, team size by conference size, and handover.',
+  headline: TITLE,
+  description: DESCRIPTION,
   url: 'https://gavelling.com/blog/mun-secretariat-roles',
   datePublished: '2026-09-20',
-  dateModified: '2026-09-20',
+  dateModified: '2026-10-19',
   author: { '@type': 'Organization', name: 'Gavelling', url: 'https://gavelling.com' },
   publisher: JSONLD_PUBLISHER,
   image: 'https://gavelling.com/og-image.png',
@@ -46,6 +67,7 @@ export default function Article() {
         slug="mun-secretariat-roles"
         pitch="Gavelling is free for organisers: applications, allocations, payments, documents and every committee room in one place."
       >
+        <p>A MUN secretariat is the student team that organises and runs a Model UN conference. Its core is five roles: the Secretary-General, the Director-General and the Under-Secretaries-General (USGs) for Academics, Delegate Affairs and Finance.</p>
         <p>A Model UN conference is run by students who will graduate. That single fact shapes everything about how a secretariat should be built: not around the strongest people you have this year, but around roles that can be handed to somebody who has never done them. This guide covers what each role actually does across the year, how big a team a conference of your size needs, how to recruit into it, and the handover problem that quietly kills more student conferences than money ever does.</p>
 
         <H2>The core five</H2>
@@ -176,6 +198,9 @@ export default function Article() {
         <p>Three things that actually help. Give both roles a deputy from the start, not when they are already drowning. Stagger the background guide deadline by committee cluster so review is three smaller weeks rather than one impossible one. And put a shared inbox in front of Delegate Affairs, with two people answering, so that a reply does not depend on one person&rsquo;s week.</p>
         <p>The last piece is the Secretary-General&rsquo;s job and it is not organisational. Ask people how they are, individually, once a month, and mean it. Students running a conference for free will work themselves into the ground out of loyalty to a team, and the only person positioned to notice is the one who is meant to be doing less operational work than everybody else.</p>
         <p>For the year as a whole, including the parts that are not people, read <Link href="/blog/mun-conference-planning">how to plan a MUN conference</Link>.</p>
+
+        <H2>Frequently Asked Questions</H2>
+        <Faq items={FAQ} />
       </ArticleLayout>
     </>
   );

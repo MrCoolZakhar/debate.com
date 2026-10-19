@@ -4,6 +4,7 @@ import ArticleLayout from '@/components/blog/ArticleLayout';
 import { PhotoFigure } from '@/components/blog/BlogPhoto';
 import { H2, H3, Callout } from '@/components/blog/prose';
 import Link from 'next/link';
+import { ReferenceSheet } from '@/components/blog/ReferenceSheet';
 
 export const metadata: Metadata = pageMetadata({
   title: 'MUN Voting Procedures Explained: In Favour, Against, Abstain',
@@ -52,6 +53,7 @@ export default function Article() {
         <p>Voting is the moment everything in a Model UN committee builds towards. Hours of debate, bloc-building, and resolution drafting all come down to a few minutes at the voting rostrum. Understanding exactly how MUN voting works (what counts, what does not, and what your options are) is essential for both delegates and chairs. The <Link href="/blog/mun-glossary">MUN glossary</Link> defines the terms used here.</p>
 
         <H2>Types of Votes in MUN</H2>
+        <ReferenceSheet id="roll-call-and-voting" caption="Roll call answers and voting terms on one page." />
         <p>Most MUN committees use two main voting mechanisms: placard votes (show of placards) for procedural motions, and roll call votes for substantive matters like resolutions. Some conferences use electronic voting systems or a standing vote for certain matters. Regardless of format, the principle is the same: each present-and-voting delegation casts one vote.</p>
 
         <H3>Placard Vote</H3>

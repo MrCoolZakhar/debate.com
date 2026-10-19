@@ -3,24 +3,55 @@ import Link from 'next/link';
 import { pageMetadata, JSONLD_PUBLISHER } from '@/lib/seo';
 import ArticleLayout from '@/components/blog/ArticleLayout';
 import { H2, Callout, FactCard, TableWrap } from '@/components/blog/prose';
+import Faq, { type FaqItem } from '@/components/blog/Faq';
+
+const TITLE = 'MUN Dress Code: What to Wear to Model UN';
+const DESCRIPTION =
+  'The MUN dress code is Western business attire: a dark blazer, plain shirt, tailored trousers or a knee-length skirt, closed shoes. What counts, on a budget.';
+
+const FAQ: FaqItem[] = [
+  {
+    question: 'What is the dress code for MUN?',
+    answer:
+      'Western business attire: a plain dark blazer, a plain shirt or blouse, tailored trousers or a knee-length skirt, and closed, comfortable shoes. A matching suit and a tie are not required.',
+  },
+  {
+    question: 'Can you wear jeans to MUN?',
+    answer:
+      'Not at most conferences. Jeans, sportswear, trainers, hoodies and anything with a visible logo or slogan are usually not accepted in committee.',
+  },
+  {
+    question: 'Can I wear my school uniform to MUN?',
+    answer:
+      'Usually, if it includes a blazer, and many delegations do. Ask your faculty advisor rather than assuming either way.',
+  },
+  {
+    question: 'Can I wear national or religious dress to MUN?',
+    answer:
+      'Yes. National and cultural dress is formal wear, and religious dress, including head coverings, never needs permission or an explanation.',
+  },
+  {
+    question: 'What should I wear to an online MUN conference?',
+    answer:
+      'Business attire from the waist up. Cameras usually stay on, so a plain background, light in front of you and the camera at eye level matter as much as the outfit.',
+  },
+];
 
 export const metadata: Metadata = pageMetadata({
-  title: 'What to Wear to Model UN: The Dress Code, Explained Plainly',
-  description:
-    'What Western business attire actually means, a workable outfit on a student budget, the shoe mistake everyone makes once, and what chairs really notice.',
+  title: TITLE,
+  description: DESCRIPTION,
   path: '/blog/mun-dress-code',
-  ogDescription: 'Western business attire, explained plainly, on a student budget.',
   type: 'article',
 });
 
 const articleSchema = {
   '@context': 'https://schema.org',
   '@type': 'Article',
-  headline: 'What to Wear to Model UN: The Dress Code, Explained Plainly',
-  description: 'What western business attire means in practice, on a student budget, with the things chairs notice.',
+  headline: TITLE,
+  description: DESCRIPTION,
   url: 'https://gavelling.com/blog/mun-dress-code',
   datePublished: '2026-09-20',
-  dateModified: '2026-09-20',
+  dateModified: '2026-10-19',
   author: { '@type': 'Organization', name: 'Gavelling', url: 'https://gavelling.com' },
   publisher: JSONLD_PUBLISHER,
   image: 'https://gavelling.com/og-image.png',
@@ -46,6 +77,7 @@ export default function Article() {
         slug="mun-dress-code"
         pitch="Worry about the speech, not the blazer. Run a free practice session with your club and get the first committee out of the way before the real one."
       >
+        <p>The MUN dress code is Western business attire: a plain dark blazer, a plain shirt or blouse, tailored trousers or a knee-length skirt, and closed shoes. National and religious dress always count as formal wear.</p>
         <p>Nobody has ever won <Link href="/blog/mun-awards-guide">Best Delegate</Link> because of a jacket. Plenty of delegates have spent <Link href="/blog/mun-for-beginners">their first conference</Link> quietly anxious about clothes instead of thinking about their country, which is a waste of a weekend. Here is what the dress code actually requires, what it does not, and what it costs. If you are still working out <Link href="/blog/what-is-model-un">what Model UN is</Link>, start there.</p>
 
         <H2>What &quot;Western business attire&quot; means in practice</H2>
@@ -122,6 +154,9 @@ export default function Article() {
           <li>Plasters, a hair tie, a spare collar stay, and anything else you would be annoyed to need and not have</li>
         </ul>
         <p>Then stop thinking about it. Once you are seated and recognised for the first time, nobody in the room is looking at your clothes, including the chair. They are listening to whether you <Link href="/blog/mun-country-research">know your country&apos;s position</Link>, which is the part worth the preparation time. Our <Link href="/blog/mun-conference-preparation">pre-conference checklist</Link> covers the week before, and <Link href="/blog/mun-public-speaking-tips">the speaking guide</Link> covers the part that actually gets noticed.</p>
+
+        <H2>Frequently Asked Questions</H2>
+        <Faq items={FAQ} />
       </ArticleLayout>
     </>
   );

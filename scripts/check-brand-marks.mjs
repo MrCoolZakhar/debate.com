@@ -32,6 +32,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 // wordmark pixels out at the margins, so they are not checked here.
 const MARKS = [
   'src/app/icon.png',
+  'src/app/icon1.png',
   'src/app/apple-icon.png',
   'public/gavelling-mark.png',
   'public/gavel-mark.png',

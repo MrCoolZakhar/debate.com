@@ -17,6 +17,8 @@ icons, avatars, discs, chips, structured-data logos, anything `object-cover`.
 |------|------|-------|
 | `src/app/icon.png` | 512x512 | **CANONICAL MASTER.** Next.js file convention -> favicon. |
 | `src/app/apple-icon.png` | 512x512 | Byte-identical to the master. Apple touch icon. |
+| `src/app/favicon.ico` | 16, 32, 48 | Resized from the master (PNG frames). Served at `/favicon.ico`, which Google's favicon fetcher and older browsers request. |
+| `src/app/icon1.png` | 192x192 | Resized from the master. A favicon size that is a multiple of 48px, as Google asks. |
 | `gavelling-mark.png` | 512x512 | Byte-identical to the master, at a stable public URL. Used by the `send-setup-nudges` Supabase edge function and by JSON-LD (`src/lib/seo.ts`). **Do not delete — `grep` shows no hits because the consumers are remote.** |
 | `gavel-mark.png` / `.webp` | 300x300 | In-app mark (`Brand.tsx`, `SiteNav` credit chip, auth pages). Derived from the master. |
 

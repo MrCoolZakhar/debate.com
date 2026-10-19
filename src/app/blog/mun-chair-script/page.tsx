@@ -7,7 +7,7 @@ import { H2, Callout, ChairScript } from '@/components/blog/prose';
 export const metadata: Metadata = pageMetadata({
   title: 'MUN Chair Script: Exact Phrases for Every Situation',
   description:
-    'A complete MUN chair script with exact phrases for opening, roll call, GSL, caucuses, voting, and closing. Copy-paste language for every committee situation.',
+    'A word-for-word MUN chair script: exactly what to say to open the session, take roll call, run the GSL, entertain motions, open caucuses, vote and close.',
   path: '/blog/mun-chair-script',
   ogDescription:
     'The complete MUN chair script with language for every committee moment.',

@@ -4,24 +4,56 @@ import { pageMetadata, JSONLD_PUBLISHER } from '@/lib/seo';
 import ArticleLayout from '@/components/blog/ArticleLayout';
 import { PhotoFigure } from '@/components/blog/BlogPhoto';
 import { H2, Callout, ChairScript, FactCard, TableWrap } from '@/components/blog/prose';
+import Faq, { type FaqItem } from '@/components/blog/Faq';
+import { ReferenceSheet } from '@/components/blog/ReferenceSheet';
+
+const TITLE = 'Points in MUN: The Four Points and When to Raise Each';
+const DESCRIPTION =
+  'MUN has four points: Point of Order, Parliamentary Inquiry, Personal Privilege and Information. What each asks for, if it can interrupt, and the wording.';
+
+const FAQ: FaqItem[] = [
+  {
+    question: 'What are points in MUN?',
+    answer:
+      'Points are requests to the chair or to a speaker. The four in common use are the Point of Order, the Point of Parliamentary Inquiry, the Point of Personal Privilege and the Point of Information.',
+  },
+  {
+    question: 'What is the difference between a point and a motion?',
+    answer:
+      'A point is a request and never changes what the committee is doing. A motion is a proposal to change it, such as entering a caucus, and the committee votes on it.',
+  },
+  {
+    question: 'Which point can interrupt a speaker?',
+    answer:
+      'In most rulesets only a Point of Personal Privilege, and only when you cannot hear the speaker. The other points wait for a gap in debate unless your rules say otherwise.',
+  },
+  {
+    question: 'What is a Point of Order in MUN?',
+    answer:
+      'A Point of Order is raised when the rules of procedure are being broken, almost always by the dais. The chair rules on it immediately and there is no debate.',
+  },
+  {
+    question: 'Is a right of reply a point?',
+    answer:
+      'No. A right of reply is a separate procedure, granted at the chair\'s discretion to a delegation whose national integrity, sovereignty or dignity has been impugned by another delegate.',
+  },
+];
 
 export const metadata: Metadata = pageMetadata({
-  title: 'Points in MUN: Order, Inquiry, Information and Personal Privilege',
-  description:
-    'All four points, what each is for, whether it can interrupt a speaker, the exact wording, and how the circuits differ.',
+  title: TITLE,
+  description: DESCRIPTION,
   path: '/blog/mun-points-explained',
-  ogDescription: 'The four points in Model UN, with wording and interrupt rules.',
   type: 'article',
 });
 
 const articleSchema = {
   '@context': 'https://schema.org',
   '@type': 'Article',
-  headline: 'Points in MUN: Order, Inquiry, Information and Personal Privilege',
-  description: 'The four points in Model UN, with wording and interrupt rules.',
+  headline: TITLE,
+  description: DESCRIPTION,
   url: 'https://gavelling.com/blog/mun-points-explained',
   datePublished: '2026-09-20',
-  dateModified: '2026-09-20',
+  dateModified: '2026-10-19',
   author: { '@type': 'Organization', name: 'Gavelling', url: 'https://gavelling.com' },
   publisher: JSONLD_PUBLISHER,
   image: 'https://gavelling.com/og-image.png',
@@ -47,6 +79,7 @@ export default function Article() {
         slug="mun-points-explained"
         pitch="Gavelling shows the floor, the clock and the motion on every delegate’s phone, so points get raised about the right things."
       >
+        <p>Points in MUN are requests to the chair or to a speaker. Four are in common use: the Point of Order, the Point of Parliamentary Inquiry, the Point of Personal Privilege and the Point of Information.</p>
         <p>A point is a request. A motion is a proposal. That single distinction clears up most of the confusion, because a point never changes what the committee is doing: it asks the chair to fix something, to explain something, or to let you ask a question. There are four of them in common use, and this guide gives you each one, whether it can interrupt a speaker, the words to say, and where the circuits disagree.</p>
         <p>One caution before the table. Every rule below varies by conference. The rules of procedure your conference publishes always win over anything here, and reading them once before you arrive takes fifteen minutes and saves you from the single most common cause of a chair ruling against you.</p>
 
@@ -69,6 +102,7 @@ export default function Article() {
         <PhotoFigure id="un-hrc-session" caption="A full session of the Human Rights Council in Geneva." />
 
 
+        <ReferenceSheet id="points" caption="Every point at a glance, with the right of reply alongside." />
         <H2>Point of Order</H2>
         <FactCard title="Point of Order">
           Raised when the rules of procedure are being broken, almost always by the dais. It is not a way to disagree with a decision the chair was entitled to make. The chair rules on it immediately and there is no debate.
@@ -164,6 +198,9 @@ export default function Article() {
           <li><strong>Point of fact, or point of contradiction.</strong> Used to say another delegate is wrong. There is no procedural remedy for someone being wrong: answer it in your own speech, which is more persuasive anyway.</li>
         </ul>
         <p>There is a fourth worth adding: the point raised purely to be seen raising one. Chairs can tell, and what it signals is the opposite of procedural mastery. Two well-judged points across a conference do more for your standing than a dozen, and how that record is actually assessed is covered in <Link href="/blog/mun-judging-rubric">the chair&rsquo;s scoring rubric</Link>.</p>
+
+        <H2>Frequently Asked Questions</H2>
+        <Faq items={FAQ} />
       </ArticleLayout>
     </>
   );

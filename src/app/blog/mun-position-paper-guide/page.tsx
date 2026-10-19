@@ -4,25 +4,45 @@ import { pageMetadata, JSONLD_PUBLISHER } from '@/lib/seo';
 import ArticleLayout from '@/components/blog/ArticleLayout';
 import { PhotoFigure } from '@/components/blog/BlogPhoto';
 import { H2, H3, Callout } from '@/components/blog/prose';
+import Faq, { type FaqItem } from '@/components/blog/Faq';
+
+const TITLE = 'MUN Position Paper: Format, Structure and How to Write One';
+const DESCRIPTION =
+  'A MUN position paper is a one to two page statement of your country\'s stance on the topic, sent to the dais before the conference. Format and sections.';
+
+const FAQ: FaqItem[] = [
+  {
+    question: 'What is a position paper in MUN?',
+    answer:
+      'A one- to two-page document written from your assigned country\'s perspective on the committee topic and submitted to the dais before the conference. It states the country\'s stance, the reasoning behind it and the solutions it will advocate.',
+  },
+  {
+    question: 'What is the format of a MUN position paper?',
+    answer:
+      'A short header block (committee, topic, country, delegate and school), then three sections: country background and topic overview, the country\'s position, and proposed solutions. Always check your conference\'s own guidelines.',
+  },
+  {
+    question: 'How long should a MUN position paper be?',
+    answer:
+      'Usually one to two pages. If the conference sets a page limit, keep to it exactly: chairs penalise papers that ignore instructions.',
+  },
+];
 
 export const metadata: Metadata = pageMetadata({
-  title: 'How to Write a MUN Position Paper: Format, Tips & Examples',
-  description:
-    'Step-by-step guide to writing a Model UN position paper: correct format, what to include, common mistakes, and examples that impress chairs.',
+  title: TITLE,
+  description: DESCRIPTION,
   path: '/blog/mun-position-paper-guide',
-  ogDescription:
-    'Write position papers that impress chairs and set you up to lead debate.',
   type: 'article',
 });
 
 const articleSchema = {
   '@context': 'https://schema.org',
   '@type': 'Article',
-  headline: 'How to Write a MUN Position Paper: Format, Tips & Examples',
-  description: 'Step-by-step guide to writing a MUN position paper.',
+  headline: TITLE,
+  description: DESCRIPTION,
   url: 'https://gavelling.com/blog/mun-position-paper-guide',
   datePublished: '2026-06-07',
-  dateModified: '2026-06-07',
+  dateModified: '2026-10-19',
   author: { '@type': 'Organization', name: 'Gavelling', url: 'https://gavelling.com' },
   publisher: JSONLD_PUBLISHER,
   image: 'https://gavelling.com/og-image.png',
@@ -49,6 +69,7 @@ export default function Article() {
         pitch="Use Gavelling to manage your committee sessions with the same preparation mindset."
       >
 
+        <p>A MUN position paper is a one- to two-page document, written from your assigned country&apos;s perspective, that sets out its stance on the committee topic and the solutions it will push for. It is submitted to the dais before the conference.</p>
         <p>A position paper is your entry ticket to serious MUN. Many conferences require one before committee even begins. Done well, it forces you to clarify your country&apos;s stance before walking in the door, and signals to chairs that you are prepared to lead. Done poorly, it reads like a Wikipedia summary with a flag at the top. This guide shows you how to write one that actually matters, and our <Link href="/blog/mun-position-paper-examples">position paper examples</Link> show finished papers, annotated.</p>
 
         <H2>What Is a MUN Position Paper?</H2>
@@ -94,6 +115,9 @@ export default function Article() {
 
         <H2>Using Your Position Paper in Committee</H2>
         <p>Your position paper is also a speech outline. Your <Link href="/blog/mun-opening-speech">opening GSL speech</Link> should cover the same ground in sixty to ninety seconds. Your proposed solutions become the operative clauses of your working paper. If you have written a strong position paper, you have already done most of the intellectual work needed to lead debate.</p>
+
+        <H2>Frequently Asked Questions</H2>
+        <Faq items={FAQ} />
       </ArticleLayout>
     </>
   );

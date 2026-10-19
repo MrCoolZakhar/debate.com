@@ -157,7 +157,7 @@ export default function Article() {
 
         <H2>Handing the slate to the secretariat</H2>
         <p>Most conferences ask the dais to submit a slate for ratification rather than announcing awards themselves. Send it with a short note, two or three sentences per award, naming specific moments. This does three jobs: it lets the secretariat spot a committee where the standard has drifted, it gives whoever runs the ceremony something true to say, and it is the document that exists if the result is questioned weeks later.</p>
-        <p>Keep your notes until the conference is over and the results are published. If your record lives in a session tool, save it before you leave. In Gavelling, download the session record from the End View or the scoreboard: a standalone room is deleted about an hour after it ends, though a conference room is kept.</p>
+        <p>Keep your notes until the conference is over and the results are published. If your record lives in a session tool, save it before you leave. In Gavelling, download the session record from the End View or the scoreboard: a standalone room is deleted 24 hours after it ends, though a conference room is kept.</p>
 
         <H2>What to do with the rubric next year</H2>
         <p>After the conference, spend fifteen minutes on two questions. Which criterion did you never actually use, and which behaviour did your weights accidentally encourage? The second is the more useful. If your committee spent two days queueing for the speakers list and barely negotiated, your weights told them to. Change them, publish the change in your chair&rsquo;s letter, and watch the room behave differently.</p>

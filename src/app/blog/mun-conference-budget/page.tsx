@@ -3,24 +3,69 @@ import Link from 'next/link';
 import { pageMetadata, JSONLD_PUBLISHER } from '@/lib/seo';
 import ArticleLayout from '@/components/blog/ArticleLayout';
 import { H2, H3, Callout, FactCard, TableWrap } from '@/components/blog/prose';
+import Faq, { type FaqItem } from '@/components/blog/Faq';
+
+const TITLE = 'MUN Conference Budget: A Sample Budget and the Delegate Fee It Needs';
+const DESCRIPTION =
+  'A complete sample budget for a 180-delegate, two-day Model UN conference with every line filled in, the delegate fee worked out from it, break-even at three sizes, and what each discount really costs';
+
+const FAQ: FaqItem[] = [
+  {
+    question: 'How much does it cost to host a MUN conference?',
+    answer:
+      'It depends mostly on the venue. In the sample budget on this page, a two-day conference for 180 delegates in a hired university venue costs about 4,500 euros in fixed costs plus about 28 euros per delegate, roughly 9,500 euros in total. The same conference in rooms a school provides for free costs about 2,500 euros less.',
+  },
+  {
+    question: 'How much should a MUN delegate fee be?',
+    answer:
+      'Work it out from your costs: the direct cost per delegate, plus fixed costs divided by a cautious headcount, plus payment fees and a 15 to 20 percent contingency. In the sample budget that gives 72 euros in a hired venue and 51 euros in a free school venue. Then compare it with what similar conferences in your region charge.',
+  },
+  {
+    question: 'What is the biggest cost of a MUN conference?',
+    answer:
+      'Venue hire, when you pay for it, often followed by catering. A conference in rooms its own school or university provides can run largely on catering and printing.',
+  },
+  {
+    question: 'How much contingency should a MUN conference budget have?',
+    answer:
+      'Fifteen to twenty percent of total costs is the usual figure for student-run events. It covers roughly one supplier surprise, and it is the money a small financial aid scheme can come from if nothing goes wrong.',
+  },
+  {
+    question: 'Should chairs pay a delegate fee?',
+    answer:
+      'No. Chairs are staff. Most conferences charge them nothing and many feed them, which belongs in the budget as a fixed cost.',
+  },
+  {
+    question: 'How many delegates does a MUN conference need to break even?',
+    answer:
+      'Divide the fixed costs by what each delegate contributes after their own direct costs and payment fees. In the sample budget, 4,555 euros of fixed costs and about 42 euros of contribution per delegate gives a break-even of 109 delegates, 61 percent of the 180 target.',
+  },
+];
 
 export const metadata: Metadata = pageMetadata({
-  title: 'MUN Conference Budget: What It Costs and How to Set Your Fees',
-  description:
-    'A real line-item budget for a Model UN conference, how to price a delegate fee that covers it, and the four costs first-time organisers forget',
+  title: TITLE,
+  description: DESCRIPTION,
   path: '/blog/mun-conference-budget',
-  ogDescription: 'A line-item MUN conference budget, worked break-even maths, and how to set a delegate fee.',
+  keywords: [
+    'MUN conference budget',
+    'MUN conference budget template',
+    'sample MUN budget',
+    'how much does it cost to host a MUN',
+    'MUN delegate fee',
+    'MUN conference costs',
+  ],
+  ogDescription: 'A sample MUN conference budget with every line filled in, and the delegate fee it needs.',
   type: 'article',
 });
 
 const articleSchema = {
   '@context': 'https://schema.org',
   '@type': 'Article',
-  headline: 'MUN Conference Budget: What It Costs and How to Set Your Fees',
-  description: 'A line-item MUN conference budget, worked break-even maths, and how to set a delegate fee.',
+  headline: TITLE,
+  description: DESCRIPTION,
   url: 'https://gavelling.com/blog/mun-conference-budget',
   datePublished: '2026-09-20',
-  dateModified: '2026-09-20',
+  dateModified: '2026-10-19',
   author: { '@type': 'Organization', name: 'Gavelling', url: 'https://gavelling.com' },
   publisher: JSONLD_PUBLISHER,
   image: 'https://gavelling.com/og-image.png',
@@ -47,7 +92,7 @@ export default function Article() {
         pitch="Gavelling charges the organiser nothing and settles participant payments into your own Stripe account, with the fee shown on screen."
       >
         <p>
-          Most first conferences do not fail because the fee was too low. They fail because the budget was built in the wrong direction: someone picked a fee that felt reasonable, multiplied it by an optimistic headcount, and spent against the result. This guide builds it the other way round, which is the only way that survives a bad registration year. For the income that does not come from fees, see our <Link href="/blog/mun-conference-sponsorship">MUN conference sponsorship</Link> guide.
+          Most first conferences do not fail because the fee was too low. They fail because the budget was built in the wrong direction: someone picked a fee that felt reasonable, multiplied it by an optimistic headcount, and spent against the result. This guide builds it the other way round, which is the only way that survives a bad registration year, and then fills in a complete sample budget for one conference so you can see every number land. For the income that does not come from fees, see our <Link href="/blog/mun-conference-sponsorship">MUN conference sponsorship</Link> guide.
         </p>
         <p>
           All figures below are illustrative ranges in euros. Venue and catering costs vary by a factor of five between countries and between a school hall and a hired conference centre, so treat the structure and the ratios as the transferable part, not the numbers.
@@ -139,8 +184,73 @@ export default function Article() {
           15 to 20 percent contingency, which is the figure widely used for student-run events because it covers roughly one supplier surprise. Plus, if your institution lets you carry a balance, a small surplus so that year two does not start from zero.
         </FactCard>
         <p>
-          Then sense-check against the market. Look at what three comparable conferences in your region charge, with what included. If your number is 40 percent above them, the problem is your venue, not your maths.
+          Then sense-check against the market. Look at what three comparable conferences in your region charge, with what included; <Link href="/conferences/explore">Explore</Link> lists conferences you can compare against. If your number is 40 percent above them, the problem is your venue, not your maths.
         </p>
+
+        <H2>A sample budget, filled in</H2>
+        <p>
+          One conference, every line. A school society runs a two-day conference for a target of 180 delegates in nine committees, in rooms hired from a local university. It plans against a cautious 140.
+        </p>
+        <H3>Fixed costs</H3>
+        <TableWrap>
+          <table>
+            <thead>
+              <tr><th>Line</th><th>How it was worked out</th><th>Euros</th></tr>
+            </thead>
+            <tbody>
+              {[
+                ['Room hire', 'Nine committee rooms, a plenary hall, a secretariat room, two days', '1,800'],
+                ['AV', 'Projectors in two rooms, microphones in the plenary', '300'],
+                ['Security and caretaking', 'Saturday access charge', '250'],
+                ['Cleaning', 'Venue charge', '150'],
+                ['Staff and chair meals', '40 people, two days, 8 each', '640'],
+                ['Awards', 'Nine committees, 50 each', '450'],
+                ['Committee supplies', 'Nine rooms, 25 each', '225'],
+                ['Opening ceremony', 'Speaker travel, a small gift', '200'],
+                ['Accessibility', 'Quiet room supplies, a reserved line for requests', '200'],
+                ['Signage and fixed printing', 'Room signs, schedules', '150'],
+                ['Insurance', 'Event cover beyond the school’s policy', '150'],
+                ['Website and email', 'Domain for a year', '40'],
+              ].map((r) => (
+                <tr key={r[0]}>
+                  <td><strong>{r[0]}</strong></td>
+                  <td>{r[1]}</td>
+                  <td>{r[2]}</td>
+                </tr>
+              ))}
+              <tr><td><strong>Fixed total</strong></td><td>&nbsp;</td><td><strong>4,555</strong></td></tr>
+            </tbody>
+          </table>
+        </TableWrap>
+        <H3>Cost per delegate</H3>
+        <TableWrap>
+          <table>
+            <thead>
+              <tr><th>Line</th><th>How it was worked out</th><th>Euros per delegate</th></tr>
+            </thead>
+            <tbody>
+              <tr><td><strong>Lunch</strong></td><td>Two days at 9</td><td>18.00</td></tr>
+              <tr><td><strong>Breaks</strong></td><td>Two days at 3</td><td>6.00</td></tr>
+              <tr><td><strong>Badge, lanyard, placard</strong></td><td>Ordered in bulk</td><td>2.50</td></tr>
+              <tr><td><strong>Printing</strong></td><td>Delegate pack</td><td>1.50</td></tr>
+              <tr><td><strong>Direct cost per delegate</strong></td><td>&nbsp;</td><td><strong>28.00</strong></td></tr>
+            </tbody>
+          </table>
+        </TableWrap>
+        <H3>The fee, step by step</H3>
+        <ul className="gv-check">
+          <li><strong>Costs at the cautious headcount:</strong> 4,555 fixed plus 140 delegates at 28, which is 3,920. Total 8,475.</li>
+          <li><strong>Contingency at 15 percent:</strong> 1,271. Total 9,746.</li>
+          <li><strong>Per delegate:</strong> 9,746 divided by 140 is 69.61.</li>
+          <li><strong>Payment fees of about 3 percent on top:</strong> 69.61 divided by 0.97 is 71.77.</li>
+          <li><strong>Fee:</strong> 72 euros.</li>
+        </ul>
+        <p>
+          Now test it. Each delegate contributes 72 less 3 percent in fees less 28 of direct cost, about 41.84. The fixed 4,555 is covered at <strong>109 delegates</strong>, 61 percent of the target, so a bad year is survivable. At the full 180 the conference ends with about 3,000 unspent, including the contingency, which is next year&rsquo;s deposit.
+        </p>
+        <FactCard title="The same conference in free rooms">
+          Take out room hire, AV, security and cleaning and the fixed total falls to 2,055. Run the same five steps and the fee comes out at 51 euros. Twenty-one euros of every fee, nearly a third, was the venue. That is the number to take to the school before you go looking for a hired hall.
+        </FactCard>
 
         <H2>Break-even, worked at three sizes</H2>
         <p className="gv-note">
@@ -200,14 +310,27 @@ export default function Article() {
           Some registered delegates never pay and some paid delegates never arrive. At a first conference expect a meaningful gap between the three numbers (registered, paid and attended), and find out what yours is so you can plan around it next year. Budget catering against paid, not registered, and set your <Link href="/blog/mun-conference-registration-payments">payment deadline</Link> before your catering numbers deadline so the two agree.
         </p>
 
-        <H2>Fee structures that work</H2>
-        <ul>
-          <li><strong>Early bird.</strong> 10 to 20 percent off for registering and paying before a cut-off. Its real purpose is cash flow, not marketing: it brings money in before you pay the venue balance.</li>
-          <li><strong>Delegation rate.</strong> A per-school charge plus a lower per-delegate fee, or a discount above a threshold of delegates. It rewards the schools that bring twelve students and cost you one relationship to manage instead of twelve.</li>
-          <li><strong>Role-based fees.</strong> Observers and press at a reduced rate. Faculty advisors usually free or at cost, because charging the person who decides whether the school comes at all is a false economy.</li>
-          <li><strong>Chairs.</strong> Never charged. They are staff.</li>
-          <li><strong>Financial aid.</strong> Decide the policy before you open registration: how many places, full or partial, and on what evidence. A small, quiet, documented scheme funded from your contingency is far better than an unbudgeted case-by-case one, because the latter always ends up deciding under time pressure.</li>
-        </ul>
+        <H2>What each discount costs the budget</H2>
+        <p>
+          Discounts are worth offering, but each one moves the break-even, so price them before you publish them. Using the sample budget above:
+        </p>
+        <TableWrap>
+          <table>
+            <thead>
+              <tr><th>Discount</th><th>What it does</th><th>What it costs</th></tr>
+            </thead>
+            <tbody>
+              <tr><td><strong>Early bird, 15 percent off</strong></td><td>Brings money in before the venue balance is due</td><td>If half of delegates take it, the average fee falls to about 66.60 and break-even rises from 109 to 125 delegates</td></tr>
+              <tr><td><strong>Delegation rate</strong></td><td>Rewards schools that bring a large team</td><td>10 percent off for teams of 10 or more, taken by 100 delegates, is about 720 of income</td></tr>
+              <tr><td><strong>Free faculty advisors</strong></td><td>Keeps the person who decides whether a school comes on side</td><td>Only their meals: about 24 each in this budget</td></tr>
+              <tr><td><strong>Free chairs</strong></td><td>Chairs are staff, not customers</td><td>Already in the fixed costs as meals</td></tr>
+              <tr><td><strong>Five full financial aid places</strong></td><td>Lets students come who otherwise could not</td><td>About 360 of income, plus their 140 of direct costs; fund it from the contingency and decide the number before registration opens</td></tr>
+            </tbody>
+          </table>
+        </TableWrap>
+        <p>
+          How to set these up so they apply automatically, with deadlines and refund rules, is in our guide to <Link href="/blog/mun-conference-registration-payments">registration and payments</Link>. The budget&rsquo;s only job is to know what they cost.
+        </p>
 
         <H2>Cash flow</H2>
         <p>
@@ -248,6 +371,9 @@ export default function Article() {
         <p>
           Then show it to your treasurer and to whoever approves the event, and ask them to attack the assumptions tab specifically. That is where every wrong budget is wrong.
         </p>
+
+        <H2>Frequently Asked Questions</H2>
+        <Faq items={FAQ} />
 
         <H2>Next</H2>
         <p>

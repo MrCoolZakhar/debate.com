@@ -3,24 +3,45 @@ import Link from 'next/link';
 import { pageMetadata, JSONLD_PUBLISHER } from '@/lib/seo';
 import ArticleLayout from '@/components/blog/ArticleLayout';
 import { H2, Callout, ChairScript, FactCard, TableWrap } from '@/components/blog/prose';
+import Faq, { type FaqItem } from '@/components/blog/Faq';
+
+const TITLE = 'MUN Speech Examples: Opening, Caucus and Closing Speeches';
+const DESCRIPTION =
+  'Full Model UN speech examples from 30 to 90 seconds: opening GSL speeches, caucus speeches, a pre-vote speech, a response and a close, with why each works.';
+
+const FAQ: FaqItem[] = [
+  {
+    question: 'How long is a MUN speech?',
+    answer:
+      'It depends on the speech: an opening GSL speech is usually 60 to 90 seconds, a moderated caucus speech 30 to 60, a speech before a vote 45 to 90 and a response 20 to 45.',
+  },
+  {
+    question: 'What should a MUN opening speech include?',
+    answer:
+      'A clear statement of your country\'s position, plus three things most delegates leave out: one ask the room can write down, one thing you will not accept, and one instruction about how to find you.',
+  },
+  {
+    question: 'How do you write a MUN speech quickly?',
+    answer:
+      'Write four lines, not sentences: the claim, one dated piece of evidence, the ask, and the hook, such as where to find you or the motion you will raise. Then speak from those four lines.',
+  },
+];
 
 export const metadata: Metadata = pageMetadata({
-  title: 'MUN Speech Examples: Twelve Speeches, Under a Minute Each',
-  description:
-    'Full worked speeches for the opening, the caucus, the vote, the reply and the close, with the timing marks and why each one works',
+  title: TITLE,
+  description: DESCRIPTION,
   path: '/blog/mun-speech-examples',
-  ogDescription: 'Twelve full Model UN speeches, each under a minute, with why each one works.',
   type: 'article',
 });
 
 const articleSchema = {
   '@context': 'https://schema.org',
   '@type': 'Article',
-  headline: 'MUN Speech Examples: Twelve Speeches, Under a Minute Each',
-  description: 'Twelve full Model UN speeches, each under a minute, with why each one works.',
+  headline: TITLE,
+  description: DESCRIPTION,
   url: 'https://gavelling.com/blog/mun-speech-examples',
   datePublished: '2026-09-20',
-  dateModified: '2026-09-20',
+  dateModified: '2026-10-19',
   author: { '@type': 'Organization', name: 'Gavelling', url: 'https://gavelling.com' },
   publisher: JSONLD_PUBLISHER,
   image: 'https://gavelling.com/og-image.png',
@@ -46,7 +67,8 @@ export default function Article() {
         slug="mun-speech-examples"
         pitch="Gavelling shows every delegate their place in the speakers list on their own phone, so you know how long you have to write the speech you are about to give."
       >
-        <p>You are third on the <Link href="/blog/general-speakers-list-guide">speakers list</Link> with ninety seconds to prepare. That is the real problem this page solves. Below are twelve complete speeches across the five situations you will actually face, each written to a stated length, each followed by the reason it works. The topic throughout is a General Assembly debate on access to safe drinking water and sanitation, so you can see the same material handled five different ways. Square brackets mark where your own research goes.</p>
+        <p>A MUN speech is a short timed address to the committee, usually 20 to 90 seconds. An opening speech states your position, a caucus speech adds one idea, and a speech before the vote moves undecided delegations.</p>
+        <p>You are third on the <Link href="/blog/general-speakers-list-guide">speakers list</Link> with ninety seconds to prepare. That is the real problem this page solves. Below are complete speeches for the five situations you will actually face, each written to a stated length, each followed by the reason it works. The topic throughout is a General Assembly debate on access to safe drinking water and sanitation, so you can see the same material handled five different ways. Square brackets mark where your own research goes.</p>
 
         <H2>The four speech shapes</H2>
         <TableWrap>
@@ -191,6 +213,9 @@ export default function Article() {
         </ul>
         <p>Then speak from those four lines rather than reading. A speech delivered from four prompts sounds like thinking and a speech read from a paragraph sounds like reading, and the difference is obvious from the dais. If you want to work on the delivery rather than the content, our <Link href="/blog/mun-public-speaking-tips">public speaking guide</Link> covers pace, nerves and what to do with your hands.</p>
         <p className="gv-note">Timings in this guide assume roughly 130 to 150 words a minute, which is a clear committee pace. Read your own speech aloud once with a clock before you trust the word count.</p>
+
+        <H2>Frequently Asked Questions</H2>
+        <Faq items={FAQ} />
       </ArticleLayout>
     </>
   );

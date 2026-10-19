@@ -658,9 +658,13 @@ export interface ConferenceDetailClientProps {
    *  bare /role resolver route (initialView === 'overview' | 'reviews'
    *  never carry a role). Seeds `activeRole`. */
   initialRole?: string | null;
+  /** Server-rendered content drawn at the foot of Overview (page.tsx passes
+   *  ConferenceFacts: the plain summary and the hub links), so it is in the
+   *  raw HTML. Only the landing page passes it. */
+  overviewFooter?: React.ReactNode;
 }
 
-export default function ConferenceDetailClient({ initialView, initialRole = null, initialConference = null, initialCommittees = [] }: ConferenceDetailClientProps) {
+export default function ConferenceDetailClient({ initialView, initialRole = null, initialConference = null, initialCommittees = [], overviewFooter = null }: ConferenceDetailClientProps) {
   const params = useParams<{ slug: string }>();
   const slug = params.slug;
   const router = useRouter();
@@ -3730,6 +3734,8 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                   back to an inline strip when there is no room; see
                   components/ConferencePartners.tsx. */}
               <ConferencePartners partners={partners} />
+
+              {overviewFooter}
 
               </div>
               )}

@@ -1,28 +1,58 @@
 import type { Metadata } from 'next';
+import Link from 'next/link';
 import { pageMetadata, JSONLD_PUBLISHER } from '@/lib/seo';
 import ArticleLayout from '@/components/blog/ArticleLayout';
 import { PhotoFigure } from '@/components/blog/BlogPhoto';
 import { H2, Callout, ChairScript } from '@/components/blog/prose';
-import Link from 'next/link';
+import Faq, { type FaqItem } from '@/components/blog/Faq';
+
+const TITLE = 'Unmoderated Caucus in MUN: What It Is and How It Works';
+const DESCRIPTION =
+  'An unmoderated caucus is a timed break from formal debate where delegates leave their seats to negotiate and draft working papers. How to propose and use one.';
+
+const FAQ: FaqItem[] = [
+  {
+    question: 'What is an unmoderated caucus in MUN?',
+    answer:
+      'An unmoderated caucus, or unmod, is a timed recess from formal debate. Delegates leave their seats, form groups and negotiate informally, with no speakers list and no timer per delegate.',
+  },
+  {
+    question: 'How do you propose an unmoderated caucus?',
+    answer:
+      'Raise your placard and say: "I move for an unmoderated caucus of [duration]." Some conferences also require a stated purpose. The motion needs a simple majority to pass.',
+  },
+  {
+    question: 'How long is an unmoderated caucus?',
+    answer:
+      'Usually fifteen or twenty minutes. Ten is too short to get much done, thirty suits merging two large working papers, and more than thirty usually means the committee has lost focus.',
+  },
+  {
+    question: 'What is the difference between a moderated and an unmoderated caucus?',
+    answer:
+      'A moderated caucus has a topic, a speaker queue and a time per speaker. An unmoderated caucus has only a total time: delegates move freely and talk informally.',
+  },
+  {
+    question: 'What should delegates do during an unmod?',
+    answer:
+      'Find your bloc, start a working paper, talk to the opposing blocs and put any procedural questions to the chair. Sitting at your seat and waiting is the one thing not to do.',
+  },
+];
 
 export const metadata: Metadata = pageMetadata({
-  title: 'Unmoderated Caucus in MUN: What It Is and How to Use It',
-  description:
-    'Learn what an unmoderated caucus is in Model UN, how delegates should use the time, and tips for chairs on managing unmod periods effectively.',
+  title: TITLE,
+  description: DESCRIPTION,
   path: '/blog/unmoderated-caucus-guide',
-  ogDescription:
-    'The complete guide to unmoderated caucuses for MUN chairs and delegates.',
   type: 'article',
 });
 
 const articleSchema = {
   '@context': 'https://schema.org',
   '@type': 'Article',
-  headline: 'Unmoderated Caucus in MUN: What It Is and How to Use It',
-  description: 'The complete guide to unmoderated caucuses for MUN chairs and delegates.',
+  headline: TITLE,
+  description: DESCRIPTION,
   url: 'https://gavelling.com/blog/unmoderated-caucus-guide',
   datePublished: '2026-06-07',
-  dateModified: '2026-06-07',
+  dateModified: '2026-10-19',
   author: { '@type': 'Organization', name: 'Gavelling', url: 'https://gavelling.com' },
   publisher: JSONLD_PUBLISHER,
   image: 'https://gavelling.com/og-image.png',
@@ -49,6 +79,7 @@ export default function Article() {
         pitch="Gavelling tracks caucus timers, the GSL, and motions all in one place."
       >
 
+        <p>An unmoderated caucus, or unmod, is a timed break from formal debate in Model UN: delegates leave their seats to negotiate, build blocs and draft working papers, with no speakers list. It is proposed by motion and passes by simple majority.</p>
         <p>If the <Link href="/blog/how-to-run-moderated-caucus">moderated caucus</Link> is structured debate, the unmoderated caucus is everything else. It is the unofficial heartbeat of Model UN: the twenty minutes where working papers get drafted, blocs form, deals are made, and delegates who have not spoken once during formal debate suddenly become the most influential people in the room.</p>
         <p>For new delegates and first-time chairs alike, the unmoderated caucus can feel chaotic. This guide explains exactly what it is, how to make the most of it, and how chairs should manage it.</p>
 
@@ -94,6 +125,9 @@ export default function Article() {
           <li><strong>Using unmods to avoid speaking.</strong> Shy delegates sometimes prefer the chaos of an unmod to formal debate. Push yourself to use the GSL too.</li>
           <li><strong>Chairs leaving the dais entirely.</strong> Step away briefly, but stay visible and monitor the clock.</li>
         </ul>
+
+        <H2>Frequently Asked Questions</H2>
+        <Faq items={FAQ} />
       </ArticleLayout>
     </>
   );

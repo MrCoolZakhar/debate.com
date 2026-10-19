@@ -3,24 +3,45 @@ import Link from 'next/link';
 import { pageMetadata, JSONLD_PUBLISHER } from '@/lib/seo';
 import ArticleLayout from '@/components/blog/ArticleLayout';
 import { H2, H3, Callout, FactCard, TableWrap } from '@/components/blog/prose';
+import Faq, { type FaqItem } from '@/components/blog/Faq';
+
+const TITLE = 'MUN Resolution Example: A Full Resolution, Line by Line';
+const DESCRIPTION =
+  'A full Model UN resolution example: the header, the preambulatory and operative clauses annotated line by line, three amendments and the vote that passed it.';
+
+const FAQ: FaqItem[] = [
+  {
+    question: 'What does a MUN resolution look like?',
+    answer:
+      'A header block with the draft number, committee, topic, sponsors and signatories, then one long sentence: the committee\'s name, preambulatory clauses ending in commas, and numbered operative clauses ending in semicolons, with a full stop after the last.',
+  },
+  {
+    question: 'What is the difference between sponsors and signatories?',
+    answer:
+      'Sponsors wrote the paper and stand behind it, and at most conferences they may not vote against it. Signatories only want it debated: signing is not endorsement.',
+  },
+  {
+    question: 'How many clauses should a MUN resolution have?',
+    answer:
+      'The example here has six preambulatory and nine operative clauses, a realistic size for a paper that has to survive amendment. A twenty-clause resolution is mostly a list of things nobody will defend.',
+  },
+];
 
 export const metadata: Metadata = pageMetadata({
-  title: 'Model UN Resolution Example: A Full Resolution, Line by Line',
-  description:
-    'One complete draft resolution, annotated clause by clause with the politics behind each line, plus the amended version that passed and the vote that carried it',
+  title: TITLE,
+  description: DESCRIPTION,
   path: '/blog/mun-resolution-example',
-  ogDescription: 'A complete draft resolution, annotated clause by clause, and the amendments that passed it.',
   type: 'article',
 });
 
 const articleSchema = {
   '@context': 'https://schema.org',
   '@type': 'Article',
-  headline: 'Model UN Resolution Example: A Full Resolution, Line by Line',
-  description: 'A complete draft resolution, annotated clause by clause, and the amendments that passed it.',
+  headline: TITLE,
+  description: DESCRIPTION,
   url: 'https://gavelling.com/blog/mun-resolution-example',
   datePublished: '2026-09-20',
-  dateModified: '2026-09-20',
+  dateModified: '2026-10-19',
   author: { '@type': 'Organization', name: 'Gavelling', url: 'https://gavelling.com' },
   publisher: JSONLD_PUBLISHER,
   image: 'https://gavelling.com/og-image.png',
@@ -46,6 +67,9 @@ export default function Article() {
         slug="mun-resolution-example"
         pitch="Draft resolutions, sponsors, amendments and the vote: Gavelling runs the document side of a committee as well as the clock."
       >
+        <p>
+          A Model UN resolution is one long sentence: it opens with the committee&apos;s name, then unnumbered preambulatory clauses ending in commas, then numbered operative clauses ending in semicolons, with a full stop after the last.
+        </p>
         <p>
           Below is one complete draft resolution, written for this guide, on a real General Assembly topic. First the document as it was introduced. Then an annotation of every clause explaining what it does, what it costs and who would vote against it. Then the three amendments the committee made to it, and the vote it passed on. If you want the process rather than the artefact, the <Link href="/blog/mun-resolution-writing">resolution writing guide</Link> is the method and the <Link href="/blog/mun-clause-phrases">phrase list</Link> is the reference. The <Link href="/blog/mun-glossary">MUN glossary</Link> defines any term below you have not met.
         </p>
@@ -243,6 +267,9 @@ export default function Article() {
         <p>
           Then find the two delegations you have not bought and work out what preambulatory clause or what sub-clause would buy them. That conversation is <Link href="/blog/mun-bloc-building">bloc building</Link>, and it is what an unmoderated caucus is for. Before any of it, the paper has to exist: the <Link href="/blog/mun-working-paper-guide">working paper guide</Link> covers getting from a blank document to something with signatories on it. If your country&apos;s position is not written down yet, our <Link href="/blog/mun-position-paper-examples">position paper examples</Link> show what that looks like.
         </p>
+
+        <H2>Frequently Asked Questions</H2>
+        <Faq items={FAQ} />
       </ArticleLayout>
     </>
   );

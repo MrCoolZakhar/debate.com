@@ -44,15 +44,17 @@ export interface ListedConference {
 const COLUMNS =
   'id, slug, full_name, acronym, city, country, start_date, end_date, dates_tbd, fee_amount, fee_currency, expected_delegates, logo_url, banner_url, format, is_verified, is_demo, updated_at';
 
-interface WindowRow {
+export interface WindowRow {
   conference_id: string;
   is_enabled: boolean | null;
   applications_open_at: string | null;
   applications_close_at: string | null;
 }
 
-/** Mirror of roleWindowState() in applicationWindow.ts (the trigger's order). */
-function windowState(cfg: WindowRow | undefined, now: number): ListedConference['window'] {
+/** Mirror of roleWindowState() in applicationWindow.ts (the trigger's order).
+ *  Exported for server components (the conference page's metadata), which
+ *  cannot import applicationWindow.ts because it imports useEffect. */
+export function windowState(cfg: Pick<WindowRow, 'is_enabled' | 'applications_open_at' | 'applications_close_at'> | null | undefined, now: number): ListedConference['window'] {
   if (!cfg || !cfg.is_enabled) return 'disabled';
   const openAt = cfg.applications_open_at ? new Date(cfg.applications_open_at).getTime() : null;
   if (openAt !== null && Number.isFinite(openAt) && now < openAt) return 'not_open';

@@ -3,24 +3,56 @@ import Link from 'next/link';
 import { pageMetadata, JSONLD_PUBLISHER } from '@/lib/seo';
 import ArticleLayout from '@/components/blog/ArticleLayout';
 import { H2, H3, Callout, TableWrap } from '@/components/blog/prose';
+import Faq, { type FaqItem } from '@/components/blog/Faq';
+import { ReferenceSheet } from '@/components/blog/ReferenceSheet';
+
+const TITLE = 'Preambulatory and Operative Clauses in MUN: Full Phrase List';
+const DESCRIPTION =
+  'Preambulatory clauses state what is already true and end in a comma; operative clauses say what the committee does. 70 phrases with examples, by strength.';
+
+const FAQ: FaqItem[] = [
+  {
+    question: 'What are preambulatory clauses in MUN?',
+    answer:
+      'Preambulatory clauses open a resolution and describe what is already true: what the body has noted, what it recalls, what concerns it. They start with a phrase such as Recalling or Noting with concern, are not numbered and end in a comma.',
+  },
+  {
+    question: 'What are operative clauses in MUN?',
+    answer:
+      'Operative clauses say what the committee now does: requests, urges, establishes, decides. They are numbered and end in a semicolon, the last one ends in a full stop, and they are the part of a resolution that gets amended.',
+  },
+  {
+    question: 'What is the difference between preambulatory and operative clauses?',
+    answer:
+      'Preambulatory clauses describe and commit nobody to anything; operative clauses act. A useful test: if a clause could be deleted without changing what any state or body has to do, it belongs in the preamble.',
+  },
+  {
+    question: 'How many preambulatory clauses should a resolution have?',
+    answer:
+      'Five to eight is normal for a committee resolution. Fifteen is usually a sign the drafters did not know how to start.',
+  },
+  {
+    question: 'Can a General Assembly committee use Decides or Demands?',
+    answer:
+      'A GA committee may decide about its own procedure or bodies, as in Decides to establish an open-ended working group. It cannot decide that States shall do something, and it cannot demand: only the Security Council binds States.',
+  },
+];
 
 export const metadata: Metadata = pageMetadata({
-  title: 'Preambulatory and Operative Clauses: The Complete Phrase List',
-  description:
-    'Every accepted preambulatory and operative phrase, what each one commits the committee to, and which verbs a General Assembly committee is not allowed to use.',
+  title: TITLE,
+  description: DESCRIPTION,
   path: '/blog/mun-clause-phrases',
-  ogDescription: 'Every preambulatory and operative phrase, with what each one commits the committee to.',
   type: 'article',
 });
 
 const articleSchema = {
   '@context': 'https://schema.org',
   '@type': 'Article',
-  headline: 'Preambulatory and Operative Clauses: The Complete Phrase List',
-  description: 'Every preambulatory and operative phrase, with what each one commits the committee to.',
+  headline: TITLE,
+  description: DESCRIPTION,
   url: 'https://gavelling.com/blog/mun-clause-phrases',
   datePublished: '2026-09-20',
-  dateModified: '2026-09-20',
+  dateModified: '2026-10-19',
   author: { '@type': 'Organization', name: 'Gavelling', url: 'https://gavelling.com' },
   publisher: JSONLD_PUBLISHER,
   image: 'https://gavelling.com/og-image.png',
@@ -74,6 +106,9 @@ export default function Article() {
         pitch="Drafting during an unmod? Gavelling holds the papers, the sponsors and the clock so the dais can see who wrote what."
       >
         <p>
+          Preambulatory clauses are the unnumbered opening lines of a resolution that set out what is already true, each ending in a comma. Operative clauses are the numbered lines that say what the committee now does, each ending in a semicolon.
+        </p>
+        <p>
           This is the reference you keep open in a second tab while you draft. Every accepted preambulatory and operative phrase, grouped by what it does, with a line showing how it opens. It does not teach resolution structure: the <Link href="/blog/mun-resolution-writing">resolution writing guide</Link> does that, and a <Link href="/blog/mun-resolution-example">full annotated resolution</Link> shows the finished thing. The <Link href="/blog/mun-glossary">MUN glossary</Link> covers the wider vocabulary.
         </p>
 
@@ -94,6 +129,7 @@ export default function Article() {
         </p>
 
         <H2>Preambulatory phrases</H2>
+        <ReferenceSheet id="preambulatory-phrases" caption="Every common preambulatory phrase on one page." />
         <p>
           Grouped by function, because that is how you choose one. Five to eight preambulatory clauses is normal for a committee resolution; fifteen is a sign the drafters did not know how to start.
         </p>
@@ -174,6 +210,7 @@ export default function Article() {
         </Callout>
 
         <H2>Operative phrases, ordered by force</H2>
+        <ReferenceSheet id="operative-phrases" caption="Every common operative phrase on one page." />
         <p>
           This is the list that matters. Operative verbs are not interchangeable: they carry different degrees of obligation, and some of them a General Assembly committee simply cannot use. They are ordered here from softest to strongest.
         </p>
@@ -332,6 +369,9 @@ export default function Article() {
         <p>
           Then the paper has to survive amendment, which is a different skill: the <Link href="/blog/mun-amendment-guide">amendment guide</Link> covers friendly versus unfriendly and the order clauses are voted in. And before any of it can be debated, it has to be introduced, which is the <Link href="/blog/mun-working-paper-guide">working paper guide</Link>.
         </p>
+
+        <H2>Frequently Asked Questions</H2>
+        <Faq items={FAQ} />
       </ArticleLayout>
     </>
   );

@@ -3,24 +3,50 @@ import Link from 'next/link';
 import { pageMetadata, JSONLD_PUBLISHER } from '@/lib/seo';
 import ArticleLayout from '@/components/blog/ArticleLayout';
 import { H2, H3, Callout, FactCard, TableWrap } from '@/components/blog/prose';
+import Faq, { type FaqItem } from '@/components/blog/Faq';
+
+const TITLE = 'MUN Committees: Every Model UN Committee Type Explained';
+const DESCRIPTION =
+  'MUN committees run from 150-seat General Assembly rooms to the 15-seat Security Council, crisis cabinets and press corps. What each is like and who it suits.';
+
+const FAQ: FaqItem[] = [
+  {
+    question: 'What are the main MUN committees?',
+    answer:
+      'General Assembly committees such as DISEC, SOCHUM and SPECPOL, ECOSOC and the specialised agencies, the Security Council, regional bodies, crisis committees and cabinets, press corps, and ad hoc or parliamentary chambers.',
+  },
+  {
+    question: 'Which MUN committee is best for beginners?',
+    answer:
+      'A General Assembly committee. The size gives you room to watch before you commit, and debate follows standard procedure with a long General Speakers List.',
+  },
+  {
+    question: 'What is the difference between a GA committee and the Security Council?',
+    answer:
+      'A General Assembly committee seats every member state and passes recommendations. The Security Council has fifteen seats, five permanent members hold a veto, and its decisions under Chapter VII bind member states.',
+  },
+  {
+    question: 'What is a crisis committee in MUN?',
+    answer:
+      'A small committee, usually 10 to 25 seats, where you play a named person rather than a country. Debate is interrupted by crisis updates, and the output is directives rather than a resolution.',
+  },
+];
 
 export const metadata: Metadata = pageMetadata({
-  title: 'Model UN Committee Types Explained: Which One Should You Pick?',
-  description:
-    'Every kind of committee on a conference list, what debate actually feels like in each, and who it suits.',
+  title: TITLE,
+  description: DESCRIPTION,
   path: '/blog/mun-committee-types',
-  ogDescription: 'Every Model UN committee type, what debate feels like inside it, and who it suits.',
   type: 'article',
 });
 
 const articleSchema = {
   '@context': 'https://schema.org',
   '@type': 'Article',
-  headline: 'Model UN Committee Types Explained: Which One Should You Pick?',
-  description: 'Every Model UN committee type, what debate feels like inside it, and who it suits.',
+  headline: TITLE,
+  description: DESCRIPTION,
   url: 'https://gavelling.com/blog/mun-committee-types',
   datePublished: '2026-09-20',
-  dateModified: '2026-09-20',
+  dateModified: '2026-10-19',
   author: { '@type': 'Organization', name: 'Gavelling', url: 'https://gavelling.com' },
   publisher: JSONLD_PUBLISHER,
   image: 'https://gavelling.com/og-image.png',
@@ -46,6 +72,7 @@ export default function Article() {
         slug="mun-committee-types"
         pitch="Gavelling runs every committee type from one dais screen, including custom chambers where seats are party members rather than countries."
       >
+        <p>MUN committees are the rooms a Model UN conference debates in: General Assembly committees, ECOSOC and the specialised agencies, the Security Council, regional bodies, crisis committees, press corps and custom chambers. They differ most in size and formality.</p>
         <p>A conference sends you a committee list and asks you to rank it. The names mean very little until you have sat in one. A General Assembly committee and a crisis cabinet are both called committees, but almost nothing about the two experiences is the same: the size, the pace, the paperwork and the skill being tested all differ. This guide walks the whole list, says what an hour inside each one actually feels like, and tells you who each suits. If you are drawn to reporting rather than debating, our <Link href="/blog/mun-press-corps-guide">press corps guide</Link> covers that room in full.</p>
 
         <H2>The one thing that decides everything: size and formality</H2>
@@ -145,6 +172,9 @@ export default function Article() {
         <p>Three practical points. Conferences allocate against experience as well as preference, so an honest experience answer gets you a better fit than an inflated one. A double delegation, where two people share one country, is a different experience again: you get half the speaking slots and a partner to draft with, which suits a nervous first-timer well. And if a committee is listed with a character sheet rather than a country slate, assume crisis procedure whatever the name says.</p>
         <p>Once you know the room, the preparation diverges sharply. A GA committee rewards a deep read of your country&rsquo;s <Link href="/blog/mun-country-research">voting record and stated position</Link>; a crisis cabinet rewards knowing exactly what your character can order without asking anyone. Both reward <Link href="/blog/mun-conference-preparation">arriving prepared</Link> in the specific way the room uses.</p>
         <p>If you are still choosing a conference rather than a committee, the <Link href="/conferences/explore">conference directory</Link> lists what each one is running, and the committee list tells you more about a conference than the promotional page does.</p>
+
+        <H2>Frequently Asked Questions</H2>
+        <Faq items={FAQ} />
       </ArticleLayout>
     </>
   );

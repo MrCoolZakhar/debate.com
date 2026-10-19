@@ -185,7 +185,7 @@ export default function Article5() {
           <li><strong>Debrief with your co-chair.</strong> What went well? What would you do differently? This 10-minute conversation is how you improve.</li>
           <li><strong>Review delegate feedback.</strong> Ask delegates for a few lines of feedback at the end, on paper or a short form. Reading it, even the harsh comments, speeds up your development more than anything else.</li>
           <li><strong>Prepare for awards.</strong> If your conference gives awards, see our <Link href="/blog/mun-judging-rubric" style={{ color: '#1B3828', fontWeight: 600 }}>MUN judging rubric</Link>.</li>
-          <li><strong>Archive your notes.</strong> Before you close the laptop, download the session record from the End View or the scoreboard: one spreadsheet with the history, scores, speeches, attendance and documents. A standalone room is deleted about an hour after it ends. The record is useful for writing committee reports and for your own review.</li>
+          <li><strong>Archive your notes.</strong> Before you close the laptop, download the session record from the End View or the scoreboard: one spreadsheet with the history, scores, speeches, attendance and documents. A standalone room is deleted 24 hours after it ends. The record is useful for writing committee reports and for your own review.</li>
         </ul>
 
         <div className="gv-callout gv-callout-plain">

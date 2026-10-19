@@ -123,9 +123,12 @@ export const metadata: Metadata = {
   // marking those pages as duplicates of the homepage and keeping them out of
   // the index. Each indexable page declares its own canonical instead.
   // Favicon + apple-touch icon are served by the App Router file convention
-  // (src/app/icon.png, src/app/apple-icon.png) — the gavel mark on a
-  // transparent background, so no broken white square in the tab. We must NOT
-  // set metadata.icons here: defining it suppresses the file-convention link.
+  // (src/app/favicon.ico 16/32/48, src/app/icon.png 512, src/app/icon1.png 192,
+  // src/app/apple-icon.png), all the gavel mark on a transparent background, so
+  // no broken white square in the tab. /favicon.ico is what Google's favicon
+  // fetcher and older browsers ask for; icon1.png is the 192px (a multiple of
+  // 48, Google's rule) PNG. We must NOT set metadata.icons here: defining it
+  // suppresses the file-convention links.
   manifest: '/site.webmanifest',
 };
 

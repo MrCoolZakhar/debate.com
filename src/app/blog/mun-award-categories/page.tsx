@@ -3,24 +3,55 @@ import Link from 'next/link';
 import { pageMetadata, JSONLD_PUBLISHER } from '@/lib/seo';
 import ArticleLayout from '@/components/blog/ArticleLayout';
 import { H2, H3, Callout, FactCard, TableWrap } from '@/components/blog/prose';
+import Faq, { type FaqItem } from '@/components/blog/Faq';
+
+const TITLE = 'MUN Awards: Every Award and Commendation Explained';
+const DESCRIPTION =
+  'MUN awards usually run Best Delegate, Outstanding Delegate, Honourable Mention, then Verbal Commendation. What each means and how many a committee gives.';
+
+const FAQ: FaqItem[] = [
+  {
+    question: 'What are the awards in MUN?',
+    answer:
+      'Most conferences give, in order, Best Delegate, Outstanding Delegate, Honourable Mention and Verbal Commendation, plus Best Position Paper and delegation awards for schools. None of it is standardised, so each conference can name and count them differently.',
+  },
+  {
+    question: 'What is a Verbal Commendation in MUN?',
+    answer:
+      'A Verbal Commendation is an honour announced aloud, usually without a certificate, for one specific thing a delegate did well, such as a strong speech or a merger they brokered.',
+  },
+  {
+    question: 'What does High Commendation mean in MUN?',
+    answer:
+      'High Commendation is the name some conferences give to the award just below Best Delegate, so it usually means second place or close to it. Check the conference\'s own award list, because the names vary.',
+  },
+  {
+    question: 'How many awards does a MUN committee give?',
+    answer:
+      'A common rule is about one award for every six to eight delegates, so a committee of 20 gives about three and a committee of 45 about six. Chairs can usually give fewer than the quota, not more.',
+  },
+  {
+    question: 'Is an Honourable Mention a good award?',
+    answer:
+      'Yes. Two to four in a forty-seat committee is usual, which puts you among the strongest delegates in the room after Best Delegate and Outstanding Delegate.',
+  },
+];
 
 export const metadata: Metadata = pageMetadata({
-  title: 'MUN Award Categories Explained: Every Award and What It Means',
-  description:
-    'Best Delegate, Outstanding, Honourable Mention, Verbal Commendation, best paper and delegation awards: what each one signals and how many a committee gives.',
+  title: TITLE,
+  description: DESCRIPTION,
   path: '/blog/mun-award-categories',
-  ogDescription: 'Every MUN award category, its usual quota, and what it signals.',
   type: 'article',
 });
 
 const articleSchema = {
   '@context': 'https://schema.org',
   '@type': 'Article',
-  headline: 'MUN Award Categories Explained: Every Award and What It Means',
-  description: 'Every MUN award category, its usual quota, and what it signals.',
+  headline: TITLE,
+  description: DESCRIPTION,
   url: 'https://gavelling.com/blog/mun-award-categories',
   datePublished: '2026-09-20',
-  dateModified: '2026-09-20',
+  dateModified: '2026-10-19',
   author: { '@type': 'Organization', name: 'Gavelling', url: 'https://gavelling.com' },
   publisher: JSONLD_PUBLISHER,
   image: 'https://gavelling.com/og-image.png',
@@ -46,6 +77,7 @@ export default function Article() {
         slug="mun-award-categories"
         pitch="Gavelling keeps the record of what each delegation actually did, so a dais decides from evidence rather than memory."
       >
+        <p>MUN awards are the honours a conference&rsquo;s dais gives at the close. In order they are usually Best Delegate, Outstanding Delegate, Honourable Mention and Verbal Commendation, plus Best Position Paper and delegation awards for schools.</p>
         <p>Every conference gives out awards and almost none of them explain what the awards mean. A delegate comes home with an Honourable Mention and has no idea whether that is a near miss or a participation prize. This guide covers every category a Model UN conference gives, roughly how many of each you should expect, how delegation awards are tallied, and what each one is worth to somebody who was not in the room.</p>
         <p>One thing to hold on to throughout: none of this is standardised. There is no governing body for Model UN awards. The names below are the common ones, the quotas are the common ranges, and any individual conference is free to do something else entirely, and many do.</p>
 
@@ -72,11 +104,14 @@ export default function Article() {
         <H3>Outstanding Delegate</H3>
         <p>Usually one, sometimes two in a large committee. In practice this is second place, and everyone in the room knows it. A useful way to read it: Outstanding means the dais would have been comfortable giving you Best Delegate in a slightly different committee. It is a serious result, and most delegates who eventually win Best Delegate collect one or two of these first.</p>
 
+        <H3>High Commendation</H3>
+        <p>High Commendation, sometimes written Highly Commended, is the name some conferences give to the award just below Best Delegate, so it usually sits where Outstanding Delegate sits in the table above: second place, or close to it. The name is common on the UK and Indian circuits. As with every award here, check the conference&rsquo;s own list, because the same words can mean a lower tier somewhere else.</p>
+
         <H3>Honourable Mention</H3>
         <p>The widest band and therefore the most misread. Two to four in a forty-seat room means roughly the top ten per cent after the two awards above it, which is a real achievement, but the same words also appear at conferences that give six of them in a committee of twenty. Read it in context: ask how large the committee was and how many were given. It means you were visibly among the strongest people in the room and did not quite make the top two.</p>
 
         <H3>Verbal Commendation</H3>
-        <p>Sometimes called a Diplomatic Commendation or a Special Mention. It recognises one specific thing rather than a whole conference: a particularly good speech, a well-argued amendment, the delegate who brokered a merger nobody else could. Conferences use it for two different purposes, and it is worth knowing which. Some use it as a genuine fifth tier of merit. Others use it to acknowledge a delegate who was excellent for one session, or who was new, or who showed obvious improvement.</p>
+        <p>A Verbal Commendation is an honour announced aloud, usually without a certificate, for one specific thing a delegate did well. It is sometimes called a Diplomatic Commendation or a Special Mention, and it recognises one specific thing rather than a whole conference: a particularly good speech, a well-argued amendment, the delegate who brokered a merger nobody else could. Conferences use it for two different purposes, and it is worth knowing which. Some use it as a genuine fifth tier of merit. Others use it to acknowledge a delegate who was excellent for one session, or who was new, or who showed obvious improvement.</p>
         <Callout>Verbal commendations are usually announced aloud and not certificated, which is exactly why they do not belong on a CV line that a reader will take as a placing. Describe what you did instead.</Callout>
 
         <H3>Best Position Paper</H3>
@@ -137,6 +172,9 @@ export default function Article() {
         <p>So give them the context that makes it legible: the award, the conference, the committee, and the size of the field. &ldquo;Outstanding Delegate, UNEP (48 delegates), at a 700-delegate conference&rdquo; tells a reader something real. &ldquo;Award winner, Model UN&rdquo; tells them nothing and invites the assumption that you are padding.</p>
         <p>And one thing to keep in mind: what a reader can evaluate is what you describe yourself doing. A sentence about brokering a merger between two blocs on a specific issue is worth more than any certificate, because it is checkable, specific, and about a skill rather than a ranking. Awards are evidence that somebody agreed with you. The work is the point.</p>
         <p>For how to improve your odds in the room itself, see <Link href="/blog/mun-awards-guide">how Best Delegate is chosen</Link> and <Link href="/blog/mun-negotiation-tactics">negotiation and diplomacy in MUN</Link>.</p>
+
+        <H2>Frequently Asked Questions</H2>
+        <Faq items={FAQ} />
       </ArticleLayout>
     </>
   );

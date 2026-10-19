@@ -4,25 +4,56 @@ import { pageMetadata, JSONLD_PUBLISHER } from '@/lib/seo';
 import ArticleLayout from '@/components/blog/ArticleLayout';
 import { PhotoFigure } from '@/components/blog/BlogPhoto';
 import { H2, H3 } from '@/components/blog/prose';
+import Faq, { type FaqItem } from '@/components/blog/Faq';
+import { ReferenceSheet } from '@/components/blog/ReferenceSheet';
+
+const TITLE = 'MUN Chair Guide: How to Run a Model UN Committee';
+const DESCRIPTION =
+  'A MUN chair runs the committee: roll call, the speakers list, motions, caucuses and voting. A step-by-step guide to chairing Model UN, gavel to close.';
+
+const FAQ: FaqItem[] = [
+  {
+    question: 'What does a MUN chair do?',
+    answer:
+      'A MUN chair runs the committee: they take roll call, keep the General Speakers List, entertain motions and points, time every speaker, run caucuses and conduct the vote on draft resolutions.',
+  },
+  {
+    question: 'What is quorum in MUN?',
+    answer:
+      'Quorum is the minimum number of delegations needed to conduct business, typically a simple majority of 50% plus 1. With 20 delegations, at least 11 must be present.',
+  },
+  {
+    question: 'What is the difference between Present and Present and Voting?',
+    answer:
+      'A delegation that is Present may abstain on substantive votes. One that is Present and Voting commits to voting For or Against on every substantive matter and cannot abstain.',
+  },
+  {
+    question: 'How long is each speech on the GSL?',
+    answer:
+      'The committee sets the speaking time by motion, typically 60 to 90 seconds per delegate, and the chair enforces it strictly.',
+  },
+  {
+    question: 'How does a MUN session end?',
+    answer:
+      'A delegate moves to adjourn the meeting. If the motion passes, the chair closes the session with a gavel strike and a short closing statement.',
+  },
+];
 
 export const metadata: Metadata = pageMetadata({
-  title: "How to Run a Model UN Committee: Chair's Complete Guide (2026)",
-  description:
-    'Everything a MUN chair needs to run a professional committee session: opening procedures, roll call, General Speakers List, motions, caucuses, and voting. Step-by-step guide.',
+  title: TITLE,
+  description: DESCRIPTION,
   path: '/blog/how-to-run-mun-committee',
-  ogDescription:
-    'Everything a MUN chair needs to run a professional committee session.',
   type: 'article',
 });
 
 const articleSchema = {
   '@context': 'https://schema.org',
   '@type': 'Article',
-  headline: "How to Run a Model UN Committee: Chair's Complete Guide (2026)",
-  description: 'Everything a MUN chair needs to run a professional committee session: opening procedures, roll call, General Speakers List, motions, caucuses, and voting.',
+  headline: TITLE,
+  description: DESCRIPTION,
   url: 'https://gavelling.com/blog/how-to-run-mun-committee',
   datePublished: '2026-06-01',
-  dateModified: '2026-06-01',
+  dateModified: '2026-10-19',
   author: { '@type': 'Organization', name: 'Gavelling', url: 'https://gavelling.com' },
   publisher: JSONLD_PUBLISHER,
   image: 'https://gavelling.com/og-image.png',
@@ -50,9 +81,14 @@ export default function Article1() {
       >
 
         <p>
+          A MUN chair runs a Model UN committee from the dais: they take roll call, keep the speakers list, rule on points and motions, time every speech and run the vote.
+        </p>
+
+        <p>
           Chairing a Model UN committee is one of the most rewarding roles in the MUN experience, and one of the most demanding. You are simultaneously a facilitator, timekeeper, procedural authority, and energy manager. This guide walks you through every stage of a committee session, from your first gavel strike to adjournment. For the energy side of the job, read our guide to <Link href="/blog/mun-controlling-the-floor" style={{ color: '#1B3828', fontWeight: 600 }}>controlling the floor</Link>.
         </p>
 
+        <ReferenceSheet id="committee-session-flow" caption="The usual order of a committee session." />
         <H2>1. Before the Session: Preparation</H2>
         <p>
           The quality of a committee session is largely determined before it starts. Chairs who walk in prepared radiate confidence; chairs who improvise burn energy managing avoidable chaos. It also helps to know in advance <Link href="/blog/mun-difficult-delegates" style={{ color: '#1B3828', fontWeight: 600 }}>how to handle difficult delegates</Link>.
@@ -168,8 +204,11 @@ export default function Article1() {
           At the end of a session, a delegate typically motions to adjourn the meeting. The chair calls the vote and, if passed, formally closes the session with a gavel strike. A brief closing statement from the chair, thanking delegates for their participation and summarising what was accomplished, leaves the committee on a positive note.
         </p>
         <p>
-          If you used Gavelling, download the session record (a spreadsheet with the history, scores, speeches, attendance and documents) from the End View or the scoreboard for post-conference review. Do it straight away: a standalone room is deleted about an hour after it ends (a suspended one after 36 to 72 hours), while a conference room is kept. If your conference gives awards, see our <Link href="/blog/mun-judging-rubric" style={{ color: '#1B3828', fontWeight: 600 }}>MUN judging rubric</Link>.
+          If you used Gavelling, download the session record (a spreadsheet with the history, scores, speeches, attendance and documents) from the End View or the scoreboard for post-conference review. Do it straight away: a standalone room is deleted 24 hours after it ends (a suspended one after 36 to 72 hours), while a conference room is kept. If your conference gives awards, see our <Link href="/blog/mun-judging-rubric" style={{ color: '#1B3828', fontWeight: 600 }}>MUN judging rubric</Link>.
         </p>
+
+        <H2>8. Frequently Asked Questions</H2>
+        <Faq items={FAQ} />
       </ArticleLayout>
     </>
   );

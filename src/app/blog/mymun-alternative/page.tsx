@@ -5,9 +5,9 @@ import ArticleLayout from '@/components/blog/ArticleLayout';
 import { H2, H3, TableWrap } from '@/components/blog/prose';
 
 export const metadata: Metadata = pageMetadata({
-  title: 'mymun Alternative 2026: mymun and MUN Command vs Gavelling',
+  title: 'mymun Alternative: What mymun and MUN Command Cost in 2026',
   description:
-    'MUN Command is mymun’s software, and the two brands are converging. What mymun costs (€1 per user per day), what its free tier does not save, where it genuinely beats Gavelling, and where Gavelling, free to the conference, wins.',
+    'What is MUN Command? It is mymun’s live-session software, and the two brands are converging. What mymun costs (€1 per user per day), what its free tier does not save, where it genuinely beats Gavelling, and where Gavelling, free to the conference, wins.',
   path: '/blog/mymun-alternative',
   keywords: [
     'mymun',
@@ -30,7 +30,7 @@ export const metadata: Metadata = pageMetadata({
 const articleSchema = {
   '@context': 'https://schema.org',
   '@type': 'Article',
-  headline: 'mymun Alternative 2026: mymun and MUN Command vs Gavelling',
+  headline: 'mymun Alternative: What mymun and MUN Command Cost in 2026',
   description:
     'An honest side-by-side of mymun and its MUN Command session software against Gavelling, covering pricing, conference administration and live committee tools.',
   url: 'https://gavelling.com/blog/mymun-alternative',
@@ -109,7 +109,7 @@ export default function MymunAlternative() {
           We build Gavelling, so read this with that in mind. We have tried to make it the kind of comparison we would want if we were the ones choosing: every number sourced, every concession made in plain language, and an open invitation at the bottom to correct anything that is wrong.
         </p>
 
-        <H2>First: mymun and MUN Command are the same thing</H2>
+        <H2>What Is MUN Command? It Is mymun&rsquo;s Session Software</H2>
         <p>
           <strong>mymun</strong> is the parent platform: conference listings, applications, delegate profiles, the administrative layer a conference organiser lives in. <strong>MUN Command</strong> (also written <strong>MUNCommand</strong>) is the live-session half of that same product: the software a chair actually runs a committee on, given its own name, its own product page on mymun.com, and for a while its own social accounts.
         </p>
@@ -178,7 +178,7 @@ export default function MymunAlternative() {
             <strong>Native iOS, iPad and Android apps.</strong> Gavelling has none. Being a delegate is a phone job (eight hours, one device, a room full of people), and a native app gets an app-switcher slot, drops the browser chrome and holds state through backgrounding in a way a web page does not. Gavelling runs in the browser on any device with nothing to install, which is an advantage on conference morning and a disadvantage for the eight hours after it.
           </li>
           <li>
-            <strong>Offline support.</strong> mymun advertises offline operation with sync on reconnect. Gavelling has no offline mode at all: it is installable to a home screen, but a committee room with dead Wi-Fi is a committee room where Gavelling stops updating. A venue with known-bad connectivity is a genuine reason to pick them.
+            <strong>Offline support.</strong> mymun advertises offline operation with sync on reconnect. Gavelling has no full offline mode. When venue Wi-Fi drops, the chair&apos;s laptop keeps every change it makes and saves them once the connection is back, but delegates&apos; phones stop updating until they reconnect. A venue with known-bad connectivity is a genuine reason to pick them.
           </li>
           <li>
             <strong>Delegates can raise motions from their own device.</strong> On mymun this is a headline feature, and it is a real one: it moves work off the dais and stops the chair being a typist. On Gavelling, motions are chair-entered only; delegates can request a speaking slot and request to join, but a motion still goes through the dais. This is the single feature gap we get asked about most, and it is on our list.
@@ -270,7 +270,7 @@ export default function MymunAlternative() {
                 ['Free tier procedure limits', 'None: full toolkit on every session', '3 modes of debate, 3 motion types'],
                 ['Delegate accounts for a session', 'Not required: join by 6-character code', 'Platform accounts'],
                 ['Native mobile apps', 'No, browser only', 'Yes: iOS, iPad, Android'],
-                ['Offline support', 'No', 'Yes'],
+                ['Offline support', 'Partly: the chair keeps working and syncs later', 'Yes'],
                 ['Delegates raise motions in-app', 'No, chair-entered', 'Yes'],
                 ['Interface languages', '4 (EN, ES, FR, AR)', '8'],
                 ['Motion types', '7, all renameable, plus a free-text custom motion', '21 on the paid tier'],

@@ -146,7 +146,7 @@ export default function MunCommandAlternative() {
                 ['Delegate accounts for a session', 'Not required: join by code', 'Platform accounts'],
                 ['Native mobile apps', 'No, web app on any device', 'Yes, iOS and Android'],
                 ['Committee session tools', 'Roll call, GSL, caucuses, motions, voting, chat, docs', '20+ debate modes, motions, stats, chat, docs'],
-                ['Conference management', 'Applications, allocations, payments, aid, study guides, papers, jobs (awards coming soon)', 'Committee tracking, documents, stats, chat'],
+                ['Conference management', 'Applications, allocations, payments, aid, study guides, papers, jobs, awards', 'Committee tracking, documents, stats, chat'],
                 ['Conference discovery', 'Public directory + world map', 'mymun listings'],
                 ['Delegate record', 'Shareable MUN CV, with conferences attended recorded automatically', 'Not available'],
               ].map(([feat, g, m]) => (

@@ -3,26 +3,57 @@ import type { Metadata } from 'next';
 import { pageMetadata, JSONLD_PUBLISHER } from '@/lib/seo';
 import ArticleLayout from '@/components/blog/ArticleLayout';
 import { PhotoFigure } from '@/components/blog/BlogPhoto';
-import { H2, FactCard, TableWrap } from '@/components/blog/prose';
+import { H2, H3, FactCard, TableWrap } from '@/components/blog/prose';
+import Faq, { type FaqItem } from '@/components/blog/Faq';
+import { ReferenceSheet } from '@/components/blog/ReferenceSheet';
+
+const TITLE = 'Motions in MUN: Every Motion and How to Raise One';
+const DESCRIPTION =
+  'A motion in MUN is a formal proposal to change what the committee does, like opening a caucus or moving to a vote. Every motion, its vote and how to raise it.';
+
+const FAQ: FaqItem[] = [
+  {
+    question: 'What is a motion in MUN?',
+    answer:
+      'A motion is a formal proposal by a delegate to change what the committee is doing, such as entering a caucus, extending speaking time or moving to a vote. It is always procedural, never about the content of a resolution.',
+  },
+  {
+    question: 'How do you raise a motion in MUN?',
+    answer:
+      'Raise your placard, wait to be recognised by the chair, then state the motion in full, for example: "The delegation of Brazil moves for a moderated caucus on climate financing, for a total time of 10 minutes with 90 seconds per speaker." Most motions then need a second and a simple majority.',
+  },
+  {
+    question: 'How do you raise a motion for the GSL?',
+    answer:
+      'Raise your placard when the floor is open and say: "The delegation of [Country] moves to open the General Speakers List." Many chairs open the list directly once the agenda is set, so a vote is often not needed.',
+  },
+  {
+    question: 'What is the difference between a motion and a point?',
+    answer:
+      'A motion proposes a change to what the committee is doing, and the committee votes on it. A point is a request to the chair, for example to correct a breach of the rules, and the chair rules on it.',
+  },
+  {
+    question: 'Which motion is voted on first?',
+    answer:
+      'The most disruptive one. A motion to adjourn comes first, then to suspend the meeting, then an unmoderated caucus, then a moderated caucus, then setting the agenda or speaking time.',
+  },
+];
 
 export const metadata: Metadata = pageMetadata({
-  title: 'MUN Motions Explained: Types, How to Propose, and Voting Rules',
-  description:
-    'A complete guide to Model UN motions: moderated caucus, unmoderated caucus, extension of speaking time, adjournment, and more. Includes voting thresholds and chair tips.',
+  title: TITLE,
+  description: DESCRIPTION,
   path: '/blog/mun-motions-explained',
-  ogDescription:
-    'Complete reference for every MUN motion type with voting thresholds and chair tips.',
   type: 'article',
 });
 
 const articleSchema = {
   '@context': 'https://schema.org',
   '@type': 'Article',
-  headline: 'MUN Motions Explained: Types, How to Propose, and Voting Rules',
-  description: 'A complete guide to Model UN motions: every type, voting thresholds, precedence, and chair tips.',
+  headline: TITLE,
+  description: DESCRIPTION,
   url: 'https://gavelling.com/blog/mun-motions-explained',
   datePublished: '2026-06-01',
-  dateModified: '2026-06-01',
+  dateModified: '2026-10-19',
   author: { '@type': 'Organization', name: 'Gavelling', url: 'https://gavelling.com' },
   publisher: JSONLD_PUBLISHER,
   image: 'https://gavelling.com/og-image.png',
@@ -50,6 +81,10 @@ export default function Article4() {
       >
 
         <p>
+          A motion in MUN is a formal proposal by a delegate to change what the committee is doing, such as opening a caucus, extending speaking time or moving to a vote. You raise one by raising your placard, waiting to be recognised and stating the motion in full; most motions then need a second and a simple majority.
+        </p>
+
+        <p>
           Motions are the mechanism through which delegates change what the committee is doing: shifting from formal debate to a caucus, extending speaking time, moving to a vote, or closing the session. Understanding every motion type, when to use it, and what threshold it requires is essential for both chairs and experienced delegates. The <Link href="/blog/mun-glossary">MUN glossary</Link> defines any term you have not met yet.
         </p>
 
@@ -75,7 +110,13 @@ export default function Article4() {
           <li><strong>Vote</strong>: the chair calls a vote. Motions pass by simple majority unless otherwise specified.</li>
         </ul>
 
+        <H3>How to raise a motion for the GSL</H3>
+        <p>
+          Opening the General Speakers List is the motion new delegates ask about most. Raise your placard when the floor is open and say: <em>&quot;The delegation of Brazil moves to open the General Speakers List.&quot;</em> Many chairs open the list directly once the agenda is set, so a vote is often not needed. To change how long each GSL speaker has, move to set the speaking time: <em>&quot;The delegation of Brazil moves to set the speaking time at 60 seconds.&quot;</em> That one passes by simple majority. The <Link href="/blog/general-speakers-list-guide">GSL guide</Link> covers what happens once the list is open.
+        </p>
+
         <H2>3. The Most Common MUN Motions</H2>
+        <ReferenceSheet id="motions" caption="The common motions, the vote each needs and what to say." />
 
         <FactCard title="Motion to Open / Continue the Speakers List">Opens or reopens the General Speakers List after a caucus. Requires: none specified (chair may open it directly). Vote threshold: typically no vote needed. The chair opens it as a matter of course.</FactCard>
 
@@ -160,6 +201,9 @@ export default function Article4() {
         <p>
           See also: <Link href="/blog/how-to-run-mun-committee" style={{ color: '#1B3828', fontWeight: 600 }}>How to Run a MUN Committee</Link> for a complete session walkthrough.
         </p>
+
+        <H2>7. Frequently Asked Questions</H2>
+        <Faq items={FAQ} />
       </ArticleLayout>
     </>
   );
