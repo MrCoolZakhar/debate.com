@@ -1,4 +1,4 @@
--- scratch-reserve-in-slug.sql (19 Oct 2026). NOT APPLIED: the chat's Supabase work.
+-- scratch-reserve-in-slug.sql (19 Oct 2026). APPLIED 19 Oct 2026 (migration reserve_in_conference_slug).
 --
 -- `/conferences/in/` is a static route (the country list and the hubs), so a
 -- conference slug `in` would be shadowed forever. src/lib/conferenceSlug.ts

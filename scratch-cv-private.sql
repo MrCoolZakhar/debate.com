@@ -1,4 +1,4 @@
--- Private CVs no longer 404 (owner, 19 Oct 2026). get_public_cv returns the
+-- APPLIED 19 Oct 2026 (migration get_public_cv_private_identity). Private CVs no longer 404 (owner, 19 Oct 2026).
 -- name and photo of a private CV with `private: true` and no entries, so every
 -- link to a person (conference teams, avatars) lands on a page that says
 -- "This MUN CV is private". Nationality and every entry stay hidden.
