@@ -703,7 +703,7 @@ export default function SpotlightPopup(props: SpotlightPopupProps) {
               busyText="Saving your dates…"
               disabled={!bookable || !stepReady || chosenDays === 0}
             >
-              {stepIx + 1 < items.length ? `Next: ${NAMES[items[stepIx + 1].placement]}` : 'Next: customise'}
+              {stepIx + 1 < items.length ? `Next: ${NAMES[items[stepIx + 1].placement]}` : 'Next: Customize'}
             </GoldButton>
           )}
         </div>

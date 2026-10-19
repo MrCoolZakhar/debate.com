@@ -129,7 +129,7 @@ export default function EmailIssuesNotice({
                 Check templates
               </button>
             ) : (
-              <Link href={`/manage/${slug}/communications?view=automatic`} style={button} className="focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] focus-visible:ring-offset-2">
+              <Link href={`/manage/${slug}/communications?tab=automatic`} style={button} className="focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] focus-visible:ring-offset-2">
                 Check templates
               </Link>
             )}

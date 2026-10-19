@@ -474,7 +474,7 @@ function ConferenceDescription({ text }: { text: string }) {
         id={id}
         ref={ref}
         className={`text-[15px] ${expanded ? '' : 'max-sm:line-clamp-10'}`}
-        style={{ color: '#3B342C', fontFamily: "var(--font-brand), sans-serif", whiteSpace: 'pre-wrap', lineHeight: 1.9, margin: 0 }}
+        style={{ color: '#3B342C', fontFamily: "var(--font-brand), sans-serif", whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', lineHeight: 1.9, margin: 0 }}
       >
         {text}
       </p>
@@ -3544,7 +3544,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                                           >
                                             {ROMAN[ti] ?? String(ti + 1)}.
                                           </span>
-                                          <span className="text-[12.5px] font-medium" style={{ color: '#2E2820', fontFamily: "var(--font-brand), sans-serif", lineHeight: 1.55 }}>
+                                          <span className="text-[12.5px] font-medium" style={{ color: '#2E2820', fontFamily: "var(--font-brand), sans-serif", lineHeight: 1.55, overflowWrap: 'anywhere', minWidth: 0 }}>
                                             {/* First 120 characters, cut at a word. One Show more per committee, below. */}
                                             <CardTopic text={topic} />
                                           </span>

@@ -45,7 +45,7 @@ import {
   isConcluded, pickHeadliner,
 } from './shared';
 import { recordSpotlightClick, recordSpotlightView, type FeaturedRow } from '@/lib/spotlight';
-import { PREVIEW_CLICK_HINT, SpotlightPreviewBar, previewFeaturedRow, useSpotlightPreview } from '@/lib/spotlightPreview';
+import { PREVIEW_CLICK_HINT, PreviewHint, SpotlightPreviewBar, previewFeaturedRow, useSpotlightPreview } from '@/lib/spotlightPreview';
 import { SessionsSection, AboutCards, LearnMunSection, type HomeGuide } from './HomeSections';
 import { isGavellingListing } from '@/lib/listings';
 import { conferenceImageSrc } from '@/lib/listingImage';
@@ -410,10 +410,11 @@ export default function VariantStagefront({
                       key={c.id}
                       className="w-[280px] lg:w-auto flex-shrink-0 lg:flex-shrink"
                       style={{ filter: 'drop-shadow(0 14px 30px rgba(0,0,0,0.40))', scrollSnapAlign: 'start' }}
-                      title={c.id === previewId ? PREVIEW_CLICK_HINT : undefined}
                     >
                       {/* A booked Spotlight wears the tag and the bright gold
-                          edge; a filled slot is today's plain card. */}
+                          edge; a filled slot is today's plain card. The
+                          previewed card carries the site's own tooltip. */}
+                      <PreviewHint text={PREVIEW_CLICK_HINT} style={{ display: 'block' }} disabled={c.id !== previewId}>
                       <ConferenceCard
                         conf={c}
                         heroCompact
@@ -431,6 +432,7 @@ export default function VariantStagefront({
                           goTo(c.slug);
                         }}
                       />
+                      </PreviewHint>
                     </div>
                   ))}
                 </div>

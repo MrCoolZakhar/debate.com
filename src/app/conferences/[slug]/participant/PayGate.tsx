@@ -66,7 +66,7 @@ export function RejectedCard({
             <p className="text-[10px] font-bold mb-1" style={{ color: '#B8844A', fontFamily: OUTFIT, letterSpacing: '0.1em' }}>
               FEEDBACK FROM THE ORGANIZERS
             </p>
-            <p className="text-[13px] whitespace-pre-wrap" style={{ color: '#1C1410', fontFamily: OUTFIT, lineHeight: 1.6 }}>
+            <p className="text-[13px] whitespace-pre-wrap" style={{ color: '#1C1410', fontFamily: OUTFIT, lineHeight: 1.6, overflowWrap: 'anywhere' }}>
               {organizerNote}
             </p>
           </div>

@@ -269,7 +269,7 @@ export default function SubmissionToast({ conferenceName, message, linkLabel, li
         </button>
       </div>
 
-      <p style={{ fontFamily: OUTFIT, fontSize: 13.5, fontWeight: 600, lineHeight: 1.5, color: GLASS.ink, margin: '8px 0 0 0' }}>
+      <p style={{ fontFamily: OUTFIT, fontSize: 13.5, fontWeight: 600, lineHeight: 1.5, color: GLASS.ink, margin: '8px 0 0 0', overflowWrap: 'anywhere' }}>
         {message}
       </p>
 

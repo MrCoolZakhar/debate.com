@@ -13,6 +13,7 @@
 // here since PurchasePopupHost only mounts it while a purchase is open.
 
 import { useEffect, useState } from 'react';
+import { PreviewHint } from '@/lib/spotlightPreview';
 import Link from 'next/link';
 import { LogoDisc } from '@/components/LogoDisc';
 import { PurchaseShell, PURCHASE_CSS } from '@/components/purchase/purchaseKit';
@@ -100,8 +101,8 @@ export default function ConferenceSpotlightDialog({ rows, onClose, openRolesFor,
                   <div className="gv-cs-actions">
                     {preview ? (
                       <>
-                        <span className="gv-cs-btn gv-cs-primary" aria-disabled="true" title="Visitors can click this">Apply</span>
-                        <span className="gv-cs-btn gv-cs-secondary" aria-disabled="true" title="Visitors can click this">View conference</span>
+                        <PreviewHint style={{ flex: '1 1 auto', display: 'flex' }}><span className="gv-cs-btn gv-cs-primary" aria-disabled="true" tabIndex={0}>Apply</span></PreviewHint>
+                        <PreviewHint style={{ flex: '1 1 auto', display: 'flex' }}><span className="gv-cs-btn gv-cs-secondary" aria-disabled="true" tabIndex={0}>View conference</span></PreviewHint>
                       </>
                     ) : (<>
                     {(() => {

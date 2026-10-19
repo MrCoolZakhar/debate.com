@@ -61,7 +61,7 @@ export const EVENT_REGISTRY = [
   // event-emails edge function v2). Nothing on the client queues them; the rows exist so
   // Communications lists them and an organizer can write their own copy or switch one off.
   { key: 'document_shared', label: 'Document shared', description: "Sent when organisers share a document and choose to email the people it is for.", defaultDelivery: 'immediate' },
-  { key: 'document_return_requested', label: 'Document to send back', description: "Sent when organisers share a document people must send back, and choose to email them.", defaultDelivery: 'immediate' },
+  { key: 'document_return_requested', label: 'New Actionable Document', description: "Sent when organisers share a document people must send back, and choose to email them.", defaultDelivery: 'immediate' },
   { key: 'document_return_accepted', label: 'Returned copy accepted', description: "Sent when organisers accept a copy someone sent back.", defaultDelivery: 'immediate' },
   { key: 'document_return_sent_back', label: 'Returned copy sent back', description: "Sent when organisers send a copy back with a note.", defaultDelivery: 'immediate' },
   { key: 'document_return_reminder', label: 'Document due reminder', description: "Sent 3 days before a send-back document is due and on the day, to people who have not sent it.", defaultDelivery: 'immediate' },
@@ -293,7 +293,10 @@ export const ESSENTIAL_DEFAULT_ON_EVENTS = new Set<string>([
   // Money answers (owner, 7 Oct 2026).
   'aid_approved', 'aid_denied', 'fee_waived', 'spot_received', 'spot_lost',
   // Document Uploads (owner, 12 Oct 2026): sent by the server only; a missing row means on.
-  'document_shared', 'document_return_requested', 'document_return_accepted', 'document_return_sent_back', 'document_return_reminder',
+  // Since 19 Oct 2026 (prompt 140) only these two are on by default; "Copy
+  // accepted", "Copy sent back" and "Document due" are off until switched on,
+  // and a conference's saved choice (an email_templates row) always wins.
+  'document_shared', 'document_return_requested',
 ]);
 
 /** Whether an event with NO template row still sends (our default copy). */

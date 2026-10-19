@@ -62,7 +62,7 @@ import { isListedConference } from '@/lib/publicConferences';
 import { isGavellingListing } from '@/lib/listings';
 import { conferenceImageSrc } from '@/lib/listingImage';
 import { fetchFeatured, recordSpotlightClick, recordSpotlightView, type FeaturedRow, type SpotlightPlacement } from '@/lib/spotlight';
-import { PREVIEW_CLICK_HINT, SpotlightPreviewBar, previewFeaturedRow, useSpotlightPreview } from '@/lib/spotlightPreview';
+import { PREVIEW_CLICK_HINT, PreviewHint, SpotlightPreviewBar, previewFeaturedRow, useSpotlightPreview } from '@/lib/spotlightPreview';
 import { fetchCreditSponsoredIds } from '@/lib/creditSponsored';
 import ConferenceSpotlightDialog, { claimSpotlightDialog } from './ConferenceSpotlightDialog';
 import SpotlightPlacePopup, { claimPlacePopup, fetchSpotlightPopups, type PlacePopupPlacement, type PlacePopupRow } from './SpotlightPlacePopup';
@@ -814,7 +814,7 @@ export default function ConferencesExploreClient() {
 
   const cardFor = (conf: Conference, spot?: FeaturedRow) => conf.id === previewId ? (
     // The previewed conference's own card does nothing (it is a preview).
-    <div key={conf.id} title={PREVIEW_CLICK_HINT}>
+    <PreviewHint key={conf.id} text={PREVIEW_CLICK_HINT} style={{ display: 'block' }}>
       <ConferenceCard
         conf={conf}
         variant="listing"
@@ -827,7 +827,7 @@ export default function ConferencesExploreClient() {
         onLeave={() => setHoveredId(null)}
         onClick={() => {}}
       />
-    </div>
+    </PreviewHint>
   ) : (
     <ConferenceCard
       key={conf.id}

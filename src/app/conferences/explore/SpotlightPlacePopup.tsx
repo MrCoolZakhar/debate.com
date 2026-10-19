@@ -18,6 +18,7 @@
 // sheet with two cards swiped sideways (scroll snap, no auto-rotation).
 
 import { useEffect } from 'react';
+import { PreviewHint } from '@/lib/spotlightPreview';
 import Link from 'next/link';
 import { CheckCircle2, MapPin, CalendarDays, Globe2 } from 'lucide-react';
 import { LogoDisc } from '@/components/LogoDisc';
@@ -153,8 +154,8 @@ export default function SpotlightPlacePopup({ rows, placement, onClose, preview 
                   <div className="gv-sp-actions">
                     {preview ? (
                       <>
-                        <span className="gv-sp-btn gv-sp-primary" aria-disabled="true" title={previewHint}>Apply now</span>
-                        <span className="gv-sp-btn gv-sp-secondary" aria-disabled="true" title={previewHint}>View conference</span>
+                        <PreviewHint text={previewHint} style={{ flex: '1 1 150px', display: 'flex' }}><span className="gv-sp-btn gv-sp-primary" aria-disabled="true" tabIndex={0}>Apply now</span></PreviewHint>
+                        <PreviewHint text={previewHint} style={{ flex: '1 1 150px', display: 'flex' }}><span className="gv-sp-btn gv-sp-secondary" aria-disabled="true" tabIndex={0}>View conference</span></PreviewHint>
                       </>
                     ) : (
                       <>

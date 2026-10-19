@@ -100,7 +100,7 @@ export const EVENT_COPY: Record<EventKey, { name: string; when: string }> = {
   spot_lost: { name: 'Spot lost', when: 'Coming soon. When someone loses a covered place' },
   documents_published: { name: 'Study guide out', when: "When a committee's study guide is released" },
   document_shared: { name: 'New document', when: 'When you share a document and choose to email it' },
-  document_return_requested: { name: 'Please send it back', when: 'When you share a document people must send back' },
+  document_return_requested: { name: 'New Actionable Document', when: 'When you share a document people must send back' },
   document_return_accepted: { name: 'Copy accepted', when: 'When you accept a copy someone sent back' },
   document_return_sent_back: { name: 'Copy sent back', when: 'When you send a copy back with a note' },
   document_return_reminder: { name: 'Document due', when: '3 days before the due date and on the day, if not sent' },

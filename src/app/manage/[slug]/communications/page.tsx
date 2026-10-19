@@ -58,6 +58,7 @@ import { friendlyError, plainOrFallback, UserFacingError } from '@/lib/friendlyE
 import { formatConferenceDates } from '@/lib/conferenceDates';
 import { waitingSince } from './waitingOnReply';
 import MessagesHeader, { type MessagesTab } from './MessagesHeader';
+import { replaceUrlInPlace } from '@/lib/replaceUrlInPlace';
 import InboxSplit, { type SplitThread, type SplitDetail } from './InboxSplit';
 import AutomaticEmailsList, { type AutoGroup, type AutoRow } from './AutomaticEmailsList';
 import { JOURNEY, EVENT_JOURNEY, EVENT_COPY, REMINDER_OF } from './automaticEmails';
@@ -2616,7 +2617,14 @@ function CommunicationsPageInner() {
       return;
     }
     const ev = searchParams.get('event');
-    // ?view=automatic: the "Check templates" button of an email-issue notice.
+    // ?tab=questions | sent | automatic (prompt 140): the tab the organizer was
+    // on, written on every switch, so a reload stays there. Unknown or missing:
+    // the default (the inbox), as before.
+    const tab = searchParams.get('tab');
+    if (!ev && tab === 'sent') { setView('sent'); return; }
+    if (!ev && tab === 'automatic') { setView('automatic'); return; }
+    if (!ev && tab === 'questions') { setView('inbox'); return; }
+    // ?view=automatic: the "Check templates" button of an email-issue notice (older links).
     if (!ev && searchParams.get('view') === 'automatic') { setView('automatic'); return; }
     // ?view=inbox | sent | announce: the three other screens of the redesign.
     const v = searchParams.get('view');
@@ -2628,6 +2636,18 @@ function CommunicationsPageInner() {
       openBuilderForEvent(def);
     }
   }, [loading, deepLinkHandled, searchParams, openBuilderForEvent]);
+
+  /** A tab press: the view, and ?tab= in the URL in place (no request, no
+   *  scroll, no new history entry; prompt 140). */
+  function selectTab(t: MessagesTab) {
+    setView(t === 'questions' ? 'inbox' : t);
+    try {
+      const url = new URL(window.location.href);
+      url.searchParams.set('tab', t);
+      url.searchParams.delete('view');
+      replaceUrlInPlace(url.pathname + url.search + url.hash);
+    } catch { /* the view still changes */ }
+  }
 
   // ── Builder mutations ─────────────────────────────────────────────────────
 
@@ -3993,12 +4013,12 @@ function CommunicationsPageInner() {
       {!builderOpen && !loading && view !== 'announce' && (
         <MessagesHeader
           tab={messagesTab}
-          onTab={t => setView(t === 'questions' ? 'inbox' : t)}
+          onTab={selectTab}
           waitingCount={waitingCount}
           onWrite={openPicker}
           onMarketing={() => setView('announce')}
           failedCount={failedTotal}
-          onSeeFailed={() => setView('sent')}
+          onSeeFailed={() => selectTab('sent')}
           sessionCodesHint={sessionCodesNudge && railCardVisible('session-codes') ? `The conference starts ${daysToStart === 0 ? 'today' : `in ${daysToStart} day${daysToStart === 1 ? '' : 's'}`} and delegates do not have their session codes yet.` : null}
           onSessionCodes={() => {
             const def = EVENT_REGISTRY.find(e => e.key === 'session_join_invite');

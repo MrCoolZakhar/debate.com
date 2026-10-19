@@ -202,7 +202,7 @@ export function ManualPayAction({
         </>
       )}
       {externalPaymentNote && (
-        <p className="mb-3" style={{ fontFamily: OUTFIT, fontSize: 12, color: NEU.muted, lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>
+        <p className="mb-3" style={{ fontFamily: OUTFIT, fontSize: 12, color: NEU.muted, lineHeight: 1.6, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>
           {externalPaymentNote}
         </p>
       )}

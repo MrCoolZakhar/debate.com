@@ -17,8 +17,9 @@
  * - Close preview removes the flag (history.replaceState) and hides it.
  */
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { Eye, X } from 'lucide-react';
+import Portal from '@/components/Portal';
 import { useAuth } from '@/components/AuthProvider';
 import { getFreshAuthedClient } from '@/lib/supabase-auth';
 import type { FeaturedRow, SpotlightPlacement } from '@/lib/spotlight';
@@ -232,3 +233,68 @@ const BAR_CSS = `
   .gv-spv-text{flex:1 1 180px;font-size:13px}
 }
 `;
+
+/**
+ * The site's own tooltip on a previewed card or button (prompt 140; it was a
+ * native `title`, slow and not part of the site). Shown at once on hover and on
+ * keyboard focus inside it, above the element, kept on screen. Clicking still
+ * does nothing in a preview (the caller's markup decides that).
+ */
+export function PreviewHint({ text = PREVIEW_CLICK_HINT, children, className, style, disabled = false }: {
+  text?: string;
+  /** Not a preview: draws the children with no tooltip. */
+  disabled?: boolean;
+  children: ReactNode;
+  className?: string;
+  style?: React.CSSProperties;
+}) {
+  const ref = useRef<HTMLSpanElement | null>(null);
+  const [pos, setPos] = useState<{ top: number; left: number; above: boolean } | null>(null);
+  const show = useCallback(() => {
+    const el = ref.current;
+    if (!el || disabled) return;
+    const r = el.getBoundingClientRect();
+    const width = Math.min(220, window.innerWidth - 20);
+    const left = Math.max(10, Math.min(r.left + r.width / 2 - width / 2, window.innerWidth - width - 10));
+    const above = r.top > 60;
+    setPos({ top: above ? r.top - 8 : r.bottom + 8, left, above });
+  }, [disabled]);
+  useEffect(() => {
+    if (!pos) return;
+    const hide = () => setPos(null);
+    window.addEventListener('scroll', hide, true);
+    window.addEventListener('resize', hide);
+    return () => { window.removeEventListener('scroll', hide, true); window.removeEventListener('resize', hide); };
+  }, [pos]);
+  return (
+    <span
+      ref={ref}
+      className={className}
+      style={{ display: 'inline-block', ...style }}
+      onMouseEnter={show}
+      onMouseLeave={() => setPos(null)}
+      onFocus={show}
+      onBlur={() => setPos(null)}
+    >
+      {children}
+      {pos && (
+        <Portal>
+          <span
+            role="tooltip"
+            style={{
+              position: 'fixed', zIndex: 9600, top: pos.top, left: pos.left, width: Math.min(220, window.innerWidth - 20),
+              transform: pos.above ? 'translateY(-100%)' : undefined,
+              padding: '9px 12px', borderRadius: 12, background: '#F0EBDD',
+              boxShadow: '0 10px 26px -12px rgba(27,56,40,0.45), 0 1px 0 rgba(27,56,40,0.08)',
+              fontFamily: 'var(--font-brand), sans-serif', fontSize: 13, fontWeight: 600, lineHeight: 1.45,
+              color: '#5B4F42', textAlign: 'center', pointerEvents: 'none',
+            }}
+          >
+            {text}
+          </span>
+        </Portal>
+      )}
+    </span>
+  );
+}
+

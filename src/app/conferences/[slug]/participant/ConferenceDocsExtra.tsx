@@ -229,7 +229,7 @@ function SendBackBlock({ doc, viewing, onView, onSend }: {
       {state === 'sent_back' && (
         <p className="gv-cdx-state" style={{ color: DANGER, margin: 0 }}>
           <CornerUpLeft size={16} strokeWidth={2.4} aria-hidden />
-          <span style={{ whiteSpace: 'pre-wrap' }}>Sent back: {r?.review_note ?? ''}</span>
+          <span style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>Sent back: {r?.review_note ?? ''}</span>
         </p>
       )}
       {state === 'accepted' && (
