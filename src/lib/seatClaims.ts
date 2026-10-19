@@ -2,10 +2,14 @@
 //
 // Contract (migration `delegate_seat_claims_and_open_conference_seats`):
 //   • A conference seat is RESERVED when the linked conference committee has a
-//     `conference_allocations` row for that country: a registered delegate, an imported
-//     address with no account yet (user_id null), or a delegation block. A reserved seat
-//     needs a signed-in account that is allocated to it, and claim_delegate_seat checks
-//     that on the SERVER, so the gate is not only in the UI.
+//     `conference_allocations` row for that country that names a person: a registered
+//     delegate (user_id) or an application, including an imported address with no
+//     account yet (user_id null). A delegation block seat (society_id, no person) does
+//     NOT reserve the country (seat_claim_is_reserved, scratch-session-block-seats.sql).
+//     The database decides (session_join_rules → reserved_countries); this file never
+//     reads conference_allocations itself. A reserved seat needs a signed-in account
+//     that is allocated to it, and claim_delegate_seat checks that on the SERVER, so the
+//     gate is not only in the UI.
 //   • Every other seat is OPEN: the session code alone is enough, exactly like a
 //     standalone session. A conference that never invited anyone is fully open; a
 //     partly imported one keeps its imports gated and lets everyone else in.
