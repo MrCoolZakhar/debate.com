@@ -5,7 +5,8 @@
  * (useConferenceDraft, 12 Oct 2026):
  *   DraftStatusCard  a saved draft that cannot be opened here yet (it belongs
  *                    to an account: sign in; another account's; unreadable)
- *   DraftSavedNote   the quiet "Saved" line, bottom left
+ *   DraftSavedNote   the quiet "Saved" line, bottom left ("Saved on this
+ *                    device" for a signed-out draft)
  *   DraftNotice      a one-line note above the wizard (reminders stopped,
  *                    a draft that was already created)
  */
@@ -78,7 +79,8 @@ const link: React.CSSProperties = {
   fontSize: 13.5, fontWeight: 700, color: NEU.forest, textDecoration: 'underline',
 };
 
-export function DraftSavedNote({ state, error }: { state: SaveState; error: string }) {
+/** `onDevice`: a signed-out draft, kept in this browser until they sign in. */
+export function DraftSavedNote({ state, error, onDevice }: { state: SaveState; error: string; onDevice?: boolean }) {
   if (state === 'idle' && !error) return null;
   const failed = state === 'error' || !!error;
   return (
@@ -94,7 +96,7 @@ export function DraftSavedNote({ state, error }: { state: SaveState; error: stri
       }}
     >
       {failed ? <CloudOff size={13} /> : <Check size={13} />}
-      {error || (state === 'saving' ? 'Saving' : state === 'saved' ? 'Saved' : 'Not saved yet. Trying again soon')}
+      {error || (state === 'saving' ? 'Saving' : state === 'saved' ? (onDevice ? 'Saved on this device' : 'Saved') : 'Not saved yet. Trying again soon')}
     </div>
   );
 }

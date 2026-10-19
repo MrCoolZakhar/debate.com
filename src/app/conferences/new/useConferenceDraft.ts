@@ -6,12 +6,19 @@
  * The page owns every answer; this hook only
  *   1. finds out whether the drafts SQL exists (`available`; false = behave
  *      exactly as before: signed-out visitors go to sign in, nothing is saved),
- *   2. resumes a draft from `?draft=<token>` or this browser's token, handing
- *      the saved answers back through `restore`,
+ *   2. resumes a draft from `?draft=<token>`, this browser's token, or the
+ *      signed-out copy kept in this browser, handing the saved answers back
+ *      through `restore`,
  *   3. autosaves: about 1 s after the last change, at once on a step change,
- *      and a keepalive save on `pagehide`,
- *   4. holds the signed-out visitor's email (the wizard's email step), and
- *   5. marks the draft finished once the conference exists.
+ *      and on `pagehide`. Signed in, or holding a server token: to the
+ *      server. Signed out with no token (owner, 19 Oct 2026: no email step):
+ *      to this browser only, because the server never mints a draft without
+ *      an email and the wizard no longer asks for one. Signing in turns that
+ *      copy into the account's server draft on the next save,
+ *   4. marks the draft finished once the conference exists.
+ *
+ * It never sends an email address: a signed-in save takes the account's on
+ * the server (src/lib/conferenceDrafts.ts).
  *
  * It never writes committee or conference data and never sends anything: the
  * reminder emails are the database's job (queue_conference_draft_reminders).
@@ -22,6 +29,7 @@ import {
   conferenceDraftsAvailable, loadConferenceDraft, saveConferenceDraft, saveConferenceDraftKeepalive,
   stopConferenceDraftReminders, finishConferenceDraft, claimConferenceDrafts, fingerprintConferenceDraft,
   readLocalDraftToken, writeLocalDraftToken, isDraftToken, setPendingCreate, readPendingCreate,
+  readLocalDraft, writeLocalDraft, clearLocalDraft, LOCAL_PENDING_CREATE, type RpcAnswer, type SaveDraftAnswer,
 } from '@/lib/conferenceDrafts';
 import { replaceUrlInPlace } from '@/lib/replaceUrlInPlace';
 
@@ -52,7 +60,6 @@ export function useConferenceDraft({ userId, accessToken, authLoading, data, ste
   const [available, setAvailable] = useState<boolean | null>(null);
   const [status, setStatus] = useState<DraftStatus>('loading');
   const [token, setToken] = useState<string | null>(null);
-  const [email, setEmailState] = useState<string>('');
   const [saveState, setSaveState] = useState<SaveState>('idle');
   const [saveError, setSaveError] = useState('');
   const [notice, setNotice] = useState('');
@@ -65,14 +72,17 @@ export function useConferenceDraft({ userId, accessToken, authLoading, data, ste
 
   const restoreRef = useRef(restore);
   const tokenRef = useRef<string | null>(null);
-  const emailRef = useRef('');
   const savedPrint = useRef<string>('');
   const inFlight = useRef(false);
   const again = useRef(false);
   const blockedPrint = useRef<string>('');   // a refused save is not retried until the data changes
-  const latest = useRef({ data, step, accessToken });
+  // The server save in flight, so `finish` can wait for the token it mints.
+  const pendingSave = useRef<Promise<RpcAnswer<SaveDraftAnswer>> | null>(null);
+  // Set once the conference exists: nothing is saved after that.
+  const finished = useRef(false);
+  const latest = useRef({ data, step, accessToken, userId });
   useLayoutEffect(() => {
-    latest.current = { data, step, accessToken };
+    latest.current = { data, step, accessToken, userId };
     restoreRef.current = restore;
   });
   const loadedFor = useRef<string | null>(null);
@@ -119,7 +129,8 @@ export function useConferenceDraft({ userId, accessToken, authLoading, data, ste
       }
       if (running.current && !urlToken) {
         // Signed in mid-wizard: keep what is on screen and save it now, which
-        // claims the draft for this account by its token.
+        // claims the draft for this account by its token, or (a browser-only
+        // draft) creates the account's server draft on the next autosave.
         savedPrint.current = '';
         if (!cancelled) { setStatus('ready'); if (tokenRef.current) void runSaveRef.current(); }
         return;
@@ -133,7 +144,19 @@ export function useConferenceDraft({ userId, accessToken, authLoading, data, ste
       // The token now lives in this browser; keep it out of the address bar.
       if (urlToken || wantsStop) replaceUrlInPlace('/conferences/new');
 
-      if (!t) { if (!cancelled) setStatus('ready'); return; }
+      if (!t) {
+        // No server draft: the signed-out copy this browser kept, if any. Once
+        // signed in (a Google round trip reloads the page) it is saved to the
+        // account at once, so the baseline is left empty.
+        const local = readLocalDraft();
+        if (cancelled) return;
+        if (local) {
+          restoreRef.current(local.data, local.step);
+          savedPrint.current = userId ? '' : '__restored__';
+        }
+        setStatus('ready');
+        return;
+      }
 
       const a = await loadConferenceDraft(t);
       if (cancelled) return;
@@ -142,8 +165,6 @@ export function useConferenceDraft({ userId, accessToken, authLoading, data, ste
       const r = a.data;
       if (r.ok) {
         adoptToken(r.token);
-        emailRef.current = r.email ?? '';
-        setEmailState(r.email ?? '');
         restoreRef.current(r.data ?? {}, r.step ?? 1);
         // The restored answers are what is saved: no save until they change.
         savedPrint.current = '__restored__';
@@ -178,17 +199,27 @@ export function useConferenceDraft({ userId, accessToken, authLoading, data, ste
 
   useEffect(() => { if (status === 'ready') running.current = true; }, [status]);
 
-  const canSave = available === true && status === 'ready'
-    && (token !== null || (userId ? hasContent : email !== ''));
+  const canSave = available === true && status === 'ready' && (token !== null || hasContent);
 
   const runSave = useCallback(async (): Promise<boolean> => {
+    if (finished.current) return true;
     if (inFlight.current) { again.current = true; return true; }
-    const { data: d, step: s } = latest.current;
+    const { data: d, step: s, userId: uid } = latest.current;
     const p = fingerprintConferenceDraft(d, s);
     if (p === savedPrint.current || p === blockedPrint.current) return true;
+    if (!uid && !tokenRef.current) {
+      // Signed out with no server draft: this browser keeps it.
+      const ok = writeLocalDraft(d, s);
+      savedPrint.current = p;
+      setSaveState(ok ? 'saved' : 'idle');
+      return ok;
+    }
     inFlight.current = true;
     setSaveState('saving');
-    const a = await saveConferenceDraft(tokenRef.current, emailRef.current || null, d, s);
+    const req = saveConferenceDraft(tokenRef.current, d, s);
+    pendingSave.current = req;
+    const a = await req;
+    pendingSave.current = null;
     inFlight.current = false;
     let ok = false;
     if (a.kind === 'missing') { setAvailable(false); setSaveState('idle'); }
@@ -202,6 +233,8 @@ export function useConferenceDraft({ userId, accessToken, authLoading, data, ste
     else if (a.data.ok) {
       ok = true;
       if (a.data.token !== tokenRef.current) adoptToken(a.data.token);
+      // Saved to the account now: the signed-out copy has done its job.
+      if (uid) clearLocalDraft();
       savedPrint.current = p;
       setSaveState('saved');
       setSaveError('');
@@ -246,33 +279,20 @@ export function useConferenceDraft({ userId, accessToken, authLoading, data, ste
   useEffect(() => {
     function onHide() {
       const t = tokenRef.current;
-      if (!t || available !== true || status !== 'ready') return;
-      const { data: d, step: s, accessToken: at } = latest.current;
+      if (finished.current || available !== true || status !== 'ready') return;
+      const { data: d, step: s, accessToken: at, userId: uid } = latest.current;
       if (fingerprintConferenceDraft(d, s) === savedPrint.current) return;
-      saveConferenceDraftKeepalive(t, emailRef.current || null, d, s, at);
+      if (!t) {
+        // Signed out: the browser copy (synchronous). Signed in without a
+        // token yet: the debounced save a second ago is the last word.
+        if (!uid) writeLocalDraft(d, s);
+        return;
+      }
+      saveConferenceDraftKeepalive(t, d, s, at);
     }
     window.addEventListener('pagehide', onHide);
     return () => window.removeEventListener('pagehide', onHide);
   }, [available, status]);
-
-  /** The email step: remember it and create the draft now. */
-  const submitEmail = useCallback(async (value: string): Promise<{ ok: boolean; message?: string }> => {
-    emailRef.current = value.trim().toLowerCase();
-    setEmailState(emailRef.current);
-    blockedPrint.current = '';
-    if (available !== true) return { ok: true };
-    const { data: d, step: s } = latest.current;
-    const a = await saveConferenceDraft(tokenRef.current, emailRef.current, d, Math.max(1, s));
-    if (a.kind === 'missing') { setAvailable(false); return { ok: true }; }
-    if (a.kind === 'error') return { ok: false, message: 'We could not save that just now. Check your connection and try again.' };
-    if (a.data.ok) {
-      adoptToken(a.data.token);
-      savedPrint.current = fingerprintConferenceDraft(d, Math.max(1, s));
-      setSaveState('saved');
-      return { ok: true };
-    }
-    return { ok: false, message: a.data.message || 'We could not save that just now.' };
-  }, [available, adoptToken]);
 
   /** Save now (before opening the sign-in pop-up, before creating). */
   const flush = useCallback(async () => {
@@ -281,8 +301,12 @@ export function useConferenceDraft({ userId, accessToken, authLoading, data, ste
 
   /** The conference exists: the draft is done, and this browser forgets it. */
   const finish = useCallback(async (conferenceId: string) => {
-    const t = tokenRef.current;
+    finished.current = true;
     setPendingCreate(null);
+    clearLocalDraft();
+    // A save that is minting the account's draft right now: wait for its token.
+    if (pendingSave.current) { try { await pendingSave.current; } catch { /* nothing to finish */ } }
+    const t = tokenRef.current;
     if (!t || available !== true) return;
     await finishConferenceDraft(t, conferenceId);
     adoptToken(null);
@@ -300,10 +324,12 @@ export function useConferenceDraft({ userId, accessToken, authLoading, data, ste
     setReloadNonce((n) => n + 1);
   }, []);
 
-  const markPendingCreate = useCallback(() => { setPendingCreate(tokenRef.current); }, []);
+  const markPendingCreate = useCallback(() => { setPendingCreate(tokenRef.current ?? LOCAL_PENDING_CREATE); }, []);
   const pendingCreate = useCallback(() => {
     const p = readPendingCreate();
-    return !!p && p === tokenRef.current;
+    // A browser-only draft gets a token on its first signed-in save, so its
+    // marker is not a token.
+    return !!p && (p === tokenRef.current || p === LOCAL_PENDING_CREATE);
   }, []);
   const clearPendingCreate = useCallback(() => setPendingCreate(null), []);
 
@@ -313,13 +339,11 @@ export function useConferenceDraft({ userId, accessToken, authLoading, data, ste
     /** True while the page should not draw the wizard yet. */
     booting: available === null || (available === true && status === 'loading'),
     token,
-    email,
     maskedEmail,
     saveState,
     saveError,
     notice,
     dismissNotice: () => setNotice(''),
-    submitEmail,
     flush,
     finish,
     startFresh,

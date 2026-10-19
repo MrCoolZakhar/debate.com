@@ -94,19 +94,30 @@ answer shapes what we lead them with afterwards.
     `?draft=<token>` or this browser's token (`localStorage gavelling-conference-draft`) at the
     saved step, then strips the token from the address bar. Signed-in drafts are created only
     once a name is typed or step 1 is passed.
-  - **Signed out.** A new first screen, `EmailStep.tsx` (step 0, outside the 10-step count):
-    "Where Should We Save Your Conference?" with the privacy line under the field. The server
-    mints the 64-hex token on the first save. Logo and banner uploads still need an account
-    (they open the sign-in pop-up). "Sign in and create" on the review step saves, opens
-    `openAuth` with the email prefilled, and a sessionStorage flag creates the conference
-    once they are back and the pop-up has closed (`useBasicsGateBlocking`). Signed-in users
-    never see the email step; their account address is used.
+  - **Signed out (owner, 19 Oct 2026: "remove that step and just ask them to sign in right
+    before publishing").** There is no email step any more (`EmailStep.tsx` is deleted): a
+    signed-out visitor starts at step 1. `save_conference_draft` refuses to mint a draft
+    without an email (`email_required`), and the client never sends one (`p_email` is always
+    null), so a signed-out draft lives in THIS browser only
+    (`localStorage gavelling-conference-draft-local`, `readLocalDraft` / `writeLocalDraft`;
+    "Saved on this device" bottom left) and a reload resumes it. A browser that already holds
+    a server token (an older email draft, a `?draft=` reminder link) keeps saving to it by the
+    token. Logo and banner uploads still need an account (they open the sign-in pop-up). The
+    review step hides the contact email while signed out and its button is "Sign in to
+    publish": it saves, opens `openAuth` titled "Sign In to Publish Your Conference", and a
+    sessionStorage flag (the token, or `local`) creates the conference once they are back,
+    the pop-up and the gates have closed (`useBasicsGateBlocking`) and the contact email has
+    been filled from the profile. The first signed-in save turns the browser copy into the
+    account's server draft and clears it; a Google round trip reloads the page and the
+    browser copy restores first. Created = the draft is finished and the browser copy cleared.
+    Signed-in users are unchanged; their account address is used.
   - **Ownership.** A draft becomes an account's only by its browser token (a signed-in save or
     load) or by the VERIFIED auth email (`claim_conference_drafts`, run by My conferences and
     on the wizard's first load), never by a typed email. A claimed draft opened by anyone else
     answers `sign_in` / `not_yours` and never its answers. Limits: 512 KB of data, 240 saves
     per token per 10 minutes, 3 new drafts per email per day, 5 open per email, 500 new
-    anonymous drafts per hour, 5 email changes per token.
+    anonymous drafts per hour, 5 email changes per token (the last two now reached only by
+    older email drafts: the wizard no longer creates anonymous server drafts).
   - **Shown like application drafts.** My conferences carries "Finish listing"
     (`account/conferences/ConferenceDraftsSection.tsx`) above "Drafts to complete": logo,
     acronym over name, step, last edited, Continue (`/conferences/new?draft=<token>`) and

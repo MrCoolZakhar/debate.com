@@ -15,12 +15,13 @@
  * (see handleCreate's "PUBLISH ON CREATE" block), and visibility is editable
  * from Settings → Privacy afterwards.
  *
- * Progress is saved on the server as the organiser goes (12 Oct 2026,
- * useConferenceDraft.ts + src/lib/conferenceDrafts.ts): reloading, leaving or
- * switching device resumes it, and a signed-out visitor starts with an email
- * step (EmailStep.tsx) and only signs in to create. Until the drafts SQL
- * (scratch-conference-drafts.sql) is applied, none of that runs and the wizard
- * behaves as before: sign in first, progress in component state only.
+ * Progress is saved as the organiser goes (12 Oct 2026, useConferenceDraft.ts
+ * + src/lib/conferenceDrafts.ts): on the server once signed in, in this browser
+ * before that. A signed-out visitor goes straight into step 1 (owner, 19 Oct
+ * 2026: the email step is gone) and is asked to sign in only on the review
+ * step, by the sign-in pop-up, after which the conference is created. If the
+ * drafts SQL ever went missing, none of that runs and the wizard behaves as
+ * before: sign in first, progress in component state only.
  */
 
 import { pressAwareCommitteeType } from '@/lib/press';
@@ -60,11 +61,10 @@ import {
 import { LevelInsignia, LEVEL_ACCENT } from '@/app/account/accountUi';
 import { effectiveEmblem } from '@/components/committeeSetupKit';
 import { normaliseCommitteeLanguage, DEFAULT_COMMITTEE_LANGUAGE } from '@/lib/committeeLanguage';
-// Server-side drafts and the signed-out email step (12 Oct 2026).
+// Drafts (12 Oct 2026) and signing in to publish (19 Oct 2026).
 import { openAuth } from '@/lib/authModal';
 import { useBasicsGateBlocking } from '@/lib/basicsGateState';
 import { useConferenceDraft } from './useConferenceDraft';
-import { EmailStep } from './EmailStep';
 import { DraftStatusCard, DraftSavedNote, DraftNotice } from './DraftChrome';
 
 
@@ -721,19 +721,8 @@ export default function NewConferencePage() {
     }
   }, [loading, user, router, draft.available]);
 
-  // Signed out: the email step comes first, unless the draft already has one.
-  // Signed in (including signing in from the email step): it is skipped.
-  useEffect(() => {
-    if (loading || draft.available !== true || draft.booting || draft.status !== 'ready') return;
-    if (!user && !draft.email && step !== 0) setStep(0);
-    else if (user && step === 0) setStep(1);
-  }, [loading, user, draft.available, draft.booting, draft.status, draft.email, step]);
-
-  // A signed-out organiser's contact email starts as the address they saved with.
-  useEffect(() => {
-    if (draft.email && !contactEmail) setContactEmail(draft.email);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [draft.email]);
+  // Signed out: no email step (owner, 19 Oct 2026). They start at step 1 and
+  // sign in on the review step; the contact email is then their account's.
 
   const acronymError = acronym ? acronymProblem(acronym) : '';
 
@@ -851,7 +840,7 @@ export default function NewConferencePage() {
   async function handleLogoUpload(file: File) {
     if (!session) {
       setLogoError('Sign in to upload a logo, or skip it for now. Your answers are saved.');
-      if (draft.available) openAuth({ email: draft.email || undefined });
+      if (draft.available) openAuth();
       return;
     }
     setLogoUploading(true);
@@ -867,7 +856,7 @@ export default function NewConferencePage() {
   async function handleBannerUpload(file: File) {
     if (!session) {
       setBannerError('Sign in to upload a banner, or pick one of ours. Your answers are saved.');
-      if (draft.available) openAuth({ email: draft.email || undefined });
+      if (draft.available) openAuth();
       return;
     }
     setBannerUploading(true);
@@ -882,13 +871,17 @@ export default function NewConferencePage() {
   // ── Submit, preserved exactly from the old form ─────────────────────────
   async function handleCreate() {
     if (!user || !session) {
-      // Signed out with a saved draft: save it, ask them to sign in (or make
-      // an account) in the pop-up, and create it the moment they are back
-      // (the pending-create effect below). The insert needs auth.uid().
+      // Signed out: save the answers (in this browser, or to their server
+      // draft), ask them to sign in (or make an account) in the pop-up, and
+      // create it the moment they are back (the pending-create effect below).
+      // The insert needs auth.uid().
       if (draft.available) {
         await draft.flush();
         draft.markPendingCreate();
-        openAuth({ email: draft.email || contactEmail.trim() || undefined });
+        openAuth({
+          title: 'Sign In to Publish Your Conference',
+          notice: 'Your answers are saved. Log in or make a free account and we create your conference straight away.',
+        });
         return;
       }
       setError('You must be signed in to create a conference.');
@@ -1276,15 +1269,20 @@ export default function NewConferencePage() {
   // those four has a step with no skip link, so a review screen that could not
   // submit would mean an editable row is empty — hence a ReviewRow for every
   // one of them.
-  const readyToCreate =
-    fullName.trim() && acronym.trim() && !acronymProblem(acronym) && contactEmail.trim() &&
+  // Signed out, the contact email is not asked yet (it becomes the account's
+  // address once they sign in), so it is the one answer the sign-in press
+  // does not need.
+  const answersComplete =
+    fullName.trim() && acronym.trim() && !acronymProblem(acronym) &&
     studentLevel && country && city.trim() && format &&
     parseInt(expectedDelegates) > 0 &&
     paymentAnswered &&
     intentKeys.length > 0;
+  const readyToCreate = answersComplete && contactEmail.trim();
 
-  // Signed in after "Sign in and create": create it now, once the pop-up has
-  // closed (a new account first answers its questions there).
+  // Signed in after "Sign in to publish": create it now, once the pop-up has
+  // closed (a new account first answers its questions there) and the contact
+  // email has been filled from the profile.
   const authBlocking = useBasicsGateBlocking();
   useEffect(() => {
     if (!user || !session || submitting || authBlocking || !readyToCreate || !contactEmail.trim()) return;
@@ -1344,16 +1342,6 @@ export default function NewConferencePage() {
 
             <DraftNotice text={draft.notice} onDismiss={draft.dismissNotice} />
 
-            {/* ── Step 0, signed out only: where to save the draft ───────── */}
-            {step === 0 && !user && (
-              <EmailStep
-                total={TOTAL_STEPS}
-                initialEmail={draft.email}
-                onSubmit={draft.submitEmail}
-                onDone={() => goTo(1)}
-              />
-            )}
-
             {/* ── Step 1, your conference: name, acronym, logo, banner, dates ── */}
             {step === 1 && (
               <WizardShell
@@ -1361,7 +1349,7 @@ export default function NewConferencePage() {
                 maxWidth={1080}
                 title="Your Conference"
                 sub="Its name, its look and its dates. You can change any of it later."
-                onBack={returnToReview ? back : (!user && draft.available ? () => goTo(0) : undefined)}
+                onBack={returnToReview ? back : undefined}
               >
                 <IdentityStep
                   fullName={fullName}
@@ -1806,7 +1794,10 @@ export default function NewConferencePage() {
                   <ReviewRow label="Using Gavelling for" value={intentSummary} onEdit={() => editFromReview(9)} />
                 </div>
 
-                {/* Contact email, required by the directory, prefilled from your profile */}
+                {/* Contact email, required by the directory, prefilled from your
+                    profile. Signed out it is not asked: the account's address
+                    fills it once they sign in. */}
+                {user && (
                 <div style={{ marginTop: 20 }}>
                   <FieldLabel>Organizer contact email</FieldLabel>
                   <div className="relative">
@@ -1824,6 +1815,7 @@ export default function NewConferencePage() {
                     />
                   </div>
                 </div>
+                )}
 
                 {/* What happens the moment they tap Create (owner, 7 Oct 2026).
                     Two states: a conference with dates to be decided goes live
@@ -1858,10 +1850,10 @@ export default function NewConferencePage() {
                 <div className="flex justify-center" style={{ marginTop: 24 }}>
                   <PrimaryButton
                     onClick={handleCreate}
-                    disabled={submitting || !readyToCreate || !contactEmail.trim()}
+                    disabled={submitting || (user ? !readyToCreate : !answersComplete)}
                     style={{ padding: '14px 38px' }}
                   >
-                    {submitting ? 'Creating' : user ? 'Create conference' : 'Sign in and create'}
+                    {submitting ? 'Creating' : user ? 'Create conference' : 'Sign in to publish'}
                   </PrimaryButton>
                 </div>
               </WizardShell>
@@ -1871,7 +1863,9 @@ export default function NewConferencePage() {
         </main>
       </div>
 
-      {draft.available && <DraftSavedNote state={draft.saveState} error={draft.saveError} />}
+      {draft.available && (
+        <DraftSavedNote state={draft.saveState} error={draft.saveError} onDevice={!user && !draft.token} />
+      )}
 
       {/* Drag-to-fit crop step, flattens the chosen framing into a square
           transparent PNG, then hands off to the storage upload path. */}

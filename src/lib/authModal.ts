@@ -36,6 +36,9 @@ export interface AuthRequest {
   apply?: boolean;
   /** Short status line shown above the email field (verified, failed...). */
   notice?: string;
+  /** Replaces "Log in or sign up" as the first step's title (Title Case),
+   *  e.g. the creation wizard's "Sign In to Publish Your Conference". */
+  title?: string;
 }
 
 export interface AuthModalState {

@@ -445,7 +445,7 @@ function AuthModal({ request }: { request: AuthRequest }) {
                 <img src="/gavelling-mark.png" alt="" className="gv-auth-mark" />
                 <span className="gv-auth-word">Gavelling</span>
               </div>
-              <h2 id="gv-auth-title" className="gv-auth-big">Log in or sign up</h2>
+              <h2 id="gv-auth-title" className="gv-auth-big">{request.title ?? 'Log in or sign up'}</h2>
               <p className="gv-auth-intro">One account for applying, chairing and organising. Free to start.</p>
               {request.apply && <p className="gv-notice" role="status">Log in or sign up to carry on with your application. We will bring you straight back to it.</p>}
               {request.notice && <p className="gv-notice" role="status">{request.notice}</p>}
