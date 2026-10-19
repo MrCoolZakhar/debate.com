@@ -2,7 +2,7 @@
 
 import { sortCvEntries } from '@/lib/cvOrder';
 import Link from 'next/link';
-import { ArrowRight, ScrollText } from 'lucide-react';
+import { ArrowRight, Lock, ScrollText } from 'lucide-react';
 import { getCountryByName } from '@/lib/countries';
 import { CircleFlag } from '@/components/CircleFlag';
 import { BrandLogo } from '@/components/BrandLogo';
@@ -22,7 +22,14 @@ export interface PublicProfile {
 
 // Data is resolved server-side (see page.tsx) and passed in as props, so the
 // CV renders fully on first paint — no client RPC round-trip, no spinner.
-export default function PublicCVClient({ profile, entries: rawEntries }: { profile: PublicProfile | null; entries: CVEntry[] }) {
+export default function PublicCVClient({ profile, entries: rawEntries, isPrivate = false }: {
+  profile: PublicProfile | null;
+  entries: CVEntry[];
+  /** The owner keeps the CV private (profiles.cv_private): the name and photo
+   *  still show, so a link to it never dead-ends, but no record (owner,
+   *  19 Oct 2026). */
+  isPrivate?: boolean;
+}) {
   // Dated first, then year-in-name, undated at the bottom (src/lib/cvOrder.ts).
   const entries = sortCvEntries(rawEntries);
   if (!profile) {
@@ -110,6 +117,21 @@ export default function PublicCVClient({ profile, entries: rawEntries }: { profi
           </div>
         </section>
 
+        {isPrivate ? (
+          <div
+            className="text-center rounded-2xl"
+            style={{ padding: '48px 24px', backgroundColor: '#FAF8F3', border: '1px solid rgba(221,212,192,0.95)', animation: 'gvRise 480ms cubic-bezier(0.2,0,0,1) both', animationDelay: '90ms' }}
+          >
+            <Lock size={28} strokeWidth={1.8} style={{ color: '#1B3828', margin: '0 auto' }} aria-hidden />
+            <p className="text-lg font-bold mt-3 mb-2" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
+              This MUN CV is private
+            </p>
+            <p className="text-sm max-w-sm mx-auto" style={{ color: '#9A8A78', fontFamily: OUTFIT, lineHeight: 1.7 }}>
+              {`${name} keeps their Model UN record private.`}
+            </p>
+          </div>
+        ) : (
+        <>
         {/* Stats row — same showcase counts + rank as the private CV */}
         <div style={{ animation: 'gvRise 480ms cubic-bezier(0.2,0,0,1) both', animationDelay: '90ms' }}>
           <CVStatsRow entries={entries} />
@@ -144,6 +166,9 @@ export default function PublicCVClient({ profile, entries: rawEntries }: { profi
           </div>
         )}
         </div>
+
+        </>
+        )}
 
         {/* Footer CTA */}
         <div

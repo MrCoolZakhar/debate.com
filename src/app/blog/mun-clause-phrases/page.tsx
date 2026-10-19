@@ -129,7 +129,7 @@ export default function Article() {
         </p>
 
         <H2>Preambulatory phrases</H2>
-        <ReferenceSheet id="preambulatory-phrases" caption="Every common preambulatory phrase on one page." />
+        <ReferenceSheet variant="stack" id="preambulatory-phrases" caption="Every common preambulatory phrase on one page." />
         <p>
           Grouped by function, because that is how you choose one. Five to eight preambulatory clauses is normal for a committee resolution; fifteen is a sign the drafters did not know how to start.
         </p>
@@ -210,7 +210,7 @@ export default function Article() {
         </Callout>
 
         <H2>Operative phrases, ordered by force</H2>
-        <ReferenceSheet id="operative-phrases" caption="Every common operative phrase on one page." />
+        <ReferenceSheet variant="stack" id="operative-phrases" caption="Every common operative phrase on one page." />
         <p>
           This is the list that matters. Operative verbs are not interchangeable: they carry different degrees of obligation, and some of them a General Assembly committee simply cannot use. They are ordered here from softest to strongest.
         </p>

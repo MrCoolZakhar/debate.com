@@ -8,7 +8,7 @@ import PublicCVClient, { type PublicProfile } from './PublicCVClient';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-interface CvPayload { profile: PublicProfile | null; entries: CVEntry[] }
+interface CvPayload { profile: PublicProfile | null; entries: CVEntry[]; private?: boolean }
 
 // Resolve a public CV from the [id] route param. Accepts BOTH forms:
 //   • a raw user UUID (old links: /cv/<uuid>) — used directly, and
@@ -60,6 +60,15 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
   }
   const profile = resolved === 'error' ? null : resolved?.profile ?? null;
   const name = (profile?.display_name ?? '').trim();
+  // A private CV shows only the name and photo: never indexed.
+  if (resolved !== 'error' && resolved?.private) {
+    return pageMetadata({
+      title: { absolute: name ? `${name} · Gavelling` : 'Private MUN CV · Gavelling' },
+      description: 'This Model UN CV is private.',
+      path: `/cv/${id}`,
+      robots: { index: false, follow: true },
+    });
+  }
 
   return pageMetadata({
     title: { absolute: name ? `${name} · MUN CV · Gavelling` : 'MUN CV · Gavelling' },
@@ -74,8 +83,9 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
 export default async function PublicCVPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const resolved = await resolveCv(id);
-  // An unknown or private CV is a real 404, not a 200 "empty CV" page (a
-  // soft 404 in Search Console).
+  // An unknown CV is a real 404, not a 200 "empty CV" page (a soft 404 in
+  // Search Console). A private one renders the name and photo, noindex, so
+  // no link to a person dead-ends.
   if (isMissing(resolved)) notFound();
   const payload = resolved === 'error' ? null : resolved;
 
@@ -87,5 +97,5 @@ export default async function PublicCVPage({ params }: { params: Promise<{ id: s
     photos: r.photos ?? [],
   }));
 
-  return <PublicCVClient profile={profile} entries={entries} />;
+  return <PublicCVClient profile={profile} entries={payload?.private ? [] : entries} isPrivate={!!payload?.private} />;
 }

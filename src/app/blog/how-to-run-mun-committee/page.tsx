@@ -88,7 +88,7 @@ export default function Article1() {
           Chairing a Model UN committee is one of the most rewarding roles in the MUN experience, and one of the most demanding. You are simultaneously a facilitator, timekeeper, procedural authority, and energy manager. This guide walks you through every stage of a committee session, from your first gavel strike to adjournment. For the energy side of the job, read our guide to <Link href="/blog/mun-controlling-the-floor" style={{ color: '#1B3828', fontWeight: 600 }}>controlling the floor</Link>.
         </p>
 
-        <ReferenceSheet id="committee-session-flow" caption="The usual order of a committee session." />
+        <ReferenceSheet variant="stack" id="committee-session-flow" caption="The usual order of a committee session." />
         <H2>1. Before the Session: Preparation</H2>
         <p>
           The quality of a committee session is largely determined before it starts. Chairs who walk in prepared radiate confidence; chairs who improvise burn energy managing avoidable chaos. It also helps to know in advance <Link href="/blog/mun-difficult-delegates" style={{ color: '#1B3828', fontWeight: 600 }}>how to handle difficult delegates</Link>.
