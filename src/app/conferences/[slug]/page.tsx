@@ -17,13 +17,11 @@ import {
   conferenceSeoDescription,
   conferenceSeoTitle,
   conferenceShortName,
-  conferenceSummary,
   NO_WINDOW,
   type DelegateWindow,
 } from '@/lib/conferenceSeo';
-import ConferenceFacts from './ConferenceFacts';
-import ConferenceAbout, { ConferenceFaq } from './ConferenceAbout';
-import { buildConferenceAbout, conferenceFaqJsonLd, type AboutRole } from '@/lib/conferenceAbout';
+import ConferenceAbout from './ConferenceAbout';
+import { buildConferenceAbout, type AboutRole } from '@/lib/conferenceAbout';
 import { isGavellingListing, listingMeta } from '@/lib/listings';
 import { listingOutboundLink } from './ListingParts';
 
@@ -219,16 +217,6 @@ const getPlaceHubs = cache(async (conf: ConfMeta): Promise<Hub[]> => {
     return [];
   }
 });
-
-/** The words each place link says at the foot of the Overview. */
-function hubLinkLabel(h: Hub): string {
-  switch (h.kind) {
-    case 'country': return `More Model UN conferences in ${h.name}`;
-    case 'online': return 'More online Model UN conferences';
-    case 'month': return `Model UN conferences in ${h.name}`;
-    default: return `Model UN conferences ${h.name}`;
-  }
-}
 
 /** The organiser's own website for `organizer.url`, without tracking
  *  parameters (fbclid, utm_*), or null when it is not a plain http(s) URL. */
@@ -520,8 +508,6 @@ export default async function ConferenceDetailPage({ params }: { params: Promise
         aboutRoles,
       )
     : null;
-  const faqSchema = about ? conferenceFaqJsonLd(about.faq) : null;
-  const hubLinks = placeHubs.map((h) => ({ href: hubPath(h.slug), label: hubLinkLabel(h) }));
   return (
     <>
       {schema && (
@@ -536,12 +522,6 @@ export default async function ConferenceDetailPage({ params }: { params: Promise
           dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbs).replace(/</g, '\\u003c') }}
         />
       )}
-      {faqSchema && (
-        <script
-          type="application/ld+json"
-          dangerouslySetInnerHTML={{ __html: JSON.stringify(faqSchema).replace(/</g, '\\u003c') }}
-        />
-      )}
       {/* Anonymous, aggregate view count by source (no cookies): see src/lib/trafficSource.ts. */}
       <ConferenceViewBeacon slug={slug} />
       <ConferenceDetailClient
@@ -552,23 +532,10 @@ export default async function ConferenceDetailPage({ params }: { params: Promise
           country: countryHub ? { href: hubPath(countryHub.slug), label: `Model UN conferences in ${countryHub.name}` } : null,
           online: onlineHub ? { href: hubPath(onlineHub.slug), label: 'Online Model UN conferences' } : null,
         } : null}
-        aboutFallback={about?.thin ? (
-          <>
-            <ConferenceAbout about={about} hubLinks={hubLinks} />
-            <ConferenceFaq items={about.faq} />
-          </>
-        ) : null}
-        // A thin page says these facts (and carries the hub links) in its
-        // About section, so the facts paragraph is only for the others.
-        overviewFooter={full && about && !about.thin ? (
-          <>
-            <ConferenceFaq items={about.faq} />
-            <ConferenceFacts
-              summary={conferenceSummary({ ...conf, student_level: fullRow?.student_level, expected_delegates: fullRow?.expected_delegates }, typedCommittees, role.price, role.window, { listing })}
-              links={hubLinks}
-            />
-          </>
-        ) : null}
+        // Owner (19 Oct 2026): only the About section, and only when the
+        // organiser's description is thin. No FAQ card, no facts paragraph,
+        // no row of hub links at the foot of the page.
+        aboutFallback={about?.thin ? <ConferenceAbout about={about} hubLinks={[]} /> : null}
       />
     </>
   );
