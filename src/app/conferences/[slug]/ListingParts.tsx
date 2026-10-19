@@ -149,6 +149,8 @@ export function ListingSourceNote({ meta, fullName, slug }: { meta: ListingMeta 
           </>
         )}
       </p>
+      {/* The free photo's licence needs a credit; it lives here, not on the banner (owner, 19 Oct 2026). */}
+      {meta?.banner_credit && <BannerCreditLine credit={meta.banner_credit} style={{ fontSize: 13, marginTop: 4 }} />}
       <p style={{ margin: '4px 0 0 0' }}>
         Not right?{' '}
         <a href={correctionMailto(fullName, slug)} className="focus:outline-none" style={linkStyle}>
@@ -168,7 +170,7 @@ export function BannerCreditLine({ credit, style }: { credit: BannerCredit; styl
   const licenseOk = !!credit.license_url && /^https:\/\//i.test(credit.license_url);
   return (
     <p style={{ fontFamily: FONT, fontSize: 10.5, lineHeight: 1.3, margin: 0, ...style }}>
-      Photo:{' '}
+      Banner photo:{' '}
       {sourceOk ? (
         <a href={credit.source_url} target="_blank" rel="noopener noreferrer nofollow" className="focus:outline-none" style={linkStyle}>{author || 'source'}</a>
       ) : author}

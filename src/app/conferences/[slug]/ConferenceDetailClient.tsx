@@ -69,7 +69,7 @@ import { BottomToastHost } from './BottomToast';
 import { isGavellingListing, isPastListing, listingMeta } from '@/lib/listings';
 import { conferenceImageSrc } from '@/lib/listingImage';
 import { NotOnGavellingMark } from '@/components/conferences/NotOnGavellingMark';
-import { BannerCreditLine, ListingCta, ListingSourceNote } from './ListingParts';
+import { ListingCta, ListingSourceNote } from './ListingParts';
 
 const GRAIN = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='grain'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23grain)' opacity='1'/%3E%3C/svg%3E")`;
 
@@ -1948,12 +1948,6 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
             </>
           )}
 
-          {/* A free city photo used as a listing's banner carries its credit (owner, 19 Oct 2026). */}
-          {isListing && bannerSrc && listingInfo?.banner_credit && (
-            <div className="absolute right-6 md:right-14 z-10" style={{ bottom: '52px', color: 'rgba(255,255,255,0.78)', textShadow: '0 1px 6px rgba(0,0,0,0.5)' }}>
-              <BannerCreditLine credit={listingInfo.banner_credit} />
-            </div>
-          )}
 
 
           {/* Bottom-left content */}
