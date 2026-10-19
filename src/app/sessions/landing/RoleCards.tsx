@@ -111,24 +111,24 @@ export default function RoleCards() {
 }
 
 const CSS = `
-.rc { max-width: 1520px; padding: clamp(40px, 4vw, 64px) clamp(16px, 4vw, 64px); }
-.rc-h2 { margin: 0; text-align: center; font-weight: 800; font-size: clamp(24px, 2.4vw, 40px); line-height: 1.05; letter-spacing: -0.03em; color: ${INK}; }
-.rc-row { margin-top: clamp(20px, 2.2vw, 32px); display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: clamp(14px, 1.6vw, 24px); }
-.rc-panel { position: relative; overflow: hidden; border-radius: 24px; background: ${IVORY}; aspect-ratio: 4 / 5; min-height: 440px;
+.rc { max-width: 1320px; padding: clamp(28px, 3vw, 48px) clamp(16px, 4vw, 64px); }
+.rc-h2 { margin: 0; text-align: center; font-weight: 800; font-size: clamp(22px, 2vw, 32px); line-height: 1.05; letter-spacing: -0.03em; color: ${INK}; }
+.rc-row { margin-top: clamp(16px, 1.8vw, 24px); display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: clamp(14px, 1.6vw, 24px); }
+.rc-panel { position: relative; overflow: hidden; border-radius: 24px; background: ${IVORY}; aspect-ratio: 1 / 1; min-height: 340px;
   box-shadow: 0 30px 60px -38px rgba(27,56,40,.6), 0 2px 6px rgba(27,56,40,.08); transition: transform .25s cubic-bezier(.22,1,.36,1); }
 @media (hover: hover) { .rc-panel:hover { transform: translateY(-3px); } }
 .rc-panel img { user-select: none; }
 .rc-scrim { position: absolute; inset: 0; background: linear-gradient(to bottom, rgba(20,48,31,0) 30%, rgba(20,48,31,.42) 55%, rgba(20,48,31,.9) 78%, rgba(20,48,31,.97) 100%); }
-.rc-foot { position: absolute; inset-inline: 0; bottom: 0; padding: 0 clamp(20px, 2vw, 30px) clamp(22px, 2.2vw, 32px); display: flex; flex-direction: column; }
-.rc-word { margin: 0; font-weight: 800; font-size: clamp(34px, 3vw, 46px); line-height: 1; letter-spacing: -0.03em; color: ${CREAM}; }
-.rc-line { margin: 10px 0 0; font-size: clamp(15px, 1.05vw, 16.5px); line-height: 1.45; color: rgba(250,248,243,.9); max-width: 26em; }
-.rc-act { margin-top: 18px; display: flex; flex-direction: column; align-items: flex-start; gap: 14px; }
+.rc-foot { position: absolute; inset-inline: 0; bottom: 0; padding: 0 clamp(18px, 1.8vw, 26px) clamp(18px, 1.8vw, 26px); display: flex; flex-direction: column; }
+.rc-word { margin: 0; font-weight: 800; font-size: clamp(28px, 2.3vw, 36px); line-height: 1; letter-spacing: -0.03em; color: ${CREAM}; }
+.rc-line { margin: 8px 0 0; font-size: clamp(14px, 0.95vw, 15.5px); line-height: 1.45; color: rgba(250,248,243,.9); max-width: 26em; }
+.rc-act { margin-top: 14px; display: flex; flex-direction: column; align-items: flex-start; gap: 14px; }
 .rc-find { display: flex; align-items: stretch; gap: 8px; width: 100%; flex-wrap: wrap; }
-.rc-code { flex: 1 1 120px; min-width: 0; height: 52px; padding: 0 16px; border: 0; border-radius: 12px; background: rgba(255,255,255,.92); color: ${INK};
+.rc-code { flex: 1 1 120px; min-width: 0; height: 46px; padding: 0 14px; border: 0; border-radius: 12px; background: rgba(255,255,255,.92); color: ${INK};
   font: 700 15px/1 ${BRAND}; letter-spacing: .1em; text-transform: uppercase; outline: none; box-shadow: inset 0 0 0 1.5px rgba(27,56,40,.14); }
 .rc-code::placeholder { letter-spacing: 0; text-transform: none; font-weight: 500; color: #5A5046; }
 .rc-code:focus { background: ${WHITE}; box-shadow: inset 0 0 0 2px ${GOLD_TEXT}; }
-.rc-cta.gv-gold-cta { white-space: nowrap; text-transform: none; letter-spacing: 0; font-weight: 700; }
+.rc-cta.gv-gold-cta { white-space: nowrap; text-transform: none; letter-spacing: 0; font-weight: 700; min-height: 46px; height: 46px; padding-top: 0; padding-bottom: 0; font-size: 15px; }
 .rc-link { display: inline-flex; align-items: center; min-height: 44px; color: ${GOLD_TEXT}; font-weight: 800; font-size: 15px; text-decoration: underline; text-underline-offset: 3px; text-decoration-thickness: 1.5px; }
 .rc-link:hover { color: ${WHITE}; }
 .rc-link:focus-visible { outline: 2px solid ${GOLD_TEXT}; outline-offset: 3px; border-radius: 6px; }
@@ -138,7 +138,7 @@ const CSS = `
   .rc-row { display: flex; gap: 12px; overflow-x: auto; overscroll-behavior-x: contain; scroll-snap-type: x mandatory; padding: 4px 16px 20px;
     -webkit-overflow-scrolling: touch; scrollbar-width: none; }
   .rc-row::-webkit-scrollbar { display: none; }
-  .rc-panel { flex: 0 0 84vw; max-width: 420px; min-height: 420px; aspect-ratio: 4 / 5; scroll-snap-align: center; }
+  .rc-panel { flex: 0 0 80vw; max-width: 380px; min-height: 340px; aspect-ratio: 1 / 1; scroll-snap-align: center; }
   .rc-panel:hover { transform: none; }
 }
 /* 16px on phones and tablets: iOS zooms into any focused field under 16px. */

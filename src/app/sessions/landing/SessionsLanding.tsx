@@ -9,6 +9,8 @@
 //      every language, "Start committee" as the one big action and a
 //      smaller code field with Join under it, the chair's laptop and a delegate's
 //      phone on the right as still images.
+//   1b. SessionsVideo: "See how it works", the YouTube walkthrough, click to
+//      load (nothing from YouTube before the press).
 //   2. RoleCards: "Built for every role in the *room*", one tall photo panel
 //      per role (Chairs, Delegates, Faculty advisors) with the role word, one
 //      line and a real action, in the homepage's role pattern.
@@ -28,6 +30,7 @@ import { GoldButtonStyles } from '@/components/GoldButton';
 import { GoldWord } from '@/components/BrandHeading';
 import { useT, useLanguage } from '@/contexts/LanguageContext';
 import RoleCards from './RoleCards';
+import SessionsVideo from './SessionsVideo';
 import ConferenceBridge from './ConferenceBridge';
 import { BRAND, INK, INK_SOFT, FOREST, GOLD, GOLD_TEXT, HAIR, IVORY, CREAM, WHITE, CTA_GRADIENT } from './tokens';
 
@@ -175,6 +178,9 @@ export default function SessionsLanding() {
             </div>
           </div>
         </section>
+
+        {/* ── How it works: the YouTube walkthrough, click to load ─────────── */}
+        <SessionsVideo />
 
         {/* ── 2. Built for every role in the room ──────────────────────────── */}
         <RoleCards />

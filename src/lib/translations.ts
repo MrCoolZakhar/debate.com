@@ -9,6 +9,7 @@ import { placeholderTranslations } from './translationsPlaceholders';
 import { floorToolsTranslations } from './translationsFloorTools';
 import { createJoinTranslations } from './translationsCreateJoin';
 import { restartTranslations } from './translationsRestart';
+import { sessionsVideoTranslations } from './translationsSessionsVideo';
 import { seatAdmissionTranslations } from './translationsSeatAdmission';
 import { broadcastsTranslations } from './translationsBroadcasts';
 import { ptTranslationsA } from './translationsPtA';
@@ -29,6 +30,7 @@ export const translations = {
     ...floorToolsTranslations.en,
     ...createJoinTranslations.en,
     ...restartTranslations.en,
+    ...sessionsVideoTranslations.en,
     ...seatAdmissionTranslations.en,
     ...broadcastsTranslations.en,
     ...placeholderTranslations.en,
@@ -1731,6 +1733,7 @@ export const translations = {
     ...floorToolsTranslations.es,
     ...createJoinTranslations.es,
     ...restartTranslations.es,
+    ...sessionsVideoTranslations.es,
     ...seatAdmissionTranslations.es,
     ...broadcastsTranslations.es,
     ...placeholderTranslations.es,
@@ -3430,6 +3433,7 @@ export const translations = {
     ...floorToolsTranslations.fr,
     ...createJoinTranslations.fr,
     ...restartTranslations.fr,
+    ...sessionsVideoTranslations.fr,
     ...seatAdmissionTranslations.fr,
     ...broadcastsTranslations.fr,
     ...placeholderTranslations.fr,
@@ -5129,6 +5133,7 @@ export const translations = {
     ...floorToolsTranslations.ar,
     ...createJoinTranslations.ar,
     ...restartTranslations.ar,
+    ...sessionsVideoTranslations.ar,
     ...seatAdmissionTranslations.ar,
     ...broadcastsTranslations.ar,
     ...placeholderTranslations.ar,
@@ -6831,6 +6836,7 @@ export const translations = {
     ...floorToolsTranslations.pt,
     ...createJoinTranslations.pt,
     ...restartTranslations.pt,
+    ...sessionsVideoTranslations.pt,
     ...seatAdmissionTranslations.pt,
     ...broadcastsTranslations.pt,
     ...placeholderTranslations.pt,
