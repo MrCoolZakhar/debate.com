@@ -5,7 +5,7 @@ How Claude adds Gavelling listings (owner, 19 Oct 2026: "adding listings should 
 ## Each run
 
 1. **How many:** up to **10 new listings** per run. Updating an existing listing (new dates, committees found) does not count toward the 10.
-2. **Where:** India, Pakistan, Egypt, the United Arab Emirates, and big international conferences (well-known university conferences anywhere, e.g. the Harvard, Yale, LSE, Oxford, Cambridge, Georgetown, Penn, Chicago circuits and large international ones). Rotate countries across runs so each gets attention.
+2. **Where (owner, 19 Oct 2026: a heavy focus on Europe, as proof of quality):** about **7 of every 10** new listings are European conferences: well-run university and school conferences across the UK, the Netherlands, Germany, France, Spain, Italy, Belgium, Switzerland, Austria, Ireland, the Nordics, Poland, the Czech Republic, Portugal, Greece, the Baltics and so on (well-known ones first: e.g. LSE, Oxford, Cambridge, Edinburgh, King's, UCL, Leiden, Maastricht, Groningen, Rotterdam, Berlin, Munich, Heidelberg, Sciences Po, Madrid, Barcelona, Rome, Bologna, Geneva, Vienna, Prague, Warsaw, Riga, Tallinn, Helsinki, Stockholm, Copenhagen). The other 3: India, Pakistan, Egypt, the United Arab Emirates and big international conferences elsewhere (e.g. the US university circuit). Rotate cities and countries across runs so no single country floods the list.
 3. **Only upcoming:** start date today or later, preferably within the next 12 months.
 
 ## Finding candidates
