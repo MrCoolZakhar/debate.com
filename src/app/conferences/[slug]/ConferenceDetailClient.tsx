@@ -74,6 +74,9 @@ import { ListingCta, ListingSourceNote } from './ListingParts';
 const GRAIN = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='grain'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23grain)' opacity='1'/%3E%3C/svg%3E")`;
 
 const EASE = 'cubic-bezier(0.22,1,0.36,1)';
+// The You tab widens the page and drops the rail in place (no reload): the
+// width and side padding glide instead of jumping when the tab changes.
+const WIDTH_TRANSITION = `max-width 420ms ${EASE}, padding 420ms ${EASE}`;
 
 // Bundled banner presets, same list as manage/[slug]/settings BANNER_PRESETS.
 const BANNER_PRESETS = [
@@ -1788,10 +1791,13 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
   // Role-aware sidebar state
   const isOrganizerViewer = !!organizerRole || isOrganizer;
   // The rail rides up over the banner beside the stat tiles (owner, 19 Oct
-  // 2026). Where it is hidden (below xl on an applicant's You tab) the tiles
-  // keep the full width instead of leaving an empty band.
-  const railHiddenBelowXl = pane === 'participant' && !!myApplications[0] && !isOrganizerViewer && !authLoading && !participantDataLoading;
-  const railBesideHero = !railHiddenBelowXl;
+  // 2026). On the You tab of anyone with an application (organisers who also
+  // applied included) the rail is gone at every width and the page widens to
+  // 1440, so the dashboard uses the whole page instead of a squeezed middle
+  // column (owner, 19 Oct 2026). Overview keeps the rail.
+  const youWide = pane === 'participant' && !!myApplications[0] && !authLoading && !participantDataLoading;
+  const railBesideHero = !youWide;
+  const pageMaxWidth = youWide ? '1440px' : '1200px';
 
   // The three public-page visibility switches (Settings → Conference →
   // "What people can see"). An organiser sees everything on their own page,
@@ -2091,8 +2097,8 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
         </div>
 
         {/* ── Neu stat strip, three soft tiles overlapping the hero ──── */}
-        <div className="relative z-20 px-6 md:px-14" style={{ marginTop: '-44px' }}>
-          <div style={{ maxWidth: '1200px', margin: '0 auto' }} className={railBesideHero ? 'md:pr-[372px]' : undefined}>
+        <div className={`relative z-20 px-6 ${youWide ? 'md:px-10' : 'md:px-14'}`} style={{ marginTop: '-44px', transition: WIDTH_TRANSITION }}>
+          <div style={{ maxWidth: pageMaxWidth, margin: '0 auto', transition: WIDTH_TRANSITION }} className={railBesideHero ? 'md:pr-[372px]' : undefined}>
             <div className="grid grid-cols-3 gap-2 sm:gap-3">
               {/* Dates + location live in the hero overlay (flag, city, date
                   range), only facts NOT already shown above appear here.
@@ -2148,7 +2154,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
         </div>
 
         {/* ── Main content ───────────────────────────────────────────── */}
-        <div style={{ maxWidth: '1200px', margin: '0 auto', width: '100%', isolation: 'isolate', zIndex: 21 }} className="relative px-6 md:px-14 pt-5 pb-14 flex-1">
+        <div style={{ maxWidth: pageMaxWidth, margin: '0 auto', width: '100%', isolation: 'isolate', zIndex: 21, transition: WIDTH_TRANSITION }} className={`relative px-6 ${youWide ? 'md:px-10' : 'md:px-14'} pt-5 pb-14 flex-1`}>
           {/* No decorative glyphs here (owner, 18 Oct 2026: the faded gavel
               and scroll behind the columns read as random floating icons on a
               phone, peeking out wherever the cards left a gap). */}
@@ -2728,7 +2734,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                 on the wrong things, and on a tablet it squeezed the one-page
                 dashboard into a 280px column. Overview keeps it, and from xl
                 (where the dashboard has its sub-nav) it is unchanged. */}
-            <div className={`${railHiddenBelowXl ? 'hidden xl:block ' : ''}${railBesideHero ? 'md:-mt-[96px] ' : ''}conf-rise w-full md:w-[340px] md:flex-shrink-0 order-first md:order-none`} style={{ animationDelay: '120ms' }}>
+            <div className={`${youWide ? 'hidden ' : ''}${railBesideHero ? 'md:-mt-[96px] ' : ''}conf-rise w-full md:w-[340px] md:flex-shrink-0 order-first md:order-none`} style={{ animationDelay: '120ms' }}>
               <div ref={railRef} className="flex flex-col gap-4 md:sticky md:top-3 lg:top-[84px]">
 
                 {/* A listing: "Visit their website" and "Claim it free" instead of Apply, and no prices

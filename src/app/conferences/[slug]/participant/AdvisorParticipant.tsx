@@ -10,6 +10,8 @@
 //
 // ONE DelegationPanel instance serves both Overview and Delegation (it takes
 // the active `section`), so its reads and a half-made swap survive a switch.
+// With a delegation (19 Oct 2026) there is no Overview section: Delegation is
+// first, with the page's next-step card above the leader card.
 
 import { Landmark, Users } from 'lucide-react';
 import DelegationPanel from './DelegationPanel';
@@ -18,7 +20,7 @@ import { OUTFIT } from './shared';
 import { DashCard, CardHeading, INK_SOFT, Pane, StackHeading, useDashStacked } from './dashboardKit';
 import type { ParticipantApplication } from './types';
 
-export default function AdvisorParticipant({ conferenceId, conferenceSlug, conferenceStartDate, application, allocationSwapMode, section, onSelectSection }: {
+export default function AdvisorParticipant({ conferenceId, conferenceSlug, conferenceStartDate, application, allocationSwapMode, section, onSelectSection, delegationLead }: {
   conferenceId: string;
   conferenceSlug: string;
   conferenceStartDate: string | null;
@@ -26,6 +28,9 @@ export default function AdvisorParticipant({ conferenceId, conferenceSlug, confe
   allocationSwapMode: string;
   section: string;
   onSelectSection: (key: string) => void;
+  /** With a delegation, Delegation is the first section and opens with the
+   *  page's next-step card (DelegationLead, owner 19 Oct 2026). */
+  delegationLead?: React.ReactNode;
 }) {
   // The one-page phone dashboard (below xl): Your Delegation (the full
   // members card, whatever section the desktop has open), then Committees.
@@ -33,6 +38,7 @@ export default function AdvisorParticipant({ conferenceId, conferenceSlug, confe
   return (
     <>
       {application.society_id && stacked && <StackHeading title="Your Delegation" icon={Users} />}
+      {application.society_id && delegationLead && <Pane show={section === 'delegation'}>{delegationLead}</Pane>}
       {application.society_id ? (
         <DelegationPanel
           conferenceId={conferenceId}

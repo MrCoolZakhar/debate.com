@@ -1,9 +1,10 @@
 'use client';
 
 // The People table of the leader card (taste board 1A): one row per member,
-// person (photo or initials, name, role in plain words), seat (round flag and
-// country, then the committee's round emblem and acronym as a link that opens
-// the committee), position paper (V2 only), payment, and the row menu.
+// person (photo or initials, name, role in plain words), seat (the country's
+// round flag and the committee's round emblem side by side at 44px, owner 19
+// Oct 2026, then the country and the committee acronym as a link that opens
+// the committee, two rows), position paper (V2 only), payment, and the row menu.
 // From 760px of card width it is a table; below it every row stacks.
 // Names wrap, never an ellipsis (CLAUDE.md §8).
 
@@ -59,8 +60,9 @@ function ToneWord({ word, tone }: { word: string; tone: PayTone }) {
   );
 }
 
-const GRID_V2 = '@[760px]:grid-cols-[minmax(0,1.5fr)_minmax(0,1.35fr)_minmax(0,0.85fr)_minmax(0,1fr)_36px]';
-const GRID = '@[760px]:grid-cols-[minmax(0,1.5fr)_minmax(0,1.4fr)_minmax(0,1fr)_36px]';
+// The seat column is the widest: two 44px circles before its two text rows.
+const GRID_V2 = '@[760px]:grid-cols-[minmax(0,1.4fr)_minmax(0,1.7fr)_minmax(0,0.8fr)_minmax(0,0.95fr)_36px]';
+const GRID = '@[760px]:grid-cols-[minmax(0,1.5fr)_minmax(0,1.7fr)_minmax(0,0.9fr)_36px]';
 
 export default function PeopleTable({ rows, societyId, conferenceId, openSeats, onOpenCommittee, onChanged, swap }: {
   rows: PersonRow[];
@@ -150,24 +152,25 @@ export default function PeopleTable({ rows, societyId, conferenceId, openSeats, 
             {/* Seat */}
             <div className="min-w-0 pl-[66px] @[760px]:pl-0">
               {r.seat ? (
-                <div className="flex items-center gap-2.5 min-w-0">
-                  <CircleFlag code={r.seat.country_code} logoUrl={r.seat.seatLogo} label={r.seat.country_name} size={22} decorative />
+                <div className="flex items-center gap-3 min-w-0">
+                  <span className="flex items-center flex-shrink-0" style={{ gap: 6 }}>
+                    <CircleFlag code={r.seat.country_code} logoUrl={r.seat.seatLogo} label={r.seat.country_name} size={44} decorative />
+                    <CommitteeDisc src={r.seat.emblem} size={44} />
+                  </span>
                   <div className="min-w-0 flex flex-col gap-0.5">
-                    <span className="[overflow-wrap:anywhere]" style={{ fontFamily: FONT, fontSize: 14, fontWeight: 500, color: INK }}>{r.seat.country_name}</span>
+                    <span className="[overflow-wrap:anywhere]" style={{ fontFamily: FONT, fontSize: 14.5, fontWeight: 500, color: INK, lineHeight: 1.3 }}>{r.seat.country_name}</span>
                     {r.seat.committee_id ? (
                       <button
                         type="button"
                         title="Open this committee"
                         onClick={(e) => { e.stopPropagation(); if (r.seat?.committee_id) onOpenCommittee(r.seat.committee_id); }}
-                        className="inline-flex items-center gap-1.5 self-start text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] rounded"
-                        style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontFamily: FONT, fontSize: 13, fontWeight: 700, color: '#1B3828', textDecoration: 'underline', textUnderlineOffset: 3 }}
+                        className="self-start text-left [overflow-wrap:anywhere] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] rounded"
+                        style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontFamily: FONT, fontSize: 13, fontWeight: 700, color: '#1B3828', textDecoration: 'underline', textUnderlineOffset: 3, lineHeight: 1.35 }}
                       >
-                        <CommitteeDisc src={r.seat.emblem} size={16} />
-                        <span className="[overflow-wrap:anywhere]">{r.seat.committee_label}</span>
+                        {r.seat.committee_label}
                       </button>
                     ) : (
-                      <span className="inline-flex items-center gap-1.5 [overflow-wrap:anywhere]" style={{ fontFamily: FONT, fontSize: 13, color: INK_SOFT }}>
-                        <CommitteeDisc src={r.seat.emblem} size={16} />
+                      <span className="[overflow-wrap:anywhere]" style={{ fontFamily: FONT, fontSize: 13, color: INK_SOFT, lineHeight: 1.35 }}>
                         {r.seat.committee_label}
                       </span>
                     )}

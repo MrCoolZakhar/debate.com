@@ -8,10 +8,16 @@
 // display:none when its section is not shown (Pane), so switching never
 // refetches a card or loses a half-uploaded position paper.
 //   overview    published awards (only when there are some), the assignment
+//               (independent delegates only; see delegation below)
 //   committee   the committee card (5A: topics, co-delegate, live room), the
 //               study guide and paper at a glance, the committee list
 //   documents   the study guide and the position paper
-//   delegation  the delegation roster (members of a delegation only)
+//   delegation  members of a delegation only, and FIRST (owner, 19 Oct 2026:
+//               Delegation is their overview, there is no Overview section):
+//               the page's next-step card (DelegationLead), published awards,
+//               then the leader or member card. The assignment hero is left
+//               out for them: the Committee section and the delegation card
+//               already show the seat.
 // Below xl (10 Oct 2026) there is no sub-nav: the panes stack in this order on
 // one page, with Payment and Support placed by the parent.
 
@@ -66,7 +72,7 @@ function delegateNextStep(
   return { kind: 'done', line: 'Read your study guide and prepare your speeches for the committee.' };
 }
 
-export default function DelegateParticipant({ conferenceId, conferenceSlug, conferenceStartDate, application, myAllocation, committees, allocationSwapMode, section, onSelectSection }: {
+export default function DelegateParticipant({ conferenceId, conferenceSlug, conferenceStartDate, application, myAllocation, committees, allocationSwapMode, section, onSelectSection, delegationLead }: {
   conferenceId: string;
   conferenceSlug: string;
   conferenceStartDate: string | null;
@@ -77,6 +83,8 @@ export default function DelegateParticipant({ conferenceId, conferenceSlug, conf
   section: string;
   /** Switches the desktop sub-nav (the paper and guide cards lead to Documents). */
   onSelectSection?: (key: string) => void;
+  /** The top of the Delegation section (next step, status, Join session), from the page. */
+  delegationLead?: React.ReactNode;
 }) {
   const committee = myAllocation ? committees.find(c => c.id === myAllocation.conference_committee_id) ?? null : null;
   // Below xl every pane shows on one page (see ParticipantView), in this
@@ -94,8 +102,30 @@ export default function DelegateParticipant({ conferenceId, conferenceSlug, conf
     requestAnimationFrame(() => document.getElementById('you-documents')?.scrollIntoView({ block: 'start' }));
   }, [onSelectSection]);
 
+  const inDelegation = !!application.society_id;
+
   return (
     <>
+      {/* One delegation card for everyone in a delegation (25 Sep 2026): the
+          roster, grouped, the viewer first. A delegate sees only their own
+          allocation and payment; leaders see everything. Since 19 Oct 2026 it
+          is their first section and carries what Overview used to. */}
+      {application.society_id && (
+        <Pane show={section === 'delegation'} title="Your Delegation" icon={Users}>
+          {delegationLead}
+          <MyAwardsCard conferenceId={conferenceId} conferenceSlug={conferenceSlug} myAllocation={myAllocation} />
+          <DelegationPanel
+            conferenceId={conferenceId}
+            conferenceSlug={conferenceSlug}
+            societyId={application.society_id}
+            allocationSwapMode={allocationSwapMode}
+            section="delegation"
+            member={{ committees, myAllocation, selfPaid: application.self_paid }}
+          />
+        </Pane>
+      )}
+
+      {!inDelegation && (
       <Pane show={section === 'overview'} title="Your Assignment" icon={Flag}>
         {/* Only ever renders once the secretariat has published and this
             delegate's allocation holds an honour; otherwise nothing. */}
@@ -108,6 +138,7 @@ export default function DelegateParticipant({ conferenceId, conferenceSlug, conf
           joinFromXlOnly={stacked}
         />
       </Pane>
+      )}
 
       <Pane show={section === 'committee'} title="Your Committee" icon={Landmark} phone={assigned}>
         {/* Taste board 5A: the committee (with a double delegate's partner),
@@ -127,23 +158,6 @@ export default function DelegateParticipant({ conferenceId, conferenceSlug, conf
         <PositionPaperCard conferenceId={conferenceId} conferenceSlug={conferenceSlug} myAllocation={myAllocation} onPaperState={setPaper} />
         <StudyGuideCard committeeId={myAllocation?.conference_committee_id ?? null} />
       </Pane>
-
-      {/* One delegation card for everyone in a delegation (25 Sep 2026): the
-          roster, grouped, the viewer first. A delegate sees only their own
-          allocation and payment; leaders see everything. An independent
-          delegate has no Delegation section (Overview says so instead). */}
-      {application.society_id && (
-        <Pane show={section === 'delegation'} title="Your Delegation" icon={Users}>
-          <DelegationPanel
-            conferenceId={conferenceId}
-            conferenceSlug={conferenceSlug}
-            societyId={application.society_id}
-            allocationSwapMode={allocationSwapMode}
-            section="delegation"
-            member={{ committees, myAllocation, selfPaid: application.self_paid }}
-          />
-        </Pane>
-      )}
     </>
   );
 }

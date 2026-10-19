@@ -29,6 +29,7 @@ import RequestsPanel from './RequestsPanel';
 import ApplyPointer from './ApplyPointer';
 import ConferenceDocsSection, { useConferenceDocs, docForRole, DOC_READER_STATUSES } from './ConferenceDocsSection';
 import ConferenceDocsExtra, { useMyConferenceDocs, requiredOutstanding, DocsRequiredNotice } from './ConferenceDocsExtra';
+import DelegationLead, { liveRoomCode } from './delegation/DelegationLead';
 import type { ParticipantApplication, ParticipantRoleConfig, ParticipantAllocation, ParticipantCommittee } from './types';
 import { friendlyError, UserFacingError } from '@/lib/friendlyError';
 
@@ -59,7 +60,16 @@ const DOCUMENTS: DashSection = { key: 'documents', label: 'Documents', icon: Fil
 const DELEGATION: DashSection = { key: 'delegation', label: 'Delegation', icon: Users };
 const COMMITTEES: DashSection = { key: 'committees', label: 'Committees', icon: Landmark };
 
+/** In a delegation (owner, 19 Oct 2026): a head delegate, a faculty advisor or
+ *  a delegate with a society. Their Delegation section IS the overview: it
+ *  comes first, opens by default, and there is no Overview section. */
+function inDelegation(app: ParticipantApplication): boolean {
+  return !!app.society_id && (DELEGATE_ROLES.has(app.role) || app.role === 'faculty-advisor');
+}
+
 function sectionsFor(app: ParticipantApplication, gateOpen: boolean, hasConferenceDocs = false, chairAwards = false): DashSection[] {
+  // While the pay gate is closed the role content is not drawn, so there is
+  // no delegation card yet: Overview stays, for every role.
   if (!gateOpen) return [OVERVIEW, PAYMENT, SUPPORT];
   const list = roleSections(app);
   // A chair's Awards tab (prompt 134), after Committee, only while it is open.
@@ -81,13 +91,9 @@ function roleSections(app: ParticipantApplication): DashSection[] {
   switch (app.role) {
     case 'delegate':
     case 'head-delegate':
-      return [
-        OVERVIEW,
-        { key: 'committee', label: 'Committee', icon: Landmark },
-        DOCUMENTS,
-        ...(app.society_id ? [DELEGATION] : []),
-        PAYMENT, SUPPORT,
-      ];
+      return app.society_id
+        ? [DELEGATION, { key: 'committee', label: 'Committee', icon: Landmark }, DOCUMENTS, PAYMENT, SUPPORT]
+        : [OVERVIEW, { key: 'committee', label: 'Committee', icon: Landmark }, DOCUMENTS, PAYMENT, SUPPORT];
     case 'chair':
       return [
         OVERVIEW,
@@ -96,7 +102,7 @@ function roleSections(app: ParticipantApplication): DashSection[] {
         DOCUMENTS, PAYMENT, SUPPORT,
       ];
     case 'faculty-advisor':
-      return [OVERVIEW, DELEGATION, COMMITTEES, PAYMENT, SUPPORT];
+      return app.society_id ? [DELEGATION, COMMITTEES, PAYMENT, SUPPORT] : [OVERVIEW, DELEGATION, COMMITTEES, PAYMENT, SUPPORT];
     case 'observer':
       return [OVERVIEW, COMMITTEES, PAYMENT, SUPPORT];
     default:
@@ -390,10 +396,57 @@ export default function ParticipantView({
   const hasDocs = docsExtraOn ? gateOpen && (extraDocs?.documents.length ?? 0) > 0 : roleDocs.length > 0;
   const docsDue = gateOpen && extraDocs && extraDocs.warnings > 0 ? requiredOutstanding(extraDocs.documents) : [];
   const sections = sectionsFor(selected, gateOpen, hasDocs, chairAwardsTab);
+  // In a delegation with the gate open, Delegation is the overview.
+  const delegationFirst = gateOpen && inDelegation(selected);
   // A section that no longer exists for this application (a role switch, the
-  // gate closing) falls back to Overview.
-  const activeSection = section.appId === selected.id && sections.some(x => x.key === section.key) ? section.key : 'overview';
+  // gate closing) falls back to the first one (Overview, or Delegation for
+  // anyone in a delegation); asking for 'overview' lands on Delegation there.
+  const wantedSection = section.appId === selected.id ? section.key : 'overview';
+  const homeSection = sections[0]?.key ?? 'overview';
+  const activeSection = wantedSection === 'overview' && delegationFirst
+    ? homeSection
+    : sections.some(x => x.key === wantedSection) ? wantedSection : homeSection;
+  // The overview's section key: Delegation for anyone in a delegation.
+  const overviewKey = delegationFirst ? 'delegation' : 'overview';
   const selectSection = (key: string) => setSection({ appId: selected.id, key });
+
+  const docsNotice = docsDue.length > 0 ? (
+    <DocsRequiredNotice
+      conferenceName={conferenceName || 'This conference'}
+      docs={docsDue}
+      onGo={() => {
+        selectSection('documents');
+        window.setTimeout(() => {
+          document.getElementById('conference-documents')?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+        }, 60);
+      }}
+    />
+  ) : null;
+
+  const payNow = feeToday !== 0
+    && !(selected.payment_status === 'paid' || selected.payment_status === 'waived')
+    && !(paymentTiming === 'after_acceptance' && selected.status === 'submitted');
+  const nextStep = pageNextStep({
+    app: selected,
+    conferenceSlug,
+    conferenceName: conferenceName || 'conference',
+    locked: gateState === 'locked',
+    payNow,
+    // A role step only counts while that role's dashboard is on the page.
+    roleStep: gateOpen ? roleStep : null,
+    paymentsReady,
+  });
+
+  // The top of the Delegation section for anyone in a delegation: the next
+  // step, the application's status and Join session while the room is live.
+  const delegationLead = delegationFirst ? (
+    <DelegationLead
+      step={nextStep}
+      status={selected.status}
+      roomCode={isDelegateRole ? liveRoomCode(myAllocation, conferenceStartDate) : null}
+      notice={docsNotice}
+    />
+  ) : undefined;
 
   const roleContent = isDelegateRole ? (
     <DelegateParticipant
@@ -406,6 +459,7 @@ export default function ParticipantView({
       allocationSwapMode={allocationSwapMode}
       section={activeSection}
       onSelectSection={selectSection}
+      delegationLead={delegationLead}
     />
   ) : selected.role === 'faculty-advisor' ? (
     <AdvisorParticipant
@@ -416,6 +470,7 @@ export default function ParticipantView({
       allocationSwapMode={allocationSwapMode}
       section={activeSection}
       onSelectSection={selectSection}
+      delegationLead={delegationLead}
     />
   ) : selected.role === 'chair' ? (
     <ChairParticipant conferenceId={conferenceId} conferenceSlug={conferenceSlug} section={activeSection} onAwardsTab={onChairAwardsTab} />
@@ -436,19 +491,6 @@ export default function ParticipantView({
   // questions. From xl the sub-nav and one section at a time are unchanged:
   // the DOM order below changes nothing there.
   const stacked = true;
-  const payNow = feeToday !== 0
-    && !(selected.payment_status === 'paid' || selected.payment_status === 'waived')
-    && !(paymentTiming === 'after_acceptance' && selected.status === 'submitted');
-  const nextStep = pageNextStep({
-    app: selected,
-    conferenceSlug,
-    conferenceName: conferenceName || 'conference',
-    locked: gateState === 'locked',
-    payNow,
-    // A role step only counts while that role's dashboard is on the page.
-    roleStep: gateOpen ? roleStep : null,
-    paymentsReady,
-  });
   const paymentPane = (
     <Pane show={activeSection === 'payment'} title="Payment" icon={CreditCard}>
       <PaymentPane
@@ -590,20 +632,12 @@ export default function ParticipantView({
             {/* Overview: MyMUN's three facts first, never gated. Below xl the
                 next-step card takes their place (status at its top right,
                 "what happens next" as its one line), so nothing repeats. */}
+            {/* Not drawn for anyone in a delegation (their Delegation section
+                carries the next step, DelegationLead), on any width. */}
+            {!delegationFirst && (
             <Pane show={activeSection === 'overview'}>
               {nextStep && <NextStepCard step={nextStep} status={selected.status} />}
-              {docsDue.length > 0 && (
-                <DocsRequiredNotice
-                  conferenceName={conferenceName || 'This conference'}
-                  docs={docsDue}
-                  onGo={() => {
-                    selectSection('documents');
-                    window.setTimeout(() => {
-                      document.getElementById('conference-documents')?.scrollIntoView({ block: 'start', behavior: 'smooth' });
-                    }, 60);
-                  }}
-                />
-              )}
+              {docsNotice}
               <div className="hidden xl:block">
               <StatusRow
                 input={{
@@ -627,6 +661,7 @@ export default function ParticipantView({
                 </p>
               )}
             </Pane>
+            )}
 
             {/* The role's own sections. Mounted once; each hides the panes
                 that are not showing. Behind the pay gate exactly as before:
@@ -641,7 +676,7 @@ export default function ParticipantView({
                 committee's seat holders and chairs) and accepted observers; the card asks
                 the database and draws nothing for anyone else, or while the SQL is pending. */}
             {gateOpen && PRESS_DESK_ROLES.has(selected.role) && (
-              <PressDeskEntry conferenceId={conferenceId} conferenceSlug={conferenceSlug} show={activeSection === 'overview'} />
+              <PressDeskEntry conferenceId={conferenceId} conferenceSlug={conferenceSlug} show={activeSection === overviewKey} />
             )}
 
             {/* Conference Documents: the Rules of Procedure, logistics and the
@@ -661,7 +696,7 @@ export default function ParticipantView({
                 we (on the phone page it is its own section, before the
                 questions; on desktop it closes Overview as before). */}
             {selected.status === 'submitted' && (
-              <Pane show={activeSection === 'overview'} title="Your Application" icon={ClipboardList}>
+              <Pane show={activeSection === overviewKey} title="Your Application" icon={ClipboardList}>
                 <DashCard>
                   <div className="flex items-center justify-between gap-3 flex-wrap">
                     <p className="text-[14px]" style={{ color: '#1C1410', fontFamily: OUTFIT, fontWeight: 600, margin: 0 }}>
