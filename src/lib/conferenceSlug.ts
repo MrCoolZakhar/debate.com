@@ -95,6 +95,9 @@ export const MAX_VERSION_RUNG = 20;
  */
 const RESERVED_CONFERENCE_SLUGS: ReadonlySet<string> = new Set([
   'explore', 'landing-lab', 'map', 'new', 'organise', 'organize', 'roles',
+  // The hubs (/conferences/in/*) since 24 Sep 2026. Its twin in the database
+  // (conference_slug_push) gains it in scratch-reserve-in-slug.sql.
+  'in',
   // Defensive: plausible future siblings.
   'all', 'search', 'directory', 'calendar', 'index',
 ]);

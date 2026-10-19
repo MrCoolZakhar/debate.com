@@ -163,7 +163,7 @@ export default function Article() {
 | Prop | |
 |---|---|
 | `slug` | **Required.** Everything else about the post comes from the manifest entry with this slug. |
-| `pitch` | The sentence in the call to action at the foot. Say what THIS guide's reader gets. Defaults to a generic line; write a real one. |
+| `pitch` | The line in the top product banner under the header (shown from 640px up). Say what THIS guide's reader gets. Defaults to a generic line; write a real one. The three product banners (top, middle before the middle `<H2>`, bottom) are placed by `ArticleLayout` from `ProductBanners.tsx`; a post adds nothing for them. |
 | `title` | Only if the `<h1>` should differ from the manifest title. Rare; one post uses it. |
 | `dek` | Only if the standfirst should differ from the manifest description. Rare. |
 
@@ -306,8 +306,8 @@ These are the rules the rest of the site is held to
 
 - **No em dashes.** Short sentences. A colon or a full stop instead.
 - **No count or status pills.** Counts are plain typography.
-- **Write the `pitch`.** A guide to the right of reply should not end on the
-  same sentence as a guide to conference budgets.
+- **Write the `pitch`.** A guide to the right of reply should not open its
+  product banner on the same sentence as a guide to conference budgets.
 - **One idea per section**, and a `<H2>` for each. Guides run 7 to 13 minutes.
 - Escape `'` and `"` in JSX text (`&apos;`, `&quot;`) or lint will flag it.
 

@@ -8,10 +8,9 @@ import { warmOgImage } from '@/lib/ogWarm';
 import { supabase } from '@/lib/supabase';
 import ConferenceDetailClient from './ConferenceDetailClient';
 import ConferenceViewBeacon from '@/components/conferences/ConferenceViewBeacon';
-import { displayDelegatePrice, TBD_PRICE, type DelegatePrice, type DelegatePriceConfig } from '@/lib/publicFees';
+import { displayRolePrice, TBD_PRICE, type DelegatePrice, type DelegatePriceConfig } from '@/lib/publicFees';
 import { windowState } from '@/lib/listedConferences';
-import { countryHubs } from '@/lib/countryHubs';
-import { getCountryByName } from '@/lib/countries';
+import { allHubs, hubPath, hubsForConference, type Hub } from '@/lib/countryHubs';
 import { isListedConference } from '@/lib/publicConferences';
 import { hasNoDates } from '@/lib/conferenceDates';
 import {
@@ -23,16 +22,32 @@ import {
   type DelegateWindow,
 } from '@/lib/conferenceSeo';
 import ConferenceFacts from './ConferenceFacts';
+import ConferenceAbout, { ConferenceFaq } from './ConferenceAbout';
+import { buildConferenceAbout, conferenceFaqJsonLd, type AboutRole } from '@/lib/conferenceAbout';
 
-// Server-rendered shell only; the client always does its own live fetch on
-// mount (ConferenceDetailClient's fetchAll, unconditional) with the right
-// auth context, so a stale hour-old server seed never reaches the screen —
-// it only affects how fresh the pre-hydration HTML/metadata a crawler sees
-// is. Safe for the private-conference path too: nothing here reads cookies
-// or headers, and a private conference's `full`/`schema` stay null
-// regardless of cache freshness (gated on `conf.is_public`, not on when the
-// row was fetched), so there is nothing user-specific to go stale.
-export const revalidate = 3600;
+// ISR (19 Oct 2026). Server-rendered shell only; the client always does its
+// own live fetch on mount (ConferenceDetailClient's fetchAll, unconditional)
+// with the right auth context, so a stale server seed never reaches the
+// screen; it only affects how fresh the pre-hydration HTML/metadata a crawler
+// or a link preview sees is. Safe for the private-conference path too:
+// nothing here reads cookies or headers, and a private conference's
+// `full`/`schema` stay null (gated on `conf.is_public`), so the cached HTML
+// is the same for every visitor. Everything personal is client-side.
+//
+// This route used to answer `private, no-cache, no-store` and re-run every
+// query on every request (6 to 12 s under load) despite `revalidate`, for two
+// reasons: (1) a dynamic segment WITHOUT generateStaticParams is rendered per
+// request; returning [] makes each slug render on first visit and then be
+// cached; (2) the stored-card probe (storedCardExists) and the card warmer
+// fetched with `cache: 'no-store'`, which opts the whole route into dynamic
+// rendering. Both fixed; keep it that way (no cookies(), headers(),
+// searchParams or no-store fetches anywhere in this page or its metadata).
+// 10 minutes, so an organiser's edit reaches crawlers and new link previews
+// soon after the page is next visited.
+export const revalidate = 600;
+export function generateStaticParams() {
+  return [];
+}
 
 interface ConfMeta {
   id: string;
@@ -52,6 +67,7 @@ interface ConfMeta {
   timezone: string | null;
   website_url: string | null;
   published_at: string | null;
+  show_committees: boolean | null;
 }
 
 
@@ -59,14 +75,24 @@ interface ConfMeta {
 // (React request-level cache), so adding the Event schema costs nothing extra.
 // Exported so sibling routes (e.g. ../reviews/page.tsx) can reuse the same
 // cached fetch for their own title instead of adding a duplicate query.
+// This page reads through `readConference`, where a failed READ throws and
+// never returns null: under ISR a null here is a notFound() that would be
+// cached as a 404 for the whole revalidate window, while a thrown render keeps
+// the last good copy (or answers 500, never cached). `getConference` keeps
+// the old forgiving shape (null on any failure) for ../reviews and ../awards.
+const readConference = cache(async (slug: string): Promise<ConfMeta | null> => {
+  const { data, error } = await supabase
+    .from('conferences')
+    .select('id, fee_currency, full_name, acronym, description, banner_url, logo_url, city, country, start_date, end_date, is_public, format, dates_tbd, timezone, website_url, published_at, show_committees')
+    .eq('slug', slug)
+    .maybeSingle();
+  if (error) throw new Error(`Conference read failed: ${error.code ?? 'unknown'}`);
+  return (data as ConfMeta) ?? null;
+});
+
 export const getConference = cache(async (slug: string): Promise<ConfMeta | null> => {
   try {
-    const { data } = await supabase
-      .from('conferences')
-      .select('id, fee_currency, full_name, acronym, description, banner_url, logo_url, city, country, start_date, end_date, is_public, format, dates_tbd, timezone, website_url, published_at')
-      .eq('slug', slug)
-      .maybeSingle();
-    return (data as ConfMeta) ?? null;
+    return await readConference(slug);
   } catch {
     return null;
   }
@@ -95,17 +121,16 @@ const CONFERENCE_COLUMNS = `
 `;
 
 export const getConferenceFull = cache(async (slug: string) => {
-  try {
-    const { data } = await supabase
-      .from('conferences')
-      .select(CONFERENCE_COLUMNS)
-      .eq('slug', slug)
-      .eq('is_public', true)
-      .maybeSingle();
-    return data ?? null;
-  } catch {
-    return null;
-  }
+  // Throws on a failed read for the same reason as readConference: a cached
+  // copy without the seed would hide the page's content from crawlers.
+  const { data, error } = await supabase
+    .from('conferences')
+    .select(CONFERENCE_COLUMNS)
+    .eq('slug', slug)
+    .eq('is_public', true)
+    .maybeSingle();
+  if (error) throw new Error(`Conference read failed: ${error.code ?? 'unknown'}`);
+  return data ?? null;
 });
 
 /** Committee names and topics. These are the words a search for a topic or a
@@ -125,54 +150,78 @@ const getCommittees = cache(async (conferenceId: string) => {
   }
 });
 
-/** The delegate role as public pages see it: the price (publicFees.ts, the
- *  one rule) and the application window (listedConferences.windowState, the
- *  mirror of the trigger), from ONE read of the conference_public_fees view.
- *  Public conferences only; TBD and no window on any failure. */
-const getDelegateRole = cache(async (id: string, currency: string | null): Promise<{ price: DelegatePrice; window: DelegateWindow }> => {
-  try {
-    const { data } = await supabase
-      .from('conference_public_fees')
-      .select('fee_amount, fee_currency, fee_phases, is_enabled, applications_open_at, applications_close_at')
-      .eq('conference_id', id)
-      .eq('role', 'delegate')
-      .maybeSingle();
-    if (!data) return { price: TBD_PRICE, window: NO_WINDOW };
-    const row = data as DelegatePriceConfig & { applications_close_at: string | null };
-    return {
-      price: displayDelegatePrice(row, currency ?? ''),
-      window: {
-        state: windowState(
-          { is_enabled: row.is_enabled ?? null, applications_open_at: row.applications_open_at ?? null, applications_close_at: row.applications_close_at },
-          Date.now(),
-        ),
-        openAt: row.applications_open_at ?? null,
-        closeAt: row.applications_close_at ?? null,
-      },
-    };
-  } catch {
-    return { price: TBD_PRICE, window: NO_WINDOW };
-  }
-});
+type PublicRoleRow = DelegatePriceConfig & { role: string; applications_close_at: string | null };
 
-/** The country hub (/conferences/in/<country>) this conference's country has,
- *  by the hubs' own rule (countryHubs.ts), or null when there is none. */
-const getCountryHub = cache(async (country: string | null): Promise<{ slug: string; name: string } | null> => {
-  const hit = country ? getCountryByName(country.trim()) : undefined;
-  if (!hit) return null;
+/** Every role of a public conference from ONE read of the
+ *  conference_public_fees view (prices and windows only). null on a failure. */
+const getPublicRoles = cache(async (id: string): Promise<PublicRoleRow[] | null> => {
   try {
-    const { data } = await supabase
-      .from('conferences')
-      .select('slug, full_name, is_demo, country, start_date, end_date')
-      .eq('is_public', true);
-    const rows = ((data as { slug: string; full_name: string; is_demo: boolean | null; country: string | null; start_date: string | null; end_date: string | null }[]) ?? [])
-      .filter(isListedConference);
-    const hub = countryHubs(rows).find((h) => h.code === hit.code.toUpperCase());
-    return hub ? { slug: hub.slug, name: hub.name } : null;
+    const { data, error } = await supabase
+      .from('conference_public_fees')
+      .select('role, fee_amount, fee_currency, fee_phases, is_enabled, applications_open_at, applications_close_at')
+      .eq('conference_id', id);
+    if (error) return null;
+    return (data as PublicRoleRow[]) ?? [];
   } catch {
     return null;
   }
 });
+
+/** One role's public price (publicFees.ts, the one rule) and window
+ *  (listedConferences.windowState, the mirror of the trigger). */
+function roleView(row: PublicRoleRow, currency: string | null): { price: DelegatePrice; window: DelegateWindow } {
+  return {
+    price: displayRolePrice(row, currency ?? ''),
+    window: {
+      state: windowState(
+        { is_enabled: row.is_enabled ?? null, applications_open_at: row.applications_open_at ?? null, applications_close_at: row.applications_close_at },
+        Date.now(),
+      ),
+      openAt: row.applications_open_at ?? null,
+      closeAt: row.applications_close_at ?? null,
+    },
+  };
+}
+
+/** The delegate role as public pages see it: the price and the application
+ *  window, from the same read as every other role. Public conferences only;
+ *  TBD and no window on any failure. */
+const getDelegateRole = cache(async (id: string, currency: string | null): Promise<{ price: DelegatePrice; window: DelegateWindow }> => {
+  const row = (await getPublicRoles(id))?.find((r) => r.role === 'delegate');
+  return row ? roleView(row, currency) : { price: TBD_PRICE, window: NO_WINDOW };
+});
+
+/** Every role for the About section and the FAQ; [] on a failure. */
+const getAboutRoles = cache(async (id: string, currency: string | null): Promise<AboutRole[]> => {
+  return ((await getPublicRoles(id)) ?? []).map((r) => ({ role: r.role, ...roleView(r, currency) }));
+});
+
+/** The hubs (/conferences/in/<slug>) this conference belongs to that exist,
+ *  by the hubs' own rule (countryHubs.ts): its country, online, its month and
+ *  its year, in that order. Empty on any failure. */
+const getPlaceHubs = cache(async (conf: ConfMeta): Promise<Hub[]> => {
+  try {
+    const { data } = await supabase
+      .from('conferences')
+      .select('slug, full_name, is_demo, country, format, dates_tbd, start_date, end_date')
+      .eq('is_public', true);
+    const rows = ((data as { slug: string; full_name: string; is_demo: boolean | null; country: string | null; format: string | null; dates_tbd: boolean | null; start_date: string | null; end_date: string | null }[]) ?? [])
+      .filter(isListedConference);
+    return hubsForConference(conf, allHubs(rows));
+  } catch {
+    return [];
+  }
+});
+
+/** The words each place link says at the foot of the Overview. */
+function hubLinkLabel(h: Hub): string {
+  switch (h.kind) {
+    case 'country': return `More Model UN conferences in ${h.name}`;
+    case 'online': return 'More online Model UN conferences';
+    case 'month': return `Model UN conferences in ${h.name}`;
+    default: return `Model UN conferences ${h.name}`;
+  }
+}
 
 /** The organiser's own website for `organizer.url`, without tracking
  *  parameters (fbclid, utm_*), or null when it is not a plain http(s) URL. */
@@ -193,7 +242,7 @@ function organiserWebsite(raw: string | null): string | null {
 // slugs fall through to a safe generic card (they 404 for outsiders anyway).
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
   const { slug } = await params;
-  const conf = await getConference(slug);
+  const conf = await readConference(slug);
 
   if (!conf) {
     // NOTE on status codes: this route has a loading.tsx, which makes Next
@@ -260,6 +309,9 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   // (src/lib/ogStore.ts): served from anywhere without a render, so a sender
   // far from our server no longer waits ~2 s for the picture. Until then, the
   // route URL, rendered now after this response so it renders and saves.
+  // Under ISR this runs when the page is (re)rendered, i.e. on the first
+  // visit after the cached copy is 10 minutes old: a changed card (new
+  // ogVersion) is warmed and stored then, and the next render points at it.
   const cardPath = conferenceCardPath(slug, ogVersion(conf));
   const stored = await storedCardExists(cardPath, 400);
   const image = stored ? storedCardUrl(cardPath) : routeImage;
@@ -390,11 +442,11 @@ function eventSchema(
 }
 
 /** Home > Conferences > <country hub, when there is one> > this conference. */
-function breadcrumbSchema(slug: string, conf: ConfMeta, hub: { slug: string; name: string } | null): object {
+function breadcrumbSchema(slug: string, conf: ConfMeta, hub: Hub | null): object {
   const items = [
     { name: 'Home', item: 'https://gavelling.com' },
     { name: 'Conferences', item: 'https://gavelling.com/conferences/explore' },
-    ...(hub ? [{ name: hub.name, item: `https://gavelling.com/conferences/in/${hub.slug}` }] : []),
+    ...(hub ? [{ name: hub.name, item: `https://gavelling.com${hubPath(hub.slug)}` }] : []),
     { name: conferenceShortName(conf), item: `https://gavelling.com/conferences/${slug}` },
   ];
   return {
@@ -406,8 +458,8 @@ function breadcrumbSchema(slug: string, conf: ConfMeta, hub: { slug: string; nam
 
 export default async function ConferenceDetailPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
-  const conf = await getConference(slug);
-  // getConference has no is_public filter, so this is null ONLY when the row
+  const conf = await readConference(slug);
+  // readConference has no is_public filter, so this is null ONLY when the row
   // genuinely doesn't exist — a private conference still comes back here
   // (with is_public: false) and must keep rendering for an owner holding the
   // link. Only a missing row is a real 404.
@@ -415,18 +467,33 @@ export default async function ConferenceDetailPage({ params }: { params: Promise
   // Server-fetched seed for the client view. Public rows only; null for a
   // private conference, which leaves the client's existing authed path intact.
   const full = conf?.is_public ? await getConferenceFull(slug) : null;
-  const [committees, role, hub] = full
+  const [committees, role, placeHubs, aboutRoles] = full
     ? await Promise.all([
         getCommittees((full as { id: string }).id),
         getDelegateRole(conf.id, conf.fee_currency),
-        getCountryHub(conf.country),
+        getPlaceHubs(conf),
+        getAboutRoles(conf.id, conf.fee_currency),
       ])
-    : [[], { price: TBD_PRICE as DelegatePrice, window: NO_WINDOW }, null];
+    : [[], { price: TBD_PRICE as DelegatePrice, window: NO_WINDOW }, [] as Hub[], [] as AboutRole[]];
+  const countryHub = placeHubs.find((h) => h.kind === 'country') ?? null;
+  const onlineHub = placeHubs.find((h) => h.kind === 'online') ?? null;
   const typedCommittees = committees as { name: string; abbreviation: string | null; topics: unknown }[];
   const description = conferenceSeoDescription(conf, typedCommittees, role.price, role.window);
   const schema = full ? eventSchema(slug, conf, typedCommittees, role.price, role.window, description) : null;
-  const breadcrumbs = full ? breadcrumbSchema(slug, conf, hub) : null;
-  const fullRow = full as { student_level?: string | null; expected_delegates?: number | null } | null;
+  const breadcrumbs = full ? breadcrumbSchema(slug, conf, countryHub) : null;
+  const fullRow = full as { student_level?: string | null; expected_delegates?: number | null; min_age?: number | null; max_age?: number | null } | null;
+  // The About section (thin description) and the FAQ, built from the same
+  // facts; the FAQ strings are also the FAQPage JSON-LD, word for word.
+  // Committees the organiser hid from the page stay out of both.
+  const about = full
+    ? buildConferenceAbout(
+        { ...conf, slug, student_level: fullRow?.student_level, expected_delegates: fullRow?.expected_delegates, min_age: fullRow?.min_age, max_age: fullRow?.max_age },
+        conf.show_committees === false ? [] : (committees as { name: string; abbreviation: string | null; topics: unknown; committee_type?: string | null }[]),
+        aboutRoles,
+      )
+    : null;
+  const faqSchema = about ? conferenceFaqJsonLd(about.faq) : null;
+  const hubLinks = placeHubs.map((h) => ({ href: hubPath(h.slug), label: hubLinkLabel(h) }));
   return (
     <>
       {schema && (
@@ -441,17 +508,38 @@ export default async function ConferenceDetailPage({ params }: { params: Promise
           dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbs).replace(/</g, '\\u003c') }}
         />
       )}
+      {faqSchema && (
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(faqSchema).replace(/</g, '\\u003c') }}
+        />
+      )}
       {/* Anonymous, aggregate view count by source (no cookies): see src/lib/trafficSource.ts. */}
       <ConferenceViewBeacon slug={slug} />
       <ConferenceDetailClient
         initialView="overview"
         initialConference={full as never}
         initialCommittees={committees as never}
-        overviewFooter={full ? (
-          <ConferenceFacts
-            summary={conferenceSummary({ ...conf, student_level: fullRow?.student_level, expected_delegates: fullRow?.expected_delegates }, typedCommittees, role.price, role.window)}
-            hub={hub}
-          />
+        placeLinks={full ? {
+          country: countryHub ? { href: hubPath(countryHub.slug), label: `Model UN conferences in ${countryHub.name}` } : null,
+          online: onlineHub ? { href: hubPath(onlineHub.slug), label: 'Online Model UN conferences' } : null,
+        } : null}
+        aboutFallback={about?.thin ? (
+          <>
+            <ConferenceAbout about={about} hubLinks={hubLinks} />
+            <ConferenceFaq items={about.faq} />
+          </>
+        ) : null}
+        // A thin page says these facts (and carries the hub links) in its
+        // About section, so the facts paragraph is only for the others.
+        overviewFooter={full && about && !about.thin ? (
+          <>
+            <ConferenceFaq items={about.faq} />
+            <ConferenceFacts
+              summary={conferenceSummary({ ...conf, student_level: fullRow?.student_level, expected_delegates: fullRow?.expected_delegates }, typedCommittees, role.price, role.window)}
+              links={hubLinks}
+            />
+          </>
         ) : null}
       />
     </>

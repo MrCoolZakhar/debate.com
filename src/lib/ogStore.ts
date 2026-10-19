@@ -57,7 +57,10 @@ export async function storedCardExists(path: string, timeoutMs = 500): Promise<b
     const res = await fetch(storedCardUrl(path), {
       method: 'HEAD',
       signal: AbortSignal.timeout(timeoutMs),
-      cache: 'no-store',
+      // No `cache: 'no-store'`: inside a page render it opts the WHOLE route
+      // into dynamic rendering (the conference page answered no-store on
+      // every request because of it). With no cache option Next does not
+      // keep the answer outside the build, so each (re)render still asks.
     });
     if (res.ok) {
       if (known.size >= MAX_REMEMBERED) known.clear();

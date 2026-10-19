@@ -11,7 +11,9 @@ import { SITE_URL } from '@/lib/seo';
  * fetched and re-encoded). So every page view that has a rendered card asks for
  * it once, AFTER the page has been sent (`after`, which Vercel keeps alive with
  * waitUntil). By the time an organiser copies the link they have usually opened
- * the page, and the card is warm.
+ * the page, and the card is warm. Since 19 Oct 2026 the conference page is
+ * ISR, so "every page view" is every RENDER: the first visit after the cached
+ * copy expires (10 minutes), which is when a changed card first appears.
  *
  * Production only (a preview deployment or localhost would warm gavelling.com
  * from the wrong code), at most once per URL per server instance, and never
@@ -33,7 +35,8 @@ export function warmOgImage(imageUrl: string | null | undefined): void {
         const res = await fetch(imageUrl, {
           headers: { 'user-agent': 'GavellingCardWarmer/1.0' },
           signal: AbortSignal.timeout(15000),
-          cache: 'no-store',
+          // No `cache: 'no-store'`: this runs from the conference page's
+          // render, and a no-store fetch there makes the route dynamic.
         });
         // Read the body to the end: an abandoned response may never be stored.
         await res.arrayBuffer();

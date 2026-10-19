@@ -3,6 +3,7 @@ import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { Clock, Lock } from 'lucide-react';
 import BlogChrome from '@/components/blog/BlogChrome';
+import { TopBanner, BottomBanner } from '@/components/blog/ProductBanners';
 import GuideToc from '@/components/premiumGuides/GuideToc';
 import GuideBlocks from '@/components/premiumGuides/GuideBlocks';
 import GuideIcon from '@/components/premiumGuides/GuideIcon';
@@ -47,6 +48,9 @@ export default async function GuidePage({ params }: { params: Promise<{ slug: st
   const url = `${SITE_URL}/guides/${slug}`;
   const locked = meta.toc.filter((t) => !t.free);
   const others = listGuides().filter((g) => g.slug !== slug);
+  // The blog's product banners, top and bottom (no middle: the body past the
+  // teaser is the paywall). An organisers' guide leads with the organiser one.
+  const lead = meta.audience === 'Organisers' ? 'organisers' : 'sessions';
 
   const article = {
     '@context': 'https://schema.org',
@@ -112,6 +116,10 @@ export default async function GuidePage({ params }: { params: Promise<{ slug: st
             </div>
           </header>
 
+          <div style={{ marginTop: 28 }}>
+            <TopBanner variant={lead} />
+          </div>
+
           <div className="gvg-layout">
             <aside className="gvg-aside" aria-label="In this guide">
               <GuideToc slug={slug} toc={meta.toc.map((t) => ({ id: t.id, text: t.text, free: t.free }))} />
@@ -121,6 +129,10 @@ export default async function GuidePage({ params }: { params: Promise<{ slug: st
               <GuideBlocks blocks={teaser} />
               <PremiumBody slug={slug} title={meta.title} lockedSections={locked.map((t) => t.text)} />
             </article>
+          </div>
+
+          <div style={{ marginTop: 56 }}>
+            <BottomBanner variant={lead === 'organisers' ? 'sessions' : 'organisers'} />
           </div>
 
           <section className="gvg-more" aria-labelledby="gvg-more-title">

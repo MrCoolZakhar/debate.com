@@ -99,7 +99,7 @@ function sameName(a: string, b: string, year: string): boolean {
 }
 
 /** "ANKARA" reads as "Ankara"; anything typed in mixed case is left alone. */
-function placeCase(s: string): string {
+export function placeCase(s: string): string {
   const t = tidy(s);
   if (t.length <= 3 || t !== t.toUpperCase() || t === t.toLowerCase()) return t;
   return t.toLowerCase().replace(/(^|[\s'-])(\p{L})/gu, (_, p: string, ch: string) => p + ch.toUpperCase());
@@ -152,7 +152,7 @@ export function windowDayText(iso: string, timeZone: string | null | undefined):
 }
 
 /** "Global Assembly Model United Nations (GAMUN 2026)", or the short name alone. */
-function nameForSentence(c: ConferenceSeoInput): string {
+export function nameForSentence(c: ConferenceSeoInput): string {
   const full = tidy(c.full_name);
   const acronym = tidy(c.acronym);
   const short = conferenceShortName(c);

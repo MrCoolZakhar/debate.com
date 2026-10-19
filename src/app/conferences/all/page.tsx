@@ -6,7 +6,7 @@ import { supabase } from '@/lib/supabase';
 import SiteNav from '@/components/SiteNav';
 import SiteFooter from '@/components/SiteFooter';
 import { isListedConference } from '@/lib/publicConferences';
-import { countryHubs } from '@/lib/countryHubs';
+import { allHubs, hubPath, HUB_INDEX_PATH } from '@/lib/countryHubs';
 
 // /conferences/all: the plain directory of every listed conference and every
 // country hub, as server-rendered <a href>s.
@@ -26,7 +26,7 @@ export const revalidate = 3600;
 export const metadata: Metadata = pageMetadata({
   title: 'All Model UN Conferences on Gavelling',
   description:
-    'Every Model UN conference listed on Gavelling, A to Z, with the city and country of each, plus country pages for the places with the most upcoming conferences.',
+    'Every Model UN conference listed on Gavelling, A to Z, with the city and country of each, plus a page for every country, online conferences, each year and each month.',
   path: '/conferences/all',
 });
 
@@ -41,6 +41,8 @@ interface DirectoryConf {
   full_name: string;
   city: string | null;
   country: string | null;
+  format: string | null;
+  dates_tbd: boolean | null;
   is_demo: boolean | null;
   start_date: string | null;
   end_date: string | null;
@@ -51,7 +53,7 @@ async function loadConferences(): Promise<DirectoryConf[]> {
   try {
     const { data } = await supabase
       .from('conferences')
-      .select('slug, full_name, city, country, is_demo, start_date, end_date, updated_at')
+      .select('slug, full_name, city, country, format, dates_tbd, is_demo, start_date, end_date, updated_at')
       .eq('is_public', true)
       .order('full_name', { ascending: true });
     // Test and demo conferences are never listed (src/lib/publicConferences.ts).
@@ -93,7 +95,11 @@ const h2Style: React.CSSProperties = {
 
 export default async function AllConferencesPage() {
   const confs = await loadConferences();
-  const hubs = countryHubs(confs);
+  // Every indexable hub (countryHubs.ts): countries, then online, years and
+  // months. Each is a plain link, so every hub is one hop from this page.
+  const indexableHubs = allHubs(confs).filter((h) => h.indexable);
+  const hubs = indexableHubs.filter((h) => h.kind === 'country');
+  const datedHubs = indexableHubs.filter((h) => h.kind !== 'country');
   const groups = groupByInitial(confs);
 
   const breadcrumbs = {
@@ -167,12 +173,44 @@ export default async function AllConferencesPage() {
               {hubs.map((h) => (
                 <li key={h.slug}>
                   <Link
-                    href={`/conferences/in/${h.slug}`}
+                    href={hubPath(h.slug)}
                     className="group inline-flex items-center gap-2 py-1.5 focus:outline-none focus-visible:underline"
                     style={{ color: FOREST, textDecoration: 'none', fontSize: 15, fontWeight: 600 }}
                   >
                     <MapPin size={15} aria-hidden="true" style={{ color: GOLD, flexShrink: 0 }} />
                     <span className="group-hover:underline">Model UN in {h.name}</span>
+                    <span style={{ color: INK_SOFT, fontWeight: 500, fontVariantNumeric: 'tabular-nums' }}>
+                      {h.count} upcoming
+                    </span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+            <p style={{ margin: '12px 0 0', fontSize: 14, color: INK_SOFT }}>
+              <Link href={HUB_INDEX_PATH} className="hover:text-[#0F3A28]" style={{ color: FOREST, fontWeight: 700, textDecoration: 'underline', textUnderlineOffset: 3 }}>
+                Every country, by continent
+              </Link>
+            </p>
+          </section>
+        )}
+
+        {datedHubs.length > 0 && (
+          <section aria-labelledby="by-date" style={{ marginTop: 40 }}>
+            <h2 id="by-date" style={h2Style}>
+              Online and By Date
+            </h2>
+            <ul
+              className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-1"
+              style={{ listStyle: 'none', margin: 0, padding: 0 }}
+            >
+              {datedHubs.map((h) => (
+                <li key={h.slug}>
+                  <Link
+                    href={hubPath(h.slug)}
+                    className="group inline-flex items-center gap-2 py-1.5 focus:outline-none focus-visible:underline"
+                    style={{ color: FOREST, textDecoration: 'none', fontSize: 15, fontWeight: 600 }}
+                  >
+                    <span className="group-hover:underline">{h.kind === 'online' ? 'Online Model UN conferences' : `Model UN in ${h.name}`}</span>
                     <span style={{ color: INK_SOFT, fontWeight: 500, fontVariantNumeric: 'tabular-nums' }}>
                       {h.count} upcoming
                     </span>

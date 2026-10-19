@@ -662,9 +662,17 @@ export interface ConferenceDetailClientProps {
    *  ConferenceFacts: the plain summary and the hub links), so it is in the
    *  raw HTML. Only the landing page passes it. */
   overviewFooter?: React.ReactNode;
+  /** The hubs the hero's place links to (src/lib/countryHubs.ts), worked out
+   *  on the server so the link is in the raw HTML and never points at a hub
+   *  that does not exist: the country (its ISO code in the hero) and, for an
+   *  online conference, the online hub. Only the landing page passes it. */
+  placeLinks?: { country: { href: string; label: string } | null; online: { href: string; label: string } | null } | null;
+  /** Server-built "About" section (ConferenceAbout.tsx) for a thin
+   *  description, mounted right below the description on Overview. */
+  aboutFallback?: React.ReactNode;
 }
 
-export default function ConferenceDetailClient({ initialView, initialRole = null, initialConference = null, initialCommittees = [], overviewFooter = null }: ConferenceDetailClientProps) {
+export default function ConferenceDetailClient({ initialView, initialRole = null, initialConference = null, initialCommittees = [], overviewFooter = null, placeLinks = null, aboutFallback = null }: ConferenceDetailClientProps) {
   const params = useParams<{ slug: string }>();
   const slug = params.slug;
   const router = useRouter();
@@ -1971,7 +1979,26 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                     <span style={{ fontSize: '14px', color: 'rgba(237,231,216,0.92)', fontFamily: "var(--font-brand), sans-serif", fontWeight: 500 }}>
                       {/* City in full, country as its ISO code, the flag already
                           names the country, so the full name would repeat it. */}
-                      {isOnline ? 'Online' : [(conference.city ?? '').trim(), (countryObj?.code ?? conference.country ?? '').trim().toUpperCase()].filter(Boolean).join(', ')}
+                      {/* The country code (or Online) links to its hub when
+                          the server found one; same words, underlined. */}
+                      {isOnline ? (
+                        placeLinks?.online ? (
+                          <Link href={placeLinks.online.href} title={placeLinks.online.label} className="focus:outline-none" style={{ color: 'inherit', textDecoration: 'underline', textUnderlineOffset: 3, textDecorationColor: 'rgba(237,231,216,0.55)' }}>Online</Link>
+                        ) : 'Online'
+                      ) : (() => {
+                        const city = (conference.city ?? '').trim();
+                        const code = (countryObj?.code ?? conference.country ?? '').trim().toUpperCase();
+                        const countryLink = placeLinks?.country;
+                        return (
+                          <>
+                            {city}
+                            {city && code ? ', ' : ''}
+                            {code && countryLink ? (
+                              <Link href={countryLink.href} title={countryLink.label} aria-label={countryLink.label} className="focus:outline-none" style={{ color: 'inherit', textDecoration: 'underline', textUnderlineOffset: 3, textDecorationColor: 'rgba(237,231,216,0.55)' }}>{code}</Link>
+                            ) : code}
+                          </>
+                        );
+                      })()}
                     </span>
                   </span>
                   {/* Dates to be decided: a public TBD conference (allowed since
@@ -2252,6 +2279,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                   )}
                 </SectionCard>
               )}
+              {activeTab === 'overview' && aboutFallback}
 
 
               {/* Organiser */}

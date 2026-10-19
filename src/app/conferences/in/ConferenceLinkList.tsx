@@ -4,8 +4,8 @@ import { delegatePriceLabel } from '@/lib/publicFees';
 import type { ListedConference } from '@/lib/listedConferences';
 
 // A server-rendered list of conferences as plain <a href> rows: logo, name,
-// dates, city and the public delegate price (publicFees.ts). Used by the
-// country hubs and /organisers, where the links must be in the raw HTML.
+// dates, city (or Online) and the public delegate price (publicFees.ts). Used
+// by the hubs (/conferences/in/*) and /organisers, where the links must be in the raw HTML.
 
 const SANS = "var(--font-brand), sans-serif";
 const FOREST = '#1B3828';
@@ -25,12 +25,13 @@ export function conferenceTitle(c: Pick<ListedConference, 'acronym' | 'full_name
   return year && /^\d{4}$/.test(year) && !base.includes(year) ? `${base} ${year}` : base;
 }
 
-export default function ConferenceLinkList({ conferences }: { conferences: ListedConference[] }) {
+export default function ConferenceLinkList({ conferences, wide = false }: { conferences: ListedConference[]; wide?: boolean }) {
+  // `wide`: the hub pages run the full content width, so 3 and 4 columns there.
   return (
-    <ul className="grid grid-cols-1 md:grid-cols-2 gap-3" style={{ listStyle: 'none', margin: 0, padding: 0 }}>
+    <ul className={wide ? 'grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-3' : 'grid grid-cols-1 md:grid-cols-2 gap-3'} style={{ listStyle: 'none', margin: 0, padding: 0 }}>
       {conferences.map(c => {
         const dates = hasNoDates(c) ? DATES_TO_BE_DECIDED : formatConferenceDates(c.start_date, c.end_date, { style: 'dmy-end-year' });
-        const place = [c.city, c.country].filter(Boolean).join(', ');
+        const place = c.format === 'online' ? ['Online', c.country].filter(Boolean).join(', ') : [c.city, c.country].filter(Boolean).join(', ');
         const windowLabel = WINDOW_LABEL[c.window];
         return (
           <li key={c.id}>

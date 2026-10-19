@@ -35,9 +35,10 @@ import { currentConferenceSlug } from '@/lib/conferenceAliases';
  * leaves the browser — the hash.
  */
 
-/** Static siblings of `/conferences/[slug]`. Mirrors RESERVED_CONFERENCE_SLUGS. */
+/** Static siblings of `/conferences/[slug]`. Mirrors RESERVED_CONFERENCE_SLUGS.
+ *  `all` and `in` (the directory and the hubs) skip the alias lookup too. */
 const CONFERENCE_STATIC = new Set([
-  'explore', 'landing-lab', 'map', 'new', 'organise', 'organize', 'roles',
+  'explore', 'landing-lab', 'map', 'new', 'organise', 'organize', 'roles', 'all', 'in',
 ]);
 
 export async function middleware(req: NextRequest) {

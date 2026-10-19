@@ -11,29 +11,30 @@
  * and cover art are all read from the manifest (src/app/blog/posts.ts), so the
  * index card and the article can never disagree about a post.
  *
+ * The product banners (top, middle, bottom) are placed here too, for every
+ * post at once: see ProductBanners.tsx.
+ *
  * See docs/blog-authoring.md for the post template.
  */
 
 import Link from 'next/link';
-import { ChevronRight, CalendarDays, Clock, ArrowRight } from 'lucide-react';
+import { ChevronRight, CalendarDays, Clock } from 'lucide-react';
 import { articles } from '@/app/blog/posts';
 import { SHELVES, formatPostDate } from './blogTaxonomy';
 import GuidePlate from './GuidePlate';
 import ArticleToc from './ArticleToc';
 import RelatedGuides from './RelatedGuides';
 import BlogChrome from './BlogChrome';
-import { collectHeadings } from './prose';
+import { collectHeadings, insertBeforeMiddleH2 } from './prose';
+import { TopBanner, MiddleBanner, BottomBanner, leadsWithOrganisers } from './ProductBanners';
 import { AuthorByline, AuthorBox } from './AuthorCredit';
 import { HeroPhoto, PhotoCredit } from './BlogPhoto';
 
 const C = {
   forest: '#1B3828',
-  forestMid: '#2A5A3C',
   ink: '#1C1410',
   inkSoft: '#55483C',
   muted: '#9A8A78',
-  rule: '#DDD4C0',
-  gold: '#EED98A',
 };
 
 function Breadcrumb({ shelfLabel, shelfKey }: { shelfLabel: string; shelfKey: string }) {
@@ -73,59 +74,6 @@ function MetaLine({ date, updated, minutes }: { date: string; updated?: string; 
   );
 }
 
-/**
- * The one call to action, at the foot of the article where a reader who
- * finished has a reason to act. `pitch` is the post's own sentence: a guide to
- * the right of reply should not end on the same line as a guide to conference
- * budgets.
- */
-function ArticleCta({ pitch }: { pitch: string }) {
-  return (
-    <section
-      className="relative overflow-hidden rounded-3xl px-6 py-9 sm:px-11 sm:py-11"
-      style={{
-        background: `linear-gradient(135deg, ${C.forestMid} 0%, ${C.forest} 62%)`,
-        boxShadow: '0 18px 44px rgba(27,56,40,0.22)',
-      }}
-    >
-      {/* the gold glow the rulebook asks for on a protagonist */}
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute -right-16 -top-24 h-64 w-64 rounded-full"
-        style={{ background: 'radial-gradient(circle, rgba(238,217,138,0.20) 0%, transparent 68%)' }}
-      />
-      <div className="relative max-w-[34rem]">
-        <p className="m-0 text-[13px] font-bold" style={{ color: C.gold }}>
-          Run it on Gavelling
-        </p>
-        <p className="m-0 mt-2.5 text-[21px] font-extrabold leading-[1.28] sm:text-[24px]" style={{ color: '#EDE7D8' }}>
-          {pitch}
-        </p>
-        <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center">
-          <Link
-            href="/create/sessions"
-            className="gv-lift-dark inline-flex items-center justify-center gap-2 rounded-xl px-6 py-3.5 text-[14.5px] font-extrabold no-underline"
-            style={{ background: C.gold, color: '#1C1410' }}
-          >
-            Start a free session
-            <ArrowRight size={17} strokeWidth={2.6} aria-hidden="true" />
-          </Link>
-          <Link
-            href="/conferences/explore"
-            className="inline-flex items-center justify-center rounded-xl px-5 py-3.5 text-[14.5px] font-bold no-underline transition-colors"
-            style={{ color: C.gold, border: '1.5px solid rgba(238,217,138,0.34)' }}
-          >
-            Explore conferences
-          </Link>
-        </div>
-        <p className="m-0 mt-4 text-[12.5px]" style={{ color: 'rgba(238,217,138,0.6)' }}>
-          Free, no account, delegates join with a six character code.
-        </p>
-      </div>
-    </section>
-  );
-}
-
 export default function ArticleLayout({
   slug,
   title,
@@ -140,7 +88,8 @@ export default function ArticleLayout({
   title?: string;
   /** Only when the standfirst should differ from the manifest description. */
   dek?: string;
-  /** The sentence in the call to action. Say what THIS guide's reader gets. */
+  /** The line in the top product banner (shown from 640px up). Say what
+   *  THIS guide's reader gets. */
   pitch?: string;
   children: React.ReactNode;
 }) {
@@ -159,6 +108,13 @@ export default function ArticleLayout({
   // headings are collected from the post's own JSX, on the server
 
   const headings = collectHeadings(children);
+
+  // The three product banners (ProductBanners.tsx). An organiser post leads
+  // with the organiser banner and ends on the session one; every other post
+  // the other way round. The middle one goes in before the middle <H2>.
+  const lead = leadsWithOrganisers(post.slug, post.category) ? 'organisers' : 'sessions';
+  const tail = lead === 'organisers' ? 'sessions' : 'organisers';
+  const body = insertBeforeMiddleH2(children, <MiddleBanner />);
 
   return (
     <BlogChrome>
@@ -236,7 +192,10 @@ export default function ArticleLayout({
             )}
           </header>
 
-          <hr className="mt-10 mb-9 border-0" style={{ height: '1.5px', background: C.rule }} />
+          {/* The top banner is the divider between the header and the article. */}
+          <div className="mt-8 mb-8 lg:mt-10 lg:mb-9">
+            <TopBanner variant={lead} line={pitch} />
+          </div>
 
           {/* Prose left, contents right. The contents come FIRST in the DOM so
               that on a phone, where the grid collapses to one column, the
@@ -248,20 +207,20 @@ export default function ArticleLayout({
             </div>
             {post.author ? (
               <div className="lg:col-start-1 lg:row-start-1">
-                <article className="gv-prose">{children}</article>
+                <article className="gv-prose">{body}</article>
                 <AuthorBox author={post.author} />
               </div>
             ) : (
-              <article className="gv-prose lg:col-start-1 lg:row-start-1">{children}</article>
+              <article className="gv-prose lg:col-start-1 lg:row-start-1">{body}</article>
             )}
           </div>
 
           <div className="mt-14">
-            <RelatedGuides currentSlug={post.slug} />
+            <BottomBanner variant={tail} />
           </div>
 
-          <div className="mt-12">
-            <ArticleCta pitch={pitch} />
+          <div className="mt-14">
+            <RelatedGuides currentSlug={post.slug} />
           </div>
         </div>
       </div>

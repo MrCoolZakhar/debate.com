@@ -1,0 +1,409 @@
+/* The three product banners on every blog post and premium guide
+ * (ProductBanners.tsx). A CSS module so it loads wherever a banner renders
+ * (blog.css is /blog only, guides.css is /guides only).
+ *
+ * The middle banner sits INSIDE `.gv-prose`, whose `a`, `> *` and line-height
+ * rules would otherwise restyle it. Every rule a prose rule could reach is
+ * written with two classes (0,2,0), which beats `.gv-prose a` (0,1,1) and
+ * `.gv-prose a:hover` loses to `.x .btn:hover` (0,3,0).
+ *
+ * Cards are white with the soft forest-tinted shadow (CLAUDE.md §8 rule 3);
+ * the devices are the landing page's own renders (/sessions/hero-*.webp),
+ * placed the way the homepage's Sessions section places them: the laptop
+ * first, the phone tilted over its corner. */
+
+.banner {
+  font-family: var(--font-brand), sans-serif;
+  color: #1c1410;
+  line-height: 1.4;
+  overflow-wrap: normal;
+}
+
+.card {
+  position: relative;
+  background: #ffffff;
+  border-radius: 22px;
+  box-shadow: 0 0 0 1px rgba(27, 56, 40, 0.07), 0 14px 32px rgba(27, 56, 40, 0.09);
+}
+
+/* ── The forest button (the homepage's "Start a committee" look) ──────────── */
+
+.banner .btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 48px;
+  padding: 0 22px;
+  border-radius: 14px;
+  background: linear-gradient(90deg, #1b3828 0%, #2a5a3c 55%, #1e4a31 100%);
+  color: #ffffff;
+  font-family: var(--font-brand), sans-serif;
+  font-size: 15.5px;
+  font-weight: 700;
+  line-height: 1;
+  text-decoration: none;
+  white-space: nowrap;
+  box-shadow: 0 12px 26px rgba(27, 56, 40, 0.22);
+  transition: transform 180ms ease, box-shadow 180ms ease;
+}
+
+.banner .btn:hover {
+  color: #ffffff;
+  transform: translateY(-2px);
+  box-shadow: 0 16px 32px rgba(27, 56, 40, 0.28);
+}
+
+.banner .btn:active {
+  transform: scale(0.97);
+}
+
+.banner .btn:focus {
+  outline: none;
+}
+
+.banner .btn:focus-visible {
+  outline: 2px solid #b6871f;
+  outline-offset: 3px;
+}
+
+/* Every inline link is bold and underlined (§8 rule 7). */
+.banner .textLink {
+  color: #1b3828;
+  font-weight: 800;
+  text-decoration: underline;
+  text-decoration-color: currentColor;
+  text-decoration-thickness: 1.5px;
+  text-underline-offset: 4px;
+}
+
+.banner .textLink:hover {
+  color: #2a5a3c;
+}
+
+.banner .textLink:focus {
+  outline: none;
+}
+
+.banner .textLink:focus-visible {
+  outline: 2px solid #b6871f;
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+
+/* ── Shared device pair: laptop with the phone over its lower right corner ─── */
+
+.devices {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 100 / 58;
+}
+
+.devices .laptop,
+.devices .phone {
+  position: absolute;
+  display: block;
+  height: auto;
+}
+
+.devices .laptop {
+  left: 0;
+  top: 2%;
+  width: 86%;
+  filter: drop-shadow(0 10px 16px rgba(27, 56, 40, 0.2));
+}
+
+.devices .phone {
+  right: 0;
+  bottom: 0;
+  width: 29%;
+  transform: rotate(5deg);
+  filter: drop-shadow(0 10px 14px rgba(27, 56, 40, 0.26));
+}
+
+/* ── 1. TOP: a compact strip under the article header ─────────────────────── */
+
+.top {
+  display: grid;
+  grid-template-columns: 76px minmax(0, 1fr);
+  grid-template-areas:
+    'dev copy'
+    'dev cta';
+  align-items: center;
+  column-gap: 14px;
+  row-gap: 10px;
+  padding: 12px 14px;
+}
+
+.top .topDevices {
+  grid-area: dev;
+}
+
+.top .topCopy {
+  grid-area: copy;
+  min-width: 0;
+}
+
+.top .topCta {
+  grid-area: cta;
+  justify-self: start;
+}
+
+.top .title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 800;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+  color: #1c1410;
+}
+
+/* The post's own pitch. Hidden on a phone, where the strip stays two short
+   rows so the answer-first paragraph is never pushed off the first screen. */
+.top .line {
+  display: none;
+  margin: 4px 0 0;
+  font-size: 14.5px;
+  line-height: 1.5;
+  color: #55483c;
+}
+
+.top .btn {
+  min-height: 40px;
+  padding: 0 16px;
+  border-radius: 12px;
+  font-size: 14px;
+  white-space: normal;
+  text-align: center;
+  box-shadow: 0 8px 18px rgba(27, 56, 40, 0.2);
+}
+
+@media (min-width: 640px) {
+  .top {
+    grid-template-columns: 132px minmax(0, 1fr) auto;
+    grid-template-areas: 'dev copy cta';
+    column-gap: 20px;
+    padding: 14px 20px 14px 16px;
+  }
+
+  .top .title {
+    font-size: 17.5px;
+  }
+
+  .top .line {
+    display: block;
+  }
+
+  .top .topCta {
+    justify-self: end;
+  }
+
+  .top .btn {
+    min-height: 46px;
+    padding: 0 20px;
+    font-size: 15px;
+  }
+}
+
+@media (min-width: 1024px) {
+  .top {
+    grid-template-columns: 156px minmax(0, 1fr) auto;
+    column-gap: 26px;
+    padding: 16px 24px 16px 18px;
+  }
+}
+
+/* ── 2. MIDDLE: inside the prose column, after the middle section ─────────── */
+
+:global(.gv-prose) > .mid {
+  margin: 2.5rem 0 2.75rem;
+}
+
+.mid {
+  overflow: visible;
+}
+
+/* The placard photo from the homepage's role cards, as the card's top band. */
+.mid .midPhoto {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1024 / 365;
+  border-radius: 22px 22px 0 0;
+  overflow: hidden;
+  background: #ddd4c0;
+}
+
+.mid .midPhoto img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.mid .midBody {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) clamp(88px, 26%, 132px);
+  column-gap: 14px;
+  padding: 18px 16px 20px 18px;
+}
+
+.mid .midCopy {
+  min-width: 0;
+  align-self: center;
+}
+
+/* The phone rises out of the body over the photo's lower edge. */
+.mid .midPhone {
+  position: relative;
+  z-index: 1;
+  align-self: start;
+  margin-top: -64%;
+  margin-bottom: -6px;
+}
+
+.mid .midPhone img {
+  display: block;
+  width: 100%;
+  height: auto;
+  transform: rotate(5deg);
+  filter: drop-shadow(0 14px 20px rgba(27, 56, 40, 0.28));
+}
+
+.mid .title {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 800;
+  line-height: 1.2;
+  letter-spacing: -0.015em;
+  color: #1c1410;
+}
+
+.mid .line {
+  margin: 6px 0 16px;
+  font-size: 15px;
+  line-height: 1.55;
+  color: #55483c;
+}
+
+@media (min-width: 640px) {
+  .mid .midBody {
+    padding: 22px 22px 24px 26px;
+    column-gap: 20px;
+  }
+
+  .mid .title {
+    font-size: 23px;
+  }
+
+  .mid .midPhone {
+    margin-top: -78%;
+  }
+}
+
+/* ── 3. BOTTOM: the landing-style banner after the article ────────────────── */
+
+.full {
+  display: grid;
+  gap: 28px;
+  padding: clamp(26px, 4vw, 48px) clamp(20px, 4vw, 48px) clamp(26px, 3.4vw, 40px);
+  border-radius: 28px;
+}
+
+.full .eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 10px;
+  font-size: 13.5px;
+  font-weight: 700;
+  color: #1b3828;
+}
+
+.full .title {
+  margin: 0;
+  font-size: clamp(27px, 3.6vw, 38px);
+  font-weight: 900;
+  line-height: 1.06;
+  letter-spacing: -0.02em;
+  color: #1c1410;
+  text-wrap: balance;
+}
+
+.full .line {
+  margin: 12px 0 0;
+  max-width: 30rem;
+  font-size: clamp(16px, 1.5vw, 18px);
+  line-height: 1.5;
+  color: #55483c;
+}
+
+.full .fullActions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 16px;
+  margin-top: 24px;
+}
+
+.full .btn {
+  min-height: 56px;
+  padding: 0 28px;
+  font-size: 17px;
+}
+
+.full .fullDevices {
+  justify-self: center;
+  width: 100%;
+  max-width: 460px;
+}
+
+.full .devices .laptop {
+  filter: drop-shadow(0 22px 34px rgba(27, 56, 40, 0.22));
+}
+
+.full .devices .phone {
+  filter: drop-shadow(0 20px 28px rgba(27, 56, 40, 0.28));
+}
+
+@media (max-width: 479px) {
+  .full .btn {
+    width: 100%;
+  }
+
+  .full .fullActions {
+    align-items: stretch;
+  }
+}
+
+@media (min-width: 768px) {
+  .full {
+    grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.05fr);
+    align-items: center;
+    gap: clamp(24px, 4vw, 48px);
+  }
+
+  .full .fullDevices {
+    max-width: none;
+  }
+
+  /* Turned towards the copy, the homepage's perspective mirrored. */
+  .full .devices .laptop {
+    transform: perspective(1800px) rotateY(-11deg) rotateZ(1deg);
+    transform-origin: left center;
+  }
+
+  .full .devices .phone {
+    transform: rotate(6deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .banner .btn {
+    transition: none;
+  }
+
+  .banner .btn:hover,
+  .banner .btn:active {
+    transform: none;
+  }
+}

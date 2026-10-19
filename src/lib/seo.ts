@@ -91,6 +91,7 @@ export const JSONLD_LOGO = {
 export const JSONLD_PUBLISHER = {
   '@type': 'Organization',
   name: 'Gavelling',
+  alternateName: 'Gaveling',
   url: SITE_URL,
   logo: JSONLD_LOGO,
 };

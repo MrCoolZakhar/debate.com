@@ -3,7 +3,7 @@ import { supabase } from '@/lib/supabase';
 import { articles } from './blog/posts';
 import { SITE_URL } from '@/lib/seo';
 import { isListedConference } from '@/lib/publicConferences';
-import { countryHubs } from '@/lib/countryHubs';
+import { allHubs, hubPath, HUB_INDEX_PATH } from '@/lib/countryHubs';
 import { listGuides } from '@/lib/premiumGuides';
 
 // ── The sitemap: every indexable URL, exactly as it canonicalises ────────────
@@ -61,6 +61,8 @@ interface ConfRow {
   full_name?: string | null;
   is_demo?: boolean | null;
   country?: string | null;
+  format?: string | null;
+  dates_tbd?: boolean | null;
   start_date?: string | null;
   end_date?: string | null;
   updated_at: string | null;
@@ -74,7 +76,7 @@ async function publicConferences(): Promise<ConfRow[]> {
   try {
     const { data, error } = await supabase
       .from('conferences')
-      .select('slug, full_name, is_demo, country, start_date, end_date, updated_at, awards_published_at')
+      .select('slug, full_name, is_demo, country, format, dates_tbd, start_date, end_date, updated_at, awards_published_at')
       .eq('is_public', true)
       .order('updated_at', { ascending: false });
     if (!error) return ((data as ConfRow[]) ?? []).filter(isListedConference);
@@ -105,14 +107,24 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { url: url('/conferences/all'), lastModified: hubDate, changeFrequency: 'daily', priority: 0.8 },
     // The organiser landing page (static copy plus the live conference list).
     { url: url('/organisers'), lastModified: hubDate, changeFrequency: 'weekly', priority: 0.9 },
-    // Country hubs: only countries with enough upcoming public conferences
-    // (countryHubs.ts decides, the hub page 404s below the same threshold).
-    ...countryHubs(conferences).map((h) => ({
-      url: url(`/conferences/in/${h.slug}`),
-      lastModified: h.lastModified ? new Date(h.lastModified) : hubDate,
-      changeFrequency: 'weekly' as const,
-      priority: 0.7,
-    })),
+    // The country list and the hubs (/conferences/in/<country | online |
+    // year | month>): only the INDEXABLE ones, i.e. with an upcoming
+    // conference (countryHubs.ts decides; a hub with nothing upcoming answers
+    // noindex and is left out here). lastmod is the newest conference update.
+    ...(() => {
+      const hubs = allHubs(conferences).filter((h) => h.indexable);
+      if (hubs.length === 0) return [];
+      const newestHub = hubs.map((h) => h.lastModified ?? '').sort().at(-1);
+      return [
+        { url: url(HUB_INDEX_PATH), lastModified: newestHub ? new Date(newestHub) : hubDate, changeFrequency: 'weekly' as const, priority: 0.7 },
+        ...hubs.map((h) => ({
+          url: url(hubPath(h.slug)),
+          lastModified: h.lastModified ? new Date(h.lastModified) : hubDate,
+          changeFrequency: 'weekly' as const,
+          priority: h.kind === 'country' || h.kind === 'online' ? 0.7 : 0.6,
+        })),
+      ];
+    })(),
     // /blog lists the posts, so it changes when the newest post does. Derived
     // rather than hardcoded: a hand-kept date here went stale every time a post
     // was added, which is the same "lastmod that lies" problem as above.

@@ -45,6 +45,9 @@ const organizationSchema = {
   '@context': 'https://schema.org',
   '@type': 'Organization',
   name: 'Gavelling',
+  // People often search the name with one L ("gaveling": 2,112 impressions in
+  // 3 months, Search Console, Oct 2026). Tells Google it is the same brand.
+  alternateName: ['Gaveling', 'Gavelling MUN', 'gavelling.com'],
   url: 'https://gavelling.com',
   logo: JSONLD_LOGO,
   sameAs: [
@@ -67,6 +70,7 @@ const websiteSchema = {
   '@context': 'https://schema.org',
   '@type': 'WebSite',
   name: 'Gavelling',
+  alternateName: ['Gaveling', 'Gavelling MUN'],
   url: 'https://gavelling.com',
   potentialAction: {
     '@type': 'SearchAction',

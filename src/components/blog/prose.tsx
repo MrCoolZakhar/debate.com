@@ -12,6 +12,7 @@
  * All server components. No state, no effects, no client bundle.
  */
 
+import { Children, Fragment, isValidElement } from 'react';
 import { Info } from 'lucide-react';
 
 /** Slug for a heading, so `<H2>Chair's discretion</H2>` gets a stable anchor
@@ -95,6 +96,26 @@ export function collectHeadings(node: React.ReactNode, out: Heading[] = []): Hea
   }
   collectHeadings(el.props?.children, out);
   return out;
+}
+
+/**
+ * Put `insert` into a post's body just before its middle <H2>, so it lands at a
+ * section boundary halfway down the article (the middle product banner,
+ * ArticleLayout). Works on the flat list of children every post passes to
+ * ArticleLayout, and on one wrapping fragment. A body with fewer than two
+ * top-level <H2>s is returned unchanged: it has no middle worth interrupting.
+ * Runs on the server like collectHeadings; the post files are not touched.
+ */
+export function insertBeforeMiddleH2(children: React.ReactNode, insert: React.ReactNode): React.ReactNode {
+  let list = Children.toArray(children);
+  const only = list[0];
+  if (list.length === 1 && isValidElement<{ children?: React.ReactNode }>(only) && only.type === Fragment) {
+    list = Children.toArray(only.props.children);
+  }
+  const h2At = list.flatMap((child, i) => (isValidElement(child) && child.type === H2 ? [i] : []));
+  if (h2At.length < 2) return children;
+  const at = h2At[Math.floor(h2At.length / 2)];
+  return [...list.slice(0, at), <Fragment key="gv-middle-banner">{insert}</Fragment>, ...list.slice(at)];
 }
 
 /**
