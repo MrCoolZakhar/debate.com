@@ -8,11 +8,14 @@ import { NOT_ON_GAVELLING } from '@/components/conferences/NotOnGavellingMark';
 
 // The bottom of /conferences/explore: every upcoming conference as a plain,
 // server-rendered <a href> (name, city and country, dates), then the country
-// hubs, the A to Z directory and the guides. It is VISIBLE, styled like the
-// rest of the page (one white soft card on the ivory), never hidden text: the
-// grid above renders client-side, so this is what a crawler (and a no-JS
-// visitor) reads as the page's list. Rendered by page.tsx on the server,
-// outside the Suspense boundary, so it is in the raw HTML (CLAUDE.md §4).
+// hubs, the A to Z directory and the guides. The grid above renders
+// client-side, so this is what a crawler (and a no-JS visitor) reads as the
+// page's list. Rendered by page.tsx on the server, outside the Suspense
+// boundary, so it is in the raw HTML (CLAUDE.md §3).
+// Owner, 19 Oct 2026: not shown open on Explore. It sits FOLDED in a native
+// <details> behind one small "See all upcoming conferences" line: the links
+// stay in the raw HTML (crawlers read and follow them; a visitor can open it),
+// so it is a collapsed section, not hidden text.
 
 const SANS = 'var(--font-brand), sans-serif';
 const INK = '#1C1410';
@@ -62,8 +65,13 @@ export default function ExploreDirectory({ conferences, hubs }: { conferences: L
     <section
       aria-labelledby="gv-explore-directory"
       className="gv-explore-wrap"
-      style={{ paddingTop: 'clamp(24px, 3vw, 40px)', paddingBottom: 'clamp(40px, 4vw, 64px)', fontFamily: SANS }}
+      style={{ paddingTop: 'clamp(16px, 2vw, 24px)', paddingBottom: 'clamp(28px, 3vw, 44px)', fontFamily: SANS }}
     >
+      <details className="gv-explore-dir-fold">
+      <summary className="focus:outline-none" style={{ cursor: 'pointer', fontSize: 14.5, fontWeight: 700, color: FOREST, textDecoration: 'underline', textUnderlineOffset: 3, width: 'fit-content' }}>
+        See all upcoming conferences
+      </summary>
+      <div style={{ marginTop: 18 }}>
       <h2 id="gv-explore-directory" style={{ margin: 0, fontWeight: 800, fontSize: 'clamp(22px, 2.2vw, 30px)', letterSpacing: '-0.012em', color: INK }}>
         All Upcoming Conferences
       </h2>
@@ -106,7 +114,11 @@ export default function ExploreDirectory({ conferences, hubs }: { conferences: L
         {' · '}
         <Link href="/guides" style={LINK}>MUN guides</Link>
       </p>
+      </div>
+      </details>
       <style>{`
+        .gv-explore-dir-fold > summary { list-style: none; }
+        .gv-explore-dir-fold > summary::-webkit-details-marker { display: none; }
         .gv-explore-dir { columns: 1; column-gap: 20px; }
         @media (min-width: 640px) { .gv-explore-dir { columns: 2; } }
         @media (min-width: 1024px) { .gv-explore-dir { columns: 3; } }
