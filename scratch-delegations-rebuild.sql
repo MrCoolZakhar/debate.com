@@ -1,5 +1,8 @@
 -- =============================================================================
 -- scratch-delegations-rebuild.sql
+-- SUPERSEDED (20 Oct 2026) by scratch-delegations-part1-people-and-seats.sql (apply
+-- first) and scratch-delegations-part2-money-and-wording.sql (waits for Christian).
+-- Never apply this file. Kept only because older code comments point at it.
 -- DRAFT, NOT APPLIED. The owners apply it through the chat's Supabase work.
 -- Written 19 Oct 2026 against the live schema of luruhkwrgisytejswlas, read only.
 -- Decisions: docs/conferences/delegations.md. Map: CLAUDE.md.

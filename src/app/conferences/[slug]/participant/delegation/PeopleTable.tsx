@@ -1,20 +1,44 @@
 'use client';
 
 // The People table of the leader card (taste board 1A): one row per member,
-// person (photo or initials, name, role in plain words), seat (the country's
-// round flag and the committee's round emblem side by side at 44px, owner 19
-// Oct 2026, then the country and the committee acronym as a link that opens
-// the committee, two rows), position paper (V2 only), payment, and the row menu.
+// person (photo or initials, name, role in plain words), seat (seat/SeatCell:
+// the country's round flag big with its name under it, the committee's emblem
+// smaller beside it with the acronym that opens the committee, owner 20 Oct
+// 2026), position paper (V2 only), payment, and the row menu.
 // From 760px of card width it is a table; below it every row stacks.
 // Names wrap, never an ellipsis (CLAUDE.md §8).
+//
+// Seats move here (owner, 20 Oct 2026):
+//   * Drag a seated member's seat onto another person's row (seat/useSeatDrag).
+//     Onto a seated row: a switch, asked in place under that row, "Switch" while
+//     the conference lets leaders reshuffle (allocation_swap_mode 'self_serve'),
+//     "Request switch" while it is 'request' (seat/seatWrites switchSeats, the
+//     same writes as DelegationPanel's Swap allocations; live today). Onto a
+//     member with no seat: the seat moves to them (moveSeat, DELEGATIONS_V2_DB and
+//     'self_serve' only). The keyboard way is "Switch with…" in the row menu.
+//   * The seat cell's icon buttons, DELEGATIONS_V2_DB only: Upload position paper
+//     and Take out of seat (asked in place); "Place in a seat" for a member with
+//     no seat opens the row menu's place step.
+// Every seat change shows at once (a patch over the rows, and the Open seats
+// card through seat/pendingSeats), then the write; a refusal puts the rows
+// back with the server's sentence. Afterwards the card re-reads in place
+// (onChanged), never behind a loader.
 
-import { useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AlertCircle, Check, Mail, Minus, Search, UserX } from 'lucide-react';
-import { CircleFlag } from '@/components/CircleFlag';
 import ProfileLink from '@/components/ProfileLink';
-import { DELEGATIONS_V2_DB, type OpenSeat } from './v2';
-import MemberMenu, { type MenuMember } from './MemberMenu';
-import { cardStyle, CommitteeDisc, FONT, INK, INK_SOFT, LINE, OK_GREEN, OWE, RoundAvatar, STROKE } from './leaderKit';
+import { committeeDisplayName } from '@/lib/presetNames';
+import { friendlyError } from '@/lib/friendlyError';
+import { notifyErr, notifyOk } from '@/lib/appNotify';
+import { DELEGATIONS_V2_DB, placeMember, unplaceMember, uploadPaperForMember, type OpenSeat, type Result } from './v2';
+import MemberMenu, { type MemberMenuHandle, type MenuMember, type SeatOps, type SwitchTarget } from './MemberMenu';
+import { cardStyle, committeeEmblemSrc, FONT, FOREST, INK, INK_SOFT, LINE, OK_GREEN, OWE, RoundAvatar, STROKE } from './leaderKit';
+import SeatCell, { type Seat } from './seat/SeatCell';
+import InPlaceConfirm from './seat/InPlaceConfirm';
+import { useSeatDrag } from './seat/useSeatDrag';
+import { useSwapMode } from './seat/useSwapMode';
+import { moveSeat, switchSeats } from './seat/seatWrites';
+import { addPendingSeats, dropPendingSeats, usePendingOpenSeats, type PendingOpenSeat } from './seat/pendingSeats';
 
 export type PayTone = 'ok' | 'owe' | 'soft';
 
@@ -60,30 +84,284 @@ function ToneWord({ word, tone }: { word: string; tone: PayTone }) {
   );
 }
 
-// The seat column is the widest: two 44px circles before its two text rows.
-const GRID_V2 = '@[760px]:grid-cols-[minmax(0,1.4fr)_minmax(0,1.7fr)_minmax(0,0.8fr)_minmax(0,0.95fr)_36px]';
-const GRID = '@[760px]:grid-cols-[minmax(0,1.5fr)_minmax(0,1.7fr)_minmax(0,0.9fr)_36px]';
+// The seat column is the widest: the 56px flag with its name under it, the
+// committee beside it, the seat's icon buttons stacked at its end (V2).
+const GRID_V2 = '@[760px]:grid-cols-[minmax(0,1.25fr)_minmax(0,2.1fr)_minmax(0,0.75fr)_minmax(0,0.85fr)_36px]';
+const GRID = '@[760px]:grid-cols-[minmax(0,1.35fr)_minmax(0,1.75fr)_minmax(0,0.9fr)_36px]';
 
-export default function PeopleTable({ rows, societyId, conferenceId, openSeats, onOpenCommittee, onChanged, swap }: {
+/** The position-papers bucket's own limit, checked before the row changes. */
+const PAPER_MAX_BYTES = 5 * 1024 * 1024;
+
+interface Patch { op: number; seat?: { v: Seat | null }; paper?: { v: PersonRow['paper'] } }
+
+interface Ask {
+  anchor: HTMLElement;
+  align: 'start' | 'end';
+  title: string;
+  line: string | null;
+  yes: string;
+  danger: boolean;
+  onYes: () => void;
+}
+
+const seatWords = (s: Seat) => `${s.country_name ?? 'Their seat'} · ${s.committee_label}`;
+const seatLabel = (s: Seat) => `${s.committee_label}: ${s.country_name ?? ''}`;
+
+function seatFromOpen(s: OpenSeat | PendingOpenSeat): Seat {
+  const label = (s.abbreviation ?? '').trim() || committeeDisplayName(s.committee, s.abbreviation);
+  return {
+    country_name: s.country_name,
+    country_code: s.country_code,
+    seatLogo: s.country_logo_url,
+    committee_id: s.conference_committee_id,
+    committee_label: label,
+    committee_full: s.committee || null,
+    emblem: ('emblem' in s && s.emblem) || committeeEmblemSrc(s.logo_url, s.committee, s.abbreviation),
+  };
+}
+
+/** A seat that has just been emptied, drawn on the Open seats card until the re-read. */
+function openFromSeat(s: Seat): PendingOpenSeat {
+  return {
+    allocation_id: null,
+    conference_committee_id: s.committee_id ?? '',
+    committee: s.committee_full ?? s.committee_label,
+    abbreviation: s.committee_label,
+    logo_url: null,
+    country_code: s.country_code,
+    country_name: s.country_name ?? '',
+    country_logo_url: s.seatLogo,
+    seat: 1,
+    delegation_size: null,
+    emblem: s.emblem,
+  };
+}
+
+export default function PeopleTable({ rows, societyId, societyName, conferenceId, openSeats, onOpenCommittee, onChanged, swap, allocationSwapMode }: {
   rows: PersonRow[];
   societyId: string;
+  /** For the swap request's subject; "this delegation" until LeaderCard passes it. */
+  societyName?: string;
   conferenceId: string;
   openSeats: OpenSeat[] | null;
   onOpenCommittee: (committeeId: string) => void;
   onChanged: () => Promise<void> | void;
   /** The existing allocation swap: while on, seated rows are picked instead of the menu. */
   swap: { on: boolean; selected: string[]; toggle: (applicationId: string) => void };
+  /** conferences.allocation_swap_mode; read here once when not passed. */
+  allocationSwapMode?: string;
 }) {
   const [query, setQuery] = useState('');
+  const mode = useSwapMode(conferenceId, allocationSwapMode);
+  const [patches, setPatches] = useState<Map<string, Patch>>(() => new Map());
+  const [busy, setBusy] = useState<Set<string>>(() => new Set());
+  const [ask, setAsk] = useState<Ask | null>(null);
+  const opSeq = useRef(0);
+  const menus = useRef(new Map<string, MemberMenuHandle | null>());
+  const fileRef = useRef<HTMLInputElement>(null);
+  const uploadFor = useRef<string | null>(null);
+  const shownOpenSeats = usePendingOpenSeats(societyId, openSeats);
+
+  // The rows with this table's own changes laid over them.
+  const live = useMemo(() => rows.map(r => {
+    const p = patches.get(r.application_id);
+    if (!p) return r;
+    return { ...r, ...(p.seat ? { seat: p.seat.v } : {}), ...(p.paper ? { paper: p.paper.v } : {}) };
+  }), [rows, patches]);
+  const liveRef = useRef(live);
+  useEffect(() => { liveRef.current = live; }, [live]);
+  const busyRef = useRef(busy);
+  useEffect(() => { busyRef.current = busy; }, [busy]);
+
   const shown = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return rows;
-    return rows.filter(r => [r.name, r.seat?.country_name, r.seat?.committee_label, r.seat?.committee_full, ROLE_WORD[r.role]]
+    if (!q) return live;
+    return live.filter(r => [r.name, r.seat?.country_name, r.seat?.committee_label, r.seat?.committee_full, ROLE_WORD[r.role]]
       .some(v => (v ?? '').toLowerCase().includes(q)));
-  }, [rows, query]);
+  }, [live, query]);
+
+  const canSwitchSeated = mode === 'self_serve' || mode === 'request';
+  const canMoveToEmpty = DELEGATIONS_V2_DB && mode === 'self_serve';
+
+  const rowOf = useCallback((id: string) => liveRef.current.find(r => r.application_id === id) ?? null, []);
+  const canDragFrom = useCallback((id: string) => {
+    const r = rowOf(id);
+    return !!r && !swap.on && !busyRef.current.has(id) && r.role !== 'faculty-advisor' && !!r.seat?.committee_id
+      && (canSwitchSeated || canMoveToEmpty);
+  }, [rowOf, swap.on, canSwitchSeated, canMoveToEmpty]);
+  // Whether a seat can be dropped on this person's row (pure, for render too).
+  const targetOk = useCallback((t: PersonRow | null, busyNow: Set<string>) => {
+    if (!t || t.role === 'faculty-advisor' || busyNow.has(t.application_id)) return false;
+    if (t.seat) return canSwitchSeated && !!t.seat.committee_id;
+    return canMoveToEmpty;
+  }, [canSwitchSeated, canMoveToEmpty]);
+  const canDropOn = useCallback((from: string, to: string) => from !== to && targetOk(rowOf(to), busyRef.current), [rowOf, targetOk]);
+
+  /** One seat change: the rows change now, the write runs, a refusal puts them back. */
+  const runOp = useCallback(async (o: {
+    patch: Record<string, Omit<Patch, 'op'>>;
+    pending?: { hide?: string | null; show?: PendingOpenSeat | null };
+    work: () => Promise<Result>;
+    ok: string;
+  }) => {
+    const op = ++opSeq.current;
+    const ids = Object.keys(o.patch);
+    setBusy(prev => new Set([...prev, ...ids]));
+    setPatches(prev => {
+      const next = new Map(prev);
+      for (const id of ids) next.set(id, { ...o.patch[id], op });
+      return next;
+    });
+    if (o.pending) addPendingSeats(op, societyId, o.pending);
+    let r: Result;
+    try {
+      r = await o.work();
+    } catch (e) {
+      r = { ok: false, error: friendlyError(e, 'That change was not saved. Try again.') };
+    }
+    if (r.ok) {
+      notifyOk(o.ok);
+      // A quiet re-read in place; the patch stays until it has landed.
+      try { await onChanged(); } catch { /* the patch is dropped; the next read corrects it */ }
+    } else {
+      notifyErr(r.error);
+    }
+    setPatches(prev => {
+      const next = new Map(prev);
+      for (const id of ids) if (next.get(id)?.op === op) next.delete(id);
+      return next;
+    });
+    dropPendingSeats(op);
+    setBusy(prev => {
+      const next = new Set(prev);
+      for (const id of ids) next.delete(id);
+      return next;
+    });
+  }, [onChanged, societyId]);
+
+  const switchCopy = useCallback((fromId: string, toId: string) => {
+    const a = rowOf(fromId);
+    const b = rowOf(toId);
+    if (!a?.seat || !b) return { title: 'Switch these seats?', line: null, yes: 'Switch' };
+    if (b.seat) {
+      return {
+        title: `Switch ${seatWords(a.seat)} (${a.name}) and ${seatWords(b.seat)} (${b.name})?`,
+        line: mode === 'request' ? 'The organising team gets the request and makes the switch.' : null,
+        yes: mode === 'request' ? 'Request switch' : 'Switch',
+      };
+    }
+    return { title: `Move ${seatWords(a.seat)} from ${a.name} to ${b.name}?`, line: `${a.name} stays in the delegation with no seat.`, yes: 'Move' };
+  }, [rowOf, mode]);
+
+  const doSwitch = useCallback((fromId: string, toId: string) => {
+    const a = rowOf(fromId);
+    const b = rowOf(toId);
+    if (!a?.seat || !b || !canDropOn(fromId, toId)) return;
+    const aSeat = a.seat;
+    if (b.seat) {
+      const bSeat = b.seat;
+      const sides = {
+        a: { applicationId: a.application_id, name: a.name, label: seatLabel(aSeat) },
+        b: { applicationId: b.application_id, name: b.name, label: seatLabel(bSeat) },
+      };
+      if (mode === 'request') {
+        // A request moves nothing until the organisers act on it.
+        void runOp({
+          patch: {},
+          work: () => switchSeats({ conferenceId, societyId, societyName: societyName ?? null, mode: 'request', ...sides }),
+          ok: 'Switch requested. The organising team will make it.',
+        });
+        return;
+      }
+      void runOp({
+        patch: { [a.application_id]: { seat: { v: bSeat } }, [b.application_id]: { seat: { v: aSeat } } },
+        work: () => switchSeats({ conferenceId, societyId, societyName: societyName ?? null, mode: 'self_serve', ...sides }),
+        ok: `${a.name} and ${b.name} switched seats.`,
+      });
+      return;
+    }
+    void runOp({
+      patch: { [a.application_id]: { seat: { v: null } }, [b.application_id]: { seat: { v: aSeat } } },
+      work: () => moveSeat(a.application_id, b.application_id),
+      ok: `${b.name} is now in ${aSeat.country_name ?? 'that seat'}.`,
+    });
+  }, [rowOf, canDropOn, mode, runOp, conferenceId, societyId, societyName]);
+
+  const askSwitch = useCallback((fromId: string, toId: string, anchor: HTMLElement) => {
+    const c = switchCopy(fromId, toId);
+    setAsk({ anchor, align: 'start', ...c, danger: false, onYes: () => { setAsk(null); doSwitch(fromId, toId); } });
+  }, [switchCopy, doSwitch]);
+
+  const { drag, start, ghost, wasJustDragged } = useSeatDrag({ canDragFrom, canDropOn, onDrop: askSwitch });
+
+  const doPlace = useCallback((id: string, s: OpenSeat) => {
+    const r = rowOf(id);
+    if (!r || !s.allocation_id) return;
+    const allocationId = s.allocation_id;
+    void runOp({
+      patch: { [id]: { seat: { v: seatFromOpen(s) } } },
+      pending: { hide: allocationId, show: r.seat ? openFromSeat(r.seat) : null },
+      work: () => placeMember(id, allocationId),
+      ok: `${r.name} is now in ${s.country_name}.`,
+    });
+  }, [rowOf, runOp]);
+
+  const doUnplace = useCallback((id: string) => {
+    const r = rowOf(id);
+    if (!r?.seat) return;
+    void runOp({
+      patch: { [id]: { seat: { v: null } } },
+      pending: { show: openFromSeat(r.seat) },
+      work: () => unplaceMember(id),
+      ok: r.is_me ? 'You are out of your seat. It stays open for the delegation.' : `${r.name} is out of their seat. It stays open for the delegation.`,
+    });
+  }, [rowOf, runOp]);
+
+  const askUnplace = useCallback((id: string, anchor: HTMLElement) => {
+    const r = rowOf(id);
+    if (!r?.seat) return;
+    setAsk({
+      anchor, align: 'end',
+      title: r.is_me ? 'Take yourself out of your seat?' : `Take ${r.name} out of their seat?`,
+      line: 'The seat stays with the delegation as an open seat.',
+      yes: 'Take out of seat', danger: true,
+      onYes: () => { setAsk(null); doUnplace(id); },
+    });
+  }, [rowOf, doUnplace]);
+
+  const doUpload = useCallback((id: string, file: File) => {
+    const r = rowOf(id);
+    if (!r?.seat?.committee_id || !r.user_id) return;
+    if (file.type !== 'application/pdf') { notifyErr('Choose a PDF file.'); return; }
+    if (file.size > PAPER_MAX_BYTES) { notifyErr('The file is over 5 MB. Choose a smaller PDF.'); return; }
+    const committeeId = r.seat.committee_id;
+    const userId = r.user_id;
+    void runOp({
+      patch: { [id]: { paper: { v: { word: 'Submitted', tone: 'ok' } } } },
+      work: () => uploadPaperForMember({ conferenceId, committeeId, applicationId: id, memberUserId: userId, file }),
+      ok: `Position paper uploaded for ${r.name}.`,
+    });
+  }, [rowOf, runOp, conferenceId]);
+
+  const pickPaper = useCallback((id: string) => {
+    uploadFor.current = id;
+    fileRef.current?.click();
+  }, []);
+
+  const onPaperPicked = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    const id = uploadFor.current;
+    uploadFor.current = null;
+    if (file && id) doUpload(id, file);
+  };
+
+  const closeAsk = useCallback(() => setAsk(null), []);
 
   const grid = DELEGATIONS_V2_DB ? GRID_V2 : GRID;
   const heads = DELEGATIONS_V2_DB ? ['Person', 'Seat', 'Position paper', 'Payment'] : ['Person', 'Seat', 'Payment'];
+  const hasOpenSeats = (shownOpenSeats?.length ?? 0) > 0;
+  const seatToolsOn = DELEGATIONS_V2_DB && !swap.on;
 
   return (
     <section className="@container min-w-0" style={{ ...cardStyle, padding: '8px 0 12px' }} aria-label="People">
@@ -117,16 +395,37 @@ export default function PeopleTable({ rows, societyId, conferenceId, openSeats, 
       ) : shown.map(r => {
         const selectable = swap.on && !!r.seat?.committee_id;
         const selected = swap.selected.includes(r.application_id);
+        const rowBusy = busy.has(r.application_id);
+        const isTarget = !!drag && drag.over === r.application_id;
+        const draggable = !swap.on && !rowBusy && r.role !== 'faculty-advisor' && !!r.seat?.committee_id && (canSwitchSeated || canMoveToEmpty);
+        const seatable = r.role !== 'faculty-advisor';
+        const switchTargets: SwitchTarget[] = draggable
+          ? live.filter(o => o.application_id !== r.application_id && targetOk(o, busy)).map(o => ({
+              application_id: o.application_id, name: o.name, avatar_url: o.avatar_url,
+              seat: o.seat ? { country_name: o.seat.country_name, country_code: o.seat.country_code, seatLogo: o.seat.seatLogo, committee_label: o.seat.committee_label } : null,
+            }))
+          : [];
+        const ops: SeatOps = {
+          place: (s) => doPlace(r.application_id, s),
+          unplace: () => doUnplace(r.application_id),
+          upload: (file) => doUpload(r.application_id, file),
+          switchTargets,
+          switchCopy: (to) => switchCopy(r.application_id, to),
+          switchWith: (to) => doSwitch(r.application_id, to),
+        };
         return (
           <div
             key={r.application_id}
+            data-seat-target={r.application_id}
             onClick={() => { if (selectable) swap.toggle(r.application_id); }}
             className={`relative flex flex-col gap-3 @[760px]:grid ${grid} @[760px]:gap-3 @[760px]:items-center`}
             style={{
               padding: '12px 24px', borderBottom: `1px solid ${LINE}`,
-              background: selected ? 'rgba(27,56,40,0.06)' : r.is_me ? 'rgba(238,217,138,0.14)' : 'transparent',
+              background: isTarget ? 'rgba(27,56,40,0.07)' : selected ? 'rgba(27,56,40,0.06)' : r.is_me ? 'rgba(238,217,138,0.14)' : 'transparent',
+              boxShadow: isTarget ? `inset 0 0 0 2px ${FOREST}` : 'none',
               opacity: !r.attending ? 0.6 : swap.on && !selectable ? 0.45 : 1,
               cursor: selectable ? 'pointer' : 'default',
+              transition: 'background-color 120ms ease, box-shadow 120ms ease',
             }}
           >
             {/* Person */}
@@ -150,37 +449,28 @@ export default function PeopleTable({ rows, societyId, conferenceId, openSeats, 
             </div>
 
             {/* Seat */}
-            <div className="min-w-0 pl-[66px] @[760px]:pl-0">
-              {r.seat ? (
-                <div className="flex items-center gap-3 min-w-0">
-                  <span className="flex items-center flex-shrink-0" style={{ gap: 6 }}>
-                    <CircleFlag code={r.seat.country_code} logoUrl={r.seat.seatLogo} label={r.seat.country_name} size={44} decorative />
-                    <CommitteeDisc src={r.seat.emblem} size={44} />
-                  </span>
-                  <div className="min-w-0 flex flex-col gap-0.5">
-                    <span className="[overflow-wrap:anywhere]" style={{ fontFamily: FONT, fontSize: 14.5, fontWeight: 500, color: INK, lineHeight: 1.3 }}>{r.seat.country_name}</span>
-                    {r.seat.committee_id ? (
-                      <button
-                        type="button"
-                        title="Open this committee"
-                        onClick={(e) => { e.stopPropagation(); if (r.seat?.committee_id) onOpenCommittee(r.seat.committee_id); }}
-                        className="self-start text-left [overflow-wrap:anywhere] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] rounded"
-                        style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontFamily: FONT, fontSize: 13, fontWeight: 700, color: '#1B3828', textDecoration: 'underline', textUnderlineOffset: 3, lineHeight: 1.35 }}
-                      >
-                        {r.seat.committee_label}
-                      </button>
-                    ) : (
-                      <span className="[overflow-wrap:anywhere]" style={{ fontFamily: FONT, fontSize: 13, color: INK_SOFT, lineHeight: 1.35 }}>
-                        {r.seat.committee_label}
-                      </span>
-                    )}
-                  </div>
-                </div>
-              ) : (
-                <span style={{ fontFamily: FONT, fontSize: 14, color: INK_SOFT }}>
-                  {r.role === 'faculty-advisor' ? 'Advisors have no seat' : 'No seat yet'}
-                </span>
-              )}
+            <div className="min-w-0 pl-[54px] @[760px]:pl-0">
+              <SeatCell
+                seat={r.seat}
+                role={r.role}
+                draggable={draggable}
+                dragging={!!drag && drag.from === r.application_id}
+                onDragStart={(e, fromGrip) => {
+                  if (!r.seat) return;
+                  start(e, r.application_id, {
+                    code: r.seat.country_code, logoUrl: r.seat.seatLogo,
+                    label: r.seat.country_name ?? r.name, committee: r.seat.committee_label,
+                  }, fromGrip);
+                }}
+                onOpenCommittee={onOpenCommittee}
+                wasJustDragged={wasJustDragged}
+                busy={rowBusy}
+                onTakeOut={seatToolsOn && seatable && r.seat && mode === 'self_serve' ? (el) => askUnplace(r.application_id, el) : undefined}
+                onUpload={seatToolsOn && seatable && r.seat?.committee_id && r.user_id ? () => pickPaper(r.application_id) : undefined}
+                onPlace={seatToolsOn && seatable && !r.seat && hasOpenSeats
+                  ? (el) => menus.current.get(r.application_id)?.openAt('place', el)
+                  : undefined}
+              />
             </div>
 
             {/* Position paper (V2) */}
@@ -205,20 +495,39 @@ export default function PeopleTable({ rows, societyId, conferenceId, openSeats, 
                 ) : null
               ) : (
                 <MemberMenu
+                  handleRef={(h) => { if (h) menus.current.set(r.application_id, h); else menus.current.delete(r.application_id); }}
                   member={{
                     application_id: r.application_id, name: r.name, role: r.role, is_me: r.is_me, user_id: r.user_id,
                     seat: r.seat?.committee_id && r.seat.country_code ? { committee_id: r.seat.committee_id, country_code: r.seat.country_code } : null,
                   }}
                   societyId={societyId}
                   conferenceId={conferenceId}
-                  openSeats={openSeats}
+                  openSeats={shownOpenSeats}
                   onDone={onChanged}
+                  ops={ops}
                 />
               )}
             </div>
           </div>
         );
       })}
+
+      {DELEGATIONS_V2_DB && (
+        <input ref={fileRef} type="file" accept="application/pdf" hidden onChange={onPaperPicked} />
+      )}
+      {ghost}
+      {ask && (
+        <InPlaceConfirm
+          anchor={ask.anchor}
+          align={ask.align}
+          title={ask.title}
+          line={ask.line}
+          yes={ask.yes}
+          danger={ask.danger}
+          onYes={ask.onYes}
+          onCancel={closeAsk}
+        />
+      )}
     </section>
   );
 }

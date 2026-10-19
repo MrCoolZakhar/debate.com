@@ -21,7 +21,7 @@
 // SECURITY DEFINER helpers, so this just works with the viewer's own authed
 // client.
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useContext, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowLeftRight, ChevronLeft, ChevronRight, Compass, Mail, UserPlus, UserX, X } from 'lucide-react';
 import { getFreshAuthedClient } from '@/lib/supabase-auth';
@@ -29,6 +29,7 @@ import { useDelegationImport } from './DelegationImportCard';
 import DelegationImportPopup from './DelegationImportPopup';
 import DelegationInviteLink from './DelegationInviteLink';
 import LeaderCard from './delegation/LeaderCard';
+import { DelegationLeadContext } from './delegation/DelegationLead';
 import MemberDelegationCard from './delegation/member/MemberDelegationCard';
 import type { ParticipantAllocation, ParticipantCommittee } from './types';
 import { BTN_CLASS, cardStyle, primaryBtn, secondaryBtn, STROKE } from './delegation/leaderKit';
@@ -398,6 +399,9 @@ export default function DelegationPanel({ conferenceId, conferenceSlug, societyI
   const [rosterError, setRosterError] = useState<string | null>(null);
   const [importOpen, setImportOpen] = useState(false);
   const [conferenceAcronym, setConferenceAcronym] = useState('');
+  // The page's next step (DelegationLead): under the leader card's header,
+  // above the member card (owner, 20 Oct 2026).
+  const lead = useContext(DelegationLeadContext);
 
   const loadRoster = useCallback(async () => {
     if (!societyId) return;
@@ -441,7 +445,11 @@ export default function DelegationPanel({ conferenceId, conferenceSlug, societyI
   const [society, setSociety] = useState<Society | null>(null);
   const [members, setMembers] = useState<PoolMember[]>([]);
   const [, setCoveredIds] = useState<Set<string>>(new Set());
-  const [loading, setLoading] = useState(true);
+  // True once the leader extras were read once. Only the FIRST read shows the
+  // skeleton: every later read (an import, a swap, a role change, a stepper
+  // tap) swaps the data in place and never unmounts the leader card.
+  const [leaderLoaded, setLeaderLoaded] = useState(false);
+  const userId = user?.id ?? null;
   const [swapMode, setSwapMode] = useState(false);
   const [swapSelection, setSwapSelection] = useState<string[]>([]);
   const [swapError, setSwapError] = useState('');
@@ -459,12 +467,13 @@ export default function DelegationPanel({ conferenceId, conferenceSlug, societyI
   }, [seatArt]);
 
   const load = useCallback(async () => {
-    if (!societyId || !session) return;
+    if (!societyId || !userId) return;
     // A plain delegate reads only the roster; the leader extras below need
     // the leaders' RLS and are skipped for everyone else.
-    if (!isLeader) { setLoading(false); return; }
-    setLoading(true);
-    const supabase = getAuthedClient(session.access_token);
+    if (!isLeader) return;
+    // Keyed on the user id, the client made at call time (CLAUDE.md, Auth clients).
+    const supabase = await getFreshAuthedClient();
+    if (!supabase) return;
     const [{ data: societyRow }, { data: memberRows }, { data: coveredRows }] = await Promise.all([
       supabase.from('societies').select('id, name, spots_purchased').eq('id', societyId).maybeSingle(),
       supabase.from('applications').select(POOL_MEMBER_SELECT).eq('society_id', societyId).in('status', ['accepted', 'assigned', 'checked-in']),
@@ -474,12 +483,12 @@ export default function DelegationPanel({ conferenceId, conferenceSlug, societyI
     setSociety((societyRow as Society | null) ?? null);
     setMembers(memberList);
     setCoveredIds(new Set((coveredRows ?? []) as string[]));
-    setLoading(false);
+    setLeaderLoaded(true);
     const ccIds = memberList.map(m => m.assigned_committee_id).filter((id): id is string => !!id);
     void loadSlotArtIndex(supabase, ccIds).then(setSeatArt).catch(() => {});
-  }, [societyId, session, isLeader]);
+  }, [societyId, userId, isLeader]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => { void load(); }, [load]);
 
   // The delegation's swap activity, an open swap_request plus the most recent
   // swap_notice. RLS now lets any leader of this society read
@@ -656,19 +665,26 @@ export default function DelegationPanel({ conferenceId, conferenceSlug, societyI
 
   if (!roster && rosterError) {
     return phoneOnly(
-      <SectionCard>
-        <p className="text-sm" role="alert" style={{ color: '#8B2020', fontFamily: OUTFIT, margin: 0 }}>{rosterError}</p>
-      </SectionCard>
+      <>
+        <SectionCard>
+          <p className="text-sm" role="alert" style={{ color: '#8B2020', fontFamily: OUTFIT, margin: 0 }}>{rosterError}</p>
+        </SectionCard>
+        {lead}
+      </>
     );
   }
 
-  if (!roster || (isLeader && loading)) {
+  // The first read only; the lead waits under it where the header will be.
+  if (!roster || (isLeader && !leaderLoaded)) {
     return phoneOnly(
-      <SectionCard>
-        <div className="flex justify-center py-6">
-          <Loader size={48} />
-        </div>
-      </SectionCard>
+      <>
+        <SectionCard>
+          <div className="flex justify-center py-6">
+            <Loader size={48} />
+          </div>
+        </SectionCard>
+        {lead}
+      </>
     );
   }
 
@@ -837,16 +853,18 @@ export default function DelegationPanel({ conferenceId, conferenceSlug, societyI
         seatLogoFor={seatLogoFor}
         importAvailable={importAvailable}
         onImport={() => setImportOpen(true)}
-        onChanged={async () => { await Promise.all([loadRoster(), load()]); }}
+        onChanged={async () => { await Promise.all([loadRoster(), load(), loadSwapActivity()]); }}
         swap={{ on: swapMode, selected: swapSelection, toggle: toggleSwapSelect }}
         swapTools={swapTools}
         overlays={withOverlays ? overlays : null}
       />
     );
   }
-  // A member who does not lead: the 5B card (delegation/member).
+  // A member who does not lead: the 5B card (delegation/member), the page's
+  // next step above it.
   return (
     <>
+      {lead}
       <MemberDelegationCard
         conferenceId={conferenceId}
         conferenceSlug={conferenceSlug}

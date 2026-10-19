@@ -71,13 +71,17 @@ export function useLeaderData({ conferenceId, societyId, committeeIds, memberUse
     return () => { alive = false; };
   }, [committeeKey]);
 
-  const reloadPay = useCallback(async () => {
+  // Swaps the overview in place (never back to null, never a loader) and
+  // returns it, so a caller can act on the fresh read; null when it failed.
+  const reloadPay = useCallback(async (): Promise<PayOverview | null> => {
     try {
       const o = await readPayOverview(conferenceId);
       setPay(o);
       setPayError(null);
+      return o;
     } catch (e) {
       setPayError(friendlyError(e, 'Your delegation’s payments could not be read. Refresh the page to try again.'));
+      return null;
     }
   }, [conferenceId]);
 

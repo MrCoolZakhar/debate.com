@@ -248,7 +248,8 @@ Client constants:
 | `COMMS_TOUR_LIVE` | `manage/[slug]/communications/page.tsx` | false |
 | `GENERATE_INVOICES_READY` | `manage/[slug]/financials/dashboardKit.tsx` | true |
 | `OFFLINE_RESILIENCE` | `src/lib/offlineResilience.ts` | true (the kill switch) |
-| `DELEGATIONS_V2_DB` | `conferences/[slug]/participant/delegation/v2.ts` and `manage/[slug]/applications/delegations/v2.ts` | false (flip both together once `scratch-delegations-rebuild.sql` is applied) |
+| `DELEGATIONS_V2_DB` | `conferences/[slug]/participant/delegation/v2.ts` and `manage/[slug]/applications/delegations/v2.ts` | false (people and seats; flip both together once `scratch-delegations-part1-people-and-seats.sql` is applied) |
+| `DELEGATIONS_MONEY_DB` | the same two `v2.ts` files | false (the delegation-wide money read `my_delegation_money`; flip both together once `scratch-delegations-part2-money-and-wording.sql` is applied) |
 | `REFUND_WORDS_EDITABLE` | `financials/documents/DocumentEditor.tsx` | true |
 
 ---
@@ -259,7 +260,8 @@ Client constants:
 - `scratch-tbd-public.sql`: the commented UPDATE publishing existing never-published TBD conferences. Owners' call, not run.
 - `scratch-study-guides-storage.sql`: the `study-guides` bucket lets ANY signed-in account upload, overwrite, delete and list every conference's files; the draft limits writes and listing to the conference's organisers (same test as the `study_guides` table), public-URL reads unchanged, no client change. Apply soon (owners).
 - `scratch-session-block-seats.sql`: a delegation's open seat (allocation with no person) currently locks its country in the live room for everyone, and leader seat swaps fail when both people have accounts; the draft makes only rows naming a person reserve a country (`seat_claim_is_reserved`, used by `session_join_rules`, `claim_delegate_seat`, `session_reserved_seat_hint`) and clears both seats before a swap fills them. Apply before any conference with live rooms gives open seats (owners); then update AGENTS.md JOIN PAGE "Reserved seat".
-- `scratch-delegations-rebuild.sql`: the delegations rebuild's database side (role moves, remove, open seats, placing, organiser seat grants with the seat limit, committee roster, member seats, leader papers, delegation money, chair names). Not applied; its `DECISION NEEDED (Christian)` blocks need answers first. Then flip both `DELEGATIONS_V2_DB`.
+- `scratch-delegations-part1-people-and-seats.sql`: the delegations rebuild's people and seats (role moves, remove, open seats, placing and taking out of a seat, organiser seat grants with the seat limit, committee roster, member seats, leader papers, study guides, chair names). Apply first, no money decisions needed: its `DECISION NEEDED (Christian)` blocks are comments and the drafted code takes the cautious option (header lists each default). Then flip both `DELEGATIONS_V2_DB`.
+- `scratch-delegations-part2-money-and-wording.sql`: the "pledge" wording in database text and `my_delegation_money`. Waits for Christian's answers (section 10). Then flip both `DELEGATIONS_MONEY_DB`. `scratch-delegations-rebuild.sql` is the superseded single draft; never apply it.
 - Cron `paid-announcements`: not scheduled; nothing reaches recipients until it is. Schedule after the first approval in /admin (commented in `scratch-paid-announcements.sql`). Owners.
 - Cron `conference-draft-reminders` (`queue_conference_draft_reminders(false)`): not scheduled; needs Peter's go.
 - The email burst alarm goes to petizakhar@gmail.com; moving it to the team inbox needs SQL (the chat's Supabase work).

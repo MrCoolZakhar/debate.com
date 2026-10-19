@@ -29,7 +29,7 @@ import RequestsPanel from './RequestsPanel';
 import ApplyPointer from './ApplyPointer';
 import ConferenceDocsSection, { useConferenceDocs, docForRole, DOC_READER_STATUSES } from './ConferenceDocsSection';
 import ConferenceDocsExtra, { useMyConferenceDocs, requiredOutstanding, DocsRequiredNotice } from './ConferenceDocsExtra';
-import DelegationLead, { liveRoomCode } from './delegation/DelegationLead';
+import DelegationLead, { DelegationLeadContext, liveRoomCode } from './delegation/DelegationLead';
 import type { ParticipantApplication, ParticipantRoleConfig, ParticipantAllocation, ParticipantCommittee } from './types';
 import { friendlyError, UserFacingError } from '@/lib/friendlyError';
 
@@ -437,8 +437,9 @@ export default function ParticipantView({
     paymentsReady,
   });
 
-  // The top of the Delegation section for anyone in a delegation: the next
-  // step, the application's status and Join session while the room is live.
+  // The next step in the Delegation section for anyone in a delegation (Join
+  // session while the room is live). Handed down through DelegationLeadContext:
+  // DelegationPanel places it under the delegation's name (owner, 20 Oct 2026).
   const delegationLead = delegationFirst ? (
     <DelegationLead
       step={nextStep}
@@ -459,7 +460,6 @@ export default function ParticipantView({
       allocationSwapMode={allocationSwapMode}
       section={activeSection}
       onSelectSection={selectSection}
-      delegationLead={delegationLead}
     />
   ) : selected.role === 'faculty-advisor' ? (
     <AdvisorParticipant
@@ -470,7 +470,6 @@ export default function ParticipantView({
       allocationSwapMode={allocationSwapMode}
       section={activeSection}
       onSelectSection={selectSection}
-      delegationLead={delegationLead}
     />
   ) : selected.role === 'chair' ? (
     <ChairParticipant conferenceId={conferenceId} conferenceSlug={conferenceSlug} section={activeSection} onAwardsTab={onChairAwardsTab} />
@@ -669,7 +668,9 @@ export default function ParticipantView({
                 Support, and Overview's status row says what to do. The role
                 reports its next step to the card above. */}
             <NextStepReportProvider value={reportRoleStep}>
-              {gateOpen ? roleContent : null}
+              <DelegationLeadContext.Provider value={delegationLead ?? null}>
+                {gateOpen ? roleContent : null}
+              </DelegationLeadContext.Provider>
             </NextStepReportProvider>
 
             {/* Press Desk (12 Oct 2026): only for the press of this conference (a press

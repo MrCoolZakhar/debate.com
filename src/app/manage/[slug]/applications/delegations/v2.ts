@@ -1,8 +1,8 @@
 // The organiser side of the delegations rebuild, database half
 // (docs/conferences/delegations.md).
 //
-// DELEGATIONS_V2_DB stays false until the chat's Supabase work has created the
-// objects below. While it is false NOTHING here is called and the Delegations
+// DELEGATIONS_V2_DB stays false until the chat's Supabase work has applied part 1
+// (scratch-delegations-part1-people-and-seats.sql), which creates the objects below. While it is false NOTHING here is called and the Delegations
 // tab renders none of the pieces that need them: the seat limit radio, the
 // "Until" date, the role select and "Remove from delegation" in the pop-up.
 // Seats are given with the plain block-seat insert (seatWrites.ts) meanwhile.
@@ -13,7 +13,7 @@
 //   organiser_give_society_seats(p_society uuid, p_seats jsonb)
 //       p_seats = [{ conference_committee_id, country_code, seat: 1|2 }] (1..200), all or
 //       nothing, enforces the seat limit; answers { ok, created, allocation_ids } or
-//       { ok: false, code, error } (the CLIENT CONTRACT in scratch-delegations-rebuild.sql)
+//       { ok: false, code, error } (the CLIENT CONTRACT in scratch-delegations-part1-people-and-seats.sql)
 //   organiser_take_back_society_seat(p_allocation uuid) -> { ok, allocation_id, society_id }
 //   delegation_set_role(p_application, p_role) and delegation_remove_member(p_application)
 //       callable by the conference's organisers as well as the delegation's leaders
@@ -23,6 +23,12 @@ import { getFreshAuthedClient } from '@/lib/supabase-auth';
 import { friendlyError, plainOrFallback } from '@/lib/friendlyError';
 
 export const DELEGATIONS_V2_DB = false;
+
+// Part 2 (scratch-delegations-part2-money-and-wording.sql): the delegation-wide
+// money read my_delegation_money. Nothing on the organiser side reads it today
+// (organisers have financials_dashboard); kept beside the participant flag so both
+// files flip together.
+export const DELEGATIONS_MONEY_DB = false;
 
 export type SeatLimit = 'none' | 'paid' | 'expected';
 

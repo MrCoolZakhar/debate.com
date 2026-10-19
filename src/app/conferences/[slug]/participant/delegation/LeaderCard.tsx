@@ -7,17 +7,22 @@
 // the import pop-up and the swap; this card draws them and adds its own reads
 // (useLeaderData).
 //
-//   Header        the crest (round), the name, "Delegation · City, Country"
-//                 with the home country's round flag; Copy invite link and
-//                 Import delegates
+//   Header        the crest (round), the name in bold, "Delegation · City,
+//                 Country" with the home country's round flag; Copy invite
+//                 link and Import delegates. The FIRST thing in the section
+//                 (owner, 20 Oct 2026), the page's next step right under it
+//                 (DelegationLead, handed down through DelegationLeadContext)
 //   Stats         joined, seats given, paid, and Expected size with a stepper
 //                 (add_pledged_spots +1, remove_pledged_spot_invoice on one of
-//                 this leader's unpaid spots)
+//                 this leader's unpaid spots). The number moves on the tap;
+//                 taps queue and are sent one at a time, each re-reading
+//                 my_pay_overview in place, and a refusal puts the server's
+//                 number back. Nothing here ever shows a loader.
 //   People        PeopleTable, with the row menu (MemberMenu)
 //   Financials    FinancialsCard
 //   Open seats    and the reshuffle line, DELEGATIONS_V2_DB only
 
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { Minus, Plus, UserPlus } from 'lucide-react';
 import { CircleFlag } from '@/components/CircleFlag';
 import { getCountryByCode } from '@/lib/countries';
@@ -28,7 +33,8 @@ import { notifyErr, notifyOk } from '@/lib/appNotify';
 import type { PoolMember } from '@/app/manage/[slug]/assignment/delegationShared';
 import DelegationInviteLink from '../DelegationInviteLink';
 import type { RosterMember } from '../DelegationPanel';
-import { removePledgedTicket } from '../../pay/payApi';
+import { removePledgedTicket, type PayOverview } from '../../pay/payApi';
+import { DelegationLeadContext } from './DelegationLead';
 import { DELEGATIONS_V2_DB } from './v2';
 import { useLeaderData } from './useLeaderData';
 import PeopleTable, { type PayTone, type PersonRow } from './PeopleTable';
@@ -85,9 +91,16 @@ export default function LeaderCard({
   const memberUserIds = useMemo(() => pool.map(p => p.user_id).filter((x): x is string => !!x), [pool]);
   const data = useLeaderData({ conferenceId, societyId, committeeIds, memberUserIds });
   const { pay, reloadPay, reloadV2 } = data;
+  const lead = useContext(DelegationLeadContext);
   const [openCommittee, setOpenCommittee] = useState<string | null>(null);
-  const [stepBusy, setStepBusy] = useState(false);
-  const stepBusyRef = useRef(false);
+  // Expected size, optimistic: the number shown while taps are queued or in
+  // flight (null = the server's number). Taps wait in stepQueue and one
+  // drain sends them in order, so the shown number and the server agree.
+  const [shownExpected, setShownExpected] = useState<number | null>(null);
+  const stepQueue = useRef<Array<1 | -1>>([]);
+  const draining = useRef(false);
+  const payRef = useRef<PayOverview | null>(pay);
+  useEffect(() => { payRef.current = pay; }, [pay]);
 
   const rows: PersonRow[] = useMemo(() => members.map(m => {
     const p = poolById.get(m.application_id);
@@ -134,44 +147,85 @@ export default function LeaderCard({
   const myDelegation = pay?.delegation?.find(d => d.society_id === societyId) ?? null;
   const expected = myDelegation?.delegate_tickets ?? null;
   const myLeaderApp = pay?.me.find(m => m.society_id === societyId && m.is_leader) ?? null;
-  const removableSpot = useMemo(() => {
-    const own = (pay?.items ?? []).filter(i => i.kind === 'pledge_spot' && i.owner_is_me && i.removable);
-    return own.length > 0 ? own[own.length - 1] : null;
-  }, [pay]);
+  const removableCount = useMemo(
+    () => (pay?.items ?? []).filter(i => i.kind === 'pledge_spot' && i.owner_is_me && i.removable).length,
+    [pay],
+  );
+  const leaderAppId = myLeaderApp?.application_id ?? null;
+  const shown = shownExpected ?? expected ?? 0;
+  // Spots this leader could still take off: the unpaid ones they added, plus
+  // the ones queued on top that the server has not drawn yet.
+  const lowerable = removableCount + (shown - (expected ?? 0));
 
+  // Re-reads everything in place after a row action (a role change, a move):
+  // DelegationPanel's own re-read keeps the card mounted, never a loader.
   const refresh = useCallback(async () => {
     await Promise.all([onChanged(), reloadPay(), reloadV2()]);
   }, [onChanged, reloadPay, reloadV2]);
 
-  const step = useCallback(async (dir: 1 | -1) => {
-    if (stepBusyRef.current) return;
-    stepBusyRef.current = true;
-    setStepBusy(true);
-    try {
-      if (dir > 0) {
-        if (!myLeaderApp) return;
-        const fallback = 'The expected size could not be raised. Try again.';
-        const c = await getFreshAuthedClient();
-        if (!c) { notifyErr('Your session has expired. Refresh the page and sign in again.'); return; }
-        const { data: out, error } = await c.rpc('add_pledged_spots', { p_application_id: myLeaderApp.application_id, p_count: 1 });
-        const r = out as { ok?: boolean; error?: string } | null;
-        if (error) { notifyErr(friendlyError(error, fallback)); return; }
-        if (!r?.ok) { notifyErr(plainOrFallback(r?.error, fallback)); return; }
-        notifyOk('Expected size raised by one. The new spot is on your Payments page.');
-      } else {
-        if (!removableSpot) return;
-        const r = await removePledgedTicket(removableSpot.invoice_id);
-        if (!r.ok) { notifyErr(r.error); return; }
-        notifyOk('Expected size lowered by one.');
-      }
-      await refresh();
-    } catch (e) {
-      notifyErr(friendlyError(e, 'That change was not saved. Try again.'));
-    } finally {
-      stepBusyRef.current = false;
-      setStepBusy(false);
+  /** One queued tap against the server. Null when it landed, else the sentence to show. */
+  const sendStep = useCallback(async (dir: 1 | -1, current: PayOverview | null): Promise<string | null> => {
+    if (dir > 0) {
+      if (!leaderAppId) return 'The expected size could not be raised. Try again.';
+      const fallback = 'The expected size could not be raised. Try again.';
+      const c = await getFreshAuthedClient();
+      if (!c) return 'Your session has expired. Refresh the page and sign in again.';
+      const { data: out, error } = await c.rpc('add_pledged_spots', { p_application_id: leaderAppId, p_count: 1 });
+      const r = out as { ok?: boolean; error?: string } | null;
+      if (error) return friendlyError(error, fallback);
+      if (!r?.ok) return plainOrFallback(r?.error, fallback);
+      return null;
     }
-  }, [myLeaderApp, removableSpot, refresh]);
+    const own = (current?.items ?? []).filter(i => i.kind === 'pledge_spot' && i.owner_is_me && i.removable);
+    const spot = own.length > 0 ? own[own.length - 1] : null;
+    if (!spot) return 'Only a spot you added and have not paid can be removed here.';
+    const r = await removePledgedTicket(spot.invoice_id);
+    return r.ok ? null : r.error;
+  }, [leaderAppId]);
+
+  // Sends the queued taps one at a time. After each landed tap the overview is
+  // re-read in place (the next minus needs a fresh unpaid spot); the shown
+  // number is handed back to the server's only once the queue is empty, so it
+  // never jumps. A refusal drops the taps still waiting and shows the server's
+  // number again.
+  const drain = useCallback(async () => {
+    if (draining.current) return;
+    draining.current = true;
+    let current = payRef.current;
+    let raised = false;
+    let failed: string | null = null;
+    try {
+      while (stepQueue.current.length > 0) {
+        const dir = stepQueue.current[0];
+        const err = await sendStep(dir, current);
+        if (err) { failed = err; break; }
+        stepQueue.current.shift();
+        if (dir > 0) raised = true;
+        current = (await reloadPay()) ?? current;
+      }
+    } catch (e) {
+      failed = friendlyError(e, 'That change was not saved. Try again.');
+    } finally {
+      if (failed) {
+        stepQueue.current = [];
+        await reloadPay();
+        // A tap made while the number was being put back is dropped with it.
+        stepQueue.current = [];
+        notifyErr(failed);
+      } else if (raised) {
+        notifyOk('Expected size saved. New spots are on your Payments page.');
+      }
+      draining.current = false;
+      setShownExpected(null);
+    }
+  }, [sendStep, reloadPay]);
+
+  const step = useCallback((dir: 1 | -1) => {
+    if (dir > 0 ? !leaderAppId : lowerable <= 0 || shown <= 0) return;
+    stepQueue.current.push(dir);
+    setShownExpected(prev => (prev ?? expected ?? 0) + dir);
+    void drain();
+  }, [leaderAppId, lowerable, shown, expected, drain]);
 
   const home = data.society;
   const countryName = home?.country_code ? getCountryByCode(home.country_code)?.name ?? null : null;
@@ -179,16 +233,15 @@ export default function LeaderCard({
   const crestName = home?.name ?? societyName;
 
   const stepBtn = (dir: 1 | -1) => {
-    const off = stepBusy || (dir > 0 ? !myLeaderApp : !removableSpot);
+    const off = dir > 0 ? !leaderAppId : lowerable <= 0 || shown <= 0;
     const Icon = dir > 0 ? Plus : Minus;
     return (
       <button
         type="button"
-        onClick={() => { void step(dir); }}
+        onClick={() => step(dir)}
         aria-disabled={off}
-        disabled={stepBusy}
         aria-label={dir > 0 ? 'Raise expected size' : 'Lower expected size'}
-        title={dir < 0 && !removableSpot ? 'Only a spot you added and have not paid can be removed here' : undefined}
+        title={dir < 0 && off ? 'Only a spot you added and have not paid can be removed here' : undefined}
         className="inline-flex items-center justify-center focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]"
         style={{ width: 44, height: 44, margin: -6, padding: 0, border: 'none', background: 'transparent', cursor: off ? 'default' : 'pointer', opacity: off ? 0.4 : 1 }}
       >
@@ -218,7 +271,7 @@ export default function LeaderCard({
             <RoundAvatar name={crestName} url={home?.logo_url ?? null} size={56} seed={societyId} />
           </span>
           <div className="min-w-0 flex flex-col gap-1">
-            <h2 className="[overflow-wrap:anywhere]" style={{ fontFamily: FONT, fontSize: 30, fontWeight: 600, letterSpacing: '-0.01em', color: INK, margin: 0, lineHeight: 1.15 }}>{societyName}</h2>
+            <h2 className="[overflow-wrap:anywhere]" style={{ fontFamily: FONT, fontSize: 30, fontWeight: 700, letterSpacing: '-0.01em', color: INK, margin: 0, lineHeight: 1.15 }}>{societyName}</h2>
             <div className="flex items-center gap-2 [overflow-wrap:anywhere]" style={{ fontFamily: FONT, fontSize: 14, color: INK_SOFT }}>
               {home?.country_code && <CircleFlag code={home.country_code} size={18} decorative />}
               {place ? `Delegation · ${place}` : 'Delegation'}
@@ -236,6 +289,9 @@ export default function LeaderCard({
         </div>
       </div>
 
+      {/* The page's next step (DelegationLead), right under the name. */}
+      {lead}
+
       {/* Stats */}
       <div className="grid grid-cols-2 @[900px]:grid-cols-4" style={{ ...cardStyle, padding: '20px 0' }}>
         <div className={statCell}><StatNumber n={joined} word="joined" /></div>
@@ -246,7 +302,7 @@ export default function LeaderCard({
           <div className="flex items-center gap-2.5">
             {stepBtn(-1)}
             <span style={{ fontFamily: FONT, fontSize: 22, fontWeight: 600, color: INK, minWidth: 28, textAlign: 'center', fontVariantNumeric: 'tabular-nums' }} aria-live="polite">
-              {expected ?? 0}
+              {shown}
             </span>
             {stepBtn(1)}
           </div>
@@ -264,6 +320,7 @@ export default function LeaderCard({
             onOpenCommittee={setOpenCommittee}
             onChanged={refresh}
             swap={swap}
+            societyName={societyName}
           />
           {swapTools}
         </div>
@@ -280,7 +337,7 @@ export default function LeaderCard({
         </div>
       </div>
 
-      {DELEGATIONS_V2_DB && <OpenSeatsCard seats={openSeats} />}
+      {DELEGATIONS_V2_DB && <OpenSeatsCard seats={openSeats} societyId={societyId} />}
 
       {openCommittee && openInfo && (
         <CommitteePopup

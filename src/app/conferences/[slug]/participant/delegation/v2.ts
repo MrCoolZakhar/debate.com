@@ -1,7 +1,7 @@
 // The delegations rebuild, database half (docs/conferences/delegations.md).
 //
-// DELEGATIONS_V2_DB stays false until the chat's Supabase work has created the
-// objects below. While it is false NOTHING here is called and the leader card
+// DELEGATIONS_V2_DB stays false until the chat's Supabase work has applied part 1
+// (scratch-delegations-part1-people-and-seats.sql), which creates the objects below. While it is false NOTHING here is called and the leader card
 // renders none of the pieces that need them (the extra member menu items, the
 // position paper column, the open seats card and the reshuffle line).
 //
@@ -9,6 +9,7 @@
 //   delegation_set_role(p_application, p_role)          leader moves a member's role
 //   delegation_place_member(p_application, p_allocation) leader seats a member in a block seat
 //   delegation_remove_member(p_application)             leader removes a member
+//   delegation_unplace_member(p_application)            leader takes a member out of their seat
 //   my_delegation_open_seats(p_society)                 the delegation's block seats; the
 //       card also needs each row's allocation id (`allocation_id`) to place a member
 //   conferences.delegation_reshuffle_until              the reshuffle deadline
@@ -20,6 +21,12 @@ import { getFreshAuthedClient } from '@/lib/supabase-auth';
 import { friendlyError, plainOrFallback } from '@/lib/friendlyError';
 
 export const DELEGATIONS_V2_DB = false;
+
+// Part 2 (scratch-delegations-part2-money-and-wording.sql, waits for Christian's
+// money decisions): my_delegation_money, the whole delegation's money for the
+// leader card. Nothing calls it yet; any reader of it goes behind this flag, never
+// behind DELEGATIONS_V2_DB. Flip both v2.ts copies together once part 2 is applied.
+export const DELEGATIONS_MONEY_DB = false;
 
 export type Result = { ok: true } | { ok: false; error: string };
 
@@ -51,6 +58,10 @@ export function placeMember(applicationId: string, allocationId: string): Promis
 
 export function removeMember(applicationId: string): Promise<Result> {
   return call('delegation_remove_member', { p_application: applicationId }, 'They could not be removed. Try again.');
+}
+
+export function unplaceMember(applicationId: string): Promise<Result> {
+  return call('delegation_unplace_member', { p_application: applicationId }, 'They could not be taken out of their seat. Try again.');
 }
 
 /** One block seat of the delegation with nobody in it. */

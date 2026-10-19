@@ -5,23 +5,31 @@
 // and, only while DELEGATIONS_V2_DB is on (v2.ts):
 //   Make faculty advisor, Make delegate / Make head delegate for an advisor   delegation_set_role
 //   Place in a seat                           delegation_place_member (a second step lists the open seats)
+//   Take out of seat                          delegation_unplace_member (a seated member; the seat stays open)
 //   Upload position paper                     a PDF for a seated member
 //   Remove from delegation                    delegation_remove_member
+// and, whenever the People table offers a switch (seat/), "Switch with…": a
+// second step lists the people this seat can go to, then the switch is asked
+// in place (the keyboard way to do what dragging a seat onto a row does).
+// With `ops` from the People table, Place, Take out, Upload and Switch run
+// through the table so its rows change at once (optimistic, rolled back on a
+// refusal); the table can also open the menu straight at the place or switch
+// step, anchored to its own button (handleRef.openAt).
 // The menu is a Portal popover at fixed coordinates under the button, opened
 // upward and leftward near the edges, closed on an outside press or Escape.
 // A confirm is asked IN PLACE inside the menu (never a modal); a second step
 // replaces the menu's content with a back button.
 
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { Armchair, ChevronLeft, Crown, GraduationCap, MoreHorizontal, Upload, UserRound, X } from 'lucide-react';
+import { useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react';
+import { ArrowLeftRight, Armchair, ChevronLeft, CircleMinus, Crown, GraduationCap, MoreHorizontal, Upload, UserRound, X } from 'lucide-react';
 import Portal from '@/components/Portal';
 import { CircleFlag } from '@/components/CircleFlag';
 import { getFreshAuthedClient } from '@/lib/supabase-auth';
 import { friendlyError, plainOrFallback } from '@/lib/friendlyError';
 import { notifyErr, notifyOk } from '@/lib/appNotify';
 import { committeeDisplayName } from '@/lib/presetNames';
-import { DELEGATIONS_V2_DB, placeMember, removeMember, setMemberRole, uploadPaperForMember, type MemberRole, type OpenSeat, type Result } from './v2';
-import { CommitteeDisc, committeeEmblemSrc, DANGER, FONT, INK, INK_SOFT, LINE, STROKE } from './leaderKit';
+import { DELEGATIONS_V2_DB, placeMember, removeMember, setMemberRole, unplaceMember, uploadPaperForMember, type MemberRole, type OpenSeat, type Result } from './v2';
+import { CommitteeDisc, committeeEmblemSrc, DANGER, FONT, INK, INK_SOFT, LINE, RoundAvatar, STROKE } from './leaderKit';
 
 export interface MenuMember {
   application_id: string;
@@ -33,23 +41,50 @@ export interface MenuMember {
   seat: { committee_id: string; country_code: string } | null;
 }
 
+/** Someone this member's seat can be switched with (or moved to). */
+export interface SwitchTarget {
+  application_id: string;
+  name: string;
+  avatar_url: string | null;
+  seat: { country_name: string | null; country_code: string | null; seatLogo: string | null; committee_label: string } | null;
+}
+
+/** The People table's seat writes for this row; each one closes the menu and reports itself. */
+export interface SeatOps {
+  place: (seat: OpenSeat) => void;
+  unplace: () => void;
+  upload: (file: File) => void;
+  switchTargets: SwitchTarget[];
+  switchCopy: (toApplicationId: string) => { title: string; line: string | null; yes: string };
+  switchWith: (toApplicationId: string) => void;
+}
+
+export interface MemberMenuHandle {
+  /** Opens the menu at a step, under `anchor` instead of the ··· button. */
+  openAt: (step: 'place' | 'switch', anchor: HTMLElement) => void;
+}
+
 type Action =
   | { kind: 'head'; head: boolean }
   | { kind: 'role'; role: MemberRole }
-  | { kind: 'remove' };
+  | { kind: 'remove' }
+  | { kind: 'unplace' }
+  | { kind: 'switch'; to: string };
 
-type Step = 'list' | 'place' | { confirm: Action };
+type Step = 'list' | 'place' | 'switch' | { confirm: Action };
 
 const MENU_W = 272;
 const ADVISOR_LINE = 'The paid delegate spot stays with the delegation for someone else, and the advisor fee is owed.';
 
-export default function MemberMenu({ member, societyId, openSeats, conferenceId, onDone }: {
+export default function MemberMenu({ member, societyId, openSeats, conferenceId, onDone, ops, handleRef }: {
   member: MenuMember;
   societyId: string;
   /** The delegation's open seats (V2 only), for Place in a seat. */
   openSeats: OpenSeat[] | null;
   conferenceId: string;
   onDone: () => Promise<void> | void;
+  ops?: SeatOps;
+  handleRef?: React.Ref<MemberMenuHandle>;
 }) {
   const [open, setOpen] = useState(false);
   const [step, setStep] = useState<Step>('list');
@@ -58,13 +93,15 @@ export default function MemberMenu({ member, societyId, openSeats, conferenceId,
   const btnRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  // Set when the table opened the menu from its own button (openAt).
+  const anchorRef = useRef<HTMLElement | null>(null);
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
 
   const self = member.is_me;
   const isAdvisor = member.role === 'faculty-advisor';
 
   const place = useCallback(() => {
-    const r = btnRef.current?.getBoundingClientRect();
+    const r = (anchorRef.current ?? btnRef.current)?.getBoundingClientRect();
     if (!r) return;
     const h = menuRef.current?.offsetHeight ?? 160;
     // Leftward: the menu's right edge on the button's right edge, kept on screen.
@@ -94,7 +131,7 @@ export default function MemberMenu({ member, societyId, openSeats, conferenceId,
     if (!open) return;
     const onDown = (e: PointerEvent) => {
       const t = e.target as Node;
-      if (btnRef.current?.contains(t) || menuRef.current?.contains(t)) return;
+      if (btnRef.current?.contains(t) || menuRef.current?.contains(t) || anchorRef.current?.contains(t)) return;
       setOpen(false);
     };
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false); };
@@ -109,6 +146,15 @@ export default function MemberMenu({ member, societyId, openSeats, conferenceId,
       document.removeEventListener('keydown', onKey);
     };
   }, [open, place]);
+
+  useImperativeHandle(handleRef, () => ({
+    openAt: (to, anchor) => {
+      anchorRef.current = anchor;
+      setPos(null);
+      setStep(to);
+      setOpen(true);
+    },
+  }), []);
 
   const run = useCallback(async (work: () => Promise<Result>, okLine: string) => {
     if (busyRef.current) return;
@@ -144,6 +190,10 @@ export default function MemberMenu({ member, societyId, openSeats, conferenceId,
   const doAction = (a: Action) => {
     if (a.kind === 'head') return setHead(a.head);
     if (a.kind === 'remove') return run(() => removeMember(member.application_id), `${member.name} is no longer in the delegation.`);
+    if (a.kind === 'switch') { setOpen(false); ops?.switchWith(a.to); return; }
+    if (a.kind === 'unplace' && ops) { setOpen(false); ops.unplace(); return; }
+    // Like Place in a seat: the table is re-read by onDone once the write landed.
+    if (a.kind === 'unplace') return run(() => unplaceMember(member.application_id), self ? 'You are out of your seat. It stays open for the delegation.' : `${member.name} is out of their seat. It stays open for the delegation.`);
     const word = a.role === 'faculty-advisor' ? 'a faculty advisor' : a.role === 'head-delegate' ? 'a head delegate' : 'a delegate';
     return run(() => setMemberRole(member.application_id, a.role), self ? `You are now ${word}.` : `${member.name} is now ${word}.`);
   };
@@ -152,6 +202,7 @@ export default function MemberMenu({ member, societyId, openSeats, conferenceId,
     const file = e.target.files?.[0];
     e.target.value = '';
     if (!file || !member.seat || !member.user_id) return;
+    if (ops) { setOpen(false); ops.upload(file); return; }
     const seat = member.seat;
     const userId = member.user_id;
     await run(() => uploadPaperForMember({
@@ -170,8 +221,14 @@ export default function MemberMenu({ member, societyId, openSeats, conferenceId,
     } else {
       items.push({ key: 'advisor', icon: GraduationCap, label: 'Make faculty advisor', onPress: () => setStep({ confirm: { kind: 'role', role: 'faculty-advisor' } }) });
       if ((openSeats?.length ?? 0) > 0) items.push({ key: 'place', icon: Armchair, label: 'Place in a seat', onPress: () => setStep('place') });
+      if (member.seat) items.push({ key: 'unplace', icon: CircleMinus, label: 'Take out of seat', onPress: () => setStep({ confirm: { kind: 'unplace' } }) });
       if (member.seat && member.user_id) items.push({ key: 'upload', icon: Upload, label: 'Upload position paper', onPress: () => fileRef.current?.click() });
     }
+  }
+  if (member.seat && (ops?.switchTargets.length ?? 0) > 0) {
+    items.push({ key: 'switch', icon: ArrowLeftRight, label: 'Switch with…', onPress: () => setStep('switch') });
+  }
+  if (DELEGATIONS_V2_DB) {
     if (!self) items.push({ key: 'remove', icon: X, label: 'Remove from delegation', onPress: () => setStep({ confirm: { kind: 'remove' } }), danger: true });
   }
 
@@ -183,6 +240,10 @@ export default function MemberMenu({ member, societyId, openSeats, conferenceId,
   };
 
   const confirmCopy = (a: Action): { title: string; line: string | null; yes: string; danger: boolean } => {
+    if (a.kind === 'switch') return { ...(ops?.switchCopy(a.to) ?? { title: 'Switch these seats?', line: null, yes: 'Switch' }), danger: false };
+    if (a.kind === 'unplace') return self
+      ? { title: 'Take yourself out of your seat?', line: 'The seat stays with the delegation as an open seat.', yes: 'Take out of seat', danger: true }
+      : { title: `Take ${member.name} out of their seat?`, line: 'The seat stays with the delegation as an open seat.', yes: 'Take out of seat', danger: true };
     if (a.kind === 'remove') return { title: `Remove ${member.name}?`, line: 'Their seat goes back to the delegation as open. Money stays with whoever paid it.', yes: 'Remove', danger: true };
     if (a.kind === 'head') return self
       ? { title: 'Make yourself a delegate?', line: 'You stop leading the delegation. Your seat stays yours.', yes: 'Make me a delegate', danger: true }
@@ -214,7 +275,11 @@ export default function MemberMenu({ member, societyId, openSeats, conferenceId,
               type="button"
               role="menuitem"
               disabled={busy || !s.allocation_id}
-              onClick={() => { if (s.allocation_id) void run(() => placeMember(member.application_id, s.allocation_id as string), `${member.name} is now in ${s.country_name}.`); }}
+              onClick={() => {
+                if (!s.allocation_id) return;
+                if (ops) { setOpen(false); ops.place(s); return; }
+                void run(() => placeMember(member.application_id, s.allocation_id as string), `${member.name} is now in ${s.country_name}.`);
+              }}
               className="focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] hover:bg-[#F4F0E6]"
               style={itemStyle}
             >
@@ -223,6 +288,39 @@ export default function MemberMenu({ member, societyId, openSeats, conferenceId,
               <span className="inline-flex items-center gap-1.5 [overflow-wrap:anywhere]" style={{ fontSize: 12.5, color: INK_SOFT }}>
                 <CommitteeDisc src={committeeEmblemSrc(s.logo_url, s.committee, s.abbreviation)} size={16} />
                 {s.abbreviation || committeeDisplayName(s.committee, s.abbreviation)}
+              </span>
+            </button>
+          ))}
+        </div>
+      </div>
+    );
+  } else if (step === 'switch') {
+    body = (
+      <div>
+        {backBtn}
+        <p style={{ fontFamily: FONT, fontSize: 13.5, fontWeight: 600, color: INK, margin: '4px 10px 6px' }}>Switch with</p>
+        <div style={{ maxHeight: 300, overflowY: 'auto' }}>
+          {(ops?.switchTargets ?? []).map(t => (
+            <button
+              key={t.application_id}
+              type="button"
+              role="menuitem"
+              disabled={busy}
+              onClick={() => setStep({ confirm: { kind: 'switch', to: t.application_id } })}
+              className="focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] hover:bg-[#F4F0E6]"
+              style={itemStyle}
+            >
+              <RoundAvatar name={t.name} url={t.avatar_url} size={28} seed={t.application_id} />
+              <span className="min-w-0 flex-1 flex flex-col">
+                <span className="[overflow-wrap:anywhere]" style={{ fontWeight: 600 }}>{t.name}</span>
+                <span className="inline-flex items-center gap-1.5 [overflow-wrap:anywhere]" style={{ fontSize: 12.5, color: INK_SOFT }}>
+                  {t.seat ? (
+                    <>
+                      <CircleFlag code={t.seat.country_code} logoUrl={t.seat.seatLogo} label={t.seat.country_name} size={16} decorative />
+                      {t.seat.country_name} · {t.seat.committee_label}
+                    </>
+                  ) : 'No seat yet'}
+                </span>
               </span>
             </button>
           ))}
@@ -276,7 +374,7 @@ export default function MemberMenu({ member, societyId, openSeats, conferenceId,
       <button
         ref={btnRef}
         type="button"
-        onClick={(e) => { e.stopPropagation(); setStep('list'); setOpen(o => !o); }}
+        onClick={(e) => { e.stopPropagation(); anchorRef.current = null; setStep('list'); setOpen(o => !o); }}
         disabled={busy}
         aria-label={`More for ${member.name}`}
         aria-haspopup="menu"

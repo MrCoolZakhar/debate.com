@@ -56,6 +56,14 @@ Owner: Peter, 19 Oct 2026. The decisions below came out of a Q&A before the rebu
 - Leader card: `participant/DelegationPanel.tsx`. Organiser: `applications/DelegationsBoard.tsx` (in Applications), `assignment/DelegationsView.tsx`.
 - "Pledge" copy: `pay/payPanels.tsx`, `DelegationPanel.tsx`, `DelegationsBoard.tsx`, `DelegationsView.tsx`, `applications/page.tsx:4311`, `settings/delegationsUi.tsx`, `financials/shared.tsx`, `ApplicantsDial.tsx`, the emails (`defaultEmails.ts`, `emailEvents.ts`, `emailCard.ts`) and two database error strings.
 
+## The database side, in two parts (20 Oct 2026)
+
+The drafted SQL is split so leader actions can be tested before the money decisions:
+
+- `scratch-delegations-part1-people-and-seats.sql`: settings columns, helpers, `delegation_set_role`, `delegation_remove_member`, `my_delegation_open_seats`, `delegation_place_member`, `delegation_unplace_member` (a leader or organiser takes a member out of their seat: the seat stays with the delegation as Open, the member stays in the delegation, same reshuffle rule for leaders as moving a seat), organiser seats, `my_committee_roster`, leader papers, `my_delegation_seats`, the study guide read policy, `my_committee_chairs`. Safe to apply before Christian answers: every DECISION NEEDED default is the cautious one (listed in its header). Client flag `DELEGATIONS_V2_DB` (both `v2.ts` files).
+- `scratch-delegations-part2-money-and-wording.sql`: the "pledge" wording in database text and `my_delegation_money` (the leader card's whole-delegation Financials). Waits for Christian's answers in its section 10. Client flag `DELEGATIONS_MONEY_DB` (both `v2.ts` files); nothing reads `my_delegation_money` yet, and any reader goes behind this flag.
+- `scratch-delegations-rebuild.sql` is the superseded single draft; never apply it.
+
 Taste board: https://claude.ai/artifact/CAVUg2YLKyTj5Y6yuVmLup
 
 ## Taste board votes (19 Oct 2026)

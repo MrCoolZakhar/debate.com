@@ -1,23 +1,34 @@
 'use client';
 
-// The top of the Delegation section for anyone in a delegation (owner, 19 Oct
-// 2026: the Delegation section IS their overview, there is no Overview section
-// for them any more). One white card in the leader card's style: what to do
-// now in one line with at most one main button, the application's status as
-// icon + word, and Join session while the room is live. Everything the
-// delegation card already shows (people, seats, money) stays there.
+// The next step at the top of the Delegation section for anyone in a
+// delegation (owner, 19 Oct 2026: the Delegation section IS their overview,
+// there is no Overview section for them any more). One white card in the
+// leader card's style: what to do now in one line with at most one main
+// button, and Join session while the room is live. Everything the delegation
+// card already shows (people, seats, money) stays there.
 //
-// Drawn by ParticipantView, mounted inside the role's Delegation pane
-// (DelegateParticipant, AdvisorParticipant) so it sits above LeaderCard or
-// MemberDelegationCard on every width.
+// Owner, 20 Oct 2026: no application status chip ("I really don't like the
+// tab of whatever kind of accepted"), and the card draws NOTHING when it has
+// nothing to do: a 'done' step is shown only while the application is still
+// being reviewed. Genuine actions (Pay now, a role's own step, Join session)
+// stay the one next step; documents needed back ride under it as `notice`.
+//
+// Built by ParticipantView and handed down through DelegationLeadContext;
+// DelegationPanel draws it right UNDER the leader card's header (the
+// delegation's name is the first thing in the section) and above the member
+// card, the skeleton or the error otherwise.
 
+import { createContext } from 'react';
 import Link from 'next/link';
-import { ArrowDown, ArrowRight, CheckCircle2, DoorOpen } from 'lucide-react';
+import { ArrowDown, ArrowRight, DoorOpen } from 'lucide-react';
 import LockedPayButton from '../PaymentsLocked';
-import { appStatusMark, type NextStep } from '../dashboardKit';
+import type { NextStep } from '../dashboardKit';
 import { effectiveReleaseTime } from '../shared';
 import type { ParticipantAllocation } from '../types';
 import { BTN_CLASS, cardStyle, FONT, INK, INK_SOFT, primaryBtn, secondaryBtn, STROKE } from './leaderKit';
+
+/** The page's DelegationLead, for DelegationPanel to place (null outside a delegation). */
+export const DelegationLeadContext = createContext<React.ReactNode>(null);
 
 /** The committee room's code while it is open to delegates, else null. */
 export function liveRoomCode(myAllocation: ParticipantAllocation | null, conferenceStartDate: string | null): string | null {
@@ -37,42 +48,29 @@ function scrollToAnchor(id: string) {
 
 export default function DelegationLead({ step, status, roomCode, notice }: {
   step: NextStep | null;
-  /** The application's status (submitted, accepted, assigned, checked-in). */
+  /** The application's status: a 'done' step is drawn only while it is 'submitted'. */
   status: string;
   /** The live committee room's code, for Join session. */
   roomCode: string | null;
   /** Documents the organisers still need back, when there are some. */
   notice?: React.ReactNode;
 }) {
-  const st = appStatusMark(status);
-  const StIcon = st.icon;
   const action = step?.kind === 'action' ? step.action : undefined;
   const joinHref = roomCode ? `/join?code=${roomCode}` : null;
   // Join session is its own button unless the next step already is it.
   const joinExtra = !!joinHref && !(action && 'href' in action && action.href === joinHref);
+  // A 'done' line is worth a card only while the organisers are still deciding.
+  const showDone = step?.kind === 'done' && status === 'submitted';
+  const hasStep = step?.kind === 'action' || showDone;
+
+  if (!hasStep && !joinExtra) return <>{notice}</>;
 
   return (
     <>
       <section aria-label="Your next step" className="flex flex-col gap-3" style={{ ...cardStyle, padding: '20px 24px' }}>
-        <div className="flex items-center justify-between gap-x-4 gap-y-2 flex-wrap">
-          {step?.kind === 'done' ? (
-            <p className="inline-flex items-center gap-2" style={{ fontFamily: FONT, fontSize: 17, fontWeight: 600, color: INK, margin: 0 }}>
-              <CheckCircle2 size={20} strokeWidth={STROKE} aria-hidden style={{ color: '#1F6B45', flexShrink: 0 }} />
-              You&apos;re all set
-            </p>
-          ) : (
-            <p style={{ fontFamily: FONT, fontSize: 13, fontWeight: 600, color: '#8A6614', margin: 0 }}>Your next step</p>
-          )}
-          <span className="inline-flex items-center gap-1.5" style={{ fontFamily: FONT, fontSize: 14, color: INK_SOFT }}>
-            Application
-            <span className="inline-flex items-center gap-1.5" style={{ color: st.color, fontWeight: 600 }}>
-              <StIcon size={16} strokeWidth={STROKE} aria-hidden style={{ flexShrink: 0 }} />
-              {st.word}
-            </span>
-          </span>
-        </div>
+        <p style={{ fontFamily: FONT, fontSize: 13, fontWeight: 600, color: '#8A6614', margin: 0 }}>Your next step</p>
 
-        {step && (
+        {step && hasStep && (
           <p
             className="[overflow-wrap:anywhere]"
             style={step.kind === 'action'

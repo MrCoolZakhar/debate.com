@@ -4,15 +4,19 @@
 // them) and the reshuffle deadline. Rendered only while DELEGATIONS_V2_DB is
 // on (my_delegation_open_seats and conferences.delegation_reshuffle_until).
 // Every seat in columns: flag and country, the committee's emblem and acronym,
-// a dashed tile. No invite links (taste board vote).
+// a dashed tile. No invite links (taste board vote). A seat the People table
+// has just filled leaves at once and a seat it has just emptied shows at once
+// (seat/pendingSeats), before the re-read lands.
 
 import { Clock } from 'lucide-react';
 import { CircleFlag } from '@/components/CircleFlag';
 import { committeeDisplayName } from '@/lib/presetNames';
 import type { OpenSeat } from './v2';
+import { usePendingOpenSeats } from './seat/pendingSeats';
 import { cardStyle, CommitteeDisc, committeeEmblemSrc, FONT, FOREST, INK, INK_SOFT, StatNumber, STROKE } from './leaderKit';
 
-export function OpenSeatsCard({ seats }: { seats: OpenSeat[] }) {
+export function OpenSeatsCard({ seats: read, societyId }: { seats: OpenSeat[]; societyId?: string }) {
+  const seats = usePendingOpenSeats(societyId, read) ?? [];
   if (seats.length === 0) return null;
   return (
     <section className="@container" style={{ ...cardStyle, padding: '22px 24px' }} aria-label="Open seats">
@@ -29,7 +33,7 @@ export function OpenSeatsCard({ seats }: { seats: OpenSeat[] }) {
             <CircleFlag code={s.country_code} logoUrl={s.country_logo_url} label={s.country_name} size={22} decorative />
             <span className="flex-1 min-w-0 [overflow-wrap:anywhere]" style={{ fontFamily: FONT, fontSize: 14, fontWeight: 500, color: INK }}>{s.country_name}</span>
             <span className="inline-flex items-center gap-1.5 [overflow-wrap:anywhere]" style={{ fontFamily: FONT, fontSize: 13, color: INK_SOFT }}>
-              <CommitteeDisc src={committeeEmblemSrc(s.logo_url, s.committee, s.abbreviation)} size={20} />
+              <CommitteeDisc src={s.emblem ?? committeeEmblemSrc(s.logo_url, s.committee, s.abbreviation)} size={20} />
               {(s.abbreviation ?? '').trim() || committeeDisplayName(s.committee, s.abbreviation)}
             </span>
           </div>
