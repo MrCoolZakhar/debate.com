@@ -6,7 +6,7 @@ import {
   ArrowRight, BadgeCheck, Ban, CheckCircle2, MinusCircle, XCircle, Briefcase, Building2, CalendarDays, Check, ChevronDown, ChevronLeft, CircleCheck, Clock,
   Download, Eye, Filter, Gavel, GraduationCap, HandCoins, Inbox, Info, Landmark, LogOut,
   Loader2, Mail, MoreHorizontal, PencilLine, Plus, RotateCcw, Search, Send, SlidersHorizontal, Trash2, Undo2, User, UserRoundCheck,
-  UserX, Users, Wallet, X, UsersRound } from 'lucide-react';
+  UserX, Users, Wallet, X, UsersRound, FileSearch } from 'lucide-react';
 import Link from 'next/link';
 import { useManage } from '@/app/manage/[slug]/layout';
 import { getAuthedClient, getFreshAuthedClient } from '@/lib/supabase-auth';
@@ -522,9 +522,13 @@ function ReviewMoreMenu({ items, disabled }: {
 }
 
 function PaymentMenu({
-  app, disabled, paymentsLive, onMarkPaid, onRemind, onMarkUnpaid, onUndoWaive, align = 'left',
+  app, disabled, paymentsLive, onMarkPaid, onRemind, onMarkUnpaid, onUndoWaive, align = 'left', live = null, onReviewProof,
 }: {
   app: Application;
+  /** A proof waiting or a payment started with no proof (prompt 138). */
+  live?: LivePay | null;
+  /** Opens Things to Do in Financials. */
+  onReviewProof?: () => void;
   disabled?: boolean;
   /** When true, Stripe is live for this conference — manual mark-paid/unpaid
    *  is disabled (checkout + webhook own that state). Undo-waive stays free. */
@@ -573,7 +577,9 @@ function PaymentMenu({
 
   const paid = app.payment_status === 'paid';
   const waived = app.payment_status === 'waived';
-  const label = paid ? 'Paid' : waived ? 'Waived' : 'Payment';
+  const proofWaiting = !paid && !waived && live?.kind === 'proof';
+  const started = !paid && !waived && live?.kind === 'started';
+  const label = paid ? 'Paid' : waived ? 'Waived' : proofWaiting ? 'Proof to review' : started ? 'Payment started' : 'Payment';
 
   const item = (
     icon: LucideGlyph, text: string, onClick: () => void, tone: 'ink' | 'danger' = 'ink',
@@ -611,17 +617,22 @@ function PaymentMenu({
         style={{
           padding: '7px 13px', borderRadius: 999,
           fontFamily: OUTFIT, fontSize: 11, fontWeight: 800,
-          // Paid → green filled (no separate PAID badge, #9). Else calm cream.
-          color: paid ? '#FFFFFF' : NEU.ink,
-          background: paid ? 'linear-gradient(135deg, #3D7A52, #2A5A3C)' : NEU.surface,
-          boxShadow: paid ? '0 3px 8px #3D7A5255, ' + NEU.outSm : NEU.outSm,
-          border: 'none',
+          // Paid → green filled (no separate PAID badge, #9). A proof to review
+          // → the gold attention accent; a started payment → quiet. Else calm cream.
+          color: paid ? '#FFFFFF' : proofWaiting ? '#7A5A10' : started ? NEU.inkSoft : NEU.ink,
+          background: paid ? 'linear-gradient(135deg, #3D7A52, #2A5A3C)' : proofWaiting ? 'rgba(238,217,138,0.55)' : NEU.surface,
+          boxShadow: paid ? '0 3px 8px #3D7A5255, ' + NEU.outSm : proofWaiting ? '0 0 0 1.5px rgba(182,135,31,0.55), ' + NEU.outSm : NEU.outSm,
+          border: 'none', whiteSpace: 'nowrap', flexShrink: 0,
           cursor: disabled ? 'default' : 'pointer', opacity: disabled ? 0.5 : 1,
         }}
       >
         {paid
           ? <CircleCheck size={13} strokeWidth={2.7} style={{ color: '#FFFFFF' }} />
-          : <Wallet size={13} strokeWidth={2.5} style={{ color: NEU.deepGold }} />}
+          : proofWaiting
+            ? <FileSearch size={13} strokeWidth={2.5} style={{ color: '#7A5A10' }} />
+            : started
+              ? <Clock size={13} strokeWidth={2.5} style={{ color: NEU.inkSoft }} />
+              : <Wallet size={13} strokeWidth={2.5} style={{ color: NEU.deepGold }} />}
         {label}
         <ChevronDown size={12} strokeWidth={2.6} style={{ transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 160ms' }} />
       </button>
@@ -632,6 +643,13 @@ function PaymentMenu({
             style={{ position: 'fixed', top: pos.top, left: pos.left, zIndex: 9999, minWidth: 196, backgroundColor: NEU.surface, borderRadius: 14, boxShadow: NEU.out, padding: 6, animation: `neuFadeIn 160ms ${EASE_LOCAL}` }}
           >
             <style>{`@keyframes neuFadeIn { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: translateY(0); } }`}</style>
+            {proofWaiting && onReviewProof && item(FileSearch, 'Review proof', onReviewProof)}
+            {started && live && (
+              <p style={{ margin: 0, padding: '8px 12px 6px', maxWidth: 240, fontFamily: OUTFIT, fontSize: 11.5, lineHeight: 1.45, color: NEU.inkSoft }}>
+                {live.createdAt ? `Started ${formatDate(live.createdAt)}, no proof yet.` : 'Started, no proof yet.'}
+                {live.expiresAt ? ` Held until ${formatDate(live.expiresAt)}` : ''}
+              </p>
+            )}
             {!paid && !waived && item(CircleCheck, 'Mark paid manually', onMarkPaid, 'ink',
               paymentsLive ? { disabled: true, title: 'Payments are handled automatically via checkout' } : undefined)}
             {!paid && !waived && item(Send, 'Remind to pay', onRemind)}
@@ -1161,7 +1179,14 @@ const PAYMENT_OPTIONS = [
   { label: 'Paid', value: 'paid' },
   { label: 'Unpaid', value: 'unpaid' },
   { label: 'Waived', value: 'waived' },
+  { label: 'Proof to review', value: 'proof' },
+  { label: 'Payment started', value: 'started' },
 ];
+
+/** A live manual payment on an application (prompt 138): a proof waiting for
+ *  the organizers ('pending' batch) or a payment started on /pay with no proof
+ *  yet ('awaiting_proof'). A proof wins over a started payment. */
+interface LivePay { kind: 'proof' | 'started'; createdAt: string | null; expiresAt: string | null }
 
 // Status GROUPS, module scope so the stat tiles and the ?status= deep link can
 // never drift apart. "Accepted" means accepted-or-beyond and "Allocated" means
@@ -1850,6 +1875,8 @@ export default function ApplicationsPage() {
   // (conference_leader_imports). Keyed on the id, never on invited_email,
   // because claiming clears invited_email and the mark must stay.
   const [leaderImports, setLeaderImports] = useState<Map<string, string>>(() => new Map());
+  // Live manual payments per application (prompt 138), read beside the list.
+  const [livePays, setLivePays] = useState<Map<string, LivePay>>(() => new Map());
   // Unpaid gating invoices (gates_acceptance=true, status not settled/waived/
   // void). Only app_fee rows ever carry the flag, since it comes from
   // application_surcharges.gates_acceptance. Fetched with the applications list.
@@ -2064,6 +2091,33 @@ export default function ApplicationsPage() {
         if (row.application_id) next.set(row.application_id, row.delegation_name?.trim() || 'a delegation leader');
       }
       setLeaderImports(next);
+    })();
+    // Live manual payments: a proof waiting ('pending') or a payment started
+    // with no proof ('awaiting_proof'), per application. A failed read only
+    // leaves the chips as "Payment"; it never blocks the list.
+    void (async () => {
+      const { data, error } = await supabase
+        .from('payment_batches')
+        .select('id, status, proof_path, created_at, expires_at, payments!payments_batch_id_fkey (status, invoices (application_id))')
+        .eq('conference_id', conference.id)
+        .in('status', ['pending', 'awaiting_proof']);
+      if (seq !== loadSeq.current || error) return;
+      type Row = { status: string; proof_path: string | null; created_at: string | null; expires_at: string | null;
+        payments: { status: string; invoices: { application_id: string | null } | { application_id: string | null }[] | null }[] | null };
+      const next = new Map<string, LivePay>();
+      for (const b of (data ?? []) as unknown as Row[]) {
+        const kind: LivePay['kind'] = b.status === 'pending' ? 'proof' : 'started';
+        for (const p of b.payments ?? []) {
+          if (p.status !== 'pending') continue;
+          const inv = Array.isArray(p.invoices) ? p.invoices[0] : p.invoices;
+          const appId = inv?.application_id;
+          if (!appId) continue;
+          const had = next.get(appId);
+          if (had?.kind === 'proof') continue;
+          if (kind === 'proof' || !had) next.set(appId, { kind, createdAt: b.created_at, expiresAt: b.expires_at });
+        }
+      }
+      setLivePays(next);
     })();
     const [appRes, cfgRes, gatingRes] = await Promise.all([
       fetchAllRows((from, to) => supabase
@@ -3880,7 +3934,9 @@ export default function ApplicationsPage() {
       const match =
         (filters.payment.has('paid') && ps === 'paid') ||
         (filters.payment.has('waived') && ps === 'waived') ||
-        (filters.payment.has('unpaid') && (ps === 'unpaid' || ps == null));
+        (filters.payment.has('unpaid') && (ps === 'unpaid' || ps == null)) ||
+        (filters.payment.has('proof') && ps !== 'paid' && ps !== 'waived' && livePays.get(a.id)?.kind === 'proof') ||
+        (filters.payment.has('started') && ps !== 'paid' && ps !== 'waived' && livePays.get(a.id)?.kind === 'started');
       if (!match) return false;
     }
     if (filters.dateFrom && a.submitted_at && a.submitted_at.slice(0, 10) < filters.dateFrom) return false;
@@ -4745,6 +4801,8 @@ export default function ApplicationsPage() {
                               onRemind={() => handleRemindPay(app)}
                               onMarkUnpaid={() => handleMarkUnpaid(app)}
                               onUndoWaive={() => handleUndoWaive(app)}
+                              live={livePays.get(app.id) ?? null}
+                              onReviewProof={() => router.push(`/manage/${conference.slug}/financials?open=todo`)}
                             />
                           </span>
                         ) : isInvitedChair ? (
@@ -5352,6 +5410,8 @@ export default function ApplicationsPage() {
               onRemind={() => handleRemindPay(app)}
               onMarkUnpaid={() => handleMarkUnpaid(app)}
               onUndoWaive={() => handleUndoWaive(app)}
+              live={livePays.get(app.id) ?? null}
+              onReviewProof={() => router.push(`/manage/${conference.slug}/financials?open=todo`)}
             />
           </span>
         ) : (app.role === 'chair' && app.fee_waiver_source === 'chair_invite') ? (
