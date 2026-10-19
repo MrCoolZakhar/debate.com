@@ -4,14 +4,14 @@ How Claude adds Gavelling listings (owner, 19 Oct 2026: "adding listings should 
 
 ## Each run
 
-1. **How many:** up to **10 new listings** per run. Updating an existing listing (new dates, committees found) does not count toward the 10.
+1. **How many:** up to **10 new listings** per run. **Never re-check or update a listing that already exists** (owner, 19 Oct 2026: "no need to re check the already uploaded conferences every day"). A candidate already on Gavelling, as a listing or an organiser's conference, is skipped. Take the run's candidates from **This week's plan** below, in order; when a day's candidate fails (no website of its own, no dates, past, already on Gavelling, a mymun event), take the next unused one from the reserve list.
 2. **Where (owner, 19 Oct 2026: a heavy focus on Europe, as proof of quality):** about **7 of every 10** new listings are European conferences: well-run university and school conferences across the UK, the Netherlands, Germany, France, Spain, Italy, Belgium, Switzerland, Austria, Ireland, the Nordics, Poland, the Czech Republic, Portugal, Greece, the Baltics and so on (well-known ones first: e.g. LSE, Oxford, Cambridge, Edinburgh, King's, UCL, Leiden, Maastricht, Groningen, Rotterdam, Berlin, Munich, Heidelberg, Sciences Po, Madrid, Barcelona, Rome, Bologna, Geneva, Vienna, Prague, Warsaw, Riga, Tallinn, Helsinki, Stockholm, Copenhagen). The other 3: India, Pakistan, Egypt, the United Arab Emirates and big international conferences elsewhere (e.g. the US university circuit). Rotate cities and countries across runs so no single country floods the list.
 3. **Only upcoming:** start date today or later, preferably within the next 12 months.
 
 ## Finding candidates
 
 - Use web search (Claude's search tool) for things like "Model United Nations 2026 Lahore", "MUN conference Mumbai January 2027", "MUN Cairo 2027", "university Model UN conference 2027".
-- **mymun pages may appear in results. Use them only to learn that a conference exists.** Never copy anything from mymun (their text, images, fees, dates). Go to the conference's OWN website (or its own Linktree / public page) and take every fact from there. If a conference has no website or public page of its own, skip it.
+- **mymun pages may appear in results. Use them only to learn that a conference exists**, with one exception: the expected delegate number when the conference's own site gives none (see `expected_delegates`). Never copy anything else from mymun (their text, images, fees, dates). Go to the conference's OWN website (or its own Linktree / public page) and take every fact from there. If a conference has no website or public page of its own, skip it.
 - Never list a conference run by mymun itself (MUN London, MUN Paris, MUN Bruxelles, MUN Rome, and any "mymun" branded event).
 - Check robots.txt of the conference's site before fetching pages; respect it.
 - **Instagram:** only use what is visible without logging in; do not log in, do not scrape feeds. If committees and topics are only on Instagram behind a login, leave them out.
@@ -56,6 +56,24 @@ A listing goes live only when it passes the quality bar (real dates, a place, a 
 - Facts only; if unsure about a fact, leave it out.
 - Never touch a conference whose `listed_by` is `organiser`. The upsert refuses anyway.
 - Never call any function that sends email. The upsert sends none.
+
+## This week's plan (20 to 26 October 2026)
+
+Written 19 Oct 2026. Names are candidates, not facts: every date and detail still comes from the conference's own site, and a candidate that fails a check is skipped for the next one in the reserve. About 7 of every 10 are European. Already on Gavelling and never added again: BERMUN, BIMUN ESADE, BIMUN/SINUB, CBSMUN, HMUN Dubai, HNMUN, ILMUNC India, MUNoV, OxIMUN, PRAMUN, LIMUN.
+
+| Day | Europe (7) | Elsewhere (3) |
+|---|---|---|
+| Tue 20 Oct | LSEMUN (London), KCLMUN (London), Cambridge CUIMUN, DurMUN (Durham), EdMUN (Edinburgh), WarMUN (Warwick), TCD MUN (Dublin) | THIMUN Qatar (Doha), LUMUN (Lahore), CIMUN (Cairo) |
+| Wed 21 Oct | THIMUN (The Hague), Leiden LIDMUN, MaMUN (Maastricht), EuroMUN (Maastricht), GrMUN (Groningen), RMUN (Rotterdam), AMUN (Amsterdam) | YMUN (Yale, New Haven), Dubai MUN (DMUN), Delhi Public School MUN |
+| Thu 22 Oct | MUNich (Munich), HeidelMUN (Heidelberg), HamMUN (Hamburg), FrankMUN (Frankfurt), CologneMUN, DresdenMUN, ZuMUN (Zurich) | NMUN New York, Karachi MUN (KMUN), AUC MUN (Cairo) |
+| Fri 23 Oct | PIMUN (Paris), Sciences Po MUN (Paris), LyonMUN, StrasMUN (Strasbourg), GIMUN (Geneva), BelMUN (Brussels), LUXMUN (Luxembourg) | ChoMUN (Chicago), Mumbai MUN, Abu Dhabi MUN |
+| Sat 24 Oct | RomeMUN (Rome), BoMUN (Bologna), MilanMUN, MadMUN (Madrid), LxMUN (Lisbon), PortoMUN, AthensMUN | CMUNCE (Columbia, New York), Islamabad MUN, Sharjah MUN |
+| Sun 25 Oct | VIMUN (Vienna), BudMUN (Budapest), WMUN (Warsaw), KrakMUN (Krakow), RIGAMUN (Riga), TalMUN (Tallinn), ViMUN (Vilnius) | NCSC (Georgetown, Washington), Bangalore MUN, Alexandria MUN |
+| Mon 26 Oct | HELMUN (Helsinki), SMUN (Stockholm), LundMUN (Lund), CopMUN (Copenhagen), OsloMUN, AarhusMUN, GöteborgMUN | UPenn ILMUNC (Philadelphia), Hyderabad MUN, Doha MUN |
+
+**Reserve** (in order): St Andrews MUN, GlasMUN (Glasgow), ManMUN (Manchester), BristolMUN, ExMUN (Exeter), Utrecht MUN, NijMUN (Nijmegen), MannMUN (Mannheim), BonnMUN school edition, BaselMUN, LuxMUN school edition, SalzMUN (Salzburg), PragueMUN (university), BratMUN (Bratislava), ValMUN (Valencia), SevMUN (Seville), FloMUN (Florence), TurinMUN, CorkMUN, GalwayMUN; elsewhere: BMUN (Berkeley), SMUNC (Stanford), Lahore Grammar MUN, Chennai MUN, Kuwait MUN.
+
+At the end of the week, write next week's plan here the same way, dropping everything that was added or skipped.
 
 ## Report
 
