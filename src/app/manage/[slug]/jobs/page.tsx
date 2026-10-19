@@ -639,7 +639,7 @@ function PostingModal({
             <label style={labelStyle}>APPLICATION DEADLINE (OPTIONAL)</label>
             {/* The shared picker (prompt 135): never a native date input. Same
                 'YYYY-MM-DDTHH:mm' value the native datetime field gave. */}
-            <DatePicker withTime clearable value={deadline} onChange={setDeadline} placeholder="No deadline" />
+            <DatePicker futureOnly withTime clearable value={deadline} onChange={setDeadline} placeholder="No deadline" />
           </div>
 
           {/* Submit */}

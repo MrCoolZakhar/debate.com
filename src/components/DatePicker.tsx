@@ -56,7 +56,7 @@ function startOfDay(d: Date): Date {
 export function DatePicker({
   value, onChange, min, max, placeholder = 'Select a date', disabled, initialView,
   id, describedBy, invalid = false, variant = 'default',
-  withTime = false, clearable = false, zoneNote,
+  withTime = false, clearable = false, zoneNote, futureOnly = false,
 }: {
   value: string;
   onChange: (iso: string) => void;
@@ -92,6 +92,14 @@ export function DatePicker({
   clearable?: boolean;
   /** Small line printed under the time row, e.g. the organiser's timezone. */
   zoneNote?: string;
+  /**
+   * Something that can only happen from now on (a deadline, a release, a due
+   * date, an opening; prompt 139): days before today are dimmed and cannot be
+   * picked, an empty picker opens on the current month with today as the
+   * pending day (nothing is saved by opening), and the year list starts at the
+   * current year. A value already saved in the past still shows as it is.
+   */
+  futureOnly?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const selected = useMemo(() => parseISO(value), [value]);
@@ -115,7 +123,13 @@ export function DatePicker({
     if (selected) emit(toISO(selected), h, m);
     else setPendingTime({ h, m });
   }, [selected, emit]);
-  const minDate = useMemo(() => parseISO(min), [min]);
+  // Today's date-only string, read once per open picker instance.
+  const [todayIso] = useState(() => toISO(new Date()));
+  const effectiveMin = futureOnly ? (min && min > todayIso ? min : todayIso) : min;
+  const minDate = useMemo(() => parseISO(effectiveMin), [effectiveMin]);
+  // An empty future-only picker shows today as the pending day: a click on a
+  // day saves it (date only), Done saves it with the time (with time).
+  const pendingDay = futureOnly && !selected ? todayIso : null;
   const maxDate = useMemo(() => parseISO(max), [max]);
   const [view, setView] = useState<Date>(() => selected ?? parseISO(initialView) ?? new Date());
 
@@ -134,13 +148,22 @@ export function DatePicker({
   // The range follows min/max when they are given (date of birth passes
   // max = today, so it offers a real birth-year span) and always includes the
   // year currently in view, so there is never a selected value with no option.
+  // Since prompt 139 the list always STARTS at the current year: a past-only
+  // picker (a birthday: max up to today, no min) counts down from it, every
+  // other picker counts up from it. The year in view is always included.
   const years = useMemo(() => {
     const viewYear = view.getFullYear();
     const nowYear = new Date().getFullYear();
-    const lo = Math.min(minDate ? minDate.getFullYear() : nowYear - 100, viewYear);
-    const hi = Math.max(maxDate ? maxDate.getFullYear() : nowYear + 20, viewYear);
-    return Array.from({ length: hi - lo + 1 }, (_, i) => hi - i);
-  }, [view, minDate, maxDate]);
+    const pastOnly = !futureOnly && !!maxDate && !minDate && maxDate.getFullYear() <= nowYear;
+    if (pastOnly) {
+      const hi = Math.max(nowYear, viewYear);
+      const lo = Math.min(nowYear - 100, viewYear);
+      return Array.from({ length: hi - lo + 1 }, (_, i) => hi - i);
+    }
+    const lo = Math.min(nowYear, viewYear);
+    const hi = Math.max(maxDate ? maxDate.getFullYear() : nowYear + 20, viewYear, nowYear);
+    return Array.from({ length: hi - lo + 1 }, (_, i) => lo + i);
+  }, [view, minDate, maxDate, futureOnly]);
   const btnRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState<{ top: number; left: number; compact: boolean } | null>(null);
@@ -362,7 +385,7 @@ export function DatePicker({
           <div className={`grid grid-cols-7 ${compactNow ? 'gap-0.5' : 'gap-1'}`}>
             {grid.map((d, i) => {
               if (!d) return <div key={i} />;
-              const isSel = selected && toISO(d) === toISO(selected);
+              const isSel = selected ? toISO(d) === toISO(selected) : pendingDay === toISO(d);
               const off = disabledDay(d);
               return (
                 <button key={i} type="button" disabled={off}
@@ -415,7 +438,11 @@ export function DatePicker({
                 />
                 <button
                   type="button"
-                  onClick={() => setOpen(false)}
+                  onClick={() => {
+                    // An empty future-only picker: Done saves the pending day (today) with the time.
+                    if (!selected && pendingDay) emit(pendingDay, hour, minute);
+                    setOpen(false);
+                  }}
                   className="ml-auto rounded-lg px-3 py-1.5 focus:outline-none"
                   style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 11, letterSpacing: '0.08em', backgroundColor: '#1B3828', color: '#EED98A', border: 'none', cursor: 'pointer' }}
                 >

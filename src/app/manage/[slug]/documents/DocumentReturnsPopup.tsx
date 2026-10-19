@@ -39,7 +39,7 @@ const STATE_LOOK: Record<ReturnState, { color: string; Icon: typeof Circle }> = 
 
 function fmtDate(iso: string | null): string {
   if (!iso) return '';
-  try { return new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }); } catch { return ''; }
+  try { return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }); } catch { return ''; }
 }
 function roleWord(p: ReturnPerson): string {
   if (p.is_head_delegate && p.role === 'delegate') return 'Head delegate';

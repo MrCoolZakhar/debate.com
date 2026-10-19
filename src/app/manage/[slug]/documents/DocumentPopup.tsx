@@ -34,6 +34,7 @@ import { dayInZone, endOfDayIso } from '@/lib/applicationWindow';
 import { STORE_CSS } from '../store/storeKit';
 import { DASH_CSS, IconDisc, TINT_GREEN, TINT_GOLD, INK, INK_SOFT, FOREST } from '../financials/dashboardKit';
 import { CD_CSS, EXTRA_CSS, ROLE_CHOICES } from './docsTabKit';
+import { formatDate } from './CommitteeDocsPopup';
 import {
   CONFERENCE_DOCS_BUCKET, CONFERENCE_DOC_MAX_BYTES, CONFERENCE_DOC_TITLE_MAX, DOC_FILE_ACCEPT,
   conferenceDocPath, docMimeFor, docTypeLabel, formatDocSize, isAllowedDocFile, linkHost, normaliseDocUrl, saveConferenceDocument,
@@ -447,7 +448,7 @@ export default function DocumentPopup({ conferenceId, editing, extra, onClose, o
                   <div className="gv-cd-sub-block">
                     <div className="gv-cd-field">
                       <label className="gv-fd-label" htmlFor="gv-dflow-due">Due date (optional)</label>
-                      <DatePicker id="gv-dflow-due" value={dueDay} min={today} clearable disabled={busy} onChange={v => { setDueDay(v); clearFieldErr('due_at'); }} placeholder="No due date" />
+                      <DatePicker id="gv-dflow-due" futureOnly value={dueDay} min={today} clearable disabled={busy} onChange={v => { setDueDay(v); clearFieldErr('due_at'); }} placeholder="No due date" />
                       {err('due_at')}
                     </div>
                     <Switch on={required} disabled={busy} onChange={setRequired} title="Required" line="People who have not sent it see a reminder on their dashboard. It never stops check-in." />
@@ -469,7 +470,7 @@ export default function DocumentPopup({ conferenceId, editing, extra, onClose, o
                     <SumRow
                       label="Send it back"
                       onEdit={() => setStep(4)}
-                      value={askBackOn ? [`Yes`, dueDay ? `due ${dueDay}` : 'no due date', required ? 'required' : null].filter(Boolean).join(', ') : 'No'}
+                      value={askBackOn ? [`Yes`, dueDay ? `due ${formatDate(`${dueDay}T12:00:00`)}` : 'no due date', required ? 'required' : null].filter(Boolean).join(', ') : 'No'}
                     />
                   )}
                 </dl>

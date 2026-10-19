@@ -258,6 +258,7 @@ function ReleaseTimePicker({ value, onSave, placeholder, disabled }: {
       <div className="flex gap-2 items-center">
         <div style={{ flex: 1, minWidth: 160 }}>
           <DatePicker
+            futureOnly
             value={datePart}
             onChange={iso => commit(iso, timePart || '00:00')}
             placeholder={placeholder}

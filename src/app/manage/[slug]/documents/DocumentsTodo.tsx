@@ -82,7 +82,7 @@ function ago(iso: string | null, now: number): string {
   if (h < 24) return `${h} ${h === 1 ? 'hour' : 'hours'} ago`;
   const d = Math.round(h / 24);
   if (d < 30) return `${d} ${d === 1 ? 'day' : 'days'} ago`;
-  return new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+  return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
 /** The card: a title with the count and the rows, scrolling inside itself. */

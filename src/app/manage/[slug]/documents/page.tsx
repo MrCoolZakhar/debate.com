@@ -33,27 +33,21 @@ import { STORE_CSS } from '../store/storeKit';
 import { DASH_CSS, DashCard, TINT_GOLD } from '../financials/dashboardKit';
 
 const OUTFIT = "var(--font-brand), sans-serif";
-const PER_PAGE = 6;
+const PER_PAGE = 5;
 const GREEN = '#2F6644';
 
-interface GuideMark { conference_committee_id: string; is_published: boolean }
+interface GuideMark { conference_committee_id: string; is_published: boolean; title?: string | null }
 
 /** The three lines on a committee row: the full sentence (its tooltip and
- *  accessible name) and the short word drawn beside the line's icon, so six
- *  rows fit the card at 1280x800 (prompt 133). */
+ *  accessible name) and the short words drawn beside the line's icon, so five
+ *  rows fit the card at 1280x800 (prompt 133; five since prompt 139). Every
+ *  date carries its year ("Releases 1 Dec 2026"). */
 function studyGuideLine(c: CommitteeDoc, guides: GuideMark[], now: number): { text: string; short: string; on: boolean } {
   const mine = guides.filter(g => g.conference_committee_id === c.id);
   const at = c.study_guides_publish_at ? new Date(c.study_guides_publish_at).getTime() : null;
   if (mine.some(g => g.is_published) || (mine.length > 0 && at !== null && at <= now)) return { text: 'Study guide published', short: 'Published', on: true };
-  if (mine.length > 0 && at !== null && at > now) return { text: `Study guide releases ${formatDate(c.study_guides_publish_at!)}`, short: `Releases ${shortDate(c.study_guides_publish_at!)}`, on: false };
+  if (mine.length > 0 && at !== null && at > now) return { text: `Study guide releases ${formatDate(c.study_guides_publish_at!)}`, short: `Releases ${formatDate(c.study_guides_publish_at!)}`, on: false };
   return { text: 'Study guide not published', short: 'Not published', on: false };
-}
-
-/** "Oct 3" (the year only when it is not this year). */
-function shortDate(iso: string): string {
-  const full = formatDate(iso);
-  const y = String(new Date().getFullYear());
-  return full.endsWith(`, ${y}`) ? full.slice(0, -(y.length + 2)) : full;
 }
 
 function StatusLine({ icon: Icon, text, short, color }: { icon: typeof ScrollText; text: string; short: string; color: string }) {
@@ -90,8 +84,9 @@ function CommitteeCard({ c, guides, now, onOpen }: {
           short={c.pp_submissions_enabled ? 'Papers enabled' : 'Papers disabled'}
           color={c.pp_submissions_enabled ? GREEN : NEU.inkSoft}
         />
-        {c.position_paper_deadline && (
-          <StatusLine icon={CalendarClock} text={`Due ${formatDate(c.position_paper_deadline)}`} short={`Due ${shortDate(c.position_paper_deadline)}`} color={NEU.ink} />
+        {/* No due date while papers are disabled (prompt 139); the saved deadline is kept. */}
+        {c.pp_submissions_enabled && c.position_paper_deadline && (
+          <StatusLine icon={CalendarClock} text={`Due ${formatDate(c.position_paper_deadline)}`} short={`Due ${formatDate(c.position_paper_deadline)}`} color={NEU.ink} />
         )}
       </ul>
       <div className="gv-docs-cactions">
@@ -159,7 +154,7 @@ export default function DocumentsPage() {
     if (rows.length > 0) {
       const { data: g } = await supabase
         .from('study_guides')
-        .select('conference_committee_id, is_published')
+        .select('conference_committee_id, is_published, title')
         .in('conference_committee_id', rows.map(r => r.id));
       setGuides((g ?? []) as GuideMark[]);
     } else {
@@ -186,7 +181,8 @@ export default function DocumentsPage() {
   const safePage = Math.min(page, pages - 1);
   const shown = committees.slice(safePage * PER_PAGE, safePage * PER_PAGE + PER_PAGE);
   const openCommittee = open ? committees.find(c => c.id === open.id) ?? null : null;
-  const guideIds = new Set(guides.map(g => g.conference_committee_id));
+  // Each committee's study guide title, for the pop-up's copy view.
+  const guideTitles = new Map(guides.map(g => [g.conference_committee_id, g.title ?? 'Study guide'] as const));
 
   return (
     <div className="gv-docs-page px-6 md:px-10 py-8">
@@ -276,7 +272,7 @@ export default function DocumentsPage() {
           conferenceSlug={conference.slug}
           committee={openCommittee}
           committees={committees}
-          guideCommitteeIds={guideIds}
+          guideTitles={guideTitles}
           initialPane={open.pane}
           onCommitteeChange={next => setCommittees(prev => prev.map(c => (c.id === next.id ? next : c)))}
           onClose={() => { setOpen(null); void loadCommittees(); setTodoVersion(v => v + 1); }}
@@ -298,11 +294,9 @@ const PAGE_CSS = `
 .gv-docs-dash{min-width:0;min-height:0}
 .gv-docs-dash .gv-st-card-head{margin-bottom:12px}
 .gv-docs-dash .gv-st-card-title{font-size:clamp(20px,1.6vw,24px);letter-spacing:-0.015em;line-height:1.15}
-.gv-docs-committees{display:grid;grid-template-columns:minmax(0,1fr);gap:8px;align-content:start}
-.gv-docs-ccard{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px;padding:8px 12px;border-radius:14px;background:#FAF8F3;box-shadow:inset 0 0 0 1px rgba(27,56,40,0.07);min-width:0;min-height:0}
-.gv-docs-cid{display:flex;align-items:center;gap:10px;min-width:0;flex:1 1 200px}
-.gv-docs-cname{margin:0;font-family:${OUTFIT};font-size:16px;font-weight:800;letter-spacing:-0.01em;line-height:1.15;color:#1C1410;overflow-wrap:anywhere}
-.gv-docs-cfull{margin:1px 0 0;font-family:${OUTFIT};font-size:11.5px;line-height:1.25;color:${NEU.inkSoft};overflow-wrap:anywhere}
+.gv-docs-committees{display:grid;grid-template-columns:minmax(0,1fr);gap:6px;align-content:start;container-type:inline-size}
+.gv-docs-cname{margin:0;font-family:${OUTFIT};font-size:16px;font-weight:800;letter-spacing:-0.01em;line-height:1.15;color:#1C1410;white-space:nowrap}
+.gv-docs-cfull{margin:1px 0 0;font-family:${OUTFIT};font-size:11.5px;line-height:1.2;color:${NEU.inkSoft};overflow-wrap:normal;word-break:normal}
 .gv-docs-lines{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:1px;font-family:${OUTFIT};font-size:12px;font-weight:600;line-height:1.25;flex:0 1 auto;min-width:0}
 .gv-docs-lines li{display:flex;align-items:center;gap:5px;white-space:nowrap}
 .gv-docs-cactions{display:flex;gap:6px;flex-wrap:nowrap;flex:0 0 auto}
@@ -318,12 +312,25 @@ const PAGE_CSS = `
 .gv-docs-arrow:disabled{opacity:0.35;cursor:default}
 .gv-docs-arrow:focus{outline:none}
 .gv-docs-arrow:focus-visible{outline:2px solid #1B3828;outline-offset:2px}
+/* A committee row (prompt 139): the name column never gets crushed. Wide: name,
+   status lines, buttons on one line. Narrower: the status lines move under the
+   name and the buttons stay beside it; narrowest: everything stacks. */
+.gv-docs-committees .gv-docs-ccard{display:grid;grid-template-columns:minmax(180px,1.3fr) minmax(150px,1fr) auto;grid-template-areas:"id lines act";align-items:center;gap:4px 12px;padding:6px 12px;border-radius:14px;background:#FAF8F3;box-shadow:inset 0 0 0 1px rgba(27,56,40,0.07);min-width:0;min-height:0}
+.gv-docs-ccard .gv-docs-cid{grid-area:id;display:flex;align-items:center;gap:10px;min-width:0}
+.gv-docs-ccard .gv-docs-lines{grid-area:lines;font-size:11.5px;line-height:1.2}
+.gv-docs-ccard .gv-docs-cactions{grid-area:act}
+.gv-docs-ccard .gv-docs-btn{padding:0 9px}
+@container (max-width:599px){
+  .gv-docs-committees .gv-docs-ccard{grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"id act" "lines lines"}
+  .gv-docs-ccard .gv-docs-lines{padding-left:46px;flex-direction:row;flex-wrap:wrap;gap:1px 12px}
+}
+@container (max-width:380px){
+  .gv-docs-committees .gv-docs-ccard{grid-template-columns:minmax(0,1fr);grid-template-areas:"id" "lines" "act"}
+}
 @media (min-width:1100px){
   .gv-docs-page{height:calc(100dvh - 56px);overflow:hidden}
   .gv-docs-grid{flex:1 1 auto;grid-template-columns:minmax(0,1fr) minmax(0,1fr);grid-template-rows:minmax(0,1fr);padding-top:4px}
-  .gv-docs-committees{flex:1 1 auto;min-height:0;grid-template-rows:repeat(6,minmax(0,1fr));align-content:stretch}
-  .gv-docs-ccard{flex-wrap:nowrap}
-  .gv-docs-cid{flex:1 1 0}
+  .gv-docs-committees{flex:1 1 auto;min-height:0;grid-template-rows:repeat(5,minmax(0,1fr));align-content:stretch}
   .gv-docs-right{height:100%}
   .gv-docs-right>.gv-docs-dash{flex:1 1 0;box-sizing:border-box}
 }

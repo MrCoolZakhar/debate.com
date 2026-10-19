@@ -303,6 +303,7 @@ export default function DelegationsTab<M extends DelegationMemberLite>(props: De
               <span style={{ color: INK_SOFT }}>Until</span>
               <div style={{ width: 170 }}>
                 <DatePicker
+                  futureOnly
                   value={until}
                   disabled={!reshuffleOn || v2Saving}
                   placeholder="No end date"

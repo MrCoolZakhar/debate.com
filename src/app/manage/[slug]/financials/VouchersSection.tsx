@@ -430,6 +430,7 @@ export default function VouchersSection({
           <div>
             <label htmlFor="voucher-expiry" style={fieldLabelStyle}>Expiry date · optional</label>
             <DatePicker
+              futureOnly
               value={expiry}
               onChange={setExpiry}
               min={new Date().toISOString().slice(0, 10)}

@@ -25,6 +25,7 @@ import { DASH_CSS, IconDisc, TINT_GOLD } from '../financials/dashboardKit';
 import { CD_CSS, EXTRA_CSS, audienceLine, kindIcon } from './docsTabKit';
 import DocumentPopup from './DocumentPopup';
 import DocumentReturnsPopup from './DocumentReturnsPopup';
+import { formatDate } from './CommitteeDocsPopup';
 
 export default function DocumentsExtraTab({ conferenceId, initial, initialDocId, onInitialDocUsed, inPopup = false, onViewSubmissions, onEdit }: {
   conferenceId: string;
@@ -176,7 +177,7 @@ export default function DocumentsExtraTab({ conferenceId, initial, initialDocId,
                     <p className="gv-cd-row-ret">
                       <span><b>{doc.returned}</b> of {doc.audience} {inPopup ? 'sent back' : 'returned'}</span>
                       {doc.to_review > 0 && <span className="gv-cd-gold">{doc.to_review} to review</span>}
-                      {doc.due_label && <span>Due {doc.due_label}</span>}
+                      {(doc.due_at || doc.due_label) && <span>Due {doc.due_at ? formatDate(doc.due_at) : doc.due_label}</span>}
                       {doc.required && <span style={{ fontWeight: 700 }}>Required</span>}
                     </p>
                   )}

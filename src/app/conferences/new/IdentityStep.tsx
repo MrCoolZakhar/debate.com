@@ -412,6 +412,7 @@ export function IdentityStep(p: IdentityStepProps) {
             <div>
               <p style={{ fontFamily: OUTFIT, fontSize: 12, fontWeight: 700, color: NEU.inkSoft, margin: '0 0 5px' }}>First day</p>
               <DatePicker
+                futureOnly
                 value={p.startDate}
                 min={p.todayISO}
                 onChange={p.onStartDate}
@@ -422,6 +423,7 @@ export function IdentityStep(p: IdentityStepProps) {
             <div>
               <p style={{ fontFamily: OUTFIT, fontSize: 12, fontWeight: 700, color: NEU.inkSoft, margin: '0 0 5px' }}>Last day</p>
               <DatePicker
+                futureOnly
                 value={p.endDate}
                 min={p.startDate || p.todayISO}
                 onChange={p.onEndDate}

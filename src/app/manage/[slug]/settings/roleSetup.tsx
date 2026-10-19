@@ -582,6 +582,7 @@ export function RoleSheet(props: RoleSheetProps) {
                             <InfoHint label="About the opening time" text="Before it, the application link says when it opens. It opens by itself. Leave it empty to open the moment you switch the role on." />
                           </FieldLabel>
                           <DatePicker
+                            futureOnly
                             withTime
                             clearable
                             value={toDatetimeLocal(config.applications_open_at)}
@@ -597,6 +598,7 @@ export function RoleSheet(props: RoleSheetProps) {
                             <InfoHint label="About the closing time" text="No new applications after this. The ones already sent are kept. Leave it empty to stay open until you switch the role off." />
                           </FieldLabel>
                           <DatePicker
+                            futureOnly
                             withTime
                             clearable
                             value={toDatetimeLocal(config.applications_close_at)}
@@ -876,6 +878,7 @@ function StageTable({ phases, active, configVersion, blankIdx, onBlank, onUpdate
                 />
                 <div className="gvs-st-from min-w-0">
                   <DatePicker
+                    futureOnly
                     value={phase.start_date}
                     max={phase.end_date || undefined}
                     placeholder="From"
@@ -884,6 +887,7 @@ function StageTable({ phases, active, configVersion, blankIdx, onBlank, onUpdate
                 </div>
                 <div className="gvs-st-to min-w-0">
                   <DatePicker
+                    futureOnly
                     value={phase.end_date}
                     min={phase.start_date || undefined}
                     placeholder="To"
