@@ -56,7 +56,11 @@ export default function SiteFooter({
         </div>
         <div className="flex flex-col items-center gap-1 md:items-end">
           <p className="text-xs font-semibold" style={{ color: FOREST, margin: 0 }}>{line}</p>
-          <Link href="/privacy" className="text-xs gv-foot-link">Privacy Policy</Link>
+          {/* "Help Center" to the left of Privacy Policy, the same link style (prompt 141). */}
+          <span className="flex items-center gap-3">
+            <Link href="/help" className="text-xs gv-foot-link">Help Center</Link>
+            <Link href="/privacy" className="text-xs gv-foot-link">Privacy Policy</Link>
+          </span>
         </div>
       </div>
       <FooterLegal tone="ivory" />

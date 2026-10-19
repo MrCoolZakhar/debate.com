@@ -184,8 +184,8 @@ export function InfoTip({ text, label = 'More about this' }: { text: string; lab
 export function HelpLine() {
   return (
     <p style={{ margin: '40px 0 0', fontFamily: OUTFIT, fontSize: T.body, color: INK_SOFT }}>
-      Need a hand?{' '}
-      <TextLink href="/help">We are here to help</TextLink>
+      Need a hand? Visit our{' '}
+      <TextLink href="/help">Help Center</TextLink>
     </p>
   );
 }

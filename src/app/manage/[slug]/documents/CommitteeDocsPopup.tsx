@@ -662,7 +662,7 @@ export default function CommitteeDocsPopup({
                 conferenceSlug={conferenceSlug}
                 conferenceCommitteeId={committeeId}
                 currentUserId={user?.id ?? ''}
-                deadline={committee.position_paper_deadline}
+                deadline={committee.pp_submissions_enabled ? committee.position_paper_deadline : null}
                 allocations={rosterAllocations}
                 papers={papers}
                 messagesByPaper={messagesByPaper}

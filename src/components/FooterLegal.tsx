@@ -110,7 +110,7 @@ export default function FooterLegal({
         </Link>
         <span aria-hidden="true" style={{ color: t.text, opacity: 0.5 }}>·</span>
         <Link href="/help" className={hubLink}>
-          Help
+          Help Center
         </Link>
         <span aria-hidden="true" style={{ color: t.text, opacity: 0.5 }}>·</span>
         <Link href="/contact" className={hubLink}>

@@ -1582,7 +1582,7 @@ export default function DashboardPage() {
                 {doneCount} of {checklist.length} done{doneCount === checklist.length ? '. You are all set.' : ''}
                 {' · '}Stuck? See the{' '}
                 <Link href="/help#organizers" className="rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]" style={{ color: NEU.forest, fontWeight: 700, textDecoration: 'underline', textUnderlineOffset: 2 }}>
-                  help desk
+                  Help Center
                 </Link>
               </p>
             </div>

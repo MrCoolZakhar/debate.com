@@ -61,7 +61,11 @@ export default function ContactClient() {
         .gv-founder-circle{width:76px;height:76px}
         .gv-founders{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.6fr) minmax(0,1fr);gap:14px;align-items:center}
         @media (min-width:1280px){.gv-founder-circle{width:92px;height:92px}}
-        @media (max-height:760px) and (min-width:768px){.gv-contact-hero{display:none!important}}
+        /* Gavin stays at every width (prompt 141): the picture is cropped, never
+           hidden, so the green panel never shows an empty band. Stacked on a
+           phone it is a shorter band above the form. */
+        .gv-contact-hero{display:flex;flex:0 0 auto;height:clamp(150px,36vw,220px);margin:14px 0;overflow:hidden;border-radius:16px}
+        @media (min-width:768px){.gv-contact-hero{flex:1 1 0;height:auto;min-height:90px}}
       `}</style>
 
       <SiteNav />
@@ -83,10 +87,10 @@ export default function ContactClient() {
               <span style={{ fontFamily: "'Playfair Display', serif", fontStyle: 'italic', fontWeight: 400, color: GOLD }}>Yours</span>
             </p>
 
-            {/* The picture takes whatever room is left and is never cut off. */}
-            <div className="gv-contact-hero hidden md:flex" style={{ flex: '1 1 0', minHeight: 90, margin: '14px 0', alignItems: 'center', justifyContent: 'center' }}>
+            {/* The picture takes whatever room is left, cropped round Gavin and the desk. */}
+            <div className="gv-contact-hero">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src="/Contact-Hero.webp" alt="" style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }} />
+              <img src="/Contact-Hero.webp" alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center', display: 'block' }} />
             </div>
 
             <section

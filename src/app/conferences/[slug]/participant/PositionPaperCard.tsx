@@ -59,9 +59,10 @@ function uploadErrorSentence(error: unknown): string {
 }
 
 const ppMonths = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+/** "22 Jul 2026": the site's one date format (prompt 139). */
 function fmtDate(iso: string): string {
   const d = new Date(iso);
-  return `${ppMonths[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
+  return `${d.getDate()} ${ppMonths[d.getMonth()]} ${d.getFullYear()}`;
 }
 
 // getPublicUrl returns .../object/public/position-papers/<path>. Storage
@@ -341,7 +342,12 @@ export default function PositionPaperCard({ conferenceId, conferenceSlug, myAllo
     );
   }
 
-  const deadline = myAllocation.conference_committees?.position_paper_deadline ?? null;
+  // No due date and no "Late" while the committee's papers are closed (prompt
+  // 141); the saved deadline is kept and comes back when they open again.
+  const deadline = ppEnabled ? (myAllocation.conference_committees?.position_paper_deadline ?? null) : null;
+  // A rejected paper can ALWAYS be replaced, whatever the switch or the
+  // deadline says (owner, 16 Oct 2026); "not yet open" is for a first paper only.
+  const replacingRejected = isReplacing && myPositionPaper?.status === 'rejected';
   const deadlineSoon = deadline ? (new Date(deadline).getTime() - Date.now()) < 7 * 24 * 60 * 60 * 1000 && new Date(deadline) > new Date() : false;
   const deadlinePassed = deadline ? new Date(deadline).getTime() <= Date.now() : false;
   const late = myPositionPaper ? isPaperLate(myPositionPaper.submitted_at, deadline) : false;
@@ -417,6 +423,17 @@ export default function PositionPaperCard({ conferenceId, conferenceSlug, myAllo
             <ChevronRight size={16} strokeWidth={2.4} style={{ color: NEU.muted, flexShrink: 0 }} />
           </div>
         </NeuCard>
+        {myPositionPaper.status === 'rejected' ? (
+          <ActionButton
+            onClick={() => { setIsReplacing(true); setExpanded(true); setPPFile(null); setPPError(''); }}
+            background="linear-gradient(135deg, #1B3828, #2F6644)"
+            color="#EED98A"
+            boxShadowColor="rgba(27,56,40,0.35)"
+            style={{ marginTop: 12, padding: '10px 18px', fontSize: 13, borderRadius: 12 }}
+          >
+            Upload and Replace
+          </ActionButton>
+        ) : ppEnabled && (
         <button
           onClick={() => setShowPPWarning(true)}
           className="focus:outline-none mt-2.5"
@@ -426,6 +443,7 @@ export default function PositionPaperCard({ conferenceId, conferenceSlug, myAllo
         >
           Replace
         </button>
+        )}
 
         {showPPWarning && (
           <div className="fixed inset-0 z-50 flex items-center justify-center px-6" style={{ backgroundColor: 'rgba(28,20,16,0.5)', backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)' }}>
@@ -522,7 +540,7 @@ export default function PositionPaperCard({ conferenceId, conferenceSlug, myAllo
 
       {expanded && (
         <div className="mt-5 pt-5" style={{ borderTop: '1px solid rgba(221,212,192,0.6)' }}>
-          {!ppEnabled ? (
+          {!ppEnabled && !replacingRejected ? (
             <p style={{ fontFamily: OUTFIT, fontSize: 13, color: '#9A8A78' }}>
               Position paper submissions are not yet open for your committee.
             </p>

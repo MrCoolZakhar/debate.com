@@ -14,7 +14,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
-import { Search, X, Landmark, GraduationCap, Gavel, Briefcase, Wallet, type LucideIcon } from 'lucide-react';
+import { ArrowRight, Search, X, Landmark, GraduationCap, Gavel, Briefcase, Wallet, type LucideIcon } from 'lucide-react';
 import SiteNav from '@/components/SiteNav';
 import SiteFooter from '@/components/SiteFooter';
 import { Emoji3D, OUTFIT } from '@/components/neu';
@@ -172,6 +172,10 @@ export default function HelpClient() {
         .gv-help-results-count{margin:0 0 10px;font-size:14px;color:${INK_SOFT}}
         .gv-help-group{padding:20px 0 4px}
         .gv-help-group h2{margin:0 0 10px;font-size:17px;font-weight:800;letter-spacing:-0.005em;color:${INK}}
+        .gv-help-contact-card{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-top:32px;padding:20px 22px;border-radius:20px;background:#FFFFFF;text-decoration:none;color:${FOREST};box-shadow:0 1px 0 rgba(27,56,40,0.08),0 18px 40px -30px rgba(27,56,40,0.45);transition:transform 140ms ease,box-shadow 140ms ease}
+        .gv-help-contact-card:hover{transform:translateY(-2px);box-shadow:0 1px 0 rgba(27,56,40,0.08),0 22px 44px -28px rgba(27,56,40,0.5)}
+        .gv-help-contact-title{font-size:17px;font-weight:800;line-height:1.35}
+        .gv-help-contact-arrow{display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;width:40px;height:40px;border-radius:999px;background:linear-gradient(90deg,#1B3828,#2A5A3C);color:#FFFFFF}
         .gv-help-empty{padding:28px 0 8px;font-size:16px;line-height:1.6;color:${INK_SOFT};max-width:56ch}
         .gv-help-empty a{color:${FOREST};font-weight:700;text-decoration:underline;text-underline-offset:3px;text-decoration-thickness:1.5px;border-radius:4px}
         .gv-help-empty a:hover{color:${FOREST_MID}}
@@ -262,7 +266,7 @@ export default function HelpClient() {
                 <section className="gv-help-results" aria-label="Search results">
                   {hits.length === 0 ? (
                     <p className="gv-help-empty" aria-live="polite">
-                      No matches. <Link href="/contact" className={FOCUS}>Contact us</Link> and a person answers
+                      No Matches found. <Link href="/contact" className={FOCUS}>Contact us</Link> and we&apos;ll respond as soon as possible.
                     </p>
                   ) : (
                     <>
@@ -292,6 +296,11 @@ export default function HelpClient() {
                   );
                 })
               )}
+              {/* Under the questions (prompt 141): the whole card goes to /contact. */}
+              <Link href="/contact" className={`gv-help-contact-card ${FOCUS}`}>
+                <span className="gv-help-contact-title">Can&apos;t find what you&apos;re looking for? Contact Us!</span>
+                <span aria-hidden className="gv-help-contact-arrow"><ArrowRight size={18} strokeWidth={2.4} /></span>
+              </Link>
             </div>
           </div>
         </div>

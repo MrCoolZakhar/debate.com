@@ -126,7 +126,7 @@ export function QuestionBox() {
       <div>
         <h2 id="gv-p-question-title">Got a question?</h2>
         <p>
-          Every pricing answer lives in the <Link href="/help#pricing" className={`gv-p-link ${FOCUS_RING}`}>help center</Link>
+          Every pricing answer lives in the <Link href="/help#pricing" className={`gv-p-link ${FOCUS_RING}`}>Help Center</Link>
         </p>
       </div>
       <ActionLink href="/contact" skin="forest">Contact us</ActionLink>

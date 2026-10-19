@@ -10,7 +10,8 @@
 import AuthLink from '@/components/auth/AuthLink';
 import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { ArrowLeft, Check, CheckCircle2, Clock, Download, Eye, ExternalLink, FileText, Hourglass, Send, X, XCircle } from 'lucide-react';
+import { ArrowLeft, Check, CheckCircle2, Clock, Download, Eye, ExternalLink, FileText, Hourglass, Minus, Plus, Send, X, XCircle } from 'lucide-react';
+import PlainPdfPages from '@/components/documents/PlainPdfPages';
 import type { LucideIcon } from 'lucide-react';
 import SiteNav from '@/components/SiteNav';
 import Loader from '@/components/Loader';
@@ -25,9 +26,10 @@ import { NEU, NEU_GRADIENTS, EASE, OUTFIT, NeuCard } from '@/components/neu';
 import { ActionButton } from '@/components/PositionPaperButtons';
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+/** "22 Jul 2026": the site's one date format (prompt 139). */
 function fmtDate(iso: string): string {
   const d = new Date(iso);
-  return `${MONTHS[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
+  return `${d.getDate()} ${MONTHS[d.getMonth()]} ${d.getFullYear()}`;
 }
 function fmtTime(iso: string): string {
   const d = new Date(iso);
@@ -41,6 +43,8 @@ interface PaperCommittee {
   name: string;
   abbreviation: string | null;
   position_paper_deadline: string | null;
+  /** Papers closed: no due date and no "Late" (prompt 141). */
+  pp_submissions_enabled?: boolean | null;
   conference_id: string;
   chair_user_ids: string[] | null;
 }
@@ -262,6 +266,9 @@ export default function PositionPaperPage() {
   const { user, session, loading: authLoading } = useAuth();
 
   const [loading, setLoading] = useState(true);
+  // The pdf.js viewer (prompt 141): 75% of the page's width by default, 50% to 200%.
+  const [pdfZoom, setPdfZoom] = useState(0.75);
+  const [pdfFailed, setPdfFailed] = useState(false);
   const [paper, setPaper] = useState<PaperRow | null>(null);
   const [submitters, setSubmitters] = useState<Submitter[]>([]);
   const [isReviewer, setIsReviewer] = useState(false);
@@ -297,7 +304,7 @@ export default function PositionPaperPage() {
         .select(`
           id, conference_committee_id, country_code, file_url, file_name, file_size_bytes,
           status, submitted_at, reviewed_at,
-          conference_committees ( id, name, abbreviation, position_paper_deadline, conference_id, chair_user_ids )
+          conference_committees ( id, name, abbreviation, position_paper_deadline, pp_submissions_enabled, conference_id, chair_user_ids )
         `)
         .eq('id', paperId)
         .maybeSingle();
@@ -436,7 +443,10 @@ export default function PositionPaperPage() {
   // their own MUN CV. The ' & ' that used to be the join separator is now
   // rendered between the links.
   const namedSubmitters = submitters.filter(s => !!s.display_name);
-  const late = paper ? isPaperLate(paper.submitted_at, committee?.position_paper_deadline ?? null) : false;
+  // While the committee's papers are closed there is no due date and no "Late"
+  // (prompt 141); the saved deadline is kept for when they open again.
+  const dueDate = committee && committee.pp_submissions_enabled !== false ? committee.position_paper_deadline : null;
+  const late = paper ? isPaperLate(paper.submitted_at, dueDate) : false;
 
   return (
     <div
@@ -514,7 +524,7 @@ export default function PositionPaperPage() {
                       </Fragment>
                     ))}
                     {` · Submitted ${fmtDate(paper.submitted_at)}`}
-                    {committee?.position_paper_deadline && ` · Due ${fmtDate(committee.position_paper_deadline)}`}
+                    {dueDate && ` · Due ${fmtDate(dueDate)}`}
                   </p>
                 </div>
               </div>
@@ -651,6 +661,23 @@ export default function PositionPaperPage() {
                   <p style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: 12.5, color: NEU.ink, margin: 0, minWidth: 0, overflowWrap: 'anywhere' }}>
                     {paper.file_name}
                   </p>
+                  <span className="flex items-center gap-2 flex-shrink-0">
+                  {!pdfFailed && (
+                    <span className="inline-flex items-center gap-1.5" aria-label="Zoom">
+                      <button type="button" className="gv-pp-zoom" aria-label="Zoom out" disabled={pdfZoom <= 0.5}
+                        onClick={() => setPdfZoom(z => Math.max(0.5, Math.round((z - 0.25) * 100) / 100))}>
+                        <Minus size={15} strokeWidth={2.6} aria-hidden />
+                      </button>
+                      <span style={{ fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 800, color: NEU.ink, minWidth: 40, textAlign: 'center', fontVariantNumeric: 'tabular-nums' }} aria-live="polite">
+                        {Math.round(pdfZoom * 100)}%
+                      </span>
+                      <button type="button" className="gv-pp-zoom" aria-label="Zoom in" disabled={pdfZoom >= 2}
+                        onClick={() => setPdfZoom(z => Math.min(2, Math.round((z + 0.25) * 100) / 100))}>
+                        <Plus size={15} strokeWidth={2.6} aria-hidden />
+                      </button>
+                      <style>{`.gv-pp-zoom{width:32px;height:32px;border-radius:999px;border:none;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;color:${NEU.gold};background:linear-gradient(135deg, ${NEU_GRADIENTS.forest[0]}, ${NEU_GRADIENTS.forest[1]});box-shadow:0 3px 8px color-mix(in srgb, ${NEU_GRADIENTS.forest[0]} 30%, transparent)}.gv-pp-zoom:disabled{opacity:0.4;cursor:default}.gv-pp-zoom:focus{outline:none}.gv-pp-zoom:focus-visible{outline:2px solid ${NEU_GRADIENTS.forest[0]};outline-offset:2px}`}</style>
+                    </span>
+                  )}
                   <ActionButton
                     as="a"
                     href={paper.file_url}
@@ -665,8 +692,17 @@ export default function PositionPaperPage() {
                   >
                     Download
                   </ActionButton>
+                  </span>
                 </div>
-                <iframe src={paper.file_url} title={paper.file_name} className="flex-1 w-full" style={{ border: 'none' }} />
+                {/* Our own viewer (prompt 141): the pages on white, at 75% by
+                    default, zoomed from the header; a file it cannot draw says so. */}
+                {pdfFailed ? (
+                  <p className="flex-1" style={{ fontFamily: OUTFIT, fontSize: 14, color: NEU.inkSoft, padding: 24, margin: 0, background: '#FFFFFF' }}>
+                    This file could not be shown here. Use Download to open it
+                  </p>
+                ) : (
+                  <PlainPdfPages url={paper.file_url} zoom={pdfZoom} onFailed={() => setPdfFailed(true)} className="flex-1 w-full" style={{ minHeight: 0 }} />
+                )}
               </NeuCard>
 
               {/* PDF, phone and tablet: hand it to the native viewer. */}

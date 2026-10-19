@@ -192,7 +192,7 @@ export default function ContactSection() {
               {sending ? 'Sending' : <>Send message<ArrowRight size={17} strokeWidth={2.4} aria-hidden /></>}
             </button>
             <p style={{ margin: 0, fontSize: 14, color: INK_SOFT, lineHeight: 1.5 }}>
-              Have a general question? See the <Link className="gv-inline-link" href="/help">help desk</Link>
+              Have questions? Visit our <Link className="gv-inline-link" href="/help">Help Center</Link>
             </p>
           </div>
         </form>

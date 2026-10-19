@@ -344,7 +344,7 @@ export default function AccountLayout({ children }: { children: React.ReactNode 
               <p style={{ margin: '6px 12px 4px', fontFamily: FONT, fontSize: 13, lineHeight: 1.5, color: INK_SOFT }}>
                 Need help? Visit the{' '}
                 <Link href="/help" className={`rounded ${FOCUS}`} style={{ color: FOREST, fontWeight: 700, textDecoration: 'underline', textUnderlineOffset: 3, textDecorationThickness: 1.5 }}>
-                  help desk
+                  Help Center
                 </Link>
               </p>
 
