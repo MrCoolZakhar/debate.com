@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { DatePicker } from '@/components/DatePicker';
 import Link from 'next/link';
 import { Building2, CreditCard, Clock, Users, X, ChevronDown, ChevronUp, Briefcase, CheckCircle2, XCircle, MinusCircle } from 'lucide-react';
 import { useManage } from '@/app/manage/[slug]/layout';
@@ -636,14 +637,9 @@ function PostingModal({
           {/* Deadline */}
           <div>
             <label style={labelStyle}>APPLICATION DEADLINE (OPTIONAL)</label>
-            <input
-              type="datetime-local"
-              value={deadline}
-              onChange={e => setDeadline(e.target.value)}
-              style={inputStyle}
-              onFocus={(e) => { (e.currentTarget as HTMLElement).style.borderColor = FOREST; }}
-              onBlur={(e) => { (e.currentTarget as HTMLElement).style.borderColor = BORDER; }}
-            />
+            {/* The shared picker (prompt 135): never a native date input. Same
+                'YYYY-MM-DDTHH:mm' value the native datetime field gave. */}
+            <DatePicker withTime clearable value={deadline} onChange={setDeadline} placeholder="No deadline" />
           </div>
 
           {/* Submit */}

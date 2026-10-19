@@ -143,7 +143,10 @@ export function DatePicker({
   }, [view, minDate, maxDate]);
   const btnRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
-  const [pos, setPos] = useState<{ top: number; left: number; maxHeight: number } | null>(null);
+  const [pos, setPos] = useState<{ top: number; left: number; compact: boolean } | null>(null);
+  // The calendar's natural height in its normal layout, measured whenever it
+  // is drawn that way; it decides when the compact layout is needed.
+  const normalHeightRef = useRef<number | null>(null);
 
   // Follow a new value to its month: the "previous value in state" pattern
   // (compared during render), not an effect.
@@ -171,30 +174,46 @@ export function DatePicker({
 
   // The calendar is rendered through a Portal at fixed viewport coordinates so
   // it can never be clipped by an ancestor's overflow (e.g. a scrollable filter
-  // popover or an overflow-hidden card) or run off the viewport. Opens below the
-  // trigger, flips to whichever side has more room, and clamps horizontally so
-  // it always stays on screen. On a viewport short enough that NEITHER side has
-  // full room for it (a real case on small screens with the field low on the
-  // page), it's also height-capped and made internally scrollable instead of
-  // hanging off the edge with rows no scroll can reach.
+  // popover or an overflow-hidden card) or run off the viewport. It NEVER
+  // scrolls (prompt 135): measured at its natural height, it opens below the
+  // trigger when it fits there, else above when it fits there, else it is
+  // clamped fully on screen even if it then covers the trigger. On a viewport
+  // shorter than the whole calendar (a short phone in landscape) it switches to
+  // a compact layout (smaller day cells, a tighter time row) so it still fits.
   const place = useCallback(() => {
     const b = btnRef.current;
     if (!b) return;
     const r = b.getBoundingClientRect();
     const margin = 8;
     const width = 300;
-    const height = menuRef.current?.offsetHeight ?? 372;
+    const vh = window.innerHeight;
+    const el = menuRef.current;
+    const drawnCompact = el?.dataset.compact === 'true';
+    const measured = el ? el.scrollHeight : null;
+    if (measured && !drawnCompact) normalHeightRef.current = measured;
+    const normal = normalHeightRef.current ?? (withTime ? 440 : 372);
+    const compact = normal > vh - margin * 2;
+    // The height to place: what is drawn when it matches the layout wanted,
+    // else an estimate until the next frame measures it.
+    const height = measured && drawnCompact === compact ? measured : compact ? Math.round(normal * 0.78) : normal;
     let left = r.left;
     if (left + width > window.innerWidth - margin) left = window.innerWidth - margin - width;
     left = Math.max(margin, left);
 
-    const spaceBelow = window.innerHeight - margin - (r.bottom + 8);
-    const spaceAbove = r.top - 8 - margin;
-    const flip = height > spaceBelow && spaceAbove > spaceBelow;
-    const top = flip ? Math.max(margin, r.top - 8 - height) : r.bottom + 8;
-    const available = flip ? r.top - 8 - top : window.innerHeight - margin - top;
-    setPos({ top, left, maxHeight: Math.max(160, Math.min(height, available)) });
-  }, []);
+    let top: number;
+    if (r.bottom + 8 + height <= vh - margin) top = r.bottom + 8;
+    else if (r.top - 8 - height >= margin) top = r.top - 8 - height;
+    else top = Math.max(margin, Math.min(r.bottom + 8, vh - margin - height));
+    setPos(prev => (prev && prev.top === top && prev.left === left && prev.compact === compact ? prev : { top, left, compact }));
+  }, [withTime]);
+
+  // A change of layout changes the height: place it again once it is drawn.
+  const compactNow = pos?.compact ?? false;
+  useEffect(() => {
+    if (!open) return;
+    const raf = requestAnimationFrame(place);
+    return () => cancelAnimationFrame(raf);
+  }, [compactNow, open, place]);
 
   useEffect(() => {
     // The position is cleared where the picker opens (the trigger's onClick),
@@ -294,19 +313,22 @@ export function DatePicker({
         )}
       </button>
 
-      {open && pos && (
+      {open && (
         <Portal>
         <div
           ref={menuRef}
-          className="rounded-2xl p-3"
+          data-compact={compactNow ? 'true' : 'false'}
+          className={`rounded-2xl ${compactNow ? 'p-2' : 'p-3'}`}
           style={{
-            position: 'fixed', top: pos.top, left: pos.left, zIndex: 9999,
-            width: 300, maxHeight: pos.maxHeight, overflowY: 'auto',
+            // Drawn hidden until placed, so its natural height can be measured.
+            position: 'fixed', top: pos?.top ?? 0, left: pos?.left ?? 0, zIndex: 9999,
+            visibility: pos ? 'visible' : 'hidden',
+            width: 300,
             backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0',
             boxShadow: '0 20px 48px rgba(27,56,40,0.18), 0 2px 8px rgba(27,56,40,0.08)',
           }}
         >
-          <div className="flex items-center justify-between mb-2 px-1">
+          <div className={`flex items-center justify-between ${compactNow ? 'mb-1' : 'mb-2'} px-1`}>
             <button type="button" onClick={() => setView(new Date(view.getFullYear(), view.getMonth() - 1, 1))}
               className="rounded-lg p-1.5 focus:outline-none" style={{ color: '#1B3828' }}
               onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.06)'; }}
@@ -337,7 +359,7 @@ export function DatePicker({
               <div key={d} className="text-center" style={{ fontFamily: OUTFIT, fontSize: 10, fontWeight: 700, color: '#9A8A78', letterSpacing: '0.04em' }}>{d}</div>
             ))}
           </div>
-          <div className="grid grid-cols-7 gap-1">
+          <div className={`grid grid-cols-7 ${compactNow ? 'gap-0.5' : 'gap-1'}`}>
             {grid.map((d, i) => {
               if (!d) return <div key={i} />;
               const isSel = selected && toISO(d) === toISO(selected);
@@ -345,9 +367,10 @@ export function DatePicker({
               return (
                 <button key={i} type="button" disabled={off}
                   onClick={() => { emit(toISO(d), hour, minute); if (!withTime) setOpen(false); }}
-                  className="aspect-square rounded-lg flex items-center justify-center focus:outline-none"
+                  className={`${compactNow ? '' : 'aspect-square '}rounded-lg flex items-center justify-center focus:outline-none`}
                   style={{
-                    fontFamily: OUTFIT, fontSize: 13, fontWeight: isSel ? 800 : 500, fontVariantNumeric: 'tabular-nums',
+                    height: compactNow ? 26 : undefined,
+                    fontFamily: OUTFIT, fontSize: compactNow ? 12 : 13, fontWeight: isSel ? 800 : 500, fontVariantNumeric: 'tabular-nums',
                     backgroundColor: isSel ? '#1B3828' : 'transparent',
                     color: off ? '#CFC6B4' : isSel ? '#EED98A' : '#1C1410',
                     cursor: off ? 'default' : 'pointer', transition: 'background-color 140ms',
@@ -364,7 +387,7 @@ export function DatePicker({
               "9am or midnight?", and an application window that silently opens
               at 00:00 is the bug this replaces. */}
           {withTime && (
-            <div className="mt-3 pt-3" style={{ borderTop: '1px solid #DDD4C0' }}>
+            <div className={compactNow ? 'mt-1.5 pt-1.5' : 'mt-3 pt-3'} style={{ borderTop: '1px solid #DDD4C0' }}>
               <div className="flex items-center gap-2">
                 <Clock size={15} strokeWidth={2.2} style={{ color: '#B6871F', flexShrink: 0 }} />
                 <GSelect

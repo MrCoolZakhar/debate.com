@@ -1168,7 +1168,7 @@ export default function SettingsPage() {
       .update(updates)
       .eq('conference_id', conference.id)
       .eq('role', role)
-      .select('id, applications_open_at, applications_close_at, fee_phases');
+      .select('id, applications_open_at, applications_close_at, fee_phases, is_enabled');
 
     if (error || !data || data.length === 0) {
       // Revert the optimistic patch and surface the failure, a silent
@@ -1178,11 +1178,20 @@ export default function SettingsPage() {
       markStep(step, 'idle');
       return false;
     } else {
-      // The timeline trigger may have moved a date (enforce_role_config_timeline):
-      // show what the database stored, never our own guess.
-      const row = data[0] as Pick<RoleConfig, 'applications_open_at' | 'applications_close_at' | 'fee_phases'>;
+      // The timeline trigger may have moved a date (enforce_role_config_timeline),
+      // and a closing date already past switches the role off in the same
+      // write (trg_role_config_switch_off_when_closed, prompt 135): show what
+      // the database stored, never our own guess, so the switch on the role
+      // row and in the pop-up turns off at once.
+      const row = data[0] as Pick<RoleConfig, 'applications_open_at' | 'applications_close_at' | 'fee_phases' | 'is_enabled'>;
       setRoleConfigs(prev => prev.map(rc => (rc.role === role
-        ? { ...rc, applications_open_at: row.applications_open_at, applications_close_at: row.applications_close_at, fee_phases: row.fee_phases }
+        ? {
+            ...rc,
+            applications_open_at: row.applications_open_at,
+            applications_close_at: row.applications_close_at,
+            fee_phases: row.fee_phases,
+            ...(typeof row.is_enabled === 'boolean' ? { is_enabled: row.is_enabled } : {}),
+          }
         : rc)));
       markStep(step, 'saved');
       notifySettingsFlagsChanged();
