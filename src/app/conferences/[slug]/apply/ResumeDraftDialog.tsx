@@ -4,8 +4,8 @@
  * "Application in progress": asked once, when the apply page opens on a saved
  * draft (the account's `application_drafts` row, or a signed-out visitor's
  * browser draft) that got past step 1. Continue restores it exactly as the
- * page always did; Start again clears it (after an inline "are you sure")
- * and begins at step 1.
+ * page always did; Start again clears it and begins at step 1; Delete clears
+ * it and leaves the form. Both destructive choices ask "are you sure" in place.
  *
  * Presentational only. The page owns every write: `onStartAgain` resolves to
  * null when the draft is gone, or to a sentence to show when it is not.
@@ -15,6 +15,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Portal from '@/components/Portal';
 import { NEU, OUTFIT } from '@/components/neu';
+import { FileText, RotateCcw, Trash2 } from 'lucide-react';
 
 const DANGER = '#8B2020';
 
@@ -26,6 +27,8 @@ export interface ResumeDraftDialogProps {
   savedAt: Date | null;
   onContinue: () => void;
   onStartAgain: () => Promise<string | null>;
+  /** Clears the draft and leaves the apply page. */
+  onDelete: () => Promise<string | null>;
 }
 
 function formatSavedDay(d: Date): string {
@@ -40,9 +43,9 @@ function formatSavedDay(d: Date): string {
 }
 
 export default function ResumeDraftDialog({
-  step, totalSteps, stepLabel, savedAt, onContinue, onStartAgain,
+  step, totalSteps, stepLabel, savedAt, onContinue, onStartAgain, onDelete,
 }: ResumeDraftDialogProps) {
-  const [confirming, setConfirming] = useState(false);
+  const [confirming, setConfirming] = useState<null | 'restart' | 'delete'>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const panelRef = useRef<HTMLDivElement | null>(null);
@@ -90,23 +93,47 @@ export default function ResumeDraftDialog({
     return () => { document.body.style.overflow = prev; };
   }, []);
 
-  async function handleStartAgain() {
-    if (!confirming) { setConfirming(true); setError(''); return; }
+  async function runConfirmed(kind: 'restart' | 'delete') {
+    if (confirming !== kind) { setConfirming(kind); setError(''); return; }
     if (busy) return;
     setBusy(true);
     setError('');
-    const failure = await onStartAgain();
+    const failure = await (kind === 'restart' ? onStartAgain() : onDelete());
     if (failure) {
       setBusy(false);
       setError(failure);
     }
-    // On success the page closes the dialog.
+    // On success the page closes the dialog (or leaves).
   }
 
-  const where = stepLabel ? `step ${step} of ${totalSteps} (${stepLabel})` : `step ${step} of ${totalSteps}`;
+  const where = stepLabel ? `Step ${step} of ${totalSteps}: ${stepLabel}` : `Step ${step} of ${totalSteps}`;
   const day = savedAt ? formatSavedDay(savedAt) : null;
-  const when = !day ? '' : day === 'today' || day === 'yesterday' ? ` ${day}` : ` on ${day}`;
-  const line = `You got to ${where}${when}.`;
+  const when = !day ? null : day === 'today' || day === 'yesterday' ? `Saved ${day}` : `Saved on ${day}`;
+  const pct = Math.round((Math.min(step, totalSteps) / Math.max(1, totalSteps)) * 100);
+
+  const secondary = (kind: 'restart' | 'delete', Icon: typeof RotateCcw, label: string, armedLabel: string) => {
+    const armed = confirming === kind;
+    return (
+      <button
+        type="button"
+        onClick={() => runConfirmed(kind)}
+        disabled={busy}
+        className="flex items-center justify-center gap-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 active:scale-[0.97] transition-[transform,background-color,color] duration-150"
+        style={{
+          flex: 1, height: 44, borderRadius: 12,
+          background: armed ? DANGER : '#FFFFFF',
+          border: armed ? '1px solid transparent' : '1px solid color-mix(in srgb, var(--gv-main) 16%, transparent)',
+          boxShadow: armed ? 'none' : '0 1px 2px rgba(27,56,40,0.06)',
+          color: armed ? '#FFFFFF' : kind === 'delete' ? DANGER : NEU.ink,
+          fontFamily: OUTFIT, fontSize: 13.5, fontWeight: 600,
+          cursor: busy ? 'default' : 'pointer', opacity: busy && !armed ? 0.6 : 1,
+        }}
+      >
+        <Icon size={15} strokeWidth={2.2} aria-hidden />
+        {busy && armed ? (kind === 'delete' ? 'Deleting' : 'Clearing') : armed ? armedLabel : label}
+      </button>
+    );
+  };
 
   return (
     <Portal>
@@ -120,24 +147,45 @@ export default function ResumeDraftDialog({
           aria-modal="true"
           aria-labelledby="resume-draft-title"
           aria-describedby="resume-draft-line"
+          className="conf-rise"
           style={{
-            width: 360, maxWidth: '100%',
-            background: '#FAF8F3', borderRadius: 20,
-            boxShadow: '0 1px 0 rgba(255,255,255,0.7) inset, 0 18px 48px -12px rgba(27,56,40,0.35), 0 4px 12px -4px rgba(27,56,40,0.18)',
-            padding: '22px 22px 18px',
+            width: 400, maxWidth: '100%',
+            background: '#FFFFFF', borderRadius: 24,
+            boxShadow: '0 24px 60px -16px rgba(27,56,40,0.40), 0 4px 14px -4px rgba(27,56,40,0.16)',
+            padding: 24,
             fontFamily: OUTFIT,
           }}
         >
-          <p id="resume-draft-title" style={{ margin: 0, fontSize: 18, fontWeight: 700, color: NEU.ink, lineHeight: 1.3, textWrap: 'balance' }}>
-            Application in Progress
-          </p>
-          <p id="resume-draft-line" style={{ margin: '6px 0 0', fontSize: 13.5, fontWeight: 500, color: NEU.inkSoft, lineHeight: 1.5 }}>
-            {line} Would you like to continue or start again?
-          </p>
+          <div className="flex items-center gap-3.5">
+            <span
+              aria-hidden
+              className="flex items-center justify-center flex-shrink-0"
+              style={{ width: 48, height: 48, borderRadius: 14, background: 'color-mix(in srgb, var(--gv-main) 9%, #FFFFFF)', color: NEU.forest }}
+            >
+              <FileText size={22} strokeWidth={2} />
+            </span>
+            <div className="min-w-0">
+              <p id="resume-draft-title" style={{ margin: 0, fontSize: 19, fontWeight: 700, color: NEU.ink, lineHeight: 1.25, textWrap: 'balance' }}>
+                Application in Progress
+              </p>
+              {when && (
+                <p style={{ margin: '2px 0 0', fontSize: 12.5, fontWeight: 500, color: NEU.inkSoft }}>{when}</p>
+              )}
+            </div>
+          </div>
+
+          <div style={{ marginTop: 18, padding: '14px 16px', borderRadius: 16, background: '#F6F2E8' }}>
+            <p id="resume-draft-line" style={{ margin: 0, fontSize: 13.5, fontWeight: 600, color: NEU.ink, lineHeight: 1.4 }}>
+              {where}
+            </p>
+            <div aria-hidden style={{ marginTop: 10, height: 6, borderRadius: 6, background: 'color-mix(in srgb, var(--gv-main) 12%, transparent)', overflow: 'hidden' }}>
+              <div style={{ width: `${pct}%`, height: '100%', borderRadius: 6, background: `linear-gradient(90deg, ${NEU.forest}, color-mix(in srgb, ${NEU.forest} 70%, #3E7A57))` }} />
+            </div>
+          </div>
 
           {confirming && (
-            <p role="status" style={{ margin: '12px 0 0', fontSize: 12.5, fontWeight: 600, color: DANGER, lineHeight: 1.45 }}>
-              This clears your saved answers.
+            <p role="status" style={{ margin: '14px 0 0', fontSize: 12.5, fontWeight: 600, color: DANGER, lineHeight: 1.45 }}>
+              {confirming === 'delete' ? 'This deletes your saved answers. Press again to delete.' : 'This clears your saved answers. Press again to start over.'}
             </p>
           )}
           {error && (
@@ -146,38 +194,26 @@ export default function ResumeDraftDialog({
             </p>
           )}
 
-          <div className="flex items-center gap-2.5" style={{ marginTop: 18 }}>
-            <button
-              ref={continueRef}
-              type="button"
-              onClick={handleContinue}
-              disabled={busy}
-              className="focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 active:scale-[0.97] transition-transform"
-              style={{
-                flex: 1, height: 42, borderRadius: 999, border: 'none',
-                background: NEU.forest, color: NEU.gold,
-                fontFamily: OUTFIT, fontSize: 14, fontWeight: 700,
-                cursor: busy ? 'default' : 'pointer', opacity: busy ? 0.6 : 1,
-              }}
-            >
-              Continue
-            </button>
-            <button
-              type="button"
-              onClick={handleStartAgain}
-              disabled={busy}
-              className="focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 active:scale-[0.97] transition-transform"
-              style={{
-                flex: 1, height: 42, borderRadius: 999,
-                background: confirming ? DANGER : 'transparent',
-                border: confirming ? 'none' : '1.5px solid color-mix(in srgb, var(--gv-main) 28%, transparent)',
-                color: confirming ? '#FFFFFF' : NEU.ink,
-                fontFamily: OUTFIT, fontSize: 14, fontWeight: 600,
-                cursor: busy ? 'default' : 'pointer', opacity: busy ? 0.7 : 1,
-              }}
-            >
-              {busy ? 'Clearing...' : confirming ? 'Clear and start' : 'Start again'}
-            </button>
+          <button
+            ref={continueRef}
+            type="button"
+            onClick={handleContinue}
+            disabled={busy}
+            className="w-full focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 active:scale-[0.98] transition-transform"
+            style={{
+              marginTop: 18, height: 48, borderRadius: 12, border: 'none',
+              background: `linear-gradient(180deg, color-mix(in srgb, ${NEU.forest} 82%, #3E7A57), ${NEU.forest})`,
+              boxShadow: '0 6px 16px -6px rgba(27,56,40,0.55)',
+              color: '#FFFFFF',
+              fontFamily: OUTFIT, fontSize: 15, fontWeight: 700,
+              cursor: busy ? 'default' : 'pointer', opacity: busy ? 0.6 : 1,
+            }}
+          >
+            Continue where you left off
+          </button>
+          <div className="flex items-center gap-2.5" style={{ marginTop: 10 }}>
+            {secondary('restart', RotateCcw, 'Start again', 'Clear and restart')}
+            {secondary('delete', Trash2, 'Delete', 'Yes, delete')}
           </div>
         </div>
       </div>

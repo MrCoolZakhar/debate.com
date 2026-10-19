@@ -2102,7 +2102,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                   stacked cards; on ≥sm they open into the full label/value row. */}
               {[
                 { icon: Monitor, gradient: NEU_GRADIENTS.forest, label: 'Format', value: capitalize(conference.format.replace('-', ' ')) },
-                { icon: GraduationCap, gradient: NEU_GRADIENTS.amber, label: 'Level', value: conference.student_level === 'school' ? 'High School' : capitalize(conference.student_level) },
+                { icon: GraduationCap, gradient: NEU_GRADIENTS.amber, label: 'Level', value: conference.student_level === 'school' ? 'High School' : conference.student_level === 'both' ? 'University and High School' : capitalize(conference.student_level) },
                 ...(conference.expected_delegates > 0 && (!isListing || listingInfo?.delegates_known)
                   ? [{ icon: Users, gradient: NEU_GRADIENTS.green, label: 'Delegates', value: conference.expected_delegates.toLocaleString() }]
                   : []),

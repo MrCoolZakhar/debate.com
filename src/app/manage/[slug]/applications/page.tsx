@@ -2253,7 +2253,15 @@ export default function ApplicationsPage() {
       .eq('conference_id', conference.id)
       .order('updated_at', { ascending: false });
 
-    setDrafts((data ?? []) as unknown as DraftRow[]);
+    // One draft per person (owner, 19 Oct 2026): someone who started more
+    // than one role shows once, with their newest draft (the list is newest first).
+    const seen = new Set<string>();
+    const rows = ((data ?? []) as unknown as DraftRow[]).filter((d) => {
+      if (seen.has(d.user_id)) return false;
+      seen.add(d.user_id);
+      return true;
+    });
+    setDrafts(rows);
   }, [conference, accessToken]);
 
   useEffect(() => { loadDrafts(); }, [loadDrafts]);

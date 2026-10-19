@@ -407,6 +407,30 @@ export async function discardApplyDraft(
 }
 
 /**
+ * ONE DRAFT PER PERSON (owner, 19 Oct 2026). A person applies for one role, so
+ * once a draft for `keepRole` exists, the caller's drafts for every other role
+ * of this conference are discarded through the same RPC as any discard.
+ * Best effort: a failure leaves them for the next visit.
+ */
+export async function discardOtherRoleDrafts(
+  client: SupabaseClient,
+  args: { conferenceId: string; userId: string; keepRole: string },
+): Promise<number> {
+  const { data, error } = await client
+    .from('application_drafts')
+    .select('role, discard_token')
+    .eq('conference_id', args.conferenceId)
+    .eq('user_id', args.userId)
+    .neq('role', args.keepRole);
+  if (error || !data) return 0;
+  let removed = 0;
+  for (const row of data as { role: string; discard_token: string | null }[]) {
+    if (await discardApplyDraft(client, { conferenceId: args.conferenceId, userId: args.userId, role: row.role, token: row.discard_token })) removed++;
+  }
+  return removed;
+}
+
+/**
  * THE RESUME PROMPT. Opening the apply page on a saved draft that got past
  * step 1 asks "Application in progress: continue or start again?" instead of
  * dropping the applicant on a later step unannounced. A draft still on step 1

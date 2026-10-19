@@ -32,6 +32,7 @@ import {
   saveApplyDraftOnTeardown, resyncDraftRevision,
   draftHasContent, newDraftClientId, fingerprintDraft,
   draftWorthResumePrompt, consumeApplyCheckoutRoundTrip,
+  discardOtherRoleDrafts,
 } from '@/lib/applyDraft';
 import ResumeDraftDialog from './ResumeDraftDialog';
 import {
@@ -1749,6 +1750,29 @@ function ConferenceApplyInner() {
     notifyDraftsChanged();
     setResumePrompt(null);
     setDraftReady(true);
+    return null;
+  }
+
+  // One draft per person: once this role's draft exists, the applicant's
+  // drafts for the conference's other roles go (once per visit).
+  const otherDraftsClearedRef = useRef(false);
+  useEffect(() => {
+    if (!hasDraft || otherDraftsClearedRef.current || !conference || !user) return;
+    otherDraftsClearedRef.current = true;
+    void (async () => {
+      const supabase = await getFreshAuthedClient();
+      if (!supabase) return;
+      const removed = await discardOtherRoleDrafts(supabase, { conferenceId: conference.id, userId: user.id, keepRole: role });
+      if (removed > 0) notifyDraftsChanged();
+    })();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasDraft, conference?.id, user?.id, role]);
+
+  /** Delete in the prompt: clear the saved draft and leave the form. */
+  async function handleResumeDelete(): Promise<string | null> {
+    const failure = await handleResumeStartAgain();
+    if (failure) return failure;
+    router.push(`/conferences/${slug}`);
     return null;
   }
 
@@ -6239,6 +6263,7 @@ function ConferenceApplyInner() {
               savedAt={savedAt && !Number.isNaN(savedAt.getTime()) ? savedAt : null}
               onContinue={handleResumeContinue}
               onStartAgain={handleResumeStartAgain}
+              onDelete={handleResumeDelete}
             />
           );
         })()}
