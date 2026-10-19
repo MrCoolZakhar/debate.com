@@ -34,7 +34,7 @@ import { fetchDelegatePrices, displayDelegatePrice, displayRolePrice, delegatePr
 import { hasNothingToPay } from '@/lib/freeRegistration';
 import { normalizeSocialUrl } from '@/lib/socialLinks';
 import { normalizeBlocks } from '@/lib/customQuestions';
-import { appendEditionYear } from '@/lib/presetNames';
+import { appendEditionYear, matchPresetEmblem } from '@/lib/presetNames';
 import { conferenceAcronymLabel, conferenceFullNameLabel, conferenceLabels } from '@/lib/conferenceLabels';
 import ConferencePartners, { type PartnerEntry } from '@/components/ConferencePartners';
 import { formatConferenceDates } from '@/lib/conferenceDates';
@@ -2314,6 +2314,12 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                       style={{ position: 'absolute', top: 12, right: 12 }}
                     />
                   )}
+                  <h2
+                    className="text-[19px] sm:text-[21px] font-bold"
+                    style={{ color: 'var(--gv-on-surface)', fontFamily: "var(--font-brand), sans-serif", margin: '0 0 12px 0', letterSpacing: '-0.01em' }}
+                  >
+                    About the Conference
+                  </h2>
                   {conference.description ? (
                     <ConferenceDescription text={conference.description} />
                   ) : (
@@ -3376,6 +3382,9 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                             // carries the identity.
                             const abbrClean = (c.abbreviation ?? '').replace(/[^A-Za-z0-9]/g, '').toUpperCase();
                             const nameClean = c.name.trim();
+                            // Every committee shows an emblem (owner, 19 Oct 2026): its own logo,
+                            // else the preset that matches its name, else the UN emblem.
+                            const emblemSrc = c.logo_url || matchPresetEmblem(c.name, c.abbreviation) || '/logos/un.svg';
                             const monogram = abbrClean && abbrClean.length <= 7
                               ? abbrClean
                               : /^[A-Za-z0-9]{2,6}$/.test(nameClean) ? nameClean.toUpperCase() : '';
@@ -3443,9 +3452,9 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                                 )}
                                 <div className="flex flex-col items-center px-5 pt-7 flex-1">
                                   {/* Emblem, free-floating */}
-                                  {c.logo_url ? (
+                                  {emblemSrc ? (
                                     <img
-                                      src={c.logo_url}
+                                      src={emblemSrc}
                                       alt={c.abbreviation ?? c.name}
                                       style={{
                                         width: '104px', height: '104px', objectFit: 'contain', flexShrink: 0,
@@ -3484,7 +3493,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                                     // row read as "FAO / FAO".
                                     const showAcr = !!acr
                                       && acr.toUpperCase() !== c.name.trim().toUpperCase()
-                                      && (!!c.logo_url || acr.replace(/[^A-Za-z0-9]/g, '').toUpperCase() !== monogram);
+                                      && (!!emblemSrc || acr.replace(/[^A-Za-z0-9]/g, '').toUpperCase() !== monogram);
                                     return (
                                       <>
                                         {showAcr && (

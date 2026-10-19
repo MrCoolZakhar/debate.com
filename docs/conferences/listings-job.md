@@ -39,7 +39,7 @@ select public.upsert_gavelling_listing('{ ... }'::jsonb);
 - `format`: `in-person`, `online` or `hybrid`
 - `city`, `country` (country in plain English, e.g. "Pakistan", "United Arab Emirates", "Egypt", "India")
 - `student_level`: `school`, `university` or `both` (from the site; `both` if unclear)
-- `expected_delegates` only when the site states a number
+- `expected_delegates`: always send one (owner, 19 Oct 2026). In order: the number the conference's own site or Instagram states; else the number on its MyMUN page (mymun.com) or another public listing; else an estimate, about 25 delegates per committee you found (a conference with no committee list: 150), rounded to the nearest 50. Add the page the number came from to `sources`. When re-checking a listing that has no delegates number yet, send one too.
 - `summary`: **our own words**, 50 to 110 words, factual, no hype, no em or en dashes, never copied from their site. What it is, who runs it (the school or university), where and when, who it is for, what is notable (committees, size, edition number). Mention that it is listed from the conference's website and can be claimed is NOT needed; the page says that.
 - `website_url` (https) and/or `instagram_url` (https://instagram.com/<profile>)
 - `logo_url`: the conference's own logo image URL from its site (https), if clearly theirs
