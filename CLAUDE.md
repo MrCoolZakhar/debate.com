@@ -37,7 +37,7 @@ The owners are Peter and Christian; a decision by either stands. If a request wo
 - /about and /contact are two separate pages; /about carries the ambassador world map; no footer on /contact.
 - /account/manage is three pages: Credits, Subscription, Promo code. Credits and Unlimited stay apart.
 - No site footer on /account.
-- Delegation leaders import from "Import delegates" on the delegation card (two-tab pop-up) and share the invite link from "Copy invite link" on the same card (`create_delegation_invite`, `/invites/delegation/[token]`). There is no /delegation portal. Leaders can make a delegate a head delegate and back (`delegation_set_head`); delegate and faculty advisor never swap.
+- Delegation leaders import from "Import delegates" on the delegation card (two-tab pop-up) and share the invite link from "Copy invite link" on the same card (`create_delegation_invite`, `/invites/delegation/[token]`). There is no /delegation portal. All leaders (head delegates and faculty advisors, several of each) have the same powers and move anyone between delegate, head delegate and faculty advisor freely (Peter, 19 Oct 2026; `delegation_set_head` today, `delegation_set_role` once the v2 SQL is live); a delegate moved to advisor leaves their paid delegate spot with the delegation and owes the advisor fee. Only a head delegate or an advisor creates a delegation, never the organiser. The leader card lives in the conference page's You view (Delegation section). "Pledge" is called Expected size everywhere users read it. Rules and votes: `docs/conferences/delegations.md`.
 - My conferences opens each conference's role dashboard.
 - Explore: the title left, the search pill left with "Organise your conference" on the same line, the place pills under Where (max 5), no place rail, filters with sort and view on one line, grid first, at most 4 columns, spotlights as the first grid cards (no "In the Spotlight" row), the list view in plain date order with spotlights tagged in place, Near you is the IP country. Spotlights obey every filter.
 - Free (house) spotlights exist only for flagship pairs in `spotlight_flagships`; the database refuses any other. Never add free spotlights as test data.
@@ -248,6 +248,7 @@ Client constants:
 | `COMMS_TOUR_LIVE` | `manage/[slug]/communications/page.tsx` | false |
 | `GENERATE_INVOICES_READY` | `manage/[slug]/financials/dashboardKit.tsx` | true |
 | `OFFLINE_RESILIENCE` | `src/lib/offlineResilience.ts` | true (the kill switch) |
+| `DELEGATIONS_V2_DB` | `conferences/[slug]/participant/delegation/v2.ts` and `manage/[slug]/applications/delegations/v2.ts` | false (flip both together once `scratch-delegations-rebuild.sql` is applied) |
 | `REFUND_WORDS_EDITABLE` | `financials/documents/DocumentEditor.tsx` | true |
 
 ---
@@ -256,13 +257,14 @@ Client constants:
 
 - `scratch-awards-setup.sql`: an unapplied draft enforcing the awards gate in the chair INSERT policy and `submit_committee_awards`. Owners decide.
 - `scratch-tbd-public.sql`: the commented UPDATE publishing existing never-published TBD conferences. Owners' call, not run.
+- `scratch-delegations-rebuild.sql`: the delegations rebuild's database side (role moves, remove, open seats, placing, organiser seat grants with the seat limit, committee roster, member seats, leader papers, delegation money, chair names). Not applied; its `DECISION NEEDED (Christian)` blocks need answers first. Then flip both `DELEGATIONS_V2_DB`.
 - Cron `paid-announcements`: not scheduled; nothing reaches recipients until it is. Schedule after the first approval in /admin (commented in `scratch-paid-announcements.sql`). Owners.
 - Cron `conference-draft-reminders` (`queue_conference_draft_reminders(false)`): not scheduled; needs Peter's go.
 - The email burst alarm goes to petizakhar@gmail.com; moving it to the team inbox needs SQL (the chat's Supabase work).
 - Referral codes: the database objects remain unshown; removing them is the chat's Supabase work. The old "step 6" ownership check is moot.
 - `www.gavelling.com` must 308 to `https://gavelling.com` at the Vercel domain level with a valid certificate (Peter or Christian).
 
-**Dead code to delete:** `account/manage/{ManageAccount,CreditsSection,SubscriptionSection,PromoSection}.tsx`, `SpotlightRow` in `ExploreFeed.tsx`, `awards/AwardsConsole.tsx`, `src/lib/store.ts` with `SpeakersListPanel`, `CaucusPanel`, `ResolutionsPanel`, the `BrandLogo` fallback, `src/app/_archive/*`.
+**Dead code to delete:** `account/manage/{ManageAccount,CreditsSection,SubscriptionSection,PromoSection}.tsx`, `SpotlightRow` in `ExploreFeed.tsx`, `awards/AwardsConsole.tsx`, `src/lib/store.ts` with `SpeakersListPanel`, `CaucusPanel`, `ResolutionsPanel`, the `BrandLogo` fallback, `src/app/_archive/*`, the old board component in `applications/DelegationsBoard.tsx` (only `PeopleDelegationsSwitch` is used), `CoDelegateCard`'s default export and `RosterGroup` / `RosterRow` in `participant/`.
 
 ---
 

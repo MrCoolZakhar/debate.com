@@ -4133,7 +4133,7 @@ function ConferenceApplyInner() {
         {showSpots && (
           <div className="mb-6">
             <label className="block font-semibold text-sm mb-1.5" style={{ color: 'var(--gv-on-surface)', fontFamily: "var(--font-brand), sans-serif" }}>
-              How many delegates will your delegation have?
+              What is your delegation&apos;s expected size?
             </label>
             <input
               type="number"
@@ -4151,7 +4151,7 @@ function ConferenceApplyInner() {
               onBlur={(e) => { (e.currentTarget as HTMLElement).style.borderColor = 'var(--gv-border)'; }}
             />
             <p className="mt-1.5 text-xs leading-relaxed" style={{ color: 'var(--gv-muted)', fontFamily: "var(--font-brand), sans-serif" }}>
-              We will generate an invoice for each delegate in your delegation. You can add or remove delegates at any time. Delegates can also pay for themselves at any point.
+              This is how many people you expect to bring. We will make an invoice for each spot. You can raise or lower it at any time. Delegates can also pay for themselves at any point.
             </p>
           </div>
         )}

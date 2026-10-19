@@ -105,7 +105,7 @@ export default function ApplicantsDial({
     if (acc > 0) bands.push({ key: `${s.key}-acc`, label: s.label, value: acc, color, title: `${s.label}: ${acc.toLocaleString()} accepted` });
     if (pending > 0) bands.push({ key: `${s.key}-pend`, label: s.label, value: pending, color: tint(color, 0.58), title: `${s.label}: ${pending.toLocaleString()} still pending` });
   });
-  if (pledgedHeads > 0) bands.push({ key: 'pledged', label: 'Pledged spots', value: pledgedHeads, color: PLEDGED, title: `Pledged spots: ${pledgedHeads.toLocaleString()} not registered yet` });
+  if (pledgedHeads > 0) bands.push({ key: 'pledged', label: 'Expected size', value: pledgedHeads, color: PLEDGED, title: `Expected size: ${pledgedHeads.toLocaleString()} not registered yet` });
   let cursor = 0;
   const arcs = bands.map((b) => {
     const from = cursor;
@@ -122,7 +122,7 @@ export default function ApplicantsDial({
           width={size}
           height={size}
           role="img"
-          aria-label={`${applied} applicants${target > 0 ? ` of ${target} expected` : ''}${pledgedHeads > 0 ? `, ${registered} registered and ${pledgedHeads} pledged delegation spots` : ''}, ${accepted} accepted. ${stages
+          aria-label={`${applied} applicants${target > 0 ? ` of ${target} expected` : ''}${pledgedHeads > 0 ? `, ${registered} registered and ${pledgedHeads} more expected from delegations` : ''}, ${accepted} accepted. ${stages
             .map((s) => `${s.label} ${s.applied} applied, ${s.accepted} accepted`)
             .join('. ')}.`}
         >
@@ -180,7 +180,7 @@ export default function ApplicantsDial({
             }}
           >
             {pledgedHeads > 0
-              ? `${registered.toLocaleString()} registered · ${pledgedHeads.toLocaleString()} pledged`
+              ? `${registered.toLocaleString()} registered · ${pledgedHeads.toLocaleString()} expected`
               : `${accepted.toLocaleString()} accepted`}
           </span>
         </div>
@@ -240,11 +240,11 @@ export default function ApplicantsDial({
           );
         })}
         {pledgedHeads > 0 && (
-          <li title="Delegation spots pledged that nobody has registered against yet">
+          <li title="Spots in a delegation's expected size that nobody has registered against yet">
             <span style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '3px 4px', minHeight: 26 }}>
               <span aria-hidden style={{ width: 9, height: 9, borderRadius: 3, flexShrink: 0, background: PLEDGED }} />
               <span className="truncate" style={{ fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 700, color: INK_70, minWidth: 0 }}>
-                Pledged spots
+                Expected size
               </span>
               <span style={{ marginInlineStart: 'auto', fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 900, color: INK, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap', flexShrink: 0 }}>
                 {pledgedHeads.toLocaleString()}

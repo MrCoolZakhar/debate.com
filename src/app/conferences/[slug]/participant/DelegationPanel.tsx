@@ -23,12 +23,15 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowLeftRight, CheckCircle2, ChevronLeft, ChevronRight, Compass, Hourglass, Mail, UserPlus, UserX, X } from 'lucide-react';
+import { ArrowLeftRight, ChevronLeft, ChevronRight, Compass, Mail, UserPlus, UserX, X } from 'lucide-react';
 import { getFreshAuthedClient } from '@/lib/supabase-auth';
-import { useDelegationImport, LEAD_SWITCH_NOTE } from './DelegationImportCard';
+import { useDelegationImport } from './DelegationImportCard';
 import DelegationImportPopup from './DelegationImportPopup';
 import DelegationInviteLink from './DelegationInviteLink';
-import MemberLeadMenu from './MemberLeadMenu';
+import LeaderCard from './delegation/LeaderCard';
+import MemberDelegationCard from './delegation/member/MemberDelegationCard';
+import type { ParticipantAllocation, ParticipantCommittee } from './types';
+import { BTN_CLASS, cardStyle, primaryBtn, secondaryBtn, STROKE } from './delegation/leaderKit';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { loadSlotArtIndex, artFromIndex, slotArtKey, type SlotArtIndex } from '@/lib/slotGroups';
@@ -41,7 +44,7 @@ import Loader from '@/components/Loader';
 import { queueParticipantEventEmail } from '@/lib/emailEvents';
 import { friendlyError, plainOrFallback } from '@/lib/friendlyError';
 import {
-  POOL_MEMBER_SELECT, pledgeSatisfied, pledgeText, MemberAvatar,
+  POOL_MEMBER_SELECT, MemberAvatar,
   type PoolMember,
 } from '@/app/manage/[slug]/assignment/delegationShared';
 import { SectionCard, OUTFIT, PaymentChipMark, derivePaymentChip, formatReleaseDate } from './shared';
@@ -127,10 +130,8 @@ const GOLD_EDGE = '#B6871F';
 
 const ROW_GRID = '@[520px]:grid @[520px]:grid-cols-[minmax(0,1.35fr)_minmax(0,1.2fr)_minmax(0,0.85fr)] @[520px]:items-center';
 
-export function RosterRow({ member, pool, swapMode, swapSelectable, swapSelected, onToggleSwap, covered, seatLogo, canSeeAllocation, leadMenu }: {
+export function RosterRow({ member, pool, swapMode, swapSelectable, swapSelected, onToggleSwap, covered, seatLogo, canSeeAllocation }: {
   member: RosterMember;
-  /** The head delegate's "…" menu for this row (MemberLeadMenu), else nothing. */
-  leadMenu?: React.ReactNode;
   /** The leader's own read of this application (swap, CV link, attending). */
   pool?: PoolMember;
   swapMode: boolean;
@@ -242,7 +243,6 @@ export function RosterRow({ member, pool, swapMode, swapSelectable, swapSelected
         </div>
       </div>
 
-      {!swapMode && leadMenu && <div className="flex-shrink-0 mt-1">{leadMenu}</div>}
       {swapMode && (
         <div
           className="flex items-center justify-center flex-shrink-0 mt-2.5"
@@ -378,9 +378,12 @@ export interface DelegationPanelProps {
   section?: string;
   /** Overview's "See all members": the parent switches to Delegation. */
   onOpenMembers?: () => void;
+  /** A delegate's own context for the member card (5B): the conference's
+   *  committees (logos), their seat and who paid their fee. */
+  member?: { committees: ParticipantCommittee[]; myAllocation: ParticipantAllocation | null; selfPaid: boolean };
 }
 
-export default function DelegationPanel({ conferenceId, conferenceSlug, societyId, allocationSwapMode, section = 'delegation', onOpenMembers }: DelegationPanelProps) {
+export default function DelegationPanel({ conferenceId, conferenceSlug, societyId, allocationSwapMode, section = 'delegation', onOpenMembers, member }: DelegationPanelProps) {
   const { user, session } = useAuth();
   const router = useRouter();
   const { confirm, modal: confirmModal } = useConfirmModal();
@@ -393,7 +396,6 @@ export default function DelegationPanel({ conferenceId, conferenceSlug, societyI
   // Every hook in this component sits ABOVE the early returns further down.
   const [roster, setRoster] = useState<Roster | null>(null);
   const [rosterError, setRosterError] = useState<string | null>(null);
-  const [pages, setPages] = useState<Record<string, number>>({});
   const [importOpen, setImportOpen] = useState(false);
   const [conferenceAcronym, setConferenceAcronym] = useState('');
 
@@ -438,7 +440,7 @@ export default function DelegationPanel({ conferenceId, conferenceSlug, societyI
 
   const [society, setSociety] = useState<Society | null>(null);
   const [members, setMembers] = useState<PoolMember[]>([]);
-  const [coveredIds, setCoveredIds] = useState<Set<string>>(new Set());
+  const [, setCoveredIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [swapMode, setSwapMode] = useState(false);
   const [swapSelection, setSwapSelection] = useState<string[]>([]);
@@ -522,10 +524,8 @@ export default function DelegationPanel({ conferenceId, conferenceSlug, societyI
   const advisors = useMemo(() => rosterMembers.filter(m => m.role === 'faculty-advisor'), [rosterMembers]);
   const headDelegates = useMemo(() => rosterMembers.filter(m => m.role === 'head-delegate'), [rosterMembers]);
   const delegates = useMemo(() => rosterMembers.filter(m => m.role === 'delegate'), [rosterMembers]);
-  const poolById = useMemo(() => new Map(members.map(m => [m.id, m] as const)), [members]);
   const delegatePool = useMemo(() => members.filter(m => m.role === 'delegate' || m.role === 'head-delegate'), [members]);
   const paidCount = delegatePool.filter(m => m.payment_status === 'paid').length;
-  const pledgingMembers = useMemo(() => members.filter(m => !!m.pledge_type), [members]);
 
   function toggleSwapSelect(memberId: string) {
     setSwapError('');
@@ -672,38 +672,6 @@ export default function DelegationPanel({ conferenceId, conferenceSlug, societyI
     );
   }
 
-  const rowFor = (m: RosterMember, swappable: boolean) => {
-    const pool = poolById.get(m.application_id);
-    return (
-      <RosterRow
-        member={m}
-        pool={pool}
-        swapMode={swappable && swapMode}
-        swapSelectable={!!pool?.assigned_committee_id}
-        swapSelected={swapSelection.includes(m.application_id)}
-        onToggleSwap={() => toggleSwapSelect(m.application_id)}
-        covered={coveredIds.has(m.application_id)}
-        seatLogo={pool ? seatLogoFor(pool) : null}
-        canSeeAllocation={isLeader || m.is_me}
-        // Every leader (faculty advisor or head delegate) gets the menu (27 Sep 2026).
-        leadMenu={isLeader && societyId ? (
-          <MemberLeadMenu
-            member={{
-              application_id: m.application_id, name: m.name, role: m.role, claimed: m.claimed,
-              status: m.status, is_me: m.is_me, seat: m.allocation?.country_name ?? null,
-            }}
-            societyId={societyId}
-            societyName={roster.society_name ?? society?.name ?? 'your delegation'}
-            confirm={confirm}
-            onDone={loadRoster}
-          />
-        ) : undefined}
-      />
-    );
-  };
-  const pageOf = (k: string) => pages[k] ?? 0;
-  const setPageOf = (k: string) => (n: number) => setPages(prev => ({ ...prev, [k]: n }));
-
   const societyName = roster.society_name ?? society?.name ?? 'Delegation';
   const studentCount = headDelegates.length + delegates.length;
   const allocatedCount = [...headDelegates, ...delegates].filter(m => !!m.allocation?.country_code).length;
@@ -778,149 +746,119 @@ export default function DelegationPanel({ conferenceId, conferenceSlug, societyI
   if (section !== 'delegation') return phoneOnly(renderFull(false));
   return renderFull(true);
 
-  // The full card (members, pledges, swaps), drawn once per render. Overlays
-  // ride inside it only when it is the panel's whole output.
+  // The full card, drawn once per render. A leader gets the roster card
+  // (delegation/LeaderCard.tsx, taste board 1A) with the swap tools under its
+  // table; every other member gets the 5B card (delegation/member). Overlays ride
+  // inside it only when it is the panel's whole output.
   function renderFull(withOverlays: boolean) {
-  return (
-    <DashCard className="@container">
-      <CardHeading label="Delegation" title={societyName} aside={leaderActions} stackedHide="label" />
-      <div className="mb-6">{counts}</div>
-
-      {pendingSwapRequest && (
-        <div className="flex items-start gap-2.5 rounded-xl px-3.5 py-2.5 mb-4" style={{ backgroundColor: 'rgba(238,217,138,0.16)' }}>
-          <ArrowLeftRight size={15} style={{ color: '#8A6614', flexShrink: 0, marginTop: 1 }} />
-          <div>
-            {/* Deliberately NOT CV-linked. The two swapped names come from the
-                request's metadata as bare strings with no user id, so only the
-                requester below could ever link — one linked name among three in
-                the same banner reads as an inconsistency, not an affordance. */}
-            <p className="text-[13px]" style={{ color: '#1C1410', fontFamily: OUTFIT, margin: 0 }}>
-              A swap of {pendingSwapRequest.metadata.member_a ?? 'a delegate'} and {pendingSwapRequest.metadata.member_b ?? 'a delegate'} is awaiting the organizing team.
-            </p>
-            <p className="text-[12px] mt-0.5" style={{ color: '#6B5F52', fontFamily: OUTFIT, margin: '2px 0 0 0' }}>
-              Requested by {pendingRequesterName} on {formatReleaseDate(new Date(pendingSwapRequest.created_at).getTime())}.
-            </p>
-          </div>
-        </div>
-      )}
-
-      {recentSwapNotice && (
-        <p className="text-[13px] mb-4" style={{ color: '#6B5F52', fontFamily: OUTFIT }}>
-          {recentSwapNotice.metadata.member_a ?? 'A delegate'} and {recentSwapNotice.metadata.member_b ?? 'a delegate'} swapped allocations on {formatReleaseDate(new Date(recentSwapNotice.created_at).getTime())}.
-        </p>
-      )}
-
-      {/* Column labels, only where the rows are laid out as a table. */}
-      <div
-        className="hidden @[520px]:grid grid-cols-[minmax(0,1.35fr)_minmax(0,1.2fr)_minmax(0,0.85fr)] gap-4 px-3 pb-2 mb-2"
-        style={{ borderBottom: '1px solid rgba(27,56,40,0.08)', paddingRight: swapMode ? 42 : undefined }}
-        aria-hidden
-      >
-        {['Member', 'Assignment', 'Application'].map(h => (
-          <span key={h} style={{ fontFamily: OUTFIT, fontSize: 12, fontWeight: 700, color: '#6B5F52' }}>{h}</span>
-        ))}
-      </div>
-
-      <RosterGroup title="Advisors" members={advisors} pageSize={3} page={pageOf('adv')} onPage={setPageOf('adv')} renderRow={m => rowFor(m, false)} />
-
-      <RosterGroup title="Head delegates" members={headDelegates} pageSize={3} page={pageOf('hd')} onPage={setPageOf('hd')} renderRow={m => rowFor(m, true)} />
-
-      <RosterGroup title="Delegates" members={delegates} pageSize={8} page={pageOf('del')} onPage={setPageOf('del')} empty="No delegates yet." renderRow={m => rowFor(m, true)} />
-
-      {/* Once, near the members and only for leaders: the "…" menu on a
-          member row switches head delegate and delegate (delegation_set_head). */}
-      {isLeader && (
-        <p className="mb-5 px-3" style={{ fontFamily: OUTFIT, fontSize: 12, color: '#6B5F52', lineHeight: 1.5, maxWidth: 560 }}>
-          {LEAD_SWITCH_NOTE}
-        </p>
-      )}
-
-      {isLeader && pledgingMembers.length > 0 && (
-        <div className="mb-5 pt-4 px-3" style={{ borderTop: '1px solid rgba(27,56,40,0.08)' }}>
-          <p className="mb-2" style={{ fontSize: 13, fontWeight: 800, color: '#1C1410', fontFamily: OUTFIT }}>Pledges</p>
-          <div className="flex flex-col gap-1">
-            {pledgingMembers.map(m => (
-              <div key={m.id} className="flex items-center justify-between gap-2 py-1">
-                <span className="flex items-center gap-2 min-w-0 text-[13px]" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
-                  {/* avatar_url rides along on every member row via
-                      POOL_MEMBER_SELECT's `profiles (display_name, avatar_url)`.
-                      Left unlinked: the name is the CV link, the picture is
-                      decoration. */}
-                  <MemberAvatar name={m.profiles?.display_name ?? 'Unknown'} url={m.profiles?.avatar_url ?? null} size={24} />
-                  <span className="min-w-0 [overflow-wrap:anywhere]">
-                    {/* Pledger's name links to their MUN CV — this row has no
-                        clickable ancestor, so no `nested` here. */}
-                    <ProfileLink userId={m.user_id} name={m.profiles?.display_name}>
-                      {m.profiles?.display_name ?? 'Unknown'}
-                    </ProfileLink> <span style={{ color: '#6B5F52' }}>· {pledgeText(m)}</span>
-                  </span>
-                </span>
-                {pledgeSatisfied(m) ? (
-                  <span className="inline-flex items-center gap-1 flex-shrink-0" style={{ fontSize: 12, fontWeight: 700, fontFamily: OUTFIT, color: '#2A5A3C' }}>
-                    <CheckCircle2 size={14} strokeWidth={2.2} aria-hidden /> Covered
-                  </span>
-                ) : (
-                  <span className="inline-flex items-center gap-1 flex-shrink-0" style={{ fontSize: 12, fontWeight: 700, fontFamily: OUTFIT, color: '#8A6614' }}>
-                    <Hourglass size={14} strokeWidth={2.2} aria-hidden /> Pending
-                  </span>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {isLeader && allocationSwapMode !== 'off' && (
-        <div className="pt-4 px-3" style={{ borderTop: '1px solid rgba(27,56,40,0.08)' }}>
-          {!swapMode ? (
-            <button
-              onClick={() => { setSwapMode(true); setSwapSelection([]); setSwapError(''); }}
-              className="inline-flex items-center gap-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F]"
-              style={{ minHeight: 44, padding: '0 16px', borderRadius: 10, border: '1.5px solid rgba(28,20,16,0.55)', color: '#1C1410', backgroundColor: '#FFFFFF', fontFamily: OUTFIT, fontSize: 14, fontWeight: 700, cursor: 'pointer' }}
-            >
-              <ArrowLeftRight size={16} aria-hidden /> Swap allocations
-            </button>
-          ) : (
+  if (isLeader && roster) {
+    const swapOn = allocationSwapMode !== 'off';
+    const swapTools = (pendingSwapRequest || recentSwapNotice || swapOn) ? (
+      <div className="flex flex-col gap-3" style={{ ...cardStyle, padding: '18px 24px' }}>
+        {pendingSwapRequest && (
+          <div className="flex items-start gap-2.5">
+            <ArrowLeftRight size={16} strokeWidth={STROKE} style={{ color: '#8A6614', flexShrink: 0, marginTop: 2 }} aria-hidden />
             <div>
-              <div className="flex items-center justify-between gap-3 mb-2">
-                <p className="text-[13px]" style={{ color: '#6B5F52', fontFamily: OUTFIT, margin: 0 }}>
-                  Select two allocated members to swap.
+              {/* Deliberately NOT CV-linked: the two names come from the
+                  request's metadata as bare strings with no user id. */}
+              <p className="text-[14px]" style={{ color: '#1C1410', fontFamily: OUTFIT, margin: 0 }}>
+                A swap of {pendingSwapRequest.metadata.member_a ?? 'a delegate'} and {pendingSwapRequest.metadata.member_b ?? 'a delegate'} is awaiting the organizing team.
+              </p>
+              <p className="text-[13px]" style={{ color: '#6B5F52', fontFamily: OUTFIT, margin: '2px 0 0 0' }}>
+                Requested by {pendingRequesterName} on {formatReleaseDate(new Date(pendingSwapRequest.created_at).getTime())}.
+              </p>
+            </div>
+          </div>
+        )}
+        {recentSwapNotice && (
+          <p className="text-[14px]" style={{ color: '#6B5F52', fontFamily: OUTFIT, margin: 0 }}>
+            {recentSwapNotice.metadata.member_a ?? 'A delegate'} and {recentSwapNotice.metadata.member_b ?? 'a delegate'} swapped allocations on {formatReleaseDate(new Date(recentSwapNotice.created_at).getTime())}.
+          </p>
+        )}
+        {swapOn && (!swapMode ? (
+          <div>
+            <button
+              type="button"
+              onClick={() => { setSwapMode(true); setSwapSelection([]); setSwapError(''); }}
+              className={BTN_CLASS}
+              style={secondaryBtn}
+            >
+              <ArrowLeftRight size={17} strokeWidth={STROKE} aria-hidden /> Swap allocations
+            </button>
+          </div>
+        ) : (
+          <div>
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-[14px]" style={{ color: '#6B5F52', fontFamily: OUTFIT, margin: 0 }}>
+                Pick two seated people in the table to swap.
+              </p>
+              <button
+                type="button"
+                onClick={() => { setSwapMode(false); setSwapSelection([]); setSwapError(''); }}
+                aria-label="Stop swapping"
+                className="focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] flex-shrink-0 inline-flex items-center justify-center rounded-full"
+                style={{ color: '#6B5F52', width: 44, height: 44, margin: -6, background: 'none', border: 'none', cursor: 'pointer' }}
+              >
+                <X size={18} strokeWidth={STROKE} aria-hidden />
+              </button>
+            </div>
+            {swapA && swapB && (
+              <div className="rounded-xl px-3.5 py-3 mt-3" style={{ backgroundColor: 'rgba(27,56,40,0.05)' }}>
+                {/* Deliberately NOT CV-linked: swapSelection is local state, so
+                    navigating away to a CV discards it. */}
+                <p className="text-[14px] mb-2.5 [overflow-wrap:anywhere]" style={{ color: '#1C1410', fontFamily: OUTFIT, fontWeight: 500 }}>
+                  {swapA.profiles?.display_name}: {allocationLabel(swapA)} and {swapB.profiles?.display_name}: {allocationLabel(swapB)}
                 </p>
                 <button
-                  onClick={() => { setSwapMode(false); setSwapSelection([]); setSwapError(''); }}
-                  aria-label="Stop swapping"
-                  className="focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] flex-shrink-0 inline-flex items-center justify-center rounded-full"
-                  style={{ color: '#6B5F52', width: 36, height: 36, background: 'none', border: 'none', cursor: 'pointer' }}
+                  type="button"
+                  onClick={handleConfirmSwap}
+                  disabled={swapping}
+                  className={BTN_CLASS}
+                  style={{ ...primaryBtn, opacity: swapping ? 0.6 : 1, cursor: swapping ? 'default' : 'pointer' }}
                 >
-                  <X size={16} />
+                  {swapping ? 'Processing…' : allocationSwapMode === 'self_serve' ? 'Confirm swap' : 'Confirm request'}
                 </button>
               </div>
-              {swapA && swapB && (
-                <div className="rounded-xl px-3.5 py-3 mb-3" style={{ backgroundColor: 'rgba(27,56,40,0.05)' }}>
-                  {/* Deliberately NOT CV-linked. This is the live confirm step
-                      sitting directly above the confirm button — swapSelection
-                      is local state, so navigating away to a CV discards it. */}
-                  <p className="text-[13px] mb-2.5" style={{ color: '#1C1410', fontFamily: OUTFIT, fontWeight: 600 }}>
-                    {swapA.profiles?.display_name}: {allocationLabel(swapA)} ↔ {swapB.profiles?.display_name}: {allocationLabel(swapB)}
-                  </p>
-                  <button
-                    onClick={handleConfirmSwap}
-                    disabled={swapping}
-                    className="inline-flex items-center focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[#B6871F]"
-                    style={{ minHeight: 44, padding: '0 18px', borderRadius: 10, background: swapping ? '#DDD4C0' : FOREST_GRADIENT, color: swapping ? '#6B5F52' : '#FFFFFF', border: 'none', fontFamily: OUTFIT, fontSize: 14, fontWeight: 700, cursor: swapping ? 'default' : 'pointer' }}
-                  >
-                    {swapping ? 'Processing…' : allocationSwapMode === 'self_serve' ? 'Confirm swap' : 'Confirm request'}
-                  </button>
-                </div>
-              )}
-              {swapError && <p className="text-[13px] mb-2" role="alert" style={{ color: '#8B2020', fontFamily: OUTFIT }}>{swapError}</p>}
-            </div>
-          )}
-        </div>
-      )}
-
+            )}
+            {swapError && <p className="text-[13px] mt-2" role="alert" style={{ color: '#8B2020', fontFamily: OUTFIT, margin: '8px 0 0 0' }}>{swapError}</p>}
+          </div>
+        ))}
+      </div>
+    ) : null;
+    return (
+      <LeaderCard
+        conferenceId={conferenceId}
+        conferenceSlug={conferenceSlug}
+        societyId={societyId}
+        societyName={societyName}
+        members={rosterMembers}
+        pool={members}
+        paidCount={paidCount}
+        seatLogoFor={seatLogoFor}
+        importAvailable={importAvailable}
+        onImport={() => setImportOpen(true)}
+        onChanged={async () => { await Promise.all([loadRoster(), load()]); }}
+        swap={{ on: swapMode, selected: swapSelection, toggle: toggleSwapSelect }}
+        swapTools={swapTools}
+        overlays={withOverlays ? overlays : null}
+      />
+    );
+  }
+  // A member who does not lead: the 5B card (delegation/member).
+  return (
+    <>
+      <MemberDelegationCard
+        conferenceId={conferenceId}
+        conferenceSlug={conferenceSlug}
+        societyId={societyId}
+        societyName={societyName}
+        members={rosterMembers}
+        committees={member?.committees}
+        myAllocation={member?.myAllocation ?? null}
+        selfPaid={member?.selfPaid ?? false}
+      />
       {withOverlays && overlays}
-    </DashCard>
+    </>
   );
   }
 }

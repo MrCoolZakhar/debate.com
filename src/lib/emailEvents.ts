@@ -49,7 +49,7 @@ export const EVENT_REGISTRY = [
   { key: 'co_delegate_assigned', label: 'Co-delegate assigned', description: "Double delegations only. Sent to a delegate who was already told their seat when their co-delegate's allocation is announced later, naming the co-delegate and their email address so the two can prepare together. Once per pair. If both are announced together, each allocation email already names the other and this does not send.", defaultDelivery: 'immediate' },
   { key: 'allocation_changed', label: 'Allocation Changed', description: "Sent when a delegate's allocation changes.", defaultDelivery: 'immediate' },
   { key: 'allocation_removed', label: 'Allocation Removed', description: "Sent when a delegate's allocation is removed.", defaultDelivery: 'manual' },
-  { key: 'pledge_received', label: 'Pledge Received', description: 'Sent to a delegation leader when you confirm their delegation tickets are paid.', defaultDelivery: 'immediate' },
+  { key: 'pledge_received', label: 'Delegation Spots Paid', description: 'Sent to a delegation leader when you confirm their delegation tickets are paid.', defaultDelivery: 'immediate' },
   { key: 'added_to_delegation', label: 'Added to Delegation', description: 'Sent when a delegate joins a delegation.', defaultDelivery: 'immediate' },
   { key: 'removed_from_delegation', label: 'Removed from Delegation', description: 'Sent when a delegate leaves a delegation.', defaultDelivery: 'manual' },
   { key: 'spot_received', label: 'Spot Received', description: "Coming soon. Today Gavelling sends its own 'Your spot is covered' email when a delegation ticket covers someone.", defaultDelivery: 'immediate' },

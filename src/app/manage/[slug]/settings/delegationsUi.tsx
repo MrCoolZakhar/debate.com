@@ -281,8 +281,8 @@ export function DelegationsSettings({
               <Hint
                 label="About delegation imports"
                 text={LEADER_IMPORTS_PAID_LAUNCH
-                  ? "Faculty advisors and head delegates can add their delegates by name and email, up to the spots they pledged. Each import uses one of the leader's credits, which comes back to them if the delegate is rejected or withdraws, and every imported delegate still waits for your acceptance."
-                  : "Faculty advisors and head delegates can add their delegates by name and email, up to the spots they pledged. Each delegate uses their own credit when they claim their place. Every imported delegate still waits for your acceptance."}
+                  ? "Faculty advisors and head delegates can add their delegates by name and email, up to their expected size. Each import uses one of the leader's credits, which comes back to them if the delegate is rejected or withdraws, and every imported delegate still waits for your acceptance."
+                  : "Faculty advisors and head delegates can add their delegates by name and email, up to their expected size. Each delegate uses their own credit when they claim their place. Every imported delegate still waits for your acceptance."}
               />
             </p>
             <p style={{ color: '#5A5046', fontFamily: FONT, fontSize: TYPE_PX.hint }}>

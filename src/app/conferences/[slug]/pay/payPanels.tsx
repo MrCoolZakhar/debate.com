@@ -496,7 +496,7 @@ export function AddSpotsPanel({
         <p style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 13, color: NEU.ink, margin: 0 }}>Add Delegation Spots</p>
       </div>
       <p style={{ fontFamily: OUTFIT, fontSize: 11.5, color: NEU.muted, margin: 0, lineHeight: 1.5 }}>
-        Pledge more spots for your delegation. Each becomes a payable invoice above.
+        Raise your delegation&apos;s expected size. Each new spot becomes a payable invoice above.
       </p>
       <div className="flex items-center gap-2">
         <input
@@ -510,7 +510,7 @@ export function AddSpotsPanel({
             setCount(Number.isNaN(n) ? '' : Math.max(1, n));
           }}
           onBlur={() => { if (count === '') setCount(1); }}
-          aria-label="Number of spots to pledge"
+          aria-label="Number of spots to add to your expected size"
           className="rounded-xl text-base sm:text-sm text-center focus:outline-none"
           style={{ width: 64, height: 44, border: 'none', backgroundColor: NEU.base, boxShadow: NEU.inSm, color: NEU.ink, fontFamily: OUTFIT, fontWeight: 700 }}
         />

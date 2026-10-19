@@ -8,17 +8,17 @@
 // display:none when its section is not shown (Pane), so switching never
 // refetches a card or loses a half-uploaded position paper.
 //   overview    published awards (only when there are some), the assignment
-//   committee   the committee card (topics, live session), the co-delegate
+//   committee   the committee card (5A: topics, co-delegate, live room), the
+//               study guide and paper at a glance, the committee list
 //   documents   the study guide and the position paper
 //   delegation  the delegation roster (members of a delegation only)
 // Below xl (10 Oct 2026) there is no sub-nav: the panes stack in this order on
 // one page, with Payment and Support placed by the parent.
 
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { FileText, Flag, Landmark, Users } from 'lucide-react';
-import AllocationCard from './AllocationCard';
 import AssignmentHero from './AssignmentHero';
-import CoDelegateCard from './CoDelegateCard';
+import MyCommitteeSection from './delegation/committee/MyCommitteeSection';
 import StudyGuideCard from './StudyGuideCard';
 import PositionPaperCard from './PositionPaperCard';
 import DelegationPanel from './DelegationPanel';
@@ -66,7 +66,7 @@ function delegateNextStep(
   return { kind: 'done', line: 'Read your study guide and prepare your speeches for the committee.' };
 }
 
-export default function DelegateParticipant({ conferenceId, conferenceSlug, conferenceStartDate, application, myAllocation, committees, allocationSwapMode, section }: {
+export default function DelegateParticipant({ conferenceId, conferenceSlug, conferenceStartDate, application, myAllocation, committees, allocationSwapMode, section, onSelectSection }: {
   conferenceId: string;
   conferenceSlug: string;
   conferenceStartDate: string | null;
@@ -75,6 +75,8 @@ export default function DelegateParticipant({ conferenceId, conferenceSlug, conf
   committees: ParticipantCommittee[];
   allocationSwapMode: string;
   section: string;
+  /** Switches the desktop sub-nav (the paper and guide cards lead to Documents). */
+  onSelectSection?: (key: string) => void;
 }) {
   const committee = myAllocation ? committees.find(c => c.id === myAllocation.conference_committee_id) ?? null : null;
   // Below xl every pane shows on one page (see ParticipantView), in this
@@ -85,6 +87,12 @@ export default function DelegateParticipant({ conferenceId, conferenceSlug, conf
   // With no seat yet, the Committee and Documents sections would only repeat
   // "appears once you are assigned": the phone page leaves them out.
   const assigned = !!myAllocation;
+  // The Committee section's paper and guide cards open the full cards in
+  // Documents: the desktop switches section, the phone page scrolls to it.
+  const openDocuments = useCallback(() => {
+    onSelectSection?.('documents');
+    requestAnimationFrame(() => document.getElementById('you-documents')?.scrollIntoView({ block: 'start' }));
+  }, [onSelectSection]);
 
   return (
     <>
@@ -102,16 +110,17 @@ export default function DelegateParticipant({ conferenceId, conferenceSlug, conf
       </Pane>
 
       <Pane show={section === 'committee'} title="Your Committee" icon={Landmark} phone={assigned}>
-        <AllocationCard
+        {/* Taste board 5A: the committee (with a double delegate's partner),
+            the study guide and position paper at a glance, the committee list. */}
+        <MyCommitteeSection
+          conferenceId={conferenceId}
+          conferenceStartDate={conferenceStartDate}
           committee={committee}
           myAllocation={myAllocation}
-          conferenceStartDate={conferenceStartDate}
-          showCountry={false}
+          paper={paper}
+          onOpenDocuments={openDocuments}
           joinFromXlOnly={stacked}
-          headerFromXlOnly={stacked}
         />
-        {/* Double delegations only: the co-delegate and what the two share. */}
-        <CoDelegateCard conferenceId={conferenceId} myAllocation={myAllocation} />
       </Pane>
 
       <Pane show={section === 'documents'} title="Documents" icon={FileText} phone={assigned} anchor="you-documents">
@@ -131,6 +140,7 @@ export default function DelegateParticipant({ conferenceId, conferenceSlug, conf
             societyId={application.society_id}
             allocationSwapMode={allocationSwapMode}
             section="delegation"
+            member={{ committees, myAllocation, selfPaid: application.self_paid }}
           />
         </Pane>
       )}

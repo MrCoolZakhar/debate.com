@@ -405,6 +405,7 @@ export default function ParticipantView({
       committees={committees}
       allocationSwapMode={allocationSwapMode}
       section={activeSection}
+      onSelectSection={selectSection}
     />
   ) : selected.role === 'faculty-advisor' ? (
     <AdvisorParticipant

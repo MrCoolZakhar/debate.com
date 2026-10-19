@@ -222,10 +222,10 @@ export const DEFAULT_EVENT_EMAILS: Record<string, DefaultEventEmail> = {
     ],
   },
   pledge_received: {
-    subject: 'Delegation pledge received: {{conference_name}}',
+    subject: 'Delegation spots paid: {{conference_name}}',
     blocks: [
-      { type: 'paragraph', variant: 'heading', content: 'Pledge received' },
-      { type: 'paragraph', content: 'Hi {{delegate_name}},\n\nYour pledge to cover delegation spots for {{delegation_name}} at {{conference_name}} has been marked received. Thank you for handling payment on behalf of your delegation.\n\nYour conference view shows which spots the pledge covers and who is currently holding them.' },
+      { type: 'paragraph', variant: 'heading', content: 'Delegation spots paid' },
+      { type: 'paragraph', content: 'Hi {{delegate_name}},\n\nThe delegation spots you are paying for {{delegation_name}} at {{conference_name}} have been marked received. Thank you for handling payment on behalf of your delegation.\n\nYour conference view shows which spots are covered and who is currently holding them.' },
       VIEW_CONFERENCE_BUTTON,
     ],
   },

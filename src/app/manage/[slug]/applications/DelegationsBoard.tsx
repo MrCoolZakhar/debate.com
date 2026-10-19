@@ -294,10 +294,10 @@ export default function DelegationsBoard<M extends DelegationMemberLite>(props: 
       <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-5">
         {[
           { label: 'Delegations', value: totals.delegations },
-          { label: 'Expected', value: totals.expected, hint: 'Places pledged, or confirmed as paid for when there is no pledge' },
+          { label: 'Expected size', value: totals.expected, hint: 'The expected size each delegation gave, or the places paid for when none was given' },
           { label: 'Registered', value: totals.registered, hint: 'Members who have applied and are coming' },
           { label: 'Waiting on you', value: totals.waiting, hint: `${plural(totals.waitingDelegations, 'delegation')} with members to decide` },
-          { label: 'Owe money', value: totals.owing, hint: 'Delegations with an open balance on an accepted member or on their pledge' },
+          { label: 'Owe money', value: totals.owing, hint: 'Delegations with an open balance on an accepted member or on their delegation spots' },
         ].map(t => (
           <div key={t.label} title={t.hint} style={{ padding: '12px 14px', borderRadius: 16, backgroundColor: NEU.surface, boxShadow: NEU.outSm }}>
             <p style={{ fontFamily: OUTFIT, fontSize: 24, fontWeight: 900, color: NEU.ink, fontVariantNumeric: 'tabular-nums', lineHeight: 1.1 }}>{t.value}</p>
@@ -486,13 +486,13 @@ function DelegationRowCard<M extends DelegationMemberLite>({
         </button>
 
         {/* Members: expected over registered. */}
-        <div className="min-w-0" title="Expected: places pledged (or confirmed as paid for). Registered: members who applied and are coming.">
+        <div className="min-w-0" title="Expected size: what the leaders expect to bring (or the places paid for). Registered: members who applied and are coming.">
           {empty && row.applying === 0 ? (
             <p style={{ fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 700, color: NEU.inkSoft }}>No members yet</p>
           ) : (
             <>
               <p style={{ fontFamily: OUTFIT, fontSize: 13.5, fontWeight: 800, color: NEU.ink, fontVariantNumeric: 'tabular-nums' }}>
-                {row.expected != null ? `${row.expected} expected` : 'No pledge'}
+                {row.expected != null ? `Expected size ${row.expected}` : 'No expected size'}
                 <span style={{ color: NEU.inkSoft, fontWeight: 700, display: 'inline-block' }}>&nbsp;/ {row.registered} registered</span>
               </p>
               <p style={{ fontFamily: OUTFIT, fontSize: 12, fontWeight: 600, color: NEU.inkSoft, fontVariantNumeric: 'tabular-nums' }}>
@@ -574,7 +574,7 @@ function DelegationRowCard<M extends DelegationMemberLite>({
             </>
           ) : row.pledgeAwaiting ? (
             <span className="inline-flex items-center gap-1.5" style={{ fontFamily: OUTFIT, fontSize: 12, fontWeight: 700, color: '#8A5A12' }}>
-              <Hourglass size={13} strokeWidth={2.4} /> Pledge not confirmed
+              <Hourglass size={13} strokeWidth={2.4} /> Spots not confirmed as paid
             </span>
           ) : (
             <span className="inline-flex items-center gap-1.5" style={{ fontFamily: OUTFIT, fontSize: 12, fontWeight: 700, color: NEU.inkSoft }}>
@@ -605,9 +605,9 @@ function DelegationRowCard<M extends DelegationMemberLite>({
 
           {(row.pledged > 0 || row.purchased > 0) && (
             <p className="mb-3" style={{ fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 600, color: NEU.inkSoft }}>
-              {row.pledged > 0 ? `Pledged ${plural(row.pledged, 'place')}. ` : ''}
+              {row.pledged > 0 ? `Expected size ${row.pledged}. ` : ''}
               {row.purchased > 0 ? `${plural(row.purchased, 'place')} confirmed as paid for. ` : ''}
-              {row.pledgeAwaiting ? 'The pledge is not confirmed as paid yet.' : row.pledged > 0 ? 'The pledge is confirmed.' : ''}
+              {row.pledgeAwaiting ? 'Those spots are not confirmed as paid yet.' : row.pledged > 0 ? 'Those spots are confirmed as paid.' : ''}
             </p>
           )}
 

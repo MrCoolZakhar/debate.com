@@ -75,7 +75,7 @@ function DelegationCard({ society, members, hasUnseenSwap, isEmpty, onClick, onD
             style={{ fontSize: 12, fontWeight: 700, color: '#9A6B2F', fontFamily: OUTFIT, whiteSpace: 'nowrap' }}
           >
             <Clock size={14} strokeWidth={2.4} aria-hidden="true" />
-            Pledge pending
+            Spots not paid yet
           </span>
         )}
         {isEmpty && !pledgePending && (
@@ -425,7 +425,7 @@ export default function DelegationsView({ conference, showFlash, initialSocietyI
     // F21: fully idempotent, nothing left to do once the pledge is satisfied.
     if (pledgeSatisfied(member)) return;
     const { confirmed } = await confirm({
-      title: 'Confirm this pledge as paid?',
+      title: 'Confirm these spots as paid?',
       body: 'Spots will be added to the delegation.',
       confirmLabel: 'Confirm',
     });
@@ -442,7 +442,7 @@ export default function DelegationsView({ conference, showFlash, initialSocietyI
     if (societySnapshot) {
       patchSociety(societyId, { spots_purchased: societySnapshot.spots_purchased + (member.spots_pledged ?? 0) });
     }
-    showFlash('ok', 'Pledge marked received.');
+    showFlash('ok', 'Spots marked received.');
 
     const rollback = () => {
       restoreMember(memberSnapshot);
@@ -465,7 +465,7 @@ export default function DelegationsView({ conference, showFlash, initialSocietyI
 
       if (firstError) {
         rollback();
-        showFlash('err', 'Could not confirm this pledge.');
+        showFlash('err', 'Could not confirm these spots.');
         loadData({ silent: true }); // converge any partial writes
         return;
       }
@@ -478,13 +478,13 @@ export default function DelegationsView({ conference, showFlash, initialSocietyI
         const result = await queueEventEmail(supabase, conference.id, 'pledge_received', pledgeRecipientIds);
         notifyIfNeeded(result, pushDraftNotice);
       } catch {
-        showFlash('err', 'Pledge confirmed, but the notification email could not be queued.');
+        showFlash('err', 'Spots confirmed, but the notification email could not be queued.');
       }
 
       loadData({ silent: true }); // brings in fillFreeSpots promotions
     })().catch(() => {
       rollback();
-      showFlash('err', 'Could not confirm this pledge.');
+      showFlash('err', 'Could not confirm these spots.');
       loadData({ silent: true });
     }).finally(() => markBusy(member.id, false));
   }
@@ -1029,7 +1029,7 @@ export default function DelegationsView({ conference, showFlash, initialSocietyI
       {/* Pledges */}
       {pledgingMembers.length > 0 && (
         <NeuCard className="mb-6" style={{ padding: 16 }}>
-          <SectionLabel>PLEDGES</SectionLabel>
+          <SectionLabel>EXPECTED SIZE</SectionLabel>
           <div className="flex flex-col gap-2 mt-2.5">
             {pledgingMembers.map(m => (
               <div key={m.id} className="flex items-center justify-between gap-3">
@@ -1037,7 +1037,7 @@ export default function DelegationsView({ conference, showFlash, initialSocietyI
                   {/* Pledge row: plain <div>, MARK RECEIVED is a sibling button. */}
                   <PersonAvatar name={m.profiles?.display_name ?? m.invited_name ?? 'Unknown'} url={m.profiles?.avatar_url ?? null} size={26} userId={m.user_id} />
                   <p className="text-sm min-w-0 [overflow-wrap:anywhere]" style={{ color: NEU.ink, fontFamily: OUTFIT }}>
-                    <span style={{ fontWeight: 700 }}>{m.profiles?.display_name ?? m.invited_name ?? 'Unknown'}</span> pledged: {pledgeText(m)}
+                    <span style={{ fontWeight: 700 }}>{m.profiles?.display_name ?? m.invited_name ?? 'Unknown'}</span>: {pledgeText(m)}
                   </p>
                 </div>
                 {pledgeSatisfied(m) ? (

@@ -22,6 +22,8 @@ import { ageAt } from '@/lib/age';
 import { LevelInsignia, LEVEL_ACCENT } from '@/app/account/accountUi';
 import DelegationsView from '@/app/manage/[slug]/assignment/DelegationsView';
 import IndependentsView from '@/app/manage/[slug]/assignment/IndependentsView';
+import DelegationSeatsView from '@/app/manage/[slug]/assignment/DelegationSeatsView';
+import { replaceUrlInPlace } from '@/lib/replaceUrlInPlace';
 import { queueEventEmail, notifyIfNeeded, turnOnDefaultEmail } from '@/lib/emailEvents';
 import { AssignConfirmDialog } from '@/app/manage/[slug]/assignment/AssignConfirmDialog';
 import {
@@ -3542,7 +3544,7 @@ export default function AssignmentPage() {
   const [chairInvites, setChairInvites] = useState<PendingChairInvite[]>([]);
   const [societies, setSocieties] = useState<DelegationSource[]>([]);
   const [history, setHistory] = useState<Record<string, UserHistory>>({});
-  const [mode, setMode] = useState<'delegates' | 'chairs' | 'delegations' | 'independents'>('delegates');
+  const [mode, setMode] = useState<'delegates' | 'chairs' | 'delegations' | 'independents' | 'delegation-seats'>('delegates');
   // ?release=unsent (the dashboard's "never told their seat" row) opens the
   // allocation email picker with the unsent delegates ticked. It only OPENS the
   // picker; sending is still the organiser's press. Read once, then dropped
@@ -3565,8 +3567,8 @@ export default function AssignmentPage() {
   useEffect(() => {
     const q = new URLSearchParams(window.location.search);
     const m = q.get('mode');
-    if (m === 'delegates' || m === 'chairs' || m === 'delegations' || m === 'independents') setMode(m);
-    const d = q.get('delegation');
+    if (m === 'delegates' || m === 'chairs' || m === 'delegations' || m === 'independents' || m === 'delegation-seats') setMode(m);
+    const d = q.get('delegation') ?? (m === 'delegation-seats' ? q.get('society') : null);
     if (d) setDeepDelegationId(d);
   }, []);
   const [loading, setLoading] = useState(true);
@@ -4704,6 +4706,17 @@ export default function AssignmentPage() {
   }, [accepted, committees, needyCommitteeIds, seatedIdentities]);
 
   if (!conference) return null;
+
+  // ?mode=delegation-seats[&society=<id>]: "Give seats" (3C), its own screen.
+  if (mode === 'delegation-seats') {
+    return (
+      <DelegationSeatsView
+        conference={conference}
+        initialSocietyId={deepDelegationId}
+        onSingleDelegates={() => { setMode('delegates'); replaceUrlInPlace(`/manage/${conference.slug}/assignment`); }}
+      />
+    );
+  }
 
   const selectedApp = accepted.find(a => a.id === selectedAppId) ?? null;
   const dropModalCommittee = dropModal ? committees.find(c => c.id === dropModal.committeeId) ?? null : null;

@@ -182,11 +182,11 @@ export function paymentMethod(
     if (money !== undefined) {
       if (money && money.received > 0) return { label: 'STRIPE', title: 'Paid online through Gavelling' };
       if (money && money.offline > 0) return { label: 'OFFLINE', title: 'Recorded as paid outside Gavelling (marked paid or proof approved)' };
-      if (r.society_id && !r.self_paid) return { label: 'DELEGATION', title: 'Covered by a delegation pledge spot, no payment of its own' };
+      if (r.society_id && !r.self_paid) return { label: 'DELEGATION', title: 'Covered by a spot the delegation paid for, no payment of its own' };
       return { label: 'NO PAYMENT', title: 'Registered with no money received: a free role, or marked paid with no payment recorded' };
     }
     if (r.stripe_payment_intent_id) return { label: 'STRIPE', title: 'Paid online via Stripe checkout' };
-    if (r.society_id && !r.self_paid) return { label: 'DELEGATION', title: 'Covered by a delegation pledge spot' };
+    if (r.society_id && !r.self_paid) return { label: 'DELEGATION', title: 'Covered by a spot the delegation paid for' };
     return { label: 'MANUAL', title: 'Marked paid manually on the Applications page' };
   }
   if (r.payment_status === 'waived' && r.fee_waiver_source) {

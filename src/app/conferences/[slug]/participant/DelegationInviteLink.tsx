@@ -18,7 +18,13 @@ import { getFreshAuthedClient } from '@/lib/supabase-auth';
 import { friendlyError, plainOrFallback } from '@/lib/friendlyError';
 import { OUTFIT } from '@/components/neu';
 
-export default function DelegationInviteLink({ societyId, conferenceId }: { societyId: string; conferenceId: string }) {
+export default function DelegationInviteLink({ societyId, conferenceId, buttonStyle, iconStroke = 2.4 }: {
+  societyId: string;
+  conferenceId: string;
+  /** The leader card's own button look, laid over the default. */
+  buttonStyle?: React.CSSProperties;
+  iconStroke?: number;
+}) {
   const [busy, setBusy] = useState(false);
   const [link, setLink] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
@@ -72,10 +78,12 @@ export default function DelegationInviteLink({ societyId, conferenceId }: { soci
         style={{
           minHeight: 44, padding: '0 16px', borderRadius: 10,
           border: '1.5px solid rgba(27,56,40,0.55)', background: '#FFFFFF', color: '#1B3828',
-          fontFamily: OUTFIT, fontSize: 14, fontWeight: 700, cursor: busy ? 'wait' : 'pointer',
+          fontFamily: OUTFIT, fontSize: 14, fontWeight: 700,
+          ...buttonStyle,
+          cursor: busy ? 'wait' : 'pointer',
         }}
       >
-        {copied ? <Check size={16} strokeWidth={2.6} aria-hidden /> : <Link2 size={16} strokeWidth={2.4} aria-hidden />}
+        {copied ? <Check size={16} strokeWidth={iconStroke} aria-hidden /> : <Link2 size={16} strokeWidth={iconStroke} aria-hidden />}
         {copied ? 'Link copied' : busy ? 'Making your link' : 'Copy invite link'}
       </button>
       {link && (

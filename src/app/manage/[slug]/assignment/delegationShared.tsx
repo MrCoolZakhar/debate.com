@@ -554,7 +554,7 @@ export function ModalOverlay({ children, onClose }: { children: React.ReactNode;
 
 export function pledgeText(m: PoolMember): string {
   if (m.pledge_type !== 'delegation') return '';
-  return `${m.spots_pledged ?? 0} delegation spots`;
+  return `Expected size ${m.spots_pledged ?? 0}`;
 }
 
 // ── Chips ────────────────────────────────────────────────────────────────────

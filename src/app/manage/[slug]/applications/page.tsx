@@ -43,7 +43,8 @@ import {
 import { LevelInsignia, LEVEL_ACCENT } from '@/app/account/accountUi';
 import { type CustomQuestion, type CustomAnswers, normalizeBlocks, questionsOf, displayAnswer, answerIsEmpty } from '@/lib/customQuestions';
 import { useScrollLock } from '@/hooks/useScrollLock';
-import DelegationsBoard, { PeopleDelegationsSwitch } from './DelegationsBoard';
+import { PeopleDelegationsSwitch } from './DelegationsBoard';
+import DelegationsTab from './delegations/DelegationsTab';
 import { DelegationIdentity, useDelegationSummaries } from './DelegationAvatar';
 import OpenDelegateApplications from './OpenDelegateApplications';
 // Same vocabulary the team invite wizard in Settings uses — never a parallel
@@ -4184,24 +4185,15 @@ export default function ApplicationsPage() {
       </div>
       )}
 
-      {/* Delegations: their own list, counts and filters. Decisions go through
-          the same runBulk + handleAccept / handleReject as the people list. */}
+      {/* Delegations: the table with seat meters and the delegation pop-up (delegations/DelegationsTab.tsx). */}
       {listView === 'delegations' && !loading && (
-        <DelegationsBoard
+        <DelegationsTab
           conference={conference}
           applications={applications}
           drafts={drafts}
           search={search}
           focusId={delegationFocus}
-          canAccept={a => a.attending && a.status === 'submitted' && a.role !== 'secretariat' && !isAcceptBlockedByFee(a)}
-          canReject={a => a.attending && a.status === 'submitted'}
-          onAcceptAll={(apps, name) => runBulk(apps, { title: `Accept ${apps.length} from ${name}?`, body: 'Each member is accepted on their own, exactly as from the People list: acceptance emails and delegation spot cover run per person.', confirmLabel: `Accept ${apps.length}` }, a => handleAccept(a.id))}
-          onRejectAll={(apps, name) => runBulk(apps, { title: `Reject ${apps.length} from ${name}?`, body: 'This rejects the members who are waiting. You can reinstate them later.', confirmLabel: `Reject ${apps.length}`, danger: true }, a => handleReject(a.id))}
-          onMessage={openComposeEmail}
-          onRemindPay={apps => { void handleBulkRemindPay(apps); }}
-          onOpenMember={id => setReviewId(id)}
           onChanged={() => { void loadApplications({ silent: true }); }}
-          busy={!!bulkRunning || bulkEmailBusy}
         />
       )}
 
@@ -4308,7 +4300,7 @@ export default function ApplicationsPage() {
             const selected = selectedIds.has(app.id);
 
             const pledgeLine = app.pledge_type === 'delegation'
-              ? `Pledged ${app.spots_pledged ?? 0} delegation spots`
+              ? `Expected size ${app.spots_pledged ?? 0}`
               : null;
             const rowBusy = busyIds.has(app.id);
             const busyStyle: React.CSSProperties = rowBusy ? { opacity: 0.5, pointerEvents: 'none' } : {};

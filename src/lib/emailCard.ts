@@ -158,7 +158,7 @@ const EVENT_CARD: Record<string, { pill: string; snapshot?: keyof typeof EMAIL_S
   allocation_assigned: { pill: 'Allocated', icon: 'seats' },
   allocation_changed: { pill: 'Allocation changed', icon: 'seats' },
   allocation_removed: { pill: 'Allocation removed' },
-  pledge_received: { pill: 'Pledge received', icon: 'payments' },
+  pledge_received: { pill: 'Spots paid', icon: 'payments' },
   added_to_delegation: { pill: 'In a delegation', icon: 'secretariat' },
   removed_from_delegation: { pill: 'Delegation update' },
   spot_received: { pill: 'Spot confirmed', icon: 'seats', seat: true },

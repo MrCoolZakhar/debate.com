@@ -26,7 +26,7 @@ import ProfileLink from '@/components/ProfileLink';
 import { SectionCard, OUTFIT } from './shared';
 import type { ParticipantAllocation } from './types';
 
-interface CoDelegateRow {
+export interface CoDelegateRow {
   allocation_id: string;
   committee_name: string;
   committee_abbreviation: string | null;
@@ -52,14 +52,16 @@ function initials(name: string | null): string {
   return ((parts[0]?.[0] ?? '') + (parts.length > 1 ? parts[parts.length - 1][0] : '')).toUpperCase() || '?';
 }
 
-export default function CoDelegateCard({ conferenceId, myAllocation }: {
-  conferenceId: string;
-  myAllocation: ParticipantAllocation | null;
-}) {
+/** The double-delegation partner of the viewer's own seat (null on a single
+ *  seat), and the shared position paper's status (undefined while reading).
+ *  Shared by this card and the delegate's committee card. */
+export function useCoDelegate(conferenceId: string, myAllocation: ParticipantAllocation | null): {
+  row: CoDelegateRow | null;
+  paperStatus: string | null | undefined;
+} {
   const { session } = useAuth();
   const [row, setRow] = useState<CoDelegateRow | null>(null);
   const [paperStatus, setPaperStatus] = useState<string | null | undefined>(undefined);
-  const [copied, setCopied] = useState(false);
   const token = session?.access_token ?? null;
   const allocationId = myAllocation?.id ?? null;
 
@@ -85,6 +87,16 @@ export default function CoDelegateCard({ conferenceId, myAllocation }: {
     return () => { cancelled = true; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token, allocationId, conferenceId]);
+
+  return { row, paperStatus };
+}
+
+export default function CoDelegateCard({ conferenceId, myAllocation }: {
+  conferenceId: string;
+  myAllocation: ParticipantAllocation | null;
+}) {
+  const { row, paperStatus } = useCoDelegate(conferenceId, myAllocation);
+  const [copied, setCopied] = useState(false);
 
   if (!row || !myAllocation) return null;
 
