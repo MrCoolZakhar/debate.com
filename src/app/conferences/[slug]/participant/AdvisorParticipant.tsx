@@ -4,7 +4,8 @@
 // themselves, so their dashboard is the delegation: Overview is its summary
 // (name, how many delegates, how many are assigned, paid spots), Delegation
 // the full members table with the leader tools (import, invitation link,
-// pledges, swaps), Committees every room with its session. Buying delegation
+// pledges, swaps), Committees the rooms the delegation sits in
+// (delegation/advisor/AdvisorCommitteesSection; every room only without a delegation). Buying delegation
 // credits and requesting delegation-pool aid live on /pay and in the parent's
 // Payment section (the single money surface).
 //
@@ -16,6 +17,7 @@
 import { Landmark, Users } from 'lucide-react';
 import DelegationPanel from './DelegationPanel';
 import CommitteesSessionsCard from './CommitteesSessionsCard';
+import AdvisorCommitteesSection from './delegation/advisor/AdvisorCommitteesSection';
 import { OUTFIT } from './shared';
 import { DashCard, CardHeading, INK_SOFT, Pane, StackHeading, useDashStacked } from './dashboardKit';
 import type { ParticipantApplication } from './types';
@@ -60,7 +62,16 @@ export default function AdvisorParticipant({ conferenceId, conferenceSlug, confe
         </Pane>
       )}
       <Pane show={section === 'committees'} title="Committees" icon={Landmark}>
-        <CommitteesSessionsCard conferenceId={conferenceId} conferenceStartDate={conferenceStartDate} />
+        {application.society_id ? (
+          <AdvisorCommitteesSection
+            conferenceId={conferenceId}
+            conferenceStartDate={conferenceStartDate}
+            societyId={application.society_id}
+            onOpenDelegation={() => onSelectSection('delegation')}
+          />
+        ) : (
+          <CommitteesSessionsCard conferenceId={conferenceId} conferenceStartDate={conferenceStartDate} />
+        )}
       </Pane>
     </>
   );
