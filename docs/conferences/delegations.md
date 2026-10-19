@@ -57,3 +57,9 @@ Owner: Peter, 19 Oct 2026. The decisions below came out of a Q&A before the rebu
 - "Pledge" copy: `pay/payPanels.tsx`, `DelegationPanel.tsx`, `DelegationsBoard.tsx`, `DelegationsView.tsx`, `applications/page.tsx:4311`, `settings/delegationsUi.tsx`, `financials/shared.tsx`, `ApplicantsDial.tsx`, the emails (`defaultEmails.ts`, `emailEvents.ts`, `emailCard.ts`) and two database error strings.
 
 Taste board: https://claude.ai/artifact/CAVUg2YLKyTj5Y6yuVmLup
+
+## Taste board votes (19 Oct 2026)
+
+- Leader's card: **1A, the roster** ("definitely 1A is the best"), with bigger person circles, round crests, cards that lift like Airbnb, a Financials section (fees paid by kind, members who owe, left to pay, Pay / Add or remove spots / Receipts) and every open seat listed in columns (flag + country, committee logo + name, no invite links).
+- Organiser: **2B, the table with meters** ("love this honestly"), names larger.
+- Every country shows its flag and every committee its logo, everywhere. Clicking a member's committee opens that committee (its roster of countries and names).
