@@ -66,6 +66,7 @@ import { openAuth } from '@/lib/authModal';
 import { useBasicsGateBlocking } from '@/lib/basicsGateState';
 import { useConferenceDraft } from './useConferenceDraft';
 import { DraftStatusCard, DraftSavedNote, DraftNotice } from './DraftChrome';
+import { ExistingConferencePrompt } from './ExistingConferencePrompt';
 
 
 // Mirrors settings' ensureRoleConfigs default set (source of truth there) —
@@ -1341,6 +1342,11 @@ export default function NewConferencePage() {
           <div className="w-full">
 
             <DraftNotice text={draft.notice} onDismiss={draft.dismissNotice} />
+
+            {/* "You Already Have a Conference": a signed-in organiser whose
+                conference is not taking applications yet is offered to finish
+                it first (owner, 19 Oct 2026). Never blocks; see the file. */}
+            <ExistingConferencePrompt userId={user?.id ?? null} suppressed={submitting || committeeModal !== null} />
 
             {/* ── Step 1, your conference: name, acronym, logo, banner, dates ── */}
             {step === 1 && (

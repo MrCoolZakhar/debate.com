@@ -38,6 +38,9 @@ import { useBasicsGateBlocking } from '@/lib/basicsGateState';
 const EXCLUDED_PREFIXES = [
   '/auth', '/chair', '/delegate', '/advisor', '/voting', '/join',
   '/manage', '/unsubscribe', '/invites', '/drafts', '/api',
+  // The creation wizard has its own pop-up about unfinished conferences
+  // (conferences/new/ExistingConferencePrompt.tsx); two would stack.
+  '/conferences/new',
 ];
 const EXCLUDED_SEGMENTS = ['/apply', '/pay'];
 

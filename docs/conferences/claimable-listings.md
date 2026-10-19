@@ -1,6 +1,15 @@
 # Claimable Conference Listings: Plan
 
-Status: PLAN, awaiting Peter's decisions (19 Oct 2026). Nothing built, nothing applied. Draft SQL: `scratch-claimable-listings.sql`.
+Status: APPROVED with changes (Peter, 19 Oct 2026); being built. Draft SQL: `scratch-claimable-listings.sql`.
+
+## Owner decisions (19 Oct 2026), these override anything below
+
+- **Claims are purely manual:** "Claim it free" asks the organiser to email us (wearegavelling@gmail.com, subject prefilled with the conference). Peter reviews several times a day and approves in /admin. No automatic domain-email or website-code methods.
+- **Listings are added automatically by Claude** (a daily job), not by a person. Each listing still goes live only if it passes the quality bar; otherwise it stays a draft for Peter to see in /admin.
+- **Explore shows listings,** marked "Not on Gavelling yet".
+- **Logos are shown.** The banner is the conference's own banner when one can be found on its site; otherwise a free-to-use photo of its city (public domain, CC0 or a licence that allows reuse, credited where required).
+- **Past listings are kept** (as past conferences), not removed.
+- **Committees and topics are taken** wherever the conference publishes them: website, Linktree, linked study guides, Google results. Instagram only where the post is public without logging in, kept minimal (automated collection from Instagram is against Meta's terms).
 
 ## The idea in one paragraph
 
