@@ -4004,16 +4004,6 @@ function ConferenceApplyInner() {
           <button
             type="button"
             role="radio"
-            aria-checked={willPledgeAdvisors !== true}
-            onClick={() => { setWillPledgeAdvisors(false); setInvoicingError(''); }}
-            className="flex-1 rounded-xl py-2.5 text-sm font-bold focus:outline-none transition-colors"
-            style={choice(willPledgeAdvisors !== true)}
-          >
-            No, just me
-          </button>
-          <button
-            type="button"
-            role="radio"
             aria-checked={willPledgeAdvisors === true}
             onClick={() => {
               setWillPledgeAdvisors(true);
@@ -4024,6 +4014,16 @@ function ConferenceApplyInner() {
             style={choice(willPledgeAdvisors === true)}
           >
             Yes
+          </button>
+          <button
+            type="button"
+            role="radio"
+            aria-checked={willPledgeAdvisors !== true}
+            onClick={() => { setWillPledgeAdvisors(false); setInvoicingError(''); }}
+            className="flex-1 rounded-xl py-2.5 text-sm font-bold focus:outline-none transition-colors"
+            style={choice(willPledgeAdvisors !== true)}
+          >
+            No, just me
           </button>
         </div>
 
@@ -4081,23 +4081,24 @@ function ConferenceApplyInner() {
         minBodyHeight={STEP_MIN_BODY}
         extraChrome={wizardExtraChrome}
         onBack={() => setStep(s => s - 1)}
-        title="Paying for Delegation Spots?"
-        sub="Separate from your own registration fee. This only covers spots for your delegates."
+        title="Paying for Your Delegation?"
+        sub="Gavelling allows you to pay for your delegation's delegate fees directly for them."
       >
         <TwoTabPick
+          compact
           value={pledgeValue}
           onChange={(key) => { setWillPledgeSpots(key === 'yes'); setInvoicingError(''); }}
           options={[
             {
               key: 'yes',
               label: 'Yes',
-              icon: <Coins size={78} strokeWidth={1.7} style={{ color: NEU.deepGold }} />,
-              sub: "I'll pay for my delegation's spots",
+              icon: <Coins size={46} strokeWidth={1.8} style={{ color: NEU.deepGold }} />,
+              sub: 'I will pay for my delegation',
             },
             {
               key: 'no',
               label: 'No',
-              icon: <Users size={78} strokeWidth={1.7} style={{ color: NEU.forest }} />,
+              icon: <Users size={46} strokeWidth={1.8} style={{ color: NEU.forest }} />,
               sub: 'My delegates will pay their own way',
             },
           ]}
@@ -4108,7 +4109,7 @@ function ConferenceApplyInner() {
         {showSpots && (
           <div className="mb-6">
             <label className="block font-semibold text-sm mb-1.5" style={{ color: 'var(--gv-on-surface)', fontFamily: "var(--font-brand), sans-serif" }}>
-              How many delegate spots will you pay for?
+              How many delegates will your delegation have?
             </label>
             <input
               type="number"
@@ -4126,7 +4127,7 @@ function ConferenceApplyInner() {
               onBlur={(e) => { (e.currentTarget as HTMLElement).style.borderColor = 'var(--gv-border)'; }}
             />
             <p className="mt-1.5 text-xs leading-relaxed" style={{ color: 'var(--gv-muted)', fontFamily: "var(--font-brand), sans-serif" }}>
-              These spots stay with your delegation once purchased. If a delegate drops out, the spot remains and can be given to their replacement.
+              We will generate an invoice for each delegate in your delegation. You can add or remove delegates at any time. Delegates can also pay for themselves at any point.
             </p>
           </div>
         )}

@@ -237,8 +237,10 @@ export function DashboardPlaceholder() {
 
 type S = FinancialsDashboard['settings'];
 
-function SettingCard({ title, hint, icon, fact, sub, onOpen, readOnly }: {
+function SettingCard({ title, hint, icon, fact, sub, onOpen, readOnly, onHow }: {
   title: string; hint: string; icon: CardIcon; fact: string; sub?: string; onOpen: () => void; readOnly: boolean;
+  /** A quiet "How it works" beside the open action (prompt 136). */
+  onHow?: () => void;
 }) {
   return (
     <section className="gv-st-card gv-fd-card gv-fd-set gv-fd-hung" aria-label={title}>
@@ -252,6 +254,7 @@ function SettingCard({ title, hint, icon, fact, sub, onOpen, readOnly }: {
       <div className="gv-fd-foot">
         {/* A read-only organizer can still look at the settings page, which is itself read-only. */}
         <button type="button" className="gv-st-btn gv-st-outline" onClick={onOpen}>{readOnly ? 'View' : 'Change'}</button>
+        {onHow && <button type="button" className="gv-st-link" onClick={onHow}>How it works</button>}
       </div>
     </section>
   );
@@ -272,7 +275,7 @@ export function paymentMethodWords(s: S): { fact: string; sub: string } {
   return { fact: 'Payment link', sub: s.has_external_url ? 'Payers pay on your page, then upload a proof' : 'Add your payment link to start taking payments' };
 }
 
-export function PaymentMethodCard({ s, onOpen, readOnly }: { s: S; onOpen: () => void; readOnly: boolean }) {
+export function PaymentMethodCard({ s, onOpen, readOnly, onHow }: { s: S; onOpen: () => void; readOnly: boolean; onHow?: () => void }) {
   let fact = 'Not set up yet';
   let sub: string | undefined = 'Set this up when you want to take payments';
   if (s.platform_collects) {
@@ -290,7 +293,7 @@ export function PaymentMethodCard({ s, onOpen, readOnly }: { s: S; onOpen: () =>
     <SettingCard
       title="Payment Method" icon={{ emoji: 'Credit card', lucide: CreditCard, tint: TINT_GREEN }}
       hint="How participants pay you. Card payments go straight to your own Stripe account. With a payment link, QR code or bank transfer, the payer uploads a proof for you to check. With in-person payment, you confirm each payment yourself."
-      fact={fact} sub={sub} onOpen={onOpen} readOnly={readOnly}
+      fact={fact} sub={sub} onOpen={onOpen} readOnly={readOnly} onHow={onHow}
     />
   );
 }

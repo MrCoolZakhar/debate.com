@@ -15,8 +15,8 @@ import { ArrowLeft, ArrowLeftRight, FileText, HeartHandshake, ReceiptText, type 
 import { useManage } from '@/app/manage/[slug]/layout';
 import { NEU, OUTFIT, Emoji3D } from '@/components/neu';
 import { TINT_GOLD, TINT_GREEN } from './dashboardKit';
-import { CurrencyPicker } from '@/components/CurrencyPicker';
-import { FinancialsCurrencyProvider, useFinancialsCurrency, mutedCaption, conversionLine } from './shared';
+import { FinancialsCurrencyProvider, mutedCaption } from './shared';
+import ConferenceCurrencyChip from './ConferenceCurrencyChip';
 
 // Each sub-page names itself; the caption is one quiet line under the title.
 // `emoji` is the Fluent 3D emoji in the tinted disc beside the title (the
@@ -32,7 +32,6 @@ const SUB_PAGES: Record<string, { title: string; caption?: string; emoji: string
 
 function SubPageHeader({ slug, section }: { slug: string; section: string }) {
   const sub = SUB_PAGES[section] ?? { title: 'Financials', emoji: 'Money bag', lucide: ReceiptText, tint: TINT_GREEN };
-  const { currency, displayCurrency, setDisplayCurrency, currencyOptions, converted, ratesAsOf } = useFinancialsCurrency();
   return (
     <div className="mb-6">
       <Link
@@ -56,22 +55,9 @@ function SubPageHeader({ slug, section }: { slug: string; section: string }) {
             {sub.title}
           </h1>
         </div>
-        {!sub.noCurrency && <CurrencyPicker
-          value={displayCurrency}
-          onChange={setDisplayCurrency}
-          options={currencyOptions}
-          variant="pill"
-          showName
-          disabled={currencyOptions.length <= 1}
-          ariaLabel="Display currency"
-        />}
+        {!sub.noCurrency && <ConferenceCurrencyChip />}
       </div>
       {sub.caption && <p className="mt-1" style={{ ...mutedCaption, fontSize: 14 }}>{sub.caption}</p>}
-      {converted && !sub.noCurrency && (
-        <p className="mt-1" style={mutedCaption}>
-          {conversionLine(currency, ratesAsOf)}
-        </p>
-      )}
     </div>
   );
 }

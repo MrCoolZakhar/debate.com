@@ -19,12 +19,12 @@ import {
 import { useManage, type Conference } from '@/app/manage/[slug]/layout';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
-import { roundMoney, formatFee, CURRENCY_CODES } from '@/lib/finance';
+import { roundMoney, formatFee } from '@/lib/finance';
 import { useConferenceMoney, moneyFromCents, moneyByApplication } from '@/lib/conferenceMoney';
 import { FlagImg } from '@/components/FlagImg';
 import { getCountryByName } from '@/lib/countries';
 import { NEU, OUTFIT } from '@/components/neu';
-import { convertApprox, fxRate, useFxRates } from '@/lib/fxRates';
+import { convertApprox } from '@/lib/fxRates';
 
 export { convertApprox };
 
@@ -376,29 +376,14 @@ export function formatCents(value: number | null | undefined, currency: string):
 }
 
 // ── FinancialsCurrencyContext ────────────────────────────────────────────────
-// All figures can be re-displayed in another currency via the header
-// switcher, at the day's rates from public.fx_rates (src/lib/fxRates.ts,
-// refreshed daily by the fx-rates-refresh edge function; finance.ts USD_FX
-// only until they load). Display only: stored values and voucher creation
-// stay in the conference currency; converted figures are prefixed with "≈"
-// (joined to the number by a non-breaking space, so it never wraps alone).
+// Every figure is shown in the conference's ONE currency (prompt 136: the
+// display conversion is gone; the header chip is the conference currency and
+// changing it changes the conference's currency, ConferenceCurrencyChip).
 
 interface FinancialsCurrencyContextValue {
-  /** The conference's own stored currency (never changes). */
+  /** The conference's own currency. */
   currency: string;
-  /** Resolved display currency, defaults to `currency` once loaded. */
-  displayCurrency: string;
-  setDisplayCurrency: (c: string) => void;
-  /** Conference currency first, then every code of CURRENCY_CODES that has a
-   *  rate; just the conference currency when it has no rate itself. */
-  currencyOptions: string[];
-  /** The newest fx_rates source date, or null (still loading, or the fixed fallback table). */
-  ratesAsOf: string | null;
-  /** True once the picked display currency differs from the stored one. */
-  converted: boolean;
-  fxAvailable: boolean;
-  /** Format an amount stored in the conference currency for display —
-   *  converted values carry an "≈" prefix; unconvertible ones stay as-is. */
+  /** Format an amount stored in the conference currency. */
   disp: (n: number) => string;
 }
 
@@ -406,61 +391,15 @@ const FinancialsCurrencyContext = createContext<FinancialsCurrencyContextValue |
 
 export function FinancialsCurrencyProvider({ conference, children }: { conference: Conference; children: ReactNode }) {
   const currency = conference.fee_currency;
-  // Displayed currency, '' until the per-conference localStorage choice is
-  // loaded; falls back to the conference currency. Display-only: stored
-  // values and voucher creation always stay in the conference currency.
-  const [displayCurrencyState, setDisplayCurrencyState] = useState('');
-  // Every figure re-renders once the day's rates land.
-  const { ratesAsOf } = useFxRates();
-
-  useEffect(() => {
-    const id = setTimeout(() => {
-      // Checked against the options on every render below, not here: a stored
-      // choice the fallback table cannot convert (ARS) must survive until the
-      // live rates arrive, and only then fall back if it still cannot.
-      setDisplayCurrencyState(window.localStorage.getItem(`gavelling-fin-currency-${conference.slug}`) || currency);
-    }, 0);
-    return () => clearTimeout(id);
-  }, [conference.slug, currency]);
-
-  function setDisplayCurrency(c: string) {
-    setDisplayCurrencyState(c);
-    window.localStorage.setItem(`gavelling-fin-currency-${conference.slug}`, c);
-  }
-
-  const fxAvailable = fxRate(currency) !== null;
-  const currencyOptions = fxAvailable
-    ? [currency, ...CURRENCY_CODES.filter(c => c !== currency && fxRate(c) !== null)]
-    : [currency];
-  const wanted = displayCurrencyState || currency;
-  const displayCurrency = currencyOptions.includes(wanted) ? wanted : currency;
-  const converted = displayCurrency !== currency;
-
-  function disp(n: number): string {
-    if (!converted) return formatMoney(n, currency);
-    const c = convertApprox(n, currency, displayCurrency);
-    // Never a conference-currency number under another currency's name.
-    return c === null ? formatMoney(n, currency) : `≈\u00A0${formatMoney(c, displayCurrency)}`;
-  }
-
   const value: FinancialsCurrencyContextValue = {
-    currency, displayCurrency, setDisplayCurrency, currencyOptions, ratesAsOf, converted, fxAvailable, disp,
+    currency,
+    disp: (n: number) => formatMoney(n, currency),
   };
-
   return (
     <FinancialsCurrencyContext.Provider value={value}>
       {children}
     </FinancialsCurrencyContext.Provider>
   );
-}
-
-/** The line under a converted header: "Approximate conversion at the rate of 8 Oct: payments settle in USD". */
-export function conversionLine(currency: string, ratesAsOf: string | null): string {
-  const d = ratesAsOf ? new Date(ratesAsOf) : null;
-  const day = d && !Number.isNaN(d.getTime()) ? d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : '';
-  return day
-    ? `Approximate conversion at the rate of ${day}: payments settle in ${currency}`
-    : `Approximate conversion: payments settle in ${currency}`;
 }
 
 export function useFinancialsCurrency(): FinancialsCurrencyContextValue {

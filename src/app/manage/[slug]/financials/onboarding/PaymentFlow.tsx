@@ -71,12 +71,6 @@ export const FLOW_CSS = `
 .gv-pf-icon{width:48px;height:48px;border-radius:14px;display:inline-flex;align-items:center;justify-content:center;background:rgba(238,217,138,0.45);color:#1B3828}
 .gv-pf-title{margin:0;font-size:18px;font-weight:800;letter-spacing:-0.01em}
 .gv-pf-desc{margin:0;font-size:14px;line-height:1.5;color:#5A5046}
-.gv-pf-how{display:grid;grid-template-columns:minmax(0,1fr);gap:12px}
-@media (min-width:720px){.gv-pf-how{grid-template-columns:repeat(auto-fit,minmax(260px,1fr))}}
-.gv-pf-how-card{display:flex;flex-direction:column;gap:10px;padding:18px 18px 20px;border-radius:18px;background:#FFFFFF;color:#1C1410;box-shadow:0 1px 0 rgba(27,56,40,0.08),0 14px 30px -26px rgba(27,56,40,0.5),inset 0 0 0 1.5px rgba(27,56,40,0.1);min-width:0}
-.gv-pf-how-head{display:flex;align-items:center;gap:12px}
-.gv-pf-how-head .gv-pf-title{font-size:17px}
-.gv-pf-how-p{margin:0;font-size:14px;line-height:1.55;color:#5A5046;overflow-wrap:anywhere}
 .gv-pf-tick{position:absolute;top:14px;right:14px;width:26px;height:26px;border-radius:999px;display:inline-flex;align-items:center;justify-content:center;background:#1B3828;color:#EED98A}
 .gv-pf-input{width:100%;height:50px;padding:0 14px;border-radius:12px;border:1.5px solid rgba(27,56,40,0.28);background:#FFFFFF;color:#1C1410;font-family:inherit;font-size:15.5px}
 .gv-pf-input:focus{outline:none;border-color:#1B3828;box-shadow:0 0 0 3px rgba(27,56,40,0.12)}
@@ -141,6 +135,8 @@ export default function PaymentFlow({ conference, mode, startStep, readOnly, onC
 }) {
   const current = currentMethod(conference);
   const [step, setStep] = useState<Step>(startStep ?? (mode === 'payment' ? 4 : 1));
+  // Opened straight on the currency step (the Change door): never suggest the bank country's currency.
+  const openedOnCurrency = startStep === 2;
   // The intro card before step 1 (prompt 106): only the welcome flow opened from the start.
   const [intro, setIntro] = useState(mode === 'welcome' && startStep === undefined && !conference.platform_collects);
   // The success screen's summary, read fresh when Done is reached.
@@ -180,17 +176,20 @@ export default function PaymentFlow({ conference, mode, startStep, readOnly, onC
       setCurErr('');
       setCur(st);
       setCurFor(country);
-      // Locked or priced: the currency in use. No prices yet: the bank country's
-      // currency when the rates know it, else the conference's current one.
+      // Locked or priced: the currency in use. Opened straight on this step
+      // (the Change door, ?open=currency; prompt 136): the conference's
+      // current currency. Only when reached from step 1 in this pop-up with
+      // no prices yet is the bank country's currency suggested (when the
+      // rates know it).
       const local = currencyForCountry(country)?.code ?? null;
-      setPick(st.locked || st.priced || !local || (list.length > 0 && !list.includes(local)) ? st.currency : local);
+      setPick(openedOnCurrency || st.locked || st.priced || !local || (list.length > 0 && !list.includes(local)) ? st.currency : local);
     });
     return () => { alive = false; };
-  }, [step, conference.id, country]);
+  }, [step, conference.id, country, openedOnCurrency]);
 
   // What was set up, for the success screen. A failed read only leaves the summary out.
   useEffect(() => {
-    if (step !== 7) return;
+    if (step !== 8) return;
     let alive = true;
     readDashboard(conference.id).then(d => { if (alive) setSummary(d.settings); }).catch(() => {});
     return () => { alive = false; };
@@ -399,36 +398,7 @@ export default function PaymentFlow({ conference, mode, startStep, readOnly, onC
     };
   } else if (step === 3) {
     title = 'How Payments Work';
-    body = (
-      <div>
-        <div className="gv-pf-how">
-          {cardOk && (
-            <section className="gv-pf-how-card" aria-labelledby="gv-pf-how-card">
-              <div className="gv-pf-how-head">
-                <span className="gv-pf-icon" aria-hidden><CreditCard size={22} strokeWidth={2.2} /></span>
-                <h3 id="gv-pf-how-card" className="gv-pf-title">Card payments with Stripe</h3>
-              </div>
-              <p className="gv-pf-how-p">Participants pay by card on Gavelling. The money goes to your own Stripe account and from there to your bank.</p>
-              <p className="gv-pf-how-p">Everything updates by itself: the invoice is marked paid, the participant gets a receipt and Financials shows the payment. Nothing to check.</p>
-              <p className="gv-pf-how-p">
-                Stripe takes about 2.9% + 30¢ per card payment (it depends on your country). Gavelling takes nothing.{' '}
-                <a href="https://stripe.com/pricing" target="_blank" rel="noopener noreferrer" className="gv-st-link">See Stripe&apos;s pricing</a>
-              </p>
-            </section>
-          )}
-          <section className="gv-pf-how-card" aria-labelledby="gv-pf-how-proof">
-            <div className="gv-pf-how-head">
-              <span className="gv-pf-icon" aria-hidden><ImageUp size={22} strokeWidth={2.2} /></span>
-              <h3 id="gv-pf-how-proof" className="gv-pf-title">Payment links, bank transfers and in person</h3>
-            </div>
-            <p className="gv-pf-how-p">Participants pay you directly, then upload proof of their payment on Gavelling (a receipt or a screenshot). You never need to collect screenshots yourself.</p>
-            <p className="gv-pf-how-p">Each proof appears in Things to Do in Financials. Check it, then accept it and the invoice is marked paid, or reject it with a note so they can send a new one.</p>
-            <p className="gv-pf-how-p">For in-person payments the proof is optional. You still confirm each payment in Things to Do.</p>
-          </section>
-        </div>
-        <p className="gv-fd-note" style={{ marginTop: 14 }}>You can change how people pay at any time in Settings, Payments</p>
-      </div>
-    );
+    body = <HowPaymentsWork cardOk={cardOk} />;
     primary = { label: 'Continue', onClick: () => setStep(4) };
   } else if (step === 4) {
     title = 'How Will People Pay You?';
@@ -707,3 +677,52 @@ function summaryFee(s: FinancialsDashboard['settings']): string {
   const perDelegate = !!f.applies_to && /delegate$/.test(f.applies_to);
   return `${cents(f.amount_cents, f.currency)} registration fee ${perDelegate ? 'per delegate' : 'per delegation'}`;
 }
+
+// ── How Payments Work (prompt 132; shared with the "How it works" pop-up, prompt 136) ──
+
+/** The step's two cards and the line under them. The Stripe card only where
+ *  Stripe works for the bank country (`cardOk`, isStripeCountrySupported). */
+export function HowPaymentsWork({ cardOk }: { cardOk: boolean }) {
+  return (
+    <div>
+      <style>{HOW_CSS}</style>
+      <div className="gv-pf-how">
+        {cardOk && (
+          <section className="gv-pf-how-card" aria-labelledby="gv-pf-how-card">
+            <div className="gv-pf-how-head">
+              <span className="gv-pf-icon" aria-hidden><CreditCard size={22} strokeWidth={2.2} /></span>
+              <h3 id="gv-pf-how-card" className="gv-pf-title">Card payments with Stripe</h3>
+            </div>
+            <p className="gv-pf-how-p">Participants pay by card on Gavelling. The money goes to your own Stripe account and from there to your bank.</p>
+            <p className="gv-pf-how-p">Everything updates by itself: the invoice is marked paid, the participant gets a receipt and Financials shows the payment. Nothing to check.</p>
+            <p className="gv-pf-how-p">
+              Stripe takes about 2.9% + 30¢ per card payment (it depends on your country). Gavelling takes nothing.{' '}
+              <a href="https://stripe.com/pricing" target="_blank" rel="noopener noreferrer" className="gv-st-link">See Stripe&apos;s pricing</a>
+            </p>
+          </section>
+        )}
+        <section className="gv-pf-how-card" aria-labelledby="gv-pf-how-proof">
+          <div className="gv-pf-how-head">
+            <span className="gv-pf-icon" aria-hidden><ImageUp size={22} strokeWidth={2.2} /></span>
+            <h3 id="gv-pf-how-proof" className="gv-pf-title">Payment links, bank transfers and in person</h3>
+          </div>
+          <p className="gv-pf-how-p">Participants pay you directly, then upload proof of their payment on Gavelling (a receipt or a screenshot). You never need to collect screenshots yourself.</p>
+          <p className="gv-pf-how-p">Each proof appears in Things to Do in Financials. Check it, then accept it and the invoice is marked paid, or reject it with a note so they can send a new one.</p>
+          <p className="gv-pf-how-p">For in-person payments the proof is optional. You still confirm each payment in Things to Do.</p>
+        </section>
+      </div>
+      <p className="gv-fd-note" style={{ marginTop: 14 }}>You can change how people pay at any time in Settings, Payments</p>
+    </div>
+  );
+}
+
+const HOW_CSS = `
+.gv-pf-icon{width:48px;height:48px;border-radius:14px;display:inline-flex;align-items:center;justify-content:center;background:rgba(238,217,138,0.45);color:#1B3828}
+.gv-pf-title{margin:0;font-size:18px;font-weight:800;letter-spacing:-0.01em}
+.gv-pf-how{display:grid;grid-template-columns:minmax(0,1fr);gap:12px}
+@media (min-width:720px){.gv-pf-how{grid-template-columns:repeat(auto-fit,minmax(260px,1fr))}}
+.gv-pf-how-card{display:flex;flex-direction:column;gap:10px;padding:18px 18px 20px;border-radius:18px;background:#FFFFFF;color:#1C1410;box-shadow:0 1px 0 rgba(27,56,40,0.08),0 14px 30px -26px rgba(27,56,40,0.5),inset 0 0 0 1.5px rgba(27,56,40,0.1);min-width:0}
+.gv-pf-how-head{display:flex;align-items:center;gap:12px}
+.gv-pf-how-head .gv-pf-title{font-size:17px}
+.gv-pf-how-p{margin:0;font-size:14px;line-height:1.55;color:#5A5046;overflow-wrap:anywhere}
+`;

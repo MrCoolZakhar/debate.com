@@ -448,6 +448,7 @@ const TWO_TAB_CSS = `
   .gv-twotab>*{min-height:0!important}
   .gv-twotab .gv-twotab-art{height:150px!important;margin-bottom:18px!important}
   .gv-twotab .gv-twotab-glyph{font-size:64px!important;height:84px!important;margin-bottom:14px!important}
+  .gv-twotab[data-compact="true"] .gv-twotab-glyph{font-size:44px!important;height:52px!important;margin-bottom:10px!important}
 }
 `;
 
@@ -455,11 +456,14 @@ export function TwoTabPick({
   options,
   value,
   onChange,
+  compact = false,
 }: {
   /** Two options side by side; a third (e.g. "Both") makes three columns. */
   options: WizardOption[];
   value: string | null;
   onChange: (key: string) => void;
+  /** As tall as the content, with less padding (prompt 136: the apply page's "Paying for Your Delegation?"). */
+  compact?: boolean;
 }) {
   const [hoverKey, setHoverKey] = useState<string | null>(null);
   const [pressKey, setPressKey] = useState<string | null>(null);
@@ -498,7 +502,7 @@ export function TwoTabPick({
   }
 
   return (
-    <div role="radiogroup" className="gv-twotab" data-n={options.length} style={{ ['--gv-twotab-n' as string]: options.length } as React.CSSProperties}>
+    <div role="radiogroup" className="gv-twotab" data-n={options.length} data-compact={compact ? 'true' : undefined} style={{ ['--gv-twotab-n' as string]: options.length } as React.CSSProperties}>
       <style>{TWO_TAB_CSS}</style>
       {options.map((opt, idx) => {
         if (opt.disabled) {
@@ -628,8 +632,8 @@ export function TwoTabPick({
             className="flex flex-col items-center justify-start focus-visible:ring-2"
             style={{
               ...cardBaseStyle(selected, hovered, pressed),
-              minHeight: 400,
-              padding: opt.image ? '0 0 34px' : '56px 26px 44px',
+              minHeight: compact ? 0 : 400,
+              padding: opt.image ? '0 0 34px' : compact ? '26px 20px 24px' : '56px 26px 44px',
               overflow: 'hidden',
             }}
           >
@@ -656,7 +660,7 @@ export function TwoTabPick({
               <span
                 aria-hidden
                 className="gv-twotab-glyph flex items-center justify-center"
-                style={{ fontSize: 100, height: 124, marginBottom: 24 }}
+                style={compact ? { fontSize: 48, height: 56, marginBottom: 12 } : { fontSize: 100, height: 124, marginBottom: 24 }}
               >
                 {opt.icon}
               </span>

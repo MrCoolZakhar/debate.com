@@ -45,7 +45,7 @@
  * the settings page's own, passed in unchanged.
  */
 
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import {
   Check, Plus, Star, X, Trash2,
@@ -292,6 +292,14 @@ export function RoleSheet(props: RoleSheetProps) {
   const rootRef = useRef<HTMLDivElement | null>(null);
   const panelRef = useRef<HTMLDivElement | null>(null);
   const bodyRef = useRef<HTMLDivElement | null>(null);
+  // The body as state too (prompt 136): the sheet is portaled, and Portal
+  // mounts its children a render later, so an effect reading bodyRef on the
+  // first render found null and the scroll-spy never attached. A callback ref
+  // re-runs it once the body really exists.
+  const [bodyEl, setBodyEl] = useState<HTMLDivElement | null>(null);
+  const setBody = useCallback((el: HTMLDivElement | null) => { bodyRef.current = el; setBodyEl(el); }, []);
+  // A rail click pins its section until that scroll ends.
+  const pinnedRef = useRef<string | null>(null);
   const closeRef = useRef<HTMLButtonElement | null>(null);
   const onCloseRef = useRef(props.onClose);
   useEffect(() => { onCloseRef.current = props.onClose; });
@@ -319,31 +327,49 @@ export function RoleSheet(props: RoleSheetProps) {
     return () => window.clearTimeout(t);
   }, [startStep]);
 
-  // Scroll-spy: an IntersectionObserver on the section headings, no scroll
-  // listener and no layout reads. A heading in the top 45% of the body is "in";
-  // the first one in wins, else the last one scrolled past.
+  // Scroll-spy (prompt 136): a passive scroll listener on the body, throttled
+  // to one read per frame. The active section is the last one whose heading
+  // has passed the top third of the body; scrolled to the bottom, the LAST
+  // section is active. Re-attached whenever the body or the sections change.
   useEffect(() => {
-    const body = bodyRef.current;
-    if (!body || !loaded || typeof IntersectionObserver === 'undefined') return;
+    const body = bodyEl;
+    if (!body || !loaded) return;
     const ids = railKey.split('|');
-    const where = new Map<string, 'in' | 'above' | 'below'>();
-    const io = new IntersectionObserver((entries) => {
-      for (const e of entries) {
-        const id = (e.target as HTMLElement).dataset.railHeading ?? '';
-        const top = e.rootBounds?.top ?? 0;
-        where.set(id, e.isIntersecting ? 'in' : e.boundingClientRect.top < top ? 'above' : 'below');
+    let raf = 0;
+    let endTimer = 0;
+    const compute = () => {
+      raf = 0;
+      if (pinnedRef.current) return;
+      const rect = body.getBoundingClientRect();
+      const line = rect.top + body.clientHeight / 3;
+      let next = ids[0];
+      if (body.scrollTop + body.clientHeight >= body.scrollHeight - 2) {
+        next = ids[ids.length - 1];
+      } else {
+        for (const id of ids) {
+          const h = body.querySelector<HTMLElement>(`[data-rail-heading="${id}"]`);
+          if (h && h.getBoundingClientRect().top <= line) next = id;
+        }
       }
-      const inView = ids.find(id => where.get(id) === 'in');
-      const passed = [...ids].reverse().find(id => where.get(id) === 'above');
-      const next = inView ?? passed ?? ids[0];
       setActiveSection(prev => (prev === next ? prev : next));
-    }, { root: body, rootMargin: '0px 0px -55% 0px', threshold: 0 });
-    for (const id of ids) {
-      const h = body.querySelector<HTMLElement>(`[data-rail-heading="${id}"]`);
-      if (h) io.observe(h);
-    }
-    return () => io.disconnect();
-  }, [railKey, loaded]);
+    };
+    const onScroll = () => {
+      if (pinnedRef.current) {
+        // A rail click's own scroll: keep its section until the scroll ends.
+        window.clearTimeout(endTimer);
+        endTimer = window.setTimeout(() => { pinnedRef.current = null; }, 160);
+        return;
+      }
+      if (!raf) raf = requestAnimationFrame(compute);
+    };
+    body.addEventListener('scroll', onScroll, { passive: true });
+    raf = requestAnimationFrame(compute);
+    return () => {
+      body.removeEventListener('scroll', onScroll);
+      if (raf) cancelAnimationFrame(raf);
+      window.clearTimeout(endTimer);
+    };
+  }, [bodyEl, railKey, loaded]);
 
   // On a phone the rail is a sideways row: keep the active name in view.
   // Runs when the active section changes, never per scroll event.
@@ -367,6 +393,7 @@ export function RoleSheet(props: RoleSheetProps) {
     const sec = body?.querySelector<HTMLElement>(`#${id}`);
     if (!body || !sec) return;
     setActiveSection(id);
+    pinnedRef.current = id;
     const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
     const rail = body.querySelector<HTMLElement>('.gvs-rail');
     const railOnTop = window.matchMedia?.('(max-width: 720px)').matches;
@@ -375,7 +402,12 @@ export function RoleSheet(props: RoleSheetProps) {
     const heading = body.querySelector<HTMLElement>(`#${id}-h`);
     let done = false;
     const focus = () => { if (done) return; done = true; body.removeEventListener('scrollend', focus); heading?.focus({ preventScroll: true }); };
-    if (reduce || Math.abs(body.scrollTop - top) < 2) { body.scrollTop = top; focus(); return; }
+    if (reduce || Math.abs(body.scrollTop - top) < 2) {
+      // No smooth scroll to wait for: the pin ends with this frame's scroll (if any).
+      body.scrollTop = top; focus();
+      window.setTimeout(() => { pinnedRef.current = null; }, 160);
+      return;
+    }
     const from = body.scrollTop;
     body.addEventListener('scrollend', focus);
     // A browser that never animates (a background frame, some embedded views)
@@ -493,7 +525,7 @@ export function RoleSheet(props: RoleSheetProps) {
             </button>
           </header>
 
-          <div ref={bodyRef} className="gvs-body">
+          <div ref={setBody} className="gvs-body">
             <div className="gvs-layout">
             <nav ref={railRef} className="gvs-rail" aria-label="Sections">
               {railSections.map(r => (

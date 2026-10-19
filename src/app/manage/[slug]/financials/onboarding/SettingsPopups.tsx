@@ -13,7 +13,6 @@ import { getFreshAuthedClient } from '@/lib/supabase-auth';
 import { STORE_CSS } from '../../store/storeKit';
 import { DASH_CSS, READ_ONLY_LINE } from '../dashboardKit';
 import { cents } from '../financialsApi';
-import { useFinancialsCurrency } from '../shared';
 import ApplicationFeeSection from '../ApplicationFeeSection';
 import AddonsSection from '../AddonsSection';
 import VouchersSection from '../VouchersSection';
@@ -85,10 +84,9 @@ export function AddonsPopup({ conference, readOnly, onClose }: { conference: Con
 }
 
 export function VouchersPopup({ conference, readOnly, onClose }: { conference: Conference; readOnly: boolean; onClose: () => void }) {
-  const { displayCurrency } = useFinancialsCurrency();
   return (
     <Shell title="Vouchers" line="Discount codes for partner schools or early supporters, and how often each was used" readOnly={readOnly} onClose={onClose}>
-      <VouchersSection conference={conference} displayCurrency={displayCurrency} bare />
+      <VouchersSection conference={conference} bare />
     </Shell>
   );
 }

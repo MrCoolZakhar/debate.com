@@ -19,11 +19,11 @@ import { Emoji3D } from '@/components/neu';
 import { useManage } from '@/app/manage/[slug]/layout';
 import { OUTFIT, NEU } from '@/components/neu';
 import { GoldWord } from '@/components/BrandHeading';
-import { CurrencyPicker } from '@/components/CurrencyPicker';
-import { PURCHASE_CSS } from '@/components/purchase/purchaseKit';
+import { PURCHASE_CSS, PurchaseShell } from '@/components/purchase/purchaseKit';
 import { friendlyError } from '@/lib/friendlyError';
 import { STORE_CSS, Big } from '../store/storeKit';
-import { conversionLine, useFinancialsCurrency } from './shared';
+import { useFinancialsCurrency } from './shared';
+import ConferenceCurrencyChip from './ConferenceCurrencyChip';
 import {
   cents, readDashboard, readThingsToDo, type FinancialsDashboard, type ThingsToDo, type TodoKind,
 } from './financialsApi';
@@ -33,7 +33,8 @@ import {
 } from './dashboardKit';
 import AidCard from './AidCard';
 import MoneyPopup from './MoneyPopup';
-import PaymentFlow from './onboarding/PaymentFlow';
+import PaymentFlow, { HowPaymentsWork } from './onboarding/PaymentFlow';
+import { isStripeCountrySupported } from '@/lib/payments';
 import { FeePopup, AddonsPopup, VouchersPopup } from './onboarding/SettingsPopups';
 import { sessionDel, sessionGet, sessionSet, welcomeMarkerKey, welcomeSeenKey } from './onboarding/paymentApi';
 import ThingsToDoPopup from './ThingsToDoPopup';
@@ -69,9 +70,11 @@ export default function FinancialsDashboardPage() {
   // start 6 resumes the welcome flow after Stripe (the registration fee step); start 2 is the currency step (Settings, Payments).
   const [flow, setFlow] = useState<{ mode: 'welcome' | 'payment'; start?: 2 | 6 } | null>(null);
   const [setting, setSetting] = useState<'fee' | 'addons' | 'vouchers' | null>(null);
+  // "How it works" (prompt 136): only the How Payments Work step, in its own pop-up.
+  const [howOpen, setHowOpen] = useState(false);
   const openParamDone = useRef(false);
   const autoWelcomeDone = useRef(false);
-  const { currency, displayCurrency, setDisplayCurrency, currencyOptions, converted, disp, ratesAsOf } = useFinancialsCurrency();
+  const { disp } = useFinancialsCurrency();
   const [data, setData] = useState<FinancialsDashboard | null>(null);
   const [things, setThings] = useState<ThingsToDo | null>(null);
   const [error, setError] = useState('');
@@ -98,7 +101,7 @@ export default function FinancialsDashboardPage() {
   /** After anything in the payment flow or a settings pop-up was saved. */
   const afterChange = useCallback(() => { refreshConferenceQuiet(); reload(); }, [refreshConferenceQuiet, reload]);
 
-  // ?open=payment | currency | fee | addons | vouchers | welcome4 | todo opens that pop-up once, then leaves the URL.
+  // ?open=payment | currency | fee | addons | vouchers | welcome4 | todo | how-payments opens that pop-up once, then leaves the URL.
   // welcome4 keeps its old name (the Stripe return writes it) and now resumes at step 5.
   // ?open=todo is the link in the owner's email to organizers (prompt 114).
   const openParam = params.get('open');
@@ -114,6 +117,7 @@ export default function FinancialsDashboardPage() {
       else if (which === 'welcome4') setFlow({ mode: 'welcome', start: 6 });
       else if (which === 'fee' || which === 'addons' || which === 'vouchers') setSetting(which);
       else if (which === 'todo') setPopup('todo');
+      else if (which === 'how-payments') setHowOpen(true);
     });
     replaceUrlInPlace(pathname);
   }, [conferenceId, openParam, pathname]);
@@ -144,7 +148,7 @@ export default function FinancialsDashboardPage() {
     <div className="gv-st">
       <style>{STORE_CSS}</style>
       <style>{DASH_CSS}</style>
-      {popup || flow || setting ? <style>{PURCHASE_CSS}</style> : null}
+      {popup || flow || setting || howOpen ? <style>{PURCHASE_CSS}</style> : null}
 
       {/* Header: the title left, the key numbers and the picker right, like the Store */}
       <div className="flex items-start justify-between gap-4 flex-wrap mb-6">
@@ -169,18 +173,9 @@ export default function FinancialsDashboardPage() {
               </>
             )}
             <div className="gv-fd-head-cell" style={{ alignSelf: 'center' }}>
-              <CurrencyPicker
-                value={displayCurrency}
-                onChange={setDisplayCurrency}
-                options={currencyOptions}
-                variant="pill"
-                showName
-                disabled={currencyOptions.length <= 1}
-                ariaLabel="Display currency"
-              />
+              <ConferenceCurrencyChip onChanged={afterChange} />
             </div>
           </div>
-          {converted && <p className="gv-fd-other">{conversionLine(currency, ratesAsOf)}</p>}
           {data && data.other_currencies.length > 0 && (
             <p className="gv-fd-other">Some payments are in {data.other_currencies.join(', ')}. They are not included here</p>
           )}
@@ -302,7 +297,7 @@ export default function FinancialsDashboardPage() {
           </div>
 
           <div className="gv-fd-four">
-            <PaymentMethodCard s={data.settings} onOpen={() => setFlow(needsSetup ? { mode: 'welcome' } : { mode: 'payment' })} readOnly={financialsReadOnly} />
+            <PaymentMethodCard s={data.settings} onOpen={() => setFlow(needsSetup ? { mode: 'welcome' } : { mode: 'payment' })} readOnly={financialsReadOnly} onHow={() => setHowOpen(true)} />
             <RegistrationFeeCard s={data.settings} onOpen={() => setSetting('fee')} readOnly={financialsReadOnly} formatCents={cents} />
             <AddonsCard s={data.settings} onOpen={() => setSetting('addons')} readOnly={financialsReadOnly} />
             <VouchersCard s={data.settings} onOpen={() => setSetting('vouchers')} readOnly={financialsReadOnly} />
@@ -320,6 +315,17 @@ export default function FinancialsDashboardPage() {
           onClose={() => { setFlow(null); afterChange(); }}
           onChanged={afterChange}
         />
+      )}
+      {howOpen && (
+        <PurchaseShell tone="light" label="How payments work" onClose={() => setHowOpen(false)} panelClass="gv-fd-wide gv-fd-fit" testId="financials-how-payments">
+          <div className="gv-fd-pop gv-st">
+            <h2 className="gv-fd-pop-title" style={{ paddingRight: 40 }}>How Payments Work</h2>
+            <HowPaymentsWork cardOk={!!conference.platform_collects || isStripeCountrySupported(conference.payout_country ?? '')} />
+            <div className="gv-fd-footbar">
+              <button type="button" className="gv-st-btn gv-st-forest" onClick={() => setHowOpen(false)} autoFocus>Got it</button>
+            </div>
+          </div>
+        </PurchaseShell>
       )}
       {setting === 'fee' && <FeePopup conference={conference} readOnly={financialsReadOnly} onClose={() => { setSetting(null); afterChange(); }} />}
       {setting === 'addons' && <AddonsPopup conference={conference} readOnly={financialsReadOnly} onClose={() => { setSetting(null); afterChange(); }} />}

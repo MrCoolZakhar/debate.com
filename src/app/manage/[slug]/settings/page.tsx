@@ -9,7 +9,7 @@ import {
   Settings2, Globe, Eye, EyeOff, ArrowUp, ArrowDown, Trash2, Briefcase,
   CreditCard, Star, CheckCircle2, Clock, Users2,
   ChevronRight as ChevronRightIcon, CalendarDays, Palette, Handshake, History,
-  School, ReceiptText, Gift, Ticket, HandHeart, type LucideIcon,
+  School, ReceiptText, Gift, Ticket, HandHeart, Coins, type LucideIcon,
 } from 'lucide-react';
 import { useManage, type Conference } from '@/app/manage/[slug]/layout';
 
@@ -4719,18 +4719,22 @@ export default function SettingsPage() {
             />
             <Group title="How People Pay" emoji="Money bag" icon={CreditCard} tint={TINT_GOLD_BG}>
               <Row
-                label="Payment method"
+                label={<span className="inline-flex items-center gap-2.5"><EmojiDisc emoji="Credit card" icon={CreditCard} size={32} tint={TINT_GOLD_BG} />Payment method</span>}
                 align="end"
                 on={ready}
                 need={!ready}
                 desc={ready ? method : 'Set this up when you want to take payments.'}
               >
-                <a href={`${fin}?open=payment`} className="gv-st-btn gv-st-forest">
-                  {ready ? 'Change' : 'Set up payments'}<ChevronRightIcon size={16} strokeWidth={2.4} aria-hidden />
-                </a>
+                {/* "How it works" (prompt 136): only the How Payments Work step, in its own pop-up. */}
+                <span className="inline-flex items-center gap-2 flex-wrap justify-end">
+                  <a href={`${fin}?open=how-payments`} className="gv-st-btn gv-st-outline">How it works</a>
+                  <a href={`${fin}?open=payment`} className="gv-st-btn gv-st-forest">
+                    {ready ? 'Change' : 'Set up payments'}<ChevronRightIcon size={16} strokeWidth={2.4} aria-hidden />
+                  </a>
+                </span>
               </Row>
               <Row
-                label="Currency"
+                label={<span className="inline-flex items-center gap-2.5"><EmojiDisc emoji="Coin" icon={Coins} size={32} tint={TINT_GOLD_BG} />Currency</span>}
                 align="end"
                 desc={`${view.fee_currency} · ${findCurrency(view.fee_currency)?.name ?? view.fee_currency}`}
               >
