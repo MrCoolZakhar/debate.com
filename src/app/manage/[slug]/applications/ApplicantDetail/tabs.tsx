@@ -326,10 +326,12 @@ export function MoneyStrip({ totals, compact }: { totals: LedgerTotals; compact?
           </div>
         ))}
       </div>
-      {(totals.pendingProofs > 0 || totals.aidCents > 0 || totals.otherCurrencies.length > 0) && (
+      {(totals.pendingProofs > 0 || totals.startedNoProof > 0 || totals.aidCents > 0 || totals.otherCurrencies.length > 0) && (
         <p className="mt-2" style={{ fontFamily: OUTFIT, fontSize: 12, color: C.inkSoft, ...NUM }}>
           {[
             totals.pendingProofs > 0 ? `${totals.pendingProofs} proof${totals.pendingProofs === 1 ? '' : 's'} waiting for review` : null,
+            // Started on /pay, no proof sent (prompt 137): only when no proof is waiting.
+            totals.pendingProofs === 0 && totals.startedNoProof > 0 ? `${totals.startedNoProof} payment${totals.startedNoProof === 1 ? '' : 's'} started, no proof yet` : null,
             totals.aidCents > 0 ? `${centsToFee(totals.aidCents, totals.currency)} of financial aid applied` : null,
             totals.otherCurrencies.length > 0 ? `Also billed in ${totals.otherCurrencies.join(', ')}` : null,
           ].filter(Boolean).join(' · ')}

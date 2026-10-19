@@ -76,10 +76,15 @@ export interface CvEntry {
 export interface LedgerBatch {
   id: string;
   method: 'stripe' | 'manual' | 'organizer' | string;
-  status: 'pending' | 'paid' | 'rejected' | string;
+  /** 'awaiting_proof' = the payer pressed Pay and has not sent a proof yet
+   *  (prompt 137: never "waiting for review"); 'pending' = a proof (or an
+   *  in-person payment finished without one) waiting for the organizers. */
+  status: 'awaiting_proof' | 'pending' | 'paid' | 'rejected' | string;
   proof_path: string | null;
   proof_uploaded_at: string | null;
   paid_at: string | null;
+  /** How long a started payment is held. */
+  expires_at?: string | null;
 }
 
 export interface LedgerPayment {
@@ -211,7 +216,7 @@ export function useApplicantLedger(app: ApplicantApp, accessToken: string | null
         application_id, covers_application_id, quantity, created_at,
         payments (
           id, amount_cents, currency, status, type, method, note, created_at,
-          batch:payment_batches (id, method, status, proof_path, proof_uploaded_at, paid_at)
+          batch:payment_batches (id, method, status, proof_path, proof_uploaded_at, paid_at, expires_at)
         )
       `)
       .or(`application_id.eq.${app.id},covers_application_id.eq.${app.id}`)
@@ -239,7 +244,10 @@ export interface LedgerTotals {
   outstandingCents: number;
   billedCents: number;
   aidCents: number;
+  /** Payments whose proof is waiting for the organizers (one per payment, not per item). */
   pendingProofs: number;
+  /** Payments started on /pay with no proof sent yet (prompt 137). */
+  startedNoProof: number;
   otherCurrencies: string[];
 }
 
@@ -250,8 +258,11 @@ export function ledgerTotals(ledger: Ledger | undefined): LedgerTotals | null {
   const currency = [...byCur.entries()].sort((a, b) => b[1] - a[1])[0][0];
   const t: LedgerTotals = {
     currency, receivedCents: 0, offlineCents: 0, outstandingCents: 0, billedCents: 0, aidCents: 0,
-    pendingProofs: 0, otherCurrencies: [...byCur.keys()].filter(c => c !== currency),
+    pendingProofs: 0, startedNoProof: 0, otherCurrencies: [...byCur.keys()].filter(c => c !== currency),
   };
+  // Counted per payment (batch), never per item it covers.
+  const reviewBatches = new Set<string>();
+  const startedBatches = new Set<string>();
   for (const inv of ledger.invoices) {
     if (inv.currency !== currency) continue;
     t.billedCents += inv.amount_cents;
@@ -264,10 +275,14 @@ export function ledgerTotals(ledger: Ledger | undefined): LedgerTotals | null {
         if (p.method === 'stripe') t.receivedCents += p.amount_cents;
         else t.offlineCents += p.amount_cents;
       } else if (p.status === 'pending' && p.type === 'manual_proof') {
-        t.pendingProofs += 1;
+        const key = p.batch?.id ?? p.id;
+        if (p.batch?.status === 'awaiting_proof') startedBatches.add(key);
+        else reviewBatches.add(key);
       }
     }
   }
+  t.pendingProofs = reviewBatches.size;
+  t.startedNoProof = startedBatches.size;
   return t;
 }
 

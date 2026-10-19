@@ -55,6 +55,8 @@ function provenance(p: LedgerPayment): { label: string; icon: LucideIcon; tint: 
   if (p.type === 'manual_proof') {
     if (ok) return { label: 'Proof of payment approved', icon: FileImage, tint: C.goldInk };
     if (p.batch?.status === 'rejected') return { label: 'Proof of payment rejected', icon: XCircle, tint: C.red, muted: true };
+    // Pressed Pay, no proof sent yet (prompt 137): nothing to review.
+    if (p.batch?.status === 'awaiting_proof') return { label: 'Payment started, no proof uploaded yet', icon: CircleDashed, tint: C.inkSoft };
     return { label: 'Proof of payment waiting for review', icon: Clock, tint: C.amber };
   }
   return ok
@@ -110,6 +112,11 @@ function PaymentLine({ p, accessToken }: { p: LedgerPayment; accessToken: string
           {fmtDateTime(p.batch?.paid_at && p.status === 'succeeded' ? p.batch.paid_at : p.created_at)}
           {p.note ? ` · ${p.note}` : ''}
         </p>
+        {p.batch?.status === 'awaiting_proof' && p.batch.expires_at && (
+          <p style={{ fontFamily: OUTFIT, fontSize: 11.5, color: C.inkSoft, lineHeight: 1.4, marginTop: 2 }}>
+            Their payment is held until {fmtDateTime(p.batch.expires_at)}. Proofs they upload appear in Things to Do in Financials
+          </p>
+        )}
       </div>
       {p.batch?.proof_path && <ProofButton path={p.batch.proof_path} accessToken={accessToken} />}
       <span style={{ fontFamily: OUTFIT, fontSize: 14, fontWeight: 800, color: pv.muted ? C.inkSoft : C.ink, textDecoration: pv.muted ? 'line-through' : 'none', ...NUM }}>
