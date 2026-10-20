@@ -30,10 +30,10 @@ import { createMyDocument, saveMyBilling, type Billing, type BillingSuggestion, 
 
 export const PAYDOCS_CSS = `
 .gv-buy-panel.gv-pd-view{max-width:860px}
-.gv-pd-input,.gv-pd-area{width:100%;border-radius:12px;border:1.5px solid rgba(27,56,40,0.28);background:#FFFFFF;color:${INK};font-family:inherit;font-size:16px;line-height:1.45}
+.gv-pd-input,.gv-pd-area{width:100%;border-radius:12px;border:1.5px solid color-mix(in srgb, var(--gv-main) 28%, transparent);background:#FFFFFF;color:${INK};font-family:inherit;font-size:16px;line-height:1.45}
 .gv-pd-input{height:46px;padding:0 14px}
 .gv-pd-area{min-height:72px;padding:11px 14px;resize:vertical}
-.gv-pd-input:focus,.gv-pd-area:focus{outline:none;border-color:${FOREST};box-shadow:0 0 0 3px rgba(27,56,40,0.14)}
+.gv-pd-input:focus,.gv-pd-area:focus{outline:none;border-color:${FOREST};box-shadow:0 0 0 3px color-mix(in srgb, var(--gv-main) 14%, transparent)}
 .gv-pd-label{display:block;margin:0 0 6px;font-size:13.5px;font-weight:700;color:${INK}}
 .gv-pd-label small{font-weight:500;color:${INK_SOFT}}
 .gv-pd-two{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px}
@@ -43,16 +43,16 @@ export const PAYDOCS_CSS = `
 .gv-pd-check input{width:20px;height:20px;accent-color:${FOREST};flex-shrink:0}
 .gv-pd-seg{display:inline-grid;grid-auto-flow:column;grid-auto-columns:1fr;gap:4px;max-width:100%;padding:4px;border-radius:14px;background:#FFFFFF}
 .gv-pd-seg button{min-height:40px;padding:0 14px;border:none;border-radius:10px;background:none;font-family:inherit;font-size:14px;font-weight:700;color:${INK_SOFT};cursor:pointer}
-.gv-pd-seg button[aria-checked="true"]{background:${FOREST};color:#EED98A}
+.gv-pd-seg button[aria-checked="true"]{background:${FOREST};color:var(--gv-accent-light)}
 .gv-pd-seg button:disabled{opacity:0.45;cursor:default}
-.gv-pd-docs{display:flex;flex-direction:column;background:#FFFFFF;border-radius:16px;padding:4px 0;box-shadow:0 1px 0 rgba(27,56,40,0.08),0 14px 30px -28px rgba(27,56,40,0.5)}
+.gv-pd-docs{display:flex;flex-direction:column;background:#FFFFFF;border-radius:16px;padding:4px 0;box-shadow:0 1px 0 color-mix(in srgb, var(--gv-main) 8%, transparent),0 14px 30px -28px color-mix(in srgb, var(--gv-main) 50%, transparent)}
 .gv-pd-doc{display:flex;align-items:center;gap:12px;padding:12px 16px}
 .gv-pd-doc + .gv-pd-doc{border-top:1px solid ${LINE}}
 .gv-pd-doc-open{flex:1;min-width:0;display:flex;align-items:center;gap:12px;background:none;border:none;padding:0;text-align:left;font-family:inherit;color:${INK};cursor:pointer}
 .gv-pd-doc-open:focus{outline:none}
 .gv-pd-doc-open:focus-visible{outline:2px solid ${FOREST};outline-offset:4px;border-radius:6px}
 @media (max-width:420px){.gv-pd-seg{grid-auto-flow:row}}
-.gv-pd-doc-icon{display:inline-flex;align-items:center;justify-content:center;width:36px;height:36px;border-radius:10px;background:rgba(238,217,138,0.4);color:${FOREST};flex-shrink:0}
+.gv-pd-doc-icon{display:inline-flex;align-items:center;justify-content:center;width:36px;height:36px;border-radius:10px;background:color-mix(in srgb, var(--gv-accent-light) 40%, transparent);color:${FOREST};flex-shrink:0}
 .gv-pd-doc-text{display:flex;flex-direction:column;min-width:0}
 .gv-pd-doc-dl{flex-shrink:0;white-space:nowrap;display:inline-flex;align-items:center;gap:6px}
 .gv-pd-ok{display:inline-flex;align-items:center;gap:6px;font-weight:700;color:#2F7A4D}

@@ -22,6 +22,7 @@ import { useCredits, refreshCreditsEverywhere } from '@/hooks/useCredits';
 import { openCreditsPopup } from '@/lib/purchasePopup';
 import { friendlyError, plainOrFallback, UserFacingError } from '@/lib/friendlyError';
 import { SectionCard, OUTFIT } from './shared';
+import { CARD_TITLE_STYLE } from './dashboardKit';
 
 const FUND_MAX = 500;
 const MESSAGE_MS = 5000;
@@ -330,9 +331,7 @@ export default function DelegationCreditsCard({ societyId }: { societyId: string
   if (notLeader) return null;
 
   const eyebrow = (
-    <p style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: 9, letterSpacing: '0.14em', color: 'var(--gv-accent)', margin: 0 }}>
-      PAY FOR YOUR DELEGATES
-    </p>
+    <h3 className="[overflow-wrap:anywhere]" style={CARD_TITLE_STYLE}>Pay for Your Delegates</h3>
   );
 
   if (loading && !pool) {

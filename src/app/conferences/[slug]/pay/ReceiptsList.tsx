@@ -96,7 +96,7 @@ export function ReceiptPopup({ payment, conferenceName, onClose, pdf, itemsById,
       <PurchaseShell tone="light" label="Receipt" onClose={onClose} panelClass="gv-pay-mid" testId="pay-receipt">
         <div style={{ padding: '28px 26px 26px', display: 'flex', flexDirection: 'column', gap: 16, width: '100%' }}>
           <div style={{ paddingRight: 40 }}>
-            <span style={{ display: 'inline-flex', width: 44, height: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center', background: 'rgba(238,217,138,0.45)', color: '#1B3828' }} aria-hidden>
+            <span style={{ display: 'inline-flex', width: 44, height: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center', background: 'color-mix(in srgb, var(--gv-accent-light) 45%, transparent)', color: 'var(--gv-main)' }} aria-hidden>
               <ReceiptText size={22} strokeWidth={2.2} />
             </span>
             <h2 style={{ margin: '12px 0 0', fontSize: 26, fontWeight: 800, letterSpacing: '-0.02em', color: '#1C1410' }}>Receipt</h2>
@@ -125,7 +125,7 @@ export function ReceiptPopup({ payment, conferenceName, onClose, pdf, itemsById,
                 </div>
               );
             })}
-            <div className="gv-pay-row" style={{ fontWeight: 800 }}><span>Total</span><b style={{ color: '#1B3828' }}>{money(sum, payment.currency)}</b></div>
+            <div className="gv-pay-row" style={{ fontWeight: 800 }}><span>Total</span><b style={{ color: 'var(--gv-main)' }}>{money(sum, payment.currency)}</b></div>
           </div>
           {(payment.refunded_cents ?? 0) > 0 && (
             <p style={{ margin: 0, fontSize: 14, color: DANGER }}>{money(payment.refunded_cents!, payment.currency)} of this was refunded</p>

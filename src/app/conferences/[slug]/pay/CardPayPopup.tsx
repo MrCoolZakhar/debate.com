@@ -111,7 +111,7 @@ export default function CardPayPopup({ conferenceId, conferenceName, invoiceIds,
 
           {stage.kind === 'paid' && (
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 12, padding: '12px 0' }} aria-live="polite">
-              <span style={{ width: 48, height: 48, borderRadius: 999, background: 'rgba(27,56,40,0.08)', color: '#1B3828', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }} aria-hidden>
+              <span style={{ width: 48, height: 48, borderRadius: 999, background: 'color-mix(in srgb, var(--gv-main) 8%, transparent)', color: 'var(--gv-main)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }} aria-hidden>
                 <CircleCheck size={26} strokeWidth={2.2} />
               </span>
               <p style={{ margin: 0, fontSize: 17, fontWeight: 700, color: '#1C1410' }}>

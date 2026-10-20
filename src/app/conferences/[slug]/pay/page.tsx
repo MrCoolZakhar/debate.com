@@ -510,7 +510,7 @@ export default function PayPage() {
   return (
     <Frame theme={conference.theme} slug={slug}>
       <h1 style={{ margin: 0, fontSize: 'clamp(28px, 3vw, 36px)', fontWeight: 900, letterSpacing: '-0.02em', color: INK }}>
-        Conference <GoldWord tone="light">Payments</GoldWord>
+        Conference <GoldWord tone="light" style={{ color: 'var(--gv-accent)' }}>Payments</GoldWord>
       </h1>
       <p style={{ margin: '4px 0 22px', fontSize: 15, color: INK_SOFT, overflowWrap: 'anywhere' }}>{c.full_name}</p>
 
@@ -773,7 +773,7 @@ export default function PayPage() {
 
 function Frame({ theme, slug, children }: { theme: PayConference['theme'] | undefined; slug: string; children: React.ReactNode }) {
   return (
-    <div className="gv-pay min-h-screen flex flex-col" style={{ ...themeCssVars(theme ?? {}), backgroundColor: '#EDE7D8' }}>
+    <div className="gv-pay min-h-screen flex flex-col" style={{ ...themeCssVars(theme ?? {}), backgroundColor: 'var(--gv-bg)' }}>
       <style>{PAY_CSS}</style>
       <SiteNav />
       <div className="flex-1 w-full max-w-[1240px] mx-auto px-4 sm:px-6 pt-8 pb-[calc(2.5rem+env(safe-area-inset-bottom))]">

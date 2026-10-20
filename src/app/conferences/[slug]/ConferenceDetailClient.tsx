@@ -433,7 +433,7 @@ function MinAgeChip({ minAge, maxAge }: { minAge: number | null; maxAge: number 
               color: '#3B342C',
               borderRadius: 12,
               padding: '10px 12px',
-              boxShadow: '0 8px 28px rgba(27,56,40,0.22)',
+              boxShadow: '0 8px 28px color-mix(in srgb, var(--gv-main) 22%, transparent)',
               fontFamily: "var(--font-brand), sans-serif",
               fontSize: 13,
               lineHeight: 1.45,
@@ -2045,14 +2045,14 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                       12 Oct 2026) says so to everyone, never a made-up date. */}
                   {!conference.dates_tbd && conference.start_date ? (
                     <>
-                      <span aria-hidden style={{ color: 'rgba(238,217,138,0.5)', fontSize: '10px' }}>◆</span>
+                      <span aria-hidden style={{ color: 'color-mix(in srgb, var(--gv-accent-light) 50%, transparent)', fontSize: '10px' }}>◆</span>
                       <span style={{ fontFamily: "var(--font-brand), sans-serif", fontWeight: 500, fontVariantNumeric: 'tabular-nums', letterSpacing: '0.01em', fontSize: '12px', color: 'rgba(237,231,216,0.78)' }}>
                         {formatDateRange(conference.start_date, conference.end_date)}
                       </span>
                     </>
                   ) : (
                     <>
-                      <span aria-hidden style={{ color: 'rgba(238,217,138,0.5)', fontSize: '10px' }}>◆</span>
+                      <span aria-hidden style={{ color: 'color-mix(in srgb, var(--gv-accent-light) 50%, transparent)', fontSize: '10px' }}>◆</span>
                       <span style={{ fontFamily: "var(--font-brand), sans-serif", fontWeight: 500, letterSpacing: '0.01em', fontSize: '12px', color: 'rgba(237,231,216,0.78)' }}>
                         Dates to be decided
                       </span>
@@ -2063,13 +2063,13 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                       medallion stays too). */}
                   {isListing && (
                     <>
-                      <span aria-hidden style={{ color: 'rgba(238,217,138,0.5)', fontSize: '10px' }}>◆</span>
+                      <span aria-hidden style={{ color: 'color-mix(in srgb, var(--gv-accent-light) 50%, transparent)', fontSize: '10px' }}>◆</span>
                       <NotOnGavellingMark tone="dark" size="md" />
                     </>
                   )}
                   {creditSponsored && !isListing && (
                     <>
-                      <span aria-hidden style={{ color: 'rgba(238,217,138,0.5)', fontSize: '10px' }}>◆</span>
+                      <span aria-hidden style={{ color: 'color-mix(in srgb, var(--gv-accent-light) 50%, transparent)', fontSize: '10px' }}>◆</span>
                       <span
                         style={{ display: 'inline-flex', alignItems: 'center', backgroundColor: 'rgba(250,248,243,0.94)', borderRadius: 9999, padding: '2px 9px' }}
                       >
@@ -2240,7 +2240,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                       position: 'absolute', top: 5, bottom: 5, left: 0,
                       width: viewsThumb.width, transform: `translateX(${viewsThumb.left}px)`,
                       borderRadius: 12, backgroundColor: '#FFFFFF',
-                      boxShadow: '0 1px 2px rgba(27,56,40,0.10), 0 4px 12px rgba(27,56,40,0.10)',
+                      boxShadow: '0 1px 2px color-mix(in srgb, var(--gv-main) 10%, transparent), 0 4px 12px color-mix(in srgb, var(--gv-main) 10%, transparent)',
                       transition: `transform 320ms ${EASE}, width 320ms ${EASE}`,
                     }}
                   />
@@ -2763,7 +2763,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                     className="pointer-events-none absolute"
                     style={{
                       top: '-60px', right: '-40px', width: '200px', height: '200px',
-                      background: 'radial-gradient(circle, rgba(238,217,138,0.14) 0%, transparent 65%)',
+                      background: 'radial-gradient(circle, color-mix(in srgb, var(--gv-accent-light) 14%, transparent) 0%, transparent 65%)',
                     }}
                   />
                   <div className="relative">
@@ -2787,7 +2787,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                         {myApp && (
                           <div
                             className="flex items-center justify-between rounded-xl px-3.5 py-2.5 mb-3"
-                            style={{ backgroundColor: 'rgba(238,217,138,0.08)', border: '1px solid rgba(238,217,138,0.18)' }}
+                            style={{ backgroundColor: 'color-mix(in srgb, var(--gv-accent-light) 8%, transparent)', border: '1px solid color-mix(in srgb, var(--gv-accent-light) 18%, transparent)' }}
                           >
                             <span className="text-[12px] font-semibold" style={{ color: 'color-mix(in srgb, var(--gv-on-main) 90%, transparent)', fontFamily: "var(--font-brand), sans-serif" }}>
                               Also applied as {roleLabel(myApp.role)}
@@ -2893,7 +2893,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                             {myAllocation && (
                               <div
                                 className="mt-4 rounded-xl px-4 py-3.5"
-                                style={{ backgroundColor: 'rgba(238,217,138,0.08)', border: '1px solid rgba(238,217,138,0.18)' }}
+                                style={{ backgroundColor: 'color-mix(in srgb, var(--gv-accent-light) 8%, transparent)', border: '1px solid color-mix(in srgb, var(--gv-accent-light) 18%, transparent)' }}
                               >
                                 <p style={{ fontFamily: "var(--font-brand), sans-serif", fontWeight: 700, fontSize: '8.5px', letterSpacing: '0.14em', color: 'color-mix(in srgb, var(--gv-on-main) 75%, transparent)', margin: '0 0 6px 0' }}>
                                   YOUR ALLOCATION
@@ -2926,9 +2926,9 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                                 showTab('participant', myApp.role);
                               }}
                               className="w-full flex items-center justify-center gap-2 rounded-xl py-2.5 mt-3 font-bold text-xs transition-colors focus:outline-none"
-                              style={{ backgroundColor: 'rgba(238,217,138,0.08)', color: 'var(--gv-on-main)', border: '1px solid rgba(238,217,138,0.22)', fontFamily: "var(--font-brand), sans-serif", textDecoration: 'none' }}
-                              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(238,217,138,0.16)'; }}
-                              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(238,217,138,0.08)'; }}
+                              style={{ backgroundColor: 'color-mix(in srgb, var(--gv-accent-light) 8%, transparent)', color: 'var(--gv-on-main)', border: '1px solid color-mix(in srgb, var(--gv-accent-light) 22%, transparent)', fontFamily: "var(--font-brand), sans-serif", textDecoration: 'none' }}
+                              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'color-mix(in srgb, var(--gv-accent-light) 16%, transparent)'; }}
+                              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'color-mix(in srgb, var(--gv-accent-light) 8%, transparent)'; }}
                             >
                               View your dashboard
                             </a>
@@ -3019,9 +3019,9 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                       className="relative flex flex-col items-center justify-center"
                       style={{
                         width: '150px', height: '150px', borderRadius: '9999px',
-                        background: 'radial-gradient(circle at 50% 36%, rgba(238,217,138,0.3) 0%, rgba(250,248,243,0) 72%)',
+                        background: 'radial-gradient(circle at 50% 36%, color-mix(in srgb, var(--gv-accent-light) 30%, transparent) 0%, rgba(250,248,243,0) 72%)',
                         border: '1.5px solid color-mix(in srgb, var(--gv-accent) 42%, transparent)',
-                        boxShadow: '0 10px 30px color-mix(in srgb, var(--gv-main) 10%, transparent), 0 0 0 8px rgba(238,217,138,0.12)',
+                        boxShadow: '0 10px 30px color-mix(in srgb, var(--gv-main) 10%, transparent), 0 0 0 8px color-mix(in srgb, var(--gv-accent-light) 12%, transparent)',
                       }}
                     >
                       {heroPrice === null ? (
@@ -3772,7 +3772,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                                       {logo ? (
                                         <span
                                           className="flex items-center justify-center flex-shrink-0"
-                                          style={{ width: '22px', height: '22px', borderRadius: '5px', backgroundColor: 'rgba(250,248,243,0.85)', overflow: 'hidden', boxShadow: '0 1px 3px rgba(27,56,40,0.18)' }}
+                                          style={{ width: '22px', height: '22px', borderRadius: '5px', backgroundColor: 'rgba(250,248,243,0.85)', overflow: 'hidden', boxShadow: '0 1px 3px color-mix(in srgb, var(--gv-main) 18%, transparent)' }}
                                           title={logo.label}
                                         >
                                           {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -3906,7 +3906,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                         width: 84, height: 48, padding: 0, borderRadius: 10, overflow: 'hidden',
                         cursor: assetUploading || editSaving ? 'wait' : 'pointer',
                         border: selected ? '2px solid var(--gv-accent)' : '1.5px solid var(--gv-border)',
-                        boxShadow: selected ? '0 0 0 3px rgba(238,217,138,0.55)' : 'none',
+                        boxShadow: selected ? '0 0 0 3px color-mix(in srgb, var(--gv-accent-light) 55%, transparent)' : 'none',
                         opacity: (assetUploading || editSaving) && !selected ? 0.6 : 1,
                         transition: 'border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease',
                         backgroundColor: 'var(--gv-bg)',

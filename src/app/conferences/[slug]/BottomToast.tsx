@@ -79,7 +79,7 @@ export function BottomToastHost() {
               backgroundColor: 'rgba(255,255,255,0.96)',
               backdropFilter: 'blur(12px)',
               WebkitBackdropFilter: 'blur(12px)',
-              boxShadow: '0 10px 28px rgba(27,56,40,0.18), 0 1px 3px rgba(27,56,40,0.10)',
+              boxShadow: '0 10px 28px color-mix(in srgb, var(--gv-main) 18%, transparent), 0 1px 3px color-mix(in srgb, var(--gv-main) 10%, transparent)',
               fontFamily: 'var(--font-brand), sans-serif',
               fontSize: 14,
               fontWeight: 600,
@@ -87,7 +87,7 @@ export function BottomToastHost() {
               whiteSpace: 'nowrap',
             }}
           >
-            <CheckCircle2 size={17} strokeWidth={2.2} aria-hidden style={{ color: '#1B3828' }} />
+            <CheckCircle2 size={17} strokeWidth={2.2} aria-hidden style={{ color: 'var(--gv-main)' }} />
             {on ? text : <span aria-hidden>{text}</span>}
           </span>
         )}

@@ -60,9 +60,9 @@ export default function PressDocViewer({ room, doc, onClose }: {
           aria-modal="true"
           aria-labelledby="press-doc-title"
           className="flex h-full w-full flex-col overflow-hidden sm:h-[min(92dvh,980px)] sm:max-w-[1100px] sm:rounded-[22px]"
-          style={{ backgroundColor: '#FFFFFF', boxShadow: '0 24px 64px rgba(27,56,40,0.28)' }}
+          style={{ backgroundColor: '#FFFFFF', boxShadow: '0 24px 64px color-mix(in srgb, var(--gv-main) 28%, transparent)' }}
         >
-          <header className="flex items-start gap-3 px-5 pt-4 pb-3" style={{ boxShadow: 'inset 0 -1px 0 rgba(27,56,40,0.08)' }}>
+          <header className="flex items-start gap-3 px-5 pt-4 pb-3" style={{ boxShadow: 'inset 0 -1px 0 color-mix(in srgb, var(--gv-main) 8%, transparent)' }}>
             <div className="min-w-0 flex-1">
               <p style={{ fontFamily: OUTFIT, fontSize: 12, fontWeight: 700, color: '#8A6614', margin: 0 }}>
                 {committeeShort(room.name, room.abbreviation)}
@@ -79,7 +79,7 @@ export default function PressDocViewer({ room, doc, onClose }: {
               onClick={onClose}
               aria-label="Close"
               title="Close"
-              className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full transition-[background-color] duration-150 hover:bg-[#1B3828]/[0.07] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F]"
+              className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full transition-[background-color] duration-150 hover:bg-[var(--gv-main)]/[0.07] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gv-accent)]"
               style={{ color: INK_SOFT }}
             >
               <X size={19} />
@@ -99,7 +99,7 @@ export default function PressDocViewer({ room, doc, onClose }: {
               <div className="absolute inset-0 overflow-y-auto px-4 py-6">
                 <div
                   className="mx-auto max-w-[760px] rounded-[10px] p-6 sm:p-10 whitespace-pre-wrap [overflow-wrap:anywhere]"
-                  style={{ backgroundColor: '#FFFFFF', boxShadow: '0 2px 10px rgba(27,56,40,0.12)', fontFamily: OUTFIT, fontSize: 15.5, lineHeight: 1.65, color: INK }}
+                  style={{ backgroundColor: '#FFFFFF', boxShadow: '0 2px 10px color-mix(in srgb, var(--gv-main) 12%, transparent)', fontFamily: OUTFIT, fontSize: 15.5, lineHeight: 1.65, color: INK }}
                 >
                   {doc.content}
                 </div>

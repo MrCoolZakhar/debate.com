@@ -8,24 +8,24 @@ import { OUTFIT } from '@/components/neu';
 
 export const INK = '#1C1410';
 export const INK_SOFT = '#5A5046';
-export const FOREST = '#1B3828';
-export const GOLD = '#EED98A';
-export const DEEP_GOLD = '#B6871F';
+export const FOREST = 'var(--gv-main)';
+export const GOLD = 'var(--gv-accent-light)';
+export const DEEP_GOLD = 'var(--gv-accent)';
 export const IVORY = '#FAF8F3';
-export const LINE = 'rgba(27,56,40,0.12)';
+export const LINE = 'color-mix(in srgb, var(--gv-main) 12%, transparent)';
 export const DANGER = '#8B2020';
-export const GREEN = '#2A5A3C';
+export const GREEN = 'var(--gv-main-mid)';
 
 export const PAY_CSS = `
 .gv-pay{font-family:${OUTFIT};color:${INK}}
-.gv-pay-card{position:relative;background:#FFFFFF;border-radius:20px;padding:20px 20px 18px;box-shadow:0 1px 0 rgba(27,56,40,0.08),0 18px 40px -32px rgba(27,56,40,0.35)}
+.gv-pay-card{position:relative;background:#FFFFFF;border-radius:20px;padding:20px 20px 18px;box-shadow:0 1px 0 color-mix(in srgb, var(--gv-main) 8%, transparent),0 18px 40px -32px color-mix(in srgb, var(--gv-main) 35%, transparent)}
 .gv-pay-sect{margin:0 0 10px;font-size:13px;font-weight:800;letter-spacing:0.06em;text-transform:uppercase;color:${INK_SOFT}}
 .gv-pay-btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:46px;padding:0 20px;border-radius:12px;border:none;cursor:pointer;font-family:${OUTFIT};font-size:14.5px;font-weight:700;text-decoration:none;transition:background-color 140ms ease,transform 120ms ease,opacity 140ms ease}
 .gv-pay-btn:active{transform:scale(0.985)}
 .gv-pay-btn:disabled{opacity:0.55;cursor:default;transform:none}
 .gv-pay-btn:focus{outline:none}
 .gv-pay-btn:focus-visible{outline:2px solid ${FOREST};outline-offset:2px}
-.gv-pay-forest{background:linear-gradient(90deg,#1B3828 0%,#2A5A3C 100%);color:${GOLD}}
+.gv-pay-forest{background:linear-gradient(90deg,var(--gv-main) 0%,var(--gv-main-mid) 100%);color:var(--gv-on-main)}
 .gv-pay-forest:hover:not(:disabled){background:linear-gradient(90deg,#234a35 0%,#33694a 100%)}
 .gv-pay-outline{background:#FFFFFF;color:${INK};box-shadow:inset 0 0 0 1.5px ${INK}}
 .gv-pay-outline:hover:not(:disabled){background:${IVORY}}
@@ -46,10 +46,10 @@ export const PAY_CSS = `
 .gv-pay-break li{display:flex;justify-content:space-between;gap:14px;font-size:13.5px;color:${INK_SOFT};font-variant-numeric:tabular-nums}
 
 /* Items */
-.gv-pay-items{display:flex;flex-direction:column;background:#FFFFFF;border-radius:20px;padding:4px 0;box-shadow:0 1px 0 rgba(27,56,40,0.08),0 18px 40px -32px rgba(27,56,40,0.35)}
+.gv-pay-items{display:flex;flex-direction:column;background:#FFFFFF;border-radius:20px;padding:4px 0;box-shadow:0 1px 0 color-mix(in srgb, var(--gv-main) 8%, transparent),0 18px 40px -32px color-mix(in srgb, var(--gv-main) 35%, transparent)}
 .gv-pay-item{display:grid;grid-template-columns:44px minmax(0,1fr) auto 44px;gap:6px 8px;align-items:start;padding:12px 10px 12px 6px}
 .gv-pay-item + .gv-pay-item{border-top:1px solid ${LINE}}
-.gv-pay-item[data-selected]{background:rgba(238,217,138,0.16)}
+.gv-pay-item[data-selected]{background:color-mix(in srgb, var(--gv-accent-light) 16%, transparent)}
 .gv-pay-tick{width:44px;height:44px;display:inline-flex;align-items:center;justify-content:center}
 .gv-pay-tick input{width:20px;height:20px;accent-color:${FOREST};cursor:pointer}
 .gv-pay-name{margin:11px 0 0;font-size:15.5px;font-weight:700;line-height:1.3;overflow-wrap:anywhere}
@@ -64,15 +64,15 @@ export const PAY_CSS = `
 .gv-pay-confirm{grid-column:2 / -1;margin:6px 8px 4px 0;padding:12px 14px;border-radius:12px;background:${IVORY};display:flex;flex-direction:column;gap:10px}
 
 /* Bottom pay bar */
-.gv-pay-bar{position:sticky;bottom:calc(12px + env(safe-area-inset-bottom,0px));z-index:30;margin-top:14px;display:flex;flex-wrap:wrap;align-items:center;gap:10px 16px;padding:12px 14px 12px 18px;border-radius:18px;background:#FFFFFF;box-shadow:0 2px 0 rgba(27,56,40,0.06),0 18px 40px -16px rgba(27,56,40,0.5)}
+.gv-pay-bar{position:sticky;bottom:calc(12px + env(safe-area-inset-bottom,0px));z-index:30;margin-top:14px;display:flex;flex-wrap:wrap;align-items:center;gap:10px 16px;padding:12px 14px 12px 18px;border-radius:18px;background:#FFFFFF;box-shadow:0 2px 0 color-mix(in srgb, var(--gv-main) 6%, transparent),0 18px 40px -16px color-mix(in srgb, var(--gv-main) 50%, transparent)}
 .gv-pay-bar-sum{margin-right:auto;font-size:16px;font-weight:800;font-variant-numeric:tabular-nums}
 /* Discount codes (prompt 107): the link under Pay (under the total on phones) and the applied chip */
 .gv-pay-bar-pay{display:inline-flex;flex-direction:column;align-items:center;gap:0}
 .gv-pay-bar .gv-pay-link.gv-pay-code-link{min-height:32px;font-size:13px;font-weight:700}
 .gv-pay-code-phone{display:none!important}
-.gv-pay-code-chip{display:inline-flex;align-items:center;gap:4px;margin-left:8px;padding:2px 4px 2px 10px;border-radius:999px;background:rgba(238,217,138,0.45);color:${FOREST};font-size:12.5px;font-weight:800;letter-spacing:0.04em;vertical-align:2px}
+.gv-pay-code-chip{display:inline-flex;align-items:center;gap:4px;margin-left:8px;padding:2px 4px 2px 10px;border-radius:999px;background:color-mix(in srgb, var(--gv-accent-light) 45%, transparent);color:${FOREST};font-size:12.5px;font-weight:800;letter-spacing:0.04em;vertical-align:2px}
 .gv-pay-code-chip button{width:24px;height:24px;display:inline-flex;align-items:center;justify-content:center;border:none;border-radius:999px;background:transparent;color:${FOREST};cursor:pointer}
-.gv-pay-code-chip button:hover{background:rgba(27,56,40,0.1)}
+.gv-pay-code-chip button:hover{background:color-mix(in srgb, var(--gv-main) 10%, transparent)}
 .gv-pay-code-chip button:focus{outline:none}
 .gv-pay-code-chip button:focus-visible{outline:2px solid ${FOREST}}
 @media (max-width:639px){.gv-pay-code-desk{display:none!important}.gv-pay-code-phone{display:inline-flex!important;margin-left:-6px}}
@@ -91,24 +91,24 @@ export const PAY_CSS = `
 
 /* Receipts */
 .gv-pay-receipts{display:flex;flex-direction:column;gap:8px}
-.gv-pay-receipt{display:flex;align-items:center;gap:12px;width:100%;padding:14px 16px;border:none;border-radius:16px;background:#FFFFFF;cursor:pointer;text-align:left;font-family:${OUTFIT};color:${INK};box-shadow:0 1px 0 rgba(27,56,40,0.08),0 14px 30px -28px rgba(27,56,40,0.5)}
+.gv-pay-receipt{display:flex;align-items:center;gap:12px;width:100%;padding:14px 16px;border:none;border-radius:16px;background:#FFFFFF;cursor:pointer;text-align:left;font-family:${OUTFIT};color:${INK};box-shadow:0 1px 0 color-mix(in srgb, var(--gv-main) 8%, transparent),0 14px 30px -28px color-mix(in srgb, var(--gv-main) 50%, transparent)}
 .gv-pay-receipt:hover{background:${IVORY}}
 .gv-pay-receipt:focus{outline:none}
 .gv-pay-receipt:focus-visible{box-shadow:0 0 0 2px ${FOREST}}
 
 /* Right column */
-.gv-pay-action{display:flex;align-items:center;gap:14px;width:100%;padding:14px 16px;border:none;border-radius:16px;background:#FFFFFF;cursor:pointer;text-align:left;font-family:${OUTFIT};color:${INK};box-shadow:0 1px 0 rgba(27,56,40,0.08),0 14px 30px -28px rgba(27,56,40,0.5);transition:transform 160ms ease}
+.gv-pay-action{display:flex;align-items:center;gap:14px;width:100%;padding:14px 16px;border:none;border-radius:16px;background:#FFFFFF;cursor:pointer;text-align:left;font-family:${OUTFIT};color:${INK};box-shadow:0 1px 0 color-mix(in srgb, var(--gv-main) 8%, transparent),0 14px 30px -28px color-mix(in srgb, var(--gv-main) 50%, transparent);transition:transform 160ms ease}
 .gv-pay-action:hover{transform:translateY(-1px)}
 .gv-pay-action:focus{outline:none}
 .gv-pay-action:focus-visible{box-shadow:0 0 0 2px ${FOREST}}
-.gv-pay-action-icon{width:40px;height:40px;border-radius:12px;display:inline-flex;align-items:center;justify-content:center;background:rgba(238,217,138,0.45);color:${FOREST};flex-shrink:0}
+.gv-pay-action-icon{width:40px;height:40px;border-radius:12px;display:inline-flex;align-items:center;justify-content:center;background:color-mix(in srgb, var(--gv-accent-light) 45%, transparent);color:${FOREST};flex-shrink:0}
 .gv-pay-action b{display:block;font-size:14.5px;font-weight:800}
 .gv-pay-action small{display:block;margin-top:2px;font-size:12.5px;color:${INK_SOFT}}
 
 /* Layout (prompt 101): a sticky rail with the two tabs, the middle, the right column */
 .gv-pay-layout{display:grid;grid-template-columns:minmax(0,1fr);gap:18px 24px;align-items:start}
 .gv-pay-rail{display:grid;grid-template-columns:1fr 1fr;gap:8px}
-.gv-pay-tab{display:flex;align-items:center;justify-content:center;gap:10px;min-height:46px;padding:0 16px;border:none;border-radius:14px;background:#FFFFFF;font-family:${OUTFIT};font-size:15px;font-weight:700;color:${INK_SOFT};cursor:pointer;box-shadow:0 1px 0 rgba(27,56,40,0.08),0 10px 24px -22px rgba(27,56,40,0.5);text-align:left}
+.gv-pay-tab{display:flex;align-items:center;justify-content:center;gap:10px;min-height:46px;padding:0 16px;border:none;border-radius:14px;background:#FFFFFF;font-family:${OUTFIT};font-size:15px;font-weight:700;color:${INK_SOFT};cursor:pointer;box-shadow:0 1px 0 color-mix(in srgb, var(--gv-main) 8%, transparent),0 10px 24px -22px color-mix(in srgb, var(--gv-main) 50%, transparent);text-align:left}
 .gv-pay-tab:hover{color:${INK}}
 .gv-pay-tab[aria-current="page"]{background:${FOREST};color:${GOLD}}
 .gv-pay-tab:focus{outline:none}

@@ -55,7 +55,7 @@ export default function BalanceHeader({ o }: { o: PayOverview }) {
         </div>
         {t.in_review_cents > 0 && (
           <div>
-            <span className="gv-pay-big" style={{ color: '#B6871F' }}>{money(t.in_review_cents, cur)}</span>
+            <span className="gv-pay-big" style={{ color: 'var(--gv-accent)' }}>{money(t.in_review_cents, cur)}</span>
             <span className="gv-pay-big-cap">Waiting for review</span>
           </div>
         )}

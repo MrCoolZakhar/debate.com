@@ -12,13 +12,15 @@
 
 import { Fragment, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Check, ChevronRight, X } from 'lucide-react';
+import { Check, ChevronRight, Download, X } from 'lucide-react';
 import ProfileLink from '@/components/ProfileLink';
 import { FlagImg } from '@/components/FlagImg';
 import { supabase } from '@/lib/supabase';
 import { loadSlotArtIndex, artFromIndex, slotArtKey, type SlotArtIndex } from '@/lib/slotGroups';
 import { getCountryByCode } from '@/lib/countries';
-import { isPaperLate, countUnread, type PaperMessageStub } from '@/lib/positionPapers';
+import { isPaperLate, countUnread, downloadPositionPaper, type PaperMessageStub } from '@/lib/positionPapers';
+import { getFreshAuthedClient } from '@/lib/supabase-auth';
+import { notifyErr } from '@/lib/appNotify';
 import { NEU, NEU_GRADIENTS, NeuCard } from '@/components/neu';
 import { ActionButton } from '@/components/PositionPaperButtons';
 
@@ -47,12 +49,15 @@ export interface RosterPaper {
   status: string;
   submitted_at: string;
   reviewer_seen_at: string | null;
+  /** The stored file, for Download on the row (prompt 143). */
+  file_url?: string | null;
+  file_name?: string | null;
 }
 
 const STATUS_STYLES: Record<string, { bg: string; color: string }> = {
-  submitted: { bg: 'rgba(238,217,138,0.2)', color: '#B8844A' },
+  submitted: { bg: 'color-mix(in srgb, var(--gv-accent-light) 20%, transparent)', color: '#B8844A' },
   reviewed: { bg: 'rgba(154,138,120,0.15)', color: '#6E5F4E' },
-  approved: { bg: 'rgba(61,122,82,0.12)', color: '#3D7A52' },
+  approved: { bg: 'color-mix(in srgb, var(--gv-main-light) 12%, transparent)', color: 'var(--gv-main-light)' },
   rejected: { bg: 'rgba(139,32,32,0.1)', color: '#8B2020' },
 };
 
@@ -108,6 +113,13 @@ export default function PositionPaperRoster({
     const art = artFromIndex(seatArt.get(slotArtKey(conferenceCommitteeId, code)), code);
     return art.kind === 'logo' ? art.url : null;
   };
+
+  async function downloadPaper(paper: RosterPaper) {
+    if (!paper.file_url) return;
+    const client = await getFreshAuthedClient();
+    const ok = client ? await downloadPositionPaper(client, paper.file_url, paper.file_name ?? null) : false;
+    if (!ok) notifyErr("The paper couldn't be downloaded. Try again in a moment.", 'position-papers');
+  }
 
   const byCountry = new Map<string, RosterAllocation[]>();
   for (const a of allocations) {
@@ -188,7 +200,7 @@ export default function PositionPaperRoster({
                   {unread > 0 && (
                     <span
                       className="flex items-center justify-center flex-shrink-0"
-                      style={{ minWidth: 18, height: 18, padding: '0 5px', borderRadius: 9999, backgroundColor: '#1B3828', color: '#EED98A', fontSize: 10, fontFamily: OUTFIT, fontWeight: 800 }}
+                      style={{ minWidth: 18, height: 18, padding: '0 5px', borderRadius: 9999, backgroundColor: 'var(--gv-main)', color: 'var(--gv-on-main)', fontSize: 10, fontFamily: OUTFIT, fontWeight: 800 }}
                     >
                       {unread}
                     </span>
@@ -202,6 +214,19 @@ export default function PositionPaperRoster({
                     </span>
                   )}
                   <StatusBadge status={paper.status} />
+                  {paper.file_url && (
+                    <span onClick={e => e.stopPropagation()}>
+                      <ActionButton
+                        onClick={() => { void downloadPaper(paper); }}
+                        icon={Download}
+                        background={NEU.surface}
+                        color={NEU.ink}
+                        boxShadowColor="color-mix(in srgb, var(--gv-main) 12%, transparent)"
+                      >
+                        Download
+                      </ActionButton>
+                    </span>
+                  )}
                   {paper.status !== 'approved' && (
                     <span onClick={e => e.stopPropagation()}>
                       <ActionButton

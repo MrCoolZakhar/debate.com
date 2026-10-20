@@ -22,7 +22,7 @@ import { getCountryByCode } from '@/lib/countries';
 import { CircleFlag } from '@/components/CircleFlag';
 import ProfileLink from '@/components/ProfileLink';
 import Avatar from '@/components/Avatar';
-import { isPaperLate, signedPositionPaperUrl } from '@/lib/positionPapers';
+import { downloadPositionPaper, isPaperLate, signedPositionPaperUrl } from '@/lib/positionPapers';
 import { NEU, NEU_GRADIENTS, EASE, OUTFIT, NeuCard } from '@/components/neu';
 import { ActionButton } from '@/components/PositionPaperButtons';
 
@@ -191,7 +191,7 @@ function formatBytes(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-function PaperHandoff({ fileName, fileUrl, sizeBytes }: { fileName: string; fileUrl: string; sizeBytes: number }) {
+function PaperHandoff({ fileName, fileUrl, sizeBytes, onDownload }: { fileName: string; fileUrl: string; sizeBytes: number; onDownload: () => void }) {
   const size = formatBytes(sizeBytes);
   return (
     /* `display` stays in the className, never the inline style: NeuCard spreads
@@ -205,7 +205,7 @@ function PaperHandoff({ fileName, fileUrl, sizeBytes }: { fileName: string; file
           style={{
             width: 46, height: 46, borderRadius: 14,
             background: `linear-gradient(135deg, ${NEU_GRADIENTS.forest[0]}, ${NEU_GRADIENTS.forest[1]})`,
-            color: NEU.gold, boxShadow: `0 4px 12px color-mix(in srgb, ${NEU_GRADIENTS.forest[0]} 25%, transparent)`,
+            color: 'var(--gv-on-main)', boxShadow: `0 4px 12px color-mix(in srgb, ${NEU_GRADIENTS.forest[0]} 25%, transparent)`,
           }}
         >
           <FileText size={22} strokeWidth={1.9} />
@@ -229,7 +229,7 @@ function PaperHandoff({ fileName, fileUrl, sizeBytes }: { fileName: string; file
         style={{
           minHeight: 48, borderRadius: 14, textDecoration: 'none',
           background: `linear-gradient(135deg, ${NEU_GRADIENTS.forest[0]}, ${NEU_GRADIENTS.forest[1]})`,
-          color: NEU.gold, fontFamily: OUTFIT, fontWeight: 800, fontSize: 14,
+          color: 'var(--gv-on-main)', fontFamily: OUTFIT, fontWeight: 800, fontSize: 14,
           boxShadow: `0 6px 16px color-mix(in srgb, ${NEU_GRADIENTS.forest[0]} 27%, transparent)`,
         }}
       >
@@ -237,21 +237,19 @@ function PaperHandoff({ fileName, fileUrl, sizeBytes }: { fileName: string; file
         Open the PDF
       </a>
 
-      <a
-        href={fileUrl}
-        download={fileName}
-        target="_blank"
-        rel="noopener noreferrer"
+      <button
+        type="button"
+        onClick={onDownload}
         className="flex items-center justify-center gap-2 focus:outline-none"
         style={{
-          minHeight: 44, borderRadius: 14, textDecoration: 'none',
+          minHeight: 44, borderRadius: 14, textDecoration: 'none', cursor: 'pointer',
           backgroundColor: NEU.surface, border: '1.5px solid #D8CDB6',
           color: NEU.forest, fontFamily: OUTFIT, fontWeight: 700, fontSize: 13,
         }}
       >
         <Download size={16} strokeWidth={2.2} />
         Download
-      </a>
+      </button>
 
       <p style={{ fontFamily: OUTFIT, fontSize: 11.5, color: NEU.muted, margin: 0, lineHeight: 1.5, textAlign: 'center' }}>
         Opens in your phone&apos;s PDF reader, so you can pinch to zoom and read every page.
@@ -687,11 +685,11 @@ export default function PositionPaperPage() {
                     </span>
                   )}
                   <ActionButton
-                    as="a"
-                    href={paper.file_url}
-                    download={paper.file_name}
-                    target="_blank"
-                    rel="noopener noreferrer"
+                    onClick={() => {
+                      // A real download with the paper's own name (prompt 143), never a new tab.
+                      if (!session) return;
+                      void downloadPositionPaper(getAuthedClient(session.access_token), paper.file_url, paper.file_name);
+                    }}
                     icon={Download}
                     background={`linear-gradient(135deg, ${NEU_GRADIENTS.forest[0]}, ${NEU_GRADIENTS.forest[1]})`}
                     color="var(--gv-on-main)"
@@ -714,7 +712,7 @@ export default function PositionPaperPage() {
               </NeuCard>
 
               {/* PDF, phone and tablet: hand it to the native viewer. */}
-              <PaperHandoff fileName={paper.file_name} fileUrl={paper.file_url} sizeBytes={paper.file_size_bytes} />
+              <PaperHandoff fileName={paper.file_name} fileUrl={paper.file_url} sizeBytes={paper.file_size_bytes} onDownload={() => { if (session) void downloadPositionPaper(getAuthedClient(session.access_token), paper.file_url, paper.file_name); }} />
             </div>
           </>
         )}

@@ -117,7 +117,7 @@ export function ListingCta({ fullName, shortName, slug, website_url, instagram_u
         style={{
           color: 'var(--gv-on-main)', fontFamily: FONT, textDecoration: 'none',
           border: '1px solid color-mix(in srgb, var(--gv-on-main) 35%, transparent)',
-          backgroundColor: 'rgba(238,217,138,0.06)',
+          backgroundColor: 'color-mix(in srgb, var(--gv-accent-light) 6%, transparent)',
         }}
       >
         <Mail size={14} strokeWidth={2.2} aria-hidden className="shrink-0" />

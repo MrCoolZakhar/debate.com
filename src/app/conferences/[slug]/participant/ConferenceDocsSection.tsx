@@ -16,7 +16,7 @@ import { STORE_CSS } from '@/app/manage/[slug]/store/storeKit';
 import { DASH_CSS, IconDisc, INK, INK_SOFT } from '@/app/manage/[slug]/financials/dashboardKit';
 import { DashCard as YouCard, CardHeading, FOREST, TINT_ACCENT as TINT_GOLD, TINT_MAIN as TINT_GREEN } from './dashboardKit';
 import {
-  formatDocSize, kindInfo, linkHost, loadConferenceDocs, openConferenceDoc, type ConferenceDoc,
+  downloadConferenceDoc, formatDocSize, kindInfo, linkHost, loadConferenceDocs, openConferenceDoc, type ConferenceDoc,
 } from '@/lib/conferenceDocuments';
 
 /** Application statuses that can read conference documents. */
@@ -65,17 +65,15 @@ export function docForRole(
 
 const CSS = `
 .gv-cdp{display:flex;flex-direction:column;gap:10px}
-.gv-cdp-row{display:flex;align-items:center;gap:14px;width:100%;min-height:72px;padding:12px 16px;border:none;border-radius:16px;background:#FAF8F3;text-align:left;cursor:pointer;font-family:inherit;box-shadow:inset 0 0 0 1px color-mix(in srgb, var(--gv-main) 6%, transparent);transition:transform 160ms cubic-bezier(0.22,1,0.36,1),background-color 160ms ease,box-shadow 160ms ease}
-.gv-cdp-row:hover{transform:translateY(-2px);background:#FFFFFF;box-shadow:inset 0 0 0 1px color-mix(in srgb, var(--gv-main) 8%, transparent),0 14px 30px -24px color-mix(in srgb, var(--gv-main) 45%, transparent)}
-.gv-cdp-row:active{transform:scale(0.99)}
-.gv-cdp-row:focus{outline:none}
-.gv-cdp-row:focus-visible{outline:2px solid ${FOREST};outline-offset:2px}
-.gv-cdp-row:disabled{cursor:default;opacity:0.7;transform:none}
+.gv-cdp-row{display:flex;align-items:center;gap:14px;width:100%;min-height:72px;padding:12px 16px;border:none;border-radius:16px;background:#FAF8F3;text-align:left;font-family:inherit;box-shadow:inset 0 0 0 1px color-mix(in srgb, var(--gv-main) 6%, transparent);transition:transform 160ms cubic-bezier(0.22,1,0.36,1),background-color 160ms ease,box-shadow 160ms ease}
 .gv-cdp-main{flex:1 1 auto;min-width:0}
 .gv-cdp-title{margin:0;font-size:15.5px;font-weight:800;line-height:1.3;color:${INK};overflow-wrap:anywhere}
 .gv-cdp-sub{margin:3px 0 0;font-size:13px;line-height:1.45;color:${INK_SOFT};overflow-wrap:anywhere}
-.gv-cdp-open{flex-shrink:0;font-size:14px;font-weight:700;color:${FOREST};text-decoration:underline;text-underline-offset:3px}
-@media (prefers-reduced-motion:reduce){.gv-cdp-row{transition:none}.gv-cdp-row:hover{transform:none}}
+.gv-cdp-links{flex-shrink:0;display:flex;align-items:center;gap:14px;flex-wrap:wrap;justify-content:flex-end}
+.gv-cdp-open{flex-shrink:0;border:none;background:none;padding:6px 2px;font-family:inherit;font-size:14px;font-weight:700;color:${FOREST};text-decoration:underline;text-underline-offset:3px;cursor:pointer}
+.gv-cdp-open:disabled{opacity:0.6;cursor:default}
+.gv-cdp-open:focus{outline:none}
+.gv-cdp-open:focus-visible{outline:2px solid ${FOREST};outline-offset:2px;border-radius:4px}
 `;
 
 export default function ConferenceDocsSection({ docs }: { docs: ConferenceDoc[] }) {
@@ -90,6 +88,15 @@ export default function ConferenceDocsSection({ docs }: { docs: ConferenceDoc[] 
     const ok = await openConferenceDoc(getAuthedClient(session.access_token), doc);
     setOpeningId(null);
     if (!ok) setErr("Couldn't open that document. Please try again.");
+  }
+
+  async function download(doc: ConferenceDoc) {
+    if (!session || openingId) return;
+    setErr('');
+    setOpeningId(`dl:${doc.id}`);
+    const ok = await downloadConferenceDoc(getAuthedClient(session.access_token), doc);
+    setOpeningId(null);
+    if (!ok) setErr("Couldn't download that document. Please try again.");
   }
 
   if (docs.length === 0) return null;
@@ -108,14 +115,24 @@ export default function ConferenceDocsSection({ docs }: { docs: ConferenceDoc[] 
             : ['PDF', formatDocSize(doc.file_size_bytes)].filter(Boolean).join(', ');
           return (
             <li key={doc.id}>
-              <button type="button" className="gv-cdp-row" onClick={() => open(doc)} disabled={openingId === doc.id} aria-label={`Open ${doc.title}`}>
+              <div className="gv-cdp-row">
                 <IconDisc icon={{ emoji: info.emoji, lucide: info.lucide ?? FileText, tint: info.tint === 'green' ? TINT_GREEN : TINT_GOLD }} />
                 <span className="gv-cdp-main">
                   <span className="gv-cdp-title" style={{ display: 'block' }}>{doc.title}</span>
                   <span className="gv-cdp-sub" style={{ display: 'block' }}>{info.label} · {detail}</span>
                 </span>
-                <span className="gv-cdp-open" aria-hidden>{openingId === doc.id ? 'Opening…' : 'Open'}</span>
-              </button>
+                {/* Open and Download side by side (prompt 143); a link only opens. */}
+                <span className="gv-cdp-links">
+                  <button type="button" className="gv-cdp-open" onClick={() => open(doc)} disabled={!!openingId} aria-label={`Open ${doc.title}`}>
+                    {openingId === doc.id ? 'Opening…' : 'Open'}
+                  </button>
+                  {!doc.url && doc.file_path && (
+                    <button type="button" className="gv-cdp-open" onClick={() => download(doc)} disabled={!!openingId} aria-label={`Download ${doc.title}`}>
+                      {openingId === `dl:${doc.id}` ? 'Downloading…' : 'Download'}
+                    </button>
+                  )}
+                </span>
+              </div>
             </li>
           );
         })}

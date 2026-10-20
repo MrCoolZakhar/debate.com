@@ -62,7 +62,7 @@ export function RefundRequestPopup({ items, preselect, onClose, onDone }: {
         {items.map(i => (
           <label key={i.invoice_id} className="gv-pay-row" style={{ alignItems: 'center', cursor: 'pointer' }}>
             <span className="flex items-center gap-3" style={{ minWidth: 0 }}>
-              <input type="checkbox" checked={ticked.has(i.invoice_id)} disabled={busy} style={{ width: 20, height: 20, accentColor: '#1B3828' }}
+              <input type="checkbox" checked={ticked.has(i.invoice_id)} disabled={busy} style={{ width: 20, height: 20, accentColor: 'var(--gv-main)' }}
                 onChange={e => { const n = new Set(ticked); if (e.target.checked) n.add(i.invoice_id); else n.delete(i.invoice_id); setTicked(n); }} />
               <span style={{ overflowWrap: 'anywhere' }}>{i.label}{i.for_name ? ` (for ${i.for_name})` : ''}</span>
             </span>
@@ -73,7 +73,7 @@ export function RefundRequestPopup({ items, preselect, onClose, onDone }: {
       <div>
         <label htmlFor="gv-refund-why" style={{ display: 'block', margin: '0 0 6px', fontSize: 14, fontWeight: 700 }}>Reason for Refund</label>
         <textarea id="gv-refund-why" value={reason} maxLength={REASON_MAX} disabled={busy} onChange={e => setReason(e.target.value)}
-          style={{ width: '100%', minHeight: 84, padding: '12px 14px', borderRadius: 12, border: '1.5px solid rgba(27,56,40,0.28)', background: '#FFFFFF', fontFamily: 'inherit', fontSize: 16, lineHeight: 1.5 }} />
+          style={{ width: '100%', minHeight: 84, padding: '12px 14px', borderRadius: 12, border: '1.5px solid color-mix(in srgb, var(--gv-main) 28%, transparent)', background: '#FFFFFF', fontFamily: 'inherit', fontSize: 16, lineHeight: 1.5 }} />
         <p style={{ margin: '4px 0 0', fontSize: 12, color: INK_SOFT, textAlign: 'right' }}>{reason.length} / {REASON_MAX}</p>
       </div>
       {err && <p role="alert" style={{ margin: 0, fontSize: 14, color: DANGER }}>{err}</p>}
@@ -109,7 +109,7 @@ export function NotReceivedPopup({ item, onClose, onDone }: { item: PayItem; onC
       <div>
         <label htmlFor="gv-notrec-note" style={{ display: 'block', margin: '0 0 6px', fontSize: 14, fontWeight: 700 }}>Anything they should know? (optional)</label>
         <textarea id="gv-notrec-note" value={note} maxLength={REASON_MAX} disabled={busy} onChange={e => setNote(e.target.value)}
-          style={{ width: '100%', minHeight: 80, padding: '12px 14px', borderRadius: 12, border: '1.5px solid rgba(27,56,40,0.28)', background: '#FFFFFF', fontFamily: 'inherit', fontSize: 16, lineHeight: 1.5 }} />
+          style={{ width: '100%', minHeight: 80, padding: '12px 14px', borderRadius: 12, border: '1.5px solid color-mix(in srgb, var(--gv-main) 28%, transparent)', background: '#FFFFFF', fontFamily: 'inherit', fontSize: 16, lineHeight: 1.5 }} />
       </div>
       {err && <p role="alert" style={{ margin: 0, fontSize: 14, color: DANGER }}>{err}</p>}
       <div><button type="button" className="gv-pay-btn gv-pay-forest" disabled={busy} onClick={() => { void send(); }}>{busy ? 'Sending' : 'Tell the organizers'}</button></div>
@@ -120,7 +120,7 @@ export function NotReceivedPopup({ item, onClose, onDone }: { item: PayItem; onC
 export function LockPopup({ mine, onGo, onClose }: { mine: boolean; onGo: () => void; onClose: () => void }) {
   return (
     <Shell label="In a started payment" onClose={onClose} small>
-      <span style={{ width: 44, height: 44, borderRadius: 12, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(238,217,138,0.45)', color: '#1B3828' }} aria-hidden>
+      <span style={{ width: 44, height: 44, borderRadius: 12, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: 'color-mix(in srgb, var(--gv-accent-light) 45%, transparent)', color: 'var(--gv-main)' }} aria-hidden>
         <Lock size={22} strokeWidth={2.2} />
       </span>
       <h2 style={{ margin: 0, paddingRight: 40, fontSize: 24, fontWeight: 800, letterSpacing: '-0.02em' }}>In a Started Payment</h2>

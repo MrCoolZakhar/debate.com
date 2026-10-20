@@ -67,7 +67,7 @@ export default function PressRoomCard({ room, onOpenDoc }: {
 
       {/* The floor: who speaks now, then the queue as one row of round flags */}
       {showFloor && (
-        <div className="flex flex-col gap-2 rounded-[14px] px-3 py-2.5" style={{ backgroundColor: 'rgba(238,217,138,0.2)' }}>
+        <div className="flex flex-col gap-2 rounded-[14px] px-3 py-2.5" style={{ backgroundColor: 'color-mix(in srgb, var(--gv-accent-light) 20%, transparent)' }}>
           {s.speaker && (
             <div className="flex items-center gap-2">
               <Mic size={15} strokeWidth={2.3} aria-label="Speaking now" style={{ color: '#8A6614', flexShrink: 0 }} />
@@ -104,8 +104,8 @@ export default function PressRoomCard({ room, onOpenDoc }: {
                   type="button"
                   onClick={() => onOpenDoc(room, d)}
                   title={d.sponsors.length ? `Sponsors: ${d.sponsors.join(', ')}` : undefined}
-                  className="flex w-full items-start gap-2 text-start rounded-[10px] px-2.5 py-2 transition-[background-color] duration-150 hover:bg-[#1B3828]/[0.07] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F]"
-                  style={{ backgroundColor: 'rgba(27,56,40,0.04)' }}
+                  className="flex w-full items-start gap-2 text-start rounded-[10px] px-2.5 py-2 transition-[background-color] duration-150 hover:bg-[var(--gv-main)]/[0.07] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gv-accent)]"
+                  style={{ backgroundColor: 'color-mix(in srgb, var(--gv-main) 4%, transparent)' }}
                 >
                   <FileText size={16} strokeWidth={2.1} aria-hidden style={{ color: SLATE, flexShrink: 0, marginTop: 1 }} />
                   <span className="min-w-0 flex-1 [overflow-wrap:anywhere]" style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 700, color: INK, lineHeight: 1.35 }}>

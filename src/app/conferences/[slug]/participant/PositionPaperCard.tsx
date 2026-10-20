@@ -9,10 +9,10 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { ChevronDown, ChevronRight, ChevronUp, FileText } from 'lucide-react';
+import { ChevronDown, ChevronRight, ChevronUp, Download, FileText } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient, getFreshAuthedClient } from '@/lib/supabase-auth';
-import { isPaperLate, countUnread, type PaperMessageStub } from '@/lib/positionPapers';
+import { isPaperLate, countUnread, downloadPositionPaper, type PaperMessageStub } from '@/lib/positionPapers';
 import { NEU, EASE, NeuCard } from '@/components/neu';
 import ProfileLink from '@/components/ProfileLink';
 import { ActionButton } from '@/components/PositionPaperButtons';
@@ -330,6 +330,13 @@ export default function PositionPaperCard({ conferenceId, conferenceSlug, myAllo
     await loadMyPositionPaper();
   }
 
+  async function downloadMine() {
+    if (!myPositionPaper) return;
+    const supabase = await client();
+    const ok = supabase ? await downloadPositionPaper(supabase, myPositionPaper.file_url, myPositionPaper.file_name) : false;
+    if (!ok) setPPError("Couldn't download your paper. Please try again.");
+  }
+
   if (!myAllocation) {
     return (
       <SectionCard>
@@ -426,22 +433,36 @@ export default function PositionPaperCard({ conferenceId, conferenceSlug, myAllo
             <ChevronRight size={16} strokeWidth={2.4} style={{ color: NEU.muted, flexShrink: 0 }} />
           </div>
         </NeuCard>
-        {canReplace && (
+        <div className="flex flex-wrap items-center gap-2.5" style={{ marginTop: 12 }}>
+          {canReplace && (
+            <ActionButton
+              onClick={() => {
+                // A rejected paper goes straight to the upload; any other paper
+                // first says the new version reopens it for review.
+                if (myPositionPaper.status === 'rejected') { setIsReplacing(true); setExpanded(true); setPPFile(null); setPPError(''); }
+                else setShowPPWarning(true);
+              }}
+              background="linear-gradient(135deg, var(--gv-main), var(--gv-main-mid))"
+              color="var(--gv-on-main)"
+              boxShadowColor="color-mix(in srgb, var(--gv-main) 35%, transparent)"
+              style={{ padding: '10px 18px', fontSize: 13, borderRadius: 12 }}
+            >
+              Upload and Replace
+            </ActionButton>
+          )}
+          {/* Download with the file's own name (prompt 143). */}
           <ActionButton
-            onClick={() => {
-              // A rejected paper goes straight to the upload; any other paper
-              // first says the new version reopens it for review.
-              if (myPositionPaper.status === 'rejected') { setIsReplacing(true); setExpanded(true); setPPFile(null); setPPError(''); }
-              else setShowPPWarning(true);
-            }}
-            background="linear-gradient(135deg, var(--gv-main), var(--gv-main-mid))"
-            color="var(--gv-on-main)"
-            boxShadowColor="color-mix(in srgb, var(--gv-main) 35%, transparent)"
-            style={{ marginTop: 12, padding: '10px 18px', fontSize: 13, borderRadius: 12 }}
+            onClick={() => { void downloadMine(); }}
+            icon={Download}
+            background={NEU.surface}
+            color={NEU.ink}
+            boxShadowColor="color-mix(in srgb, var(--gv-main) 12%, transparent)"
+            style={{ padding: '10px 18px', fontSize: 13, borderRadius: 12 }}
           >
-            Upload and Replace
+            Download
           </ActionButton>
-        )}
+        </div>
+        {ppError && <p style={{ fontSize: 13, color: '#8B2020', fontFamily: OUTFIT, margin: '8px 0 0' }}>{ppError}</p>}
 
         {showPPWarning && (
           <div className="fixed inset-0 z-50 flex items-center justify-center px-6" style={{ backgroundColor: 'rgba(28,20,16,0.5)', backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)' }}>

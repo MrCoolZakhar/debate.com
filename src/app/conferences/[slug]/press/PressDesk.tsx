@@ -43,7 +43,7 @@ export default function PressDesk({ conferenceId }: { conferenceId: string }) {
       <Note
         title="We couldn't open the Press Desk"
         line="Check your connection and try again"
-        action={<button type="button" onClick={reload} style={{ fontFamily: OUTFIT, fontSize: 14, fontWeight: 700, color: '#1B3828', textDecoration: 'underline' }}>Try again</button>}
+        action={<button type="button" onClick={reload} style={{ fontFamily: OUTFIT, fontSize: 14, fontWeight: 700, color: 'var(--gv-main)', textDecoration: 'underline' }}>Try again</button>}
       />
     );
   }

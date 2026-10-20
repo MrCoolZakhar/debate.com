@@ -2,7 +2,7 @@
 
 // ReturnFileViewer.tsx — shows one copy a participant sent back (prompt 111).
 // A PDF in PdfViewer, an image fitted with "Open full size", a Word file as its
-// name and size with "Download to open". Files live in the private
+// name and size with "Download" (a real download since prompt 143). Files live in the private
 // document-returns bucket and are read through 300-second signed URLs; a link
 // that opens a new tab is signed inside the click.
 
@@ -11,7 +11,7 @@ import { FileText } from 'lucide-react';
 import PdfViewer, { type PdfZoom } from '@/components/documents/PdfViewer';
 import { getFreshAuthedClient } from '@/lib/supabase-auth';
 import { notifyErr } from '@/lib/appNotify';
-import { DOCUMENT_RETURNS_BUCKET, docTypeLabel, formatDocSize, openStoredFile } from '@/lib/conferenceDocuments';
+import { DOCUMENT_RETURNS_BUCKET, docTypeLabel, downloadStoredFile, formatDocSize, openStoredFile } from '@/lib/conferenceDocuments';
 import { IconDisc, TINT_GOLD, INK, INK_SOFT } from '../financials/dashboardKit';
 
 const SIGN_SECONDS = 300;
@@ -50,6 +50,13 @@ export default function ReturnFileViewer({ path, fileName, mime, size }: {
     if (!ok) notifyErr("The file couldn't be opened. Try again in a moment.", 'conference-docs');
   }
 
+  // A real download with the copy's own file name (prompt 143), never a new tab.
+  async function download() {
+    const client = await getFreshAuthedClient();
+    const ok = client ? await downloadStoredFile(client, DOCUMENT_RETURNS_BUCKET, path, fileName, SIGN_SECONDS) : false;
+    if (!ok) notifyErr("The file couldn't be downloaded. Try again in a moment.", 'conference-docs');
+  }
+
   const current = url && url.path === path ? url : null;
 
   if (kind === 'other') {
@@ -58,7 +65,7 @@ export default function ReturnFileViewer({ path, fileName, mime, size }: {
         <IconDisc icon={{ emoji: 'Page facing up', lucide: FileText, tint: TINT_GOLD }} size={72} />
         <p style={{ margin: 0, fontSize: 17, fontWeight: 800, color: INK, overflowWrap: 'anywhere' }}>{fileName ?? 'Their copy'}</p>
         <p style={{ margin: 0, fontSize: 14, color: INK_SOFT }}>{[docTypeLabel(mime), formatDocSize(size)].filter(Boolean).join(', ')}</p>
-        <button type="button" className="gv-st-btn gv-st-forest" onClick={openNew}>Download to open</button>
+        <button type="button" className="gv-st-btn gv-st-forest" onClick={() => { void download(); }}>Download</button>
       </div>
     );
   }
@@ -68,7 +75,10 @@ export default function ReturnFileViewer({ path, fileName, mime, size }: {
     return (
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12, padding: 28 }}>
         <p style={{ margin: 0, fontSize: 15, color: INK_SOFT }}>This copy couldn&apos;t be shown here.</p>
-        <button type="button" className="gv-st-btn gv-st-outline" onClick={openNew}>Open in a new tab</button>
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', justifyContent: 'center' }}>
+          <button type="button" className="gv-st-btn gv-st-outline" onClick={openNew}>Open in a new tab</button>
+          <button type="button" className="gv-st-btn gv-st-outline" onClick={() => { void download(); }}>Download</button>
+        </div>
       </div>
     );
   }
@@ -85,7 +95,10 @@ export default function ReturnFileViewer({ path, fileName, mime, size }: {
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src={current.url} alt={fileName ?? 'Their copy'} style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />
       </div>
-      <div><button type="button" className="gv-st-link" onClick={openNew}>Open full size</button></div>
+      <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+        <button type="button" className="gv-st-link" onClick={openNew}>Open full size</button>
+        <button type="button" className="gv-st-link" onClick={() => { void download(); }}>Download</button>
+      </div>
     </div>
   );
 }

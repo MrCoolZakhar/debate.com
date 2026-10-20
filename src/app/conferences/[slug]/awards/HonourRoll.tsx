@@ -18,6 +18,7 @@ import { formatConferenceDates } from '@/lib/conferenceDates';
 import { conferenceAcronymLabel } from '@/lib/conferenceLabels';
 import { getAwardsConfig, type ConferenceAwardRow } from '@/lib/awards';
 import VerifiedCheck from '@/components/VerifiedCheck';
+import { themeCssVars, type ConferenceTheme } from '@/lib/theme';
 
 export interface HonourRollConference {
   slug: string;
@@ -29,6 +30,8 @@ export interface HonourRollConference {
   start_date: string | null;
   end_date: string | null;
   is_verified?: boolean;
+  /** The conference's colours (prompt 143). */
+  theme?: ConferenceTheme | null;
 }
 
 export interface HonourRollCommittee {
@@ -37,7 +40,8 @@ export interface HonourRollCommittee {
   abbreviation: string | null;
 }
 
-const PAGE_BG = '#EDE7D8';
+// The conference's own page ground (prompt 143: conference pages use its theme).
+const PAGE_BG = 'var(--gv-bg)';
 
 export default function HonourRoll({ conference, committees, awards }: {
   conference: HonourRollConference;
@@ -70,7 +74,7 @@ export default function HonourRoll({ conference, committees, awards }: {
   const published = !!conference.awards_published_at;
 
   return (
-    <div className="min-h-screen flex flex-col" style={{ backgroundColor: PAGE_BG }}>
+    <div className="min-h-screen flex flex-col" style={{ ...themeCssVars(conference.theme ?? {}), backgroundColor: PAGE_BG }}>
       <SiteNav />
 
       <main className="flex-1 w-full max-w-3xl mx-auto px-5 md:px-8 pt-8 pb-16">
@@ -86,7 +90,7 @@ export default function HonourRoll({ conference, committees, awards }: {
         <div className="flex items-center gap-4 mb-8">
           <LogoDisc src={conference.logo_url} alt={name} size={64} fallbackText={(conference.acronym || conference.full_name).slice(0, 3)} />
           <div className="min-w-0">
-            <p style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: '9px', letterSpacing: '0.16em', color: '#B6871F', margin: 0 }}>
+            <p style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: '9px', letterSpacing: '0.16em', color: 'var(--gv-accent)', margin: 0 }}>
               HONOUR ROLL
             </p>
             <h1 className="font-black leading-tight flex items-center gap-2 min-w-0" style={{ fontFamily: OUTFIT, fontSize: 26, color: '#1C1410', margin: '4px 0 0 0' }}>
@@ -102,8 +106,8 @@ export default function HonourRoll({ conference, committees, awards }: {
         {!published ? (
           <Card>
             <div className="flex flex-col items-center text-center py-8">
-              <span className="flex items-center justify-center mb-4 rounded-full" style={{ width: 52, height: 52, backgroundColor: 'rgba(27,56,40,0.07)', border: '1px solid rgba(27,56,40,0.14)' }}>
-                <Trophy size={22} style={{ color: '#1B3828' }} />
+              <span className="flex items-center justify-center mb-4 rounded-full" style={{ width: 52, height: 52, backgroundColor: 'color-mix(in srgb, var(--gv-main) 7%, transparent)', border: '1px solid color-mix(in srgb, var(--gv-main) 14%, transparent)' }}>
+                <Trophy size={22} style={{ color: 'var(--gv-main)' }} />
               </span>
               <p style={{ fontFamily: OUTFIT, fontSize: 15, fontWeight: 700, color: '#1C1410', margin: 0 }}>
                 Awards for {name} have not been announced yet
@@ -114,7 +118,7 @@ export default function HonourRoll({ conference, committees, awards }: {
               <Link
                 href={`/conferences/${conference.slug}`}
                 className="rounded-xl py-2.5 px-5 focus:outline-none"
-                style={{ backgroundColor: '#1B3828', color: '#EED98A', fontFamily: OUTFIT, fontWeight: 800, fontSize: 13, textDecoration: 'none' }}
+                style={{ backgroundColor: 'var(--gv-main)', color: 'var(--gv-on-main)', fontFamily: OUTFIT, fontWeight: 800, fontSize: 13, textDecoration: 'none' }}
               >
                 Back to the conference
               </Link>
@@ -183,7 +187,7 @@ function Card({ children }: { children: React.ReactNode }) {
   return (
     <div
       className="rounded-[20px] p-6 md:p-7"
-      style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0', boxShadow: '0 1px 3px rgba(27,56,40,0.04)' }}
+      style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0', boxShadow: '0 1px 3px color-mix(in srgb, var(--gv-main) 4%, transparent)' }}
     >
       {children}
     </div>
@@ -192,7 +196,7 @@ function Card({ children }: { children: React.ReactNode }) {
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
-    <p style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: '9px', letterSpacing: '0.14em', color: '#B6871F', margin: '0 0 12px 0' }}>
+    <p style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: '9px', letterSpacing: '0.14em', color: 'var(--gv-accent)', margin: '0 0 12px 0' }}>
       {children}
     </p>
   );

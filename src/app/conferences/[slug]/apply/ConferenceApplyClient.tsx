@@ -199,9 +199,9 @@ const EXPERIENCE_ICON: Record<string, IconType> = {
 
 const EXPERIENCE_ACCENT: Record<string, string> = {
   beginner: '#4A7896',
-  intermediate: '#2A5A3C',
+  intermediate: 'var(--gv-main-mid)',
   advanced: '#B8844A',
-  expert: '#B6871F',
+  expert: 'var(--gv-accent)',
 };
 
 /** Committee difficulty tier → label, accent colour and insignia. The four
@@ -209,9 +209,9 @@ const EXPERIENCE_ACCENT: Record<string, string> = {
  *  escalating insignia language. */
 const DIFFICULTY_META: Record<string, { label: string; accent: string; icon: IconType }> = {
   beginner: { label: 'Beginner', accent: '#4A7896', icon: Sprout },
-  intermediate: { label: 'Intermediate', accent: '#2A5A3C', icon: GraduationCap },
+  intermediate: { label: 'Intermediate', accent: 'var(--gv-main-mid)', icon: GraduationCap },
   advanced: { label: 'Advanced', accent: '#B8844A', icon: Trophy },
-  expert: { label: 'Expert', accent: '#B6871F', icon: Crown },
+  expert: { label: 'Expert', accent: 'var(--gv-accent)', icon: Crown },
 };
 
 /**
@@ -3898,8 +3898,8 @@ function ConferenceApplyInner() {
                     className="mt-2 flex items-start gap-2 rounded-xl"
                     style={{
                       padding: '10px 12px', fontFamily: OUTFIT, fontWeight: 500, fontSize: 12.5, lineHeight: 1.5, color: NEU.ink,
-                      background: 'color-mix(in srgb, var(--gv-accent, #EED98A) 26%, transparent)',
-                      boxShadow: 'inset 0 0 0 1px color-mix(in srgb, #B6871F 32%, transparent)',
+                      background: 'color-mix(in srgb, var(--gv-accent, var(--gv-accent-light)) 26%, transparent)',
+                      boxShadow: 'inset 0 0 0 1px color-mix(in srgb, var(--gv-accent) 32%, transparent)',
                     }}
                   >
                     <CircleAlert size={15} strokeWidth={2.4} style={{ color: '#8A6410', flexShrink: 0, marginTop: 1 }} aria-hidden />
@@ -3917,7 +3917,7 @@ function ConferenceApplyInner() {
                           Applying on your own?{' '}
                           <button
                             type="button"
-                            className="focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] rounded"
+                            className="focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gv-accent)] rounded"
                             style={{ fontWeight: 700, textDecoration: 'underline', color: NEU.forest, background: 'none', border: 'none', padding: 0, cursor: 'pointer', font: 'inherit' }}
                             onClick={() => { setIsIndependent(true); setSocietyError(''); setSocietyDropdownOpen(false); }}
                           >
@@ -5726,7 +5726,7 @@ function ConferenceApplyInner() {
                   conferenceId={conference.id}
                   slug={slug}
                   className="inline-flex items-center gap-1.5 rounded-xl py-2.5 px-6 font-bold text-sm focus:outline-none"
-                  style={{ backgroundColor: '#1B3828', color: '#EED98A', textDecoration: 'none', fontFamily: "var(--font-brand), sans-serif", border: 'none' }}
+                  style={{ backgroundColor: 'var(--gv-main)', color: 'var(--gv-on-main)', textDecoration: 'none', fontFamily: "var(--font-brand), sans-serif", border: 'none' }}
                 >
                   Go to payment
                 </PayLink>

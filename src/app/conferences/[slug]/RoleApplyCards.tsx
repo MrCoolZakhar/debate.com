@@ -34,13 +34,13 @@ const ROLE_GLYPH: Record<string, LucideIcon> = {
 };
 
 function RoleGlyph({ role, open, size = 36 }: { role: string; open: boolean; size?: number }) {
-  const ink = open ? '#1B3828' : '#8A7A66';
+  const ink = open ? 'var(--gv-main)' : '#8A7A66';
   const Icon = ROLE_GLYPH[role] ?? UserRound;
   return (
     <span
       className="shrink-0 relative inline-flex items-center justify-center rounded-full"
       aria-hidden
-      style={{ width: size, height: size, background: open ? 'rgba(238,217,138,0.45)' : 'rgba(27,56,40,0.06)' }}
+      style={{ width: size, height: size, background: open ? 'color-mix(in srgb, var(--gv-accent-light) 45%, transparent)' : 'color-mix(in srgb, var(--gv-main) 6%, transparent)' }}
     >
       {role === 'chair' ? (
         <>
@@ -87,7 +87,7 @@ const TILE_CSS = `
 .gv-role-tile[data-open="true"]:hover .gv-role-go,.gv-role-tile[data-open="true"]:focus-visible .gv-role-go{transform:translateX(2px)}
 .gv-role-go{transition:transform 200ms cubic-bezier(.32,.72,0,1)}
 .gv-role-tile[data-open="true"]:active{transform:scale(0.99)}
-.gv-role-tile:focus-visible{outline:2px solid #EED98A;outline-offset:3px}
+.gv-role-tile:focus-visible{outline:2px solid var(--gv-accent-light);outline-offset:3px}
 @media (prefers-reduced-motion: reduce){
   .gv-role-tile,.gv-role-go{transition:none}
   .gv-role-tile[data-open="true"]:hover,.gv-role-tile[data-open="true"]:focus-visible,.gv-role-tile[data-open="true"]:active,
@@ -200,7 +200,7 @@ export function RoleApplyCards({ tiles: given, onPick }: { tiles: RoleTile[]; on
                   <span
                     className="gv-role-go shrink-0 inline-flex items-center justify-center rounded-full"
                     aria-hidden
-                    style={{ width: 28, height: 28, background: 'linear-gradient(90deg,#1B3828,#2A5A3C)', color: '#FFFFFF' }}
+                    style={{ width: 28, height: 28, background: 'linear-gradient(90deg,var(--gv-main),var(--gv-main-mid))', color: '#FFFFFF' }}
                   >
                     <ArrowRight size={15} strokeWidth={2.6} />
                   </span>

@@ -242,7 +242,7 @@ export default function ItemList({ items, selected, onToggle, onReceipt, onRemov
                     <MoreHorizontal size={18} strokeWidth={2.4} />
                   </button>
                   {menu === it.invoice_id && (
-                    <span role="menu" style={{ position: 'absolute', right: 0, top: 46, zIndex: 20, minWidth: 190, padding: 6, borderRadius: 12, background: '#FFFFFF', boxShadow: '0 12px 30px -10px rgba(27,56,40,0.45), 0 0 0 1px rgba(27,56,40,0.08)' }}>
+                    <span role="menu" style={{ position: 'absolute', right: 0, top: 46, zIndex: 20, minWidth: 190, padding: 6, borderRadius: 12, background: '#FFFFFF', boxShadow: '0 12px 30px -10px color-mix(in srgb, var(--gv-main) 45%, transparent), 0 0 0 1px color-mix(in srgb, var(--gv-main) 8%, transparent)' }}>
                       <button type="button" role="menuitem" onClick={() => { setMenu(null); onRequestRefund(it); }}
                         style={{ display: 'block', width: '100%', textAlign: 'left', padding: '10px 12px', border: 'none', borderRadius: 8, background: 'none', cursor: 'pointer', fontFamily: 'inherit', fontSize: 14, fontWeight: 600, color: '#1C1410' }}>
                         Request a refund

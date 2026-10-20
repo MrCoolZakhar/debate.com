@@ -58,7 +58,7 @@ export default function ProofDrop({ conferenceId, onUploaded, disabled }: {
       <span style={{ display: 'block', margin: '0 0 6px', fontSize: 14, fontWeight: 700 }}>Your proof of payment</span>
       <input ref={input} type="file" accept="image/*,application/pdf" className="sr-only" onChange={e => { void take(e.target.files?.[0] ?? null); }} />
       {file && preview ? (
-        <div style={{ display: 'flex', gap: 14, alignItems: 'center', padding: 12, borderRadius: 14, background: '#FFFFFF', boxShadow: 'inset 0 0 0 1.5px rgba(27,56,40,0.15)' }}>
+        <div style={{ display: 'flex', gap: 14, alignItems: 'center', padding: 12, borderRadius: 14, background: '#FFFFFF', boxShadow: 'inset 0 0 0 1.5px color-mix(in srgb, var(--gv-main) 15%, transparent)' }}>
           <span style={{ width: 84, height: 108, borderRadius: 8, overflow: 'hidden', background: IVORY, flexShrink: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
             {isPdf
               ? <PdfThumb url={preview} width={84} height={108} fallback={<FileUp size={24} aria-hidden />} />
@@ -81,8 +81,8 @@ export default function ProofDrop({ conferenceId, onUploaded, disabled }: {
           onDrop={e => { e.preventDefault(); setOver(false); void take(e.dataTransfer.files?.[0] ?? null); }}
           style={{
             width: '100%', minHeight: 140, borderRadius: 16, cursor: 'pointer', fontFamily: 'inherit', color: '#1C1410',
-            background: over ? 'rgba(238,217,138,0.25)' : '#FFFFFF',
-            border: `2px dashed ${over ? FOREST : 'rgba(27,56,40,0.28)'}`,
+            background: over ? 'color-mix(in srgb, var(--gv-accent-light) 25%, transparent)' : '#FFFFFF',
+            border: `2px dashed ${over ? FOREST : 'color-mix(in srgb, var(--gv-main) 28%, transparent)'}`,
             display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6, padding: 16,
           }}
         >

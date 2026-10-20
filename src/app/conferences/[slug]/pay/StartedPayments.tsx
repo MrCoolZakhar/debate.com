@@ -59,7 +59,7 @@ export default function StartedPayments({ payments, highlight, wayLabel, onUploa
               key={p.batch_id}
               ref={el => { if (el) refs.current.set(p.batch_id, el); else refs.current.delete(p.batch_id); }}
               className="gv-pay-card"
-              style={{ padding: '16px 18px', boxShadow: lit ? '0 0 0 3px #EED98A, 0 0 0 4px rgba(182,135,31,0.5), 0 18px 40px -26px rgba(182,135,31,0.6)' : undefined, transition: 'box-shadow 300ms ease' }}
+              style={{ padding: '16px 18px', boxShadow: lit ? '0 0 0 3px var(--gv-accent-light), 0 0 0 4px color-mix(in srgb, var(--gv-accent) 50%, transparent), 0 18px 40px -26px color-mix(in srgb, var(--gv-accent) 60%, transparent)' : undefined, transition: 'box-shadow 300ms ease' }}
             >
               <div className="flex items-start justify-between gap-4 flex-wrap">
                 <div style={{ minWidth: 0 }}>

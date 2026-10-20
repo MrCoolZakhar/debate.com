@@ -57,7 +57,7 @@ export default function DiscountCodePopup({ invoiceIds, onClose, onApplied }: {
               onChange={e => { setCode(e.target.value.toUpperCase()); if (err) setErr(''); }}
               style={{
                 width: '100%', height: 50, padding: '0 14px', borderRadius: 12,
-                border: `1.5px solid ${err ? DANGER : 'rgba(27,56,40,0.28)'}`, background: '#FFFFFF',
+                border: `1.5px solid ${err ? DANGER : 'color-mix(in srgb, var(--gv-main) 28%, transparent)'}`, background: '#FFFFFF',
                 fontFamily: 'inherit', fontSize: 16, fontWeight: 700, letterSpacing: '0.04em', color: INK,
               }}
             />

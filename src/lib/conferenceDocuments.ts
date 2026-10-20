@@ -238,6 +238,30 @@ export async function openStoredFile(client: SupabaseClient, bucket: string, pat
   return true;
 }
 
+/** Downloads a stored file with its original name (prompt 143): a signed URL made with
+ *  storage's download option (the file comes back as an attachment named `fileName`),
+ *  followed by a hidden link in this tab, so it never opens in a new tab.
+ *  False when the link could not be made. */
+export async function downloadStoredFile(client: SupabaseClient, bucket: string, path: string, fileName: string | null, seconds = 300): Promise<boolean> {
+  const { data, error } = await client.storage.from(bucket).createSignedUrl(path, seconds, { download: fileName || true });
+  if (error || !data?.signedUrl) return false;
+  const a = document.createElement('a');
+  a.href = data.signedUrl;
+  a.rel = 'noopener';
+  if (fileName) a.download = fileName;
+  a.style.display = 'none';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  return true;
+}
+
+/** Downloads a conference document's file (never a link) with its file name. */
+export async function downloadConferenceDoc(client: SupabaseClient, doc: { file_path: string | null; file_name: string | null }): Promise<boolean> {
+  if (!doc.file_path) return false;
+  return downloadStoredFile(client, CONFERENCE_DOCS_BUCKET, doc.file_path, doc.file_name);
+}
+
 // ── Document Uploads: types and RPC wrappers (prompt 110) ─────────────────────
 
 export type DocAnswer<T> = ({ ok: true } & T) | { ok: false; error: string; field?: string };

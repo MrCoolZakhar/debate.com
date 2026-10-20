@@ -40,6 +40,24 @@ export async function signedPositionPaperUrl(
   return data.signedUrl;
 }
 
+/** Downloads a position paper with its file name (prompt 143): a signed URL with
+ *  storage's download option, clicked through a hidden link in this tab. */
+export async function downloadPositionPaper(supabase: SupabaseLike, fileUrl: string, fileName: string | null): Promise<boolean> {
+  const path = positionPaperPath(fileUrl);
+  if (!path) return false;
+  const { data, error } = await supabase.storage.from('position-papers').createSignedUrl(path, 300, { download: fileName || true });
+  if (error || !data?.signedUrl) return false;
+  const a = document.createElement('a');
+  a.href = data.signedUrl;
+  a.rel = 'noopener';
+  if (fileName) a.download = fileName;
+  a.style.display = 'none';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  return true;
+}
+
 /** A paper is late when it was submitted after its committee's deadline.
  *  Informational only, never blocks anything. */
 export function isPaperLate(submittedAt: string | null, deadline: string | null): boolean {

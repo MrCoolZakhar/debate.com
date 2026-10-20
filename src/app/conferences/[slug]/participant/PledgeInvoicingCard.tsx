@@ -16,6 +16,7 @@ import { formatFee, currencySymbol } from '@/lib/utils';
 import { type FormBlock, type CustomAnswers, questionsOf, validateAnswers, answerIsEmpty } from '@/lib/customQuestions';
 import CustomQuestionsField from '@/components/CustomQuestionsField';
 import { SectionCard, OUTFIT } from './shared';
+import { CARD_TITLE_STYLE } from './dashboardKit';
 import { friendlyError } from '@/lib/friendlyError';
 
 interface DelegationAidRequest {
@@ -113,9 +114,7 @@ export default function PledgeInvoicingCard({
 
   return (
     <SectionCard>
-      <p className="mb-4" style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: '9px', letterSpacing: '0.14em', color: 'var(--gv-accent)', margin: '0 0 16px 0' }}>
-        DELEGATION FINANCIAL AID
-      </p>
+      <h3 className="[overflow-wrap:anywhere]" style={{ ...CARD_TITLE_STYLE, marginBottom: 16 }}>Delegation Financial Aid</h3>
 
       {!delegationAidLoaded ? (
         <p className="text-sm" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>

@@ -18,6 +18,7 @@ import { CreditCard, ArrowRight, CalendarClock } from 'lucide-react';
 import { getFreshAuthedClient } from '@/lib/supabase-auth';
 import { centsToFee } from '@/lib/invoices';
 import { SectionCard, OUTFIT } from './shared';
+import { CARD_TITLE_STYLE } from './dashboardKit';
 
 export interface OpenBalance {
   conference_id: string;
@@ -139,9 +140,7 @@ export function PaymentsDueSection({ userId }: { userId: string | null }) {
   if (!rows || rows.length === 0) return null;
   return (
     <section className="mb-8" aria-label="Payments due">
-      <p style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 11, letterSpacing: '0.18em', color: '#8A6614', margin: '0 0 10px 0' }}>
-        PAYMENTS DUE
-      </p>
+      <h2 className="[overflow-wrap:anywhere]" style={{ ...CARD_TITLE_STYLE, marginBottom: 12 }}>Payments Due</h2>
       <SectionCard>
         <div className="flex flex-col gap-4">
           {rows.map(b => <BalanceRow key={`${b.conference_id}:${b.currency}`} b={b} showConference />)}

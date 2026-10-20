@@ -87,9 +87,9 @@ export async function copyEmailWithToast(address: string, select?: HTMLElement |
 
 const CARD_CSS = `
 .gv-contact-card{transition:transform 200ms cubic-bezier(.32,.72,0,1),box-shadow 200ms cubic-bezier(.32,.72,0,1)}
-.gv-contact-card:hover{transform:translateY(-1px);background-color:rgba(238,217,138,0.2)!important}
+.gv-contact-card:hover{transform:translateY(-1px);background-color:color-mix(in srgb, var(--gv-accent-light) 20%, transparent)!important}
 .gv-contact-card:active{transform:scale(0.98)}
-.gv-contact-card:focus-visible{outline:2px solid #EED98A;outline-offset:3px}
+.gv-contact-card:focus-visible{outline:2px solid var(--gv-accent-light);outline-offset:3px}
 @media (prefers-reduced-motion: reduce){.gv-contact-card,.gv-contact-card:hover,.gv-contact-card:active{transition:none;transform:none}}
 `;
 
@@ -108,13 +108,13 @@ function ContactEmailCard({ address }: { address: string }) {
       style={{
         minHeight: 54,
         padding: '7px 12px 7px 8px',
-        border: '1px solid rgba(238,217,138,0.45)',
-        backgroundColor: 'rgba(238,217,138,0.1)',
+        border: '1px solid color-mix(in srgb, var(--gv-accent-light) 45%, transparent)',
+        backgroundColor: 'color-mix(in srgb, var(--gv-accent-light) 10%, transparent)',
         cursor: 'pointer',
       }}
     >
       <span className="shrink-0 flex flex-col items-center" style={{ minWidth: 44 }}>
-        <Emoji3D name="E-mail" size={26} fallback={Mail} fallbackColor="#EED98A" />
+        <Emoji3D name="E-mail" size={26} fallback={Mail} fallbackColor="var(--gv-accent-light)" />
         <span style={{ fontFamily: FONT, fontSize: 10.5, fontWeight: 600, lineHeight: 1.2, color: 'rgba(250,246,234,0.82)', marginTop: 2 }}>
           Contact
         </span>
@@ -138,7 +138,7 @@ export function ContactOrganisers({ email }: {
   const addresses = conferenceContactEmails(email);
   if (addresses.length === 0) return null;
   return (
-    <div className="flex flex-col gap-2" style={{ marginTop: 14, paddingTop: 14, borderTop: '1px solid rgba(238,217,138,0.22)' }}>
+    <div className="flex flex-col gap-2" style={{ marginTop: 14, paddingTop: 14, borderTop: '1px solid color-mix(in srgb, var(--gv-accent-light) 22%, transparent)' }}>
       <style>{CARD_CSS}</style>
       {addresses.map(a => <ContactEmailCard key={a} address={a} />)}
     </div>

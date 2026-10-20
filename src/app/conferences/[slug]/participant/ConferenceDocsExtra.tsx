@@ -25,7 +25,7 @@ import { DASH_CSS, IconDisc, INK, INK_SOFT, DANGER } from '@/app/manage/[slug]/f
 import { DashCard as YouCard, CardHeading, FOREST, TINT_ACCENT as TINT_GOLD, TINT_MAIN as TINT_GREEN, CONF_BUTTON_CSS } from './dashboardKit';
 import {
   CONFERENCE_DOC_MAX_BYTES, DOC_FILE_ACCEPT, DOCUMENT_RETURNS_BUCKET,
-  docMimeFor, docTypeLabel, documentReturnPath, fetchMyConferenceDocuments, formatDocSize, isAllowedDocFile,
+  docMimeFor, docTypeLabel, documentReturnPath, downloadConferenceDoc, downloadStoredFile, fetchMyConferenceDocuments, formatDocSize,
   kindInfo, linkHost, openConferenceDoc, openStoredFile, replaceDocumentReturn, submitDocumentReturn,
   type ConferenceDoc, type MyConferenceDoc, type MyConferenceDocs,
 } from '@/lib/conferenceDocuments';
@@ -82,6 +82,9 @@ const CSS = `
 .gv-cdx-sub{margin:4px 0 0;font-size:13px;line-height:1.45;color:${INK_SOFT};overflow-wrap:anywhere}
 .gv-cdx-link{flex-shrink:0;align-self:center;border:none;background:none;padding:6px 2px;font-family:inherit;font-size:14px;font-weight:700;color:${FOREST};text-decoration:underline;text-underline-offset:3px;cursor:pointer}
 .gv-cdx-link:disabled{opacity:0.6;cursor:default}
+.gv-cdx-side{flex-shrink:0;display:flex;flex-direction:column;align-items:flex-end;gap:4px;align-self:flex-start}
+.gv-cdx-links{display:flex;align-items:center;gap:14px;flex-wrap:wrap;justify-content:flex-end}
+.gv-cdx-req{display:inline-flex;align-items:center;padding:2px 9px;border-radius:999px;background:rgba(139,32,32,0.1);color:#8B2020;font-size:12px;font-weight:800;line-height:1.5}
 .gv-cdx-link:focus{outline:none}
 .gv-cdx-link:focus-visible{outline:2px solid ${FOREST};outline-offset:2px;border-radius:4px}
 .gv-cdx-back{margin-top:12px;padding:12px 14px;border-radius:12px;background:#FFFFFF;box-shadow:inset 0 0 0 1px color-mix(in srgb, var(--gv-main) 8%, transparent);display:flex;flex-direction:column;gap:8px}
@@ -147,6 +150,23 @@ export default function ConferenceDocsExtra({ conferenceId, data, onChanged }: {
     if (!ok) setErr("Couldn't open your copy. Please try again.");
   }
 
+  async function downloadDoc(doc: MyConferenceDoc) {
+    if (!session || busyId) return;
+    setErr(''); setBusyId(`dl:${doc.id}`);
+    const ok = await downloadConferenceDoc(getAuthedClient(session.access_token), doc);
+    setBusyId(null);
+    if (!ok) setErr("Couldn't download that document. Please try again.");
+  }
+
+  async function downloadCopy(doc: MyConferenceDoc) {
+    const r = doc.my_return;
+    if (!session || !r?.file_path || busyId) return;
+    setErr(''); setBusyId(`copydl:${doc.id}`);
+    const ok = await downloadStoredFile(getAuthedClient(session.access_token), DOCUMENT_RETURNS_BUCKET, r.file_path, r.file_name ?? null, RETURN_LINK_SECONDS);
+    setBusyId(null);
+    if (!ok) setErr("Couldn't download your copy. Please try again.");
+  }
+
   if (data.documents.length === 0) return null;
 
   return (
@@ -158,8 +178,9 @@ export default function ConferenceDocsExtra({ conferenceId, data, onChanged }: {
       <CardHeading title="Conference Documents" stackedHide />
       <ul className="gv-cdx" style={{ listStyle: 'none', margin: 0, padding: 0 }}>
         {data.documents.map(doc => {
-          const word = !doc.url && isWord(doc.mime_type, doc.file_name);
-          const label = word ? 'Download' : 'Open';
+          // Open where the browser can show it (a link, a PDF, an image); Download for every file.
+          const canOpen = !!doc.url || !isWord(doc.mime_type, doc.file_name);
+          const canDownload = !doc.url && !!doc.file_path;
           return (
             <li key={doc.id} className="gv-cdx-row">
               <div className="gv-cdx-top">
@@ -169,15 +190,29 @@ export default function ConferenceDocsExtra({ conferenceId, data, onChanged }: {
                   {doc.description && <p className="gv-cdx-desc">{doc.description}</p>}
                   <p className="gv-cdx-sub">{sourceLine(doc)}</p>
                 </div>
-                <button type="button" className="gv-cdx-link" disabled={busyId === `doc:${doc.id}`} onClick={() => openDoc(doc)} aria-label={`${label} ${doc.title}`}>
-                  {busyId === `doc:${doc.id}` ? 'Opening' : label}
-                </button>
+                <div className="gv-cdx-side">
+                  {doc.ask_back && doc.required && <span className="gv-cdx-req">Required</span>}
+                  <div className="gv-cdx-links">
+                    {canOpen && (
+                      <button type="button" className="gv-cdx-link" disabled={busyId === `doc:${doc.id}`} onClick={() => openDoc(doc)} aria-label={`Open ${doc.title}`}>
+                        {busyId === `doc:${doc.id}` ? 'Opening' : 'Open'}
+                      </button>
+                    )}
+                    {canDownload && (
+                      <button type="button" className="gv-cdx-link" disabled={busyId === `dl:${doc.id}`} onClick={() => downloadDoc(doc)} aria-label={`Download ${doc.title}`}>
+                        {busyId === `dl:${doc.id}` ? 'Downloading' : 'Download'}
+                      </button>
+                    )}
+                  </div>
+                </div>
               </div>
               {doc.ask_back && (doc.can_send_back || doc.my_return) && (
                 <SendBackBlock
                   doc={doc}
                   viewing={busyId === `copy:${doc.id}`}
                   onView={() => viewCopy(doc)}
+                  downloading={busyId === `copydl:${doc.id}`}
+                  onDownload={() => downloadCopy(doc)}
                   onSend={() => setSending(doc)}
                 />
               )}
@@ -202,18 +237,18 @@ export default function ConferenceDocsExtra({ conferenceId, data, onChanged }: {
   );
 }
 
-function SendBackBlock({ doc, viewing, onView, onSend }: {
-  doc: MyConferenceDoc; viewing: boolean; onView: () => void; onSend: () => void;
+function SendBackBlock({ doc, viewing, onView, downloading, onDownload, onSend }: {
+  doc: MyConferenceDoc; viewing: boolean; onView: () => void; downloading: boolean; onDownload: () => void; onSend: () => void;
 }) {
   const r = doc.my_return;
   const state = r?.status ?? 'none';
   return (
     <div className="gv-cdx-back">
-      {(doc.due_label || doc.required) && (
+      {/* "Required" is the red tag at the card's top right (prompt 143). */}
+      {doc.due_label && (
         <div className="gv-cdx-due">
-          {doc.due_label && <span>Send it back by <b>{doc.due_label}</b></span>}
+          <span>Send it back by <b>{doc.due_label}</b></span>
           {doc.overdue && <b style={{ color: DANGER }}>Overdue</b>}
-          {doc.required && <b>Required</b>}
         </div>
       )}
 
@@ -243,6 +278,7 @@ function SendBackBlock({ doc, viewing, onView, onSend }: {
         <div className="gv-cdx-file">
           <span>{r.file_name ?? 'Your copy'}</span>
           <button type="button" className="gv-cdx-link" style={{ padding: 0 }} disabled={viewing} onClick={onView}>{viewing ? 'Opening' : 'View'}</button>
+          <button type="button" className="gv-cdx-link" style={{ padding: 0 }} disabled={downloading} onClick={onDownload}>{downloading ? 'Downloading' : 'Download'}</button>
         </div>
       )}
 
@@ -270,7 +306,7 @@ function SendBackPopup({ conferenceId, doc, onClose, onSent }: {
 
   function pick(f: File | null | undefined) {
     if (!f) return;
-    if (!isAllowedDocFile(f)) { setErr('Use a PDF, a Word document or a JPG or PNG image'); return; }
+    if (docMimeFor(f) === null) { setErr('Use a PDF, a Word document or a JPG or PNG image'); return; }
     if (f.size > CONFERENCE_DOC_MAX_BYTES) { setErr('The file is over 10 MB. Make it smaller and try again'); return; }
     setErr('');
     setFile(f);

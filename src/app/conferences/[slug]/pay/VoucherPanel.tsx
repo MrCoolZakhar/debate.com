@@ -84,7 +84,7 @@ export default function VoucherPanel({ conferenceId, applicationId, discountCent
           onChange={e => setCode(e.target.value.toUpperCase())}
           placeholder="For example EARLYBIRD10"
           className="flex-1 min-w-0 uppercase focus:outline-none"
-          style={{ height: 44, padding: '0 12px', borderRadius: 12, border: '1.5px solid rgba(27,56,40,0.25)', background: '#FFFFFF', color: NEU.ink, fontFamily: OUTFIT, fontSize: 16 }}
+          style={{ height: 44, padding: '0 12px', borderRadius: 12, border: '1.5px solid color-mix(in srgb, var(--gv-main) 25%, transparent)', background: '#FFFFFF', color: NEU.ink, fontFamily: OUTFIT, fontSize: 16 }}
         />
         <button type="button" className="gv-pay-btn gv-pay-outline" style={{ minHeight: 44 }}
           onClick={() => applyVoucher(code.trim().toUpperCase())} disabled={applying || !code.trim()}>

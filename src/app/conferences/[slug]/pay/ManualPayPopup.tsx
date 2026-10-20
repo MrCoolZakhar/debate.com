@@ -41,13 +41,13 @@ export const MANUAL_CSS = `
 .gv-pm-grid{display:grid;grid-template-columns:minmax(0,1fr);gap:22px}
 @media (min-width:760px){.gv-pm-grid.gv-pm-two{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}}
 .gv-pm-copyrow{display:flex;align-items:center;gap:10px;padding:10px 0}
-.gv-pm-copyrow + .gv-pm-copyrow{border-top:1px solid rgba(27,56,40,0.12)}
-.gv-pm-copy{display:inline-flex;align-items:center;gap:6px;min-height:40px;padding:0 12px;border-radius:10px;border:none;background:#FAF8F3;color:#1B3828;font-family:inherit;font-size:13px;font-weight:700;cursor:pointer;flex-shrink:0}
+.gv-pm-copyrow + .gv-pm-copyrow{border-top:1px solid color-mix(in srgb, var(--gv-main) 12%, transparent)}
+.gv-pm-copy{display:inline-flex;align-items:center;gap:6px;min-height:40px;padding:0 12px;border-radius:10px;border:none;background:#FAF8F3;color:var(--gv-main);font-family:inherit;font-size:13px;font-weight:700;cursor:pointer;flex-shrink:0}
 .gv-pm-copy:hover{background:#F0EBDD}
 .gv-pm-copy:focus{outline:none}
-.gv-pm-copy:focus-visible{outline:2px solid #1B3828;outline-offset:2px}
+.gv-pm-copy:focus-visible{outline:2px solid var(--gv-main);outline-offset:2px}
 .gv-pm-touch{display:none}
-.gv-pm-warn{padding:16px;border-radius:14px;background:rgba(238,217,138,0.3);box-shadow:inset 0 0 0 1.5px rgba(182,135,31,0.35);color:#1C1410}
+.gv-pm-warn{padding:16px;border-radius:14px;background:color-mix(in srgb, var(--gv-accent-light) 30%, transparent);box-shadow:inset 0 0 0 1.5px color-mix(in srgb, var(--gv-accent) 35%, transparent);color:#1C1410}
 @media (pointer:coarse),(max-width:767px){
   .gv-pm-touch{display:flex;flex-direction:column;gap:10px;margin-top:14px;text-align:left}
   .gv-pm-copy{min-height:44px}
@@ -88,7 +88,7 @@ function InPersonBlock({ instructions, total, heading }: { instructions: string 
       {instructions?.trim()
         ? <p style={{ margin: 0, fontSize: 15, lineHeight: 1.55, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{instructions.trim()}</p>
         : <p className="gv-pay-quiet">The organizers have not added their instructions yet</p>}
-      <div style={{ display: 'flex', alignItems: 'flex-end', gap: 12, flexWrap: 'wrap', paddingTop: 12, borderTop: '1px solid rgba(27,56,40,0.12)' }}>
+      <div style={{ display: 'flex', alignItems: 'flex-end', gap: 12, flexWrap: 'wrap', paddingTop: 12, borderTop: '1px solid color-mix(in srgb, var(--gv-main) 12%, transparent)' }}>
         <span style={{ flex: 1, minWidth: 0 }}>
           <span style={{ display: 'block', fontSize: 12.5, color: INK_SOFT }}>Amount to pay</span>
           <span style={{ display: 'block', fontSize: 30, fontWeight: 800, letterSpacing: '-0.02em', lineHeight: 1.15, fontVariantNumeric: 'tabular-nums', overflowWrap: 'anywhere' }}>{total}</span>

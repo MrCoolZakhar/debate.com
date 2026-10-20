@@ -16,9 +16,9 @@ import { fetchPressDesk, type PressDesk, type PressMotion, type PressRoomSession
 
 export const INK = '#1C1410';
 export const INK_SOFT = '#5A5046';
-export const FOREST = '#1B3828';
+export const FOREST = 'var(--gv-main)';
 export const SLATE = '#2F6076';
-export const CARD_SHADOW = '0 1px 2px rgba(27,56,40,0.06), 0 8px 24px rgba(27,56,40,0.08)';
+export const CARD_SHADOW = '0 1px 2px color-mix(in srgb, var(--gv-main) 6%, transparent), 0 8px 24px color-mix(in srgb, var(--gv-main) 8%, transparent)';
 
 export const POLL_MS = 10_000;
 

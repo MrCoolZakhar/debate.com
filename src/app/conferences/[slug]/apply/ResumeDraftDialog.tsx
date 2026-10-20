@@ -123,7 +123,7 @@ export default function ResumeDraftDialog({
           flex: 1, height: 44, borderRadius: 12,
           background: armed ? DANGER : '#FFFFFF',
           border: armed ? '1px solid transparent' : '1px solid color-mix(in srgb, var(--gv-main) 16%, transparent)',
-          boxShadow: armed ? 'none' : '0 1px 2px rgba(27,56,40,0.06)',
+          boxShadow: armed ? 'none' : '0 1px 2px color-mix(in srgb, var(--gv-main) 6%, transparent)',
           color: armed ? '#FFFFFF' : kind === 'delete' ? DANGER : NEU.ink,
           fontFamily: OUTFIT, fontSize: 13.5, fontWeight: 600,
           cursor: busy ? 'default' : 'pointer', opacity: busy && !armed ? 0.6 : 1,
@@ -151,7 +151,7 @@ export default function ResumeDraftDialog({
           style={{
             width: 400, maxWidth: '100%',
             background: '#FFFFFF', borderRadius: 24,
-            boxShadow: '0 24px 60px -16px rgba(27,56,40,0.40), 0 4px 14px -4px rgba(27,56,40,0.16)',
+            boxShadow: '0 24px 60px -16px color-mix(in srgb, var(--gv-main) 40%, transparent), 0 4px 14px -4px color-mix(in srgb, var(--gv-main) 16%, transparent)',
             padding: 24,
             fontFamily: OUTFIT,
           }}
@@ -203,7 +203,7 @@ export default function ResumeDraftDialog({
             style={{
               marginTop: 18, height: 48, borderRadius: 12, border: 'none',
               background: `linear-gradient(180deg, color-mix(in srgb, ${NEU.forest} 82%, #3E7A57), ${NEU.forest})`,
-              boxShadow: '0 6px 16px -6px rgba(27,56,40,0.55)',
+              boxShadow: '0 6px 16px -6px color-mix(in srgb, var(--gv-main) 55%, transparent)',
               color: '#FFFFFF',
               fontFamily: OUTFIT, fontSize: 15, fontWeight: 700,
               cursor: busy ? 'default' : 'pointer', opacity: busy ? 0.6 : 1,

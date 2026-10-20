@@ -15,7 +15,7 @@ import { CARD_SHADOW, FOREST, INK, INK_SOFT } from './pressKit';
 
 const PRIMARY: React.CSSProperties = {
   minHeight: 44, padding: '0 18px', borderRadius: 10, border: 'none',
-  background: 'linear-gradient(90deg, #1B3828 0%, #2A5A3C 100%)', color: '#FFFFFF',
+  background: 'linear-gradient(90deg, var(--gv-main) 0%, var(--gv-main-mid) 100%)', color: '#FFFFFF',
   fontFamily: OUTFIT, fontSize: 15, fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 8,
 };
 const SECOND: React.CSSProperties = {
@@ -99,8 +99,8 @@ export default function PressReleaseComposer({ conferenceId, label, releasesLeft
         rows={4}
         disabled={out}
         placeholder={out ? 'You have used today’s press releases' : 'Breaking: the Security Council votes on a ceasefire draft at 3pm'}
-        className="mt-4 w-full rounded-[12px] px-4 py-3 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F]"
-        style={{ fontFamily: OUTFIT, fontSize: 16, lineHeight: 1.5, color: INK, backgroundColor: '#FBF8F1', border: '1.5px solid rgba(27,56,40,0.14)', resize: 'vertical', minHeight: 110 }}
+        className="mt-4 w-full rounded-[12px] px-4 py-3 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gv-accent)]"
+        style={{ fontFamily: OUTFIT, fontSize: 16, lineHeight: 1.5, color: INK, backgroundColor: '#FBF8F1', border: '1.5px solid color-mix(in srgb, var(--gv-main) 14%, transparent)', resize: 'vertical', minHeight: 110 }}
       />
 
       <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
@@ -108,18 +108,18 @@ export default function PressReleaseComposer({ conferenceId, label, releasesLeft
           <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/webp,image/gif" className="sr-only" tabIndex={-1}
             onChange={(e) => { void pick(e.target.files?.[0]); e.target.value = ''; }} />
           {imageUrl ? (
-            <span className="inline-flex items-center gap-2 rounded-[10px] px-2 py-1" style={{ backgroundColor: 'rgba(27,56,40,0.05)' }}>
+            <span className="inline-flex items-center gap-2 rounded-[10px] px-2 py-1" style={{ backgroundColor: 'color-mix(in srgb, var(--gv-main) 5%, transparent)' }}>
               {/* eslint-disable-next-line @next/next/no-img-element -- the photo just uploaded */}
               <img src={imageUrl} alt="" referrerPolicy="no-referrer" style={{ width: 36, height: 36, objectFit: 'cover', borderRadius: 8 }} />
               <span className="[overflow-wrap:anywhere]" style={{ fontFamily: OUTFIT, fontSize: 13, color: INK, maxWidth: 220 }} title={imageName}>{imageName || 'Photo'}</span>
               <button type="button" aria-label="Remove the photo" title="Remove the photo" onClick={() => { setImageUrl(null); setImageName(''); }}
-                className="inline-flex h-8 w-8 items-center justify-center rounded-full hover:bg-[#1B3828]/[0.08] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F]" style={{ color: INK_SOFT }}>
+                className="inline-flex h-8 w-8 items-center justify-center rounded-full hover:bg-[var(--gv-main)]/[0.08] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gv-accent)]" style={{ color: INK_SOFT }}>
                 <X size={15} />
               </button>
             </span>
           ) : (
             <button type="button" onClick={() => fileRef.current?.click()} disabled={uploading || out}
-              className="inline-flex items-center gap-1.5 rounded-[10px] px-3 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] disabled:opacity-50"
+              className="inline-flex items-center gap-1.5 rounded-[10px] px-3 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gv-accent)] disabled:opacity-50"
               style={{ minHeight: 40, fontFamily: OUTFIT, fontSize: 14, fontWeight: 700, color: FOREST, textDecoration: 'underline' }}>
               {uploading ? <Loader2 size={16} className="animate-spin" aria-hidden /> : <ImagePlus size={16} aria-hidden />}
               {uploading ? 'Uploading' : 'Add a photo'}
@@ -135,15 +135,15 @@ export default function PressReleaseComposer({ conferenceId, label, releasesLeft
         {asking ? (
           <>
             <span style={{ fontFamily: OUTFIT, fontSize: 14, fontWeight: 600, color: INK }}>This goes to every committee room. Send it now?</span>
-            <button type="button" style={SECOND} onClick={() => setAsking(false)} disabled={sending} className="focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F]">Cancel</button>
-            <button type="button" style={{ ...PRIMARY, opacity: sending ? 0.7 : 1 }} onClick={() => void send()} disabled={sending} className="focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F]">
+            <button type="button" style={SECOND} onClick={() => setAsking(false)} disabled={sending} className="focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gv-accent)]">Cancel</button>
+            <button type="button" style={{ ...PRIMARY, opacity: sending ? 0.7 : 1 }} onClick={() => void send()} disabled={sending} className="focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gv-accent)]">
               {sending ? <Loader2 size={16} className="animate-spin" aria-hidden /> : <Send size={16} aria-hidden />}
               Send
             </button>
           </>
         ) : (
           <button type="button" style={{ ...PRIMARY, opacity: canSend ? 1 : 0.5 }} disabled={!canSend} onClick={() => { setDone(''); setAsking(true); }}
-            className="focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F]">
+            className="focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gv-accent)]">
             <Send size={16} aria-hidden /> Send to all committees
           </button>
         )}

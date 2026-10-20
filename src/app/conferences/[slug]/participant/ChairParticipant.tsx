@@ -415,7 +415,7 @@ function ChairCommitteeBlock({ conferenceId, conferenceSlug, committee, chairDis
         .eq('conference_committee_id', committee.id),
       supabase
         .from('position_papers')
-        .select('id, country_code, status, submitted_at, reviewer_seen_at')
+        .select('id, country_code, status, submitted_at, reviewer_seen_at, file_url, file_name')
         .eq('conference_committee_id', committee.id),
     ]);
     setAllocations((allocData ?? []) as unknown as RosterAllocationRow[]);

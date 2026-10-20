@@ -85,7 +85,7 @@ export interface ActiveAddon {
 
 const NOTE_TONES = {
   amber: { color: '#B8844A', bg: 'rgba(184,132,74,0.1)', border: 'rgba(184,132,74,0.24)' },
-  green: { color: '#2A5A3C', bg: 'rgba(61,122,82,0.1)', border: 'rgba(61,122,82,0.24)' },
+  green: { color: 'var(--gv-main-mid)', bg: 'color-mix(in srgb, var(--gv-main-light) 10%, transparent)', border: 'color-mix(in srgb, var(--gv-main-light) 24%, transparent)' },
   muted: { color: '#6E5F4E', bg: 'rgba(154,138,120,0.1)', border: 'rgba(154,138,120,0.24)' },
   red: { color: '#8B2020', bg: 'rgba(139,32,32,0.08)', border: 'rgba(139,32,32,0.22)' },
 } as const;
@@ -365,7 +365,7 @@ export function AddonsModal({
                       </label>
 
                       {isPurchased ? (
-                        <p className="mt-2 inline-flex items-center gap-1" style={{ fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 800, color: '#2A5A3C' }}>
+                        <p className="mt-2 inline-flex items-center gap-1" style={{ fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 800, color: 'var(--gv-main-mid)' }}>
                           Purchased ✓
                         </p>
                       ) : sel.checked && (

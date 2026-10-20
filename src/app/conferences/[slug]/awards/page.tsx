@@ -8,6 +8,7 @@
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { pageMetadata } from '@/lib/seo';
+import type { ConferenceTheme } from '@/lib/theme';
 import { conferenceOgImageUrl } from '@/lib/ogVersion';
 import { conferenceAcronymLabel } from '@/lib/conferenceLabels';
 import { supabase } from '@/lib/supabase';
@@ -48,6 +49,7 @@ interface ConfRow {
   start_date: string | null;
   end_date: string | null;
   is_verified?: boolean;
+  theme?: ConferenceTheme | null;
 }
 
 export default async function ConferenceAwardsPage({ params }: { params: Promise<{ slug: string }> }) {
@@ -57,7 +59,7 @@ export default async function ConferenceAwardsPage({ params }: { params: Promise
   try {
     const { data } = await supabase
       .from('conferences')
-      .select('id, slug, full_name, acronym, logo_url, awards_published_at, awards_config, start_date, end_date, is_verified')
+      .select('id, slug, full_name, acronym, logo_url, awards_published_at, awards_config, start_date, end_date, is_verified, theme')
       .eq('slug', slug)
       .maybeSingle();
     conf = (data as ConfRow | null) ?? null;
@@ -76,6 +78,7 @@ export default async function ConferenceAwardsPage({ params }: { params: Promise
     start_date: conf.start_date,
     end_date: conf.end_date,
     is_verified: !!conf.is_verified,
+    theme: conf.theme ?? null,
   };
 
   if (!conf.awards_published_at) {

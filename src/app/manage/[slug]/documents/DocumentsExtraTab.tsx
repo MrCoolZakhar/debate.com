@@ -17,7 +17,7 @@ import { getFreshAuthedClient } from '@/lib/supabase-auth';
 import { useConfirmModal } from '@/components/ConfirmModal';
 import { notifyErr, notifyOk } from '@/lib/appNotify';
 import {
-  canPreviewDoc, fetchDocsOverview, formatDocSize, kindInfo, linkHost, openConferenceDoc, removeConferenceDocument,
+  canPreviewDoc, downloadConferenceDoc, fetchDocsOverview, formatDocSize, kindInfo, linkHost, openConferenceDoc, removeConferenceDocument,
   type ConferenceDoc, type DocsOverview, type DocsOverviewItem,
 } from '@/lib/conferenceDocuments';
 import { STORE_CSS } from '../store/storeKit';
@@ -114,6 +114,12 @@ export default function DocumentsExtraTab({ conferenceId, initial, initialDocId,
     if (!ok) notifyErr("Couldn't open the document. Please try again.", 'conference-docs');
   }
 
+  async function download(doc: DocsOverviewItem) {
+    const client = await getFreshAuthedClient();
+    const ok = client ? await downloadConferenceDoc(client, doc) : false;
+    if (!ok) notifyErr("Couldn't download the document. Please try again.", 'conference-docs');
+  }
+
   const toReview = overview.to_review;
 
   return (
@@ -186,10 +192,13 @@ export default function DocumentsExtraTab({ conferenceId, initial, initialDocId,
                   </span>
                 </div>
                 <div className="gv-cd-row-actions">
-                  {!inPopup && <button type="button" className="gv-st-btn gv-st-outline" onClick={() => open(doc)}>Open</button>}
-                  {/* In View Documents (prompt 142): a link opens, a file the preview cannot draw (Word) downloads. */}
-                  {inPopup && (doc.url || !canPreviewDoc(doc.mime_type, doc.file_name)) && (
-                    <button type="button" className="gv-st-btn gv-st-outline" onClick={() => open(doc)}>{doc.url ? 'Open' : 'Download'}</button>
+                  {/* Open where the browser can show it (a link, a PDF, an image) and Download for
+                      every file, side by side (prompt 143); a Word file only downloads. */}
+                  {(doc.url || canPreviewDoc(doc.mime_type, doc.file_name)) && (
+                    <button type="button" className="gv-st-btn gv-st-outline" onClick={() => open(doc)}>Open</button>
+                  )}
+                  {!doc.url && doc.file_path && (
+                    <button type="button" className="gv-st-btn gv-st-outline" onClick={() => download(doc)}>Download</button>
                   )}
                   <button type="button" className="gv-st-btn gv-st-outline" disabled={busy} onClick={() => { if (onEdit) onEdit(doc); else setDialog({ mode: 'edit', doc }); }}>Edit</button>
                   {doc.ask_back && (

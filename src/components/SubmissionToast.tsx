@@ -227,10 +227,10 @@ export default function SubmissionToast({ conferenceName, message, linkLabel, li
         .dgs-x {
           transition: background-color 140ms ${EASE}, transform 120ms ${EASE};
         }
-        .dgs-x:hover { background-color: rgba(27,56,40,0.14) }
+        .dgs-x:hover { background-color: color-mix(in srgb, var(--gv-main) 14%, transparent) }
         .dgs-x:active { transform: scale(0.94) }
         .dgs-x:focus-visible, .dgs-link:focus-visible {
-          box-shadow: 0 0 0 2px var(--gv-surface, #FAF8F3), 0 0 0 4px rgba(27,56,40,0.55);
+          box-shadow: 0 0 0 2px var(--gv-surface, #FAF8F3), 0 0 0 4px color-mix(in srgb, var(--gv-main) 55%, transparent);
         }
         .dgs-link { transition: transform 120ms ${EASE}, filter 120ms ${EASE} }
         .dgs-link:active { transform: scale(0.97) }
@@ -283,8 +283,8 @@ export default function SubmissionToast({ conferenceName, message, linkLabel, li
             marginTop: 12,
             padding: '8px 16px',
             borderRadius: 999,
-            backgroundColor: 'var(--gv-main, #1B3828)',
-            color: 'var(--gv-on-main, #EED98A)',
+            backgroundColor: 'var(--gv-main)',
+            color: 'var(--gv-on-main, var(--gv-accent-light))',
             fontFamily: OUTFIT, fontWeight: 700, fontSize: 12, letterSpacing: '0.04em',
             textDecoration: 'none', cursor: 'pointer',
           }}

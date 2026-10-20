@@ -261,7 +261,7 @@ export default function RegistrationConfirmation({
             background: NEU.surface,
             borderRadius: 26,
             padding: '14px 14px 22px',
-            boxShadow: `0 28px 60px color-mix(in srgb, ${NEU.forest} 20%, transparent), inset 0 1px 0 rgba(255,255,255,0.75), 0 0 0 1px rgba(27,56,40,0.07)`,
+            boxShadow: `0 28px 60px color-mix(in srgb, ${NEU.forest} 20%, transparent), inset 0 1px 0 rgba(255,255,255,0.75), 0 0 0 1px color-mix(in srgb, var(--gv-main) 7%, transparent)`,
             transformOrigin: '50% 50%',
           }}
         >
