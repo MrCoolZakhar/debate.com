@@ -18,6 +18,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Plus } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { openAuth } from '@/lib/authModal';
+import { replaceUrlInPlace } from '@/lib/replaceUrlInPlace';
 import { openCreditsPopup } from '@/lib/purchasePopup';
 import { notifyErr, notifyOk } from '@/lib/appNotify';
 import { refreshCreditsEverywhere, useCredits } from '@/hooks/useCredits';
@@ -51,7 +52,7 @@ export function useStandalonePosting({ onChanged, onPosted }: {
   /** A listing went live: show Your Listings. */
   onPosted?: () => void;
 }) {
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const userId = user?.id ?? null;
   const { balance } = useCredits();
   const [open, setOpen] = useState<Open>(null);
@@ -76,6 +77,24 @@ export function useStandalonePosting({ onChanged, onPosted }: {
 
   const edit = useCallback((listing: JobMyListing) => setOpen({ kind: 'post', listing }), []);
   const promote = useCallback((listing: JobMyListing) => setOpen({ kind: 'promote', listing }), []);
+
+  // /jobs?post=1 (the homepage's "Post a listing" tile) acts as one press of
+  // the button, once the viewer is known (signed out: sign-in first, then it
+  // carries on as above). The param leaves the URL so a refresh never reopens it.
+  const postParamRef = useRef(false);
+  useEffect(() => {
+    if (authLoading || postParamRef.current) return;
+    if (new URL(window.location.href).searchParams.get('post') !== '1') { postParamRef.current = true; return; }
+    const t = window.setTimeout(() => {
+      if (postParamRef.current) return;
+      postParamRef.current = true;
+      const url = new URL(window.location.href);
+      url.searchParams.delete('post');
+      replaceUrlInPlace(url.pathname + url.search + url.hash);
+      post();
+    }, 0);
+    return () => window.clearTimeout(t);
+  }, [authLoading, post]);
 
   // After signing in, the press made while signed out carries on.
   useEffect(() => {

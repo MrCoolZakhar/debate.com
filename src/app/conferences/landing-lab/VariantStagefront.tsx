@@ -11,7 +11,7 @@
 //   1. Hero, headline left, "up next" card rail right         , DARK (theatre photo)
 //   2. Sessions: laptop | "Run the room" + code field | phone  , CREAM (HomeSections.tsx)
 //   3. The circuit-in-numbers bar under Sessions               , CREAM
-//   4. "Job Board": up to 6 compact job cards (none = no section), CREAM (JobBoardSection.tsx)
+//   4. "Job Board": always shown, the search left and six small tiles right, CREAM (JobBoardSection.tsx)
 //   5. "Learn MUN": guides from the blog                       , WHITE (HomeSections.tsx)
 //   6. "Find your seat" role carousel                          , CREAM
 //   7. "Conferences near you", three cards chosen by IP country , IVORY
