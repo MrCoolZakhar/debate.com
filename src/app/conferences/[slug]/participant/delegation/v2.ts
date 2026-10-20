@@ -23,7 +23,7 @@
 import { getFreshAuthedClient } from '@/lib/supabase-auth';
 import { friendlyError, plainOrFallback } from '@/lib/friendlyError';
 
-export const DELEGATIONS_V2_DB = false;
+export const DELEGATIONS_V2_DB = true;
 
 // DELEGATIONS_MONEY_DB waits for Christian's money functions (delegation_remove_member,
 // organiser_set_member_role), built in his chat with a rollback test; what we asked

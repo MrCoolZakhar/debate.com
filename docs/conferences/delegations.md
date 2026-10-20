@@ -60,7 +60,7 @@ Owner: Peter, 19 Oct 2026. The decisions below came out of a Q&A before the rebu
 
 Christian's answers are in `delegations-money-answers.md`. Two owner decisions on 20 Oct: only organisers move someone between delegate and faculty advisor (the money moves with the person, built in Christian's chat), and the apply step keeps Christian's question "How many delegates will your delegation have?" with "besides you" for a head delegate.
 
-- `scratch-delegations-part1-people-and-seats.sql`: seats and reads only (settings columns, open seats, place and take out of a seat, organiser seat grants with the seat limit, committee roster, member seats, leader papers, study guides, chair names). Writes no invoice, payment or coverage. Send to Christian's chat for a read, then apply; client flag `DELEGATIONS_V2_DB`.
+- `scratch-delegations-part1-people-and-seats.sql`: seats and reads only (settings columns, open seats, place and take out of a seat, organiser seat grants with the seat limit, committee roster, member seats, leader papers, study guides, chair names). Writes no invoice, payment or coverage. APPLIED 20 Oct 2026; client flag `DELEGATIONS_V2_DB` is on.
 - `delegations-requests-for-christian.md`: what Christian's chat builds (removing a member, the organiser's delegate / advisor move, the "pledge" wording inside their functions). Client flag `DELEGATIONS_MONEY_DB` for the screens that call them.
 - `scratch-delegations-rebuild.sql` is the superseded single draft; never apply it.
 

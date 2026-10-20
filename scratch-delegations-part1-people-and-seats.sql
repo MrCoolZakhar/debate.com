@@ -1,6 +1,6 @@
 -- =============================================================================
 -- scratch-delegations-part1-people-and-seats.sql
--- DRAFT, NOT APPLIED. The owners apply it through the chat's Supabase work.
+-- APPLIED 20 Oct 2026 (sections 1-14 through a chat; 15-16 as migration delegations_part1_short_invites_and_member_details, Peter's one-off approval). Record of what is live.
 -- People and seats only: the delegations rebuild WITHOUT any money (rewritten
 -- 20 Oct 2026 after Christian's answers, ~/Downloads/delegations-answers-for-peter.md).
 --
