@@ -20,8 +20,8 @@
 //       well as the delegation's leaders (the leader card's wrapper is reused)
 //   organiser_set_member_role(p_application, p_role) -> { ok, code, error }, organisers
 //       only: the role move with its money in one step (organiserSetMemberRole below)
-//   organiser_set_head(p_application, p_head) -> { ok, code, error }, organisers only:
-//       delegate <-> head delegate (organiserSetHead below, DELEGATIONS_MONEY_DB)
+//   delegate <-> head delegate for organisers also goes through organiser_set_member_role
+//       (organiserSetHead below, DELEGATIONS_MONEY_DB)
 
 import { getFreshAuthedClient } from '@/lib/supabase-auth';
 import { friendlyError, plainOrFallback } from '@/lib/friendlyError';
@@ -154,24 +154,12 @@ export async function organiserSetMemberRole(
 
 /**
  * An organiser makes a delegate a head delegate, or a head delegate a delegate.
- * organiser_set_head(p_application uuid, p_head boolean) is Christian's (not
- * live, 20 Oct 2026) and answers { ok, code, error }; only called while
- * DELEGATIONS_MONEY_DB is on, its sentence shown as given.
+ * Christian's chat folded this into organiser_set_member_role (live 20 Oct 2026,
+ * accepts delegate, head-delegate and faculty-advisor), so this calls it with the
+ * target role; only while DELEGATIONS_MONEY_DB is on, its sentence shown as given.
  */
 export async function organiserSetHead(applicationId: string, head: boolean): Promise<V2Result> {
-  const fallback = 'That role change was not saved. Try again.';
-  if (!DELEGATIONS_MONEY_DB) return { ok: false, error: fallback };
-  try {
-    const c = await getFreshAuthedClient();
-    if (!c) return { ok: false, error: SIGNED_OUT };
-    const { data, error } = await c.rpc('organiser_set_head', { p_application: applicationId, p_head: head });
-    if (error) return { ok: false, error: friendlyError(error, fallback) };
-    const r = (data ?? {}) as { ok?: boolean; code?: string; error?: string; message?: string };
-    if (r.ok !== true) return { ok: false, error: plainOrFallback(r.error ?? r.message, fallback) };
-    return { ok: true };
-  } catch (e) {
-    return { ok: false, error: friendlyError(e, fallback) };
-  }
+  return organiserSetMemberRole(applicationId, head ? 'head-delegate' : 'delegate');
 }
 
 /** The hover title on every control that waits for DELEGATIONS_MONEY_DB. */
