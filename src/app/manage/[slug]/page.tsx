@@ -1278,7 +1278,8 @@ export default function DashboardPage() {
   // Checklist v2 (owner, 12 Oct 2026): page → committees → applications →
   // financials → communications → chairs → store, the same seven keys and
   // order as conference_setup_status() in scratch-checklist-v2.sql (pending).
-  // The blue checkmark is the first six; 'store' is not a criterion. 'email',
+  // The blue checkmark is all seven since 20 Oct 2026 (owner; the conferences
+  // verified that day are exempt from 'store', checkmark_store_exempt). 'email',
   // 'secretariat' and 'publish' left the list (Publish lives in the manage
   // header). Done rows are
   // filtered out entirely rather than sorted to the bottom, and what is left is

@@ -85,7 +85,7 @@ export interface AdminConferenceRow {
 
 // ── Set-up steps ────────────────────────────────────────────────────────────
 // THE SAME SEVEN PRIORITIES THE ORGANISER IS SHOWN (checklist v2, 12 Oct 2026:
-// 7, the first six of them verification stages), in the same journey order
+// 7, all of them verification stages since 20 Oct 2026), in the same journey order
 // (src/app/manage/[slug]/page.tsx `checklist`). conference_setup_status() now
 // builds all seven, reports setup_total as the length of its own item list, and
 // counts setup_done and pending_keys over the same seven with no exception for
@@ -106,8 +106,8 @@ export interface AdminConferenceRow {
 // outstanding, so a checkmark would read as "done". Nor a Globe, which is the
 // live badge's glyph.
 const SETUP_STEPS: { key: string; label: string; icon: typeof LayoutTemplate }[] = [
-  // Checklist v2 (owner, 12 Oct 2026), the organiser's order. The first six are
-  // the blue checkmark's criteria; 'store' is not (scratch-checklist-v2.sql,
+  // Checklist v2 (owner, 12 Oct 2026), the organiser's order. All seven are
+  // the blue checkmark's criteria since 20 Oct 2026 (scratch-checklist-v2.sql,
   // pending: until it is applied the SQL still returns the old keys, which
   // render through LEGACY_STEPS below).
   { key: 'page',           label: 'Conference page',    icon: LayoutTemplate },
