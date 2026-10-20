@@ -2,8 +2,8 @@
 //
 // One query shape so any view can be shared: role, country and offer repeat;
 // region repeats; from / to are ISO dates; deadline is week or month; under10
-// is 1; q is the search; tab is saved or applications; listing is the chosen
-// listing's id. Pure functions, used by the server page and the client alike.
+// is 1; q is the search; conference is one conference's id (the Hiring mark
+// on Explore); tab is saved or applications; listing is the chosen listing's id. Pure functions, used by the server page and the client alike.
 
 import type { JobFilters, JobOffer, JobRegion, JobRole } from '@/lib/jobBoard';
 
@@ -22,13 +22,15 @@ export interface JobQuery {
   deadline: JobDeadline;
   under10: boolean;
   q: string;
+  /** One conference's id, or null. */
+  conference: string | null;
   tab: JobTab;
   listing: string | null;
 }
 
 export const EMPTY_JOB_QUERY: JobQuery = {
   roles: [], countries: [], regions: [], from: '', to: '', level: '', format: '',
-  offers: [], deadline: '', under10: false, q: '', tab: 'all', listing: null,
+  offers: [], deadline: '', under10: false, q: '', conference: null, tab: 'all', listing: null,
 };
 
 const ROLES: JobRole[] = ['chair', 'secretariat', 'staff'];
@@ -66,6 +68,7 @@ export function readJobQuery(p: ParamSource): JobQuery {
   const from = p.get('from') ?? '';
   const to = p.get('to') ?? '';
   const listing = p.get('listing');
+  const conference = p.get('conference');
   const regions = uniq(p.getAll('region').filter((r): r is JobRegion => (REGIONS as string[]).includes(r)));
   return {
     roles: uniq(p.getAll('role').filter((r): r is JobRole => (ROLES as string[]).includes(r))),
@@ -80,6 +83,7 @@ export function readJobQuery(p: ParamSource): JobQuery {
     deadline: deadline === 'week' || deadline === 'month' ? deadline : '',
     under10: p.get('under10') === '1',
     q: (p.get('q') ?? '').slice(0, 120),
+    conference: conference && UUID.test(conference) ? conference : null,
     tab: tab === 'saved' || tab === 'applications' ? tab : 'all',
     listing: listing && UUID.test(listing) ? listing : null,
   };
@@ -98,6 +102,7 @@ export function writeJobQuery(q: JobQuery): string {
   if (q.deadline) s.set('deadline', q.deadline);
   if (q.under10) s.set('under10', '1');
   if (q.q.trim()) s.set('q', q.q.trim());
+  if (q.conference) s.set('conference', q.conference);
   if (q.tab !== 'all') s.set('tab', q.tab);
   if (q.listing) s.set('listing', q.listing);
   const str = s.toString();
@@ -118,6 +123,7 @@ export function jobFiltersOf(q: JobQuery): JobFilters {
     deadline_days: q.deadline === 'week' ? 7 : q.deadline === 'month' ? 30 : undefined,
     under10: q.under10 || undefined,
     q: q.q || undefined,
+    conference_id: q.conference || undefined,
   };
 }
 
@@ -128,7 +134,7 @@ export function jobFilterKey(q: JobQuery): string {
 
 export function hasJobFilters(q: JobQuery): boolean {
   return q.roles.length > 0 || q.countries.length > 0 || q.regions.length > 0 || !!q.from || !!q.to
-    || !!q.level || !!q.format || q.offers.length > 0 || !!q.deadline || q.under10 || !!q.q.trim();
+    || !!q.level || !!q.format || q.offers.length > 0 || !!q.deadline || q.under10 || !!q.q.trim() || !!q.conference;
 }
 
 export const JOB_REGION_LABEL: Record<JobRegion, string> = {

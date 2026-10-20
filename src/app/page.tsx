@@ -6,6 +6,7 @@ import { articles } from './blog/posts';
 import type { HomeGuide } from './conferences/landing-lab/HomeSections';
 import { listGuides } from '@/lib/premiumGuides';
 import { guideCover } from '@/lib/premiumGuides/covers';
+import { fetchJobHomepage } from '@/lib/jobBoard';
 
 // The cards and the trust counts are read here, on the
 // server, so they are real in the HTML (they used to render "—" until a
@@ -84,8 +85,8 @@ const websiteSchema = {
 
 // "Learn MUN" on the homepage: the evergreen beginner guides, in this order.
 // Slugs from src/app/blog/posts.ts; one that is renamed or removed there is
-// simply skipped. The old job board section was taken off the page on
-// 24 Sep 2026; the Job Board now lives at /jobs.
+// simply skipped. The Job Board lives at /jobs; its homepage section (up to 6
+// cards from job_homepage) sits directly above Learn MUN.
 const HOME_GUIDE_SLUGS = [
   'mun-for-beginners',
   'mun-position-paper-guide',
@@ -112,10 +113,12 @@ const homeGuides: HomeGuide[] = premiumPick
   : blogGuides;
 
 export default async function HomePage() {
-  const [conferences, stats, featured] = await Promise.all([
+  const [conferences, stats, featured, jobs] = await Promise.all([
     fetchListedConferences(),
     fetchPlatformStats(),
     fetchFeaturedHomepage(),
+    // The Job Board section: up to 6 cards in the owner's order ([] on failure).
+    fetchJobHomepage(),
   ]);
   return (
     <>
@@ -127,7 +130,7 @@ export default async function HomePage() {
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(websiteSchema) }}
       />
-      <StagefrontClient conferences={conferences} stats={stats} guides={homeGuides} featured={featured} />
+      <StagefrontClient conferences={conferences} stats={stats} guides={homeGuides} featured={featured} jobs={jobs} />
     </>
   );
 }

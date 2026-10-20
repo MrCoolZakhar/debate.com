@@ -153,7 +153,9 @@ export default function JobCard({
   return (
     <Link
       href={target}
-      scroll={false}
+      // In place on /jobs the page keeps its scroll; from anywhere else
+      // (the homepage), /jobs opens at the top.
+      scroll={onSelect ? false : undefined}
       onClick={onSelect ? (e) => {
         if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return;
         e.preventDefault();

@@ -29,6 +29,8 @@ export interface JobFilters {
   deadline_days?: number;
   under10?: boolean;
   q?: string;
+  /** One conference's listings (the Hiring mark on Explore links here). */
+  conference_id?: string;
 }
 
 export interface JobOffers {
@@ -170,6 +172,7 @@ export function cleanFilters(f: JobFilters): JobFilters {
   if (f.deadline_days) out.deadline_days = f.deadline_days;
   if (f.under10) out.under10 = true;
   if (f.q?.trim()) out.q = f.q.trim();
+  if (f.conference_id) out.conference_id = f.conference_id;
   return out;
 }
 
@@ -328,4 +331,37 @@ export function jobContinuePath(slug: string, role: JobRole, listingId: string):
 /** True when the listing applies on another site (no Gavelling form). */
 export function jobAppliesOutside(l: { kind: JobKind; premium_apply?: string | null }): boolean {
   return l.kind === 'outside' || (l.kind === 'premium' && l.premium_apply === 'link');
+}
+
+// ── Prompt 4: the homepage section, Join the Team and the Hiring mark ───────
+// All three are anon and authenticated reads. A failed read is an empty
+// answer: these placements simply do not render.
+
+/** Up to 6 cards, already in the owner's order. Never re-sort. Server-safe (anon client). */
+export async function fetchJobHomepage(): Promise<JobCard[]> {
+  try {
+    const { data, error } = await supabase.rpc('job_homepage');
+    if (error || !Array.isArray(data)) return [];
+    return (data as JobCard[]).slice(0, 6);
+  } catch { return []; }
+}
+
+/** This conference's live listings, promoted first, then newest. */
+export async function fetchConferenceListings(conferenceId: string): Promise<JobCard[]> {
+  try {
+    const client = await readClient();
+    const { data, error } = await client.rpc('job_conference_listings', { p_conf: conferenceId });
+    if (error || !data) return [];
+    const list = Array.isArray(data) ? data : (data as { items?: unknown }).items;
+    return Array.isArray(list) ? (list as JobCard[]) : [];
+  } catch { return []; }
+}
+
+/** Conferences with at least one live promoted listing. */
+export async function fetchHiringConferences(): Promise<Set<string>> {
+  try {
+    const { data, error } = await supabase.rpc('job_hiring_conferences');
+    if (error || !Array.isArray(data)) return new Set();
+    return new Set((data as string[]).filter((x) => typeof x === 'string'));
+  } catch { return new Set(); }
 }

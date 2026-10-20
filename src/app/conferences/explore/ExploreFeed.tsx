@@ -27,6 +27,7 @@ import { DuoIcon } from './ExploreChrome';
 import { isGavellingListing } from '@/lib/listings';
 import { conferenceImageSrc } from '@/lib/listingImage';
 import { NotOnGavellingMark } from '@/components/conferences/NotOnGavellingMark';
+import { HiringMark } from '@/components/conferences/HiringMark';
 
 const FONT = "var(--font-brand), sans-serif";
 const INK = '#1C1410';
@@ -438,12 +439,14 @@ function OpenRoles({ facet, facetsLoaded }: { facet?: ConferenceFacet; facetsLoa
 }
 
 function FeedRow({
-  conf, facet, facetsLoaded, creditSponsored, applied, member, spotlight = false,
+  conf, facet, facetsLoaded, creditSponsored, hiring = false, applied, member, spotlight = false,
 }: {
   conf: ExploreConference;
   facet?: ConferenceFacet;
   facetsLoaded: boolean;
   creditSponsored: boolean;
+  /** A live promoted Job Board listing: "Hiring", never on a Gavelling listing. */
+  hiring?: boolean;
   applied: boolean;
   member: boolean;
   spotlight?: boolean;
@@ -457,6 +460,7 @@ function FeedRow({
   const LevelIcon = LEVEL_GLYPHS[conf.student_level];
   // A Gavelling listing: the mark in the price's place, no open roles line.
   const listing = isGavellingListing(conf);
+  const showHiring = hiring && !listing;
   return (
     <Link href={`/conferences/${conf.slug}`} className="gv-row focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#1B3828]" style={{ fontFamily: FONT }}>
       <DateBlock start={conf.start_date} />
@@ -496,12 +500,14 @@ function FeedRow({
         <div className="gv-row-inline flex items-center flex-wrap" style={{ marginTop: 10, columnGap: 12, rowGap: 4 }}>
           {listing ? <NotOnGavellingMark size="xs" /> : <PriceLine price={conf.delegate_price} size={15} />}
           {creditSponsored && <CreditSponsoredMark size="xs" />}
+          {showHiring && <HiringMark conferenceId={conf.id} />}
           <ViewerState applied={applied} member={member} />
         </div>
       </div>
       <div className="gv-row-side flex-col items-end" style={{ gap: 6, textAlign: 'right', paddingTop: 2 }}>
         {listing ? <NotOnGavellingMark size="xs" /> : <PriceLine price={conf.delegate_price} size={16} />}
         {creditSponsored && <CreditSponsoredMark size="xs" />}
+        {showHiring && <HiringMark conferenceId={conf.id} />}
         <ViewerState applied={applied} member={member} />
       </div>
     </Link>
@@ -509,12 +515,14 @@ function FeedRow({
 }
 
 export function FeedRows({
-  items, facets, facetsLoaded, sponsoredIds, appliedIds, isMember, spotlights, inPlace,
+  items, facets, facetsLoaded, sponsoredIds, hiringIds, appliedIds, isMember, spotlights, inPlace,
 }: {
   items: ExploreConference[];
   facets: ReadonlyMap<string, ConferenceFacet>;
   facetsLoaded: boolean;
   sponsoredIds: ReadonlySet<string>;
+  /** Conferences with a live promoted Job Board listing (fetchHiringConferences). */
+  hiringIds?: ReadonlySet<string>;
   appliedIds: ReadonlySet<string>;
   isMember: (c: ExploreConference) => boolean;
   /** Spotlight rows (27 Sep 2026): each is its own card with the small
@@ -535,6 +543,7 @@ export function FeedRows({
               facet={facets.get(c.id)}
               facetsLoaded={facetsLoaded}
               creditSponsored={sponsoredIds.has(c.id)}
+              hiring={!!hiringIds?.has(c.id)}
               applied={appliedIds.has(c.id)}
               member={isMember(c)}
               spotlight
@@ -557,6 +566,7 @@ export function FeedRows({
                   facet={facets.get(c.id)}
                   facetsLoaded={facetsLoaded}
                   creditSponsored={sponsoredIds.has(c.id)}
+                  hiring={!!hiringIds?.has(c.id)}
                   applied={appliedIds.has(c.id)}
                   member={isMember(c)}
                   spotlight
@@ -572,6 +582,7 @@ export function FeedRows({
             facet={facets.get(c.id)}
             facetsLoaded={facetsLoaded}
             creditSponsored={sponsoredIds.has(c.id)}
+            hiring={!!hiringIds?.has(c.id)}
             applied={appliedIds.has(c.id)}
             member={isMember(c)}
           />

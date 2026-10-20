@@ -12,7 +12,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import {
-  Search, Gavel, Globe, MapPin, CalendarDays, GraduationCap, Monitor, Gift, Clock, Users, X,
+  Search, Gavel, Globe, MapPin, CalendarDays, GraduationCap, Monitor, Gift, Clock, Users, X, Building2,
 } from 'lucide-react';
 import { CircleFlag } from '@/components/CircleFlag';
 import { DatePicker } from '@/components/DatePicker';
@@ -55,8 +55,10 @@ function shortDate(s: string): string {
   return new Date(y, m - 1, d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
 }
 
-export default function JobFilters({ query, onChange, onClearAll }: {
+export default function JobFilters({ query, onChange, onClearAll, conferenceLabel }: {
   query: JobQuery;
+  /** The short name of the conference in ?conference=, once a result names it. */
+  conferenceLabel?: string | null;
   onChange: (patch: Partial<JobQuery>) => void;
   onClearAll: () => void;
 }) {
@@ -189,8 +191,17 @@ export default function JobFilters({ query, onChange, onClearAll }: {
         )}
       </div>
 
-      {(query.regions.length > 0 || query.countries.length > 0) && (
+      {(query.regions.length > 0 || query.countries.length > 0 || !!query.conference) && (
         <ul aria-label="Chosen places" className="gv-job-places">
+          {query.conference && (
+            <li>
+              <PlacePill
+                label={conferenceLabel ? `Roles at ${conferenceLabel}` : 'One conference'}
+                icon={<Building2 size={15} strokeWidth={2.2} aria-hidden />}
+                onRemove={() => onChange({ conference: null })}
+              />
+            </li>
+          )}
           {query.regions.map((r) => (
             <li key={r}>
               <PlacePill label={JOB_REGION_LABEL[r]} icon={<Globe size={15} strokeWidth={2.2} aria-hidden />} onRemove={() => onChange({ regions: query.regions.filter((x) => x !== r) })} />

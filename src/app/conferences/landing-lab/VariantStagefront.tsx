@@ -7,16 +7,17 @@
 // the hero zone: everything below sits on clean cream / ivory slabs so each
 // section reads as its own distinct band.
 //
-// Composition, top to bottom (25 Sep 2026):
+// Composition, top to bottom (25 Sep 2026; Job Board added 19 Oct 2026):
 //   1. Hero, headline left, "up next" card rail right         , DARK (theatre photo)
 //   2. Sessions: laptop | "Run the room" + code field | phone  , CREAM (HomeSections.tsx)
-//   3. "Learn MUN": six guides from the blog                   , FOREST (HomeSections.tsx)
-//   4. "Find your seat" role carousel + circuit-in-numbers strip, CREAM
-//   5. "Conferences near you", three cards chosen by IP country , IVORY
-//   6. The production globe section, verbatim                  , FOREST
-//   7. "What is Model UN?" card beside "What is Gavelling?"    , CREAM (HomeSections.tsx)
-//   8. The one site footer (src/components/SiteFooter.tsx)
-// The job board is hidden until it launches (see the comment where it was).
+//   3. The circuit-in-numbers bar under Sessions               , CREAM
+//   4. "Job Board": up to 6 compact job cards (none = no section), CREAM (JobBoardSection.tsx)
+//   5. "Learn MUN": guides from the blog                       , WHITE (HomeSections.tsx)
+//   6. "Find your seat" role carousel                          , CREAM
+//   7. "Conferences near you", three cards chosen by IP country , IVORY
+//   8. The production globe section, verbatim                  , FOREST
+//   9. "What is Model UN?" card beside "What is Gavelling?"    , CREAM (HomeSections.tsx)
+//  10. The one site footer (src/components/SiteFooter.tsx)
 //
 // The hero rail + the near-you row reuse the SHARED ConferenceCard
 // (../ConferenceCard), the same definition the explore directory renders;
@@ -47,6 +48,8 @@ import {
 import { recordSpotlightClick, recordSpotlightView, type FeaturedRow } from '@/lib/spotlight';
 import { PREVIEW_CLICK_HINT, PreviewHint, SpotlightPreviewBar, previewFeaturedRow, useSpotlightPreview } from '@/lib/spotlightPreview';
 import { SessionsSection, AboutCards, LearnMunSection, type HomeGuide } from './HomeSections';
+import JobBoardSection from './JobBoardSection';
+import type { JobCard as JobCardData } from '@/lib/jobBoard';
 import { isGavellingListing } from '@/lib/listings';
 import { conferenceImageSrc } from '@/lib/listingImage';
 
@@ -132,6 +135,7 @@ export default function VariantStagefront({
   stats,
   guides = [],
   featured = [],
+  jobs = [],
 }: {
   conferences: LabConference[];
   /** featured_conferences('homepage'): the hero's "up next" rail. */
@@ -142,6 +146,8 @@ export default function VariantStagefront({
   stats?: { total_conferences: number; published_conferences: number; countries: number } | null;
   /** The "Learn MUN" guides, picked from the blog manifest on the server. */
   guides?: HomeGuide[];
+  /** job_homepage(): up to 6 job cards in the owner's order, read on the server. */
+  jobs?: JobCardData[];
 }) {
   const router = useRouter();
   const headliner = useMemo(() => pickHeadliner(conferences), [conferences]);
@@ -486,7 +492,11 @@ export default function VariantStagefront({
         </section>
 
 
-        {/* ── Learn MUN, the guides from the blog, on forest. Third on the
+        {/* ── The Job Board, up to 6 compact cards, directly above Learn MUN
+            (owner, 19 Oct 2026). Renders nothing when there are no cards. */}
+        <JobBoardSection jobs={jobs} />
+
+        {/* ── Learn MUN, the guides from the blog, on white. Third on the
             page by the owner's instruction (25 Sep 2026). ─────────────────── */}
         <LearnMunSection guides={guides} />
 

@@ -64,6 +64,7 @@ import { conferenceImageSrc } from '@/lib/listingImage';
 import { fetchFeatured, recordSpotlightClick, recordSpotlightView, type FeaturedRow, type SpotlightPlacement } from '@/lib/spotlight';
 import { PREVIEW_CLICK_HINT, PreviewHint, SpotlightPreviewBar, previewFeaturedRow, useSpotlightPreview } from '@/lib/spotlightPreview';
 import { fetchCreditSponsoredIds } from '@/lib/creditSponsored';
+import { fetchHiringConferences } from '@/lib/jobBoard';
 import ConferenceSpotlightDialog, { claimSpotlightDialog } from './ConferenceSpotlightDialog';
 import SpotlightPlacePopup, { claimPlacePopup, fetchSpotlightPopups, type PlacePopupPlacement, type PlacePopupRow } from './SpotlightPlacePopup';
 
@@ -225,6 +226,8 @@ export default function ConferencesExploreClient() {
   const [sponsoredFilter, setSponsoredFilter] = useState<boolean>(initialQuery.sponsored);
   // Conferences whose Store pays applicants' credit (src/lib/creditSponsored.ts).
   const [sponsoredIds, setSponsoredIds] = useState<Set<string>>(() => new Set());
+  // Conferences with a live promoted Job Board listing: the "Hiring" mark (src/lib/jobBoard.ts).
+  const [hiringIds, setHiringIds] = useState<Set<string>>(() => new Set());
   // Gavelling Spotlight (src/lib/spotlight.ts): the Explore row, read once; the
   // Region and Country rows, read for the filter in force. Booked rows only.
   const [exploreSpots, setExploreSpots] = useState<FeaturedRow[]>([]);
@@ -335,6 +338,7 @@ export default function ConferencesExploreClient() {
 
       // Credit sponsored and the Explore Spotlight row, in the background.
       void fetchCreditSponsoredIds().then(setSponsoredIds);
+      void fetchHiringConferences().then(setHiringIds);
       void fetchFeatured(supabase, 'explore', '').then(rows => {
         // A Gavelling listing (src/lib/listings.ts) is never a spotlight, whatever a row says.
         const listingIds = new Set(confs.filter(isGavellingListing).map(c => c.id));
@@ -820,6 +824,7 @@ export default function ConferencesExploreClient() {
         variant="listing"
         spotlight
         creditSponsored={sponsoredIds.has(conf.id)}
+        hiring={hiringIds.has(conf.id)}
         applied={appliedIds.has(conf.id)}
         member={isMember(conf)}
         hovered={hoveredId === conf.id}
@@ -836,6 +841,7 @@ export default function ConferencesExploreClient() {
       href={`/conferences/${conf.slug}`}
       spotlight={!!spot}
       creditSponsored={sponsoredIds.has(conf.id)}
+      hiring={hiringIds.has(conf.id)}
       applied={appliedIds.has(conf.id)}
       member={isMember(conf)}
       hovered={hoveredId === conf.id}
@@ -1141,6 +1147,7 @@ export default function ConferencesExploreClient() {
                       facets={facets}
                       facetsLoaded={facetsLoaded}
                       sponsoredIds={sponsoredIds}
+                      hiringIds={hiringIds}
                       appliedIds={appliedIds}
                       isMember={isMember}
                       inPlace={spotInPlace}
@@ -1177,6 +1184,7 @@ export default function ConferencesExploreClient() {
                       facets={facets}
                       facetsLoaded={facetsLoaded}
                       sponsoredIds={sponsoredIds}
+                      hiringIds={hiringIds}
                       appliedIds={appliedIds}
                       isMember={isMember}
                     />

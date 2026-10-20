@@ -70,6 +70,7 @@ import { isGavellingListing, isPastListing, listingMeta } from '@/lib/listings';
 import { conferenceImageSrc } from '@/lib/listingImage';
 import { NotOnGavellingMark } from '@/components/conferences/NotOnGavellingMark';
 import { ListingCta, ListingSourceNote } from './ListingParts';
+import JoinTheTeam from './JoinTheTeam';
 
 const GRAIN = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='grain'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23grain)' opacity='1'/%3E%3C/svg%3E")`;
 
@@ -3836,6 +3837,9 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                   </div>
                 );
               })()}
+
+              {/* Join the Team: this conference's live Job Board listings; renders nothing when there are none. */}
+              {!isListing && <JoinTheTeam conferenceId={conference.id} />}
 
               {/* Partners — logo + name only, everything else behind the
                   popup. Floats in the left gutter on a wide screen and falls

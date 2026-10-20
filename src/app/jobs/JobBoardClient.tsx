@@ -285,7 +285,14 @@ export default function JobBoardClient({ initialQuery, initialPage, initialError
                 </div>
               )}
 
-              {tab === 'all' && <JobFilters query={query} onChange={patch} onClearAll={clearAll} />}
+              {tab === 'all' && (
+                <JobFilters
+                  query={query}
+                  onChange={patch}
+                  onClearAll={clearAll}
+                  conferenceLabel={query.conference ? (items.find((c) => c.conference.id === query.conference)?.conference.short ?? null) : null}
+                />
+              )}
 
               <div className="gv-jobs-count" aria-live="polite">
                 {!listLoading && (tab === 'all' ? board.k !== 'error' : !myErr) && (

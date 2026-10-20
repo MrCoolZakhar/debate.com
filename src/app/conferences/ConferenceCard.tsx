@@ -58,6 +58,7 @@ import { formatConferenceDates, DATES_TO_BE_DECIDED } from '@/lib/conferenceDate
 import VerifiedCheck from '@/components/VerifiedCheck';
 import { CircleFlag } from '@/components/CircleFlag';
 import { CreditSponsoredMark, SpotlightTag, SPOTLIGHT_GLOW, SPOTLIGHT_GLOW_HOVER } from '@/components/conferences/SpotlightTag';
+import { HiringMark } from '@/components/conferences/HiringMark';
 import { NotOnGavellingMark } from '@/components/conferences/NotOnGavellingMark';
 import { isGavellingListing, listingMeta } from '@/lib/listings';
 import { conferenceImageSrc } from '@/lib/listingImage';
@@ -97,6 +98,8 @@ const PHOTO_REDUCED_MOTION_CSS = `
 // The minimal conference shape the card renders. Both the explore `Conference`
 // type and the landing `LabConference` type are structurally compatible.
 export interface CardConference {
+  /** The conference id; the Hiring mark links to /jobs?conference=<id>. */
+  id?: string;
   slug: string;
   full_name: string;
   acronym: string;
@@ -153,7 +156,7 @@ function formatDateRange(start: string | null, end: string | null): string {
 
 export function ConferenceCard({
   conf: rawConf, hovered, onHover, onLeave, onClick, compact = false, heroCompact = false, goldGlow = false, applied = false, member = false,
-  showFlag = true, spotlight = false, creditSponsored = false, href, variant = 'card',
+  showFlag = true, spotlight = false, creditSponsored = false, hiring = false, href, variant = 'card',
 }: {
   /** 'listing' = Explore's photo-forward soft 3D card: the photo flush across
    *  the top. Default 'card' (the inset white card) everywhere else. */
@@ -170,6 +173,10 @@ export function ConferenceCard({
   /** The conference's Store pays applicants' credit: "Credit sponsored" with a
    *  heart, right beside the fee. */
   creditSponsored?: boolean;
+  /** Listing tier only: the conference has a live promoted Job Board listing,
+   *  "Hiring" with a briefcase that opens /jobs?conference=<id>. Never on a
+   *  Gavelling listing. */
+  hiring?: boolean;
   hovered: boolean;
   onHover: () => void;
   onLeave: () => void;
@@ -243,6 +250,7 @@ export function ConferenceCard({
         spotlight={spotlight}
         glowShadow={glowShadow}
         creditSponsored={creditSponsored}
+        hiring={hiring && !listingRow}
         applied={applied}
         member={member}
         showFlag={showFlag}
@@ -699,7 +707,7 @@ const LISTING_BANNER_H = 104;
 const LISTING_LOGO = 96;
 
 function ListingCard({
-  conf, href, hovered, onHover, onLeave, onClick, spotlight, glowShadow, creditSponsored, applied, member, showFlag,
+  conf, href, hovered, onHover, onLeave, onClick, spotlight, glowShadow, creditSponsored, hiring, applied, member, showFlag,
 }: {
   conf: CardConference;
   href?: string;
@@ -710,6 +718,7 @@ function ListingCard({
   spotlight: boolean;
   glowShadow: string;
   creditSponsored: boolean;
+  hiring: boolean;
   applied: boolean;
   member: boolean;
   showFlag: boolean;
@@ -858,6 +867,7 @@ function ListingCard({
           )}
         </div>
         {creditSponsored && <CreditSponsoredMark size="xs" style={{ marginTop: '4px' }} />}
+        {hiring && conf.id && <HiringMark conferenceId={conf.id} style={{ marginTop: '4px', alignSelf: 'flex-start' }} />}
       </div>
     </article>
   );
