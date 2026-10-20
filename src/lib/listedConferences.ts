@@ -126,29 +126,6 @@ export function isUpcoming(c: { start_date: string | null; end_date: string | nu
   return !last || last >= today;
 }
 
-export interface JobStats { open: number; hiring: number; chairing: number }
-
-/** The job-board figures on the homepage (open postings only).
- *  Unused since 24 Sep 2026: the homepage job board is hidden until the job
- *  board launches. Kept so it can be read again from src/app/page.tsx. */
-export async function fetchJobStats(): Promise<JobStats | null> {
-  try {
-    const { data, error } = await supabase
-      .from('job_postings')
-      .select('id, category, conference_id')
-      .eq('is_open', true);
-    if (error || !data) return null;
-    const rows = data as { id: string; category: string | null; conference_id: string | null }[];
-    return {
-      open: rows.length,
-      hiring: new Set(rows.map(r => r.conference_id)).size,
-      chairing: rows.filter(r => String(r.category ?? '').toLowerCase().includes('chair')).length,
-    };
-  } catch {
-    return null;
-  }
-}
-
 export interface PlatformStats { total_conferences: number; published_conferences: number; countries: number }
 
 /** Platform totals (every conference, not only public ones), counts only. */

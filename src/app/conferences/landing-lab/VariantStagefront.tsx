@@ -521,9 +521,8 @@ export default function VariantStagefront({
 
         {/* The job board ("Opportunities beyond delegating") was here. Removed
             24 Sep 2026 until the job board launches (owner: "we might readd
-            later"). To bring it back: restore this section from git history
-            (commit before 24 Sep 2026) and read fetchJobStats() in
-            src/lib/listedConferences.ts again in src/app/page.tsx. The
+            later"). The Job Board now lives at /jobs; its old figures read
+            (fetchJobStats) is gone with the legacy job tables. The
             "Conferences on Gavelling" logo row that sat above it was removed
             for good the same day. */}
 

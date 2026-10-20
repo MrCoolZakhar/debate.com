@@ -50,7 +50,7 @@ export const ORGANIZER_SECTIONS: OrganizerSection[] = [
   { key: 'documents',     label: 'Documents',    icon: FileText,   blurb: 'Study guides, position papers and their release schedule.' },
   { key: 'email_builder', label: 'Email',        icon: Mail,       blurb: 'Compose and send conference emails from the builder.' },
   { key: 'financials',    label: 'Financials',   icon: CreditCard, blurb: 'Fees, add-ons, vouchers, invoices, payouts and financial aid.' },
-  { key: 'job_board',     label: 'Job Board',    icon: Briefcase,  blurb: 'Post and manage secretariat and staff openings.' },
+  { key: 'job_board',     label: 'Job Board',    icon: Briefcase,  blurb: 'Post listings on the Job Board, follow their applicants and choose job emails' },
   { key: 'import',        label: 'Import',       icon: Upload,     blurb: 'Bulk-import delegates and send them claim links.' },
   { key: 'store',         label: 'Store',        icon: Store,      blurb: 'Spend conference credits on spotlights, email packs and sponsoring delegates\' credits.' },
   { key: 'settings',      label: 'Settings',     icon: Settings,   blurb: 'Conference identity, application windows, privacy and this team page.' },

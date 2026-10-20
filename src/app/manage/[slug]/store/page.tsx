@@ -32,6 +32,7 @@ import YourSpotlights from './YourSpotlights';
 import YourPurchases from './YourPurchases';
 import { IMPORTS_PAID_LAUNCH } from '../import/importQuote';
 import EmailPacks from './EmailPacks';
+import JobBoardStoreCard from './JobBoardStoreCard';
 import { openCreditsPopup } from '@/lib/purchasePopup';
 import { useOrganiserVisit } from '@/lib/organiserVisits';
 
@@ -251,6 +252,8 @@ export default function StorePage() {
                 <Link href={`/manage/${conference.slug}/import`} className="gv-st-btn gv-st-forest">Go to importer</Link>
               </div>
             </StoreCard>
+
+            <JobBoardStoreCard conferenceId={conference.id} slug={conference.slug} onChanged={() => afterBuy()} />
           </div>
 
           {/* Bundles */}

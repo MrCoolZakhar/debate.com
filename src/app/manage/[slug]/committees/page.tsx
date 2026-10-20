@@ -1797,7 +1797,7 @@ export default function CommitteesPage() {
           sessionGone = true;
         }
       }
-      // Delete the conference committee, cascades slots, allocations, awards, position_papers, study_guides, application_preferences; sets applications/job_postings to null (preserved).
+      // Delete the conference committee, cascades slots, allocations, awards, position_papers, study_guides, application_preferences; sets applications' committee link to null (preserved).
       const { data: removed, error } = await supabase
         .from('conference_committees')
         .delete()

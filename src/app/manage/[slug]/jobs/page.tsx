@@ -1,1116 +1,378 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
-import { DatePicker } from '@/components/DatePicker';
+// /manage/[slug]/jobs, the organizer Job Board (docs/conferences/job-board.md).
+// Rewritten for prompt 2: the legacy postings code is gone. The manage layout
+// gates the page by the job_board permission (SECTION_PERMS jobs); owners
+// always pass, and the server answers with a sentence when promoting or a paid
+// listing also needs the Store permission.
+//
+// Two columns that fill the width: the listings (drafts first) as the main
+// column; the digest (job_digest) and the emails card (job_settings_set) at
+// the side. Pop-ups: PostingPopup (post and edit, with "Publish and promote")
+// and PromotePopup. Short on credits closes the pop-up first, then
+// useJobTopUp opens the credits pop-up and retries the same call once.
+
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
-import { Building2, CreditCard, Clock, Users, X, ChevronDown, ChevronUp, Briefcase, CheckCircle2, XCircle, MinusCircle } from 'lucide-react';
+import { BarChart3, Briefcase, Mail, Plus } from 'lucide-react';
 import { useManage } from '@/app/manage/[slug]/layout';
-import { Emoji3D } from '@/components/neu';
-import { GoldWord } from '@/components/BrandHeading';
-
-// ── Launch gate ─────────────────────────────────────────────────────────────
-// The PUBLIC job board (/conferences/roles) is hidden until launch, so a
-// posting made here would reach nobody. While this is false the page shows a
-// coming-soon panel instead of the posting tools. Every hook, query and
-// component below is untouched and keeps compiling: flip this to true and the
-// board is back exactly as built.
-const JOB_BOARD_LIVE = false as boolean;
-import { getAuthedClient } from '@/lib/supabase-auth';
 import { useAuth } from '@/components/AuthProvider';
-import Portal from '@/components/Portal';
-import GSelect from '@/components/GSelect';
-import ProfileLink from '@/components/ProfileLink';
-import { useScrollLock } from '@/hooks/useScrollLock';
-import { notifyErr, clearErr } from '@/lib/appNotify';
+import { GoldWord } from '@/components/BrandHeading';
+import { NEU, OUTFIT } from '@/components/neu';
+import { notifyErr, notifyOk } from '@/lib/appNotify';
+import { STORE_CSS } from '../store/storeKit';
+import { DASH_CSS, DashCard, TINT_GOLD, TINT_GREEN } from '../financials/dashboardKit';
+import ListingRow, { ROW_CSS } from './ListingRow';
+import PostingPopup, { type ShortRequest } from './PostingPopup';
+import PromotePopup from './PromotePopup';
+import { useJobTopUp } from './useJobTopUp';
+import {
+  dayLabel, readDigest, readPanel, setJobSettings,
+  type DigestLine, type JobPanel, type MyMode, type OrgListing,
+} from './jobsApi';
 
-// ── Types ──────────────────────────────────────────────────────────────────
-
-interface Committee { id: string; name: string; }
-
-interface JobPosting {
-  id: string;
-  category: string;
-  role_name: string;
-  description: string | null;
-  requirements: string | null;
-  compensation: string;
-  compensation_note: string | null;
-  deadline: string | null;
-  is_open: boolean;
-  created_at: string;
-  conference_committees: Committee | null;
-}
-
-interface Application {
-  id: string;
-  cover_note: string | null;
-  status: string;
-  submitted_at: string;
-  // `id` is profiles.id — needed for the public MUN CV link. `avatar_url` is
-  // public.profiles.avatar_url, the one column profile pictures live in.
-  profiles: { id: string; display_name: string; email: string; avatar_url: string | null; } | null;
-}
-
-// ── Constants ──────────────────────────────────────────────────────────────
-
-const FOREST = '#1B3828';
-const GOLD = '#EED98A';
 const INK = '#1C1410';
-const MUTED = '#9A8A78';
-const CARD_BG = '#FAF8F3';
-const BORDER = '#DDD4C0';
-const DIVIDER = '#F0EDE6';
-const AMBER_TEXT = '#B6871F';
+const INK_SOFT = '#5C5140';
+const FOREST = '#1B3828';
 
-// ── Enum case normalization ─────────────────────────────────────────────────
-// The DB CHECK constraints store category/compensation lowercase and hyphenated
-// ('chairs', 'travel-covered'); the UI toggles use uppercase, spaced labels
-// ('CHAIRS', 'TRAVEL COVERED'). Convert at the DB boundary so inserts/updates
-// satisfy job_postings_category_check / job_postings_compensation_check.
-const toDbEnum = (v: string) => v.toLowerCase().replace(/\s+/g, '-');
-const toUiEnum = (v: string) => v.toUpperCase().replace(/-/g, ' ');
-// Display only: 'TRAVEL COVERED' / 'travel-covered' -> 'Travel covered'.
-const sentenceLabel = (v: string) => { const t = v.replace(/-/g, ' ').toLowerCase(); return t.charAt(0).toUpperCase() + t.slice(1); };
+type Popup = { kind: 'post'; listing: OrgListing | null } | { kind: 'promote'; listing: OrgListing } | null;
 
-// ── Helper: category badge style ───────────────────────────────────────────
-
-function categoryBadgeStyle(cat: string) {
-  const c = cat.toUpperCase();
-  if (c === 'CHAIRS')      return { backgroundColor: 'rgba(27,56,40,0.1)',   color: FOREST };
-  if (c === 'SECRETARIAT') return { backgroundColor: 'rgba(238,217,138,0.15)', color: AMBER_TEXT };
-  return                          { backgroundColor: 'rgba(154,138,120,0.1)', color: MUTED };
-}
-
-// ── Helper: format date ────────────────────────────────────────────────────
-
-function fmtDeadline(iso: string) {
-  return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
-}
-
-// ── Helper: avatar initials ────────────────────────────────────────────────
-
-function initials(name: string) {
-  return name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
-}
-
-// ── Ghost button ───────────────────────────────────────────────────────────
-
-function GhostBtn({
-  onClick, children, danger, disabled,
-}: {
-  onClick: () => void;
-  children: React.ReactNode;
-  danger?: boolean;
-  disabled?: boolean;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      disabled={disabled}
-      className="text-xs font-semibold transition-all focus:outline-none disabled:opacity-40"
-      style={{
-        color: danger ? '#DC3545' : MUTED,
-        background: 'none',
-        border: 'none',
-        padding: '2px 4px',
-        cursor: disabled ? 'not-allowed' : 'pointer',
-      }}
-      onMouseEnter={(e) => { if (!disabled) (e.currentTarget as HTMLElement).style.textDecoration = 'underline'; }}
-      onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.textDecoration = 'none'; }}
-    >
-      {children}
-    </button>
-  );
-}
-
-// ── Inline applications panel ──────────────────────────────────────────────
-
-function ApplicationsPanel({
-  postingId,
-  onStatusChange,
-}: {
-  postingId: string;
-  onStatusChange: () => void;
-}) {
-  const { session } = useAuth();
-  /** The stable half of `session`. AuthProvider replaces the session OBJECT on
-   *  every auth event (token refresh, tab focus), so depending on it would
-   *  refetch this panel on each of those; the token is a string and only
-   *  changes when it really changes — including the first time it arrives,
-   *  which is what a panel mounted before auth landed has to catch. */
-  const accessToken = session?.access_token;
-  const [apps, setApps] = useState<Application[]>([]);
-  const [loading, setLoading] = useState(true);
-  // App ids with a write in flight, hides that row's Accept/Reject (double-click guard).
-  const [busyAppIds, setBusyAppIds] = useState<Set<string>>(new Set());
-
-  useEffect(() => {
-    if (!accessToken) return;
-    const supabase = getAuthedClient(accessToken);
-    supabase
-      .from('job_applications')
-      .select('id, cover_note, status, submitted_at, profiles (id, display_name, email, avatar_url)')
-      .eq('job_posting_id', postingId)
-      .order('submitted_at', { ascending: false })
-      .then(({ data }) => {
-        setApps((data as unknown as Application[]) ?? []);
-        setLoading(false);
-      });
-  }, [postingId, accessToken]);
-
-  function handleStatus(appId: string, newStatus: string) {
-    if (!session || busyAppIds.has(appId)) return;
-    // Optimistic: flip the status immediately, persist in the background,
-    // roll back only this row + show an inline error if the write fails.
-    const prevStatus = apps.find(a => a.id === appId)?.status ?? 'submitted';
-    setApps(prev => prev.map(a => a.id === appId ? { ...a, status: newStatus } : a));
-    clearErr('jobs-applications');
-    setBusyAppIds(prev => new Set(prev).add(appId));
-    const supabase = getAuthedClient(session.access_token);
-    supabase.from('job_applications').update({ status: newStatus }).eq('id', appId).then(({ error }) => {
-      setBusyAppIds(prev => { const next = new Set(prev); next.delete(appId); return next; });
-      if (error) {
-        setApps(prev => prev.map(a => a.id === appId ? { ...a, status: prevStatus } : a));
-        notifyErr("Couldn't update that application. The change was reverted.", 'jobs-applications');
-        return;
-      }
-      onStatusChange();
-    });
-  }
-
-  if (loading) {
-    return (
-      <div
-        className="rounded-xl p-4 mt-3"
-        style={{ background: 'rgba(27,56,40,0.03)', border: '1px solid rgba(27,56,40,0.08)' }}
-      >
-        <p className="text-xs text-center py-2" style={{ color: MUTED, fontFamily: "var(--font-brand), sans-serif", fontWeight: 500 }}>Loading…</p>
-      </div>
-    );
-  }
-
-  return (
-    <div
-      className="rounded-xl p-4 mt-3"
-      style={{ background: 'rgba(27,56,40,0.03)', border: '1px solid rgba(27,56,40,0.08)' }}
-    >
-      {apps.length === 0 ? (
-        <p className="text-xs text-center py-2" style={{ color: MUTED, fontFamily: "var(--font-brand), sans-serif" }}>
-          No applications yet
-        </p>
-      ) : (
-        apps.map((app, i) => {
-          const profile = app.profiles;
-          const isLast = i === apps.length - 1;
-          const statusStyle =
-            app.status === 'accepted' ? { color: FOREST } :
-            app.status === 'rejected' ? { color: '#8B2020' } :
-                                        { color: AMBER_TEXT };
-          const StatusIcon = app.status === 'accepted' ? CheckCircle2 : app.status === 'rejected' ? XCircle : Clock;
-
-          return (
-            <div
-              key={app.id}
-              className="flex items-center gap-3 py-2"
-              style={{ borderBottom: isLast ? 'none' : `1px solid ${DIVIDER}` }}
-            >
-              {/* Picture + name link to the applicant's public MUN CV. An applicant
-                  who has not claimed an account has no profiles row, so `id` is
-                  undefined and ProfileLink renders the pair bare — correct, not a
-                  bug. `flex-1 min-w-0` stays on the name block as well as the link
-                  so the row lays out identically whether or not it is linked. */}
-              <ProfileLink
-                userId={profile?.id}
-                name={profile?.display_name}
-                className="flex items-center gap-3 flex-1 min-w-0"
-              >
-                {/* Avatar — profile picture is public.profiles.avatar_url, joined
-                    in through job_applications.profiles above. Kept as this file's
-                    own two-letter initials disc rather than the shared <Avatar>:
-                    that one draws a single-letter squircle-style glyph, so swapping
-                    would visibly change every applicant without a photo. */}
-                <div
-                  className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-xs font-bold overflow-hidden"
-                  style={{ backgroundColor: 'rgba(27,56,40,0.12)', color: FOREST }}
-                >
-                  {profile?.avatar_url ? (
-                    <img src={profile.avatar_url} alt="" className="w-8 h-8 rounded-full object-cover" />
-                  ) : (
-                    initials(profile?.display_name ?? profile?.email ?? '?')
-                  )}
-                </div>
-
-                {/* Name + email */}
-                <div className="flex-1 min-w-0">
-                  <p className="font-semibold text-sm [overflow-wrap:anywhere]" style={{ color: INK, fontFamily: "var(--font-brand), sans-serif" }}>
-                    {profile?.display_name ?? 'Unknown'}
-                  </p>
-                  <p className="text-xs [overflow-wrap:anywhere]" style={{ color: MUTED, fontFamily: "var(--font-brand), sans-serif" }}>
-                    {profile?.email ?? ''}
-                  </p>
-                </div>
-              </ProfileLink>
-
-              {/* Status badge */}
-              <span
-                className="inline-flex items-center gap-1 text-[12px] font-bold flex-shrink-0"
-                style={{ ...statusStyle, fontFamily: "var(--font-brand), sans-serif" }}
-              >
-                <StatusIcon size={14} strokeWidth={2.2} aria-hidden />
-                {sentenceLabel(app.status)}
-              </span>
-
-              {/* Accept / Reject (only if submitted) */}
-              {app.status === 'submitted' && (
-                <div className="flex gap-1 flex-shrink-0">
-                  <button
-                    onClick={() => handleStatus(app.id, 'accepted')}
-                    className="text-xs font-semibold focus:outline-none transition-all"
-                    style={{ color: FOREST }}
-                    onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.textDecoration = 'underline'; }}
-                    onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.textDecoration = 'none'; }}
-                  >
-                    Accept
-                  </button>
-                  <span style={{ color: BORDER }}>·</span>
-                  <button
-                    onClick={() => handleStatus(app.id, 'rejected')}
-                    className="text-xs font-semibold focus:outline-none transition-all"
-                    style={{ color: '#DC3545' }}
-                    onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.textDecoration = 'underline'; }}
-                    onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.textDecoration = 'none'; }}
-                  >
-                    Reject
-                  </button>
-                </div>
-              )}
-            </div>
-          );
-        })
-      )}
-    </div>
-  );
-}
-
-// ── Posting card ───────────────────────────────────────────────────────────
-
-function PostingCard({
-  posting,
-  appCount,
-  busy,
-  onEdit,
-  onToggleOpen,
-  onDelete,
-  onRefreshCount,
-}: {
-  posting: JobPosting;
-  appCount: number;
-  busy: boolean;
-  onEdit: (p: JobPosting) => void;
-  onToggleOpen: (p: JobPosting) => void;
-  onDelete: (p: JobPosting) => void;
-  onRefreshCount: () => void;
-}) {
-  const [expanded, setExpanded] = useState(false);
-
-  const catStyle = categoryBadgeStyle(posting.category);
-  const openStyle = posting.is_open
-    ? { color: FOREST }
-    : { color: '#6B5F52' };
-
-  return (
-    <div
-      className="rounded-2xl p-5 transition-all"
-      style={{ backgroundColor: CARD_BG, border: `1px solid ${BORDER}` }}
-      onMouseEnter={(e) => {
-        (e.currentTarget as HTMLElement).style.borderColor = FOREST;
-      }}
-      onMouseLeave={(e) => {
-        (e.currentTarget as HTMLElement).style.borderColor = BORDER;
-      }}
-    >
-      {/* Row 1: category + role + open/closed */}
-      <div className="flex items-center gap-3">
-        <span
-          className="text-[9px] font-bold px-2 py-0.5 rounded-full flex-shrink-0"
-          style={{ ...catStyle, fontFamily: "var(--font-brand), sans-serif" }}
-        >
-          {sentenceLabel(posting.category)}
-        </span>
-        <p className="font-semibold text-base flex-1 min-w-0" style={{ color: INK, fontFamily: "var(--font-brand), sans-serif" }}>
-          {posting.role_name}
-        </p>
-        <span
-          className="inline-flex items-center gap-1 text-[12px] font-bold flex-shrink-0"
-          style={{ ...openStyle, fontFamily: "var(--font-brand), sans-serif" }}
-        >
-          {posting.is_open
-            ? <CheckCircle2 size={14} strokeWidth={2.2} aria-hidden />
-            : <MinusCircle size={14} strokeWidth={2.2} aria-hidden />}
-          {posting.is_open ? 'Open' : 'Closed'}
-        </span>
-      </div>
-
-      {/* Row 2: meta */}
-      <div className="mt-1.5 flex flex-wrap gap-3">
-        {posting.conference_committees && (
-          <span className="flex items-center gap-1 text-xs" style={{ color: MUTED, fontFamily: "var(--font-brand), sans-serif" }}>
-            <Building2 size={12} />
-            {posting.conference_committees.name}
-          </span>
-        )}
-        <span className="flex items-center gap-1 text-xs" style={{ color: MUTED, fontFamily: "var(--font-brand), sans-serif" }}>
-          <CreditCard size={12} />
-          {posting.compensation.toLowerCase() === 'other' && posting.compensation_note
-            ? posting.compensation_note
-            : sentenceLabel(posting.compensation)}
-        </span>
-        {posting.deadline && (
-          <span className="flex items-center gap-1 text-xs" style={{ color: MUTED, fontFamily: "var(--font-brand), sans-serif" }}>
-            <Clock size={12} />
-            Closes {fmtDeadline(posting.deadline)}
-          </span>
-        )}
-        <span className="flex items-center gap-1 text-xs" style={{ color: MUTED, fontFamily: "var(--font-brand), sans-serif" }}>
-          <Users size={12} />
-          {appCount} application{appCount !== 1 ? 's' : ''}
-        </span>
-      </div>
-
-      {/* Row 3: description preview */}
-      {posting.description && (
-        <p
-          className="mt-2 text-xs leading-relaxed"
-          title={posting.description}
-          style={{
-            color: MUTED,
-            fontFamily: "var(--font-brand), sans-serif",
-            display: '-webkit-box',
-            WebkitLineClamp: 2,
-            WebkitBoxOrient: 'vertical',
-            overflow: 'hidden',
-          }}
-        >
-          {posting.description}
-        </p>
-      )}
-
-      {/* Row 4: actions */}
-      <div
-        className="mt-3 pt-3 flex items-center gap-1 flex-wrap"
-        style={{ borderTop: `1px solid ${DIVIDER}` }}
-      >
-        <button
-          onClick={() => setExpanded(v => !v)}
-          className="flex items-center gap-1 text-xs font-semibold focus:outline-none transition-all"
-          style={{ color: MUTED }}
-          onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = INK; }}
-          onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = MUTED; }}
-        >
-          {expanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
-          View applications ({appCount})
-        </button>
-
-        <div className="flex-1" />
-
-        <GhostBtn onClick={() => onEdit(posting)}>Edit</GhostBtn>
-        <GhostBtn onClick={() => onToggleOpen(posting)} disabled={busy}>
-          {posting.is_open ? 'Close' : 'Reopen'}
-        </GhostBtn>
-        <GhostBtn onClick={() => onDelete(posting)} danger disabled={busy}>Delete</GhostBtn>
-      </div>
-
-      {/* Inline applications */}
-      {expanded && (
-        <ApplicationsPanel postingId={posting.id} onStatusChange={onRefreshCount} />
-      )}
-    </div>
-  );
-}
-
-// ── Posting modal (create + edit) ──────────────────────────────────────────
-
-/** A row of choices, one selected (module level: a component defined inside
- *  another is recreated on every render). */
-function ToggleGroup({
-  options, value, onChange,
-}: { options: string[]; value: string; onChange: (v: string) => void }) {
-  return (
-    <div className="flex gap-1 rounded-xl p-1" style={{ backgroundColor: '#F0EDE6' }}>
-      {options.map(opt => (
-        <button
-          key={opt}
-          type="button"
-          onClick={() => onChange(opt)}
-          className="flex-1 py-2 rounded-lg text-xs font-bold transition-all focus:outline-none"
-          style={{
-            fontFamily: "var(--font-brand), sans-serif",
-            backgroundColor: value === opt ? FOREST : 'transparent',
-            color: value === opt ? GOLD : MUTED,
-          }}
-        >
-          {sentenceLabel(opt)}
-        </button>
-      ))}
-    </div>
-  );
-}
-
-function PostingModal({
-  conferenceId,
-  committees,
-  posting,
-  saving,
-  errorText,
-  onSave,
-  onClose,
-}: {
-  conferenceId: string;
-  committees: Committee[];
-  posting: JobPosting | null;
-  saving: boolean;
-  errorText?: string;
-  onSave: (data: {
-    category: string;
-    role_name: string;
-    committee_id: string | null;
-    description: string;
-    requirements: string;
-    compensation: string;
-    compensation_note: string;
-    deadline: string;
-  }) => void;
-  onClose: () => void;
-}) {
-  // Modal: freeze the job board behind it.
-  useScrollLock(true);
-  const [category, setCategory] = useState(posting?.category ? toUiEnum(posting.category) : 'CHAIRS');
-  const [roleName, setRoleName] = useState(posting?.role_name ?? '');
-  const [committeeId, setCommitteeId] = useState(posting?.conference_committees?.id ?? '');
-  const [description, setDescription] = useState(posting?.description ?? '');
-  const [requirements, setRequirements] = useState(posting?.requirements ?? '');
-  const [compensation, setCompensation] = useState(posting?.compensation ? toUiEnum(posting.compensation) : 'UNPAID');
-  const [compensationNote, setCompensationNote] = useState(posting?.compensation_note ?? '');
-  const [deadline, setDeadline] = useState(
-    posting?.deadline ? posting.deadline.slice(0, 16) : ''
-  );
-
-  const isEdit = posting !== null;
-
-  const inputStyle = {
-    border: `1px solid ${BORDER}`,
-    backgroundColor: '#fff',
-    color: INK,
-    fontFamily: "var(--font-brand), sans-serif",
-    borderRadius: '10px',
-    padding: '10px 12px',
-    fontSize: '14px',
-    width: '100%',
-    outline: 'none',
-  };
-
-  const labelStyle = {
-    display: 'block',
-    fontSize: '11px',
-    fontWeight: 700,
-    marginBottom: '6px',
-    color: MUTED,
-    fontFamily: "var(--font-brand), sans-serif",
-    letterSpacing: '0.05em',
-  };
-
-  return (
-    <Portal><div
-      className="fixed inset-0 z-50 flex items-center justify-center"
-      style={{ backgroundColor: 'rgba(0,0,0,0.4)' }}
-      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
-    >
-      <div
-        className="relative overflow-y-auto"
-        style={{
-          backgroundColor: CARD_BG,
-          borderRadius: '20px',
-          padding: '24px',
-          maxWidth: '512px',
-          width: 'calc(100% - 32px)',
-          maxHeight: '90vh',
-        }}
-      >
-        {/* Header */}
-        <div className="flex items-center justify-between mb-5">
-          <h2 className="font-black text-lg" style={{ color: INK, fontFamily: "var(--font-brand), sans-serif" }}>
-            {isEdit ? 'Edit Position' : 'Post a Position'}
-          </h2>
-          <button onClick={onClose} className="focus:outline-none" style={{ color: MUTED }}>
-            <X size={18} />
-          </button>
-        </div>
-
-        <div className="flex flex-col gap-4">
-          {/* Category */}
-          <div>
-            <span style={labelStyle}>CATEGORY</span>
-            <ToggleGroup options={['CHAIRS', 'SECRETARIAT', 'STAFF']} value={category} onChange={setCategory} />
-          </div>
-
-          {/* Role name */}
-          <div>
-            <label style={labelStyle}>ROLE NAME</label>
-            <input
-              type="text"
-              value={roleName}
-              onChange={e => setRoleName(e.target.value)}
-              placeholder="e.g. Director, Under-Secretary-General, Press Corps"
-              style={inputStyle}
-              onFocus={(e) => { (e.currentTarget as HTMLElement).style.borderColor = FOREST; }}
-              onBlur={(e) => { (e.currentTarget as HTMLElement).style.borderColor = BORDER; }}
-            />
-          </div>
-
-          {/* Committee */}
-          <div>
-            <label style={labelStyle}>COMMITTEE (OPTIONAL)</label>
-            <GSelect
-              aria-label="Committee"
-              value={committeeId}
-              onChange={setCommitteeId}
-              style={inputStyle}
-              searchPlaceholder="Search committees"
-              options={[{ value: '', label: 'Not committee-specific' }, ...committees.map(c => ({ value: c.id, label: c.name }))]}
-            />
-          </div>
-
-          {/* Description */}
-          <div>
-            <label style={labelStyle}>DESCRIPTION</label>
-            <textarea
-              rows={4}
-              value={description}
-              onChange={e => setDescription(e.target.value)}
-              placeholder="Describe the role and what you're looking for..."
-              style={{ ...inputStyle, resize: 'vertical', lineHeight: '1.6' }}
-              onFocus={(e) => { (e.currentTarget as HTMLElement).style.borderColor = FOREST; }}
-              onBlur={(e) => { (e.currentTarget as HTMLElement).style.borderColor = BORDER; }}
-            />
-          </div>
-
-          {/* Requirements */}
-          <div>
-            <label style={labelStyle}>REQUIREMENTS</label>
-            <textarea
-              rows={3}
-              value={requirements}
-              onChange={e => setRequirements(e.target.value)}
-              placeholder="Experience, skills, or qualifications required..."
-              style={{ ...inputStyle, resize: 'vertical', lineHeight: '1.6' }}
-              onFocus={(e) => { (e.currentTarget as HTMLElement).style.borderColor = FOREST; }}
-              onBlur={(e) => { (e.currentTarget as HTMLElement).style.borderColor = BORDER; }}
-            />
-          </div>
-
-          {/* Compensation */}
-          <div>
-            <span style={labelStyle}>COMPENSATION</span>
-            <ToggleGroup
-              options={['UNPAID', 'PAID', 'TRAVEL COVERED', 'OTHER']}
-              value={compensation}
-              onChange={setCompensation}
-            />
-          </div>
-
-          {/* Compensation note (when OTHER) */}
-          {compensation === 'OTHER' && (
-            <div>
-              <label style={labelStyle}>COMPENSATION NOTE</label>
-              <input
-                type="text"
-                value={compensationNote}
-                onChange={e => setCompensationNote(e.target.value)}
-                placeholder="e.g. Accommodation provided"
-                style={inputStyle}
-                onFocus={(e) => { (e.currentTarget as HTMLElement).style.borderColor = FOREST; }}
-                onBlur={(e) => { (e.currentTarget as HTMLElement).style.borderColor = BORDER; }}
-              />
-            </div>
-          )}
-
-          {/* Deadline */}
-          <div>
-            <label style={labelStyle}>APPLICATION DEADLINE (OPTIONAL)</label>
-            {/* The shared picker (prompt 135): never a native date input. Same
-                'YYYY-MM-DDTHH:mm' value the native datetime field gave. */}
-            <DatePicker futureOnly withTime clearable value={deadline} onChange={setDeadline} placeholder="No deadline" />
-          </div>
-
-          {/* Submit */}
-          {errorText && (
-            <p className="text-xs" style={{ color: '#8B2020', fontFamily: "var(--font-brand), sans-serif", fontWeight: 600 }}>
-              {errorText}
-            </p>
-          )}
-          <button
-            onClick={() =>
-              onSave({
-                category,
-                role_name: roleName,
-                committee_id: committeeId || null,
-                description,
-                requirements,
-                compensation,
-                compensation_note: compensationNote,
-                deadline,
-              })
-            }
-            disabled={!roleName.trim() || saving}
-            className="w-full rounded-xl py-3 font-bold text-sm focus:outline-none transition-all mt-1 disabled:opacity-50"
-            style={{
-              backgroundColor: FOREST,
-              color: GOLD,
-              fontFamily: "var(--font-brand), sans-serif",
-            }}
-            onMouseEnter={(e) => {
-              if (!saving) (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C';
-            }}
-            onMouseLeave={(e) => {
-              (e.currentTarget as HTMLElement).style.backgroundColor = FOREST;
-            }}
-          >
-            {saving
-              ? 'Saving…'
-              : isEdit
-              ? 'Save changes'
-              : 'Post position'}
-          </button>
-        </div>
-      </div>
-    </div></Portal>
-  );
-}
-
-// ── Main page ──────────────────────────────────────────────────────────────
-
-const CATEGORIES = ['ALL', 'CHAIRS', 'SECRETARIAT', 'STAFF'] as const;
-type CategoryTab = typeof CATEGORIES[number];
+const ORDER: Record<string, number> = { draft: 0, live: 1, hidden: 2, closed: 3 };
 
 export default function JobBoardPage() {
   const { conference } = useManage();
-  const { user, session } = useAuth();
-  /** The stable half of `session` — see ApplicationsPanel above. The action
-   *  handlers below keep using `session`; they run on a click, not off a
-   *  dependency array. */
-  const accessToken = session?.access_token;
+  const { user } = useAuth();
+  const confId = conference?.id ?? null;
+  const [panel, setPanel] = useState<JobPanel | null>(null);
+  const [panelErr, setPanelErr] = useState<string | null>(null);
+  const [digest, setDigest] = useState<{ lines: DigestLine[]; views_week: number; clicks_week: number } | null>(null);
+  const [digestErr, setDigestErr] = useState<string | null>(null);
+  const [popup, setPopup] = useState<Popup>(null);
+  const topUp = useJobTopUp();
+  const seq = useRef(0);
 
-  const [postings, setPostings] = useState<JobPosting[]>([]);
-  const [appCounts, setAppCounts] = useState<Record<string, number>>({});
-  const [committees, setCommittees] = useState<Committee[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [categoryTab, setCategoryTab] = useState<CategoryTab>('ALL');
-  const [createOpen, setCreateOpen] = useState(false);
-  const [editPosting, setEditPosting] = useState<JobPosting | null>(null);
-  const [saving, setSaving] = useState(false);
-  // Failures go to the corner notification stack, not a strip above the page —
-  // same store and renderer as the live committee session. The `setX('')` call
-  // shape is preserved so no call site changed; only where it lands did.
-  const setActionError = useCallback((msg: string) => {
-    if (msg) notifyErr(msg, 'jobs'); else clearErr('jobs');
+  const apply = useCallback((p: Awaited<ReturnType<typeof readPanel>>, d: Awaited<ReturnType<typeof readDigest>>) => {
+    if (p.ok) { setPanel(p); setPanelErr(null); } else setPanelErr(p.message);
+    if (d.ok) { setDigest({ lines: d.lines, views_week: d.views_week, clicks_week: d.clicks_week }); setDigestErr(null); } else setDigestErr(d.message);
   }, []);
-  const [createError, setCreateError] = useState('');
-  // Posting ids with a write in flight, disables that row's controls (double-click guard).
-  const [busyIds, setBusyIds] = useState<Set<string>>(new Set());
-  // Stale-response guard for background refetches.
-  const fetchSeq = useRef(0);
 
-  function markBusy(id: string, busy: boolean) {
-    setBusyIds(prev => {
-      const next = new Set(prev);
-      if (busy) next.add(id); else next.delete(id);
-      return next;
+  const reload = useCallback(async () => {
+    if (!confId) return;
+    const mine = ++seq.current;
+    const [p, d] = await Promise.all([readPanel(confId), readDigest(confId)]);
+    if (mine === seq.current) apply(p, d);
+  }, [confId, apply]);
+
+  useEffect(() => {
+    if (!confId) return;
+    const mine = ++seq.current;
+    void Promise.all([readPanel(confId), readDigest(confId)]).then(([p, d]) => {
+      if (mine === seq.current) apply(p, d);
     });
-  }
+  }, [confId, apply]);
 
-  const fetchAll = useCallback(async () => {
-    if (!conference) return;
-    if (!accessToken) return;
-    const seq = ++fetchSeq.current;
-    const supabase = getAuthedClient(accessToken);
+  const listings = useMemo(
+    () => [...(panel?.listings ?? [])].sort((a, b) => (ORDER[a.shown] ?? 9) - (ORDER[b.shown] ?? 9)),
+    [panel],
+  );
 
-    const [{ data: postingsData }, { data: committeesData }] = await Promise.all([
-      supabase
-        .from('job_postings')
-        .select(`
-          id, category, role_name, description, requirements,
-          compensation, compensation_note, deadline, is_open, created_at,
-          conference_committees (id, name)
-        `)
-        .eq('conference_id', conference.id)
-        .order('created_at', { ascending: false }),
-      supabase
-        .from('conference_committees')
-        .select('id, name')
-        .eq('conference_id', conference.id),
-    ]);
+  const handOffShort = useCallback((req: ShortRequest) => {
+    setPopup(null);
+    topUp({ need: req.need, retry: req.retry, okMessage: req.okMessage, onSettled: () => { void reload(); } });
+  }, [topUp, reload]);
 
-    if (seq !== fetchSeq.current) return; // stale response, a newer fetch superseded this one
+  const promoted = useCallback((endsOn: string | null) => {
+    setPopup(null);
+    notifyOk(endsOn ? `Promoted until ${dayLabel(endsOn)}` : 'Your listing is promoted', 'jobs');
+    void reload();
+  }, [reload]);
 
-    const ps = (postingsData as unknown as JobPosting[]) ?? [];
-    setPostings(ps);
-    setCommittees((committeesData as Committee[]) ?? []);
-
-    // Batch fetch app counts
-    if (ps.length > 0) {
-      const counts = await Promise.all(
-        ps.map(p =>
-          supabase
-            .from('job_applications')
-            .select('*', { count: 'exact', head: true })
-            .eq('job_posting_id', p.id)
-        )
-      );
-      if (seq !== fetchSeq.current) return;
-      const countMap: Record<string, number> = {};
-      ps.forEach((p, i) => { countMap[p.id] = counts[i].count ?? 0; });
-      setAppCounts(countMap);
-    }
-
-    setLoading(false);
-    // Keyed on the TOKEN, not the session object: with `[conference]` alone
-    // this callback was built once against whatever session existed when the
-    // conference resolved, and if auth had not landed the guard above returned
-    // early with nothing left to re-trigger the effect — the board sat empty
-    // until something else forced a re-render. The session object is the wrong
-    // dep: its identity changes on every auth event, which would refetch every
-    // posting and its per-posting count on each token refresh.
-  }, [conference, accessToken]);
-
-  // Started a microtask later so no state is set synchronously in the effect.
-  useEffect(() => { void Promise.resolve().then(() => fetchAll()); }, [fetchAll]);
-
-  async function handleCreate(data: {
-    category: string; role_name: string; committee_id: string | null;
-    description: string; requirements: string; compensation: string;
-    compensation_note: string; deadline: string;
-  }) {
-    if (!conference || !user || saving) return;
-    if (!session) return;
-    // Creation needs the real DB row (id) back, so the insert stays awaited —
-    // but only the modal's save button is busy; the page stays interactive.
-    setSaving(true);
-    setCreateError('');
-    const supabase = getAuthedClient(session.access_token);
-    const { data: created, error } = await supabase.from('job_postings').insert({
-      conference_id: conference.id,
-      posted_by: user.id,
-      category: toDbEnum(data.category),
-      role_name: data.role_name,
-      committee_id: data.committee_id || null,
-      description: data.description || null,
-      requirements: data.requirements || null,
-      compensation: toDbEnum(data.compensation),
-      compensation_note: data.compensation_note || null,
-      deadline: data.deadline || null,
-      is_open: true,
-    }).select(`
-      id, category, role_name, description, requirements,
-      compensation, compensation_note, deadline, is_open, created_at,
-      conference_committees (id, name)
-    `).single();
-    setSaving(false);
-    if (error || !created) {
-      setCreateError("Couldn't post the position. Please try again.");
-      return;
-    }
-    const row = created as unknown as JobPosting;
-    setPostings(prev => [row, ...prev]);
-    setAppCounts(prev => ({ ...prev, [row.id]: 0 }));
-    setCreateOpen(false);
-  }
-
-  function handleEdit(posting: JobPosting, data: {
-    category: string; role_name: string; committee_id: string | null;
-    description: string; requirements: string; compensation: string;
-    compensation_note: string; deadline: string;
-  }) {
-    if (!session || busyIds.has(posting.id)) return;
-    // Optimistic: patch the posting locally and close the modal at once; the
-    // write runs in the background and rolls back on failure.
-    const committee = data.committee_id ? committees.find(c => c.id === data.committee_id) ?? null : null;
-    setPostings(prev => prev.map(p => p.id === posting.id ? {
-      ...p,
-      category: toDbEnum(data.category),
-      role_name: data.role_name,
-      description: data.description || null,
-      requirements: data.requirements || null,
-      compensation: toDbEnum(data.compensation),
-      compensation_note: data.compensation_note || null,
-      deadline: data.deadline || null,
-      conference_committees: committee,
-    } : p));
-    setEditPosting(null);
-    setActionError('');
-    markBusy(posting.id, true);
-    const supabase = getAuthedClient(session.access_token);
-    supabase.from('job_postings').update({
-      category: toDbEnum(data.category),
-      role_name: data.role_name,
-      committee_id: data.committee_id || null,
-      description: data.description || null,
-      requirements: data.requirements || null,
-      compensation: toDbEnum(data.compensation),
-      compensation_note: data.compensation_note || null,
-      deadline: data.deadline || null,
-    }).eq('id', posting.id).then(({ error }) => {
-      markBusy(posting.id, false);
-      if (error) {
-        // Restore only this row to its exact pre-edit values.
-        setPostings(prev => prev.map(p => p.id === posting.id ? posting : p));
-        setActionError("Couldn't save the position. The change was reverted.");
-      }
-    });
-  }
-
-  function handleToggleOpen(posting: JobPosting) {
-    if (!session || busyIds.has(posting.id)) return;
-    // Optimistic flip; roll back only this row on failure.
-    setPostings(prev => prev.map(p => p.id === posting.id ? { ...p, is_open: !p.is_open } : p));
-    setActionError('');
-    markBusy(posting.id, true);
-    const supabase = getAuthedClient(session.access_token);
-    supabase.from('job_postings').update({ is_open: !posting.is_open }).eq('id', posting.id).then(({ error }) => {
-      markBusy(posting.id, false);
-      if (error) {
-        setPostings(prev => prev.map(p => p.id === posting.id ? { ...p, is_open: posting.is_open } : p));
-        setActionError("Couldn't update the posting. The change was reverted.");
-      }
-    });
-  }
-
-  async function handleDelete(posting: JobPosting) {
-    if (!session || busyIds.has(posting.id)) return;
-    if (!confirm(`Delete "${posting.role_name}"? This cannot be undone.`)) return;
-    // Optimistic removal; re-insert at its prior index + inline error if either delete fails.
-    const removedIndex = postings.findIndex(p => p.id === posting.id);
-    setPostings(prev => prev.filter(p => p.id !== posting.id));
-    setActionError('');
-    markBusy(posting.id, true);
-    const supabase = getAuthedClient(session.access_token);
-    const { error: appsErr } = await supabase.from('job_applications').delete().eq('job_posting_id', posting.id);
-    const { error: postErr } = appsErr
-      ? { error: appsErr }
-      : await supabase.from('job_postings').delete().eq('id', posting.id);
-    markBusy(posting.id, false);
-    if (postErr) {
-      setPostings(prev => {
-        const next = prev.filter(p => p.id !== posting.id);
-        next.splice(Math.min(Math.max(removedIndex, 0), next.length), 0, posting);
-        return next;
-      });
-      setActionError("Couldn't delete the posting. It was restored.");
-    }
-  }
-
-  // ── Derived stats ──────────────────────────────────────────────────────
-
-  const openCount = postings.filter(p => p.is_open).length;
-  const totalApps = Object.values(appCounts).reduce((s, n) => s + n, 0);
-  const categoriesActive = new Set(postings.map(p => p.category)).size;
-
-  const visible = categoryTab === 'ALL'
-    ? postings
-    : postings.filter(p => p.category.toUpperCase() === categoryTab);
-
-  // Coming soon: the public board is not open yet (see JOB_BOARD_LIVE above).
-  // Placed after every hook so the hook order is the same on both branches.
-  if (!JOB_BOARD_LIVE) {
-    return (
-      <div className="px-6 md:px-10 py-8">
-        <div
-          className="rounded-3xl"
-          style={{
-            backgroundColor: FOREST,
-            color: '#F4F1E8',
-            padding: 'clamp(28px, 4vw, 44px)',
-            maxWidth: 640,
-            boxShadow: '0 18px 40px -24px rgba(27,56,40,0.55)',
-            fontFamily: "var(--font-brand), sans-serif",
-          }}
-        >
-          <div
-            aria-hidden
-            className="inline-flex items-center justify-center rounded-2xl"
-            style={{ width: 72, height: 72, backgroundColor: 'rgba(255,255,255,0.08)', marginBottom: 18 }}
-          >
-            <Emoji3D name="Briefcase" size={48} fallback={Briefcase} fallbackColor={GOLD} />
-          </div>
-          <h1
-            className="font-black"
-            style={{ margin: 0, fontSize: 'clamp(26px, 3vw, 34px)', lineHeight: 1.08, letterSpacing: '-0.02em', color: '#F4F1E8' }}
-          >
-            Job Board <GoldWord tone="dark">Coming Soon</GoldWord>
-          </h1>
-          <p style={{ margin: '12px 0 0', fontSize: 15.5, lineHeight: 1.5, color: 'rgba(244,241,232,0.78)', maxWidth: '44ch' }}>
-            Post chair and staff roles here once the public job board opens
-          </p>
-          <Link
-            href={`/manage/${conference?.slug ?? ''}`}
-            className="focus:outline-none"
-            style={{
-              display: 'inline-block',
-              marginTop: 22,
-              color: GOLD,
-              fontWeight: 800,
-              fontSize: 14,
-              textDecoration: 'underline',
-              textUnderlineOffset: 4,
-              textDecorationThickness: 2,
-            }}
-          >
-            Back to the dashboard
-          </Link>
-        </div>
-      </div>
-    );
-  }
-
-  if (loading) {
-    return (
-      <div className="px-6 md:px-10 py-8">
-        <div className="flex flex-col gap-3">
-          {[1, 2, 3].map(i => (
-            <div
-              key={i}
-              className="rounded-2xl animate-pulse"
-              style={{ height: '120px', backgroundColor: BORDER }}
-            />
-          ))}
-        </div>
-      </div>
-    );
-  }
+  if (!conference) return null;
+  const slug = conference.slug;
 
   return (
-    <div className="px-6 md:px-10 py-8">
-      {/* Header row */}
-      <div className="flex items-center justify-between mb-6">
+    <div className="gv-jb px-6 md:px-10 py-8">
+      <style>{STORE_CSS}</style>
+      <style>{DASH_CSS}</style>
+      <style>{ROW_CSS}</style>
+      <style>{PAGE_CSS}</style>
+
+      <header className="gv-jb-head">
         <div>
-          <p
-            className="text-xs tracking-widest mb-1"
-            style={{ color: MUTED, fontFamily: "var(--font-brand), sans-serif", fontWeight: 700 }}
-          >
-            {conference?.acronym} / Job Board
+          <p style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: 13, color: NEU.inkSoft, letterSpacing: '0.06em', margin: '0 0 6px' }}>
+            {conference.acronym} / Job Board
           </p>
-          <h1 className="text-2xl font-black" style={{ color: INK, fontFamily: "var(--font-brand), sans-serif" }}>
-            Job Board
+          <h1 style={{ fontFamily: OUTFIT, fontWeight: 900, fontSize: 'clamp(32px, 3.4vw, 42px)', letterSpacing: '-0.025em', lineHeight: 1.05, color: INK, margin: 0 }}>
+            Job <GoldWord>Board</GoldWord>
           </h1>
         </div>
-        <button
-          onClick={() => setCreateOpen(true)}
-          className="rounded-xl py-2.5 px-5 font-bold text-sm focus:outline-none transition-all"
-          style={{
-            backgroundColor: FOREST,
-            color: GOLD,
-            fontFamily: "var(--font-brand), sans-serif",
-          }}
-          onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
-          onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = FOREST; }}
-        >
-          Post a position
-        </button>
-      </div>
-
-      {/* Stats row */}
-      <div className="flex gap-4 mb-6 flex-wrap">
-        {[
-          { value: openCount, label: 'Open positions' },
-          { value: totalApps, label: 'Total applications' },
-          { value: categoriesActive, label: 'Categories active' },
-        ].map(({ value, label }) => (
-          <div
-            key={label}
-            className="flex items-center gap-3 rounded-xl px-5 py-3"
-            style={{ backgroundColor: CARD_BG, border: `1px solid ${BORDER}` }}
-          >
-            <span className="font-black text-xl" style={{ color: INK, fontFamily: "var(--font-brand), sans-serif" }}>
-              {value}
-            </span>
-            <span className="text-xs" style={{ color: MUTED, fontFamily: "var(--font-brand), sans-serif", fontWeight: 500 }}>
-              {label}
-            </span>
-          </div>
-        ))}
-      </div>
-
-      {/* Category tabs */}
-      <div className="flex gap-2 mb-4 flex-wrap">
-        {CATEGORIES.map(cat => (
-          <button
-            key={cat}
-            onClick={() => setCategoryTab(cat)}
-            className="px-3 py-1.5 rounded-full text-xs font-bold transition-all focus:outline-none"
-            style={{
-              backgroundColor: categoryTab === cat ? FOREST : 'transparent',
-              color: categoryTab === cat ? GOLD : INK,
-              border: categoryTab === cat ? `1.5px solid ${FOREST}` : `1.5px solid ${BORDER}`,
-              fontFamily: "var(--font-brand), sans-serif",
-            }}
-          >
-            {cat === 'ALL' ? 'All' : sentenceLabel(cat)}
+        {panel && (
+          <button type="button" className="gv-st-btn gv-st-forest gv-jb-post" onClick={() => setPopup({ kind: 'post', listing: null })}>
+            <Plus size={17} strokeWidth={2.6} aria-hidden /> Post a listing
           </button>
-        ))}
-      </div>
+        )}
+      </header>
 
-      {/* Postings list */}
-      {visible.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-16 text-center">
-          <p className="font-semibold text-base mb-2" style={{ color: INK, fontFamily: "var(--font-brand), sans-serif" }}>
-            {postings.length === 0 ? 'No positions posted yet' : 'No positions in this category'}
-          </p>
-          <p className="text-sm mb-4" style={{ color: MUTED, fontFamily: "var(--font-brand), sans-serif" }}>
-            {postings.length === 0
-              ? 'Press "Post a position" to start recruiting chairs and staff.'
-              : 'Try selecting a different category above.'}
-          </p>
+      {!panel && panelErr ? (
+        <p className="gv-st-err" role="alert">{panelErr} <button type="button" className="gv-st-link" onClick={() => { void reload(); }}>Try again</button></p>
+      ) : !panel ? (
+        <div className="gv-jb-grid" aria-busy="true">
+          <div className="gv-jb-skel" style={{ minHeight: 420 }} />
+          <div className="gv-jb-side"><div className="gv-jb-skel" style={{ minHeight: 220 }} /><div className="gv-jb-skel" style={{ minHeight: 160 }} /></div>
         </div>
       ) : (
-        <div className="flex flex-col gap-4">
-          {visible.map(posting => (
-            <PostingCard
-              key={posting.id}
-              posting={posting}
-              appCount={appCounts[posting.id] ?? 0}
-              busy={busyIds.has(posting.id)}
-              onEdit={(p) => setEditPosting(p)}
-              onToggleOpen={handleToggleOpen}
-              onDelete={handleDelete}
-              onRefreshCount={fetchAll}
+        <div className="gv-jb-grid">
+          {/* ── Listings ── */}
+          <DashCard
+            title="Your Listings"
+            hint="Chair, secretariat and staff listings on the Job Board. Listings where people apply on Gavelling are free; a listing that applies on another site costs credits once"
+            icon={{ emoji: 'Briefcase', lucide: Briefcase, tint: TINT_GOLD }}
+            hang="start"
+            className="gv-jb-main"
+          >
+            {listings.length === 0 ? (
+              <div className="gv-jb-first">
+                <p className="gv-jb-first-title">Post your first listing</p>
+                <p className="gv-jb-first-line">Listings are free when people apply on Gavelling, as many as you like</p>
+                <button type="button" className="gv-st-btn gv-st-forest" onClick={() => setPopup({ kind: 'post', listing: null })}>
+                  <Plus size={16} strokeWidth={2.6} aria-hidden /> Post a listing
+                </button>
+              </div>
+            ) : (
+              <ul className="gv-jb-list">
+                {listings.map((l) => (
+                  <ListingRow
+                    key={l.id}
+                    listing={l}
+                    canPromote={panel.can_promote}
+                    onEdit={() => setPopup({ kind: 'post', listing: l })}
+                    onPromote={() => setPopup({ kind: 'promote', listing: l })}
+                    onChanged={(m) => { notifyOk(m, 'jobs'); void reload(); }}
+                  />
+                ))}
+              </ul>
+            )}
+          </DashCard>
+
+          <div className="gv-jb-side">
+            <DigestCard slug={slug} digest={digest} err={digestErr} onRetry={() => { void reload(); }} />
+            <EmailsCard
+              confId={conference.id}
+              settings={panel.settings}
+              onSaved={(s) => setPanel((p) => (p ? { ...p, settings: s } : p))}
             />
-          ))}
+          </div>
         </div>
       )}
 
-      {/* Create modal */}
-      {createOpen && (
-        <PostingModal
-          conferenceId={conference!.id}
-          committees={committees}
-          posting={null}
-          saving={saving}
-          errorText={createError || undefined}
-          onSave={handleCreate}
-          onClose={() => { setCreateOpen(false); setCreateError(''); }}
+      {popup?.kind === 'post' && panel && (
+        <PostingPopup
+          conference={{
+            id: conference.id, slug, acronym: conference.acronym, full_name: conference.full_name, logo_url: conference.logo_url,
+            is_verified: !!conference.is_verified, city: conference.city ?? null, country: conference.country ?? null,
+            format: conference.format ?? null, student_level: conference.student_level ?? null,
+            start_date: conference.start_date ?? null, end_date: conference.end_date ?? null,
+          }}
+          panel={panel}
+          listing={popup.listing}
+          myUserId={user?.id ?? null}
+          onClose={() => setPopup(null)}
+          onSaved={() => { void reload(); }}
+          onPublished={(m) => { setPopup(null); notifyOk(m, 'jobs'); void reload(); }}
+          onShort={handOffShort}
+          onPromoted={promoted}
         />
       )}
-
-      {/* Edit modal */}
-      {editPosting && (
-        <PostingModal
-          conferenceId={conference!.id}
-          committees={committees}
-          posting={editPosting}
-          saving={saving}
-          onSave={(data) => handleEdit(editPosting, data)}
-          onClose={() => setEditPosting(null)}
+      {popup?.kind === 'promote' && panel && (
+        <PromotePopup
+          listingId={popup.listing.id}
+          listingTitle={popup.listing.title}
+          conferenceCredits={panel.conference_credits}
+          onClose={() => setPopup(null)}
+          onDone={promoted}
+          onShort={(req) => handOffShort({ ...req, okMessage: (a) => `Promoted until ${dayLabel(typeof a.ends_on === 'string' ? a.ends_on : null)}` })}
         />
       )}
     </div>
   );
 }
+
+function DigestCard({ slug, digest, err, onRetry }: {
+  slug: string;
+  digest: { lines: DigestLine[]; views_week: number; clicks_week: number } | null;
+  err: string | null;
+  onRetry: () => void;
+}) {
+  const yesterday = (digest?.lines ?? []).filter((l) => l.yesterday > 0);
+  const week = (digest?.lines ?? []).filter((l) => l.week > 0);
+  const hrefOf = (l: DigestLine) => (l.link === 'team' ? `/manage/${slug}/settings?tab=team` : `/manage/${slug}/applications`);
+  const line = (l: DigestLine, n: number) => (
+    <li key={l.listing_id}>
+      <Link href={hrefOf(l)} className="gv-jb-dl">
+        <b>{n.toLocaleString('en-US')}</b> {n === 1 ? 'person' : 'people'} applied to {l.title}
+      </Link>
+    </li>
+  );
+  return (
+    <DashCard
+      title="Applicants"
+      hint="New applicants who came through your listings, and how often the listings were seen this week. Chair applications open in Applications; secretariat and staff in Settings, Team"
+      icon={{ emoji: 'Bar chart', lucide: BarChart3, tint: TINT_GREEN }}
+      hang="start"
+    >
+      {err && !digest ? (
+        <p className="gv-st-err" role="alert">{err} <button type="button" className="gv-st-link" onClick={onRetry}>Try again</button></p>
+      ) : !digest ? (
+        <div className="gv-jb-skel" style={{ minHeight: 120 }} aria-hidden />
+      ) : (
+        <>
+          {week.length === 0 ? (
+            <p className="gv-jb-quiet">No new applicants this week</p>
+          ) : (
+            <>
+              {yesterday.length > 0 && (
+                <section className="gv-jb-dsec">
+                  <h3 className="gv-jb-dh">Yesterday</h3>
+                  <ul className="gv-jb-dlist">{yesterday.map((l) => line(l, l.yesterday))}</ul>
+                </section>
+              )}
+              <section className="gv-jb-dsec">
+                <h3 className="gv-jb-dh">This Week</h3>
+                <ul className="gv-jb-dlist">{week.map((l) => line(l, l.week))}</ul>
+              </section>
+            </>
+          )}
+          <div className="gv-jb-dstats">
+            <p><b>{digest.views_week.toLocaleString('en-US')}</b> views</p>
+            <p><b>{digest.clicks_week.toLocaleString('en-US')}</b> clicks to apply</p>
+            <span className="gv-jb-quiet" style={{ fontSize: 12.5 }}>this week</span>
+          </div>
+        </>
+      )}
+    </DashCard>
+  );
+}
+
+function EmailsCard({ confId, settings, onSaved }: {
+  confId: string;
+  settings: { emails_on: boolean; my_mode: MyMode };
+  onSaved: (s: { emails_on: boolean; my_mode: MyMode }) => void;
+}) {
+  const [local, setLocal] = useState(settings);
+  const [seen, setSeen] = useState(settings);
+  const [busy, setBusy] = useState(false);
+  const busyRef = useRef(false);
+  if (seen !== settings) { setSeen(settings); setLocal(settings); }
+
+  const save = async (emailsOn: boolean | null, mode: MyMode | null) => {
+    if (busyRef.current) return;
+    busyRef.current = true;
+    setBusy(true);
+    const before = local;
+    setLocal({ emails_on: emailsOn ?? local.emails_on, my_mode: mode ?? local.my_mode });
+    try {
+      const r = await setJobSettings(confId, emailsOn, mode);
+      if (!r.ok) {
+        setLocal(before);
+        notifyErr(r.message, 'jobs');
+        return;
+      }
+      onSaved({ emails_on: r.emails_on, my_mode: r.my_mode });
+    } finally {
+      busyRef.current = false;
+      setBusy(false);
+    }
+  };
+
+  const MODES: { key: MyMode; label: string }[] = [
+    { key: 'each', label: 'Every new applicant' },
+    { key: 'digest', label: 'One daily digest' },
+    { key: 'off', label: 'No emails for me' },
+  ];
+
+  return (
+    <DashCard
+      title="Emails"
+      hint="The switch is for the whole conference. When it is on, each organizer chooses for themselves how often they hear about new applicants"
+      icon={{ emoji: 'Envelope', lucide: Mail, tint: TINT_GOLD }}
+      hang="start"
+    >
+      <div className="gv-jb-switchrow">
+        <button
+          type="button"
+          role="switch"
+          aria-checked={local.emails_on}
+          aria-label="Email organizers about new applicants"
+          className={`gv-jb-switch${local.emails_on ? ' gv-jb-switch-on' : ''}`}
+          onClick={() => { void save(!local.emails_on, null); }}
+          disabled={busy}
+        >
+          <span aria-hidden />
+        </button>
+        <span className="gv-jb-switch-label">Email organizers about new applicants</span>
+      </div>
+      {local.emails_on && (
+        <div className="gv-jb-modes" role="radiogroup" aria-label="Your emails">
+          {MODES.map((m) => (
+            <button
+              key={m.key}
+              type="button"
+              role="radio"
+              aria-checked={local.my_mode === m.key}
+              className={`gv-jb-mode${local.my_mode === m.key ? ' gv-jb-mode-on' : ''}`}
+              onClick={() => { if (local.my_mode !== m.key) void save(null, m.key); }}
+              disabled={busy}
+            >
+              <span className="gv-jb-dot" aria-hidden>{local.my_mode === m.key && <span />}</span>
+              {m.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </DashCard>
+  );
+}
+
+const PAGE_CSS = `
+.gv-jb-head{display:flex;align-items:flex-end;justify-content:space-between;flex-wrap:wrap;gap:16px;margin-bottom:34px}
+.gv-jb-post{min-height:48px;padding:0 22px;font-size:15px}
+.gv-jb-grid{display:grid;grid-template-columns:minmax(0,1fr);gap:34px 24px;align-items:start}
+@media (min-width:1100px){.gv-jb-grid{grid-template-columns:minmax(0,1fr) minmax(320px,380px)}}
+@media (min-width:1600px){.gv-jb-grid{grid-template-columns:minmax(0,1fr) minmax(360px,440px)}}
+.gv-jb-side{display:flex;flex-direction:column;gap:34px;min-width:0}
+.gv-jb-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:12px}
+.gv-jb-first{display:flex;flex-direction:column;align-items:flex-start;gap:10px;padding:24px 4px 8px}
+.gv-jb-first-title{margin:0;font-family:${OUTFIT};font-size:22px;font-weight:800;color:${INK}}
+.gv-jb-first-line{margin:0 0 6px;font-family:${OUTFIT};font-size:15px;color:${INK_SOFT}}
+.gv-jb-quiet{margin:0;font-family:${OUTFIT};font-size:14.5px;color:${INK_SOFT}}
+.gv-jb-dsec{margin-bottom:14px}
+.gv-jb-dh{margin:0 0 8px;font-family:${OUTFIT};font-size:14px;font-weight:800;color:${INK}}
+.gv-jb-dlist{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+.gv-jb-dl{font-family:${OUTFIT};font-size:14.5px;line-height:1.45;color:${INK};text-decoration:underline;text-decoration-color:rgba(28,20,16,0.25);text-underline-offset:3px;overflow-wrap:anywhere}
+.gv-jb-dl:hover{text-decoration-color:${FOREST};color:${FOREST}}
+.gv-jb-dl b{font-weight:800;font-variant-numeric:tabular-nums}
+.gv-jb-dstats{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 18px;padding-top:14px;border-top:1px solid rgba(28,20,16,0.08)}
+.gv-jb-dstats p{margin:0;font-family:${OUTFIT};font-size:13.5px;color:${INK_SOFT}}
+.gv-jb-dstats b{font-size:22px;font-weight:800;color:${INK};font-variant-numeric:tabular-nums;margin-right:4px}
+.gv-jb-switchrow{display:flex;align-items:center;gap:12px}
+.gv-jb-switch{position:relative;flex-shrink:0;width:46px;height:26px;border-radius:9999px;border:none;cursor:pointer;background:rgba(28,20,16,0.2);transition:background-color 160ms ease}
+.gv-jb-switch span{position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:9999px;background:#FFFFFF;box-shadow:0 1px 3px rgba(0,0,0,0.25);transition:transform 180ms cubic-bezier(0.22,1,0.36,1)}
+.gv-jb-switch-on{background:${FOREST}}
+.gv-jb-switch-on span{transform:translateX(20px)}
+.gv-jb-switch:disabled{cursor:default;opacity:0.7}
+.gv-jb-switch:focus{outline:none}
+.gv-jb-switch:focus-visible{outline:2px solid ${FOREST};outline-offset:2px}
+.gv-jb-switch-label{font-family:${OUTFIT};font-size:14.5px;font-weight:600;color:${INK}}
+.gv-jb-modes{display:flex;flex-direction:column;gap:6px;margin-top:14px}
+.gv-jb-mode{display:flex;align-items:center;gap:10px;min-height:44px;padding:0 12px;border-radius:12px;border:1.5px solid rgba(28,20,16,0.12);background:#FFFFFF;cursor:pointer;font-family:${OUTFIT};font-size:14.5px;font-weight:600;color:${INK};text-align:left}
+.gv-jb-mode-on{border-color:${FOREST};background:#EEF3EC}
+.gv-jb-mode:disabled{cursor:default}
+.gv-jb-mode:focus{outline:none}
+.gv-jb-mode:focus-visible{outline:2px solid ${FOREST};outline-offset:2px}
+.gv-jb-dot{flex-shrink:0;width:18px;height:18px;border-radius:9999px;border:1.5px solid rgba(28,20,16,0.35);display:inline-flex;align-items:center;justify-content:center;background:#FFFFFF}
+.gv-jb-mode-on .gv-jb-dot{border-color:${FOREST}}
+.gv-jb-dot span{width:9px;height:9px;border-radius:9999px;background:${FOREST}}
+.gv-jb-skel{border-radius:20px;background:linear-gradient(90deg,#EFEAE0 0%,#F7F4EE 50%,#EFEAE0 100%);background-size:200% 100%;animation:gvJbSkel 1.3s ease-in-out infinite}
+@keyframes gvJbSkel{from{background-position:100% 0}to{background-position:-100% 0}}
+@media (prefers-reduced-motion:reduce){.gv-jb-skel{animation:none}}
+`;

@@ -84,8 +84,8 @@ const websiteSchema = {
 
 // "Learn MUN" on the homepage: the evergreen beginner guides, in this order.
 // Slugs from src/app/blog/posts.ts; one that is renamed or removed there is
-// simply skipped. The job board section (and its fetchJobStats() read) is off
-// the page until the job board launches (24 Sep 2026).
+// simply skipped. The old job board section was taken off the page on
+// 24 Sep 2026; the Job Board now lives at /jobs.
 const HOME_GUIDE_SLUGS = [
   'mun-for-beginners',
   'mun-position-paper-guide',

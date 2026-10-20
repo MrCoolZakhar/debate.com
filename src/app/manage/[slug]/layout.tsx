@@ -278,9 +278,7 @@ const NAV_SECTIONS = (slug: string, badges: NavBadges = NO_BADGES): NavSection[]
     header: 'SETTINGS',
     items: [
       { icon: Settings,  label: 'Settings',  href: `/manage/${slug}/settings`, external: false, badge: badges.settings, fixes: true },
-      // The public job board is not open yet, so a posting would reach nobody.
-      // The entry stays a link (the page shows a coming-soon panel) with a tag.
-      { icon: Briefcase, label: 'Job Board', href: `/manage/${slug}/jobs`,     external: false, badge: 0, tag: 'Coming soon' },
+      { icon: Briefcase, label: 'Job Board', href: `/manage/${slug}/jobs`,     external: false, badge: 0 },
       { icon: Upload,    label: 'Import',    href: `/manage/${slug}/import`,   external: false, badge: 0 },
     ],
   },

@@ -33,7 +33,6 @@ Linking is automatic: a database trigger links the normal application to the lis
 ## Switches
 
 - `store_flags.job_board_live`: while off, the server returns only listings of demo conferences, listings made by platform admins, and the viewer's own. The client builds nothing around it.
-- The organiser Job Board page stays behind `JOB_BOARD_LIVE` in `manage/[slug]/jobs/page.tsx` until prompt 2.
 
 ## Files of prompt 1
 
@@ -49,3 +48,61 @@ Linking is automatic: a database trigger links the normal application to the lis
 - `src/components/SiteNav.tsx`: Job Board in the top strip (desktop pill from 1200px, the phone menu below).
 - `src/app/conferences/roles/page.tsx`: permanent redirect to `/jobs`.
 - `src/app/sitemap.ts`: `/jobs` replaces `/conferences/roles`.
+
+## Prompt 2: the organizer panel
+
+### The page
+
+`/manage/<slug>/jobs` is gated by the existing `job_board` permission (the section "Job Board" in Settings > Team). Owners always pass. Promoting and paid listings also need the Store permission; when it is missing the server answers with a sentence.
+
+- **Listings.** Drafts first. Each row shows its status (Draft, Live, Closed or Hidden), views, clicks and applicants, and "Promoted until" while a promotion runs. The row menu: Edit, Promote, View on Job Board, Close (asked in place) and Delete (drafts only).
+- **The digest** (`job_digest`): Yesterday and This Week, with links to Applications or Settings > Team.
+- **The emails card** (`job_settings_set`): the conference switch "Email organizers about new applicants", off by default; once on, each organizer makes their own choice: every new applicant, one daily digest, or no emails.
+
+### The posting pop-up
+
+1. **Role** and how people apply. A role whose application is off cannot be picked for a Gavelling listing.
+2. **The listing.** Title up to 80 characters, no links; the committee; the description up to 4,000 characters, prefilled from `job_draft_description`; posted by. The draft is saved when leaving this step.
+3. **What you offer.**
+4. **Screening questions** (Gavelling listings only), up to 5: Yes/No, Choice with 2 to 6 options, or Short text. Each can carry an ideal answer; Essential exists on Yes/No and Choice only and turns a miss into an automatic turn-down.
+5. **Deadline**, optional, future dates only (`futureOnly`), and for a Gavelling listing never after the role's closing. A listing closes at the earliest of its deadline, the role's closing, the conference start, or when it is closed.
+6. **Review**, with Publish and Publish and promote.
+
+### Posting rules
+
+- A listing that applies on Gavelling is free and unlimited.
+- A listing that applies on another site costs 2 credits once (`prices.outside_listing`).
+- After a paid outside listing is published, its role, title, link and dates are fixed, with one free fix in the first 24 hours (`fix_available`, `fix_used`).
+- The 60-day question (`confirm_deadline`): a paid outside listing that would stay up 60 days or more asks "Is this really the application deadline?". Yes, publish calls again with `p_confirm_deadline true`.
+- Refusal codes of `job_listing_publish`: `confirm_deadline`, `short`, `role_off` (with a link to Settings > Applications), `not_public`.
+
+### Promotion
+
+- `job_promote_quote` and `job_promote(p_id, p_days 7 | 14 | 28, p_homepage, p_top_up)`.
+- Prices today: 3, 5 or 9 credits for 7, 14 or 28 days, plus 2 credits for the homepage on each length. Prices are never typed in the client; they are read from `prices` or the quote.
+- The run starts today, never runs past the listing's close, and is not refundable.
+- The homepage holds 6 promoted listings a day. A full homepage answers `homepage_full` with `taken_days`; promoting without the homepage still works.
+
+### Short on credits
+
+A call that answers code `short` with `need_credits`: the pop-up closes first (never a pop-up on a pop-up), the credits pop-up opens preselected to `need_credits`, and when the purchase completes the SAME call runs once more with `p_top_up true` (`useJobTopUp`, a ref-guarded one-shot), then a toast.
+
+### The Store
+
+The Store's Job Board card (`store/JobBoardStoreCard.tsx`) lists live listings, each with Promote.
+
+### Legacy code
+
+The legacy `job_postings` / `job_applications` code is gone from `src/` (the tables are dropped at the production merge). `src/app/conferences/roles/ConferencesRolesClient.tsx` is deleted, and `fetchJobStats` with it.
+
+## Files of prompt 2
+
+- `src/app/manage/[slug]/jobs/page.tsx`: rewritten.
+- `src/app/manage/[slug]/jobs/jobsApi.ts`: the organizer RPC wrappers.
+- `src/app/manage/[slug]/jobs/useJobTopUp.ts`: the top-up one-shot.
+- `src/app/manage/[slug]/jobs/ListingRow.tsx`: a listing row and its menu.
+- `src/app/manage/[slug]/jobs/PostingPopup.tsx`: the posting steps.
+- `src/app/manage/[slug]/jobs/PromotePopup.tsx`: promotion.
+- `src/app/manage/[slug]/store/JobBoardStoreCard.tsx`: the Store card.
+- `src/app/manage/[slug]/layout.tsx`: the rail's "Coming soon" tag removed.
+- `src/lib/organizerPermissions.ts`: the `job_board` blurb.
