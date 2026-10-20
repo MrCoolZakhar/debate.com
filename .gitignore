@@ -50,3 +50,6 @@ scripts/newsletter/out/
 # Playwright
 /test-results/
 /playwright-report/
+
+# Downloaded handoff files, never project code
+Claude outputs/
