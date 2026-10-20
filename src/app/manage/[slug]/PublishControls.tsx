@@ -29,6 +29,8 @@ const CSS = `
 .gv-pc-btn:focus{outline:none}
 .gv-pc-btn:focus-visible{outline:2px solid #EED98A;outline-offset:2px}
 .gv-pc-btn:disabled{opacity:0.6;cursor:default}
+.gv-pc-when{font-size:12.5px;font-weight:600;color:#EDE7D8;white-space:nowrap}
+.gv-pc-light .gv-pc-when{color:#1C1410}
 .gv-pc-publish{background:#EED98A;color:#1B3828}
 .gv-pc-publish:hover:not(:disabled){background:#F5E6A8}
 .gv-pc-unpublish{background:transparent;color:#EDE7D8;box-shadow:inset 0 0 0 1.5px rgba(237,231,216,0.45)}
@@ -58,6 +60,28 @@ export default function PublishControls({ conference, onChanged, light }: {
   const [err, setErr] = useState('');
   const busyRef = useRef(false);
   const live = conference.is_public;
+  // A new conference goes live by itself 3 days after it is made, once it has
+  // a logo (publish_due_conferences, owner 20 Oct 2026).
+  const goLive = (() => {
+    if (live || !conference.auto_publish_at) return null;
+    const at = new Date(conference.auto_publish_at);
+    if (Number.isNaN(at.getTime())) return null;
+    const hasLogo = !!conference.logo_url?.trim();
+    const due = at.getTime() <= Date.now();
+    const day = at.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+    if (!hasLogo) {
+      return {
+        text: 'Add a logo to go live',
+        title: due
+          ? 'Your conference goes live automatically as soon as it has a logo.'
+          : `Your conference goes live automatically on ${day} once it has a logo.`,
+      };
+    }
+    return {
+      text: due ? 'Going live shortly' : `Goes live ${day}`,
+      title: 'Your conference goes live automatically. Publish now to go live sooner.',
+    };
+  })();
 
   const startPublish = async () => {
     if (busyRef.current) return;
@@ -100,6 +124,9 @@ export default function PublishControls({ conference, onChanged, light }: {
         {live ? <Globe2 size={14} strokeWidth={2.4} aria-hidden /> : <PencilLine size={14} strokeWidth={2.4} aria-hidden />}
         {live ? 'Public' : 'Draft'}
       </span>
+      {!live && goLive && (
+        <span className="gv-pc-when" title={goLive.title}>{goLive.text}</span>
+      )}
       {live ? (
         <button type="button" className="gv-pc-btn gv-pc-unpublish" onClick={() => { setErr(''); setUnpublishing(true); }}>Unpublish</button>
       ) : (
