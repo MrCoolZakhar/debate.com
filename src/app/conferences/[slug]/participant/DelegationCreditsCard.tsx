@@ -109,12 +109,12 @@ function Stepper({
         aria-label={kind === 'minus' ? `Fewer ${label}` : `More ${label}`}
         disabled={off}
         onClick={() => onChange(clamp(kind === 'minus' ? value - 1 : value + 1))}
-        className="flex items-center justify-center flex-shrink-0 rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] focus-visible:ring-offset-2 focus-visible:ring-offset-[#FAF8F3]"
+        className="flex items-center justify-center flex-shrink-0 rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gv-accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[#FAF8F3]"
         style={{
           width: 44, height: 44,
           backgroundColor: '#EDE7D8',
           border: '1px solid #DDD4C0',
-          color: '#1B3828',
+          color: 'var(--gv-main)',
           cursor: off ? 'not-allowed' : 'pointer',
           opacity: off ? 0.45 : 1,
         }}
@@ -137,7 +137,7 @@ function Stepper({
         onChange={e => setText(e.target.value.replace(/[^0-9]/g, '').slice(0, 3))}
         onBlur={commitText}
         onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); commitText(); } }}
-        className="text-center rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] focus-visible:ring-offset-2 focus-visible:ring-offset-[#FAF8F3]"
+        className="text-center rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gv-accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[#FAF8F3]"
         style={{
           width: compact ? 64 : 76, height: 44,
           fontFamily: OUTFIT, fontSize: 17, fontWeight: 800, color: '#1C1410',
@@ -330,7 +330,7 @@ export default function DelegationCreditsCard({ societyId }: { societyId: string
   if (notLeader) return null;
 
   const eyebrow = (
-    <p style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: 9, letterSpacing: '0.14em', color: '#B6871F', margin: 0 }}>
+    <p style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: 9, letterSpacing: '0.14em', color: 'var(--gv-accent)', margin: 0 }}>
       PAY FOR YOUR DELEGATES
     </p>
   );
@@ -356,7 +356,7 @@ export default function DelegationCreditsCard({ societyId }: { societyId: string
         <button
           type="button"
           onClick={() => { void readPool(); }}
-          className="rounded-xl px-4 font-bold text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] focus-visible:ring-offset-2 focus-visible:ring-offset-[#FAF8F3]"
+          className="rounded-xl px-4 font-bold text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gv-accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[#FAF8F3]"
           style={{ height: 44, backgroundColor: '#FFFFFF', border: '1.5px solid #1C1410', color: '#1C1410', fontFamily: OUTFIT, cursor: 'pointer' }}
         >
           Try again
@@ -378,12 +378,12 @@ export default function DelegationCreditsCard({ societyId }: { societyId: string
           style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: '#EDE7D8' }}
           aria-hidden
         >
-          <Emoji3D name="Busts in silhouette" size={24} fallback={Users} fallbackColor="#1B3828" />
+          <Emoji3D name="Busts in silhouette" size={24} fallback={Users} fallbackColor="var(--gv-main)" />
         </div>
       </div>
 
       {/* The pool */}
-      <p style={{ fontFamily: OUTFIT, fontSize: 40, fontWeight: 900, color: '#1B3828', margin: '4px 0 0 0', lineHeight: 1.05, fontVariantNumeric: 'tabular-nums' }}>
+      <p style={{ fontFamily: OUTFIT, fontSize: 40, fontWeight: 900, color: 'var(--gv-main)', margin: '4px 0 0 0', lineHeight: 1.05, fontVariantNumeric: 'tabular-nums' }}>
         {pool.pool}
       </p>
       <p style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 600, color: '#5A5046', margin: '4px 0 0 0' }}>
@@ -428,23 +428,23 @@ export default function DelegationCreditsCard({ societyId }: { societyId: string
           disabled={fundBusy}
           aria-busy={fundBusy}
           onClick={() => { void fund(fundQty); }}
-          className="flex-1 flex items-center justify-center rounded-xl px-5 font-bold text-sm transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] focus-visible:ring-offset-2 focus-visible:ring-offset-[#FAF8F3]"
+          className="flex-1 flex items-center justify-center rounded-xl px-5 font-bold text-sm transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gv-accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[#FAF8F3]"
           style={{
             minWidth: 200, height: 44,
-            backgroundColor: fundBusy ? '#2A5A3C' : '#1B3828',
-            color: '#EED98A',
+            backgroundColor: fundBusy ? 'var(--gv-main-mid)' : 'var(--gv-main)',
+            color: 'var(--gv-on-main)',
             fontFamily: OUTFIT, border: 'none',
             cursor: fundBusy ? 'wait' : 'pointer',
             opacity: fundBusy ? 0.85 : 1,
           }}
-          onMouseEnter={e => { if (!fundBusy) (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
-          onMouseLeave={e => { if (!fundBusy) (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
+          onMouseEnter={e => { if (!fundBusy) (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--gv-main-mid)'; }}
+          onMouseLeave={e => { if (!fundBusy) (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--gv-main)'; }}
         >
           {fundBusy ? 'Adding' : 'Add to delegation'}
         </button>
       </div>
       {fundOk && (
-        <p role="status" style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 600, color: '#2A5A3C', margin: '10px 0 0 0' }}>
+        <p role="status" style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 600, color: 'var(--gv-main-mid)', margin: '10px 0 0 0' }}>
           {fundOk}
         </p>
       )}
@@ -475,7 +475,7 @@ export default function DelegationCreditsCard({ societyId }: { societyId: string
               disabled={backBusy}
               aria-busy={backBusy}
               onClick={() => { void takeBack(backQtyShown); }}
-              className="flex items-center justify-center rounded-xl px-5 font-bold text-sm transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] focus-visible:ring-offset-2 focus-visible:ring-offset-[#FAF8F3]"
+              className="flex items-center justify-center rounded-xl px-5 font-bold text-sm transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gv-accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[#FAF8F3]"
               style={{
                 height: 44,
                 backgroundColor: '#FFFFFF',
@@ -492,7 +492,7 @@ export default function DelegationCreditsCard({ societyId }: { societyId: string
             </button>
           </div>
           {backOk && (
-            <p role="status" style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 600, color: '#2A5A3C', margin: '10px 0 0 0' }}>
+            <p role="status" style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 600, color: 'var(--gv-main-mid)', margin: '10px 0 0 0' }}>
               {backOk}
             </p>
           )}

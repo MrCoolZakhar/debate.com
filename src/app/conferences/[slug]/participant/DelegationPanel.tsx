@@ -120,7 +120,7 @@ const ROLE_WORD: Record<RosterRole, string> = {
 };
 
 /** The viewer's own row, the same on every view: a gold edge and "You". */
-const GOLD_EDGE = '#B6871F';
+const GOLD_EDGE = 'var(--gv-accent)';
 
 // ── Member row ───────────────────────────────────────────────────────────────
 // MyMUN's members table in Gavelling's shape (26 Sep 2026): one row per member
@@ -161,8 +161,8 @@ export function RosterRow({ member, pool, swapMode, swapSelectable, swapSelected
       onClick={() => { if (swapMode && swapSelectable) onToggleSwap(); }}
       className="relative flex items-start gap-3 px-3 py-3 rounded-xl transition-colors"
       style={{
-        backgroundColor: swapSelected ? 'rgba(61,122,82,0.08)' : me ? 'rgba(238,217,138,0.16)' : 'transparent',
-        boxShadow: swapSelected ? 'inset 0 0 0 1.5px #1B3828' : me ? `inset 3px 0 0 ${GOLD_EDGE}` : 'none',
+        backgroundColor: swapSelected ? 'color-mix(in srgb, var(--gv-main-light) 8%, transparent)' : me ? 'color-mix(in srgb, var(--gv-accent-light) 16%, transparent)' : 'transparent',
+        boxShadow: swapSelected ? 'inset 0 0 0 1.5px var(--gv-main)' : me ? `inset 3px 0 0 ${GOLD_EDGE}` : 'none',
         opacity: dimmed ? 0.55 : swapMode && !swapSelectable ? 0.45 : 1,
         cursor: swapMode && swapSelectable ? 'pointer' : 'default',
       }}
@@ -219,7 +219,7 @@ export function RosterRow({ member, pool, swapMode, swapSelectable, swapSelected
                 <p className="[overflow-wrap:anywhere]" style={{ fontFamily: OUTFIT, fontSize: 13.5, fontWeight: 700, color: '#1C1410', margin: 0, lineHeight: 1.25 }}>
                   {a.country_name}
                 </p>
-                <p className="[overflow-wrap:anywhere]" style={{ fontFamily: OUTFIT, fontSize: 12, fontWeight: 700, color: '#2A5A3C', margin: '1px 0 0 0', lineHeight: 1.3 }}>
+                <p className="[overflow-wrap:anywhere]" style={{ fontFamily: OUTFIT, fontSize: 12, fontWeight: 700, color: 'var(--gv-main-mid)', margin: '1px 0 0 0', lineHeight: 1.3 }}>
                   {committeeShortWord}
                 </p>
                 {a.committee_abbr && a.committee && a.committee !== a.committee_abbr && (
@@ -249,11 +249,11 @@ export function RosterRow({ member, pool, swapMode, swapSelectable, swapSelected
           className="flex items-center justify-center flex-shrink-0 mt-2.5"
           style={{
             width: 18, height: 18, borderRadius: '9999px',
-            border: `1.5px solid ${swapSelected ? '#1B3828' : '#DDD4C0'}`,
-            backgroundColor: swapSelected ? '#1B3828' : 'transparent',
+            border: `1.5px solid ${swapSelected ? 'var(--gv-main)' : '#DDD4C0'}`,
+            backgroundColor: swapSelected ? 'var(--gv-main)' : 'transparent',
           }}
         >
-          {swapSelected && <span style={{ width: 7, height: 7, borderRadius: '9999px', backgroundColor: '#EED98A' }} />}
+          {swapSelected && <span style={{ width: 7, height: 7, borderRadius: '9999px', backgroundColor: 'var(--gv-accent-light)' }} />}
         </div>
       )}
     </div>
@@ -285,11 +285,11 @@ export function RosterGroup({ title, members, pageSize, page, onPage, empty, ren
         onClick={() => onPage(p + dir)}
         disabled={off}
         aria-label={`${dir < 0 ? 'Previous' : 'Next'} ${title.toLowerCase()}`}
-        className="inline-flex items-center justify-center rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F]"
+        className="inline-flex items-center justify-center rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gv-accent)]"
         // A 44px hit area around the 32px disc; the negative margin keeps the header row's height.
         style={{ width: 44, height: 44, margin: '-6px -3px', padding: 0, border: 'none', background: 'transparent', opacity: off ? 0.35 : 1, cursor: off ? 'default' : 'pointer' }}
       >
-        <span aria-hidden className="inline-flex items-center justify-center rounded-full" style={{ width: 32, height: 32, background: '#FFFFFF', boxShadow: '0 0 0 1px rgba(27,56,40,0.12), 0 2px 6px -2px rgba(27,56,40,0.25)', color: '#1B3828' }}>
+        <span aria-hidden className="inline-flex items-center justify-center rounded-full" style={{ width: 32, height: 32, background: '#FFFFFF', boxShadow: '0 0 0 1px color-mix(in srgb, var(--gv-main) 12%, transparent), 0 2px 6px -2px color-mix(in srgb, var(--gv-main) 25%, transparent)', color: 'var(--gv-main)' }}>
           <Icon size={15} aria-hidden />
         </span>
       </button>
@@ -317,7 +317,7 @@ export function RosterGroup({ title, members, pageSize, page, onPage, empty, ren
       ) : (
         <div className="flex flex-col" style={{ gap: 2 }}>
           {shown.map((m, i) => (
-            <div key={m.application_id} style={i > 0 ? { borderTop: '1px solid rgba(27,56,40,0.07)', paddingTop: 2 } : undefined}>
+            <div key={m.application_id} style={i > 0 ? { borderTop: '1px solid color-mix(in srgb, var(--gv-main) 7%, transparent)', paddingTop: 2 } : undefined}>
               {renderRow(m)}
             </div>
           ))}
@@ -351,7 +351,7 @@ function SwapResultModal({ info, onClose }: { info: SwapResultInfo; onClose: () 
           width: 400, maxWidth: '90vw',
           backgroundColor: NEU.surface,
           borderRadius: 24,
-          boxShadow: `${NEU.out}, 0 24px 60px rgba(27,56,40,0.28)`,
+          boxShadow: `${NEU.out}, 0 24px 60px color-mix(in srgb, var(--gv-main) 28%, transparent)`,
         }}
       >
         <p className="text-base" style={{ color: NEU.ink, fontWeight: 800, fontFamily: OUTFIT }}>{info.title}</p>
@@ -703,8 +703,8 @@ export default function DelegationPanel({ conferenceId, conferenceSlug, societyI
         <button
           type="button"
           onClick={() => setImportOpen(true)}
-          className="inline-flex items-center gap-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[#B6871F]"
-          style={{ minHeight: 44, padding: '0 16px', borderRadius: 10, border: 'none', background: FOREST_GRADIENT, color: '#FFFFFF', fontFamily: OUTFIT, fontSize: 14, fontWeight: 700, cursor: 'pointer', boxShadow: '0 6px 16px -8px rgba(27,56,40,0.55)' }}
+          className="inline-flex items-center gap-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[var(--gv-accent)]"
+          style={{ minHeight: 44, padding: '0 16px', borderRadius: 10, border: 'none', background: FOREST_GRADIENT, color: '#FFFFFF', fontFamily: OUTFIT, fontSize: 14, fontWeight: 700, cursor: 'pointer', boxShadow: '0 6px 16px -8px color-mix(in srgb, var(--gv-main) 55%, transparent)' }}
         >
           <UserPlus size={16} strokeWidth={2.4} aria-hidden />
           Import delegates
@@ -738,8 +738,8 @@ export default function DelegationPanel({ conferenceId, conferenceSlug, societyI
               <button
                 type="button"
                 onClick={onOpenMembers}
-                className="focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] rounded"
-                style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontFamily: OUTFIT, fontSize: 14, fontWeight: 800, color: '#1B3828', textDecoration: 'underline', textUnderlineOffset: 3 }}
+                className="focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gv-accent)] rounded"
+                style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontFamily: OUTFIT, fontSize: 14, fontWeight: 800, color: 'var(--gv-main)', textDecoration: 'underline', textUnderlineOffset: 3 }}
               >
                 See every member
               </button>
@@ -773,7 +773,7 @@ export default function DelegationPanel({ conferenceId, conferenceSlug, societyI
       <div className="flex flex-col gap-3" style={{ ...cardStyle, padding: '18px 24px' }}>
         {pendingSwapRequest && (
           <div className="flex items-start gap-2.5">
-            <ArrowLeftRight size={16} strokeWidth={STROKE} style={{ color: '#8A6614', flexShrink: 0, marginTop: 2 }} aria-hidden />
+            <ArrowLeftRight size={16} strokeWidth={STROKE} style={{ color: 'color-mix(in srgb, var(--gv-accent) 72%, #1C1410)', flexShrink: 0, marginTop: 2 }} aria-hidden />
             <div>
               {/* Deliberately NOT CV-linked: the two names come from the
                   request's metadata as bare strings with no user id. */}
@@ -812,14 +812,14 @@ export default function DelegationPanel({ conferenceId, conferenceSlug, societyI
                 type="button"
                 onClick={() => { setSwapMode(false); setSwapSelection([]); setSwapError(''); }}
                 aria-label="Stop swapping"
-                className="focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] flex-shrink-0 inline-flex items-center justify-center rounded-full"
+                className="focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gv-accent)] flex-shrink-0 inline-flex items-center justify-center rounded-full"
                 style={{ color: '#6B5F52', width: 44, height: 44, margin: -6, background: 'none', border: 'none', cursor: 'pointer' }}
               >
                 <X size={18} strokeWidth={STROKE} aria-hidden />
               </button>
             </div>
             {swapA && swapB && (
-              <div className="rounded-xl px-3.5 py-3 mt-3" style={{ backgroundColor: 'rgba(27,56,40,0.05)' }}>
+              <div className="rounded-xl px-3.5 py-3 mt-3" style={{ backgroundColor: 'color-mix(in srgb, var(--gv-main) 5%, transparent)' }}>
                 {/* Deliberately NOT CV-linked: swapSelection is local state, so
                     navigating away to a CV discards it. */}
                 <p className="text-[14px] mb-2.5 [overflow-wrap:anywhere]" style={{ color: '#1C1410', fontFamily: OUTFIT, fontWeight: 500 }}>

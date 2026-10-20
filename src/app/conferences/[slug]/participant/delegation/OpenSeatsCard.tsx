@@ -28,7 +28,7 @@ export function OpenSeatsCard({ seats: read, societyId }: { seats: OpenSeat[]; s
           <div
             key={`${s.allocation_id ?? ''}-${s.conference_committee_id}-${s.seat}-${i}`}
             className="flex items-center gap-2.5 min-w-0"
-            style={{ padding: '10px 12px', borderRadius: 12, border: '1.5px dashed rgba(27,56,40,0.22)' }}
+            style={{ padding: '10px 12px', borderRadius: 12, border: '1.5px dashed color-mix(in srgb, var(--gv-main) 22%, transparent)' }}
           >
             <CircleFlag code={s.country_code} logoUrl={s.country_logo_url} label={s.country_name} size={22} decorative />
             <span className="flex-1 min-w-0 [overflow-wrap:anywhere]" style={{ fontFamily: FONT, fontSize: 14, fontWeight: 500, color: INK }}>{s.country_name}</span>

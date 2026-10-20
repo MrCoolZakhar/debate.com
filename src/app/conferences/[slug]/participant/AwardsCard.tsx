@@ -29,6 +29,7 @@ import {
 } from '@/lib/awardsService';
 import { loadConferenceScoreboard, formatSpeakingTime, type ScoreboardDelegateRow } from '@/lib/conferenceScoreboard';
 import { SectionCard, OUTFIT } from './shared';
+import { CARD_TITLE_STYLE } from './dashboardKit';
 
 // ── Props ────────────────────────────────────────────────────────────────────
 
@@ -59,16 +60,16 @@ export interface AwardsCardAllocation {
 // ── Small helpers ────────────────────────────────────────────────────────────
 
 const TIER_DOT: Record<AwardTier, string> = {
-  gold: 'linear-gradient(135deg, #EED98A, #B6871F)',
+  gold: 'linear-gradient(135deg, var(--gv-accent-light), var(--gv-accent))',
   silver: 'linear-gradient(135deg, #D6DCE4, #8C98A8)',
   bronze: 'linear-gradient(135deg, #CE9668, #96603A)',
-  special: 'linear-gradient(135deg, #3F7A52, #1B3828)',
+  special: 'linear-gradient(135deg, #3F7A52, var(--gv-main))',
 };
 
 const PAPER_STYLES: Record<string, { bg: string; color: string }> = {
-  submitted: { bg: 'rgba(238,217,138,0.2)', color: '#B8844A' },
+  submitted: { bg: 'color-mix(in srgb, var(--gv-accent-light) 20%, transparent)', color: '#B8844A' },
   reviewed: { bg: 'rgba(154,138,120,0.15)', color: '#6E5F4E' },
-  approved: { bg: 'rgba(61,122,82,0.12)', color: '#3D7A52' },
+  approved: { bg: 'color-mix(in srgb, var(--gv-main-light) 12%, transparent)', color: 'var(--gv-main-light)' },
   rejected: { bg: 'rgba(139,32,32,0.1)', color: '#8B2020' },
 };
 
@@ -467,9 +468,7 @@ export default function AwardsCard({ conferenceId, conferenceSlug, committee, co
   return (
     <SectionCard id="awards">
       <div className="flex items-start justify-between gap-3 flex-wrap">
-        <p style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: '9px', letterSpacing: '0.14em', color: '#B6871F', margin: 0 }}>
-          AWARDS
-        </p>
+        <h3 style={CARD_TITLE_STYLE}>Awards</h3>
         <StatePill state={state} />
       </div>
 
@@ -492,7 +491,7 @@ export default function AwardsCard({ conferenceId, conferenceSlug, committee, co
           </p>
         )}
         {state === 'open' && cd && (
-          <p className="mt-1.5" style={{ fontFamily: OUTFIT, fontSize: 12, fontWeight: 700, letterSpacing: '0.04em', color: cd.past ? '#8B2020' : '#2A5A3C', margin: '6px 0 0 0' }}>
+          <p className="mt-1.5" style={{ fontFamily: OUTFIT, fontSize: 12, fontWeight: 700, letterSpacing: '0.04em', color: cd.past ? '#8B2020' : 'var(--gv-main-mid)', margin: '6px 0 0 0' }}>
             {cd.past ? 'You are past the deadline. You can still submit, but tell the secretariat.' : cd.label}
           </p>
         )}
@@ -507,7 +506,7 @@ export default function AwardsCard({ conferenceId, conferenceSlug, committee, co
               type="button"
               onClick={suggest}
               className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 focus:outline-none"
-              style={{ border: '1px solid rgba(182,135,31,0.45)', backgroundColor: 'rgba(238,217,138,0.18)', color: '#7A5A20', fontFamily: OUTFIT, fontSize: 11, fontWeight: 700, cursor: 'pointer' }}
+              style={{ border: '1px solid color-mix(in srgb, var(--gv-accent) 45%, transparent)', backgroundColor: 'color-mix(in srgb, var(--gv-accent-light) 18%, transparent)', color: '#7A5A20', fontFamily: OUTFIT, fontSize: 11, fontWeight: 700, cursor: 'pointer' }}
             >
               <Sparkles size={12} /> Suggest from the record
             </button>
@@ -544,7 +543,7 @@ export default function AwardsCard({ conferenceId, conferenceSlug, committee, co
                   <div
                     key={slotKey}
                     className="rounded-xl px-3.5 py-3"
-                    style={{ border: `1px solid ${suggested ? 'rgba(182,135,31,0.45)' : 'rgba(221,212,192,0.8)'}`, backgroundColor: suggested ? 'rgba(238,217,138,0.10)' : 'rgba(27,56,40,0.025)' }}
+                    style={{ border: `1px solid ${suggested ? 'color-mix(in srgb, var(--gv-accent) 45%, transparent)' : 'rgba(221,212,192,0.8)'}`, backgroundColor: suggested ? 'color-mix(in srgb, var(--gv-accent-light) 10%, transparent)' : 'color-mix(in srgb, var(--gv-main) 2.5%, transparent)' }}
                   >
                     <div className="flex items-center gap-2.5 flex-wrap">
                       <TierDot tier={slot.tier} />
@@ -552,7 +551,7 @@ export default function AwardsCard({ conferenceId, conferenceSlug, committee, co
                         {slot.label}{slot.perCommittee > 1 ? ` ${i + 1}` : ''}
                       </span>
                       {suggested && (
-                        <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5" style={{ backgroundColor: 'rgba(238,217,138,0.35)', color: '#7A5A20', fontFamily: OUTFIT, fontSize: 9.5, fontWeight: 700, letterSpacing: '0.08em' }}>
+                        <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5" style={{ backgroundColor: 'color-mix(in srgb, var(--gv-accent-light) 35%, transparent)', color: '#7A5A20', fontFamily: OUTFIT, fontSize: 9.5, fontWeight: 700, letterSpacing: '0.08em' }}>
                           SUGGESTED
                           <button
                             type="button"
@@ -567,7 +566,7 @@ export default function AwardsCard({ conferenceId, conferenceSlug, committee, co
                         </span>
                       )}
                       {!editable && existing && ranks.get(existing.country_name ?? '') && (
-                        <span style={{ color: '#1B3828', fontFamily: OUTFIT, fontSize: 12, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
+                        <span style={{ color: 'var(--gv-main)', fontFamily: OUTFIT, fontSize: 12, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
                           #{ranks.get(existing.country_name ?? '')} on record
                         </span>
                       )}
@@ -640,7 +639,7 @@ export default function AwardsCard({ conferenceId, conferenceSlug, committee, co
       {/* Footer */}
       {!rowsLoading && slots.length > 0 && (state === 'open' || state === 'returned' || state === 'submitted') && (
         <div className="mt-5 pt-4 flex items-center justify-between gap-3 flex-wrap" style={{ borderTop: '1px solid rgba(221,212,192,0.55)' }}>
-          <span style={{ fontFamily: OUTFIT, fontSize: 12, color: completeness.complete ? '#2A5A3C' : '#6B5F52', fontVariantNumeric: 'tabular-nums' }}>
+          <span style={{ fontFamily: OUTFIT, fontSize: 12, color: completeness.complete ? 'var(--gv-main-mid)' : '#6B5F52', fontVariantNumeric: 'tabular-nums' }}>
             {completeness.filled} of {completeness.total} slots filled
             {completeness.over.length > 0 && ` (over quota: ${completeness.over.join(', ')})`}
           </span>
@@ -651,11 +650,11 @@ export default function AwardsCard({ conferenceId, conferenceSlug, committee, co
               disabled={lifecycleBusy || rows.length === 0}
               className="inline-flex items-center gap-2 rounded-xl px-4 py-2.5 focus:outline-none transition-colors"
               style={{
-                backgroundColor: '#1B3828', color: '#EED98A', fontFamily: OUTFIT, fontWeight: 800, fontSize: 12,
+                backgroundColor: 'var(--gv-main)', color: 'var(--gv-on-main)', fontFamily: OUTFIT, fontWeight: 800, fontSize: 12,
                 border: 'none', cursor: lifecycleBusy || rows.length === 0 ? 'not-allowed' : 'pointer', opacity: lifecycleBusy || rows.length === 0 ? 0.55 : 1,
               }}
-              onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
-              onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
+              onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--gv-main-mid)'; }}
+              onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--gv-main)'; }}
             >
               <Send size={13} /> Send Awards
             </button>
@@ -670,7 +669,7 @@ export default function AwardsCard({ conferenceId, conferenceSlug, committee, co
                 border: '1px solid #DDD4C0', cursor: lifecycleBusy ? 'not-allowed' : 'pointer', opacity: lifecycleBusy ? 0.55 : 1,
               }}
             >
-              {justSubmitted ? <Check size={13} style={{ color: '#3D7A52' }} /> : <Undo2 size={13} />} {justSubmitted ? 'Submitted' : 'Withdraw'}
+              {justSubmitted ? <Check size={13} style={{ color: 'var(--gv-main-light)' }} /> : <Undo2 size={13} />} {justSubmitted ? 'Submitted' : 'Withdraw'}
             </button>
           )}
         </div>
@@ -742,7 +741,7 @@ export default function AwardsCard({ conferenceId, conferenceSlug, committee, co
                                   {r.status === 'absent' && <span style={{ fontSize: 10, color: '#8B2020', fontWeight: 700 }}>ABSENT</span>}
                                 </span>
                               </td>
-                              <td style={{ ...num, fontWeight: 700, color: '#1B3828' }}>{Math.round(r.headline)}</td>
+                              <td style={{ ...num, fontWeight: 700, color: 'var(--gv-main)' }}>{Math.round(r.headline)}</td>
                               <td style={num}>{r.gslSpeeches + r.caucusSpeeches}</td>
                               <td style={num}>{formatSpeakingTime(r.speakingSeconds)}</td>
                               <td style={num}>{r.workingPapers}/{r.draftResolutions}</td>
@@ -770,7 +769,7 @@ export default function AwardsCard({ conferenceId, conferenceSlug, committee, co
 
       {/* Decision Guide (prompt 134: was How chairs decide), collapsed by default */}
       {(
-        <div className="mt-6 rounded-xl" style={{ border: '1px solid rgba(221,212,192,0.8)', backgroundColor: 'rgba(238,217,138,0.08)' }}>
+        <div className="mt-6 rounded-xl" style={{ border: '1px solid rgba(221,212,192,0.8)', backgroundColor: 'color-mix(in srgb, var(--gv-accent-light) 8%, transparent)' }}>
           <button
             type="button"
             onClick={toggleGuide}
@@ -786,7 +785,7 @@ export default function AwardsCard({ conferenceId, conferenceSlug, committee, co
               <ul className="m-0 p-0" style={{ listStyle: 'none' }}>
                 {GUIDE_DIMENSIONS.map(d => (
                   <li key={d.name} className="flex items-baseline gap-2 py-0.5">
-                    <span style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: 12.5, color: '#1B3828', minWidth: 96 }}>{d.name}</span>
+                    <span style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: 12.5, color: 'var(--gv-main)', minWidth: 96 }}>{d.name}</span>
                     <span style={{ fontFamily: OUTFIT, fontSize: 12.5, color: '#6B5F52' }}>{d.text}</span>
                   </li>
                 ))}
@@ -799,7 +798,7 @@ export default function AwardsCard({ conferenceId, conferenceSlug, committee, co
                 target="_blank"
                 rel="noreferrer"
                 className="inline-flex items-center gap-1 mt-2"
-                style={{ fontFamily: OUTFIT, fontSize: 12, fontWeight: 700, color: '#2A5A3C', textDecoration: 'underline', textUnderlineOffset: 3 }}
+                style={{ fontFamily: OUTFIT, fontSize: 12, fontWeight: 700, color: 'var(--gv-main-mid)', textDecoration: 'underline', textUnderlineOffset: 3 }}
               >
                 Full guide <ExternalLink size={11} />
               </a>
@@ -811,7 +810,7 @@ export default function AwardsCard({ conferenceId, conferenceSlug, committee, co
       {state === 'published' && (
         <p className="mt-4" style={{ fontFamily: OUTFIT, fontSize: 12, color: '#6B5F52', margin: '16px 0 0 0' }}>
           The honour roll is public at{' '}
-          <a href={`/conferences/${conferenceSlug}/awards`} style={{ color: '#2A5A3C', fontWeight: 700, textDecoration: 'underline', textUnderlineOffset: 3 }}>
+          <a href={`/conferences/${conferenceSlug}/awards`} style={{ color: 'var(--gv-main-mid)', fontWeight: 700, textDecoration: 'underline', textUnderlineOffset: 3 }}>
             /conferences/{conferenceSlug}/awards
           </a>.
         </p>
@@ -827,7 +826,7 @@ function TierDot({ tier }: { tier: AwardTier }) {
     <span
       aria-hidden
       className="flex-shrink-0 rounded-full"
-      style={{ width: 10, height: 10, background: TIER_DOT[tier], boxShadow: '0 1px 2px rgba(27,56,40,0.25)' }}
+      style={{ width: 10, height: 10, background: TIER_DOT[tier], boxShadow: '0 1px 2px color-mix(in srgb, var(--gv-main) 25%, transparent)' }}
     />
   );
 }
@@ -835,11 +834,11 @@ function TierDot({ tier }: { tier: AwardTier }) {
 function StatePill({ state }: { state: SlateState }) {
   const style: Record<SlateState, { bg: string; color: string; Icon: typeof Lock | null }> = {
     off: { bg: 'transparent', color: '#9A8A78', Icon: null },
-    open: { bg: 'rgba(238,217,138,0.35)', color: '#8A6614', Icon: Clock },
+    open: { bg: 'color-mix(in srgb, var(--gv-accent-light) 35%, transparent)', color: '#8A6614', Icon: Clock },
     returned: { bg: 'rgba(139,32,32,0.1)', color: '#8B2020', Icon: Undo2 },
-    submitted: { bg: 'rgba(61,122,82,0.13)', color: '#2A5A3C', Icon: Send },
-    approved: { bg: 'rgba(27,56,40,0.12)', color: '#1B3828', Icon: Lock },
-    published: { bg: 'rgba(238,217,138,0.5)', color: '#7A5A20', Icon: Megaphone },
+    submitted: { bg: 'color-mix(in srgb, var(--gv-main-light) 13%, transparent)', color: 'var(--gv-main-mid)', Icon: Send },
+    approved: { bg: 'color-mix(in srgb, var(--gv-main) 12%, transparent)', color: 'var(--gv-main)', Icon: Lock },
+    published: { bg: 'color-mix(in srgb, var(--gv-accent-light) 50%, transparent)', color: '#7A5A20', Icon: Megaphone },
   };
   const s = style[state];
   const label: Record<SlateState, string> = {

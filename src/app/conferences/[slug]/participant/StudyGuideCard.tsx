@@ -9,6 +9,7 @@ import { FileText, Download } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { SectionCard, OUTFIT } from './shared';
+import { CardHeading, INK_SOFT } from './dashboardKit';
 import Loader from '@/components/Loader';
 
 interface StudyGuide {
@@ -58,15 +59,13 @@ export default function StudyGuideCard({ committeeId }: { committeeId: string | 
 
   return (
     <SectionCard>
-      <p className="mb-3" style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: '9px', letterSpacing: '0.14em', color: '#B6871F', margin: '0 0 12px 0' }}>
-        STUDY GUIDE
-      </p>
+      <CardHeading title="Study Guide" />
       {loading ? (
         <div className="flex justify-center py-6">
           <Loader size={36} />
         </div>
       ) : !committeeId || guides.length === 0 ? (
-        <p className="text-sm" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>
+        <p style={{ color: INK_SOFT, fontFamily: OUTFIT, fontSize: 14, lineHeight: 1.5, margin: 0 }}>
           {scheduled ? `Releases ${fmtDate(releaseAt!)}.` : "The study guide hasn't been released yet."}
         </p>
       ) : (
@@ -79,18 +78,18 @@ export default function StudyGuideCard({ committeeId }: { committeeId: string | 
               rel="noopener noreferrer"
               className="flex items-center gap-3.5 rounded-2xl px-4 py-3 transition-colors"
               style={{ border: '1px solid rgba(221,212,192,0.7)', backgroundColor: 'rgba(237,231,216,0.25)', textDecoration: 'none' }}
-              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.05)'; }}
+              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'color-mix(in srgb, var(--gv-main) 5%, transparent)'; }}
               onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(237,231,216,0.25)'; }}
             >
               <div
                 className="flex-shrink-0 flex items-center justify-center"
-                style={{ width: '38px', height: '38px', borderRadius: '11px', backgroundColor: 'rgba(27,56,40,0.07)' }}
+                style={{ width: '38px', height: '38px', borderRadius: '11px', backgroundColor: 'color-mix(in srgb, var(--gv-main) 7%, transparent)' }}
               >
-                <FileText size={16} style={{ color: '#1B3828' }} />
+                <FileText size={16} style={{ color: 'var(--gv-main)' }} />
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold" title={sg.title} style={{ color: '#1C1410', fontFamily: OUTFIT, overflowWrap: 'anywhere', margin: 0 }}>{sg.title}</p>
-                <p className="text-[11px] mt-0.5" style={{ color: '#9A8A78', fontFamily: OUTFIT, fontWeight: 500, margin: 0 }}>{sg.file_name}</p>
+                <p title={sg.title} style={{ color: '#1C1410', fontFamily: OUTFIT, fontSize: 15.5, fontWeight: 800, lineHeight: 1.3, overflowWrap: 'anywhere', margin: 0 }}>{sg.title}</p>
+                <p style={{ color: INK_SOFT, fontFamily: OUTFIT, fontSize: 13, lineHeight: 1.45, margin: '3px 0 0', overflowWrap: 'anywhere' }}>{sg.file_name}</p>
               </div>
               <Download size={15} style={{ color: '#9A8A78', flexShrink: 0 }} />
             </a>

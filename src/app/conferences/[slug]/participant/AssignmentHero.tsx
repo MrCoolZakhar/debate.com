@@ -37,8 +37,8 @@ export default function AssignmentHero({ committee, myAllocation, conferenceStar
       <DashCard>
         <CardHeading title="Your assignment" stackedHide />
         <div className="flex items-center gap-3">
-          <span className="inline-flex items-center justify-center flex-shrink-0" style={{ width: 44, height: 44, borderRadius: 999, backgroundColor: 'rgba(61,122,82,0.12)' }}>
-            <Compass size={20} strokeWidth={2.2} style={{ color: '#1B3828', fill: 'rgba(238,217,138,0.5)' }} aria-hidden />
+          <span className="inline-flex items-center justify-center flex-shrink-0" style={{ width: 44, height: 44, borderRadius: 999, backgroundColor: 'color-mix(in srgb, var(--gv-main-light) 12%, transparent)' }}>
+            <Compass size={20} strokeWidth={2.2} style={{ color: 'var(--gv-main)', fill: 'color-mix(in srgb, var(--gv-accent-light) 50%, transparent)' }} aria-hidden />
           </span>
           <p style={{ fontFamily: OUTFIT, fontSize: 14, color: INK_SOFT, margin: 0, lineHeight: 1.5 }}>
             Your committee and country appear here once the organisers assign them.
@@ -65,7 +65,7 @@ export default function AssignmentHero({ committee, myAllocation, conferenceStar
             label={myAllocation.country_name}
             size={76}
             loading="eager"
-            style={{ boxShadow: '0 8px 18px -8px rgba(27,56,40,0.45)' }}
+            style={{ boxShadow: '0 8px 18px -8px color-mix(in srgb, var(--gv-main) 45%, transparent)' }}
           />
           <div className="min-w-0">
             <p style={{ fontFamily: OUTFIT, fontSize: 12, fontWeight: 700, color: INK_SOFT, margin: '0 0 2px 0' }}>Representing</p>

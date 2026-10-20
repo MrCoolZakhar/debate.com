@@ -113,7 +113,7 @@ export default function PledgeInvoicingCard({
 
   return (
     <SectionCard>
-      <p className="mb-4" style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: '9px', letterSpacing: '0.14em', color: '#B6871F', margin: '0 0 16px 0' }}>
+      <p className="mb-4" style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: '9px', letterSpacing: '0.14em', color: 'var(--gv-accent)', margin: '0 0 16px 0' }}>
         DELEGATION FINANCIAL AID
       </p>
 
@@ -125,7 +125,7 @@ export default function PledgeInvoicingCard({
         <button
           type="button"
           onClick={() => setAidModalOpen(true)}
-          className="text-xs font-bold text-left focus:outline-none hover:text-[#1B3828]"
+          className="text-xs font-bold text-left focus:outline-none hover:text-[var(--gv-main)]"
           style={{ color: '#6E5F4E', fontFamily: OUTFIT, textDecoration: 'underline', textUnderlineOffset: 3, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
         >
           Request financial aid for your delegation
@@ -140,7 +140,7 @@ export default function PledgeInvoicingCard({
       ) : delegationAid.status === 'approved' ? (
         <p
           className="text-[13px] rounded-xl px-4 py-3"
-          style={{ color: '#2A5A3C', fontFamily: OUTFIT, backgroundColor: 'rgba(61,122,82,0.1)', border: '1px solid rgba(61,122,82,0.24)', lineHeight: 1.6 }}
+          style={{ color: 'var(--gv-main-mid)', fontFamily: OUTFIT, backgroundColor: 'color-mix(in srgb, var(--gv-main-light) 10%, transparent)', border: '1px solid color-mix(in srgb, var(--gv-main-light) 24%, transparent)', lineHeight: 1.6 }}
         >
           Delegation aid approved. {formatFee(delegationAid.granted_amount ?? 0, currency)} applied across your delegation&apos;s spots.
         </p>
@@ -231,8 +231,8 @@ export default function PledgeInvoicingCard({
                 disabled={aidSubmitting}
                 className="flex-1 rounded-xl py-2.5 font-bold text-sm focus:outline-none transition-colors"
                 style={{
-                  backgroundColor: aidSubmitting ? '#DDD4C0' : '#1B3828',
-                  color: aidSubmitting ? '#9A8A78' : '#EED98A',
+                  backgroundColor: aidSubmitting ? '#DDD4C0' : 'var(--gv-main)',
+                  color: aidSubmitting ? '#9A8A78' : 'var(--gv-on-main)',
                   fontFamily: OUTFIT, cursor: aidSubmitting ? 'default' : 'pointer',
                 }}
               >

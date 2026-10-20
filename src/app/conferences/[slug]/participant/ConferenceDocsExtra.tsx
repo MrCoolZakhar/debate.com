@@ -20,9 +20,9 @@ import { getAuthedClient, getFreshAuthedClient } from '@/lib/supabase-auth';
 import { PurchaseShell, PURCHASE_CSS } from '@/components/purchase/purchaseKit';
 import { friendlyError } from '@/lib/friendlyError';
 import { notifyOk } from '@/lib/appNotify';
-import { DashCard as YouCard, CardHeading } from './dashboardKit';
 import { STORE_CSS } from '@/app/manage/[slug]/store/storeKit';
-import { DASH_CSS, IconDisc, TINT_GOLD, TINT_GREEN, INK, INK_SOFT, FOREST, DANGER } from '@/app/manage/[slug]/financials/dashboardKit';
+import { DASH_CSS, IconDisc, INK, INK_SOFT, DANGER } from '@/app/manage/[slug]/financials/dashboardKit';
+import { DashCard as YouCard, CardHeading, FOREST, TINT_ACCENT as TINT_GOLD, TINT_MAIN as TINT_GREEN, CONF_BUTTON_CSS } from './dashboardKit';
 import {
   CONFERENCE_DOC_MAX_BYTES, DOC_FILE_ACCEPT, DOCUMENT_RETURNS_BUCKET,
   docMimeFor, docTypeLabel, documentReturnPath, fetchMyConferenceDocuments, formatDocSize, isAllowedDocFile,
@@ -32,7 +32,7 @@ import {
 
 const RETURN_LINK_SECONDS = 300;
 const GOLD_TEXT = '#8A6410';
-const GREEN_TEXT = '#2A5A3C';
+const GREEN_TEXT = 'var(--gv-main-mid)';
 
 export type MyDocsState =
   | { status: 'loading' }
@@ -74,7 +74,7 @@ export function requiredOutstanding(docs: MyConferenceDoc[]): MyConferenceDoc[] 
 
 const CSS = `
 .gv-cdx{display:flex;flex-direction:column;gap:10px}
-.gv-cdx-row{border-radius:16px;background:#FAF8F3;box-shadow:inset 0 0 0 1px rgba(27,56,40,0.06);padding:12px 16px}
+.gv-cdx-row{border-radius:16px;background:#FAF8F3;box-shadow:inset 0 0 0 1px color-mix(in srgb, var(--gv-main) 6%, transparent);padding:12px 16px}
 .gv-cdx-top{display:flex;align-items:flex-start;gap:14px}
 .gv-cdx-main{flex:1 1 auto;min-width:0}
 .gv-cdx-title{margin:0;font-size:15.5px;font-weight:800;line-height:1.3;color:${INK};overflow-wrap:anywhere}
@@ -84,7 +84,7 @@ const CSS = `
 .gv-cdx-link:disabled{opacity:0.6;cursor:default}
 .gv-cdx-link:focus{outline:none}
 .gv-cdx-link:focus-visible{outline:2px solid ${FOREST};outline-offset:2px;border-radius:4px}
-.gv-cdx-back{margin-top:12px;padding:12px 14px;border-radius:12px;background:#FFFFFF;box-shadow:inset 0 0 0 1px rgba(27,56,40,0.08);display:flex;flex-direction:column;gap:8px}
+.gv-cdx-back{margin-top:12px;padding:12px 14px;border-radius:12px;background:#FFFFFF;box-shadow:inset 0 0 0 1px color-mix(in srgb, var(--gv-main) 8%, transparent);display:flex;flex-direction:column;gap:8px}
 .gv-cdx-due{display:flex;flex-wrap:wrap;gap:4px 12px;font-size:13.5px;color:${INK}}
 .gv-cdx-due b{font-weight:800}
 .gv-cdx-state{display:flex;align-items:flex-start;gap:8px;font-size:14px;line-height:1.45;font-weight:600;overflow-wrap:anywhere}
@@ -95,11 +95,11 @@ const CSS = `
 .gv-buy-panel.gv-cdx-pop{max-width:520px;min-height:0}
 .gv-buy-panel.gv-cdx-pop .gv-buy-body{flex-direction:column;min-height:0}
 @media (max-width:743px){.gv-buy-panel.gv-cdx-pop{height:auto;max-height:92dvh;margin-top:auto;border-radius:22px 22px 0 0}}
-.gv-cdx-drop{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;width:100%;min-height:132px;padding:18px;border-radius:14px;border:2px dashed rgba(27,56,40,0.28);background:#FAF8F3;color:${INK};font-family:inherit;cursor:pointer;text-align:center}
+.gv-cdx-drop{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;width:100%;min-height:132px;padding:18px;border-radius:14px;border:2px dashed color-mix(in srgb, var(--gv-main) 28%, transparent);background:#FAF8F3;color:${INK};font-family:inherit;cursor:pointer;text-align:center}
 .gv-cdx-drop:hover,.gv-cdx-drop[data-over="true"]{border-color:${FOREST};background:#F6F3EC}
 .gv-cdx-drop:focus{outline:none}
 .gv-cdx-drop:focus-visible{outline:2px solid ${FOREST};outline-offset:2px}
-.gv-cdx-chosen{display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:14px;background:rgba(61,122,82,0.08)}
+.gv-cdx-chosen{display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:14px;background:color-mix(in srgb, var(--gv-main-light) 8%, transparent)}
 `;
 
 function docIcon(kind: string) {
@@ -153,6 +153,7 @@ export default function ConferenceDocsExtra({ conferenceId, data, onChanged }: {
     <YouCard className="gv-st">
       <style>{STORE_CSS}</style>
       <style>{DASH_CSS}</style>
+      <style>{CONF_BUTTON_CSS}</style>
       <style>{CSS}</style>
       <CardHeading title="Conference Documents" stackedHide />
       <ul className="gv-cdx" style={{ listStyle: 'none', margin: 0, padding: 0 }}>
@@ -248,7 +249,7 @@ function SendBackBlock({ doc, viewing, onView, onSend }: {
       {/* A new copy can always be sent, even after it was accepted (prompt 130). */}
       {doc.can_send_back && (
         <div className="gv-cdx-actions">
-          <button type="button" className={`gv-st-btn ${state === 'submitted' ? 'gv-st-outline' : 'gv-st-forest'}`} onClick={onSend}>
+          <button type="button" className={`gv-st-btn ${state === 'submitted' ? 'gv-st-outline' : 'gv-cf-main'}`} onClick={onSend}>
             {state === 'none' ? 'Send it back' : state === 'submitted' ? 'Replace' : 'Send a new copy'}
           </button>
         </div>
@@ -303,6 +304,7 @@ function SendBackPopup({ conferenceId, doc, onClose, onSent }: {
       <style>{PURCHASE_CSS}</style>
       <style>{STORE_CSS}</style>
       <style>{DASH_CSS}</style>
+      <style>{CONF_BUTTON_CSS}</style>
       <style>{CSS}</style>
       <PurchaseShell tone="light" label="Send it back" onClose={() => { if (!busyRef.current) onClose(); }} panelClass="gv-cdx-pop" testId="document-send-back">
         <div className="gv-fd-pop gv-st" style={{ overflowY: 'auto' }}>
@@ -347,7 +349,7 @@ function SendBackPopup({ conferenceId, doc, onClose, onSent }: {
           )}
 
           <div className="gv-fd-footbar">
-            <button type="button" className="gv-st-btn gv-st-forest" disabled={!file || sending} onClick={send}>
+            <button type="button" className="gv-st-btn gv-cf-main" disabled={!file || sending} onClick={send}>
               {sending ? 'Sending' : 'Send'}
             </button>
             <button type="button" className="gv-st-btn gv-st-outline" disabled={sending} onClick={onClose}>Cancel</button>
@@ -365,17 +367,18 @@ export function DocsRequiredNotice({ conferenceName, docs, onGo }: {
 }) {
   if (docs.length === 0) return null;
   const overdue = docs.some(d => d.overdue);
-  const edge = overdue ? DANGER : '#B6871F';
+  const edge = overdue ? DANGER : 'var(--gv-accent)';
   return (
     <div
       role="status"
       className="gv-st"
       style={{
-        marginTop: 14, padding: '14px 16px', borderRadius: 16, background: overdue ? 'rgba(139,32,32,0.06)' : 'rgba(238,217,138,0.22)',
+        marginTop: 14, padding: '14px 16px', borderRadius: 16, background: overdue ? 'rgba(139,32,32,0.06)' : 'color-mix(in srgb, var(--gv-accent-light) 22%, transparent)',
         boxShadow: `inset 3px 0 0 ${edge}`, display: 'flex', flexDirection: 'column', gap: 10,
       }}
     >
       <style>{STORE_CSS}</style>
+      <style>{CONF_BUTTON_CSS}</style>
       <p style={{ margin: 0, fontSize: 15, fontWeight: 800, color: INK, lineHeight: 1.4, overflowWrap: 'anywhere' }}>
         {conferenceName} needs {docs.length} {docs.length === 1 ? 'document' : 'documents'} back from you
       </p>
@@ -388,7 +391,7 @@ export function DocsRequiredNotice({ conferenceName, docs, onGo }: {
         ))}
       </ul>
       <div>
-        <button type="button" className="gv-st-btn gv-st-forest" style={{ minHeight: 40, padding: '0 16px', fontSize: 14 }} onClick={onGo}>
+        <button type="button" className="gv-st-btn gv-cf-main" style={{ minHeight: 40, padding: '0 16px', fontSize: 14 }} onClick={onGo}>
           Go to documents
         </button>
       </div>

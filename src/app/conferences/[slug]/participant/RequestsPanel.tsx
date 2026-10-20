@@ -13,7 +13,8 @@ import type { LucideIcon } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient, getFreshAuthedClient } from '@/lib/supabase-auth';
 import { notifyOrganizersOfRequest } from '@/lib/emailEvents';
-import { NEU, NEU_GRADIENTS, OUTFIT, NeuCard, NeuInset, NeuIconDisc, NeuButton } from '@/components/neu';
+import { NEU, NEU_GRADIENTS, OUTFIT, NeuInset, NeuIconDisc, NeuButton } from '@/components/neu';
+import { DashCard, CARD_TITLE_STYLE, GOLD_DEEP } from './dashboardKit';
 import { FilterPopoverShell, FilterGroup, FilterHeading, toggleIn } from '@/components/FilterPopover';
 import { DatePicker } from '@/components/DatePicker';
 import Loader from '@/components/Loader';
@@ -77,13 +78,13 @@ function fmtTime(iso: string): string {
 // Same kind/status colour language as the organizer inbox (communications/page.tsx).
 // Drawn as an icon plus a plain word (CLAUDE.md §8), never a pill.
 const KIND_CHIP: Record<string, { label: string; color: string; icon: LucideIcon }> = {
-  question: { label: 'Question', color: '#1B3828', icon: HelpCircle },
+  question: { label: 'Question', color: 'var(--gv-main)', icon: HelpCircle },
   swap_request: { label: 'Swap request', color: '#8A6614', icon: Repeat },
   swap_notice: { label: 'Swap', color: '#6B5F52', icon: Repeat },
 };
 
 const STATUS_CHIP: Record<string, { label: string; color: string; icon: LucideIcon }> = {
-  open: { label: 'Open', color: '#2A5A3C', icon: CircleDot },
+  open: { label: 'Open', color: 'var(--gv-main-mid)', icon: CircleDot },
   closed: { label: 'Closed', color: '#6B5F52', icon: CheckCircle2 },
 };
 
@@ -422,11 +423,11 @@ export default function RequestsPanel({ conferenceId, applicationId, myApplicati
   const isSwapThread = selectedRequest?.kind === 'swap_request' || selectedRequest?.kind === 'swap_notice';
 
   return (
-    <NeuCard className="p-6 md:p-7">
+    <DashCard>
       <div className="flex items-center justify-between gap-3 mb-4">
-        <p style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: 9, letterSpacing: '0.14em', color: NEU.deepGold, margin: 0 }}>
-          QUESTIONS &amp; REQUESTS{unreadThreadCount > 0 ? ` (${unreadThreadCount})` : ''}
-        </p>
+        <h3 className="[overflow-wrap:anywhere]" style={CARD_TITLE_STYLE}>
+          Questions and Requests{unreadThreadCount > 0 ? ` (${unreadThreadCount})` : ''}
+        </h3>
         {!selectedId && !creating && (
           <NeuButton icon={Plus} onClick={() => setCreating(true)} style={{ padding: '7px 14px', fontSize: 11 }}>
             New request
@@ -471,8 +472,8 @@ export default function RequestsPanel({ conferenceId, applicationId, myApplicati
               swap_request. */}
           {isSwapThread && (
             <NeuInset small className="px-4 py-3 mb-4">
-              <p style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', color: NEU.deepGold, fontFamily: OUTFIT, margin: '0 0 6px 0' }}>
-                SWAP DETAILS
+              <p style={{ fontSize: 12, fontWeight: 700, color: GOLD_DEEP, fontFamily: OUTFIT, margin: '0 0 6px 0' }}>
+                Swap details
               </p>
               <p className="text-sm" style={{ color: NEU.ink, fontFamily: OUTFIT, margin: 0 }}>
                 {selectedRequest.metadata.member_a ?? 'Member A'}: {selectedRequest.metadata.before?.a ?? 'None'} → {selectedRequest.metadata.after?.a ?? 'None'}
@@ -536,7 +537,7 @@ export default function RequestsPanel({ conferenceId, applicationId, myApplicati
                 className="flex items-center justify-center rounded-xl px-3.5 focus:outline-none"
                 style={{
                   minWidth: 44, minHeight: 44,
-                  backgroundColor: replying || !replyText.trim() ? 'rgba(27,56,40,0.14)' : NEU.forest,
+                  backgroundColor: replying || !replyText.trim() ? 'color-mix(in srgb, var(--gv-main) 14%, transparent)' : NEU.forest,
                   color: replying || !replyText.trim() ? NEU.muted : NEU.gold,
                   border: 'none', boxShadow: replying || !replyText.trim() ? 'none' : NEU.outSm,
                   cursor: replying || !replyText.trim() ? 'default' : 'pointer',
@@ -739,6 +740,6 @@ export default function RequestsPanel({ conferenceId, applicationId, myApplicati
           )}
         </>
       )}
-    </NeuCard>
+    </DashCard>
   );
 }

@@ -12,6 +12,7 @@ import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { ArrowLeft, Check, CheckCircle2, Clock, Download, Eye, ExternalLink, FileText, Hourglass, Minus, Plus, Send, X, XCircle } from 'lucide-react';
 import PlainPdfPages from '@/components/documents/PlainPdfPages';
+import { themeCssVars, type ConferenceTheme } from '@/lib/theme';
 import type { LucideIcon } from 'lucide-react';
 import SiteNav from '@/components/SiteNav';
 import Loader from '@/components/Loader';
@@ -84,7 +85,7 @@ interface ChatMessage {
 const STATUS_STYLES: Record<string, { color: string; icon: LucideIcon }> = {
   submitted: { color: '#8A6614', icon: Clock },
   reviewed: { color: '#6E5F4E', icon: Eye },
-  approved: { color: '#2A5A3C', icon: CheckCircle2 },
+  approved: { color: 'var(--gv-main-mid)', icon: CheckCircle2 },
   rejected: { color: '#8B2020', icon: XCircle },
 };
 
@@ -119,7 +120,7 @@ function SendButton({ onClick, disabled }: { onClick: () => void; disabled: bool
       className="flex items-center justify-center flex-shrink-0 focus:outline-none"
       style={{
         width: 38, height: 38, borderRadius: 12, border: 'none',
-        background: disabled ? 'rgba(27,56,40,0.12)' : `linear-gradient(135deg, ${NEU_GRADIENTS.forest[0]}, ${NEU_GRADIENTS.forest[1]})`,
+        background: disabled ? 'color-mix(in srgb, var(--gv-main) 12%, transparent)' : `linear-gradient(135deg, ${NEU_GRADIENTS.forest[0]}, ${NEU_GRADIENTS.forest[1]})`,
         color: disabled ? NEU.muted : NEU.gold,
         cursor: disabled ? 'default' : 'pointer',
         boxShadow: disabled ? 'none' : hovered ? `0 6px 14px color-mix(in srgb, ${NEU_GRADIENTS.forest[0]} 33%, transparent), ${NEU.outSmHover}` : `0 3px 8px color-mix(in srgb, ${NEU_GRADIENTS.forest[0]} 25%, transparent), ${NEU.outSm}`,
@@ -269,6 +270,7 @@ export default function PositionPaperPage() {
   // The pdf.js viewer (prompt 141): 75% of the page's width by default, 50% to 200%.
   const [pdfZoom, setPdfZoom] = useState(0.75);
   const [pdfFailed, setPdfFailed] = useState(false);
+  const [confTheme, setConfTheme] = useState<ConferenceTheme | null>(null);
   const [paper, setPaper] = useState<PaperRow | null>(null);
   const [submitters, setSubmitters] = useState<Submitter[]>([]);
   const [isReviewer, setIsReviewer] = useState(false);
@@ -320,8 +322,14 @@ export default function PositionPaperPage() {
       const committee = row.conference_committees;
       const isChair = !!committee && (committee.chair_user_ids ?? []).includes(user.id);
       let reviewer = isChair;
+      // The conference row: its organizer (for the reviewer check) and its colours
+      // (the page draws in the conference theme, CLAUDE.md owner rule).
+      const { data: confRow } = committee
+        ? await supabase.from('conferences').select('organizer_id, theme').eq('id', committee.conference_id).maybeSingle()
+        : { data: null };
+      if (cancelled) return;
+      setConfTheme(((confRow as { theme: ConferenceTheme | null } | null)?.theme) ?? null);
       if (!reviewer && committee) {
-        const { data: confRow } = await supabase.from('conferences').select('organizer_id').eq('id', committee.conference_id).maybeSingle();
         if ((confRow as { organizer_id: string | null } | null)?.organizer_id === user.id) {
           reviewer = true;
         } else {
@@ -451,7 +459,7 @@ export default function PositionPaperPage() {
   return (
     <div
       className="flex flex-col min-h-screen lg:min-h-0 lg:h-[100dvh] overflow-visible lg:overflow-hidden"
-      style={{ backgroundColor: NEU.base }}
+      style={{ ...themeCssVars(confTheme ?? {}), backgroundColor: NEU.base }}
     >
       <SiteNav />
       <div
@@ -467,7 +475,7 @@ export default function PositionPaperPage() {
           background={NEU.surface}
           color={NEU.muted}
           hoverColor={NEU.forest}
-          boxShadowColor="rgba(27,56,40,0.14)"
+          boxShadowColor="color-mix(in srgb, var(--gv-main) 14%, transparent)"
           style={{ marginBottom: 24, padding: '7px 14px', fontSize: 11.5 }}
         >
           Back
@@ -635,7 +643,7 @@ export default function PositionPaperPage() {
                     })
                   )}
                 </div>
-                <div className="flex items-center gap-2 px-3 py-3" style={{ borderTop: '1px solid rgba(27,56,40,0.08)' }}>
+                <div className="flex items-center gap-2 px-3 py-3" style={{ borderTop: '1px solid color-mix(in srgb, var(--gv-main) 8%, transparent)' }}>
                   <input
                     value={body}
                     onChange={e => setBody(e.target.value)}
@@ -657,7 +665,7 @@ export default function PositionPaperPage() {
 
               {/* PDF, desktop: embedded, the paper is the protagonist */}
               <NeuCard className="hidden lg:flex lg:h-full" style={{ flexDirection: 'column', overflow: 'hidden', padding: 0, minHeight: 0 }}>
-                <div className="flex items-center justify-between gap-3 px-4 py-3" style={{ borderBottom: '1px solid rgba(27,56,40,0.08)' }}>
+                <div className="flex items-center justify-between gap-3 px-4 py-3" style={{ borderBottom: '1px solid color-mix(in srgb, var(--gv-main) 8%, transparent)' }}>
                   <p style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: 12.5, color: NEU.ink, margin: 0, minWidth: 0, overflowWrap: 'anywhere' }}>
                     {paper.file_name}
                   </p>
@@ -675,7 +683,7 @@ export default function PositionPaperPage() {
                         onClick={() => setPdfZoom(z => Math.min(2, Math.round((z + 0.25) * 100) / 100))}>
                         <Plus size={15} strokeWidth={2.6} aria-hidden />
                       </button>
-                      <style>{`.gv-pp-zoom{width:32px;height:32px;border-radius:999px;border:none;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;color:${NEU.gold};background:linear-gradient(135deg, ${NEU_GRADIENTS.forest[0]}, ${NEU_GRADIENTS.forest[1]});box-shadow:0 3px 8px color-mix(in srgb, ${NEU_GRADIENTS.forest[0]} 30%, transparent)}.gv-pp-zoom:disabled{opacity:0.4;cursor:default}.gv-pp-zoom:focus{outline:none}.gv-pp-zoom:focus-visible{outline:2px solid ${NEU_GRADIENTS.forest[0]};outline-offset:2px}`}</style>
+                      <style>{`.gv-pp-zoom{width:32px;height:32px;border-radius:999px;border:none;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;color:var(--gv-on-main);background:linear-gradient(135deg, ${NEU_GRADIENTS.forest[0]}, ${NEU_GRADIENTS.forest[1]});box-shadow:0 3px 8px color-mix(in srgb, ${NEU_GRADIENTS.forest[0]} 30%, transparent)}.gv-pp-zoom:disabled{opacity:0.4;cursor:default}.gv-pp-zoom:focus{outline:none}.gv-pp-zoom:focus-visible{outline:2px solid ${NEU_GRADIENTS.forest[0]};outline-offset:2px}`}</style>
                     </span>
                   )}
                   <ActionButton
@@ -686,7 +694,7 @@ export default function PositionPaperPage() {
                     rel="noopener noreferrer"
                     icon={Download}
                     background={`linear-gradient(135deg, ${NEU_GRADIENTS.forest[0]}, ${NEU_GRADIENTS.forest[1]})`}
-                    color={NEU.gold}
+                    color="var(--gv-on-main)"
                     boxShadowColor={`color-mix(in srgb, ${NEU_GRADIENTS.forest[0]} 33%, transparent)`}
                     style={{ flexShrink: 0 }}
                   >

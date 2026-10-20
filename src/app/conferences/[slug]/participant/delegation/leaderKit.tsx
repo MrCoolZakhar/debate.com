@@ -11,14 +11,14 @@ export const FONT = OUTFIT;
 export const INK = NEU.ink;
 export const INK_SOFT = NEU.inkSoft;
 export const FOREST = NEU.forest;
-export const LINE = 'rgba(27,56,40,0.09)';
+export const LINE = 'color-mix(in srgb, var(--gv-main) 9%, transparent)';
 export const OK_GREEN = '#1F6B45';
 export const OWE = '#9A4A12';
 export const DANGER = '#A3341F';
 /** Fine line, bare ink (icon direction A). */
 export const STROKE = 1.5;
 
-export const LIFT_SHADOW = '0 1px 2px rgba(27,56,40,0.08), 0 6px 16px rgba(27,56,40,0.08), 0 18px 44px rgba(27,56,40,0.12)';
+export const LIFT_SHADOW = '0 1px 2px color-mix(in srgb, var(--gv-main) 8%, transparent), 0 6px 16px color-mix(in srgb, var(--gv-main) 8%, transparent), 0 18px 44px color-mix(in srgb, var(--gv-main) 12%, transparent)';
 
 export const cardStyle: React.CSSProperties = {
   background: '#FFFFFF', borderRadius: 20, boxShadow: LIFT_SHADOW,
@@ -29,15 +29,15 @@ const BTN_BASE: React.CSSProperties = {
   borderRadius: 10, fontFamily: FONT, fontSize: 14, fontWeight: 600, cursor: 'pointer', textDecoration: 'none',
 };
 export const primaryBtn: React.CSSProperties = {
-  ...BTN_BASE, border: 'none', color: '#FFFFFF', background: 'linear-gradient(180deg, #26503D, #1B3828)',
+  ...BTN_BASE, border: 'none', color: '#FFFFFF', background: 'linear-gradient(180deg, #26503D, var(--gv-main))',
 };
 export const secondaryBtn: React.CSSProperties = {
-  ...BTN_BASE, border: '1px solid rgba(27,56,40,0.16)', color: '#1B3828', background: '#FFFFFF',
+  ...BTN_BASE, border: '1px solid color-mix(in srgb, var(--gv-main) 16%, transparent)', color: 'var(--gv-main)', background: '#FFFFFF',
 };
-export const BTN_CLASS = 'focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[#B6871F]';
+export const BTN_CLASS = 'focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[var(--gv-accent)]';
 
 export const linkStyle: React.CSSProperties = {
-  fontFamily: FONT, fontSize: 13.5, fontWeight: 700, color: '#1B3828', textDecoration: 'underline', textUnderlineOffset: 3,
+  fontFamily: FONT, fontSize: 13.5, fontWeight: 700, color: 'var(--gv-main)', textDecoration: 'underline', textUnderlineOffset: 3,
   background: 'none', border: 'none', padding: 0, cursor: 'pointer',
 };
 
@@ -86,7 +86,7 @@ export function RoundAvatar({ name, url, size = 54, seed }: { name: string; url:
     <span
       aria-hidden
       className="inline-flex items-center justify-center flex-shrink-0"
-      style={{ width: size, height: size, borderRadius: '50%', background: tintFor(seed ?? name), color: '#1B3828', fontFamily: FONT, fontWeight: 600, fontSize: Math.round(size * 0.32) }}
+      style={{ width: size, height: size, borderRadius: '50%', background: tintFor(seed ?? name), color: 'var(--gv-main)', fontFamily: FONT, fontWeight: 600, fontSize: Math.round(size * 0.32) }}
     >
       {initialsOf(name)}
     </span>

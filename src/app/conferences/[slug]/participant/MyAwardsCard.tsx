@@ -22,6 +22,7 @@ import { loadPublishedAwards } from '@/lib/awardsService';
 import type { ConferenceAwardRow } from '@/lib/awards';
 import { conferenceAcronymLabel } from '@/lib/conferenceLabels';
 import { SectionCard, OUTFIT } from './shared';
+import { GOLD_DEEP } from './dashboardKit';
 import type { ParticipantAllocation } from './types';
 
 interface ConferenceBits {
@@ -116,13 +117,13 @@ export default function MyAwardsCard({ conferenceId, conferenceSlug, myAllocatio
         <div
           aria-hidden
           className="absolute inset-0 pointer-events-none"
-          style={{ background: 'radial-gradient(120% 80% at 100% 0%, rgba(238,217,138,0.35), rgba(238,217,138,0) 60%)' }}
+          style={{ background: 'radial-gradient(120% 80% at 100% 0%, color-mix(in srgb, var(--gv-accent-light) 35%, transparent), color-mix(in srgb, var(--gv-accent-light) 0%, transparent) 60%)' }}
         />
         <div className="relative">
           <div className="flex items-center gap-2 mb-3">
-            <Trophy size={13} style={{ color: '#B6871F' }} />
-            <p style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: '9px', letterSpacing: '0.14em', color: '#B6871F', margin: 0 }}>
-              YOUR AWARDS
+            <Trophy size={13} style={{ color: 'var(--gv-accent)' }} />
+            <p style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: 12, color: GOLD_DEEP, margin: 0 }}>
+              Your awards
             </p>
           </div>
           <h3 className="font-black text-[22px] leading-tight" style={{ color: '#1C1410', fontFamily: OUTFIT, margin: 0 }}>
@@ -140,9 +141,9 @@ export default function MyAwardsCard({ conferenceId, conferenceSlug, myAllocatio
 
           <p className="text-[12.5px] mt-4" style={{ color: '#2E2820', fontFamily: OUTFIT, margin: '16px 0 0 0', lineHeight: 1.6 }}>
             This is now a verified entry on your MUN CV.{' '}
-            <Link href="/account/cv" style={{ color: '#2A5A3C', fontWeight: 700, textDecoration: 'underline', textUnderlineOffset: 3 }}>Open your CV</Link>
+            <Link href="/account/cv" style={{ color: 'var(--gv-main-mid)', fontWeight: 700, textDecoration: 'underline', textUnderlineOffset: 3 }}>Open your CV</Link>
             {' '}or see the{' '}
-            <Link href={honourRollPath} style={{ color: '#2A5A3C', fontWeight: 700, textDecoration: 'underline', textUnderlineOffset: 3 }}>public honour roll</Link>.
+            <Link href={honourRollPath} style={{ color: 'var(--gv-main-mid)', fontWeight: 700, textDecoration: 'underline', textUnderlineOffset: 3 }}>public honour roll</Link>.
           </p>
 
           <div className="flex flex-wrap gap-2 mt-4">
@@ -150,9 +151,9 @@ export default function MyAwardsCard({ conferenceId, conferenceSlug, myAllocatio
               type="button"
               onClick={() => setShareOpen(true)}
               className="inline-flex items-center gap-2 rounded-xl px-4 py-2.5 focus:outline-none transition-colors"
-              style={{ backgroundColor: '#1B3828', color: '#EED98A', fontFamily: OUTFIT, fontWeight: 800, fontSize: 12, border: 'none', cursor: 'pointer' }}
-              onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
-              onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
+              style={{ backgroundColor: 'var(--gv-main)', color: 'var(--gv-on-main)', fontFamily: OUTFIT, fontWeight: 800, fontSize: 12, border: 'none', cursor: 'pointer' }}
+              onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--gv-main-mid)'; }}
+              onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--gv-main)'; }}
             >
               <Share2 size={13} /> Share
             </button>
@@ -162,7 +163,7 @@ export default function MyAwardsCard({ conferenceId, conferenceSlug, myAllocatio
               className="inline-flex items-center gap-2 rounded-xl px-4 py-2.5 focus:outline-none"
               style={{ backgroundColor: 'transparent', color: '#1C1410', fontFamily: OUTFIT, fontWeight: 700, fontSize: 12, border: '1px solid #DDD4C0', cursor: 'pointer' }}
             >
-              {copied ? <Check size={13} style={{ color: '#3D7A52' }} /> : <Link2 size={13} />} {copied ? 'Copied' : 'Copy honour roll link'}
+              {copied ? <Check size={13} style={{ color: 'var(--gv-main-light)' }} /> : <Link2 size={13} />} {copied ? 'Copied' : 'Copy honour roll link'}
             </button>
           </div>
         </div>

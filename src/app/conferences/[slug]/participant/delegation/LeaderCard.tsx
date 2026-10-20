@@ -242,10 +242,10 @@ export default function LeaderCard({
         aria-disabled={off}
         aria-label={dir > 0 ? 'Raise expected size' : 'Lower expected size'}
         title={dir < 0 && off ? 'Only a spot you added and have not paid can be removed here' : undefined}
-        className="inline-flex items-center justify-center focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]"
+        className="inline-flex items-center justify-center focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gv-main)]"
         style={{ width: 44, height: 44, margin: -6, padding: 0, border: 'none', background: 'transparent', cursor: off ? 'default' : 'pointer', opacity: off ? 0.4 : 1 }}
       >
-        <span aria-hidden className="inline-flex items-center justify-center" style={{ width: 32, height: 32, borderRadius: 9, border: '1px solid rgba(27,56,40,0.16)', background: '#FFFFFF', color: '#1B3828' }}>
+        <span aria-hidden className="inline-flex items-center justify-center" style={{ width: 32, height: 32, borderRadius: 9, border: '1px solid color-mix(in srgb, var(--gv-main) 16%, transparent)', background: '#FFFFFF', color: 'var(--gv-main)' }}>
           <Icon size={17} strokeWidth={STROKE} aria-hidden />
         </span>
       </button>
@@ -267,7 +267,7 @@ export default function LeaderCard({
       {/* Header */}
       <div className="flex items-center justify-between gap-x-6 gap-y-4 flex-wrap">
         <div className="flex items-center gap-4 min-w-0">
-          <span style={{ borderRadius: '50%', boxShadow: '0 6px 18px rgba(27,56,40,0.10)', flexShrink: 0, background: '#FFFFFF' }}>
+          <span style={{ borderRadius: '50%', boxShadow: '0 6px 18px color-mix(in srgb, var(--gv-main) 10%, transparent)', flexShrink: 0, background: '#FFFFFF' }}>
             <RoundAvatar name={crestName} url={home?.logo_url ?? null} size={56} seed={societyId} />
           </span>
           <div className="min-w-0 flex flex-col gap-1">

@@ -256,7 +256,7 @@ export default function MemberMenu({ member, societyId, openSeats, conferenceId,
   };
 
   const backBtn = (
-    <button type="button" onClick={() => setStep('list')} className="focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]" style={{ ...itemStyle, minHeight: 40, padding: '6px 8px', color: INK_SOFT, fontSize: 13.5 }}>
+    <button type="button" onClick={() => setStep('list')} className="focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gv-main)]" style={{ ...itemStyle, minHeight: 40, padding: '6px 8px', color: INK_SOFT, fontSize: 13.5 }}>
       <ChevronLeft size={16} strokeWidth={STROKE} aria-hidden />
       Back
     </button>
@@ -280,7 +280,7 @@ export default function MemberMenu({ member, societyId, openSeats, conferenceId,
                 if (ops) { setOpen(false); ops.place(s); return; }
                 void run(() => placeMember(member.application_id, s.allocation_id as string), `${member.name} is now in ${s.country_name}.`);
               }}
-              className="focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] hover:bg-[#F4F0E6]"
+              className="focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gv-main)] hover:bg-[#F4F0E6]"
               style={itemStyle}
             >
               <CircleFlag code={s.country_code} logoUrl={s.country_logo_url} label={s.country_name} size={22} decorative />
@@ -307,7 +307,7 @@ export default function MemberMenu({ member, societyId, openSeats, conferenceId,
               role="menuitem"
               disabled={busy}
               onClick={() => setStep({ confirm: { kind: 'switch', to: t.application_id } })}
-              className="focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] hover:bg-[#F4F0E6]"
+              className="focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gv-main)] hover:bg-[#F4F0E6]"
               style={itemStyle}
             >
               <RoundAvatar name={t.name} url={t.avatar_url} size={28} seed={t.application_id} />
@@ -335,12 +335,12 @@ export default function MemberMenu({ member, societyId, openSeats, conferenceId,
         <p style={{ fontFamily: FONT, fontSize: 14, fontWeight: 600, color: INK, margin: 0, overflowWrap: 'anywhere' }}>{c.title}</p>
         {c.line && <p style={{ fontFamily: FONT, fontSize: 13, color: INK_SOFT, margin: '4px 0 0 0', lineHeight: 1.45 }}>{c.line}</p>}
         <div className="flex items-center justify-end gap-2" style={{ marginTop: 12 }}>
-          <button type="button" onClick={() => setStep('list')} disabled={busy} className="focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]"
-            style={{ minHeight: 40, padding: '0 12px', borderRadius: 8, border: '1px solid rgba(27,56,40,0.16)', background: '#FFFFFF', color: INK, fontFamily: FONT, fontSize: 13.5, fontWeight: 600, cursor: 'pointer' }}>
+          <button type="button" onClick={() => setStep('list')} disabled={busy} className="focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gv-main)]"
+            style={{ minHeight: 40, padding: '0 12px', borderRadius: 8, border: '1px solid color-mix(in srgb, var(--gv-main) 16%, transparent)', background: '#FFFFFF', color: INK, fontFamily: FONT, fontSize: 13.5, fontWeight: 600, cursor: 'pointer' }}>
             Cancel
           </button>
-          <button type="button" onClick={() => { void doAction(action); }} disabled={busy} className="focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]"
-            style={{ minHeight: 40, padding: '0 12px', borderRadius: 8, border: 'none', background: c.danger ? DANGER : '#1B3828', color: '#FFFFFF', fontFamily: FONT, fontSize: 13.5, fontWeight: 600, cursor: busy ? 'default' : 'pointer', opacity: busy ? 0.6 : 1 }}>
+          <button type="button" onClick={() => { void doAction(action); }} disabled={busy} className="focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gv-main)]"
+            style={{ minHeight: 40, padding: '0 12px', borderRadius: 8, border: 'none', background: c.danger ? DANGER : 'var(--gv-main)', color: '#FFFFFF', fontFamily: FONT, fontSize: 13.5, fontWeight: 600, cursor: busy ? 'default' : 'pointer', opacity: busy ? 0.6 : 1 }}>
             {c.yes}
           </button>
         </div>
@@ -353,7 +353,7 @@ export default function MemberMenu({ member, societyId, openSeats, conferenceId,
       const Icon = i.icon;
       return (
         <button key={i.key} type="button" role="menuitem" onClick={i.onPress} disabled={busy}
-          className="focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] hover:bg-[#F4F0E6]"
+          className="focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gv-main)] hover:bg-[#F4F0E6]"
           style={{ ...itemStyle, color: i.danger ? DANGER : INK }}>
           <Icon size={18} strokeWidth={STROKE} aria-hidden />
           {i.label}
@@ -379,7 +379,7 @@ export default function MemberMenu({ member, societyId, openSeats, conferenceId,
         aria-label={`More for ${member.name}`}
         aria-haspopup="menu"
         aria-expanded={open}
-        className="inline-flex items-center justify-center flex-shrink-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]"
+        className="inline-flex items-center justify-center flex-shrink-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gv-main)]"
         style={{ width: 44, height: 44, margin: -6, padding: 0, borderRadius: 10, border: 'none', background: 'transparent', color: INK, cursor: busy ? 'default' : 'pointer', opacity: busy ? 0.5 : 1 }}
       >
         <span aria-hidden className="inline-flex items-center justify-center" style={{ width: 32, height: 32, borderRadius: 8, background: open ? '#F1ECE1' : 'transparent' }}>
@@ -397,7 +397,7 @@ export default function MemberMenu({ member, societyId, openSeats, conferenceId,
             aria-label={`More for ${member.name}`}
             style={{
               position: 'fixed', top: pos?.top ?? -9999, left: pos?.left ?? -9999, width: MENU_W, zIndex: 80, padding: 6, borderRadius: 12,
-              background: '#FFFFFF', boxShadow: '0 1px 2px rgba(27,56,40,0.08), 0 6px 16px rgba(27,56,40,0.10), 0 18px 44px rgba(27,56,40,0.16)',
+              background: '#FFFFFF', boxShadow: '0 1px 2px color-mix(in srgb, var(--gv-main) 8%, transparent), 0 6px 16px color-mix(in srgb, var(--gv-main) 10%, transparent), 0 18px 44px color-mix(in srgb, var(--gv-main) 16%, transparent)',
               maxHeight: 'calc(100vh - 16px)', overflowY: 'auto', visibility: pos ? 'visible' : 'hidden',
             }}
           >

@@ -99,7 +99,7 @@ export default function CommitteesSessionsCard({ conferenceId, conferenceStartDa
           <div
             key={c.id}
             className="flex items-center gap-3 py-3"
-            style={i > 0 ? { borderTop: '1px solid rgba(27,56,40,0.07)' } : undefined}
+            style={i > 0 ? { borderTop: '1px solid color-mix(in srgb, var(--gv-main) 7%, transparent)' } : undefined}
           >
             <CommitteeEmblem logoUrl={c.logo_url} name={c.name} abbreviation={c.abbreviation} size={40} />
             <div className="flex-1 min-w-0">

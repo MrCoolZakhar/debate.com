@@ -15,7 +15,7 @@ export const OUTFIT = "var(--font-brand), sans-serif";
 
 /** The participant dashboard's one card shadow: a hairline of forest and a
  *  soft drop, so a white card lifts off the ivory page. */
-export const CARD_SHADOW = '0 0 0 1px rgba(27,56,40,0.06), 0 1px 2px rgba(27,56,40,0.05), 0 12px 32px -14px rgba(27,56,40,0.22)';
+export const CARD_SHADOW = '0 0 0 1px color-mix(in srgb, var(--gv-main) 6%, transparent), 0 1px 2px color-mix(in srgb, var(--gv-main) 5%, transparent), 0 12px 32px -14px color-mix(in srgb, var(--gv-main) 22%, transparent)';
 
 export function SectionCard({ children, className = '', id }: { children: React.ReactNode; className?: string; id?: string }) {
   return (
@@ -123,7 +123,7 @@ export type PaymentChip = 'PAID' | 'COVERED' | 'WAIVED' | 'PARTIAL' | 'UNPAID' |
 
 // Drawn as an icon plus a plain word (CLAUDE.md §8), never a capitals pill.
 export const CHIP_STYLES: Record<PaymentChip, { color: string; icon: LucideIcon; word: string }> = {
-  PAID: { color: '#2A5A3C', icon: CheckCircle2, word: 'Paid' },
+  PAID: { color: 'var(--gv-main-mid)', icon: CheckCircle2, word: 'Paid' },
   COVERED: { color: '#2A6858', icon: CheckCircle2, word: 'Covered' },
   WAIVED: { color: '#6B5F52', icon: MinusCircle, word: 'Waived' },
   PARTIAL: { color: '#8A6614', icon: CircleDashed, word: 'Partial' },

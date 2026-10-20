@@ -421,7 +421,7 @@ export default function PeopleTable({ rows, societyId, societyName, conferenceId
             className={`relative flex flex-col gap-3 @[760px]:grid ${grid} @[760px]:gap-3 @[760px]:items-center`}
             style={{
               padding: '12px 24px', borderBottom: `1px solid ${LINE}`,
-              background: isTarget ? 'rgba(27,56,40,0.07)' : selected ? 'rgba(27,56,40,0.06)' : r.is_me ? 'rgba(238,217,138,0.14)' : 'transparent',
+              background: isTarget ? 'color-mix(in srgb, var(--gv-main) 7%, transparent)' : selected ? 'color-mix(in srgb, var(--gv-main) 6%, transparent)' : r.is_me ? 'color-mix(in srgb, var(--gv-accent-light) 14%, transparent)' : 'transparent',
               boxShadow: isTarget ? `inset 0 0 0 2px ${FOREST}` : 'none',
               opacity: !r.attending ? 0.6 : swap.on && !selectable ? 0.45 : 1,
               cursor: selectable ? 'pointer' : 'default',
@@ -434,7 +434,7 @@ export default function PeopleTable({ rows, societyId, societyName, conferenceId
               <div className="min-w-0 flex flex-col gap-0.5">
                 <span className="[overflow-wrap:anywhere]" style={{ fontFamily: FONT, fontSize: 15, fontWeight: 600, color: INK, lineHeight: 1.3 }}>
                   {r.user_id ? <ProfileLink userId={r.user_id} name={r.name} nested>{r.name}</ProfileLink> : r.name}
-                  {r.is_me && <span style={{ fontSize: 12.5, fontWeight: 600, color: '#8A6614', marginLeft: 6 }}>You</span>}
+                  {r.is_me && <span style={{ fontSize: 12.5, fontWeight: 600, color: 'color-mix(in srgb, var(--gv-accent) 72%, #1C1410)', marginLeft: 6 }}>You</span>}
                 </span>
                 <span className="flex items-center flex-wrap gap-x-2.5 gap-y-0.5" style={{ fontFamily: FONT, fontSize: 13, color: INK_SOFT }}>
                   {ROLE_WORD[r.role]}
@@ -489,7 +489,7 @@ export default function PeopleTable({ rows, societyId, societyName, conferenceId
             <div className="absolute right-6 top-[23px] @[760px]:static flex justify-end">
               {swap.on ? (
                 selectable ? (
-                  <span aria-hidden className="inline-flex items-center justify-center" style={{ width: 20, height: 20, borderRadius: '50%', border: `1.5px solid ${selected ? '#1B3828' : 'rgba(27,56,40,0.3)'}`, background: selected ? '#1B3828' : 'transparent' }}>
+                  <span aria-hidden className="inline-flex items-center justify-center" style={{ width: 20, height: 20, borderRadius: '50%', border: `1.5px solid ${selected ? 'var(--gv-main)' : 'color-mix(in srgb, var(--gv-main) 30%, transparent)'}`, background: selected ? 'var(--gv-main)' : 'transparent' }}>
                     {selected && <Check size={12} strokeWidth={2} color="#FFFFFF" aria-hidden />}
                   </span>
                 ) : null

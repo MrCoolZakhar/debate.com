@@ -52,7 +52,7 @@ export default function PaymentPane({ application, conferenceId, conferenceSlug,
         <div className="flex items-center justify-between gap-4 flex-wrap">
           <div className="min-w-0" style={{ maxWidth: 440 }}>
             {free ? (
-              <IconWord icon={settled ? CheckCircle2 : MinusCircle} word="No fee required" color={settled ? '#2A5A3C' : INK_SOFT} size="lg" />
+              <IconWord icon={settled ? CheckCircle2 : MinusCircle} word="No fee required" color={settled ? 'var(--gv-main-mid)' : INK_SOFT} size="lg" />
             ) : waitingForAcceptance ? (
               <IconWord icon={Hourglass} word="After acceptance" color={INK_SOFT} size="lg" />
             ) : (
@@ -66,7 +66,7 @@ export default function PaymentPane({ application, conferenceId, conferenceSlug,
                 slug={conferenceSlug}
                 label={<>Open payments</>}
                 className="inline-flex items-center gap-1.5 rounded-xl px-4 focus:outline-none"
-                style={{ minHeight: 44, backgroundColor: '#1B3828', color: '#EED98A', fontFamily: OUTFIT, fontSize: 14, fontWeight: 700, border: 'none' }}
+                style={{ minHeight: 44, backgroundColor: 'var(--gv-main)', color: 'var(--gv-on-main)', fontFamily: OUTFIT, fontSize: 14, fontWeight: 700, border: 'none' }}
               />
             ) : (
               <ForestLink href={`/conferences/${conferenceSlug}/pay`}>

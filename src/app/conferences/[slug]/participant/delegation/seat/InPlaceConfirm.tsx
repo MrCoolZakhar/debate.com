@@ -88,12 +88,12 @@ export default function InPlaceConfirm({ anchor, align = 'start', title, line, y
         <p style={{ fontFamily: FONT, fontSize: 14, fontWeight: 600, color: INK, margin: 0, overflowWrap: 'anywhere', lineHeight: 1.4 }}>{title}</p>
         {line && <p style={{ fontFamily: FONT, fontSize: 13, color: INK_SOFT, margin: '4px 0 0 0', lineHeight: 1.45 }}>{line}</p>}
         <div className="flex items-center justify-end gap-2" style={{ marginTop: 12 }}>
-          <button type="button" data-confirm-no onClick={onCancel} disabled={busy} className="focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]"
-            style={{ minHeight: 40, padding: '0 12px', borderRadius: 8, border: '1px solid rgba(27,56,40,0.16)', background: '#FFFFFF', color: INK, fontFamily: FONT, fontSize: 13.5, fontWeight: 600, cursor: 'pointer' }}>
+          <button type="button" data-confirm-no onClick={onCancel} disabled={busy} className="focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gv-main)]"
+            style={{ minHeight: 40, padding: '0 12px', borderRadius: 8, border: '1px solid color-mix(in srgb, var(--gv-main) 16%, transparent)', background: '#FFFFFF', color: INK, fontFamily: FONT, fontSize: 13.5, fontWeight: 600, cursor: 'pointer' }}>
             Cancel
           </button>
-          <button type="button" data-confirm-yes onClick={onYes} disabled={busy} className="focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]"
-            style={{ minHeight: 40, padding: '0 12px', borderRadius: 8, border: 'none', background: danger ? DANGER : '#1B3828', color: '#FFFFFF', fontFamily: FONT, fontSize: 13.5, fontWeight: 600, cursor: busy ? 'default' : 'pointer', opacity: busy ? 0.6 : 1 }}>
+          <button type="button" data-confirm-yes onClick={onYes} disabled={busy} className="focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gv-main)]"
+            style={{ minHeight: 40, padding: '0 12px', borderRadius: 8, border: 'none', background: danger ? DANGER : 'var(--gv-main)', color: '#FFFFFF', fontFamily: FONT, fontSize: 13.5, fontWeight: 600, cursor: busy ? 'default' : 'pointer', opacity: busy ? 0.6 : 1 }}>
             {yes}
           </button>
         </div>

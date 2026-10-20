@@ -345,9 +345,9 @@ export default function ParticipantView({
         <div className="flex flex-col items-center text-center py-8">
           <div
             className="flex items-center justify-center mb-4"
-            style={{ width: 56, height: 56, borderRadius: 9999, backgroundColor: 'rgba(42,90,60,0.12)', border: '1px solid rgba(42,90,60,0.28)' }}
+            style={{ width: 56, height: 56, borderRadius: 9999, backgroundColor: 'color-mix(in srgb, var(--gv-main-mid) 12%, transparent)', border: '1px solid color-mix(in srgb, var(--gv-main-mid) 28%, transparent)' }}
           >
-            <Gavel size={24} strokeWidth={2} aria-hidden style={{ color: '#1B3828' }} />
+            <Gavel size={24} strokeWidth={2} aria-hidden style={{ color: 'var(--gv-main)' }} />
           </div>
           <p className="text-[16px] font-extrabold mb-1" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
             You&apos;re the organizer
@@ -359,7 +359,7 @@ export default function ParticipantView({
           <Link
             href={`/manage/${conferenceSlug}`}
             className="inline-flex items-center gap-2 rounded-full"
-            style={{ padding: '11px 20px', backgroundColor: '#1B3828', color: '#EED98A', fontFamily: OUTFIT, fontWeight: 800, fontSize: 13.5, textDecoration: 'none' }}
+            style={{ padding: '11px 20px', backgroundColor: 'var(--gv-main)', color: 'var(--gv-on-main)', fontFamily: OUTFIT, fontWeight: 800, fontSize: 13.5, textDecoration: 'none' }}
           >
             Manage conference
           </Link>
@@ -509,12 +509,12 @@ export default function ParticipantView({
       {justClaimedCount > 0 && !claimNoticeDismissed && (
         <SectionCard className="!py-3 !px-5">
           <div className="flex items-center justify-between gap-3">
-            <p className="text-[13.5px]" style={{ color: '#2A5A3C', fontFamily: OUTFIT, margin: 0 }}>
+            <p className="text-[13.5px]" style={{ color: 'var(--gv-main-mid)', fontFamily: OUTFIT, margin: 0 }}>
               We found your registration and attached it to your account.
             </p>
             <button
               onClick={() => setClaimNoticeDismissed(true)}
-              className="flex-shrink-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] rounded-full"
+              className="flex-shrink-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gv-accent)] rounded-full"
               style={{ color: '#6B5F52', background: 'none', border: 'none', cursor: 'pointer', padding: 14, margin: -10 }}
               aria-label="Dismiss"
             >
@@ -548,14 +548,14 @@ export default function ParticipantView({
                   type="button"
                   onClick={() => selectApplication(app)}
                   aria-pressed={active}
-                  className="text-start focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[#B6871F]"
+                  className="text-start focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[var(--gv-accent)]"
                   style={{
                     minHeight: 72, padding: '12px 16px', borderRadius: 16, cursor: 'pointer',
                     border: 'none', backgroundColor: '#FFFFFF',
-                    boxShadow: active ? `inset 0 0 0 2px #1B3828, ${CARD_SHADOW}` : CARD_SHADOW,
+                    boxShadow: active ? `inset 0 0 0 2px var(--gv-main), ${CARD_SHADOW}` : CARD_SHADOW,
                   }}
                 >
-                  <span className="block [overflow-wrap:anywhere]" style={{ fontFamily: OUTFIT, fontSize: 17, fontWeight: 800, color: active ? '#1B3828' : '#1C1410', lineHeight: 1.25 }}>
+                  <span className="block [overflow-wrap:anywhere]" style={{ fontFamily: OUTFIT, fontSize: 17, fontWeight: 800, color: active ? 'var(--gv-main)' : '#1C1410', lineHeight: 1.25 }}>
                     {roleLabel(app.role)}
                   </span>
                   <span className="mt-1 inline-flex items-center gap-1.5" style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 600, color: st.color }}>
@@ -579,13 +579,13 @@ export default function ParticipantView({
                 onClick={() => selectApplication(app)}
                 aria-pressed={active}
                 title={st.word}
-                className="inline-flex items-center gap-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F]"
+                className="inline-flex items-center gap-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gv-accent)]"
                 style={{
                   minHeight: 44, padding: '0 16px', borderRadius: 999, cursor: 'pointer',
                   border: 'none',
                   backgroundColor: active ? '#FFFFFF' : 'transparent',
                   boxShadow: active ? CARD_SHADOW : 'inset 0 0 0 1.5px rgba(28,20,16,0.18)',
-                  color: active ? '#1B3828' : '#6B5F52',
+                  color: active ? 'var(--gv-main)' : '#6B5F52',
                   fontFamily: OUTFIT, fontSize: 14, fontWeight: active ? 800 : 600,
                 }}
               >
@@ -712,7 +712,7 @@ export default function ParticipantView({
                           choice and cannot be undone from here. */}
                       <button
                         onClick={() => { setWithdrawConfirm(true); setWithdrawError(''); }}
-                        className="inline-flex items-center gap-1.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F]"
+                        className="inline-flex items-center gap-1.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gv-accent)]"
                         style={{ minHeight: 44, padding: '0 12px', borderRadius: 10, border: 'none', background: 'transparent', color: '#8B2020', fontFamily: OUTFIT, fontSize: 14, fontWeight: 700, cursor: 'pointer', textDecoration: 'underline', textUnderlineOffset: 3 }}
                       >
                         <LogOut size={15} aria-hidden />
@@ -747,7 +747,7 @@ export default function ParticipantView({
                         <button
                           onClick={() => { setWithdrawConfirm(false); setWithdrawError(''); }}
                           disabled={withdrawing}
-                          className="inline-flex items-center focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F]"
+                          className="inline-flex items-center focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gv-accent)]"
                           style={{ minHeight: 44, padding: '0 18px', borderRadius: 10, border: '1.5px solid rgba(28,20,16,0.55)', color: '#1C1410', background: '#FFFFFF', fontFamily: OUTFIT, fontSize: 14, fontWeight: 700, cursor: withdrawing ? 'not-allowed' : 'pointer' }}
                         >
                           Keep it

@@ -80,6 +80,14 @@ export function isAllowedDocFile(file: File): boolean {
   return docMimeFor(file) !== null && file.size <= CONFERENCE_DOC_MAX_BYTES;
 }
 
+/** Whether a stored file can be drawn in the browser (a PDF or a JPG / PNG image);
+ *  a Word document cannot, so screens offer Download for it instead. */
+export function canPreviewDoc(mime: string | null | undefined, name: string | null | undefined): boolean {
+  const m = mime ?? '';
+  const n = (name ?? '').toLowerCase();
+  return m === 'application/pdf' || m.startsWith('image/') || n.endsWith('.pdf') || /\.(jpe?g|png)$/.test(n);
+}
+
 /** "PDF", "Word" or "Image". */
 export function docTypeLabel(mime: string | null | undefined): string {
   if (!mime) return '';

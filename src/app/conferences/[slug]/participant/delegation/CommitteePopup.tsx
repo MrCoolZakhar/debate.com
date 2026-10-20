@@ -61,7 +61,7 @@ export default function CommitteePopup({ name, abbreviation, emblem, people, onC
               type="button"
               onClick={onClose}
               aria-label="Close"
-              className="inline-flex items-center justify-center flex-shrink-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]"
+              className="inline-flex items-center justify-center flex-shrink-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gv-main)]"
               style={{ width: 44, height: 44, margin: -8, borderRadius: 10, border: 'none', background: 'transparent', color: INK, cursor: 'pointer' }}
             >
               <X size={20} strokeWidth={STROKE} aria-hidden />

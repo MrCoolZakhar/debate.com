@@ -34,12 +34,12 @@ export function ActionButton({
 }) {
   const [hovered, setHovered] = useState(false);
   const [pressed, setPressed] = useState(false);
-  const shadowTint = boxShadowColor ?? 'rgba(27,56,40,0.2)';
+  const shadowTint = boxShadowColor ?? 'color-mix(in srgb, var(--gv-main) 20%, transparent)';
   const sharedStyle: React.CSSProperties = {
     display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6,
     padding: '8px 16px', borderRadius: 9999,
     border: border ?? 'none',
-    background: disabled ? 'rgba(27,56,40,0.12)' : (hovered && hoverBackground) ? hoverBackground : background,
+    background: disabled ? 'color-mix(in srgb, var(--gv-main) 12%, transparent)' : (hovered && hoverBackground) ? hoverBackground : background,
     color: disabled ? NEU.muted : (hovered && hoverColor) ? hoverColor : color,
     fontFamily: OUTFIT, fontSize: 12, fontWeight: 800, letterSpacing: 0,
     textDecoration: 'none',

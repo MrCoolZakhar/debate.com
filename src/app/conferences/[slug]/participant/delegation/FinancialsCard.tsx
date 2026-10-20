@@ -93,8 +93,8 @@ export default function FinancialsCard({ pay, payError, societyId, membersOwing,
       </div>
       {content}
       <div className="flex items-center justify-between gap-3 flex-wrap">
-        <Link href={`/conferences/${slug}/pay?open=spots`} className="focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] rounded" style={linkStyle}>Add or remove spots</Link>
-        <Link href={`/conferences/${slug}/pay?tab=completed`} className="focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] rounded" style={linkStyle}>Receipts</Link>
+        <Link href={`/conferences/${slug}/pay?open=spots`} className="focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gv-main)] rounded" style={linkStyle}>Add or remove spots</Link>
+        <Link href={`/conferences/${slug}/pay?tab=completed`} className="focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gv-main)] rounded" style={linkStyle}>Receipts</Link>
       </div>
     </section>
   );

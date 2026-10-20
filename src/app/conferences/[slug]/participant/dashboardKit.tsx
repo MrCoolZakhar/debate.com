@@ -30,9 +30,17 @@ import { OUTFIT, CARD_SHADOW, CHIP_STYLES, derivePaymentChip } from './shared';
 
 export const INK = '#1C1410';
 export const INK_SOFT = '#6B5F52';
-export const FOREST = '#1B3828';
-export const GOLD_DEEP = '#8A6614';
-export const FOREST_GRADIENT = 'linear-gradient(90deg, #1B3828 0%, #2A5A3C 100%)';
+export const FOREST = 'var(--gv-main)';
+export const GOLD_DEEP = 'color-mix(in srgb, var(--gv-accent) 72%, #1C1410)';
+export const FOREST_GRADIENT = 'linear-gradient(90deg, var(--gv-main) 0%, var(--gv-main-mid) 100%)';
+
+// The conference's own colours for the tinted icon discs and the primary
+// button class used by the documents cards (CLAUDE.md owner rule: every page
+// under /conferences/[slug] reads the conference theme, never Gavelling's).
+export const TINT_MAIN = 'linear-gradient(150deg, color-mix(in srgb, var(--gv-main-light) 20%, transparent), color-mix(in srgb, var(--gv-main-light) 8%, transparent))';
+export const TINT_ACCENT = 'linear-gradient(150deg, color-mix(in srgb, var(--gv-accent-light) 70%, transparent), color-mix(in srgb, var(--gv-accent-light) 30%, transparent))';
+/** `.gv-cf-main`: the primary button in the conference theme (pairs with `.gv-st-btn`). */
+export const CONF_BUTTON_CSS = `.gv-cf-main{background:linear-gradient(90deg,var(--gv-main) 0%,var(--gv-main-mid) 100%);color:var(--gv-on-main)}.gv-cf-main:hover:not(:disabled){filter:brightness(1.1)}.gv-cf-main:focus-visible{outline-color:var(--gv-main)}`;
 
 // ── Cards and headings ───────────────────────────────────────────────────────
 
@@ -59,6 +67,10 @@ export function DashCard({ children, className = '', style, id }: {
  *  it on the one-page phone dashboard, so below xl it is left out there (the
  *  aside stays); 'label' leaves out only the small label above the title.
  *  From xl, and outside a stacked dashboard, nothing changes. */
+/** The card title every role page card uses (CardHeading's h3), for cards whose
+ *  title sits inside a control, such as a collapsible header. */
+export const CARD_TITLE_STYLE: React.CSSProperties = { fontFamily: OUTFIT, fontSize: 19, fontWeight: 800, color: INK, margin: 0, lineHeight: 1.25 };
+
 export function CardHeading({ label, title, aside, stackedHide = false }: { label?: string; title: React.ReactNode; aside?: React.ReactNode; stackedHide?: boolean | 'label' }) {
   const stacked = useDashStacked();
   const hide = stacked && stackedHide === true;
@@ -69,7 +81,7 @@ export function CardHeading({ label, title, aside, stackedHide = false }: { labe
         {label && (
           <p className={hideLabel ? 'hidden xl:block' : undefined} style={{ fontFamily: OUTFIT, fontSize: 12, fontWeight: 700, color: GOLD_DEEP, margin: '0 0 2px 0' }}>{label}</p>
         )}
-        <h3 className="[overflow-wrap:anywhere]" style={{ fontFamily: OUTFIT, fontSize: 19, fontWeight: 800, color: INK, margin: 0, lineHeight: 1.25 }}>
+        <h3 className="[overflow-wrap:anywhere]" style={CARD_TITLE_STYLE}>
           {title}
         </h3>
       </div>
@@ -90,8 +102,8 @@ const BTN_BASE: React.CSSProperties = {
 export function ForestLink({ href, children, external, className = '' }: {
   href: string; children: React.ReactNode; external?: boolean; className?: string;
 }) {
-  const style: React.CSSProperties = { ...BTN_BASE, background: FOREST_GRADIENT, color: '#FFFFFF', border: 'none', boxShadow: '0 6px 16px -8px rgba(27,56,40,0.55)' };
-  const cls = `focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[#B6871F] ${className}`;
+  const style: React.CSSProperties = { ...BTN_BASE, background: FOREST_GRADIENT, color: '#FFFFFF', border: 'none', boxShadow: '0 6px 16px -8px color-mix(in srgb, var(--gv-main) 55%, transparent)' };
+  const cls = `focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[var(--gv-accent)] ${className}`;
   return external
     ? <a href={href} className={cls} style={style}>{children}</a>
     : <Link href={href} className={cls} style={style}>{children}</Link>;
@@ -102,7 +114,7 @@ export function OutlineLink({ href, children, className = '' }: { href: string; 
   return (
     <Link
       href={href}
-      className={`focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] ${className}`}
+      className={`focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gv-accent)] ${className}`}
       style={{ ...BTN_BASE, background: '#FFFFFF', color: INK, border: '1.5px solid rgba(28,20,16,0.55)' }}
     >
       {children}
@@ -127,9 +139,9 @@ export function IconWord({ icon: Icon, word, color = INK, size = 'md' }: {
 
 const APP_STATUS: Record<string, { icon: LucideIcon; word: string; color: string }> = {
   submitted: { icon: Clock, word: 'Under review', color: '#8A6614' },
-  accepted: { icon: CheckCircle2, word: 'Accepted', color: '#2A5A3C' },
-  assigned: { icon: BadgeCheck, word: 'Assigned', color: '#2A5A3C' },
-  'checked-in': { icon: DoorOpen, word: 'Checked in', color: '#2A5A3C' },
+  accepted: { icon: CheckCircle2, word: 'Accepted', color: 'var(--gv-main-mid)' },
+  assigned: { icon: BadgeCheck, word: 'Assigned', color: 'var(--gv-main-mid)' },
+  'checked-in': { icon: DoorOpen, word: 'Checked in', color: 'var(--gv-main-mid)' },
   withdrawn: { icon: MinusCircle, word: 'Withdrawn', color: INK_SOFT },
   rejected: { icon: MinusCircle, word: 'Not accepted', color: '#8B2020' },
 };
@@ -236,14 +248,14 @@ export function StatusRow({ input }: { input: StatusRowInput }) {
           {free && !PAID.has(input.paymentStatus) ? (
             <IconWord icon={MinusCircle} word="No fee" color={INK_SOFT} size="lg" />
           ) : free ? (
-            <IconWord icon={CheckCircle2} word="No fee" color="#2A5A3C" size="lg" />
+            <IconWord icon={CheckCircle2} word="No fee" color="var(--gv-main-mid)" size="lg" />
           ) : beforeAcceptance ? (
             <IconWord icon={Hourglass} word="After acceptance" color={INK_SOFT} size="lg" />
           ) : (
             <IconWord icon={CHIP_STYLES[chip].icon} word={CHIP_STYLES[chip].word} color={CHIP_STYLES[chip].color} size="lg" />
           )}
         </Fact>
-        <div className="col-span-2" style={{ height: 1, background: 'rgba(27,56,40,0.08)' }} aria-hidden />
+        <div className="col-span-2" style={{ height: 1, background: 'color-mix(in srgb, var(--gv-main) 8%, transparent)' }} aria-hidden />
         <Fact label="What happens next" wide>
           <p style={{ fontFamily: OUTFIT, fontSize: 15, fontWeight: 600, color: INK, margin: 0, lineHeight: 1.5 }}>
             {nextStepSentence(input)}
@@ -287,9 +299,9 @@ export function StackHeading({ title, icon: Icon }: { title: string; icon: Lucid
       <span
         aria-hidden
         className="inline-flex items-center justify-center flex-shrink-0"
-        style={{ width: 38, height: 38, borderRadius: 999, backgroundColor: 'rgba(61,122,82,0.13)' }}
+        style={{ width: 38, height: 38, borderRadius: 999, backgroundColor: 'color-mix(in srgb, var(--gv-main-light) 13%, transparent)' }}
       >
-        <Icon size={18} strokeWidth={2.2} style={{ color: FOREST, fill: 'rgba(238,217,138,0.6)' }} />
+        <Icon size={18} strokeWidth={2.2} style={{ color: FOREST, fill: 'color-mix(in srgb, var(--gv-accent-light) 60%, transparent)' }} />
       </span>
       <span className="min-w-0">{title}</span>
     </h2>
@@ -393,8 +405,8 @@ export function NextStepCard({ step, status }: { step: NextStep; status: string 
           <p style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 700, color: GOLD_DEEP, margin: 0 }}>Your next step</p>
         ) : (
           <p className="inline-flex items-center gap-2.5" style={{ fontFamily: OUTFIT, fontSize: 19, fontWeight: 800, color: INK, margin: 0 }}>
-            <span aria-hidden className="inline-flex items-center justify-center flex-shrink-0" style={{ width: 36, height: 36, borderRadius: 999, backgroundColor: 'rgba(61,122,82,0.14)' }}>
-              <CheckCircle2 size={19} strokeWidth={2.3} style={{ color: FOREST, fill: 'rgba(238,217,138,0.6)' }} />
+            <span aria-hidden className="inline-flex items-center justify-center flex-shrink-0" style={{ width: 36, height: 36, borderRadius: 999, backgroundColor: 'color-mix(in srgb, var(--gv-main-light) 14%, transparent)' }}>
+              <CheckCircle2 size={19} strokeWidth={2.3} style={{ color: FOREST, fill: 'color-mix(in srgb, var(--gv-accent-light) 60%, transparent)' }} />
             </span>
             You&apos;re all set
           </p>
@@ -422,8 +434,8 @@ export function NextStepCard({ step, status }: { step: NextStep; status: string 
             <button
               type="button"
               onClick={() => scrollToAnchor(action.scrollTo)}
-              className="w-full sm:w-auto focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[#B6871F]"
-              style={{ ...BTN_BASE, background: FOREST_GRADIENT, color: '#FFFFFF', border: 'none', boxShadow: '0 6px 16px -8px rgba(27,56,40,0.55)' }}
+              className="w-full sm:w-auto focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[var(--gv-accent)]"
+              style={{ ...BTN_BASE, background: FOREST_GRADIENT, color: '#FFFFFF', border: 'none', boxShadow: '0 6px 16px -8px color-mix(in srgb, var(--gv-main) 55%, transparent)' }}
             >
               {action.label} <ArrowDown size={16} strokeWidth={2.4} aria-hidden />
             </button>
@@ -441,7 +453,7 @@ function NavItem({ s, on, onSelect, row }: { s: DashSection; on: boolean; onSele
       type="button"
       onClick={onSelect}
       aria-current={on ? 'page' : undefined}
-      className={`${row ? 'flex-shrink-0' : 'w-full'} inline-flex items-center gap-2.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F]`}
+      className={`${row ? 'flex-shrink-0' : 'w-full'} inline-flex items-center gap-2.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gv-accent)]`}
       style={{
         minHeight: 44, padding: row ? '0 14px 0 6px' : '0 12px 0 6px', borderRadius: 999,
         border: 'none', cursor: 'pointer', textAlign: 'start',
@@ -457,9 +469,9 @@ function NavItem({ s, on, onSelect, row }: { s: DashSection; on: boolean; onSele
       <span
         aria-hidden
         className="inline-flex items-center justify-center flex-shrink-0"
-        style={{ width: 32, height: 32, borderRadius: 999, backgroundColor: on ? 'rgba(61,122,82,0.14)' : 'rgba(27,56,40,0.05)' }}
+        style={{ width: 32, height: 32, borderRadius: 999, backgroundColor: on ? 'color-mix(in srgb, var(--gv-main-light) 14%, transparent)' : 'color-mix(in srgb, var(--gv-main) 5%, transparent)' }}
       >
-        <Icon size={16} strokeWidth={2.2} style={{ color: on ? FOREST : INK_SOFT, fill: on ? 'rgba(238,217,138,0.55)' : 'none' }} />
+        <Icon size={16} strokeWidth={2.2} style={{ color: on ? FOREST : INK_SOFT, fill: on ? 'color-mix(in srgb, var(--gv-accent-light) 55%, transparent)' : 'none' }} />
       </span>
       <span style={{ whiteSpace: 'nowrap' }}>{s.label}</span>
     </button>
@@ -578,7 +590,7 @@ export function CommitteeEmblem({ logoUrl, name, abbreviation, size = 48, isCris
 }) {
   if (logoUrl) {
     // eslint-disable-next-line @next/next/no-img-element
-    return <img src={logoUrl} alt="" style={{ width: size, height: size, objectFit: 'contain', flexShrink: 0, filter: 'drop-shadow(0 6px 12px rgba(27,56,40,0.22))' }} />;
+    return <img src={logoUrl} alt="" style={{ width: size, height: size, objectFit: 'contain', flexShrink: 0, filter: 'drop-shadow(0 6px 12px color-mix(in srgb, var(--gv-main) 22%, transparent))' }} />;
   }
   return <MonogramMedallion text={abbreviation || name} isCrisis={isCrisis} size={size} />;
 }

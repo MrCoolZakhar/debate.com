@@ -17,7 +17,7 @@
  * - Stateless about the stage: mount it once and it keeps its scroll and zoom (the zoom is a
  *   prop owned by the caller). Nothing here touches committee state.
  * - Any pdf.js failure (worker, CORS, a broken file) falls back to the browser's iframe, and so
- *   does any URL outside this project's public storage (`isPdfJsUrl`).
+ *   does any URL outside this project's storage, public or signed (`isPdfJsUrl`).
  * - Every drawn page carries a pdf.js text layer (transparent, selectable, read by screen
  *   readers), sized by `--total-scale-factor` on the page box so it follows the zoom.
  */

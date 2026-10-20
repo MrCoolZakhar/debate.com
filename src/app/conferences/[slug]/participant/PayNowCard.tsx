@@ -71,9 +71,9 @@ function BalanceRow({ b, showConference }: { b: OpenBalance; showConference: boo
     <div className="flex items-center gap-3.5 flex-wrap">
       <div
         className="flex-shrink-0 flex items-center justify-center"
-        style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: 'rgba(27,56,40,0.07)' }}
+        style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: 'color-mix(in srgb, var(--gv-main) 7%, transparent)' }}
       >
-        <CreditCard size={18} strokeWidth={2} style={{ color: '#1B3828' }} aria-hidden />
+        <CreditCard size={18} strokeWidth={2} style={{ color: 'var(--gv-main)' }} aria-hidden />
       </div>
       <div className="flex-1 min-w-0">
         {showConference && (
@@ -97,7 +97,7 @@ function BalanceRow({ b, showConference }: { b: OpenBalance; showConference: boo
         <Link
           href={`/conferences/${b.slug}/pay`}
           className="inline-flex items-center gap-1.5 rounded-full px-4 py-2.5 focus:outline-none flex-shrink-0"
-          style={{ backgroundColor: '#1B3828', color: '#EED98A', fontFamily: OUTFIT, fontSize: 13, fontWeight: 700, textDecoration: 'none' }}
+          style={{ backgroundColor: 'var(--gv-main)', color: 'var(--gv-on-main)', fontFamily: OUTFIT, fontSize: 13, fontWeight: 700, textDecoration: 'none' }}
         >
           Pay now <ArrowRight size={14} aria-hidden />
         </Link>
@@ -107,7 +107,7 @@ function BalanceRow({ b, showConference }: { b: OpenBalance; showConference: boo
           slug={b.slug}
           label={<>Pay now</>}
           className="inline-flex items-center gap-1.5 rounded-full px-4 py-2.5 focus:outline-none flex-shrink-0"
-          style={{ backgroundColor: '#1B3828', color: '#EED98A', fontFamily: OUTFIT, fontSize: 13, fontWeight: 700, border: 'none' }}
+          style={{ backgroundColor: 'var(--gv-main)', color: 'var(--gv-on-main)', fontFamily: OUTFIT, fontSize: 13, fontWeight: 700, border: 'none' }}
         />
       )}
     </div>

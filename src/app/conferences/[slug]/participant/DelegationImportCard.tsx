@@ -36,10 +36,10 @@ import { SectionCard, OUTFIT } from './shared';
 const MAX_ROWS = 200;
 const INK = '#1C1410';
 const INK_SOFT = '#5A5046';
-const FOREST = '#1B3828';
+const FOREST = 'var(--gv-main)';
 const LINE = '#DDD4C0';
 const DANGER = '#8B2020';
-const FOCUS = 'focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] focus-visible:ring-offset-2 focus-visible:ring-offset-[#FAF8F3]';
+const FOCUS = 'focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gv-accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[#FAF8F3]';
 
 // ── Server shapes ──────────────────────────────────────────────────────────
 
@@ -214,7 +214,7 @@ function statusOf(d: ImportedDelegate): { Icon: typeof Mail; label: string; colo
   if (d.status === 'rejected') return { Icon: UserX, label: 'Not accepted', color: DANGER };
   if (d.status === 'withdrawn') return { Icon: Undo2, label: 'Withdrawn', color: INK_SOFT };
   if (d.status === 'accepted' || d.status === 'assigned' || d.status === 'checked-in') {
-    return { Icon: BadgeCheck, label: 'Accepted', color: '#2A5A3C' };
+    return { Icon: BadgeCheck, label: 'Accepted', color: 'var(--gv-main-mid)' };
   }
   if (d.claimed) return { Icon: UserCheck, label: 'Joined', color: FOREST };
   return { Icon: Mail, label: 'Invited', color: '#8A6414' };
@@ -652,7 +652,7 @@ export default function DelegationImportCard({
           className={`flex items-center justify-center rounded-xl px-5 font-bold text-sm transition-colors ${FOCUS}`}
           style={{
             minWidth: 220, height: 48,
-            background: busy ? '#2A5A3C' : 'linear-gradient(90deg, #1B3828 0%, #2A5A3C 100%)',
+            background: busy ? 'var(--gv-main-mid)' : 'linear-gradient(90deg, var(--gv-main) 0%, var(--gv-main-mid) 100%)',
             color: '#FFFFFF',
             fontFamily: OUTFIT, letterSpacing: '0.01em', border: 'none',
             cursor: busy ? 'wait' : count === 0 ? 'not-allowed' : 'pointer',
@@ -700,7 +700,7 @@ export default function DelegationImportCard({
         </div>
       )}
       {okLine && (
-        <p role="status" style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 600, color: '#2A5A3C', margin: '12px 0 0 0' }}>{okLine}</p>
+        <p role="status" style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 600, color: 'var(--gv-main-mid)', margin: '12px 0 0 0' }}>{okLine}</p>
       )}
     </>
   );
@@ -715,7 +715,7 @@ export default function DelegationImportCard({
           <li
             key={d.application_id}
             className="flex flex-wrap items-start justify-between gap-x-4 gap-y-1.5 rounded-xl"
-            style={{ padding: '12px 14px', backgroundColor: '#FFFFFF', boxShadow: '0 1px 3px rgba(27,56,40,0.06)' }}
+            style={{ padding: '12px 14px', backgroundColor: '#FFFFFF', boxShadow: '0 1px 3px color-mix(in srgb, var(--gv-main) 6%, transparent)' }}
           >
             <div className="min-w-0 flex-1" style={{ minWidth: 180 }}>
               <p style={{ fontFamily: OUTFIT, fontSize: 15.5, fontWeight: 700, color: INK, margin: 0, overflowWrap: 'anywhere', lineHeight: 1.3 }}>

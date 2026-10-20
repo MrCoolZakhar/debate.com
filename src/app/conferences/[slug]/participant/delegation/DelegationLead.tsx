@@ -68,7 +68,7 @@ export default function DelegationLead({ step, status, roomCode, notice }: {
   return (
     <>
       <section aria-label="Your next step" className="flex flex-col gap-3" style={{ ...cardStyle, padding: '20px 24px' }}>
-        <p style={{ fontFamily: FONT, fontSize: 13, fontWeight: 600, color: '#8A6614', margin: 0 }}>Your next step</p>
+        <p style={{ fontFamily: FONT, fontSize: 13, fontWeight: 600, color: 'color-mix(in srgb, var(--gv-accent) 72%, #1C1410)', margin: 0 }}>Your next step</p>
 
         {step && hasStep && (
           <p

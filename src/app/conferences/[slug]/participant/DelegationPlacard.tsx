@@ -60,15 +60,15 @@ export default function DelegationPlacard({ societyId, paymentStatus, selfPaid, 
   if (isIndependent) {
     return (
       <SectionCard>
-        <p style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: '9px', letterSpacing: '0.14em', color: '#B6871F', margin: '0 0 10px 0' }}>
+        <p style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: '9px', letterSpacing: '0.14em', color: 'var(--gv-accent)', margin: '0 0 10px 0' }}>
           DELEGATION
         </p>
         <div className="flex items-center gap-3">
           <span
             className="flex items-center justify-center flex-shrink-0"
-            style={{ width: 38, height: 38, borderRadius: '9999px', backgroundColor: 'rgba(27,56,40,0.07)' }}
+            style={{ width: 38, height: 38, borderRadius: '9999px', backgroundColor: 'color-mix(in srgb, var(--gv-main) 7%, transparent)' }}
           >
-            <Users2 size={16} style={{ color: '#1B3828' }} />
+            <Users2 size={16} style={{ color: 'var(--gv-main)' }} />
           </span>
           <p className="text-sm font-semibold" style={{ color: '#1C1410', fontFamily: OUTFIT, margin: 0 }}>
             Independent delegate
@@ -81,7 +81,7 @@ export default function DelegationPlacard({ societyId, paymentStatus, selfPaid, 
   return (
     <SectionCard>
       <div className="flex items-center justify-between gap-3 mb-3">
-        <p style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: '9px', letterSpacing: '0.14em', color: '#B6871F', margin: 0 }}>
+        <p style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: '9px', letterSpacing: '0.14em', color: 'var(--gv-accent)', margin: 0 }}>
           DELEGATION
         </p>
         <PaymentChipMark chip={chip} />

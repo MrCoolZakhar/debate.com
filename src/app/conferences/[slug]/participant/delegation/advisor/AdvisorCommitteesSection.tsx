@@ -199,7 +199,7 @@ function SeatRow({ seat: s, showSeatNumber }: { seat: AdvisorCommitteeSeat; show
     return (
       <div
         className="flex items-center gap-3"
-        style={{ padding: '10px 12px', borderRadius: 12, border: '1.5px dashed rgba(27,56,40,0.22)' }}
+        style={{ padding: '10px 12px', borderRadius: 12, border: '1.5px dashed color-mix(in srgb, var(--gv-main) 22%, transparent)' }}
       >
         <CircleFlag code={s.countryCode} country={s.countryName} size={40} decorative />
         <div className="flex-1 min-w-0 flex flex-col gap-0.5">

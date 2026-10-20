@@ -24,6 +24,7 @@ import { getAuthedClient } from '@/lib/supabase-auth';
 import { FlagImg } from '@/components/FlagImg';
 import ProfileLink from '@/components/ProfileLink';
 import { SectionCard, OUTFIT } from './shared';
+import { CARD_TITLE_STYLE } from './dashboardKit';
 import type { ParticipantAllocation } from './types';
 
 export interface CoDelegateRow {
@@ -115,7 +116,7 @@ export default function CoDelegateCard({ conferenceId, myAllocation }: {
   return (
     <SectionCard>
       <div className="flex items-center gap-2.5 mb-5">
-        <Users size={18} strokeWidth={2.2} style={{ color: '#1B3828' }} aria-hidden />
+        <Users size={18} strokeWidth={2.2} style={{ color: 'var(--gv-main)' }} aria-hidden />
         <h3 className="font-bold text-[16px]" style={{ color: '#1C1410', fontFamily: OUTFIT, margin: 0 }}>
           Your Delegation
         </h3>
@@ -127,21 +128,19 @@ export default function CoDelegateCard({ conferenceId, myAllocation }: {
           <img
             src={row.partner_avatar_url}
             alt=""
-            style={{ width: 56, height: 56, borderRadius: 9999, objectFit: 'cover', flexShrink: 0, boxShadow: '0 4px 12px rgba(27,56,40,0.18)' }}
+            style={{ width: 56, height: 56, borderRadius: 9999, objectFit: 'cover', flexShrink: 0, boxShadow: '0 4px 12px color-mix(in srgb, var(--gv-main) 18%, transparent)' }}
           />
         ) : (
           <div
             aria-hidden
             className="flex items-center justify-center font-bold"
-            style={{ width: 56, height: 56, borderRadius: 9999, flexShrink: 0, backgroundColor: '#1B3828', color: '#EED98A', fontFamily: OUTFIT, fontSize: 18 }}
+            style={{ width: 56, height: 56, borderRadius: 9999, flexShrink: 0, backgroundColor: 'var(--gv-main)', color: 'var(--gv-on-main)', fontFamily: OUTFIT, fontSize: 18 }}
           >
             {hasPartner ? initials(row.partner_name ?? row.partner_email) : '?'}
           </div>
         )}
         <div className="min-w-0 flex-1">
-          <p style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: 11, letterSpacing: '0.12em', color: '#8A6614', margin: 0 }}>
-            YOUR CO-DELEGATE
-          </p>
+          <h3 style={CARD_TITLE_STYLE}>Your Co-Delegate</h3>
           {hasPartner ? (
             <>
               <p className="font-bold text-[17px] [overflow-wrap:anywhere]" style={{ color: '#1C1410', fontFamily: OUTFIT, margin: '2px 0 0' }}>
@@ -160,10 +159,10 @@ export default function CoDelegateCard({ conferenceId, myAllocation }: {
                     aria-label={copied ? 'Email copied' : 'Copy email address'}
                     title={copied ? 'Copied' : 'Copy email address'}
                     className="flex items-center justify-center focus:outline-none flex-shrink-0"
-                    style={{ width: 28, height: 28, borderRadius: 9999, border: 'none', cursor: 'pointer', backgroundColor: 'rgba(27,56,40,0.07)' }}
+                    style={{ width: 28, height: 28, borderRadius: 9999, border: 'none', cursor: 'pointer', backgroundColor: 'color-mix(in srgb, var(--gv-main) 7%, transparent)' }}
                   >
                     {copied
-                      ? <Check size={13} strokeWidth={2.6} style={{ color: '#3D7A52' }} />
+                      ? <Check size={13} strokeWidth={2.6} style={{ color: 'var(--gv-main-light)' }} />
                       : <Copy size={13} strokeWidth={2.4} style={{ color: '#574B40' }} />}
                   </button>
                 </div>
@@ -180,21 +179,21 @@ export default function CoDelegateCard({ conferenceId, myAllocation }: {
       {/* What the two of you share */}
       <div className="mt-6 pt-5 flex flex-col gap-3.5" style={{ borderTop: '1px solid rgba(221,212,192,0.55)' }}>
         <div className="flex items-center gap-3">
-          <Armchair size={16} strokeWidth={2.2} style={{ color: '#1B3828', flexShrink: 0 }} aria-hidden />
+          <Armchair size={16} strokeWidth={2.2} style={{ color: 'var(--gv-main)', flexShrink: 0 }} aria-hidden />
           <FlagImg code={row.country_code} size={20} className="rounded-sm" label={row.country_name} />
           <span className="text-[13.5px]" style={{ color: '#2E2820', fontFamily: OUTFIT }}>
             One seat: <strong>{row.country_name}</strong> in {committeeLabel}
           </span>
         </div>
         <div className="flex items-center gap-3">
-          <FileText size={16} strokeWidth={2.2} style={{ color: '#1B3828', flexShrink: 0 }} aria-hidden />
+          <FileText size={16} strokeWidth={2.2} style={{ color: 'var(--gv-main)', flexShrink: 0 }} aria-hidden />
           <span className="text-[13.5px]" style={{ color: '#2E2820', fontFamily: OUTFIT }}>
             One position paper:{' '}
             {paperStatus === undefined ? '' : paperStatus ? (PAPER_WORDS[paperStatus] ?? 'Submitted') : 'not submitted yet. Either of you can submit it.'}
           </span>
         </div>
         <div className="flex items-center gap-3">
-          <Radio size={16} strokeWidth={2.2} style={{ color: '#1B3828', flexShrink: 0 }} aria-hidden />
+          <Radio size={16} strokeWidth={2.2} style={{ color: 'var(--gv-main)', flexShrink: 0 }} aria-hidden />
           <span className="text-[13.5px]" style={{ color: '#2E2820', fontFamily: OUTFIT }}>
             {sessionCode
               ? 'One placard in the live session. You can both join the same seat, each on your own phone.'

@@ -17,6 +17,7 @@ import { NEU, EASE, NeuCard } from '@/components/neu';
 import ProfileLink from '@/components/ProfileLink';
 import { ActionButton } from '@/components/PositionPaperButtons';
 import { SectionCard, OUTFIT, useAllocationPartner } from './shared';
+import { CardHeading, CARD_TITLE_STYLE, INK_SOFT } from './dashboardKit';
 import type { ParticipantAllocation } from './types';
 import { useScrollLock } from '@/hooks/useScrollLock';
 import { friendlyError } from '@/lib/friendlyError';
@@ -33,9 +34,9 @@ interface PositionPaper {
 }
 
 const ppStatusMap: Record<string, { bg: string; color: string }> = {
-  submitted: { bg: 'rgba(238,217,138,0.2)', color: '#B8844A' },
+  submitted: { bg: 'color-mix(in srgb, var(--gv-accent-light) 20%, transparent)', color: '#B8844A' },
   reviewed: { bg: 'rgba(154,138,120,0.15)', color: '#9A8A78' },
-  approved: { bg: 'rgba(61,122,82,0.12)', color: '#3D7A52' },
+  approved: { bg: 'color-mix(in srgb, var(--gv-main-light) 12%, transparent)', color: 'var(--gv-main-light)' },
   rejected: { bg: 'rgba(139,32,32,0.1)', color: '#8B2020' },
 };
 const NOT_SUBMITTED_STYLE = { bg: 'rgba(154,138,120,0.14)', color: '#6B5F52' };
@@ -332,10 +333,8 @@ export default function PositionPaperCard({ conferenceId, conferenceSlug, myAllo
   if (!myAllocation) {
     return (
       <SectionCard>
-        <p style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: '9px', letterSpacing: '0.14em', color: '#B6871F', margin: '0 0 8px 0' }}>
-          POSITION PAPER
-        </p>
-        <p className="text-sm" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>
+        <CardHeading title="Position Paper" />
+        <p style={{ color: INK_SOFT, fontFamily: OUTFIT, fontSize: 14, lineHeight: 1.5, margin: 0 }}>
           Your position paper submission unlocks once you receive your committee allocation.
         </p>
       </SectionCard>
@@ -355,7 +354,7 @@ export default function PositionPaperCard({ conferenceId, conferenceSlug, myAllo
   // replacement is still held to it (see the late-warning in the replace
   // modal below).
   const dueLine = deadline ? (
-    <p style={{ fontFamily: OUTFIT, fontWeight: 500, fontVariantNumeric: 'tabular-nums', fontSize: 11, color: deadlineSoon ? '#B8844A' : '#9A8A78', margin: '0 0 10px 0' }}>
+    <p style={{ fontFamily: OUTFIT, fontWeight: 500, fontVariantNumeric: 'tabular-nums', fontSize: 14, color: deadlineSoon ? '#8A5A2E' : INK_SOFT, margin: '0 0 12px 0' }}>
       Due {fmtDate(deadline)}
     </p>
   ) : null;
@@ -364,12 +363,16 @@ export default function PositionPaperCard({ conferenceId, conferenceSlug, myAllo
   // always-visible clickable row — no accordion, matching the study guide
   // card's pattern.
   if (myPositionPaper && !isReplacing) {
+    // "Upload and Replace" (prompt 142): always for a rejected paper; for a
+    // paper submitted or under review only while submissions are open and the
+    // deadline (if any) has not passed; never once it is accepted.
+    const st = myPositionPaper.status;
+    const canReplace = st === 'rejected'
+      || ((st === 'submitted' || st === 'reviewed') && ppEnabled && !deadlinePassed);
     const statusStyle = ppStatusMap[myPositionPaper.status] ?? ppStatusMap.submitted;
     return (
       <SectionCard>
-        <p style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: '9px', letterSpacing: '0.14em', color: '#B6871F', margin: '0 0 12px 0' }}>
-          POSITION PAPER
-        </p>
+        <CardHeading title="Position Paper" />
         {dueLine}
         <NeuCard
           hover
@@ -377,12 +380,12 @@ export default function PositionPaperCard({ conferenceId, conferenceSlug, myAllo
           className="w-full flex items-center gap-3.5 text-left"
           style={{ padding: '12px 16px', borderRadius: 16 }}
         >
-          <div className="flex-shrink-0 flex items-center justify-center" style={{ width: 38, height: 38, borderRadius: 11, backgroundColor: 'rgba(27,56,40,0.07)' }}>
-            <FileText size={16} style={{ color: '#1B3828' }} />
+          <div className="flex-shrink-0 flex items-center justify-center" style={{ width: 38, height: 38, borderRadius: 11, backgroundColor: 'color-mix(in srgb, var(--gv-main) 7%, transparent)' }}>
+            <FileText size={16} style={{ color: 'var(--gv-main)' }} />
           </div>
           <div className="flex-1 min-w-0">
-            <p className="[overflow-wrap:anywhere]" title={myPositionPaper.file_name} style={{ fontFamily: OUTFIT, fontWeight: 600, fontSize: 13, color: '#1C1410', margin: 0 }}>{myPositionPaper.file_name}</p>
-            <p style={{ fontFamily: OUTFIT, fontSize: 11, color: '#9A8A78', margin: '2px 0 0 0' }}>
+            <p className="[overflow-wrap:anywhere]" title={myPositionPaper.file_name} style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 15.5, lineHeight: 1.3, color: '#1C1410', margin: 0 }}>{myPositionPaper.file_name}</p>
+            <p style={{ fontFamily: OUTFIT, fontSize: 13, lineHeight: 1.45, color: INK_SOFT, margin: '3px 0 0 0' }}>
               Submitted {fmtDate(myPositionPaper.submitted_at)}
               {myPositionPaper.user_id !== user?.id && (
                 <>
@@ -402,7 +405,7 @@ export default function PositionPaperCard({ conferenceId, conferenceSlug, myAllo
             {unreadCount > 0 && (
               <span
                 className="flex items-center justify-center"
-                style={{ minWidth: 18, height: 18, padding: '0 5px', borderRadius: 9999, backgroundColor: '#1B3828', color: '#EED98A', fontSize: 10, fontFamily: OUTFIT, fontWeight: 800 }}
+                style={{ minWidth: 18, height: 18, padding: '0 5px', borderRadius: 9999, backgroundColor: 'var(--gv-main)', color: 'var(--gv-on-main)', fontSize: 10, fontFamily: OUTFIT, fontWeight: 800 }}
               >
                 {unreadCount}
               </span>
@@ -423,26 +426,21 @@ export default function PositionPaperCard({ conferenceId, conferenceSlug, myAllo
             <ChevronRight size={16} strokeWidth={2.4} style={{ color: NEU.muted, flexShrink: 0 }} />
           </div>
         </NeuCard>
-        {myPositionPaper.status === 'rejected' ? (
+        {canReplace && (
           <ActionButton
-            onClick={() => { setIsReplacing(true); setExpanded(true); setPPFile(null); setPPError(''); }}
-            background="linear-gradient(135deg, #1B3828, #2F6644)"
-            color="#EED98A"
-            boxShadowColor="rgba(27,56,40,0.35)"
+            onClick={() => {
+              // A rejected paper goes straight to the upload; any other paper
+              // first says the new version reopens it for review.
+              if (myPositionPaper.status === 'rejected') { setIsReplacing(true); setExpanded(true); setPPFile(null); setPPError(''); }
+              else setShowPPWarning(true);
+            }}
+            background="linear-gradient(135deg, var(--gv-main), var(--gv-main-mid))"
+            color="var(--gv-on-main)"
+            boxShadowColor="color-mix(in srgb, var(--gv-main) 35%, transparent)"
             style={{ marginTop: 12, padding: '10px 18px', fontSize: 13, borderRadius: 12 }}
           >
             Upload and Replace
           </ActionButton>
-        ) : ppEnabled && (
-        <button
-          onClick={() => setShowPPWarning(true)}
-          className="focus:outline-none mt-2.5"
-          style={{ fontFamily: OUTFIT, fontSize: 10.5, fontWeight: 500, color: NEU.muted, background: 'none', border: 'none', cursor: 'pointer', padding: 0, textDecoration: 'none', transition: `color 160ms ${EASE}` }}
-          onMouseEnter={e => { const el = e.currentTarget as HTMLElement; el.style.color = NEU.forest; el.style.textDecoration = 'underline'; }}
-          onMouseLeave={e => { const el = e.currentTarget as HTMLElement; el.style.color = NEU.muted; el.style.textDecoration = 'none'; }}
-        >
-          Replace
-        </button>
         )}
 
         {showPPWarning && (
@@ -462,16 +460,16 @@ export default function PositionPaperCard({ conferenceId, conferenceSlug, myAllo
                   onClick={() => setShowPPWarning(false)}
                   background={NEU.surface}
                   color={NEU.ink}
-                  boxShadowColor="rgba(27,56,40,0.1)"
+                  boxShadowColor="color-mix(in srgb, var(--gv-main) 10%, transparent)"
                   style={{ flex: 1, padding: '10px 0', fontSize: 13, borderRadius: 12 }}
                 >
                   Cancel
                 </ActionButton>
                 <ActionButton
                   onClick={() => { setShowPPWarning(false); setIsReplacing(true); setExpanded(true); setPPFile(null); setPPError(''); }}
-                  background="linear-gradient(135deg, #1B3828, #2F6644)"
-                  color="#EED98A"
-                  boxShadowColor="rgba(27,56,40,0.35)"
+                  background="linear-gradient(135deg, var(--gv-main), var(--gv-main-mid))"
+                  color="var(--gv-on-main)"
+                  boxShadowColor="color-mix(in srgb, var(--gv-main) 35%, transparent)"
                   style={{ flex: 1, padding: '10px 0', fontSize: 13, borderRadius: 12 }}
                 >
                   Replace
@@ -488,9 +486,7 @@ export default function PositionPaperCard({ conferenceId, conferenceSlug, myAllo
   if (!myPositionPaper && paperLoad !== 'ok') {
     return (
       <SectionCard>
-        <p style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: '9px', letterSpacing: '0.14em', color: '#B6871F', margin: '0 0 8px 0' }}>
-          POSITION PAPER
-        </p>
+        <CardHeading title="Position Paper" />
         {dueLine}
         {paperLoad === 'loading' ? (
           <p className="text-sm" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>Loading your paper…</p>
@@ -502,7 +498,7 @@ export default function PositionPaperCard({ conferenceId, conferenceSlug, myAllo
             <button
               onClick={() => { setPaperLoad('loading'); loadMyPositionPaper(); }}
               className="focus:outline-none flex-shrink-0 rounded-full px-3.5 py-1.5"
-              style={{ fontFamily: OUTFIT, fontSize: 12, fontWeight: 700, color: '#EED98A', background: '#1B3828', border: 'none', cursor: 'pointer' }}
+              style={{ fontFamily: OUTFIT, fontSize: 12, fontWeight: 700, color: 'var(--gv-on-main)', background: 'var(--gv-main)', border: 'none', cursor: 'pointer' }}
             >
               Try again
             </button>
@@ -521,12 +517,10 @@ export default function PositionPaperCard({ conferenceId, conferenceSlug, myAllo
         onClick={() => setExpanded(v => !v)}
         className="w-full flex items-center justify-between gap-3 rounded-xl focus:outline-none"
         style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '4px 6px', margin: '-4px -6px', transition: `background-color 180ms ${EASE}` }}
-        onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.04)'; }}
+        onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'color-mix(in srgb, var(--gv-main) 4%, transparent)'; }}
         onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
       >
-        <p style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: '9px', color: '#B6871F', margin: 0 }}>
-          POSITION PAPER
-        </p>
+        <h3 style={CARD_TITLE_STYLE}>Position Paper</h3>
         <div className="flex items-center gap-2.5">
           <span
             style={{ color: collapsedStyle.color, fontSize: 12, fontFamily: OUTFIT, fontWeight: 700 }}
@@ -541,7 +535,7 @@ export default function PositionPaperCard({ conferenceId, conferenceSlug, myAllo
       {expanded && (
         <div className="mt-5 pt-5" style={{ borderTop: '1px solid rgba(221,212,192,0.6)' }}>
           {!ppEnabled && !replacingRejected ? (
-            <p style={{ fontFamily: OUTFIT, fontSize: 13, color: '#9A8A78' }}>
+            <p style={{ fontFamily: OUTFIT, fontSize: 14, lineHeight: 1.5, color: INK_SOFT, margin: 0 }}>
               Position paper submissions are not yet open for your committee.
             </p>
           ) : (
@@ -562,8 +556,8 @@ export default function PositionPaperCard({ conferenceId, conferenceSlug, myAllo
                   <p style={{ fontSize: 11, color: '#9A8A78', fontFamily: OUTFIT, fontWeight: 500, fontVariantNumeric: 'tabular-nums' }}>MAX 5MB</p>
                 </div>
               ) : (
-                <div style={{ borderRadius: 12, padding: '10px 14px', backgroundColor: 'rgba(61,122,82,0.06)', boxShadow: NEU.inSm, display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-                  <FileText size={15} style={{ color: '#2A5A3C', flexShrink: 0 }} />
+                <div style={{ borderRadius: 12, padding: '10px 14px', backgroundColor: 'color-mix(in srgb, var(--gv-main-light) 6%, transparent)', boxShadow: NEU.inSm, display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                  <FileText size={15} style={{ color: 'var(--gv-main-mid)', flexShrink: 0 }} />
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <p title={ppFile.name} style={{ fontSize: 13, color: '#1C1410', fontFamily: OUTFIT, fontWeight: 600, overflowWrap: 'anywhere' }}>{ppFile.name}</p>
                   </div>
@@ -585,7 +579,7 @@ export default function PositionPaperCard({ conferenceId, conferenceSlug, myAllo
                     onClick={() => { setIsReplacing(false); setPPFile(null); setPPError(''); }}
                     background={NEU.surface}
                     color={NEU.ink}
-                    boxShadowColor="rgba(27,56,40,0.1)"
+                    boxShadowColor="color-mix(in srgb, var(--gv-main) 10%, transparent)"
                     style={{ padding: '10px 18px', fontSize: 13, borderRadius: 12 }}
                   >
                     Cancel
@@ -594,9 +588,9 @@ export default function PositionPaperCard({ conferenceId, conferenceSlug, myAllo
                 <ActionButton
                   onClick={isReplacing ? handleReplace : handlePPSubmit}
                   disabled={!ppFile || ppUploading}
-                  background="linear-gradient(135deg, #1B3828, #2F6644)"
-                  color="#EED98A"
-                  boxShadowColor="rgba(27,56,40,0.35)"
+                  background="linear-gradient(135deg, var(--gv-main), var(--gv-main-mid))"
+                  color="var(--gv-on-main)"
+                  boxShadowColor="color-mix(in srgb, var(--gv-main) 35%, transparent)"
                   style={{ flex: 1, padding: '10px 0', fontSize: 13, borderRadius: 12 }}
                 >
                   {ppUploading ? 'Uploading…' : isReplacing ? 'Submit new version' : 'Submit position paper'}

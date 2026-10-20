@@ -74,10 +74,10 @@ export default function DelegationInviteLink({ societyId, conferenceId, buttonSt
         onClick={onPress}
         disabled={busy}
         aria-live="polite"
-        className="inline-flex items-center gap-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[#B6871F]"
+        className="inline-flex items-center gap-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[var(--gv-accent)]"
         style={{
           minHeight: 44, padding: '0 16px', borderRadius: 10,
-          border: '1.5px solid rgba(27,56,40,0.55)', background: '#FFFFFF', color: '#1B3828',
+          border: '1.5px solid color-mix(in srgb, var(--gv-main) 55%, transparent)', background: '#FFFFFF', color: 'var(--gv-main)',
           fontFamily: OUTFIT, fontSize: 14, fontWeight: 700,
           ...buttonStyle,
           cursor: busy ? 'wait' : 'pointer',
@@ -90,7 +90,7 @@ export default function DelegationInviteLink({ societyId, conferenceId, buttonSt
         <p style={{ fontFamily: OUTFIT, fontSize: 13, lineHeight: 1.45, color: '#5A4A3C', margin: 0, maxWidth: 340, overflowWrap: 'anywhere' }}>
           Send it to your delegates. They apply with your delegation already chosen, or join it if they applied already.
           <br />
-          <span style={{ color: '#1B3828', fontWeight: 600, userSelect: 'all' }}>{link}</span>
+          <span style={{ color: 'var(--gv-main)', fontWeight: 600, userSelect: 'all' }}>{link}</span>
         </p>
       )}
       {error && (

@@ -10,7 +10,7 @@
  * - Pages are drawn lazily: only the ones near the view hold a canvas.
  * - Anything that fails (the worker, CORS, a broken file) calls `onFailed`, and
  *   the caller shows its sentence with Download still working.
- * Only files in this project's public storage are opened (`isPdfJsUrl`).
+ * Only files in this project's storage are opened, public or signed (`isPdfJsUrl`, the same test PdfViewer uses).
  */
 
 import { useEffect, useRef, useState } from 'react';

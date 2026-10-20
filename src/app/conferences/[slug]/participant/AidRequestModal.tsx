@@ -208,8 +208,8 @@ export default function AidRequestModal({
             disabled={submitting}
             className="flex-1 rounded-xl py-2.5 font-bold text-sm focus:outline-none transition-colors"
             style={{
-              backgroundColor: submitting ? '#DDD4C0' : '#1B3828',
-              color: submitting ? '#9A8A78' : '#EED98A',
+              backgroundColor: submitting ? '#DDD4C0' : 'var(--gv-main)',
+              color: submitting ? '#9A8A78' : 'var(--gv-on-main)',
               fontFamily: OUTFIT, cursor: submitting ? 'default' : 'pointer',
             }}
           >

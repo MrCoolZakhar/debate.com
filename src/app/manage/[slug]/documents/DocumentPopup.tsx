@@ -22,7 +22,7 @@
 // A file uploaded for a document that is never saved is removed again.
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, Check, ExternalLink, FileText, Upload } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, Check, Download, ExternalLink, FileText, Lock, Upload } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { getFreshAuthedClient } from '@/lib/supabase-auth';
 import { PurchaseShell, PURCHASE_CSS } from '@/components/purchase/purchaseKit';
@@ -37,7 +37,7 @@ import { CD_CSS, EXTRA_CSS, ROLE_CHOICES } from './docsTabKit';
 import { formatDate } from './CommitteeDocsPopup';
 import {
   CONFERENCE_DOCS_BUCKET, CONFERENCE_DOC_MAX_BYTES, CONFERENCE_DOC_TITLE_MAX, DOC_FILE_ACCEPT,
-  conferenceDocPath, docMimeFor, docTypeLabel, formatDocSize, isAllowedDocFile, linkHost, normaliseDocUrl, saveConferenceDocument,
+  conferenceDocPath, docMimeFor, docTypeLabel, formatDocSize, linkHost, normaliseDocUrl, saveConferenceDocument,
   type ConferenceDocKind,
 } from '@/lib/conferenceDocuments';
 
@@ -146,7 +146,9 @@ export default function DocumentPopup({ conferenceId, editing, extra, onClose, o
 
   function pickFile(f: File | undefined | null) {
     if (!f) return;
-    if (!isAllowedDocFile(f)) { setFieldErr('file', 'Use a PDF, a Word document or a JPG or PNG image'); return; }
+    // The type first, then the size: isAllowedDocFile also refuses a file over
+    // 10 MB, which made a large PDF read as the wrong type (check 90).
+    if (docMimeFor(f) === null) { setFieldErr('file', 'Use a PDF, a Word document or a JPG or PNG image'); return; }
     if (f.size > CONFERENCE_DOC_MAX_BYTES) { setFieldErr('file', 'The file is over 10 MB. Make it smaller and try again'); return; }
     clearFieldErr('file');
     setFile(f);
@@ -439,10 +441,10 @@ export default function DocumentPopup({ conferenceId, editing, extra, onClose, o
                 <Switch
                   on={askBackOn}
                   disabled={busy || source === 'link'}
+                  locked={source === 'link'}
                   onChange={v => { setAskBack(v); clearFieldErr('ask_back'); }}
                   title="Ask applicants to send this document back"
                 />
-                {source === 'link' && <p className="gv-fd-note">To ask people to send it back, upload the file itself, not a link</p>}
                 {err('ask_back')}
                 {askBackOn && (
                   <div className="gv-cd-sub-block">
@@ -479,6 +481,13 @@ export default function DocumentPopup({ conferenceId, editing, extra, onClose, o
             )}
 
             {formErr && <p className="gv-st-err" role="alert">{formErr}</p>}
+
+            {step === 4 && extra && source === 'link' && (
+              <div className="gv-dflow-warn" role="note">
+                <AlertTriangle size={18} strokeWidth={2.4} aria-hidden style={{ flexShrink: 0, marginTop: 1 }} />
+                <p>To ask people to send it back, upload the file itself, not a link</p>
+              </div>
+            )}
 
             <div className="gv-dflow-foot">
               {stepNo === 1 && onBackToList && (
@@ -555,6 +564,8 @@ function DocPreview({ link, localFile, storedPath, storedName, storedMime, store
   storedSize: number | null;
 }) {
   const [zoom, setZoom] = useState<PdfZoom>('fit');
+  // An image the browser could not draw falls back to the file card with Download.
+  const [failedImg, setFailedImg] = useState<string | null>(null);
   const [stored, setStored] = useState<{ path: string; url: string | null } | null>(null);
   // A chosen file is shown from memory; its object URL goes when it changes.
   const localUrl = useMemo(() => (localFile ? URL.createObjectURL(localFile) : null), [localFile]);
@@ -578,7 +589,7 @@ function DocPreview({ link, localFile, storedPath, storedName, storedMime, store
         <IconDisc icon={{ emoji: 'Link', lucide: ExternalLink, tint: TINT_GOLD }} size={68} />
         <p style={{ margin: 0, fontSize: 17, fontWeight: 800, color: INK, overflowWrap: 'anywhere' }}>{linkHost(link)}</p>
         <a className="gv-st-btn gv-st-forest" href={link} target="_blank" rel="noopener noreferrer" style={{ textDecoration: 'none' }}>
-          View document <ExternalLink size={14} strokeWidth={2.4} aria-hidden />
+          Open <ExternalLink size={14} strokeWidth={2.4} aria-hidden />
         </a>
       </div>
     );
@@ -595,12 +606,13 @@ function DocPreview({ link, localFile, storedPath, storedName, storedMime, store
   if (!localFile && !storedPath) {
     return <div className="gv-dflow-card"><p style={{ margin: 0, color: INK_SOFT }}>No file yet.</p></div>;
   }
-  if (!isPdf && !isImage) {
+  if ((!isPdf && !isImage) || (isImage && !!url && failedImg === url)) {
     return (
       <div className="gv-dflow-card">
         <IconDisc icon={{ emoji: 'Page facing up', lucide: FileText, tint: TINT_GOLD }} size={72} />
         <p style={{ margin: 0, fontSize: 17, fontWeight: 800, color: INK, overflowWrap: 'anywhere' }}>{name ?? 'Document'}</p>
         <p style={{ margin: 0, fontSize: 14, color: INK_SOFT }}>{[docTypeLabel(mime), formatDocSize(size)].filter(Boolean).join(', ')}</p>
+        <DownloadButton url={url} name={name} />
       </div>
     );
   }
@@ -609,20 +621,38 @@ function DocPreview({ link, localFile, storedPath, storedName, storedMime, store
     return (
       <div style={{ flex: 1, minHeight: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16, background: '#F6F3EC' }}>
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={url} alt={name ?? 'Document'} style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />
+        <img src={url} alt={name ?? 'Document'} onError={() => setFailedImg(url)} style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />
       </div>
     );
   }
   return <PdfViewer url={url} title={name ?? 'Document'} fileName={name ?? undefined} zoom={zoom} onZoomChange={setZoom} compact className="relative flex-1 min-h-0" />;
 }
 
+/** Download for a file the preview cannot draw (prompt 142): a chosen file from
+ *  memory, a saved one through its short signed URL; waits for the URL. */
+function DownloadButton({ url, name }: { url: string | null; name: string | null }) {
+  if (!url) return <span className="gv-st-btn gv-st-outline" aria-disabled="true" style={{ opacity: 0.55 }}>Download</span>;
+  return (
+    <a className="gv-st-btn gv-st-forest" href={url} download={name ?? undefined} target="_blank" rel="noopener noreferrer" style={{ textDecoration: 'none' }}>
+      <Download size={15} strokeWidth={2.4} aria-hidden /> Download
+    </a>
+  );
+}
+
 /** A switch beside its words; pressing the words presses the switch. */
-function Switch({ on, onChange, title, line, disabled }: {
+function Switch({ on, onChange, title, line, disabled, locked }: {
   on: boolean; onChange: (v: boolean) => void; title: string; line?: string; disabled?: boolean;
+  /** Off for good here (a link cannot be sent back): a small lock sits on the switch. */
+  locked?: boolean;
 }) {
   return (
     <div className="gv-cd-switch" onClick={() => { if (!disabled) onChange(!on); }}>
-      <button type="button" role="switch" aria-checked={on} aria-label={title} className="gv-cd-switch-track" disabled={disabled} onClick={e => { e.stopPropagation(); onChange(!on); }} />
+      <span style={{ position: 'relative', display: 'inline-flex', flexShrink: 0 }}>
+        <button type="button" role="switch" aria-checked={on} aria-label={locked ? `${title} (not available for a link)` : title} className="gv-cd-switch-track" disabled={disabled} onClick={e => { e.stopPropagation(); onChange(!on); }} />
+        {locked && (
+          <span aria-hidden className="gv-dflow-lock"><Lock size={11} strokeWidth={2.6} /></span>
+        )}
+      </span>
       <span>
         <b>{title}</b>
         {line && <small>{line}</small>}
@@ -638,6 +668,10 @@ const FLOW_CSS = `
 .gv-dflow[data-split] .gv-dflow-left{border-right:1px solid rgba(27,56,40,0.10)}
 .gv-dflow-right{min-height:0;display:flex;flex-direction:column;background:#FFFFFF}
 .gv-dflow-step{margin:0;font-size:13px;font-weight:700;color:${INK_SOFT};font-variant-numeric:tabular-nums}
+.gv-dflow-warn{display:flex;align-items:flex-start;gap:10px;margin-top:auto;padding:12px 14px;border-radius:14px;background:#FBF1D2;box-shadow:inset 0 0 0 1px rgba(182,135,31,0.35);color:#6B4E0E}
+.gv-dflow-warn p{margin:0;font-size:14px;font-weight:600;line-height:1.45}
+.gv-dflow-warn + .gv-dflow-foot{margin-top:0}
+.gv-dflow-lock{position:absolute;top:6px;left:5px;width:18px;height:18px;display:inline-flex;align-items:center;justify-content:center;color:${INK_SOFT};pointer-events:none}
 .gv-dflow-foot{display:flex;align-items:center;gap:10px;margin-top:auto;padding-top:14px}
 .gv-dflow-card{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:28px;text-align:center}
 .gv-dflow-sum{margin:0;display:flex;flex-direction:column;gap:8px}

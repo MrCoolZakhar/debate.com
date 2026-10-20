@@ -2267,7 +2267,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                       aria-current={on ? 'page' : undefined}
                       onMouseEnter={(e) => { if (!on) (e.currentTarget as HTMLElement).style.color = 'var(--gv-on-surface)'; }}
                       onMouseLeave={(e) => { if (!on) (e.currentTarget as HTMLElement).style.color = '#6B5F52'; }}
-                      className="relative inline-flex items-center gap-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] active:scale-[0.97]"
+                      className="relative inline-flex items-center gap-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gv-accent)] active:scale-[0.97]"
                       style={{
                         minHeight: 40, padding: '0 18px', borderRadius: 12,
                         backgroundColor: on && !viewsThumb ? '#FFFFFF' : 'transparent',

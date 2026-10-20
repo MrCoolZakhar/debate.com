@@ -15,9 +15,9 @@ export function LockedCard() {
       <div className="flex flex-col items-center text-center py-10">
         <div
           className="flex items-center justify-center mb-5"
-          style={{ width: '64px', height: '64px', borderRadius: '9999px', backgroundColor: 'rgba(27,56,40,0.07)', border: '1px solid rgba(27,56,40,0.14)' }}
+          style={{ width: '64px', height: '64px', borderRadius: '9999px', backgroundColor: 'color-mix(in srgb, var(--gv-main) 7%, transparent)', border: '1px solid color-mix(in srgb, var(--gv-main) 14%, transparent)' }}
         >
-          <Lock size={24} strokeWidth={1.8} style={{ color: '#1B3828' }} />
+          <Lock size={24} strokeWidth={1.8} style={{ color: 'var(--gv-main)' }} />
         </div>
         <p className="text-[15px] font-semibold mb-1.5" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
           Unlocks once your registration is paid
@@ -63,8 +63,8 @@ export function RejectedCard({
             className="text-left rounded-xl px-4 py-3 mb-4"
             style={{ maxWidth: 380, backgroundColor: 'rgba(184,132,74,0.08)', border: '1px solid rgba(184,132,74,0.22)' }}
           >
-            <p className="text-[10px] font-bold mb-1" style={{ color: '#B8844A', fontFamily: OUTFIT, letterSpacing: '0.1em' }}>
-              FEEDBACK FROM THE ORGANIZERS
+            <p className="font-bold mb-1" style={{ fontSize: 12, color: '#8A5A2E', fontFamily: OUTFIT }}>
+              Feedback from the organizers
             </p>
             <p className="text-[13px] whitespace-pre-wrap" style={{ color: '#1C1410', fontFamily: OUTFIT, lineHeight: 1.6, overflowWrap: 'anywhere' }}>
               {organizerNote}
@@ -80,9 +80,9 @@ export function RejectedCard({
             <Link
               href={`/conferences/${conferenceSlug}/apply?role=${role}&edit=1`}
               className="inline-flex items-center gap-2 rounded-xl py-2.5 px-6 font-bold text-sm focus:outline-none transition-colors"
-              style={{ backgroundColor: '#1B3828', color: '#EED98A', textDecoration: 'none', fontFamily: OUTFIT }}
-              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
-              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
+              style={{ backgroundColor: 'var(--gv-main)', color: 'var(--gv-on-main)', textDecoration: 'none', fontFamily: OUTFIT }}
+              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--gv-main-mid)'; }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--gv-main)'; }}
             >
               <RotateCcw size={15} />
               Edit and resubmit
@@ -126,9 +126,9 @@ export function WithdrawnCard({ conferenceSlug }: { conferenceSlug: string; role
         <Link
           href={`/conferences/${conferenceSlug}`}
           className="inline-flex items-center gap-2 rounded-xl py-2.5 px-6 font-bold text-sm focus:outline-none transition-colors"
-          style={{ backgroundColor: '#1B3828', color: '#EED98A', textDecoration: 'none', fontFamily: OUTFIT }}
-          onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
-          onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
+          style={{ backgroundColor: 'var(--gv-main)', color: 'var(--gv-on-main)', textDecoration: 'none', fontFamily: OUTFIT }}
+          onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--gv-main-mid)'; }}
+          onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--gv-main)'; }}
         >
           View conference
         </Link>

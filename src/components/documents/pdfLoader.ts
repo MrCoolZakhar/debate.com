@@ -128,8 +128,13 @@ export function loadPdfLib(): Promise<PdfJs> {
 }
 
 /**
- * Only papers stored in this project's public storage are opened with pdf.js (fetched by
- * script, so the origin matters). Anything else keeps the browser's own viewer.
+ * Only files in this project's own storage are opened with pdf.js (fetched by script,
+ * so the origin matters): public object URLs (`/storage/v1/object/public/...`) and signed
+ * object URLs (`/storage/v1/object/sign/...?token=...`, the private buckets such as
+ * position papers). File names may carry spaces and other characters, plain or encoded;
+ * dot segments and encoded slashes are refused. Anything else keeps the browser's own viewer.
+ * Every pdf.js viewer (PdfViewer, PlainPdfPages) asks this one test, so a file that opens
+ * in one opens in all of them.
  */
 export function isPdfJsUrl(u: string): boolean {
   if (!u) return false;
@@ -137,10 +142,17 @@ export function isPdfJsUrl(u: string): boolean {
   let origin: string;
   try { parsed = new URL(u); origin = new URL(SUPABASE_URL).origin; } catch { return false; }
   if (parsed.protocol !== 'https:' || parsed.origin !== origin || parsed.username || parsed.password) return false;
-  const raw = u.split('#')[0].split('?')[0];
-  if (raw.includes('\\') || /%2e|%2f|%5c/i.test(raw) || /(^|\/)\.{1,2}(\/|$)/.test(parsed.pathname)) return false;
-  if (raw !== origin + parsed.pathname) return false;
-  return parsed.pathname.startsWith('/storage/v1/object/public/');
+  const rawPath = u.split('#')[0].split('?')[0];
+  if (!rawPath.startsWith(origin + '/')) return false;
+  if (rawPath.includes('\\') || /%2e|%2f|%5c/i.test(rawPath)) return false;
+  for (const seg of rawPath.slice(origin.length).split('/')) {
+    let d: string;
+    try { d = decodeURIComponent(seg); } catch { return false; }
+    if (d === '.' || d === '..' || d.includes('/') || d.includes('\\')) return false;
+  }
+  if (parsed.pathname.startsWith('/storage/v1/object/public/')) return true;
+  if (parsed.pathname.startsWith('/storage/v1/object/sign/')) return !!parsed.searchParams.get('token');
+  return false;
 }
 
 /** CSS pixels per PDF point at 100%: pdf.js viewers treat a point as 96/72 CSS px. */

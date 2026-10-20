@@ -23,9 +23,9 @@ export default function ApplyPointer({ conferenceSlug, signedOut, next }: {
       <div className="flex flex-col items-center text-center py-10">
         <div
           className="flex items-center justify-center mb-5"
-          style={{ width: '64px', height: '64px', borderRadius: '9999px', backgroundColor: 'rgba(27,56,40,0.07)', border: '1px solid rgba(27,56,40,0.14)' }}
+          style={{ width: '64px', height: '64px', borderRadius: '9999px', backgroundColor: 'color-mix(in srgb, var(--gv-main) 7%, transparent)', border: '1px solid color-mix(in srgb, var(--gv-main) 14%, transparent)' }}
         >
-          <UserRound size={26} strokeWidth={1.8} style={{ color: '#1B3828' }} />
+          <UserRound size={26} strokeWidth={1.8} style={{ color: 'var(--gv-main)' }} />
         </div>
         <p className="text-[15px] font-semibold mb-1.5" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
           {signedOut ? 'Sign in to see your participant dashboard' : "You haven't applied yet"}
@@ -38,9 +38,9 @@ export default function ApplyPointer({ conferenceSlug, signedOut, next }: {
         <button
           onClick={() => (signedOut ? openAuth({ next }) : router.push(`/conferences/${conferenceSlug}/apply`))}
           className="rounded-xl py-2.5 px-6 font-bold text-sm focus:outline-none transition-colors"
-          style={{ backgroundColor: '#1B3828', color: '#EED98A', fontFamily: OUTFIT, border: 'none', cursor: 'pointer' }}
-          onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
-          onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
+          style={{ backgroundColor: 'var(--gv-main)', color: 'var(--gv-on-main)', fontFamily: OUTFIT, border: 'none', cursor: 'pointer' }}
+          onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--gv-main-mid)'; }}
+          onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--gv-main)'; }}
         >
           {signedOut ? 'Sign in' : 'Apply now'}
         </button>

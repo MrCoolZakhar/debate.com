@@ -24,7 +24,7 @@ import { SectionCard, OUTFIT, capitalize, effectiveReleaseTime } from './shared'
 import { DashCard, CardHeading, CommitteeEmblem, TwoRowName, ForestLink, IconWord, BigCount, Pane, committeeShort, useDashStacked, useReportNextStep, type NextStep, FOREST, FOREST_GRADIENT, INK, INK_SOFT } from './dashboardKit';
 
 const DIFFICULTY_STYLES: Record<string, { color: string }> = {
-  beginner: { color: '#2A5A3C' },
+  beginner: { color: 'var(--gv-main-mid)' },
   intermediate: { color: '#8A6614' },
   advanced: { color: '#B8844A' },
   expert: { color: '#8B2020' },
@@ -114,7 +114,7 @@ function CommitteeHeaderCard({ committee, headerFromXlOnly = false }: {
           <img
             src={committee.logo_url}
             alt={committee.abbreviation ?? committee.name}
-            style={{ width: '96px', height: '96px', objectFit: 'contain', flexShrink: 0, filter: 'drop-shadow(0 10px 18px rgba(27,56,40,0.28))' }}
+            style={{ width: '96px', height: '96px', objectFit: 'contain', flexShrink: 0, filter: 'drop-shadow(0 10px 18px color-mix(in srgb, var(--gv-main) 28%, transparent))' }}
           />
         ) : (
           <MonogramMedallion text={committee.abbreviation || committee.name} isCrisis={isCrisis} size={88} />
@@ -132,7 +132,7 @@ function CommitteeHeaderCard({ committee, headerFromXlOnly = false }: {
           )}
           {isCrisis && (
             <>
-              <span aria-hidden style={{ color: 'rgba(182,135,31,0.55)', fontSize: '7px' }}>◆</span>
+              <span aria-hidden style={{ color: 'color-mix(in srgb, var(--gv-accent) 55%, transparent)', fontSize: '7px' }}>◆</span>
               <span className="text-[10px] font-bold" style={{ color: '#8B2020', fontFamily: OUTFIT, letterSpacing: '0.12em' }}>CRISIS</span>
             </>
           )}
@@ -141,7 +141,7 @@ function CommitteeHeaderCard({ committee, headerFromXlOnly = false }: {
           <div className="w-full mt-5 pt-4 text-left" style={{ borderTop: '1px solid rgba(221,212,192,0.55)' }}>
             {topics.map((topic, ti) => (
               <div key={topic} className="flex items-start gap-2.5 py-1">
-                <span className="flex-shrink-0 text-right" style={{ fontFamily: OUTFIT, fontWeight: 600, fontVariantNumeric: 'tabular-nums', fontSize: '11px', color: '#B6871F', width: '18px', lineHeight: '19px' }}>
+                <span className="flex-shrink-0 text-right" style={{ fontFamily: OUTFIT, fontWeight: 600, fontVariantNumeric: 'tabular-nums', fontSize: '11px', color: 'var(--gv-accent)', width: '18px', lineHeight: '19px' }}>
                   {ROMAN[ti] ?? String(ti + 1)}.
                 </span>
                 <span className="text-[12.5px] font-medium" style={{ color: '#2E2820', fontFamily: OUTFIT, lineHeight: 1.55 }}>{topic}</span>
@@ -285,13 +285,13 @@ function SessionCard({ committee, chairDisplayName, conferenceStartDate, showCom
             onClick={handleCreateSession}
             disabled={creating}
             aria-busy={creating || undefined}
-            className="focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[#B6871F]"
+            className="focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[var(--gv-accent)]"
             style={{
               minHeight: 44, padding: '0 18px', borderRadius: 10, fontFamily: OUTFIT,
               fontSize: 14, fontWeight: 700, border: 'none',
               display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8,
               background: FOREST_GRADIENT, color: '#FFFFFF',
-              boxShadow: '0 6px 16px -8px rgba(27,56,40,0.55)',
+              boxShadow: '0 6px 16px -8px color-mix(in srgb, var(--gv-main) 55%, transparent)',
               cursor: creating ? 'default' : 'pointer', opacity: creating ? 0.7 : 1,
             }}
           >
@@ -313,8 +313,8 @@ function SessionCard({ committee, chairDisplayName, conferenceStartDate, showCom
               <button
                 onClick={handleCopy}
                 aria-label={copied ? 'Copied' : 'Copy session code'}
-                className="inline-flex items-center gap-1.5 rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F]"
-                style={{ minHeight: 36, padding: '0 12px', border: 'none', background: copied ? 'rgba(61,122,82,0.12)' : 'rgba(27,56,40,0.06)', color: copied ? '#2A5A3C' : FOREST, fontFamily: OUTFIT, fontSize: 13, fontWeight: 700, cursor: 'pointer' }}
+                className="inline-flex items-center gap-1.5 rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gv-accent)]"
+                style={{ minHeight: 36, padding: '0 12px', border: 'none', background: copied ? 'color-mix(in srgb, var(--gv-main-light) 12%, transparent)' : 'color-mix(in srgb, var(--gv-main) 6%, transparent)', color: copied ? 'var(--gv-main-mid)' : FOREST, fontFamily: OUTFIT, fontSize: 13, fontWeight: 700, cursor: 'pointer' }}
               >
                 {copied ? <Check size={14} aria-hidden /> : <Copy size={14} aria-hidden />}
                 {copied ? 'Copied' : 'Copy'}

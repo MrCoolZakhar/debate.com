@@ -27,7 +27,7 @@ function IconBtn({ label, onPress, disabled, children }: { label: string; onPres
       title={label}
       disabled={disabled}
       onClick={(e) => { e.stopPropagation(); if (ref.current) onPress(ref.current); }}
-      className="inline-flex items-center justify-center flex-shrink-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] hover:bg-[#F1ECE1]"
+      className="inline-flex items-center justify-center flex-shrink-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gv-main)] hover:bg-[#F1ECE1]"
       style={{ width: 36, height: 36, borderRadius: 9, border: 'none', background: 'transparent', color: INK_SOFT, cursor: disabled ? 'default' : 'pointer', opacity: disabled ? 0.45 : 1 }}
     >
       {children}
@@ -75,7 +75,7 @@ export default function SeatCell({
           title="Drag onto another person to switch seats"
           onPointerDown={(e) => onDragStart(e, true)}
           className="inline-flex items-center justify-center flex-shrink-0"
-          style={{ width: 20, height: 44, marginLeft: -6, color: 'rgba(27,56,40,0.35)', cursor: 'grab', touchAction: 'none' }}
+          style={{ width: 20, height: 44, marginLeft: -6, color: 'color-mix(in srgb, var(--gv-main) 35%, transparent)', cursor: 'grab', touchAction: 'none' }}
         >
           <GripVertical size={16} strokeWidth={STROKE} aria-hidden />
         </span>
@@ -100,7 +100,7 @@ export default function SeatCell({
               type="button"
               title={seat.committee_full ? `Open ${seat.committee_full}` : 'Open this committee'}
               onClick={(e) => { e.stopPropagation(); if (wasJustDragged()) return; if (seat.committee_id) onOpenCommittee(seat.committee_id); }}
-              className="text-left [overflow-wrap:anywhere] min-w-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] rounded"
+              className="text-left [overflow-wrap:anywhere] min-w-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gv-main)] rounded"
               style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontFamily: FONT, fontSize: 13, fontWeight: 700, color: FOREST, textDecoration: 'underline', textUnderlineOffset: 3, lineHeight: 1.35 }}
             >
               {seat.committee_label}
@@ -138,8 +138,8 @@ function PlaceButton({ onPlace, disabled }: { onPlace: (anchor: HTMLElement) => 
       type="button"
       disabled={disabled}
       onClick={(e) => { e.stopPropagation(); if (ref.current) onPlace(ref.current); }}
-      className="inline-flex items-center gap-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]"
-      style={{ minHeight: 40, padding: '0 12px', borderRadius: 10, border: '1px dashed rgba(27,56,40,0.3)', background: 'transparent', color: FOREST, fontFamily: FONT, fontSize: 13.5, fontWeight: 600, cursor: disabled ? 'default' : 'pointer', opacity: disabled ? 0.5 : 1 }}
+      className="inline-flex items-center gap-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gv-main)]"
+      style={{ minHeight: 40, padding: '0 12px', borderRadius: 10, border: '1px dashed color-mix(in srgb, var(--gv-main) 30%, transparent)', background: 'transparent', color: FOREST, fontFamily: FONT, fontSize: 13.5, fontWeight: 600, cursor: disabled ? 'default' : 'pointer', opacity: disabled ? 0.5 : 1 }}
     >
       <Armchair size={17} strokeWidth={STROKE} aria-hidden />
       Place in a seat

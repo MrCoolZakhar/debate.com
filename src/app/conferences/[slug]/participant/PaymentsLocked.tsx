@@ -89,7 +89,7 @@ export default function LockedPayButton({ slug, label, className, style }: {
       >
         Payments have not been set up for this conference.{' '}
         <a href={askOrganisersHref(slug)} onClick={onContact} onFocus={show} onBlur={hideSoon}
-          style={{ color: '#EED98A', fontWeight: 800, textDecoration: 'underline', textUnderlineOffset: 3 }}>Contact</a>
+          style={{ color: 'var(--gv-accent-light)', fontWeight: 800, textDecoration: 'underline', textUnderlineOffset: 3 }}>Contact</a>
         {' '}your organizers if there are any doubts.
       </span>
     </span>

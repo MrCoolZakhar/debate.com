@@ -10,11 +10,11 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { FileText } from 'lucide-react';
-import { DashCard as YouCard, CardHeading } from './dashboardKit';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { STORE_CSS } from '@/app/manage/[slug]/store/storeKit';
-import { DASH_CSS, IconDisc, TINT_GOLD, TINT_GREEN, INK, INK_SOFT, FOREST } from '@/app/manage/[slug]/financials/dashboardKit';
+import { DASH_CSS, IconDisc, INK, INK_SOFT } from '@/app/manage/[slug]/financials/dashboardKit';
+import { DashCard as YouCard, CardHeading, FOREST, TINT_ACCENT as TINT_GOLD, TINT_MAIN as TINT_GREEN } from './dashboardKit';
 import {
   formatDocSize, kindInfo, linkHost, loadConferenceDocs, openConferenceDoc, type ConferenceDoc,
 } from '@/lib/conferenceDocuments';
@@ -65,8 +65,8 @@ export function docForRole(
 
 const CSS = `
 .gv-cdp{display:flex;flex-direction:column;gap:10px}
-.gv-cdp-row{display:flex;align-items:center;gap:14px;width:100%;min-height:72px;padding:12px 16px;border:none;border-radius:16px;background:#FAF8F3;text-align:left;cursor:pointer;font-family:inherit;box-shadow:inset 0 0 0 1px rgba(27,56,40,0.06);transition:transform 160ms cubic-bezier(0.22,1,0.36,1),background-color 160ms ease,box-shadow 160ms ease}
-.gv-cdp-row:hover{transform:translateY(-2px);background:#FFFFFF;box-shadow:inset 0 0 0 1px rgba(27,56,40,0.08),0 14px 30px -24px rgba(27,56,40,0.45)}
+.gv-cdp-row{display:flex;align-items:center;gap:14px;width:100%;min-height:72px;padding:12px 16px;border:none;border-radius:16px;background:#FAF8F3;text-align:left;cursor:pointer;font-family:inherit;box-shadow:inset 0 0 0 1px color-mix(in srgb, var(--gv-main) 6%, transparent);transition:transform 160ms cubic-bezier(0.22,1,0.36,1),background-color 160ms ease,box-shadow 160ms ease}
+.gv-cdp-row:hover{transform:translateY(-2px);background:#FFFFFF;box-shadow:inset 0 0 0 1px color-mix(in srgb, var(--gv-main) 8%, transparent),0 14px 30px -24px color-mix(in srgb, var(--gv-main) 45%, transparent)}
 .gv-cdp-row:active{transform:scale(0.99)}
 .gv-cdp-row:focus{outline:none}
 .gv-cdp-row:focus-visible{outline:2px solid ${FOREST};outline-offset:2px}
