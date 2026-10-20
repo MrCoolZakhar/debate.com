@@ -27,6 +27,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { ArrowLeft, Bookmark, BookmarkCheck, Check, ExternalLink, ListChecks, Loader2, Mail, Share2, X } from 'lucide-react';
 import ShareCardPopup from './ShareCardPopup';
+import MoreFromConference from './MoreFromConference';
 import { useAuth } from '@/components/AuthProvider';
 import { isUnlimited, useUnlimitedStatus } from '@/lib/unlimitedStatus';
 import { openAuth } from '@/lib/authModal';
@@ -70,7 +71,7 @@ function shortDay(iso: string | null | undefined): string | null {
 }
 
 export default function JobListing({
-  id, initialCard, initialDetail, onBack, scrollRoot, appliedAt, onChanged, inviteNote = null,
+  id, initialCard, initialDetail, onBack, scrollRoot, appliedAt, onChanged, inviteNote = null, onSelectListing,
 }: {
   id: string;
   /** The card from the list, so the header draws at once. */
@@ -87,6 +88,8 @@ export default function JobListing({
   onChanged?: () => void;
   /** This visit came from an invite (prompt 11): "<short> invited you to apply". */
   inviteNote?: { short: string; message: string | null } | null;
+  /** Opens another listing in this pane (More from this conference). */
+  onSelectListing?: (id: string) => void;
 }) {
   const { user, loading: authLoading } = useAuth();
   const userId = user?.id ?? null;
@@ -425,6 +428,11 @@ export default function JobListing({
             ) : null}
           </aside>
         </div>
+      )}
+
+      {/* The conference's other live roles (prompt 12), for conference listings only. */}
+      {!card.standalone && conf.slug && (
+        <MoreFromConference conferenceId={conf.id} excludeId={id} short={conf.short || conf.name || 'this conference'} onSelect={onSelectListing} />
       )}
 
       {sharing && listing && !applyOpen && <ShareCardPopup card={listing} onClose={() => setSharing(false)} />}

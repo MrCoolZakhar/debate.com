@@ -249,3 +249,9 @@ Organizer side (/manage/<slug>/jobs):
 - `job_conference_invites(p_conf)`: the conference's invites for the Invites card.
 - "Find people" (FindPeoplePopup.tsx: search, then the invite step in the same pop-up) and the Invites card (SentInvitesCard.tsx).
 - Delivery is by email from the server ("See the role" to /jobs?listing=<id>&invite=<invite id>); queued invites go out with an hourly job.
+
+## Prompt 12: more from this conference, no results, closing dates
+
+- **More from this conference** (`src/app/jobs/MoreFromConference.tsx`): under a conference listing's body, "More from <short>" from job_conference_listings, the listing being read left out, hidden when there are none. Owner's rule (20 Oct 2026): exactly 3 compact JobCards at a time (fewer only when fewer exist); Next and Previous slide by ONE and wrap around (a transform, none with reduced motion); the arrows hide with 3 or fewer. On phones it is a swipe row with no arrows. Each card opens that listing in the same pane.
+- **No results** (`src/app/jobs/NoMatches.tsx`): when All roles has no results, the laptop's right pane shows "No matches found", "Save this search as an alert to know when roles that match it are posted.", SaveAlertAction for the current query and "Clear filters"; on phones the same offer sits under "No roles match these filters." With results and nothing chosen the pane is unchanged.
+- **Closing dates on homepage tiles** (`landing-lab/JobBoardSection.tsx`): a listing tile whose closes_at is within 14 days adds its own urgency line when it starts with "Closes" ("Closes in 5 days"), in gold ink with a small clock, sharing the place's line when there is room so tiles keep their size. Starter tiles are unchanged.

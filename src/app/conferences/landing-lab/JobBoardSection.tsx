@@ -26,7 +26,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { BellRing, Banknote, Gavel, Landmark, Megaphone, PlusCircle, Search, Sparkles, Crown } from 'lucide-react';
+import { BellRing, Banknote, Clock, Gavel, Landmark, Megaphone, PlusCircle, Search, Sparkles, Crown } from 'lucide-react';
 import type { JobCard as JobCardData } from '@/lib/jobBoard';
 import { jobDates, jobPlace } from '@/app/jobs/JobCard';
 import { CREAM, FOREST, IVORY, SANS } from './shared';
@@ -49,6 +49,8 @@ const STARTERS: { title: string; line: string; href: string; icon: IconType }[] 
 export default function JobBoardSection({ jobs }: { jobs: JobCardData[] }) {
   const listings = (jobs ?? []).slice(0, TILE_COUNT);
   const starters = STARTERS.slice(0, TILE_COUNT - listings.length);
+  // Taken once, for the "closes within 14 days" test on listing tiles.
+  const [now] = useState(() => Date.now());
 
   return (
     <section
@@ -75,7 +77,7 @@ export default function JobBoardSection({ jobs }: { jobs: JobCardData[] }) {
         {/* ── Right: always six tiles ── */}
         <ul className="hs-jobs-tiles -mx-5 px-5 scroll-px-5 md:mx-0 md:px-0" aria-label="Open roles">
           {listings.map((card) => (
-            <li key={card.id} className="hs-jobs-cell"><ListingTile card={card} /></li>
+            <li key={card.id} className="hs-jobs-cell"><ListingTile card={card} now={now} /></li>
           ))}
           {starters.map((s) => (
             <li key={s.title} className="hs-jobs-cell"><StarterTile {...s} /></li>
@@ -138,10 +140,13 @@ function RoleSearch() {
   );
 }
 
-function ListingTile({ card }: { card: JobCardData }) {
+function ListingTile({ card, now }: { card: JobCardData; now: number }) {
   const conf = card.conference;
   const place = conf.format === 'online' ? 'Online' : jobPlace(conf);
   const long = card.title.length > 30;
+  // Closing within 14 days: the card's own urgency line when it is a "Closes ..." line.
+  const closesMs = card.closes_at ? new Date(card.closes_at).getTime() - now : NaN;
+  const closing = Number.isFinite(closesMs) && closesMs >= 0 && closesMs <= 14 * 86400000 && card.urgency?.startsWith('Closes') ? card.urgency : null;
   return (
     <Link
       href={`/jobs?listing=${encodeURIComponent(card.id)}`}
@@ -156,7 +161,15 @@ function ListingTile({ card }: { card: JobCardData }) {
       <span className="hs-jobs-title" style={{ fontSize: long ? 13.5 : 15 }}>{card.title}</span>
       <span className="hs-jobs-conf">{conf.short || conf.name}</span>
       <span className="hs-jobs-meta">{jobDates(conf)}</span>
-      {place && <span className="hs-jobs-meta">{place}</span>}
+      {(place || closing) && (
+        // The place and the closing line share one line when there is room, so tiles keep their size.
+        <span className="hs-jobs-metarow">
+          {place && <span className="hs-jobs-meta">{place}</span>}
+          {closing && (
+            <span className="hs-jobs-closing"><Clock size={11} strokeWidth={2.6} aria-hidden />{closing}</span>
+          )}
+        </span>
+      )}
     </Link>
   );
 }
@@ -214,6 +227,8 @@ const SECTION_CSS = `
   color: ${FOREST}; background: rgba(27,56,40,0.07); }
 .hs-jobs-title { font-weight: 700; line-height: 1.25; letter-spacing: -0.005em; color: ${INK}; overflow-wrap: anywhere; }
 .hs-jobs-conf { margin-top: 2px; font-size: 13px; font-weight: 700; color: ${FOREST}; overflow-wrap: anywhere; }
+.hs-jobs-metarow { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 8px; row-gap: 1px; }
+.hs-jobs-closing { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 700; color: #8A5A12; white-space: nowrap; }
 .hs-jobs-meta { font-size: 12.5px; font-weight: 500; line-height: 1.4; color: ${INK_SOFT}; overflow-wrap: anywhere; }
 @media (prefers-reduced-motion: reduce) { .hs-jobs-tile, .hs-jobs-go { transition: none; } .hs-jobs-tile:hover, .hs-jobs-go:hover { transform: none; } }
 `;
