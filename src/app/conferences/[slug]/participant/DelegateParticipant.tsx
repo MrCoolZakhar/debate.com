@@ -7,30 +7,31 @@
 // active `section`. Every card here stays MOUNTED and is hidden with
 // display:none when its section is not shown (Pane), so switching never
 // refetches a card or loses a half-uploaded position paper.
-//   overview    published awards (only when there are some), the assignment
-//               (independent delegates only; see delegation below)
+//   overview    published awards (only when there are some), then the seat:
+//               the assignment hero for an independent delegate, the compact
+//               OwnSeatCard for anyone in a delegation (owner, 20 Oct 2026:
+//               Overview is back and is their OWN page; the page's next step,
+//               DelegationLead, sits above it and carries Join session)
+//   delegation  members of a delegation only, second: the leader or member card
 //   committee   the committee card (5A: topics, co-delegate, live room), the
 //               study guide and paper at a glance, the committee list
 //   documents   the study guide and the position paper
-//   delegation  members of a delegation only, and FIRST (owner, 19 Oct 2026:
-//               Delegation is their overview, there is no Overview section):
-//               the page's next-step card (DelegationLead), published awards,
-//               then the leader or member card. The assignment hero is left
-//               out for them: the Committee section and the delegation card
-//               already show the seat.
-// Below xl (10 Oct 2026) there is no sub-nav: the panes stack in this order on
+// Below lg (10 Oct 2026) there is no sub-nav: the panes stack in this order on
 // one page, with Payment and Support placed by the parent.
 
 import { useCallback, useState } from 'react';
-import { FileText, Flag, Landmark, Users } from 'lucide-react';
+import { Compass, FileText, Flag, Landmark, Users } from 'lucide-react';
+import { CircleFlag } from '@/components/CircleFlag';
+import ProfileLink from '@/components/ProfileLink';
 import AssignmentHero from './AssignmentHero';
+import { useSeatCrest } from './AllocationCard';
 import MyCommitteeSection from './delegation/committee/MyCommitteeSection';
 import StudyGuideCard from './StudyGuideCard';
 import PositionPaperCard from './PositionPaperCard';
 import DelegationPanel from './DelegationPanel';
 import MyAwardsCard from './MyAwardsCard';
-import { Pane, useDashStacked, useReportNextStep, type NextStep } from './dashboardKit';
-import { effectiveReleaseTime, formatReleaseDate } from './shared';
+import { CardHeading, CommitteeEmblem, DashCard, INK, INK_SOFT, Pane, TwoRowName, committeeShort, useDashStacked, useReportNextStep, type NextStep } from './dashboardKit';
+import { effectiveReleaseTime, formatReleaseDate, OUTFIT, useAllocationPartner } from './shared';
 import type { ParticipantApplication, ParticipantAllocation, ParticipantCommittee } from './types';
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -72,7 +73,57 @@ function delegateNextStep(
   return { kind: 'done', line: 'Read your study guide and prepare your speeches for the committee.' };
 }
 
-export default function DelegateParticipant({ conferenceId, conferenceSlug, conferenceStartDate, application, myAllocation, committees, allocationSwapMode, section, onSelectSection, delegationLead }: {
+/** A delegation member's own seat in Overview: the flag (or the seat's crest)
+ *  with the country, the committee's emblem with its short name over the full
+ *  one, and a double seat's partner. No Join session here: the next step above
+ *  it carries that. Names wrap, never cut. */
+function OwnSeatCard({ committee, myAllocation }: { committee: ParticipantCommittee | null; myAllocation: ParticipantAllocation | null }) {
+  const crest = useSeatCrest(myAllocation);
+  const partner = useAllocationPartner(myAllocation);
+  if (!committee || !myAllocation) {
+    return (
+      <DashCard>
+        <CardHeading title="Your seat" stackedHide />
+        <p className="inline-flex items-center gap-2" style={{ fontFamily: OUTFIT, fontSize: 14, color: INK_SOFT, margin: 0, lineHeight: 1.5 }}>
+          <Compass size={18} strokeWidth={1.8} aria-hidden style={{ color: 'var(--gv-main)', flexShrink: 0 }} />
+          Your committee and country appear here once the organisers assign them.
+        </p>
+      </DashCard>
+    );
+  }
+  return (
+    <DashCard className="@container">
+      <CardHeading title="Your seat" stackedHide />
+      <div className="grid grid-cols-1 @[480px]:grid-cols-2 gap-5">
+        <div className="flex items-center gap-3.5 min-w-0">
+          <CircleFlag code={myAllocation.country_code} logoUrl={crest} label={myAllocation.country_name} size={52} />
+          <div className="min-w-0">
+            <p className="[overflow-wrap:anywhere]" style={{ fontFamily: OUTFIT, fontSize: 18, fontWeight: 800, color: INK, margin: 0, lineHeight: 1.2 }}>
+              {myAllocation.country_name}
+            </p>
+            {partner?.name && (
+              <p className="[overflow-wrap:anywhere]" style={{ fontFamily: OUTFIT, fontSize: 12.5, color: INK_SOFT, margin: '3px 0 0 0' }}>
+                With <ProfileLink userId={partner.userId} name={partner.name}>{partner.name}</ProfileLink>
+              </p>
+            )}
+          </div>
+        </div>
+        <div className="flex items-center gap-3.5 min-w-0">
+          <CommitteeEmblem
+            logoUrl={committee.logo_url}
+            name={committee.name}
+            abbreviation={committee.abbreviation}
+            isCrisis={committee.committee_type === 'crisis'}
+            size={48}
+          />
+          <TwoRowName short={committeeShort(committee.name, committee.abbreviation)} full={committee.name} size={18} />
+        </div>
+      </div>
+    </DashCard>
+  );
+}
+
+export default function DelegateParticipant({ conferenceId, conferenceSlug, conferenceStartDate, application, myAllocation, committees, allocationSwapMode, section, onSelectSection }: {
   conferenceId: string;
   conferenceSlug: string;
   conferenceStartDate: string | null;
@@ -83,12 +134,10 @@ export default function DelegateParticipant({ conferenceId, conferenceSlug, conf
   section: string;
   /** Switches the desktop sub-nav (the paper and guide cards lead to Documents). */
   onSelectSection?: (key: string) => void;
-  /** The top of the Delegation section (next step, status, Join session), from the page. */
-  delegationLead?: React.ReactNode;
 }) {
   const committee = myAllocation ? committees.find(c => c.id === myAllocation.conference_committee_id) ?? null : null;
-  // Below xl every pane shows on one page (see ParticipantView), in this
-  // order: awards and the assignment, the committee, documents, delegation.
+  // Below lg every pane shows on one page (see ParticipantView), in this
+  // order: awards and the seat, the delegation, the committee, documents.
   const stacked = useDashStacked();
   const [paper, setPaper] = useState<{ enabled: boolean; submitted: boolean } | null>(null);
   useReportNextStep(stacked ? delegateNextStep(myAllocation, conferenceStartDate, paper) : null);
@@ -106,38 +155,35 @@ export default function DelegateParticipant({ conferenceId, conferenceSlug, conf
 
   return (
     <>
+      {/* Overview: published awards (only once the secretariat publishes an
+          honour for this allocation), then the seat. */}
+      <Pane show={section === 'overview'} title="Your Assignment" icon={Flag}>
+        <MyAwardsCard conferenceId={conferenceId} conferenceSlug={conferenceSlug} myAllocation={myAllocation} />
+        {inDelegation ? (
+          <OwnSeatCard committee={committee} myAllocation={myAllocation} />
+        ) : (
+          <AssignmentHero
+            committee={committee}
+            myAllocation={myAllocation}
+            conferenceStartDate={conferenceStartDate}
+            independent
+            joinFromXlOnly={stacked}
+          />
+        )}
+      </Pane>
+
       {/* One delegation card for everyone in a delegation (25 Sep 2026): the
-          roster, grouped, the viewer first. A delegate sees only their own
-          allocation and payment; leaders see everything. Since 19 Oct 2026 it
-          is their first section and carries what Overview used to. */}
+          leader card for leaders, the member card (5B) for everyone else. */}
       {application.society_id && (
         <Pane show={section === 'delegation'} title="Your Delegation" icon={Users}>
-          {delegationLead}
-          <MyAwardsCard conferenceId={conferenceId} conferenceSlug={conferenceSlug} myAllocation={myAllocation} />
           <DelegationPanel
             conferenceId={conferenceId}
             conferenceSlug={conferenceSlug}
             societyId={application.society_id}
             allocationSwapMode={allocationSwapMode}
-            section="delegation"
             member={{ committees, myAllocation, selfPaid: application.self_paid }}
           />
         </Pane>
-      )}
-
-      {!inDelegation && (
-      <Pane show={section === 'overview'} title="Your Assignment" icon={Flag}>
-        {/* Only ever renders once the secretariat has published and this
-            delegate's allocation holds an honour; otherwise nothing. */}
-        <MyAwardsCard conferenceId={conferenceId} conferenceSlug={conferenceSlug} myAllocation={myAllocation} />
-        <AssignmentHero
-          committee={committee}
-          myAllocation={myAllocation}
-          conferenceStartDate={conferenceStartDate}
-          independent={!application.society_id}
-          joinFromXlOnly={stacked}
-        />
-      </Pane>
       )}
 
       <Pane show={section === 'committee'} title="Your Committee" icon={Landmark} phone={assigned}>

@@ -202,7 +202,7 @@ export default function MyCommitteeSection({ conferenceId, conferenceStartDate, 
             )}
           </div>
           {roomOpen && (
-            <Link href={`/join?code=${sessionCode}`} className={`${BTN_CLASS} ${joinFromXlOnly ? 'hidden xl:inline-flex' : 'inline-flex'}`} style={{ ...primaryBtn, alignSelf: 'flex-start' }}>
+            <Link href={`/join?code=${sessionCode}`} className={`${BTN_CLASS} ${joinFromXlOnly ? 'hidden lg:inline-flex' : 'inline-flex'}`} style={{ ...primaryBtn, alignSelf: 'flex-start' }}>
               Join session
             </Link>
           )}

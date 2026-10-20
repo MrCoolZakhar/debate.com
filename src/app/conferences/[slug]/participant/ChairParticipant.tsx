@@ -109,7 +109,7 @@ function CommitteeHeaderCard({ committee, headerFromXlOnly = false }: {
   return (
     <SectionCard>
       <div className="flex flex-col items-center text-center">
-        <div className={headerFromXlOnly ? 'hidden xl:flex flex-col items-center' : 'flex flex-col items-center'}>
+        <div className={headerFromXlOnly ? 'hidden lg:flex flex-col items-center' : 'flex flex-col items-center'}>
         {committee.logo_url ? (
           <img
             src={committee.logo_url}
@@ -321,7 +321,7 @@ function SessionCard({ committee, chairDisplayName, conferenceStartDate, showCom
               </button>
             </div>
           </div>
-          <span className={joinFromXlOnly ? 'hidden xl:inline-flex' : 'inline-flex'}>
+          <span className={joinFromXlOnly ? 'hidden lg:inline-flex' : 'inline-flex'}>
             <ForestLink href={chairHref(committee, chairDisplayName)} external>
               <Radio size={16} aria-hidden /> Join as chair
             </ForestLink>
@@ -367,7 +367,7 @@ function AssignmentTile({ committee, chairDisplayName, conferenceStartDate, dele
         {!loading && <BigCount n={papers} word={papers === 1 ? 'paper in' : 'papers in'} />}
       </div>
       {released && (
-        <div className={`${stacked ? 'hidden xl:flex' : 'flex'} mt-5 justify-end`}>
+        <div className={`${stacked ? 'hidden lg:flex' : 'flex'} mt-5 justify-end`}>
           <ForestLink href={chairHref(committee, chairDisplayName)} external>
             <Radio size={16} aria-hidden /> Join as chair
           </ForestLink>
@@ -671,7 +671,7 @@ export default function ChairParticipant({ conferenceId, conferenceSlug, section
   if (committees.length === 0) {
     // On the phone page the next step already says this.
     return (
-      <DashCard className={stacked ? 'hidden xl:block' : ''}>
+      <DashCard className={stacked ? 'hidden lg:block' : ''}>
         <CardHeading title="Your assignment" />
         <p className="inline-flex items-center gap-2" style={{ color: INK_SOFT, fontFamily: OUTFIT, fontSize: 14, margin: 0 }}>
           <Gavel size={16} strokeWidth={2.2} aria-hidden />

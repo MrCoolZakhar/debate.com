@@ -29,7 +29,7 @@ import RequestsPanel from './RequestsPanel';
 import ApplyPointer from './ApplyPointer';
 import ConferenceDocsSection, { useConferenceDocs, docForRole, DOC_READER_STATUSES } from './ConferenceDocsSection';
 import ConferenceDocsExtra, { useMyConferenceDocs, requiredOutstanding, DocsRequiredNotice } from './ConferenceDocsExtra';
-import DelegationLead, { DelegationLeadContext, liveRoomCode } from './delegation/DelegationLead';
+import DelegationLead, { liveRoomCode } from './delegation/DelegationLead';
 import type { ParticipantApplication, ParticipantRoleConfig, ParticipantAllocation, ParticipantCommittee } from './types';
 import { friendlyError, UserFacingError } from '@/lib/friendlyError';
 
@@ -60,16 +60,18 @@ const DOCUMENTS: DashSection = { key: 'documents', label: 'Documents', icon: Fil
 const DELEGATION: DashSection = { key: 'delegation', label: 'Delegation', icon: Users };
 const COMMITTEES: DashSection = { key: 'committees', label: 'Committees', icon: Landmark };
 
-/** In a delegation (owner, 19 Oct 2026): a head delegate, a faculty advisor or
- *  a delegate with a society. Their Delegation section IS the overview: it
- *  comes first, opens by default, and there is no Overview section. */
+/** In a delegation: a head delegate, a faculty advisor or a delegate with a
+ *  society. Owner, 20 Oct 2026: Overview is back for them and is their OWN
+ *  page (next step, Join session, documents needed back, their seat), drawn
+ *  with DelegationLead; Delegation is the second section, the leader or member
+ *  card only. */
 function inDelegation(app: ParticipantApplication): boolean {
   return !!app.society_id && (DELEGATE_ROLES.has(app.role) || app.role === 'faculty-advisor');
 }
 
 function sectionsFor(app: ParticipantApplication, gateOpen: boolean, hasConferenceDocs = false, chairAwards = false): DashSection[] {
-  // While the pay gate is closed the role content is not drawn, so there is
-  // no delegation card yet: Overview stays, for every role.
+  // While the pay gate is closed the role content is not drawn: Overview,
+  // Payment and Support only, for every role.
   if (!gateOpen) return [OVERVIEW, PAYMENT, SUPPORT];
   const list = roleSections(app);
   // A chair's Awards tab (prompt 134), after Committee, only while it is open.
@@ -92,7 +94,7 @@ function roleSections(app: ParticipantApplication): DashSection[] {
     case 'delegate':
     case 'head-delegate':
       return app.society_id
-        ? [DELEGATION, { key: 'committee', label: 'Committee', icon: Landmark }, DOCUMENTS, PAYMENT, SUPPORT]
+        ? [OVERVIEW, DELEGATION, { key: 'committee', label: 'Committee', icon: Landmark }, DOCUMENTS, PAYMENT, SUPPORT]
         : [OVERVIEW, { key: 'committee', label: 'Committee', icon: Landmark }, DOCUMENTS, PAYMENT, SUPPORT];
     case 'chair':
       return [
@@ -102,7 +104,7 @@ function roleSections(app: ParticipantApplication): DashSection[] {
         DOCUMENTS, PAYMENT, SUPPORT,
       ];
     case 'faculty-advisor':
-      return app.society_id ? [DELEGATION, COMMITTEES, PAYMENT, SUPPORT] : [OVERVIEW, DELEGATION, COMMITTEES, PAYMENT, SUPPORT];
+      return [OVERVIEW, DELEGATION, COMMITTEES, PAYMENT, SUPPORT];
     case 'observer':
       return [OVERVIEW, COMMITTEES, PAYMENT, SUPPORT];
     default:
@@ -147,7 +149,7 @@ function pageNextStep(o: {
       return {
         kind: 'done',
         line: o.app.society_id
-          ? 'Follow your delegation below. The organisers email you when allocations go out.'
+          ? 'Your delegation is in the Delegation section. The organisers email you when allocations go out.'
           : 'The organisers will link your delegation to your application.',
       };
     case 'observer':
@@ -396,18 +398,14 @@ export default function ParticipantView({
   const hasDocs = docsExtraOn ? gateOpen && (extraDocs?.documents.length ?? 0) > 0 : roleDocs.length > 0;
   const docsDue = gateOpen && extraDocs && extraDocs.warnings > 0 ? requiredOutstanding(extraDocs.documents) : [];
   const sections = sectionsFor(selected, gateOpen, hasDocs, chairAwardsTab);
-  // In a delegation with the gate open, Delegation is the overview.
-  const delegationFirst = gateOpen && inDelegation(selected);
+  // In a delegation with the gate open, Overview is drawn by DelegationLead.
+  const delegationOverview = gateOpen && inDelegation(selected);
   // A section that no longer exists for this application (a role switch, the
-  // gate closing) falls back to the first one (Overview, or Delegation for
-  // anyone in a delegation); asking for 'overview' lands on Delegation there.
+  // gate closing) falls back to the first one, Overview.
   const wantedSection = section.appId === selected.id ? section.key : 'overview';
   const homeSection = sections[0]?.key ?? 'overview';
-  const activeSection = wantedSection === 'overview' && delegationFirst
-    ? homeSection
-    : sections.some(x => x.key === wantedSection) ? wantedSection : homeSection;
-  // The overview's section key: Delegation for anyone in a delegation.
-  const overviewKey = delegationFirst ? 'delegation' : 'overview';
+  const activeSection = sections.some(x => x.key === wantedSection) ? wantedSection : homeSection;
+  const overviewKey = 'overview';
   const selectSection = (key: string) => setSection({ appId: selected.id, key });
 
   const docsNotice = docsDue.length > 0 ? (
@@ -437,17 +435,18 @@ export default function ParticipantView({
     paymentsReady,
   });
 
-  // The next step in the Delegation section for anyone in a delegation (Join
-  // session while the room is live). Handed down through DelegationLeadContext:
-  // DelegationPanel places it under the delegation's name (owner, 20 Oct 2026).
-  const delegationLead = delegationFirst ? (
+  // The next step at the top of Overview for anyone in a delegation (Join
+  // session while the room is live, documents needed back). An advisor holds
+  // no seat, so their Overview always says where things stand.
+  const delegationLead = delegationOverview ? (
     <DelegationLead
       step={nextStep}
       status={selected.status}
       roomCode={isDelegateRole ? liveRoomCode(myAllocation, conferenceStartDate) : null}
       notice={docsNotice}
+      showDone={selected.role === 'faculty-advisor'}
     />
-  ) : undefined;
+  ) : null;
 
   const roleContent = isDelegateRole ? (
     <DelegateParticipant
@@ -481,14 +480,15 @@ export default function ParticipantView({
 
   const closed = selected.status === 'withdrawn' || selected.status === 'rejected';
 
-  // Every role's dashboard is ONE page below xl (10 Oct 2026, delegates
+  // Every role's dashboard is ONE page below lg (10 Oct 2026, delegates
   // first; every role the same day, owner: "there is still multiple tabs in
   // you ... not yet clear enough"). No pill row: the page opens on ONE card
   // that says what to do now (pay, join the room, hand in the paper, or
   // "You're all set"), then the role's own sections in the order that
   // matters (each under a heading), then Payment, the application and the
-  // questions. From xl the sub-nav and one section at a time are unchanged:
-  // the DOM order below changes nothing there.
+  // questions. From lg (xl until 20 Oct 2026, owner: "wider, with the tabs on
+  // the side") the sub-nav and one section at a time: the DOM order below
+  // changes nothing there.
   const stacked = true;
   const paymentPane = (
     <Pane show={activeSection === 'payment'} title="Payment" icon={CreditCard}>
@@ -525,15 +525,14 @@ export default function ParticipantView({
       )}
 
       {/* More than one application here: pick which one the dashboard shows.
-          Below xl (10 Oct 2026) ONE clear chooser at the top: a big card per
+          Below lg (10 Oct 2026) ONE clear chooser at the top: a big card per
           role, the role large and its status as icon + word beneath, the
           one on screen ringed. One role at a time rather than every role's
           page stacked: each role has its own payment, papers and questions,
-          and stacking them would repeat all three. From xl the pill row is
-          unchanged. */}
+          and stacking them would repeat all three. From lg the pill row. */}
       {myApplications.length > 1 && (
         <>
-        <div className="xl:hidden" role="group" aria-label="Your roles at this conference">
+        <div className="lg:hidden" role="group" aria-label="Your roles at this conference">
           <p style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 700, color: '#6B5F52', margin: '0 0 8px 0' }}>
             You have {myApplications.length} roles here. Pick one to see its page.
           </p>
@@ -568,7 +567,7 @@ export default function ParticipantView({
             })}
           </div>
         </div>
-        <div role="group" aria-label="Your roles at this conference" className="hidden xl:flex flex-wrap gap-2">
+        <div role="group" aria-label="Your roles at this conference" className="hidden lg:flex flex-wrap gap-2">
           {myApplications.map(app => {
             const active = app.id === selected.id;
             const st = appStatusMark(app.status);
@@ -625,15 +624,18 @@ export default function ParticipantView({
           active={activeSection}
           onSelect={selectSection}
           ariaLabel={`${roleLabel(selected.role)} dashboard`}
-          stackBelowXl={stacked}
+          stackBelowLg={stacked}
         >
           <div className="flex flex-col gap-6">
             {/* Overview: MyMUN's three facts first, never gated. Below xl the
                 next-step card takes their place (status at its top right,
-                "what happens next" as its one line), so nothing repeats. */}
-            {/* Not drawn for anyone in a delegation (their Delegation section
-                carries the next step, DelegationLead), on any width. */}
-            {!delegationFirst && (
+                "what happens next" as its one line), so nothing repeats.
+                Anyone in a delegation gets DelegationLead instead, on every
+                width (no status chip; owner, 20 Oct 2026); their seat follows
+                from the role's own Overview pane. */}
+            {delegationOverview ? (
+            <Pane show={activeSection === 'overview'}>{delegationLead}</Pane>
+            ) : (
             <Pane show={activeSection === 'overview'}>
               {nextStep && <NextStepCard step={nextStep} status={selected.status} />}
               {docsNotice}
@@ -668,9 +670,7 @@ export default function ParticipantView({
                 Support, and Overview's status row says what to do. The role
                 reports its next step to the card above. */}
             <NextStepReportProvider value={reportRoleStep}>
-              <DelegationLeadContext.Provider value={delegationLead ?? null}>
-                {gateOpen ? roleContent : null}
-              </DelegationLeadContext.Provider>
+              {gateOpen ? roleContent : null}
             </NextStepReportProvider>
 
             {/* Press Desk (12 Oct 2026): only for the press of this conference (a press

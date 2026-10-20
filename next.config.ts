@@ -15,6 +15,7 @@ const NOINDEX_ROUTES = [
   '/manage/:path*',
   '/admin', '/admin/:path*',
   '/invites/:path*',
+  '/i/:path*',
   '/drafts/:path*',
   '/delegation/:path*',
   '/unsubscribe',

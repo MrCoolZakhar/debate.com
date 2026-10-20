@@ -7,8 +7,10 @@
 // false the hook returns null without touching the database and the card is
 // not rendered.
 //
-// Expected rows: { country_code, country_name, seat, display_name,
-// society_name, is_mine }, where is_mine marks the viewer's own delegation.
+// Expected rows: { country_code, country_name, seat, delegate_name (or
+// display_name), society_name, country_logo_url?, is_mine }, where is_mine
+// marks the viewer's own delegation. The leader card's committee pop-up
+// (CommitteePopup) reads the same rows.
 
 import { useEffect, useState } from 'react';
 import { getFreshAuthedClient } from '@/lib/supabase-auth';
@@ -20,6 +22,8 @@ export interface CommitteeRosterRow {
   seat: string | null;
   display_name: string | null;
   society_name: string | null;
+  /** A seat's custom crest, drawn before the flag, when the read sends one. */
+  country_logo_url: string | null;
   is_mine: boolean;
 }
 
@@ -46,8 +50,9 @@ export function useCommitteeRoster(conferenceCommitteeId: string | null): Commit
         country_code: str(r.country_code),
         country_name: str(r.country_name) ?? str(r.country) ?? '',
         seat: r.seat == null ? null : String(r.seat),
-        display_name: str(r.delegate_name),
+        display_name: str(r.delegate_name) ?? str(r.display_name),
         society_name: str(r.society_name),
+        country_logo_url: str(r.country_logo_url),
         is_mine: r.is_mine === true,
       }));
       setLoaded({ key, state: { kind: 'ok', rows } });

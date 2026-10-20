@@ -33,6 +33,7 @@ import {
   type GridAllocation, type GridCommittee, type GridRow, type GridSociety, type PaidApp, type SeatCell,
 } from '@/app/manage/[slug]/assignment/delegationSeatsGrid';
 import { giveSeats, takeBackSeats } from '@/app/manage/[slug]/assignment/delegationSeatWrites';
+import DelegationPopupLink from '@/app/manage/[slug]/DelegationPopupLink';
 
 // ── Look ─────────────────────────────────────────────────────────────────────
 
@@ -395,7 +396,7 @@ export default function DelegationSeatsView({ conference, initialSocietyId, onSi
             <SocietyCrest society={selected} size={44} selected />
             <div className="flex flex-col flex-1" style={{ gap: 6, minWidth: 220 }}>
               <span className="[overflow-wrap:anywhere]" style={{ fontFamily: OUTFIT, fontSize: 16, fontWeight: 600, color: INK }}>
-                {selected.name}{' '}
+                <DelegationPopupLink societyId={selected.id} tab="people" onClosed={() => { void load(); }}>{selected.name}</DelegationPopupLink>{' '}
                 <span style={{ fontWeight: 400, color: INK_SOFT }}>
                   {selectedSummary.paid > 0
                     ? `· ${selectedSummary.given} of ${selectedSummary.paid} paid spots have a seat`

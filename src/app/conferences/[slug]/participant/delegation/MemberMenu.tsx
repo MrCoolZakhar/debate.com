@@ -1,18 +1,21 @@
 'use client';
 
-// The row menu on the leader card's People table. Every leader gets it.
+// The row menu on the leader card's People table. Every leader gets it, and
+// sees the full menu (owner, 20 Oct 2026); an item a flag still holds back is
+// shown disabled with a hover title saying why:
 //   Make head delegate / Make delegate        delegation_set_head (live)
-// and, only while DELEGATIONS_V2_DB is on (v2.ts):
-//   Place in a seat                           delegation_place_member (a second step lists the open seats)
-//   Take out of seat                          delegation_unplace_member (a seated member; the seat stays open)
-//   Upload position paper                     a PDF for a seated member
-// and, only while DELEGATIONS_MONEY_DB is on (waits for Christian's money functions):
-//   Remove from delegation                    delegation_remove_member
-// Leaders never move anyone to or from faculty advisor: only organisers do that
-// (owners, 20 Oct 2026), from the organiser's delegation pop-up.
-// and, whenever the People table offers a switch (seat/), "Switch with…": a
-// second step lists the people this seat can go to, then the switch is asked
-// in place (the keyboard way to do what dragging a seat onto a row does).
+//   Place in a seat / Take out of seat        DELEGATIONS_V2_DB (v2.ts), else "Coming soon";
+//                                             Place lists the open seats in a second step
+//                                             (committee A to Z, country, seat: seat/seatOrder)
+//   Upload position paper                     DELEGATIONS_V2_DB, else "Coming soon"
+//   Switch with…                              whenever the People table offers a switch (seat/):
+//                                             a second step lists the people this seat can go
+//                                             to, then the switch is asked in place
+//   Remove from delegation                    DELEGATIONS_MONEY_DB (Christian's money functions),
+//                                             else "Coming soon, waiting for Christian"
+// Seat items and paper never show for a faculty advisor (no seat). Leaders never
+// move anyone to or from faculty advisor: only organisers do that (owners,
+// 20 Oct 2026), from the organiser's delegation pop-up.
 // With `ops` from the People table, Place, Take out, Upload and Switch run
 // through the table so its rows change at once (optimistic, rolled back on a
 // refusal); the table can also open the menu straight at the place or switch
@@ -32,6 +35,7 @@ import { notifyErr, notifyOk } from '@/lib/appNotify';
 import { committeeDisplayName } from '@/lib/presetNames';
 import { DELEGATIONS_MONEY_DB, DELEGATIONS_V2_DB, placeMember, removeMember, unplaceMember, uploadPaperForMember, type MemberRole, type OpenSeat, type Result } from './v2';
 import { CommitteeDisc, committeeEmblemSrc, DANGER, FONT, INK, INK_SOFT, LINE, RoundAvatar, STROKE } from './leaderKit';
+import { sortOpenSeats } from './seat/seatOrder';
 
 export interface MenuMember {
   application_id: string;
@@ -59,6 +63,8 @@ export interface SeatOps {
   switchTargets: SwitchTarget[];
   switchCopy: (toApplicationId: string) => { title: string; line: string | null; yes: string };
   switchWith: (toApplicationId: string) => void;
+  /** Why "Switch with…" is disabled when nobody is in switchTargets. */
+  switchOffReason?: string;
 }
 
 export interface MemberMenuHandle {
@@ -75,6 +81,18 @@ type Action =
 type Step = 'list' | 'place' | 'switch' | { confirm: Action };
 
 const MENU_W = 272;
+const SOON = 'Coming soon';
+const SOON_CHRISTIAN = 'Coming soon, waiting for Christian';
+
+interface Item {
+  key: string;
+  icon: typeof Crown;
+  label: string;
+  onPress: () => void;
+  danger?: boolean;
+  /** Shown but not pressable; the hover title says why. */
+  off?: string;
+}
 
 export default function MemberMenu({ member, societyId, openSeats, conferenceId, onDone, ops, handleRef }: {
   member: MenuMember;
@@ -208,22 +226,41 @@ export default function MemberMenu({ member, societyId, openSeats, conferenceId,
     }), `Position paper uploaded for ${member.name}.`);
   };
 
-  // What this row offers.
-  const items: { key: string; icon: typeof Crown; label: string; onPress: () => void; danger?: boolean }[] = [];
+  // What this row offers: the full menu, with what a flag holds back disabled.
+  const seats = sortOpenSeats(openSeats);
+  const noop = () => {};
+  const items: Item[] = [];
   if (member.role === 'delegate') items.push({ key: 'up', icon: Crown, label: 'Make head delegate', onPress: () => { void doAction({ kind: 'head', head: true }); } });
   if (member.role === 'head-delegate') items.push({ key: 'down', icon: UserRound, label: 'Make delegate', onPress: () => setStep({ confirm: { kind: 'head', head: false } }) });
-  if (DELEGATIONS_V2_DB) {
-    if (!isAdvisor) {
-      if ((openSeats?.length ?? 0) > 0) items.push({ key: 'place', icon: Armchair, label: 'Place in a seat', onPress: () => setStep('place') });
-      if (member.seat) items.push({ key: 'unplace', icon: CircleMinus, label: 'Take out of seat', onPress: () => setStep({ confirm: { kind: 'unplace' } }) });
-      if (member.seat && member.user_id) items.push({ key: 'upload', icon: Upload, label: 'Upload position paper', onPress: () => fileRef.current?.click() });
+  if (!isAdvisor) {
+    if (member.seat) {
+      items.push(DELEGATIONS_V2_DB
+        ? { key: 'unplace', icon: CircleMinus, label: 'Take out of seat', onPress: () => setStep({ confirm: { kind: 'unplace' } }) }
+        : { key: 'unplace', icon: CircleMinus, label: 'Take out of seat', onPress: noop, off: SOON });
+    } else {
+      items.push(!DELEGATIONS_V2_DB
+        ? { key: 'place', icon: Armchair, label: 'Place in a seat', onPress: noop, off: SOON }
+        : (seats?.length ?? 0) > 0
+          ? { key: 'place', icon: Armchair, label: 'Place in a seat', onPress: () => setStep('place') }
+          : { key: 'place', icon: Armchair, label: 'Place in a seat', onPress: noop, off: 'The delegation has no open seats' });
+    }
+    items.push(!DELEGATIONS_V2_DB
+      ? { key: 'upload', icon: Upload, label: 'Upload position paper', onPress: noop, off: SOON }
+      : !member.seat
+        ? { key: 'upload', icon: Upload, label: 'Upload position paper', onPress: noop, off: 'Place them in a seat first' }
+        : !member.user_id
+          ? { key: 'upload', icon: Upload, label: 'Upload position paper', onPress: noop, off: 'They have not joined yet' }
+          : { key: 'upload', icon: Upload, label: 'Upload position paper', onPress: () => fileRef.current?.click() });
+    if (member.seat) {
+      items.push((ops?.switchTargets.length ?? 0) > 0
+        ? { key: 'switch', icon: ArrowLeftRight, label: 'Switch with…', onPress: () => setStep('switch') }
+        : { key: 'switch', icon: ArrowLeftRight, label: 'Switch with…', onPress: noop, off: ops?.switchOffReason ?? 'Nobody to switch with right now' });
     }
   }
-  if (member.seat && (ops?.switchTargets.length ?? 0) > 0) {
-    items.push({ key: 'switch', icon: ArrowLeftRight, label: 'Switch with…', onPress: () => setStep('switch') });
-  }
-  if (DELEGATIONS_MONEY_DB) {
-    if (!self) items.push({ key: 'remove', icon: X, label: 'Remove from delegation', onPress: () => setStep({ confirm: { kind: 'remove' } }), danger: true });
+  if (!self) {
+    items.push(DELEGATIONS_MONEY_DB
+      ? { key: 'remove', icon: X, label: 'Remove from delegation', onPress: () => setStep({ confirm: { kind: 'remove' } }), danger: true }
+      : { key: 'remove', icon: X, label: 'Remove from delegation', onPress: noop, danger: true, off: SOON_CHRISTIAN });
   }
 
   if (items.length === 0) return null;
@@ -258,7 +295,7 @@ export default function MemberMenu({ member, societyId, openSeats, conferenceId,
         {backBtn}
         <p style={{ fontFamily: FONT, fontSize: 13.5, fontWeight: 600, color: INK, margin: '4px 10px 6px' }}>Choose a seat for {member.name}</p>
         <div style={{ maxHeight: 280, overflowY: 'auto' }}>
-          {(openSeats ?? []).map((s, i) => (
+          {(seats ?? []).map((s, i) => (
             <button
               key={`${s.allocation_id ?? i}`}
               type="button"
@@ -338,8 +375,19 @@ export default function MemberMenu({ member, societyId, openSeats, conferenceId,
   } else {
     const danger = items.filter(i => i.danger);
     const plain = items.filter(i => !i.danger);
-    const row = (i: typeof items[number]) => {
+    const row = (i: Item) => {
       const Icon = i.icon;
+      if (i.off) {
+        // aria-disabled, not disabled: a disabled button shows no hover title in every browser.
+        return (
+          <button key={i.key} type="button" role="menuitem" aria-disabled="true" title={i.off} onClick={(e) => e.preventDefault()}
+            className="focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gv-main)]"
+            style={{ ...itemStyle, color: i.danger ? DANGER : INK, opacity: 0.45, cursor: 'default' }}>
+            <Icon size={18} strokeWidth={STROKE} aria-hidden />
+            {i.label}
+          </button>
+        );
+      }
       return (
         <button key={i.key} type="button" role="menuitem" onClick={i.onPress} disabled={busy}
           className="focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gv-main)] hover:bg-[#F4F0E6]"

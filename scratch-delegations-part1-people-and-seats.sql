@@ -16,9 +16,12 @@
 --     or replaces one. Checked by grep on 20 Oct 2026. The only writes are:
 --     conference_allocations (seats), applications.status ('accepted' <-> 'assigned')
 --     and assigned_committee_id / assigned_country_code / assigned_country_name,
---     position_papers, position_paper_messages, and two new conferences columns.
+--     position_papers, position_paper_messages, two new conferences columns, and
+--     delegation_invites (the new short_code column, and the delegation's one invite
+--     row when a leader asks for its short link before it exists, section 15).
 --   * Read only: _society_paid_delegate_spots reads invoices, payment_status and
---     self_paid; _society_expected_size reads spots_pledged. Nothing else reads money.
+--     self_paid; _society_expected_size reads spots_pledged. Nothing else reads money
+--     (delegation_member_details, section 16, returns no payment data).
 --   * Existing triggers: delegation_place_member and delegation_unplace_member flip
 --     applications.status between 'accepted' and 'assigned', exactly as the live
 --     delegation_assign_seat does today. That fires the existing
@@ -37,7 +40,7 @@
 -- Leaders: every leader check is is_society_leader (an ACCEPTED head delegate or
 -- faculty advisor of the delegation, answer 11), never societies.advisor_user_id.
 --
--- Written 19 Oct 2026 (section 14 on 20 Oct 2026) against the live schema of
+-- Written 19 Oct 2026 (sections 14 to 16 on 20 Oct 2026) against the live schema of
 -- luruhkwrgisytejswlas, read only. Decisions: docs/conferences/delegations.md.
 -- Map: CLAUDE.md. Client flag: DELEGATIONS_V2_DB (both v2.ts files), flipped once
 -- this file is applied.
@@ -53,7 +56,9 @@
 --     does). friendlyError passes a plain P0001 message through.
 --   * Application writes set app.trusted_write (guard_application_write).
 --   * Grants: revoke from public and anon, grant execute to authenticated (as
---     delegation_set_head). Internal helpers are granted to nobody.
+--     delegation_set_head). Internal helpers are granted to nobody. One exception:
+--     resolve_delegation_short_invite is anon and authenticated, like
+--     resolve_delegation_invite, because the invite page resolves before sign-in.
 -- =============================================================================
 
 begin;
@@ -1212,6 +1217,301 @@ end $function$;
 revoke all on function public.delegation_unplace_member(uuid) from public, anon;
 grant execute on function public.delegation_unplace_member(uuid) to authenticated;
 
+
+-- -----------------------------------------------------------------------------
+-- 15. Short invite links (20 Oct 2026)
+--     Today (read live): delegation_invites (id, token text unique default a uuid,
+--     society_id, conference_id, created_by, expires_at, created_at), unique on
+--     (society_id, conference_id), RLS "Leaders manage their delegation invites"
+--     (ALL, is_society_leader(society_id)); 11 rows. create_delegation_invite
+--     (leader only) inserts or returns the one invite of the delegation;
+--     resolve_delegation_invite(p_token) is callable by anon and authenticated and
+--     answers the delegation and conference names. The page is
+--     /invites/delegation/[token].
+--     New:
+--       * delegation_invites.short_code text unique, e.g. westbrook-academy-k7q3mx:
+--         a slug of the delegation name (accents folded, lowercase a-z0-9 and
+--         single dashes, at most 24 characters, cut at a word end when there is
+--         one, 'delegation' when nothing is left) + '-' + 6 random
+--         characters from abcdefghjkmnpqrstuvwxyz23456789 (31 characters, no
+--         0 / o / 1 / l / i): 31^6 = about 887 million codes per slug, so the slug
+--         (guessable from the name) never makes the link guessable. Random bytes
+--         come from extensions.gen_random_bytes (pgcrypto) with rejection sampling
+--         (bytes 248..255 are skipped), so every character is equally likely.
+--         A CHECK keeps the shape, because the existing RLS policy lets a leader
+--         UPDATE their own invite row directly.
+--       * The code is made once and never changes, so a link already shared keeps
+--         working after the delegation is renamed.
+--       * delegation_invite_short_code(p_society uuid) returns text: for an
+--         accepted leader of the society (is_society_leader) the invite's short
+--         code, creating the invite (as create_delegation_invite does) and the code
+--         when missing. A collision with an existing code is retried with new
+--         random characters. Anyone else gets the P0001 sentence (hint not_leader).
+--       * resolve_delegation_short_invite(p_code text) returns text: the invite's
+--         full token, or null for an unknown code. Same exposure as
+--         resolve_delegation_invite (anon and authenticated): it returns only the
+--         token the short code already stands for. Matching ignores case and spaces
+--         around the code. An expired invite still answers its token, so the page's
+--         existing resolve_delegation_invite / delegation_join_via_invite say
+--         "This invite link has expired." as they do today.
+--     No money: nothing here reads or writes invoices, payments or applications.
+-- -----------------------------------------------------------------------------
+
+alter table public.delegation_invites
+  add column if not exists short_code text null;
+
+do $do$
+begin
+  if not exists (select 1 from pg_constraint where conname = 'delegation_invites_short_code_key') then
+    alter table public.delegation_invites
+      add constraint delegation_invites_short_code_key unique (short_code);
+  end if;
+  if not exists (select 1 from pg_constraint where conname = 'delegation_invites_short_code_check') then
+    alter table public.delegation_invites
+      add constraint delegation_invites_short_code_check
+      check (short_code is null
+             or (length(short_code) <= 31
+                 and short_code ~ '^([a-z0-9]+-)+[abcdefghjkmnpqrstuvwxyz2-9]{6}$'));
+  end if;
+end $do$;
+
+comment on column public.delegation_invites.short_code is
+  'Readable invite code: slug of the delegation name (max 24) + "-" + 6 random characters (no 0/o/1/l/i). Made once by delegation_invite_short_code, resolved by resolve_delegation_short_invite.';
+
+-- The slug part. Immutable, so it can be tested on its own.
+create or replace function public._delegation_invite_slug(p_name text)
+returns text
+language plpgsql
+immutable
+set search_path to 'public', 'pg_temp'
+as $function$
+declare
+  v text := lower(coalesce(p_name, ''));
+begin
+  v := regexp_replace(v, '[\u0300-\u036f]', '', 'g');  -- combining marks (lower('İ') = 'i' + U+0307)
+  v := replace(v, 'ß', 'ss');
+  v := translate(v,
+    'àáâãäåāăą' || 'çćč' || 'ď' || 'èéêëēėęě' || 'ğ' || 'ìíîïīįı' || 'ł' || 'ñńň' || 'òóôõöøōő' || 'ř' || 'śšş' || 'ţť' || 'ùúûüūůűų' || 'ýÿ' || 'žźż',
+    'aaaaaaaaa' || 'ccc' || 'd' || 'eeeeeeee' || 'g' || 'iiiiiii' || 'l' || 'nnn' || 'oooooooo' || 'r' || 'sss' || 'tt' || 'uuuuuuuu' || 'yy' || 'zzz');
+  v := regexp_replace(v, '[^a-z0-9]+', '-', 'g');
+  v := btrim(v, '-');
+  -- At most 24 characters, cut at a word end when there is one.
+  if length(v) > 24 then
+    v := case when strpos(left(v, 25), '-') > 0
+              then btrim(regexp_replace(left(v, 25), '-[^-]*$', ''), '-')
+              else left(v, 24) end;
+  end if;
+  if v = '' then v := 'delegation'; end if;
+  return v;
+end $function$;
+
+-- Six random characters from the unambiguous alphabet.
+create or replace function public._delegation_invite_random6()
+returns text
+language plpgsql
+volatile
+set search_path to 'public', 'pg_temp'
+as $function$
+declare
+  v_alpha constant text := 'abcdefghjkmnpqrstuvwxyz23456789';  -- 31, no 0 o 1 l i
+  v_out text := '';
+  v_bytes bytea;
+  v_b int;
+  i int;
+begin
+  while length(v_out) < 6 loop
+    v_bytes := extensions.gen_random_bytes(16);
+    for i in 0..15 loop
+      v_b := get_byte(v_bytes, i);
+      if v_b < 248 then                        -- 248 = 31 * 8: no modulo bias
+        v_out := v_out || substr(v_alpha, (v_b % 31) + 1, 1);
+        exit when length(v_out) = 6;
+      end if;
+    end loop;
+  end loop;
+  return v_out;
+end $function$;
+
+create or replace function public.delegation_invite_short_code(p_society uuid)
+returns text
+language plpgsql
+security definer
+set search_path to 'public', 'pg_temp'
+as $function$
+declare
+  v_uid uuid := auth.uid();
+  v_soc record;
+  v_inv record;
+  v_slug text;
+  v_code text;
+  v_try int := 0;
+begin
+  if v_uid is null then
+    raise exception 'Please sign in again.' using errcode = 'P0001', hint = 'signed_out';
+  end if;
+  if not is_society_leader(p_society) then
+    raise exception 'Only a head delegate or faculty advisor of this delegation can share its invite link.'
+      using errcode = 'P0001', hint = 'not_leader';
+  end if;
+  select s.id, s.conference_id, s.name into v_soc from societies s where s.id = p_society;
+  if v_soc.id is null then
+    raise exception 'We could not find this delegation.' using errcode = 'P0001', hint = 'not_found';
+  end if;
+
+  -- The one invite of the delegation, as create_delegation_invite makes it.
+  insert into delegation_invites (society_id, conference_id, created_by)
+  values (v_soc.id, v_soc.conference_id, v_uid)
+  on conflict (society_id, conference_id) do nothing;
+
+  select i.id, i.short_code into v_inv
+    from delegation_invites i
+   where i.society_id = v_soc.id and i.conference_id = v_soc.conference_id
+   for update;
+  if v_inv.short_code is not null then
+    return v_inv.short_code;
+  end if;
+
+  v_slug := public._delegation_invite_slug(v_soc.name);
+  loop
+    v_try := v_try + 1;
+    v_code := v_slug || '-' || public._delegation_invite_random6();
+    begin
+      update delegation_invites set short_code = v_code
+       where id = v_inv.id and short_code is null;
+      exit;
+    exception when unique_violation then
+      if v_try >= 20 then
+        raise exception 'We could not make a short link. Try again.' using errcode = 'P0001', hint = 'no_code';
+      end if;
+    end;
+  end loop;
+
+  select i.short_code into v_code from delegation_invites i where i.id = v_inv.id;
+  return v_code;
+end $function$;
+
+create or replace function public.resolve_delegation_short_invite(p_code text)
+returns text
+language sql
+stable security definer
+set search_path to 'public', 'pg_temp'
+as $function$
+  select i.token
+    from delegation_invites i
+   where i.short_code = lower(btrim(coalesce(p_code, '')))
+   limit 1;
+$function$;
+
+revoke all on function public._delegation_invite_slug(text) from public, anon, authenticated;
+revoke all on function public._delegation_invite_random6() from public, anon, authenticated;
+revoke all on function public.delegation_invite_short_code(uuid) from public, anon;
+grant execute on function public.delegation_invite_short_code(uuid) to authenticated;
+revoke all on function public.resolve_delegation_short_invite(text) from public;
+grant execute on function public.resolve_delegation_short_invite(text) to anon, authenticated;
+
+
+-- -----------------------------------------------------------------------------
+-- 16. delegation_member_details(p_application) (20 Oct 2026)
+--     What a leader sees when they open a member: who they are and their answers
+--     to the role's application questions.
+--     Who: an accepted leader of the member's delegation (is_society_leader) or an
+--     organiser of the conference (is_conference_organizer). Anyone else, and an
+--     id that does not exist, get the same refusal (no probing for ids).
+--     Returns: {ok:true, application_id, name, email, role, status, nationality,
+--       society_id, society, answers: [{id, question, type, answer}]}
+--       name        profiles.display_name (live), else applications.invited_name
+--       email       profiles.email, else applications.invited_email
+--       nationality profiles.nationality (null for an imported member with no account)
+--       society     the delegation's name
+--       answers     the role's custom questions (application_role_configs.custom_questions
+--                   of this conference and the member's role), in form order: question
+--                   blocks only (kind 'question' or no kind; title and section blocks
+--                   skipped), archived questions only when this member answered them,
+--                   matched to applications.custom_answers by question id. answer is the
+--                   stored value (a string, or an array for checkboxes), null when
+--                   unanswered or empty.
+--     Never: date of birth (profiles.date_of_birth is not read, and a custom
+--     question whose label mentions a birth date is left out, so a typed birth date
+--     never shows either), payment data (no payment_status, invoices, fees, aid),
+--     the financial aid form (applications.aid_custom_answers is a separate form
+--     and is never read), user ids.
+-- -----------------------------------------------------------------------------
+
+create or replace function public.delegation_member_details(p_application uuid)
+returns jsonb
+language plpgsql
+stable security definer
+set search_path to 'public', 'pg_temp'
+as $function$
+declare
+  v_uid uuid := auth.uid();
+  v_a record;
+  v_answers jsonb;
+begin
+  if v_uid is null then
+    return jsonb_build_object('ok', false, 'code', 'signed_out', 'error', 'Sign in first.');
+  end if;
+
+  select a.id, a.conference_id, a.society_id, a.role, a.status, a.user_id,
+         a.invited_name, a.invited_email, a.custom_answers,
+         p.display_name, p.email, p.nationality,
+         s.name as society_name
+    into v_a
+    from applications a
+    left join profiles p on p.id = a.user_id
+    left join societies s on s.id = a.society_id
+   where a.id = p_application;
+
+  if v_a.id is null
+     or not (is_conference_organizer(v_a.conference_id)
+             or (v_a.society_id is not null and is_society_leader(v_a.society_id))) then
+    return jsonb_build_object('ok', false, 'code', 'not_leader',
+      'error', 'Only a head delegate or faculty advisor of this delegation can see these details.');
+  end if;
+
+  select coalesce(jsonb_agg(jsonb_build_object(
+           'id', q.e->>'id',
+           'question', coalesce(q.e->>'label', ''),
+           'type', q.e->>'type',
+           'answer', case
+                       when ans.v is null or ans.v = 'null'::jsonb then null
+                       when jsonb_typeof(ans.v) = 'string' and btrim(ans.v #>> '{}') = '' then null
+                       when jsonb_typeof(ans.v) = 'array' and jsonb_array_length(ans.v) = 0 then null
+                       else ans.v
+                     end)
+           order by q.ord), '[]'::jsonb)
+    into v_answers
+    from application_role_configs rc
+    cross join lateral jsonb_array_elements(
+      case when jsonb_typeof(rc.custom_questions) = 'array' then rc.custom_questions else '[]'::jsonb end
+    ) with ordinality as q(e, ord)
+    cross join lateral (
+      select case when jsonb_typeof(v_a.custom_answers) = 'object'
+                  then v_a.custom_answers -> (q.e->>'id') end as v
+    ) ans
+   where rc.conference_id = v_a.conference_id
+     and rc.role = v_a.role
+     and coalesce(q.e->>'kind', 'question') = 'question'
+     and q.e ? 'id'
+     and coalesce(q.e->>'label', '') !~* '(birth|\mdob\M|doğum|nacimiento|naissance|geburt)'
+     and (coalesce(q.e->'archived', 'false'::jsonb) <> 'true'::jsonb or ans.v is not null);
+
+  return jsonb_build_object(
+    'ok', true,
+    'application_id', v_a.id,
+    'name', coalesce(nullif(btrim(v_a.display_name), ''), nullif(btrim(v_a.invited_name), '')),
+    'email', coalesce(nullif(btrim(v_a.email), ''), nullif(btrim(v_a.invited_email), '')),
+    'role', v_a.role,
+    'status', v_a.status,
+    'nationality', v_a.nationality,
+    'society_id', v_a.society_id,
+    'society', v_a.society_name,
+    'answers', coalesce(v_answers, '[]'::jsonb));
+end $function$;
+
+revoke all on function public.delegation_member_details(uuid) from public, anon;
+grant execute on function public.delegation_member_details(uuid) to authenticated;
+
 commit;
 
 
@@ -1308,6 +1608,32 @@ commit;
 --   Anyone seated in the committee, a leader of a delegation with a member or an
 --   Open seat in it, or an organiser.
 --   raises (hint): signed_out, not_found, not_allowed
+--
+-- delegation_invite_short_code(p_society uuid)                    -> text
+--   An accepted leader of the delegation (is_society_leader). The delegation's
+--   short invite code, e.g. 'westbrook-academy-k7q3mx', made (with the invite
+--   itself) on the first call and never changed after, so a shared link survives a
+--   rename. The client builds the short link around it (gavelling.com/i/<code>,
+--   src/app/i/[code]), which resolves the code to the token and opens
+--   /invites/delegation/<token>.
+--   raises (hint): signed_out, not_leader, not_found, no_code
+--
+-- resolve_delegation_short_invite(p_code text)                     -> text | null
+--   anon and authenticated. The invite's full token, or null (show "This invite
+--   link is not valid."). Case and surrounding spaces ignored. Then call
+--   resolve_delegation_invite / delegation_join_via_invite with the token as today
+--   (they report an expired invite).
+--
+-- delegation_member_details(p_application uuid)                    -> jsonb
+--   An accepted leader of the member's delegation, or an organiser.
+--   ok: {ok, application_id, name text|null, email text|null, role, status,
+--        nationality text|null, society_id uuid|null, society text|null,
+--        answers: [{id, question, type, answer}]}
+--       answers follow the role's form order; answer is a string, a string[]
+--       (checkboxes) or null (unanswered). Title / section blocks, the aid form and
+--       any question about a birth date are left out.
+--   codes: signed_out, not_leader (also for an unknown id)
+--   Never a date of birth, payment data or a user id.
 --
 -- conferences.delegation_seat_limit 'none'|'paid'|'expected' (default 'none'),
 -- conferences.delegation_reshuffle_until timestamptz|null: plain columns, written by

@@ -23,6 +23,7 @@ import { LevelInsignia, LEVEL_ACCENT } from '@/app/account/accountUi';
 import DelegationsView from '@/app/manage/[slug]/assignment/DelegationsView';
 import IndependentsView from '@/app/manage/[slug]/assignment/IndependentsView';
 import DelegationSeatsView from '@/app/manage/[slug]/assignment/DelegationSeatsView';
+import DelegationPopupLink from '@/app/manage/[slug]/DelegationPopupLink';
 import { replaceUrlInPlace } from '@/lib/replaceUrlInPlace';
 import { queueEventEmail, notifyIfNeeded, turnOnDefaultEmail } from '@/lib/emailEvents';
 import { AssignConfirmDialog } from '@/app/manage/[slug]/assignment/AssignConfirmDialog';
@@ -1429,7 +1430,7 @@ function LevelTag({ level }: { level: string | null | undefined }) {
   );
 }
 
-function DelegationChip({ app }: { app: AcceptedApp }) {
+function DelegationChip({ app, openable = false }: { app: AcceptedApp; openable?: boolean }) {
   const indep = app.society_id == null;
   const label = indep ? 'Independent' : app.societies?.name ?? null;
   if (!label) return null;
@@ -1450,7 +1451,7 @@ function DelegationChip({ app }: { app: AcceptedApp }) {
         className="[overflow-wrap:anywhere]"
         style={{ fontSize: 10, fontWeight: 700, fontFamily: MONO, letterSpacing: '0.04em' }}
       >
-        {label}
+        {openable && !indep ? <DelegationPopupLink societyId={app.society_id}>{label}</DelegationPopupLink> : label}
       </span>
     </span>
   );
@@ -2444,7 +2445,9 @@ function OccupiedSeatChip({ alloc, onRemoveAllocation }: { alloc: AllocationRow;
           no user_id, so ProfileLink renders it as bare text. */}
       <span style={{ fontFamily: OUTFIT, maxWidth: 140, minWidth: 0, paddingBlock: 1 }}>
         {isSociety ? (
-          <span style={{ display: 'block', fontSize: 12, fontWeight: 700, color: NEU.ink, overflowWrap: 'anywhere', lineHeight: 1.15 }} title={name}>{name}</span>
+          <span style={{ display: 'block', fontSize: 12, fontWeight: 700, color: NEU.ink, overflowWrap: 'anywhere', lineHeight: 1.15 }}>
+            <DelegationPopupLink societyId={alloc.society_id}>{name}</DelegationPopupLink>
+          </span>
         ) : (
           <ProfileLink userId={alloc.user_id} name={name} nested>
             <StackedName name={name} size={12} weight={700} color={NEU.ink} restColor={NEU.inkSoft} />
@@ -5051,7 +5054,7 @@ export default function AssignmentPage() {
                             <DelegationAvatar size={40} />
                             <div className="flex-1 min-w-0">
                               <p className="[overflow-wrap:anywhere]" style={{ fontSize: 15, fontWeight: 800, color: NEU.ink, fontFamily: OUTFIT, lineHeight: 1.15 }}>
-                                {soc.name}
+                                <DelegationPopupLink societyId={soc.id}>{soc.name}</DelegationPopupLink>
                               </p>
                               <p className="flex items-center gap-1 mt-0.5" style={{ fontSize: 10.5, color: NEU.muted, fontFamily: MONO, letterSpacing: '0.04em', fontVariantNumeric: 'tabular-nums' }}>
                                 <Users size={11} strokeWidth={2.2} /> {soc.memberCount} {soc.memberCount === 1 ? 'MEMBER' : 'MEMBERS'}
@@ -5160,7 +5163,7 @@ export default function AssignmentPage() {
                           </div>
 
                           <div className="flex items-center gap-1.5 mt-2 flex-wrap">
-                            <DelegationChip app={app} />
+                            <DelegationChip app={app} openable />
                           </div>
 
                           {firstPref && (

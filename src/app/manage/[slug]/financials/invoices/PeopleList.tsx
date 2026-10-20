@@ -11,6 +11,7 @@ import { OUTFIT } from '@/components/neu';
 import { INK, INK_SOFT, FOREST, DEEP_GOLD, LINE } from '../dashboardKit';
 import { KIND_NAME, KIND_ORDER } from '../financialsApi';
 import { roleWord, type PersonRow } from './invoicesApi';
+import DelegationPopupLink from '@/app/manage/[slug]/DelegationPopupLink';
 
 export const INDEPENDENTS = '__independent';
 export const PAGE_SIZE = 50;
@@ -108,7 +109,7 @@ export function PersonLine({ p, selected, onToggle, onOpen, money, readOnly }: {
   money: (c: number, currency: string | null) => string;
   readOnly: boolean;
 }) {
-  const sub = [roleWord(p.role), p.delegation].filter(Boolean).join(' · ');
+  const role = roleWord(p.role);
   return (
     <div
       className="gv-inv-row"
@@ -129,7 +130,15 @@ export function PersonLine({ p, selected, onToggle, onOpen, money, readOnly }: {
           <p className="gv-inv-flag"><b>{p.to_do}</b> to review</p>
         )}
         <p className="gv-inv-name">{p.name}</p>
-        {sub && <p className="gv-inv-sub">{sub}</p>}
+        {(role || p.delegation) && (
+          <p className="gv-inv-sub">
+            {role}
+            {role && p.delegation ? ' · ' : null}
+            {p.delegation && (p.society_id
+              ? <DelegationPopupLink societyId={p.society_id} tab="payments">{p.delegation}</DelegationPopupLink>
+              : p.delegation)}
+          </p>
+        )}
         {!p.claimed && <p className="gv-inv-sub">Not claimed yet</p>}
         {p.closed && <p className="gv-inv-sub">{p.app_status === 'withdrawn' ? 'Withdrawn' : 'Rejected'}</p>}
       </div>

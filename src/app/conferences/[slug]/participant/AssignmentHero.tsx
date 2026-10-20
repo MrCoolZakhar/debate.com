@@ -96,10 +96,10 @@ export default function AssignmentHero({ committee, myAllocation, conferenceStar
       </div>
 
       {(independent || (sessionCode && (released || releaseMs !== null))) && (
-        <div className={`${joinFromXlOnly && !independent && sessionCode && released ? 'hidden xl:flex' : 'flex'} items-center justify-between gap-3 flex-wrap mt-5`}>
+        <div className={`${joinFromXlOnly && !independent && sessionCode && released ? 'hidden lg:flex' : 'flex'} items-center justify-between gap-3 flex-wrap mt-5`}>
           {independent ? <IconWord icon={Users} word="Independent delegate" color={INK_SOFT} size="sm" /> : <span />}
           {sessionCode && released ? (
-            <span className={joinFromXlOnly ? 'hidden xl:inline-flex' : 'inline-flex'}>
+            <span className={joinFromXlOnly ? 'hidden lg:inline-flex' : 'inline-flex'}>
               <ForestLink href={`/join?code=${sessionCode}`}>
                 Join session <ArrowRight size={16} strokeWidth={2.4} aria-hidden />
               </ForestLink>

@@ -8,22 +8,26 @@
 // (useLeaderData).
 //
 //   Header        the crest (round), the name in bold, "Delegation · City,
-//                 Country" with the home country's round flag; Copy invite
-//                 link and Import delegates. The FIRST thing in the section
-//                 (owner, 20 Oct 2026), the page's next step right under it
-//                 (DelegationLead, handed down through DelegationLeadContext)
+//                 Country" with the home country's round flag; the invite link
+//                 itself, always shown with Copy (owner, 20 Oct 2026), and
+//                 Import delegates. The page's next step lives in Overview now.
 //   Stats         joined, seats given, paid, and Expected size with a stepper
 //                 (the plus is "Buy another ticket": add_pledged_spots +1, which
 //                 raises the size and makes the ticket; remove_pledged_spot_invoice on one of
 //                 this leader's unpaid spots). The number moves on the tap;
 //                 taps queue and are sent one at a time, each re-reading
 //                 my_pay_overview in place, and a refusal puts the server's
-//                 number back. Nothing here ever shows a loader.
-//   People        PeopleTable, with the row menu (MemberMenu)
+//                 number back. Nothing here ever shows a loader. The minus
+//                 stops at the delegates who rely on the delegation's tickets
+//                 (Christian's answer 5: delegates, and head delegates who
+//                 bought no tickets; a ticket-buying leader's own ticket is
+//                 separate), so it drops when a delegate leaves.
+//   People        PeopleTable, with the row menu (MemberMenu); it opens the
+//                 committee pop-up itself
 //   Financials    FinancialsCard
 //   Open seats    and the reshuffle line, DELEGATIONS_V2_DB only
 
-import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Minus, Plus, UserPlus } from 'lucide-react';
 import { CircleFlag } from '@/components/CircleFlag';
 import { getCountryByCode } from '@/lib/countries';
@@ -35,15 +39,13 @@ import type { PoolMember } from '@/app/manage/[slug]/assignment/delegationShared
 import DelegationInviteLink from '../DelegationInviteLink';
 import type { RosterMember } from '../DelegationPanel';
 import { removePledgedTicket, type PayOverview } from '../../pay/payApi';
-import { DelegationLeadContext } from './DelegationLead';
 import { DELEGATIONS_V2_DB } from './v2';
 import { useLeaderData } from './useLeaderData';
 import PeopleTable, { type PayTone, type PersonRow } from './PeopleTable';
 import FinancialsCard from './FinancialsCard';
 import { OpenSeatsCard, ReshuffleLine } from './OpenSeatsCard';
-import CommitteePopup from './CommitteePopup';
 import {
-  BTN_CLASS, cardStyle, committeeEmblemSrc, FONT, INK, INK_SOFT, primaryBtn, RoundAvatar, secondaryBtn, StatNumber, STROKE,
+  BTN_CLASS, cardStyle, committeeEmblemSrc, FONT, INK, INK_SOFT, primaryBtn, RoundAvatar, StatNumber, STROKE,
 } from './leaderKit';
 
 function payWord(m: RosterMember, pool: PoolMember | undefined): { word: string; tone: PayTone } | null {
@@ -92,8 +94,6 @@ export default function LeaderCard({
   const memberUserIds = useMemo(() => pool.map(p => p.user_id).filter((x): x is string => !!x), [pool]);
   const data = useLeaderData({ conferenceId, societyId, committeeIds, memberUserIds });
   const { pay, reloadPay, reloadV2 } = data;
-  const lead = useContext(DelegationLeadContext);
-  const [openCommittee, setOpenCommittee] = useState<string | null>(null);
   // Expected size, optimistic: the number shown while taps are queued or in
   // flight (null = the server's number). Taps wait in stepQueue and one
   // drain sends them in order, so the shown number and the server agree.
@@ -154,6 +154,15 @@ export default function LeaderCard({
   );
   const leaderAppId = myLeaderApp?.application_id ?? null;
   const shown = shownExpected ?? expected ?? 0;
+  // The floor: delegates, plus head delegates who bought no tickets (a buyer's
+  // own ticket is separate), who are not withdrawn or turned down.
+  const floor = useMemo(() => members.filter(m => {
+    if (m.status === 'withdrawn' || m.status === 'rejected') return false;
+    if (m.role === 'delegate') return true;
+    if (m.role !== 'head-delegate') return false;
+    return (poolById.get(m.application_id)?.spots_pledged ?? 0) <= 0;
+  }).length, [members, poolById]);
+  const floorHint = `You have ${floor} ${floor === 1 ? 'delegate' : 'delegates'}, so you need at least ${floor} ${floor === 1 ? 'ticket' : 'tickets'}`;
   // Spots this leader could still take off: the unpaid ones they added, plus
   // the ones queued on top that the server has not drawn yet.
   const lowerable = removableCount + (shown - (expected ?? 0));
@@ -222,11 +231,11 @@ export default function LeaderCard({
   }, [sendStep, reloadPay]);
 
   const step = useCallback((dir: 1 | -1) => {
-    if (dir > 0 ? !leaderAppId : lowerable <= 0 || shown <= 0) return;
+    if (dir > 0 ? !leaderAppId : lowerable <= 0 || shown <= 0 || shown <= floor) return;
     stepQueue.current.push(dir);
     setShownExpected(prev => (prev ?? expected ?? 0) + dir);
     void drain();
-  }, [leaderAppId, lowerable, shown, expected, drain]);
+  }, [leaderAppId, lowerable, shown, floor, expected, drain]);
 
   const home = data.society;
   const countryName = home?.country_code ? getCountryByCode(home.country_code)?.name ?? null : null;
@@ -234,15 +243,16 @@ export default function LeaderCard({
   const crestName = home?.name ?? societyName;
 
   const stepBtn = (dir: 1 | -1) => {
-    const off = dir > 0 ? !leaderAppId : lowerable <= 0 || shown <= 0;
+    const atFloor = dir < 0 && floor > 0 && shown <= floor;
+    const off = dir > 0 ? !leaderAppId : lowerable <= 0 || shown <= 0 || atFloor;
     const Icon = dir > 0 ? Plus : Minus;
     return (
       <button
         type="button"
         onClick={() => step(dir)}
         aria-disabled={off}
-        aria-label={dir > 0 ? 'Buy another ticket' : 'Lower expected size'}
-        title={dir > 0 ? 'Buy another ticket' : off ? 'Only a spot you added and have not paid can be removed here' : undefined}
+        aria-label={dir > 0 ? 'Buy another ticket' : atFloor ? `Lower expected size. ${floorHint}` : 'Lower expected size'}
+        title={dir > 0 ? 'Buy another ticket' : atFloor ? floorHint : off ? 'Only a spot you added and have not paid can be removed here' : undefined}
         className="inline-flex items-center justify-center focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gv-main)]"
         style={{ width: 44, height: 44, margin: -6, padding: 0, border: 'none', background: 'transparent', cursor: off ? 'default' : 'pointer', opacity: off ? 0.4 : 1 }}
       >
@@ -252,14 +262,6 @@ export default function LeaderCard({
       </button>
     );
   };
-
-  const committeePeople = openCommittee
-    ? rows.filter(r => r.seat?.committee_id === openCommittee).map(r => ({
-        application_id: r.application_id, name: r.name, avatar_url: r.avatar_url,
-        country_name: r.seat?.country_name ?? null, country_code: r.seat?.country_code ?? null, seatLogo: r.seat?.seatLogo ?? null,
-      }))
-    : [];
-  const openInfo = openCommittee ? rows.find(r => r.seat?.committee_id === openCommittee)?.seat ?? null : null;
 
   const statCell = 'flex items-center min-w-0 px-6 py-2 @[900px]:py-0 @[900px]:border-r @[900px]:border-[#EFEAE0]';
 
@@ -279,8 +281,8 @@ export default function LeaderCard({
             </div>
           </div>
         </div>
-        <div className="flex items-start gap-2.5 flex-wrap">
-          <DelegationInviteLink societyId={societyId} conferenceId={conferenceId} buttonStyle={{ ...secondaryBtn, fontWeight: 600 }} iconStroke={STROKE} />
+        <div className="flex items-end gap-2.5 flex-wrap min-w-0">
+          <DelegationInviteLink societyId={societyId} conferenceId={conferenceId} />
           {importAvailable && (
             <button type="button" onClick={onImport} className={BTN_CLASS} style={primaryBtn}>
               <UserPlus size={18} strokeWidth={STROKE} aria-hidden />
@@ -289,9 +291,6 @@ export default function LeaderCard({
           )}
         </div>
       </div>
-
-      {/* The page's next step (DelegationLead), right under the name. */}
-      {lead}
 
       {/* Stats */}
       <div className="grid grid-cols-2 @[900px]:grid-cols-4" style={{ ...cardStyle, padding: '20px 0' }}>
@@ -318,7 +317,6 @@ export default function LeaderCard({
             societyId={societyId}
             conferenceId={conferenceId}
             openSeats={DELEGATIONS_V2_DB ? data.openSeats : null}
-            onOpenCommittee={setOpenCommittee}
             onChanged={refresh}
             swap={swap}
             societyName={societyName}
@@ -340,15 +338,6 @@ export default function LeaderCard({
 
       {DELEGATIONS_V2_DB && <OpenSeatsCard seats={openSeats} societyId={societyId} />}
 
-      {openCommittee && openInfo && (
-        <CommitteePopup
-          name={openInfo.committee_full ?? openInfo.committee_label}
-          abbreviation={openInfo.committee_label}
-          emblem={openInfo.emblem}
-          people={committeePeople}
-          onClose={() => setOpenCommittee(null)}
-        />
-      )}
       {overlays}
     </div>
   );

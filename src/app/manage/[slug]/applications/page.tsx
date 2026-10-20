@@ -45,6 +45,7 @@ import { type CustomQuestion, type CustomAnswers, normalizeBlocks, questionsOf, 
 import { useScrollLock } from '@/hooks/useScrollLock';
 import { PeopleDelegationsSwitch } from './DelegationsBoard';
 import DelegationsTab from './delegations/DelegationsTab';
+import DelegationPopupLink from '@/app/manage/[slug]/DelegationPopupLink';
 import { DelegationIdentity, useDelegationSummaries } from './DelegationAvatar';
 import OpenDelegateApplications from './OpenDelegateApplications';
 // Same vocabulary the team invite wizard in Settings uses — never a parallel
@@ -1990,7 +1991,7 @@ export default function ApplicationsPage() {
   // never share rows with people. Seeded from ?view=delegations and
   // ?delegation=<id> so other pages can deep link. The read-only delegation
   // popup that used to live here is gone: the delegation name on a person row
-  // opens this list with that delegation expanded instead.
+  // opens the delegation pop-up in place (DelegationPopupLink).
   const [listView, setListView] = useState<'people' | 'delegations'>(
     () => (searchParams.get('view') === 'delegations' ? 'delegations' : 'people'),
   );
@@ -4472,7 +4473,7 @@ export default function ApplicationsPage() {
                       {app.societies?.name && (() => {
                         // The delegation as its own identity: a round initials
                         // disc, the name bold, members and who leads it beneath.
-                        // A click opens it in the Delegations list, expanded.
+                        // A click opens the delegation pop-up in place (DelegationPopupLink).
                         const d = app.society_id ? delegationSummaries.get(app.society_id) : undefined;
                         const leads = !!d?.leadAppIds.includes(app.id);
                         const body = (
@@ -4489,14 +4490,16 @@ export default function ApplicationsPage() {
                           />
                         );
                         return app.society_id ? (
-                          <button
-                            onClick={e => { e.stopPropagation(); clearSelection(); setDelegationFocus(app.society_id); setListView('delegations'); window.scrollTo({ top: 0 }); }}
-                            title={`View the ${app.societies.name} delegation`}
-                            className="appDelegTag block max-w-full focus:outline-none"
-                            style={{ background: 'transparent', border: 'none', padding: '4px 10px 4px 4px', margin: '8px 0 0 -4px', borderRadius: 999, cursor: 'pointer', textAlign: 'left' }}
+                          <DelegationPopupLink
+                            societyId={app.society_id}
+                            tab="people"
+                            title={`Open the ${app.societies.name} delegation`}
+                            className="appDelegTag block max-w-full"
+                            style={{ padding: '4px 10px 4px 4px', margin: '8px 0 0 -4px', borderRadius: 999, textAlign: 'left' }}
+                            onChanged={() => { void loadApplications({ silent: true }); }}
                           >
                             {body}
-                          </button>
+                          </DelegationPopupLink>
                         ) : (
                           <div style={{ marginTop: 10 }}>{body}</div>
                         );

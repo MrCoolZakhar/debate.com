@@ -20,6 +20,7 @@ import { PersonAvatar } from '@/app/manage/[slug]/assignment/page';
 import { NEU, NEU_GRADIENTS, NeuCard, NeuInset, NeuButton, NeuIconDisc } from '@/components/neu';
 import { StackedName, committeeShortName, byAppliedAt } from '@/app/manage/[slug]/assignment/displayNames';
 import { Users } from 'lucide-react';
+import DelegationPopupLink from '@/app/manage/[slug]/DelegationPopupLink';
 
 function isHeadDelegate(m: PoolMember): boolean {
   return m.is_head_delegate || m.role === 'head-delegate';
@@ -36,8 +37,10 @@ interface Society {
 
 // ── Card grid ────────────────────────────────────────────────────────────────
 
-function DelegationCard({ society, members, hasUnseenSwap, isEmpty, onClick, onDelete }: {
+function DelegationCard({ society, members, hasUnseenSwap, isEmpty, onClick, onDelete, onPopupClosed }: {
   society: Society; members: PoolMember[]; hasUnseenSwap: boolean; isEmpty: boolean; onClick: () => void; onDelete: () => void;
+  /** The delegation pop-up opened from the name closed: re-read. */
+  onPopupClosed?: () => void;
 }) {
   const advisorCount = members.filter(m => m.role === 'faculty-advisor').length;
   const headDelCount = members.filter(m => m.is_head_delegate || m.role === 'head-delegate').length;
@@ -67,7 +70,9 @@ function DelegationCard({ society, members, hasUnseenSwap, isEmpty, onClick, onD
               style={{ width: 7, height: 7, borderRadius: '9999px', backgroundColor: NEU.deepGold }}
             />
           )}
-          <p className="font-black text-base [overflow-wrap:anywhere]" style={{ color: NEU.ink, fontFamily: OUTFIT, maxWidth: isEmpty ? '80%' : undefined }}>{society.name}</p>
+          <p className="font-black text-base [overflow-wrap:anywhere]" style={{ color: NEU.ink, fontFamily: OUTFIT, maxWidth: isEmpty ? '80%' : undefined }}>
+            <DelegationPopupLink societyId={society.id} onClosed={onPopupClosed}>{society.name}</DelegationPopupLink>
+          </p>
         </div>
         {pledgePending && (
           <span
@@ -812,6 +817,7 @@ export default function DelegationsView({ conference, showFlash, initialSocietyI
                 isEmpty={(societyAppCounts.get(s.id) ?? 0) === 0}
                 onClick={() => handleExpandSociety(s.id)}
                 onDelete={() => handleDeleteDelegation(s)}
+                onPopupClosed={() => { void loadData({ silent: true }); }}
               />
             ))}
           </div>
@@ -868,7 +874,9 @@ export default function DelegationsView({ conference, showFlash, initialSocietyI
         </button>
         {/* Multi-person glyph marks this as a delegation. */}
         <NeuIconDisc gradient={NEU_GRADIENTS.forest} icon={Users} size={34} />
-        <h2 className="font-black text-xl [overflow-wrap:anywhere]" style={{ color: NEU.ink, fontFamily: OUTFIT }}>{society.name}</h2>
+        <h2 className="font-black text-xl [overflow-wrap:anywhere]" style={{ color: NEU.ink, fontFamily: OUTFIT }}>
+          <DelegationPopupLink societyId={society.id} onClosed={() => { void loadData({ silent: true }); }}>{society.name}</DelegationPopupLink>
+        </h2>
       </div>
 
       {/* Advisors (F18) */}

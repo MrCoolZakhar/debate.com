@@ -114,7 +114,7 @@ export default function AllocationCard({ committee, myAllocation, conferenceStar
   return (
     <SectionCard>
       <div className="flex flex-col items-center px-2 text-center">
-        <div className={headerFromXlOnly ? 'hidden xl:flex flex-col items-center' : 'flex flex-col items-center'}>
+        <div className={headerFromXlOnly ? 'hidden lg:flex flex-col items-center' : 'flex flex-col items-center'}>
         {committee.logo_url ? (
           <img
             src={committee.logo_url}
@@ -222,7 +222,7 @@ export default function AllocationCard({ committee, myAllocation, conferenceStar
                 </button>
                 <Link
                   href={`/join?code=${sessionCode}`}
-                  className={`${joinFromXlOnly ? 'hidden xl:inline-flex' : 'inline-flex'} items-center justify-center gap-2 w-full rounded-xl focus:outline-none`}
+                  className={`${joinFromXlOnly ? 'hidden lg:inline-flex' : 'inline-flex'} items-center justify-center gap-2 w-full rounded-xl focus:outline-none`}
                   style={{
                     padding: '13px 18px', backgroundColor: 'var(--gv-main)', color: 'var(--gv-on-main)',
                     fontFamily: OUTFIT, fontWeight: 800, fontSize: 14,

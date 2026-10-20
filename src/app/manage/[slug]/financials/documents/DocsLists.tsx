@@ -14,6 +14,7 @@ import { docShortDate, kindWord } from '@/components/money/moneyDocument';
 import { FOREST, INK_SOFT } from '../dashboardKit';
 import { KIND_NAME, KIND_ORDER, cents } from '../financialsApi';
 import type { DocumentRow, MoneyPayment } from './documentsApi';
+import DelegationPopupLink from '@/app/manage/[slug]/DelegationPopupLink';
 
 export type How = '' | 'card' | 'proof' | 'marked';
 export interface PayFilters { q: string; how: How; kind: string }
@@ -59,7 +60,7 @@ export function PaymentLine({ p, selected, onToggle, onOpenDoc, canTick, onRefun
   /** This payment's refund receipt is being made now. */
   refundBusy?: boolean;
 }) {
-  const sub = [p.delegation, howWords(p.how), docShortDate(p.at)].filter(Boolean).join(' · ');
+  const sub = [howWords(p.how), docShortDate(p.at)].filter(Boolean).join(' · ');
   return (
     <div className="gv-inv-row" data-selected={selected || undefined} style={{ cursor: canTick ? 'pointer' : 'default' }}
       onClick={() => { if (canTick) onToggle(); }}>
@@ -73,7 +74,11 @@ export function PaymentLine({ p, selected, onToggle, onOpenDoc, canTick, onRefun
           </span>
           <span style={{ minWidth: 0 }}>{p.name}</span>
         </p>
-        <p className="gv-inv-sub">{sub}</p>
+        <p className="gv-inv-sub">
+          {p.delegation && <DelegationPopupLink societyName={p.delegation} tab="payments">{p.delegation}</DelegationPopupLink>}
+          {p.delegation && sub ? ' · ' : null}
+          {sub}
+        </p>
         <p className="gv-inv-sub">{p.items.map(i => i.label).join(', ')}</p>
         {p.documents.length > 0 && (
           <p className="gv-inv-sub" style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 12px', marginTop: 4 }}>

@@ -7,6 +7,13 @@
 // 2026), position paper (V2 only), payment, and the row menu.
 // From 760px of card width it is a table; below it every row stacks.
 // Names wrap, never an ellipsis (CLAUDE.md §8).
+// Order (owner, 20 Oct 2026, "the committees should always be alphabetical
+// within the allocations"): you first, then the seated by committee acronym,
+// country and name (seat/seatOrder), then everyone without a seat as read.
+// The avatar and the name open the member's pop-up (member/MemberDetailsPopup:
+// details and application answers); a committee acronym opens the committee's
+// pop-up (CommitteePopup, the whole committee under DELEGATIONS_V2_DB). Both
+// pop-ups are this table's own, so onOpenCommittee is no longer called.
 //
 // Seats move here (owner, 20 Oct 2026):
 //   * Drag a seated member's seat onto another person's row (seat/useSeatDrag).
@@ -25,22 +32,25 @@
 // (onChanged), never behind a loader.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { AlertCircle, Check, Mail, Minus, Search, UserX } from 'lucide-react';
-import ProfileLink from '@/components/ProfileLink';
+import { Check, Mail, Search, UserX } from 'lucide-react';
 import { committeeDisplayName } from '@/lib/presetNames';
 import { friendlyError } from '@/lib/friendlyError';
 import { notifyErr, notifyOk } from '@/lib/appNotify';
 import { DELEGATIONS_V2_DB, placeMember, unplaceMember, uploadPaperForMember, type OpenSeat, type Result } from './v2';
 import MemberMenu, { type MemberMenuHandle, type MenuMember, type SeatOps, type SwitchTarget } from './MemberMenu';
-import { cardStyle, committeeEmblemSrc, FONT, FOREST, INK, INK_SOFT, LINE, OK_GREEN, OWE, RoundAvatar, STROKE } from './leaderKit';
+import { cardStyle, committeeEmblemSrc, FONT, FOREST, INK, INK_SOFT, LINE, RoundAvatar, STROKE } from './leaderKit';
 import SeatCell, { type Seat } from './seat/SeatCell';
 import InPlaceConfirm from './seat/InPlaceConfirm';
 import { useSeatDrag } from './seat/useSeatDrag';
 import { useSwapMode } from './seat/useSwapMode';
 import { moveSeat, switchSeats } from './seat/seatWrites';
 import { addPendingSeats, dropPendingSeats, usePendingOpenSeats, type PendingOpenSeat } from './seat/pendingSeats';
+import { compareSeatKeys, sortOpenSeats } from './seat/seatOrder';
+import { ROLE_WORD, ToneWord, type PayTone } from './member/memberKit';
+import MemberDetailsPopup from './member/MemberDetailsPopup';
+import CommitteePopup from './CommitteePopup';
 
-export type PayTone = 'ok' | 'owe' | 'soft';
+export type { PayTone };
 
 export interface PersonRow {
   application_id: string;
@@ -65,23 +75,28 @@ export interface PersonRow {
   pay: { word: string; tone: PayTone } | null;
 }
 
-const ROLE_WORD: Record<PersonRow['role'], string> = {
-  'faculty-advisor': 'Faculty advisor',
-  'head-delegate': 'Head delegate',
-  delegate: 'Delegate',
-};
+const collator = new Intl.Collator('en', { sensitivity: 'base', numeric: true });
 
-const TONE_COLOR: Record<PayTone, string> = { ok: OK_GREEN, owe: OWE, soft: INK_SOFT };
-const TONE_ICON = { ok: Check, owe: AlertCircle, soft: Minus } as const;
+/** A seated row's place in the seat order. */
+const seatKeyOf = (r: PersonRow) => ({ committee: r.seat?.committee_label ?? '', country: r.seat?.country_name ?? '' });
 
-function ToneWord({ word, tone }: { word: string; tone: PayTone }) {
-  const Icon = TONE_ICON[tone];
-  return (
-    <span className="inline-flex items-center gap-1.5" style={{ fontFamily: FONT, fontSize: 14, color: TONE_COLOR[tone] }}>
-      <Icon size={16} strokeWidth={STROKE} aria-hidden style={{ flexShrink: 0 }} />
-      {word}
-    </span>
-  );
+/** The seated in seat order (then name), then the rest by name: the "Switch with" list. */
+function bySeat(rows: PersonRow[]): PersonRow[] {
+  return [...rows].sort((a, b) => (a.seat ? 0 : 1) - (b.seat ? 0 : 1)
+    || (a.seat && b.seat ? compareSeatKeys(seatKeyOf(a), seatKeyOf(b)) : 0)
+    || collator.compare(a.name, b.name));
+}
+
+/** You first, then the seated in seat order (then name), then the rest as read. */
+function orderRows(rows: PersonRow[]): PersonRow[] {
+  const index = new Map(rows.map((r, i) => [r.application_id, i] as const));
+  const bucket = (r: PersonRow) => (r.is_me ? 0 : r.seat ? 1 : 2);
+  return [...rows].sort((a, b) => {
+    const d = bucket(a) - bucket(b);
+    if (d !== 0) return d;
+    if (bucket(a) === 1) return compareSeatKeys(seatKeyOf(a), seatKeyOf(b)) || collator.compare(a.name, b.name);
+    return (index.get(a.application_id) ?? 0) - (index.get(b.application_id) ?? 0);
+  });
 }
 
 // The seat column is the widest: the 56px flag with its name under it, the
@@ -137,14 +152,15 @@ function openFromSeat(s: Seat): PendingOpenSeat {
   };
 }
 
-export default function PeopleTable({ rows, societyId, societyName, conferenceId, openSeats, onOpenCommittee, onChanged, swap, allocationSwapMode }: {
+export default function PeopleTable({ rows, societyId, societyName, conferenceId, openSeats, onChanged, swap, allocationSwapMode }: {
   rows: PersonRow[];
   societyId: string;
   /** For the swap request's subject; "this delegation" until LeaderCard passes it. */
   societyName?: string;
   conferenceId: string;
   openSeats: OpenSeat[] | null;
-  onOpenCommittee: (committeeId: string) => void;
+  /** No longer called: the committee pop-up is the table's own (it needs the committee id). */
+  onOpenCommittee?: (committeeId: string) => void;
   onChanged: () => Promise<void> | void;
   /** The existing allocation swap: while on, seated rows are picked instead of the menu. */
   swap: { on: boolean; selected: string[]; toggle: (applicationId: string) => void };
@@ -160,7 +176,11 @@ export default function PeopleTable({ rows, societyId, societyName, conferenceId
   const menus = useRef(new Map<string, MemberMenuHandle | null>());
   const fileRef = useRef<HTMLInputElement>(null);
   const uploadFor = useRef<string | null>(null);
-  const shownOpenSeats = usePendingOpenSeats(societyId, openSeats);
+  const pendingOpenSeats = usePendingOpenSeats(societyId, openSeats);
+  const shownOpenSeats = useMemo(() => sortOpenSeats(pendingOpenSeats), [pendingOpenSeats]);
+  // The member pop-up (application id) and the committee pop-up (conference committee id).
+  const [detailsFor, setDetailsFor] = useState<string | null>(null);
+  const [committeeOpen, setCommitteeOpen] = useState<string | null>(null);
 
   // The rows with this table's own changes laid over them.
   const live = useMemo(() => rows.map(r => {
@@ -175,8 +195,9 @@ export default function PeopleTable({ rows, societyId, societyName, conferenceId
 
   const shown = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return live;
-    return live.filter(r => [r.name, r.seat?.country_name, r.seat?.committee_label, r.seat?.committee_full, ROLE_WORD[r.role]]
+    const ordered = orderRows(live);
+    if (!q) return ordered;
+    return ordered.filter(r => [r.name, r.seat?.country_name, r.seat?.committee_label, r.seat?.committee_full, ROLE_WORD[r.role]]
       .some(v => (v ?? '').toLowerCase().includes(q)));
   }, [live, query]);
 
@@ -357,6 +378,26 @@ export default function PeopleTable({ rows, societyId, societyName, conferenceId
   };
 
   const closeAsk = useCallback(() => setAsk(null), []);
+  const closeDetails = useCallback(() => setDetailsFor(null), []);
+  const closeCommittee = useCallback(() => setCommitteeOpen(null), []);
+  const openDetails = (e: React.MouseEvent, id: string) => {
+    // While picking seats to swap, a press on the person picks the row instead.
+    if (swap.on) return;
+    e.stopPropagation();
+    setDetailsFor(id);
+  };
+
+  const detailsRow = detailsFor ? live.find(r => r.application_id === detailsFor) ?? null : null;
+  const committeeInfo = committeeOpen ? live.find(r => r.seat?.committee_id === committeeOpen)?.seat ?? null : null;
+  const committeePeople = committeeOpen
+    ? live.filter(r => r.seat?.committee_id === committeeOpen).map(r => ({
+        application_id: r.application_id, name: r.name, avatar_url: r.avatar_url,
+        country_name: r.seat?.country_name ?? null, country_code: r.seat?.country_code ?? null, seatLogo: r.seat?.seatLogo ?? null,
+      }))
+    : [];
+  const switchOffReason = canSwitchSeated || canMoveToEmpty
+    ? 'Nobody to switch with right now'
+    : 'Your conference does not let leaders switch seats';
 
   const grid = DELEGATIONS_V2_DB ? GRID_V2 : GRID;
   const heads = DELEGATIONS_V2_DB ? ['Person', 'Seat', 'Position paper', 'Payment'] : ['Person', 'Seat', 'Payment'];
@@ -400,7 +441,7 @@ export default function PeopleTable({ rows, societyId, societyName, conferenceId
         const draggable = !swap.on && !rowBusy && r.role !== 'faculty-advisor' && !!r.seat?.committee_id && (canSwitchSeated || canMoveToEmpty);
         const seatable = r.role !== 'faculty-advisor';
         const switchTargets: SwitchTarget[] = draggable
-          ? live.filter(o => o.application_id !== r.application_id && targetOk(o, busy)).map(o => ({
+          ? bySeat(live).filter(o => o.application_id !== r.application_id && targetOk(o, busy)).map(o => ({
               application_id: o.application_id, name: o.name, avatar_url: o.avatar_url,
               seat: o.seat ? { country_name: o.seat.country_name, country_code: o.seat.country_code, seatLogo: o.seat.seatLogo, committee_label: o.seat.committee_label } : null,
             }))
@@ -412,6 +453,7 @@ export default function PeopleTable({ rows, societyId, societyName, conferenceId
           switchTargets,
           switchCopy: (to) => switchCopy(r.application_id, to),
           switchWith: (to) => doSwitch(r.application_id, to),
+          switchOffReason,
         };
         return (
           <div
@@ -430,10 +472,28 @@ export default function PeopleTable({ rows, societyId, societyName, conferenceId
           >
             {/* Person */}
             <div className="flex items-center gap-3 min-w-0 pr-10 @[760px]:pr-0">
-              <RoundAvatar name={r.name} url={r.avatar_url} size={54} seed={r.application_id} />
+              <button
+                type="button"
+                onClick={(e) => openDetails(e, r.application_id)}
+                aria-label={`See ${r.name}'s details`}
+                title={swap.on ? undefined : 'See details and application'}
+                tabIndex={swap.on ? -1 : 0}
+                className="flex-shrink-0 rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gv-main)] focus-visible:ring-offset-2"
+                style={{ padding: 0, border: 'none', background: 'transparent', cursor: swap.on ? 'inherit' : 'pointer', lineHeight: 0 }}
+              >
+                <RoundAvatar name={r.name} url={r.avatar_url} size={54} seed={r.application_id} />
+              </button>
               <div className="min-w-0 flex flex-col gap-0.5">
                 <span className="[overflow-wrap:anywhere]" style={{ fontFamily: FONT, fontSize: 15, fontWeight: 600, color: INK, lineHeight: 1.3 }}>
-                  {r.user_id ? <ProfileLink userId={r.user_id} name={r.name} nested>{r.name}</ProfileLink> : r.name}
+                  <button
+                    type="button"
+                    onClick={(e) => openDetails(e, r.application_id)}
+                    tabIndex={swap.on ? -1 : 0}
+                    className="text-left [overflow-wrap:anywhere] rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gv-main)] hover:underline"
+                    style={{ padding: 0, border: 'none', background: 'transparent', font: 'inherit', color: 'inherit', cursor: swap.on ? 'inherit' : 'pointer', textUnderlineOffset: 3 }}
+                  >
+                    {r.name}
+                  </button>
                   {r.is_me && <span style={{ fontSize: 12.5, fontWeight: 600, color: 'color-mix(in srgb, var(--gv-accent) 72%, #1C1410)', marginLeft: 6 }}>You</span>}
                 </span>
                 <span className="flex items-center flex-wrap gap-x-2.5 gap-y-0.5" style={{ fontFamily: FONT, fontSize: 13, color: INK_SOFT }}>
@@ -462,7 +522,7 @@ export default function PeopleTable({ rows, societyId, societyName, conferenceId
                     label: r.seat.country_name ?? r.name, committee: r.seat.committee_label,
                   }, fromGrip);
                 }}
-                onOpenCommittee={onOpenCommittee}
+                onOpenCommittee={setCommitteeOpen}
                 wasJustDragged={wasJustDragged}
                 busy={rowBusy}
                 onTakeOut={seatToolsOn && seatable && r.seat && mode === 'self_serve' ? (el) => askUnplace(r.application_id, el) : undefined}
@@ -526,6 +586,17 @@ export default function PeopleTable({ rows, societyId, societyName, conferenceId
           danger={ask.danger}
           onYes={ask.onYes}
           onCancel={closeAsk}
+        />
+      )}
+      {detailsRow && <MemberDetailsPopup person={detailsRow} onClose={closeDetails} />}
+      {committeeOpen && committeeInfo && (
+        <CommitteePopup
+          committeeId={committeeOpen}
+          name={committeeInfo.committee_full ?? committeeInfo.committee_label}
+          abbreviation={committeeInfo.committee_label}
+          emblem={committeeInfo.emblem}
+          people={committeePeople}
+          onClose={closeCommittee}
         />
       )}
     </section>

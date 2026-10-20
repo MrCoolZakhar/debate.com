@@ -74,3 +74,28 @@ Your answer 12: the public `sync_participant_invoices` returns quietly when a le
 - **Other-currency payments on the leader card.** Answer 6 asks for "Some payments are in {codes}. They are not included here", but `my_pay_overview` sums payments in every currency, so the leader card cannot say that truthfully yet. If you want that line, `my_pay_overview` (or a field beside it) needs to return the totals in the conference currency only plus the other codes.
 - **Small client touch on /pay:** `pay/BalanceHeader.tsx` now exports its `itemsCurrency` helper so the leader card shows the same currency as /pay. No behaviour change.
 - **Test data note:** on the private test conference `gavelling-test-mun-2027` (Peter's, credits sponsored) a setup script reset `applications.payment_status` directly from the free-registration "paid" to "unpaid" before the mock fees were added. No money moved; it is against your "payments are the truth" rule, so say if you want those rows re-derived another way.
+
+## 20 Oct, round 2
+
+### (a) Removing a member: the SQL is ready for you
+
+`scratch-delegations-remove-member.sql` (repo root) is written for your chat to read, test and apply. It needs part 1 applied first (it calls `_delegation_release_seat` and `_delegation_leader_count`).
+
+- `delegation_remove_member(p_application uuid) returns jsonb`: an accepted leader of the member's delegation or an organiser. Refuses `last_leader` and `holds_tickets` ("Move this leader's tickets to another leader first.", your C1). The seat becomes an Open seat of the delegation, `society_id` becomes null, `assigned` goes back to `accepted`, and the person stays an applicant. It writes no invoice, payment, `payment_status` or coverage itself.
+- The header lists exactly what your live triggers do when `society_id` changes (`zz_app_society_changed`, `zz_applications_pledge_coverage`, the audit and credit triggers), so you can check them.
+- **One gap to decide:** the removed member's own role fee, when it was waived as "Covered by your delegation", is not reopened. `apply_pledge_coverage_society` only loops over people still in the old delegation, and the call for the new society (null) does nothing. So one ticket ends up covering two people: the removed member and the next member it moves to. Our rule is that money paid by the delegation stays with the delegation, so we think the removed member should owe their own fee again. That change is in your functions, so we have not made it.
+- The same file adds `organiser_set_head(p_application uuid, p_head boolean) returns jsonb`. It is the live `delegation_set_head` with an organiser check (`is_conference_organizer`) instead of a leader check, and it moves only between delegate and head delegate. The money happens exactly as today through your `zz_app_role_switched` trigger, and no credit is taken (`app.delegation_role_move`). It keeps the last-leader rule and adds `holds_tickets` on a demotion. The live `delegation_set_head` has neither check, so please confirm both. This is the delegate <-> head delegate part of the earlier request for `organiser_set_member_role`. The delegate <-> faculty advisor move is still yours.
+- A rolled-back verification block runs at the end of the file.
+
+### (b) Leaders choosing which member a Delegate Ticket covers
+
+Today coverage is automatic: a delegation's tickets cover the earliest members to join (your answer 10, `pledge_covered_application_ids`). Leaders have asked to choose which member a paid Delegate Ticket covers. Two questions:
+
+- May a leader assign a ticket to a specific member?
+- If so, how? For example, a pinned `covered_application_id` on the `pledge_spot` invoice that `pledge_covered_application_ids` honours before the join order, or a leader-only function that swaps coverage between two members.
+
+Nothing on our side calls anything for this until you decide.
+
+### (c) Expected size never below the delegates in the delegation
+
+The leader card now stops the minus button at the number of delegates already in the delegation. `remove_pledged_spot_invoice` (the X on /pay) can still go below it: it voids any open, unpaid `pledge_spot` and lowers `spots_pledged` with no check against the members. Please refuse it on the server when the delegation's expected size (your answer 5: the leaders' `spots_pledged` plus one for each head delegate) would drop below the number of delegates and head delegates in the delegation who are not rejected or withdrawn. A sentence we can show: "Your delegation already has {n} delegates. Remove a delegate first."

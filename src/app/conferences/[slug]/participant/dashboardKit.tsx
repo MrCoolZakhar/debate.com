@@ -5,7 +5,7 @@
 // in the conference page ... MyMUN does this pretty well in essence").
 //
 // MyMUN's shape, in Gavelling's language: a sub-nav per conference (a sticky
-// column from xl, a scrolling row of pills below it), a status row of three
+// column from lg since 20 Oct 2026, a scrolling row of pills below it), a status row of three
 // facts at the top of Overview (application, payment, what happens next as ONE
 // sentence), then the assignment. Every pane is mounted once and hidden with
 // display:none when it is not the one shown, so switching sections never
@@ -64,9 +64,9 @@ export function DashCard({ children, className = '', style, id }: {
 /** A small label above a sans heading (liked on the taste board), never an
  *  all-capitals tracked heading on its own. `aside` sits at the inline end.
  *  `stackedHide`: the card's title says the same as the section heading above
- *  it on the one-page phone dashboard, so below xl it is left out there (the
+ *  it on the one-page phone dashboard, so below lg it is left out there (the
  *  aside stays); 'label' leaves out only the small label above the title.
- *  From xl, and outside a stacked dashboard, nothing changes. */
+ *  From lg, and outside a stacked dashboard, nothing changes. */
 /** The card title every role page card uses (CardHeading's h3), for cards whose
  *  title sits inside a control, such as a collapsible header. */
 export const CARD_TITLE_STYLE: React.CSSProperties = { fontFamily: OUTFIT, fontSize: 19, fontWeight: 800, color: INK, margin: 0, lineHeight: 1.25 };
@@ -76,10 +76,10 @@ export function CardHeading({ label, title, aside, stackedHide = false }: { labe
   const hide = stacked && stackedHide === true;
   const hideLabel = stacked && stackedHide === 'label';
   return (
-    <div className={`${hide && !aside ? 'hidden xl:flex' : 'flex'} items-start justify-between gap-3 flex-wrap mb-4`}>
-      <div className={hide ? 'hidden xl:block min-w-0' : 'min-w-0'}>
+    <div className={`${hide && !aside ? 'hidden lg:flex' : 'flex'} items-start justify-between gap-3 flex-wrap mb-4`}>
+      <div className={hide ? 'hidden lg:block min-w-0' : 'min-w-0'}>
         {label && (
-          <p className={hideLabel ? 'hidden xl:block' : undefined} style={{ fontFamily: OUTFIT, fontSize: 12, fontWeight: 700, color: GOLD_DEEP, margin: '0 0 2px 0' }}>{label}</p>
+          <p className={hideLabel ? 'hidden lg:block' : undefined} style={{ fontFamily: OUTFIT, fontSize: 12, fontWeight: 700, color: GOLD_DEEP, margin: '0 0 2px 0' }}>{label}</p>
         )}
         <h3 className="[overflow-wrap:anywhere]" style={CARD_TITLE_STYLE}>
           {title}
@@ -274,13 +274,13 @@ export interface DashSection {
   icon: LucideIcon;
 }
 
-/** True inside a DashboardShell drawn as ONE page below xl (the delegate
+/** True inside a DashboardShell drawn as ONE page below lg (the delegate
  *  dashboard, 10 Oct 2026, owner: "on the phone ... just have everything in
- *  one page"). Below xl every pane shows, in DOM order; from xl the sub-nav
- *  and one pane at a time, exactly as before. */
+ *  one page"). Below lg every pane shows, in DOM order; from lg (xl until
+ *  20 Oct 2026) the sub-nav and one pane at a time. */
 const StackedContext = createContext(false);
 
-/** Whether the current dashboard stacks every pane below xl. */
+/** Whether the current dashboard stacks every pane below lg. */
 export function useDashStacked(): boolean {
   return useContext(StackedContext);
 }
@@ -288,12 +288,12 @@ export function useDashStacked(): boolean {
 /** A section's heading on the one-page phone dashboard (10 Oct 2026, owner:
  *  "there is still multiple tabs in you ... not yet clear enough"): Title
  *  Case, a duotone icon in a soft tinted disc (CLAUDE.md §8), sitting closer
- *  to its own cards than to the section above. Below xl only: from xl the
+ *  to its own cards than to the section above. Below lg only: from lg the
  *  sub-nav names the section. */
 export function StackHeading({ title, icon: Icon }: { title: string; icon: LucideIcon }) {
   return (
     <h2
-      className="xl:hidden flex items-center gap-3 mt-5 -mb-2 [overflow-wrap:anywhere]"
+      className="lg:hidden flex items-center gap-3 mt-5 -mb-2 [overflow-wrap:anywhere]"
       style={{ fontFamily: OUTFIT, fontSize: 20, fontWeight: 800, color: INK, lineHeight: 1.25 }}
     >
       <span
@@ -309,9 +309,9 @@ export function StackHeading({ title, icon: Icon }: { title: string; icon: Lucid
 }
 
 /** A pane that stays mounted: display:none when it is not the one shown. In a
- *  stacked dashboard a pane that is not the one shown is hidden from xl only,
+ *  stacked dashboard a pane that is not the one shown is hidden from lg only,
  *  so a phone or tablet reads every section on one scrolling page, each
- *  section under its `title` (drawn below xl only). `phone={false}` keeps a
+ *  section under its `title` (drawn below lg only). `phone={false}` keeps a
  *  pane off the phone page (it would repeat what is already there) while the
  *  desktop section is unchanged. `anchor` is the id a "next step" button
  *  scrolls to. */
@@ -329,8 +329,8 @@ export function Pane({ show, children, gap = 6, title, icon, phone = true, ancho
   const base = `flex ${flow}`;
   if (stacked) {
     const cls = !phone
-      ? (show ? `hidden xl:flex ${flow}` : 'hidden')
-      : (show ? base : `${base} xl:hidden`);
+      ? (show ? `hidden lg:flex ${flow}` : 'hidden')
+      : (show ? base : `${base} lg:hidden`);
     return (
       <div id={anchor} className={cls} style={anchor ? { scrollMarginTop: 96 } : undefined}>
         {phone && title && icon && <StackHeading title={title} icon={icon} />}
@@ -394,8 +394,9 @@ function scrollToAnchor(id: string) {
 
 /** "What do I do next", answered in one line with one button, or "You're all
  *  set" when there is nothing to do. The application's status sits at the
- *  top right as icon + word. Below xl only (the desktop Overview keeps its
- *  status row). */
+ *  top right as icon + word. Below xl only (the xl Overview keeps its status
+ *  row; between lg and xl this card stays, because the role cards there still
+ *  leave Join session to it). */
 export function NextStepCard({ step, status }: { step: NextStep; status: string }) {
   const action = step.action;
   return (
@@ -446,6 +447,12 @@ export function NextStepCard({ step, status }: { step: NextStep; status: string 
   );
 }
 
+/** The resting chip's shadow: soft and forest-tinted, so an unopened tab still
+ *  reads as something to press (owner, 20 Oct 2026: "make the tabs pop a
+ *  little more even when they're not open"). */
+const NAV_REST_SHADOW = '0 1px 2px color-mix(in srgb, var(--gv-main) 8%, transparent), 0 4px 12px -4px color-mix(in srgb, var(--gv-main) 18%, transparent)';
+const NAV_ON_SHADOW = 'inset 0 0 0 2px var(--gv-main), 0 2px 4px color-mix(in srgb, var(--gv-main) 10%, transparent), 0 10px 22px -10px color-mix(in srgb, var(--gv-main) 35%, transparent)';
+
 function NavItem({ s, on, onSelect, row }: { s: DashSection; on: boolean; onSelect: () => void; row: boolean }) {
   const Icon = s.icon;
   return (
@@ -453,43 +460,44 @@ function NavItem({ s, on, onSelect, row }: { s: DashSection; on: boolean; onSele
       type="button"
       onClick={onSelect}
       aria-current={on ? 'page' : undefined}
-      className={`${row ? 'flex-shrink-0' : 'w-full'} inline-flex items-center gap-2.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gv-accent)]`}
+      className={`${row ? 'flex-shrink-0' : 'w-full'} inline-flex items-center gap-2.5 hover:-translate-y-px active:translate-y-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[var(--gv-accent)]`}
       style={{
-        minHeight: 44, padding: row ? '0 14px 0 6px' : '0 12px 0 6px', borderRadius: 999,
+        minHeight: 44, padding: row ? '0 14px 0 6px' : '0 12px 0 6px', borderRadius: row ? 999 : 14,
         border: 'none', cursor: 'pointer', textAlign: 'start',
-        backgroundColor: on ? '#FFFFFF' : 'transparent',
-        boxShadow: on ? CARD_SHADOW : 'none',
-        color: on ? FOREST : INK_SOFT,
+        // Every tab is a white chip at rest; the open one is ringed in forest.
+        backgroundColor: '#FFFFFF',
+        boxShadow: on ? NAV_ON_SHADOW : NAV_REST_SHADOW,
+        color: on ? FOREST : INK,
         fontFamily: OUTFIT, fontSize: 14, fontWeight: on ? 800 : 600,
-        transition: 'background-color 180ms ease, box-shadow 180ms ease, color 180ms ease',
+        transition: 'box-shadow 180ms ease, color 180ms ease, transform 160ms ease',
       }}
     >
-      {/* The icon in a soft tinted disc (the taste board's acceptable form):
-          a pale green fill when active, a faint wash otherwise. */}
+      {/* The icon in forest on a soft disc: tinted and filled when open. */}
       <span
         aria-hidden
         className="inline-flex items-center justify-center flex-shrink-0"
-        style={{ width: 32, height: 32, borderRadius: 999, backgroundColor: on ? 'color-mix(in srgb, var(--gv-main-light) 14%, transparent)' : 'color-mix(in srgb, var(--gv-main) 5%, transparent)' }}
+        style={{ width: 32, height: 32, borderRadius: 999, backgroundColor: on ? 'color-mix(in srgb, var(--gv-main-light) 16%, transparent)' : 'color-mix(in srgb, var(--gv-main) 6%, transparent)' }}
       >
-        <Icon size={16} strokeWidth={2.2} style={{ color: on ? FOREST : INK_SOFT, fill: on ? 'color-mix(in srgb, var(--gv-accent-light) 55%, transparent)' : 'none' }} />
+        <Icon size={16} strokeWidth={2.2} style={{ color: FOREST, fill: on ? 'color-mix(in srgb, var(--gv-accent-light) 55%, transparent)' : 'none' }} />
       </span>
       <span style={{ whiteSpace: 'nowrap' }}>{s.label}</span>
     </button>
   );
 }
 
-/** Sub-nav on the left from xl (sticky under the fixed site nav), a pill row
- *  above the content below that (wrapping from sm, sideways-scrolling on phones). With `stackBelowXl` there is no pill
- *  row: below xl every pane is shown, one after another, on one page (the
- *  pills hid sections off the edge of a phone, and a delegate could not tell
- *  where anything was). */
-export function DashboardShell({ sections, active, onSelect, children, ariaLabel, stackBelowXl = false }: {
+/** Sub-nav on the left from lg (sticky under the fixed site nav; xl until
+ *  20 Oct 2026, owner: "wider, with the tabs on the side"), a pill row above
+ *  the content below that (wrapping from sm, sideways-scrolling on phones).
+ *  With `stackBelowLg` there is no pill row: below lg every pane is shown, one
+ *  after another, on one page (the pills hid sections off the edge of a phone,
+ *  and a delegate could not tell where anything was). */
+export function DashboardShell({ sections, active, onSelect, children, ariaLabel, stackBelowLg = false }: {
   sections: DashSection[];
   active: string;
   onSelect: (key: string) => void;
   children: React.ReactNode;
   ariaLabel: string;
-  stackBelowXl?: boolean;
+  stackBelowLg?: boolean;
 }) {
   const rootRef = useRef<HTMLDivElement>(null);
   const rowRef = useRef<HTMLDivElement>(null);
@@ -552,31 +560,29 @@ export function DashboardShell({ sections, active, onSelect, children, ariaLabel
   const mask = `linear-gradient(90deg, ${edges.left ? 'transparent 0, #000 28px' : '#000 0'}, ${edges.right ? '#000 calc(100% - 28px), transparent 100%' : '#000 100%'})`;
 
   return (
-    <div ref={rootRef} className="flex flex-col xl:flex-row gap-5 xl:gap-7" style={{ scrollMarginTop: 96 }}>
-      <nav aria-label={ariaLabel} className={`${stackBelowXl ? 'hidden xl:block ' : ''}xl:w-[176px] xl:flex-shrink-0`}>
+    <div ref={rootRef} className="flex flex-col lg:flex-row gap-5 lg:gap-7" style={{ scrollMarginTop: 96 }}>
+      <nav aria-label={ariaLabel} className={`${stackBelowLg ? 'hidden lg:block ' : ''}lg:w-[188px] lg:flex-shrink-0`}>
         {/* Phones and tablets: a row of pills that scrolls sideways (not in a
             stacked dashboard, which shows every section instead). */}
-        {!stackBelowXl && (
+        {!stackBelowLg && (
         <div
           ref={rowRef}
           // Phones scroll the row sideways with a fade on the edge that has
           // more. From sm (640px) there is room to show every pill, so the
-          // row WRAPS instead and is never clipped: at 1024 to 1279px the
-          // content column beside the right rail is narrower than six pills,
-          // and the scrolling row started cut off at its first label.
-          className="xl:hidden flex items-center gap-1.5 overflow-x-auto sm:flex-wrap sm:overflow-x-visible [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-          style={{ WebkitMaskImage: mask, maskImage: mask, padding: '6px 2px 10px' }}
+          // row WRAPS instead and is never clipped.
+          className="lg:hidden flex items-center gap-2 overflow-x-auto sm:flex-wrap sm:overflow-x-visible [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          style={{ WebkitMaskImage: mask, maskImage: mask, padding: '6px 4px 12px' }}
         >
           {sections.map(s => <NavItem key={s.key} s={s} on={s.key === active} onSelect={() => select(s.key)} row />)}
         </div>
         )}
         {/* Desktop: a sticky column. */}
-        <div className="hidden xl:flex flex-col gap-1 sticky top-[96px]">
+        <div className="hidden lg:flex flex-col gap-2 sticky top-[96px]">
           {sections.map(s => <NavItem key={s.key} s={s} on={s.key === active} onSelect={() => select(s.key)} row={false} />)}
         </div>
       </nav>
       <div className="flex-1 min-w-0 @container">
-        <StackedContext.Provider value={stackBelowXl}>{children}</StackedContext.Provider>
+        <StackedContext.Provider value={stackBelowLg}>{children}</StackedContext.Provider>
       </div>
     </div>
   );

@@ -6,17 +6,19 @@
 // Every seat in columns: flag and country, the committee's emblem and acronym,
 // a dashed tile. No invite links (taste board vote). A seat the People table
 // has just filled leaves at once and a seat it has just emptied shows at once
-// (seat/pendingSeats), before the re-read lands.
+// (seat/pendingSeats), before the re-read lands. Committee acronym A to Z,
+// then country A to Z, then seat number (seat/seatOrder).
 
 import { Clock } from 'lucide-react';
 import { CircleFlag } from '@/components/CircleFlag';
 import { committeeDisplayName } from '@/lib/presetNames';
 import type { OpenSeat } from './v2';
 import { usePendingOpenSeats } from './seat/pendingSeats';
+import { sortOpenSeats } from './seat/seatOrder';
 import { cardStyle, CommitteeDisc, committeeEmblemSrc, FONT, FOREST, INK, INK_SOFT, StatNumber, STROKE } from './leaderKit';
 
 export function OpenSeatsCard({ seats: read, societyId }: { seats: OpenSeat[]; societyId?: string }) {
-  const seats = usePendingOpenSeats(societyId, read) ?? [];
+  const seats = sortOpenSeats(usePendingOpenSeats(societyId, read) ?? []);
   if (seats.length === 0) return null;
   return (
     <section className="@container" style={{ ...cardStyle, padding: '22px 24px' }} aria-label="Open seats">

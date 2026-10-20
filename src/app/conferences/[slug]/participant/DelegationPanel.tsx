@@ -21,15 +21,13 @@
 // SECURITY DEFINER helpers, so this just works with the viewer's own authed
 // client.
 
-import { useState, useEffect, useCallback, useContext, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowLeftRight, ChevronLeft, ChevronRight, Compass, Mail, UserPlus, UserX, X } from 'lucide-react';
+import { ArrowLeftRight, ChevronLeft, ChevronRight, Compass, Mail, UserX, X } from 'lucide-react';
 import { getFreshAuthedClient } from '@/lib/supabase-auth';
 import { useDelegationImport } from './DelegationImportCard';
 import DelegationImportPopup from './DelegationImportPopup';
-import DelegationInviteLink from './DelegationInviteLink';
 import LeaderCard from './delegation/LeaderCard';
-import { DelegationLeadContext } from './delegation/DelegationLead';
 import MemberDelegationCard from './delegation/member/MemberDelegationCard';
 import type { ParticipantAllocation, ParticipantCommittee } from './types';
 import { BTN_CLASS, cardStyle, primaryBtn, secondaryBtn, STROKE } from './delegation/leaderKit';
@@ -41,7 +39,7 @@ import { useConfirmModal } from '@/components/ConfirmModal';
 import { ModalOverlay } from '@/components/CommitteeEditorModal';
 import { NEU, NeuButton } from '@/components/neu';
 import ProfileLink from '@/components/ProfileLink';
-import Loader from '@/components/Loader';
+import { SectionCardSkeleton } from '@/components/Skeleton';
 import { queueParticipantEventEmail } from '@/lib/emailEvents';
 import { friendlyError, plainOrFallback } from '@/lib/friendlyError';
 import {
@@ -49,7 +47,7 @@ import {
   type PoolMember,
 } from '@/app/manage/[slug]/assignment/delegationShared';
 import { SectionCard, OUTFIT, PaymentChipMark, derivePaymentChip, formatReleaseDate } from './shared';
-import { DashCard, CardHeading, BigCount, AppStatusMark, FOREST_GRADIENT, useDashStacked } from './dashboardKit';
+import { AppStatusMark } from './dashboardKit';
 
 interface Society {
   id: string;
@@ -372,26 +370,18 @@ export interface DelegationPanelProps {
   conferenceSlug: string;
   societyId: string;
   allocationSwapMode: string;
-  /** Which part of the dashboard is showing (26 Sep 2026). 'overview' draws
-   *  the delegation summary only, 'delegation' the full members table and
-   *  the leader tools, anything else nothing visible. The panel stays
-   *  mounted either way, so its reads and a half-made swap survive a switch. */
-  section?: string;
-  /** Overview's "See all members": the parent switches to Delegation. */
-  onOpenMembers?: () => void;
   /** A delegate's own context for the member card (5B): the conference's
    *  committees (logos), their seat and who paid their fee. */
   member?: { committees: ParticipantCommittee[]; myAllocation: ParticipantAllocation | null; selfPaid: boolean };
 }
 
-export default function DelegationPanel({ conferenceId, conferenceSlug, societyId, allocationSwapMode, section = 'delegation', onOpenMembers, member }: DelegationPanelProps) {
+/** The Delegation section's card (owner, 20 Oct 2026: its own section again,
+ *  second after Overview). The parent's Pane shows or hides it; it stays
+ *  mounted, so its reads and a half-made swap survive a switch. */
+export default function DelegationPanel({ conferenceId, conferenceSlug, societyId, allocationSwapMode, member }: DelegationPanelProps) {
   const { user, session } = useAuth();
   const router = useRouter();
   const { confirm, modal: confirmModal } = useConfirmModal();
-  // On the one-page phone dashboard (below xl) there are no sections: the
-  // full delegation card shows whatever section the desktop has open, and the
-  // Overview summary is a desktop-only view of it.
-  const stacked = useDashStacked();
 
   // ── The roster, for every member (my_delegation_roster) ──────────────────
   // Every hook in this component sits ABOVE the early returns further down.
@@ -399,9 +389,6 @@ export default function DelegationPanel({ conferenceId, conferenceSlug, societyI
   const [rosterError, setRosterError] = useState<string | null>(null);
   const [importOpen, setImportOpen] = useState(false);
   const [conferenceAcronym, setConferenceAcronym] = useState('');
-  // The page's next step (DelegationLead): under the leader card's header,
-  // above the member card (owner, 20 Oct 2026).
-  const lead = useContext(DelegationLeadContext);
 
   const loadRoster = useCallback(async () => {
     if (!societyId) return;
@@ -528,11 +515,8 @@ export default function DelegationPanel({ conferenceId, conferenceSlug, societyI
 
   useEffect(() => { loadSwapActivity(); }, [loadSwapActivity]);
 
-  // The roster, grouped; the server already puts the viewer first.
+  // The roster; the server already puts the viewer first.
   const rosterMembers = useMemo(() => roster?.members ?? [], [roster]);
-  const advisors = useMemo(() => rosterMembers.filter(m => m.role === 'faculty-advisor'), [rosterMembers]);
-  const headDelegates = useMemo(() => rosterMembers.filter(m => m.role === 'head-delegate'), [rosterMembers]);
-  const delegates = useMemo(() => rosterMembers.filter(m => m.role === 'delegate'), [rosterMembers]);
   const delegatePool = useMemo(() => members.filter(m => m.role === 'delegate' || m.role === 'head-delegate'), [members]);
   const paidCount = delegatePool.filter(m => m.payment_status === 'paid').length;
 
@@ -658,115 +642,29 @@ export default function DelegationPanel({ conferenceId, conferenceSlug, societyI
     </>
   );
 
-  const ownSection = section === 'overview' || section === 'delegation';
-  if (!ownSection && !stacked) return overlays;
-  // Stacked and on another desktop section: drawn below xl only.
-  const phoneOnly = (node: React.ReactNode) => (ownSection ? node : <><div className="xl:hidden">{node}</div>{overlays}</>);
-
   if (!roster && rosterError) {
-    return phoneOnly(
+    return (
       <>
         <SectionCard>
           <p className="text-sm" role="alert" style={{ color: '#8B2020', fontFamily: OUTFIT, margin: 0 }}>{rosterError}</p>
         </SectionCard>
-        {lead}
+        {overlays}
       </>
     );
   }
 
-  // The first read only; the lead waits under it where the header will be.
+  // The first read only: a grey skeleton. Every later read swaps the data in place.
   if (!roster || (isLeader && !leaderLoaded)) {
-    return phoneOnly(
-      <>
-        <SectionCard>
-          <div className="flex justify-center py-6">
-            <Loader size={48} />
-          </div>
-        </SectionCard>
-        {lead}
-      </>
-    );
+    return <><SectionCardSkeleton />{overlays}</>;
   }
 
   const societyName = roster.society_name ?? society?.name ?? 'Delegation';
-  const studentCount = headDelegates.length + delegates.length;
-  const allocatedCount = [...headDelegates, ...delegates].filter(m => !!m.allocation?.country_code).length;
-  const invitedCount = rosterMembers.filter(m => !m.claimed).length;
-
-  // The leader's tools, the same on both views: the delegation's invite link
-  // (always; owners, 11 Oct 2026) and, while the conference allows it,
-  // Import delegates. The head delegate's tools are on the member rows.
-  const leaderActions = isLeader && societyId ? (
-    <>
-      <DelegationInviteLink societyId={societyId} conferenceId={conferenceId} />
-      {importAvailable && (
-        <button
-          type="button"
-          onClick={() => setImportOpen(true)}
-          className="inline-flex items-center gap-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[var(--gv-accent)]"
-          style={{ minHeight: 44, padding: '0 16px', borderRadius: 10, border: 'none', background: FOREST_GRADIENT, color: '#FFFFFF', fontFamily: OUTFIT, fontSize: 14, fontWeight: 700, cursor: 'pointer', boxShadow: '0 6px 16px -8px color-mix(in srgb, var(--gv-main) 55%, transparent)' }}
-        >
-          <UserPlus size={16} strokeWidth={2.4} aria-hidden />
-          Import delegates
-        </button>
-      )}
-    </>
-  ) : null;
-
-  const counts = (
-    <div className="grid grid-cols-2 @[520px]:grid-cols-3 gap-x-6 gap-y-4">
-      <BigCount n={studentCount} word={studentCount === 1 ? 'delegate' : 'delegates'} />
-      {isLeader && <BigCount n={allocatedCount} of={studentCount} word="assigned" />}
-      {isLeader && <BigCount n={paidCount} of={society?.spots_purchased ?? 0} word="paid spots" />}
-      {!isLeader && advisors.length > 0 && <BigCount n={advisors.length} word={advisors.length === 1 ? 'advisor' : 'advisors'} />}
-    </div>
-  );
-
-  if (section === 'overview') {
-    const summary = (
-        <DashCard className="@container">
-          <CardHeading label="Your delegation" title={societyName} aside={leaderActions} />
-          {counts}
-          {isLeader && invitedCount > 0 && (
-            <p className="mt-4 inline-flex items-center gap-1.5" style={{ fontFamily: OUTFIT, fontSize: 13, color: '#6B5F52', margin: '16px 0 0 0' }}>
-              <Mail size={14} strokeWidth={2.2} aria-hidden />
-              {invitedCount} {invitedCount === 1 ? 'member has' : 'members have'} not claimed their invite yet
-            </p>
-          )}
-          {onOpenMembers && (
-            <div className="mt-5">
-              <button
-                type="button"
-                onClick={onOpenMembers}
-                className="focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gv-accent)] rounded"
-                style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontFamily: OUTFIT, fontSize: 14, fontWeight: 800, color: 'var(--gv-main)', textDecoration: 'underline', textUnderlineOffset: 3 }}
-              >
-                See every member
-              </button>
-            </div>
-          )}
-        </DashCard>
-    );
-    if (stacked) {
-      return (
-        <>
-          <div className="hidden xl:block">{summary}</div>
-          <div className="xl:hidden">{renderFull(false)}</div>
-          {overlays}
-        </>
-      );
-    }
-    return <>{summary}{overlays}</>;
-  }
-
-  if (section !== 'delegation') return phoneOnly(renderFull(false));
-  return renderFull(true);
+  return renderFull();
 
   // The full card, drawn once per render. A leader gets the roster card
   // (delegation/LeaderCard.tsx, taste board 1A) with the swap tools under its
-  // table; every other member gets the 5B card (delegation/member). Overlays ride
-  // inside it only when it is the panel's whole output.
-  function renderFull(withOverlays: boolean) {
+  // table; every other member gets the 5B card (delegation/member).
+  function renderFull() {
   if (isLeader && roster) {
     const swapOn = allocationSwapMode !== 'off';
     const swapTools = (pendingSwapRequest || recentSwapNotice || swapOn) ? (
@@ -856,15 +754,13 @@ export default function DelegationPanel({ conferenceId, conferenceSlug, societyI
         onChanged={async () => { await Promise.all([loadRoster(), load(), loadSwapActivity()]); }}
         swap={{ on: swapMode, selected: swapSelection, toggle: toggleSwapSelect }}
         swapTools={swapTools}
-        overlays={withOverlays ? overlays : null}
+        overlays={overlays}
       />
     );
   }
-  // A member who does not lead: the 5B card (delegation/member), the page's
-  // next step above it.
+  // A member who does not lead: the 5B card (delegation/member).
   return (
     <>
-      {lead}
       <MemberDelegationCard
         conferenceId={conferenceId}
         conferenceSlug={conferenceSlug}
@@ -875,7 +771,7 @@ export default function DelegationPanel({ conferenceId, conferenceSlug, societyI
         myAllocation={member?.myAllocation ?? null}
         selfPaid={member?.selfPaid ?? false}
       />
-      {withOverlays && overlays}
+      {overlays}
     </>
   );
   }

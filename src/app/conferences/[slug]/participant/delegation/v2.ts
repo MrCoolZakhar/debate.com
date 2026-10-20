@@ -16,6 +16,9 @@
 //   a leader read of members' position_papers rows, and
 //   delegation_submit_member_paper(p_application, p_file_url, p_file_name,
 //       p_file_size)                                    writes a member's paper row
+//   delegation_invite_short_code(p_society) returns text  the short invite code
+//       (e.g. westbrook-academy-k7q3mx) for https://gavelling.com/i/<code>; its
+//       twin resolve_delegation_short_invite(p_code) is read by src/app/i/[code]
 
 import { getFreshAuthedClient } from '@/lib/supabase-auth';
 import { friendlyError, plainOrFallback } from '@/lib/friendlyError';
@@ -61,6 +64,20 @@ export function removeMember(applicationId: string): Promise<Result> {
 
 export function unplaceMember(applicationId: string): Promise<Result> {
   return call('delegation_unplace_member', { p_application: applicationId }, 'They could not be taken out of their seat. Try again.');
+}
+
+/** The delegation's short invite code, or null (flag off, not a leader, or a failed read). */
+export async function readInviteShortCode(societyId: string): Promise<string | null> {
+  if (!DELEGATIONS_V2_DB) return null;
+  try {
+    const c = await getFreshAuthedClient();
+    if (!c) return null;
+    const { data, error } = await c.rpc('delegation_invite_short_code', { p_society: societyId });
+    if (error || typeof data !== 'string' || !data.trim()) return null;
+    return data.trim();
+  } catch {
+    return null;
+  }
 }
 
 /** One block seat of the delegation with nobody in it. */
