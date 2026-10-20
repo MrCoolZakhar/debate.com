@@ -20,7 +20,7 @@ import FaqList from '@/components/pricing/FaqList';
 import RenewOnceOpener from '@/components/pricing/RenewOnceOpener';
 import { ActionButton, ActionLink, FOCUS_RING, P, PricingStyles, QuestionBox } from '@/components/pricing/pricingKit';
 
-/** The job board route: the arrow on the premium roles line. */
+/** The job board route: the arrow on the insights, alerts and premium roles lines. */
 const JOBS_ROUTE = '/jobs';
 
 // Kept in step with BENEFITS in the Unlimited pop-up (owner, 25 Sep 2026).
@@ -30,10 +30,13 @@ const INCLUDED: { label: string; href?: string | null; soon?: boolean }[] = [
   { label: 'Apply to as many conferences as you like', href: '/conferences/explore' },
   { label: 'Premium MUN guides', href: '/guides' },
   { label: 'Your MUN archive', soon: true },
-  { label: 'Premium job board roles', href: JOBS_ROUTE },
+  { label: 'Your applications show first to organizers' },
+  { label: "Insights on every role: who's applying and how fast it fills", href: JOBS_ROUTE },
+  { label: 'Job alerts by email when new roles match', href: JOBS_ROUTE },
+  { label: 'Premium-only roles on the Job Board', href: JOBS_ROUTE },
 ];
 
-const FREE_LIST = ['Run and join sessions', 'Find and apply to conferences', 'The job board', 'Your MUN CV'];
+const FREE_LIST = ['Run and join sessions', 'Find and apply to conferences', 'Browse and apply on the Job Board', 'Your MUN CV'];
 
 type Period = 'yearly' | 'monthly';
 

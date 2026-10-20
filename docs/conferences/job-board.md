@@ -183,7 +183,12 @@ Three placements outside /jobs. All three reads are anon and authenticated, and 
 - The insights strip under the header card of a listing (job_listing_get insights { applicants, closes_at, reviewing }): "N applied", "Closes 15 Nov", "Organizers are actively reviewing" (an organizer opened the applicants in the last 7 days). Everyone else sees it locked, with "Get Unlimited" opening the Unlimited pop-up (insights_locked). Never on outside listings.
 - Premium listings: a non-member (premium_locked) sees the Premium tag and the header card, then a lock card, "This role is for Gavelling Unlimited members", instead of the description and Apply. The page reads again once the plan turns on. job_screening and job_submit_screening answer code 'unlimited'.
 - Job alerts: "Save as alert" under the filters saves the current filters with a name (job_alert_save, Unlimited only, at most 10; non-members get the Unlimited pop-up); members manage them in the Alerts panel of the Saved tab (job_alerts_mine, job_alert_remove). "We email you once a day when new roles match": the daily email is sent by the server.
-- "Premium job board roles" is live in the Unlimited pop-up and on /pricing/subscription.
+- What Unlimited lists for the Job Board (prompt 13, owner 20 Oct 2026: the board itself is free for everyone, so the lists name the real perks instead of "Premium job board roles"), in this order after "Premium MUN guides" and "Your MUN archive", all live, the same four lines in the Unlimited pop-up (`UnlimitedPopup.tsx`), /pricing/subscription (`SubscriptionPricingClient.tsx`, the last three linking to /jobs) and the Subscription pages under /account/manage:
+  - "Your applications show first to organizers"
+  - "Insights on every role: who's applying and how fast it fills"
+  - "Job alerts by email when new roles match"
+  - "Premium-only roles on the Job Board"
+  /pricing/subscription's free list says "Browse and apply on the Job Board". No copy says or suggests that organizers can see who holds Unlimited. The pop-up's benefit list is tighter (scoped to that pop-up) so seven lines still fit 1280 x 800 with no captions.
 
 ### Admin
 - /admin has a Job Board tab (src/app/admin/JobBoardTab.tsx): every listing (admin_job_listings) with search, View and Hide / Unhide (an optional note asked in place; admin_job_hide emails the poster when hiding).
@@ -202,7 +207,7 @@ Three placements outside /jobs. All three reads are anon and authenticated, and 
 - `src/app/jobs/InsightsStrip.tsx`, `PremiumLock.tsx`, `SaveAlertAction.tsx`, `AlertsPanel.tsx`, `JobListing.tsx` (the strip, the lock, signed-out Apply), `JobApplyPopup.tsx` (signed-out questions and the check).
 - `src/app/manage/[slug]/jobs/PromotePopup.tsx`: an optional `payer` ('you' on /jobs, so the totals speak of your own credits).
 - `src/app/conferences/[slug]/apply/ListingApplyLine.tsx` (useListingClaim, ListingClaimNote) and `ConferenceApplyClient.tsx` (the hook call, the claim before the confirmation redirect, the note in the form and on "You've Already Applied").
-- `src/app/admin/JobBoardTab.tsx` and `AdminClient.tsx` (the admin tab); `src/components/purchase/UnlimitedPopup.tsx` and `src/app/pricing/subscription/SubscriptionPricingClient.tsx` (Premium job board roles live).
+- `src/app/admin/JobBoardTab.tsx` and `AdminClient.tsx` (the admin tab); `src/components/purchase/UnlimitedPopup.tsx` and `src/app/pricing/subscription/SubscriptionPricingClient.tsx` (the Job Board perks live).
 - `src/app/conferences/landing-lab/JobBoardSection.tsx`: the plain title.
 - Known limit: admin_job_listings leaves drafts out, so a premium draft is not listed in /admin until it is published.
 

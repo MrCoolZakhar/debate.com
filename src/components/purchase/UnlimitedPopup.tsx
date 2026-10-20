@@ -19,7 +19,7 @@
 import { useCallback, useRef, useState } from 'react';
 import { formatLongDate, manageErrorText, manageSubscription, notifyPlanChanged, useUnlimitedDetail } from '@/lib/subscriptionManage';
 import Link from 'next/link';
-import { BookOpen, Briefcase, Infinity as InfinityIcon, Loader2, Archive } from 'lucide-react';
+import { BarChart3, Bell, BookOpen, Briefcase, Infinity as InfinityIcon, Loader2, Archive, Rocket } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { Emoji3D } from '@/components/neu';
 import { openAuth } from '@/lib/authModal';
@@ -41,14 +41,26 @@ const BENEFITS: Benefit[] = [
   { emoji: 'Infinity', fallback: InfinityIcon, title: 'Apply to as many conferences as you like', live: true },
   { emoji: 'Books', fallback: BookOpen, title: 'Premium MUN guides', live: true },
   { emoji: 'File cabinet', fallback: Archive, title: 'Your MUN archive', live: false },
-  { emoji: 'Briefcase', fallback: Briefcase, title: 'Premium job board roles', live: true },
+  { emoji: 'Rocket', fallback: Rocket, title: 'Your applications show first to organizers', live: true },
+  { emoji: 'Bar chart', fallback: BarChart3, title: "Insights on every role: who's applying and how fast it fills", live: true },
+  { emoji: 'Bell', fallback: Bell, title: 'Job alerts by email when new roles match', live: true },
+  { emoji: 'Briefcase', fallback: Briefcase, title: 'Premium-only roles on the Job Board', live: true },
 ];
 
+// Seven benefit lines since 20 Oct 2026 (the Job Board perks): a tighter list
+// so the pop-up still fits 1280 x 800 with no scroll and no captions (owner
+// rule, 25 Sep 2026). Scoped to this pop-up; the kit is unchanged elsewhere.
 // Resume mode: the benefits a touch more prominent, and the one sentence-case button.
 const RESUME_CSS = `
+[data-testid="unlimited-popup"] .gv-buy-left{gap:16px}
+[data-testid="unlimited-popup"] .gv-buy-benefits{gap:9px}
+[data-testid="unlimited-popup"] .gv-buy-benefit{gap:12px}
+[data-testid="unlimited-popup"] .gv-buy-benefit-disc{width:40px;height:40px;border-radius:12px}
+[data-testid="unlimited-popup"] .gv-buy-benefit-disc img,[data-testid="unlimited-popup"] .gv-buy-benefit-disc svg{width:22px;height:22px}
+[data-testid="unlimited-popup"] .gv-buy-benefit-text{font-size:15px!important;line-height:1.3}
 .gv-buy-benefits-hl .gv-buy-benefit-disc{background:rgba(238,217,138,0.16);border-color:rgba(238,217,138,0.5)}
-.gv-buy-benefits-hl .gv-buy-benefit-text{color:#FFFFFF;font-size:18px!important;font-weight:700}
-.gv-buy-benefits-hl .gv-buy-benefits{gap:18px}
+.gv-buy-benefits-hl .gv-buy-benefit-text{color:#FFFFFF;font-size:16px!important;font-weight:700}
+.gv-buy-benefits-hl .gv-buy-benefits{gap:11px}
 [data-testid="unlimited-resume"]{text-transform:none;letter-spacing:0.01em}
 `;
 

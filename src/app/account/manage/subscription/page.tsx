@@ -40,7 +40,10 @@ const BENEFITS = [
   'Apply to as many conferences as you like',
   'Premium MUN guides',
   'Your MUN archive',
-  'Premium job board roles',
+  'Your applications show first to organizers',
+  "Insights on every role: who's applying and how fast it fills",
+  'Job alerts by email when new roles match',
+  'Premium-only roles on the Job Board',
 ];
 
 /** The sad Gavin for "We hate to see you go". There is no sad drawing yet:
