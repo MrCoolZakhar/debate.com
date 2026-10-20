@@ -205,3 +205,13 @@ Three placements outside /jobs. All three reads are anon and authenticated, and 
 - `src/app/admin/JobBoardTab.tsx` and `AdminClient.tsx` (the admin tab); `src/components/purchase/UnlimitedPopup.tsx` and `src/app/pricing/subscription/SubscriptionPricingClient.tsx` (Premium job board roles live).
 - `src/app/conferences/landing-lab/JobBoardSection.tsx`: the plain title.
 - Known limit: admin_job_listings leaves drafts out, so a premium draft is not listed in /admin until it is published.
+
+## Applicant notes (prompt 9)
+
+Owner, 20 Oct 2026: organizers review applications together, so every applicant has a thread of private team notes. They are private to the conference's organizers, never shown or sent to the applicant, and separate from `applications.organizer_note` (the "Note sent to them" on a rejection, which is unchanged).
+
+- `application_notes_list(p_application)`: the notes, oldest first (`id, body, created_at, updated_at, edited, author_id, author_name, author_avatar, mine`); empty for anyone who is not an organizer of that conference.
+- `application_note_add(p_application, p_body)`: returns the new note id (1 to 4,000 characters, trimmed by the server).
+- `application_note_edit(p_note, p_body)` and `application_note_remove(p_note)`: return true; only the author can change or remove a note, everyone else gets the server's sentence.
+- `application_note_counts(p_conf)`: `{ "<application_id>": count }`, organizers only.
+- Where: the applicant pop-up's Notes tab (after Payment, `?tab=notes`, the count beside it), the Notes section of Settings > Team's review step (not the access step), and a small note icon with the count on an Applications row ("N notes from your team"), read with the page's other reads and again after the pop-up closes (`applications/useNoteCounts.ts`). The thread and the box are `applications/ApplicantDetail/NotesPanel.tsx`: optimistic add, edit and remove rolled back with the server's sentence, Cmd or Ctrl plus Enter adds, edits and removals asked in place.

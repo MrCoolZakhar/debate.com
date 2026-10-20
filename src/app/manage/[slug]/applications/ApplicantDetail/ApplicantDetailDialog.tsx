@@ -14,13 +14,14 @@
 // (the page's effect works on `cardRef`), and closing (setReviewId(null)).
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react';
-import { LayoutDashboard, ListOrdered, Trophy, Wallet, X, Cake } from 'lucide-react';
+import { LayoutDashboard, ListOrdered, Trophy, Wallet, X, Cake, StickyNote } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import Portal from '@/components/Portal';
 import ProfileLink from '@/components/ProfileLink';
 import { useApplicantCv, useApplicantLedger, ledgerTotals, type ApplicantApp } from './data';
 import { OverviewTab, PreferencesTab, ExperienceTab, type AnswerItem, type OverviewDelegation } from './tabs';
 import PaymentTab, { type AidInfo } from './PaymentTab';
+import NotesPanel from './NotesPanel';
 import { C, OUTFIT, SeatFlag, fmtDay } from './kit';
 import { type ApplicantTab, initialApplicantTab, writeApplicantTab } from './url';
 import type { JobPick } from '../JobPicksBlock';
@@ -36,6 +37,7 @@ const TAB_META: Record<Exclude<ApplicantTab, 'answers'>, { label: string; icon: 
   preferences: { label: 'Preferences', icon: ListOrdered },
   experience: { label: 'Experience', icon: Trophy },
   payment: { label: 'Payment', icon: Wallet },
+  notes: { label: 'Notes', icon: StickyNote },
 };
 
 const CSS = `
@@ -91,9 +93,11 @@ export default function ApplicantDetailDialog({
   app, name, email, age, cardRef, onClose, conferenceSlug, accessToken,
   chips, actions, actionsWithoutPayment, paymentControls, isDelegate, showsPreferences, feeCharged,
   experienceLevel, answerItems, orphanAnswers, listedExperience, showListedExperience, aid, onOpenDelegation,
-  dob, delegation, jobPicks = null,
+  dob, delegation, jobPicks = null, noteCount = 0,
 }: {
   app: ApplicantApp;
+  /** Notes from the team (application_note_counts), until the Notes tab reads them itself. */
+  noteCount?: number;
   name: string;
   email: string;
   age: number | null;
@@ -125,9 +129,11 @@ export default function ApplicantDetailDialog({
   jobPicks?: JobPick[] | null;
 }) {
   const tabs = useMemo<Exclude<ApplicantTab, 'answers'>[]>(
-    () => (['overview', ...(showsPreferences ? ['preferences' as const] : []), 'experience', 'payment'] as Exclude<ApplicantTab, 'answers'>[]),
+    () => (['overview', ...(showsPreferences ? ['preferences' as const] : []), 'experience', 'payment', 'notes'] as Exclude<ApplicantTab, 'answers'>[]),
     [showsPreferences],
   );
+  // The Notes tab's own count once it has read the thread (null until then).
+  const [notesCount, setNotesCount] = useState<number | null>(null);
   const [tab, setTabState] = useState<Exclude<ApplicantTab, 'answers'>>(() => {
     const t = initialApplicantTab();
     return t && t !== 'answers' && tabs.includes(t) ? t : 'overview';
@@ -272,6 +278,7 @@ export default function ApplicantDetailDialog({
               const Icon = TAB_META[t].icon;
               const badge = t === 'preferences' ? (app.application_preferences?.length ?? 0)
                 : t === 'experience' ? (cv.data?.length ?? null)
+                : t === 'notes' ? (notesCount ?? noteCount)
                 : null;
               return (
                 <button
@@ -324,6 +331,7 @@ export default function ApplicantDetailDialog({
               />
             )}
             {tab === 'preferences' && <PreferencesTab app={app} />}
+            {tab === 'notes' && <NotesPanel applicationId={app.id} onCount={setNotesCount} />}
             {tab === 'experience' && (
               <ExperienceTab
                 app={app}

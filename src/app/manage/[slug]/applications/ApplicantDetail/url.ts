@@ -8,7 +8,7 @@
 
 import { useEffect, useRef } from 'react';
 
-export const APPLICANT_TABS = ['overview', 'preferences', 'experience', 'answers', 'payment'] as const;
+export const APPLICANT_TABS = ['overview', 'preferences', 'experience', 'answers', 'payment', 'notes'] as const;
 export type ApplicantTab = typeof APPLICANT_TABS[number];
 
 function writeParams(mut: (p: URLSearchParams) => void) {

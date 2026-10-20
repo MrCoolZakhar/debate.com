@@ -6,7 +6,8 @@ import {
   ArrowRight, BadgeCheck, Ban, CheckCircle2, MinusCircle, XCircle, Building2, CalendarDays, Check, ChevronDown, ChevronLeft, CircleCheck, Clock,
   Download, Eye, Filter, Gavel, GraduationCap, HandCoins, Inbox, Info, Landmark, LogOut,
   Loader2, Mail, MoreHorizontal, PencilLine, Plus, RotateCcw, Search, Send, SlidersHorizontal, Trash2, Undo2, User, UserRoundCheck,
-  UserX, Users, Wallet, X, UsersRound, FileSearch } from 'lucide-react';
+  UserX, Users, Wallet, X, UsersRound, FileSearch, StickyNote,
+} from 'lucide-react';
 import Link from 'next/link';
 import { useManage } from '@/app/manage/[slug]/layout';
 import { getAuthedClient, getFreshAuthedClient } from '@/lib/supabase-auth';
@@ -50,6 +51,7 @@ import { DelegationIdentity, useDelegationSummaries } from './DelegationAvatar';
 import OpenDelegateApplications from './OpenDelegateApplications';
 import { rejectUpdates, writeReject, rejectFollowUps } from './teamDecisions';
 import { useJobBoardApplicantExtras } from './useJobBoardApplicantExtras';
+import { useNoteCounts } from './useNoteCounts';
 import TeamApplicantsLine from './TeamApplicantsLine';
 // The applicant pop-up (hero, action bar, five tabs) and its ?app= URL state.
 import ApplicantDetailDialog, { useApplicantUrlSync } from './ApplicantDetail/ApplicantDetailDialog';
@@ -1906,6 +1908,8 @@ export default function ApplicationsPage() {
   // Seeded from ?app=<id> so the applicant pop-up is linkable and survives a
   // reload; useApplicantUrlSync (below) keeps the URL in step afterwards.
   const [reviewId, setReviewId] = useState<string | null>(() => searchParams.get('app'));
+  // Team notes per applicant (useNoteCounts.ts), read again when the pop-up closes.
+  const noteCounts = useNoteCounts(conference?.id, session?.user?.id, !!reviewId);
   // The review dialog card, for the focus trap in the effect below.
   const reviewCardRef = useRef<HTMLDivElement | null>(null);
   // Conferences done in any capacity, per user, count of their mun_cv_entries
@@ -4341,6 +4345,12 @@ export default function ApplicationsPage() {
                             <span>{nationality}</span>
                           </span>
                         )}
+                        {(noteCounts.get(app.id) ?? 0) > 0 && (
+                          <span className="inline-flex items-center gap-1.5" style={{ ...factStyle, fontVariantNumeric: 'tabular-nums' }} title={`${noteCounts.get(app.id)} ${noteCounts.get(app.id) === 1 ? 'note' : 'notes'} from your team`}>
+                            <StickyNote size={14} strokeWidth={2.3} aria-hidden="true" />
+                            <span>{noteCounts.get(app.id)}</span>
+                          </span>
+                        )}
                       </div>
 
                       {pledgeLine && (
@@ -5379,6 +5389,7 @@ export default function ApplicationsPage() {
           <ApplicantDetailDialog
             key={app.id}
             app={app}
+            noteCount={noteCounts.get(app.id) ?? 0}
             name={name}
             email={email}
             age={ageForApp(app, questions)}

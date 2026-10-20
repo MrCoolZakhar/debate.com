@@ -21,6 +21,7 @@ import { AwardArtwork, monogramFor } from '@/app/account/accountUi';
 import { ORGANIZER_SECTIONS, TEAM_KEY, FINANCIALS_READONLY_KEY } from '@/lib/organizerPermissions';
 import { questionsOf, displayAnswer, normalizeBlocks, type CustomAnswerValue } from '@/lib/customQuestions';
 import JobPicksBlock from '../applications/JobPicksBlock';
+import NotesPanel from '../applications/ApplicantDetail/NotesPanel';
 import { AnswersTab, type AnswerItem } from '../applications/ApplicantDetail/tabs';
 import { fmtDay } from '../applications/ApplicantDetail/kit';
 import { type TeamApplicant, teamRoleLabel, firstPickTitle } from './teamApplicantsApi';
@@ -231,6 +232,11 @@ export default function TeamApplicantPopup({
                 )}
 
                 <JobPicksBlock picks={a.picks} />
+
+                <section aria-label="Notes">
+                  <SectionLabel>Notes</SectionLabel>
+                  <NotesPanel applicationId={a.application_id} />
+                </section>
               </div>
             ) : (
               <div className="flex flex-col" style={{ gap: 18 }}>
