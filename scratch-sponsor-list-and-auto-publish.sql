@@ -254,7 +254,7 @@ end $$;
 
 revoke all on function public.queue_sponsor_list_emails(text, boolean, text) from public, anon, authenticated;
 
--- NOT scheduled here. After Peter approves the real send:
+-- Sent 20 Oct 2026 (verified only, 122 people; the teaser was NOT sent, owner's call) and scheduled as below:
 --   select public.queue_sponsor_list_emails('verified', false);
 --   select public.queue_sponsor_list_emails('teaser', false);
 --   select cron.schedule('sponsor-list-emails', '25 * * * *',
