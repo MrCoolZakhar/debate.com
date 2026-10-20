@@ -8,27 +8,29 @@
 // same rule as conference_money_summary). "Paid" and "Paid by delegation" are
 // the member's access flag (`payment_status`, `self_paid`), never a sum.
 //
-// Writes, only while DELEGATIONS_V2_DB is on: the role select
-// (delegation_set_role) and Remove from delegation (delegation_remove_member),
-// each confirmed in place where it moves a paid spot. While it is off the role
-// is plain text and nothing here writes.
+// Writes, only while DELEGATIONS_MONEY_DB is on (v2.ts; waits for Christian's
+// money functions): the role select (organiser_set_member_role, which moves the
+// person's ticket and money with them; every move to or from faculty advisor is
+// confirmed in place, since only organisers make it) and Remove from delegation
+// (delegation_remove_member). While it is off the role is plain text and nothing
+// here writes.
 
 import { useMemo, useState } from 'react';
 import { UserMinus } from 'lucide-react';
 import GSelect from '@/components/GSelect';
 import { CircleFlag } from '@/components/CircleFlag';
 import { notifyErr, notifyOk } from '@/lib/appNotify';
-import { setMemberRole, removeMember, type MemberRole } from '@/app/conferences/[slug]/participant/delegation/v2';
+import { removeMember, type MemberRole } from '@/app/conferences/[slug]/participant/delegation/v2';
 import { LIVE, ACCEPTED, memberName, type DelegationMemberLite } from '../delegationRows';
 import type { DelegationsData, DelegationView } from './useDelegationsData';
 import { societyAllocations } from './societySeats';
-import { DELEGATIONS_V2_DB } from './v2';
+import { DELEGATIONS_MONEY_DB, organiserSetMemberRole } from './v2';
 import {
   BTN_CLASS, CommitteeTag, FONT, HAIRLINE, INK, INK_SOFT, OK_GREEN, OWE, ROW_LINE, RoundAvatar, STROKE,
   firstName, smallPrimaryBtn, smallSecondaryBtn,
 } from './kit';
 
-const GRID = DELEGATIONS_V2_DB ? 'minmax(0,1fr) 190px 190px 160px 36px' : 'minmax(0,1fr) 190px 190px 160px';
+const GRID = DELEGATIONS_MONEY_DB ? 'minmax(0,1fr) 190px 190px 160px 36px' : 'minmax(0,1fr) 190px 190px 160px';
 
 const ROLE_OPTIONS: { value: MemberRole; label: string }[] = [
   { value: 'delegate', label: 'Delegate' },
@@ -65,7 +67,7 @@ function paymentOf(m: DelegationMemberLite, owes: boolean): { text: string; colo
 }
 
 type Pending =
-  | { kind: 'advisor'; id: string }
+  | { kind: 'role'; id: string; role: MemberRole }
   | { kind: 'remove'; id: string };
 
 export default function PeopleTab<M extends DelegationMemberLite>({ row, data, onChanged }: {
@@ -100,7 +102,7 @@ export default function PeopleTab<M extends DelegationMemberLite>({ row, data, o
   async function changeRole(m: M, role: MemberRole) {
     if (busyId) return;
     setBusyId(m.id);
-    const r = await setMemberRole(m.id, role);
+    const r = await organiserSetMemberRole(m.id, role);
     setBusyId(null);
     setPending(null);
     if (!r.ok) { notifyErr(r.error, 'applications'); return; }
@@ -124,7 +126,8 @@ export default function PeopleTab<M extends DelegationMemberLite>({ row, data, o
   function onRolePick(m: M, next: MemberRole) {
     const current = roleOf(m);
     if (next === current) return;
-    if (next === 'faculty-advisor' && current !== 'faculty-advisor') { setPending({ kind: 'advisor', id: m.id }); return; }
+    // Delegate or head delegate to faculty advisor, or back: asked first.
+    if ((next === 'faculty-advisor') !== (current === 'faculty-advisor')) { setPending({ kind: 'role', id: m.id, role: next }); return; }
     void changeRole(m, next);
   }
 
@@ -168,9 +171,9 @@ export default function PeopleTab<M extends DelegationMemberLite>({ row, data, o
                 </div>
 
                 <div className="min-w-0">
-                  {DELEGATIONS_V2_DB && role && ACCEPTED.has(m.status) ? (
+                  {DELEGATIONS_MONEY_DB && role && ACCEPTED.has(m.status) ? (
                     <GSelect<MemberRole>
-                      value={confirming?.kind === 'advisor' ? 'faculty-advisor' : role}
+                      value={confirming?.kind === 'role' ? confirming.role : role}
                       onChange={v => onRolePick(m, v)}
                       options={ROLE_OPTIONS}
                       size="sm"
@@ -198,7 +201,7 @@ export default function PeopleTab<M extends DelegationMemberLite>({ row, data, o
 
                 <span style={{ fontFamily: FONT, fontSize: 14, color: pay.color }}>{pay.text}</span>
 
-                {DELEGATIONS_V2_DB && (
+                {DELEGATIONS_MONEY_DB && (
                   <button type="button" aria-label={`Remove ${name} from the delegation`} title="Remove from delegation"
                     disabled={busyId !== null}
                     onClick={() => setPending({ kind: 'remove', id: m.id })}
@@ -213,16 +216,16 @@ export default function PeopleTab<M extends DelegationMemberLite>({ row, data, o
                 <div className="flex items-center justify-between gap-4 flex-wrap"
                   style={{ margin: '0 28px 14px 78px', padding: '14px 16px', borderRadius: 12, background: '#FFFFFF', boxShadow: '0 1px 2px rgba(27,56,40,0.06), 0 6px 18px rgba(27,56,40,0.08)' }}>
                   <span style={{ fontFamily: FONT, fontSize: 14, lineHeight: 1.45, color: INK }}>
-                    {confirming.kind === 'advisor'
-                      ? `Make ${firstName(name)} a faculty advisor? The paid delegate spot stays with the delegation for someone else, and the advisor fee is owed.`
+                    {confirming.kind === 'role'
+                      ? `Make ${firstName(name)} ${confirming.role === 'faculty-advisor' ? 'a faculty advisor' : confirming.role === 'head-delegate' ? 'a head delegate' : 'a delegate'}? Their ticket moves with them to the new role. Any price difference is charged, or refunded to whoever paid.`
                       : `Remove ${firstName(name)} from the delegation? Their seat goes back to the delegation as Open.`}
                   </span>
                   <div className="flex gap-2 flex-shrink-0">
                     <button type="button" onClick={() => setPending(null)} disabled={busyId !== null} className={BTN_CLASS} style={smallSecondaryBtn}>Cancel</button>
                     <button type="button" disabled={busyId !== null} className={BTN_CLASS}
-                      onClick={() => { if (confirming.kind === 'advisor') void changeRole(m, 'faculty-advisor'); else void remove(m); }}
+                      onClick={() => { if (confirming.kind === 'role') void changeRole(m, confirming.role); else void remove(m); }}
                       style={{ ...smallPrimaryBtn, height: 36, opacity: busyId ? 0.7 : 1 }}>
-                      {confirming.kind === 'advisor' ? 'Make advisor' : 'Remove'}
+                      {confirming.kind === 'role' ? (confirming.role === 'faculty-advisor' ? 'Make advisor' : confirming.role === 'head-delegate' ? 'Make head delegate' : 'Make delegate') : 'Remove'}
                     </button>
                   </div>
                 </div>

@@ -4,7 +4,8 @@
 // DELEGATIONS_V2_DB stays false until the chat's Supabase work has applied part 1
 // (scratch-delegations-part1-people-and-seats.sql), which creates the objects below. While it is false NOTHING here is called and the Delegations
 // tab renders none of the pieces that need them: the seat limit radio, the
-// "Until" date, the role select and "Remove from delegation" in the pop-up.
+// "Until" date. The role select and "Remove from delegation" in the pop-up
+// wait for DELEGATIONS_MONEY_DB instead (below).
 // Seats are given with the plain block-seat insert (seatWrites.ts) meanwhile.
 //
 // Objects this file expects, none of which exist yet (19 Oct 2026):
@@ -15,19 +16,22 @@
 //       nothing, enforces the seat limit; answers { ok, created, allocation_ids } or
 //       { ok: false, code, error } (the CLIENT CONTRACT in scratch-delegations-part1-people-and-seats.sql)
 //   organiser_take_back_society_seat(p_allocation uuid) -> { ok, allocation_id, society_id }
-//   delegation_set_role(p_application, p_role) and delegation_remove_member(p_application)
-//       callable by the conference's organisers as well as the delegation's leaders
-//       (the leader card's wrappers in participant/delegation/v2.ts are reused)
+//   delegation_remove_member(p_application) callable by the conference's organisers as
+//       well as the delegation's leaders (the leader card's wrapper is reused)
+//   organiser_set_member_role(p_application, p_role) -> { ok, code, error }, organisers
+//       only: the role move with its money in one step (organiserSetMemberRole below)
 
 import { getFreshAuthedClient } from '@/lib/supabase-auth';
 import { friendlyError, plainOrFallback } from '@/lib/friendlyError';
 
 export const DELEGATIONS_V2_DB = false;
 
-// Part 2 (scratch-delegations-part2-money-and-wording.sql): the delegation-wide
-// money read my_delegation_money. Nothing on the organiser side reads it today
-// (organisers have financials_dashboard); kept beside the participant flag so both
-// files flip together.
+// DELEGATIONS_MONEY_DB waits for Christian's money functions (delegation_remove_member,
+// organiser_set_member_role), built in his chat with a rollback test; what we asked
+// for is in docs/conferences/delegations-requests-for-christian.md. While it is false
+// the pop-up's role select and "Remove from delegation" are not drawn. Only
+// organisers move someone between delegate and faculty advisor (owners, 20 Oct 2026);
+// delegation_set_role is withdrawn and nothing calls it. Flip both v2.ts copies together.
 export const DELEGATIONS_MONEY_DB = false;
 
 export type SeatLimit = 'none' | 'paid' | 'expected';
@@ -114,6 +118,30 @@ export async function takeBackSocietySeatRpc(allocationId: string): Promise<V2Re
     const { data, error } = await c.rpc('organiser_take_back_society_seat', { p_allocation: allocationId });
     if (error) return { ok: false, error: friendlyError(error, fallback) };
     const r = (data ?? {}) as { ok?: boolean; error?: string; message?: string };
+    if (r.ok !== true) return { ok: false, error: plainOrFallback(r.error ?? r.message, fallback) };
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: friendlyError(e, fallback) };
+  }
+}
+
+/**
+ * An organiser moves a member between delegate, head delegate and faculty advisor.
+ * organiser_set_member_role moves the person's ticket and money with them in one
+ * step and answers { ok, code, error }; its sentence is shown as given.
+ */
+export async function organiserSetMemberRole(
+  applicationId: string,
+  role: 'delegate' | 'head-delegate' | 'faculty-advisor',
+): Promise<V2Result> {
+  const fallback = 'That role change was not saved. Try again.';
+  if (!DELEGATIONS_MONEY_DB) return { ok: false, error: fallback };
+  try {
+    const c = await getFreshAuthedClient();
+    if (!c) return { ok: false, error: SIGNED_OUT };
+    const { data, error } = await c.rpc('organiser_set_member_role', { p_application: applicationId, p_role: role });
+    if (error) return { ok: false, error: friendlyError(error, fallback) };
+    const r = (data ?? {}) as { ok?: boolean; code?: string; error?: string; message?: string };
     if (r.ok !== true) return { ok: false, error: plainOrFallback(r.error ?? r.message, fallback) };
     return { ok: true };
   } catch (e) {

@@ -1,29 +1,47 @@
 'use client';
 
-// The leader card's Financials (taste board 1A). Every number comes from what
-// the database already gives: my_pay_overview (the leader's OWN items and
-// payments, the same read as /pay) and the roster's payment status per member.
-// Nothing here types a price; amounts go through the /pay page's formatter.
-//   paid               my_pay_overview totals.paid_cents (what this leader paid)
-//   Delegate fees      this leader's delegation tickets (pledge_spot items), paid of all
-//   Faculty advisor    this leader's advisor tickets (advisor_spot items), paid of all
-//   Members paying     members of the delegation whose own fee is still unpaid
-//   Left to pay        my_pay_overview totals.owed_cents
+// The leader card's Financials (taste board 1A; Christian's answers 6 and 7,
+// 19 Oct 2026). Every number comes from what the database already gives:
+// my_pay_overview (the leader's OWN items and payments, the same read as /pay)
+// and the roster's payment status per member. Nothing here types a price or
+// computes a second total; amounts go through the /pay page's formatter in the
+// currency /pay picks (itemsCurrency, BalanceHeader.tsx).
+//   paid                 totals.paid_cents, exactly /pay's Paid (card and accepted
+//                        proofs, net of refunds)
+//   Waiting for review   totals.in_review_cents, proofs not accepted yet, as /pay
+//   Delegate Tickets     a COUNT of tickets, never an amount: this leader's
+//   Advisor Tickets      pledge_spot / advisor_spot items plus their own ticket
+//                        (a role_fee named "Delegate Ticket" / "Advisor Ticket",
+//                        /pay's names); paid = the invoice is settled; void,
+//                        refunded-and-closed and waived tickets are not counted
+//   Members paying       members of the delegation whose own fee is still unpaid
+//   Left to pay          totals.owed_cents
 // Other leaders' tickets and payments are theirs (my_pay_overview reads the
-// caller's own items only), so the two fee rows say "you added" when another
-// leader has tickets too.
+// caller's own items only), so the ticket rows say "Your" when another leader
+// has tickets too.
 
 import Link from 'next/link';
 import { CreditCard } from 'lucide-react';
 import { PayLink } from '../PaymentsLocked';
 import { money, type PayItem, type PayOverview } from '../../pay/payApi';
+import { itemsCurrency } from '../../pay/BalanceHeader';
 import { BTN_CLASS, cardStyle, FONT, FOREST, INK, INK_SOFT, LINE, linkStyle, OWE, primaryBtn, STROKE } from './leaderKit';
 
-const DONE_STATES = new Set(['paid', 'refund_requested', 'disputed', 'covered', 'waived']);
+/** Which ticket an item is, by /pay's kinds and names; null when it is not a ticket. */
+function ticketOf(i: PayItem): 'delegate' | 'advisor' | null {
+  if (i.kind === 'pledge_spot') return 'delegate';
+  if (i.kind === 'advisor_spot') return 'advisor';
+  if (i.kind === 'role_fee') {
+    if (i.label.startsWith('Delegate Ticket')) return 'delegate';
+    if (i.label.startsWith('Advisor Ticket')) return 'advisor';
+  }
+  return null;
+}
 
-function tally(items: PayItem[], kind: string) {
-  const live = items.filter(i => i.kind === kind && i.owner_is_me && i.state !== 'refund_closed');
-  return { total: live.length, done: live.filter(i => DONE_STATES.has(i.state)).length, payable: live.filter(i => i.payable).length };
+function tally(items: PayItem[], which: 'delegate' | 'advisor') {
+  const live = items.filter(i => i.owner_is_me && ticketOf(i) === which
+    && i.status !== 'void' && i.status !== 'waived' && i.state !== 'refund_closed');
+  return { total: live.length, done: live.filter(i => i.status === 'settled').length, payable: live.filter(i => i.payable).length };
 }
 
 export default function FinancialsCard({ pay, payError, societyId, membersOwing, conferenceId, slug }: {
@@ -54,13 +72,13 @@ export default function FinancialsCard({ pay, payError, societyId, membersOwing,
         </div>
       );
   } else {
-    const cur = pay.conference.currency;
-    const delegateFees = tally(pay.items, 'pledge_spot');
-    const advisorFees = tally(pay.items, 'advisor_spot');
+    const cur = itemsCurrency(pay) ?? pay.conference.currency;
+    const delegateFees = tally(pay.items, 'delegate');
+    const advisorFees = tally(pay.items, 'advisor');
     const toPay = delegateFees.payable + advisorFees.payable;
     const mine = pay.delegation?.find(d => d.society_id === societyId) ?? null;
     const othersHaveTickets = !!mine?.leaders.some(l => !l.is_me && (l.delegate_tickets > 0 || l.advisor_tickets > 0));
-    const youAdded = othersHaveTickets ? ' you added' : '';
+    const your = othersHaveTickets ? 'Your ' : '';
     content = (
       <>
         <div className="flex items-baseline gap-2 flex-wrap">
@@ -68,8 +86,9 @@ export default function FinancialsCard({ pay, payError, societyId, membersOwing,
           <span style={{ fontFamily: FONT, fontSize: 14, color: INK_SOFT }}>paid</span>
         </div>
         <div className="flex flex-col" style={{ gap: 9 }}>
-          {delegateFees.total > 0 && row(`Delegate fees${youAdded}`, <><b style={{ fontWeight: 600 }}>{delegateFees.done}</b> of {delegateFees.total} paid</>)}
-          {advisorFees.total > 0 && row(`Faculty advisor fees${youAdded}`, <><b style={{ fontWeight: 600 }}>{advisorFees.done}</b> of {advisorFees.total} paid</>)}
+          {pay.totals.in_review_cents > 0 && row('Waiting for review', money(pay.totals.in_review_cents, cur))}
+          {delegateFees.total > 0 && row(`${your}Delegate Tickets`, <><b style={{ fontWeight: 600 }}>{delegateFees.done}</b> of {delegateFees.total} paid</>)}
+          {advisorFees.total > 0 && row(`${your}Advisor Tickets`, <><b style={{ fontWeight: 600 }}>{advisorFees.done}</b> of {advisorFees.total} paid</>)}
           {membersOwing > 0 && row('Members paying themselves', <><b style={{ fontWeight: 600 }}>{membersOwing}</b> owe</>, OWE)}
           <div className="flex items-baseline justify-between gap-3" style={{ fontFamily: FONT, fontSize: 14, paddingTop: 10, borderTop: `1px solid ${LINE}` }}>
             <span style={{ fontWeight: 500, color: INK }}>Left to pay</span>
@@ -78,7 +97,7 @@ export default function FinancialsCard({ pay, payError, societyId, membersOwing,
         </div>
         {toPay > 0 && (
           <PayLink conferenceId={conferenceId} slug={slug} className={BTN_CLASS} style={{ ...primaryBtn, width: '100%' }}>
-            Pay for {toPay} {toPay === 1 ? 'spot' : 'spots'}
+            Pay for {toPay} {toPay === 1 ? 'ticket' : 'tickets'}
           </PayLink>
         )}
       </>

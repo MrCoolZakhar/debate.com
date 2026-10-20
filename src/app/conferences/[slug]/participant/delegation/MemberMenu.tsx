@@ -3,11 +3,13 @@
 // The row menu on the leader card's People table. Every leader gets it.
 //   Make head delegate / Make delegate        delegation_set_head (live)
 // and, only while DELEGATIONS_V2_DB is on (v2.ts):
-//   Make faculty advisor, Make delegate / Make head delegate for an advisor   delegation_set_role
 //   Place in a seat                           delegation_place_member (a second step lists the open seats)
 //   Take out of seat                          delegation_unplace_member (a seated member; the seat stays open)
 //   Upload position paper                     a PDF for a seated member
+// and, only while DELEGATIONS_MONEY_DB is on (waits for Christian's money functions):
 //   Remove from delegation                    delegation_remove_member
+// Leaders never move anyone to or from faculty advisor: only organisers do that
+// (owners, 20 Oct 2026), from the organiser's delegation pop-up.
 // and, whenever the People table offers a switch (seat/), "Switch with…": a
 // second step lists the people this seat can go to, then the switch is asked
 // in place (the keyboard way to do what dragging a seat onto a row does).
@@ -21,14 +23,14 @@
 // replaces the menu's content with a back button.
 
 import { useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react';
-import { ArrowLeftRight, Armchair, ChevronLeft, CircleMinus, Crown, GraduationCap, MoreHorizontal, Upload, UserRound, X } from 'lucide-react';
+import { ArrowLeftRight, Armchair, ChevronLeft, CircleMinus, Crown, MoreHorizontal, Upload, UserRound, X } from 'lucide-react';
 import Portal from '@/components/Portal';
 import { CircleFlag } from '@/components/CircleFlag';
 import { getFreshAuthedClient } from '@/lib/supabase-auth';
 import { friendlyError, plainOrFallback } from '@/lib/friendlyError';
 import { notifyErr, notifyOk } from '@/lib/appNotify';
 import { committeeDisplayName } from '@/lib/presetNames';
-import { DELEGATIONS_V2_DB, placeMember, removeMember, setMemberRole, unplaceMember, uploadPaperForMember, type MemberRole, type OpenSeat, type Result } from './v2';
+import { DELEGATIONS_MONEY_DB, DELEGATIONS_V2_DB, placeMember, removeMember, unplaceMember, uploadPaperForMember, type MemberRole, type OpenSeat, type Result } from './v2';
 import { CommitteeDisc, committeeEmblemSrc, DANGER, FONT, INK, INK_SOFT, LINE, RoundAvatar, STROKE } from './leaderKit';
 
 export interface MenuMember {
@@ -66,7 +68,6 @@ export interface MemberMenuHandle {
 
 type Action =
   | { kind: 'head'; head: boolean }
-  | { kind: 'role'; role: MemberRole }
   | { kind: 'remove' }
   | { kind: 'unplace' }
   | { kind: 'switch'; to: string };
@@ -74,7 +75,6 @@ type Action =
 type Step = 'list' | 'place' | 'switch' | { confirm: Action };
 
 const MENU_W = 272;
-const ADVISOR_LINE = 'The paid delegate spot stays with the delegation for someone else, and the advisor fee is owed.';
 
 export default function MemberMenu({ member, societyId, openSeats, conferenceId, onDone, ops, handleRef }: {
   member: MenuMember;
@@ -193,9 +193,7 @@ export default function MemberMenu({ member, societyId, openSeats, conferenceId,
     if (a.kind === 'switch') { setOpen(false); ops?.switchWith(a.to); return; }
     if (a.kind === 'unplace' && ops) { setOpen(false); ops.unplace(); return; }
     // Like Place in a seat: the table is re-read by onDone once the write landed.
-    if (a.kind === 'unplace') return run(() => unplaceMember(member.application_id), self ? 'You are out of your seat. It stays open for the delegation.' : `${member.name} is out of their seat. It stays open for the delegation.`);
-    const word = a.role === 'faculty-advisor' ? 'a faculty advisor' : a.role === 'head-delegate' ? 'a head delegate' : 'a delegate';
-    return run(() => setMemberRole(member.application_id, a.role), self ? `You are now ${word}.` : `${member.name} is now ${word}.`);
+    return run(() => unplaceMember(member.application_id), self ? 'You are out of your seat. It stays open for the delegation.' : `${member.name} is out of their seat. It stays open for the delegation.`);
   };
 
   const onPickFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -215,11 +213,7 @@ export default function MemberMenu({ member, societyId, openSeats, conferenceId,
   if (member.role === 'delegate') items.push({ key: 'up', icon: Crown, label: 'Make head delegate', onPress: () => { void doAction({ kind: 'head', head: true }); } });
   if (member.role === 'head-delegate') items.push({ key: 'down', icon: UserRound, label: 'Make delegate', onPress: () => setStep({ confirm: { kind: 'head', head: false } }) });
   if (DELEGATIONS_V2_DB) {
-    if (isAdvisor) {
-      items.push({ key: 'adv-del', icon: UserRound, label: 'Make delegate', onPress: () => setStep({ confirm: { kind: 'role', role: 'delegate' } }) });
-      items.push({ key: 'adv-head', icon: Crown, label: 'Make head delegate', onPress: () => setStep({ confirm: { kind: 'role', role: 'head-delegate' } }) });
-    } else {
-      items.push({ key: 'advisor', icon: GraduationCap, label: 'Make faculty advisor', onPress: () => setStep({ confirm: { kind: 'role', role: 'faculty-advisor' } }) });
+    if (!isAdvisor) {
       if ((openSeats?.length ?? 0) > 0) items.push({ key: 'place', icon: Armchair, label: 'Place in a seat', onPress: () => setStep('place') });
       if (member.seat) items.push({ key: 'unplace', icon: CircleMinus, label: 'Take out of seat', onPress: () => setStep({ confirm: { kind: 'unplace' } }) });
       if (member.seat && member.user_id) items.push({ key: 'upload', icon: Upload, label: 'Upload position paper', onPress: () => fileRef.current?.click() });
@@ -228,7 +222,7 @@ export default function MemberMenu({ member, societyId, openSeats, conferenceId,
   if (member.seat && (ops?.switchTargets.length ?? 0) > 0) {
     items.push({ key: 'switch', icon: ArrowLeftRight, label: 'Switch with…', onPress: () => setStep('switch') });
   }
-  if (DELEGATIONS_V2_DB) {
+  if (DELEGATIONS_MONEY_DB) {
     if (!self) items.push({ key: 'remove', icon: X, label: 'Remove from delegation', onPress: () => setStep({ confirm: { kind: 'remove' } }), danger: true });
   }
 
@@ -245,14 +239,9 @@ export default function MemberMenu({ member, societyId, openSeats, conferenceId,
       ? { title: 'Take yourself out of your seat?', line: 'The seat stays with the delegation as an open seat.', yes: 'Take out of seat', danger: true }
       : { title: `Take ${member.name} out of their seat?`, line: 'The seat stays with the delegation as an open seat.', yes: 'Take out of seat', danger: true };
     if (a.kind === 'remove') return { title: `Remove ${member.name}?`, line: 'Their seat goes back to the delegation as open. Money stays with whoever paid it.', yes: 'Remove', danger: true };
-    if (a.kind === 'head') return self
+    return self
       ? { title: 'Make yourself a delegate?', line: 'You stop leading the delegation. Your seat stays yours.', yes: 'Make me a delegate', danger: true }
       : { title: `Make ${member.name} a delegate?`, line: 'They stop leading the delegation.', yes: 'Make delegate', danger: true };
-    if (a.role === 'faculty-advisor') return { title: `Make ${self ? 'yourself' : member.name} a faculty advisor?`, line: ADVISOR_LINE, yes: 'Make faculty advisor', danger: false };
-    return {
-      title: `Make ${self ? 'yourself' : member.name} ${a.role === 'head-delegate' ? 'a head delegate' : 'a delegate'}?`,
-      line: null, yes: a.role === 'head-delegate' ? 'Make head delegate' : 'Make delegate', danger: false,
-    };
   };
 
   const backBtn = (

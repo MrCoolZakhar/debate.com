@@ -13,7 +13,8 @@
 //                 (owner, 20 Oct 2026), the page's next step right under it
 //                 (DelegationLead, handed down through DelegationLeadContext)
 //   Stats         joined, seats given, paid, and Expected size with a stepper
-//                 (add_pledged_spots +1, remove_pledged_spot_invoice on one of
+//                 (the plus is "Buy another ticket": add_pledged_spots +1, which
+//                 raises the size and makes the ticket; remove_pledged_spot_invoice on one of
 //                 this leader's unpaid spots). The number moves on the tap;
 //                 taps queue and are sent one at a time, each re-reading
 //                 my_pay_overview in place, and a refusal puts the server's
@@ -240,8 +241,8 @@ export default function LeaderCard({
         type="button"
         onClick={() => step(dir)}
         aria-disabled={off}
-        aria-label={dir > 0 ? 'Raise expected size' : 'Lower expected size'}
-        title={dir < 0 && off ? 'Only a spot you added and have not paid can be removed here' : undefined}
+        aria-label={dir > 0 ? 'Buy another ticket' : 'Lower expected size'}
+        title={dir > 0 ? 'Buy another ticket' : off ? 'Only a spot you added and have not paid can be removed here' : undefined}
         className="inline-flex items-center justify-center focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gv-main)]"
         style={{ width: 44, height: 44, margin: -6, padding: 0, border: 'none', background: 'transparent', cursor: off ? 'default' : 'pointer', opacity: off ? 0.4 : 1 }}
       >

@@ -6,9 +6,9 @@
 // position paper column, the open seats card and the reshuffle line).
 //
 // Objects this file expects, none of which exist yet (19 Oct 2026):
-//   delegation_set_role(p_application, p_role)          leader moves a member's role
 //   delegation_place_member(p_application, p_allocation) leader seats a member in a block seat
-//   delegation_remove_member(p_application)             leader removes a member
+//   delegation_remove_member(p_application)             leader removes a member (waits for
+//       Christian's money functions: called only while DELEGATIONS_MONEY_DB is on)
 //   delegation_unplace_member(p_application)            leader takes a member out of their seat
 //   my_delegation_open_seats(p_society)                 the delegation's block seats; the
 //       card also needs each row's allocation id (`allocation_id`) to place a member
@@ -22,10 +22,13 @@ import { friendlyError, plainOrFallback } from '@/lib/friendlyError';
 
 export const DELEGATIONS_V2_DB = false;
 
-// Part 2 (scratch-delegations-part2-money-and-wording.sql, waits for Christian's
-// money decisions): my_delegation_money, the whole delegation's money for the
-// leader card. Nothing calls it yet; any reader of it goes behind this flag, never
-// behind DELEGATIONS_V2_DB. Flip both v2.ts copies together once part 2 is applied.
+// DELEGATIONS_MONEY_DB waits for Christian's money functions (delegation_remove_member,
+// organiser_set_member_role), built in his chat with a rollback test; what we asked
+// for is in docs/conferences/delegations-requests-for-christian.md. Anything that
+// moves money with a person goes behind this flag, never behind DELEGATIONS_V2_DB.
+// Flip both v2.ts copies together once his functions are live.
+// Leaders never move anyone to or from faculty advisor (owners, 20 Oct 2026):
+// delegation_set_role is withdrawn and nothing here calls it.
 export const DELEGATIONS_MONEY_DB = false;
 
 export type Result = { ok: true } | { ok: false; error: string };
@@ -46,10 +49,6 @@ async function call(fn: string, args: Record<string, unknown>, fallback: string)
   } catch (e) {
     return { ok: false, error: friendlyError(e, fallback) };
   }
-}
-
-export function setMemberRole(applicationId: string, role: MemberRole): Promise<Result> {
-  return call('delegation_set_role', { p_application: applicationId, p_role: role }, 'That role change was not saved. Try again.');
 }
 
 export function placeMember(applicationId: string, allocationId: string): Promise<Result> {

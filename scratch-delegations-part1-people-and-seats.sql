@@ -1,29 +1,46 @@
 -- =============================================================================
 -- scratch-delegations-part1-people-and-seats.sql
 -- DRAFT, NOT APPLIED. The owners apply it through the chat's Supabase work.
--- Part 1 of 2 of the delegations rebuild (was scratch-delegations-rebuild.sql,
--- sections 1, 0, 2 to 8, 11 to 13, function bodies copied verbatim, plus the new
--- section 14). Part 2 (scratch-delegations-part2-money-and-wording.sql) holds the
--- money read and the wording and waits for Christian.
+-- People and seats only: the delegations rebuild WITHOUT any money (rewritten
+-- 20 Oct 2026 after Christian's answers, ~/Downloads/delegations-answers-for-peter.md).
 --
--- SAFE TO APPLY BEFORE CHRISTIAN ANSWERS. Every DECISION NEEDED block below is a
--- comment; the drafted code already takes the cautious option. What each default
--- does, in plain words:
---   E (section 0, expected size): "Up to expected size" counts the tickets leaders
---     set plus members who paid their own ticket or were waived (E1).
---   A (section 2, a paid ticket and a role change): nothing changes; a ticket paid at
---     the old role's price counts as paid (A2), no difference line, no refund.
---   B (section 2, older pool coverage): a person the delegation covered stays
---     covered whatever their new role (B2).
---   C (sections 2 and 3, a leader holding the delegation's tickets): refused with
---     code holds_tickets; they stay a leader until the organiser moves the tickets (C1).
---   D (section 2, Advisor Tickets): they never cover anyone automatically, so a
---     delegate moved to faculty advisor owes the advisor fee (D2).
+-- NO MONEY IN THIS FILE (Peter, 20 Oct 2026)
+--   * No statement here writes invoices, payments, applications.payment_status,
+--     self_paid, spots_pledged or advisors_pledged, and none calls a function on
+--     Christian's do-not-move list (sync_participant_invoices, settle_invoice_effects,
+--     cover_pledge_spot, pledge_covered_application_ids, _apply_pledge_cover_to_app,
+--     apply_pledge_coverage_society / _all, renumber_pledge_spot_labels,
+--     renumber_delegation_tickets, add_pledged_spots, add_pledged_advisor_spots,
+--     remove_pledged_spot_invoice, trim_excess_spot_invoices, _app_role_switched,
+--     invoice_price_locked, money_daily_check, my_pay_overview, fin_attention_due_v2)
+--     or replaces one. Checked by grep on 20 Oct 2026. The only writes are:
+--     conference_allocations (seats), applications.status ('accepted' <-> 'assigned')
+--     and assigned_committee_id / assigned_country_code / assigned_country_name,
+--     position_papers, position_paper_messages, and two new conferences columns.
+--   * Read only: _society_paid_delegate_spots reads invoices, payment_status and
+--     self_paid; _society_expected_size reads spots_pledged. Nothing else reads money.
+--   * Existing triggers: delegation_place_member and delegation_unplace_member flip
+--     applications.status between 'accepted' and 'assigned', exactly as the live
+--     delegation_assign_seat does today. That fires the existing
+--     zz_applications_pledge_coverage trigger (Christian's, unchanged), the same as
+--     every seat placement today. No status here ever becomes rejected or withdrawn,
+--     and no role or society_id is written.
+--
+-- REMOVED from the earlier draft (money, so they belong to Christian's chat; see
+-- docs/conferences/delegations-requests-for-christian.md):
+--   delegation_set_role, _delegation_reprice_own_ticket, delegation_remove_member.
+--   Only organisers move someone between delegate and faculty advisor, through a
+--   function Christian builds. Delegate <-> head delegate stays on the live
+--   delegation_set_head. Removing a member changes society_id, which moves ticket
+--   coverage through Christian's triggers, so it is his too.
+--
+-- Leaders: every leader check is is_society_leader (an ACCEPTED head delegate or
+-- faculty advisor of the delegation, answer 11), never societies.advisor_user_id.
 --
 -- Written 19 Oct 2026 (section 14 on 20 Oct 2026) against the live schema of
 -- luruhkwrgisytejswlas, read only. Decisions: docs/conferences/delegations.md.
 -- Map: CLAUDE.md. Client flag: DELEGATIONS_V2_DB (both v2.ts files), flipped once
--- this part is applied.
+-- this file is applied.
 --
 -- Conventions copied from the live functions it builds on
 --   * delegation_set_head, delegation_promote_to_advisor, delegation_assign_seat,
@@ -34,14 +51,9 @@
 --   * Functions that RETURN TABLE cannot return a jsonb refusal: they RAISE with
 --     errcode P0001, a plain sentence and the code in HINT (as guard_application_write
 --     does). friendlyError passes a plain P0001 message through.
---   * Application writes set app.trusted_write (guard_application_write) and, on a
---     role change, app.delegation_role_move (applications_credit_gate then takes no
---     second credit: every charged role costs exactly 1 credit, so a move is free).
+--   * Application writes set app.trusted_write (guard_application_write).
 --   * Grants: revoke from public and anon, grant execute to authenticated (as
 --     delegation_set_head). Internal helpers are granted to nobody.
---
--- DECISION NEEDED (Christian) blocks are comments. Nothing inside them runs.
--- Search this file for "DECISION NEEDED".
 -- =============================================================================
 
 begin;
@@ -77,7 +89,9 @@ comment on column public.conferences.delegation_reshuffle_until is
 
 
 -- -----------------------------------------------------------------------------
--- 0. Internal helpers (used by sections 2 to 6). Not callable by clients.
+-- 0. Internal helpers (used by sections 5, 6 and 14). Not callable by clients.
+--    _delegation_leader_count is kept for Christian's role and removal functions
+--    (the last-leader rule); nothing in this file calls it.
 -- -----------------------------------------------------------------------------
 
 -- Leaders of a society other than p_except: accepted head delegates and faculty
@@ -102,13 +116,13 @@ $function$;
 -- refunds -1, one-off corrections) and on 19 Oct 2026 it disagreed with the ledger
 -- for 15 of the 118 delegations. This counts:
 --   * the delegation's Delegate Tickets that are paid in full (pledge_spot invoices
---     of its active leaders, status settled), plus
+--     of its accepted leaders, as is_society_leader counts them, status settled), plus
 --   * delegates and head delegates who paid their own ticket (self_paid) or whose
 --     fee the organiser waived. A member covered by a delegation ticket is NOT
 --     counted again (payment_status stays unpaid under fin_pledge_covers, or is
 --     'paid' with self_paid false under the older pool, both excluded).
 -- A free registration is 'paid' + self_paid (applications_mark_free_as_paid), so on
--- a free conference every member counts.
+-- a free conference every member counts. READ ONLY: nothing is written.
 create or replace function public._society_paid_delegate_spots(p_society uuid)
 returns integer
 language sql
@@ -120,7 +134,7 @@ as $function$
       join applications l on l.id = i.application_id
      where l.society_id = p_society
        and l.role in ('faculty-advisor', 'head-delegate')
-       and l.status not in ('rejected', 'withdrawn')
+       and l.status in ('accepted', 'assigned', 'checked-in')
        and i.kind = 'pledge_spot'
        and i.status = 'settled'
   )::int + (
@@ -132,35 +146,25 @@ as $function$
   )::int;
 $function$;
 
--- Expected size of a delegation (what the UI used to call "pledged").
--- DECISION NEEDED (Christian): what "Up to expected size" counts.
---   Today the number leaders set is applications.spots_pledged on their own
---   application, and every unit of it is a Delegate Ticket invoice they owe
---   (sync_participant_invoices). Members who pay their own ticket are NOT in it
---   (pledge_covered_application_ids skips them). So a delegation whose 10 members
---   all pay for themselves has an expected size of 0.
---   Option E1 (drafted below): tickets set by leaders + members who paid their own
---     ticket or were waived. "Expected" then is never smaller than "paid".
---   Option E2: tickets set by leaders only (sum of spots_pledged). Simpler, but a
---     self-paying delegation could be given no seats under "Up to expected size".
+-- Expected size of a delegation (what the UI used to call "pledged"), as Christian's
+-- answer 5 defines it: the sum of spots_pledged over the delegation's ACCEPTED leaders
+-- (head delegates and faculty advisors, the is_society_leader test), plus one seat
+-- for each accepted head delegate, who holds their own Delegate Ticket 1. Faculty
+-- advisors are not delegate seats, so they add only the tickets they bought.
+-- Expected size and the Delegate Tickets are one number on purpose (answer 8).
+-- READ ONLY: nothing is written.
 create or replace function public._society_expected_size(p_society uuid)
 returns integer
 language sql
 stable security definer
 set search_path to 'public', 'pg_temp'
 as $function$
-  select coalesce((
-    select sum(coalesce(l.spots_pledged, 0)) from applications l
-     where l.society_id = p_society
-       and l.role in ('faculty-advisor', 'head-delegate')
-       and l.status not in ('rejected', 'withdrawn')
-  ), 0)::int + (
-    select count(*) from applications a
-     where a.society_id = p_society
-       and a.role in ('delegate', 'head-delegate')
-       and a.status not in ('rejected', 'withdrawn')
-       and (a.payment_status = 'waived' or (a.payment_status = 'paid' and a.self_paid))
-  )::int;
+  select coalesce(sum(coalesce(l.spots_pledged, 0)
+                      + case when l.role = 'head-delegate' then 1 else 0 end), 0)::int
+    from applications l
+   where l.society_id = p_society
+     and l.role in ('faculty-advisor', 'head-delegate')
+     and l.status in ('accepted', 'assigned', 'checked-in');
 $function$;
 
 -- Seats a delegation holds today: its block seats (society_id set) plus every seat
@@ -214,405 +218,11 @@ begin
   return v_ids;
 end $function$;
 
--- Reprices a person's OWN open, unpaid ticket to their current role, exactly as the
--- "not covered" branch of sync_participant_invoices does, then re-runs their aid
--- pool and the ticket names. Needed because sync_participant_invoices returns
--- silently unless the caller is the applicant or an organiser, so a leader acting on
--- a member never reaches it (the member's /pay page would fix it on their next visit,
--- Financials would show the old price until then). Paid, partly paid, proof-pending
--- and price-locked tickets are never touched (invoice_price_locked).
-create or replace function public._delegation_reprice_own_ticket(p_application uuid)
-returns void
-language plpgsql
-security definer
-set search_path to 'public', 'pg_temp'
-as $function$
-begin
-  update invoices i
-     set amount_cents = public.role_fee_net_minor(p_application),
-         label = case when i.label in ('Covered by delegation', 'Fee waived', 'Covered by your delegation') then null else i.label end,
-         updated_at = now()
-   where i.application_id = p_application
-     and i.kind = 'role_fee'
-     and i.status = 'open'
-     and coalesce(i.amount_paid_cents, 0) = 0
-     and not public.invoice_price_locked(i.id);
-  perform public.apply_aid_pool(p_application);
-  perform public.renumber_pledge_spot_labels(p_application);
-end $function$;
-
 revoke all on function public._delegation_leader_count(uuid, uuid) from public, anon, authenticated;
 revoke all on function public._society_paid_delegate_spots(uuid) from public, anon, authenticated;
 revoke all on function public._society_expected_size(uuid) from public, anon, authenticated;
 revoke all on function public._society_seat_count(uuid) from public, anon, authenticated;
 revoke all on function public._delegation_release_seat(uuid, uuid) from public, anon, authenticated;
-revoke all on function public._delegation_reprice_own_ticket(uuid) from public, anon, authenticated;
-
-
--- -----------------------------------------------------------------------------
--- 2. delegation_set_role(p_application, p_role)
---    Any leader of the member's delegation, or an organiser of the conference (the
---    delegation pop-up; same permission as the applications page's writes, RLS
---    "Organizers update applications" = is_conference_organizer), moves them between
---    delegate, head-delegate and faculty-advisor, in any direction. Every rule below
---    holds for organisers too (the last leader stays, tickets stay with a leader). Replaces the old owner
---    rule "delegate and faculty advisor never swap" (CLAUDE.md Owner Decisions
---    still says it; the owners update that line).
---    delegation_set_head and delegation_promote_to_advisor stay as they are (the
---    client calls delegation_set_head today); this supersedes both.
---
---    What it does
---      * Never leaves the delegation with no leader with an account.
---      * A new leader needs an account (as delegation_set_head).
---      * Faculty advisor only when the conference takes advisors (as
---        delegation_promote_to_advisor).
---      * Refuses when the person already holds another application of the new role
---        at this conference (unique conference_id, user_id, role).
---      * To faculty advisor: their seat becomes a block seat of the delegation
---        (committee, country and seat kept, person cleared), their assigned_*
---        fields clear and 'assigned' drops back to 'accepted'.
---      * Credits: none taken (app.delegation_role_move).
---      * Money, automatic through existing triggers on the role UPDATE:
---          zz_applications_pledge_coverage -> apply_pledge_coverage_society
---            - delegate -> advisor: they leave the set the delegation's Delegate
---              Tickets cover (pledge_covered_application_ids), so the ticket that
---              covered them now covers the next uncovered member, or sits free.
---              Their "Covered by your delegation" ticket reopens at the ADVISOR
---              price (role_fee_net_minor reads the new role). = "they owe the
---              faculty advisor fee if they have not paid it".
---            - advisor -> delegate: if a Delegate Ticket is free they are covered
---              (and _apply_pledge_cover_to_app queues its existing "Your delegation
---              covers your ticket" email: an existing trigger side effect).
---          zz_app_role_switched (delegate <-> head delegate only): unchanged.
---      * Money, done here: their own OPEN, UNPAID ticket is repriced to the new role
---        (_delegation_reprice_own_ticket). = "advisor to delegate: they owe a
---        delegate fee unless covered".
--- -----------------------------------------------------------------------------
-
--- DECISION NEEDED (Christian): money cases this function does NOT decide.
---
--- (A) A person who already PAID their own ticket at the old role's price (role_fee
---     settled / partial / price locked) moves delegate <-> faculty advisor.
---     zz_app_role_switched only fires for delegate <-> head-delegate.
---     A1. Extend it to all three roles, so a dearer role gets a "<Role> Ticket
---         difference" surcharge line and a cheaper role a refund_due money_todo,
---         exactly as today for delegate <-> head delegate. The function body already
---         handles any role; only the trigger's WHEN changes:
---           drop trigger if exists zz_app_role_switched on public.applications;
---           create trigger zz_app_role_switched after update of role on public.applications
---             for each row when (old.role is distinct from new.role
---               and old.role = any (array['delegate','head-delegate','faculty-advisor'])
---               and new.role = any (array['delegate','head-delegate','faculty-advisor']))
---             execute function _app_role_switched();
---         (still gated by store flag fin_role_switch_diff)
---     A2. A paid ticket of any of the three roles counts as paid; nothing changes.
---
--- (B) The OLDER pool coverage: settle_invoice_effects / cover_pledge_spot mark a
---     member payment_status 'paid', self_paid false when a ticket is settled.
---     apply_pledge_coverage_society treats such a member as covered_other and leaves
---     them alone, so after delegate -> advisor they stay "paid" and owe nothing.
---     B1. Mirror the organiser's removeFromDelegation (assignment/delegationShared.ts):
---         set payment_status 'unpaid' when paid and not self_paid, then
---         _delegation_reprice_own_ticket, so they owe the advisor fee; the pool spot
---         stays with the delegation (counted in societies.spots_purchased).
---           update applications set payment_status = 'unpaid' where id = v_to.id
---             and payment_status = 'paid' and self_paid is not true;
---     B2. Leave it: a covered person stays covered whatever their role.
---     Same question in reverse for an advisor covered by an Advisor Ticket who
---     becomes a delegate.
---
--- (C) A leader who holds the delegation's tickets (spots_pledged > 0 or
---     advisors_pledged > 0) becomes a delegate, or is removed (section 3).
---     Those tickets, their invoices and payments hang on the leader's application,
---     and pledge_covered_application_ids only sums spots_pledged of LEADERS, so the
---     delegation's coverage would silently drop.
---     C1. (drafted) Refuse with code holds_tickets until the tickets are moved.
---     C2. A new function that moves spots_pledged / advisors_pledged and their open
---         and paid pledge_spot / advisor_spot invoices to another leader of the same
---         delegation, in one transaction (Christian's design: receipts, refunds and
---         the ticket numbering all key on application_id).
---     C3. Allow it and let the tickets stay on a non-leader application (needs
---         pledge_covered_application_ids and sync_participant_invoices to count
---         them for any role).
---
--- (D) Advisor Tickets (advisors_pledged / advisor_spot) never cover anyone
---     automatically under fin_pledge_covers (only Delegate Tickets do, through
---     pledge_covered_application_ids). So a delegate moved to faculty advisor
---     always owes the advisor fee even when the delegation bought Advisor Tickets.
---     D1. Add an advisor twin of pledge_covered_application_ids / coverage.
---     D2. Keep: advisor tickets are only for the advisors a faculty advisor brings
---         (CLAUDE.md: "advisors_pledged counts only the advisors coming with a
---         faculty advisor; their own ticket is their role fee").
-
-create or replace function public.delegation_set_role(p_application uuid, p_role text)
-returns jsonb
-language plpgsql
-security definer
-set search_path to 'public', 'pg_temp'
-as $function$
-declare
-  v_uid uuid := auth.uid();
-  v_to record;
-  v_enabled boolean;
-  v_was_leader boolean;
-  v_will_lead boolean;
-  v_seat text;
-  v_released uuid[] := '{}'::uuid[];
-  v_name text;
-  v_is_org boolean;
-begin
-  if v_uid is null then
-    return jsonb_build_object('ok', false, 'code', 'signed_out', 'error', 'Sign in first.');
-  end if;
-  if p_role is null or p_role not in ('delegate', 'head-delegate', 'faculty-advisor') then
-    return jsonb_build_object('ok', false, 'code', 'bad_role', 'error', 'Choose delegate, head delegate or faculty advisor.');
-  end if;
-
-  select a.id, a.user_id, a.role, a.status, a.conference_id, a.society_id,
-         coalesce(a.spots_pledged, 0) as spots, coalesce(a.advisors_pledged, 0) as adv_spots
-    into v_to
-    from applications a
-   where a.id = p_application
-   for update;
-  if v_to.id is null or v_to.society_id is null then
-    return jsonb_build_object('ok', false, 'code', 'not_member', 'error', 'That person is not in a delegation.');
-  end if;
-  -- Leaders of the delegation, or an organiser of the conference (the same test the
-  -- applications page's writes rely on: RLS "Organizers update applications" =
-  -- is_conference_organizer(conference_id)).
-  v_is_org := is_conference_organizer(v_to.conference_id);
-  if not (v_is_org or is_society_leader(v_to.society_id)) then
-    return jsonb_build_object('ok', false, 'code', 'not_leader', 'error', 'Only a head delegate or faculty advisor of this delegation, or the organiser, can change roles.');
-  end if;
-
-  -- One leadership change per delegation at a time: two leaders demoting each other
-  -- at the same moment can never leave it with none.
-  perform 1 from societies where id = v_to.society_id for update;
-
-  if v_to.role not in ('delegate', 'head-delegate', 'faculty-advisor') then
-    return jsonb_build_object('ok', false, 'code', 'other_role', 'error', 'This person''s role cannot be changed here. Ask the organiser.');
-  end if;
-  if v_to.status not in ('accepted', 'assigned', 'checked-in') then
-    return jsonb_build_object('ok', false, 'code', 'not_accepted', 'error', 'The organiser has to accept this application first.');
-  end if;
-  if v_to.role = p_role then
-    return jsonb_build_object('ok', false, 'code', 'same_role', 'error', 'They already have this role.');
-  end if;
-
-  v_was_leader := v_to.role in ('head-delegate', 'faculty-advisor');
-  v_will_lead := p_role in ('head-delegate', 'faculty-advisor');
-
-  if v_will_lead and v_to.user_id is null then
-    return jsonb_build_object('ok', false, 'code', 'no_account', 'error', 'This person has not created their account yet. They need one before they can lead.');
-  end if;
-
-  if p_role = 'faculty-advisor' then
-    select coalesce(rc.is_enabled, false) into v_enabled
-      from application_role_configs rc
-     where rc.conference_id = v_to.conference_id and rc.role = 'faculty-advisor';
-    if not coalesce(v_enabled, false) then
-      return jsonb_build_object('ok', false, 'code', 'advisor_closed', 'error', 'This conference does not take faculty advisors. Ask the organiser to open the role first.');
-    end if;
-  end if;
-
-  if v_was_leader and not v_will_lead then
-    if public._delegation_leader_count(v_to.society_id, v_to.id) = 0 then
-      return jsonb_build_object('ok', false, 'code', 'last_leader', 'error', 'A delegation needs at least one head delegate or faculty advisor. Make someone else a leader first.');
-    end if;
-    -- DECISION NEEDED (Christian) (C): C1 drafted.
-    if v_to.spots > 0 or v_to.adv_spots > 0 then
-      return jsonb_build_object('ok', false, 'code', 'holds_tickets', 'error', 'This leader holds the delegation''s tickets, so they stay a leader for now. Ask the organiser to move the tickets first.');
-    end if;
-  end if;
-
-  if v_to.user_id is not null and exists (
-    select 1 from applications o
-     where o.conference_id = v_to.conference_id and o.user_id = v_to.user_id
-       and o.role = p_role and o.id <> v_to.id) then
-    return jsonb_build_object('ok', false, 'code', 'duplicate_role', 'error', 'This person already has another ' || replace(p_role, '-', ' ') || ' application at this conference. Ask the organiser to sort it out first.');
-  end if;
-
-  perform set_config('app.trusted_write', 'on', true);
-  perform set_config('app.delegation_role_move', 'on', true);
-
-  -- A faculty advisor never sits in a committee: the seat stays with the delegation.
-  if p_role = 'faculty-advisor' then
-    select coalesce(cc.abbreviation, cc.name) || ' (' || ca.country_name || ')' into v_seat
-      from conference_allocations ca
-      join conference_committees cc on cc.id = ca.conference_committee_id
-     where ca.conference_id = v_to.conference_id
-       and (ca.application_id = v_to.id or (v_to.user_id is not null and ca.user_id = v_to.user_id))
-     limit 1;
-    v_released := public._delegation_release_seat(v_to.id, v_to.society_id);
-  end if;
-
-  update applications
-     set role = p_role,
-         is_head_delegate = (p_role = 'head-delegate'),
-         assigned_committee_id = case when p_role = 'faculty-advisor' then null else assigned_committee_id end,
-         assigned_country_code = case when p_role = 'faculty-advisor' then null else assigned_country_code end,
-         assigned_country_name = case when p_role = 'faculty-advisor' then null else assigned_country_name end,
-         status = case when p_role = 'faculty-advisor' and status = 'assigned' then 'accepted' else status end
-   where id = v_to.id;
-
-  -- Their own open, unpaid ticket now costs what the new role costs.
-  perform public._delegation_reprice_own_ticket(v_to.id);
-
-  select coalesce(nullif(btrim(display_name), ''), 'them') into v_name from profiles where id = v_to.user_id;
-  return jsonb_build_object(
-    'ok', true,
-    'application_id', v_to.id,
-    'role', p_role,
-    'name', coalesce(v_name, 'them'),
-    'released_seat', v_seat,
-    'released_allocation_ids', to_jsonb(v_released),
-    'by_organiser', v_is_org and not is_society_leader(v_to.society_id),
-    'self', v_to.user_id = v_uid);
-end $function$;
-
-revoke all on function public.delegation_set_role(uuid, text) from public, anon;
-grant execute on function public.delegation_set_role(uuid, text) to authenticated;
-
-
--- -----------------------------------------------------------------------------
--- 3. delegation_remove_member(p_application)
---    Any leader, or an organiser of the conference (is_conference_organizer, as the
---    applications page's writes), removes a member (another leader or an advisor
---    included), never the last leader. The organiser's older Assignment path
---    (removeFromDelegation) can then be moved onto this RPC. The person LEAVES THE DELEGATION AND STAYS AN APPLICANT of the
---    conference: society_id null, is_independent true, status unchanged.
---    Why not the withdraw path: withdrawing refunds their Gavelling credit
---    (applications_credit_gate), voids their open invoices
---    (zz_void_closed_application_invoices) and ends their application. The owner's
---    rule is "money stays with whoever paid it", and the organiser's existing
---    "Remove from delegation" (assignment/delegationShared.ts removeFromDelegation)
---    also keeps them as an applicant. This mirrors that function, in the database.
---
---    Seat: every seat they hold becomes a block seat of the delegation (Open).
---    Money (no refund here):
---      * Paid their own ticket (self_paid): it stays with them. As the organiser
---        path does, the delegation's legacy pool counter (spots_purchased, or
---        advisor_spots_purchased for an advisor) drops by 1, because
---        settle_invoice_effects added 1 when they paid.
---      * Covered by the delegation under the older pool (paid, not self_paid): the
---        place stays with the delegation, they become 'unpaid' (organiser path's
---        dropToUnpaid).
---      * Covered by a Delegate Ticket (fin_pledge_covers, "Covered by your
---        delegation" waived ticket): the ticket stays with the delegation and covers
---        the next member (the coverage trigger re-runs for the old delegation); their
---        own ticket reopens at their role's price, as apply_pledge_coverage_society
---        does for anyone no longer covered.
---      * A per-delegation Registration Fee invoice hanging on a removed leader is
---        voided by the existing _app_society_changed trigger when unpaid.
---    Email: none from here. The organiser path queues the 'removed_from_delegation'
---    event from the client (queueEventEmail); whether a leader's removal sends it is
---    for the client prompt, never a direct email_outbox insert.
---    DECISION NEEDED (Christian) (C) applies: a leader holding tickets is refused.
--- -----------------------------------------------------------------------------
-
-create or replace function public.delegation_remove_member(p_application uuid)
-returns jsonb
-language plpgsql
-security definer
-set search_path to 'public', 'pg_temp'
-as $function$
-declare
-  v_uid uuid := auth.uid();
-  v_m record;
-  v_society uuid;
-  v_is_leader boolean;
-  v_released uuid[] := '{}'::uuid[];
-  v_pool text;
-  v_money text;
-  v_name text;
-  v_is_org boolean;
-begin
-  if v_uid is null then
-    return jsonb_build_object('ok', false, 'code', 'signed_out', 'error', 'Sign in first.');
-  end if;
-
-  select a.id, a.user_id, a.role, a.status, a.conference_id, a.society_id,
-         a.payment_status, a.self_paid, a.invited_name,
-         coalesce(a.spots_pledged, 0) as spots, coalesce(a.advisors_pledged, 0) as adv_spots
-    into v_m
-    from applications a
-   where a.id = p_application
-   for update;
-  if v_m.id is null or v_m.society_id is null then
-    return jsonb_build_object('ok', false, 'code', 'not_member', 'error', 'That person is not in a delegation.');
-  end if;
-  v_society := v_m.society_id;
-  v_is_org := is_conference_organizer(v_m.conference_id);
-  if not (v_is_org or is_society_leader(v_society)) then
-    return jsonb_build_object('ok', false, 'code', 'not_leader', 'error', 'Only a head delegate or faculty advisor of this delegation, or the organiser, can remove people.');
-  end if;
-
-  perform 1 from societies where id = v_society for update;
-
-  v_is_leader := v_m.role in ('head-delegate', 'faculty-advisor')
-                 and v_m.status in ('accepted', 'assigned', 'checked-in')
-                 and v_m.user_id is not null;
-  if v_is_leader and public._delegation_leader_count(v_society, v_m.id) = 0 then
-    return jsonb_build_object('ok', false, 'code', 'last_leader', 'error', 'A delegation needs at least one head delegate or faculty advisor. Make someone else a leader first.');
-  end if;
-  -- DECISION NEEDED (Christian) (C): C1 drafted.
-  if v_m.spots > 0 or v_m.adv_spots > 0 then
-    return jsonb_build_object('ok', false, 'code', 'holds_tickets', 'error', 'This leader holds the delegation''s tickets, so they cannot be removed yet. Ask the organiser to move the tickets first.');
-  end if;
-
-  perform set_config('app.trusted_write', 'on', true);
-
-  -- Their seat goes back to the delegation as an Open seat.
-  v_released := public._delegation_release_seat(v_m.id, v_society);
-
-  -- Money stays with whoever paid it (mirrors removeFromDelegation / releasePoolSpot).
-  if v_m.payment_status = 'paid' and coalesce(v_m.self_paid, false) then
-    v_pool := case when v_m.role = 'faculty-advisor' then 'advisor_spots_purchased' else 'spots_purchased' end;
-    execute format('update societies set %I = greatest(0, coalesce(%I, 0) - 1) where id = $1', v_pool, v_pool) using v_society;
-    v_money := 'kept_by_member';
-  elsif v_m.payment_status = 'paid' then
-    v_money := 'kept_by_delegation';
-  elsif v_m.payment_status = 'waived' then
-    v_money := 'waived';
-  else
-    v_money := 'unpaid';
-  end if;
-
-  update applications
-     set society_id = null,
-         is_independent = true,
-         payment_status = case when payment_status = 'paid' and self_paid is not true then 'unpaid' else payment_status end,
-         assigned_committee_id = null,
-         assigned_country_code = null,
-         assigned_country_name = null,
-         status = case when status = 'assigned' then 'accepted' else status end
-   where id = v_m.id;
-
-  -- A ticket the delegation covered reopens for them at their role's price.
-  update invoices i
-     set amount_cents = public.role_fee_net_minor(v_m.id), status = 'open', label = null, updated_at = now()
-   where i.application_id = v_m.id
-     and i.kind = 'role_fee'
-     and i.status = 'waived'
-     and i.label in ('Covered by your delegation', 'Covered by delegation')
-     and coalesce(i.amount_paid_cents, 0) = 0
-     and not public.invoice_price_locked(i.id);
-  perform public._delegation_reprice_own_ticket(v_m.id);
-
-  select coalesce(nullif(btrim(p.display_name), ''), v_m.invited_name, 'them') into v_name
-    from profiles p where p.id = v_m.user_id;
-  return jsonb_build_object(
-    'ok', true,
-    'application_id', v_m.id,
-    'name', coalesce(v_name, v_m.invited_name, 'them'),
-    'released_allocation_ids', to_jsonb(v_released),
-    'money', v_money,
-    'by_organiser', v_is_org and not is_society_leader(v_society),
-    'self', v_m.user_id = v_uid);
-end $function$;
-
-revoke all on function public.delegation_remove_member(uuid) from public, anon;
-grant execute on function public.delegation_remove_member(uuid) to authenticated;
 
 
 -- -----------------------------------------------------------------------------
@@ -1115,6 +725,8 @@ grant execute on function public.my_committee_roster(uuid) to authenticated;
 --    orphan, which the paper flow already treats as harmless.
 --    Not drafted: leaders in the paper's feedback thread (can_access_paper is
 --    unchanged, so leaders do not read or post chair feedback messages).
+--    Money: none. This section writes only position_papers, position_paper_messages
+--    and storage policies; no invoice, payment, credit or application column.
 -- -----------------------------------------------------------------------------
 
 -- Is the caller a leader of p_user's delegation, with p_user seated in p_committee?
@@ -1510,7 +1122,7 @@ grant execute on function public.my_committee_chairs(uuid) to authenticated;
 --     (is_conference_organizer), takes a delegate or head delegate out of their seat.
 --       * The seat becomes a block seat of the delegation (Open): committee, country
 --         and seat kept, person cleared, allocation_sent back to false, through
---         _delegation_release_seat exactly as delegation_remove_member does.
+--         _delegation_release_seat, as delegation_place_member does for a moved member.
 --       * The member STAYS in the delegation: society_id, role and money untouched;
 --         assigned_* cleared and 'assigned' drops back to 'accepted'.
 --       * Leaders: the same rule as moving a seated member in delegation_place_member,
@@ -1609,35 +1221,19 @@ commit;
 -- plain sentence safe to show (v2.ts call() already reads it). Table RPCs answer
 -- rows, or raise P0001 with a plain sentence and the code in `hint`.
 --
--- WHO CALLS: delegation_set_role, delegation_remove_member,
--- delegation_place_member and delegation_unplace_member accept a leader of the member's delegation OR an organiser
--- of the conference (is_conference_organizer, the permission the applications page's
--- writes rely on: RLS "Organizers update applications"). So the organiser's
--- delegation pop-up calls the same four RPCs. Organisers obey the same rules (last
--- leader, tickets, faculty advisors never seated), except that place_member and
--- unplace_member never apply the reshuffle switch or deadline to an organiser.
--- A refusal for anyone else
--- is code not_leader. set_role and remove_member answer by_organiser: true when the
--- caller acted as organiser only.
+-- WHO CALLS: delegation_place_member and delegation_unplace_member accept a leader of
+-- the member's delegation (is_society_leader: an accepted head delegate or faculty
+-- advisor) OR an organiser of the conference (is_conference_organizer, the
+-- permission the applications page's writes rely on: RLS "Organizers update
+-- applications"). So the organiser's delegation pop-up calls the same two RPCs.
+-- Organisers obey the same rules (faculty advisors never seated), except that they
+-- are never held by the reshuffle switch or deadline. A refusal for anyone else is
+-- code not_leader.
 --
--- delegation_set_role(p_application uuid, p_role text)            -> jsonb
---   p_role: 'delegate' | 'head-delegate' | 'faculty-advisor'
---   ok: {ok, application_id, role, name, released_seat text|null,
---        released_allocation_ids uuid[], by_organiser boolean, self boolean}
---   codes: signed_out, bad_role, not_member, not_leader, other_role, not_accepted,
---          same_role, no_account, advisor_closed, last_leader, holds_tickets,
---          duplicate_role
---   Side effects: seat -> Open seat when moved to faculty advisor; own open unpaid
---   ticket repriced; delegation ticket coverage re-runs (may queue the existing
---   "Your delegation covers your ticket" email from _apply_pledge_cover_to_app).
---   Re-read my_delegation_roster, my_delegation_open_seats and my_pay_overview.
---
--- delegation_remove_member(p_application uuid)                     -> jsonb
---   ok: {ok, application_id, name, released_allocation_ids uuid[],
---        money: 'kept_by_member'|'kept_by_delegation'|'waived'|'unpaid',
---        by_organiser boolean, self boolean}
---   codes: signed_out, not_member, not_leader, last_leader, holds_tickets
---   The person stays an applicant of the conference (independent). No email is sent.
+-- NOT HERE (Christian's chat builds them; docs/conferences/delegations-requests-for-christian.md):
+--   role moves between delegate and faculty advisor (organisers only), removing a
+--   member from a delegation, and any money. Delegate <-> head delegate stays on
+--   the live delegation_set_head. Money on the leader card reads my_pay_overview.
 --
 -- my_delegation_open_seats(p_society uuid)                         -> setof rows
 --   allocation_id is the conference_allocations.id to pass as p_allocation to

@@ -9,7 +9,7 @@ import { KIND_GROUP, KIND_ORDER, money, type PayOverview } from './payApi';
 const OWED_STATES = new Set(['unpaid', 'rejected', 'refunded', 'started']);
 
 /** The currency most of this person's items are in, owed items first. */
-function itemsCurrency(o: PayOverview): string | null {
+export function itemsCurrency(o: PayOverview): string | null {
   const count = new Map<string, number>();
   const owed = o.items.filter(it => OWED_STATES.has(it.state) && it.due_cents > 0);
   for (const it of owed.length > 0 ? owed : o.items) {

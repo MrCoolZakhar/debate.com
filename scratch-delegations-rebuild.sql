@@ -1,8 +1,16 @@
 -- =============================================================================
 -- scratch-delegations-rebuild.sql
--- SUPERSEDED (20 Oct 2026) by scratch-delegations-part1-people-and-seats.sql (apply
--- first) and scratch-delegations-part2-money-and-wording.sql (waits for Christian).
--- Never apply this file. Kept only because older code comments point at it.
+-- SUPERSEDED (20 Oct 2026). Never apply this file. Kept only because older code
+-- comments point at it.
+--   * People and seats: scratch-delegations-part1-people-and-seats.sql (no money).
+--   * Everything that moves money is Christian's to build, not SQL of ours:
+--     delegation_set_role, _delegation_reprice_own_ticket and
+--     delegation_remove_member below are dropped; the delegate <-> faculty advisor
+--     move is organiser-only; the "pledge" wording and my_delegation_money are
+--     dropped too (the leader card reads my_pay_overview, Christian's answer 6).
+--     Requests: docs/conferences/delegations-requests-for-christian.md.
+--   * The DECISION NEEDED blocks below are answered in
+--     ~/Downloads/delegations-answers-for-peter.md (19 Oct 2026).
 -- DRAFT, NOT APPLIED. The owners apply it through the chat's Supabase work.
 -- Written 19 Oct 2026 against the live schema of luruhkwrgisytejswlas, read only.
 -- Decisions: docs/conferences/delegations.md. Map: CLAUDE.md.

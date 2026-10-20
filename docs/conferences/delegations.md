@@ -56,12 +56,12 @@ Owner: Peter, 19 Oct 2026. The decisions below came out of a Q&A before the rebu
 - Leader card: `participant/DelegationPanel.tsx`. Organiser: `applications/DelegationsBoard.tsx` (in Applications), `assignment/DelegationsView.tsx`.
 - "Pledge" copy: `pay/payPanels.tsx`, `DelegationPanel.tsx`, `DelegationsBoard.tsx`, `DelegationsView.tsx`, `applications/page.tsx:4311`, `settings/delegationsUi.tsx`, `financials/shared.tsx`, `ApplicantsDial.tsx`, the emails (`defaultEmails.ts`, `emailEvents.ts`, `emailCard.ts`) and two database error strings.
 
-## The database side, in two parts (20 Oct 2026)
+## The database side (20 Oct 2026, after Christian's answers)
 
-The drafted SQL is split so leader actions can be tested before the money decisions:
+Christian's answers are in `delegations-money-answers.md`. Two owner decisions on 20 Oct: only organisers move someone between delegate and faculty advisor (the money moves with the person, built in Christian's chat), and the apply step keeps Christian's question "How many delegates will your delegation have?" with "besides you" for a head delegate.
 
-- `scratch-delegations-part1-people-and-seats.sql`: settings columns, helpers, `delegation_set_role`, `delegation_remove_member`, `my_delegation_open_seats`, `delegation_place_member`, `delegation_unplace_member` (a leader or organiser takes a member out of their seat: the seat stays with the delegation as Open, the member stays in the delegation, same reshuffle rule for leaders as moving a seat), organiser seats, `my_committee_roster`, leader papers, `my_delegation_seats`, the study guide read policy, `my_committee_chairs`. Safe to apply before Christian answers: every DECISION NEEDED default is the cautious one (listed in its header). Client flag `DELEGATIONS_V2_DB` (both `v2.ts` files).
-- `scratch-delegations-part2-money-and-wording.sql`: the "pledge" wording in database text and `my_delegation_money` (the leader card's whole-delegation Financials). Waits for Christian's answers in its section 10. Client flag `DELEGATIONS_MONEY_DB` (both `v2.ts` files); nothing reads `my_delegation_money` yet, and any reader goes behind this flag.
+- `scratch-delegations-part1-people-and-seats.sql`: seats and reads only (settings columns, open seats, place and take out of a seat, organiser seat grants with the seat limit, committee roster, member seats, leader papers, study guides, chair names). Writes no invoice, payment or coverage. Send to Christian's chat for a read, then apply; client flag `DELEGATIONS_V2_DB`.
+- `delegations-requests-for-christian.md`: what Christian's chat builds (removing a member, the organiser's delegate / advisor move, the "pledge" wording inside their functions). Client flag `DELEGATIONS_MONEY_DB` for the screens that call them.
 - `scratch-delegations-rebuild.sql` is the superseded single draft; never apply it.
 
 Taste board: https://claude.ai/artifact/CAVUg2YLKyTj5Y6yuVmLup
