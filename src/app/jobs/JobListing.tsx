@@ -9,9 +9,17 @@
 // the Conference. A slim bar keeps the title and Apply one click away once the
 // header card scrolls out of view.
 //
-// Signed out everything reads; Apply and Save open the site's sign-in pop-up
-// and the action carries on by itself once signed in (the pending action is
-// kept in sessionStorage with the listing id). An "Apply on their site" link
+// Signed out everything reads. Apply on a Gavelling listing opens the apply
+// pop-up straight away (it reads job_screening_public; when that asks for a
+// sign-in it calls onNeedSignIn). Save, and Apply on a premium listing, open
+// the site's sign-in pop-up and the action carries on by itself once signed
+// in (the pending action is kept in sessionStorage with the listing id).
+//
+// Unlimited (prompt 5): the insights strip under the header card (members see
+// the numbers, everyone else the frosted lock), and a premium listing for a
+// non-member shows PremiumLock in place of About the Role and Apply. When the
+// plan turns active (the one store in unlimitedStatus.ts), the listing is read
+// again so it opens normally. An "Apply on their site" link
 // opens without sign-in: a new tab can only open inside the click itself.
 // Every write is verified: a refusal is shown, never an optimistic success.
 
@@ -19,6 +27,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { ArrowLeft, Bookmark, BookmarkCheck, Check, ExternalLink, ListChecks, Loader2, X } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
+import { isUnlimited, useUnlimitedStatus } from '@/lib/unlimitedStatus';
 import { openAuth } from '@/lib/authModal';
 import { notifyErr } from '@/lib/appNotify';
 import {
@@ -27,6 +36,8 @@ import {
 } from '@/lib/jobBoard';
 import { JOB_FORMAT_LABEL, JobLogo, JobTag, OfferChips, UrgencyLine, jobDates, jobPlace } from './JobCard';
 import JobApplyPopup from './JobApplyPopup';
+import InsightsStrip from './InsightsStrip';
+import PremiumLock from './PremiumLock';
 
 const FONT = "var(--font-brand), sans-serif";
 const INK = '#1C1410';
@@ -150,7 +161,9 @@ export default function JobListing({
 
   const startApply = useCallback(() => {
     if (!listing) return;
-    if (!userId) {
+    // Premium listings still need a sign-in first; a Gavelling listing opens
+    // the apply pop-up signed out (PART E.1).
+    if (!userId && listing.kind === 'premium') {
       writePending({ id, action: 'apply' });
       openAuth({ apply: true });
       return;
@@ -158,6 +171,21 @@ export default function JobListing({
     recordJobEvent(id, 'click');
     setApplyOpen(true);
   }, [id, listing, userId]);
+
+  // The plan turned active (a purchase in the Unlimited pop-up, or a sign-in
+  // as a member) while this listing was read locked: read it again, once per
+  // listing and plan, so it opens normally.
+  const planStatus = useUnlimitedStatus();
+  const member = isUnlimited(planStatus);
+  const unlockedFor = useRef<string | null>(null);
+  const lockedRead = !!detail && detail.listing.id === id && (detail.premium_locked || detail.insights_locked);
+  useEffect(() => {
+    if (!member || !lockedRead) return;
+    const key = `${id}:${planStatus}`;
+    if (unlockedFor.current === key) return;
+    unlockedFor.current = key;
+    void load(true);
+  }, [member, lockedRead, id, planStatus, load]);
 
   // After signing in, the action pressed while signed out carries on.
   useEffect(() => {
@@ -196,6 +224,9 @@ export default function JobListing({
   const confName = conf.name && conf.name !== conf.short ? conf.name : null;
   const meta = [jobPlace(conf), conf.format ? JOB_FORMAT_LABEL[conf.format] ?? null : null, jobDates(conf)].filter(Boolean) as string[];
   const applied = shortDay(appliedAt);
+  // A premium listing for a non-member: no Apply, PremiumLock instead of the role.
+  const premiumLocked = !!detail?.premium_locked && !mine;
+  const showInsights = !!detail && !outside && !premiumLocked && (detail.insights != null || detail.insights_locked);
 
   const onOutside = () => {
     if (!listing?.outside_url) return;
@@ -204,8 +235,10 @@ export default function JobListing({
   };
 
   // The main action, or the applicant's state in its place.
-  let primary: React.ReactNode;
-  if (!listing) {
+  let primary: React.ReactNode = null;
+  if (premiumLocked) {
+    primary = null;
+  } else if (!listing) {
     primary = <span className="gv-jl-main gv-jl-main-wait" aria-hidden><Loader2 size={17} className="animate-spin" /></span>;
   } else if (mine?.status === 'started' && slug) {
     primary = <Link href={jobContinuePath(slug, listing.role, listing.id)} className="gv-jl-main">Continue application</Link>;
@@ -260,7 +293,7 @@ export default function JobListing({
       {/* The slim bar: title and the main action, once the header is out of view. */}
       <div className={`gv-jl-bar${stuck ? ' gv-jl-bar-on' : ''}${scrollRoot ? '' : ' gv-jl-bar-page'}`} aria-hidden={!stuck} inert={!stuck}>
         <span className="gv-jl-bar-title">{card.title}</span>
-        {open && <span className="gv-jl-bar-act">{primary}</span>}
+        {open && primary && <span className="gv-jl-bar-act">{primary}</span>}
       </div>
 
       {onBack && <BackLink onBack={onBack} />}
@@ -301,22 +334,26 @@ export default function JobListing({
         <div style={{ marginTop: 18 }}>{actions}</div>
       </header>
 
-      {/* Prompt 5 puts the Unlimited insights strip here, directly under the
-          header card. Nothing renders in this spot yet. */}
+      {/* The Unlimited insights strip, directly under the header card. */}
+      {showInsights && detail && <InsightsStrip insights={detail.insights} locked={detail.insights_locked} />}
 
       {loading && !detail ? (
         <BodySkeleton />
       ) : (
         <div className="gv-jl-body">
-          <section className="gv-jl-card gv-jl-main-col" aria-labelledby={`gv-jl-role-${id}`}>
-            <h3 id={`gv-jl-role-${id}`} className="gv-jl-h">About the Role</h3>
-            {listing?.description?.trim() ? (
-              <p className="gv-jl-text">{listing.description}</p>
-            ) : (
-              <p className="gv-jl-text" style={{ color: INK_SOFT }}>The conference has not written a description yet</p>
-            )}
-            {failed && <p role="alert" className="gv-jl-text" style={{ color: '#9E2A12', marginTop: 12 }}>{failed}</p>}
-          </section>
+          {premiumLocked ? (
+            <PremiumLock className="gv-jl-main-col" />
+          ) : (
+            <section className="gv-jl-card gv-jl-main-col" aria-labelledby={`gv-jl-role-${id}`}>
+              <h3 id={`gv-jl-role-${id}`} className="gv-jl-h">About the Role</h3>
+              {listing?.description?.trim() ? (
+                <p className="gv-jl-text">{listing.description}</p>
+              ) : (
+                <p className="gv-jl-text" style={{ color: INK_SOFT }}>The conference has not written a description yet</p>
+              )}
+              {failed && <p role="alert" className="gv-jl-text" style={{ color: '#9E2A12', marginTop: 12 }}>{failed}</p>}
+            </section>
+          )}
 
           <aside className="gv-jl-side">
             {poster?.name && (
@@ -332,7 +369,7 @@ export default function JobListing({
               </section>
             )}
 
-            {qCount > 0 && open && !outside && (
+            {qCount > 0 && open && !outside && !premiumLocked && (
               <section className="gv-jl-card gv-jl-qcount">
                 <span className="gv-jl-qicon" aria-hidden><ListChecks size={18} strokeWidth={2.3} /></span>
                 <p style={{ margin: 0, fontSize: 15, fontWeight: 600, color: INK }}>
@@ -371,6 +408,7 @@ export default function JobListing({
           listing={listing}
           onClose={() => setApplyOpen(false)}
           onSettled={() => { void load(true); onChanged?.(); }}
+          onNeedSignIn={() => { setApplyOpen(false); writePending({ id, action: 'apply' }); openAuth({ apply: true }); }}
         />
       )}
     </article>

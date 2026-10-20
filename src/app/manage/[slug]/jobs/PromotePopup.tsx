@@ -32,6 +32,8 @@ export interface PromoteProps {
   onShort: (req: { need: number; retry: () => Promise<{ ok: true } | Refusal> }) => void;
   /** Replaces the line under the title ("Your listing is live"). */
   heading?: string;
+  /** Whose credits pay: the conference's (default) or the poster's own (a standalone listing on /jobs). */
+  payer?: 'conference' | 'you';
 }
 
 const POINTS: Benefit[] = [
@@ -73,7 +75,7 @@ function activeEnd(active: unknown): string | null {
   return typeof e === 'string' && e ? e : null;
 }
 
-export function PromoteContent({ listingId, listingTitle, conferenceCredits, onClose, onDone, onShort, heading }: PromoteProps) {
+export function PromoteContent({ listingId, listingTitle, conferenceCredits, onClose, onDone, onShort, heading, payer = 'conference' }: PromoteProps) {
   const [quote, setQuote] = useState<PromoteQuote | null>(null);
   const [loadErr, setLoadErr] = useState('');
   const [attempt, setAttempt] = useState(0);
@@ -233,8 +235,10 @@ export function PromoteContent({ listingId, listingTitle, conferenceCredits, onC
               ) : null}
               <p className="gv-pr-fine">
                 {after >= 0
-                  ? <>Conference credits after paying: <b>{after}</b></>
-                  : <>The conference has {plural(conferenceCredits, 'credit')}, so you buy {plural(-after, 'more credit')} next</>}
+                  ? <>{payer === 'you' ? 'Your credits' : 'Conference credits'} after paying: <b>{after}</b></>
+                  : payer === 'you'
+                    ? <>You have {plural(conferenceCredits, 'credit')}, so you buy {plural(-after, 'more credit')} next</>
+                    : <>The conference has {plural(conferenceCredits, 'credit')}, so you buy {plural(-after, 'more credit')} next</>}
               </p>
             </div>
 

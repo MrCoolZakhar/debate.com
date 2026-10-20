@@ -13,7 +13,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { Activity, BarChart3, Building2, Radio, ShieldCheck, Users, TrendingUp } from 'lucide-react';
+import { Activity, BarChart3, Briefcase, Building2, Radio, ShieldCheck, Users, TrendingUp } from 'lucide-react';
 import SiteNav from '@/components/SiteNav';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
@@ -34,6 +34,8 @@ import LiveCommitteesTab from './LiveCommitteesTab';
 // (admin_platform_metrics / admin_data_lists, both is_platform_admin).
 import DataTab from './DataTab';
 import TrafficTab from './TrafficTab';
+// The Job Board: every listing (hide / unhide) and Gavelling's premium listings.
+import JobBoardTab from './JobBoardTab';
 // Gavelling's own conference listings: hand over to the organiser, hide, show again.
 
 // Shared branded spinner (Gavelling green), built by a sibling agent.
@@ -41,7 +43,7 @@ import Loader from '@/components/Loader';
 
 const MONO = 'ui-monospace, monospace';
 
-type TabKey = 'data' | 'traffic' | 'conferences' | 'users' | 'activity' | 'live';
+type TabKey = 'data' | 'traffic' | 'conferences' | 'users' | 'activity' | 'live' | 'jobs';
 
 // Data is first and is the default: this console is opened every morning to
 // read the numbers, and the other four tabs are what you go to afterwards.
@@ -52,6 +54,7 @@ const TABS: { key: TabKey; label: string; icon: typeof Building2 }[] = [
   { key: 'users',       label: 'Users',       icon: Users },
   { key: 'activity',    label: 'Activity',    icon: Activity },
   { key: 'live',        label: 'Live',        icon: Radio },
+  { key: 'jobs',        label: 'Job Board',   icon: Briefcase },
 ];
 
 export default function AdminClient() {
@@ -259,6 +262,7 @@ export default function AdminClient() {
           {tab === 'users' && <UsersTab />}
           {tab === 'activity' && <ActivityTab />}
           {tab === 'live' && <LiveCommitteesTab />}
+          {tab === 'jobs' && <JobBoardTab />}
         </div>
       </main>
     </div>

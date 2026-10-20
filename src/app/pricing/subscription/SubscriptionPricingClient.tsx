@@ -20,12 +20,12 @@ import FaqList from '@/components/pricing/FaqList';
 import RenewOnceOpener from '@/components/pricing/RenewOnceOpener';
 import { ActionButton, ActionLink, FOCUS_RING, P, PricingStyles, QuestionBox } from '@/components/pricing/pricingKit';
 
-/** The job board route: no arrow until it exists (it is being built next). */
-const JOBS_ROUTE: string | null = null; // '/jobs' once the route ships
+/** The job board route: the arrow on the premium roles line. */
+const JOBS_ROUTE = '/jobs';
 
 // Kept in step with BENEFITS in the Unlimited pop-up (owner, 25 Sep 2026).
 // Each line carries a small arrow to where it lives (26 Sep 2026); the
-// archive says Soon; the job board shows nothing until its route exists.
+// archive says Soon; the job board line opens /jobs.
 const INCLUDED: { label: string; href?: string | null; soon?: boolean }[] = [
   { label: 'Apply to as many conferences as you like', href: '/conferences/explore' },
   { label: 'Premium MUN guides', href: '/guides' },

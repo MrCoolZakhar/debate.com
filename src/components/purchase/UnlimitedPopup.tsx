@@ -41,7 +41,7 @@ const BENEFITS: Benefit[] = [
   { emoji: 'Infinity', fallback: InfinityIcon, title: 'Apply to as many conferences as you like', live: true },
   { emoji: 'Books', fallback: BookOpen, title: 'Premium MUN guides', live: true },
   { emoji: 'File cabinet', fallback: Archive, title: 'Your MUN archive', live: false },
-  { emoji: 'Briefcase', fallback: Briefcase, title: 'Premium job board roles', live: false },
+  { emoji: 'Briefcase', fallback: Briefcase, title: 'Premium job board roles', live: true },
 ];
 
 // Resume mode: the benefits a touch more prominent, and the one sentence-case button.

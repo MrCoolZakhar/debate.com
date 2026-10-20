@@ -10,8 +10,13 @@
 // so the phone's own back works too).
 //
 // Signed in, three quiet tabs sit over the list: All roles, Saved and My
-// Applications (job_my()). The tabs are data, so prompt 5 adds Your Listings
-// by adding a row. The first page of the board is rendered on the server
+// Applications (job_my()). The tabs are data; prompt 5 adds Your Listings
+// (the standalone listings this person posted), shown only when job_my()
+// has some. JobTab (jobQuery.ts) knows only all / saved / applications, so
+// Your Listings is LOCAL state (`listingsTab`): the URL keeps tab=all while
+// it shows, and ?tab=listings is honoured once on load. "Post a listing" in
+// the header opens the standalone posting pop-up (useStandalonePosting,
+// which stays mounted here and holds the short-on-credits retry). The first page of the board is rendered on the server
 // (page.tsx) so the list is in the HTML; every later read is job_board().
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -23,8 +28,13 @@ import { useAuth } from '@/components/AuthProvider';
 import { replaceUrlInPlace } from '@/lib/replaceUrlInPlace';
 import {
   fetchJobBoard, fetchJobMy, jobContinuePath,
-  type JobBoardPage, type JobCard as JobCardData, type JobListingResult, type JobMyApplication, type JobMyResult, type JobMyStatus,
+  type JobBoardPage, type JobCard as JobCardData, type JobListingResult, type JobMyApplication, type JobMyListing, type JobMyResult, type JobMyStatus,
 } from '@/lib/jobBoard';
+import { notifyOk } from '@/lib/appNotify';
+import PostListingButton, { useStandalonePosting } from './PostListingButton';
+import YourListings from './YourListings';
+import SaveAlertAction from './SaveAlertAction';
+import AlertsPanel from './AlertsPanel';
 import JobCard, { JobCardSkeleton } from './JobCard';
 import JobFilters from './JobFilters';
 import JobListing from './JobListing';
@@ -39,10 +49,14 @@ const INK_SOFT = '#5C5140';
 const FOREST = '#1B3828';
 const PAGE_SIZE = 30;
 
-const TABS: { key: JobTab; label: string; signedIn: boolean }[] = [
+/** The URL's tabs plus Your Listings, which is local state (see the header). */
+type BoardTab = JobTab | 'listings';
+
+const TABS: { key: BoardTab; label: string; signedIn: boolean }[] = [
   { key: 'all', label: 'All roles', signedIn: false },
   { key: 'saved', label: 'Saved', signedIn: true },
   { key: 'applications', label: 'My Applications', signedIn: true },
+  { key: 'listings', label: 'Your Listings', signedIn: true },
 ];
 
 const STATUS_WORD: Record<JobMyStatus, { label: string; icon: typeof Check; tone: string }> = {
@@ -89,6 +103,7 @@ export default function JobBoardClient({ initialQuery, initialPage, initialError
   const [my, setMy] = useState<JobMyResult | null>(null);
   const [myErr, setMyErr] = useState<string | null>(null);
   const [showRanking, setShowRanking] = useState(false);
+  const [listingsTab, setListingsTab] = useState(false);
   const [pane, setPane] = useState<HTMLDivElement | null>(null);
   const seq = useRef(0);
   const pushedRef = useRef(false);
@@ -182,14 +197,31 @@ export default function JobBoardClient({ initialQuery, initialPage, initialError
     void loadMy();
   }, [userId, authLoading, loadMy]);
 
-  const tab: JobTab = userId ? query.tab : 'all';
-  const tabs = TABS.filter((t) => !t.signedIn || !!userId);
+  // ?tab=listings opens Your Listings once on load (jobQuery reads it as 'all').
+  useEffect(() => {
+    try {
+      if (new URLSearchParams(window.location.search).get('tab') === 'listings') setListingsTab(true);
+    } catch { /* no URL to read */ }
+  }, []);
+
+  const myListings = useMemo(() => (my?.listings ?? []) as JobMyListing[], [my]);
+  const tab: BoardTab = !userId ? 'all' : listingsTab && myListings.length > 0 ? 'listings' : query.tab;
+  const tabs = TABS.filter((t) => (!t.signedIn || !!userId) && (t.key !== 'listings' || myListings.length > 0));
+
+  const posting = useStandalonePosting({
+    onChanged: () => {
+      if (userId) void loadMy();
+      void loadBoard(queryRef.current, true);
+    },
+    onPosted: () => setListingsTab(true),
+  });
 
   const items: JobCardData[] = useMemo(() => {
+    if (tab === 'listings') return myListings;
     if (tab === 'saved') return my?.saved ?? [];
     if (tab === 'applications') return my?.applications ?? [];
     return board.k === 'error' ? [] : board.page?.items ?? [];
-  }, [tab, my, board]);
+  }, [tab, my, board, myListings]);
 
   const appliedAt = useMemo(() => {
     const m = new Map<string, string | null>();
@@ -201,9 +233,10 @@ export default function JobBoardClient({ initialQuery, initialPage, initialError
     return items.find((c) => c.id === id)
       ?? my?.saved.find((c) => c.id === id)
       ?? my?.applications.find((c) => c.id === id)
+      ?? myListings.find((c) => c.id === id)
       ?? (board.k !== 'error' ? board.page?.items.find((c) => c.id === id) : undefined)
       ?? null;
-  }, [items, my, board]);
+  }, [items, my, board, myListings]);
 
   // On a laptop the right pane is never empty: with nothing chosen it shows
   // the first listing of the list in view (the URL stays as it is).
@@ -229,7 +262,10 @@ export default function JobBoardClient({ initialQuery, initialPage, initialError
     window.requestAnimationFrame(() => window.scrollTo({ top: y }));
   }, [commit]);
 
-  const changeTab = (t: JobTab) => commit({ ...queryRef.current, tab: t, listing: wide ? null : queryRef.current.listing });
+  const changeTab = (t: BoardTab) => {
+    setListingsTab(t === 'listings');
+    commit({ ...queryRef.current, tab: t === 'listings' ? 'all' : t, listing: wide ? null : queryRef.current.listing });
+  };
 
   const phoneListing = !wide && !!query.listing;
   const listLoading = tab === 'all' ? board.k === 'loading' && !board.page : !!userId && !my && !myErr;
@@ -261,9 +297,12 @@ export default function JobBoardClient({ initialQuery, initialPage, initialError
         </main>
       ) : (
         <main className="gv-jobs-wrap" style={{ paddingBottom: 'clamp(40px, 4vw, 64px)' }}>
-          <header style={{ paddingTop: 'clamp(12px, 1.4vw, 22px)' }}>
-            <h1 className="gv-jobs-h1">Job <GoldWord>Board</GoldWord></h1>
-            <p className="gv-jobs-cap">Chair, secretariat and staff roles at conferences worldwide</p>
+          <header className="gv-jobs-head" style={{ paddingTop: 'clamp(12px, 1.4vw, 22px)' }}>
+            <div style={{ minWidth: 0 }}>
+              <h1 className="gv-jobs-h1">Job <GoldWord>Board</GoldWord></h1>
+              <p className="gv-jobs-cap">Chair, secretariat and staff roles at conferences worldwide</p>
+            </div>
+            <PostListingButton onClick={posting.post} />
           </header>
 
           <div className="gv-jobs-grid">
@@ -294,11 +333,18 @@ export default function JobBoardClient({ initialQuery, initialPage, initialError
                 />
               )}
 
+              {/* Save the current filters as a job alert (Unlimited), under the filters. */}
+              {tab === 'all' && <div style={{ marginTop: 10 }}><SaveAlertAction query={query} /></div>}
+
+              {/* Members manage their alerts in the Saved tab. */}
+              {tab === 'saved' && <div style={{ marginBottom: 14 }}><AlertsPanel /></div>}
+
               <div className="gv-jobs-count" aria-live="polite">
                 {!listLoading && (tab === 'all' ? board.k !== 'error' : !myErr) && (
                   <p style={{ margin: 0 }}>
                     <span className="gv-jobs-count-n">{total.toLocaleString()}</span>{' '}
-                    {tab === 'saved' ? (total === 1 ? 'saved role' : 'saved roles')
+                    {tab === 'listings' ? (total === 1 ? 'listing' : 'listings')
+                      : tab === 'saved' ? (total === 1 ? 'saved role' : 'saved roles')
                       : tab === 'applications' ? (total === 1 ? 'application' : 'applications')
                         : total === 1 ? 'open role' : 'open roles'}
                   </p>
@@ -317,6 +363,19 @@ export default function JobBoardClient({ initialQuery, initialPage, initialError
                   {myErr}{' '}
                   <button type="button" className="gv-jobs-link" onClick={() => { void loadMy(); }}>Try again</button>
                 </p>
+              ) : tab === 'listings' ? (
+                <YourListings
+                  listings={myListings}
+                  selectedId={wide ? selectedId : null}
+                  onSelect={select}
+                  onEdit={posting.edit}
+                  onPromote={posting.promote}
+                  onChanged={(message) => {
+                    notifyOk(message, 'jobs');
+                    void loadMy();
+                    void loadBoard(queryRef.current, true);
+                  }}
+                />
               ) : items.length === 0 ? (
                 <p className="gv-jobs-empty">
                   {tab === 'saved' ? (
@@ -384,6 +443,7 @@ export default function JobBoardClient({ initialQuery, initialPage, initialError
           </div>
         </main>
       )}
+      {posting.node}
     </div>
   );
 }
@@ -406,6 +466,8 @@ const PAGE_CSS = `
 .gv-jobs-wrap{width:100%;max-width:1720px;margin:0 auto;padding-left:16px;padding-right:16px}
 @media (min-width:640px){.gv-jobs-wrap{padding-left:24px;padding-right:24px}}
 @media (min-width:1024px){.gv-jobs-wrap{padding-left:40px;padding-right:40px}}
+.gv-jobs-head{display:flex;flex-wrap:wrap;align-items:flex-start;justify-content:space-between;gap:14px 24px}
+.gv-jobs-head .gv-jobs-post{margin-top:4px}
 .gv-jobs-h1{margin:0;font-weight:800;font-size:clamp(30px,3.4vw,48px);line-height:1.06;letter-spacing:-0.02em;color:${INK};text-wrap:balance}
 .gv-jobs-cap{margin:8px 0 0;font-size:clamp(15px,1.1vw,17px);line-height:1.45;color:${INK_SOFT}}
 .gv-jobs-grid{display:grid;grid-template-columns:minmax(0,1fr);gap:24px;margin-top:clamp(16px,1.8vw,26px)}

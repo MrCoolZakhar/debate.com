@@ -13,13 +13,21 @@
 //                        own sentence and a single "Close".
 // job_screening saying `stopped` opens straight onto the stopped screen.
 // Every button holds a busy guard; nothing is optimistic.
+//
+// Signed out (prompt 5, like every other application on Gavelling): the
+// questions come from job_screening_public and "Continue application" calls
+// job_check_screening, which stores nothing. A pass keeps the answers on this
+// device for 14 days under the listing id, and the apply page claims them
+// once the person is signed in and has applied (ListingApplyLine.tsx). A
+// premium listing still needs sign-in (onNeedSignIn).
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, Check, Loader2 } from 'lucide-react';
 import { PurchaseShell, PURCHASE_CSS } from '@/components/purchase/purchaseKit';
+import { useAuth } from '@/components/AuthProvider';
 import {
-  JOB_ROLE_LABEL, fetchJobScreening, submitJobScreening,
+  JOB_ROLE_LABEL, checkJobScreening, fetchJobScreening, fetchJobScreeningPublic, storeJobAnswers, submitJobScreening,
   type JobListingDetail, type JobQuestion, type JobRole,
 } from '@/lib/jobBoard';
 
@@ -35,13 +43,20 @@ type Phase =
   | { k: 'continue' }
   | { k: 'final'; title: string; message: string; good: boolean };
 
-export default function JobApplyPopup({ listing, onClose, onSettled }: {
+export default function JobApplyPopup({ listing, onClose, onSettled, onNeedSignIn }: {
   listing: JobListingDetail;
   onClose: () => void;
   /** Called after an answer the server stored (stopped, added, done), so the page reads its state again. */
   onSettled: () => void;
+  /** Signed out on a listing that needs sign-in (premium): the page closes this and opens sign-in. */
+  onNeedSignIn?: () => void;
 }) {
   const router = useRouter();
+  const { user } = useAuth();
+  const signedIn = !!user;
+  // The page passes a fresh arrow each render; a ref keeps the load stable.
+  const needSignInRef = useRef(onNeedSignIn);
+  useEffect(() => { needSignInRef.current = onNeedSignIn; }, [onNeedSignIn]);
   const [phase, setPhase] = useState<Phase>({ k: 'loading' });
   const [questions, setQuestions] = useState<JobQuestion[]>([]);
   const [role, setRole] = useState<JobRole>(listing.role);
@@ -56,8 +71,12 @@ export default function JobApplyPopup({ listing, onClose, onSettled }: {
   const load = useCallback(async () => {
     setPhase({ k: 'loading' });
     setErr('');
-    const res = await fetchJobScreening(listing.id);
+    const res = signedIn ? await fetchJobScreening(listing.id) : await fetchJobScreeningPublic(listing.id);
     if (!res.ok) {
+      if (!signedIn && res.code === 'signin' && needSignInRef.current) {
+        needSignInRef.current();
+        return;
+      }
       if (res.code === 'stopped') {
         setPhase({ k: 'final', title: 'Not a Match for This Role', message: res.message, good: false });
       } else {
@@ -69,7 +88,7 @@ export default function JobApplyPopup({ listing, onClose, onSettled }: {
     setRole(res.role);
     if (res.conference?.short) setShort(res.conference.short);
     setPhase(res.questions.length ? { k: 'questions' } : { k: 'continue' });
-  }, [listing.id]);
+  }, [listing.id, signedIn]);
 
   useEffect(() => { void load(); }, [load]);
 
@@ -91,10 +110,32 @@ export default function JobApplyPopup({ listing, onClose, onSettled }: {
     setBusy(true);
     setErr('');
     try {
-      const res = await submitJobScreening(
-        listing.id,
-        questions.map((q) => ({ id: q.id, answer: (answers[q.id] ?? '').trim() })),
-      );
+      const given = questions.map((q) => ({ id: q.id, answer: (answers[q.id] ?? '').trim() }));
+      if (!signedIn) {
+        // Checked, never stored on the server: the answers wait on this device.
+        const check = await checkJobScreening(listing.id, given);
+        if (!check.ok) {
+          if (check.stopped) {
+            setPhase({ k: 'final', title: 'Not a Match for This Role', message: check.message, good: false });
+          } else if (check.field && questions.some((q) => q.id === check.field)) {
+            setBad({ id: check.field, message: check.message });
+            setPhase({ k: 'questions' });
+          } else {
+            setErr(check.message);
+          }
+          return;
+        }
+        const url = check.continue_url;
+        if (url.startsWith('/') && !url.startsWith('//')) {
+          storeJobAnswers(listing.id, given);
+          setLeaving(true);
+          router.push(url);
+          return;
+        }
+        setErr('We could not open the application. Try again.');
+        return;
+      }
+      const res = await submitJobScreening(listing.id, given);
       if (!res.ok) {
         if (res.stopped) {
           onSettled();

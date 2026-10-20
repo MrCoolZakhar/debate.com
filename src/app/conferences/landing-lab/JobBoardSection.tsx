@@ -17,7 +17,6 @@
 
 import Link from 'next/link';
 import JobCard from '@/app/jobs/JobCard';
-import { GoldWord } from '@/components/BrandHeading';
 import type { JobCard as JobCardData } from '@/lib/jobBoard';
 import { CREAM, FOREST, SANS } from './shared';
 
@@ -46,7 +45,7 @@ export default function JobBoardSection({ jobs }: { jobs: JobCardData[] }) {
               id="hs-jobs-heading"
               style={{ fontFamily: SANS, fontWeight: 900, fontSize: 'clamp(26px, 2.4vw, 40px)', letterSpacing: '-0.015em', color: INK, margin: '0 0 4px 0', textWrap: 'balance' }}
             >
-              Job <GoldWord>Board</GoldWord>
+              Job Board
             </h2>
             <p style={{ fontFamily: SANS, fontSize: 'clamp(15px, 1.05vw, 18px)', lineHeight: 1.6, color: INK_70, margin: 0 }}>
               Chair, secretariat and staff roles open now

@@ -75,7 +75,7 @@ import {
   Info, Coins, Pencil, Ban, Cake, CircleAlert,
 } from 'lucide-react';
 import { replaceUrlInPlace } from '@/lib/replaceUrlInPlace';
-import { ListingApplyLine, useListingForApply, useListingCommitteePrefill } from './ListingApplyLine';
+import { ListingApplyLine, ListingClaimNote, useListingClaim, useListingForApply, useListingCommitteePrefill } from './ListingApplyLine';
 
 /** Destructive-action red, matching /drafts/[token] exactly. */
 const DANGER = '#8B2020';
@@ -1455,6 +1455,8 @@ function ConferenceApplyInner() {
   const prefillListingCommittee = useCallback((c: CommitteeOption) => {
     setPreferences(prev => (prev.length > 0 ? prev : [{ committeeId: c.id, committeeName: c.name, countryCode: '', countryName: '' }]));
   }, []);
+  // Answers given signed out on /jobs: claimed once signed in and applied (ListingApplyLine.tsx).
+  const listingClaim = useListingClaim(applyListing, { signedIn: !!user, hasApplication: !!existingApp });
   useListingCommitteePrefill(applyListing, {
     ready: !authLoading && !loading && (!draftEnabled || draftReady),
     enabled: showPreferenceStep && committeesOnly && !isEditMode && !hasDraft,
@@ -3274,6 +3276,8 @@ function ConferenceApplyInner() {
       } catch (afterErr: unknown) {
         reportBlocked('after application insert', afterErr, { conferenceSlug: slug, role, appId: newAppId });
       }
+      // A listing answered signed out joins this new application (never blocks it).
+      await listingClaim.claimAfterSubmit();
       const timingParam = roleConfig?.payment_timing ? `&timing=${roleConfig.payment_timing}` : '';
       router.push(`/conferences/${slug}/apply/confirmation?role=${role}${timingParam}`);
     } catch (err: unknown) {
@@ -5736,6 +5740,7 @@ function ConferenceApplyInner() {
               Your application as {role.replace(/-/g, ' ')} is {existingApp.status}.
               {guestDraftRow && ' The answers you just filled in are still saved in this browser.'}
             </p>
+            <ListingClaimNote note={listingClaim.note} center />
             <div className="flex flex-wrap items-center justify-center gap-3">
               {showPayment && conference && (
                 <PayLink
@@ -6193,6 +6198,7 @@ function ConferenceApplyInner() {
         )}
 
         <ListingApplyLine listing={applyListing} />
+        <ListingClaimNote note={listingClaim.note} />
 
         {/* Another tab is writing this same draft. Non-blocking on purpose —
             they can finish and submit from here, they just aren't being

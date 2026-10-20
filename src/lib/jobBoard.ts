@@ -365,3 +365,162 @@ export async function fetchHiringConferences(): Promise<Set<string>> {
     return new Set((data as string[]).filter((x) => typeof x === 'string'));
   } catch { return new Set(); }
 }
+
+// ── Prompt 5: standalone listings, Unlimited perks, signed-out apply ────────
+
+/** A standalone listing as job_my() returns it (Your Listings). */
+export interface JobMyListing extends JobCard {
+  status: string;
+  shown: 'draft' | 'live' | 'closed' | 'hidden';
+  hidden_note: string | null;
+  views: number;
+  clicks: number;
+  promotion: { starts_on: string; ends_on: string; with_homepage: boolean; days: number } | null;
+  description: string | null;
+  deadline: string | null;
+  outside_url: string | null;
+  charged_credits: number;
+  locked: boolean;
+  fix_available: boolean;
+}
+
+/** A price from job_prices (readable by anyone), e.g. 'outside_listing'. Null when it cannot be read. */
+export async function fetchJobPrice(key: string): Promise<number | null> {
+  try {
+    const { data, error } = await supabase.from('job_prices').select('credits').eq('key', key).maybeSingle();
+    if (error || !data) return null;
+    const n = Number((data as { credits: unknown }).credits);
+    return Number.isFinite(n) ? n : null;
+  } catch { return null; }
+}
+
+export interface JobAlert { id: string; name: string; filters: JobFilters; active: boolean; last_sent_at: string | null }
+
+export async function fetchMyAlerts(): Promise<JobAlert[] | Fail> {
+  const fallback = 'We could not load your alerts. Try again.';
+  const client = await authed();
+  if (!client) return { ok: false, message: SIGNIN };
+  try {
+    const { data, error } = await client.rpc('job_alerts_mine');
+    if (error) return { ok: false, message: friendlyError(error, fallback) };
+    const list = Array.isArray(data) ? data : (data as { alerts?: unknown } | null)?.alerts;
+    return Array.isArray(list) ? (list as JobAlert[]) : [];
+  } catch (e) {
+    return { ok: false, message: friendlyError(e, fallback) };
+  }
+}
+
+/** Saves the current filters as an alert (Unlimited only: code 'unlimited' otherwise; at most 10). */
+export async function saveJobAlert(id: string | null, name: string, filters: JobFilters): Promise<{ ok: true; id?: string } | (Fail & { code?: string })> {
+  const fallback = 'We could not save this alert. Try again.';
+  const client = await authed();
+  if (!client) return { ok: false, message: SIGNIN, code: 'signin' };
+  try {
+    const { data, error } = await client.rpc('job_alert_save', { p_id: id, p_name: name, p_filters: cleanFilters(filters) });
+    if (error || !data) return { ok: false, message: friendlyError(error, fallback) };
+    const d = data as { ok?: boolean; id?: string; code?: string; message?: string };
+    if (!d.ok) return { ok: false, code: d.code, message: d.message || fallback };
+    return { ok: true, id: d.id };
+  } catch (e) {
+    return { ok: false, message: friendlyError(e, fallback) };
+  }
+}
+
+export async function removeJobAlert(id: string): Promise<{ ok: true } | Fail> {
+  const fallback = 'We could not remove this alert. Try again.';
+  const client = await authed();
+  if (!client) return { ok: false, message: SIGNIN };
+  try {
+    const { data, error } = await client.rpc('job_alert_remove', { p_id: id });
+    if (error) return { ok: false, message: friendlyError(error, fallback) };
+    const d = data as { ok?: boolean; message?: string } | null;
+    if (d && d.ok === false) return { ok: false, message: d.message || fallback };
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, message: friendlyError(e, fallback) };
+  }
+}
+
+// ── Signed-out apply (PART E) ──
+
+/** The questions for anyone, signed in or not. Not ok: code 'outside', code 'signin' (premium), or a message. */
+export async function fetchJobScreeningPublic(id: string): Promise<JobScreeningResult> {
+  const fallback = 'We could not load the questions for this role. Try again.';
+  try {
+    const client = await readClient();
+    const { data, error } = await client.rpc('job_screening_public', { p_id: id });
+    if (error || !data) return { ok: false, message: friendlyError(error, fallback) };
+    const d = data as JobScreeningResult;
+    if (!d.ok) return { ...d, message: d.message || fallback };
+    return { ...d, questions: Array.isArray(d.questions) ? d.questions : [], existing_application: null };
+  } catch (e) {
+    return { ok: false, message: friendlyError(e, fallback) };
+  }
+}
+
+export type JobCheckResult =
+  | { ok: false; field?: string; stopped?: boolean; message: string }
+  | { ok: true; next: 'continue'; continue_url: string; role: JobRole; committee_id: string | null };
+
+/** Checks the answers and saves NOTHING. */
+export async function checkJobScreening(id: string, answers: { id: string; answer: string }[]): Promise<JobCheckResult> {
+  const fallback = 'We could not check your answers. Try again.';
+  try {
+    const client = await readClient();
+    const { data, error } = await client.rpc('job_check_screening', { p_id: id, p_answers: answers });
+    if (error || !data) return { ok: false, message: friendlyError(error, fallback) };
+    const d = data as JobCheckResult;
+    if (!d.ok) return { ...d, message: d.message || fallback };
+    if (d.next !== 'continue' || typeof d.continue_url !== 'string') return { ok: false, message: fallback };
+    return d;
+  } catch (e) {
+    return { ok: false, message: friendlyError(e, fallback) };
+  }
+}
+
+export type JobClaimResult =
+  | { ok: true; application_id?: string; pick_rank?: number; message?: string; unchanged?: boolean }
+  | { ok: false; stopped?: boolean; field?: string; code?: string; message: string };
+
+/** Signed in, once they have an application for the listing's role: saves the answers and adds the listing as the next pick (no email). */
+export async function claimJobScreening(id: string, answers: { id: string; answer: string }[]): Promise<JobClaimResult> {
+  const fallback = 'We could not add this listing to your application.';
+  const client = await authed();
+  if (!client) return { ok: false, message: SIGNIN, code: 'signin' };
+  try {
+    const { data, error } = await client.rpc('job_claim_screening', { p_id: id, p_answers: answers });
+    if (error || !data) return { ok: false, message: friendlyError(error, fallback) };
+    const d = data as JobClaimResult;
+    if (!d.ok) return { ...d, message: d.message || fallback };
+    return d;
+  } catch (e) {
+    return { ok: false, message: friendlyError(e, fallback) };
+  }
+}
+
+// Answers given signed out, kept on this device for 14 days under the listing id.
+const STORED_PREFIX = 'gavelling-job-answers:';
+const STORED_DAYS = 14;
+
+export function storeJobAnswers(listingId: string, answers: { id: string; answer: string }[]): void {
+  try {
+    window.localStorage.setItem(STORED_PREFIX + listingId, JSON.stringify({ at: Date.now(), answers }));
+  } catch { /* storage blocked: carry on without it */ }
+}
+
+export function readJobAnswers(listingId: string): { id: string; answer: string }[] | null {
+  try {
+    const raw = window.localStorage.getItem(STORED_PREFIX + listingId);
+    if (!raw) return null;
+    const v = JSON.parse(raw) as { at?: number; answers?: unknown };
+    if (!v || typeof v.at !== 'number' || Date.now() - v.at > STORED_DAYS * 86400000 || !Array.isArray(v.answers)) {
+      window.localStorage.removeItem(STORED_PREFIX + listingId);
+      return null;
+    }
+    return v.answers as { id: string; answer: string }[];
+  } catch { return null; }
+}
+
+export function clearJobAnswers(listingId: string): void {
+  try { window.localStorage.removeItem(STORED_PREFIX + listingId); } catch { /* nothing to clear */ }
+}
