@@ -3,6 +3,8 @@
 import { Suspense, useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { PillToggle } from '@/app/account/accountUi';
+import { saveAllocationEmailAuto } from '@/app/manage/[slug]/assignment/allocationEmails';
 import {
   Mail, AlertTriangle, Send, Bell, Copy, X, ChevronDown,
   BadgeCheck, MessageSquare, ArrowRight, Compass, Wrench,
@@ -1590,6 +1592,10 @@ function CommunicationsPageInner() {
   // stub row first (never-configured event -> TURN ON), an insert, unlike
   // the instant optimistic flip for an already-existing template row.
   const [togglingEventKeys, setTogglingEventKeys] = useState<Set<string>>(new Set());
+  // The allocation email's release (prompt 145): the SAME setting as the
+  // Allocation tab's switch (conferences.allocation_email_auto), read from the
+  // manage context and saved through the one shared save, never a second copy.
+  const [releasePending, setReleasePending] = useState<boolean | null>(null);
   const { confirm: confirmDelete, modal: deleteConfirmModal } = useConfirmModal();
   // Restored a saved audience (email_templates.audience) into the picker below.
   const [audienceRestored, setAudienceRestored] = useState(false);
@@ -2900,6 +2906,26 @@ function CommunicationsPageInner() {
     showFlash('ok', 'Duplicated as a new draft.');
   }
 
+  const allocationAuto = releasePending ?? conference?.allocation_email_auto ?? true;
+
+  function handleToggleAllocationRelease(next: boolean) {
+    if (!session || !conference || releasePending !== null) return;
+    setReleasePending(next);
+    const supabase = getAuthedClient(session.access_token);
+    const templateOff = templatesByEvent.get('allocation_assigned')?.enabled === false;
+    (async () => {
+      const res = await saveAllocationEmailAuto(supabase, conference.id, next, templateOff);
+      if (!res.ok) { notifyErr('Could not change how allocation emails are sent.', 'communications'); return; }
+      if (res.templateTurnedOn) void loadTemplates();
+      await refreshConferenceQuiet();
+      notifyOk(next
+        ? 'Allocation emails will now send automatically as you seat delegates.'
+        : 'Allocation emails are on manual release. Nobody is emailed until you send.', 'communications');
+    })()
+      .catch(() => notifyErr('Could not change how allocation emails are sent.', 'communications'))
+      .finally(() => setReleasePending(null));
+  }
+
   async function handleDeleteTemplate(t: EmailTemplate) {
     if (!session || deletingIds.has(t.id)) return;
     const { confirmed } = await confirmDelete({
@@ -3951,6 +3977,8 @@ function CommunicationsPageInner() {
       toggling: togglingEventKeys.has(ev.key),
       ownWording: templateHasContent(template),
       reminder: ev.recurring && template?.enabled ? renderReminder(template) : undefined,
+      // The Allocation tab's own release setting, shown here too (prompt 145).
+      manualRelease: ev.key === 'allocation_assigned' && conference?.allocation_email_auto === false,
       followUps: followUps.length ? followUps : undefined,
       // The thumbnail is the preview pop-up's own render (eventEmailPreview.ts),
       // drawn only once the card is on screen. Reads nothing, writes nothing.
@@ -4392,8 +4420,8 @@ function CommunicationsPageInner() {
               their audience is fixed by the event. About + the delivery radio
               ride above the editor instead of in a sidebar. */}
           {builderEventKey !== null && (
-            <div className="rounded-2xl p-5 mb-5" style={PANEL}>
-              <div className="min-w-0">
+            <div className="rounded-2xl p-5 mb-5 flex flex-col md:flex-row md:items-start gap-6" style={PANEL}>
+              <div className="flex-1 min-w-0">
                 <p className="font-semibold text-sm mb-1" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
                   About this notification
                 </p>
@@ -4404,6 +4432,30 @@ function CommunicationsPageInner() {
                   Its audience is fixed by the event. Turn it on from Automatic emails once you&apos;re happy with the draft.
                 </p>
               </div>
+              {builderEventKey === 'allocation_assigned' && conference && (
+                <div className="flex-shrink-0" style={{ minWidth: 220, maxWidth: 300 }}>
+                  <p className="font-semibold text-sm mb-2" style={{ color: '#1C1410', fontFamily: OUTFIT }}>Release</p>
+                  <span className="flex items-center gap-2" role="group" aria-label="Allocation email release mode">
+                    <PillToggle value={allocationAuto} onChange={handleToggleAllocationRelease} size="sm" disabled={releasePending !== null} />
+                    <span
+                      onClick={() => { if (releasePending === null) handleToggleAllocationRelease(!allocationAuto); }}
+                      style={{
+                        fontFamily: OUTFIT, fontSize: 13, fontWeight: 700, userSelect: 'none',
+                        color: allocationAuto ? '#1B3828' : NEU.amber,
+                        cursor: releasePending !== null ? 'wait' : 'pointer',
+                      }}
+                    >
+                      {allocationAuto ? 'Sending automatically' : 'Manual release'}
+                    </span>
+                  </span>
+                  {!allocationAuto && (
+                    <p className="text-xs mt-2" style={{ color: SOFT, fontFamily: OUTFIT, lineHeight: 1.5, textWrap: 'pretty' }}>
+                      Allocation emails go out when you release them from the{' '}
+                      <Link href={`/manage/${conference.slug}/assignment`} style={{ color: '#1B3828', fontWeight: 700, textDecoration: 'underline', textUnderlineOffset: 3 }}>Allocation tab</Link>
+                    </p>
+                  )}
+                </div>
+              )}
             </div>
           )}
 
@@ -4503,6 +4555,7 @@ function CommunicationsPageInner() {
                   guides={attachSupport.guides}
                   value={builderAttachments}
                   onChange={setBuilderAttachments}
+                  sentLine={attachAuto ? 'Sent as attachments with every one of these emails' : undefined}
                 />
               ) : undefined}
               previewFooter={shownAttachments.length > 0 ? <AttachmentChipsReadOnly value={shownAttachments} line={attachAuto ? 'Sent as attachments with every one of these emails' : undefined} /> : undefined}

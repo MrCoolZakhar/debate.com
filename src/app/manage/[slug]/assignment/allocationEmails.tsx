@@ -18,7 +18,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Mail, Info, Send, Repeat, ListChecks, Check, Search, X, ChevronDown, CircleSlash, CheckCircle2,
 } from 'lucide-react';
-import { type QueueEventEmailResult } from '@/lib/emailEvents';
+import { type QueueEventEmailResult, turnOnDefaultEmail } from '@/lib/emailEvents';
+import type { getAuthedClient } from '@/lib/supabase-auth';
 import { CircleFlag } from '@/components/CircleFlag';
 import { NEU, NEU_GRADIENTS, OUTFIT, EASE, NeuButton, NeuInset } from '@/components/neu';
 import Portal from '@/components/Portal';
@@ -34,6 +35,36 @@ export { queueAllocationEmails, ALLOCATION_EVENT_KEY } from '@/lib/allocationEma
 /** One sentence the caller can flash, so every surface explains a non-send the
  *  same way — an 'off' template, a wave where every recipient had opted out,
  *  and a partial send all read as themselves rather than as silence. */
+/**
+ * THE one save of how allocation emails are released (conferences.allocation_email_auto),
+ * used by the Allocation tab's switch and by the Allocation Assigned editor in
+ * Communications (prompt 145), so there is never a second copy of the setting.
+ * A verified write: the row must come back, otherwise nothing is reported as saved.
+ * Turning automatic sending ON also turns an explicitly switched-off Allocation
+ * Assigned email back on (`templateOff`), exactly as the Allocation tab always did;
+ * it queues nothing by itself.
+ */
+export async function saveAllocationEmailAuto(
+  supabase: ReturnType<typeof getAuthedClient>,
+  conferenceId: string,
+  next: boolean,
+  templateOff: boolean,
+): Promise<{ ok: boolean; templateTurnedOn: boolean }> {
+  const { data, error } = await supabase
+    .from('conferences')
+    .update({ allocation_email_auto: next })
+    .eq('id', conferenceId)
+    .select('id, allocation_email_auto');
+  const row = (data ?? [])[0] as { allocation_email_auto?: boolean } | undefined;
+  if (error || !data || data.length !== 1 || row?.allocation_email_auto !== next) return { ok: false, templateTurnedOn: false };
+  let templateTurnedOn = false;
+  if (next && templateOff) {
+    const res = await turnOnDefaultEmail(supabase, conferenceId, 'allocation_assigned');
+    templateTurnedOn = res.ok;
+  }
+  return { ok: true, templateTurnedOn };
+}
+
 export function allocationSendMessage(result: QueueEventEmailResult, attempted: number): { kind: 'ok' | 'err'; msg: string } {
   const queued = result.queued ?? 0;
   switch (result.outcome) {

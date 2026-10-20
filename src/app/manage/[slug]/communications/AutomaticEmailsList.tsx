@@ -47,6 +47,9 @@ export interface AutoRow {
   toggling: boolean;
   /** The organiser wrote their own subject and message. */
   ownWording: boolean;
+  /** The allocation email is on manual release (the Allocation tab's own
+   *  setting, conferences.allocation_email_auto, prompt 145). */
+  manualRelease?: boolean;
   /** Repeat settings for a reminder, drawn by the page; shown only while on. */
   reminder?: ReactNode;
   /** Always-on reminders that chase this invite, previewable one by one. */
@@ -292,6 +295,9 @@ function MailCard({ row, accent, acronym, onToggle, onPreview, onEdit }: {
             <StateWord state={state} />
             {row.ownWording && (
               <span className="gv-ae-mine"><PenLine size={13} strokeWidth={2.4} aria-hidden /> Your wording</span>
+            )}
+            {row.manualRelease && (
+              <span style={{ fontSize: 12.5, fontWeight: 700, color: '#B8844A' }} title="Allocation emails go out when you release them from the Allocation tab">Manual release</span>
             )}
           </div>
           <div className="gv-ae-links">

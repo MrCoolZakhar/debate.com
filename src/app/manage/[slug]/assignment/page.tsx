@@ -27,7 +27,7 @@ import { replaceUrlInPlace } from '@/lib/replaceUrlInPlace';
 import { queueEventEmail, notifyIfNeeded, turnOnDefaultEmail } from '@/lib/emailEvents';
 import { AssignConfirmDialog } from '@/app/manage/[slug]/assignment/AssignConfirmDialog';
 import {
-  queueAllocationEmails, allocationSendMessage, AllocationEmailBar, type AllocationTarget,
+  queueAllocationEmails, allocationSendMessage, AllocationEmailBar, saveAllocationEmailAuto, type AllocationTarget,
 } from '@/app/manage/[slug]/assignment/allocationEmails';
 import { sendChairInvite, findChairInviteRoleConflict } from '@/lib/chairInvites';
 import { useDraftNotices, DraftNoticeList } from '@/components/DraftNotice';
@@ -4157,15 +4157,7 @@ export default function AssignmentPage() {
     const supabase = getAuthedClient(session.access_token);
     const conferenceId = conference.id;
     (async () => {
-      const { data, error } = await supabase
-        .from('conferences')
-        .update({ allocation_email_auto: next })
-        .eq('id', conferenceId)
-        .select('id');
-      if (error || !data || data.length !== 1) {
-        showFlash('err', 'Could not change how allocation emails are sent.');
-        return;
-      }
+      // The one shared save (allocationEmails.tsx, also used by Communications).
       // One state: automatic sending with the Allocation Assigned email
       // switched off under Communications is exactly the SISMUN conflict (the
       // bar said "Sending automatically" and nothing went out). Turning
@@ -4173,10 +4165,12 @@ export default function AssignmentPage() {
       // Only an EXPLICIT off row is flipped: a missing row already sends our
       // default copy (eventOnWhenMissing), and must stay missing rather than
       // become a row with empty content.
-      if (next && allocTemplateEnabled === false) {
-        const res = await turnOnDefaultEmail(supabase, conferenceId, 'allocation_assigned');
-        if (res.ok) setAllocTemplateEnabled(true);
+      const res = await saveAllocationEmailAuto(supabase, conferenceId, next, allocTemplateEnabled === false);
+      if (!res.ok) {
+        showFlash('err', 'Could not change how allocation emails are sent.');
+        return;
       }
+      if (res.templateTurnedOn) setAllocTemplateEnabled(true);
       // The assign modals read conference.allocation_email_auto straight off
       // the manage context, so the context has to learn about this too.
       await refreshConferenceQuiet();

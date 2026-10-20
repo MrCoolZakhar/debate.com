@@ -153,8 +153,11 @@ export function AttachmentChipsReadOnly({ value, line }: { value: EmailAttachmen
   );
 }
 
-export default function EmailAttachments({ conferenceId, docs, guides = [], value, onChange }: {
+export default function EmailAttachments({ conferenceId, docs, guides = [], value, onChange, sentLine }: {
   conferenceId: string;
+  /** A line under the chips, e.g. for an automatic email "Sent as attachments
+   *  with every one of these emails" (prompt 145). */
+  sentLine?: string;
   docs: DocsOverviewItem[];
   /** The conference's study guides with a file (prompt 144). */
   guides?: GuideFile[];
@@ -363,6 +366,11 @@ export default function EmailAttachments({ conferenceId, docs, guides = [], valu
             <Chip key={`${a.bucket ?? ''}:${a.path}`} a={a} disabled={uploading} onRemove={() => onChange(value.filter(x => !(x.path === a.path && (x.bucket ?? '') === (a.bucket ?? ''))))} />
           ))}
         </ul>
+      )}
+      {/* Where the organizer just attached them (prompt 145): an automatic email
+          sends its files every time it goes out. */}
+      {value.length > 0 && sentLine && (
+        <p style={{ margin: '8px 0 0', fontFamily: OUTFIT, fontSize: 12.5, color: SOFT, lineHeight: 1.45, textWrap: 'pretty' }}>{sentLine}</p>
       )}
     </div>
   );
