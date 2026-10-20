@@ -250,7 +250,7 @@ Client constants:
 | `GENERATE_INVOICES_READY` | `manage/[slug]/financials/dashboardKit.tsx` | true |
 | `OFFLINE_RESILIENCE` | `src/lib/offlineResilience.ts` | true (the kill switch) |
 | `DELEGATIONS_V2_DB` | `conferences/[slug]/participant/delegation/v2.ts` and `manage/[slug]/applications/delegations/v2.ts` | true (part 1 live since 20 Oct 2026: sections 1 to 14 applied through a chat, 15 and 16 from Claude Code with Peter's one-off approval, migration `delegations_part1_short_invites_and_member_details`) |
-| `DELEGATIONS_MONEY_DB` | the same two `v2.ts` files | false (removing a member and the organiser's delegate / advisor move; flip both once Christian's chat ships `delegation_remove_member` and `organiser_set_member_role`, `docs/conferences/delegations-requests-for-christian.md`) |
+| `DELEGATIONS_MONEY_DB` | the same two `v2.ts` files | true (20 Oct 2026: Christian's chat shipped `delegation_remove_member` and `organiser_set_member_role`, which also does delegate <-> head delegate for organisers; contract in his project doc `peter-delegation-functions-live.md`) |
 | `REFUND_WORDS_EDITABLE` | `financials/documents/DocumentEditor.tsx` | true |
 
 ---
@@ -259,9 +259,9 @@ Client constants:
 
 - `scratch-awards-setup.sql`: an unapplied draft enforcing the awards gate in the chair INSERT policy and `submit_committee_awards`. Owners decide.
 - `scratch-tbd-public.sql`: the commented UPDATE publishing existing never-published TBD conferences. Owners' call, not run.
-- `scratch-study-guides-storage.sql`: the `study-guides` bucket lets ANY signed-in account upload, overwrite, delete and list every conference's files; the draft limits writes and listing to the conference's organisers (same test as the `study_guides` table), public-URL reads unchanged, no client change. Apply soon (owners).
-- `scratch-session-block-seats.sql`: a delegation's open seat (allocation with no person) currently locks its country in the live room for everyone, and leader seat swaps fail when both people have accounts; the draft makes only rows naming a person reserve a country (`seat_claim_is_reserved`, used by `session_join_rules`, `claim_delegate_seat`, `session_reserved_seat_hint`) and clears both seats before a swap fills them. Apply before any conference with live rooms gives open seats (owners); then update AGENTS.md JOIN PAGE "Reserved seat".
-- `scratch-delegations-part1-people-and-seats.sql`: APPLIED (20 Oct 2026), kept as the record of what is live; `DELEGATIONS_V2_DB` is on. Money pieces stay with Christian's chat: `docs/conferences/delegations-requests-for-christian.md` (`delegation_remove_member` and `organiser_set_member_role` are live from his chat as of 20 Oct; `organiser_set_head` is not). `scratch-delegations-rebuild.sql` is the superseded single draft; never apply it.
+- `scratch-study-guides-storage.sql`: APPLIED 20 Oct 2026 by Christian's chat (study-guide uploads, overwrites, deletes and listing are organiser-only). Still open (ours): make the `study-guides` and `position-papers` buckets private once every reader uses signed links (Christian agreed, `delegations-money-answers.md` 15 and 16).
+- `scratch-session-block-seats.sql`: APPLIED 20 Oct 2026 by Christian's chat (a delegation's open seat no longer reserves its country in the live room; seat swaps clear both seats before filling them).
+- `scratch-delegations-part1-people-and-seats.sql`: APPLIED (20 Oct 2026), kept as the record of what is live; both `DELEGATIONS_V2_DB` and `DELEGATIONS_MONEY_DB` are on. Everything in `docs/conferences/delegations-requests-for-christian.md` is live (his chat, 20 Oct), including `paid_cents_in_currency` / `other_currencies` in `my_pay_overview` totals (the leader Financials card uses them; /pay itself is Christian's to switch). `scratch-delegations-rebuild.sql` is the superseded single draft; never apply it.
 - Cron `paid-announcements`: not scheduled; nothing reaches recipients until it is. Schedule after the first approval in /admin (commented in `scratch-paid-announcements.sql`). Owners.
 - Cron `conference-draft-reminders` (`queue_conference_draft_reminders(false)`): not scheduled; needs Peter's go.
 - The email burst alarm goes to petizakhar@gmail.com; moving it to the team inbox needs SQL (the chat's Supabase work).

@@ -82,9 +82,16 @@ export default function FinancialsCard({ pay, payError, societyId, membersOwing,
     content = (
       <>
         <div className="flex items-baseline gap-2 flex-wrap">
-          <span style={{ fontFamily: FONT, fontSize: 26, fontWeight: 600, color: INK, fontVariantNumeric: 'tabular-nums' }}>{money(pay.totals.paid_cents, cur)}</span>
+          <span style={{ fontFamily: FONT, fontSize: 26, fontWeight: 600, color: INK, fontVariantNumeric: 'tabular-nums' }}>{money(pay.totals.paid_cents_in_currency ?? pay.totals.paid_cents, cur)}</span>
           <span style={{ fontFamily: FONT, fontSize: 14, color: INK_SOFT }}>paid</span>
         </div>
+        {/* my_pay_overview (Christian, 20 Oct 2026): paid_cents_in_currency is the
+            conference currency only; payments in other currencies are named, never added. */}
+        {(pay.totals.other_currencies?.length ?? 0) > 0 && (
+          <p style={{ fontFamily: FONT, fontSize: 13, color: INK_SOFT, margin: '-6px 0 0' }}>
+            Some payments are in {pay.totals.other_currencies!.join(', ')}. They are not included here
+          </p>
+        )}
         <div className="flex flex-col" style={{ gap: 9 }}>
           {pay.totals.in_review_cents > 0 && row('Waiting for review', money(pay.totals.in_review_cents, cur))}
           {delegateFees.total > 0 && row(`${your}Delegate Tickets`, <><b style={{ fontWeight: 600 }}>{delegateFees.done}</b> of {delegateFees.total} paid</>)}

@@ -87,7 +87,7 @@ export interface PayOverview {
   me: { application_id: string; role: string; status: string; payment_status: string; society_id: string | null; delegation: string | null; is_leader: boolean }[];
   items: PayItem[];
   payments: PayPayment[];
-  totals: { owed_cents: number; paid_cents: number; in_review_cents: number };
+  totals: { owed_cents: number; paid_cents: number; in_review_cents: number; paid_cents_in_currency?: number; other_currencies?: string[] };
   /** null, or one entry per delegation the caller leads. */
   delegation: PayDelegation[] | null;
 }

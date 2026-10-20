@@ -1,3 +1,5 @@
+> **Status (20 Oct 2026): all of this is live** (Christian's chat): `organiser_set_member_role`, `delegation_remove_member`, the wording fixes, the 9 renamed templates, `paid_cents_in_currency` / `other_currencies` in `my_pay_overview`, and our three SQL files. Both client switches are on. Contract: his project doc `peter-delegation-functions-live.md`.
+
 # Delegations: requests for Christian's chat
 
 From Peter's delegations rebuild, 20 Oct 2026, after Christian's answers of 19 Oct. Our SQL (`scratch-delegations-part1-people-and-seats.sql`) now holds people and seats only: it writes no invoices, payments, `payment_status`, coverage or ticket numbering, and changes none of the functions on your do-not-move list. Everything below touches money, so it is yours to build with a rollback test. Our screens only call it and show its sentence.

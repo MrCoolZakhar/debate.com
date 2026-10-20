@@ -32,7 +32,7 @@ export const DELEGATIONS_V2_DB = true;
 // Flip both v2.ts copies together once his functions are live.
 // Leaders never move anyone to or from faculty advisor (owners, 20 Oct 2026):
 // delegation_set_role is withdrawn and nothing here calls it.
-export const DELEGATIONS_MONEY_DB = false;
+export const DELEGATIONS_MONEY_DB = true;
 
 export type Result = { ok: true } | { ok: false; error: string };
 

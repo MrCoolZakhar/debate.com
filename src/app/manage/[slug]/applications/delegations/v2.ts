@@ -35,7 +35,7 @@ export const DELEGATIONS_V2_DB = true;
 // hover title "Coming soon, waiting for Christian" (owner, 20 Oct 2026). Only
 // organisers move someone between delegate and faculty advisor (owners, 20 Oct 2026);
 // delegation_set_role is withdrawn and nothing calls it. Flip both v2.ts copies together.
-export const DELEGATIONS_MONEY_DB = false;
+export const DELEGATIONS_MONEY_DB = true;
 
 export type SeatLimit = 'none' | 'paid' | 'expected';
 
