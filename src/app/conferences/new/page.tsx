@@ -1121,66 +1121,16 @@ export default function NewConferencePage() {
         }
       }
 
-      // ── PUBLISH ON CREATE (owner, 7 Oct 2026) ──────────────────────────
+      // ── GOES LIVE IN 3 DAYS, NOT ON CREATE (owner, 20 Oct 2026) ─────────
       //
-      // "So many conferences get left in the draft even though they are fully
-      // ready to be published": 216 of 302 non-demo conferences had NEVER been
-      // published, 95 of them made in the last 30 days, and 32 were already
-      // collecting applications while invisible to every applicant. A
-      // conference is therefore live the moment it is created, and Settings →
-      // Privacy takes it back to private in one switch (that direction is
-      // never gated).
-      //
-      // WHY THIS IS A SECOND WRITE and not `is_public: true` in the insert.
-      // The insert above is all-or-nothing: any refusal aborts the whole
-      // creation and the organiser loses every step they filled in. Two
-      // database rules have refused a publish: conferences_tbd_not_public and,
-      // before 12 Oct 2026, a publish payment gate. The
-      // `expected_delegates` note further up is the scar from exactly this
-      // failure mode. As a separate write a refusal costs nothing: the
-      // conference is already saved, it simply stays a draft, and the
-      // dashboard checklist's own "Publish your conference" row says what to
-      // do next.
-      //
-      // IT IS ATTEMPTED, never preconditioned on conferencePaymentsReady():
-      // the owner is dropping the publish gate separately, so an attempt that
-      // merely fails today starts succeeding the moment that SQL lands, with
-      // no code change. Dates to be decided are attempted too (owner,
-      // 12 Oct 2026: a TBD conference is public like any other and Explore
-      // lists it under "Dates to Be Decided"); until the owner drops the CHECK
-      // conferences_tbd_not_public (scratch-tbd-public.sql) that write is
-      // refused and swallowed here like any other refusal.
-      //
-      // Awaited (one fast write) but it can never block the redirect: every
-      // path below falls through to router.push.
-      {
-        try {
-          const { data: publishedRows, error: publishError } = await supabase
-            .from('conferences')
-            .update({ is_public: true, status: 'public' })
-            .eq('id', conferenceId)
-            .select('id');
-          if (publishError || !publishedRows || publishedRows.length === 0) {
-            // Refused (a gate, or RLS). Not an error the organiser needs: they
-            // have a conference, and it is a draft they can publish from the
-            // dashboard. Never surfaced, never retried.
-            console.warn(
-              'Conference created but left as a draft:',
-              publishError?.message ?? 'the publish write changed no row',
-            );
-          } else {
-            // Fire-and-forget, exactly as the dashboard's PublishModal does:
-            // ping IndexNow so the new public page gets crawled right away.
-            void fetch('/api/indexnow', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ slug }),
-            }).catch(() => {});
-          }
-        } catch (publishErr) {
-          console.warn('Conference created but left as a draft:', publishErr);
-        }
-      }
+      // Publish on create (7 Oct 2026) put conferences live before they were
+      // ready ("especially yesterday, there were like 2 that weren't ready to
+      // go live"). The database now stamps conferences.auto_publish_at =
+      // created + 3 days on insert, and publish_due_conferences (cron
+      // auto-publish-conferences, every 15 minutes) publishes it then, only
+      // once it has a logo. The manage header says when
+      // (PublishControls), and Publish there still goes live at once.
+      // Nothing is written here.
 
       // The saved draft is done: it stops its reminders and leaves My
       // conferences. Never blocks the redirect.

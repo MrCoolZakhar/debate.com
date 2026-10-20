@@ -39,6 +39,10 @@ export interface Conference {
   status: string;
   logo_url: string | null;
   banner_url: string | null;
+  /** When a never-published draft goes live by itself (20 Oct 2026): created
+   *  + 3 days, only once it has a logo (publish_due_conferences, every 15
+   *  minutes). Null once it has been published or unpublished by hand. */
+  auto_publish_at: string | null;
   start_date: string;
   end_date: string;
   /** Dates "to be decided": start/end are null and the conference cannot be
@@ -174,7 +178,7 @@ export function useManage() {
 
 const CONFERENCE_COLUMNS = [
   'id', 'slug', 'full_name', 'acronym', 'is_public', 'status',
-  'logo_url', 'banner_url', 'start_date', 'end_date', 'dates_tbd', 'country', 'city',
+  'logo_url', 'banner_url', 'auto_publish_at', 'start_date', 'end_date', 'dates_tbd', 'country', 'city',
   'format', 'expected_delegates', 'fee_amount', 'fee_currency',
   'contact_email', 'student_level', 'description',
   'instagram_url', 'facebook_url', 'tiktok_url', 'whatsapp_url', 'website_url',
