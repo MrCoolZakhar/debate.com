@@ -34,7 +34,7 @@ import {
 } from '../leaderKit';
 import { DELEGATIONS_V2_DB } from '../v2';
 import { useCommitteeRoster } from './committeeRoster';
-import { guideState, shortDay, useCommitteeGuides } from './useCommitteeGuides';
+import { guideState, shortDay, useCommitteeGuides, useOpenStudyGuide } from './useCommitteeGuides';
 import { CardTitle, MINE_TINT, ROW_LINE, SOFT_PANEL, SmallLabel } from './youKit';
 
 export interface PaperSummary {
@@ -68,6 +68,7 @@ export default function MyCommitteeSection({ conferenceId, conferenceStartDate, 
   const seatCrest = useSeatCrest(myAllocation);
   const { row: partner } = useCoDelegate(conferenceId, myAllocation);
   const guides = useCommitteeGuides(ccId ? [ccId] : []);
+  const openGuide = useOpenStudyGuide();
   const roster = useCommitteeRoster(ccId);
 
   if (!committee || !myAllocation) {
@@ -228,9 +229,9 @@ export default function MyCommitteeSection({ conferenceId, conferenceStartDate, 
     guide.kind === 'open' ? (
       <div className="flex flex-col gap-1.5">
         {guideFiles.map(g => (
-          <a key={g.id} href={g.file_url} target="_blank" rel="noopener noreferrer" className={`${BTN_CLASS} [overflow-wrap:anywhere]`} style={linkStyle}>
+          <button key={g.id} type="button" onClick={() => openGuide(g.file_url)} className={`${BTN_CLASS} [overflow-wrap:anywhere]`} style={linkStyle}>
             {guideFiles.length === 1 ? 'Open' : g.title}
-          </a>
+          </button>
         ))}
       </div>
     ) : null,

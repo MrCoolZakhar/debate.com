@@ -24,7 +24,7 @@ import { getFreshAuthedClient } from '@/lib/supabase-auth';
 import { friendlyError, plainOrFallback } from '@/lib/friendlyError';
 import { notifyOk } from '@/lib/appNotify';
 import { reviewDocumentReturn } from '@/lib/conferenceDocuments';
-import { signedPositionPaperUrl } from '@/lib/positionPapers';
+import { signedPositionPaperUrlOrNull } from '@/lib/positionPapers';
 import { PurchaseShell, PURCHASE_CSS } from '@/components/purchase/purchaseKit';
 import PdfViewer, { type PdfZoom } from '@/components/documents/PdfViewer';
 import { InfoHint } from '../settings/applicationsUi';
@@ -349,32 +349,43 @@ function NoFile() {
   );
 }
 
-/** The paper itself, through a short signed URL (the bucket is private). */
+/** The paper itself, through a short signed URL (the bucket is private, so the
+ *  stored public URL never opens: a failed signature says so instead). */
 function PaperFile({ url, name }: { url: string | null; name: string | null }) {
-  const [signed, setSigned] = useState<string | null>(null);
+  const [signed, setSigned] = useState<{ for: string; url: string | null } | null>(null);
   const [zoom, setZoom] = useState<PdfZoom>('fit');
   useEffect(() => {
     if (!url) return;
     let alive = true;
     void (async () => {
-      const c = await getFreshAuthedClient();
-      const s = c ? await signedPositionPaperUrl(c, url, 600) : url;
-      if (alive) setSigned(s);
+      let s: string | null = null;
+      try {
+        const c = await getFreshAuthedClient();
+        s = c ? await signedPositionPaperUrlOrNull(c, url, 600) : null;
+      } catch { s = null; }
+      if (alive) setSigned({ for: url, url: s });
     })();
     return () => { alive = false; };
   }, [url]);
   const isImage = useMemo(() => /\.(jpe?g|png)$/i.test(name ?? url ?? ''), [name, url]);
   if (!url) return <NoFile />;
-  if (!signed) return <div className="gv-fd-ph" style={{ flex: 1, margin: 16, minHeight: 240 }} aria-busy="true" />;
+  if (!signed || signed.for !== url) return <div className="gv-fd-ph" style={{ flex: 1, margin: 16, minHeight: 240 }} aria-busy="true" />;
+  if (!signed.url) {
+    return (
+      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 28, color: INK_SOFT, fontFamily: FONT }}>
+        This file can&apos;t be opened right now
+      </div>
+    );
+  }
   if (isImage) {
     return (
       <div style={{ flex: 1, minHeight: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16, background: '#F6F3EC' }}>
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={signed} alt={name ?? 'Position paper'} style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />
+        <img src={signed.url} alt={name ?? 'Position paper'} style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />
       </div>
     );
   }
-  return <PdfViewer url={signed} title={name ?? 'Position paper'} fileName={name ?? undefined} zoom={zoom} onZoomChange={setZoom} compact className="relative flex-1 min-h-0" />;
+  return <PdfViewer url={signed.url} title={name ?? 'Position paper'} fileName={name ?? undefined} zoom={zoom} onZoomChange={setZoom} compact className="relative flex-1 min-h-0" />;
 }
 
 const TODO_CSS = `

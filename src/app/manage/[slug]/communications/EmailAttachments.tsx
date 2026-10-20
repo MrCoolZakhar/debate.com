@@ -26,6 +26,7 @@ import {
   EMAIL_ATTACH_MAX_BYTES, EMAIL_ATTACH_MAX_FILES, attachmentsProblem, attachmentsTotalBytes, formatMb,
   STUDY_GUIDES_BUCKET, uploadEmailAttachment, type EmailAttachment,
 } from '@/lib/emailAttachments';
+import { studyGuidePath } from '@/lib/studyGuideFiles';
 
 const FOREST = '#1B3828';
 const INK = '#1C1410';
@@ -37,15 +38,6 @@ const LINE = 'rgba(27,56,40,0.14)';
 export interface GuideFile { id: string; committee: string; title: string; path: string; file_name: string; size: number }
 
 export interface AttachmentsSupport { enabled: boolean; docs: DocsOverviewItem[]; guides: GuideFile[] }
-
-/** The storage key inside the study-guides bucket, from a guide's public URL. */
-function guidePath(url: string): string | null {
-  const marker = '/study-guides/';
-  const i = url.indexOf(marker);
-  if (i === -1) return null;
-  const path = url.slice(i + marker.length).split(/[?#]/)[0];
-  try { return decodeURIComponent(path); } catch { return path; }
-}
 
 /** Every study guide of the conference that has a file (prompt 144). A failed read is none. */
 async function loadGuideFiles(conferenceId: string): Promise<GuideFile[]> {
@@ -59,7 +51,9 @@ async function loadGuideFiles(conferenceId: string): Promise<GuideFile[]> {
   if (error || !data) return [];
   const out: GuideFile[] = [];
   for (const r of data as unknown as Record<string, unknown>[]) {
-    const path = guidePath(String(r.file_url ?? ''));
+    // The bucket is private; an attachment keeps bucket + path and the sender
+    // downloads it with the service key, so only the path is needed here.
+    const path = studyGuidePath(String(r.file_url ?? ''));
     // The database accepts study guides stored under this conference's id only.
     if (!path || !path.startsWith(`${conferenceId}/`)) continue;
     const raw = r.conference_committees;

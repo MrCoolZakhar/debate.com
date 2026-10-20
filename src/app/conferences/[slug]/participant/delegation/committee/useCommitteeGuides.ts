@@ -8,8 +8,11 @@
 // any participant). A committee whose guides RLS hides reads as "no guide
 // yet", never as an error.
 
-import { useEffect, useState } from 'react';
-import { getFreshAuthedClient } from '@/lib/supabase-auth';
+import { useCallback, useEffect, useState } from 'react';
+import { useAuth } from '@/components/AuthProvider';
+import { getAuthedClient, getFreshAuthedClient } from '@/lib/supabase-auth';
+import { openStudyGuide } from '@/lib/studyGuideFiles';
+import { notifyErr } from '@/lib/appNotify';
 
 export interface GuideFile {
   id: string;
@@ -63,6 +66,20 @@ export function useCommitteeGuides(committeeIds: string[]): Map<string, Committe
   }, [key]);
 
   return key && loaded?.key === key ? loaded.map : null;
+}
+
+/** Opens a guide from a click. The `study-guides` bucket is private, so the tab
+ *  opens inside the click and is then pointed at a signed URL minted for the
+ *  viewer (getAuthedClient sends the SDK's current token at request time). */
+export function useOpenStudyGuide(): (fileUrl: string) => void {
+  const { session } = useAuth();
+  const token = session?.access_token ?? null;
+  return useCallback((fileUrl: string) => {
+    if (!token) { notifyErr("This file can't be opened right now", 'study-guides'); return; }
+    void openStudyGuide(getAuthedClient(token), fileUrl).then(ok => {
+      if (!ok) notifyErr("This file can't be opened right now", 'study-guides');
+    });
+  }, [token]);
 }
 
 /** One line for a committee's guide: released (with a link), out on a date, or not out yet. */

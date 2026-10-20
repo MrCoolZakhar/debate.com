@@ -11,6 +11,8 @@ import { getAuthedClient } from '@/lib/supabase-auth';
 import { SectionCard, OUTFIT } from './shared';
 import { CardHeading, INK_SOFT } from './dashboardKit';
 import Loader from '@/components/Loader';
+import { openStudyGuide } from '@/lib/studyGuideFiles';
+import { notifyErr } from '@/lib/appNotify';
 
 interface StudyGuide {
   id: string;
@@ -54,6 +56,14 @@ export default function StudyGuideCard({ committeeId }: { committeeId: string | 
   // Started a microtask later so no state is set synchronously in the effect.
   useEffect(() => { void Promise.resolve().then(() => load()); }, [load]);
 
+  // The bucket is private: the tab opens inside the click, then gets a signed URL.
+  function openGuide(fileUrl: string) {
+    if (!session) return;
+    void openStudyGuide(getAuthedClient(session.access_token), fileUrl).then(ok => {
+      if (!ok) notifyErr("This file can't be opened right now", 'study-guides');
+    });
+  }
+
   // useNow ticks every minute, so a scheduled guide flips to released while the page is open.
   const scheduled = !!releaseAt && new Date(releaseAt).getTime() > now;
 
@@ -71,12 +81,11 @@ export default function StudyGuideCard({ committeeId }: { committeeId: string | 
       ) : (
         <div className="flex flex-col gap-2">
           {guides.map(sg => (
-            <a
+            <button
               key={sg.id}
-              href={sg.file_url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center gap-3.5 rounded-2xl px-4 py-3 transition-colors"
+              type="button"
+              onClick={() => openGuide(sg.file_url)}
+              className="flex w-full items-center gap-3.5 rounded-2xl px-4 py-3 text-left transition-colors cursor-pointer focus:outline-none"
               style={{ border: '1px solid rgba(221,212,192,0.7)', backgroundColor: 'rgba(237,231,216,0.25)', textDecoration: 'none' }}
               onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'color-mix(in srgb, var(--gv-main) 5%, transparent)'; }}
               onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(237,231,216,0.25)'; }}
@@ -92,7 +101,7 @@ export default function StudyGuideCard({ committeeId }: { committeeId: string | 
                 <p style={{ color: INK_SOFT, fontFamily: OUTFIT, fontSize: 13, lineHeight: 1.45, margin: '3px 0 0', overflowWrap: 'anywhere' }}>{sg.file_name}</p>
               </div>
               <Download size={15} style={{ color: '#9A8A78', flexShrink: 0 }} />
-            </a>
+            </button>
           ))}
         </div>
       )}

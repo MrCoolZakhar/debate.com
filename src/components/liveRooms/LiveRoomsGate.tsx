@@ -48,7 +48,7 @@ import LiveRoomsDialog, { PROMPT_ATTR, itemHref, type PromptItem, type Standalon
 
 const EXCLUDED_PREFIXES = [
   '/chair', '/delegate', '/voting', '/advisor', '/join',
-  '/auth', '/unsubscribe', '/drafts', '/invites', '/api',
+  '/auth', '/unsubscribe', '/drafts', '/invites', '/api', '/files', '/i/',
 ];
 const EXCLUDED_SEGMENTS = ['/apply', '/pay'];
 

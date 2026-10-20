@@ -27,17 +27,52 @@ export function positionPaperPath(fileUrl: string | null | undefined): string | 
 /** The bucket is private (23 Sep 2026): a paper is opened through a short-lived
  *  signed URL minted for the viewer, which storage grants only to the author,
  *  their seatmates, the committee's chairs and the conference's organisers.
- *  Falls back to the stored URL when signing fails, so nothing throws. */
+ *  Null when it cannot be signed (no access, no path, a network failure); never
+ *  throws. Readers show "This file can't be opened right now", never the stored
+ *  public URL, which no longer opens. */
+export async function signedPositionPaperUrlOrNull(
+  supabase: SupabaseLike,
+  fileUrl: string | null | undefined,
+  expiresInSeconds = 4 * 60 * 60,
+): Promise<string | null> {
+  const path = positionPaperPath(fileUrl);
+  if (!path) return null;
+  try {
+    const { data, error } = await supabase.storage.from('position-papers').createSignedUrl(path, expiresInSeconds);
+    if (error || !data?.signedUrl) return null;
+    return data.signedUrl;
+  } catch {
+    return null;
+  }
+}
+
+/** Legacy shape for older callers: falls back to the stored URL when signing
+ *  fails. New readers use signedPositionPaperUrlOrNull. */
 export async function signedPositionPaperUrl(
   supabase: SupabaseLike,
   fileUrl: string,
   expiresInSeconds = 4 * 60 * 60,
 ): Promise<string> {
-  const path = positionPaperPath(fileUrl);
-  if (!path) return fileUrl;
-  const { data, error } = await supabase.storage.from('position-papers').createSignedUrl(path, expiresInSeconds);
-  if (error || !data?.signedUrl) return fileUrl;
-  return data.signedUrl;
+  return (await signedPositionPaperUrlOrNull(supabase, fileUrl, expiresInSeconds)) ?? fileUrl;
+}
+
+/** Opens a paper in a new tab from a click. The tab is opened INSIDE the click,
+ *  before any await, so browsers never block it, then pointed at the signed URL.
+ *  Returns false (and closes the empty tab) when the paper cannot be opened. */
+export async function openPositionPaper(supabase: SupabaseLike, fileUrl: string | null | undefined): Promise<boolean> {
+  const tab = typeof window !== 'undefined' ? window.open('about:blank', '_blank') : null;
+  const url = await signedPositionPaperUrlOrNull(supabase, fileUrl, 10 * 60);
+  if (!url) {
+    tab?.close();
+    return false;
+  }
+  if (tab) {
+    try { tab.opener = null; } catch { /* cross-origin after navigation; harmless */ }
+    tab.location.href = url;
+  } else {
+    window.location.href = url;
+  }
+  return true;
 }
 
 /** Downloads a position paper with its file name (prompt 143): a signed URL with

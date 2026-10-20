@@ -17,12 +17,14 @@ import type { LucideIcon } from 'lucide-react';
 import SiteNav from '@/components/SiteNav';
 import Loader from '@/components/Loader';
 import { useAuth } from '@/components/AuthProvider';
-import { getAuthedClient } from '@/lib/supabase-auth';
+import { getAuthedClient, getFreshAuthedClient } from '@/lib/supabase-auth';
 import { getCountryByCode } from '@/lib/countries';
 import { CircleFlag } from '@/components/CircleFlag';
 import ProfileLink from '@/components/ProfileLink';
 import Avatar from '@/components/Avatar';
-import { downloadPositionPaper, isPaperLate, signedPositionPaperUrl } from '@/lib/positionPapers';
+import { downloadPositionPaper, isPaperLate, openPositionPaper, signedPositionPaperUrlOrNull } from '@/lib/positionPapers';
+import { SkeletonBlock } from '@/components/Skeleton';
+import { notifyErr } from '@/lib/appNotify';
 import { NEU, NEU_GRADIENTS, EASE, OUTFIT, NeuCard } from '@/components/neu';
 import { ActionButton } from '@/components/PositionPaperButtons';
 
@@ -191,7 +193,7 @@ function formatBytes(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-function PaperHandoff({ fileName, fileUrl, sizeBytes, onDownload }: { fileName: string; fileUrl: string; sizeBytes: number; onDownload: () => void }) {
+function PaperHandoff({ fileName, sizeBytes, onOpen, onDownload }: { fileName: string; sizeBytes: number; onOpen: () => void; onDownload: () => void }) {
   const size = formatBytes(sizeBytes);
   return (
     /* `display` stays in the className, never the inline style: NeuCard spreads
@@ -221,13 +223,12 @@ function PaperHandoff({ fileName, fileUrl, sizeBytes, onDownload }: { fileName: 
       </div>
 
       {/* Primary: full width, 48px, icon leading the word (rulebook §7). */}
-      <a
-        href={fileUrl}
-        target="_blank"
-        rel="noopener noreferrer"
+      <button
+        type="button"
+        onClick={onOpen}
         className="flex items-center justify-center gap-2.5 focus:outline-none"
         style={{
-          minHeight: 48, borderRadius: 14, textDecoration: 'none',
+          minHeight: 48, borderRadius: 14, textDecoration: 'none', cursor: 'pointer', border: 'none',
           background: `linear-gradient(135deg, ${NEU_GRADIENTS.forest[0]}, ${NEU_GRADIENTS.forest[1]})`,
           color: 'var(--gv-on-main)', fontFamily: OUTFIT, fontWeight: 800, fontSize: 14,
           boxShadow: `0 6px 16px color-mix(in srgb, ${NEU_GRADIENTS.forest[0]} 27%, transparent)`,
@@ -235,7 +236,7 @@ function PaperHandoff({ fileName, fileUrl, sizeBytes, onDownload }: { fileName: 
       >
         <ExternalLink size={17} strokeWidth={2.2} />
         Open the PDF
-      </a>
+      </button>
 
       <button
         type="button"
@@ -312,9 +313,7 @@ export default function PositionPaperPage() {
       if (cancelled) return;
       if (error || !data) { setPaper(null); setLoading(false); return; }
       const row = data as unknown as PaperRow;
-      // The bucket is private: open the file through a signed URL minted for this viewer.
-      row.file_url = await signedPositionPaperUrl(supabase, row.file_url);
-      if (cancelled) return;
+      // file_url stays the stored form; the viewer signs it below.
       setPaper(row);
 
       const committee = row.conference_committees;
@@ -372,6 +371,31 @@ export default function PositionPaperPage() {
   useEffect(() => {
     threadRef.current?.scrollTo({ top: threadRef.current.scrollHeight });
   }, [messages]);
+
+  // The bucket is private: the embedded viewer gets a signed URL minted for
+  // this viewer, keyed on the stored file_url and the user id. undefined while
+  // it is out, null when it could not be signed (never the stored public URL).
+  const storedFileUrl = paper?.file_url ?? null;
+  const signKey = storedFileUrl && user?.id ? `${user.id}|${storedFileUrl}` : null;
+  const [signedPdf, setSignedPdf] = useState<{ key: string; url: string | null } | null>(null);
+  useEffect(() => {
+    if (!signKey || !storedFileUrl) return;
+    let cancelled = false;
+    (async () => {
+      const client = await getFreshAuthedClient();
+      const url = client ? await signedPositionPaperUrlOrNull(client, storedFileUrl) : null;
+      if (!cancelled) setSignedPdf({ key: signKey, url });
+    })();
+    return () => { cancelled = true; };
+  }, [signKey, storedFileUrl]);
+  const pdfUrl: string | null | undefined = signKey && signedPdf?.key === signKey ? signedPdf.url : undefined;
+
+  function openPaper() {
+    if (!session || !paper) return;
+    void openPositionPaper(getAuthedClient(session.access_token), paper.file_url).then(ok => {
+      if (!ok) notifyErr("This file can't be opened right now", 'position-papers');
+    });
+  }
 
   function updateStatus(status: 'approved' | 'rejected') {
     if (!user || !session || !paper || savingStatus) return;
@@ -668,7 +692,7 @@ export default function PositionPaperPage() {
                     {paper.file_name}
                   </p>
                   <span className="flex items-center gap-2 flex-shrink-0">
-                  {!pdfFailed && (
+                  {!pdfFailed && !!pdfUrl && (
                     <span className="inline-flex items-center gap-1.5" aria-label="Zoom">
                       <button type="button" className="gv-pp-zoom" aria-label="Zoom out" disabled={pdfZoom <= 0.5}
                         onClick={() => setPdfZoom(z => Math.max(0.5, Math.round((z - 0.25) * 100) / 100))}>
@@ -702,17 +726,25 @@ export default function PositionPaperPage() {
                 </div>
                 {/* Our own viewer (prompt 141): the pages on white, at 75% by
                     default, zoomed from the header; a file it cannot draw says so. */}
-                {pdfFailed ? (
+                {pdfUrl === undefined ? (
+                  <div className="flex-1 flex justify-center" style={{ padding: 24, background: '#FFFFFF', minHeight: 0 }}>
+                    <SkeletonBlock width="75%" height="100%" radius={6} style={{ maxHeight: 900 }} />
+                  </div>
+                ) : pdfUrl === null ? (
+                  <p className="flex-1" style={{ fontFamily: OUTFIT, fontSize: 14, color: NEU.inkSoft, padding: 24, margin: 0, background: '#FFFFFF' }}>
+                    This file can&apos;t be opened right now
+                  </p>
+                ) : pdfFailed ? (
                   <p className="flex-1" style={{ fontFamily: OUTFIT, fontSize: 14, color: NEU.inkSoft, padding: 24, margin: 0, background: '#FFFFFF' }}>
                     This file could not be shown here. Use Download to open it
                   </p>
                 ) : (
-                  <PlainPdfPages url={paper.file_url} zoom={pdfZoom} onFailed={() => setPdfFailed(true)} className="flex-1 w-full" style={{ minHeight: 0 }} />
+                  <PlainPdfPages url={pdfUrl} zoom={pdfZoom} onFailed={() => setPdfFailed(true)} className="flex-1 w-full" style={{ minHeight: 0 }} />
                 )}
               </NeuCard>
 
               {/* PDF, phone and tablet: hand it to the native viewer. */}
-              <PaperHandoff fileName={paper.file_name} fileUrl={paper.file_url} sizeBytes={paper.file_size_bytes} onDownload={() => { if (session) void downloadPositionPaper(getAuthedClient(session.access_token), paper.file_url, paper.file_name); }} />
+              <PaperHandoff fileName={paper.file_name} sizeBytes={paper.file_size_bytes} onOpen={openPaper} onDownload={() => { if (session) void downloadPositionPaper(getAuthedClient(session.access_token), paper.file_url, paper.file_name); }} />
             </div>
           </>
         )}

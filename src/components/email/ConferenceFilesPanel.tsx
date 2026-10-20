@@ -11,11 +11,17 @@
 // to change. So a button that said "Attach" would be a button that quietly
 // did nothing, or a promise cashed by somebody else later.
 //
-// What organisers actually have is already hosted: every study guide, rules of
-// procedure and background document the secretariat uploaded lives in the
-// PUBLIC `study-guides` bucket with a stable URL. So a file goes into an email
-// as a real link on a real button, one click for the reader, nothing for the
-// mail server to weigh, and no 40MB message that lands in spam.
+// What organisers actually have is already hosted: every study guide the
+// secretariat uploaded lives in the `study-guides` bucket. That bucket is
+// PRIVATE (20 Oct 2026), so the stored public URL no longer opens. A file goes
+// into an email as a button on the stable Gavelling link
+// `https://gavelling.com/files/study-guide/<study_guides.id>`
+// (src/app/files/study-guide/[id]/page.tsx): the reader signs in, RLS decides
+// whether they may read the guide (released guides for seated delegates,
+// chairs, delegation members, organisers), and the page opens a short signed
+// URL. One click for the reader, nothing for the mail server to weigh, no 40MB
+// message that lands in spam, and the link keeps working because it never
+// carries an expiring signature.
 //
 // WHAT IT SHOWS. `study_guides` rows for this conference, reached through
 // `conference_committees` (the table is scoped per COMMITTEE, not per
@@ -25,10 +31,11 @@
 // a delegate submission can never appear here.
 //
 // UNPUBLISHED guides are shown but marked, because linking one in an email is
-// how you accidentally release it early. Rows whose `file_url` is a bare
-// relative path (six seed rows in production point at the wrong bucket) cannot
-// produce a working link, so they are listed and disabled rather than
-// silently inserted as a dead URL.
+// how you accidentally release it early (the link page still refuses it to a
+// delegate before the release date). Rows whose `file_url` is not a
+// `study-guides` object (six seed rows in production are a bare relative path
+// into the wrong bucket) cannot be signed, so they are listed and disabled
+// rather than silently inserted as a dead link.
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { useEffect, useState } from 'react';
@@ -38,6 +45,8 @@ import { Emoji3D, NEU, NEU_GRADIENTS, OUTFIT, EASE } from '@/components/neu';
 import { SOFT, AMBER_INK, CARD_BORDER } from '@/app/manage/[slug]/live/tokens';
 import type { EmailBlock } from '@/lib/emailBlocks';
 import { friendlyError } from '@/lib/friendlyError';
+import { absoluteUrl } from '@/lib/seo';
+import { studyGuidePath } from '@/lib/studyGuideFiles';
 
 const FOREST = '#1B3828';
 const INK = '#1C1410';
@@ -47,10 +56,11 @@ export interface ConferenceFile {
   title: string;
   fileName: string;
   sizeBytes: number | null;
+  /** The stable Gavelling link for the guide (/files/study-guide/<id>). */
   url: string;
   published: boolean;
   committee: string;
-  /** False when `file_url` is not an absolute http(s) URL, see the note above. */
+  /** False when `file_url` is not a study-guides object, see the note above. */
   linkable: boolean;
 }
 
@@ -89,16 +99,17 @@ export function useConferenceFiles(conferenceId: string, accessToken: string | n
         // both rather than betting on one.
         const raw = r.conference_committees;
         const cc = (Array.isArray(raw) ? raw[0] : raw) as { name?: string; abbreviation?: string | null } | undefined;
-        const url = String(r.file_url ?? '');
+        const stored = String(r.file_url ?? '');
+        const id = String(r.id);
         return {
-          id: String(r.id),
+          id,
           title: String(r.title ?? 'Untitled'),
           fileName: String(r.file_name ?? ''),
           sizeBytes: (r.file_size_bytes as number | null) ?? null,
-          url,
+          url: absoluteUrl(`/files/study-guide/${id}`),
           published: r.is_published === true,
           committee: cc?.abbreviation || cc?.name || '',
-          linkable: /^https?:\/\//i.test(url),
+          linkable: studyGuidePath(stored) !== null,
         };
       }));
     })();

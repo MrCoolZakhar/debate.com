@@ -40,7 +40,7 @@ import {
   cardStyle, committeeEmblemSrc, linkStyle, primaryBtn,
 } from '../leaderKit';
 import { DELEGATIONS_V2_DB } from '../v2';
-import { guideState, useCommitteeGuides } from '../committee/useCommitteeGuides';
+import { guideState, useCommitteeGuides, useOpenStudyGuide } from '../committee/useCommitteeGuides';
 import { CardTitle, MINE_TINT, ROW_LINE, SOFT_PANEL } from '../committee/youKit';
 
 const ROLE_WORD: Record<RosterMember['role'], string> = {
@@ -166,6 +166,7 @@ export default function MemberDelegationCard({ conferenceId, conferenceSlug, soc
     }];
   }, [groups, myAllocation, committees]);
   const guides = useCommitteeGuides(guideCommittees.map(c => c.id ?? ''));
+  const openGuide = useOpenStudyGuide();
 
   const placeCountry = look?.country_code ? getCountryByCode(look.country_code)?.name ?? null : null;
   const place = [look?.city?.trim() || null, placeCountry].filter(Boolean).join(', ');
@@ -332,9 +333,9 @@ export default function MemberDelegationCard({ conferenceId, conferenceSlug, soc
             ) : st.kind === 'open' ? (
               <span className="flex flex-col items-end gap-1 min-w-0" style={{ maxWidth: '50%' }}>
                 {files.map(g => (
-                  <a key={g.id} href={g.file_url} target="_blank" rel="noopener noreferrer" className={`${BTN_CLASS} [overflow-wrap:anywhere] text-right`} style={linkStyle}>
+                  <button key={g.id} type="button" onClick={() => openGuide(g.file_url)} className={`${BTN_CLASS} [overflow-wrap:anywhere] text-right`} style={linkStyle}>
                     {files.length === 1 ? 'Open' : g.title}
-                  </a>
+                  </button>
                 ))}
               </span>
             ) : (

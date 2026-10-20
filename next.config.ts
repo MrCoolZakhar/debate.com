@@ -17,6 +17,7 @@ const NOINDEX_ROUTES = [
   '/invites/:path*',
   '/i/:path*',
   '/drafts/:path*',
+  '/files/:path*',
   '/delegation/:path*',
   '/unsubscribe',
   '/api/:path*',
