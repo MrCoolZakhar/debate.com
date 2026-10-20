@@ -60,6 +60,8 @@ import { GENERAL_CSS, IdentityBanner, IdentityLogo, IdField, PlainField, NameFie
 import { PlatformLogo } from '@/components/conferences/ApplicationSourceMark';
 import { SettingsShell, type ShellSection } from './settingsShell';
 import { CountryPicker } from './countryPicker';
+import TeamApplicants from './TeamApplicants';
+import { useTeamWaitingCount } from './teamApplicantsApi';
 import {
   SectionHead, Group, Row, SwitchRow, SwitchGrid, BigCount, Switch as KitSwitch, TINT_GOLD_BG, TINT_GREEN_BG, EmojiDisc, TYPE,
   listedRoles, generalAnswer, inGeneralScope, GENERAL_FIELDS, type RoleSetupConfig, TYPE_PX,
@@ -423,6 +425,8 @@ export default function SettingsPage() {
   // 2026). Re-read on the flags event Review and Publish fires after Approve,
   // Return and Publish.
   const [awardsWaiting, setAwardsWaiting] = useState(0);
+  // Secretariat and staff applicants waiting in Settings > Team (the Team badge).
+  const [teamWaiting, setTeamWaiting] = useTeamWaitingCount(conference?.id ?? null);
   const awardsConfId = conference?.id ?? null;
   useEffect(() => {
     if (!awardsConfId) return;
@@ -3230,7 +3234,7 @@ export default function SettingsPage() {
 
   return (
     <div className="px-4 sm:px-6 md:px-10 pt-6 pb-10" style={{ maxWidth: activeTab === 'organizers' ? '1500px' : '1380px' }}>
-      <SettingsShell active={SHELL_OF[activeTab]} onOpen={(k) => openSection(TAB_OF[k])} conferenceName={shellName} fixes={{ applications: settingsFixCount, awards: awardsWaiting }}>
+      <SettingsShell active={SHELL_OF[activeTab]} onOpen={(k) => openSection(TAB_OF[k])} conferenceName={shellName} fixes={{ applications: settingsFixCount, awards: awardsWaiting, team: teamWaiting }}>
       <div>
 
       {activeTab === 'applications' && (
@@ -4170,6 +4174,15 @@ export default function SettingsPage() {
             focal={<BigCount n={organizers.length} word={organizers.length === 1 ? 'person' : 'people'} />}
           />
         </div>
+      )}
+      {activeTab === 'organizers' && conference && (
+        <TeamApplicants
+          conferenceId={conference.id}
+          conferenceSlug={conference.slug}
+          roleConfigs={roleConfigs}
+          onTeamChanged={loadOrganizers}
+          onWaitingChange={setTeamWaiting}
+        />
       )}
       {activeTab === 'organizers' && (() => {
         // ── The team, drawn as a hierarchy ──────────────────────────────────

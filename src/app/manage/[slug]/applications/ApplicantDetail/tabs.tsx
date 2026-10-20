@@ -20,6 +20,7 @@ import {
   C, OUTFIT, NUM, SeatFlag, SectionTitle, FactRow, Empty, Spinner, ErrorLine, fmtDay, fmtDateTime, ordinal,
 } from './kit';
 import type { ApplicantTab } from './url';
+import JobPicksBlock, { type JobPick } from '../JobPicksBlock';
 
 // ── helpers ─────────────────────────────────────────────────────────────────
 
@@ -74,7 +75,7 @@ export interface OverviewDelegation {
 
 export function OverviewTab({
   app, isDelegate, conferenceSlug, experienceLevel, cvCount, totals, ledgerLoading, feeCharged, onTab,
-  answerItems, orphanAnswers, delegation, onOpenDelegation, dob, age,
+  answerItems, orphanAnswers, delegation, onOpenDelegation, dob, age, jobPicks,
 }: {
   app: ApplicantApp;
   isDelegate: boolean;
@@ -91,6 +92,8 @@ export function OverviewTab({
   onOpenDelegation?: () => void;
   dob: string | null;
   age: number | null;
+  /** A chair applicant's ranked Job Board picks (job_application_picks). */
+  jobPicks?: JobPick[] | null;
 }) {
   const allocated = !!app.assigned_committee && (app.status === 'assigned' || app.status === 'checked-in' || !!app.assigned_country_name);
   const pref = matchedPreference(app);
@@ -213,6 +216,9 @@ export function OverviewTab({
             )}
           </section>
         )}
+
+        {/* A chair applicant's Job Board picks, beside their answers. */}
+        {app.role === 'chair' && <JobPicksBlock picks={jobPicks} />}
       </div>
 
       <div className="min-w-0 flex flex-col" style={{ gap: 22 }}>

@@ -786,7 +786,7 @@ export const GENERAL_FIELDS: readonly GeneralField[] = ['auto_accept', 'payment_
 /** Does the rule for every role cover this field on this role? */
 export function inGeneralScope(field: GeneralField, role: string): boolean {
   if (field === 'payment_timing') return roleHasPrice(role);
-  if (field === 'auto_accept') return role !== 'secretariat';
+  if (field === 'auto_accept') return role !== 'secretariat' && role !== 'staff';
   return role === 'delegate' || role === 'head-delegate';
 }
 

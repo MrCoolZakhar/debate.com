@@ -62,6 +62,7 @@ export const ROLE_TONE: Record<string, PillTone> = {
 export const ORGANISER_LABEL: Record<string, string> = {
   owner:       'Organiser · Owner',
   secretariat: 'Organiser · Secretariat',
+  staff:       'Organiser · Staff',
   organizer:   'Organiser',
 };
 

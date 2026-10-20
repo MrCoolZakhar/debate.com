@@ -170,7 +170,7 @@ export function SettingsShell({ active, onOpen, conferenceName, fixes, children 
               >
                 <EmojiDisc emoji={s.emoji} icon={s.icon} tint={s.tint} size={32} />
                 {s.label}
-                <FixBadge n={fixes?.[s.key] ?? 0} size={20} label={s.key === 'awards' ? slatesWaitingLabel : undefined} />
+                <FixBadge n={fixes?.[s.key] ?? 0} size={20} label={s.key === 'awards' ? slatesWaitingLabel : s.key === 'team' ? (n: number) => `${n} team ${n === 1 ? 'applicant' : 'applicants'} waiting` : undefined} />
               </button>
             );
           })}

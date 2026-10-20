@@ -106,3 +106,47 @@ The legacy `job_postings` / `job_applications` code is gone from `src/` (the tab
 - `src/app/manage/[slug]/store/JobBoardStoreCard.tsx`: the Store card.
 - `src/app/manage/[slug]/layout.tsx`: the rail's "Coming soon" tag removed.
 - `src/lib/organizerPermissions.ts`: the `job_board` blurb.
+
+## Prompt 3: team applicants
+
+### Where secretariat and staff applicants land
+
+Secretariat and staff applicants land only in Settings > Team, in an Applicants list with the filters Waiting, Accepted, Rejected and All. They are no longer listed, counted, filtered, exported, bulk-selected or emailed on the Applications page, which shows one slim line instead: "N team applicants are in Settings > Team". Chair applicants stay in Applications.
+
+### The reads and writes
+
+- `team_applicants(p_conf)`: the list. Calling it also records that an organizer reviewed applicants, which feeds the Unlimited "actively reviewing" line. It returns `can_accept`: false without the Team permission, and then the organizer can read and reject but Accept is greyed with "Adding someone to the team needs the Team permission".
+- `accept_team_application(p_application_id, p_permissions, p_public_title)`: for secretariat and staff. `p_public_title` null means the first pick's listing title. The new `conference_organizers` row has role `'secretariat'` or `'staff'` and `show_on_public` false. `accept_secretariat_application` stays in the database, but the client no longer calls it.
+
+### The review pop-up
+
+It shows who they are, their MUN experience, their answers and their Job Board picks. Accept replaces the pop-up's content with the permissions step (the `ORGANIZER_SECTIONS`, all unticked, and a Public title prefilled from the first pick), then runs the same post-accept effects as before: the `application_accepted` email, `payment_available` when `payment_timing` is `after_acceptance`, `notifyIfNeeded` and `heldUnresolvedMessage`. Reject is asked in place and runs the Applications page's reject, shared in `applications/teamDecisions.ts`.
+
+### The Unlimited badge
+
+`conference_unlimited_applicants(p_conf)` returns a `uuid[]` of the applicants who are Gavelling Unlimited members. They carry a small gold "Unlimited" mark (`src/components/conferences/UnlimitedMark.tsx`) with the tooltip "Gavelling Unlimited member" on Applications rows, cards and the applicant pop-up, and on team applicant rows.
+
+### Chair picks
+
+`job_application_picks(p_conf)` feeds the "From the Job Board" block in a chair applicant's pop-up (`applications/JobPicksBlock.tsx`, also used in the team review pop-up).
+
+### Marking applicants reviewed
+
+`job_mark_reviewed(p_conf)` is called once when the Applications page opens, fire and forget.
+
+### Organizer role 'staff'
+
+`conference_organizers.role` can be `'staff'`, shown as "Staff" and treated like `'secretariat'` everywhere (for example `ORGANISER_LABEL` in `src/components/PersonalConferenceCard.tsx`, and `unstartedConferences.ts`, which leaves both out). The public secretariat list is unaffected: `sync_display_secretariat()` builds `conferences.display_secretariat` from `show_on_public` only, whatever the role.
+
+## Files of prompt 3
+
+- `src/app/manage/[slug]/applications/teamDecisions.ts`: the shared accept and reject.
+- `src/app/manage/[slug]/applications/JobPicksBlock.tsx`: the "From the Job Board" block.
+- `src/app/manage/[slug]/applications/useJobBoardApplicantExtras.ts`: the hook for the unlimited ids, the picks and the mark reviewed.
+- `src/app/manage/[slug]/applications/TeamApplicantsLine.tsx`: the slim line.
+- `src/app/manage/[slug]/applications/page.tsx`: team applicants taken out, the hook and the line mounted.
+- `src/components/conferences/UnlimitedMark.tsx`: the Unlimited mark.
+- `src/app/manage/[slug]/settings/teamApplicantsApi.ts`: the team_applicants read and the Team badge count.
+- `src/app/manage/[slug]/settings/TeamApplicants.tsx`: the Applicants list (filters, rows, accept and reject) mounted under Your Team.
+- `src/app/manage/[slug]/settings/TeamApplicantPopup.tsx`: the review pop-up and its permissions step.
+- `src/app/manage/[slug]/settings/settingsShell.tsx`: the Team badge's spoken label. `settings/panelKit.tsx`: staff, like secretariat, is never auto accepted.

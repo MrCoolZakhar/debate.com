@@ -12,7 +12,7 @@
 // A conference counts when ALL of these hold:
 //   - the person is on its team as 'owner' (the creator or a co-owner) or
 //     'organizer' (conference_organizers; every creator has an owner row).
-//     'secretariat' is left out: it cannot finish the set-up.
+//     'secretariat' and 'staff' are left out: they cannot finish the set-up.
 //   - it is not a test or demo conference (isTestConference)
 //   - it is not over: its last day (end date, else start date) is today or
 //     later, and a conference with no dates yet counts as not over

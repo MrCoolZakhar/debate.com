@@ -23,6 +23,8 @@ import { OverviewTab, PreferencesTab, ExperienceTab, type AnswerItem, type Overv
 import PaymentTab, { type AidInfo } from './PaymentTab';
 import { C, OUTFIT, SeatFlag, fmtDay } from './kit';
 import { type ApplicantTab, initialApplicantTab, writeApplicantTab } from './url';
+import UnlimitedMark from '@/components/conferences/UnlimitedMark';
+import type { JobPick } from '../JobPicksBlock';
 
 export type { AnswerItem, OverviewDelegation } from './tabs';
 export type { AidInfo } from './PaymentTab';
@@ -90,7 +92,7 @@ export default function ApplicantDetailDialog({
   app, name, email, age, cardRef, onClose, conferenceSlug, accessToken,
   chips, actions, actionsWithoutPayment, paymentControls, isDelegate, showsPreferences, feeCharged,
   experienceLevel, answerItems, orphanAnswers, listedExperience, showListedExperience, aid, onOpenDelegation,
-  dob, delegation,
+  dob, delegation, unlimited = false, jobPicks = null,
 }: {
   app: ApplicantApp;
   name: string;
@@ -120,6 +122,10 @@ export default function ApplicantDetailDialog({
   /** profiles.date_of_birth ('YYYY-MM-DD'), readable by every organiser of the conference. */
   dob: string | null;
   delegation: OverviewDelegation | null;
+  /** Holds Gavelling Unlimited (conference_unlimited_applicants). */
+  unlimited?: boolean;
+  /** A chair applicant's ranked Job Board picks. */
+  jobPicks?: JobPick[] | null;
 }) {
   const tabs = useMemo<Exclude<ApplicantTab, 'answers'>[]>(
     () => (['overview', ...(showsPreferences ? ['preferences' as const] : []), 'experience', 'payment'] as Exclude<ApplicantTab, 'answers'>[]),
@@ -209,7 +215,8 @@ export default function ApplicantDetailDialog({
             </ProfileLink>
 
             <div className="flex-1 min-w-0">
-              <ProfileLink userId={app.user_id} name={name} newTab style={{ display: 'block', color: 'inherit', textDecoration: 'none' }}>
+              <div className="flex items-center flex-wrap" style={{ gap: '4px 10px' }}>
+              <ProfileLink userId={app.user_id} name={name} newTab style={{ display: 'block', minWidth: 0, maxWidth: '100%', color: 'inherit', textDecoration: 'none' }}>
                 <h2
                   id="apd-name"
                   className="apdName"
@@ -221,6 +228,8 @@ export default function ApplicantDetailDialog({
                   {name}
                 </h2>
               </ProfileLink>
+              {unlimited && <UnlimitedMark />}
+              </div>
               {email && (
                 <p style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 500, color: 'rgba(237,231,216,0.78)', marginTop: 2, overflowWrap: 'anywhere' }}>{email}</p>
               )}
@@ -315,6 +324,7 @@ export default function ApplicantDetailDialog({
                 onOpenDelegation={onOpenDelegation}
                 dob={dob}
                 age={age}
+                jobPicks={jobPicks}
               />
             )}
             {tab === 'preferences' && <PreferencesTab app={app} />}
