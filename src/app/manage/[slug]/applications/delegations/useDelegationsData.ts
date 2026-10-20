@@ -121,7 +121,7 @@ export function useDelegationsData<M extends DelegationMemberLite>(args: {
       supabase.from('conference_committees')
         .select(`
           id, name, abbreviation, logo_url,
-          committee_country_slots (id, country_code, country_name, delegation_size, is_observer),
+          committee_country_slots (id, country_code, country_name, delegation_size, is_observer, logo_url),
           conference_allocations (id, country_code, country_name, seat, society_id, application_id, user_id)
         `)
         .eq('conference_id', conferenceId)

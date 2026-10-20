@@ -30,6 +30,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Minus, Plus, UserPlus } from 'lucide-react';
 import { CircleFlag } from '@/components/CircleFlag';
+import DelegationCrest from '@/components/DelegationCrest';
 import { getCountryByCode } from '@/lib/countries';
 import { committeeDisplayName } from '@/lib/presetNames';
 import { getFreshAuthedClient } from '@/lib/supabase-auth';
@@ -45,7 +46,7 @@ import PeopleTable, { type PayTone, type PersonRow } from './PeopleTable';
 import FinancialsCard from './FinancialsCard';
 import { OpenSeatsCard, ReshuffleLine } from './OpenSeatsCard';
 import {
-  BTN_CLASS, cardStyle, committeeEmblemSrc, FONT, INK, INK_SOFT, primaryBtn, RoundAvatar, StatNumber, STROKE,
+  BTN_CLASS, cardStyle, committeeEmblemSrc, FONT, INK, INK_SOFT, primaryBtn, StatNumber, STROKE,
 } from './leaderKit';
 
 function payWord(m: RosterMember, pool: PoolMember | undefined): { word: string; tone: PayTone } | null {
@@ -271,7 +272,7 @@ export default function LeaderCard({
       <div className="flex items-center justify-between gap-x-6 gap-y-4 flex-wrap">
         <div className="flex items-center gap-4 min-w-0">
           <span style={{ borderRadius: '50%', boxShadow: '0 6px 18px color-mix(in srgb, var(--gv-main) 10%, transparent)', flexShrink: 0, background: '#FFFFFF' }}>
-            <RoundAvatar name={crestName} url={home?.logo_url ?? null} size={56} seed={societyId} />
+            <DelegationCrest name={crestName} logoUrl={home?.logo_url ?? null} size={56} />
           </span>
           <div className="min-w-0 flex flex-col gap-1">
             <h2 className="[overflow-wrap:anywhere]" style={{ fontFamily: FONT, fontSize: 30, fontWeight: 700, letterSpacing: '-0.01em', color: INK, margin: 0, lineHeight: 1.15 }}>{societyName}</h2>

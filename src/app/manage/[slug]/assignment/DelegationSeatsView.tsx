@@ -20,6 +20,7 @@ import Link from 'next/link';
 import { Plus } from 'lucide-react';
 import { GoldWord } from '@/components/BrandHeading';
 import { CircleFlag } from '@/components/CircleFlag';
+import DelegationCrest from '@/components/DelegationCrest';
 import { useAuth } from '@/components/AuthProvider';
 import { getFreshAuthedClient } from '@/lib/supabase-auth';
 import { friendlyError } from '@/lib/friendlyError';
@@ -46,43 +47,11 @@ const OTHER_INK = '#6B6157';
 const FREE_BORDER = '1.5px dashed rgba(27,56,40,0.35)';
 const LIFT_SHADOW = '0 1px 2px rgba(27,56,40,0.08), 0 6px 16px rgba(27,56,40,0.08), 0 18px 44px rgba(27,56,40,0.12)';
 const CARD: React.CSSProperties = { background: '#FFFFFF', borderRadius: 20, boxShadow: LIFT_SHADOW };
-const TINTS = ['#DCE8F0', '#F3E9C9', '#E3EDE6', '#F6E2D8', '#EDE4F3', '#E8E1F0'];
 const STROKE = 1.5;
 const CELL_H = 44;
 
-function tintFor(seed: string): string {
-  let h = 0;
-  for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) >>> 0;
-  return TINTS[h % TINTS.length];
-}
-
 function SocietyCrest({ society, size, selected }: { society: GridSociety; size: number; selected?: boolean }) {
-  const [failed, setFailed] = useState<string | null>(null);
-  if (society.logo_url && failed !== society.logo_url) {
-    return (
-      // eslint-disable-next-line @next/next/no-img-element
-      <img
-        src={society.logo_url}
-        alt=""
-        aria-hidden
-        onError={() => setFailed(society.logo_url)}
-        style={{ width: size, height: size, borderRadius: '50%', objectFit: 'cover', flexShrink: 0, background: '#FFFFFF', boxShadow: 'inset 0 0 0 1px rgba(0,0,0,0.08)' }}
-      />
-    );
-  }
-  return (
-    <span
-      aria-hidden
-      className="inline-flex items-center justify-center flex-shrink-0 select-none"
-      style={{
-        width: size, height: size, borderRadius: '50%',
-        background: selected ? FOREST : tintFor(society.id), color: selected ? '#FFFFFF' : FOREST,
-        fontFamily: OUTFIT, fontWeight: 700, fontSize: Math.round(size * 0.32), lineHeight: 1,
-      }}
-    >
-      {initialsOf(society.name)}
-    </span>
-  );
+  return <DelegationCrest name={society.name} logoUrl={society.logo_url} size={size} selected={selected} />;
 }
 
 function CommitteeEmblem({ committee, size = 26 }: { committee: GridCommittee; size?: number }) {

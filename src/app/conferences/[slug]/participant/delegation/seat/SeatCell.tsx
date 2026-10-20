@@ -46,7 +46,8 @@ export default function SeatCell({
   /** This seat is the one being dragged. */
   dragging: boolean;
   onDragStart: (e: React.PointerEvent, fromGrip: boolean) => void;
-  onOpenCommittee: (committeeId: string) => void;
+  /** Opens the committee; when left out the acronym is plain text (the organiser's pop-up). */
+  onOpenCommittee?: (committeeId: string) => void;
   wasJustDragged: () => boolean;
   /** Each is offered only when given. */
   onTakeOut?: (anchor: HTMLElement) => void;
@@ -95,18 +96,19 @@ export default function SeatCell({
         {/* The committee: smaller, beside it, centred. */}
         <div className="flex items-center min-w-0" style={{ gap: 7 }}>
           <CommitteeDisc src={seat.emblem} size={28} />
-          {seat.committee_id ? (
+          {seat.committee_id && onOpenCommittee ? (
             <button
               type="button"
               title={seat.committee_full ? `Open ${seat.committee_full}` : 'Open this committee'}
-              onClick={(e) => { e.stopPropagation(); if (wasJustDragged()) return; if (seat.committee_id) onOpenCommittee(seat.committee_id); }}
+              onClick={(e) => { e.stopPropagation(); if (wasJustDragged()) return; if (seat.committee_id) onOpenCommittee?.(seat.committee_id); }}
               className="text-left [overflow-wrap:anywhere] min-w-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gv-main)] rounded"
               style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontFamily: FONT, fontSize: 13, fontWeight: 700, color: FOREST, textDecoration: 'underline', textUnderlineOffset: 3, lineHeight: 1.35 }}
             >
               {seat.committee_label}
             </button>
           ) : (
-            <span className="[overflow-wrap:anywhere] min-w-0" style={{ fontFamily: FONT, fontSize: 13, color: INK_SOFT, lineHeight: 1.35 }}>
+            <span className="[overflow-wrap:anywhere] min-w-0" title={seat.committee_full ?? undefined}
+              style={{ fontFamily: FONT, fontSize: 13, fontWeight: seat.committee_id ? 600 : 400, color: seat.committee_id ? INK : INK_SOFT, lineHeight: 1.35 }}>
               {seat.committee_label}
             </span>
           )}

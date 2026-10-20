@@ -82,43 +82,48 @@ function CopyEmail({ email }: { email: string }) {
   );
 }
 
-export default function MemberDetailsPopup({ person, onClose }: { person: PersonRow; onClose: () => void }) {
+/** The top of a member's details: big avatar, name, role, MUN CV link. */
+export function MemberDetailsHead({ person }: { person: PersonRow }) {
+  const cv = person.user_id ? cvHref(person.user_id, person.name) : null;
+  return (
+    <div className="flex items-center gap-4">
+      <RoundAvatar name={person.name} url={person.avatar_url} size={88} seed={person.application_id} />
+      <div className="min-w-0 flex-1 flex flex-col gap-1">
+        <h2 className="[overflow-wrap:anywhere]" style={{ fontFamily: FONT, fontSize: 22, fontWeight: 600, color: INK, margin: 0, lineHeight: 1.2 }}>
+          {person.name}
+          {person.is_me && <span style={{ fontSize: 13, fontWeight: 600, color: 'color-mix(in srgb, var(--gv-accent) 72%, #1C1410)', marginLeft: 8 }}>You</span>}
+        </h2>
+        <p style={{ fontFamily: FONT, fontSize: 14, color: INK_SOFT, margin: 0 }}>{ROLE_WORD[person.role]}</p>
+        {cv && (
+          <Link
+            href={cv}
+            target="_blank"
+            rel="noopener"
+            className="focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gv-main)] rounded self-start"
+            style={{ fontFamily: FONT, fontSize: 13.5, fontWeight: 700, color: 'var(--gv-main)', textDecoration: 'underline', textUnderlineOffset: 3 }}
+          >
+            View MUN CV
+          </Link>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * The rest of a member's details: email, nationality, seat, paper, payment and
+ * the application answers. The leader card shows it in its own pop-up; the
+ * organiser's delegation pop-up shows it as a second step in place.
+ */
+export function MemberDetailsBody({ person }: { person: PersonRow }) {
   const state = useMemberDetails(person.application_id);
   const details = state?.kind === 'ok' ? state.details : null;
   const loading = DELEGATIONS_V2_DB && state === null;
-  const cv = person.user_id ? cvHref(person.user_id, person.name) : null;
   const nat = details?.nationality ? nationalityOf(details.nationality) : null;
   const seat = person.seat;
 
   return (
-    <PopupShell
-      label={person.name}
-      onClose={onClose}
-      width={520}
-      head={(
-        <div className="flex items-center gap-4">
-          <RoundAvatar name={person.name} url={person.avatar_url} size={88} seed={person.application_id} />
-          <div className="min-w-0 flex-1 flex flex-col gap-1">
-            <h2 className="[overflow-wrap:anywhere]" style={{ fontFamily: FONT, fontSize: 22, fontWeight: 600, color: INK, margin: 0, lineHeight: 1.2 }}>
-              {person.name}
-              {person.is_me && <span style={{ fontSize: 13, fontWeight: 600, color: 'color-mix(in srgb, var(--gv-accent) 72%, #1C1410)', marginLeft: 8 }}>You</span>}
-            </h2>
-            <p style={{ fontFamily: FONT, fontSize: 14, color: INK_SOFT, margin: 0 }}>{ROLE_WORD[person.role]}</p>
-            {cv && (
-              <Link
-                href={cv}
-                target="_blank"
-                rel="noopener"
-                className="focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gv-main)] rounded self-start"
-                style={{ fontFamily: FONT, fontSize: 13.5, fontWeight: 700, color: 'var(--gv-main)', textDecoration: 'underline', textUnderlineOffset: 3 }}
-              >
-                View MUN CV
-              </Link>
-            )}
-          </div>
-        </div>
-      )}
-    >
+    <>
       <div style={{ marginTop: 18 }}>
         {loading && (
           <Field name="Email"><SkeletonBlock width="70%" height={14} /></Field>
@@ -198,6 +203,14 @@ export default function MemberDetailsPopup({ person, onClose }: { person: Person
           )}
         </div>
       )}
+    </>
+  );
+}
+
+export default function MemberDetailsPopup({ person, onClose }: { person: PersonRow; onClose: () => void }) {
+  return (
+    <PopupShell label={person.name} onClose={onClose} width={520} head={<MemberDetailsHead person={person} />}>
+      <MemberDetailsBody person={person} />
     </PopupShell>
   );
 }

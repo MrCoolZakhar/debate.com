@@ -11,7 +11,6 @@ import { getCountryByCode } from '@/lib/countries';
 import {
   FONT, INK, INK_SOFT, FOREST, committeeEmblemSrc, CommitteeDisc,
 } from '@/app/conferences/[slug]/participant/delegation/leaderKit';
-import { delegationInitials } from '../DelegationAvatar';
 
 export {
   FONT, INK, INK_SOFT, FOREST, OK_GREEN, OWE, DANGER, STROKE, LIFT_SHADOW, cardStyle, primaryBtn, secondaryBtn,
@@ -33,22 +32,6 @@ export const smallSecondaryBtn: React.CSSProperties = {
   fontFamily: FONT, fontSize: 13, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap',
 };
 
-/** A delegation's round crest: its logo, else its initials on a soft ivory disc. */
-export function Crest({ name, logoUrl, size = 48 }: { name: string; logoUrl: string | null; size?: number }) {
-  if (logoUrl) {
-    return (
-      // eslint-disable-next-line @next/next/no-img-element
-      <img src={logoUrl} alt="" aria-hidden style={{ width: size, height: size, borderRadius: '50%', objectFit: 'cover', flexShrink: 0, background: '#FFFFFF', boxShadow: 'inset 0 0 0 1px rgba(0,0,0,0.06)' }} />
-    );
-  }
-  return (
-    <span aria-hidden className="inline-flex items-center justify-center flex-shrink-0"
-      style={{ width: size, height: size, borderRadius: '50%', background: '#F6F2EA', color: FOREST, fontFamily: FONT, fontWeight: 700, fontSize: Math.round(size * 0.32) }}>
-      {delegationInitials(name)}
-    </span>
-  );
-}
-
 /** "City, Country" with the country's round flag, or null when neither is known. */
 export function placeOf(city: string | null | undefined, countryCode: string | null | undefined): { label: string; code: string | null } | null {
   const c = city?.trim() || '';
@@ -58,12 +41,12 @@ export function placeOf(city: string | null | undefined, countryCode: string | n
   return label ? { label, code: code || null } : null;
 }
 
-export function PlaceLine({ city, countryCode, extra, size = 16 }: { city: string | null; countryCode: string | null; extra?: string | null; size?: number }) {
+export function PlaceLine({ city, countryCode, extra, size = 16, fontSize = 13 }: { city: string | null; countryCode: string | null; extra?: string | null; size?: number; fontSize?: number }) {
   const place = placeOf(city, countryCode);
   const text = [place?.label, extra].filter(Boolean).join(' · ');
   if (!text) return null;
   return (
-    <span className="flex items-center gap-1.5 min-w-0" style={{ fontFamily: FONT, fontSize: 13, color: INK_SOFT }}>
+    <span className="flex items-center gap-1.5 min-w-0" style={{ fontFamily: FONT, fontSize, color: INK_SOFT }}>
       {place?.code && <CircleFlag code={place.code} size={size} decorative />}
       <span className="[overflow-wrap:anywhere]">{text}</span>
     </span>

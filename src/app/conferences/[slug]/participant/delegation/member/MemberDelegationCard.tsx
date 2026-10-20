@@ -23,6 +23,7 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { CheckCircle2, CircleDollarSign } from 'lucide-react';
 import { CircleFlag } from '@/components/CircleFlag';
+import DelegationCrest from '@/components/DelegationCrest';
 import { useAuth } from '@/components/AuthProvider';
 import { SkeletonBlock } from '@/components/Skeleton';
 import { getCountryByCode } from '@/lib/countries';
@@ -220,7 +221,7 @@ export default function MemberDelegationCard({ conferenceId, conferenceSlug, soc
   const header = (
     <div style={cardStyle} className="flex flex-col gap-4 p-5 @[640px]:p-6 @[900px]:flex-row @[900px]:items-center @[900px]:justify-between">
       <div className="flex items-center gap-3.5 min-w-0">
-        <RoundAvatar name={societyName} url={look?.logo_url ?? null} size={60} seed={societyId} />
+        <DelegationCrest name={societyName} logoUrl={look?.logo_url ?? null} size={60} />
         <div className="min-w-0 flex flex-col gap-1">
           <span className="[overflow-wrap:anywhere]" style={{ fontFamily: FONT, fontSize: 21, fontWeight: 600, color: INK, lineHeight: 1.2 }}>{societyName}</span>
           {place && (

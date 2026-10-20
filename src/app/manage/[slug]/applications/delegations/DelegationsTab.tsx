@@ -27,6 +27,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useManage } from '@/app/manage/[slug]/layout';
 import { DatePicker } from '@/components/DatePicker';
+import DelegationCrest from '@/components/DelegationCrest';
 import { getFreshAuthedClient } from '@/lib/supabase-auth';
 import { friendlyError } from '@/lib/friendlyError';
 import { notifyErr, notifyOk } from '@/lib/appNotify';
@@ -184,9 +185,12 @@ export default function DelegationsTab<M extends DelegationMemberLite>(props: De
                   className="dlgV2Row grid items-center focus:outline-none"
                   style={{ gridTemplateColumns: GRID, gap: 16, padding: '14px 24px', borderBottom: `1px solid ${ROW_LINE}`, cursor: 'pointer' }}
                 >
-                  <div className="flex flex-col min-w-0" style={{ gap: 2 }}>
-                    <span className="[overflow-wrap:anywhere]" style={{ fontFamily: FONT, fontSize: 18, fontWeight: 600, color: INK, lineHeight: 1.3 }}>{r.name}</span>
-                    <PlaceLine city={r.city} countryCode={r.countryCode} />
+                  <div className="flex items-center gap-3 min-w-0">
+                    <DelegationCrest name={r.name} logoUrl={r.logoUrl} size={44} />
+                    <div className="flex flex-col min-w-0" style={{ gap: 2 }}>
+                      <span className="[overflow-wrap:anywhere]" style={{ fontFamily: FONT, fontSize: 18, fontWeight: 600, color: INK, lineHeight: 1.3 }}>{r.name}</span>
+                      <PlaceLine city={r.city} countryCode={r.countryCode} />
+                    </div>
                   </div>
                   <Num n={r.expected ?? 0} soft={r.expected == null} />
                   <Num n={r.registered} />

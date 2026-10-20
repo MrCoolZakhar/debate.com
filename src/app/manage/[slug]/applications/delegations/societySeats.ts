@@ -23,6 +23,8 @@ export interface SeatSlot {
   country_name: string;
   delegation_size: number;
   is_observer?: boolean | null;
+  /** A custom seat's own crest (slotGroups), drawn in place of the country flag. */
+  logo_url?: string | null;
 }
 
 export interface SeatAllocation {

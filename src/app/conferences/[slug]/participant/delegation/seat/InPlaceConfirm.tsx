@@ -9,6 +9,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Portal from '@/components/Portal';
+import { useModalEscape } from '@/components/ModalOverlay';
 import { DANGER, FONT, INK, INK_SOFT, LIFT_SHADOW } from '../leaderKit';
 
 const W = 340;
@@ -26,6 +27,9 @@ export default function InPlaceConfirm({ anchor, align = 'start', title, line, y
   onCancel: () => void;
 }) {
   const cardRef = useRef<HTMLDivElement | null>(null);
+  // Escape closes this card, never a pop-up it sits in: it joins the shared
+  // Escape stack (ModalOverlay), so only the top-most layer hears the key.
+  useModalEscape(onCancel);
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
 
   const place = useCallback(() => {
@@ -60,16 +64,13 @@ export default function InPlaceConfirm({ anchor, align = 'start', title, line, y
       if (cardRef.current?.contains(t) || anchor.contains(t)) return;
       onCancel();
     };
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onCancel(); };
     window.addEventListener('scroll', place, true);
     window.addEventListener('resize', place);
     document.addEventListener('pointerdown', onDown);
-    document.addEventListener('keydown', onKey);
     return () => {
       window.removeEventListener('scroll', place, true);
       window.removeEventListener('resize', place);
       document.removeEventListener('pointerdown', onDown);
-      document.removeEventListener('keydown', onKey);
     };
   }, [anchor, place, onCancel]);
 
