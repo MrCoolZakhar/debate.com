@@ -122,9 +122,13 @@ Secretariat and staff applicants land only in Settings > Team, in an Applicants 
 
 It shows who they are, their MUN experience, their answers and their Job Board picks. Accept replaces the pop-up's content with the permissions step (the `ORGANIZER_SECTIONS`, all unticked, and a Public title prefilled from the first pick), then runs the same post-accept effects as before: the `application_accepted` email, `payment_available` when `payment_timing` is `after_acceptance`, `notifyIfNeeded` and `heldUnresolvedMessage`. Reject is asked in place and runs the Applications page's reject, shared in `applications/teamDecisions.ts`.
 
-### The Unlimited badge
+### Unlimited applicants first
 
-`conference_unlimited_applicants(p_conf)` returns a `uuid[]` of the applicants who are Gavelling Unlimited members. They carry a small gold "Unlimited" mark (`src/components/conferences/UnlimitedMark.tsx`) with the tooltip "Gavelling Unlimited member" on Applications rows, cards and the applicant pop-up, and on team applicant rows.
+Owner, 20 Oct 2026 (prompt 7): organizers must never be able to tell which applicants hold Gavelling Unlimited, so nobody is judged as paying extra to win. Unlimited applicants appear first, silently: no mark, word, tooltip, colour or divider anywhere.
+
+- `conference_applicant_priority(p_conf)` returns a `uuid[]` of the application ids to show first (organizers only; anyone else gets an empty array). It never says why. The Applications page reads it once (`useJobBoardApplicantExtras.ts`, `priorityIds`) and, inside each status group of its default order, puts those ids first, then newest first. The `groupAtOpen` snapshot is unchanged, so a decision never moves a row while the organizer looks at it; filters, exports, counts and bulk actions are unchanged.
+- `team_applicants(p_conf)` no longer returns `unlimited` and already orders its applicants (waiting first, then priority applicants, then newest). Settings > Team keeps that order and never re-sorts it.
+- `conference_unlimited_applicants(p_conf)` is no longer called by the client (the chat removes its access). The gold Unlimited mark component was deleted.
 
 ### Chair picks
 
@@ -142,10 +146,9 @@ It shows who they are, their MUN experience, their answers and their Job Board p
 
 - `src/app/manage/[slug]/applications/teamDecisions.ts`: the shared accept and reject.
 - `src/app/manage/[slug]/applications/JobPicksBlock.tsx`: the "From the Job Board" block.
-- `src/app/manage/[slug]/applications/useJobBoardApplicantExtras.ts`: the hook for the unlimited ids, the picks and the mark reviewed.
+- `src/app/manage/[slug]/applications/useJobBoardApplicantExtras.ts`: the hook for the priority ids (shown first, never labelled), the picks and the mark reviewed.
 - `src/app/manage/[slug]/applications/TeamApplicantsLine.tsx`: the slim line.
 - `src/app/manage/[slug]/applications/page.tsx`: team applicants taken out, the hook and the line mounted.
-- `src/components/conferences/UnlimitedMark.tsx`: the Unlimited mark.
 - `src/app/manage/[slug]/settings/teamApplicantsApi.ts`: the team_applicants read and the Team badge count.
 - `src/app/manage/[slug]/settings/TeamApplicants.tsx`: the Applicants list (filters, rows, accept and reject) mounted under Your Team.
 - `src/app/manage/[slug]/settings/TeamApplicantPopup.tsx`: the review pop-up and its permissions step.
@@ -176,7 +179,7 @@ Three placements outside /jobs. All three reads are anon and authenticated, and 
 - Posters manage them in the "Your Listings" tab on /jobs (shown when job_my().listings is not empty): status, views, clicks, Promoted, the lock hint, Edit, Promote (paid from their own credits), Close, Delete for drafts, and "Hidden by Gavelling: <note>".
 
 ### Unlimited perks
-- The applicant badge (prompt 3).
+- Their applications appear first in organizers' lists, silently (see Unlimited applicants first).
 - The insights strip under the header card of a listing (job_listing_get insights { applicants, closes_at, reviewing }): "N applied", "Closes 15 Nov", "Organizers are actively reviewing" (an organizer opened the applicants in the last 7 days). Everyone else sees it locked, with "Get Unlimited" opening the Unlimited pop-up (insights_locked). Never on outside listings.
 - Premium listings: a non-member (premium_locked) sees the Premium tag and the header card, then a lock card, "This role is for Gavelling Unlimited members", instead of the description and Apply. The page reads again once the plan turns on. job_screening and job_submit_screening answer code 'unlimited'.
 - Job alerts: "Save as alert" under the filters saves the current filters with a name (job_alert_save, Unlimited only, at most 10; non-members get the Unlimited pop-up); members manage them in the Alerts panel of the Saved tab (job_alerts_mine, job_alert_remove). "We email you once a day when new roles match": the daily email is sent by the server.

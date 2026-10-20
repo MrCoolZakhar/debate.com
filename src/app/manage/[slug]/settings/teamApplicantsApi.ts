@@ -35,7 +35,6 @@ export interface TeamApplicant {
   name: string | null;
   email: string | null;
   avatar_url: string | null;
-  unlimited: boolean;
   experience_entries: TeamExperienceEntry[] | null;
   custom_answers: Record<string, unknown> | null;
   organizer_note: string | null;

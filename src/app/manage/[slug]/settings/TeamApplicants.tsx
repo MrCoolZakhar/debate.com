@@ -25,7 +25,6 @@ import { notifyErr, notifyOk } from '@/lib/appNotify';
 import { friendlyError, UserFacingError } from '@/lib/friendlyError';
 import { NEU, OUTFIT } from '@/components/neu';
 import { bundlePermissions } from '@/lib/organizerPermissions';
-import UnlimitedMark from '@/components/conferences/UnlimitedMark';
 import { acceptTeamApplication, rejectUpdates, writeReject, rejectFollowUps } from '../applications/teamDecisions';
 import { fmtDay } from '../applications/ApplicantDetail/kit';
 import { Group, TINT_GOLD_BG } from './panelKit';
@@ -236,7 +235,6 @@ export default function TeamApplicants({
                   <div className="min-w-0" style={{ flex: '1 1 220px' }}>
                     <p className="flex flex-wrap items-center gap-x-2 gap-y-1" style={{ margin: 0, fontSize: 15, fontWeight: 800, color: '#1C1410' }}>
                       <span style={{ overflowWrap: 'anywhere' }}>{a.name ?? 'No name'}</span>
-                      {a.unlimited && <UnlimitedMark size="xs" />}
                     </p>
                     <p style={{ margin: '2px 0 0', fontSize: 13, color: NEU.inkSoft, overflowWrap: 'anywhere' }}>
                       {[

@@ -18,7 +18,6 @@ import { NEU, OUTFIT, EASE } from '@/components/neu';
 import { useScrollLock } from '@/hooks/useScrollLock';
 import { LogoDisc } from '@/components/LogoDisc';
 import { AwardArtwork, monogramFor } from '@/app/account/accountUi';
-import UnlimitedMark from '@/components/conferences/UnlimitedMark';
 import { ORGANIZER_SECTIONS, TEAM_KEY, FINANCIALS_READONLY_KEY } from '@/lib/organizerPermissions';
 import { questionsOf, displayAnswer, normalizeBlocks, type CustomAnswerValue } from '@/lib/customQuestions';
 import JobPicksBlock from '../applications/JobPicksBlock';
@@ -167,7 +166,6 @@ export default function TeamApplicantPopup({
             <div className="min-w-0 flex-1">
               <p className="flex flex-wrap items-center gap-x-2 gap-y-1" style={{ margin: 0, fontSize: 19, fontWeight: 800, color: INK, overflowWrap: 'anywhere', lineHeight: 1.25 }}>
                 <span style={{ overflowWrap: 'anywhere' }}>{step === 'access' ? `Add ${a.name ?? 'them'} to the team` : (a.name ?? 'No name')}</span>
-                {step === 'review' && a.unlimited && <UnlimitedMark />}
               </p>
               <p style={{ margin: '3px 0 0', fontSize: 13.5, color: NEU.inkSoft, overflowWrap: 'anywhere' }}>
                 {step === 'access'

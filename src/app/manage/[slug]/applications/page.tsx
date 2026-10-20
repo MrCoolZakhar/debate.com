@@ -49,7 +49,6 @@ import DelegationPopupLink from '@/app/manage/[slug]/DelegationPopupLink';
 import { DelegationIdentity, useDelegationSummaries } from './DelegationAvatar';
 import OpenDelegateApplications from './OpenDelegateApplications';
 import { rejectUpdates, writeReject, rejectFollowUps } from './teamDecisions';
-import UnlimitedMark from '@/components/conferences/UnlimitedMark';
 import { useJobBoardApplicantExtras } from './useJobBoardApplicantExtras';
 import TeamApplicantsLine from './TeamApplicantsLine';
 // The applicant pop-up (hero, action bar, five tabs) and its ?app= URL state.
@@ -1867,7 +1866,7 @@ export default function ApplicationsPage() {
    *  changes when it really changes. Use this in loader guards and deps, and
    *  keep using `session` for anything that needs the rest of it. */
   const accessToken = session?.access_token;
-  // Unlimited badges, chair Job Board picks, the team applicant count, and
+  // The silent first-in-group order, chair Job Board picks, the team applicant count, and
   // job_mark_reviewed once (useJobBoardApplicantExtras.ts).
   const jobExtras = useJobBoardApplicantExtras(conference?.id, session?.user?.id);
   const router = useRouter();
@@ -3828,6 +3827,11 @@ export default function ApplicationsPage() {
     // next visit. Rows that arrived since are grouped by their live status.
     // Before the snapshot exists (first paint) everything is treated as one
     // group, so the order never flickers as it arrives.
+    //
+    // Inside each group the ids from conference_applicant_priority come first,
+    // silently (owner, 20 Oct 2026: organizers never see who holds Unlimited,
+    // so nothing on screen marks them). Priority never depends on status, so a
+    // decision still leaves the row where it is.
     .sort((a, b) => {
       const atOpen = groupAtOpen.current;
       if (atOpen) {
@@ -3836,6 +3840,9 @@ export default function ApplicationsPage() {
         const bG = group(b);
         if (aG !== bG) return aG - bG;
       }
+      const aP = jobExtras.priorityIds.has(a.id) ? 0 : 1;
+      const bP = jobExtras.priorityIds.has(b.id) ? 0 : 1;
+      if (aP !== bP) return aP - bP;
       return (b.submitted_at ?? '').localeCompare(a.submitted_at ?? '');
     });
 
@@ -4308,7 +4315,6 @@ export default function ApplicationsPage() {
                             {name}{age !== null ? `, ${age}` : ''}
                           </p>
                         </ProfileLink>
-                        {jobExtras.unlimitedIds.has(app.id) && <UnlimitedMark />}
                         {!app.user_id && <NotRegisteredChip />}
                       </div>
                       {email && <p className="[overflow-wrap:anywhere]" style={{ fontFamily: OUTFIT, fontSize: 13, color: NEU.muted, marginTop: 2, fontWeight: 500 }}>{email}</p>}
@@ -5459,7 +5465,6 @@ export default function ApplicationsPage() {
               currency: aidCurrency,
             } : null}
             dob={app.profiles?.date_of_birth ?? null}
-            unlimited={jobExtras.unlimitedIds.has(app.id)}
             jobPicks={jobExtras.picksByApp.get(app.id) ?? null}
             delegation={(() => {
               const d = app.society_id ? delegationSummaries.get(app.society_id) : undefined;

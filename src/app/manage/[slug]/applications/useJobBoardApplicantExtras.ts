@@ -3,8 +3,9 @@
 // ── The Job Board's extras for the Applications page (Job Board prompt 3) ──
 //
 // Read once per conference and signed-in organiser, beside the list:
-//   unlimitedIds   conference_unlimited_applicants(p_conf): the application
-//                  ids whose applicant holds Gavelling Unlimited (the badge).
+//   priorityIds    conference_applicant_priority(p_conf): application ids
+//                  shown first; never shown or labelled (organizers never see
+//                  who holds Unlimited, owner 20 Oct 2026).
 //   picksByApp     job_application_picks(p_conf): each chair applicant's
 //                  ranked listing picks with their screening answers.
 //   teamCount      how many secretariat and staff applications this
@@ -12,7 +13,7 @@
 // And once: job_mark_reviewed(p_conf), fire and forget.
 //
 // Every read is best effort: a failed read leaves the empty value and says
-// nothing (a missing badge or pick list never blocks the page).
+// nothing (a missing order or pick list never blocks the page).
 
 import { useEffect, useRef, useState } from 'react';
 import { getFreshAuthedClient } from '@/lib/supabase-auth';
@@ -28,7 +29,7 @@ interface PickRow {
 }
 
 export interface JobBoardApplicantExtras {
-  unlimitedIds: Set<string>;
+  priorityIds: Set<string>;
   picksByApp: Map<string, JobPick[]>;
   teamCount: number;
 }
@@ -37,7 +38,7 @@ const EMPTY_SET = new Set<string>();
 const EMPTY_MAP = new Map<string, JobPick[]>();
 
 export function useJobBoardApplicantExtras(conferenceId: string | null | undefined, userId: string | null | undefined): JobBoardApplicantExtras {
-  const [unlimitedIds, setUnlimitedIds] = useState<Set<string>>(EMPTY_SET);
+  const [priorityIds, setPriorityIds] = useState<Set<string>>(EMPTY_SET);
   const [picksByApp, setPicksByApp] = useState<Map<string, JobPick[]>>(EMPTY_MAP);
   const [teamCount, setTeamCount] = useState(0);
   const markedFor = useRef<string | null>(null);
@@ -57,7 +58,7 @@ export function useJobBoardApplicantExtras(conferenceId: string | null | undefin
       let results;
       try {
         results = await Promise.all([
-          supabase.rpc('conference_unlimited_applicants', { p_conf: conferenceId }),
+          supabase.rpc('conference_applicant_priority', { p_conf: conferenceId }),
           supabase.rpc('job_application_picks', { p_conf: conferenceId }),
           supabase.from('applications')
             .select('id', { count: 'exact', head: true })
@@ -68,10 +69,10 @@ export function useJobBoardApplicantExtras(conferenceId: string | null | undefin
         return;
       }
       if (cancelled) return;
-      const [unl, picks, team] = results;
+      const [prio, picks, team] = results;
 
-      if (!unl.error && Array.isArray(unl.data)) {
-        setUnlimitedIds(new Set((unl.data as unknown[]).filter((x): x is string => typeof x === 'string')));
+      if (!prio.error && Array.isArray(prio.data)) {
+        setPriorityIds(new Set((prio.data as unknown[]).filter((x): x is string => typeof x === 'string')));
       }
       if (!picks.error && Array.isArray(picks.data)) {
         const next = new Map<string, JobPick[]>();
@@ -88,5 +89,5 @@ export function useJobBoardApplicantExtras(conferenceId: string | null | undefin
     return () => { cancelled = true; };
   }, [conferenceId, userId]);
 
-  return { unlimitedIds, picksByApp, teamCount };
+  return { priorityIds, picksByApp, teamCount };
 }
