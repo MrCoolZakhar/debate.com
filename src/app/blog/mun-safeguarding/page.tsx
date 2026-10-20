@@ -79,7 +79,7 @@ export default function Article() {
           <li><strong>Named references</strong> for chairs recruited from outside your own institution.</li>
           <li><strong>A briefing</strong> that covers conduct explicitly, not only procedure.</li>
         </ul>
-        <p>If you recruit chairs publicly, and most conferences now do, through cross-conference job boards including Gavelling&apos;s at <Link href="/conferences/roles">/conferences/roles</Link>, then you are appointing people you have never met. Treat that exactly as your institution would treat any volunteer appointment: an application, a reference, a declaration, and a briefing.</p>
+        <p>If you recruit chairs publicly, and most conferences now do, through cross-conference job boards including Gavelling&apos;s at <Link href="/jobs">/jobs</Link>, then you are appointing people you have never met. Treat that exactly as your institution would treat any volunteer appointment: an application, a reference, a declaration, and a briefing.</p>
 
         <H2>Supervision, and the gap where incidents happen</H2>
         <p>A delegate at your conference is supervised by their own faculty advisor, who retains responsibility for them, and is also in your building under your arrangements. Both of those are true, and the gap between them is where almost every incident occurs.</p>

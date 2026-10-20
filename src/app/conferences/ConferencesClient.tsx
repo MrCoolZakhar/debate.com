@@ -344,7 +344,7 @@ function RolesSection() {
             ))}
           </div>
           <Link
-            href="/conferences/roles"
+            href="/jobs"
             className="inline-block rounded-2xl py-4 px-8 font-bold text-sm tracking-widest transition-colors focus:outline-none"
             style={{ backgroundColor: '#1B3828', color: '#EED98A', fontFamily: "var(--font-brand), sans-serif", letterSpacing: '0.08em', textDecoration: 'none' }}
             onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}

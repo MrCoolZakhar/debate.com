@@ -33,7 +33,7 @@ const STATIC_PAGES: { path: string; lastModified: string; changeFrequency: 'dail
   { path: '/create',            lastModified: '2026-09-25', changeFrequency: 'monthly', priority: 0.8 },
   { path: '/create/sessions',   lastModified: '2026-09-26', changeFrequency: 'monthly', priority: 0.8 },
   { path: '/join',              lastModified: '2026-10-06', changeFrequency: 'monthly', priority: 0.7 },
-  { path: '/conferences/roles', lastModified: '2026-09-08', changeFrequency: 'weekly',  priority: 0.7 },
+  { path: '/jobs',              lastModified: '2026-10-19', changeFrequency: 'daily',   priority: 0.8 },
   { path: '/pricing/credits',   lastModified: '2026-09-24', changeFrequency: 'monthly', priority: 0.7 },
   { path: '/pricing/subscription', lastModified: '2026-09-24', changeFrequency: 'monthly', priority: 0.7 },
   { path: '/help',              lastModified: '2026-10-18', changeFrequency: 'weekly',  priority: 0.6 },

@@ -78,7 +78,7 @@ export default function Article() {
           </table>
         </TableWrap>
         <p className="gv-note">Ranges vary by conference and by country. Treat the pattern as a prompt to check early, not as a calendar.</p>
-        <p>They are posted in four places, in roughly this order of usefulness: the conference&rsquo;s own site, usually behind a &ldquo;Get involved&rdquo; or &ldquo;Staff&rdquo; link that is not in the main navigation; cross-conference role boards, including <Link href="/conferences/roles">Gavelling&rsquo;s job board for chairs and staff</Link>; the conference&rsquo;s Instagram, which is often where the deadline is actually announced; and your own society&rsquo;s mailing list, where a secretariat member will forward a call because they want someone they know to apply.</p>
+        <p>They are posted in four places, in roughly this order of usefulness: the conference&rsquo;s own site, usually behind a &ldquo;Get involved&rdquo; or &ldquo;Staff&rdquo; link that is not in the main navigation; cross-conference role boards, including <Link href="/jobs">Gavelling&rsquo;s job board for chairs and staff</Link>; the conference&rsquo;s Instagram, which is often where the deadline is actually announced; and your own society&rsquo;s mailing list, where a secretariat member will forward a call because they want someone they know to apply.</p>
         <p>Set a reminder for each conference you would chair at, three weeks before the window you expect. Most missed applications are missed by people who were qualified and looked in November.</p>
 
         <H2>The application, question by question</H2>

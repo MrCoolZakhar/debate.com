@@ -166,7 +166,7 @@ export default function Article() {
           ]}
         />
         <p>
-          If you want to write rather than debate, read the <Link href="/blog/mun-press-corps-guide">press corps guide</Link>. If any of these appeal as a next step, the <Link href="/conferences/roles">chair and staff job board</Link> lists open positions across conferences.
+          If you want to write rather than debate, read the <Link href="/blog/mun-press-corps-guide">press corps guide</Link>. If any of these appeal as a next step, the <Link href="/jobs">chair and staff job board</Link> lists open positions across conferences.
         </p>
 
         <H2>Voting</H2>

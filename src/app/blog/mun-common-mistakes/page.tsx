@@ -126,7 +126,7 @@ export default function Article() {
         <FactCard title="The five-minute self-check, at lunch on day one">
           Have I said anything that only my country would say? Has anyone written my words into a paper? Do I know who is undecided in this room? Do I know what I will concede? Has a chair heard me say something specific and dated? Any two &ldquo;no&rdquo; answers tell you where to spend the afternoon.
         </FactCard>
-        <p>If you are preparing rather than recovering, work forwards instead: our <Link href="/blog/mun-conference-preparation">pre-conference checklist</Link> prevents most of the research and writing mistakes, and <Link href="/blog/mun-delegate-tips">delegate tips</Link> is the positive version of this page. If you have made most of these mistakes and want to see the room from the other side, the fastest cure is chairing, and open positions are listed on the <Link href="/conferences/roles">Gavelling roles board</Link>.</p>
+        <p>If you are preparing rather than recovering, work forwards instead: our <Link href="/blog/mun-conference-preparation">pre-conference checklist</Link> prevents most of the research and writing mistakes, and <Link href="/blog/mun-delegate-tips">delegate tips</Link> is the positive version of this page. If you have made most of these mistakes and want to see the room from the other side, the fastest cure is chairing, and open positions are listed on the <Link href="/jobs">Gavelling roles board</Link>.</p>
       </ArticleLayout>
     </>
   );

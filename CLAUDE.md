@@ -26,6 +26,7 @@ This file holds rules, limits and pointers. The history behind every rule (owner
 | Email (every sender, the brake, the cap, campaigns) | `docs/conferences/where-things-live.md` |
 | Design, copy, taste boards | `docs/conferences/design-system-and-copy.md` |
 | Custom and press committees | `docs/conferences/custom-committees.md` |
+| Job board (/jobs, listings, screening) | `docs/conferences/job-board.md` |
 
 ---
 

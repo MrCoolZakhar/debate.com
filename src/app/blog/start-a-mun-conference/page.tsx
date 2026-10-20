@@ -194,7 +194,7 @@ export default function Article() {
           On topics: pick things with a live multilateral process, so delegates have real documents to research, and avoid topics whose entire content is a single ongoing conflict unless your chairs are experienced enough to handle a room that gets heated. Our <Link href="/blog/mun-committee-types">committee types overview</Link> sets out what debate feels like in each format.
         </p>
         <p>
-          Recruit chairs before you finalise topics. A chair who chooses their own topic within your slate writes a much better background guide than one handed a topic in February. The <Link href="/conferences/roles">chair and staff job board</Link> is one place to advertise, alongside your own society and the nearby universities.
+          Recruit chairs before you finalise topics. A chair who chooses their own topic within your slate writes a much better background guide than one handed a topic in February. The <Link href="/jobs">chair and staff job board</Link> is one place to advertise, alongside your own society and the nearby universities.
         </p>
 
         <H2>The eight-month calendar</H2>

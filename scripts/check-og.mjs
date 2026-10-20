@@ -64,7 +64,7 @@ const ROUTES = [
   { path: '/create/sessions' },
   { path: '/join' },
   { path: '/conferences/explore' },
-  { path: '/conferences/roles' },
+  { path: '/jobs' },
   { path: '/conferences/new' },
   { path: '/conferences', redirectsTo: '/' },
   { path: '/conferences/organise', redirectsTo: '/account/conferences', skipCard: true },

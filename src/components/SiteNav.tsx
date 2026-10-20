@@ -18,7 +18,8 @@ import { openCreditsPopup } from '@/lib/purchasePopup';
 import ActivityNotices from '@/components/profile/ActivityNotices';
 import { useMyActivity, useOpenSeenState, markActivitySeen, attentionRows, endActivityOpening } from '@/lib/myActivity';
 
-// Five one-word items, in this order (owner, 25 Sep 2026): Sessions, Create,
+// Six items since 19 Oct 2026: Start Session, List your Conference, Explore,
+// Job Board, Pricing, Contact. History: five one-word items (owner, 25 Sep 2026): Sessions, Create,
 // Explore, Pricing, Contact (Help until 18 Oct 2026). Sentence case since the owner's taste boards (25 Sep
 // 2026: no tracked capitals; the active item is ink with a short forest
 // underline, Airbnb's category-rail manner, not a forest pill). No stacked
@@ -39,6 +40,8 @@ const NAV_LINKS_CONFIG: ReadonlyArray<{
   { en: 'Session', es: 'Sesión', fr: 'Session', ar: 'جلسة', pt: 'Sessão', kicker: { en: 'Start', es: 'Iniciar', fr: 'Lancer', ar: 'ابدأ', pt: 'Iniciar' }, href: '/sessions' },
   { en: 'Conference', es: 'Conferencia', fr: 'Conférence', ar: 'مؤتمر', pt: 'Conferência', kicker: { en: 'List your', es: 'Publica tu', fr: 'Publiez votre', ar: 'أضف', pt: 'Publique sua' }, href: '/conferences/new' },
   { en: 'Explore',  es: 'Explorar', fr: 'Explorer', ar: 'استكشف', pt: 'Explorar', href: '/conferences/explore' },
+  // The cross-conference job board (prompt 1, 19 Oct 2026). Plain like Explore.
+  { en: 'Job Board', es: 'Bolsa de Trabajo', fr: 'Offres', ar: 'الوظائف', pt: 'Vagas', href: '/jobs' },
   { en: 'Pricing',  es: 'Precios',  fr: 'Tarifs',   ar: 'الأسعار', pt: 'Preços', href: '/pricing/credits' },
   // Reads Contact and opens the contact page; the help desk is linked from
   // there and from every footer (owner, 18 Oct 2026).
@@ -48,8 +51,9 @@ const NAV_LINKS_CONFIG: ReadonlyArray<{
 /** SESSIONS lights on every sessions path (isSessionsPath), CREATE on the
  *  chooser and the creator under it, EXPLORE on /conferences/explore only
  *  (owner, 12 Oct 2026: it stayed lit on a conference's own page; a
- *  conference page, /conferences/all, /conferences/in/* and /conferences/roles
- *  light nothing), PRICING on every /pricing page, CONTACT on /contact only. */
+ *  conference page, /conferences/all and /conferences/in/* light nothing),
+ *  JOB BOARD on /jobs and everything under it, PRICING on every /pricing page,
+ *  CONTACT on /contact only. */
 function isExplorePath(pathname: string): boolean {
   return pathname === '/conferences/explore' || pathname.startsWith('/conferences/explore/');
 }
@@ -59,6 +63,7 @@ function isNavLinkActive(pathname: string | null, href: string | null): boolean 
   if (href === '/sessions') return isSessionsPath(pathname) && !pathname.startsWith('/create');
   if (href === '/conferences/new') return pathname.startsWith('/conferences/new');
   if (href === '/conferences/explore') return isExplorePath(pathname);
+  if (href === '/jobs') return pathname === '/jobs' || pathname.startsWith('/jobs/');
   if (href === '/pricing/credits') return pathname.startsWith('/pricing');
   if (href === '/contact') return pathname === '/contact';
   return pathname === href;
@@ -211,7 +216,10 @@ export default function SiteNav(props: SiteNavProps = {}) {
     UPDATE 24 Sep 2026 (owner: "the nav pill now doesn't move with the page as it
     scrolls, fix"): the pill is FIXED again, at the same 72px band it sits in at scroll
     top, z-40. The collisions below are handled at the sticky bars instead: on desktop
-    (lg+, the only widths the pill exists at: five one-word items (SESSIONS, CREATE, EXPLORE, PRICING, HELP since 25 Sep 2026) need 1024px, so 768 to 1023 use the phone menu) every sticky bar on a page with this nav
+    (lg+, the only widths the pill exists at: six items (Start Session, List your Conference,
+    Explore, Job Board, Pricing, Contact since 19 Oct 2026) fit from 1024px with the 28px logo,
+    12px items and, below 1200px, the language toggle as its globe alone; under 1024 the phone
+    menu takes over, as it did for five; see the arithmetic at itemStyle) every sticky bar on a page with this nav
     sticks at 84px or lower (conference page tabs and rail, explore filters; roles and
     account already did). A NEW sticky bar on a page with SiteNav must do the same.
 
@@ -233,7 +241,7 @@ export default function SiteNav(props: SiteNavProps = {}) {
     >
         <div
           className="rounded-full pointer-events-auto"
-          // FIVE EQUAL COLUMNS (owner, 25 Sep 2026: shorter words bunched up on
+          // EQUAL COLUMNS, six since 19 Oct 2026 (owner, 25 Sep 2026: shorter words bunched up on
           // the right). A grid of `1fr` columns on an auto-width pill sizes
           // every column to the widest label, so each item has the same hit
           // area and the same spacing, whatever the language.
@@ -246,16 +254,24 @@ export default function SiteNav(props: SiteNavProps = {}) {
             WebkitBackdropFilter: 'blur(16px)',
             border: '1px solid rgba(221, 212, 192, 0.85)',
             boxShadow: '0 8px 32px rgba(27, 56, 40, 0.12), 0 2px 8px rgba(27, 56, 40, 0.08)',
-            padding: '3px 6px',
+            padding: '3px 8px',
           }}
         >
           {navLinks.map((link) => {
             const active = isNavLinkActive(pathname, link.href);
             const hl = hovered === link.label;
-            // One style for every item. Five one-word labels in equal columns:
-            // at 1024px (1vw = 10px) 12px type with 10px side padding, about
-            // 410px of pill between a 240px logo group and a 200px account
-            // group; at 1280px the clamp opens to 13.5px / 16px. Never wrap.
+            // One style for every item. Six labels in equal columns, each as
+            // wide as "Conference" (about 5.7em bold) plus its side padding.
+            // At 1024px: 12px type, about 7px padding, about 83px a column, a
+            // 515px pill (half 258). Beside it: the logo group (56px gutter +
+            // 142px logo, + a 38px globe-only language toggle on a sessions
+            // path = 240px) and the account group (56px gutter + 76px credit
+            // chip + 12px gap + 60px avatar = 204px), so from the centre there
+            // is 512 - 240 = 272px: about 14px clear on a sessions path, 56px
+            // elsewhere. 1280: 13.4px / 9px, a 583px pill with the full toggle
+            // (264px group), 85px clear. 1440: 15px / 10px. 1920: 15px / 13px.
+            // Never wrap. Spanish ("Bolsa de Trabajo", sessions paths only) is
+            // the widest label and is tight below 1440.
             const itemStyle: CSSProperties = {
               display: 'inline-flex',
               alignItems: 'center',
@@ -265,8 +281,8 @@ export default function SiteNav(props: SiteNavProps = {}) {
               position: 'relative',
               whiteSpace: 'nowrap',
               minHeight: 36,
-              padding: '4px clamp(10px, 1.1vw, 16px)',
-              fontSize: 'clamp(14px, 1.05vw, 15.5px)',
+              padding: '4px clamp(6px, 0.7vw, 14px)',
+              fontSize: 'clamp(12px, 1.05vw, 15px)',
               fontWeight: active ? 800 : 600,
               letterSpacing: '0',
               fontFamily: "var(--font-brand), sans-serif",
@@ -329,13 +345,14 @@ export default function SiteNav(props: SiteNavProps = {}) {
           {/* ONE wordmark (BrandLogo, /gavelling-logo.png), linked to /, white
               over hero media. `height` is the height of the visible WORD (the
               file carries large transparent margins that BrandLogo crops), so
-              32px here is a normal, legible site logo in the 72px header. */}
+              28px here (32 until 19 Oct 2026, made a little smaller so six nav
+              items fit) is a normal, legible site logo in the 72px header. */}
           <span
             className="inline-flex items-center"
             onClick={() => setMenuOpen(false)}
             style={{ filter: overlay ? 'drop-shadow(0 2px 6px rgba(0,0,0,0.35))' : undefined }}
           >
-            <BrandLogo priority height={32} tone={overlay ? 'white' : 'ink'} />
+            <BrandLogo priority height={28} tone={overlay ? 'white' : 'ink'} />
           </span>
 
           {/* Language toggle (desktop only — mobile keeps its own toggle in the hamburger menu) */}
@@ -349,8 +366,9 @@ export default function SiteNav(props: SiteNavProps = {}) {
                 onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = overlay ? 'rgba(250,248,243,0.14)' : 'rgba(27,56,40,0.07)'; }}
                 onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
               >
-                <Globe size={14} strokeWidth={2} />
-                <span style={{ fontFamily: "var(--font-brand), sans-serif", fontWeight: 700, letterSpacing: '0.06em' }}>{language.toUpperCase()}</span>
+                <Globe size={14} strokeWidth={2} aria-label={language.toUpperCase()} />
+                {/* The code shows from 1200px; below it the globe alone, so six nav items fit at 1024. */}
+                <span className="hidden min-[1200px]:inline" style={{ fontFamily: "var(--font-brand), sans-serif", fontWeight: 700, letterSpacing: '0.06em' }}>{language.toUpperCase()}</span>
               </button>
             </div>
             {showLangMenu && (

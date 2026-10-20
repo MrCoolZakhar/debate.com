@@ -75,6 +75,7 @@ import {
   Info, Coins, Pencil, Ban, Cake, CircleAlert,
 } from 'lucide-react';
 import { replaceUrlInPlace } from '@/lib/replaceUrlInPlace';
+import { ListingApplyLine, useListingForApply, useListingCommitteePrefill } from './ListingApplyLine';
 
 /** Destructive-action red, matching /drafts/[token] exactly. */
 const DANGER = '#8B2020';
@@ -857,6 +858,9 @@ function ConferenceApplyInner() {
   // Mutually exclusive with edit mode — every isEditMode branch below treats
   // preview as if edit were off.
   const isPreview = searchParams.get('preview') === '1';
+  // Job Board listing that sent them here (?listing=<id>): ListingApplyLine.tsx.
+  const listingParam = searchParams.get('listing');
+  const applyListing = useListingForApply(listingParam, slug, role);
   const router = useRouter();
   const reducedMotion = useReducedMotion();
   const { user, session, loading: authLoading } = useAuth();
@@ -1445,6 +1449,18 @@ function ConferenceApplyInner() {
   // the server draft above (see guestApplyDraft.ts) — the two must never both
   // be writing for the same person, so this deliberately keeps its own !user.
   const guestDraftEnabled = !isEditMode && !authLoading && !loading && !user && !!conference && !previewing;
+
+  // The listing's committee as the 1st preference, once, only while the
+  // ranking is empty and after any draft restore has settled.
+  const prefillListingCommittee = useCallback((c: CommitteeOption) => {
+    setPreferences(prev => (prev.length > 0 ? prev : [{ committeeId: c.id, committeeName: c.name, countryCode: '', countryName: '' }]));
+  }, []);
+  useListingCommitteePrefill(applyListing, {
+    ready: !authLoading && !loading && (!draftEnabled || draftReady),
+    enabled: showPreferenceStep && committeesOnly && !isEditMode && !hasDraft,
+    committees,
+    prefillIfEmpty: prefillListingCommittee,
+  });
 
   // Live mirrors for the saver, which is called from event listeners and from
   // async continuations and must never read a stale closure. Declared BEFORE
@@ -6175,6 +6191,8 @@ function ConferenceApplyInner() {
             </p>
           </div>
         )}
+
+        <ListingApplyLine listing={applyListing} />
 
         {/* Another tab is writing this same draft. Non-blocking on purpose —
             they can finish and submit from here, they just aren't being

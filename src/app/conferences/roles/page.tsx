@@ -1,16 +1,7 @@
-import type { Metadata } from 'next';
-import { pageMetadata } from '@/lib/seo';
-import ConferencesRolesClient from './ConferencesRolesClient';
+import { permanentRedirect } from 'next/navigation';
 
-export const metadata: Metadata = pageMetadata({
-  title: 'MUN Chair & Staff Roles',
-  description:
-    'Open chairing, secretariat, and staff positions across Model UN conferences worldwide. Find your next MUN role and apply directly on Gavelling.',
-  path: '/conferences/roles',
-  ogDescription:
-    'Open chairing, secretariat, and staff positions across Model UN conferences worldwide.',
-});
-
+// The roles board became the Job Board at /jobs (19 Oct 2026). Every old link
+// lands there. ConferencesRolesClient.tsx stays in the folder, unused.
 export default function ConferencesRolesPage() {
-  return <ConferencesRolesClient />;
+  permanentRedirect('/jobs');
 }

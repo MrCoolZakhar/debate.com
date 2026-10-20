@@ -122,7 +122,7 @@ export default function Article() {
 
         <H2>Chairs and staff are a distribution channel</H2>
         <p>Every chair you appoint comes from a school or a university, knows a MUN circle, and has a reason to tell them. A conference that recruits chairs from eight different institutions has eight introductions it did not have before, and chairs who bring a delegation from their own school are extremely common.</p>
-        <p>Open chair applications early and publicly, advertise them where MUN people look, and say in the posting that chairs are welcome to encourage their own school to attend. Gavelling runs a cross-conference job board at <Link href="/conferences/roles">/conferences/roles</Link> for exactly this, and chair applications there do not cost the applicant anything.</p>
+        <p>Open chair applications early and publicly, advertise them where MUN people look, and say in the posting that chairs are welcome to encourage their own school to attend. Gavelling runs a cross-conference job board at <Link href="/jobs">/jobs</Link> for exactly this, and chair applications there do not cost the applicant anything.</p>
         <p>The same applies to your own delegates. If your school runs the conference, your students telling their circuit friends is your highest-trust channel and costs nothing but a nudge.</p>
 
         <H2>Social proof, and how to build it in year one</H2>

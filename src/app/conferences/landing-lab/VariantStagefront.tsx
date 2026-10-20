@@ -79,7 +79,7 @@ const ROLE_SLIDES: RoleSlide[] = [
     blurb: 'The machine behind the weekend: run applications, allocations, delegations and communications from one place. The whole show, zero fees.',
     image: '/roles/secretariat.webp',
     imageAlt: 'Secretariat staff coordinating a conference',
-    primary: { label: 'See open roles', href: '/conferences/roles' },
+    primary: { label: 'See open roles', href: '/jobs' },
     secondary: { label: 'List your conference', href: '/conferences/new' },
   },
   {
@@ -87,7 +87,7 @@ const ROLE_SLIDES: RoleSlide[] = [
     blurb: 'Gavel in hand: scoring, motions and the speakers list, run live from one dashboard.',
     image: '/roles/chair-card.webp',
     imageAlt: 'A chair presiding over committee from the dais',
-    primary: { label: 'Explore chairing roles', href: '/conferences/roles' },
+    primary: { label: 'Explore chairing roles', href: '/jobs' },
     secondary: { label: 'My conferences', href: '/account/conferences?tab=chair' },
   },
   {

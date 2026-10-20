@@ -129,7 +129,7 @@ export default function Article() {
           <li><strong>Your own chairs and staff.</strong> They have seen the conference from inside, you have watched them work for two days, and you know whether they answer emails. The single best source.</li>
           <li><strong>Your own delegates.</strong> Particularly for Delegate Affairs and Marketing, where having recently been a delegate is an advantage.</li>
           <li><strong>Your society or school more broadly.</strong> Finance, Logistics and Technology do not require MUN experience and are often better filled by someone who has run something else.</li>
-          <li><strong>Cross-conference role boards,</strong> which is where you find people for the hard-to-fill roles and where experienced staff look between conferences. Gavelling&rsquo;s <Link href="/conferences/roles">roles board</Link> carries chair and staff openings across conferences.</li>
+          <li><strong>Cross-conference role boards,</strong> which is where you find people for the hard-to-fill roles and where experienced staff look between conferences. Gavelling&rsquo;s <Link href="/jobs">roles board</Link> carries chair and staff openings across conferences.</li>
         </ol>
         <p>What to ask on the application. Keep it short (four questions) and make them predictive:</p>
         <ul>

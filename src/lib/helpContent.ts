@@ -130,7 +130,7 @@ const CHAIRS: FaqEntry[] = [
     id: 'chair-applications-free',
     question: 'Does applying to chair cost a credit?',
     answer: 'No. Chair applications are always free. Credits are only used by delegates, head delegates, faculty advisors and observers.',
-    actions: [{ kind: 'link', label: 'Chair and staff roles', href: '/conferences/roles' }],
+    actions: [{ kind: 'link', label: 'Chair and staff roles', href: '/jobs' }],
     pages: [],
     keywords: ['chair', 'credit', 'free', 'apply', 'job board', 'roles', 'staff'],
   },
