@@ -20,6 +20,7 @@ import { getCountryByName } from '@/lib/countries';
 import { experienceProgress } from '@/lib/munExperience';
 import CVPrivacyPanel, { type CvPrivacy } from './CVPrivacyPanel';
 import { friendlyError } from '@/lib/friendlyError';
+import TalentPrompt from '@/components/TalentPrompt';
 
 // ── Page ───────────────────────────────────────────────────────────────────
 
@@ -192,6 +193,8 @@ export default function CVPage() {
 
   return (
     <div>
+      {/* "Open to team roles" nudge: renders nothing unless the server asks for it */}
+      <TalentPrompt className="mb-4" />
       <AccountHero
         label="Delegate record"
         title={<>Your MUN <GoldWord>CV</GoldWord></>}

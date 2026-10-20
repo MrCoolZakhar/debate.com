@@ -538,3 +538,82 @@ export function readJobAnswers(listingId: string): { id: string; answer: string 
 export function clearJobAnswers(listingId: string): void {
   try { window.localStorage.removeItem(STORED_PREFIX + listingId); } catch { /* nothing to clear */ }
 }
+
+// ── Prompt 11: open to team roles, and invites (seeker side) ────────────────
+// Opt-in only: nobody can be found until they turn on "Open to team roles".
+
+export interface TalentSettings { open: boolean; since: string | null; show_prompt: boolean }
+
+export async function fetchTalentSettings(): Promise<TalentSettings | Fail> {
+  const fallback = 'We could not read your team role setting. Try again.';
+  const client = await authed();
+  if (!client) return { ok: false, message: SIGNIN };
+  try {
+    const { data, error } = await client.rpc('talent_settings');
+    if (error || !data) return { ok: false, message: friendlyError(error, fallback) };
+    const d = data as Partial<TalentSettings>;
+    return { open: !!d.open, since: d.since ?? null, show_prompt: !!d.show_prompt };
+  } catch (e) {
+    return { ok: false, message: friendlyError(e, fallback) };
+  }
+}
+
+export async function setTalentOpen(open: boolean): Promise<{ ok: true; open: boolean } | Fail> {
+  const fallback = 'We could not save your team role setting. Try again.';
+  const client = await authed();
+  if (!client) return { ok: false, message: SIGNIN };
+  try {
+    const { data, error } = await client.rpc('talent_set_open', { p_open: open });
+    if (error || !data) return { ok: false, message: friendlyError(error, fallback) };
+    const d = data as { ok?: boolean; open?: boolean; message?: string };
+    if (!d.ok) return { ok: false, message: d.message || fallback };
+    return { ok: true, open: !!d.open };
+  } catch (e) {
+    return { ok: false, message: friendlyError(e, fallback) };
+  }
+}
+
+export async function dismissTalentPrompt(): Promise<void> {
+  const client = await authed();
+  if (!client) return;
+  try { await client.rpc('talent_dismiss_prompt'); } catch { /* the nudge simply shows again next time */ }
+}
+
+export type InviteStatus = 'sent' | 'opened' | 'applied' | 'not_interested';
+export interface JobInvite extends JobCard {
+  invite_id: string;
+  invite_status: InviteStatus;
+  message: string | null;
+  invited_at: string | null;
+  invited_by: string | null;
+  open: boolean;
+}
+
+export async function fetchMyInvites(): Promise<JobInvite[] | Fail> {
+  const fallback = 'We could not load your invites. Try again.';
+  const client = await authed();
+  if (!client) return { ok: false, message: SIGNIN };
+  try {
+    const { data, error } = await client.rpc('talent_my_invites');
+    if (error) return { ok: false, message: friendlyError(error, fallback) };
+    const list = Array.isArray(data) ? data : (data as { invites?: unknown } | null)?.invites;
+    return Array.isArray(list) ? (list as JobInvite[]) : [];
+  } catch (e) {
+    return { ok: false, message: friendlyError(e, fallback) };
+  }
+}
+
+export async function respondToInvite(inviteId: string, action: 'opened' | 'not_interested'): Promise<{ ok: true } | Fail> {
+  const fallback = 'We could not save that. Try again.';
+  const client = await authed();
+  if (!client) return { ok: false, message: SIGNIN };
+  try {
+    const { data, error } = await client.rpc('talent_invite_respond', { p_invite: inviteId, p_action: action });
+    if (error || !data) return { ok: false, message: friendlyError(error, fallback) };
+    const d = data as { ok?: boolean; message?: string };
+    if (!d.ok) return { ok: false, message: d.message || fallback };
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, message: friendlyError(e, fallback) };
+  }
+}

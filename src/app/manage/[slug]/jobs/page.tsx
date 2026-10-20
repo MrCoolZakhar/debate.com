@@ -14,7 +14,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
-import { BarChart3, Briefcase, Layers, Mail, Plus } from 'lucide-react';
+import { BarChart3, Briefcase, Layers, Mail, Plus, UserSearch } from 'lucide-react';
 import { useManage } from '@/app/manage/[slug]/layout';
 import { useAuth } from '@/components/AuthProvider';
 import { GoldWord } from '@/components/BrandHeading';
@@ -27,6 +27,8 @@ import ListingRow, { ROW_CSS } from './ListingRow';
 import PostingPopup, { type ShortRequest } from './PostingPopup';
 import PromotePopup from './PromotePopup';
 import CommitteePackPopup from './CommitteePackPopup';
+import FindPeoplePopup from './FindPeoplePopup';
+import SentInvitesCard from './SentInvitesCard';
 import { useJobTopUp } from './useJobTopUp';
 import {
   dayLabel, readDigest, readPanel, setJobSettings,
@@ -37,7 +39,7 @@ const INK = '#1C1410';
 const INK_SOFT = '#5C5140';
 const FOREST = '#1B3828';
 
-type Popup = { kind: 'post'; listing: OrgListing | null } | { kind: 'promote'; listing: OrgListing } | { kind: 'pack' } | null;
+type Popup = { kind: 'post'; listing: OrgListing | null } | { kind: 'promote'; listing: OrgListing } | { kind: 'pack' } | { kind: 'find' } | null;
 
 const ORDER: Record<string, number> = { draft: 0, live: 1, hidden: 2, closed: 3 };
 
@@ -51,6 +53,7 @@ export default function JobBoardPage() {
   const [digestErr, setDigestErr] = useState<string | null>(null);
   const [popup, setPopup] = useState<Popup>(null);
   const topUp = useJobTopUp();
+  const [invitesKey, setInvitesKey] = useState(0);
   const seq = useRef(0);
 
   const apply = useCallback((p: Awaited<ReturnType<typeof readPanel>>, d: Awaited<ReturnType<typeof readDigest>>) => {
@@ -60,6 +63,7 @@ export default function JobBoardPage() {
 
   const reload = useCallback(async () => {
     if (!confId) return;
+    setInvitesKey((k) => k + 1);
     const mine = ++seq.current;
     const [p, d] = await Promise.all([readPanel(confId), readDigest(confId)]);
     if (mine === seq.current) apply(p, d);
@@ -136,6 +140,11 @@ export default function JobBoardPage() {
         </div>
         {panel && (
           <div className="flex flex-wrap items-center gap-2.5">
+            {panel.listings.some((l) => l.shown === 'live' && l.kind === 'gavelling') && (
+              <button type="button" className="gv-st-btn gv-st-outline gv-jb-post" onClick={() => setPopup({ kind: 'find' })}>
+                <UserSearch size={17} strokeWidth={2.4} aria-hidden /> Find people
+              </button>
+            )}
             {panel.committees.length > 0 && panel.roles.some((r) => r.role === 'chair' && r.enabled) && (
               <button type="button" className="gv-st-btn gv-st-outline gv-jb-post" onClick={() => setPopup({ kind: 'pack' })}>
                 <Layers size={17} strokeWidth={2.4} aria-hidden /> Post chair roles for every committee
@@ -161,7 +170,8 @@ export default function JobBoardPage() {
         </div>
       ) : (
         <div className="gv-jb-grid">
-          {/* ── Listings ── */}
+          {/* ── Listings, then the invites beneath ── */}
+          <div className="gv-jb-side">
           <DashCard
             title="Your Listings"
             hint="Chair, secretariat and staff listings on the Job Board. Listings where people apply on Gavelling are free; a listing that applies on another site costs credits once"
@@ -192,6 +202,8 @@ export default function JobBoardPage() {
               </ul>
             )}
           </DashCard>
+          <SentInvitesCard confId={conference.id} refreshKey={invitesKey} />
+          </div>
 
           <div className="gv-jb-side">
             <DigestCard slug={slug} digest={digest} err={digestErr} onRetry={() => { void reload(); }} />
@@ -216,6 +228,16 @@ export default function JobBoardPage() {
           myUserId={user?.id ?? null}
           onClose={() => setPopup(null)}
           onDone={() => { void reload(); }}
+        />
+      )}
+      {popup?.kind === 'find' && panel && (
+        <FindPeoplePopup
+          confId={conference.id}
+          slug={slug}
+          panel={panel}
+          onClose={() => setPopup(null)}
+          onShort={handOffShort}
+          onSent={() => setInvitesKey((k) => k + 1)}
         />
       )}
       {popup?.kind === 'post' && panel && (

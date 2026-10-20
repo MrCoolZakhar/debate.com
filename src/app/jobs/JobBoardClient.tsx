@@ -28,14 +28,16 @@ import { useAuth } from '@/components/AuthProvider';
 import { replaceUrlInPlace } from '@/lib/replaceUrlInPlace';
 import { openAuth } from '@/lib/authModal';
 import {
-  fetchJobBoard, fetchJobMy, jobContinuePath,
-  type JobBoardPage, type JobCard as JobCardData, type JobListingResult, type JobMyApplication, type JobMyListing, type JobMyResult, type JobMyStatus,
+  fetchJobBoard, fetchJobMy, fetchMyInvites, jobContinuePath, respondToInvite,
+  type JobBoardPage, type JobCard as JobCardData, type JobListingResult, type JobMyApplication, type JobMyListing, type JobMyResult, type JobMyStatus, type JobInvite,
 } from '@/lib/jobBoard';
 import { notifyOk } from '@/lib/appNotify';
 import PostListingButton, { useStandalonePosting } from './PostListingButton';
 import YourListings from './YourListings';
 import SaveAlertAction from './SaveAlertAction';
 import AlertsPanel from './AlertsPanel';
+import InvitesBlock, { unansweredInvites } from './InvitesBlock';
+import TalentPrompt from '@/components/TalentPrompt';
 import JobCard, { JobCardSkeleton } from './JobCard';
 import JobFilters from './JobFilters';
 import JobListing from './JobListing';
@@ -105,6 +107,12 @@ export default function JobBoardClient({ initialQuery, initialPage, initialError
   const [myErr, setMyErr] = useState<string | null>(null);
   const [showRanking, setShowRanking] = useState(false);
   const [listingsTab, setListingsTab] = useState(false);
+  // Invites to apply (prompt 11), and the invite this visit arrived with.
+  const [invites, setInvites] = useState<JobInvite[]>([]);
+  const [inviteParam] = useState<string | null>(() => {
+    if (typeof window === 'undefined') return null;
+    try { return new URLSearchParams(window.location.search).get('invite'); } catch { return null; }
+  });
   const [pane, setPane] = useState<HTMLDivElement | null>(null);
   const seq = useRef(0);
   const pushedRef = useRef(false);
@@ -187,16 +195,35 @@ export default function JobBoardClient({ initialQuery, initialPage, initialError
 
   // ── Saved and My Applications ──
   const loadMy = useCallback(async () => {
-    const res = await fetchJobMy();
+    const [res, inv] = await Promise.all([fetchJobMy(), fetchMyInvites()]);
+    if (Array.isArray(inv)) setInvites(inv);
     if (!res.ok) { setMyErr(res.message); return; }
     setMyErr(null);
     setMy(res);
   }, []);
   useEffect(() => {
     if (authLoading) return;
-    if (!userId) { setMy(null); setMyErr(null); return; }
+    if (!userId) { setMy(null); setMyErr(null); setInvites([]); return; }
     void loadMy();
   }, [userId, authLoading, loadMy]);
+
+  // /jobs?listing=<id>&invite=<invite id> (the invite email's "See the role"):
+  // signed in and theirs, the invite is marked opened once and the param
+  // leaves the URL; the listing then shows "<short> invited you to apply".
+  // Signed out nothing happens beyond showing the listing.
+  const inviteOpened = useRef(false);
+  useEffect(() => {
+    if (!inviteParam || !userId || inviteOpened.current) return;
+    const inv = invites.find((i) => i.invite_id === inviteParam);
+    if (!inv) return;
+    inviteOpened.current = true;
+    if (inv.invite_status === 'sent') void respondToInvite(inv.invite_id, 'opened');
+    try {
+      const url = new URL(window.location.href);
+      url.searchParams.delete('invite');
+      replaceUrlInPlace(url.pathname + url.search + url.hash);
+    } catch { /* the param simply stays */ }
+  }, [inviteParam, userId, invites]);
 
   // ?tab=listings opens Your Listings once on load (jobQuery reads it as 'all').
   useEffect(() => {
@@ -310,6 +337,10 @@ export default function JobBoardClient({ initialQuery, initialPage, initialError
       scrollRoot={wide ? pane : null}
       appliedAt={appliedAt.get(selectedId) ?? null}
       onChanged={() => { if (userId) void loadMy(); }}
+      inviteNote={(() => {
+        const inv = inviteParam ? invites.find((i) => i.invite_id === inviteParam && i.id === selectedId) : null;
+        return inv ? { short: inv.conference.short || inv.conference.name || 'A conference', message: inv.message } : null;
+      })()}
     />
   ) : null;
 
@@ -334,6 +365,9 @@ export default function JobBoardClient({ initialQuery, initialPage, initialError
             <PostListingButton onClick={posting.post} />
           </header>
 
+          {/* The one-time "Open to team roles" nudge (prompt 11), signed in only. */}
+          <TalentPrompt style={{ marginTop: 16 }} />
+
           <div className="gv-jobs-grid">
             <section className="gv-jobs-left" aria-label="Roles">
               {tabs.length > 1 && (
@@ -348,6 +382,9 @@ export default function JobBoardClient({ initialQuery, initialPage, initialError
                       className={`gv-jobs-tab${tab === t.key ? ' gv-jobs-tab-on' : ''}`}
                     >
                       {t.label}
+                      {t.key === 'applications' && unansweredInvites(invites) > 0 && (
+                        <span style={{ marginLeft: 6, fontSize: 12.5, fontWeight: 800, color: FOREST, fontVariantNumeric: 'tabular-nums' }}>{unansweredInvites(invites)}</span>
+                      )}
                     </button>
                   ))}
                 </div>
@@ -367,6 +404,9 @@ export default function JobBoardClient({ initialQuery, initialPage, initialError
 
               {/* Members manage their alerts in the Saved tab. */}
               {tab === 'saved' && <div style={{ marginBottom: 14 }}><AlertsPanel /></div>}
+
+              {/* Invites to apply, above My Applications (prompt 11). */}
+              {tab === 'applications' && <InvitesBlock invites={invites} onChange={setInvites} onSelect={select} />}
 
               <div className="gv-jobs-count" aria-live="polite">
                 {!listLoading && (tab === 'all' ? board.k !== 'error' : !myErr) && (

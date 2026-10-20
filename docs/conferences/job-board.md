@@ -233,3 +233,19 @@ Owner, 20 Oct 2026: organizers review applications together, so every applicant 
 ### Promote links
 - The server sends the poster of a listing one "closes soon" email (3 days or fewer left) and one "few applicants" email (live 7 days, fewer than 3 applicants) per listing, with "Promote for 3 credits". The button opens /manage/<slug>/jobs?promote=<listing id> for a conference listing, or /jobs?tab=listings&promote=<listing id> for a standalone one.
 - /manage/<slug>/jobs opens PromotePopup for that listing once the panel has loaded when it is live and the organizer can promote, otherwise shows "This listing is no longer live.", then drops the param. /jobs opens Your Listings and the Promote pop-up when it is one of the person's live listings (signed out, sign-in first), then drops the param.
+
+## Prompt 11: find people and invites
+
+Owner, 20 Oct 2026: organizers can search people with chair or secretariat experience and invite them to a listing, paying credits per invite. Two safeguards: OPT-IN ONLY (nobody can be found until they turn on "Open to team roles", off by default) and CAPS (one invite per person per conference; at most 3 invites a week reach any one person; extra invites wait and go out later). Organizers never see anyone's email or contact details.
+
+Seeker side:
+- `talent_settings()` returns `{ open, since, show_prompt }`; show_prompt is true once, for people with an accepted chair or team role (or chair or secretariat CV entries) who never answered. `talent_set_open(p_open)` turns it on or off (off also cancels invites still waiting; answering ends the nudge). `talent_dismiss_prompt()` ends the nudge without turning anything on.
+- "Open to team roles" is a setting in the CV privacy settings (`account/cv/CVPrivacyPanel.tsx`), disabled with "Make your CV public to be found" while the CV is private. The one-time nudge is `src/components/TalentPrompt.tsx`, at the top of /account/cv and of /jobs for signed-in people ("Turn on" or "Not now"; never again after either).
+- `talent_my_invites()` returns the person's invites (a JobCard plus `invite_id, invite_status sent | opened | applied | not_interested, message, invited_at, invited_by, open`); `talent_invite_respond(p_invite, 'opened' | 'not_interested')`. They show as an Invites block above My Applications on /jobs (`src/app/jobs/InvitesBlock.tsx`), the tab carrying the count of unanswered invites, with a quiet "Not interested". /jobs?listing=<id>&invite=<invite id> marks the invite opened once (signed in and theirs), drops the param, and the listing shows "<short> invited you to apply" with the note.
+
+Organizer side (/manage/<slug>/jobs):
+- `talent_search(p_conf, p_query, p_role, p_country, p_level, p_limit, p_offset)`: only opted-in people with public chair or secretariat entries, never people already on this conference's team or with an open team application there; Job Board permission. It returns the people (name, avatar, nationality, level, counts, verified, recent entries, any invite), the price, the conference credits and can_pay.
+- `job_invite_send(p_listing, p_user, p_message, p_top_up)`: price in job_prices key talent_invite (1 credit today) from conference credits (Store permission), the usual short and top-up flow (useJobTopUp), code already, or a field message. Answers status sent or queued.
+- `job_conference_invites(p_conf)`: the conference's invites for the Invites card.
+- "Find people" (FindPeoplePopup.tsx: search, then the invite step in the same pop-up) and the Invites card (SentInvitesCard.tsx).
+- Delivery is by email from the server ("See the role" to /jobs?listing=<id>&invite=<invite id>); queued invites go out with an hourly job.

@@ -220,3 +220,109 @@ export function committeePack(confId: string, ids: string[], template: PackTempl
     failed: Array.isArray(r.failed) ? r.failed : [],
   } : r));
 }
+
+// ── Find people: talent search and invites (prompt 11) ─────────────────────
+
+export type InviteStatus = 'queued' | 'sent' | 'applied' | 'not_interested' | 'cancelled';
+
+export interface TalentEntry {
+  conference: string | null;
+  type: 'chair' | 'secretariat';
+  committee: string | null;
+  title: string | null;
+  date: string | null;
+  verified: boolean;
+}
+
+export interface TalentPerson {
+  user_id: string;
+  name: string | null;
+  avatar_url: string | null;
+  nationality: string | null;
+  level: string | null;
+  chairs: number;
+  secretariat: number;
+  verified: number;
+  recent: TalentEntry[];
+  invite: { id: string; status: InviteStatus | string; listing_id: string; created_at?: string } | null;
+}
+
+export interface TalentPage {
+  total: number;
+  people: TalentPerson[];
+  price: number;
+  conference_credits: number;
+  can_pay: boolean;
+}
+
+export interface TalentQuery {
+  query?: string | null;
+  role?: 'chair' | 'secretariat' | null;
+  country?: string | null;
+  level?: string | null;
+  limit?: number;
+  offset?: number;
+}
+
+/** talent_search: only opted-in people with public chair or secretariat entries. */
+export function talentSearch(confId: string, q: TalentQuery) {
+  return call<TalentPage>('talent_search', {
+    p_conf: confId,
+    p_query: q.query?.trim() || null,
+    p_role: q.role ?? null,
+    p_country: q.country || null,
+    p_level: q.level || null,
+    p_limit: q.limit ?? 24,
+    p_offset: q.offset ?? 0,
+  }, 'We could not search for people. Try again.').then((r) => (r.ok ? {
+    ...r,
+    total: Number(r.total ?? 0),
+    price: Number(r.price ?? 0),
+    conference_credits: Number(r.conference_credits ?? 0),
+    can_pay: !!r.can_pay,
+    people: Array.isArray(r.people) ? r.people.map((p) => ({
+      ...p,
+      chairs: Number(p.chairs ?? 0),
+      secretariat: Number(p.secretariat ?? 0),
+      verified: Number(p.verified ?? 0),
+      recent: Array.isArray(p.recent) ? p.recent : [],
+      invite: p.invite && typeof p.invite === 'object' ? p.invite : null,
+    })) : [],
+  } : r));
+}
+
+/** job_invite_send, paid from conference credits (p_top_up adds the caller's own). */
+export function sendInvite(listingId: string, userId: string, message: string | null, topUp = false) {
+  return call<{ id: string; status: 'sent' | 'queued'; charged?: number; message?: string }>(
+    'job_invite_send',
+    { p_listing: listingId, p_user: userId, p_message: message?.trim() || null, p_top_up: topUp },
+    'We could not send this invite. Try again.',
+  );
+}
+
+export interface SentInvite {
+  id: string;
+  user_id: string;
+  name: string | null;
+  avatar_url: string | null;
+  listing_id: string;
+  title: string | null;
+  status: InviteStatus;
+  created_at: string;
+  sent_at: string | null;
+  invited_by: string | null;
+}
+
+/** job_conference_invites answers an array (empty without access). */
+export async function conferenceInvites(confId: string): Promise<{ ok: true; invites: SentInvite[] } | Refusal> {
+  const fallback = 'We could not load your invites. Try again in a moment.';
+  try {
+    const client = await getFreshAuthedClient();
+    if (!client) return { ok: false, message: SIGNIN };
+    const { data, error } = await client.rpc('job_conference_invites', { p_conf: confId });
+    if (error) return { ok: false, message: friendlyError(error, fallback) };
+    return { ok: true, invites: Array.isArray(data) ? (data as SentInvite[]) : [] };
+  } catch (e) {
+    return { ok: false, message: friendlyError(e, fallback) };
+  }
+}

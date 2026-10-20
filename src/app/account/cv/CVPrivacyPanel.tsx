@@ -19,8 +19,11 @@
 // rolls back on a refusal; this control only shows the state and calls it.
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Globe2, Lock, Flag, ExternalLink, Settings2 } from 'lucide-react';
+import { Globe2, Lock, Flag, ExternalLink, Settings2, Briefcase } from 'lucide-react';
 import Portal from '@/components/Portal';
+import { useAuth } from '@/components/AuthProvider';
+import { fetchTalentSettings, setTalentOpen } from '@/lib/jobBoard';
+import { TALENT_CHANGED_EVENT } from '@/components/TalentPrompt';
 import { OUTFIT, T } from '../accountUi';
 
 export interface CvPrivacy {
@@ -29,7 +32,7 @@ export interface CvPrivacy {
 }
 
 const POP_W = 280;
-const POP_H = 170;
+const POP_H = 330;
 
 export default function CVPrivacyPanel({
   value,
@@ -51,6 +54,47 @@ export default function CVPrivacyPanel({
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
   const btnRef = useRef<HTMLButtonElement | null>(null);
   const popRef = useRef<HTMLDivElement | null>(null);
+
+  // "Open to team roles" (Job Board prompt 11): opt-in to being found by
+  // conferences. Read once per signed-in user, written optimistically through
+  // talent_set_open and rolled back with the server's sentence on a refusal.
+  const { user } = useAuth();
+  const userId = user?.id ?? null;
+  const [talentOpen, setTalentOpenState] = useState<boolean | null>(null);
+  const [talentBusy, setTalentBusy] = useState(false);
+  const [talentError, setTalentError] = useState<string | null>(null);
+  const talentBusyRef = useRef(false);
+
+  useEffect(() => {
+    if (!userId) return;
+    let cancelled = false;
+    fetchTalentSettings().then((r) => {
+      if (cancelled) return;
+      if ('ok' in r) { setTalentError(r.message); return; }
+      setTalentOpenState(r.open);
+      setTalentError(null);
+    });
+    return () => { cancelled = true; };
+  }, [userId]);
+
+  const changeTalent = useCallback(async (next: boolean) => {
+    if (talentBusyRef.current || talentOpen === null) return;
+    talentBusyRef.current = true;
+    const before = talentOpen;
+    setTalentOpenState(next);
+    setTalentBusy(true);
+    setTalentError(null);
+    const r = await setTalentOpen(next);
+    talentBusyRef.current = false;
+    setTalentBusy(false);
+    if (!r.ok) {
+      setTalentOpenState(before);
+      setTalentError(r.message);
+      return;
+    }
+    setTalentOpenState(r.open);
+    try { window.dispatchEvent(new CustomEvent(TALENT_CHANGED_EVENT, { detail: { open: r.open } })); } catch { /* nothing listening */ }
+  }, [talentOpen]);
 
   const place = useCallback(() => {
     const b = btnRef.current;
@@ -212,6 +256,57 @@ export default function CVPrivacyPanel({
                 />
               </span>
             </label>
+
+            {(() => {
+              const on = !!talentOpen;
+              const off = saving || cvPrivate || talentBusy || talentOpen === null;
+              return (
+                <div>
+                  <label
+                    className="flex items-start justify-between gap-3 rounded-[12px]"
+                    style={{ padding: 10, cursor: off ? 'default' : 'pointer', opacity: cvPrivate ? 0.5 : 1 }}
+                  >
+                    <span className="flex items-start gap-2.5 min-w-0">
+                      <Briefcase size={16} strokeWidth={2.2} style={{ color: '#5C5140', marginTop: 2, flexShrink: 0 }} aria-hidden />
+                      <span className="min-w-0">
+                        <span className="block" style={{ fontFamily: OUTFIT, fontSize: T.body, fontWeight: 600, color: '#1C1410' }}>
+                          Open to team roles
+                        </span>
+                        <span className="block" style={{ marginTop: 3, fontFamily: OUTFIT, fontSize: T.caption, color: '#6E5F4E', lineHeight: 1.45 }}>
+                          {cvPrivate
+                            ? 'Make your CV public to be found'
+                            : 'Conferences can find your chair and secretariat experience and invite you to apply. They never see your email. At most 3 invites a week.'}
+                        </span>
+                      </span>
+                    </span>
+                    <input
+                      type="checkbox"
+                      role="switch"
+                      className="sr-only peer"
+                      checked={on}
+                      disabled={off}
+                      aria-busy={talentBusy}
+                      onChange={(e) => { void changeTalent(e.target.checked); }}
+                    />
+                    <span
+                      aria-hidden
+                      className="relative flex-shrink-0 rounded-full peer-focus-visible:ring-2 peer-focus-visible:ring-[#B6871F]"
+                      style={{ width: 40, height: 24, marginTop: 1, background: on ? '#1B3828' : 'rgba(154,138,120,0.45)', transition: 'background-color 180ms ease' }}
+                    >
+                      <span
+                        className="absolute rounded-full"
+                        style={{ top: 3, left: 3, width: 18, height: 18, background: '#FFFFFF', transform: on ? 'translateX(16px)' : 'none', transition: 'transform 180ms cubic-bezier(0.22,1,0.36,1)', boxShadow: '0 1px 3px rgba(0,0,0,0.2)' }}
+                      />
+                    </span>
+                  </label>
+                  {talentError && (
+                    <p role="alert" style={{ margin: '0 10px 6px', fontFamily: OUTFIT, fontSize: T.caption, fontWeight: 700, color: '#8B2020', lineHeight: 1.45 }}>
+                      {talentError}
+                    </p>
+                  )}
+                </div>
+              );
+            })()}
 
             {!cvPrivate && publicHref && (
               <a

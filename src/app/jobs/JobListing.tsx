@@ -25,7 +25,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, Bookmark, BookmarkCheck, Check, ExternalLink, ListChecks, Loader2, Share2, X } from 'lucide-react';
+import { ArrowLeft, Bookmark, BookmarkCheck, Check, ExternalLink, ListChecks, Loader2, Mail, Share2, X } from 'lucide-react';
 import ShareCardPopup from './ShareCardPopup';
 import { useAuth } from '@/components/AuthProvider';
 import { isUnlimited, useUnlimitedStatus } from '@/lib/unlimitedStatus';
@@ -70,7 +70,7 @@ function shortDay(iso: string | null | undefined): string | null {
 }
 
 export default function JobListing({
-  id, initialCard, initialDetail, onBack, scrollRoot, appliedAt, onChanged,
+  id, initialCard, initialDetail, onBack, scrollRoot, appliedAt, onChanged, inviteNote = null,
 }: {
   id: string;
   /** The card from the list, so the header draws at once. */
@@ -85,6 +85,8 @@ export default function JobListing({
   appliedAt?: string | null;
   /** Saved or applied state changed: the page reads job_my() again. */
   onChanged?: () => void;
+  /** This visit came from an invite (prompt 11): "<short> invited you to apply". */
+  inviteNote?: { short: string; message: string | null } | null;
 }) {
   const { user, loading: authLoading } = useAuth();
   const userId = user?.id ?? null;
@@ -308,6 +310,18 @@ export default function JobListing({
 
       {onBack && <BackLink onBack={onBack} />}
 
+      {inviteNote && (
+        <div className="gv-jl-invite" role="note">
+          <Mail size={16} strokeWidth={2.4} aria-hidden style={{ flexShrink: 0, marginTop: 2 }} />
+          <div style={{ minWidth: 0 }}>
+            <p style={{ margin: 0, fontSize: 14.5, fontWeight: 700, color: INK, overflowWrap: 'anywhere' }}>{inviteNote.short} invited you to apply</p>
+            {inviteNote.message?.trim() && (
+              <p style={{ margin: '3px 0 0', fontSize: 14, fontStyle: 'italic', color: INK_SOFT, whiteSpace: 'pre-line', overflowWrap: 'anywhere' }}>&ldquo;{inviteNote.message.trim()}&rdquo;</p>
+            )}
+          </div>
+        </div>
+      )}
+
       <header ref={headRef} className="gv-jl-card gv-jl-head">
         <div className="flex items-start" style={{ gap: 16 }}>
           <JobLogo conf={conf} size={68} standalone={card.standalone} />
@@ -494,6 +508,7 @@ const LISTING_CSS = `
 .gv-jl{position:relative;display:flex;flex-direction:column;gap:16px;color:${INK}}
 .gv-jl-card{background:#FFFFFF;border-radius:20px;padding:22px 24px;box-shadow:0 1px 2px rgba(27,56,40,0.05),0 8px 24px rgba(27,56,40,0.08)}
 .gv-jl-head{padding:26px 26px 24px}
+.gv-jl-invite{display:flex;gap:10px;align-items:flex-start;padding:12px 16px;border-radius:16px;background:rgba(238,217,138,0.32);color:${FOREST}}
 .gv-jl-gone{display:flex;flex-direction:column;align-items:flex-start;gap:12px}
 .gv-jl-title{margin:0;font-size:clamp(24px,2.2vw,32px);font-weight:800;letter-spacing:-0.02em;line-height:1.12;color:${INK};overflow-wrap:anywhere;text-wrap:balance}
 .gv-jl-committee{margin:6px 0 0;font-size:15.5px;font-weight:600;color:${FOREST};overflow-wrap:anywhere}
