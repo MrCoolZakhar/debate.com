@@ -368,6 +368,19 @@ export async function fetchHiringConferences(): Promise<Set<string>> {
 
 // ── Prompt 5: standalone listings, Unlimited perks, signed-out apply ────────
 
+/** How a listing turns views into applications (prompt 10). started = began
+ *  applying through the listing; screened_out = stopped by an Essential
+ *  question; submitted = finished applications. */
+export interface JobFunnel {
+  views: number;
+  clicks: number;
+  started: number;
+  screened_out: number;
+  submitted: number;
+  views_7d: number;
+  clicks_7d: number;
+}
+
 /** A standalone listing as job_my() returns it (Your Listings). */
 export interface JobMyListing extends JobCard {
   status: string;
@@ -382,6 +395,7 @@ export interface JobMyListing extends JobCard {
   charged_credits: number;
   locked: boolean;
   fix_available: boolean;
+  funnel?: JobFunnel | null;
 }
 
 /** A price from job_prices (readable by anyone), e.g. 'outside_listing'. Null when it cannot be read. */

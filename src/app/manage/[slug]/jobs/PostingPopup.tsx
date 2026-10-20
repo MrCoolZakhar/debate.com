@@ -64,7 +64,7 @@ const FIELD_STEP: Record<string, Step> = {
 };
 
 const ROLE_ICON: Record<JobRole, typeof Gavel> = { chair: Gavel, secretariat: Landmark, staff: Users };
-const NO_OFFERS: JobOffers = { paid: false, paid_amount: null, accommodation: false, travel: false, certificate: false, letter: false };
+export const NO_OFFERS: JobOffers = { paid: false, paid_amount: null, accommodation: false, travel: false, certificate: false, letter: false };
 const MAX_QUESTIONS = 5;
 const LINK_RE = /(https?:\/\/|www\.)/i;
 
@@ -486,64 +486,15 @@ export default function PostingPopup({
               />
               {markOf('committee_id') && <span role="alert" className="gv-jp-err">{markOf('committee_id')}</span>}
             </div>
-            <label className="gv-jp-field">
-              <span className="gv-jp-label">Description</span>
-              <textarea
-                className={`gv-jp-input gv-jp-area${markOf('description') ? ' gv-jp-input-bad' : ''}`}
-                value={draft.description}
-                maxLength={4000}
-                rows={8}
-                onChange={(e) => set('description', e.target.value)}
-                placeholder="What the role involves, who you are looking for, and what they get"
-                aria-invalid={!!markOf('description') || undefined}
-              />
-              <span className="gv-jp-hint">{draft.description.length.toLocaleString('en-US')} of 4,000</span>
-              {markOf('description') && <span role="alert" className="gv-jp-err">{markOf('description')}</span>}
-            </label>
-            <div className="gv-jp-field">
-              <span className="gv-jp-label">Posted by</span>
-              <GSelect
-                value={draft.poster_user_id}
-                onChange={(v) => set('poster_user_id', v)}
-                options={[...panel.organizers]
-                  .sort((a, b) => (a.user_id === myUserId ? -1 : b.user_id === myUserId ? 1 : 0))
-                  .map((o) => ({ value: o.user_id, label: o.name || 'Organizer', hint: o.title ?? undefined }))}
-                invalid={!!markOf('poster_user_id')}
-              />
-              {markOf('poster_user_id') && <span role="alert" className="gv-jp-err">{markOf('poster_user_id')}</span>}
-            </div>
+            <DescriptionField value={draft.description} onChange={(v) => set('description', v)} mark={markOf('description')} />
+            <PosterField panel={panel} myUserId={myUserId} value={draft.poster_user_id} onChange={(v) => set('poster_user_id', v)} mark={markOf('poster_user_id')} />
           </>
         )}
 
         {/* ── 3 What You Offer ── */}
         {step === 'offers' && (
           <>
-            <div className="gv-jp-offers" role="group" aria-label="What you offer">
-              {JOB_OFFER_ORDER.map((k) => (
-                <button
-                  key={k}
-                  type="button"
-                  aria-pressed={!!draft.offers[k]}
-                  className={`gv-jp-offer${draft.offers[k] ? ' gv-jp-offer-on' : ''}`}
-                  onClick={() => set('offers', { ...draft.offers, [k]: !draft.offers[k] })}
-                >
-                  {JOB_OFFER_LABEL[k]}
-                </button>
-              ))}
-            </div>
-            {draft.offers.paid && (
-              <label className="gv-jp-field" style={{ maxWidth: 260 }}>
-                <span className="gv-jp-label">Amount (optional)</span>
-                <input
-                  className={`gv-jp-input${markOf('paid_amount') || markOf('offers') ? ' gv-jp-input-bad' : ''}`}
-                  value={draft.offers.paid_amount ?? ''}
-                  maxLength={20}
-                  onChange={(e) => set('offers', { ...draft.offers, paid_amount: e.target.value })}
-                  placeholder="$200"
-                />
-              </label>
-            )}
-            {(markOf('offers') || markOf('paid_amount')) && <p role="alert" className="gv-jp-err">{markOf('offers') || markOf('paid_amount')}</p>}
+            <OffersEditor offers={draft.offers} onChange={(o) => set('offers', o)} mark={markOf('offers') || markOf('paid_amount')} />
           </>
         )}
 
@@ -640,7 +591,79 @@ export default function PostingPopup({
   );
 }
 
-function Choice({ on, onClick, icon: Icon, title, note }: { on: boolean; onClick: () => void; icon: typeof Globe; title: string; note?: string }) {
+/** The description field (up to 4,000 characters). */
+export function DescriptionField({ value, onChange, mark }: { value: string; onChange: (v: string) => void; mark: string | null }) {
+  return (
+    <label className="gv-jp-field">
+      <span className="gv-jp-label">Description</span>
+      <textarea
+        className={`gv-jp-input gv-jp-area${mark ? ' gv-jp-input-bad' : ''}`}
+        value={value}
+        maxLength={4000}
+        rows={8}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder="What the role involves, who you are looking for, and what they get"
+        aria-invalid={!!mark || undefined}
+      />
+      <span className="gv-jp-hint">{value.length.toLocaleString('en-US')} of 4,000</span>
+      {mark && <span role="alert" className="gv-jp-err">{mark}</span>}
+    </label>
+  );
+}
+
+/** Posted by: the conference's organizers, the current one first. */
+export function PosterField({ panel, myUserId, value, onChange, mark }: { panel: JobPanel; myUserId: string | null; value: string; onChange: (v: string) => void; mark: string | null }) {
+  return (
+    <div className="gv-jp-field">
+      <span className="gv-jp-label">Posted by</span>
+      <GSelect
+        value={value}
+        onChange={onChange}
+        options={[...panel.organizers]
+          .sort((a, b) => (a.user_id === myUserId ? -1 : b.user_id === myUserId ? 1 : 0))
+          .map((o) => ({ value: o.user_id, label: o.name || 'Organizer', hint: o.title ?? undefined }))}
+        invalid={!!mark}
+      />
+      {mark && <span role="alert" className="gv-jp-err">{mark}</span>}
+    </div>
+  );
+}
+
+/** What You Offer: the chips, and Paid with an optional amount. `mark` is the offers or paid_amount refusal. */
+export function OffersEditor({ offers, onChange, mark }: { offers: JobOffers; onChange: (o: JobOffers) => void; mark: string | null }) {
+  return (
+    <>
+      <div className="gv-jp-offers" role="group" aria-label="What you offer">
+        {JOB_OFFER_ORDER.map((k) => (
+          <button
+            key={k}
+            type="button"
+            aria-pressed={!!offers[k]}
+            className={`gv-jp-offer${offers[k] ? ' gv-jp-offer-on' : ''}`}
+            onClick={() => onChange({ ...offers, [k]: !offers[k] })}
+          >
+            {JOB_OFFER_LABEL[k]}
+          </button>
+        ))}
+      </div>
+      {offers.paid && (
+        <label className="gv-jp-field" style={{ maxWidth: 260 }}>
+          <span className="gv-jp-label">Amount (optional)</span>
+          <input
+            className={`gv-jp-input${mark ? ' gv-jp-input-bad' : ''}`}
+            value={offers.paid_amount ?? ''}
+            maxLength={20}
+            onChange={(e) => onChange({ ...offers, paid_amount: e.target.value })}
+            placeholder="$200"
+          />
+        </label>
+      )}
+      {mark && <p role="alert" className="gv-jp-err">{mark}</p>}
+    </>
+  );
+}
+
+export function Choice({ on, onClick, icon: Icon, title, note }: { on: boolean; onClick: () => void; icon: typeof Globe; title: string; note?: string }) {
   return (
     <button type="button" role="radio" aria-checked={on} onClick={onClick} className={`gv-jp-choice${on ? ' gv-jp-choice-on' : ''}`}>
       <span className="gv-jp-dot" aria-hidden>{on && <span />}</span>
@@ -651,7 +674,7 @@ function Choice({ on, onClick, icon: Icon, title, note }: { on: boolean; onClick
   );
 }
 
-function QuestionsEditor({ questions, autoReject, bad, onChange, onAutoReject }: {
+export function QuestionsEditor({ questions, autoReject, bad, onChange, onAutoReject }: {
   questions: OrgQuestion[];
   autoReject: boolean;
   bad: { field: string; message: string } | null;
@@ -791,7 +814,7 @@ function QuestionsEditor({ questions, autoReject, bad, onChange, onAutoReject }:
   );
 }
 
-const POSTING_CSS = `
+export const POSTING_CSS = `
 .gv-buy-panel.gv-jp{max-width:780px;min-height:0}
 .gv-buy-panel.gv-jp .gv-buy-body{display:block}
 .gv-jp-col{display:flex;flex-direction:column;gap:18px;padding:30px 32px 26px;font-family:${FONT};color:${INK}}

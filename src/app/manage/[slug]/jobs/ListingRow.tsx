@@ -13,12 +13,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import {
-  CircleDot, CircleSlash, EyeOff, FilePen, Lock, Megaphone, MoreHorizontal, Pencil, Sparkles, Trash2, ExternalLink, XCircle,
+  CircleDot, CircleSlash, EyeOff, FilePen, Lock, Megaphone, MoreHorizontal, Pencil, Sparkles, Trash2, ExternalLink, XCircle, Share2,
 } from 'lucide-react';
 import Portal from '@/components/Portal';
 import { JOB_ROLE_LABEL } from '@/lib/jobBoard';
 import { InfoHint } from '../settings/applicationsUi';
 import { closeListing, dayLabel, type OrgListing, type ShownState } from './jobsApi';
+import ListingFunnel from '@/app/jobs/ListingFunnel';
+import ShareCardPopup from '@/app/jobs/ShareCardPopup';
 
 const FONT = "var(--font-brand), sans-serif";
 const INK = '#1C1410';
@@ -42,6 +44,7 @@ export default function ListingRow({ listing, canPromote, onEdit, onPromote, onC
   onChanged: (message: string) => void;
 }) {
   const [asking, setAsking] = useState<null | 'close' | 'delete'>(null);
+  const [sharing, setSharing] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
   const busyRef = useRef(false);
@@ -108,23 +111,28 @@ export default function ListingRow({ listing, canPromote, onEdit, onPromote, onC
           )}
         </div>
 
-        <dl className="gv-jr-stats">
-          <div><dt>views</dt><dd>{listing.views.toLocaleString('en-US')}</dd></div>
-          <div><dt>clicks to apply</dt><dd>{listing.clicks.toLocaleString('en-US')}</dd></div>
-          <div><dt>{listing.applicants === 1 ? 'applicant' : 'applicants'}</dt><dd>{listing.applicants.toLocaleString('en-US')}</dd></div>
-        </dl>
+        <div className="gv-jr-funnel">
+          <ListingFunnel
+            funnel={listing.funnel}
+            fallback={{ views: listing.views, clicks: listing.clicks, applicants: listing.applicants }}
+            outside={listing.kind === 'outside'}
+          />
+        </div>
 
         <RowMenu
           items={[
             { key: 'edit', label: 'Edit', icon: Pencil, onClick: onEdit },
             ...(listing.shown === 'live' && canPromote ? [{ key: 'promote', label: 'Promote', icon: Megaphone, onClick: onPromote }] : []),
             ...(listing.shown !== 'draft' ? [{ key: 'view', label: 'View on Job Board', icon: ExternalLink, href: `/jobs?listing=${encodeURIComponent(listing.id)}` }] : []),
+            ...(listing.shown === 'live' ? [{ key: 'share', label: 'Share card', icon: Share2, onClick: () => setSharing(true) }] : []),
             ...(listing.shown === 'live' ? [{ key: 'close', label: 'Close', icon: XCircle, onClick: () => { setErr(''); setAsking('close'); } }] : []),
             ...(listing.shown === 'draft' ? [{ key: 'delete', label: 'Delete', icon: Trash2, danger: true, onClick: () => { setErr(''); setAsking('delete'); } }] : []),
           ]}
           label={`Actions for ${listing.title || 'this listing'}`}
         />
       </div>
+
+      {sharing && <ShareCardPopup card={listing} onClose={() => setSharing(false)} />}
 
       {asking && (
         <div className="gv-jr-ask" role="group" aria-label={asking === 'close' ? 'Close this listing' : 'Delete this draft'}>
@@ -235,6 +243,7 @@ export const ROW_CSS = `
 .gv-jr-chip{display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border-radius:9999px;font-size:12px;font-weight:700;color:#4A3410;background:linear-gradient(145deg,#F3E3A1 0%,#EED98A 55%,#D9B44A 100%);box-shadow:0 1px 4px rgba(182,135,31,0.3)}
 .gv-jr-chip-soft{background:rgba(238,217,138,0.4);box-shadow:none}
 .gv-jr-hidden{margin:10px 0 0;padding:8px 12px;border-radius:10px;background:rgba(158,42,18,0.07);font-size:13.5px;line-height:1.45;color:${DANGER};overflow-wrap:anywhere}
+.gv-jr-funnel{grid-column:1 / -1;grid-row:2;min-width:0}
 .gv-jr-stats{grid-column:1 / -1;display:flex;flex-wrap:wrap;gap:8px 26px;margin:0}
 .gv-jr-stats div{display:flex;align-items:baseline;gap:6px;flex-direction:row-reverse;justify-content:flex-end}
 .gv-jr-stats dd{margin:0;font-size:22px;font-weight:800;letter-spacing:-0.02em;color:${INK};font-variant-numeric:tabular-nums}

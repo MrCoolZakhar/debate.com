@@ -215,3 +215,21 @@ Owner, 20 Oct 2026: organizers review applications together, so every applicant 
 - `application_note_edit(p_note, p_body)` and `application_note_remove(p_note)`: return true; only the author can change or remove a note, everyone else gets the server's sentence.
 - `application_note_counts(p_conf)`: `{ "<application_id>": count }`, organizers only.
 - Where: the applicant pop-up's Notes tab (after Payment, `?tab=notes`, the count beside it), the Notes section of Settings > Team's review step (not the access step), and a small note icon with the count on an Applications row ("N notes from your team"), read with the page's other reads and again after the pop-up closes (`applications/useNoteCounts.ts`). The thread and the box are `applications/ApplicantDetail/NotesPanel.tsx`: optimistic add, edit and remove rolled back with the server's sentence, Cmd or Ctrl plus Enter adds, edits and removals asked in place.
+
+## Prompt 10: organizer tools
+
+### Funnel
+- `job_conference_panel(p_conf)` listings and `job_my()` Your Listings carry `funnel { views, clicks, started, screened_out, submitted, views_7d, clicks_7d }`: started = began applying through the listing, screened_out = stopped by an Essential question, submitted = finished applications.
+- `src/app/jobs/ListingFunnel.tsx` draws it on the organizer rows (`ListingRow.tsx`) and Your Listings: Views, Clicked Apply, Started, Applied, joined by a chevron with the share that went on (hidden when the step before is 0), "This week: N views, N clicks" under it, and "N stopped by an Essential question" under Started when above 0. Outside listings show only Views and Clicked their link.
+
+### Committee pack
+- `job_committee_pack(p_conf, p_committee_ids, p_template, p_publish)` posts one Gavelling chair listing per picked committee (up to 40), titled "<abbreviation or name> Chair", with the shared template (description, offers, questions, auto_reject, deadline, poster_user_id); committees with a draft or live chair listing are skipped; free. It answers created, skipped and failed (a failed one may be kept as a draft).
+- "Post chair roles for every committee" sits beside "Post a listing" on /manage/<slug>/jobs, hidden with no committees or with the chair role off. `CommitteePackPopup.tsx`: committees, the shared details (PostingPopup's own exported fields), review ("Post N listings"), then the result in place.
+
+### Share card
+- `src/app/jobs/ShareCardPopup.tsx` draws a share image on a canvas, client side, as a Post (1080 x 1350) or a Story (1080 x 1920): the logo (a monogram disc when it cannot load), the title, the conference, dates and place, up to three offers, a QR code (the `qrcode` package, imported inside the pop-up) and "Apply on Gavelling". The QR and "Copy link" point to `https://gavelling.com/jobs?listing=<id>&ref=share`; /jobs ignores `ref`. "Download image" saves "<short>-<title>.png".
+- It opens from the organizer row menu ("Share card", live listings), Your Listings ("Share", live listings) and the listing page ("Share" after Save, open listings).
+
+### Promote links
+- The server sends the poster of a listing one "closes soon" email (3 days or fewer left) and one "few applicants" email (live 7 days, fewer than 3 applicants) per listing, with "Promote for 3 credits". The button opens /manage/<slug>/jobs?promote=<listing id> for a conference listing, or /jobs?tab=listings&promote=<listing id> for a standalone one.
+- /manage/<slug>/jobs opens PromotePopup for that listing once the panel has loaded when it is live and the organizer can promote, otherwise shows "This listing is no longer live.", then drops the param. /jobs opens Your Listings and the Promote pop-up when it is one of the person's live listings (signed out, sign-in first), then drops the param.

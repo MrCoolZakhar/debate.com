@@ -26,6 +26,7 @@ import NotificationStack from '@/components/notifications/NotificationStack';
 import { GoldWord } from '@/components/BrandHeading';
 import { useAuth } from '@/components/AuthProvider';
 import { replaceUrlInPlace } from '@/lib/replaceUrlInPlace';
+import { openAuth } from '@/lib/authModal';
 import {
   fetchJobBoard, fetchJobMy, jobContinuePath,
   type JobBoardPage, type JobCard as JobCardData, type JobListingResult, type JobMyApplication, type JobMyListing, type JobMyResult, type JobMyStatus,
@@ -215,6 +216,34 @@ export default function JobBoardClient({ initialQuery, initialPage, initialError
     },
     onPosted: () => setListingsTab(true),
   });
+
+  // /jobs?tab=listings&promote=<id> (the "Promote for 3 credits" button in the
+  // poster's nudge emails): Your Listings, then the Promote pop-up for that
+  // listing when it is one of theirs and live; the param then leaves the URL.
+  // Signed out, sign-in comes first and it carries on afterwards.
+  const promoteDone = useRef(false);
+  const promoteAsked = useRef(false);
+  useEffect(() => {
+    if (promoteDone.current || authLoading) return;
+    const url = new URL(window.location.href);
+    const pid = url.searchParams.get('promote');
+    if (!pid) { promoteDone.current = true; return; }
+    if (!userId) {
+      if (!promoteAsked.current) { promoteAsked.current = true; openAuth(); }
+      return;
+    }
+    if (!my) return;
+    const target = myListings.find((l) => l.id === pid && l.shown === 'live');
+    // One beat later, and only once: a re-render in between reschedules it.
+    const t = window.setTimeout(() => {
+      if (promoteDone.current) return;
+      promoteDone.current = true;
+      url.searchParams.delete('promote');
+      replaceUrlInPlace(url.pathname + url.search + url.hash);
+      if (target) { setListingsTab(true); posting.promote(target); }
+    }, 0);
+    return () => window.clearTimeout(t);
+  }, [authLoading, userId, my, myListings, posting]);
 
   const items: JobCardData[] = useMemo(() => {
     if (tab === 'listings') return myListings;

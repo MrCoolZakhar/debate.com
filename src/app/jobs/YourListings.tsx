@@ -11,10 +11,12 @@
 // modal. The title selects the listing for the right pane.
 
 import { useRef, useState } from 'react';
-import { CircleDot, CircleSlash, EyeOff, FilePen, Lock, Megaphone, Pencil, Sparkles, Trash2, XCircle } from 'lucide-react';
+import { CircleDot, CircleSlash, EyeOff, FilePen, Lock, Megaphone, Pencil, Share2, Sparkles, Trash2, XCircle } from 'lucide-react';
 import { JOB_ROLE_LABEL, type JobMyListing } from '@/lib/jobBoard';
 import { InfoHint } from '@/app/manage/[slug]/settings/applicationsUi';
 import { closeListing, dayLabel } from '@/app/manage/[slug]/jobs/jobsApi';
+import ListingFunnel from './ListingFunnel';
+import ShareCardPopup from './ShareCardPopup';
 
 const FONT = "var(--font-brand), sans-serif";
 const INK = '#1C1410';
@@ -70,6 +72,7 @@ function Row({ listing, selected, onSelect, onEdit, onPromote, onChanged }: {
   onChanged: (message: string) => void;
 }) {
   const [asking, setAsking] = useState<null | 'close' | 'delete'>(null);
+  const [sharing, setSharing] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
   const busyRef = useRef(false);
@@ -136,10 +139,10 @@ function Row({ listing, selected, onSelect, onEdit, onPromote, onChanged }: {
       )}
 
       {listing.shown !== 'draft' && (
-        <dl className="gv-yl-stats">
-          <div><dt>{listing.views === 1 ? 'view' : 'views'}</dt><dd>{listing.views.toLocaleString('en-US')}</dd></div>
-          <div><dt>{listing.clicks === 1 ? 'click to apply' : 'clicks to apply'}</dt><dd>{listing.clicks.toLocaleString('en-US')}</dd></div>
-        </dl>
+        <div style={{ marginTop: 12 }}>
+          {/* Standalone listings apply on another site: Views, then Clicked their link. */}
+          <ListingFunnel funnel={listing.funnel} fallback={{ views: listing.views, clicks: listing.clicks }} outside />
+        </div>
       )}
 
       {!asking && (
@@ -149,6 +152,9 @@ function Row({ listing, selected, onSelect, onEdit, onPromote, onChanged }: {
             <button type="button" className="gv-yl-btn" onClick={onPromote}><Megaphone size={15} strokeWidth={2.4} aria-hidden />Promote</button>
           )}
           {listing.shown === 'live' && (
+            <button type="button" className="gv-yl-btn" onClick={() => setSharing(true)}><Share2 size={15} strokeWidth={2.4} aria-hidden />Share</button>
+          )}
+          {listing.shown === 'live' && (
             <button type="button" className="gv-yl-btn" onClick={() => { setErr(''); setAsking('close'); }}><XCircle size={15} strokeWidth={2.4} aria-hidden />Close</button>
           )}
           {listing.shown === 'draft' && (
@@ -156,6 +162,8 @@ function Row({ listing, selected, onSelect, onEdit, onPromote, onChanged }: {
           )}
         </div>
       )}
+
+      {sharing && <ShareCardPopup card={listing} onClose={() => setSharing(false)} />}
 
       {asking && (
         <div className="gv-yl-ask" role="group" aria-label={asking === 'close' ? 'Close this listing' : 'Delete this draft'}>

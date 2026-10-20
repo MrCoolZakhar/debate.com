@@ -14,17 +14,19 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
-import { BarChart3, Briefcase, Mail, Plus } from 'lucide-react';
+import { BarChart3, Briefcase, Layers, Mail, Plus } from 'lucide-react';
 import { useManage } from '@/app/manage/[slug]/layout';
 import { useAuth } from '@/components/AuthProvider';
 import { GoldWord } from '@/components/BrandHeading';
 import { NEU, OUTFIT } from '@/components/neu';
 import { notifyErr, notifyOk } from '@/lib/appNotify';
+import { replaceUrlInPlace } from '@/lib/replaceUrlInPlace';
 import { STORE_CSS } from '../store/storeKit';
 import { DASH_CSS, DashCard, TINT_GOLD, TINT_GREEN } from '../financials/dashboardKit';
 import ListingRow, { ROW_CSS } from './ListingRow';
 import PostingPopup, { type ShortRequest } from './PostingPopup';
 import PromotePopup from './PromotePopup';
+import CommitteePackPopup from './CommitteePackPopup';
 import { useJobTopUp } from './useJobTopUp';
 import {
   dayLabel, readDigest, readPanel, setJobSettings,
@@ -35,7 +37,7 @@ const INK = '#1C1410';
 const INK_SOFT = '#5C5140';
 const FOREST = '#1B3828';
 
-type Popup = { kind: 'post'; listing: OrgListing | null } | { kind: 'promote'; listing: OrgListing } | null;
+type Popup = { kind: 'post'; listing: OrgListing | null } | { kind: 'promote'; listing: OrgListing } | { kind: 'pack' } | null;
 
 const ORDER: Record<string, number> = { draft: 0, live: 1, hidden: 2, closed: 3 };
 
@@ -70,6 +72,32 @@ export default function JobBoardPage() {
       if (mine === seq.current) apply(p, d);
     });
   }, [confId, apply]);
+
+  // ?promote=<listing id> (the "Promote for 3 credits" button in the poster's
+  // nudge emails): once the panel has loaded, the Promote pop-up for that
+  // listing when it is live and promotable, else a quiet line; the param then
+  // leaves the URL.
+  const [promoteGone, setPromoteGone] = useState(false);
+  const promoteDone = useRef(false);
+  useEffect(() => {
+    if (!panel || promoteDone.current) return;
+    const url = new URL(window.location.href);
+    const pid = url.searchParams.get('promote');
+    if (!pid) { promoteDone.current = true; return; }
+    const t = window.setTimeout(() => {
+      if (promoteDone.current) return;
+      promoteDone.current = true;
+      url.searchParams.delete('promote');
+      replaceUrlInPlace(url.pathname + url.search + url.hash);
+      const target = panel.listings.find((l) => l.id === pid);
+      if (target && target.shown === 'live') {
+        if (panel.can_promote) setPopup({ kind: 'promote', listing: target });
+      } else {
+        setPromoteGone(true);
+      }
+    }, 0);
+    return () => window.clearTimeout(t);
+  }, [panel]);
 
   const listings = useMemo(
     () => [...(panel?.listings ?? [])].sort((a, b) => (ORDER[a.shown] ?? 9) - (ORDER[b.shown] ?? 9)),
@@ -107,11 +135,22 @@ export default function JobBoardPage() {
           </h1>
         </div>
         {panel && (
-          <button type="button" className="gv-st-btn gv-st-forest gv-jb-post" onClick={() => setPopup({ kind: 'post', listing: null })}>
-            <Plus size={17} strokeWidth={2.6} aria-hidden /> Post a listing
-          </button>
+          <div className="flex flex-wrap items-center gap-2.5">
+            {panel.committees.length > 0 && panel.roles.some((r) => r.role === 'chair' && r.enabled) && (
+              <button type="button" className="gv-st-btn gv-st-outline gv-jb-post" onClick={() => setPopup({ kind: 'pack' })}>
+                <Layers size={17} strokeWidth={2.4} aria-hidden /> Post chair roles for every committee
+              </button>
+            )}
+            <button type="button" className="gv-st-btn gv-st-forest gv-jb-post" onClick={() => setPopup({ kind: 'post', listing: null })}>
+              <Plus size={17} strokeWidth={2.6} aria-hidden /> Post a listing
+            </button>
+          </div>
         )}
       </header>
+
+      {promoteGone && (
+        <p style={{ fontFamily: OUTFIT, fontSize: 14, color: INK_SOFT, margin: '-18px 0 22px' }}>This listing is no longer live.</p>
+      )}
 
       {!panel && panelErr ? (
         <p className="gv-st-err" role="alert">{panelErr} <button type="button" className="gv-st-link" onClick={() => { void reload(); }}>Try again</button></p>
@@ -165,6 +204,20 @@ export default function JobBoardPage() {
         </div>
       )}
 
+      {popup?.kind === 'pack' && panel && (
+        <CommitteePackPopup
+          conference={{
+            id: conference.id, slug, acronym: conference.acronym, full_name: conference.full_name, logo_url: conference.logo_url,
+            is_verified: !!conference.is_verified, city: conference.city ?? null, country: conference.country ?? null,
+            format: conference.format ?? null, student_level: conference.student_level ?? null,
+            start_date: conference.start_date ?? null, end_date: conference.end_date ?? null,
+          }}
+          panel={panel}
+          myUserId={user?.id ?? null}
+          onClose={() => setPopup(null)}
+          onDone={() => { void reload(); }}
+        />
+      )}
       {popup?.kind === 'post' && panel && (
         <PostingPopup
           conference={{

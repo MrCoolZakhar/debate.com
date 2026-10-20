@@ -25,7 +25,8 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, Bookmark, BookmarkCheck, Check, ExternalLink, ListChecks, Loader2, X } from 'lucide-react';
+import { ArrowLeft, Bookmark, BookmarkCheck, Check, ExternalLink, ListChecks, Loader2, Share2, X } from 'lucide-react';
+import ShareCardPopup from './ShareCardPopup';
 import { useAuth } from '@/components/AuthProvider';
 import { isUnlimited, useUnlimitedStatus } from '@/lib/unlimitedStatus';
 import { openAuth } from '@/lib/authModal';
@@ -93,6 +94,7 @@ export default function JobListing({
   const [saved, setSaved] = useState<boolean>(detail?.saved ?? false);
   const [saveBusy, setSaveBusy] = useState(false);
   const [applyOpen, setApplyOpen] = useState(false);
+  const [sharing, setSharing] = useState(false);
   const [stuck, setStuck] = useState(false);
   const headRef = useRef<HTMLElement | null>(null);
   const seq = useRef(0);
@@ -277,7 +279,15 @@ export default function JobListing({
   );
 
   const actions = open ? (
-    <div className="gv-jl-actions">{primary}{saveButton}</div>
+    <div className="gv-jl-actions">
+      {primary}{saveButton}
+      {listing && (
+        <button type="button" className="gv-jl-save" onClick={() => { if (!applyOpen) setSharing(true); }}>
+          <Share2 size={17} strokeWidth={2.3} aria-hidden />
+          Share
+        </button>
+      )}
+    </div>
   ) : (
     <p className="gv-jl-closed">No longer taking applicants</p>
   );
@@ -402,6 +412,8 @@ export default function JobListing({
           </aside>
         </div>
       )}
+
+      {sharing && listing && !applyOpen && <ShareCardPopup card={listing} onClose={() => setSharing(false)} />}
 
       {applyOpen && listing && (
         <JobApplyPopup

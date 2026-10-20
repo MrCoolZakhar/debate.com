@@ -9,7 +9,7 @@
 
 import { getFreshAuthedClient } from '@/lib/supabase-auth';
 import { friendlyError } from '@/lib/friendlyError';
-import type { JobCard, JobKind, JobOffers, JobRole } from '@/lib/jobBoard';
+import type { JobCard, JobFunnel, JobKind, JobOffers, JobRole } from '@/lib/jobBoard';
 
 export type ShownState = 'draft' | 'live' | 'closed' | 'hidden';
 export type MyMode = 'off' | 'each' | 'digest';
@@ -41,6 +41,8 @@ export interface OrgListing extends JobCard {
   charged_credits: number;
   locked: boolean;
   fix_available: boolean;
+  /** Views to applications (prompt 10). */
+  funnel?: JobFunnel | null;
 }
 
 export interface PanelRole { role: JobRole; enabled: boolean; opens_at: string | null; closes_at: string | null }
@@ -189,3 +191,32 @@ export function dayLabel(iso: string | null | undefined): string {
 }
 
 export const ROLE_PLURAL: Record<JobRole, string> = { chair: 'chairs', secretariat: 'secretariat', staff: 'staff' };
+
+// ── Committee pack: one chair listing per picked committee ─────────────────
+
+/** The shared keys every pack listing gets (the job_listing_save keys). */
+export interface PackTemplate {
+  description: string;
+  offers: JobOffers;
+  questions: OrgQuestion[];
+  auto_reject: boolean;
+  deadline: string | null;
+  poster_user_id: string | null;
+}
+export interface PackCreated { committee_id: string; name: string; listing_id: string }
+export interface PackSkipped { committee_id: string; name: string; message: string }
+export interface PackFailed { committee_id: string; name: string; message: string; listing_id?: string | null; kept_as_draft?: boolean }
+
+/** job_committee_pack, published at once (up to 40 committees; free). */
+export function committeePack(confId: string, ids: string[], template: PackTemplate) {
+  return call<{ message?: string; created: PackCreated[]; skipped: PackSkipped[]; failed: PackFailed[] }>(
+    'job_committee_pack',
+    { p_conf: confId, p_committee_ids: ids, p_template: template, p_publish: true },
+    'We could not post these listings. Try again.',
+  ).then((r) => (r.ok ? {
+    ...r,
+    created: Array.isArray(r.created) ? r.created : [],
+    skipped: Array.isArray(r.skipped) ? r.skipped : [],
+    failed: Array.isArray(r.failed) ? r.failed : [],
+  } : r));
+}
