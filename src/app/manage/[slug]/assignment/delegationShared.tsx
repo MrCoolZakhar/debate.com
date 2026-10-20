@@ -786,9 +786,9 @@ export function SwapConfirmModal({
 
   return (
     <ConfirmModal
-      title="Switch delegates?"
+      title="Switch Delegates?"
       body="Are you sure you want to switch these two delegates and their payment status?"
-      confirmLabel="Confirm Swap"
+      confirmLabel="Confirm swap"
       checkbox={
         target.assigned_committee_id
           ? {

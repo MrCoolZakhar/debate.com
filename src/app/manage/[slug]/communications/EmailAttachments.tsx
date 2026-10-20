@@ -3,13 +3,15 @@
 // EmailAttachments.tsx — "Attachments" in the email builder (prompt 113), and
 // since prompt 133 in the automatic email editor too, where they ARE saved
 // (email_templates.attachments; the page writes them, this row only edits).
-// Only for one-off builder emails, and only when the conference has
-// attachments switched on (conference_documents_overview().attachments_enabled).
-// The list lives in the page's builder state for ONE send: it is never saved
-// with the template. Uploaded files go to conference-documents under
-// <conference>/email/ (removing a chip never deletes the file); "From your
-// documents" picks the conference's own documents that are files (links cannot
-// be attached). The outbox trigger is the real check (10 files, 10 MB, types).
+// Only when the conference has attachments switched on
+// (conference_documents_overview().attachments_enabled). Builder templates save
+// their chips too (email_templates.attachments, prompt 144). Uploaded files go
+// to conference-documents under <conference>/email/ (removing a chip never
+// deletes the file); "From your documents" has two sections: Additional
+// Documents (the conference's documents that are files; links cannot be
+// attached) and Study Guides (every committee study guide with a file, bucket
+// study-guides, prompt 144). The outbox trigger is the real check (10 files,
+// 10 MB, types).
 
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Check, File as FileIcon, FileImage, FileText, FolderOpen, Paperclip, Upload, X } from 'lucide-react';
@@ -18,11 +20,11 @@ import { Emoji3D, OUTFIT } from '@/components/neu';
 import { useAuth } from '@/components/AuthProvider';
 import { getFreshAuthedClient } from '@/lib/supabase-auth';
 import {
-  CONFERENCE_DOC_MAX_BYTES, DOC_FILE_ACCEPT, fetchDocsOverview, formatDocSize, isAllowedDocFile, type DocsOverviewItem,
+  CONFERENCE_DOC_MAX_BYTES, DOC_FILE_ACCEPT, docMimeFor, fetchDocsOverview, formatDocSize, type DocsOverviewItem,
 } from '@/lib/conferenceDocuments';
 import {
   EMAIL_ATTACH_MAX_BYTES, EMAIL_ATTACH_MAX_FILES, attachmentsProblem, attachmentsTotalBytes, formatMb,
-  uploadEmailAttachment, type EmailAttachment,
+  STUDY_GUIDES_BUCKET, uploadEmailAttachment, type EmailAttachment,
 } from '@/lib/emailAttachments';
 
 const FOREST = '#1B3828';
@@ -31,10 +33,51 @@ const SOFT = '#5C4A3A';
 const RED = '#8B2020';
 const LINE = 'rgba(27,56,40,0.14)';
 
-export interface AttachmentsSupport { enabled: boolean; docs: DocsOverviewItem[] }
+/** A committee study guide that has a file, attachable from the study-guides bucket. */
+export interface GuideFile { id: string; committee: string; title: string; path: string; file_name: string; size: number }
 
-/** Whether this conference can attach files, and its documents that are files.
- *  One read per conference per account; never keyed on the token. */
+export interface AttachmentsSupport { enabled: boolean; docs: DocsOverviewItem[]; guides: GuideFile[] }
+
+/** The storage key inside the study-guides bucket, from a guide's public URL. */
+function guidePath(url: string): string | null {
+  const marker = '/study-guides/';
+  const i = url.indexOf(marker);
+  if (i === -1) return null;
+  const path = url.slice(i + marker.length).split(/[?#]/)[0];
+  try { return decodeURIComponent(path); } catch { return path; }
+}
+
+/** Every study guide of the conference that has a file (prompt 144). A failed read is none. */
+async function loadGuideFiles(conferenceId: string): Promise<GuideFile[]> {
+  const client = await getFreshAuthedClient();
+  if (!client) return [];
+  const { data, error } = await client
+    .from('study_guides')
+    .select('id, title, file_name, file_size_bytes, file_url, conference_committees!inner(name, abbreviation, conference_id)')
+    .eq('conference_committees.conference_id', conferenceId)
+    .order('created_at', { ascending: true });
+  if (error || !data) return [];
+  const out: GuideFile[] = [];
+  for (const r of data as unknown as Record<string, unknown>[]) {
+    const path = guidePath(String(r.file_url ?? ''));
+    // The database accepts study guides stored under this conference's id only.
+    if (!path || !path.startsWith(`${conferenceId}/`)) continue;
+    const raw = r.conference_committees;
+    const cc = (Array.isArray(raw) ? raw[0] : raw) as { name?: string; abbreviation?: string | null } | undefined;
+    out.push({
+      id: String(r.id),
+      committee: (cc?.abbreviation || cc?.name || '').trim(),
+      title: String(r.title ?? 'Study guide'),
+      path,
+      file_name: String(r.file_name ?? path.split('/').pop() ?? 'Study guide.pdf'),
+      size: Number(r.file_size_bytes) || 0,
+    });
+  }
+  return out;
+}
+
+/** Whether this conference can attach files, its documents that are files and
+ *  its study guides. One read per conference per account; never keyed on the token. */
 export function useEmailAttachmentsSupport(conferenceId: string | null): AttachmentsSupport {
   const { user } = useAuth();
   const userId = user?.id ?? null;
@@ -43,18 +86,18 @@ export function useEmailAttachmentsSupport(conferenceId: string | null): Attachm
   useEffect(() => {
     if (!conferenceId || !userId) return;
     let alive = true;
-    void fetchDocsOverview(conferenceId).then(res => {
+    void Promise.all([fetchDocsOverview(conferenceId), loadGuideFiles(conferenceId)]).then(([res, guides]) => {
       if (!alive) return;
       setState({
         key: `${conferenceId}:${userId}`,
         value: res.ok && res.attachments_enabled
-          ? { enabled: true, docs: (res.documents ?? []).filter(d => !!d.file_path) }
-          : { enabled: false, docs: [] },
+          ? { enabled: true, docs: (res.documents ?? []).filter(d => !!d.file_path), guides }
+          : { enabled: false, docs: [], guides: [] },
       });
     });
     return () => { alive = false; };
   }, [conferenceId, userId]);
-  return state?.key === key ? state.value : { enabled: false, docs: [] };
+  return state?.key === key ? state.value : { enabled: false, docs: [], guides: [] };
 }
 
 function typeIcon(a: { file_name: string; mime?: string | null }) {
@@ -75,7 +118,7 @@ function Chip({ a, onRemove, disabled }: { a: EmailAttachment; onRemove?: () => 
       <span className="min-w-0 flex-1">
         <span style={{ display: 'block', fontFamily: OUTFIT, fontSize: 13.5, fontWeight: 700, color: INK, overflowWrap: 'anywhere', lineHeight: 1.35 }}>{a.file_name}</span>
         <span style={{ display: 'block', fontFamily: OUTFIT, fontSize: 12, color: SOFT, fontVariantNumeric: 'tabular-nums' }}>
-          {formatDocSize(a.size)}{a.isConferenceDocument ? ' · From your documents' : ''}
+          {formatDocSize(a.size)}{a.bucket === STUDY_GUIDES_BUCKET ? ' · Study guide' : a.isConferenceDocument ? ' · From your documents' : ''}
         </span>
       </span>
       {onRemove && (
@@ -101,7 +144,7 @@ export function AttachmentChipsReadOnly({ value, line }: { value: EmailAttachmen
   return (
     <div style={{ width: '100%' }}>
       <ul className="flex flex-col gap-1.5" style={{ listStyle: 'none', margin: 0, padding: 0 }}>
-        {value.map(a => <Chip key={a.path} a={a} />)}
+        {value.map(a => <Chip key={`${a.bucket ?? ''}:${a.path}`} a={a} />)}
       </ul>
       <p style={{ margin: '8px 0 0', fontFamily: OUTFIT, fontSize: 12.5, color: SOFT, lineHeight: 1.45, textWrap: 'pretty' }}>
         {line ?? 'Sent as attachments. Emails with attachments go out one by one, so a big send can take a few minutes'}
@@ -110,13 +153,13 @@ export function AttachmentChipsReadOnly({ value, line }: { value: EmailAttachmen
   );
 }
 
-export default function EmailAttachments({ conferenceId, docs, value, onChange, savedAsTemplate }: {
+export default function EmailAttachments({ conferenceId, docs, guides = [], value, onChange }: {
   conferenceId: string;
   docs: DocsOverviewItem[];
+  /** The conference's study guides with a file (prompt 144). */
+  guides?: GuideFile[];
   value: EmailAttachment[];
   onChange: (next: EmailAttachment[]) => void;
-  /** The email is kept as a template (every builder email is, once saved). */
-  savedAsTemplate: boolean;
 }) {
   const [menu, setMenu] = useState<{ left: number; top: number } | null>(null);
   const [picking, setPicking] = useState(false);
@@ -166,7 +209,9 @@ export default function EmailAttachments({ conferenceId, docs, value, onChange, 
     if (busyRef.current || files.length === 0) return;
     setErr('');
     for (const f of files) {
-      if (!isAllowedDocFile(f)) { setErr('Use a PDF, a Word document or a JPG or PNG image'); return; }
+      // The type on its own first, then the size (prompt 144): isAllowedDocFile also
+      // refuses a file over 10 MB, which made a big PDF read as the wrong type.
+      if (docMimeFor(f) === null) { setErr('Use a PDF, a Word document or a JPG or PNG image'); return; }
       if (f.size > CONFERENCE_DOC_MAX_BYTES) { setErr('The file is over 10 MB. Make it smaller and try again'); return; }
     }
     busyRef.current = true; setUploading(true);
@@ -186,10 +231,18 @@ export default function EmailAttachments({ conferenceId, docs, value, onChange, 
 
   function toggleDoc(d: DocsOverviewItem) {
     if (!d.file_path) return;
-    const has = value.some(a => a.path === d.file_path);
-    if (has) { onChange(value.filter(a => a.path !== d.file_path)); return; }
+    const isDoc = (a: EmailAttachment) => (a.bucket ?? 'conference-documents') === 'conference-documents' && a.path === d.file_path;
+    if (value.some(isDoc)) { onChange(value.filter(a => !isDoc(a))); return; }
     onChange([...value, {
       path: d.file_path, file_name: d.file_name ?? d.title, size: d.file_size_bytes ?? 0, isConferenceDocument: true, mime: d.mime_type,
+    }]);
+  }
+
+  function toggleGuide(g: GuideFile) {
+    const has = value.some(a => a.bucket === STUDY_GUIDES_BUCKET && a.path === g.path);
+    if (has) { onChange(value.filter(a => !(a.bucket === STUDY_GUIDES_BUCKET && a.path === g.path))); return; }
+    onChange([...value, {
+      path: g.path, bucket: STUDY_GUIDES_BUCKET, file_name: g.file_name, size: g.size, isConferenceDocument: false, mime: 'application/pdf',
     }]);
   }
 
@@ -252,8 +305,8 @@ export default function EmailAttachments({ conferenceId, docs, value, onChange, 
             <MenuItem
               icon={FolderOpen}
               label="From your documents"
-              sub={docs.length === 0 ? 'No documents with a file yet' : undefined}
-              disabled={docs.length === 0}
+              sub={docs.length + guides.length === 0 ? 'No documents with a file yet' : undefined}
+              disabled={docs.length + guides.length === 0}
               onClick={() => { setMenu(null); setPicking(true); }}
             />
           </div>
@@ -263,24 +316,32 @@ export default function EmailAttachments({ conferenceId, docs, value, onChange, 
       {picking && (
         <div className="mt-3" style={{ padding: 10, borderRadius: 14, backgroundColor: 'rgba(27,56,40,0.04)', boxShadow: `inset 0 0 0 1px ${LINE}` }}>
           <p style={{ margin: '0 0 6px', fontFamily: OUTFIT, fontSize: 13, fontWeight: 700, color: SOFT }}>From your documents</p>
-          <ul className="flex flex-col gap-1" style={{ listStyle: 'none', margin: 0, padding: 0 }}>
-            {docs.map(d => {
-              const on = value.some(a => a.path === d.file_path);
-              return (
-                <li key={d.id}>
-                  <label className="flex items-start gap-2.5" style={{ padding: '6px 4px', cursor: 'pointer' }}>
-                    <input type="checkbox" checked={on} onChange={() => toggleDoc(d)} style={{ width: 18, height: 18, marginTop: 2, accentColor: FOREST, flexShrink: 0 }} />
-                    <span className="min-w-0">
-                      <span style={{ display: 'block', fontFamily: OUTFIT, fontSize: 13.5, fontWeight: 700, color: INK, overflowWrap: 'anywhere' }}>{d.title}</span>
-                      <span style={{ display: 'block', fontFamily: OUTFIT, fontSize: 12, color: SOFT, overflowWrap: 'anywhere' }}>
-                        {[d.file_name, formatDocSize(d.file_size_bytes)].filter(Boolean).join(' · ')}
-                      </span>
-                    </span>
-                  </label>
-                </li>
-              );
-            })}
-          </ul>
+          {docs.length > 0 && (
+            <PickSection title="Additional Documents">
+              {docs.map(d => (
+                <PickRow
+                  key={d.id}
+                  on={value.some(a => (a.bucket ?? 'conference-documents') === 'conference-documents' && a.path === d.file_path)}
+                  onToggle={() => toggleDoc(d)}
+                  title={d.title}
+                  sub={[d.file_name, formatDocSize(d.file_size_bytes)].filter(Boolean).join(' · ')}
+                />
+              ))}
+            </PickSection>
+          )}
+          {guides.length > 0 && (
+            <PickSection title="Study Guides">
+              {guides.map(g => (
+                <PickRow
+                  key={g.id}
+                  on={value.some(a => a.bucket === STUDY_GUIDES_BUCKET && a.path === g.path)}
+                  onToggle={() => toggleGuide(g)}
+                  title={g.committee ? `${g.committee} · ${g.title}` : g.title}
+                  sub={[g.file_name, g.size ? formatDocSize(g.size) : null].filter(Boolean).join(' · ')}
+                />
+              ))}
+            </PickSection>
+          )}
           <button
             type="button"
             onClick={() => setPicking(false)}
@@ -299,14 +360,34 @@ export default function EmailAttachments({ conferenceId, docs, value, onChange, 
       {value.length > 0 && (
         <ul className="flex flex-col gap-1.5 mt-3" style={{ listStyle: 'none', margin: 0, padding: 0 }}>
           {value.map(a => (
-            <Chip key={a.path} a={a} disabled={uploading} onRemove={() => onChange(value.filter(x => x.path !== a.path))} />
+            <Chip key={`${a.bucket ?? ''}:${a.path}`} a={a} disabled={uploading} onRemove={() => onChange(value.filter(x => !(x.path === a.path && (x.bucket ?? '') === (a.bucket ?? ''))))} />
           ))}
         </ul>
       )}
-      {value.length > 0 && savedAsTemplate && (
-        <p style={{ margin: '8px 0 0', fontFamily: OUTFIT, fontSize: 12.5, color: SOFT }}>Attachments are not saved with the template</p>
-      )}
     </div>
+  );
+}
+
+function PickSection({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div style={{ marginTop: 6 }}>
+      <p style={{ margin: '4px 4px 2px', fontFamily: OUTFIT, fontSize: 12, fontWeight: 800, color: INK }}>{title}</p>
+      <ul className="flex flex-col gap-1" style={{ listStyle: 'none', margin: 0, padding: 0 }}>{children}</ul>
+    </div>
+  );
+}
+
+function PickRow({ on, onToggle, title, sub }: { on: boolean; onToggle: () => void; title: string; sub: string }) {
+  return (
+    <li>
+      <label className="flex items-start gap-2.5" style={{ padding: '6px 4px', cursor: 'pointer' }}>
+        <input type="checkbox" checked={on} onChange={onToggle} style={{ width: 18, height: 18, marginTop: 2, accentColor: FOREST, flexShrink: 0 }} />
+        <span className="min-w-0">
+          <span style={{ display: 'block', fontFamily: OUTFIT, fontSize: 13.5, fontWeight: 700, color: INK, overflowWrap: 'anywhere' }}>{title}</span>
+          {sub && <span style={{ display: 'block', fontFamily: OUTFIT, fontSize: 12, color: SOFT, overflowWrap: 'anywhere' }}>{sub}</span>}
+        </span>
+      </label>
+    </li>
   );
 }
 

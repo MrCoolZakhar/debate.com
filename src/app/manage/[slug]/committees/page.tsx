@@ -20,7 +20,7 @@ import { queueEventEmail, notifyIfNeeded, turnOnDefaultEmail } from '@/lib/email
 import type { EmailTokenContext } from '@/lib/emailTokens';
 import { useDraftNotices, DraftNoticeList } from '@/components/DraftNotice';
 import { notifyErr, notifyOk, clearErr, clearOk } from '@/lib/appNotify';
-import { useConfirmModal } from '@/components/ConfirmModal';
+import { ConfirmModal, useConfirmModal } from '@/components/ConfirmModal';
 import { PillToggle } from '@/app/account/accountUi';
 import { DifficultyTile } from '@/components/DifficultyTile';
 import { DatePicker } from '@/components/DatePicker';
@@ -993,7 +993,7 @@ function AddChairModal({ conferenceId, committee, committees, onClose, onDone, o
     if (conflict) {
       setInviting(false);
       await confirm({
-        title: 'This person already holds a role',
+        title: 'This Person Already Holds a Role',
         body: `${conflict.displayName} already has an active ${conflict.role.replace(/-/g, ' ')} application at this conference. Accepting this chair invite will give them two roles.`,
         confirmLabel: 'Proceed',
         cancelLabel: 'Cancel',
@@ -1540,7 +1540,7 @@ export default function CommitteesPage() {
     const status = releaseStatus(c.released_to_delegates_at);
     const withChairs = chairsFollowDelegates();
     const { confirmed } = await confirm({
-      title: status === 'released' ? 'Resend to participants?' : 'Send to participants?',
+      title: status === 'released' ? 'Resend to Participants?' : 'Send to Participants?',
       body: withChairs
         ? 'This notifies every delegate allocated to this committee, and its chairs at the same time.'
         : 'This notifies every delegate allocated to this committee.',
@@ -1589,7 +1589,7 @@ export default function CommitteesPage() {
     if (!session || !conference || committees.length === 0 || sendingAllToParticipants) return;
     const withChairs = chairsFollowDelegates();
     const { confirmed } = await confirm({
-      title: 'Send all committee sessions to participants?',
+      title: 'Send Every Committee Session to Participants?',
       body: withChairs
         ? 'This notifies every delegate allocated across every committee, and every dais at the same time.'
         : 'This notifies every delegate allocated across every committee.',
@@ -1888,7 +1888,7 @@ export default function CommitteesPage() {
     const busyKey = `invite-${invite.id}`;
     if (busyIds.has(busyKey)) return;
     const { confirmed } = await confirm({
-      title: 'Resend this invite?',
+      title: 'Resend This Invite?',
       body: `${label} will get another email inviting them to chair ${c.abbreviation || c.name}. Their existing link keeps working.`,
       confirmLabel: 'Resend',
     });
@@ -1916,7 +1916,7 @@ export default function CommitteesPage() {
     const busyKey = `invite-${invite.id}`;
     if (busyIds.has(busyKey)) return;
     const { confirmed } = await confirm({
-      title: 'Remove this invite?',
+      title: 'Remove This Invite?',
       body: `Withdraw the chair invite to ${label} for ${c.abbreviation || c.name}? Their invite link stops working.`,
       confirmLabel: 'Remove',
       danger: true,
@@ -1991,7 +1991,7 @@ export default function CommitteesPage() {
     if (!session || !conference) return;
     const dais = c.display_chairs ?? [];
     const { confirmed } = await confirm({
-      title: c.released_to_chairs_at ? 'Resend to chairs?' : 'Send to chairs?',
+      title: c.released_to_chairs_at ? 'Resend to Chairs?' : 'Send to Chairs?',
       body: dais.length > 0
         ? `This notifies: ${dais.map(d => d.name).join(', ')}.`
         : 'This committee has no chairs on its dais yet.',
@@ -2749,18 +2749,14 @@ export default function CommitteesPage() {
         />
       )}
       {deleteTarget && (
-        <ModalOverlay onClose={() => setDeleteTarget(null)}>
-          <div className="rounded-2xl p-6 flex flex-col gap-4" style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0', width: 400, maxWidth: 'calc(100vw - 32px)' }}>
-            <p className="text-sm font-bold" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif" }}>Delete &ldquo;{deleteTarget.name}&rdquo;?</p>
-            <p className="text-xs" style={{ color: '#6B5D4F', fontFamily: "var(--font-brand), sans-serif", lineHeight: 1.5 }}>
-              This permanently removes the committee and its live session, including all delegates, documents, messages, country slots, and allocations. Applicants are kept but returned to unassigned. This cannot be undone.
-            </p>
-            <div className="flex gap-3 mt-1">
-              <button onClick={() => setDeleteTarget(null)} className="gv-lift flex-1 rounded-xl py-2.5 font-bold text-sm focus:outline-none" style={{ border: '1.5px solid #DDD4C0', color: '#1C1410', backgroundColor: 'transparent', fontFamily: "var(--font-brand), sans-serif" }}>Cancel</button>
-              <button onClick={() => handleDeleteCommittee(deleteTarget)} className="gv-lift flex-1 rounded-xl py-2.5 font-bold text-sm focus:outline-none" style={{ backgroundColor: '#8B2020', color: '#FFFFFF', fontFamily: "var(--font-brand), sans-serif" }}>Delete</button>
-            </div>
-          </div>
-        </ModalOverlay>
+        <ConfirmModal
+          title="Delete This Committee?"
+          body={<><b style={{ fontWeight: 800, color: '#1C1410' }}>{deleteTarget.name}</b> and its live session are deleted, with every delegate, document, message, country slot and allocation. Applicants are kept and go back to unassigned. This can&apos;t be undone</>}
+          confirmLabel="Delete committee"
+          danger
+          onConfirm={() => handleDeleteCommittee(deleteTarget)}
+          onCancel={() => setDeleteTarget(null)}
+        />
       )}
       {confirmModal}
     </div>

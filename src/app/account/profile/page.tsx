@@ -1195,7 +1195,7 @@ export default function ProfilePage() {
 
       {deleteOpen && (
         <ConfirmModal
-          title="Delete your account?"
+          title="Delete Your Account?"
           danger
           loading={deleting}
           confirmDisabled={deleteConfirmText.trim() !== 'DELETE'}

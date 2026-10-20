@@ -266,7 +266,7 @@ export default function VouchersSection({
   async function handleDelete(v: Voucher) {
     if (!session || busyIds.has(v.id) || v.id.startsWith('temp-') || v.redeemed_count > 0) return;
     const { confirmed } = await confirm({
-      title: `Delete voucher ${v.code}?`,
+      title: `Delete Voucher ${v.code}?`,
       body: 'It has never been redeemed, so it can be removed permanently. Participants will no longer be able to apply it.',
       confirmLabel: 'Delete',
       danger: true,

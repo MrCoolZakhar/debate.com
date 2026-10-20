@@ -187,7 +187,7 @@ export function useConferenceActions(onAccepted: () => void | Promise<void>) {
 
   async function deleteDraft(draft: DraftRow) {
     const { confirmed } = await confirm({
-      title: 'Delete this draft?',
+      title: 'Delete This Draft?',
       body: `Your saved answers for ${conferenceAcronymLabel({ acronym: draft.acronym, full_name: draft.fullName, start_date: draft.startDate }) || draft.fullName} will be permanently deleted. You can always start the application again.`,
       confirmLabel: 'Delete draft',
       danger: true,

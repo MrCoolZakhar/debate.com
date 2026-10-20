@@ -117,7 +117,7 @@ export default function ConferenceCurrencyChip({ onChanged }: {
       />
       {ask && (
         <ConfirmModal
-          title={`Change your currency to ${ask}?`}
+          title={`Change Your Currency to ${ask}?`}
           body={<p>Your prices keep their numbers and will be shown in {ask}</p>}
           confirmLabel="Change currency"
           cancelLabel="Cancel"

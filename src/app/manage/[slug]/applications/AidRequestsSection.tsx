@@ -228,7 +228,7 @@ export default function AidRequestsSection({ conferenceId, conferenceSlug, aidBl
   async function openDenyConfirm(r: AidRequestRow) {
     if (!session || busyId) return;
     const { confirmed } = await confirm({
-      title: 'Deny this aid request?',
+      title: 'Deny This Aid Request?',
       body: 'The applicant will be notified. The standard fee still applies, and their conference application is not affected.',
       confirmLabel: 'Deny aid',
       danger: true,

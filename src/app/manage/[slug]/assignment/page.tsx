@@ -4201,7 +4201,7 @@ export default function AssignmentPage() {
     const idSet = new Set(ids);
     const alreadySent = allocationTargets.filter(t => t.sent && idSet.has(t.applicationId)).length;
     const { confirmed } = await confirm({
-      title: `Email ${ids.length} delegate${ids.length === 1 ? '' : 's'}?`,
+      title: `Email ${ids.length} Delegate${ids.length === 1 ? '' : 's'}?`,
       body: alreadySent > 0
         ? `Each one is sent their own committee and country. ${alreadySent} of them ${alreadySent === 1 ? 'has' : 'have'} already had this email. They will get it again.`
         : 'Each one is sent their own committee and country.',
@@ -4321,7 +4321,7 @@ export default function AssignmentPage() {
     const name = chairApp.profiles?.display_name ?? 'this applicant';
     const label = committeeShortName(committee);
     const { confirmed } = await confirm({
-      title: 'Assign as chair?',
+      title: 'Assign as Chair?',
       body: `Assign ${name} as chair of ${label}?`,
       confirmLabel: 'Assign',
     });
@@ -4400,7 +4400,7 @@ export default function AssignmentPage() {
   async function handleRemoveChair(userId: string, committee: CommitteeData, name: string) {
     const label = committeeShortName(committee);
     const { confirmed } = await confirm({
-      title: 'Remove chair?',
+      title: 'Remove This Chair?',
       body: `Remove ${name} from the ${label} dais?`,
       confirmLabel: 'Remove',
       danger: true,
@@ -4469,7 +4469,7 @@ export default function AssignmentPage() {
   async function handleRevokeInvite(invite: PendingChairInvite, committee: CommitteeData) {
     const label = invite.profiles?.display_name ?? invite.email;
     const { confirmed } = await confirm({
-      title: 'Revoke invite?',
+      title: 'Revoke This Invite?',
       body: `Revoke the chair invite sent to ${label} for ${committeeShortName(committee)}?`,
       confirmLabel: 'Revoke',
       danger: true,

@@ -1551,10 +1551,9 @@ function CommunicationsPageInner() {
   const [builderName, setBuilderName] = useState('');
   const [builderSubject, setBuilderSubject] = useState('');
   const [builderBlocks, setBuilderBlocks] = useState<EmailBlock[]>([]);
-  const [builderDelivery, setBuilderDelivery] = useState<'immediate' | 'manual'>('manual');
   const [builderError, setBuilderError] = useState('');
-  // Files attached to THIS one-off send (prompt 113). Never saved with the
-  // template; cleared whenever the builder opens or closes.
+  // Files attached to the email (prompt 113), saved with its template (prompt
+  // 144) and passed on every send; set from the template when the builder opens.
   const [builderAttachments, setBuilderAttachments] = useState<EmailAttachment[]>([]);
   const attachSupport = useEmailAttachmentsSupport(conference?.id ?? null);
   // Automatic emails save their attachments on the template (prompt 133). The
@@ -2525,7 +2524,6 @@ function CommunicationsPageInner() {
     setBuilderName(ev.label);
     setBuilderSubject(initialSubject);
     setBuilderBlocks(initialBlocks);
-    setBuilderDelivery(existing?.delivery ?? ev.defaultDelivery);
     resetAudience();
     setBuilderError('');
     clearErr('communications-builder');
@@ -2553,7 +2551,6 @@ function CommunicationsPageInner() {
     setBuilderName(template?.name ?? '');
     setBuilderSubject(initialSubject);
     setBuilderBlocks(initialBlocks);
-    setBuilderDelivery('manual');
     resetAudience();
     if (template?.audience) restoreAudience(template.audience);
     setBuilderError('');
@@ -2561,7 +2558,11 @@ function CommunicationsPageInner() {
     builderJustOpenedRef.current = true;
     builderInitialRef.current = JSON.stringify({ subject: initialSubject, blocks: initialBlocks });
     setPickerOpen(false);
-    setBuilderAttachments([]);
+    // A saved template opens with its files (prompt 144).
+    const savedFiles = template ? fromTemplateAttachments(template.attachments, new Set(attachSupport.docs.map(d => d.file_path ?? ''))) : [];
+    autoAttachSavedRef.current = savedFiles;
+    builderAttachmentsRef.current = savedFiles;
+    setBuilderAttachments(savedFiles);
     setBuilderOpen(true);
   }
 
@@ -2577,7 +2578,6 @@ function CommunicationsPageInner() {
     setBuilderSubject(content.subject);
     setBuilderBlocks(initialBlocks);
     builderInitialRef.current = JSON.stringify({ subject: content.subject, blocks: initialBlocks });
-    setBuilderDelivery('manual');
     resetAudience();
     if (content.audience) restoreAudience({ ...EMPTY_SAVED_AUDIENCE, ...content.audience });
     // The preset is a suggestion, not a restored save — the chips themselves
@@ -2689,14 +2689,13 @@ function CommunicationsPageInner() {
       subject: useDefault ? '' : subject,
       body: useDefault ? '' : flattenBlocksToPlainText(blocks, conference),
       body_blocks: useDefault ? [] : blocks,
-      delivery: builderDelivery,
       name,
       updated_at: new Date().toISOString(),
     };
     if (isAdHoc) payload.audience = buildAudienceState();
-    // Automatic emails carry their attachments on the template (prompt 133);
-    // builder templates never do (their files are for one send only).
-    const autoAttach = !isAdHoc && attachSupport.enabled;
+    // Every template carries its attachments (automatic emails since prompt 133,
+    // builder templates since prompt 144); removing every chip saves null.
+    const autoAttach = attachSupport.enabled;
     const attachList = builderAttachmentsRef.current;
     if (autoAttach) payload.attachments = templateAttachments(attachList);
     const attachRefused = (error: unknown) => {
@@ -2708,7 +2707,8 @@ function CommunicationsPageInner() {
     };
 
     if (builderTemplateId) {
-      const { data: rows, error } = await supabase.from('email_templates').update(payload).eq('id', builderTemplateId).select('id');
+      // Read back (prompt 144): a row-counted write that returns what it holds.
+      const { data: rows, error } = await supabase.from('email_templates').update(payload).eq('id', builderTemplateId).select('id, attachments');
       if (error || (autoAttach && (rows ?? []).length === 0)) {
         if (autoAttach) attachRefused(error);
         else if (!opts.silent) notifyErr(friendlyError(error, "Couldn't save this email. Please try again."), 'communications-builder');
@@ -2731,6 +2731,9 @@ function CommunicationsPageInner() {
       // existing row's on/off state is the organiser's, and the update branch
       // above never touches it.
       enabled: newTemplateStartsEnabled(builderEventKey),
+      // email_templates.delivery is read by nothing (prompt 144): an automatic
+      // email sends whenever it is switched on. New rows say 'immediate'.
+      delivery: 'immediate',
       ...payload,
     }).select('id').single();
     if (error) {
@@ -2758,12 +2761,15 @@ function CommunicationsPageInner() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [builderSubject, builderBlocks, builderOpen]);
 
-  // An automatic email's attachments save as soon as they change (prompt 133),
-  // through the same template save. Opened on our default wording and left as
-  // it was, the email is saved as the default stub ('' / '' / []) with them.
+  // A template's attachments save as soon as they change (automatic emails since
+  // prompt 133, builder templates since prompt 144), through the same template
+  // save. Opened on our default wording and left as it was, an automatic email is
+  // saved as the default stub ('' / '' / []) with them. A builder email not saved
+  // yet keeps them until its first save, which writes them.
   useEffect(() => {
-    if (!builderOpen || builderEventKey === null || !attachSupport.enabled) return;
-    const same = (a: EmailAttachment[], b: EmailAttachment[]) => a.map(x => x.path).join('|') === b.map(x => x.path).join('|');
+    if (!builderOpen || !attachSupport.enabled) return;
+    if (builderEventKey === null && !builderTemplateId) return;
+    const same = (a: EmailAttachment[], b: EmailAttachment[]) => a.map(x => `${x.bucket ?? ''}:${x.path}`).join('|') === b.map(x => `${x.bucket ?? ''}:${x.path}`).join('|');
     if (same(builderAttachments, autoAttachSavedRef.current)) return;
     const t = setTimeout(() => {
       const untouched = JSON.stringify({ subject: builderSubject, blocks: builderBlocks }) === builderInitialRef.current;
@@ -2772,7 +2778,7 @@ function CommunicationsPageInner() {
     }, 600);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [builderAttachments, builderOpen, builderEventKey, attachSupport.enabled]);
+  }, [builderAttachments, builderOpen, builderEventKey, builderTemplateId, attachSupport.enabled]);
 
   async function handleSaveAndClose() {
     // Opened on our default wording and left as it was: save it exactly as a
@@ -2882,8 +2888,10 @@ function CommunicationsPageInner() {
       subject: t.subject,
       body: t.body,
       body_blocks: t.body_blocks,
-      delivery: 'manual',
+      delivery: 'immediate',
       enabled: false,
+      // A copy keeps its files (prompt 144).
+      ...(t.attachments ? { attachments: t.attachments } : {}),
       updated_at: new Date().toISOString(),
     }).select('id, conference_id, event_key, name, subject, body, body_blocks, enabled, delivery, updated_at, audience, recurring_enabled, recurring_interval_days, recurring_max_sends').single();
     setDuplicatingIds(prev => { const nextSet = new Set(prev); nextSet.delete(t.id); return nextSet; });
@@ -2895,8 +2903,9 @@ function CommunicationsPageInner() {
   async function handleDeleteTemplate(t: EmailTemplate) {
     if (!session || deletingIds.has(t.id)) return;
     const { confirmed } = await confirmDelete({
-      title: `Delete "${t.name}"? This can't be undone.`,
-      confirmLabel: 'Delete',
+      title: 'Delete This Email?',
+      body: <><b style={{ fontWeight: 800, color: '#1C1410' }}>{t.name}</b> will be deleted. This can&apos;t be undone</>,
+      confirmLabel: 'Delete email',
       danger: true,
     });
     if (!confirmed) return;
@@ -3705,7 +3714,7 @@ function CommunicationsPageInner() {
     if (!session || !selectedRequest || deletingThread) return;
     const req = selectedRequest;
     const { confirmed } = await confirmDelete({
-      title: 'Delete this thread?',
+      title: 'Delete This Thread?',
       body: 'The thread and every message in it are permanently deleted. This cannot be undone.',
       confirmLabel: 'Delete',
       danger: true,
@@ -4383,8 +4392,8 @@ function CommunicationsPageInner() {
               their audience is fixed by the event. About + the delivery radio
               ride above the editor instead of in a sidebar. */}
           {builderEventKey !== null && (
-            <div className="rounded-2xl p-5 mb-5 flex flex-col md:flex-row md:items-start gap-6" style={PANEL}>
-              <div className="flex-1 min-w-0">
+            <div className="rounded-2xl p-5 mb-5" style={PANEL}>
+              <div className="min-w-0">
                 <p className="font-semibold text-sm mb-1" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
                   About this notification
                 </p>
@@ -4394,38 +4403,6 @@ function CommunicationsPageInner() {
                 <p className="text-xs mt-2" style={{ color: GOLD_INK, fontFamily: OUTFIT, textWrap: 'pretty' }}>
                   Its audience is fixed by the event. Turn it on from Automatic emails once you&apos;re happy with the draft.
                 </p>
-              </div>
-              <div className="flex-shrink-0" style={{ minWidth: 220 }}>
-                <p className="font-semibold text-sm mb-2" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
-                  Delivery
-                </p>
-                <div className="flex flex-col gap-1">
-                  {(['immediate', 'manual'] as const).map(d => (
-                    <div
-                      key={d}
-                      onClick={() => setBuilderDelivery(d)}
-                      className="flex items-center gap-3 px-3 py-2.5 rounded-xl cursor-pointer transition-colors"
-                      style={{
-                        backgroundColor: builderDelivery === d ? 'rgba(27,56,40,0.06)' : 'transparent',
-                        border: builderDelivery === d ? '1px solid rgba(27,56,40,0.15)' : '1px solid transparent',
-                      }}
-                    >
-                      <div
-                        className="flex-shrink-0 flex items-center justify-center rounded-full"
-                        style={{
-                          width: 16, height: 16,
-                          border: builderDelivery === d ? 'none' : '1.5px solid #DDD4C0',
-                          backgroundColor: builderDelivery === d ? '#1B3828' : 'transparent',
-                        }}
-                      >
-                        {builderDelivery === d && <div className="rounded-full" style={{ width: 6, height: 6, backgroundColor: 'white' }} />}
-                      </div>
-                      <span className="text-sm" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
-                        {d === 'immediate' ? 'Send automatically' : 'Manual trigger only'}
-                      </span>
-                    </div>
-                  ))}
-                </div>
               </div>
             </div>
           )}
@@ -4523,9 +4500,9 @@ function CommunicationsPageInner() {
                 <EmailAttachments
                   conferenceId={conference.id}
                   docs={attachSupport.docs}
+                  guides={attachSupport.guides}
                   value={builderAttachments}
                   onChange={setBuilderAttachments}
-                  savedAsTemplate={!attachAuto && !!builderTemplateId}
                 />
               ) : undefined}
               previewFooter={shownAttachments.length > 0 ? <AttachmentChipsReadOnly value={shownAttachments} line={attachAuto ? 'Sent as attachments with every one of these emails' : undefined} /> : undefined}
@@ -4564,7 +4541,7 @@ function CommunicationsPageInner() {
       {/* Send confirmation */}
       {sendConfirmOpen && (
         <ConfirmModal
-          title={unresolvedCount > 0 ? 'Some recipients are missing details' : 'Send this email?'}
+          title={unresolvedCount > 0 ? 'Some Recipients Are Missing Details' : 'Send This Email?'}
           body={
             <div className="flex flex-col gap-2">
               <p><strong>{builderName || eventDef?.label || '(untitled)'}</strong></p>

@@ -882,7 +882,7 @@ export async function turnOnDefaultEmail(
     body: '',
     body_blocks: [],
     enabled: true,
-    delivery: event?.defaultDelivery ?? 'immediate',
+    delivery: 'immediate',
     // A recurring event starts on, at the default cadence, because the row
     // being absent already meant "recurring at 3 sends every 3 days".
     // Inserting it off would quietly reduce what people already receive.
@@ -918,7 +918,7 @@ export async function turnOffDefaultEmail(
     body: '',
     body_blocks: [],
     enabled: false,
-    delivery: event?.defaultDelivery ?? 'immediate',
+    delivery: 'immediate',
   });
   return { ok: !error, error: error ? friendlyError(error, 'Could not turn this off.') : undefined };
 }

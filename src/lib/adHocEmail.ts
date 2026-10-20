@@ -83,7 +83,7 @@ export interface QueueAdHocEmailArgs {
   recipientFilter?: Record<string, unknown>;
   /** Files sent with every email of this send (prompt 113). Absent or empty =
    *  exactly the send as before. The outbox trigger checks them. */
-  attachments?: Pick<EmailAttachment, 'path' | 'file_name' | 'size' | 'isConferenceDocument'>[];
+  attachments?: Pick<EmailAttachment, 'path' | 'bucket' | 'file_name' | 'size' | 'isConferenceDocument'>[];
 }
 
 export interface QueueAdHocEmailResult {

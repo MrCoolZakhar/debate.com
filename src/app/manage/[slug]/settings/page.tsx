@@ -1437,7 +1437,7 @@ export default function SettingsPage() {
   async function handleRevokeInvite(invite: OrganizerInviteRow) {
     if (!session || revokingInviteId) return;
     const { confirmed } = await confirm({
-      title: 'Revoke invite?',
+      title: 'Revoke This Invite?',
       body: `Revoke the invite sent to ${invite.email}? The link they were sent will stop working.`,
       confirmLabel: 'Revoke',
       danger: true,
@@ -1795,7 +1795,7 @@ export default function SettingsPage() {
   async function handleWithdrawClaim() {
     if (!conference || withdrawingClaim) return;
     const { confirmed } = await confirm({
-      title: 'Withdraw the previous-edition claim?',
+      title: 'Withdraw the Previous Edition Claim?',
       body: 'The link (and any approval) will be removed.',
       confirmLabel: 'Withdraw',
       danger: true,
@@ -2055,7 +2055,7 @@ export default function SettingsPage() {
       ? (link.company_name ?? 'this partner')
       : (link.conf ? conferenceAcronymLabel(link.conf) || 'this conference' : 'this conference');
     const { confirmed } = await confirm({
-      title: `Remove the partner link with ${label}?`,
+      title: `Remove the Partner Link with ${label}?`,
       confirmLabel: 'Remove',
       danger: true,
     });
@@ -2468,7 +2468,7 @@ export default function SettingsPage() {
         ? `Your ${rolePlural(target).toLowerCase()} form gets a copy of every question. Answers already given to this role's questions are kept.`
         : `${rolePlural(target)} open and close at the same times.`;
     const { confirmed } = await confirm({
-      title: `Replace this role's ${noun} with ${rolePossessive(sourceRole)} ${noun}?`,
+      title: `Replace This Role's ${noun.charAt(0).toUpperCase()}${noun.slice(1)} with ${rolePossessive(sourceRole)} ${noun.charAt(0).toUpperCase()}${noun.slice(1)}?`,
       body,
       confirmLabel: 'Replace',
     });
@@ -2902,7 +2902,7 @@ export default function SettingsPage() {
         key: 'conference-slug-moved',
         kind: 'info',
         level: 'ok',
-        title: 'Your conference link changed',
+        title: 'Your Conference Link Changed',
         body: `It is now gavelling.com/conferences/${newSlug}. The old link still works and sends people here.`,
         ttlMs: 12_000,
       });
@@ -3707,9 +3707,9 @@ export default function SettingsPage() {
           {/* Delete Conference moved to the bottom of the Visibility card (owner, 12 Oct 2026). */}
           {confirmingDelete && (
             <ConfirmModal
-              title="Delete this conference?"
+              title="Delete This Conference?"
               body="Are you sure you want to delete this conference? This action is irreversible, all data relating to this conference will be lost."
-              confirmLabel="Yes, delete"
+              confirmLabel="Delete conference"
               danger
               loading={deleting}
               onConfirm={async () => {

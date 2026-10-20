@@ -280,7 +280,7 @@ export default function IndependentsView({ conference, showFlash }: Independents
     const holderName = holder.profiles?.display_name ?? holder.invited_name ?? 'this delegate';
     const recipientName = recipient.profiles?.display_name ?? recipient.invited_name ?? 'this delegate';
     const { confirmed } = await confirm({
-      title: 'Transfer this spot?',
+      title: 'Transfer This Spot?',
       body: `Transfer ${holderName}'s paid spot to ${recipientName}? ${holderName} will become unpaid.`,
       confirmLabel: 'Transfer',
     });
@@ -332,9 +332,9 @@ export default function IndependentsView({ conference, showFlash }: Independents
     if (isPaid) bodyParts.push("Their paid spot stays theirs until you transfer it to someone else.");
     if (hasAllocation) bodyParts.push('Their committee assignment will be removed.');
     const { confirmed } = await confirm({
-      title: `Mark ${name} as not attending?`,
+      title: `Mark ${name} as Not Attending?`,
       body: bodyParts.length > 0 ? bodyParts.join(' ') : `${name} will be marked not attending.`,
-      confirmLabel: 'Mark Not Attending',
+      confirmLabel: 'Mark not attending',
       danger: true,
     });
     if (!confirmed) return;

@@ -1,9 +1,10 @@
 'use client';
 
 // Shared confirm dialog, styled replacement for window.confirm/alert across
-// the manage area. Cream card on the house ModalOverlay backdrop (see
-// CommitteeEditorModal.tsx), forest-green confirm by default, muted-red
-// "danger" variant for destructive actions. Use the useConfirmModal() hook
+// the site. Since prompt 144 it is the current pop-up style: a white card on
+// the house ModalOverlay backdrop, a Title Case title, one line, sentence-case
+// buttons right-aligned (outline Cancel, forest confirm, or the "danger" red for
+// destructive actions), and a busy state. Use the useConfirmModal() hook
 // from call sites: `const { confirmed, checked } = await confirm({ ... })`.
 
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -47,7 +48,7 @@ export interface ConfirmModalProps {
   loading?: boolean;
   /** Disables the confirm button (e.g. a type-to-confirm gate) without disabling the whole modal. */
   confirmDisabled?: boolean;
-  /** Card width in px (default 400). */
+  /** Card width in px (default 440). */
   width?: number;
   onConfirm: () => void;
   onCancel: () => void;
@@ -57,7 +58,7 @@ export interface ConfirmModalProps {
 
 export function ConfirmModal({
   title, body, confirmLabel = 'Confirm', cancelLabel = 'Cancel', danger = false,
-  checkbox, checked = false, onCheckedChange, loading = false, confirmDisabled = false, width = 400, onConfirm, onCancel,
+  checkbox, checked = false, onCheckedChange, loading = false, confirmDisabled = false, width = 440, onConfirm, onCancel,
 }: ConfirmModalProps) {
   // Enter confirms. Escape is NOT handled here — ModalOverlay owns it, via a
   // stack that only ever dismisses the top-most overlay. Doing it locally as
@@ -72,9 +73,6 @@ export function ConfirmModal({
   }, [loading, confirmDisabled, onConfirm]);
 
   const disabled = loading || confirmDisabled;
-  const confirmBg = disabled ? '#DDD4C0' : danger ? '#8B2020' : '#1B3828';
-  const confirmColor = disabled ? '#9A8A78' : danger ? '#FFFFFF' : '#EED98A';
-  const spinnerColor = danger ? '#FFFFFF' : '#EED98A';
 
   return (
     <ModalOverlay
@@ -87,17 +85,12 @@ export function ConfirmModal({
         role="alertdialog"
         aria-modal="true"
         aria-labelledby="confirm-modal-title"
-        className="rounded-2xl p-6 flex flex-col gap-4"
-        style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0', width, maxWidth: '90vw', maxHeight: '92vh', overflowY: 'auto' }}
+        className="gv-confirm flex flex-col"
+        style={{ width, maxWidth: 'calc(100vw - 32px)', maxHeight: '92vh', overflowY: 'auto' }}
       >
-        <p id="confirm-modal-title" className="text-base font-bold" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
-          {title}
-        </p>
-        {body && (
-          <div className="text-sm" style={{ color: '#4A4238', fontFamily: OUTFIT, lineHeight: 1.55 }}>
-            {body}
-          </div>
-        )}
+        <style>{CONFIRM_CSS}</style>
+        <h2 id="confirm-modal-title" className="gv-confirm-title">{title}</h2>
+        {body && <div className="gv-confirm-body">{body}</div>}
         {checkbox && (
           <label
             className="flex items-start gap-2.5"
@@ -109,52 +102,61 @@ export function ConfirmModal({
               disabled={checkbox.disabled || loading}
               onChange={(e) => onCheckedChange?.(e.target.checked)}
               className="flex-shrink-0"
-              style={{ width: 15, height: 15, marginTop: 2, accentColor: '#1B3828' }}
+              style={{ width: 16, height: 16, marginTop: 2, accentColor: 'var(--gv-main)' }}
             />
-            <span style={{ fontSize: 13, color: '#1C1410', fontFamily: OUTFIT, lineHeight: 1.45 }}>
+            <span style={{ fontSize: 14, color: '#1C1410', fontFamily: OUTFIT, lineHeight: 1.45 }}>
               {checkbox.label}
               {checkbox.disabled && checkbox.disabledNote && (
-                <span className="block mt-0.5" style={{ fontSize: 11.5, color: '#9A8A78' }}>
+                <span className="block mt-0.5" style={{ fontSize: 12.5, color: '#6B5F52' }}>
                   {checkbox.disabledNote}
                 </span>
               )}
             </span>
           </label>
         )}
-        <div className="flex gap-3 mt-1">
-          <button
-            onClick={onCancel}
-            disabled={loading}
-            className="flex-1 rounded-xl py-2.5 font-bold text-sm focus:outline-none"
-            style={{
-              border: '1.5px solid #DDD4C0', color: loading ? '#C8BEA8' : '#1C1410',
-              backgroundColor: 'transparent', fontFamily: OUTFIT, cursor: loading ? 'not-allowed' : 'pointer',
-            }}
-          >
-            {cancelLabel.toUpperCase()}
+        <div className="gv-confirm-foot">
+          <button type="button" onClick={onCancel} disabled={loading} className="gv-confirm-btn gv-confirm-cancel">
+            {cancelLabel}
           </button>
           <button
+            type="button"
             onClick={onConfirm}
             disabled={disabled}
-            className="flex-1 rounded-xl py-2.5 font-bold text-sm focus:outline-none inline-flex items-center justify-center gap-2"
-            style={{
-              backgroundColor: confirmBg, color: confirmColor, fontFamily: OUTFIT,
-              cursor: disabled ? 'not-allowed' : 'pointer',
-            }}
+            aria-busy={loading || undefined}
+            className={`gv-confirm-btn ${danger ? 'gv-confirm-danger' : 'gv-confirm-main'}`}
           >
-            {loading && (
-              <span
-                className="w-3.5 h-3.5 rounded-full border-2 animate-spin flex-shrink-0"
-                style={{ borderColor: spinnerColor, borderTopColor: 'transparent' }}
-              />
-            )}
-            {confirmLabel.toUpperCase()}
+            {loading && <span className="gv-confirm-spin" aria-hidden />}
+            {confirmLabel}
           </button>
         </div>
       </div>
     </ModalOverlay>
   );
 }
+
+// The site's current pop-up look (prompt 144): a white card with a soft shadow,
+// a Title Case title, one plain line, and sentence-case buttons on the right
+// (an outline Cancel, then the forest or danger action, with a busy spinner).
+const CONFIRM_CSS = `
+.gv-confirm{gap:12px;padding:24px 24px 20px;border-radius:22px;background:#FFFFFF;font-family:${OUTFIT};box-shadow:0 30px 70px -28px color-mix(in srgb, var(--gv-main) 55%, transparent),0 0 0 1px color-mix(in srgb, var(--gv-main) 6%, transparent)}
+.gv-confirm-title{margin:0;font-size:21px;font-weight:800;line-height:1.25;letter-spacing:-0.01em;color:#1C1410;overflow-wrap:anywhere}
+.gv-confirm-body{font-size:15px;line-height:1.5;color:#544B3E;overflow-wrap:anywhere}
+.gv-confirm-foot{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:10px;margin-top:8px}
+.gv-confirm-btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:42px;padding:0 18px;border:none;border-radius:12px;font-family:inherit;font-size:14.5px;font-weight:700;cursor:pointer;transition:filter 140ms ease,transform 120ms ease,opacity 140ms ease}
+.gv-confirm-btn:active:not(:disabled){transform:scale(0.98)}
+.gv-confirm-btn:disabled{opacity:0.55;cursor:not-allowed}
+.gv-confirm-btn:focus{outline:none}
+.gv-confirm-btn:focus-visible{outline:2px solid var(--gv-main);outline-offset:2px}
+.gv-confirm-cancel{background:#FFFFFF;color:#1C1410;box-shadow:inset 0 0 0 1.5px #1C1410}
+.gv-confirm-cancel:hover:not(:disabled){background:#F6F3EC}
+.gv-confirm-main{background:linear-gradient(90deg,var(--gv-main) 0%,var(--gv-main-mid) 100%);color:#FFFFFF}
+.gv-confirm-danger{background:#8B2020;color:#FFFFFF}
+.gv-confirm-main:hover:not(:disabled),.gv-confirm-danger:hover:not(:disabled){filter:brightness(1.1)}
+.gv-confirm-spin{width:14px;height:14px;border-radius:999px;border:2px solid currentColor;border-top-color:transparent;animation:gv-confirm-spin 0.8s linear infinite;flex-shrink:0}
+@keyframes gv-confirm-spin{to{transform:rotate(360deg)}}
+@media (max-width:420px){.gv-confirm-foot .gv-confirm-btn{flex:1 1 140px}}
+@media (prefers-reduced-motion:reduce){.gv-confirm-spin{animation-duration:2s}}
+`;
 
 // ── useConfirmModal(), imperative await-style API ───────────────────────────
 

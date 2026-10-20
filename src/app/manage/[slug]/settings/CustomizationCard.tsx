@@ -258,7 +258,7 @@ export default function CustomizationCard({
 
   async function handleReset() {
     const { confirmed } = await confirm({
-      title: 'Reset colours?',
+      title: 'Reset Your Colours?',
       body: "This puts your conference back to Gavelling's colours. It does not publish until you press Save and publish.",
       confirmLabel: 'Reset',
       danger: true,
@@ -281,7 +281,7 @@ export default function CustomizationCard({
     const warnings = themeWarnings(draft);
     if (warnings.length > 0) {
       const { confirmed } = await confirm({
-        title: 'Publish these colours?',
+        title: 'Publish These Colours?',
         body: `${warnings.join(' ')} Preview your page before you publish. Published colours are public straight away.`,
         confirmLabel: 'Publish anyway',
       });

@@ -8,7 +8,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { X, UserPlus, Mail, Send } from 'lucide-react';
-import { NEU, OUTFIT, NeuButton } from '@/components/neu';
+import { NEU, OUTFIT } from '@/components/neu';
 import { usePressCommitteesAvailable, pressAwareCommitteeType } from '@/lib/press';
 import { CommitteeTypeChooser, CommitteeTypeEmoji, COMMITTEE_TYPE_TITLE } from '@/components/parliamentSetup';
 import { getAuthedClient } from '@/lib/supabase-auth';
@@ -135,6 +135,7 @@ export type { MedallionTone };
 // call sites keep working.
 
 import { ModalOverlay, MODAL_PANEL_MAX_HEIGHT } from '@/components/ModalOverlay';
+import { ConfirmModal } from '@/components/ConfirmModal';
 export { ModalOverlay, MODAL_PANEL_MAX_HEIGHT };
 
 // ── Session minting ───────────────────────────────────────────────────────────
@@ -359,8 +360,7 @@ function ChairsDock({ conferenceId, committeeId, committeeName, embedded = false
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState('');
   const [err, setErr] = useState('');
-  // Two-roles warning, rendered inline below (neumorphic dialog) rather
-  // than through the shared (flat) ConfirmModal.
+  // Two-roles warning, through the shared ConfirmModal (prompt 144).
   const [roleConflict, setRoleConflict] = useState<{ displayName: string; role: string; email: string } | null>(null);
   const [confirmBusy, setConfirmBusy] = useState(false);
 
@@ -705,40 +705,14 @@ function ChairsDock({ conferenceId, committeeId, committeeName, embedded = false
         {err && <p className="text-[10.5px] mt-2" style={{ color: '#8B2020', fontFamily: OUTFIT }}>{err}</p>}
       </div>
       {roleConflict && (
-        <ModalOverlay onClose={() => { if (!confirmBusy) setRoleConflict(null); }}>
-          <div
-            className="p-6"
-            style={{
-              width: 'min(92vw, 420px)',
-              backgroundColor: NEU.surface,
-              borderRadius: 24,
-              boxShadow: `${NEU.out}, 0 24px 60px rgba(27,56,40,0.28)`,
-            }}
-          >
-            <p className="text-base mb-2" style={{ color: NEU.ink, fontWeight: 800, fontFamily: OUTFIT }}>
-              This person already holds a role
-            </p>
-            <p className="text-sm mb-5" style={{ color: NEU.muted, fontFamily: OUTFIT, lineHeight: 1.55 }}>
-              {roleConflict.displayName} already has an active {roleConflict.role.replace(/-/g, ' ')} application at this conference. Accepting this chair invite will give them two roles.
-            </p>
-            <div className="flex gap-3">
-              <button
-                onClick={() => setRoleConflict(null)}
-                disabled={confirmBusy}
-                className="flex-1 rounded-full py-2.5 font-bold text-sm focus:outline-none"
-                style={{
-                  border: 'none', color: NEU.ink, backgroundColor: NEU.surface, boxShadow: NEU.outSm,
-                  fontFamily: OUTFIT, letterSpacing: '0.04em', cursor: confirmBusy ? 'default' : 'pointer',
-                }}
-              >
-                CANCEL
-              </button>
-              <NeuButton onClick={handleProceedRoleConflict} disabled={confirmBusy} style={{ flex: 1 }}>
-                {confirmBusy ? 'PROCEEDING...' : 'PROCEED'}
-              </NeuButton>
-            </div>
-          </div>
-        </ModalOverlay>
+        <ConfirmModal
+          title="This Person Already Holds a Role"
+          body={<>{roleConflict.displayName} already has an active {roleConflict.role.replace(/-/g, ' ')} application at this conference. Accepting this chair invite will give them two roles.</>}
+          confirmLabel="Invite anyway"
+          loading={confirmBusy}
+          onConfirm={() => { void handleProceedRoleConflict(); }}
+          onCancel={() => { if (!confirmBusy) setRoleConflict(null); }}
+        />
       )}
     </div>
   );
@@ -1546,30 +1520,24 @@ function CommitteeEditor({ conferenceId, committeeType, existing, initialRoster,
       </ModalOverlay>
     )}
     {pendingRemovalCount !== null && (
-      <ModalOverlay onClose={() => setPendingRemovalCount(null)}>
-        <div className="rounded-2xl p-6 flex flex-col gap-4" style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0', width: 380, maxWidth: 'calc(100vw - 32px)' }}>
-          <p className="text-sm" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif", lineHeight: 1.5 }}>
-            {pendingRemovalCount} of the {seatNounPlural} you removed {pendingRemovalCount === 1 ? 'has' : 'have'} an allocated delegate. Removing {pendingRemovalCount === 1 ? 'it' : 'them'} will return {pendingRemovalCount === 1 ? 'that delegate' : 'those delegates'} to the allocation pool. Proceed?
-          </p>
-          <div className="flex gap-3">
-            <button onClick={() => setPendingRemovalCount(null)} className="gv-lift flex-1 rounded-xl py-2.5 font-bold text-sm focus:outline-none" style={{ border: '1.5px solid #DDD4C0', color: '#1C1410', backgroundColor: 'transparent', fontFamily: "var(--font-brand), sans-serif" }}>CANCEL</button>
-            <button onClick={() => { setPendingRemovalCount(null); handleSave(true); }} className="gv-lift flex-1 rounded-xl py-2.5 font-bold text-sm focus:outline-none" style={{ backgroundColor: '#8B2020', color: '#FFFFFF', fontFamily: "var(--font-brand), sans-serif" }}>PROCEED</button>
-          </div>
-        </div>
-      </ModalOverlay>
+      <ConfirmModal
+        title={`Remove ${pendingRemovalCount === 1 ? `an Allocated ${seatNoun.charAt(0).toUpperCase()}${seatNoun.slice(1)}` : `${pendingRemovalCount} Allocated ${seatNounPlural.charAt(0).toUpperCase()}${seatNounPlural.slice(1)}`}?`}
+        body={<>{pendingRemovalCount} of the {seatNounPlural} you removed {pendingRemovalCount === 1 ? 'has' : 'have'} an allocated delegate. Removing {pendingRemovalCount === 1 ? 'it' : 'them'} returns {pendingRemovalCount === 1 ? 'that delegate' : 'those delegates'} to the allocation pool.</>}
+        confirmLabel="Remove and save"
+        danger
+        onConfirm={() => { setPendingRemovalCount(null); handleSave(true); }}
+        onCancel={() => setPendingRemovalCount(null)}
+      />
     )}
     {pendingDoubleOffCount !== null && (
-      <ModalOverlay onClose={() => { setPendingDoubleOffCount(null); setDoubleDelegation(true); }}>
-        <div className="rounded-2xl p-6 flex flex-col gap-4" style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0', width: 380, maxWidth: 'calc(100vw - 32px)' }}>
-          <p className="text-sm" style={{ color: '#1C1410', fontFamily: "var(--font-brand), sans-serif", lineHeight: 1.5 }}>
-            This action will affect the allocations of {pendingDoubleOffCount} delegates. It is irreversible. Are you sure you wish to continue?
-          </p>
-          <div className="flex gap-3">
-            <button onClick={() => { setPendingDoubleOffCount(null); setDoubleDelegation(true); }} className="gv-lift flex-1 rounded-xl py-2.5 font-bold text-sm focus:outline-none" style={{ border: '1.5px solid #DDD4C0', color: '#1C1410', backgroundColor: 'transparent', fontFamily: "var(--font-brand), sans-serif" }}>CANCEL</button>
-            <button onClick={() => { setPendingDoubleOffCount(null); handleSave(true, true); }} className="gv-lift flex-1 rounded-xl py-2.5 font-bold text-sm focus:outline-none" style={{ backgroundColor: '#8B2020', color: '#FFFFFF', fontFamily: "var(--font-brand), sans-serif" }}>PROCEED</button>
-          </div>
-        </div>
-      </ModalOverlay>
+      <ConfirmModal
+        title="Turn Off Double Delegations?"
+        body={<>This changes the allocations of {pendingDoubleOffCount} delegates and can&apos;t be undone.</>}
+        confirmLabel="Turn off and save"
+        danger
+        onConfirm={() => { setPendingDoubleOffCount(null); handleSave(true, true); }}
+        onCancel={() => { setPendingDoubleOffCount(null); setDoubleDelegation(true); }}
+      />
     )}
     {/* Drag-to-fit crop step, flattens the chosen framing into a square
         transparent PNG, then hands off to the existing upload path — the same

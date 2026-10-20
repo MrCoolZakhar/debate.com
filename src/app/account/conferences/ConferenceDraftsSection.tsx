@@ -61,7 +61,7 @@ export function ConferenceDraftsSection() {
   async function remove(d: MyConferenceDraft) {
     const name = d.acronym || d.full_name || 'this conference';
     const { confirmed } = await confirm({
-      title: 'Delete this draft?',
+      title: 'Delete This Draft?',
       body: `Your saved answers for ${name} will be deleted and we will stop reminding you about it. You can always start listing it again.`,
       confirmLabel: 'Delete draft',
       danger: true,

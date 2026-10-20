@@ -217,7 +217,7 @@ export default function ImportPage() {
   async function handleRepairAllocations() {
     if (!conference || !session || repairing || orphanRows.length === 0) return;
     const { confirmed } = await confirm({
-      title: `Repair ${orphanRows.length} allocation${orphanRows.length === 1 ? '' : 's'}?`,
+      title: `Repair ${orphanRows.length} Allocation${orphanRows.length === 1 ? '' : 's'}?`,
       body: 'These applications were assigned a committee and country before allocation rows existed. This creates the missing allocation rows now. Any that conflict with an existing allocation are downgraded back to accepted with no allocation.',
       confirmLabel: 'Repair',
     });
@@ -698,7 +698,7 @@ export default function ImportPage() {
   async function handleSendInvites() {
     if (!conference || !session || sendingInvites) return;
     const { confirmed } = await confirm({
-      title: `Send ${unclaimedCount} Gavelling invite${unclaimedCount === 1 ? '' : 's'}?`,
+      title: `Send ${unclaimedCount} Gavelling Invite${unclaimedCount === 1 ? '' : 's'}?`,
       body: 'Each unclaimed imported applicant gets an email with their personal invitation link. Their registration attaches automatically when they claim it, whichever email address they sign up with.',
       confirmLabel: 'Send invites',
     });
@@ -931,7 +931,7 @@ function ImportedDelegatesTab({ conference, session, confirm, fixApplicationId }
   async function handleResend(row: ImportedDelegateRow) {
     if (!session || resendingId) return;
     const { confirmed } = await confirm({
-      title: 'Resend Gavelling invite?',
+      title: 'Resend the Gavelling Invite?',
       body: `Send another account invite to ${row.invited_name || row.invited_email}?`,
       confirmLabel: 'Resend',
     });

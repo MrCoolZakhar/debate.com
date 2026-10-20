@@ -425,7 +425,7 @@ export default function DelegationsView({ conference, showFlash, initialSocietyI
     // F21: fully idempotent, nothing left to do once the pledge is satisfied.
     if (pledgeSatisfied(member)) return;
     const { confirmed } = await confirm({
-      title: 'Confirm these spots as paid?',
+      title: 'Confirm These Spots as Paid?',
       body: 'Spots will be added to the delegation.',
       confirmLabel: 'Confirm',
     });
@@ -494,11 +494,11 @@ export default function DelegationsView({ conference, showFlash, initialSocietyI
     const name = member.profiles?.display_name ?? member.invited_name ?? 'this delegate';
     const hasAllocation = !!member.assigned_committee_id;
     const { confirmed } = await confirm({
-      title: `Mark ${name} as not attending?`,
+      title: `Mark ${name} as Not Attending?`,
       body: hasAllocation
         ? 'Their delegation spot stays with the delegation. Their committee assignment will be removed.'
         : 'Their delegation spot stays with the delegation.',
-      confirmLabel: 'Mark Not Attending',
+      confirmLabel: 'Mark not attending',
       danger: true,
     });
     if (!confirmed) return;
@@ -630,7 +630,7 @@ export default function DelegationsView({ conference, showFlash, initialSocietyI
     setAdvisorTransferPicker(null);
     if (!session || busyIds.has(paidAdvisor.id) || busyIds.has(recipient.id)) return;
     const { confirmed } = await confirm({
-      title: 'Transfer this spot?',
+      title: 'Transfer This Spot?',
       body: `Transfer ${paidAdvisor.profiles?.display_name ?? paidAdvisor.invited_name ?? 'this advisor'}'s paid spot to ${recipient.profiles?.display_name ?? recipient.invited_name ?? 'this advisor'}?`,
       confirmLabel: 'Transfer',
     });
@@ -774,9 +774,9 @@ export default function DelegationsView({ conference, showFlash, initialSocietyI
     if (!sourceId) return;
     const source = members.find(m => m.id === sourceId);
     const { confirmed } = await confirm({
-      title: 'Give this open paid spot?',
+      title: 'Give This Open Paid Spot?',
       body: `Give this open paid spot to ${source?.profiles?.display_name ?? source?.invited_name ?? 'this delegate'}?`,
-      confirmLabel: 'Give Spot',
+      confirmLabel: 'Give spot',
     });
     if (confirmed) handleGiveOpenSpot(sourceId);
   }

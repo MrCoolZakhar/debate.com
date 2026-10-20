@@ -556,9 +556,9 @@ export default function DelegationPanel({ conferenceId, conferenceSlug, societyI
     const allocB = allocationLabel(swapB) ?? 'their allocation';
 
     const { confirmed } = await confirm({
-      title: 'Swap allocations?',
+      title: 'Swap Allocations?',
       body: `${nameA}: ${allocA} ↔ ${nameB}: ${allocB}`,
-      confirmLabel: allocationSwapMode === 'self_serve' ? 'Swap' : 'Request Swap',
+      confirmLabel: allocationSwapMode === 'self_serve' ? 'Swap' : 'Request swap',
     });
     if (!confirmed) return;
 
@@ -625,7 +625,7 @@ export default function DelegationPanel({ conferenceId, conferenceSlug, societyI
       await loadSwapActivity();
       setSwapping(false);
       setSwapResult({
-        title: 'Swap requested',
+        title: 'Swap Requested',
         body: "An allocation swap has been requested to the conference's organizers.",
         detail: `${nameA} and ${nameB}.`,
       });

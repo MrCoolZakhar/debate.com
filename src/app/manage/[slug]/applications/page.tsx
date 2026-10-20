@@ -3079,7 +3079,7 @@ export default function ApplicationsPage() {
 
   async function openReinstateConfirm(app: Application) {
     const { confirmed } = await confirm({
-      title: 'Reinstate this application?',
+      title: 'Reinstate This Application?',
       body: 'This returns the application to Submitted so you can review it again. Any rejection note will be cleared.',
       confirmLabel: 'Reinstate',
     });
@@ -3112,7 +3112,7 @@ export default function ApplicationsPage() {
     parts.push('This cannot be undone from here. Reinstating only restores their application to Accepted, nothing else.');
 
     const { confirmed } = await confirm({
-      title: 'Remove from conference?',
+      title: 'Remove from the Conference?',
       body: parts.join(' '),
       confirmLabel: 'Withdraw',
       danger: true,
@@ -3247,7 +3247,7 @@ export default function ApplicationsPage() {
     const name = app.profiles?.display_name ?? app.invited_name ?? 'this applicant';
     const hasAllocation = !!app.assigned_committee_id;
     const { confirmed } = await confirm({
-      title: `Mark ${name} as not attending?`,
+      title: `Mark ${name} as Not Attending?`,
       body: hasAllocation
         ? 'Their committee assignment will be removed. Their delegation spot, if any, stays with the delegation.'
         : 'Their delegation spot, if any, stays with the delegation.',
@@ -3320,7 +3320,7 @@ export default function ApplicationsPage() {
   // from withdraw, which is for real users and preserves their history.
   async function openDeleteRowConfirm(app: Application) {
     const { confirmed } = await confirm({
-      title: 'Delete this application?',
+      title: 'Delete This Application?',
       body: "This applicant never created a Gavelling account, so nothing else is affected. Their application and any committee allocation are permanently deleted. This can't be undone.",
       confirmLabel: 'Delete',
       danger: true,
@@ -3503,7 +3503,7 @@ export default function ApplicationsPage() {
     if (!session) return;
     if (busyIds.has(app.id)) { noteBusyClick(); return; }
     const { confirmed } = await confirm({
-      title: 'Remove this fee waiver?',
+      title: 'Remove This Fee Waiver?',
       body: 'They will owe payment again.',
       confirmLabel: 'Remove waiver',
       danger: true,
@@ -3698,7 +3698,7 @@ export default function ApplicationsPage() {
       }
       const skipped = ids.length - fresh.length;
       const { confirmed } = await confirm({
-        title: `Send a payment reminder to ${fresh.length}?`,
+        title: `Send a Payment Reminder to ${fresh.length}?`,
         body: skipped > 0
           ? `${skipped} of the ${ids.length} selected were reminded in the last ${REMIND_PAY_COOLDOWN_HOURS} hours and will be skipped. Anyone who has turned off payment emails is skipped too.`
           : 'They will each be re-sent the "you can pay now" email. Anyone who has turned off payment emails is skipped.',
@@ -5992,7 +5992,7 @@ export default function ApplicationsPage() {
       {markUnpaidFor && (
         <MarkUnpaidDialog
           invoiceIds={markUnpaidFor.ids}
-          title="Mark this application unpaid?"
+          title="Mark This Application Unpaid?"
           body="If their payment opened a delegation spot, one spot will be removed."
           onClose={() => setMarkUnpaidFor(null)}
           onDone={() => { setMarkUnpaidFor(null); scheduleReconcile(); }}
