@@ -10,6 +10,13 @@
 // (src/components/SeatName.tsx) draws it. A name that is already short comes back
 // with `split: false` and is drawn exactly as before, once.
 //
+// A KNOWN COUNTRY is the exception (owner, 21 Oct 2026: "just show USA"): its short form
+// ("USA", "UK", "UAE", "DRC", "United Kingdom") comes back with `alone: true` and is
+// drawn ALONE, one row, the full name kept as the title and for screen readers.
+// `seatFitFontPx` / `seatFitFontCss` step the size down for a name that is still too
+// long for a narrow slot (the floor queue, the sidebar), so it fits without an ellipsis
+// and without breaking a word.
+//
 // The short form is TAKEN FROM THE NAME, in this order (first hit wins):
 //   1. the canonical short name of a known country ("United Kingdom of Great Britain
 //      and Northern Ireland" -> "United Kingdom"), localized when a language is given;
@@ -31,12 +38,14 @@ import { acronymInName } from '@/lib/presetNames';
 export const SEAT_NAME_MAX = 18;
 
 export type SeatNameParts = {
-  /** The big line. Equal to `full` when not split. */
+  /** The line that is drawn. Equal to `full` when neither split nor alone. */
   short: string;
   /** The whole name, exactly as given. */
   full: string;
-  /** True when the name is drawn as two rows. */
+  /** True when the name is drawn as two rows (short big, full small beneath). */
   split: boolean;
+  /** True when a known country's short form is drawn ALONE, one row; `full` goes in the title. */
+  alone: boolean;
 };
 
 const TITLES = [
@@ -197,10 +206,55 @@ function shortFor(name: string, max: number, language: string | undefined, depth
 export function splitSeatName(name: string | null | undefined, opts: { max?: number; language?: string } = {}): SeatNameParts {
   const full = (name ?? '').trim();
   const max = opts.max ?? SEAT_NAME_MAX;
-  if (full.length <= max) return { short: full, full, split: false };
+  if (full.length <= max) return { short: full, full, split: false, alone: false };
   const short = shortFor(full, max, opts.language).trim();
   if (!short || short.length >= full.length || short.toLowerCase() === full.toLowerCase()) {
-    return { short: full, full, split: false };
+    return { short: full, full, split: false, alone: false };
   }
-  return { short, full, split: true };
+  // A known country's short form is a name in its own right: shown alone.
+  if (getCountryByName(full)) return { short, full, split: false, alone: true };
+  return { short, full, split: true, alone: false };
+}
+
+// ── Fitting a name to a narrow slot ─────────────────────────────────────────────
+// Measure-free: the size comes from the character counts alone. GLYPH_EM is a slight
+// over-estimate of an Inter glyph's average advance at weight 600, so a name judged to
+// fit really does. Two conditions: the LONGEST word fits on one line (so it never breaks
+// mid-word) and the whole name fits in `lines` lines.
+
+const GLYPH_EM = 0.58;
+
+function fitCounts(text: string): { longest: number; total: number } {
+  const t = (text ?? '').trim();
+  const longest = words(t).reduce((m, w) => Math.max(m, [...w].length), 0);
+  return { longest, total: [...t].length };
+}
+
+/** A font size in px for `text` in a slot `widthPx` wide: `basePx` when it fits, else a
+ *  half-pixel step smaller, never below `minPx` (default 75% of the base). */
+export function seatFitFontPx(
+  text: string, widthPx: number, basePx: number, opts: { minPx?: number; lines?: number } = {},
+): number {
+  const { longest, total } = fitCounts(text);
+  const min = Math.min(basePx, opts.minPx ?? basePx * 0.75);
+  if (!longest || widthPx <= 0) return basePx;
+  const lines = Math.max(1, opts.lines ?? 2);
+  const byWord = widthPx / (longest * GLYPH_EM);
+  const byLines = (widthPx * lines) / (total * GLYPH_EM);
+  const fit = Math.min(basePx, byWord, byLines);
+  return Math.max(min, Math.floor(fit * 2) / 2);
+}
+
+/** The same rule as a CSS `font-size` in container units, for a slot whose width is not
+ *  known in px (a resizable sidebar). The nearest ancestor needs `container-type: inline-size`. */
+export function seatFitFontCss(
+  text: string, basePx: number, opts: { minPx?: number; lines?: number } = {},
+): string {
+  const { longest, total } = fitCounts(text);
+  const min = Math.min(basePx, opts.minPx ?? basePx * 0.75);
+  if (!longest) return `${basePx}px`;
+  const lines = Math.max(1, opts.lines ?? 2);
+  const byWord = (100 / (longest * GLYPH_EM)).toFixed(3);
+  const byLines = ((100 * lines) / (total * GLYPH_EM)).toFixed(3);
+  return `clamp(${min}px, min(${byWord}cqi, ${byLines}cqi), ${basePx}px)`;
 }

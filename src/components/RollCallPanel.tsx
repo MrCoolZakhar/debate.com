@@ -1058,16 +1058,18 @@ function RollCallPanelInner({
                     </div>
                   )}
                 </div>
-                <div className="flex-1 min-w-0 flex flex-col">
-                  {/* A long seat (a crisis character) is two rows: the short form, the full
-                      name smaller beneath, wrapping; never cut (src/components/SeatName.tsx). */}
+                <div className="flex-1 min-w-0 flex flex-col" style={{ containerType: 'inline-size' }}>
+                  {/* A known country shows its short form alone ("USA"); a long seat (a crisis
+                      character) is two rows, the full name smaller beneath. A name still too
+                      long for the sidebar's width steps its size down (`fit`, container units,
+                      this column is the container); never cut (src/components/SeatName.tsx). */}
                   <SeatName
                     name={getCountryDisplayName(d.country, language)}
                     max={bigRoll ? 30 : sliderMode ? 14 : 18}
                     block
                     subScale={0.72}
+                    fit={{ basePx: isUpNext ? qr(19.5) : bigRoll ? 21 : sliderMode ? 15.5 : qr(17), lines: 2 }}
                     style={{
-                      fontSize: isUpNext ? qr(19.5) : bigRoll ? 21 : sliderMode ? 15.5 : qr(17),
                       fontWeight: isUpNext ? 800 : 600,
                       lineHeight: 1.2,
                       // Full brightness whatever the status: the backdrop says answered, the

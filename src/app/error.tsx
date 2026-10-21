@@ -73,22 +73,26 @@ export default function Error({
             className="rounded-full focus:outline-none"
             style={{
               padding: '12px 22px', backgroundColor: '#1B3828', color: '#EED98A',
-              fontFamily: OUTFIT, fontWeight: 800, fontSize: 13.5, letterSpacing: '0.04em',
+              fontFamily: OUTFIT, fontWeight: 700, fontSize: 13.5,
               border: 'none', cursor: 'pointer',
             }}
           >
-            TRY AGAIN
+            Try again
           </button>
-          <Link
-            href="/"
+          {/* A plain anchor, not next/link: a client navigation keeps this
+              crashed tree mounted (and is a no-op when the crash is on "/"),
+              so Go home always does a full load of the home page. */}
+          <button
+            type="button"
+            onClick={() => window.location.assign('/')}
             className="rounded-full focus:outline-none"
             style={{
               padding: '12px 22px', border: '1px solid #DDD4C0', color: '#1C1410',
-              fontFamily: OUTFIT, fontWeight: 700, fontSize: 13.5, textDecoration: 'none',
+              fontFamily: OUTFIT, fontWeight: 700, fontSize: 13.5, background: 'transparent', cursor: 'pointer',
             }}
           >
             Go home
-          </Link>
+          </button>
         </div>
 
         <p className="mt-5" style={{ color: '#5A5046', fontFamily: OUTFIT, fontSize: 13.5 }}>

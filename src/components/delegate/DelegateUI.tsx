@@ -1185,7 +1185,7 @@ export function QueueRow({
         max={14}
         style={{
           flex: 1, minWidth: 0, fontFamily: OUTFIT,
-          fontSize: (compact ? 12.5 : 13.5) - (name.length > 24 && !splitSeatName(name, { max: 14 }).split ? 1.5 : 0), fontWeight: 700, color: DG.forest,
+          fontSize: (compact ? 12.5 : 13.5) - (name.length > 24 && !splitSeatName(name, { max: 14 }).split && !splitSeatName(name, { max: 14 }).alone ? 1.5 : 0), fontWeight: 700, color: DG.forest,
           lineHeight: 1.15, hyphens: 'auto',
         }}
         subScale={0.8}

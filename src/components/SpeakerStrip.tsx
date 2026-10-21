@@ -32,10 +32,9 @@
 
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { GripHorizontal, X } from 'lucide-react';
-import { useLanguage, useT } from '@/contexts/LanguageContext';
+import { useT } from '@/contexts/LanguageContext';
 import { SeatCircleFlag } from '@/components/CircleFlag';
 import SeatName from '@/components/SeatName';
-import { splitSeatName } from '@/lib/seatName';
 
 type Entry = { delegateId: string; country: string };
 
@@ -107,7 +106,6 @@ export default function SpeakerStrip({
   formatName: (country: string) => string;
 }) {
   const t = useT();
-  const { language } = useLanguage();
   const [dragState, setDrag] = useState<Drag | null>(null);
   const dragRef = useRef<Drag | null>(null);
   const itemRefs = useRef(new Map<string, HTMLDivElement>());
@@ -309,15 +307,18 @@ export default function SpeakerStrip({
                 />
               )}
               {!isRoomOrderTdT && (
-                // A long seat is two rows: the short form, the full name smaller beneath,
-                // wrapping (src/components/SeatName.tsx). Never cut.
+                // A known country shows its short form alone ("USA"); another long seat is
+                // two rows, the full name smaller beneath (src/components/SeatName.tsx). A
+                // name still too long for the chip's width steps its size down to fit
+                // (`fit`, measure-free). Never cut.
                 <SeatName
                   name={name}
                   max={dense ? 9 : 11}
                   align="center"
                   subScale={0.8}
                   className="[hyphens:auto] whitespace-normal leading-[1.12] font-semibold text-center"
-                  style={{ color: '#1C1410', maxWidth: nameMax, fontSize: splitSeatName(name, { max: dense ? 9 : 11, language }).split ? 12 : name.length > 30 ? 10 : name.length > 18 ? 11 : 12 }}
+                  style={{ color: '#1C1410', maxWidth: nameMax }}
+                  fit={{ basePx: 12, minPx: 9, lines: 2, widthPx: nameMax }}
                 />
               )}
               {isCurrent && <span className="text-sm font-semibold" style={{ color: '#8B5A20' }}>{t('gsl_speaking')}</span>}

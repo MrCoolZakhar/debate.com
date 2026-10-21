@@ -9,15 +9,21 @@
 // it, wrapping (`overflow-wrap: anywhere`), never truncated. The short form comes from
 // `splitSeatName` (src/lib/seatName.ts), the one rule.
 //
+// A known country is the exception (owner, 21 Oct 2026): its short form ("USA", "UK",
+// "UAE", "DRC") is drawn ALONE, one row, with the full name as the title and for
+// screen readers (`alone` from `splitSeatName`).
+//
 // `className` / `style` style the name (font, colour, weight) and are applied to the
 // wrapper, so the second row inherits them and is drawn at `subScale` of the size (em).
+// `fit` steps the font size down for a name still too long for a narrow slot
+// (`seatFitFontPx` with a known width, else `seatFitFontCss` in container units).
 // Screen readers hear the full name once: the short row is aria-hidden when split.
 // Presentation only: no state, no effects, no writes.
 // ─────────────────────────────────────────────────────────────────────────────
 
 import type { CSSProperties } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
-import { splitSeatName, SEAT_NAME_MAX } from '@/lib/seatName';
+import { splitSeatName, seatFitFontCss, seatFitFontPx, SEAT_NAME_MAX } from '@/lib/seatName';
 
 export default function SeatName({
   name,
@@ -31,6 +37,7 @@ export default function SeatName({
   align = 'start',
   block = false,
   title,
+  fit,
 }: {
   /** The name as the surface shows it (already localized). */
   name: string;
@@ -47,16 +54,36 @@ export default function SeatName({
   align?: 'start' | 'center' | 'end';
   /** A block-level box (fills its line) instead of an inline one. */
   block?: boolean;
-  /** Tooltip; defaults to the full name when split. */
+  /** Tooltip; defaults to the full name when split or shortened. */
   title?: string;
+  /** Shrink the font a step for a long name in a narrow slot. With `widthPx` the size is
+   *  computed in px; without it, in container units (an ancestor needs
+   *  `container-type: inline-size`). Overrides any fontSize in `style`. */
+  fit?: { basePx: number; minPx?: number; lines?: number; widthPx?: number };
 }) {
   const { language } = useLanguage();
   const parts = splitSeatName(name, { max, language });
   const wrap: CSSProperties = { overflowWrap: 'anywhere' };
+  const fitSize: CSSProperties | undefined = fit
+    ? {
+      fontSize: fit.widthPx
+        ? seatFitFontPx(parts.short, fit.widthPx, fit.basePx, fit)
+        : seatFitFontCss(parts.short, fit.basePx, fit),
+    }
+    : undefined;
+
+  if (parts.alone) {
+    return (
+      <span className={className} style={{ ...wrap, ...style, ...fitSize }} title={title ?? parts.full}>
+        <span aria-hidden>{parts.short}</span>
+        <span className="sr-only">{parts.full}</span>
+      </span>
+    );
+  }
 
   if (!parts.split) {
     return (
-      <span className={className} style={{ ...wrap, ...style }} title={title}>
+      <span className={className} style={{ ...wrap, ...style, ...fitSize }} title={title}>
         {parts.full}
       </span>
     );
@@ -68,6 +95,7 @@ export default function SeatName({
       style={{
         ...wrap,
         ...style,
+        ...fitSize,
         ...splitStyle,
         display: block ? 'flex' : 'inline-flex',
         flexDirection: 'column',

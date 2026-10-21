@@ -1,11 +1,8 @@
 'use client';
 
-import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { useState, useEffect, useLayoutEffect, useCallback, useMemo, useRef } from 'react';
 import Portal from '@/components/Portal';
-import { SeatFlag } from '@/components/SeatFlag';
 import type { Committee } from '@/lib/types';
-import { getCountryDisplayName } from '@/lib/countries';
-import { getScoringConfig } from '@/lib/scoring';
 import { docName } from '@/lib/docNames';
 import { useT, useLanguage } from '@/contexts/LanguageContext';
 
@@ -15,12 +12,14 @@ interface Props {
   onStepId?: (id: string) => void;
 }
 
-type StepKind = 'questionnaire' | 'spotlight' | 'action' | 'panel' | 'goodbye';
+type StepKind = 'questionnaire' | 'spotlight' | 'action' | 'goodbye';
 
 interface TutorialStep {
   id: string;
   kind: StepKind;
   otterImage: string;
+  /** Optional short title above the text (one line, plain). */
+  title?: React.ReactNode;
   bubbleText: React.ReactNode;
   // Array of data-tutorial values, all light up simultaneously
   spotlightTargets?: string[];
@@ -219,9 +218,25 @@ function getSteps(language: string, docs: DocLabels): TutorialStep[] {
       }),
     },
     {
-      id: 'scoreboard', kind: 'panel',
+      // 21 Oct 2026 (owner): the old full-page scoreboard explainer was too long. Now a
+      // step like every other: the trophy lit, one short title, one plain line.
+      id: 'scoreboard', kind: 'spotlight',
       otterImage: '/Otter.Tutorial.webp',
-      bubbleText: '',
+      spotlightTargets: ['tab-scoreboard'], spotlightRadius: 12,
+      title: pick(language, {
+        ar: 'لوحة النقاط',
+        fr: 'Tableau des scores',
+        es: 'Marcador',
+        pt: 'Placar',
+        en: 'Scoreboard',
+      }),
+      bubbleText: pick(language, {
+        ar: <>كل الوفود مرتّبة لحظياً، والنقاط تُحتسب تلقائياً. غيّر ما يمنح النقاط من {GR('الإعدادات ← النقاط')}.</>,
+        fr: <>Toutes les délégations, classées en direct, et les points s&apos;ajoutent tout seuls. Choisissez ce qui rapporte des points dans {GR('Paramètres → Points')}.</>,
+        es: <>Todas las delegaciones, clasificadas en vivo, y los puntos se suman solos. Elige qué da puntos en {GR('Configuración → Puntos')}.</>,
+        pt: <>Todas as delegações, classificadas ao vivo, e os pontos entram sozinhos. Escolha o que vale pontos em {GR('Configurações → Pontos')}.</>,
+        en: <>Every delegation, ranked live, and the points add up on their own. Choose what earns points in {GR('Settings → Points')}.</>,
+      }),
     },
     {
       id: 'join-code', kind: 'spotlight',
@@ -291,9 +306,14 @@ function toDesign(rect: DOMRect, box: DesignBox): Rect {
 // frame, so the mask and its holes can never disagree by a frame. Also listens for
 // scroll (capture phase, to catch scrolling containers) and resize, as required for
 // any floating layer in this codebase.
+//
+// `avoid` is measured alongside: the chair's whole top bar, which the step's callout
+// must never sit on (it would cover the tab or icon being explained, or its neighbours).
+const AVOID_TARGETS = ['topbar'];
+
 function useSpotlight(targets: string[] = []) {
   const key = targets.join(',');
-  const [state, setState] = useState<{ box: DesignBox; rects: (Rect | null)[] }>({ box: IDENTITY, rects: [] });
+  const [state, setState] = useState<{ box: DesignBox; rects: (Rect | null)[]; avoid: Rect[] }>({ box: IDENTITY, rects: [], avoid: [] });
   const sigRef = useRef('');
 
   useEffect(() => {
@@ -313,7 +333,7 @@ function useSpotlight(targets: string[] = []) {
       }
       last = now;
       const box = measureBox();
-      const rects = list.map((tName) => {
+      const measure = (tName: string): Rect | null => {
         const el = document.querySelector(`[data-tutorial="${tName}"]`);
         if (!el) return null;
         const r = el.getBoundingClientRect();
@@ -322,13 +342,16 @@ function useSpotlight(targets: string[] = []) {
         // degenerate hole.
         if (r.width <= 0 || r.height <= 0) return null;
         return toDesign(r, box);
-      });
+      };
+      const rects = list.map(measure);
+      const avoid = AVOID_TARGETS.map(measure).filter((r): r is Rect => !!r);
       // Re-render only when something actually moved: this runs every frame.
+      const sigOf = (r: Rect | null) => (r ? `${Math.round(r.left)},${Math.round(r.top)},${Math.round(r.width)},${Math.round(r.height)}` : 'x');
       const sig = `${box.w}|${box.h}|${box.scale}|${box.left}|${box.top}|` +
-        rects.map((r) => (r ? `${Math.round(r.left)},${Math.round(r.top)},${Math.round(r.width)},${Math.round(r.height)}` : 'x')).join(';');
+        rects.map(sigOf).join(';') + '|' + avoid.map(sigOf).join(';');
       if (sig !== sigRef.current) {
         sigRef.current = sig;
-        setState({ box, rects });
+        setState({ box, rects, avoid });
       }
       if (!stopped) frame = requestAnimationFrame(update);
     };
@@ -369,7 +392,7 @@ export default function TutorialOverlay({ committee, onEnd, onStepId }: Props) {
   const dirRef = useRef<1 | -1>(1);
 
   const step = STEPS[Math.min(stepIdx, STEPS.length - 1)];
-  const { box, rects: spotlightRects } = useSpotlight(step.spotlightTargets);
+  const { box, rects: spotlightRects, avoid: avoidRects } = useSpotlight(step.spotlightTargets);
   const isAction = step.kind === 'action';
   const isLast = stepIdx >= STEPS.length - 1;
 
@@ -496,23 +519,39 @@ export default function TutorialOverlay({ committee, onEnd, onStepId }: Props) {
     return (
       <Portal><div className="fixed inset-0 z-[9990] flex items-center justify-center p-4"
         style={{ background: 'rgba(27,56,40,0.88)', backdropFilter: 'blur(4px)' }}>
-        <div className="tut-scroll bg-[#F6F1E9] rounded-3xl shadow-2xl px-12 py-10 max-w-md w-full text-center flex flex-col items-center gap-6"
-          style={{ border: '2px solid rgba(27,56,40,0.2)', maxHeight: '92%', overflowY: 'auto' }}>
-          <img src="/Otter.Tutorial.Intro.webp" alt="Gavin"
-            style={{ width: 260, height: 260, objectFit: 'cover', objectPosition: 'center', borderRadius: 0, flexShrink: 0 }} />
-          <h2 className="text-3xl font-black text-[#1C1410] tracking-tight">{t('tutorial_have_you_used')}</h2>
-          <p className="text-sm text-[#9A8A78]">{t('tutorial_gavin_prepared')}</p>
-          <div className="flex gap-4 w-full">
-            <button onClick={advance}
-              className="flex-1 py-3 rounded-xl font-bold text-sm"
-              style={{ backgroundColor: '#1B3828', color: '#EED98A' }}>
-              {t('tutorial_show_me')}
-            </button>
-            <button onClick={onEnd}
-              className="flex-1 py-3 rounded-xl font-bold text-sm"
-              style={{ backgroundColor: 'rgba(27,56,40,0.08)', color: '#1B3828', border: '1.5px solid rgba(27,56,40,0.2)' }}>
-              {t('tutorial_skip')}
-            </button>
+        {/* 21 Oct 2026 (owner): a smaller card with Gavin hanging over its top edge. The
+            otter is drawn OUTSIDE the card box (this wrapper does not clip), so the card
+            keeps no space for him inside and nothing is unclipped for him. */}
+        <div role="dialog" aria-modal="true" aria-labelledby="tut-q-title"
+          className="relative w-full" style={{ maxWidth: 380, paddingTop: INTRO_OTTER.above }}>
+          <img src="/Otter.Tutorial.Intro.webp" alt="" aria-hidden draggable={false}
+            className="absolute select-none pointer-events-none"
+            style={{
+              top: 0, left: '50%', transform: 'translateX(-50%)', zIndex: 1,
+              width: INTRO_OTTER.size, height: INTRO_OTTER.size, objectFit: 'contain',
+              filter: 'drop-shadow(0 8px 14px rgba(18,42,29,0.28))',
+            }} />
+          <div className="rounded-3xl text-center flex flex-col items-center"
+            style={{
+              backgroundColor: '#FFFFFF',
+              padding: `${INTRO_OTTER.size - INTRO_OTTER.above + 14}px 24px 22px`,
+              boxShadow: '0 1px 2px rgba(27,56,40,0.10), 0 24px 60px rgba(18,42,29,0.38)',
+            }}>
+            <h2 id="tut-q-title" className="text-[22px] font-extrabold text-[#1C1410] tracking-tight leading-tight [text-wrap:balance]">
+              {t('tutorial_have_you_used')}
+            </h2>
+            <p className="mt-2 text-sm leading-relaxed text-[#6A5A4A] [text-wrap:pretty]">{t('tutorial_gavin_prepared')}</p>
+            <div className="mt-5 flex w-full flex-col gap-2 sm:flex-row-reverse">
+              <button type="button" onClick={advance}
+                className={`${PRIMARY_BTN} flex-[1.3] py-3 text-[15px]`}
+                style={PRIMARY_BTN_STYLE}>
+                {t('tutorial_show_me')}
+              </button>
+              <button type="button" onClick={onEnd}
+                className={`${SECONDARY_BTN} flex-1 py-3 text-[15px]`}>
+                {t('tutorial_skip')}
+              </button>
+            </div>
           </div>
         </div>
       </div></Portal>
@@ -594,24 +633,6 @@ export default function TutorialOverlay({ committee, onEnd, onStepId }: Props) {
     );
   }
 
-  // ── Scoreboard panel step ─────────────────────────────────────────────────
-  if (step.kind === 'panel') {
-    return (
-      <Portal>
-        {/* Padded clear of the top nav pill (top:52) and the End Tutorial button, so a
-            tall card is never overlapped by its own controls. The card's max-height is
-            100% of that already-inset content box — never vh, which would resolve
-            against the real viewport instead of fit-root's design box. */}
-        <div className="fixed inset-0 z-[9990] flex items-center justify-center px-6 pb-6"
-          style={{ background: 'rgba(27,56,40,0.80)', backdropFilter: 'blur(3px)', paddingTop: 96 }}>
-          <ScoreboardTutorialCard committee={committee} language={language} box={box} />
-        </div>
-        <EndTutorialBtn onEnd={onEnd} />
-        {nav}
-      </Portal>
-    );
-  }
-
   // ── Spotlight / Action steps ──────────────────────────────────────────────
   return (
     <Portal>
@@ -672,95 +693,33 @@ export default function TutorialOverlay({ committee, onEnd, onStepId }: Props) {
           onClick={advance} />
       )}
 
-      {/* End Tutorial, fixed, just below the h-11 (44px) top navbar */}
-      <EndTutorialBtn onEnd={onEnd} />
-      {nav}
-
-      {/* Gavin, fixed bottom-right, portrait touching bottom */}
-      {/*
-        PNG is 2000×2000 with 528px transparent top.
-        Rendered at 440×440 (fit-to-width) inside the 660px box, bottom-anchored:
-          - rendered image occupies container y[220..660] (from top)
-          - transparent top within rendered image: 528/2000 × 440 ≈ 116px
-          - first actual otter pixel: 220+116 = 336px from container top
-            = 660−336 = 324px from container bottom
-        Bubble bottom is set to 334px → lands ~10px above the first otter pixel.
-      */}
-      <div style={{
-        position: 'fixed', bottom: 0, right: -20, zIndex: 9993,
-        width: 440, height: 660,
-        pointerEvents: 'none',
-      }}>
-        {/* Portrait image, fills the container, content anchored to bottom */}
-        <img
-          src={step.otterImage} alt="Gavin"
-          style={{
-            position: 'absolute', bottom: 0, left: 0,
-            width: 440, height: 660,
-            objectFit: 'contain', objectPosition: 'bottom center',
-            display: 'block',
-          }}
-        />
-
-        {/* Speech bubble, pinned just above first otter pixel. Capped and scrollable
-            so a long localised string can never grow past the top of the screen. */}
-        {step.bubbleText && (
-          <div style={{
-            position: 'absolute', bottom: 334, left: 0, right: 0,
-            display: 'flex', flexDirection: 'column', alignItems: 'center',
-          }}>
-            <div className="tut-scroll" style={{
-              padding: '14px 20px', borderRadius: 16, fontSize: 14, fontWeight: 500,
-              lineHeight: 1.45, color: '#1C1410', textAlign: 'center',
-              backgroundColor: '#FAF8F3', border: '1.5px solid rgba(27,56,40,0.18)',
-              boxShadow: '0 4px 20px rgba(0,0,0,0.15)', maxWidth: 380,
-              maxHeight: 260, overflowY: 'auto', overscrollBehavior: 'contain',
-              pointerEvents: 'auto',
-            }}>
-              {step.bubbleText}
-            </div>
-            {/* Bubble tail pointing down toward otter */}
-            <div style={{
-              width: 14, height: 14, marginTop: -1,
-              backgroundColor: '#FAF8F3',
-              borderRight: '1.5px solid rgba(27,56,40,0.18)',
-              borderBottom: '1.5px solid rgba(27,56,40,0.18)',
-              transform: 'rotate(45deg)',
-            }} />
-          </div>
-        )}
-      </div>
+      {/* The step's callout: Gavin, the words, End / Back / Next in ONE card, placed
+          beside the lit target and never on it or on the top bar (placeCallout). */}
+      <TutorialCallout
+        stepId={step.id}
+        otterImage={step.otterImage}
+        title={step.title}
+        text={step.bubbleText}
+        targets={spotlightRects.filter((x): x is Rect => !!x)}
+        avoid={avoidRects}
+        box={box}
+        idx={stepIdx}
+        total={STEPS.length}
+        isAction={isAction}
+        isLast={isLast}
+        language={language}
+        onBack={goBack}
+        onNext={isLast ? onEnd : advance}
+        onEnd={onEnd}
+      />
     </Portal>
   );
 }
 
 // ─── Sub-components ──────────────────────────────────────────────────────────
 
-function EndTutorialBtn({ onEnd }: { onEnd: () => void }) {
-  const t = useT();
-  return (
-    <button
-      onClick={onEnd}
-      style={{
-        position: 'fixed', top: 52, right: 16, zIndex: 9999,
-        padding: '7px 14px', borderRadius: 10, fontWeight: 700, fontSize: 13,
-        backgroundColor: '#1B3828', color: '#EED98A',
-        border: 'none', cursor: 'pointer',
-        boxShadow: '0 2px 8px rgba(0,0,0,0.25)',
-        whiteSpace: 'nowrap',
-      }}
-      onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
-      onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
-    >
-      {t('tutorial_end')}
-    </button>
-  );
-}
-
-// Back / counter / Next. Sits top-centre, opposite End Tutorial, clear of every
-// spotlight target (bottom bar, sidebar, centre column, tab row).
-// On an action step Next reads "Skip" — the chair must always be able to leave a
-// step they cannot complete (Commenter, below quorum, too few delegates).
+// Back / counter / Next, top-centre: the goodbye slide only (nothing is lit there).
+// Every other step carries its own Back / Next inside its callout (TutorialCallout).
 function TutorialNav({
   idx, total, onBack, onNext, isAction, isLast, language,
 }: {
@@ -812,458 +771,218 @@ function TutorialNav({
   );
 }
 
-// ─── Hover explainer ─────────────────────────────────────────────────────────
-// Informational affordance: reveals on HOVER and on FOCUS, never on click, with a
-// short close delay so the pointer can travel into the panel. Portalled at fixed
-// coordinates so the scrolling card body can never clip it, and flipped/clamped so
-// it can never leave the screen.
-function HoverInfo({ text, box }: { text: string; box: DesignBox }) {
-  const ref = useRef<HTMLSpanElement>(null);
-  const [pos, setPos] = useState<{ left: number; top: number; flip: boolean } | null>(null);
-  const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const W = 260;
-  const place = useCallback(() => {
-    const el = ref.current;
-    if (!el) return;
-    const rect = toDesign(el.getBoundingClientRect(), box);
-    // Clamp horizontally so the card always stays inside the design box.
-    const left = Math.max(8, Math.min(rect.left + rect.width / 2 - W / 2, box.w - W - 8));
-    // Flip above the trigger when there is not enough room below.
-    const flip = rect.top + rect.height + 130 > box.h;
-    const top = flip ? rect.top - 8 : rect.top + rect.height + 8;
-    setPos({ left, top, flip });
-  }, [box]);
+// ─── Buttons ─────────────────────────────────────────────────────────────────
+// The Airbnb rounded rectangle with the forest gradient for the one main action, a
+// quiet tinted secondary beside it; both sentence case, both press down a touch.
+const PRIMARY_BTN =
+  'inline-flex items-center justify-center rounded-xl font-semibold whitespace-nowrap cursor-pointer select-none ' +
+  'transition-[transform,filter] duration-150 ease-out hover:brightness-110 active:scale-[0.97] ' +
+  'focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] focus-visible:ring-offset-2 motion-reduce:transition-none';
+const PRIMARY_BTN_STYLE: React.CSSProperties = {
+  backgroundImage: 'linear-gradient(135deg, #2E6446 0%, #1F4230 42%, #1B3828 62%, #122A1D 100%)',
+  color: '#FFFFFF',
+  boxShadow: '0 1px 2px rgba(27,56,40,0.18), 0 6px 16px rgba(27,56,40,0.24)',
+};
+const SECONDARY_BTN =
+  'inline-flex items-center justify-center rounded-xl font-semibold whitespace-nowrap cursor-pointer select-none ' +
+  'bg-[rgba(27,56,40,0.06)] text-[#1B3828] hover:bg-[rgba(27,56,40,0.11)] ' +
+  'transition-[transform,background-color] duration-150 ease-out active:scale-[0.97] ' +
+  'disabled:cursor-default disabled:opacity-40 disabled:active:scale-100 ' +
+  'focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] focus-visible:ring-offset-2 motion-reduce:transition-none';
 
-  const open = () => { if (closeTimer.current) clearTimeout(closeTimer.current); place(); };
-  const close = () => {
-    if (closeTimer.current) clearTimeout(closeTimer.current);
-    closeTimer.current = setTimeout(() => setPos(null), 140);
-  };
+/** The questionnaire's Gavin (Otter.Tutorial.Intro, full body, ~10% clear at the top):
+ *  drawn `size` square, the card's top edge `above` px down, so only his feet overlap it. */
+const INTRO_OTTER = { size: 148, above: 117 };
 
-  useEffect(() => {
-    if (!pos) return;
-    const onMove = () => place();
-    window.addEventListener('scroll', onMove, true);
-    window.addEventListener('resize', onMove);
-    return () => {
-      window.removeEventListener('scroll', onMove, true);
-      window.removeEventListener('resize', onMove);
-    };
-  }, [pos, place]);
+/** The callout's Gavin (Otter.Tutorial, ~28% clear at the top): his head and shoulders
+ *  stand above the card's top edge, the rest overlaps the card's header row. */
+const CALLOUT_OTTER = { size: 84, clearTop: 24, above: 30 };
+const CALLOUT_W = 372;
 
-  useEffect(() => () => { if (closeTimer.current) clearTimeout(closeTimer.current); }, []);
+// ─── Callout placement ───────────────────────────────────────────────────────
+// Pure. Everything in fit-root design units. The callout goes beside the lit targets
+// (below, above, then the inline-end and inline-start sides, then the screen's
+// corners), first place that is fully on screen and touches neither a target nor the
+// top bar. A target inside the top bar counts as the whole bar, so the callout drops
+// below the bar instead of covering a neighbouring tab or icon. When nothing is free
+// (a tiny window) the place covering the least wins.
 
-  return (
-    <>
-      <span
-        ref={ref}
-        tabIndex={0}
-        role="note"
-        aria-label={text}
-        onMouseEnter={open}
-        onMouseLeave={close}
-        onFocus={open}
-        onBlur={close}
-        className="inline-flex items-center justify-center shrink-0 font-black select-none"
-        style={{
-          width: 14, height: 14, borderRadius: 999, fontSize: 9, cursor: 'help',
-          backgroundColor: 'rgba(27,56,40,0.10)', color: '#1B3828',
-          border: '1px solid rgba(27,56,40,0.20)', outline: 'none',
-        }}
-      >
-        i
-      </span>
-      {pos && (
-        <div
-          onMouseEnter={open}
-          onMouseLeave={close}
-          style={{
-            position: 'fixed', left: pos.left, top: pos.top, width: W, zIndex: 9998,
-            transform: pos.flip ? 'translateY(-100%)' : undefined,
-            padding: '9px 11px', borderRadius: 10,
-            backgroundColor: '#1B3828', color: '#F6F1E9',
-            fontSize: 11, lineHeight: 1.5, fontWeight: 500,
-            boxShadow: '0 8px 24px rgba(0,0,0,0.28)',
-          }}
-        >
-          {text}
-        </div>
-      )}
-    </>
-  );
+const GAP = 14;
+const EDGE = 12;
+
+function unionOf(rs: Rect[]): Rect | null {
+  if (rs.length === 0) return null;
+  const l = Math.min(...rs.map((r) => r.left));
+  const t = Math.min(...rs.map((r) => r.top));
+  const rr = Math.max(...rs.map((r) => r.left + r.width));
+  const b = Math.max(...rs.map((r) => r.top + r.height));
+  return { left: l, top: t, width: rr - l, height: b - t };
 }
 
-// ─── Scoreboard tutorial page ────────────────────────────────────────────────
+function overlapArea(a: Rect, b: Rect): number {
+  const w = Math.min(a.left + a.width, b.left + b.width) - Math.max(a.left, b.left);
+  const h = Math.min(a.top + a.height, b.top + b.height) - Math.max(a.top, b.top);
+  return w > 0 && h > 0 ? w * h : 0;
+}
 
-const SB_COPY = {
-  en: {
-    title: 'Scoreboard',
-    kicker: 'The trophy in your top bar',
-    lead: 'Every delegation, ranked live. Open it any time from the trophy icon, drill into a delegation to see exactly where each point came from, or hit Export CSV for the whole ledger.',
-    earnHead: 'Points land on their own',
-    earnFoot: 'Speaking time is counted per full 10 seconds on top of the speech itself. You can also award or deduct points by hand from a delegation drill-in; a reason is optional, and whatever you write stays in the ledger.',
-    awardsFoot: 'At a conference this record is your evidence for awards: the slate itself is decided on your conference page.',
-    earnEmpty: 'Every point source is switched off in this committee, so the ranking is quality only.',
-    tuneHead: 'Make the numbers yours',
-    tuneWhere: 'Settings → Points',
-    tune1: 'Change any point value, or switch a source off entirely.',
-    tune2: 'Rename, add or remove the quality factors Commenters rate, and set the rating scale.',
-    tune3: 'Ranking blend decides how much those quality ratings move the headline number.',
-    blendInfo: 'The headline score is the objective point total blended with the 0–100 quality score from Commenter ratings. At 0% the ranking is pure points; at 100% it is pure quality.',
-    blendNow: (n: number) => n === 0
-      ? 'Currently 0%. Quality ratings are recorded but do not move the ranking.'
-      : `Currently ${n}%. Quality ratings carry ${n}% of the headline score.`,
-    coHead: 'Commenters write the feedback',
-    coBody: 'One chair is the Moderator and holds the gavel (the committee creator by default; any chair can take it from the gavel chip at the top-right of the session). Every other chair with the same chair password is a Commenter, and their centre column becomes the feedback dock below.',
-    coBody2: 'They type a private note on whoever holds the floor and rate them on your quality factors. Notes surface under that speech in the scoreboard drill-in and in the CSV export; the ratings feed the quality score.',
-    mockCap: 'What a Commenter sees',
-    mockLive: 'Now speaking',
-    mockNote: 'Strong framing, cited the 2019 protocol directly.',
-    mockNext: 'Held the bloc together through the unmod.',
-    mockPlaceholder: 'Private note…',
-    pts: 'pts',
-  },
-  es: {
-    title: 'Marcador',
-    kicker: 'El trofeo de la barra superior',
-    lead: 'Todas las delegaciones, clasificadas en vivo. Ábrelo cuando quieras desde el trofeo, entra en una delegación para ver de dónde salió cada punto, o usa Export CSV para llevarte todo el registro.',
-    earnHead: 'Los puntos se otorgan solos',
-    earnFoot: 'El tiempo de palabra suma por cada 10 segundos completos, además del discurso en sí. También puedes otorgar o descontar puntos a mano desde la ficha de una delegación; el motivo es opcional, y lo que escribas queda en el registro.',
-    awardsFoot: 'En una conferencia, este registro es tu evidencia para los premios: la lista de premiados se decide en tu página de la conferencia.',
-    earnEmpty: 'Todas las fuentes de puntos están desactivadas en este comité, así que la clasificación es solo cualitativa.',
-    tuneHead: 'Ajusta los números a tu comité',
-    tuneWhere: 'Configuración → Puntos',
-    tune1: 'Cambia cualquier valor o desactiva una fuente por completo.',
-    tune2: 'Renombra, añade o quita los factores de calidad que valoran los comentaristas, y fija la escala.',
-    tune3: 'La mezcla de clasificación decide cuánto pesan esas calificaciones en el número final.',
-    blendInfo: 'El puntaje final mezcla el total objetivo de puntos con el puntaje de calidad de 0 a 100 que dan los comentaristas. En 0% la clasificación es puro punto; en 100% es pura calidad.',
-    blendNow: (n: number) => n === 0
-      ? 'Ahora en 0%: las calificaciones se guardan pero no mueven la clasificación.'
-      : `Ahora en ${n}%: las calificaciones pesan ${n}% del puntaje final.`,
-    coHead: 'Los comentaristas escriben la retroalimentación',
-    coBody: 'Una presidencia es el moderador y tiene el mazo (quien creó el comité por defecto; cualquier presidencia puede tomarlo desde la insignia del mazo, arriba a la derecha de la sesión). El resto de presidencias con el mismo código son comentaristas, y su columna central se convierte en el panel de retroalimentación de abajo.',
-    coBody2: 'Escriben una nota privada sobre quien tiene la palabra y lo califican en tus factores de calidad. Las notas aparecen bajo ese discurso en el marcador y en el CSV; las calificaciones alimentan el puntaje de calidad.',
-    mockCap: 'Lo que ve un comentarista',
-    mockLive: 'Hablando ahora',
-    mockNote: 'Buen encuadre, citó el protocolo de 2019 directamente.',
-    mockNext: 'Mantuvo unido al bloque durante el cáucus.',
-    mockPlaceholder: 'Nota privada…',
-    pts: 'pts',
-  },
-  fr: {
-    title: 'Tableau des scores',
-    kicker: 'Le trophée de la barre du haut',
-    lead: 'Toutes les délégations, classées en direct. Ouvrez-le à tout moment depuis le trophée, entrez dans une délégation pour voir d’où vient chaque point, ou faites Export CSV pour récupérer tout le registre.',
-    earnHead: 'Les points tombent tout seuls',
-    earnFoot: 'Le temps de parole compte par tranche de 10 secondes pleines, en plus du discours lui-même. Vous pouvez aussi attribuer ou retirer des points à la main depuis la fiche d’une délégation ; le motif est facultatif, et ce que vous écrivez reste au registre.',
-    awardsFoot: 'Lors d’une conférence, ce registre est votre référence pour les prix : la liste des lauréats se décide sur votre page de conférence.',
-    earnEmpty: 'Toutes les sources de points sont désactivées dans ce comité : le classement est purement qualitatif.',
-    tuneHead: 'Des chiffres à votre main',
-    tuneWhere: 'Paramètres → Points',
-    tune1: 'Changez n’importe quelle valeur, ou désactivez complètement une source.',
-    tune2: 'Renommez, ajoutez ou retirez les facteurs de qualité notés par les commentateurs, et réglez l’échelle.',
-    tune3: 'Le mélange du classement décide du poids de ces notes dans le chiffre final.',
-    blendInfo: 'Le score final mélange le total objectif de points et le score de qualité de 0 à 100 issu des évaluations des commentateurs. À 0 %, le classement est purement chiffré ; à 100 %, purement qualitatif.',
-    blendNow: (n: number) => n === 0
-      ? 'Actuellement 0 % : les notes de qualité sont enregistrées mais ne bougent pas le classement.'
-      : `Actuellement ${n} % : les notes de qualité pèsent ${n} % du score final.`,
-    coHead: 'Les commentateurs écrivent les retours',
-    coBody: 'Une présidence est le modérateur et tient le maillet (celle qui a créé le comité par défaut ; n’importe quelle présidence peut le prendre depuis la pastille du maillet, en haut à droite de la session). Toutes les autres présidences sur le même code sont commentatrices, et leur colonne centrale devient le dock de retours ci-dessous.',
-    coBody2: 'Elles écrivent une note privée sur qui a la parole et la notent sur vos facteurs de qualité. Les notes apparaissent sous ce discours dans le tableau des scores et dans l’export CSV ; les notes alimentent le score de qualité.',
-    mockCap: 'Ce que voit un commentateur',
-    mockLive: 'Parle en ce moment',
-    mockNote: 'Cadrage solide, a cité le protocole de 2019 directement.',
-    mockNext: 'A tenu le bloc pendant tout le caucus.',
-    mockPlaceholder: 'Note privée…',
-    pts: 'pts',
-  },
-  ar: {
-    title: 'لوحة النقاط',
-    kicker: 'الكأس في الشريط العلوي',
-    lead: 'كل الوفود مرتّبة لحظياً. افتحها متى شئت من أيقونة الكأس، وادخل على أي وفد لترى مصدر كل نقطة، أو اضغط Export CSV لتصدير السجل كاملاً.',
-    earnHead: 'النقاط تُحتسب تلقائياً',
-    earnFoot: 'يُحتسب وقت الكلام عن كل 10 ثوانٍ كاملة إضافةً إلى الخطاب نفسه. ويمكنك أيضاً منح أو خصم النقاط يدوياً من صفحة الوفد، والسبب اختياري، وما تكتبه يبقى في السجل.',
-    awardsFoot: 'في المؤتمر يكون هذا السجل دليلك عند منح الجوائز: أما قائمة الفائزين فتُحدَّد في صفحة مؤتمرك.',
-    earnEmpty: 'كل مصادر النقاط معطّلة في هذه اللجنة، لذا يعتمد الترتيب على التقييم النوعي فقط.',
-    tuneHead: 'اضبط الأرقام كما تشاء',
-    tuneWhere: 'الإعدادات ← النقاط',
-    tune1: 'غيّر أي قيمة، أو عطّل أي مصدر تماماً.',
-    tune2: 'أعد تسمية عوامل الجودة التي يقيّمها المعلّقون أو أضفها أو احذفها، واضبط سلّم التقييم.',
-    tune3: 'مزج الترتيب يحدّد مقدار تأثير تلك التقييمات في الرقم النهائي.',
-    blendInfo: 'الرقم النهائي هو مزيج من مجموع النقاط الموضوعي ودرجة الجودة من 0 إلى 100 المستمدة من تقييمات المعلّقين. عند 0% يكون الترتيب بالنقاط فقط، وعند 100% بالجودة فقط.',
-    blendNow: (n: number) => n === 0
-      ? 'القيمة الحالية 0%. تُسجَّل تقييمات الجودة لكنها لا تؤثر في الترتيب.'
-      : `القيمة الحالية ${n}%. تشكّل تقييمات الجودة ${n}% من الرقم النهائي.`,
-    coHead: 'المعلّقون يكتبون الملاحظات',
-    coBody: 'رئيس واحد هو المشرف ويمسك المطرقة (منشئ اللجنة افتراضياً، ويمكن لأي رئيس أخذها من شارة المطرقة في أعلى يمين الجلسة). أما بقية الرؤساء على رمز الرئاسة نفسه فهم معلّقون، ويتحوّل عمودهم الأوسط إلى لوحة الملاحظات أدناه.',
-    coBody2: 'يكتبون ملاحظة خاصة عن صاحب الكلمة ويقيّمونه وفق عوامل الجودة لديك. تظهر الملاحظات تحت ذلك الخطاب في لوحة النقاط وفي ملف CSV، وتغذّي التقييمات درجة الجودة.',
-    mockCap: 'ما يراه المعلّق',
-    mockLive: 'يتحدث الآن',
-    mockNote: 'طرح قوي، واستشهد ببروتوكول 2019 مباشرة.',
-    mockNext: 'حافظ على تماسك الكتلة طوال الحوار الحر.',
-    mockPlaceholder: 'ملاحظة خاصة…',
-    pts: 'نقطة',
-  },
-  pt: {
-    title: 'Placar',
-    kicker: 'O troféu na sua barra superior',
-    lead: 'Todas as delegações, classificadas ao vivo. Abra quando quiser pelo ícone do troféu, entre em uma delegação para ver de onde veio cada ponto, ou use Baixar registro para levar o registro completo.',
-    earnHead: 'Os pontos entram sozinhos',
-    earnFoot: 'O tempo de fala conta a cada 10 segundos completos, além do próprio discurso. Você também pode dar ou tirar pontos à mão na ficha de uma delegação; o motivo é opcional, e o que você escrever fica no registro.',
-    awardsFoot: 'Em uma conferência, este registro é a sua evidência para as premiações: a lista de premiados é decidida na página da sua conferência.',
-    earnEmpty: 'Todas as fontes de pontos estão desativadas neste comitê, então a classificação é só pela qualidade.',
-    tuneHead: 'Ajuste os números ao seu comitê',
-    tuneWhere: 'Configurações → Pontos',
-    tune1: 'Mude qualquer valor de pontos, ou desative uma fonte por completo.',
-    tune2: 'Renomeie, adicione ou remova os critérios de qualidade que os Comentaristas avaliam, e defina a escala de notas.',
-    tune3: 'A mistura da classificação decide quanto essas notas de qualidade pesam no número principal.',
-    blendInfo: 'A pontuação principal mistura o total objetivo de pontos com a nota de qualidade de 0 a 100 dada pelos Comentaristas. Em 0% a classificação é só por pontos; em 100%, só por qualidade.',
-    blendNow: (n: number) => n === 0
-      ? 'Agora em 0%. As notas de qualidade são registradas, mas não mexem na classificação.'
-      : `Agora em ${n}%. As notas de qualidade valem ${n}% da pontuação principal.`,
-    coHead: 'Os Comentaristas escrevem o feedback',
-    coBody: 'Um membro da Mesa é o Moderador e fica com o martelo (por padrão, quem criou o comitê; qualquer membro da Mesa pode pegá-lo pelo selo do martelo, no canto superior direito da sessão). Os demais membros da Mesa com o mesmo código são Comentaristas, e a coluna central deles vira o painel de feedback abaixo.',
-    coBody2: 'Eles escrevem uma anotação privada sobre a delegação com a palavra e a avaliam nos seus critérios de qualidade. As anotações aparecem sob esse discurso no placar e no registro baixado; as notas alimentam a pontuação de qualidade.',
-    mockCap: 'O que um Comentarista vê',
-    mockLive: 'Com a palavra',
-    mockNote: 'Bom enquadramento, citou o protocolo de 2019 diretamente.',
-    mockNext: 'Manteve o bloco unido durante o debate não moderado.',
-    mockPlaceholder: 'Anotação privada…',
-    pts: 'pts',
-  },
-};
+function placeCallout(
+  size: { w: number; h: number }, targets: Rect[], avoid: Rect[], vw: number, vh: number, rtl: boolean,
+): { left: number; top: number } {
+  const { w: W, h: H } = size;
+  const clampX = (x: number) => Math.max(EDGE, Math.min(x, vw - W - EDGE));
+  const clampY = (y: number) => Math.max(EDGE, Math.min(y, vh - H - EDGE));
+  const belowBar = Math.max(EDGE, ...avoid.map((r) => r.top + r.height + GAP));
+  const t = unionOf(targets);
+  if (!t) return { left: clampX((vw - W) / 2), top: clampY(Math.max(belowBar, (vh - H) / 2)) };
 
-function ScoreboardTutorialCard({ committee, language, box }: {
-  committee: Committee; language: string; box: DesignBox;
+  let a = t;
+  for (const o of avoid) if (overlapArea(t, o) > 0) a = unionOf([a, o]) ?? a;
+  const cx = t.left + t.width / 2 - W / 2;
+  const cy = t.top + t.height / 2 - H / 2;
+  const endSide = { left: a.left + a.width + GAP, top: clampY(cy) };
+  const startSide = { left: a.left - GAP - W, top: clampY(cy) };
+  const candidates = [
+    { left: clampX(cx), top: a.top + a.height + GAP },
+    { left: clampX(cx), top: a.top - GAP - H },
+    rtl ? startSide : endSide,
+    rtl ? endSide : startSide,
+    { left: vw - W - EDGE, top: vh - H - EDGE },
+    { left: EDGE, top: vh - H - EDGE },
+    { left: vw - W - EDGE, top: belowBar },
+    { left: EDGE, top: belowBar },
+  ];
+  const obstacles = [...targets, ...avoid];
+  const onScreen = (c: { left: number; top: number }) =>
+    c.left >= EDGE - 0.5 && c.top >= EDGE - 0.5 && c.left + W <= vw - EDGE + 0.5 && c.top + H <= vh - EDGE + 0.5;
+  const cost = (c: { left: number; top: number }) =>
+    obstacles.reduce((sum, o) => sum + overlapArea({ left: c.left, top: c.top, width: W, height: H }, o), 0);
+
+  for (const c of candidates) if (onScreen(c) && cost(c) === 0) return c;
+  let best = { left: clampX(candidates[0].left), top: clampY(candidates[0].top) };
+  let bestCost = Infinity;
+  for (const c of candidates) {
+    const k = { left: clampX(c.left), top: clampY(c.top) };
+    const kc = cost(k);
+    if (kc < bestCost) { best = k; bestCost = kc; }
+  }
+  return best;
+}
+
+// ─── The callout ─────────────────────────────────────────────────────────────
+// One white card: Gavin standing on its top edge, the step counter and End tutorial,
+// the step's words, then Back and Next. Measured once per size change (ResizeObserver,
+// layout px = design units inside fit-root) and placed by `placeCallout`; hidden until
+// its first measurement so it never flashes in the wrong place.
+function TutorialCallout({
+  stepId, otterImage, title, text, targets, avoid, box, idx, total, isAction, isLast, language,
+  onBack, onNext, onEnd,
+}: {
+  stepId: string; otterImage: string; title?: React.ReactNode; text: React.ReactNode;
+  targets: Rect[]; avoid: Rect[]; box: DesignBox;
+  idx: number; total: number; isAction: boolean; isLast: boolean; language: string;
+  onBack: () => void; onNext: () => void; onEnd: () => void;
 }) {
-  const c = pick(language, SB_COPY);
-  // Read the committee's REAL scoring config so every number on this page is the
-  // chair's own, not an invented example.
-  const cfg = getScoringConfig(committee);
-  const sources = cfg.sources.filter((s) => s.enabled);
-  const factors = cfg.factors.filter((f) => f.enabled).slice(0, 4);
-  const blend = cfg.scoreBlend;
+  const t = useT();
+  const ref = useRef<HTMLDivElement>(null);
+  const [size, setSize] = useState<{ w: number; h: number } | null>(null);
 
-  // Real delegations for the mock, falling back to nothing rather than fiction.
-  const sample = committee.delegates.slice(0, 2);
-  const live = sample[0]?.country ?? '';
-  const next = sample[1]?.country ?? '';
-  const nameOf = (country: string) => (country ? getCountryDisplayName(country, language) : '');
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const read = () => {
+      const w = el.offsetWidth;
+      const h = el.offsetHeight;
+      setSize((prev) => (prev && prev.w === w && prev.h === h ? prev : { w, h }));
+    };
+    read();
+    const ro = new ResizeObserver(read);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [stepId]);
 
-  const H: React.CSSProperties = {
-    fontSize: 11, fontWeight: 800, letterSpacing: '0.06em', textTransform: 'uppercase', color: '#1B3828',
-  };
-  const P: React.CSSProperties = { fontSize: 12.5, lineHeight: 1.55, color: '#6A5A4A' };
+  const rtl = typeof document !== 'undefined' && document.documentElement.dir === 'rtl';
+  const pos = size && box.w > 0 ? placeCallout(size, targets, avoid, box.w, box.h, rtl) : null;
+
+  const nextLabel = isLast
+    ? pick(language, { en: 'Finish', es: 'Terminar', fr: 'Terminer', ar: 'إنهاء', pt: 'Concluir' })
+    : isAction
+      ? pick(language, { en: 'Skip', es: 'Omitir', fr: 'Passer', ar: 'تخطٍّ', pt: 'Pular' })
+      : pick(language, { en: 'Next', es: 'Siguiente', fr: 'Suivant', ar: 'التالي', pt: 'Próximo' });
+  const backLabel = pick(language, { en: 'Back', es: 'Atrás', fr: 'Retour', ar: 'رجوع', pt: 'Voltar' });
 
   return (
     <div
-      className="w-full rounded-2xl overflow-hidden flex flex-col"
+      ref={ref}
+      role="dialog"
+      aria-live="polite"
+      aria-label={typeof title === 'string' ? title : undefined}
       style={{
-        maxWidth: 760, maxHeight: '100%',
-        backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0',
-        boxShadow: '0 32px 80px rgba(27,56,40,0.40)',
-        fontFamily: "'Poppins',var(--font-brand), sans-serif",
+        position: 'fixed', zIndex: 9995, left: 0, top: 0,
+        transform: `translate(${Math.round(pos?.left ?? 0)}px, ${Math.round(pos?.top ?? 0)}px)`,
+        width: Math.min(CALLOUT_W, Math.max(240, (box.w || CALLOUT_W + 24) - 24)),
+        paddingTop: CALLOUT_OTTER.above,
+        visibility: pos ? 'visible' : 'hidden',
+        // Slides from step to step on the compositor (transform only).
+        transition: pos ? 'transform 240ms cubic-bezier(0.2,0,0,1)' : undefined,
+        pointerEvents: 'auto',
       }}
+      onClick={(e) => e.stopPropagation()}
     >
-      {/* Header — mirrors the real ScoreboardPanel header so it is recognisable */}
-      <div className="px-5 py-3 flex items-center gap-3 shrink-0" style={{ backgroundColor: '#1B3828' }}>
-        <div className="w-1 h-4 rounded-full shrink-0" style={{ backgroundColor: '#EED98A' }} />
-        <span className="text-sm font-black tracking-wide" style={{ color: '#EED98A' }}>{c.title}</span>
-        <span className="text-[11px] ms-auto truncate" style={{ color: 'rgba(246,241,233,0.62)' }}>{c.kicker}</span>
-      </div>
+      <img
+        key={otterImage}
+        src={otterImage} alt="" aria-hidden draggable={false}
+        className="absolute select-none pointer-events-none"
+        style={{
+          top: -CALLOUT_OTTER.clearTop, insetInlineStart: 6, zIndex: 1,
+          width: CALLOUT_OTTER.size, height: CALLOUT_OTTER.size, objectFit: 'contain',
+          filter: 'drop-shadow(0 6px 10px rgba(18,42,29,0.22))',
+        }}
+      />
+      <div
+        style={{
+          borderRadius: 18, backgroundColor: '#FFFFFF', padding: '10px 14px 14px',
+          boxShadow: '0 1px 2px rgba(27,56,40,0.10), 0 14px 36px rgba(18,42,29,0.26)',
+        }}
+      >
+        {/* Header row: kept clear for Gavin's body at the inline start. */}
+        <div className="flex items-center gap-2" style={{ minHeight: 30, paddingInlineStart: CALLOUT_OTTER.size - 4 }}>
+          <span className="tabular-nums" style={{ fontSize: 12, fontWeight: 600, color: '#6A5A4A' }}>
+            {idx + 1}/{total}
+          </span>
+          <button
+            type="button"
+            onClick={onEnd}
+            className="ms-auto rounded-lg px-2 py-1 cursor-pointer transition-[background-color,transform] duration-150 hover:bg-[rgba(27,56,40,0.06)] active:scale-[0.97] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F]"
+            style={{ fontSize: 12.5, fontWeight: 600, color: '#6A5A4A' }}
+          >
+            {t('tutorial_end')}
+          </button>
+        </div>
 
-      {/* Body */}
-      <div className="tut-scroll flex-1 min-h-0 overflow-y-auto px-5 py-4" style={{ overscrollBehavior: 'contain' }}>
-        <p style={{ ...P, marginBottom: 16 }}>{c.lead}</p>
-
-        {/* ── How points are earned ── */}
-        <div style={H}>{c.earnHead}</div>
-        {sources.length > 0 ? (
-          <div className="flex flex-wrap gap-1.5 mt-2">
-            {sources.map((s) => (
-              <span key={s.id} className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1"
-                style={{ border: '1px solid #DDD4C0', backgroundColor: '#FFFFFF' }}>
-                <span style={{ fontSize: 11.5, color: '#1C1410' }}>{s.name}</span>
-                <span className="font-mono font-bold" style={{ fontSize: 11, color: '#1B3828' }}>
-                  {s.value > 0 ? '+' : ''}{s.value}
-                </span>
-              </span>
-            ))}
-          </div>
-        ) : (
-          <p style={{ ...P, marginTop: 6 }}>{c.earnEmpty}</p>
-        )}
-        <p style={{ ...P, marginTop: 8 }}>{c.earnFoot}</p>
-        {/* Generic on purpose: the tutorial does not know the session origin, and this only
-            says where awards are decided — it hosts no award UI. */}
-        <p style={{ ...P, marginTop: 6 }}>{c.awardsFoot}</p>
-
-        {/* ── Customisation ── */}
-        <div className="mt-5 pt-4" style={{ borderTop: '1px solid #DDD4C0' }}>
-          <div className="flex items-center gap-2 flex-wrap">
-            <span style={H}>{c.tuneHead}</span>
-            <span className="rounded-md px-1.5 py-0.5 font-bold" style={{ fontSize: 10, backgroundColor: 'rgba(27,56,40,0.08)', color: '#1B3828' }}>
-              {c.tuneWhere}
-            </span>
-          </div>
-          <ul className="mt-2 space-y-1.5" style={{ listStyle: 'none', padding: 0, margin: 0 }}>
-            {[c.tune1, c.tune2, c.tune3].map((line, i) => (
-              <li key={i} className="flex gap-2" style={P}>
-                <span aria-hidden style={{ color: '#B6871F', fontWeight: 900, lineHeight: 1.55 }}>·</span>
-                <span className="flex-1">
-                  {line}
-                  {i === 2 && (
-                    <>
-                      {' '}
-                      <HoverInfo text={c.blendInfo} box={box} />
-                      <span className="block mt-0.5 font-semibold" style={{ fontSize: 11.5, color: '#1B3828' }}>
-                        {c.blendNow(blend)}
-                      </span>
-                    </>
-                  )}
-                </span>
-              </li>
-            ))}
-          </ul>
-          {factors.length > 0 && (
-            <div className="flex flex-wrap gap-1.5 mt-2.5">
-              {factors.map((f) => (
-                <span key={f.id} className="rounded-full px-2 py-0.5" style={{ fontSize: 10.5, border: '1px solid #DDD4C0', backgroundColor: '#EDE7D8', color: '#6A5A4A' }}>
-                  {f.name} · 0–{Math.max(1, cfg.factorScaleMax)}
-                </span>
-              ))}
+        <div className="tut-scroll mt-2" style={{ maxHeight: 220, overflowY: 'auto', overscrollBehavior: 'contain' }}>
+          {title && (
+            <div className="[text-wrap:balance]" style={{ fontSize: 16, fontWeight: 700, lineHeight: 1.3, color: '#1C1410', marginBottom: 4 }}>
+              {title}
             </div>
           )}
+          <div className="[text-wrap:pretty]" style={{ fontSize: 14, fontWeight: 500, lineHeight: 1.5, color: '#1C1410' }}>
+            {text}
+          </div>
         </div>
 
-        {/* ── Commenter feedback + sneak peek ── */}
-        <div className="mt-5 pt-4" style={{ borderTop: '1px solid #DDD4C0' }}>
-          <div style={H}>{c.coHead}</div>
-          <p style={{ ...P, marginTop: 6 }}>{c.coBody}</p>
-          <p style={{ ...P, marginTop: 6 }}>{c.coBody2}</p>
-
-          <FeedbackDockMock
-            caption={c.mockCap}
-            liveLabel={c.mockLive}
-            placeholder={c.mockPlaceholder}
-            note={c.mockNote}
-            nextNote={c.mockNext}
-            liveName={nameOf(live)} liveCountry={live}
-            nextName={nameOf(next)} nextCountry={next}
-            factors={factors.map((f) => f.name)}
-            scaleMax={Math.max(1, cfg.factorScaleMax)}
-          />
+        <div className="mt-3 flex items-center justify-end gap-2">
+          <button type="button" onClick={onBack} disabled={idx <= 0}
+            className={`${SECONDARY_BTN} px-3.5 py-2 text-[13.5px]`}>
+            {backLabel}
+          </button>
+          <button type="button" onClick={onNext}
+            className={`${PRIMARY_BTN} px-4 py-2 text-[13.5px]`}
+            style={PRIMARY_BTN_STYLE}>
+            {nextLabel}
+          </button>
         </div>
       </div>
     </div>
-  );
-}
-
-// A miniature, non-interactive replica of FeedbackLogPanel: the focused white
-// writing bubble (radius 22, amber focus ring, private-note textarea) with its 2×2
-// factor grid, above a collapsed capsule (height 54 → 38, radius 9999, #EDE7D8)
-// carrying the note the Commenter already wrote and the ✓ scored marker. Same tokens,
-// reduced scale — so it stays true if the real panel is restyled around these values.
-function FeedbackDockMock({
-  caption, liveLabel, placeholder, note, nextNote,
-  liveName, liveCountry, nextName, nextCountry, factors, scaleMax,
-}: {
-  caption: string; liveLabel: string; placeholder: string; note: string; nextNote: string;
-  liveName: string; liveCountry: string; nextName: string; nextCountry: string;
-  factors: string[]; scaleMax: number;
-}) {
-  // Illustrative ratings, shown as proportions of the committee's own scale.
-  const demo = [0.82, 0.68, 0.9, 0.74];
-  // Reserved width of the 2×2 factor grid, mirroring FeedbackLogPanel's own GRID_COL
-  // (280 there) at this page's reduced scale. Both rows use it so the pills line up.
-  const GRID_W = 184;
-
-  const grid = (interactive: boolean) => (
-    // `minmax(0,1fr)` (not `1fr`): a grid item defaults to min-width:auto, so a long
-    // factor name like "Content & Research" would refuse to shrink and push the whole
-    // grid past the mock's padded box instead of truncating inside it.
-    <div className="grid gap-x-3 gap-y-1 shrink-0" style={{ width: GRID_W, gridTemplateColumns: 'minmax(0,1fr) minmax(0,1fr)' }}>
-      {factors.slice(0, 4).map((f, i) => {
-        const pct = demo[i % demo.length];
-        const v = Math.round(pct * scaleMax);
-        if (!interactive) {
-          return (
-            <div key={f} className="flex items-center gap-1 min-w-0">
-              <span className="truncate flex-1 min-w-0" style={{ fontSize: 8, textTransform: 'uppercase', letterSpacing: '0.04em', color: '#B8AE9C' }}>{f}</span>
-              <span className="shrink-0 font-bold" style={{ fontSize: 9, color: '#9A8A78' }}>{v}</span>
-            </div>
-          );
-        }
-        return (
-          <div key={f} className="min-w-0">
-            <div className="flex items-baseline justify-between gap-1 min-w-0">
-              <span className="truncate min-w-0 font-bold" style={{ fontSize: 8, textTransform: 'uppercase', letterSpacing: '0.04em', color: '#6A5A4A' }}>{f}</span>
-              <span className="shrink-0 font-black" style={{ fontSize: 9.5, color: '#1B3828' }}>{v}</span>
-            </div>
-            {/* Static stand-in for the real range input */}
-            <div className="relative" style={{ height: 10 }}>
-              <div className="absolute" style={{ insetInlineStart: 0, insetInlineEnd: 0, top: 4, height: 3, borderRadius: 999, backgroundColor: '#DDD4C0' }} />
-              <div className="absolute" style={{ insetInlineStart: 0, width: `${pct * 100}%`, top: 4, height: 3, borderRadius: 999, backgroundColor: '#1B3828' }} />
-              <div className="absolute" style={{ insetInlineStart: `calc(${pct * 100}% - 4px)`, top: 1, width: 9, height: 9, borderRadius: 999, backgroundColor: '#1B3828' }} />
-            </div>
-          </div>
-        );
-      })}
-    </div>
-  );
-
-  return (
-    <figure className="mt-3 mb-0 mx-0">
-      <div className="rounded-xl px-3 py-3" style={{ backgroundColor: '#EDE7D8', border: '1px solid #DDD4C0' }}>
-        {/* Focused, live writing bubble */}
-        <div className="flex items-center gap-2.5">
-          <div
-            className="flex-1 min-w-0"
-            style={{
-              borderRadius: 16, backgroundColor: '#FFFFFF',
-              border: '1px solid rgba(221,212,192,0.85)',
-              boxShadow: '0 0 0 2px #B8844A, 0 10px 26px rgba(28,20,16,0.16)',
-              padding: '8px 11px',
-            }}
-          >
-            <div className="flex items-center gap-2">
-              <span className="shrink-0 font-black" style={{ fontSize: 8.5, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#1B3828' }}>GSL</span>
-              <SeatFlag country={liveCountry} size={18} className="shrink-0" />
-              <span className="flex-1 min-w-0 [overflow-wrap:anywhere] font-bold" style={{ fontSize: 12, color: '#1C1410' }}>{liveName}</span>
-              <span className="shrink-0 font-bold" style={{ fontSize: 8.5, letterSpacing: '0.04em', textTransform: 'uppercase', color: '#B8844A' }}>{liveLabel}</span>
-            </div>
-            <div
-              className="mt-1.5 rounded-lg px-2 py-1.5"
-              style={{ backgroundColor: '#FAF8F3', border: '1px solid #EDE7D8', minHeight: 30 }}
-            >
-              <span style={{ fontSize: 10.5, color: '#1C1410' }}>{note}</span>
-              <span className="block" style={{ fontSize: 10, color: '#C8BAA8' }}>{placeholder}</span>
-            </div>
-          </div>
-          {factors.length > 0 && grid(true)}
-        </div>
-
-        {/* Collapsed capsule for the next speaker */}
-        <div className="flex items-center gap-2.5 mt-1.5">
-          <div
-            className="flex-1 min-w-0 flex items-center gap-2"
-            style={{
-              height: 38, borderRadius: 9999, backgroundColor: '#EDE7D8',
-              border: '1px solid rgba(221,212,192,0.85)',
-              boxShadow: '0 3px 12px rgba(28,20,16,0.07)',
-              padding: '0 14px', opacity: 0.72,
-            }}
-          >
-            <SeatFlag country={nextCountry} size={15} className="shrink-0" />
-            <span className="shrink-0 font-semibold" style={{ fontSize: 11, color: '#1C1410' }}>{nextName}</span>
-            <span className="flex-1 min-w-0 truncate" style={{ fontSize: 10.5, color: '#6A5A4A' }}>· {nextNote}</span>
-            <span className="shrink-0 font-black" style={{ fontSize: 11, color: '#1B3828' }}>✓</span>
-          </div>
-          {factors.length > 0 && <div className="shrink-0" style={{ width: GRID_W, opacity: 0.72 }}>{grid(false)}</div>}
-        </div>
-      </div>
-      <figcaption className="mt-1.5 text-center" style={{ fontSize: 10, color: '#9A8A78' }}>{caption}</figcaption>
-    </figure>
   );
 }
