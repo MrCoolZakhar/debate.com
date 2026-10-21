@@ -2492,9 +2492,13 @@ function OccupiedSeatChip({ alloc, onRemoveAllocation }: { alloc: AllocationRow;
     : allocateeName(alloc);
   const removable = !!onRemoveAllocation && !alloc.id.startsWith('temp-');
   return (
+    // The chip contains its content (owner, 21 Oct 2026: a two-line name used to
+    // spill past the pill's rounded ends): it grows with the name, the name is
+    // centred beside the icon, and the side padding clears the rounded ends so
+    // the text and the X always sit inside.
     <span
       className="inline-flex items-center gap-1.5 rounded-full"
-      style={{ backgroundColor: NEU.surface, boxShadow: NEU.outSm, padding: 2, paddingRight: removable ? 4 : 9 }}
+      style={{ backgroundColor: NEU.surface, boxShadow: NEU.outSm, padding: '4px 0', paddingLeft: isSociety ? 8 : 10, paddingRight: removable ? 7 : 11, minHeight: 28, maxWidth: '100%', boxSizing: 'border-box', flexShrink: 0 }}
     >
       {isSociety && <Users size={12} strokeWidth={2.4} style={{ color: NEU.deepGold, flexShrink: 0 }} />}
       {/* Both consumers of CountrySlotGrid sit inside the committee panel's
@@ -2503,7 +2507,7 @@ function OccupiedSeatChip({ alloc, onRemoveAllocation }: { alloc: AllocationRow;
           The link goes INSIDE the truncating span, not around it, so the
           clipping/max-width geometry is untouched. A delegation-owned seat has
           no user_id, so ProfileLink renders it as bare text. */}
-      <span style={{ fontFamily: OUTFIT, maxWidth: 140, minWidth: 0, paddingBlock: 1 }}>
+      <span className="flex items-center" style={{ fontFamily: OUTFIT, maxWidth: 140, minWidth: 56, flex: '0 1 auto' }}>
         {isSociety ? (
           <span style={{ display: 'block', fontSize: 12, fontWeight: 700, color: NEU.ink, overflowWrap: 'anywhere', lineHeight: 1.15 }}>
             <DelegationPopupLink societyId={alloc.society_id}>{name}</DelegationPopupLink>
@@ -2518,8 +2522,9 @@ function OccupiedSeatChip({ alloc, onRemoveAllocation }: { alloc: AllocationRow;
         <button
           onClick={e => { e.stopPropagation(); onRemoveAllocation!(alloc); }}
           title={`Deallocate ${name}`}
-          className="focus:outline-none flex-shrink-0"
-          style={{ color: NEU.muted, lineHeight: 0 }}
+          aria-label={`Deallocate ${name}`}
+          className="focus:outline-none flex-shrink-0 inline-flex items-center justify-center rounded-full"
+          style={{ color: NEU.muted, lineHeight: 0, width: 18, height: 18, padding: 0, border: 'none', background: 'transparent' }}
           onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = '#8B2020'; }}
           onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = NEU.muted; }}
         >
@@ -2577,7 +2582,7 @@ function CountrySlotGrid({
             <span
               key={slot.id}
               className="inline-flex items-center gap-1"
-              style={{ backgroundColor: NEU.surface, boxShadow: NEU.outSm, borderRadius: 9999, padding: 2, maxWidth: '100%', minWidth: 0 }}
+              style={{ backgroundColor: NEU.surface, boxShadow: NEU.outSm, borderRadius: 9999, padding: 3, maxWidth: '100%', boxSizing: 'border-box' }}
             >
               {flag}
               {Array.from({ length: slot.delegation_size }, (_, i) => i + 1).map(seatNum => {
@@ -2619,7 +2624,7 @@ function CountrySlotGrid({
             <span
               key={slot.id}
               className="inline-flex items-center gap-1"
-              style={{ backgroundColor: NEU.surface, boxShadow: NEU.outSm, borderRadius: 9999, padding: 2, maxWidth: '100%', minWidth: 0 }}
+              style={{ backgroundColor: NEU.surface, boxShadow: NEU.outSm, borderRadius: 9999, padding: 3, maxWidth: '100%', boxSizing: 'border-box' }}
             >
               {flag}
               <OccupiedSeatChip alloc={alloc} onRemoveAllocation={onRemoveAllocation} />

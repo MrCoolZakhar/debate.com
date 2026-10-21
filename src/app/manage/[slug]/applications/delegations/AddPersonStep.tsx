@@ -2,11 +2,14 @@
 
 // "Add a person" (owner, 21 Oct 2026): the second step of the delegation
 // pop-up's People tab, drawn in place of the tab with the pop-up's back button.
-// Lists the conference's INDIVIDUAL applicants (delegate or head-delegate
-// applications with no delegation, not turned down or withdrawn) with a search,
-// their avatar, name and, when they have one, the country and committee of their
-// allocation. Picking one asks in place "Add NAME to DELEGATION?" and calls
-// organiser_add_to_delegation (Christian's; the money moves with the person).
+// Lists only the people organiser_add_to_delegation accepts (Christian's, live
+// 21 Oct 2026): the conference's ACCEPTED individual delegates (role
+// 'delegate', status accepted, assigned or checked-in, no delegation; head
+// delegates and advisors join through the invite), with a search, their
+// avatar, name and, when they have one, the country and committee of their
+// allocation. Picking one asks in place "Add NAME to DELEGATION?"; the
+// function's own sentence is shown as given (success `message`, refusal
+// `error`), then the pop-up goes back to People and re-reads the delegation.
 // Only reachable while ORGANISER_ADD_TO_DELEGATION_DB (v2.ts) is on.
 
 import { useEffect, useMemo, useState } from 'react';
@@ -69,8 +72,8 @@ export default function AddPersonStep({ conferenceId, societyId, delegationName,
           `)
           .eq('conference_id', conferenceId)
           .is('society_id', null)
-          .in('role', ['delegate', 'head-delegate'])
-          .not('status', 'in', '(rejected,withdrawn)')
+          .eq('role', 'delegate')
+          .in('status', ['accepted', 'assigned', 'checked-in'])
           .order('id', { ascending: true })
           .range(from, from + 999);
         if (cancelled) return;
@@ -103,7 +106,10 @@ export default function AddPersonStep({ conferenceId, societyId, delegationName,
     const r = await trackWrite(() => organiserAddToDelegation(p.id, societyId));
     setBusy(false);
     if (!r.ok) { notifyErr(r.error, 'applications'); return; }
-    notifyOk(`${memberName(p)} joined ${delegationName}.`, 'applications');
+    setPickedId(null);
+    // The person has left the individuals list: drop them in place.
+    setPeople(prev => (prev ? prev.filter(x => x.id !== p.id) : prev));
+    notifyOk(r.message ?? `${memberName(p)} is now in ${delegationName}.`, 'applications');
     onAdded();
   }
 
@@ -133,7 +139,7 @@ export default function AddPersonStep({ conferenceId, societyId, delegationName,
       ) : people === null ? (
         <SkeletonRows rows={5} height={56} />
       ) : people.length === 0 ? (
-        <p style={{ fontFamily: FONT, fontSize: 14, color: INK_SOFT }}>Nobody has applied on their own yet.</p>
+        <p style={{ fontFamily: FONT, fontSize: 14, color: INK_SOFT }}>No accepted delegate is outside a delegation right now. Accept an individual delegate first, then add them here.</p>
       ) : shown.length === 0 ? (
         <p style={{ fontFamily: FONT, fontSize: 14, color: INK_SOFT }}>Nobody matches that search.</p>
       ) : (
@@ -149,7 +155,7 @@ export default function AddPersonStep({ conferenceId, societyId, delegationName,
                   onClick={() => setPickedId(picked ? null : p.id)}
                   aria-expanded={picked}
                   className={`${BTN_CLASS} w-full grid items-center text-left hover:bg-[rgba(27,56,40,0.025)]`}
-                  style={{ gridTemplateColumns: 'minmax(0,1.3fr) minmax(0,1fr) 120px', gap: 16, padding: '12px 8px', border: 'none', background: 'transparent', cursor: 'pointer' }}
+                  style={{ gridTemplateColumns: 'minmax(0,1.3fr) minmax(0,1fr)', gap: 16, padding: '12px 8px', border: 'none', background: 'transparent', cursor: 'pointer' }}
                 >
                   <span className="flex items-center gap-3 min-w-0">
                     <RoundAvatar name={name} url={p.profiles?.avatar_url ?? null} size={44} seed={p.id} />
@@ -175,7 +181,6 @@ export default function AddPersonStep({ conferenceId, societyId, delegationName,
                       <span style={{ fontFamily: FONT, fontSize: 13, color: INK_SOFT }}>No allocation yet</span>
                     )}
                   </span>
-                  <span style={{ fontFamily: FONT, fontSize: 13, color: INK_SOFT }}>{p.role === 'head-delegate' ? 'Head delegate' : 'Delegate'}</span>
                 </button>
                 {picked && (
                   <div className="flex items-center justify-between gap-4 flex-wrap"

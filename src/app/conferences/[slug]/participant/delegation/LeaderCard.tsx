@@ -23,10 +23,12 @@
 //                 bought no tickets; a ticket-buying leader's own ticket is
 //                 separate), so it drops when a delegate leaves.
 //   People        PeopleTable, with the row menu (MemberMenu); it opens the
-//                 committee pop-up itself. Swap allocations sits in its header
-//                 beside Search people and opens its picker in that same spot
-//                 (owner, 21 Oct 2026); a pending swap request and the recent
-//                 swap notice stay under the table.
+//                 committee pop-up itself and owns Swap allocations (its header
+//                 button turns into Cancel; two picks in the table run the
+//                 swap). Right under the table: Add delegate (AddDelegatePanel,
+//                 moved here from Overview, owner 21 Oct 2026), then an open
+//                 swap request's line. Every landed change re-reads in place
+//                 and tells the Overview (announceDelegationChanged).
 //   Right column  FinancialsCard, then the Open allocations list and the
 //                 reshuffle line (both DELEGATIONS_V2_DB only)
 
@@ -41,6 +43,8 @@ import { friendlyError, plainOrFallback } from '@/lib/friendlyError';
 import { notifyErr, notifyOk } from '@/lib/appNotify';
 import type { PoolMember } from '@/app/manage/[slug]/assignment/delegationShared';
 import DelegationInviteLink from '../DelegationInviteLink';
+import AddDelegatePanel from './overview/AddDelegatePanel';
+import { announceDelegationChanged } from './delegationEvents';
 import type { RosterMember } from '../DelegationPanel';
 import { removePledgedTicket, type PayOverview } from '../../pay/payApi';
 import { DELEGATIONS_V2_DB } from './v2';
@@ -76,7 +80,7 @@ function paperWord(status: string | undefined, role: RosterMember['role'], seate
 
 export default function LeaderCard({
   conferenceId, conferenceSlug, societyId, societyName, members, pool, paidCount, seatLogoFor,
-  importAvailable, onImport, onChanged, swap, swapButton, swapTools, overlays,
+  importAvailable, onImport, onChanged, allocationSwapMode, swapTools, overlays,
 }: {
   conferenceId: string;
   conferenceSlug: string;
@@ -91,10 +95,9 @@ export default function LeaderCard({
   importAvailable: boolean;
   onImport: () => void;
   onChanged: () => Promise<void>;
-  swap: { on: boolean; selected: string[]; toggle: (applicationId: string) => void };
-  /** DelegationPanel's Swap allocations button, or its picker while swapping, drawn in the People header. */
-  swapButton?: React.ReactNode;
-  /** DelegationPanel's pending swap request and recent swap notice, drawn under the table. */
+  /** conferences.allocation_swap_mode, for the People table's Swap allocations. */
+  allocationSwapMode: string;
+  /** DelegationPanel's open swap request line, drawn under the table. */
   swapTools: React.ReactNode;
   overlays: React.ReactNode;
 }) {
@@ -181,6 +184,7 @@ export default function LeaderCard({
   // DelegationPanel's own re-read keeps the card mounted, never a loader.
   const refresh = useCallback(async () => {
     await Promise.all([onChanged(), reloadPay(), reloadV2()]);
+    announceDelegationChanged();
   }, [onChanged, reloadPay, reloadV2]);
 
   /** One queued tap against the server. Null when it landed, else the sentence to show. */
@@ -328,9 +332,15 @@ export default function LeaderCard({
             conferenceId={conferenceId}
             openSeats={DELEGATIONS_V2_DB ? data.openSeats : null}
             onChanged={refresh}
-            swap={swap}
             societyName={societyName}
-            headerAction={swapButton}
+            allocationSwapMode={allocationSwapMode}
+          />
+          {/* Add delegate, right below the people (owner, 21 Oct 2026). */}
+          <AddDelegatePanel
+            societyId={societyId}
+            conferenceId={conferenceId}
+            societyName={societyName}
+            onAdded={() => { void reloadPay(); announceDelegationChanged(); }}
           />
           {swapTools}
         </div>

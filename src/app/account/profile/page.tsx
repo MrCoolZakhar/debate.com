@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import Link from 'next/link';
-import { Star, X, Check, Megaphone, MessageSquare, ClipboardCheck, FileText, CreditCard, Camera, Globe2, Sparkles, Cake, Mail, User, Bell, ShieldAlert, MapPin, GraduationCap, School, Layers, Landmark, Trophy, Coins, Infinity as InfinityIcon } from 'lucide-react';
+import { Star, Check, Megaphone, MessageSquare, ClipboardCheck, FileText, CreditCard, Camera, Globe2, Sparkles, Cake, Mail, User, Bell, ShieldAlert, MapPin, GraduationCap, School, Layers, Landmark, Trophy, Coins, Infinity as InfinityIcon } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { UN_COUNTRIES, getCountryByName, countryMatchRank } from '@/lib/countries';
@@ -21,15 +21,10 @@ import Portal from '@/components/Portal';
 import Loader from '@/components/Loader';
 import { plainOrFallback } from '@/lib/friendlyError';
 import { nameError, tidyName, titleCaseSuggestion } from '@/lib/personName';
+import { fetchPendingReviews, REVIEW_SUBMITTED_EVENT, type ReviewConference } from '@/lib/conferenceReviews';
+import ConferenceReviewDialog from '@/components/reviews/ConferenceReviewDialog';
 
-interface ReviewableConference {
-  id: string;
-  slug: string;
-  acronym: string;
-  full_name: string;
-  end_date: string | null;
-  start_date: string | null;
-}
+type ReviewableConference = ReviewConference;
 
 const NOTIFICATION_ROWS = [
   { field: 'notify_email_applications' as const, Icon: ClipboardCheck, label: 'Application & Status Updates', desc: 'Acceptance, rejection, allocation, and committee assignment emails' },
@@ -129,14 +124,11 @@ export default function ProfilePage() {
     });
   }, []);
 
-  // Review prompts — conferences the user attended but hasn't reviewed
+  // Review prompts: conferences the user attended, whose last day has passed,
+  // not reviewed yet (fetchPendingReviews, src/lib/conferenceReviews.ts). No
+  // "never" (owner, 21 Oct 2026): a card stays until the review is sent.
   const [reviewable, setReviewable]         = useState<ReviewableConference[]>([]);
-  const [reviewFormFor, setReviewFormFor]   = useState<string | null>(null);
-  const [reviewRating, setReviewRating]     = useState(0);
-  const [reviewHover, setReviewHover]       = useState(0);
-  const [reviewText, setReviewText]         = useState('');
-  const [reviewSubmitting, setReviewSubmitting] = useState(false);
-  const [reviewError, setReviewError]       = useState('');
+  const [reviewDialogFor, setReviewDialogFor] = useState<ReviewableConference | null>(null);
 
   // Delete account
   const [deleteOpen, setDeleteOpen]         = useState(false);
@@ -188,7 +180,7 @@ export default function ProfilePage() {
           });
       });
 
-    loadReviewable(supabase);
+    void loadReviewable(session.access_token);
 
     supabase
       .from('mun_cv_entries')
@@ -226,79 +218,25 @@ export default function ProfilePage() {
     };
   }, [natOpen, placeNat]);
 
-  async function loadReviewable(supabase: ReturnType<typeof getAuthedClient>) {
+  async function loadReviewable(accessToken: string) {
     if (!user) return;
-    // Attended = application with status assigned or checked-in
-    const { data: apps } = await supabase
-      .from('applications')
-      .select('conference_id, status, conferences ( id, slug, acronym, full_name, end_date, start_date )')
-      .eq('user_id', user.id)
-      .in('status', ['assigned', 'checked-in']);
-    // Only prompt for conferences that have actually taken place. A conference
-    // has concluded once its end_date (or start_date, if it has no end) is in
-    // the past — never before the event.
-    const today = new Date().toISOString().slice(0, 10);
-    const hasConcluded = (c: ReviewableConference) => {
-      const done = c.end_date ?? c.start_date;
-      return !!done && done < today;
+    try {
+      setReviewable(await fetchPendingReviews(accessToken, user.id));
+    } catch {
+      /* a failed read keeps what is shown */
+    }
+  }
+
+  // A review sent from anywhere on this page (or another tab of the app)
+  // removes its card.
+  useEffect(() => {
+    const onDone = (e: Event) => {
+      const id = (e as CustomEvent<{ conferenceId?: string }>).detail?.conferenceId;
+      if (id) setReviewable(prev => prev.filter(c => c.id !== id));
     };
-    const attendedConfs: ReviewableConference[] = [];
-    const seen = new Set<string>();
-    for (const row of ((apps ?? []) as unknown as { conference_id: string; conferences: ReviewableConference | ReviewableConference[] | null }[])) {
-      const conf = Array.isArray(row.conferences) ? row.conferences[0] : row.conferences;
-      if (!conf || seen.has(conf.id)) continue;
-      seen.add(conf.id);
-      if (!hasConcluded(conf)) continue;
-      attendedConfs.push(conf);
-    }
-    if (attendedConfs.length === 0) { setReviewable([]); return; }
-    // Exclude conferences already reviewed or dismissed
-    const { data: myReviews } = await supabase
-      .from('conference_reviews')
-      .select('conference_id')
-      .eq('user_id', user.id);
-    const reviewedIds = new Set(((myReviews ?? []) as { conference_id: string }[]).map(r => r.conference_id));
-    const remaining = attendedConfs.filter(c => {
-      if (reviewedIds.has(c.id)) return false;
-      try { return localStorage.getItem(`review-prompt-${c.id}`) !== 'dismissed'; } catch { return true; }
-    });
-    setReviewable(remaining);
-  }
-
-  function dismissReviewPrompt(conferenceId: string) {
-    try { localStorage.setItem(`review-prompt-${conferenceId}`, 'dismissed'); } catch { /* ignore */ }
-    setReviewable(prev => prev.filter(c => c.id !== conferenceId));
-    if (reviewFormFor === conferenceId) setReviewFormFor(null);
-  }
-
-  function openReviewForm(conferenceId: string) {
-    setReviewFormFor(prev => (prev === conferenceId ? null : conferenceId));
-    setReviewRating(0);
-    setReviewHover(0);
-    setReviewText('');
-    setReviewError('');
-  }
-
-  async function handleSubmitReview(conf: ReviewableConference) {
-    if (!user || !session || reviewRating < 1 || reviewSubmitting) return;
-    setReviewSubmitting(true);
-    setReviewError('');
-    const supabase = getAuthedClient(session.access_token);
-    const { error } = await supabase.from('conference_reviews').insert({
-      conference_id: conf.id,
-      user_id: user.id,
-      rating: reviewRating,
-      review_text: reviewText.trim() || null,
-      display_name: profile?.display_name ?? (displayName || null),
-    });
-    setReviewSubmitting(false);
-    if (error) {
-      setReviewError('Your review could not be saved. Please try again.');
-      return;
-    }
-    setReviewFormFor(null);
-    setReviewable(prev => prev.filter(c => c.id !== conf.id));
-  }
+    window.addEventListener(REVIEW_SUBMITTED_EVENT, onDone);
+    return () => window.removeEventListener(REVIEW_SUBMITTED_EVENT, onDone);
+  }, []);
 
   async function handleSave() {
     if (!user) return;
@@ -746,100 +684,43 @@ export default function ProfilePage() {
         </div>
       </HeroOverlap>
 
-      {/* Review prompts: conferences attended but not yet reviewed */}
+      {/* Review prompts: conferences attended, now over, not yet reviewed */}
       {reviewable.length > 0 && (
         <div className="flex flex-col gap-3 mt-6 px-2 sm:px-4 md:px-6">
-          {reviewable.map((conf) => {
-            const formOpen = reviewFormFor === conf.id;
-            return (
-              <RaisedCard key={conf.id} className="!p-4 md:!p-5">
-                <div className="flex items-center gap-4">
-                  <EmojiDisc emoji="Glowing star" fallback={Star} size={42} />
-                  <div className="flex-1 min-w-0">
-                    <p className="font-bold" style={{ fontSize: T.body + 1, color: '#1C1410', fontFamily: OUTFIT, margin: 0 }}>
-                      How was {conferenceAcronymLabel(conf)}?
-                    </p>
-                    <p className="[overflow-wrap:anywhere]" style={{ fontSize: T.caption + 1, color: HINT, fontFamily: OUTFIT, margin: '2px 0 0 0' }}>
-                      Leave a review of{' '}
-                      <Link href={`/conferences/${conf.slug}`} className="gv-acct-link">
-                        {conf.full_name}
-                      </Link>
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => openReviewForm(conf.id)}
-                    className={`${formOpen ? 'gv-acct-btn2' : 'gv-acct-btn'} flex-shrink-0`}
-                    style={{ minHeight: 40, padding: '0 16px', fontSize: T.body }}
-                  >
-                    {formOpen ? 'Close' : 'Leave a review'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => dismissReviewPrompt(conf.id)}
-                    aria-label={`Dismiss review prompt for ${conferenceAcronymLabel(conf)}`}
-                    /* 32px disc, 44px hit area (the ::before reaches 6px out). */
-                    className="gv-acct-rim flex-shrink-0 relative before:absolute before:-inset-1.5"
-                    style={{ width: 32, height: 32, color: '#5A5046' }}
-                  >
-                    <X size={14} aria-hidden />
-                  </button>
+          {reviewable.map((conf) => (
+            <RaisedCard key={conf.id} className="!p-4 md:!p-5">
+              <div className="flex flex-wrap items-center gap-4">
+                <EmojiDisc emoji="Glowing star" fallback={Star} size={42} />
+                <div className="flex-1 min-w-[180px]">
+                  <p className="font-bold [overflow-wrap:anywhere]" style={{ fontSize: T.body + 1, color: '#1C1410', fontFamily: OUTFIT, margin: 0 }}>
+                    How was {conferenceAcronymLabel(conf) || conf.full_name}?
+                  </p>
+                  <p className="[overflow-wrap:anywhere]" style={{ fontSize: T.caption + 1, color: HINT, fontFamily: OUTFIT, margin: '2px 0 0 0' }}>
+                    Leave a review of{' '}
+                    <Link href={`/conferences/${conf.slug}`} className="gv-acct-link">
+                      {conf.full_name}
+                    </Link>
+                  </p>
                 </div>
-
-                {formOpen && (
-                  <div className="mt-4 pt-4" style={{ borderTop: '1px solid rgba(221,212,192,0.6)' }}>
-                    {/* Each star is a 44px target with no gap; the negative
-                        margin keeps the first star on the text's left edge. */}
-                    <div className="flex items-center mb-3" style={{ marginInlineStart: -9 }} onMouseLeave={() => setReviewHover(0)}>
-                      {[1, 2, 3, 4, 5].map((i) => (
-                        <button
-                          key={i}
-                          type="button"
-                          onClick={() => setReviewRating(i)}
-                          onMouseEnter={() => setReviewHover(i)}
-                          aria-label={`Rate ${i} out of 5`}
-                          className="focus:outline-none inline-flex items-center justify-center"
-                          style={{ background: 'none', border: 'none', padding: 0, width: 44, height: 44, cursor: 'pointer' }}
-                        >
-                          <Star
-                            size={26}
-                            strokeWidth={1.6}
-                            style={{
-                              color: i <= (reviewHover || reviewRating) ? '#B6871F' : 'rgba(154,138,120,0.45)',
-                              fill: i <= (reviewHover || reviewRating) ? '#B6871F' : 'none',
-                              transition: 'color 120ms ease',
-                            }}
-                          />
-                        </button>
-                      ))}
-                    </div>
-                    <textarea
-                      value={reviewText}
-                      onChange={(e) => setReviewText(e.target.value)}
-                      rows={3}
-                      placeholder="What should future delegates know about this conference?"
-                      className="gv-acct-input w-full rounded-xl px-4 py-3 text-sm focus:outline-none resize-none"
-                      style={{ ...inputStyle, lineHeight: 1.7 }}
-                    />
-                    {reviewError && (
-                      <p style={{ fontSize: T.caption, color: '#8B2020', fontFamily: OUTFIT, margin: '8px 0 0 0' }}>
-                        {reviewError}
-                      </p>
-                    )}
-                    <button
-                      type="button"
-                      onClick={() => handleSubmitReview(conf)}
-                      disabled={reviewRating < 1 || reviewSubmitting}
-                      className="gv-acct-btn mt-3"
-                    >
-                      {reviewSubmitting ? 'Saving…' : 'Submit review'}
-                    </button>
-                  </div>
-                )}
-              </RaisedCard>
-            );
-          })}
+                <button
+                  type="button"
+                  onClick={() => setReviewDialogFor(conf)}
+                  className="gv-acct-btn flex-shrink-0"
+                  style={{ minHeight: 40, padding: '0 16px', fontSize: T.body }}
+                >
+                  Leave a review
+                </button>
+              </div>
+            </RaisedCard>
+          ))}
         </div>
+      )}
+      {reviewDialogFor && (
+        <ConferenceReviewDialog
+          conference={reviewDialogFor}
+          onClose={() => setReviewDialogFor(null)}
+          onSubmitted={() => setReviewDialogFor(null)}
+        />
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 md:gap-5 mt-6 px-2 sm:px-4 md:px-6">

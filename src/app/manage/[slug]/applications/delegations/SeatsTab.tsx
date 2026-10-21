@@ -11,17 +11,25 @@
 //     conference's seat limit when it has one (readDelegationSettings), and every
 //     allocation it holds as a compact list, A to Z by country across every
 //     committee (owner, 21 Oct 2026): the country's round flag and name, the
-//     committee emblem + acronym, and the person in it with their avatar (an
-//     empty one shows no person part), with Take back on an empty one.
+//     committee emblem + acronym on one line with the person in it on the
+//     SAME line, on the other side (avatar + name; an empty one shows none), so
+//     every card is the same size (owner, 21 Oct 2026). A small red minus at
+//     the card's top right removes the allocation from the delegation, asked
+//     in place: an empty one goes straight back (organiser_take_back_society_seat);
+//     one with a member in it unallocates them first with the People tab's
+//     Unallocate call (organiserTakeOutOfSeat, which keeps the allocation with
+//     the delegation as open) and then removes it. One held by someone who is
+//     not a member of this delegation keeps the minus disabled, its hover title
+//     saying to unallocate them first.
 //   * Right: "Search countries" first (focused on open), then EVERY country that
 //     is a delegate slot in any committee, A to Z, filtered by name or code with
 //     accents ignored (societySeats.countryMatrix). Each country shows one chip
 //     per committee seat, A to Z by acronym (a double is Seat 1 and Seat 2):
 //       free    one tap gives that one seat (organiser_give_society_seats with
 //               that single seat), optimistic then verified;
-//       mine    a check; an empty one asks in place "Take back X in Y?"
-//               (organiser_take_back_society_seat); one with a person shows
-//               their name and offers no take back (People tab: Unallocate);
+//       mine    a check, the person's name when someone is in it; a press
+//               asks in place "Remove X from DELEGATION?" (the same remove as
+//               the minus on the left);
 //       taken   greyed, the hover title says by whom, not pressable.
 //     "Give in all free committees" on a country with 2+ free seats.
 //
@@ -31,19 +39,19 @@
 // server's sentence and the chip goes back.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Check, Plus, Search } from 'lucide-react';
+import { Check, Minus, Plus, Search } from 'lucide-react';
 import { CircleFlag } from '@/components/CircleFlag';
 import { notifyErr, notifyOk } from '@/lib/appNotify';
 import type { DelegationMemberLite } from '../delegationRows';
 import { memberName } from '../delegationRows';
 import type { DelegationsData, DelegationView } from './useDelegationsData';
 import { countryMatrix, foldForSearch, type CountryRow, type SeatChip } from './societySeats';
-import { giveExactSeats, takeBackOneSeat } from './seatWrites';
+import { giveExactSeats, organiserTakeOutOfSeat, takeBackOneSeat } from './seatWrites';
 import { readDelegationSettings, type SeatLimit } from './v2';
 import InPlaceConfirm from '@/app/conferences/[slug]/participant/delegation/seat/InPlaceConfirm';
 import type { DelegationPopupConference, PopupStep } from './DelegationPopup';
 import {
-  BTN_CLASS, CommitteeDisc, FONT, FOREST, HAIRLINE, INK, INK_SOFT, RoundAvatar, STROKE,
+  BTN_CLASS, CommitteeDisc, DANGER, FONT, FOREST, HAIRLINE, INK, INK_SOFT, RoundAvatar, STROKE,
   committeeEmblemSrc, committeeShort, plural, smallSecondaryBtn,
 } from './kit';
 
@@ -58,7 +66,10 @@ function seatLabel(c: SeatChip): string {
   return `${c.countryName} in ${c.committeeLabel}${c.slotSize > 1 ? `, seat ${c.seat}` : ''}`;
 }
 
-export default function SeatsTab<M extends DelegationMemberLite>({ conference, row, data }: {
+/** Why an allocation of this delegation cannot be removed here, or null when it can. */
+const UNALLOCATE_FIRST = 'Someone who is not in this delegation holds it. Unallocate them first on the allocation page.';
+
+export default function SeatsTab<M extends DelegationMemberLite>({ conference, row, data, onChanged }: {
   conference: DelegationPopupConference;
   row: DelegationView<M>;
   data: DelegationsData<M>;
@@ -162,23 +173,46 @@ export default function SeatsTab<M extends DelegationMemberLite>({ conference, r
     else if (free.length > 1) notifyOk(`${plural(free.length, 'allocation')} in ${free[0].countryName} given to ${row.name}`, 'applications');
   }
 
-  async function takeBack(chip: SeatChip) {
+  /** Removes one allocation from the delegation. A member in it is unallocated
+   *  first (the People tab's Unallocate: the allocation stays with the
+   *  delegation as open), then the empty allocation is removed. */
+  async function removeAllocation(chip: SeatChip) {
     const id = chip.allocationId;
     if (!id) return;
+    const person = chip.applicationId ? memberById.get(chip.applicationId) : undefined;
     mark([chip.key], 'back');
     const r = await trackWrite(async () => {
+      if (person) {
+        const out = await organiserTakeOutOfSeat({
+          conferenceId: conference.id,
+          societyId: row.id,
+          seat: { allocationId: id, committeeId: chip.committeeId, countryCode: chip.countryCode, countryName: chip.countryName },
+          person: { id: person.id, user_id: person.user_id, status: person.status },
+        });
+        if (!out.ok) return out;
+      }
       const res = await takeBackOneSeat(id);
-      if (res.ok) { try { await reload(); } catch { /* the next read corrects it */ } }
+      if (person || res.ok) { try { await reload(); } catch { /* the next read corrects it */ } }
       return res;
     });
     mark([chip.key], null);
-    if (!r.ok) notifyErr(r.error, 'applications');
+    if (!r.ok) { notifyErr(r.error, 'applications'); return; }
+    if (person) onChanged?.();
+    notifyOk(person
+      ? `${memberName(person)} is unallocated and ${chip.countryName} in ${chip.committeeLabel} is removed from ${row.name}`
+      : `${chip.countryName} in ${chip.committeeLabel} is removed from ${row.name}`, 'applications');
   }
 
-  const canTakeBack = (c: SeatChip) => c.state === 'mine' && c.block && !c.filled && !!c.allocationId && !pending.has(c.key);
+  /** Null when this delegation's allocation can be removed here, else why not. */
+  const removeBlock = (c: SeatChip): string | null => {
+    if (c.state !== 'mine' || !c.allocationId || pending.has(c.key)) return 'Saving';
+    if (!c.filled) return c.block ? null : UNALLOCATE_FIRST;
+    return c.applicationId && memberById.has(c.applicationId) ? null : UNALLOCATE_FIRST;
+  };
+  const canRemove = (c: SeatChip) => removeBlock(c) === null;
 
-  function askBack(chip: SeatChip, anchor: HTMLElement) {
-    if (!canTakeBack(chip)) return;
+  function askRemove(chip: SeatChip, anchor: HTMLElement) {
+    if (!canRemove(chip)) return;
     setAsk({ anchor, chip });
   }
 
@@ -215,31 +249,44 @@ export default function SeatsTab<M extends DelegationMemberLite>({ conference, r
               const person = h.applicationId ? memberById.get(h.applicationId) : undefined;
               const busy = pending.has(h.key);
               const personName = person ? memberName(person) : null;
+              const blocked = removeBlock(h);
               return (
-                <div key={h.key} className="flex items-center gap-3"
-                  style={{ padding: '10px 12px', borderRadius: 12, background: '#FFFFFF', boxShadow: '0 1px 2px rgba(27,56,40,0.06)', opacity: busy ? 0.6 : 1 }}>
+                <div key={h.key} className="relative flex items-center gap-3"
+                  style={{ minHeight: 74, padding: '10px 12px', borderRadius: 12, background: '#FFFFFF', boxShadow: '0 1px 2px rgba(27,56,40,0.06)', opacity: busy ? 0.6 : 1 }}>
                   <CircleFlag code={h.countryCode} country={h.countryName} logoUrl={seatArt.get(h.countryCode) ?? undefined} label={h.countryName} size={40} decorative />
-                  <div className="flex flex-col flex-1 min-w-0" style={{ gap: 3 }}>
-                    <span className="[overflow-wrap:anywhere]" style={{ fontFamily: FONT, fontSize: 15, fontWeight: 600, color: INK }}>{h.countryName}</span>
-                    <span className="inline-flex items-center gap-1.5" title={h.committeeName} style={{ fontFamily: FONT, fontSize: 12.5 }}>
-                      <CommitteeDisc src={committeeEmblemSrc(h.logoUrl, h.committeeName, h.abbreviation)} size={16} />
-                      <span className="[overflow-wrap:anywhere]" style={{ color: INK }}>{h.committeeLabel}{h.slotSize > 1 ? `, seat ${h.seat}` : ''}</span>
-                    </span>
-                    {person && personName ? (
-                      <span className="inline-flex items-center gap-1.5 min-w-0" style={{ marginTop: 2 }}>
-                        <RoundAvatar name={personName} url={person.profiles?.avatar_url ?? null} size={22} seed={person.id} />
-                        <span className="[overflow-wrap:anywhere]" style={{ fontFamily: FONT, fontSize: 13, fontWeight: 500, color: INK }}>{personName}</span>
+                  <div className="flex flex-col flex-1 min-w-0" style={{ gap: 4 }}>
+                    <span className="[overflow-wrap:anywhere]" style={{ fontFamily: FONT, fontSize: 15, fontWeight: 600, color: INK, paddingRight: 26 }}>{h.countryName}</span>
+                    <div className="flex items-center justify-between" style={{ gap: 10 }}>
+                      <span className="inline-flex items-center gap-1.5 min-w-0" title={h.committeeName} style={{ fontFamily: FONT, fontSize: 12.5, flex: '0 1 auto' }}>
+                        <CommitteeDisc src={committeeEmblemSrc(h.logoUrl, h.committeeName, h.abbreviation)} size={18} />
+                        <span className="[overflow-wrap:anywhere]" style={{ color: INK }}>{h.committeeLabel}{h.slotSize > 1 ? `, seat ${h.seat}` : ''}</span>
                       </span>
-                    ) : h.filled ? (
-                      <span style={{ fontFamily: FONT, fontSize: 12.5, color: INK_SOFT }}>Someone is in this allocation</span>
-                    ) : null}
+                      {person && personName ? (
+                        <span className="inline-flex items-center gap-1.5 min-w-0 justify-end">
+                          <RoundAvatar name={personName} url={person.profiles?.avatar_url ?? null} size={22} seed={person.id} />
+                          <span className="[overflow-wrap:anywhere] text-right" style={{ fontFamily: FONT, fontSize: 13, fontWeight: 500, color: INK, lineHeight: 1.25 }}>{personName}</span>
+                        </span>
+                      ) : h.filled ? (
+                        <span className="text-right" style={{ fontFamily: FONT, fontSize: 12.5, color: INK_SOFT }}>Someone is in it</span>
+                      ) : null}
+                    </div>
                   </div>
-                  {canTakeBack(h) && (
-                    <button type="button" className={BTN_CLASS} onClick={e => askBack(h, e.currentTarget)}
-                      style={{ ...smallSecondaryBtn, height: 32, padding: '0 10px' }}>
-                      Take back
-                    </button>
-                  )}
+                  <button
+                    type="button"
+                    className={BTN_CLASS}
+                    onClick={e => { if (blocked === null) askRemove(h, e.currentTarget); }}
+                    aria-disabled={blocked !== null ? true : undefined}
+                    aria-label={`Remove ${seatLabel(h)} from ${row.name}`}
+                    title={blocked === null ? `Remove ${seatLabel(h)} from ${row.name}` : blocked === 'Saving' ? undefined : blocked}
+                    style={{
+                      position: 'absolute', top: 8, right: 8, width: 22, height: 22, padding: 0, borderRadius: '50%',
+                      display: 'inline-flex', alignItems: 'center', justifyContent: 'center', border: 'none',
+                      background: blocked === null ? DANGER : '#E7DCD6', color: '#FFFFFF',
+                      cursor: blocked === null ? 'pointer' : 'default', opacity: blocked === null ? 1 : 0.7,
+                    }}
+                  >
+                    <Minus size={14} strokeWidth={2.25} aria-hidden />
+                  </button>
                 </div>
               );
             })}
@@ -289,9 +336,9 @@ export default function SeatsTab<M extends DelegationMemberLite>({ conference, r
                       person={ch.applicationId ? memberById.get(ch.applicationId) : undefined}
                       holder={ch.state === 'taken' ? holderOf(ch) : null}
                       delegationName={row.name}
-                      canTakeBack={canTakeBack(ch)}
+                      canRemove={canRemove(ch)}
                       onGive={() => { void give([ch]); }}
-                      onAskBack={el => askBack(ch, el)} />
+                      onAskRemove={el => askRemove(ch, el)} />
                   ))}
                 </div>
               </div>
@@ -301,25 +348,27 @@ export default function SeatsTab<M extends DelegationMemberLite>({ conference, r
       </div>
       {ask && (
         <InPlaceConfirm anchor={ask.anchor} align="end"
-          title={`Take back ${seatLabel(ask.chip)}?`}
-          line="It is free to give again."
-          yes="Take back" danger
-          onYes={() => { const chip = ask.chip; setAsk(null); void takeBack(chip); }}
+          title={`Remove ${seatLabel(ask.chip)} from ${row.name}?`}
+          line={ask.chip.applicationId && memberById.get(ask.chip.applicationId)
+            ? `${memberName(memberById.get(ask.chip.applicationId)!)} is unallocated first. The allocation is then free to give again.`
+            : 'It is free to give again.'}
+          yes="Remove" danger
+          onYes={() => { const chip = ask.chip; setAsk(null); void removeAllocation(chip); }}
           onCancel={closeAsk} />
       )}
     </div>
   );
 }
 
-function Chip<M extends DelegationMemberLite>({ chip, busy, person, holder, delegationName, canTakeBack, onGive, onAskBack }: {
+function Chip<M extends DelegationMemberLite>({ chip, busy, person, holder, delegationName, canRemove, onGive, onAskRemove }: {
   chip: SeatChip;
   busy: boolean;
   person: M | undefined;
   holder: string | null;
   delegationName: string;
-  canTakeBack: boolean;
+  canRemove: boolean;
   onGive: () => void;
-  onAskBack: (anchor: HTMLElement) => void;
+  onAskRemove: (anchor: HTMLElement) => void;
 }) {
   const base: React.CSSProperties = {
     display: 'inline-flex', alignItems: 'center', gap: 6, minHeight: 36, padding: '4px 10px', borderRadius: 10,
@@ -364,17 +413,17 @@ function Chip<M extends DelegationMemberLite>({ chip, busy, person, holder, dele
       {!person && chip.filled && <span style={{ fontSize: 12, color: INK_SOFT }}>· Someone is in it</span>}
     </>
   );
-  if (canTakeBack) {
+  if (canRemove) {
     return (
-      <button type="button" onClick={e => onAskBack(e.currentTarget)} className={BTN_CLASS}
-        title={`Take back ${seatLabel(chip)}`} aria-label={`${seatLabel(chip)}, given to ${delegationName}. Take back`}
+      <button type="button" onClick={e => onAskRemove(e.currentTarget)} className={BTN_CLASS}
+        title={`Remove ${seatLabel(chip)} from ${delegationName}`} aria-label={`${seatLabel(chip)}, given to ${delegationName}. Remove`}
         style={{ ...mineStyle, cursor: 'pointer' }}>
         {inner}
       </button>
     );
   }
   return (
-    <span title={person ? `${memberName(person)} is in this allocation` : `Given to ${delegationName}`} style={mineStyle}>
+    <span title={chip.filled && !person ? UNALLOCATE_FIRST : person ? `${memberName(person)} is in this allocation` : `Given to ${delegationName}`} style={mineStyle}>
       {inner}
     </span>
   );

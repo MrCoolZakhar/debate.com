@@ -251,7 +251,7 @@ export default function DelegationsView({ conference, showFlash, initialSocietyI
         .from('conference_requests')
         .select('metadata')
         .eq('conference_id', conference.id)
-        .in('kind', ['swap_request', 'swap_notice'])
+        .eq('kind', 'swap_request')
         .eq('seen_by_organizer', false),
       supabase
         .from('applications')
@@ -325,7 +325,7 @@ export default function DelegationsView({ conference, showFlash, initialSocietyI
       supabase.from('conference_requests')
         .select('metadata')
         .eq('conference_id', conference.id)
-        .in('kind', ['swap_request', 'swap_notice'])
+        .eq('kind', 'swap_request')
         .eq('seen_by_organizer', false),
       supabase.from('applications')
         .select('society_id')
@@ -357,8 +357,10 @@ export default function DelegationsView({ conference, showFlash, initialSocietyI
     paused: () => loadingRef.current || busyCountRef.current > 0 || holdRef.current || !!document.querySelector('[aria-modal="true"]'),
   });
 
-  // Opening a delegation marks its pending swap_request/swap_notice rows
-  // seen, optimistic locally, fire-and-forget on the DB.
+  // Only swap_request rows are "new allocation swap activity" (21 Oct 2026):
+  // leaders no longer write swap_notice rows, and old ones never count.
+  // Opening a delegation marks its pending swap_request rows seen,
+  // optimistic locally, fire-and-forget on the DB.
   function handleExpandSociety(societyId: string) {
     setExpandedId(societyId);
     if (!unseenSwapSocietyIds.has(societyId) || !session) return;
@@ -368,7 +370,7 @@ export default function DelegationsView({ conference, showFlash, initialSocietyI
       .from('conference_requests')
       .update({ seen_by_organizer: true })
       .eq('conference_id', conference.id)
-      .in('kind', ['swap_request', 'swap_notice'])
+      .eq('kind', 'swap_request')
       .eq('seen_by_organizer', false)
       .eq('metadata->>society_id', societyId)
       .then();

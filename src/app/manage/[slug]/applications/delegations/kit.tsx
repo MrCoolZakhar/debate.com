@@ -8,6 +8,7 @@
 import { CircleFlag } from '@/components/CircleFlag';
 import { committeeDisplayName } from '@/lib/presetNames';
 import { getCountryByCode } from '@/lib/countries';
+import { countryShortName } from '@/app/manage/[slug]/assignment/displayNames';
 import {
   FONT, INK, INK_SOFT, FOREST, committeeEmblemSrc, CommitteeDisc,
 } from '@/app/conferences/[slug]/participant/delegation/leaderKit';
@@ -32,23 +33,35 @@ export const smallSecondaryBtn: React.CSSProperties = {
   fontFamily: FONT, fontSize: 13, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap',
 };
 
-/** "City, Country" with the country's round flag, or null when neither is known. */
-export function placeOf(city: string | null | undefined, countryCode: string | null | undefined): { label: string; code: string | null } | null {
+/** "City, Country" with the country's round flag, or null when neither is known.
+ *  `short` uses the everyday short name for long countries ("London, UK"),
+ *  the full name staying in `full` for the hover title. */
+export function placeOf(city: string | null | undefined, countryCode: string | null | undefined, short = false): { label: string; full: string; code: string | null } | null {
   const c = city?.trim() || '';
   const code = countryCode?.trim().toUpperCase() || '';
   const countryName = code ? (getCountryByCode(code)?.name ?? code) : '';
-  const label = [c, countryName].filter(Boolean).join(', ');
-  return label ? { label, code: code || null } : null;
+  const shown = short && countryName ? countryShortName(countryName, code) : countryName;
+  const label = [c, shown].filter(Boolean).join(', ');
+  const full = [c, countryName].filter(Boolean).join(', ');
+  return label ? { label, full, code: code || null } : null;
 }
 
-export function PlaceLine({ city, countryCode, extra, size = 16, fontSize = 13 }: { city: string | null; countryCode: string | null; extra?: string | null; size?: number; fontSize?: number }) {
-  const place = placeOf(city, countryCode);
+export function PlaceLine({ city, countryCode, extra, size = 16, fontSize = 13, short = false, oneLine = false }: {
+  city: string | null; countryCode: string | null; extra?: string | null; size?: number; fontSize?: number;
+  /** Short names for long countries (UK, USA, UAE). */
+  short?: boolean;
+  /** Kept on one line (with `short` the place fits a card; nothing is cut). */
+  oneLine?: boolean;
+}) {
+  const place = placeOf(city, countryCode, short);
   const text = [place?.label, extra].filter(Boolean).join(' · ');
   if (!text) return null;
   return (
-    <span className="flex items-center gap-1.5 min-w-0" style={{ fontFamily: FONT, fontSize, color: INK_SOFT }}>
+    <span className="flex items-center gap-1.5 min-w-0" title={place && place.full !== place.label ? place.full : undefined} style={{ fontFamily: FONT, fontSize, color: INK_SOFT }}>
       {place?.code && <CircleFlag code={place.code} size={size} decorative />}
-      <span className="[overflow-wrap:anywhere]">{text}</span>
+      {/* oneLine: one line whenever it fits (short country names); a city too
+          long for the card wraps instead of running past its edge. */}
+      <span className="[overflow-wrap:anywhere]" style={oneLine ? { minWidth: 0 } : undefined}>{text}</span>
     </span>
   );
 }

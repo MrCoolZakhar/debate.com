@@ -49,7 +49,7 @@ import { CircleFlag } from '@/components/CircleFlag';
 import { conferenceAcronymLabel } from '@/lib/conferenceLabels';
 import { LogoDisc } from '@/components/LogoDisc';
 import Portal from '@/components/Portal';
-import { getCountryByCode } from '@/lib/countries';
+import { getCountryByCode, getCountryByName } from '@/lib/countries';
 import { committeeDisplayName } from '@/lib/presetNames';
 import { caucusRemainingNow, speakerRemainingNow } from '@/lib/committeeService';
 import type { CaucusState } from '@/lib/types';
@@ -58,6 +58,7 @@ import { NEU, NEU_GRADIENTS, OUTFIT, EASE } from '@/components/neu';
 import {
   SOFT, AMBER_INK, GREEN_INK, RED, CARD_BORDER, CARD_BORDER_COLOR, CARD_SHADOW, CARD_SHADOW_HOVER,
 } from '@/components/scoreboardTokens';
+import LiveRoomView from './LiveRoomView';
 
 const MONO = 'ui-monospace, monospace';
 const SURFACE = '#F0EBDD';
@@ -472,30 +473,61 @@ function Fact({ icon: Icon, children, title, tone }: { icon: typeof Mic; childre
   );
 }
 
+/** Where a room comes from, one rule for the card and the summary strip:
+ *  a standalone room by `creator_country` (captured at creation from our own
+ *  /api/geo since 21 Oct 2026), a conference room by its conference's country.
+ *  Null = not recorded (standalone rooms opened before the capture existed). */
+interface Origin { key: string; name: string; code: string | null; kind: 'created' | 'conference' }
+function originOf(r: LiveRow): Origin | null {
+  if (!r.conference_id) {
+    const code = r.creator_country?.trim().toUpperCase() || null;
+    if (!code) return null;
+    const c = getCountryByCode(code);
+    return { key: c?.name ?? code, name: c?.name ?? code, code, kind: 'created' };
+  }
+  const raw = r.conference_country?.trim() || null;
+  if (!raw) return null;
+  const c = getCountryByName(raw);
+  return { key: c?.name ?? raw, name: c?.name ?? raw, code: c?.code ?? null, kind: 'conference' };
+}
+
+function OriginFlag({ o, size }: { o: Origin; size: number }) {
+  return o.code
+    ? <CircleFlag code={o.code} size={size} decorative />
+    : <CircleFlag country={o.name} size={size} decorative />;
+}
+
 function OriginFact({ r }: { r: LiveRow }) {
-  const code = r.creator_country?.trim().toUpperCase() || null;
-  if (!code) {
+  const o = originOf(r);
+  if (!o) {
     return (
       <span className="inline-flex items-center gap-1.5" style={{ fontFamily: OUTFIT, fontSize: 12, color: SOFT }}>
-        <Globe2 size={13} aria-hidden /> Origin unknown
-        <HoverHint width={310}>
-          <strong style={{ fontWeight: 800 }}>Not recorded.</strong> Sessions created before
-          <code style={{ fontFamily: MONO }}> committees.creator_country</code> existed have no origin.
-          {r.conference_country && <> This room&apos;s conference is held in <strong>{r.conference_country}</strong>, which is not necessarily where the chair opened it.</>}
+        <Globe2 size={13} aria-hidden /> Origin not recorded
+        <HoverHint width={300}>
+          {r.conference_id
+            ? <>This room&apos;s conference has no country on file.</>
+            : <>Gavelling records the country a standalone room was created from since 21 Oct 2026. This room is older, so its origin was never recorded.</>}
         </HoverHint>
       </span>
     );
   }
-  const country = getCountryByCode(code);
   return (
-    <span className="inline-flex items-center gap-1.5" title={`Session created from ${country?.name ?? code}`} style={{ fontFamily: OUTFIT, fontSize: 12, color: SOFT }}>
-      <CircleFlag code={code} size={16} decorative />
-      Created from <strong style={{ color: NEU.ink }}>{country?.name ?? code}</strong>
+    <span
+      className="inline-flex items-center gap-1.5"
+      title={o.kind === 'conference' ? `The conference is held in ${o.name}` : `Session created from ${o.name}`}
+      style={{ fontFamily: OUTFIT, fontSize: 12, color: SOFT }}
+    >
+      <OriginFlag o={o} size={16} />
+      {o.kind === 'conference' ? 'Conference in' : 'Created from'} <strong style={{ color: NEU.ink }}>{o.name}</strong>
     </span>
   );
 }
 
-function CommitteeCard({ r }: { r: LiveRow }) {
+/** At most two chairs on a card; the rest behind "+N", named in full on hover
+ *  and in the opened room. */
+const CARD_CHAIRS_MAX = 2;
+
+function CommitteeCard({ r, onOpen }: { r: LiveRow; onOpen: (r: LiveRow) => void }) {
   const [hover, setHover] = useState(false);
   const status = statusOf(r);
   const meta = STATUS_META[status];
@@ -519,11 +551,22 @@ function CommitteeCard({ r }: { r: LiveRow }) {
     <article
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
-      className="relative flex flex-col"
+      // The whole card opens the room (the organiser's live view, read only).
+      // Controls inside it (copy code, the hint, the live-wall link) stop the
+      // click so they keep doing only their own thing.
+      onClick={() => onOpen(r)}
+      onKeyDown={(e) => {
+        if (e.target !== e.currentTarget) return;
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpen(r); }
+      }}
+      role="button"
+      tabIndex={0}
+      aria-label={`Open ${title}`}
+      className="relative flex flex-col h-full focus:outline-none focus-visible:ring-2"
       style={{
         backgroundColor: SURFACE, borderRadius: 24, border: CARD_BORDER,
         boxShadow: hover ? CARD_SHADOW_HOVER : CARD_SHADOW,
-        transition: `box-shadow 220ms ${EASE}`, minHeight: 318,
+        transition: `box-shadow 220ms ${EASE}`, minHeight: 318, cursor: 'pointer',
       }}
     >
       <span className="absolute" style={{ insetBlockStart: -LOGO_OVERHANG, insetInlineStart: PAD_START, zIndex: 2, lineHeight: 0 }}>
@@ -546,8 +589,21 @@ function CommitteeCard({ r }: { r: LiveRow }) {
                 {title}
               </h3>
               {subtitle && <p style={{ color: SOFT, fontFamily: OUTFIT, fontSize: 11, lineHeight: 1.3 }}>{subtitle}</p>}
-              <p className="mt-0.5" style={{ color: SOFT, fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 700 }}>
+              <p className="mt-0.5 inline-flex items-center gap-1" style={{ color: SOFT, fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 700 }}>
                 {confLabel ?? 'Standalone session'}
+                {r.conference_slug && (
+                  <Link
+                    href={`/manage/${r.conference_slug}/live`}
+                    target="_blank"
+                    onClick={(e) => e.stopPropagation()}
+                    className="inline-flex items-center focus:outline-none focus-visible:underline"
+                    style={{ color: NEU.forest, lineHeight: 0 }}
+                    title={`Open ${[r.conference_name, [r.conference_city, r.conference_country].filter(Boolean).join(', ')].filter(Boolean).join(' · ')} live status in a new tab`}
+                    aria-label="Open the conference's live status in a new tab"
+                  >
+                    <ArrowUpRight size={13} aria-hidden />
+                  </Link>
+                )}
               </p>
             </div>
             <div className="flex flex-col items-end flex-shrink-0" style={{ paddingBlockStart: 3, maxWidth: '50%' }}>
@@ -558,18 +614,28 @@ function CommitteeCard({ r }: { r: LiveRow }) {
               <div className="flex flex-col items-end" style={{ marginBlockStart: 5, gap: 3 }}>
                 {chairs.length === 0
                   ? <span style={{ color: AMBER_INK, fontFamily: OUTFIT, fontSize: 12, fontWeight: 600 }}>No chair yet</span>
-                  : chairs.map((c, i) => (
+                  : chairs.slice(0, CARD_CHAIRS_MAX).map((c, i) => (
                     <span key={`${c}-${i}`} className="inline-flex items-center gap-1.5 justify-end" style={{ color: SOFT, fontFamily: OUTFIT, fontSize: 12, fontWeight: 600, overflowWrap: 'anywhere' }}>
                       {c}
                       <Gavel size={11} style={{ color: SOFT, flexShrink: 0 }} aria-hidden />
                     </span>
                   ))}
+                {chairs.length > CARD_CHAIRS_MAX && (
+                  <span
+                    title={`Chairs: ${chairs.join(', ')}`}
+                    style={{ color: NEU.ink, fontFamily: OUTFIT, fontSize: 12, fontWeight: 800, cursor: 'help' }}
+                  >
+                    +{chairs.length - CARD_CHAIRS_MAX}
+                  </span>
+                )}
               </div>
             </div>
           </div>
 
           {r.topic && r.topic !== 'TBD' && (
-            <p className="mt-2" style={{ color: NEU.ink, fontFamily: OUTFIT, fontSize: 12, lineHeight: 1.35 }}>
+            // Free text, not an identity: clamped to two lines (full text on
+            // hover) so every card keeps the same height.
+            <p className="mt-2 line-clamp-2" title={r.topic} style={{ color: NEU.ink, fontFamily: OUTFIT, fontSize: 12, lineHeight: 1.35 }}>
               <span style={{ color: SOFT, fontWeight: 700 }}>Topic: </span>{r.topic}
             </p>
           )}
@@ -594,18 +660,8 @@ function CommitteeCard({ r }: { r: LiveRow }) {
 
         {/* Footer: one action */}
         <div className="flex items-center justify-between gap-3 flex-wrap" style={{ padding: `10px ${PAD_END}px 12px ${PAD_START}px`, borderTop: `1px solid ${CARD_BORDER_COLOR}` }}>
-          {r.conference_slug ? (
-            <Link
-              href={`/manage/${r.conference_slug}/live`}
-              target="_blank"
-              className="inline-flex items-center gap-1 focus:outline-none focus-visible:underline"
-              style={{ color: NEU.forest, fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 800, textDecoration: 'none' }}
-              title={[r.conference_name, [r.conference_city, r.conference_country].filter(Boolean).join(', ')].filter(Boolean).join(' · ')}
-            >
-              Open live status <ArrowUpRight size={13} aria-hidden />
-            </Link>
-          ) : <OriginFact r={r} />}
-          <CopyCode value={r.code} />
+          <span onClick={(e) => e.stopPropagation()}><OriginFact r={r} /></span>
+          <span onClick={(e) => e.stopPropagation()}><CopyCode value={r.code} /></span>
         </div>
       </div>
     </article>
@@ -623,6 +679,9 @@ export default function LiveCommitteesTab() {
   const [refreshing, setRefreshing] = useState(false);
   const [lastRefreshed, setLastRefreshed] = useState<number | null>(null);
   const [, setTick] = useState(0);
+  /** The room opened from a card. Kept as a snapshot so a room that drops off
+   *  the list mid-view (it went idle past the cut) stays open. */
+  const [opened, setOpened] = useState<LiveRow | null>(null);
   const inFlight = useRef(false);
 
   const load = useCallback(async () => {
@@ -711,6 +770,23 @@ export default function LiveCommitteesTab() {
     return r;
   }, [all, filter, q]);
 
+  // Rooms by origin, from the rows already loaded (originOf: where a standalone
+  // room was created, where a conference room's conference is held).
+  const origins = useMemo(() => {
+    const by = new Map<string, { o: Origin; n: number }>();
+    let unknown = 0;
+    for (const r of all) {
+      const o = originOf(r);
+      if (!o) { unknown += 1; continue; }
+      const cur = by.get(o.key);
+      if (cur) cur.n += 1; else by.set(o.key, { o, n: 1 });
+    }
+    const list = Array.from(by.values()).sort((a, b) => b.n - a.n || a.o.name.localeCompare(b.o.name));
+    return { list, unknown };
+  }, [all]);
+
+  const openedLive = opened ? (rows ?? []).find((r) => r.id === opened.id) ?? opened : null;
+
   const secondsAgo = lastRefreshed ? Math.max(0, Math.floor((Date.now() - lastRefreshed) / 1000)) : null;
 
   const FILTERS: { key: Filter; label: string; n: number }[] = [
@@ -796,6 +872,35 @@ export default function LiveCommitteesTab() {
         })}
       </div>
 
+      {/* Origins */}
+      {all.length > 0 && (
+        <div className="mb-5" style={{ padding: '12px 16px', borderRadius: 18, border: CARD_BORDER, backgroundColor: SURFACE, boxShadow: CARD_SHADOW }}>
+          <div className="flex items-center gap-1.5" style={{ marginBlockEnd: 8 }}>
+            <Eyebrow>Where these rooms come from</Eyebrow>
+            <HoverHint width={320}>
+              A standalone room counts where it was created (recorded since 21 Oct 2026). A conference
+              room counts where its conference is held. Older standalone rooms have no recorded origin.
+            </HoverHint>
+          </div>
+          <div className="flex flex-wrap items-center" style={{ columnGap: 18, rowGap: 8 }}>
+            {origins.list.map(({ o, n }) => (
+              <span key={o.key} className="inline-flex items-center gap-1.5" style={{ fontFamily: OUTFIT, fontSize: 12.5, color: NEU.ink }}>
+                <OriginFlag o={o} size={18} />
+                <span style={{ fontWeight: 600 }}>{o.name}</span>
+                <strong style={{ fontWeight: 900, fontVariantNumeric: 'tabular-nums' }}>{n}</strong>
+              </span>
+            ))}
+            {origins.unknown > 0 && (
+              <span className="inline-flex items-center gap-1.5" style={{ fontFamily: OUTFIT, fontSize: 12.5, color: SOFT }}>
+                <Globe2 size={16} aria-hidden />
+                <span style={{ fontWeight: 600 }}>Not recorded</span>
+                <strong style={{ fontWeight: 900, color: NEU.ink, fontVariantNumeric: 'tabular-nums' }}>{origins.unknown}</strong>
+              </span>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Filters + search */}
       <div className="flex items-center gap-2 flex-wrap mb-4">
         {FILTERS.map((f) => {
@@ -861,11 +966,23 @@ export default function LiveCommitteesTab() {
           className="grid items-stretch"
           style={{
             gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))',
+            // Every row as tall as the tallest card, so all cards match.
+            gridAutoRows: '1fr',
             columnGap: 18, rowGap: LOGO_OVERHANG + 18, paddingBlockStart: LOGO_OVERHANG + 4,
           }}
         >
-          {shown.map((r) => <CommitteeCard key={r.id} r={r} />)}
+          {shown.map((r) => <CommitteeCard key={r.id} r={r} onOpen={setOpened} />)}
         </div>
+      )}
+
+      {openedLive && (
+        <LiveRoomView
+          key={openedLive.id}
+          sessionId={openedLive.id}
+          conferenceId={openedLive.conference_id}
+          nowPlaying={<NowPlayingPanel np={nowPlaying(openedLive)} />}
+          onClose={() => setOpened(null)}
+        />
       )}
     </div>
   );

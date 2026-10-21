@@ -36,13 +36,13 @@ export async function giveSeats(args: { conferenceId: string; societyId: string;
     const r = await giveBlockSeats(args);
     return r.ok ? { ok: true } : { ok: false, error: r.error };
   }
-  const fallback = 'Those seats were not given. Try again.';
+  const fallback = 'Those allocations were not given. Try again.';
   const seats = args.slots.flatMap(s => Array.from({ length: Math.max(1, s.size) }, (_, i) => ({
     conference_committee_id: s.committeeId,
     country_code: s.countryCode,
     seat: i + 1,
   })));
-  if (seats.length === 0) return { ok: false, error: 'There are no free seats to give.' };
+  if (seats.length === 0) return { ok: false, error: 'There are no free allocations to give.' };
   try {
     const c = await getFreshAuthedClient();
     if (!c) return { ok: false, error: SIGNED_OUT };
@@ -58,7 +58,7 @@ export async function giveSeats(args: { conferenceId: string; societyId: string;
 }
 
 export async function takeBackSeats(args: { societyId: string; allocationIds: string[] }): Promise<SeatWriteResult> {
-  const fallback = 'That seat was not taken back. Try again.';
+  const fallback = 'That allocation was not removed. Try again.';
   const ids = args.allocationIds.filter(id => !id.startsWith('temp-'));
   if (ids.length === 0) return { ok: false, error: fallback };
   try {
@@ -73,7 +73,7 @@ export async function takeBackSeats(args: { societyId: string; allocationIds: st
       }
       return { ok: true };
     }
-    const placed = 'Someone is placed in this seat, so it stays with the delegation.';
+    const placed = 'Someone is in this allocation, so it stays with the delegation.';
     type SeatRow = { id: string; conference_committee_id: string | null; country_code: string | null; society_id: string | null; user_id: string | null; application_id: string | null };
     const cols = 'id, conference_committee_id, country_code, society_id, user_id, application_id';
     // 1. The slots the pressed seats belong to.
@@ -96,7 +96,7 @@ export async function takeBackSeats(args: { societyId: string; allocationIds: st
       if (slotErr) return { ok: false, error: friendlyError(slotErr, fallback) };
       for (const r of (rows ?? []) as SeatRow[]) {
         if (r.user_id || r.application_id) return { ok: false, error: placed };
-        if (r.society_id !== args.societyId) return { ok: false, error: 'This seat is shared with someone outside the delegation, so it stays as it is.' };
+        if (r.society_id !== args.societyId) return { ok: false, error: 'This allocation is shared with someone outside the delegation, so it stays as it is.' };
         slotIds.push(r.id);
       }
     }
@@ -110,7 +110,7 @@ export async function takeBackSeats(args: { societyId: string; allocationIds: st
       .select('id');
     if (error) return { ok: false, error: friendlyError(error, fallback) };
     if (!data || data.length !== slotIds.length) {
-      return { ok: false, error: 'Someone was just placed in this seat, so it stays with the delegation.' };
+      return { ok: false, error: 'Someone was just allocated here, so it stays with the delegation.' };
     }
     return { ok: true };
   } catch (e) {

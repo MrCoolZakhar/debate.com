@@ -16,8 +16,8 @@
 //   * a seat onto a seated member: Switch (perform_delegation_swap; organisers
 //     may always switch);
 //   * a seat onto a member with no seat: Move, the first person keeps no seat;
-//   * the seat's Unallocate button, or the row menu's Unallocate: Unallocate,
-//     the allocation stays with the delegation as open;
+//   * the row menu's Unallocate (the seat cell has no button of its own):
+//     Unallocate, the allocation stays with the delegation as open;
 //   * "Allocate" on a member with no seat: Allocate, from a second step that
 //     lists the delegation's open allocations.
 // Writes: seatWrites.ts (the organiser allocation writes the assignment page
@@ -34,9 +34,10 @@
 // delegation (delegation_remove_member). Both wait for DELEGATIONS_MONEY_DB (v2.ts).
 //
 // "Add a person" in the header opens AddPersonStep as a second step: the
-// conference's individual applicants, added through organiser_add_to_delegation
-// (Christian's, not built yet: ORGANISER_ADD_TO_DELEGATION_DB in v2.ts, disabled
-// with "Coming soon, waiting for Christian" while it is off).
+// conference's accepted individual delegates, added through
+// organiser_add_to_delegation (Christian's, live 21 Oct 2026:
+// ORGANISER_ADD_TO_DELEGATION_DB in v2.ts); after a success the step closes
+// and the delegation and the page's applications are re-read.
 //
 // Live: every write runs through data.trackWrite and a drag, a confirm or an
 // open menu holds the 10 s re-read back (data.holdLive), so a leader's change
@@ -600,15 +601,6 @@ export default function PeopleTab<M extends DelegationMemberLite>({ conferenceId
                     }}
                     wasJustDragged={wasJustDragged}
                     busy={rowBusy}
-                    onTakeOut={held && canSeat ? (el) => {
-                      setAsk({
-                        anchor: el, align: 'end',
-                        title: `Unallocate ${name} from ${seatWords(held)}?`,
-                        line: 'The allocation stays with the delegation as an open allocation.',
-                        yes: 'Unallocate', danger: true,
-                        onYes: () => { setAsk(null); doSeatChange(m.id, OPEN_AREA); },
-                      });
-                    } : undefined}
                     onPlace={!held && canSeat && openSeats.length > 0 ? () => openPlaceStep(m) : undefined}
                   />
                 </div>

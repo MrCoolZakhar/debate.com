@@ -113,7 +113,7 @@ export async function giveSocietySeatsRpc(
 
 /** Takes an empty block seat back from a delegation. */
 export async function takeBackSocietySeatRpc(allocationId: string): Promise<V2Result> {
-  const fallback = 'That allocation was not taken back. Try again.';
+  const fallback = 'That allocation was not removed. Try again.';
   if (!DELEGATIONS_V2_DB) return { ok: false, error: fallback };
   try {
     const c = await getFreshAuthedClient();
@@ -162,17 +162,23 @@ export async function organiserSetHead(applicationId: string, head: boolean): Pr
   return organiserSetMemberRole(applicationId, head ? 'head-delegate' : 'delegate');
 }
 
-// ORGANISER_ADD_TO_DELEGATION_DB waits for Christian's organiser_add_to_delegation
-// (p_application uuid, p_society uuid) returns jsonb { ok, code, error }: an
-// organiser moves an individual applicant into a delegation, and the money moves
-// in the same step (their own registration fee must not carry over to the
-// delegation), so it is built in Christian's chat (owner, 21 Oct 2026). While it
-// is false the People tab's "Add a person" is drawn disabled with the hover title
-// "Coming soon, waiting for Christian" and nothing calls the function.
-export const ORGANISER_ADD_TO_DELEGATION_DB = false;
+// ORGANISER_ADD_TO_DELEGATION_DB: Christian's organiser_add_to_delegation
+// (p_application uuid, p_society uuid) returns jsonb, live 21 Oct 2026. An
+// organiser adds an ACCEPTED individual delegate (role 'delegate', no
+// delegation) to a delegation and the money moves in the same step (a paid
+// role fee stays theirs, an unpaid one may be covered by a spare Delegate
+// Ticket; their registration fee never carries over). Success:
+// { ok: true, application_id, society_id, society_name, kept_own_payment,
+// covered_by_ticket, message }, the message shown as given. Refusal:
+// { ok: false, code, error } (signed_out, not_found, not_organiser,
+// wrong_conference, not_individual, wrong_role, not_accepted), the error shown
+// as given.
+export const ORGANISER_ADD_TO_DELEGATION_DB = true;
 
-/** An organiser adds an individual applicant to a delegation; its sentence shown as given. */
-export async function organiserAddToDelegation(applicationId: string, societyId: string): Promise<V2Result> {
+export type AddToDelegationResult = { ok: true; message: string | null } | { ok: false; error: string };
+
+/** An organiser adds an individual delegate to a delegation; its sentence shown as given. */
+export async function organiserAddToDelegation(applicationId: string, societyId: string): Promise<AddToDelegationResult> {
   const fallback = 'They were not added to the delegation. Try again.';
   if (!ORGANISER_ADD_TO_DELEGATION_DB) return { ok: false, error: fallback };
   try {
@@ -182,7 +188,7 @@ export async function organiserAddToDelegation(applicationId: string, societyId:
     if (error) return { ok: false, error: friendlyError(error, fallback) };
     const r = (data ?? {}) as { ok?: boolean; code?: string; error?: string; message?: string };
     if (r.ok !== true) return { ok: false, error: plainOrFallback(r.error ?? r.message, fallback) };
-    return { ok: true };
+    return { ok: true, message: typeof r.message === 'string' && r.message.trim() ? r.message.trim() : null };
   } catch (e) {
     return { ok: false, error: friendlyError(e, fallback) };
   }

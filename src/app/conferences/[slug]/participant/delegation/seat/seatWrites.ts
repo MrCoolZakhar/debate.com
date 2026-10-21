@@ -1,11 +1,12 @@
 // The seat writes behind the People table's drag and its seat cell buttons.
 //
-// switchSeats is the SAME path DelegationPanel's "Swap allocations" uses today
-// (handleConfirmSwap): perform_delegation_swap when the conference lets leaders
-// reshuffle (allocation_swap_mode = 'self_serve'), else a swap_request row on
-// conference_requests for the organising team, each with its message row, the
-// delegation_swap email through the participant-events route and the
-// gv-requests-changed event. Live today.
+// switchSeats is the one swap path (the People table's Swap allocations, a
+// drag, "Switch with" in the row menu): perform_delegation_swap when the
+// conference lets leaders reshuffle (allocation_swap_mode = 'self_serve'), with
+// no swap_notice row any more (owner, 21 Oct 2026); else a swap_request row on
+// conference_requests for the organising team with its message row and the
+// gv-requests-changed event. Both send the delegation_swap email through the
+// participant-events route.
 //
 // moveSeat (DELEGATIONS_V2_DB only): a seated member's seat goes to a member with
 // no seat. delegation_place_member refuses a seat someone sits in, so it is two
@@ -58,17 +59,9 @@ export async function switchSeats(args: {
       if (error) return { ok: false, error: friendlyError(error, fallback) };
       const r = (data ?? {}) as { ok?: boolean; error?: string };
       if (r.ok !== true) return { ok: false, error: plainOrFallback(r.error, fallback) };
-      // The quiet notice for the delegation and the organisers, best effort as in
-      // DelegationPanel: the seats have already moved.
-      const { data: reqRow } = await c.from('conference_requests').insert({
-        conference_id: conferenceId, user_id: userId, kind: 'swap_notice', subject, metadata,
-      }).select('id').single();
-      if (reqRow) {
-        await c.from('conference_request_messages').insert({
-          request_id: (reqRow as { id: string }).id, sender_user_id: userId, is_organizer: false,
-          body: `${a.name} and ${b.name} swapped allocations: ${a.name} is now ${b.label}, ${b.name} is now ${a.label}.`,
-        });
-      }
+      // No swap_notice row any more (owner, 21 Oct 2026): organisers do not
+      // need a message for every self-serve swap. The two delegates still get
+      // the delegation_swap email below.
     } else {
       const { data: reqRow, error } = await c.from('conference_requests').insert({
         conference_id: conferenceId, user_id: userId, kind: 'swap_request', subject, metadata,
@@ -80,7 +73,8 @@ export async function switchSeats(args: {
       });
     }
     await queueParticipantEventEmail(session.access_token, conferenceId, 'delegation_swap', [a.applicationId, b.applicationId]);
-    window.dispatchEvent(new CustomEvent('gv-requests-changed'));
+    // Only a request opens a thread the Requests panel lists.
+    if (mode === 'request') window.dispatchEvent(new CustomEvent('gv-requests-changed'));
     return { ok: true };
   } catch (e) {
     return { ok: false, error: friendlyError(e, fallback) };

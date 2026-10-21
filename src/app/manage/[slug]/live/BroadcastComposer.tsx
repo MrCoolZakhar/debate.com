@@ -192,7 +192,8 @@ export function canWithdraw(g: BroadcastGroup, now: number): boolean {
 /** Rows for one send. The ONLY place the kind/action pairing is assembled. */
 export function buildBroadcastRows(input: {
   targets: BroadcastTarget[];
-  conferenceId: string;
+  /** Null only for a standalone room broadcast from the staff board. */
+  conferenceId: string | null;
   createdBy: string | null;
   kind: BroadcastKind;
   message: string;
@@ -404,7 +405,10 @@ export function BroadcastComposer({
   onClose,
   onSent,
 }: {
-  conferenceId: string;
+  /** Null only for a standalone room broadcast from the staff board
+   *  (src/app/admin): rows go out with conference_id null and the image is
+   *  stored under the room's own id. Needs scratch-admin-live-rooms.sql. */
+  conferenceId: string | null;
   conferenceLabel: string;
   createdBy: string | null;
   targets: BroadcastTarget[];
@@ -474,7 +478,7 @@ export function BroadcastComposer({
     if (!file) return;
     setError('');
     setUploading(true);
-    const res = await uploadBroadcastImage(conferenceId, file);
+    const res = await uploadBroadcastImage(conferenceId ?? targets[0]?.sessionId ?? 'standalone', file);
     setUploading(false);
     if (res.error) { setError(res.error); return; }
     setImageUrl(res.url ?? null);

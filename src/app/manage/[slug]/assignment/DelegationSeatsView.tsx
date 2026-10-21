@@ -419,7 +419,7 @@ export default function DelegationSeatsView({ conference, initialSocietyId, onSi
                 <div style={{ width: `${Math.round(progress * 100)}%`, height: '100%', background: FOREST, transition: 'width 200ms ease' }} />
               </div>
             </div>
-            <span style={{ fontFamily: OUTFIT, fontSize: 14, color: INK_SOFT }}>Tap a free allocation to give it, tap again to take it back</span>
+            <span style={{ fontFamily: OUTFIT, fontSize: 14, color: INK_SOFT }}>Tap a free allocation to give it, tap again to remove it</span>
             <Link href={doneHref} className="focus:outline-none" style={primaryBtn}>Done</Link>
           </div>
         )}
@@ -480,7 +480,7 @@ export default function DelegationSeatsView({ conference, initialSocietyId, onSi
               <span style={{ width: 14, height: 14, borderRadius: 4, background: OTHER_BG }} />
               Another delegation or a single delegate
             </span>
-            {hasDoubles && <span>A seat marked 2 holds 2 delegates and counts as 2</span>}
+            {hasDoubles && <span>An allocation marked 2 holds 2 delegates and counts as 2</span>}
           </div>
         </div>
       </div>
@@ -591,8 +591,8 @@ function Cell({ cell, committee, countryName, countryCode, selected, isBusy, onG
           type="button"
           disabled={isBusy}
           onClick={() => onTakeBack(committee.id, countryCode, cell.allocationIds)}
-          aria-label={`Take back ${where} from ${selected.name}${seats(cell.size)}`}
-          title={`${selected.name}. Tap to take it back`}
+          aria-label={`Remove ${where} from ${selected.name}${seats(cell.size)}`}
+          title={`${selected.name}. Tap to remove it`}
           className="focus:outline-none transition-transform active:scale-[0.97]"
           style={{ ...base, border: 0, background: FOREST, color: '#FFFFFF', cursor: isBusy ? 'progress' : 'pointer' }}
         >

@@ -17,6 +17,7 @@ import { sessionReadClient } from './sessionClient';
  *  The initial load, the message history, the join lookup and realtime stay on `supabase`. */
 const readDb = () => (OFFLINE_RESILIENCE ? sessionReadClient() : supabase);
 import { noteFlushedSettings } from './settingsEcho';
+import { creatorCountryWithin } from './creatorCountry';
 // The one home for how long a room is kept (roomRetention.ts): End Debate's
 // expires_at and the reopen window must stay the same number.
 import { ENDED_KEEP_HOURS, REOPEN_WINDOW_HOURS } from './roomRetention';
@@ -314,6 +315,10 @@ export async function createCommittee(
 ): Promise<{ code: string; chairJoinSuffix: string } | null> {
   const timeoutPromise = new Promise<null>((resolve) => setTimeout(() => resolve(null), 15000));
   const createPromise = async (): Promise<{ code: string; chairJoinSuffix: string } | null> => {
+    // Where the room was created from (owner, 21 Oct 2026): our own /api/geo,
+    // country code only, prefetched by /create/sessions; at most 1.5 s, and the
+    // room is created without it when it is not there (src/lib/creatorCountry.ts).
+    const creatorCountry = await creatorCountryWithin();
     const code = generateCode();
     const chairJoinSuffix = Math.floor(1000 + Math.random() * 9000).toString();
     const client = sessionClient(code, chairJoinSuffix, { timeout: false });   // D6: creation + whole roster, never timed out
@@ -323,6 +328,7 @@ export async function createCommittee(
       .insert({
         code, name, topic, chair_names: chairNames, phase: 'pre-session', speaker_time_limit: 90,
         settings: { chairJoinSuffix, separateChairCode: true },
+        ...(creatorCountry ? { creator_country: creatorCountry } : {}),
       })
       .select()
       .single();

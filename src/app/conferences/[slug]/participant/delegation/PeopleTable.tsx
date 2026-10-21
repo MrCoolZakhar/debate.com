@@ -16,11 +16,17 @@
 // pop-ups are this table's own, so onOpenCommittee is no longer called.
 //
 // Seats move here (owner, 20 Oct 2026):
+//   * Swap allocations (owner, 21 Oct 2026): the header button turns into
+//     Cancel in the same place and nothing else moves; two seated people are
+//     picked right in the table (anywhere on the row, the allocation cell
+//     included) and the swap runs on the second pick, never asked first (it can
+//     always be swapped back). While the conference wants to approve swaps the
+//     second pick files the request instead. Escape or Cancel leaves the mode.
 //   * Drag a seated member's seat onto another person's row (seat/useSeatDrag).
 //     Onto a seated row: a switch, asked in place under that row, "Switch" while
 //     the conference lets leaders reshuffle (allocation_swap_mode 'self_serve'),
 //     "Request switch" while it is 'request' (seat/seatWrites switchSeats, the
-//     same writes as DelegationPanel's Swap allocations; live today). Onto a
+//     same writes as Swap allocations; live today). Onto a
 //     member with no seat: the seat moves to them (moveSeat, DELEGATIONS_V2_DB and
 //     'self_serve' only). The keyboard way is "Switch with…" in the row menu.
 //   * "Allocate" in the seat cell for a member with no seat opens the row
@@ -37,13 +43,13 @@
 // (onChanged), never behind a loader.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Check, Mail, Search, Upload, UserX } from 'lucide-react';
+import { ArrowLeftRight, Check, Mail, Search, Upload, UserX, X } from 'lucide-react';
 import { committeeDisplayName } from '@/lib/presetNames';
 import { friendlyError } from '@/lib/friendlyError';
 import { notifyErr, notifyOk } from '@/lib/appNotify';
 import { DELEGATIONS_V2_DB, placeMember, unplaceMember, uploadPaperForMember, type OpenSeat, type Result } from './v2';
 import MemberMenu, { type MemberMenuHandle, type MenuMember, type SeatOps, type SwitchTarget } from './MemberMenu';
-import { cardStyle, committeeEmblemSrc, FONT, FOREST, INK, INK_SOFT, LINE, RoundAvatar, STROKE } from './leaderKit';
+import { BTN_CLASS, cardStyle, committeeEmblemSrc, FONT, FOREST, INK, INK_SOFT, LINE, RoundAvatar, secondaryBtn, STROKE } from './leaderKit';
 import SeatCell, { type Seat } from './seat/SeatCell';
 import InPlaceConfirm from './seat/InPlaceConfirm';
 import { useSeatDrag } from './seat/useSeatDrag';
@@ -159,7 +165,7 @@ function openFromSeat(s: Seat): PendingOpenSeat {
   };
 }
 
-export default function PeopleTable({ rows, societyId, societyName, conferenceId, openSeats, onChanged, swap, allocationSwapMode, headerAction }: {
+export default function PeopleTable({ rows, societyId, societyName, conferenceId, openSeats, onChanged, allocationSwapMode }: {
   rows: PersonRow[];
   societyId: string;
   /** For the swap request's subject; "this delegation" until LeaderCard passes it. */
@@ -169,12 +175,8 @@ export default function PeopleTable({ rows, societyId, societyName, conferenceId
   /** No longer called: the committee pop-up is the table's own (it needs the committee id). */
   onOpenCommittee?: (committeeId: string) => void;
   onChanged: () => Promise<void> | void;
-  /** The existing allocation swap: while on, seated rows are picked instead of the menu. */
-  swap: { on: boolean; selected: string[]; toggle: (applicationId: string) => void };
   /** conferences.allocation_swap_mode; read here once when not passed. */
   allocationSwapMode?: string;
-  /** Drawn beside Search people in the header (the leader card's Swap allocations). */
-  headerAction?: React.ReactNode;
 }) {
   const [query, setQuery] = useState('');
   const mode = useSwapMode(conferenceId, allocationSwapMode);
@@ -190,6 +192,12 @@ export default function PeopleTable({ rows, societyId, societyName, conferenceId
   // The member pop-up (application id) and the committee pop-up (conference committee id).
   const [detailsFor, setDetailsFor] = useState<string | null>(null);
   const [committeeOpen, setCommitteeOpen] = useState<string | null>(null);
+  // Swap allocations (owner, 21 Oct 2026): the button turns into Cancel in the
+  // same place, nothing else on the card moves; two people are picked right in
+  // the table and the swap runs on the second pick, never asked first.
+  const [swapOn, setSwapOn] = useState(false);
+  const [picked, setPicked] = useState<string | null>(null);
+  const swap = useMemo(() => ({ on: swapOn, selected: picked ? [picked] : [] }), [swapOn, picked]);
 
   // The rows with this table's own changes laid over them.
   const live = useMemo(() => rows.map(r => {
@@ -317,6 +325,25 @@ export default function PeopleTable({ rows, societyId, societyName, conferenceId
     });
   }, [rowOf, canDropOn, mode, runOp, conferenceId, societyId, societyName]);
 
+  // Swap mode: the first pick is held, the second runs the swap at once (the
+  // same doSwitch as a drag: perform_delegation_swap while leaders reshuffle,
+  // a swap request to the organisers while the conference wants to approve).
+  const stopSwap = useCallback(() => { setSwapOn(false); setPicked(null); }, []);
+  const pickForSwap = useCallback((id: string) => {
+    if (!picked) { setPicked(id); return; }
+    if (picked === id) { setPicked(null); return; }
+    const from = picked;
+    setSwapOn(false);
+    setPicked(null);
+    doSwitch(from, id);
+  }, [picked, doSwitch]);
+  useEffect(() => {
+    if (!swapOn) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') stopSwap(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [swapOn, stopSwap]);
+
   const askSwitch = useCallback((fromId: string, toId: string, anchor: HTMLElement) => {
     const c = switchCopy(fromId, toId);
     setAsk({ anchor, align: 'start', ...c, danger: false, onYes: () => { setAsk(null); doSwitch(fromId, toId); } });
@@ -406,11 +433,40 @@ export default function PeopleTable({ rows, societyId, societyName, conferenceId
   const heads = DELEGATIONS_V2_DB ? ['Person', 'Allocation', 'Position paper', 'Payment'] : ['Person', 'Allocation', 'Payment'];
   const hasOpenSeats = (shownOpenSeats?.length ?? 0) > 0;
   const seatToolsOn = DELEGATIONS_V2_DB && !swap.on;
+  const swapHint = !swapOn ? '' : picked ? 'Pick one more' : mode === 'request' ? 'Pick two people to ask for a swap' : 'Pick two people to swap';
+  // Both states keep one width, so the search beside them never moves.
+  const swapButton = !canSwitchSeated ? null : !swapOn ? (
+    <button
+      type="button"
+      onClick={() => { setSwapOn(true); setPicked(null); setAsk(null); }}
+      className={BTN_CLASS}
+      style={{ ...secondaryBtn, minHeight: 40, minWidth: 176 }}
+    >
+      <ArrowLeftRight size={17} strokeWidth={STROKE} aria-hidden /> Swap allocations
+    </button>
+  ) : (
+    <button
+      type="button"
+      onClick={stopSwap}
+      className={BTN_CLASS}
+      style={{ ...secondaryBtn, minHeight: 40, minWidth: 176 }}
+      title="Leave swap mode"
+    >
+      <X size={17} strokeWidth={STROKE} aria-hidden /> Cancel
+    </button>
+  );
 
   return (
     <section className="@container min-w-0" style={{ ...cardStyle, padding: '8px 0 12px' }} aria-label="People">
       <div className="flex items-center justify-between gap-3 flex-wrap" style={{ padding: '16px 24px 12px' }}>
-        <h2 style={{ fontFamily: FONT, fontSize: 19, fontWeight: 600, color: INK, margin: 0 }}>People</h2>
+        <div className="flex items-baseline gap-3 min-w-0">
+          <h2 style={{ fontFamily: FONT, fontSize: 19, fontWeight: 600, color: INK, margin: 0 }}>People</h2>
+          {/* Swap mode's one hint, on the title's line so nothing below moves;
+              read aloud on every width, drawn where the header has room. */}
+          <span aria-live="polite" className={swapHint ? 'sr-only @[720px]:not-sr-only' : 'sr-only'} style={{ fontFamily: FONT, fontSize: 14, color: INK_SOFT }}>
+            {swapHint}
+          </span>
+        </div>
         <div className="flex items-center gap-2.5 flex-wrap min-w-0">
         {rows.length > 4 && (
           <label className="inline-flex items-center gap-2" style={{ height: 40, padding: '0 12px', borderRadius: 10, background: '#F6F2EA', color: INK_SOFT, width: 240, maxWidth: '100%' }}>
@@ -426,7 +482,7 @@ export default function PeopleTable({ rows, societyId, societyName, conferenceId
             />
           </label>
         )}
-        {headerAction}
+        {swapButton}
         </div>
       </div>
 
@@ -440,9 +496,9 @@ export default function PeopleTable({ rows, societyId, societyName, conferenceId
           {rows.length === 0 ? 'Nobody has joined yet. Share the invite link to bring your people in.' : 'Nobody matches that search.'}
         </p>
       ) : shown.map(r => {
-        const selectable = swap.on && !!r.seat?.committee_id;
-        const selected = swap.selected.includes(r.application_id);
         const rowBusy = busy.has(r.application_id);
+        const selectable = swap.on && !!r.seat?.committee_id && !rowBusy && r.role !== 'faculty-advisor';
+        const selected = swap.selected.includes(r.application_id);
         const isTarget = !!drag && drag.over === r.application_id;
         const draggable = !swap.on && !rowBusy && r.role !== 'faculty-advisor' && !!r.seat?.committee_id && (canSwitchSeated || canMoveToEmpty);
         const seatable = r.role !== 'faculty-advisor';
@@ -465,7 +521,12 @@ export default function PeopleTable({ rows, societyId, societyName, conferenceId
           <div
             key={r.application_id}
             data-seat-target={r.application_id}
-            onClick={() => { if (selectable) swap.toggle(r.application_id); }}
+            onClick={() => { if (selectable) pickForSwap(r.application_id); }}
+            onKeyDown={(e) => { if (selectable && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); pickForSwap(r.application_id); } }}
+            role={selectable ? 'button' : undefined}
+            tabIndex={selectable ? 0 : undefined}
+            aria-pressed={selectable ? selected : undefined}
+            aria-label={selectable ? `${selected ? 'Picked' : 'Pick'} ${r.name}, ${r.seat?.country_name ?? ''} ${r.seat?.committee_label ?? ''}` : undefined}
             className={`relative flex flex-col gap-3 @[760px]:grid ${grid} @[760px]:gap-3 @[760px]:items-center`}
             style={{
               padding: '12px 24px', borderBottom: `1px solid ${LINE}`,
@@ -528,7 +589,8 @@ export default function PeopleTable({ rows, societyId, societyName, conferenceId
                     label: r.seat.country_name ?? r.name, committee: r.seat.committee_label,
                   }, fromGrip);
                 }}
-                onOpenCommittee={setCommitteeOpen}
+                // While swapping, the whole allocation cell picks the row.
+                onOpenCommittee={swap.on ? undefined : setCommitteeOpen}
                 wasJustDragged={wasJustDragged}
                 busy={rowBusy}
                 onPlace={seatToolsOn && seatable && !r.seat && hasOpenSeats

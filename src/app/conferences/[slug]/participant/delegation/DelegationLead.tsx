@@ -13,8 +13,8 @@
 // being reviewed, or with `showDone` (a faculty advisor, whose Overview would
 // otherwise be empty). Genuine actions (Pay now, a role's own step, Join
 // session) stay the one next step; documents needed back ride under it as
-// `notice`. Built and placed by ParticipantView; for a leader by LeaderOverview
-// (delegation/overview), which may hand it a step whose button opens another
+// `notice`. Placed by DelegationOverview (delegation/overview) for anyone in a
+// delegation, which may hand a leader a step whose button opens another
 // section of the dashboard (`scrollTo: 'section:<key>'`, through onOpenSection).
 
 import Link from 'next/link';

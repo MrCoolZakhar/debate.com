@@ -2,8 +2,9 @@
 
 // Advisor participant view. Advisors never hold a committee allocation
 // themselves. Owner, 20 Oct 2026: Overview is the advisor's OWN page, drawn by
-// ParticipantView (LeaderOverview since 21 Oct 2026: the next step, then the
-// delegation's recap tiles, Deadlines and Needs Your Attention); Delegation is the second section with the leader card
+// ParticipantView (DelegationOverview since 21 Oct 2026: the next step, their
+// delegation's committees in place of a seat, Your Delegation, the position
+// papers and Deadlines); Delegation is the second section with the leader card
 // (import, invite link, expected size, swaps); Committees the rooms the
 // delegation sits in (delegation/advisor/AdvisorCommitteesSection; every room
 // only without a delegation). Buying delegation credits and requesting

@@ -36,7 +36,8 @@ import { normalizeSocialUrl } from '@/lib/socialLinks';
 import { normalizeBlocks } from '@/lib/customQuestions';
 import { appendEditionYear, matchPresetEmblem } from '@/lib/presetNames';
 import { conferenceAcronymLabel, conferenceFullNameLabel, conferenceLabels } from '@/lib/conferenceLabels';
-import ConferencePartners, { type PartnerEntry } from '@/components/ConferencePartners';
+import type { PartnerEntry } from '@/components/ConferencePartners';
+import PartnerOrbit from '@/components/PartnerOrbit';
 import { formatConferenceDates } from '@/lib/conferenceDates';
 import ParticipantView from '@/app/conferences/[slug]/participant/ParticipantView';
 import { effectiveReleaseTime } from '@/app/conferences/[slug]/participant/shared';
@@ -71,6 +72,9 @@ import { conferenceImageSrc } from '@/lib/listingImage';
 import { NotOnGavellingMark } from '@/components/conferences/NotOnGavellingMark';
 import { ListingCta, ListingSourceNote } from './ListingParts';
 import JoinTheTeam from './JoinTheTeam';
+import ConferenceReviewGate from '@/components/reviews/ConferenceReviewGate';
+import ConferenceReviewDialog from '@/components/reviews/ConferenceReviewDialog';
+import { reviewWindowOpen } from '@/lib/conferenceReviews';
 
 const GRAIN = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='grain'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23grain)' opacity='1'/%3E%3C/svg%3E")`;
 
@@ -687,7 +691,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
   const params = useParams<{ slug: string }>();
   const slug = params.slug;
   const router = useRouter();
-  const { user, session, profile, loading: authLoading } = useAuth();
+  const { user, session, loading: authLoading } = useAuth();
 
   // Organizer theme preview (?preview=1): same shape as the apply flow's own
   // preview gate. A stranger appending ?preview=1 gets canPreview false and
@@ -1141,14 +1145,13 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
   const [reviews, setReviews] = useState<ConferenceReview[]>([]);
   const [predReviews, setPredReviews] = useState<ConferenceReview[]>([]);
   const [predAcronym, setPredAcronym] = useState<string | null>(null);
-  const [reviewPromptDismissed, setReviewPromptDismissed] = useState(true);
-  const [reviewRating, setReviewRating] = useState(0);
-  const [reviewHover, setReviewHover] = useState(0);
-  const [reviewText, setReviewText] = useState('');
-  const [reviewSubmitting, setReviewSubmitting] = useState(false);
-  const [reviewError, setReviewError] = useState('');
+  // The review pop-up opened from the Reviews tab (the automatic one is
+  // ConferenceReviewGate, src/components/reviews/).
+  const [reviewDialogOpen, setReviewDialogOpen] = useState(false);
   // Partners: mutually-approved conferences and organiser-added companies,
-  // flattened into one display shape by the loader below.
+  // flattened into one display shape by the loader below. Shown as circles on
+  // the rim of the header logo (PartnerOrbit, owner 21 Oct 2026); there is no
+  // partners strip in the Overview any more.
   const [partners, setPartners] = useState<PartnerEntry[]>([]);
   // Organizer in-place editing (only reachable when isOrganizerViewer)
   const [editModal, setEditModal] = useState<null | 'banner' | 'logo' | 'description' | 'about'>(null);
@@ -1409,13 +1412,6 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
       // Columns not deployed yet, ignore.
     }
 
-    // Review prompt dismissal persists per conference
-    try {
-      setReviewPromptDismissed(localStorage.getItem(`review-prompt-${conf.id}`) === 'dismissed');
-    } catch {
-      setReviewPromptDismissed(false);
-    }
-
     // Public committee extras: full rosters, live occupancy
     const ccIds = ((committeesRes.data as Committee[]) ?? []).map(c => c.id);
     if (ccIds.length > 0) {
@@ -1520,34 +1516,11 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
     setReviews((data as ConferenceReview[]) ?? []);
   }
 
-  async function handleSubmitReview() {
-    if (!user || !session || !conference || reviewRating < 1 || reviewSubmitting) return;
-    setReviewSubmitting(true);
-    setReviewError('');
-    const authed = getAuthedClient(session.access_token);
-    const { error } = await authed.from('conference_reviews').insert({
-      conference_id: conference.id,
-      user_id: user.id,
-      rating: reviewRating,
-      review_text: reviewText.trim() || null,
-      display_name: profile?.display_name ?? null,
-    });
-    if (error) {
-      setReviewError('Your review could not be saved. Only attendees can leave a review.');
-      setReviewSubmitting(false);
-      return;
-    }
-    await refreshReviews(conference.id);
-    setReviewRating(0);
-    setReviewText('');
-    setReviewSubmitting(false);
-  }
-
-  function dismissReviewPrompt() {
-    setReviewPromptDismissed(true);
-    if (conference) {
-      try { localStorage.setItem(`review-prompt-${conference.id}`, 'dismissed'); } catch { /* ignore */ }
-    }
+  /** A review landed (the pop-up saves it): re-read the list, so `myReview`
+   *  is found and every review prompt on the page goes. */
+  function handleReviewSubmitted() {
+    setReviewDialogOpen(false);
+    if (conference) void refreshReviews(conference.id);
   }
 
   // Study guides / position paper submission now live entirely in the
@@ -1796,6 +1769,8 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
   // A listing's images may be third party: drawn through our own route (src/lib/listingImage.ts).
   const bannerSrc = conferenceImageSrc(conference, 'banner', conference.banner_url);
   const logoSrc = conferenceImageSrc(conference, 'logo', conference.logo_url);
+  // A listing (not on Gavelling yet) shows no partners.
+  const orbitPartners = isListing ? [] : partners;
   const countryObj = getCountryByName((conference.country ?? "").trim());
   const flagUrl = countryObj ? getFlagUrl(countryObj.code) : null;
   const enabledRoles = roleConfigs.filter(r => r.is_enabled);
@@ -1897,8 +1872,9 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
 
   const attended = myApplications.some(a => a.status === 'assigned' || a.status === 'checked-in') || !!myAllocation;
   const myReview = user ? reviews.find(r => r.user_id === user.id) : undefined;
-  const canReview = !!user && attended && !myReview;
-  const showReviewPrompt = canReview && !reviewPromptDismissed;
+  // Owner, 21 Oct 2026: never offered before the conference's last day has
+  // passed (dates to be decided: never). `reviewWindowOpen` is the one test.
+  const canReview = !!user && attended && !myReview && !isListing && reviewWindowOpen(conference);
 
   // Reviews aggregates, current edition + approved predecessor edition
   const allReviews = [...reviews, ...predReviews];
@@ -2005,9 +1981,13 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
 
           {/* Bottom-left content */}
           <div className="absolute bottom-0 left-0 right-0 px-6 md:px-14 z-10" style={{ paddingBottom: '68px' }}>
-            <div className="flex items-end gap-5">
-              {logoSrc ? (
-                <div className="hidden sm:block relative flex-shrink-0" style={{ width: '150px', height: '150px' }}>
+            {/* sm:gap-7 leaves room for the partner circles that reach 20px
+                past the logo's right edge (PartnerOrbit), clear of the title. */}
+            <div className="flex items-end gap-5 sm:gap-7">
+              {/* Partners ride the logo's rim. Without a logo a visitor still
+                  gets the monogram disc when there are partners to hang on it. */}
+              {logoSrc || (orbitPartners.length > 0 && !isOrganizerViewer) ? (
+                <PartnerOrbit partners={orbitPartners} size={150} dot={40} maxSlots={9} className="hidden sm:block flex-shrink-0">
                   <LogoDisc
                     src={logoSrc}
                     alt={conference.acronym}
@@ -2023,7 +2003,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                       style={{ zIndex: 30, borderRadius: '9999px' }}
                     />
                   )}
-                </div>
+                </PartnerOrbit>
               ) : isOrganizerViewer ? (
                 <button
                   type="button"
@@ -2046,6 +2026,13 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                 </button>
               ) : null}
               <div className="min-w-0">
+                {/* Phones hide the big logo; with partners a small one sits on
+                    its own row above the title, partners on its rim. */}
+                {orbitPartners.length > 0 && (
+                  <PartnerOrbit partners={orbitPartners} size={60} dot={24} maxSlots={6} className="sm:hidden" style={{ marginBottom: 18 }}>
+                    <LogoDisc src={logoSrc} alt={conference.acronym} size={60} fallbackText={conference.acronym.slice(0, 3)} style={{ boxShadow: '0 8px 18px rgba(0,0,0,0.4)' }} />
+                  </PartnerOrbit>
+                )}
                 <p style={{ fontFamily: "var(--font-brand), sans-serif", fontWeight: 700, fontSize: '11px', color: 'var(--gv-on-main)', letterSpacing: '0.14em', marginBottom: '6px' }}>
                   {conferenceAcronymLabel(conference)}
                 </p>
@@ -2210,52 +2197,22 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
             {/* Left column */}
             <div className="flex-1 min-w-0">
 
-              {/* Review prompt, attendees who haven't reviewed yet */}
-              {showReviewPrompt && !isListing && (
-                <div
-                  className="relative flex items-center gap-4 rounded-[18px] px-5 py-4 mb-5"
-                  style={{
-                    backgroundColor: 'rgba(250,248,243,0.88)',
-                    backdropFilter: 'blur(14px)',
-                    WebkitBackdropFilter: 'blur(14px)',
-                    border: '1px solid color-mix(in srgb, var(--gv-accent) 35%, transparent)',
-                    boxShadow: '0 8px 24px color-mix(in srgb, var(--gv-main) 8%, transparent)',
-                  }}
-                >
-                  <span
-                    className="flex items-center justify-center flex-shrink-0"
-                    style={{ width: '38px', height: '38px', borderRadius: '12px', backgroundColor: 'color-mix(in srgb, var(--gv-accent) 12%, transparent)' }}
-                  >
-                    <Star size={17} strokeWidth={2} style={{ color: 'var(--gv-accent)', fill: 'var(--gv-accent)' }} />
-                  </span>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-[14px] font-bold" style={{ color: 'var(--gv-on-surface)', fontFamily: "var(--font-brand), sans-serif", margin: 0 }}>
-                      How was {conferenceAcronymLabel(conference)}?
-                    </p>
-                    <p className="text-[12px]" style={{ color: 'var(--gv-muted)', fontFamily: "var(--font-brand), sans-serif", margin: '1px 0 0 0' }}>
-                      Leave a review to help future delegates
-                    </p>
-                  </div>
-                  <button
-                    onClick={() => showTab('reviews')}
-                    className="flex-shrink-0 rounded-xl py-2 px-4 text-[11px] font-bold focus:outline-none transition-colors gv-lift"
-                    style={{ backgroundColor: 'var(--gv-main)', color: 'var(--gv-on-main)', fontFamily: "var(--font-brand), sans-serif", border: 'none', cursor: 'pointer' }}
-                    onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--gv-main-mid)'; }}
-                    onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--gv-main)'; }}
-                  >
-                    Leave a review
-                  </button>
-                  <button
-                    onClick={dismissReviewPrompt}
-                    aria-label="Dismiss review prompt"
-                    className="flex items-center justify-center flex-shrink-0 rounded-full focus:outline-none transition-colors"
-                    style={{ width: '26px', height: '26px', border: 'none', backgroundColor: 'transparent', color: 'var(--gv-muted)', cursor: 'pointer' }}
-                    onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = 'var(--gv-on-surface)'; }}
-                    onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = 'var(--gv-muted)'; }}
-                  >
-                    <X size={14} />
-                  </button>
-                </div>
+              {/* The review pop-up (owner, 21 Oct 2026): every visit until the
+                  attendee has reviewed, once the conference is over. Replaces
+                  the old in-page prompt, which showed before the conference. */}
+              <ConferenceReviewGate
+                conference={conference}
+                eligible={canReview && !previewing}
+                themeStyle={themeVars}
+                onSubmitted={handleReviewSubmitted}
+              />
+              {reviewDialogOpen && canReview && (
+                <ConferenceReviewDialog
+                  conference={conference}
+                  themeStyle={themeVars}
+                  onClose={() => setReviewDialogOpen(false)}
+                  onSubmitted={handleReviewSubmitted}
+                />
               )}
 
               {/* The view switcher. 26 Sep 2026, twice: the floating glass pill
@@ -2685,63 +2642,27 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                     )}
                   </SectionCard>
 
-                  {/* Write a review, attendees only */}
+                  {/* Write a review: attendees, once the conference is over */}
                   {canReview && (
                     <SectionCard>
-                      <p style={{ fontFamily: "var(--font-brand), sans-serif", fontWeight: 700, fontSize: '9px', letterSpacing: '0.14em', color: 'var(--gv-accent)', margin: '0 0 12px 0' }}>
-                        YOUR REVIEW
-                      </p>
-                      <div className="flex items-center gap-1.5 mb-4" onMouseLeave={() => setReviewHover(0)}>
-                        {[1, 2, 3, 4, 5].map(i => (
-                          <button
-                            key={i}
-                            onClick={() => setReviewRating(i)}
-                            onMouseEnter={() => setReviewHover(i)}
-                            aria-label={`Rate ${i} out of 5`}
-                            className="focus:outline-none"
-                            style={{ background: 'none', border: 'none', padding: '2px', cursor: 'pointer' }}
-                          >
-                            <Star
-                              size={26}
-                              strokeWidth={1.6}
-                              style={{
-                                color: i <= (reviewHover || reviewRating) ? 'var(--gv-accent)' : 'rgba(154,138,120,0.45)',
-                                fill: i <= (reviewHover || reviewRating) ? 'var(--gv-accent)' : 'none',
-                                transition: 'color 120ms ease',
-                              }}
-                            />
-                          </button>
-                        ))}
+                      <div className="flex flex-wrap items-center gap-4">
+                        <div className="flex-1 min-w-[200px]">
+                          <p className="text-[15px] font-semibold [overflow-wrap:anywhere]" style={{ color: 'var(--gv-on-surface)', fontFamily: "var(--font-brand), sans-serif", margin: 0 }}>
+                            How was {conferenceAcronymLabel(conference) || conferenceFullNameLabel(conference)}?
+                          </p>
+                          <p className="text-[13px]" style={{ color: 'var(--gv-muted)', fontFamily: "var(--font-brand), sans-serif", margin: '2px 0 0 0' }}>
+                            Your review helps future delegates
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setReviewDialogOpen(true)}
+                          className="rounded-xl px-5 font-semibold text-[13px] focus:outline-none transition-transform active:scale-[0.97]"
+                          style={{ minHeight: 44, backgroundColor: 'var(--gv-main)', color: 'var(--gv-on-main)', fontFamily: "var(--font-brand), sans-serif", border: 'none', cursor: 'pointer' }}
+                        >
+                          Write a review
+                        </button>
                       </div>
-                      <textarea
-                        value={reviewText}
-                        onChange={(e) => setReviewText(e.target.value)}
-                        rows={4}
-                        placeholder="What should future delegates know about this conference?"
-                        className="w-full rounded-xl px-4 py-3 text-sm focus:outline-none resize-none"
-                        style={{ border: '1px solid var(--gv-border)', backgroundColor: 'rgba(237,231,216,0.25)', color: 'var(--gv-on-surface)', fontFamily: "var(--font-brand), sans-serif", lineHeight: 1.7 }}
-                        onFocus={(e) => { e.currentTarget.style.borderColor = 'var(--gv-main)'; }}
-                        onBlur={(e) => { e.currentTarget.style.borderColor = 'var(--gv-border)'; }}
-                      />
-                      {reviewError && (
-                        <p className="text-[12px] mt-2" style={{ color: '#8B2020', fontFamily: "var(--font-brand), sans-serif", margin: '8px 0 0 0' }}>
-                          {reviewError}
-                        </p>
-                      )}
-                      <button
-                        onClick={handleSubmitReview}
-                        disabled={reviewRating < 1 || reviewSubmitting}
-                        className="mt-4 rounded-xl py-2.5 px-6 font-bold text-[13px] focus:outline-none transition-colors gv-lift"
-                        style={{
-                          backgroundColor: reviewRating < 1 || reviewSubmitting ? 'var(--gv-border)' : 'var(--gv-main)',
-                          color: reviewRating < 1 || reviewSubmitting ? 'var(--gv-muted)' : 'var(--gv-on-main)',
-                          fontFamily: "var(--font-brand), sans-serif",
-                          border: 'none',
-                          cursor: reviewRating < 1 || reviewSubmitting ? 'default' : 'pointer',
-                        }}
-                      >
-                        {reviewSubmitting ? 'Saving…' : 'Submit review'}
-                      </button>
                     </SectionCard>
                   )}
 
@@ -3886,12 +3807,6 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
 
               {/* Join the Team: this conference's live Job Board listings; renders nothing when there are none. */}
               {!isListing && <JoinTheTeam conferenceId={conference.id} />}
-
-              {/* Partners — logo + name only, everything else behind the
-                  popup. Floats in the left gutter on a wide screen and falls
-                  back to an inline strip when there is no room; see
-                  components/ConferencePartners.tsx. */}
-              <ConferencePartners partners={partners} />
 
               {overviewFooter}
 

@@ -569,7 +569,7 @@ export function ModalShell({ children, onClose, maxWidth = 672, rail, label }: {
  *  COLOUR: the label is `NEU.forest` (10.73:1) when active and `SOFT` (5.55:1)
  *  when not. Neither is `NEU.muted`, which is 2.81:1 and decoration only. */
 export function RailTab({
-  icon: Icon, label, count, active, side, onClick, title,
+  icon: Icon, label, count, active, side, onClick, title, disabled = false,
 }: {
   icon: LucideIcon;
   label: string;
@@ -579,17 +579,21 @@ export function RailTab({
   side: boolean;
   onClick: () => void;
   title?: string;
+  /** Additive (admin board): drawn but not pressable; `title` says why. */
+  disabled?: boolean;
 }) {
   const ink = active ? NEU.forest : SOFT;
   return (
     <button
       type="button"
-      onClick={onClick}
+      onClick={disabled ? undefined : onClick}
+      aria-disabled={disabled || undefined}
       title={title}
       aria-current={active ? 'page' : undefined}
       className="inline-flex items-center gap-2 focus:outline-none"
       style={{
-        border: 'none', cursor: 'pointer', fontFamily: OUTFIT,
+        border: 'none', cursor: disabled ? 'not-allowed' : 'pointer', fontFamily: OUTFIT,
+        opacity: disabled ? 0.55 : 1,
         fontSize: 14.5, fontWeight: 800, letterSpacing: '0.01em', color: ink,
         backgroundColor: active ? NEU.surface : NEU.base,
         boxShadow: active
@@ -747,6 +751,7 @@ export type RecapTab = 'overview' | 'documents' | 'scoreboard' | 'history' | 'at
 export function RecapModal({
   data, onClose, onOpenScoreboard, onBroadcast, floorDetail = null, initialDocFilter = 'all',
   conferenceSlug, awardsConfig, awardsPublishedAt, conferenceEndDate = null,
+  showAwards = true, showJoin = true, broadcastBlockedTitle = null,
 }: {
   data: LiveCommittee;
   onClose: () => void;
@@ -776,6 +781,14 @@ export function RecapModal({
   awardsConfig: AwardsConfig;
   awardsPublishedAt: string | null;
   conferenceEndDate?: string | null;
+  /** Additive, for the staff board (src/app/admin/LiveRoomView.tsx). The
+   *  organiser passes none of these, so its recap is unchanged: Awards hidden
+   *  for a standalone room, "Join as secretariat" hidden on the read-only
+   *  staff view, and a Broadcast tab drawn but disabled (with this hover title)
+   *  while a database change is pending. */
+  showAwards?: boolean;
+  showJoin?: boolean;
+  broadcastBlockedTitle?: string | null;
 }) {
   const session = data.session;
   // `phase` is left at whatever the room was last doing when it was gavelled out
@@ -872,11 +885,20 @@ export function RecapModal({
         active={tab === 'attendance'} onClick={() => setTab('attendance')}
         title="The roll: present, present & voting, absent, and each delegation's speaking time"
       />
-      <RailTab
-        side={side} icon={Medal} label="Awards" active={tab === 'awards'}
-        onClick={() => setTab('awards')}
-        title="This committee's award slate: what the chairs nominated and where it is in ratification"
-      />
+      {showAwards && (
+        <RailTab
+          side={side} icon={Medal} label="Awards" active={tab === 'awards'}
+          onClick={() => setTab('awards')}
+          title="This committee's award slate: what the chairs nominated and where it is in ratification"
+        />
+      )}
+      {!onBroadcast && broadcastBlockedTitle && (
+        <RailTab
+          side={side} icon={Megaphone} label="Broadcast" disabled
+          onClick={() => {}}
+          title={broadcastBlockedTitle}
+        />
+      )}
       {onBroadcast && (
         <RailTab
           side={side} icon={Megaphone} label="Broadcast"
@@ -996,7 +1018,7 @@ export function RecapModal({
 
           {/* Join as secretariat — the one action that belongs on every tab's
               floor, kept on Overview so it is not repeated five times. */}
-          {session && (
+          {session && showJoin && (
             <button
               onClick={joinAsSecretariat}
               className="w-full inline-flex items-center justify-center gap-2 rounded-full py-3 font-bold text-sm focus:outline-none"
@@ -1036,7 +1058,7 @@ export function RecapModal({
 
       {tab === 'attendance' && <RosterBody data={data} />}
 
-      {tab === 'awards' && (
+      {tab === 'awards' && showAwards && (
         <AwardsRecap
           committeeId={data.conf.id}
           conferenceSlug={conferenceSlug}

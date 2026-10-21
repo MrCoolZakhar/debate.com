@@ -7,11 +7,10 @@
 // active `section`. Every card here stays MOUNTED and is hidden with
 // display:none when its section is not shown (Pane), so switching never
 // refetches a card or loses a half-uploaded position paper.
-//   overview    published awards (only when there are some), then the seat:
-//               the assignment hero for an independent delegate, the compact
-//               OwnSeatCard for anyone in a delegation (owner, 20 Oct 2026:
-//               Overview is back and is their OWN page; the page's next step,
-//               DelegationLead, sits above it and carries Join session)
+//   overview    published awards (only when there are some), then the seat
+//               for an independent delegate (the assignment hero). Anyone in
+//               a delegation has their seat, guide, paper and payment on the
+//               delegation Overview (DelegationOverview, owner 21 Oct 2026)
 //   delegation  members of a delegation only, second: the leader or member card
 //   committee   the committee card (5A: topics, co-delegate, live room), the
 //               study guide and paper at a glance, the committee list
@@ -20,18 +19,15 @@
 // one page, with Payment and Support placed by the parent.
 
 import { useCallback, useState } from 'react';
-import { Compass, FileText, Flag, Landmark, Users } from 'lucide-react';
-import { CircleFlag } from '@/components/CircleFlag';
-import ProfileLink from '@/components/ProfileLink';
+import { FileText, Flag, Landmark, Users } from 'lucide-react';
 import AssignmentHero from './AssignmentHero';
-import { useSeatCrest } from './AllocationCard';
 import MyCommitteeSection from './delegation/committee/MyCommitteeSection';
 import StudyGuideCard from './StudyGuideCard';
 import PositionPaperCard from './PositionPaperCard';
 import DelegationPanel from './DelegationPanel';
 import MyAwardsCard from './MyAwardsCard';
-import { CardHeading, CommitteeEmblem, DashCard, INK, INK_SOFT, Pane, TwoRowName, committeeShort, useDashStacked, useReportNextStep, type NextStep } from './dashboardKit';
-import { effectiveReleaseTime, formatReleaseDate, OUTFIT, useAllocationPartner } from './shared';
+import { Pane, useDashStacked, useReportNextStep, type NextStep } from './dashboardKit';
+import { effectiveReleaseTime, formatReleaseDate } from './shared';
 import type { ParticipantApplication, ParticipantAllocation, ParticipantCommittee } from './types';
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -73,63 +69,7 @@ function delegateNextStep(
   return { kind: 'done', line: 'Read your study guide and prepare your speeches for the committee.' };
 }
 
-/** A delegation member's own seat in Overview: the flag (or the seat's crest)
- *  with the country, the committee's emblem with its short name over the full
- *  one, and a double seat's partner. No Join session here: the next step above
- *  it carries that. Names wrap, never cut. */
-export function OwnSeatCard({ committee, myAllocation, alwaysTitled = false }: {
-  committee: ParticipantCommittee | null;
-  myAllocation: ParticipantAllocation | null;
-  /** Keep the "Your Seat" title on the phone page too (a leader's Overview has no pane heading). */
-  alwaysTitled?: boolean;
-}) {
-  const crest = useSeatCrest(myAllocation);
-  const partner = useAllocationPartner(myAllocation);
-  const hideTitle = !alwaysTitled;
-  if (!committee || !myAllocation) {
-    return (
-      <DashCard>
-        <CardHeading title="Your Seat" stackedHide={hideTitle} />
-        <p className="inline-flex items-center gap-2" style={{ fontFamily: OUTFIT, fontSize: 14, color: INK_SOFT, margin: 0, lineHeight: 1.5 }}>
-          <Compass size={18} strokeWidth={1.8} aria-hidden style={{ color: 'var(--gv-main)', flexShrink: 0 }} />
-          Your committee and country appear here once the organisers assign them.
-        </p>
-      </DashCard>
-    );
-  }
-  return (
-    <DashCard className="@container">
-      <CardHeading title="Your Seat" stackedHide={hideTitle} />
-      <div className="grid grid-cols-1 @[480px]:grid-cols-2 gap-5">
-        <div className="flex items-center gap-3.5 min-w-0">
-          <CircleFlag code={myAllocation.country_code} logoUrl={crest} label={myAllocation.country_name} size={52} />
-          <div className="min-w-0">
-            <p className="[overflow-wrap:anywhere]" style={{ fontFamily: OUTFIT, fontSize: 18, fontWeight: 800, color: INK, margin: 0, lineHeight: 1.2 }}>
-              {myAllocation.country_name}
-            </p>
-            {partner?.name && (
-              <p className="[overflow-wrap:anywhere]" style={{ fontFamily: OUTFIT, fontSize: 12.5, color: INK_SOFT, margin: '3px 0 0 0' }}>
-                With <ProfileLink userId={partner.userId} name={partner.name}>{partner.name}</ProfileLink>
-              </p>
-            )}
-          </div>
-        </div>
-        <div className="flex items-center gap-3.5 min-w-0">
-          <CommitteeEmblem
-            logoUrl={committee.logo_url}
-            name={committee.name}
-            abbreviation={committee.abbreviation}
-            isCrisis={committee.committee_type === 'crisis'}
-            size={48}
-          />
-          <TwoRowName short={committeeShort(committee.name, committee.abbreviation)} full={committee.name} size={18} />
-        </div>
-      </div>
-    </DashCard>
-  );
-}
-
-export default function DelegateParticipant({ conferenceId, conferenceSlug, conferenceStartDate, application, myAllocation, committees, allocationSwapMode, section, onSelectSection, seatShownByLeader = false }: {
+export default function DelegateParticipant({ conferenceId, conferenceSlug, conferenceStartDate, application, myAllocation, committees, allocationSwapMode, section, onSelectSection }: {
   conferenceId: string;
   conferenceSlug: string;
   conferenceStartDate: string | null;
@@ -140,9 +80,6 @@ export default function DelegateParticipant({ conferenceId, conferenceSlug, conf
   section: string;
   /** Switches the desktop sub-nav (the paper and guide cards lead to Documents). */
   onSelectSection?: (key: string) => void;
-  /** A head delegate's seat is drawn at the top of the leader Overview
-   *  (LeaderOverview, owner 21 Oct 2026), so this pane draws only the awards. */
-  seatShownByLeader?: boolean;
 }) {
   const committee = myAllocation ? committees.find(c => c.id === myAllocation.conference_committee_id) ?? null : null;
   // Below lg every pane shows on one page (see ParticipantView), in this
@@ -166,11 +103,12 @@ export default function DelegateParticipant({ conferenceId, conferenceSlug, conf
     <>
       {/* Overview: published awards (only once the secretariat publishes an
           honour for this allocation), then the seat. */}
-      <Pane show={section === 'overview'} title={seatShownByLeader ? undefined : 'Your Assignment'} icon={Flag}>
+      {/* Anyone in a delegation has their seat on the delegation Overview
+          (DelegationOverview, owner 21 Oct 2026): this pane then draws only
+          the awards. */}
+      <Pane show={section === 'overview'} title={inDelegation ? undefined : 'Your Assignment'} icon={Flag}>
         <MyAwardsCard conferenceId={conferenceId} conferenceSlug={conferenceSlug} myAllocation={myAllocation} />
-        {seatShownByLeader ? null : inDelegation ? (
-          <OwnSeatCard committee={committee} myAllocation={myAllocation} />
-        ) : (
+        {inDelegation ? null : (
           <AssignmentHero
             committee={committee}
             myAllocation={myAllocation}

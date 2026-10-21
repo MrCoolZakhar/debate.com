@@ -1,9 +1,13 @@
 'use client';
 
-// The Delegations tab inside Applications (taste board 2B, 19 Oct 2026): one
-// table of delegations with their expected size, who joined, the spots paid
-// for and a meter of seats given against paid spots; a rail with the totals
-// and how delegations get seats. A row opens the delegation pop-up.
+// The Delegations tab inside Applications (taste board 2B, 19 Oct 2026; owner
+// 21 Oct 2026): a grid of compact delegation cards, all the same height. Each
+// card leads with the delegation: a big round crest, the name big and bold,
+// "City, Country" small on ONE line with the round flag (short names for long
+// countries: UK, USA, UAE), then one small line with the allocations meter and
+// the next step. Expected / Joined / Paid are NOT on the cards (they took most
+// of each card); they stay in the pop-up's quiet row. A rail holds the totals
+// and how delegations get allocations. A card opens the delegation pop-up.
 // Decisions: docs/conferences/delegations.md.
 //
 // Where every number comes from (useDelegationsData.ts, delegationRows.ts):
@@ -36,11 +40,13 @@ import { useDelegationsData } from './useDelegationsData';
 import DelegationPopup, { type DelegationTab } from './DelegationPopup';
 import { DELEGATIONS_V2_DB, SEAT_LIMIT_OPTIONS, readDelegationSettings, writeDelegationSetting, type SeatLimit } from './v2';
 import {
-  BTN_CLASS, FONT, FOREST, HAIRLINE, INK, INK_SOFT, PlaceLine, ROW_LINE, SeatMeter, SkeletonRows,
+  BTN_CLASS, FONT, FOREST, HAIRLINE, INK, INK_SOFT, PlaceLine, SeatMeter, SkeletonRows,
   cardStyle, linkStyle, smallPrimaryBtn,
 } from './kit';
 
-const GRID = 'minmax(0,1fr) 90px 90px 90px 260px 120px';
+const CARD_GRID: React.CSSProperties = {
+  display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gridAutoRows: '1fr', gap: 14,
+};
 
 export interface DelegationsTabProps<M extends DelegationMemberLite> {
   conference: { id: string; slug: string; fee_currency: string };
@@ -142,36 +148,30 @@ export default function DelegationsTab<M extends DelegationMemberLite>(props: De
 
   return (
     <div className="flex flex-col xl:flex-row items-stretch xl:items-start" style={{ gap: 24 }}>
-      {/* ── The table ── */}
-      <div className="flex-1 min-w-0" style={{ ...cardStyle, padding: '6px 0 10px' }}>
-        <div className="overflow-x-auto">
-          <div style={{ minWidth: 900 }}>
-            <div className="grid" style={{ gridTemplateColumns: GRID, gap: 16, padding: '14px 24px', borderBottom: `1px solid ${HAIRLINE}` }}>
-              {['Delegation', 'Expected', 'Joined', 'Paid', 'Allocations given', ''].map((h, i) => (
-                <span key={i} style={{ fontFamily: FONT, fontSize: 12, fontWeight: 500, color: INK_SOFT }}>{h}</span>
-              ))}
-            </div>
+      {/* ── The cards ── */}
+      <div className="flex-1 min-w-0 flex flex-col" style={{ gap: 12 }}>
+        {data.loading && <div style={{ ...cardStyle, padding: '16px 20px' }}><SkeletonRows rows={4} height={64} /></div>}
 
-            {data.loading && <div style={{ padding: '16px 24px' }}><SkeletonRows rows={6} height={52} /></div>}
+        {data.loadFailed && (
+          <div style={{ ...cardStyle, padding: '22px 24px' }}>
+            <p style={{ fontFamily: FONT, fontSize: 14, color: INK }}>The delegations could not be loaded.</p>
+            <button type="button" onClick={() => { void data.reload(); }} className={BTN_CLASS} style={{ ...linkStyle, marginTop: 6 }}>Try again</button>
+          </div>
+        )}
 
-            {data.loadFailed && (
-              <div style={{ padding: '22px 24px' }}>
-                <p style={{ fontFamily: FONT, fontSize: 14, color: INK }}>The delegations could not be loaded.</p>
-                <button type="button" onClick={() => { void data.reload(); }} className={BTN_CLASS} style={{ ...linkStyle, marginTop: 6 }}>Try again</button>
-              </div>
-            )}
+        {!data.loading && !data.loadFailed && data.rows.length === 0 && (
+          <div style={{ ...cardStyle, padding: '28px 24px' }}>
+            <p style={{ fontFamily: FONT, fontSize: 16, fontWeight: 600, color: INK }}>No delegations yet</p>
+            <p style={{ fontFamily: FONT, fontSize: 14, color: INK_SOFT, marginTop: 4 }}>A head delegate or a faculty advisor creates one when they apply.</p>
+          </div>
+        )}
 
-            {!data.loading && !data.loadFailed && data.rows.length === 0 && (
-              <div style={{ padding: '28px 24px' }}>
-                <p style={{ fontFamily: FONT, fontSize: 16, fontWeight: 600, color: INK }}>No delegations yet</p>
-                <p style={{ fontFamily: FONT, fontSize: 14, color: INK_SOFT, marginTop: 4 }}>A head delegate or a faculty advisor creates one when they apply.</p>
-              </div>
-            )}
+        {!data.loading && data.rows.length > 0 && visible.length === 0 && (
+          <p style={{ ...cardStyle, padding: '22px 24px', fontFamily: FONT, fontSize: 14, color: INK_SOFT }}>No delegation matches that search.</p>
+        )}
 
-            {!data.loading && data.rows.length > 0 && visible.length === 0 && (
-              <p style={{ padding: '22px 24px', fontFamily: FONT, fontSize: 14, color: INK_SOFT }}>No delegation matches that search.</p>
-            )}
-
+        {visible.length > 0 && (
+          <div style={CARD_GRID}>
             {visible.map(r => {
               const giveSeats = r.seatsGiven < r.paid;
               return (
@@ -182,26 +182,23 @@ export default function DelegationsTab<M extends DelegationMemberLite>(props: De
                   aria-label={`Open ${r.name}`}
                   onClick={() => openRow(r.id, 'people')}
                   onKeyDown={e => { if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); openRow(r.id, 'people'); } }}
-                  className="dlgV2Row grid items-center focus:outline-none"
-                  style={{ gridTemplateColumns: GRID, gap: 16, padding: '14px 24px', borderBottom: `1px solid ${ROW_LINE}`, cursor: 'pointer' }}
+                  className="dlgV2Card flex flex-col justify-between focus:outline-none"
+                  style={{ ...cardStyle, borderRadius: 18, padding: '16px 18px', gap: 14, cursor: 'pointer' }}
                 >
-                  <div className="flex items-center gap-3 min-w-0">
-                    <DelegationCrest name={r.name} logoUrl={r.logoUrl} size={44} />
-                    <div className="flex flex-col min-w-0" style={{ gap: 2 }}>
-                      <span className="[overflow-wrap:anywhere]" style={{ fontFamily: FONT, fontSize: 18, fontWeight: 600, color: INK, lineHeight: 1.3 }}>{r.name}</span>
-                      <PlaceLine city={r.city} countryCode={r.countryCode} />
+                  <div className="flex items-center min-w-0" style={{ gap: 14 }}>
+                    <DelegationCrest name={r.name} logoUrl={r.logoUrl} size={64} />
+                    <div className="flex flex-col min-w-0" style={{ gap: 4 }}>
+                      <span className="[overflow-wrap:anywhere]" style={{ fontFamily: FONT, fontSize: 20, fontWeight: 700, letterSpacing: '-0.01em', color: INK, lineHeight: 1.2 }}>{r.name}</span>
+                      <PlaceLine city={r.city} countryCode={r.countryCode} short oneLine size={15} fontSize={12.5} />
                     </div>
                   </div>
-                  <Num n={r.expected ?? 0} soft={r.expected == null} />
-                  <Num n={r.registered} />
-                  <Num n={r.paid} />
-                  <div className="flex flex-col" style={{ gap: 6 }}>
-                    <SeatMeter given={r.seatsGiven} filled={r.seatsFilled} paid={r.paid} />
-                    <span style={{ fontFamily: FONT, fontSize: 13, color: INK_SOFT, fontVariantNumeric: 'tabular-nums' }}>
-                      <b style={{ color: INK, fontWeight: 600 }}>{r.seatsGiven}</b> of {r.paid} paid · <b style={{ color: INK, fontWeight: 600 }}>{r.seatsFilled}</b> filled
-                    </span>
-                  </div>
-                  <div className="flex justify-end">
+                  <div className="flex items-center" style={{ gap: 12 }}>
+                    <div className="flex-1 min-w-0 flex flex-col" style={{ gap: 5 }}>
+                      <SeatMeter given={r.seatsGiven} filled={r.seatsFilled} paid={r.paid} height={6} />
+                      <span style={{ fontFamily: FONT, fontSize: 12, color: INK_SOFT, fontVariantNumeric: 'tabular-nums' }}>
+                        <b style={{ color: INK, fontWeight: 600 }}>{r.seatsGiven}</b> {r.seatsGiven === 1 ? 'allocation' : 'allocations'} · <b style={{ color: INK, fontWeight: 600 }}>{r.seatsFilled}</b> filled
+                      </span>
+                    </div>
                     {giveSeats ? (
                       <Link href={`/manage/${conference.slug}/assignment?mode=delegation-seats&society=${encodeURIComponent(r.id)}`}
                         className={BTN_CLASS} style={{ ...smallPrimaryBtn, textDecoration: 'none' }}
@@ -219,9 +216,9 @@ export default function DelegationsTab<M extends DelegationMemberLite>(props: De
               );
             })}
           </div>
-        </div>
+        )}
         {data.seatsUnavailable && (
-          <p style={{ padding: '12px 24px 4px', fontFamily: FONT, fontSize: 13, color: INK_SOFT }}>The allocations could not be read just now, so allocation counts may be out of date.</p>
+          <p style={{ padding: '4px 4px', fontFamily: FONT, fontSize: 13, color: INK_SOFT }}>The allocations could not be read just now, so allocation counts may be out of date.</p>
         )}
       </div>
 
@@ -325,9 +322,9 @@ export default function DelegationsTab<M extends DelegationMemberLite>(props: De
       </div>
 
       <style>{`
-        .dlgV2Row { transition: background-color 180ms cubic-bezier(0.22,1,0.36,1); }
-        .dlgV2Row:hover { background-color: rgba(27,56,40,0.025); }
-        .dlgV2Row:focus-visible { box-shadow: inset 0 0 0 2px #B6871F; }
+        .dlgV2Card { transition: transform 180ms cubic-bezier(0.22,1,0.36,1); }
+        @media (hover: hover) { .dlgV2Card:hover { transform: translateY(-2px); } }
+        .dlgV2Card:focus-visible { outline: 2px solid #B6871F !important; outline-offset: 2px; }
       `}</style>
 
       {open && (
@@ -345,6 +342,3 @@ export default function DelegationsTab<M extends DelegationMemberLite>(props: De
   );
 }
 
-function Num({ n, soft = false }: { n: number; soft?: boolean }) {
-  return <span style={{ fontFamily: FONT, fontSize: 16, fontWeight: 600, color: soft ? INK_SOFT : INK, fontVariantNumeric: 'tabular-nums' }}>{n}</span>;
-}

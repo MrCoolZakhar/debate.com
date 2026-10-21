@@ -2,10 +2,11 @@
 
 import BrandLogo from '@/components/BrandLogo';
 
-import React, { useState, useRef, Suspense } from 'react';
+import React, { useState, useRef, useEffect, Suspense } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { createCommittee as createCommitteeInDB } from '@/lib/committeeService';
+import { prefetchCreatorCountry } from '@/lib/creatorCountry';
 import { useSettingsStore } from '@/lib/settingsStore';
 import { UN_COUNTRIES, getCountryByName, getCountryDisplayName, countryMatchRank, findCountryFlexible, compareCountryNames } from '@/lib/countries';
 import SeatName from '@/components/SeatName';
@@ -249,6 +250,9 @@ function CommitteeNameInput({ id, value, onChange, onPresetSelect }: {
 }
 
 function CreatePageInner() {
+  // Ask our own /api/geo for the creator's country now, so it is ready long
+  // before Start is pressed (committees.creator_country, src/lib/creatorCountry.ts).
+  useEffect(() => { void prefetchCreatorCountry(); }, []);
   const t = useT();
   const { language, setLanguage } = useLanguage();
   const [showLangMenu, setShowLangMenu] = useState(false);

@@ -6,23 +6,24 @@
  *
  * Two steps. First WHO: a short "How it works" card (who counts, our team
  * checks every one, at most one every 14 days and never two from the same
- * conference, unsubscribe), then the three choices, redesigned 21 Oct 2026
- * (Peter: "add a little image ... delegates in our big countries and the
- * whole world", in the feel of the credits pop-up):
- *   - Country and The Whole World are two big white picture cards side by
- *     side (stacked on phones): a map photo across the top with a clean edge
- *     (no fade), the title, the flat price as a big number, one line saying
- *     who counts and a full-width Choose button. The world card shows
- *     `/marketing/world-map.jpg`; the country card shows the map of the
- *     conference country's continent (`countryToContinent`, files
- *     `/marketing/<continent>-map.jpg`, 960 x 536 JPEG copies of
- *     `public/map/*.png`) with the country's round flag (`CircleFlag`)
- *     hanging over the picture's bottom-left edge, and the country in the
- *     title. A country we cannot place on a continent gets no picture.
- *   - The city (and a country with no picture) is a slim full-width row card
- *     under them: a fine-line Lucide icon, the title and who counts, the
- *     price and Choose on the right. Lighter on purpose, never an empty
- *     picture slot.
+ * conference, unsubscribe), then the three choices: THREE white cards side
+ * by side in the order city, country, world, all the same size and shape
+ * (stacked on phones). Each card (Peter, 21 Oct 2026: "the cards should stay
+ * the exact same size and shape ... just make it smaller") has a small map
+ * strip across the top (`MapStrip`, 112 px tall, rounded top, clean edge, no
+ * fade), then the title, the flat price as a big number, one line saying who
+ * counts and a full-width Choose button.
+ *   - The Whole World: the whole world map, compressed (`WORLD_VIEW`).
+ *   - Delegates in <country>: a zoom on the country (`countryMapView`).
+ *   - Delegates in <city>: a closer zoom on the city (`cityMapView`; a city
+ *     we do not know zooms on the country's centre instead).
+ * The zoom is a CSS crop of a relief map (`src/lib/mapFocus.ts`: country
+ * centroids, about 200 host cities, and each map's calibration from
+ * landmarks; the continent map of the country, files
+ * `/marketing/<continent>-map.jpg`, 1600 x 893 copies of `public/map/*.png`).
+ * The strip is a size container and the picture is placed with `cqw` and
+ * `clamp()`, so the crop never shows past the picture's edge at any width. A
+ * country we cannot place shows its continent, or the world, uncropped.
  * NO reach numbers anywhere (owner, 11 Oct 2026): the database only says
  * whether anyone can get one there. No Emoji3D on these cards (CLAUDE.md §8
  * rule 8, style A).
@@ -53,9 +54,8 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import { GoldWord } from '@/components/BrandHeading';
-import { CircleFlag } from '@/components/CircleFlag';
 import { notifyErr, notifyOk } from '@/lib/appNotify';
-import { countryToContinent, type Continent } from '@/lib/countries';
+import { WORLD_VIEW, cityMapView, countryMapView, type MapView } from '@/lib/mapFocus';
 import { useStoreBuy, rpcCall } from '../store/storeApi';
 import { STORE_CSS, INK, INK_SOFT, FOREST, GOLD, DANGER, IVORY } from '../store/storeKit';
 import { DASH_CSS } from '../financials/dashboardKit';
@@ -80,27 +80,43 @@ const SCOPE_ICON: Record<AnnouncementScope, LucideIcon> = {
   world: Globe2,
 };
 
-/** Web copies of `public/map/*.png` (960 x 536 JPEG, made with sips). */
-const MAP_W = 960;
-const MAP_H = 536;
-const WORLD_MAP = '/marketing/world-map.jpg';
-const CONTINENT_MAP: Record<Continent, string> = {
-  Africa: '/marketing/africa-map.jpg',
-  Asia: '/marketing/asia-map.jpg',
-  Europe: '/marketing/europe-map.jpg',
-  'North America': '/marketing/north-america-map.jpg',
-  'South America': '/marketing/south-america-map.jpg',
-  Oceania: '/marketing/oceania-map.jpg',
-};
+/** The map strip's height on every card. */
+const STRIP_H = 112;
 
-/** The picture on a choice: the world map, the country's continent, or none (the city). */
-function scopeImage(scope: AnnouncementScope, country: string | null): string | null {
-  if (scope === 'world') return WORLD_MAP;
-  if (scope === 'country' && country) {
-    const continent = countryToContinent(country);
-    return continent ? CONTINENT_MAP[continent] : null;
-  }
-  return null;
+/** The map on a choice: the whole world, a zoom on the country, or a closer zoom on the city. */
+function scopeView(scope: AnnouncementScope, city: string | null, country: string | null): MapView {
+  if (scope === 'world') return WORLD_VIEW;
+  if (scope === 'country') return countryMapView(country);
+  return cityMapView(city, country);
+}
+
+/**
+ * A small strip of a relief map, cropped on `view`. The strip is a size
+ * container, so the picture is `zoom` strip-widths wide (cqw) and the point
+ * (x, y) sits in the middle, clamped so the picture always covers the strip.
+ */
+function MapStrip({ view }: { view: MapView }) {
+  const n = (v: number) => Math.round(v * 10000) / 10000;
+  const w = n(view.zoom * 100);
+  const h = n((view.zoom * 100) / view.aspect);
+  return (
+    <span className="gv-ann-photo" aria-hidden>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={view.src}
+        alt=""
+        width={1600}
+        height={Math.round(1600 / view.aspect)}
+        loading="lazy"
+        decoding="async"
+        style={{
+          width: `${w}cqw`,
+          left: `clamp(${n(100 - w)}cqw, ${n(50 - view.x * w)}cqw, 0px)`,
+          top: `clamp(calc(${STRIP_H}px - ${h}cqw), calc(${STRIP_H / 2}px - ${n(view.y * h)}cqw), 0px)`,
+        }}
+      />
+    </span>
+  );
 }
 
 /** The choice's title in Title Case. */
@@ -155,26 +171,14 @@ function HowItWorks({ capDays }: { capDays: number }) {
 }
 
 const ANN_CSS = `
-.gv-ann-choices{display:grid;grid-template-columns:minmax(0,1fr);gap:18px}
-@media (min-width:760px){.gv-ann-choices{grid-template-columns:repeat(2,minmax(0,1fr))}.gv-ann-wide{grid-column:1/-1}}
+.gv-ann-choices{display:grid;grid-template-columns:minmax(0,1fr);gap:16px}
+@media (min-width:860px){.gv-ann-choices{grid-template-columns:repeat(3,minmax(0,1fr))}}
 .gv-ann-choice{display:flex;flex-direction:column;width:100%;height:100%;text-align:left;border:none;font-family:inherit;cursor:pointer;transition:transform 200ms cubic-bezier(0.22,1,0.36,1),box-shadow 200ms ease}
 .gv-ann-choice.gv-st-card{padding:0;background:#FFFFFF;box-shadow:0 1px 0 rgba(27,56,40,0.08),0 22px 44px -30px rgba(27,56,40,0.42)}
-.gv-ann-media{position:relative;display:block}
-.gv-ann-photo{display:block;aspect-ratio:2/1;border-radius:20px 20px 0 0;overflow:hidden;background:#F0EBDD}
-@media (min-width:1600px){.gv-ann-photo{aspect-ratio:5/2}}
-.gv-ann-photo img{display:block;width:100%;height:100%;object-fit:cover}
-.gv-ann-body{display:flex;flex-direction:column;flex:1 1 auto;padding:20px 24px 24px}
-.gv-ann-media[data-flag]+.gv-ann-body{padding-top:40px}
+.gv-ann-photo{position:relative;display:block;flex:0 0 auto;height:${STRIP_H}px;border-radius:20px 20px 0 0;overflow:hidden;background:#F0EBDD;container-type:inline-size}
+.gv-ann-photo img{position:absolute;display:block;max-width:none;height:auto}
+.gv-ann-body{display:flex;flex-direction:column;flex:1 1 auto;padding:18px 22px 22px}
 .gv-ann-body .gv-ann-name{margin:0}
-@media (min-width:760px){.gv-ann-choice.gv-st-card.gv-ann-lone{flex-direction:row}.gv-ann-lone .gv-ann-media{flex:0 0 46%}.gv-ann-lone .gv-ann-photo{height:100%;min-height:240px;aspect-ratio:auto;border-radius:20px 0 0 20px}}
-.gv-ann-choice.gv-st-card.gv-ann-row{flex-direction:row;flex-wrap:wrap;align-items:center;gap:14px 24px;padding:20px 24px}
-.gv-ann-row-glyph{flex-shrink:0;color:${INK}}
-.gv-ann-row-text{display:flex;flex-direction:column;flex:1 1 280px;min-width:0}
-.gv-ann-row-text .gv-ann-name{margin:0;font-size:19px}
-.gv-ann-row-text .gv-ann-who{margin-top:4px}
-.gv-ann-row .gv-ann-nums{margin:0}
-.gv-ann-row .gv-ann-num .gv-st-big{font-size:32px}
-.gv-ann-row .gv-ann-go{margin:0;padding:0;flex:0 0 auto;min-width:170px}
 .gv-ann-choice:hover{transform:translateY(-3px)}
 .gv-ann-choice:focus{outline:none}
 .gv-ann-choice:focus-visible{box-shadow:0 0 0 3px #FFFFFF,0 0 0 6px ${FOREST}}
@@ -184,7 +188,7 @@ const ANN_CSS = `
 .gv-ann-name{display:block;margin:14px 0 0;font-size:22px;font-weight:800;letter-spacing:-0.015em;line-height:1.2;color:${INK};overflow-wrap:anywhere;text-wrap:balance}
 .gv-ann-nums{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 22px;margin:12px 0 0}
 .gv-ann-num{display:inline-flex;align-items:baseline;gap:7px}
-.gv-ann-num .gv-st-big{font-size:44px}
+.gv-ann-num .gv-st-big{font-size:40px}
 .gv-ann-num-word{font-size:15px;font-weight:700;color:${INK}}
 .gv-ann-how{margin:0 0 22px}
 .gv-ann-how-list{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:minmax(0,1fr);gap:12px 24px}
@@ -384,9 +388,7 @@ export default function AnnounceView({
         <BackLink onClick={onBack} />
         {header}
         <div className="gv-ann-choices" aria-hidden>
-          <div className="gv-fd-ph" style={{ height: 440 }} />
-          <div className="gv-fd-ph" style={{ height: 440 }} />
-          <div className="gv-fd-ph gv-ann-wide" style={{ height: 96 }} />
+          {[0, 1, 2].map(i => <div key={i} className="gv-fd-ph" style={{ height: 340 }} />)}
         </div>
       </>,
     );
@@ -411,12 +413,6 @@ export default function AnnounceView({
 
   /* ─────────────────────────── Step 1: who gets it ─────────────────────────── */
   if (step === 'choose' || missing || !targets || !scope) {
-    // Picture cards first, then the slim row cards. A lone picture card (a
-    // country we cannot place) runs the full width with its map on the left.
-    const choices = ANNOUNCEMENT_SCOPES
-      .map(s => ({ s, img: scopeImage(s, placeCountry) }))
-      .sort((a, b) => Number(!a.img) - Number(!b.img));
-    const pictureCount = choices.filter(c => c.img).length;
     return shell(
       <>
         <BackLink onClick={onBack} />
@@ -440,11 +436,9 @@ export default function AnnounceView({
         <p className="gv-st-sec-line">One flat price. We send it over a few hours, after our check</p>
 
         <div className="gv-ann-choices" role="list">
-          {choices.map(({ s, img }) => {
+          {ANNOUNCEMENT_SCOPES.map(s => {
             const o = targets?.options.find(x => x.scope === s) ?? null;
             const usable = !missing && !!o && o.available && o.hasPeople !== false;
-            const Glyph = SCOPE_ICON[s];
-            const showFlag = s === 'country' && !!placeCountry;
             const price = o ? (
               <span className="gv-ann-nums">
                 <span className="gv-ann-num">
@@ -453,7 +447,7 @@ export default function AnnounceView({
                 </span>
               </span>
             ) : (
-              <span className="gv-st-soon-tag" style={{ margin: img ? '12px 0 0' : 0 }}>Coming soon</span>
+              <span className="gv-st-soon-tag" style={{ margin: '12px 0 0' }}>Coming soon</span>
             );
             const why = (
               <>
@@ -468,48 +462,21 @@ export default function AnnounceView({
                 <Link href={`/manage/${slug}/settings?tab=conference`} className="gv-st-btn gv-st-outline" style={{ width: '100%' }}>Open Settings</Link>
               </span>
             ) : null;
-            const title = <span className="gv-ann-name">{choiceTitle(s, placeCity, placeCountry)}</span>;
-            const who = <span className="gv-ann-who">{whoCounts(s, placeCity, placeCountry)}</span>;
-
-            const content = img ? (
+            const content = (
               <>
-                <span className="gv-ann-media" data-flag={showFlag ? '' : undefined}>
-                  <span className="gv-ann-photo">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={img} alt="" width={MAP_W} height={MAP_H} loading="lazy" decoding="async" />
-                  </span>
-                  {showFlag && (
-                    <CircleFlag
-                      country={placeCountry}
-                      size={56}
-                      style={{ position: 'absolute', left: 22, bottom: -28, borderRadius: 999, boxShadow: '0 0 0 4px #FFFFFF, 0 12px 24px -12px rgba(27,56,40,0.55)' }}
-                    />
-                  )}
-                </span>
+                <MapStrip view={scopeView(s, placeCity, placeCountry)} />
                 <span className="gv-ann-body">
-                  {title}
+                  <span className="gv-ann-name">{choiceTitle(s, placeCity, placeCountry)}</span>
                   {price}
-                  {who}
+                  <span className="gv-ann-who">{whoCounts(s, placeCity, placeCountry)}</span>
                   {why}
                   {action}
                 </span>
               </>
-            ) : (
-              <>
-                <Glyph size={36} strokeWidth={1.5} aria-hidden className="gv-ann-row-glyph" />
-                <span className="gv-ann-row-text">
-                  {title}
-                  {who}
-                  {why}
-                </span>
-                {price}
-                {action}
-              </>
             );
-            const lone = !!img && pictureCount === 1;
-            const cls = `gv-st-card gv-ann-choice${img ? '' : ' gv-ann-row'}${lone ? ' gv-ann-lone' : ''}`;
+            const cls = 'gv-st-card gv-ann-choice';
             return (
-              <div key={s} role="listitem" className={`min-w-0${img && !lone ? '' : ' gv-ann-wide'}`}>
+              <div key={s} role="listitem" className="min-w-0">
                 {usable ? (
                   <button
                     type="button"

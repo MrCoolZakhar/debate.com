@@ -25,6 +25,13 @@
 //   document_sent_back the organisers sent the caller's copy back, with a note -> /conferences/<slug>/role
 //   org_document_returns organiser: returned copies waiting for review         -> /manage/<slug>/documents?tab=everyone
 //   (the three document kinds come only for conferences with Document Uploads on, or demo ones)
+//   review_due        a conference the caller attended, now over, not reviewed yet
+//                     (owner, 21 Oct 2026). NOT from the RPC: read here as the caller
+//                     through RLS by `fetchPendingReviews` (src/lib/conferenceReviews.ts),
+//                     one row per conference ("Review <ACR>")             -> /conferences/<slug>
+//                     (the page then opens the review pop-up). Actionable: stays until
+//                     the review is sent. A failed read adds no rows and never hides
+//                     the RPC's.
 //
 // ONE BUBBLE (owner, 13 Oct 2026, replacing the two colours of 24 Sep): the
 // avatar carries ONE red bubble, top right, whose number is the number of rows
@@ -50,7 +57,7 @@
 // `org-apps:<conference id>` for new applications. The old single timestamp
 // `gavelling-activity-seen:<uid>` is still honoured for allocations it covered.
 //
-// Finished conferences never appear. Live rooms are NOT in this list: the menu
+// Finished conferences never appear, except as a review_due row. Live rooms are NOT in this list: the menu
 // reads `my_live_rooms()` through `useLiveRooms` (src/lib/liveRooms.ts).
 // Same cache shape as useLiveRooms: one read per page load per account,
 // re-read by the menu when the answer is more than a minute old. Never keyed on
@@ -61,12 +68,14 @@ import { getAuthedClient } from '@/lib/supabase-auth';
 import { conferenceAcronymLabel } from '@/lib/conferenceLabels';
 import { centsToFee } from '@/lib/invoices';
 import { DRAFTS_CHANGED_EVENT } from '@/hooks/useDraftCount';
+import { fetchPendingReviews, REVIEW_SUBMITTED_EVENT, type ReviewConference } from '@/lib/conferenceReviews';
 
 export type ActivityKind =
   | 'chair_invite' | 'organiser_invite' | 'import_invite'
   | 'proof_rejected' | 'payment_due' | 'reply' | 'draft' | 'allocation' | 'accepted'
   | 'org_applications' | 'org_proofs' | 'org_inbox' | 'org_aid'
-  | 'document_due' | 'document_sent_back' | 'org_document_returns';
+  | 'document_due' | 'document_sent_back' | 'org_document_returns'
+  | 'review_due';
 
 export type ActivityTone = 'red' | 'orange';
 
@@ -232,11 +241,30 @@ function shape(r: Raw): ActivityItem | null {
   }
 }
 
-export async function fetchMyActivity(accessToken: string): Promise<ActivityItem[] | null> {
+/** A review_due row: "Review <ACR>", opening the conference page. */
+function reviewItem(c: ReviewConference): ActivityItem {
+  const conf = conferenceAcronymLabel(c) || (c.full_name ?? '').trim() || 'your conference';
+  const lastDay = (c.end_date || c.start_date || '').slice(0, 10);
+  return {
+    id: `review:${c.id}`, kind: 'review_due', action: true, at: lastDay || null,
+    title: `Review ${conf}`, detail: 'How was it? Rate it for future delegates.',
+    href: `/conferences/${c.slug}`, conference: conf, logoUrl: c.logo_url ?? null,
+    countryCode: null, countryName: null, organiser: false, tone: 'orange', serverSeen: false,
+    seenKey: null, newCount: 0, token: null, committeeName: null, committeeAbbr: null,
+    committeeLogo: null, roleTitle: null,
+  };
+}
+
+export async function fetchMyActivity(accessToken: string, userId?: string): Promise<ActivityItem[] | null> {
   try {
-    const { data, error } = await getAuthedClient(accessToken).rpc('my_attention_items');
+    const [rpc, reviews] = await Promise.all([
+      getAuthedClient(accessToken).rpc('my_attention_items'),
+      userId ? fetchPendingReviews(accessToken, userId).catch(() => [] as ReviewConference[]) : Promise.resolve([] as ReviewConference[]),
+    ]);
+    const { data, error } = rpc;
     if (error || !Array.isArray(data)) return null;
-    return (data as Raw[]).map(shape).filter((x): x is ActivityItem => !!x);
+    const items = (data as Raw[]).map(shape).filter((x): x is ActivityItem => !!x);
+    return [...items, ...reviews.map(reviewItem)];
   } catch {
     return null;
   }
@@ -253,7 +281,7 @@ const emit = () => listeners.forEach((l) => l());
 
 function load(uid: string, token: string): Promise<void> {
   if (inflight && inflight.uid === uid) return inflight.p;
-  const p = fetchMyActivity(token).then((items) => {
+  const p = fetchMyActivity(token, uid).then((items) => {
     // A failed read keeps what this account already had; with nothing yet it is
     // an empty list, so the section simply does not render.
     const prev = cache && cache.uid === uid ? cache.items : [];
@@ -277,6 +305,11 @@ if (typeof window !== 'undefined') {
   window.addEventListener(DRAFTS_CHANGED_EVENT, () => {
     if (cache) cache = { ...cache, at: 0 };
     if (cache && lastToken && listeners.size > 0) void load(cache.uid, lastToken);
+  });
+  // A review was sent: its row goes at once, then a background re-read.
+  window.addEventListener(REVIEW_SUBMITTED_EVENT, (e) => {
+    const id = (e as CustomEvent<{ conferenceId?: string }>).detail?.conferenceId;
+    if (cache && id) removeActivityItem(cache.uid, `review:${id}`);
   });
 }
 

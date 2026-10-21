@@ -35,9 +35,9 @@ export async function giveSocietySeats(args: {
   societyId: string;
   slots: FreeSlot[];
 }): Promise<GiveResult> {
-  const fallback = 'Those seats were not given. Try again.';
+  const fallback = 'Those allocations were not given. Try again.';
   const seats = args.slots.reduce((n, s) => n + s.size, 0);
-  if (seats === 0) return { ok: false, error: 'There are no free seats to give.' };
+  if (seats === 0) return { ok: false, error: 'There are no free allocations to give.' };
 
   if (DELEGATIONS_V2_DB) {
     const r = await giveSocietySeatsRpc(args.societyId, args.slots.flatMap(s => Array.from({ length: s.size }, (_, i) => ({
@@ -64,8 +64,8 @@ export async function giveSocietySeats(args: {
     })));
     const { data, error } = await c.from('conference_allocations').insert(rows).select('id');
     if (error) {
-      if (error.message?.includes('SEAT_UNAVAILABLE')) return { ok: false, error: 'One of those countries no longer has that many seats. The list is up to date now, try again.' };
-      if (error.code === '23505') return { ok: false, error: 'One of those seats was just taken. The list is up to date now, try again.' };
+      if (error.message?.includes('SEAT_UNAVAILABLE')) return { ok: false, error: 'One of those countries no longer has that many allocations. The list is up to date now, try again.' };
+      if (error.code === '23505') return { ok: false, error: 'One of those allocations was just taken. The list is up to date now, try again.' };
       return { ok: false, error: friendlyError(error, fallback) };
     }
     if (!data || data.length !== rows.length) return { ok: false, error: fallback };
@@ -93,7 +93,7 @@ export async function giveExactSeats(societyId: string, seats: GiveSeat[]): Prom
 
 /** Takes one empty block seat back from a delegation (organiser_take_back_society_seat). */
 export async function takeBackOneSeat(allocationId: string): Promise<{ ok: true } | { ok: false; error: string }> {
-  if (allocationId.startsWith('temp-')) return { ok: false, error: 'That allocation was not taken back. Try again.' };
+  if (allocationId.startsWith('temp-')) return { ok: false, error: 'That allocation was not removed. Try again.' };
   const r = await takeBackSocietySeatRpc(allocationId);
   return r.ok ? { ok: true } : r;
 }
@@ -143,7 +143,7 @@ export interface SeatPlace {
 
 type Client = NonNullable<Awaited<ReturnType<typeof getFreshAuthedClient>>>;
 
-const SEAT_CHANGED = 'That seat just changed. The list is up to date now, try again.';
+const SEAT_CHANGED = 'That allocation just changed. The list is up to date now, try again.';
 
 async function actorOf(c: Client): Promise<string | null> {
   try {
@@ -161,7 +161,7 @@ async function emailsOnAssign(c: Client, conferenceId: string): Promise<boolean>
 
 async function placeDirect(c: Client, args: { conferenceId: string; societyId: string; seat: SeatPlace; person: SeatPerson; actor: string | null }): Promise<PersonSeatResult> {
   const { seat, person, societyId } = args;
-  const fallback = 'That seat was not saved. Try again.';
+  const fallback = 'That allocation was not saved. Try again.';
   const { data: rows, error } = await c.from('conference_allocations')
     .update({ application_id: person.id, user_id: person.user_id, assigned_by: args.actor, allocation_sent: false, allocation_sent_at: null })
     .eq('id', seat.allocationId)
@@ -170,7 +170,7 @@ async function placeDirect(c: Client, args: { conferenceId: string; societyId: s
     .is('user_id', null)
     .select('id');
   if (error) {
-    if (error.code === '23505') return { ok: false, error: 'They already hold a seat. Take them out of it first.' };
+    if (error.code === '23505') return { ok: false, error: 'They already hold an allocation. Unallocate them first.' };
     return { ok: false, error: friendlyError(error, fallback) };
   }
   if (!rows || rows.length !== 1) return { ok: false, error: SEAT_CHANGED };
@@ -184,14 +184,14 @@ async function placeDirect(c: Client, args: { conferenceId: string; societyId: s
   }).eq('id', person.id).select('id');
   if (appErr || !apps || apps.length !== 1) {
     await c.from('conference_allocations').update({ application_id: null, user_id: null }).eq('id', seat.allocationId).eq('application_id', person.id);
-    return { ok: false, error: 'That seat could not be finished, so nothing changed. Try again.' };
+    return { ok: false, error: 'That allocation could not be finished, so nothing changed. Try again.' };
   }
   return { ok: true };
 }
 
 async function takeOutDirect(c: Client, args: { societyId: string; seat: SeatPlace; person: SeatPerson; actor: string | null }): Promise<PersonSeatResult> {
   const { seat, person, societyId } = args;
-  const fallback = 'They were not taken out of the seat. Try again.';
+  const fallback = 'They could not be unallocated. Try again.';
   const { data: before } = await c.from('conference_allocations').select('society_id').eq('id', seat.allocationId).maybeSingle();
   const { data: rows, error } = await c.from('conference_allocations')
     .update({ application_id: null, user_id: null, society_id: societyId, assigned_by: args.actor, allocation_sent: false, allocation_sent_at: null })
@@ -213,7 +213,7 @@ async function takeOutDirect(c: Client, args: { societyId: string; seat: SeatPla
     await c.from('conference_allocations')
       .update({ application_id: person.id, user_id: person.user_id, society_id: priorSociety })
       .eq('id', seat.allocationId).is('application_id', null);
-    return { ok: false, error: 'They could not be taken out of the seat, so nothing changed. Try again.' };
+    return { ok: false, error: 'They could not be unallocated, so nothing changed. Try again.' };
   }
   return { ok: true };
 }
@@ -232,7 +232,7 @@ export async function organiserPlaceInSeat(args: { conferenceId: string; society
     } catch { /* the seat stands; the allocation page can send the email later */ }
     return r;
   } catch (e) {
-    return { ok: false, error: friendlyError(e, 'That seat was not saved. Try again.') };
+    return { ok: false, error: friendlyError(e, 'That allocation was not saved. Try again.') };
   }
 }
 
@@ -248,14 +248,14 @@ export async function organiserTakeOutOfSeat(args: { conferenceId: string; socie
     try { await queueEventEmail(c, args.conferenceId, 'allocation_removed', [args.person.id]); } catch { /* the change stands */ }
     return r;
   } catch (e) {
-    return { ok: false, error: friendlyError(e, 'They were not taken out of the seat. Try again.') };
+    return { ok: false, error: friendlyError(e, 'They could not be unallocated. Try again.') };
   }
 }
 
 /** An organiser moves a seated member's seat to a member with none; `from` stays in the delegation with no seat. */
 export async function organiserMoveSeat(args: { conferenceId: string; societyId: string; seat: SeatPlace; from: SeatPerson; to: SeatPerson }): Promise<PersonSeatResult> {
   if (DELEGATIONS_V2_DB) return leaderMoveSeat(args.from.id, args.to.id);
-  const fallback = 'The seat could not be moved. Try again.';
+  const fallback = 'The allocation could not be moved. Try again.';
   try {
     const c = await getFreshAuthedClient();
     if (!c) return { ok: false, error: SIGNED_OUT };
@@ -282,7 +282,7 @@ export async function organiserMoveSeat(args: { conferenceId: string; societyId:
 
 /** An organiser switches two seated members of the same delegation (perform_delegation_swap). */
 export async function organiserSwitchSeats(appA: string, appB: string): Promise<PersonSeatResult> {
-  const fallback = 'The seats could not be switched. Try again.';
+  const fallback = 'The allocations could not be switched. Try again.';
   try {
     const c = await getFreshAuthedClient();
     if (!c) return { ok: false, error: SIGNED_OUT };

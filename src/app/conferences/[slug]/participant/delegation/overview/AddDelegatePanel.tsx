@@ -1,9 +1,11 @@
 'use client';
 
-// "Add delegate" on a leader's Overview (head delegates and faculty advisors;
-// Peter, 21 Oct 2026: "right below the existing delegates there should be an
-// Add delegate button ... by an invitation, or, if the conference allows it,
-// the faculty advisor or head delegate simply puts in their name and email").
+// "Add delegate" on the leader card, right below the People table (head
+// delegates and faculty advisors; Peter, 21 Oct 2026: "right below the
+// existing delegates there should be an Add delegate button ... by an
+// invitation, or, if the conference allows it, the faculty advisor or head
+// delegate simply puts in their name and email"; the same day it moved off
+// the Overview into the Delegation section, where it was first asked for).
 //
 // Opens IN PLACE (never a pop-up), and a second step replaces the content with
 // a back button:
@@ -20,7 +22,7 @@
 // branch below (the import card's) only runs once both switches are on. A
 // delegate or head delegate needs an open delegate ticket; with none left the
 // form says so and points to the delegation card's "Buy another ticket".
-// After an import, DELEGATE_ADDED_EVENT tells DelegationPanel to read again.
+// After an import, DELEGATE_ADDED_EVENT tells DelegationPanel and the Overview to read again.
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ArrowLeft, Link2, Mail, UserPlus, X } from 'lucide-react';
@@ -71,9 +73,10 @@ export default function AddDelegatePanel({ societyId, conferenceId, societyName,
   societyId: string;
   conferenceId: string;
   societyName: string | null;
-  /** Re-reads the Overview after someone was added. */
+  /** Re-reads the caller's data after someone was added. */
   onAdded: () => void;
-  onOpenSection: (key: string) => void;
+  /** Opens a dashboard section; left out on the Delegation section itself. */
+  onOpenSection?: (key: string) => void;
 }) {
   const { leader, reload: reloadImport } = useDelegationImport(societyId);
   const importOn = !!leader?.enabled;
@@ -267,11 +270,16 @@ export default function AddDelegatePanel({ societyId, conferenceId, societyName,
 
           {noTicket && (
             <p style={{ fontFamily: FONT, fontSize: 13.5, color: INK, margin: 0, lineHeight: 1.5 }}>
-              Your delegate tickets are all taken. Buy another ticket on your delegation card first.{' '}
-              <button type="button" onClick={() => onOpenSection('delegation')} className={`${BTN_CLASS} rounded`}
-                style={{ fontFamily: FONT, fontSize: 13.5, fontWeight: 700, color: 'var(--gv-main)', textDecoration: 'underline', textUnderlineOffset: 3, background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}>
-                Open delegation
-              </button>
+              Your delegate tickets are all taken. Buy another ticket with the plus beside Expected size first.
+              {onOpenSection && (
+                <>
+                  {' '}
+                  <button type="button" onClick={() => onOpenSection('delegation')} className={`${BTN_CLASS} rounded`}
+                    style={{ fontFamily: FONT, fontSize: 13.5, fontWeight: 700, color: 'var(--gv-main)', textDecoration: 'underline', textUnderlineOffset: 3, background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}>
+                    Open delegation
+                  </button>
+                </>
+              )}
             </p>
           )}
 

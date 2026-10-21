@@ -62,6 +62,7 @@ export const AMBASSADORS: Ambassador[] = [
   { name: 'Marsia Qurku',               country: 'Albania',        initials: 'MQ', photo: '/ambassador-photos/marsia_ambassador.webp' },
   { name: 'Ahmet Mert Çıragöz',         country: 'Türkiye',        initials: 'AÇ', photo: '/ambassador-photos/ahmet_ambassador.webp' },
   { name: 'Jan Beblavy',                country: 'Slovakia',       initials: 'JB', photo: '/ambassador-photos/jan_ambassador.webp' },
+  { name: 'Alexander Fusek',            country: 'Slovakia',       initials: 'AF', photo: '/ambassador-photos/alexander_ambassador.webp' },
   { name: 'Sarth Agrawal',              country: 'Jordan',         initials: 'SA', photo: '/ambassador-photos/sarth_ambassador.webp' },
   { name: 'Nadia Seranity',             country: 'Sri Lanka',      initials: 'NS', photo: '/ambassador-photos/nadia_ambassador.webp' },
   { name: 'Qais Soub',                  country: 'Jordan',         initials: 'QS', photo: null },
