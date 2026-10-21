@@ -164,7 +164,7 @@ function applyLine(confs: ListedConference[]): string {
   const listings = confs.filter(c => isGavellingListing(c)).length;
   if (listings === 0) return 'Each conference page has the committees, dates and delegate fees, and you apply as a delegate, chair or faculty advisor with one Gavelling profile.';
   if (listings === confs.length) return 'These conferences are not on Gavelling yet: each page has the committees and dates, and you apply on the conference\'s own website.';
-  return 'Each conference page has the committees and dates. Conferences marked Not on Gavelling yet take applications on their own website; on the others you apply as a delegate, chair or faculty advisor with one Gavelling profile.';
+  return 'Each conference page has the committees and dates. Conferences marked Added by Gavelling take applications on their own website; on the others you apply as a delegate, chair or faculty advisor with one Gavelling profile.';
 }
 
 /** The hubs this one links to: neighbours first, then the date and online hubs. */
