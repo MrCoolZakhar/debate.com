@@ -45,6 +45,8 @@ export interface OverviewApp {
 
 export interface LeaderOverviewData {
   isLeader: boolean;
+  /** The delegation's name (my_delegation_roster's society_name). */
+  societyName: string | null;
   members: RosterMember[];
   apps: Map<string, OverviewApp>;
   openSeats: OpenSeat[] | null;
@@ -83,7 +85,7 @@ export function useLeaderOverview(conferenceId: string, societyId: string): { st
         readPayOverview(conferenceId).catch(() => null),
       ]);
       if (rosterRes.error) throw rosterRes.error;
-      const r = (rosterRes.data ?? {}) as { ok?: boolean; message?: string; is_leader?: boolean; members?: RosterMember[] };
+      const r = (rosterRes.data ?? {}) as { ok?: boolean; message?: string; society_name?: string | null; is_leader?: boolean; members?: RosterMember[] };
       if (r.ok !== true) throw new UserFacingError(plainOrFallback(r.message, fallback));
       const members = Array.isArray(r.members) ? r.members : [];
 
@@ -125,6 +127,7 @@ export function useLeaderOverview(conferenceId: string, societyId: string): { st
         kind: 'ready',
         data: {
           isLeader: r.is_leader === true,
+          societyName: (r.society_name ?? '').trim() || null,
           members,
           apps,
           openSeats,

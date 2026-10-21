@@ -27,10 +27,11 @@ import { ArrowLeftRight, ChevronLeft, ChevronRight, Compass, Mail, UserX, X } fr
 import { getFreshAuthedClient } from '@/lib/supabase-auth';
 import { useDelegationImport } from './DelegationImportCard';
 import DelegationImportPopup from './DelegationImportPopup';
+import { DELEGATE_ADDED_EVENT } from './delegation/overview/AddDelegatePanel';
 import LeaderCard from './delegation/LeaderCard';
 import MemberDelegationCard from './delegation/member/MemberDelegationCard';
 import type { ParticipantAllocation, ParticipantCommittee } from './types';
-import { BTN_CLASS, cardStyle, primaryBtn, secondaryBtn, STROKE } from './delegation/leaderKit';
+import { BTN_CLASS, cardStyle, primaryBtn, RoundAvatar, secondaryBtn, STROKE } from './delegation/leaderKit';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { loadSlotArtIndex, artFromIndex, slotArtKey, type SlotArtIndex } from '@/lib/slotGroups';
@@ -477,6 +478,15 @@ export default function DelegationPanel({ conferenceId, conferenceSlug, societyI
 
   useEffect(() => { void load(); }, [load]);
 
+  // "Add delegate" on the leader Overview (AddDelegatePanel) added someone by
+  // name and email: read the roster, the members and the imports again.
+  const reloadImport = delegationImport.reload;
+  useEffect(() => {
+    const onAdded = () => { void loadRoster(); void load(); void reloadImport(); };
+    window.addEventListener(DELEGATE_ADDED_EVENT, onAdded);
+    return () => window.removeEventListener(DELEGATE_ADDED_EVENT, onAdded);
+  }, [loadRoster, load, reloadImport]);
+
   // The delegation's swap activity, an open swap_request plus the most recent
   // swap_notice. RLS now lets any leader of this society read
   // conference_requests rows (and their messages) of kind 'swap_request' or
@@ -668,8 +678,22 @@ export default function DelegationPanel({ conferenceId, conferenceSlug, societyI
   if (isLeader && roster) {
     const swapOn = allocationSwapMode !== 'off';
     // Swap allocations sits in the People header, beside Search people
-    // (owner, 21 Oct 2026); the banner and the pick step stay under the table.
-    const swapButton = swapOn && !swapMode ? (
+    // (owner, 21 Oct 2026). Pressed, the picker opens right there in its
+    // place (owner, 21 Oct 2026: the pick step at the bottom of the card was
+    // confusing): what to do, the two people picked with their allocations,
+    // Confirm and Cancel. The pending request and the recent swap notice
+    // stay under the table.
+    const stopSwap = () => { setSwapMode(false); setSwapSelection([]); setSwapError(''); };
+    const pickedPerson = (m: PoolMember) => (
+      <span className="inline-flex items-center gap-2 min-w-0">
+        <RoundAvatar name={m.profiles?.display_name ?? 'Member'} url={m.profiles?.avatar_url ?? null} size={28} seed={m.id} />
+        <span className="flex flex-col min-w-0" style={{ lineHeight: 1.25 }}>
+          <span className="[overflow-wrap:anywhere]" style={{ fontFamily: OUTFIT, fontSize: 14, fontWeight: 600, color: '#1C1410' }}>{m.profiles?.display_name ?? 'Member'}</span>
+          {allocationLabel(m) && <span className="[overflow-wrap:anywhere]" style={{ fontFamily: OUTFIT, fontSize: 12.5, color: '#6B5F52' }}>{allocationLabel(m)}</span>}
+        </span>
+      </span>
+    );
+    const swapButton = !swapOn ? null : !swapMode ? (
       <button
         type="button"
         onClick={() => { setSwapMode(true); setSwapSelection([]); setSwapError(''); }}
@@ -678,8 +702,50 @@ export default function DelegationPanel({ conferenceId, conferenceSlug, societyI
       >
         <ArrowLeftRight size={17} strokeWidth={STROKE} aria-hidden /> Swap allocations
       </button>
-    ) : null;
-    const swapTools = (pendingSwapRequest || recentSwapNotice || (swapOn && swapMode)) ? (
+    ) : (
+      <div
+        role="group"
+        aria-label="Swap allocations"
+        className="flex flex-col gap-2 min-w-0"
+        style={{ padding: '8px 8px 8px 14px', borderRadius: 12, maxWidth: '100%', background: 'color-mix(in srgb, var(--gv-main) 6%, #FFFFFF)', boxShadow: 'inset 0 0 0 1.5px color-mix(in srgb, var(--gv-main) 24%, transparent)' }}
+      >
+        <div className="flex items-center gap-x-3 gap-y-2 flex-wrap min-w-0">
+          <ArrowLeftRight size={17} strokeWidth={STROKE} aria-hidden style={{ color: 'var(--gv-main)', flexShrink: 0 }} />
+          {!swapA ? (
+            <span style={{ fontFamily: OUTFIT, fontSize: 14, color: '#1C1410' }}>Pick two people with an allocation in the table</span>
+          ) : !swapB ? (
+            <>
+              {pickedPerson(swapA)}
+              <span style={{ fontFamily: OUTFIT, fontSize: 14, color: '#6B5F52' }}>Pick one more</span>
+            </>
+          ) : (
+            <>
+              {pickedPerson(swapA)}
+              <span style={{ fontFamily: OUTFIT, fontSize: 14, color: '#6B5F52' }}>and</span>
+              {pickedPerson(swapB)}
+            </>
+          )}
+          <span className="inline-flex items-center gap-2 flex-none">
+            {swapA && swapB && (
+              <button
+                type="button"
+                onClick={handleConfirmSwap}
+                disabled={swapping}
+                className={BTN_CLASS}
+                style={{ ...primaryBtn, minHeight: 40, opacity: swapping ? 0.6 : 1, cursor: swapping ? 'default' : 'pointer' }}
+              >
+                {swapping ? 'Processing…' : allocationSwapMode === 'self_serve' ? 'Confirm swap' : 'Confirm request'}
+              </button>
+            )}
+            <button type="button" onClick={stopSwap} disabled={swapping} className={BTN_CLASS} style={{ ...secondaryBtn, minHeight: 40 }}>
+              <X size={16} strokeWidth={STROKE} aria-hidden /> Cancel
+            </button>
+          </span>
+        </div>
+        {swapError && <p role="alert" className="text-[13px]" style={{ color: '#8B2020', fontFamily: OUTFIT, margin: 0 }}>{swapError}</p>}
+      </div>
+    );
+    const swapTools = (pendingSwapRequest || recentSwapNotice) ? (
       <div className="flex flex-col gap-3" style={{ ...cardStyle, padding: '18px 24px' }}>
         {pendingSwapRequest && (
           <div className="flex items-start gap-2.5">
@@ -700,43 +766,6 @@ export default function DelegationPanel({ conferenceId, conferenceSlug, societyI
           <p className="text-[14px]" style={{ color: '#6B5F52', fontFamily: OUTFIT, margin: 0 }}>
             {recentSwapNotice.metadata.member_a ?? 'A delegate'} and {recentSwapNotice.metadata.member_b ?? 'a delegate'} swapped allocations on {formatReleaseDate(new Date(recentSwapNotice.created_at).getTime())}.
           </p>
-        )}
-        {swapOn && swapMode && (
-          <div>
-            <div className="flex items-center justify-between gap-3">
-              <p className="text-[14px]" style={{ color: '#6B5F52', fontFamily: OUTFIT, margin: 0 }}>
-                Pick two people with an allocation in the table to swap.
-              </p>
-              <button
-                type="button"
-                onClick={() => { setSwapMode(false); setSwapSelection([]); setSwapError(''); }}
-                aria-label="Stop swapping"
-                className="focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gv-accent)] flex-shrink-0 inline-flex items-center justify-center rounded-full"
-                style={{ color: '#6B5F52', width: 44, height: 44, margin: -6, background: 'none', border: 'none', cursor: 'pointer' }}
-              >
-                <X size={18} strokeWidth={STROKE} aria-hidden />
-              </button>
-            </div>
-            {swapA && swapB && (
-              <div className="rounded-xl px-3.5 py-3 mt-3" style={{ backgroundColor: 'color-mix(in srgb, var(--gv-main) 5%, transparent)' }}>
-                {/* Deliberately NOT CV-linked: swapSelection is local state, so
-                    navigating away to a CV discards it. */}
-                <p className="text-[14px] mb-2.5 [overflow-wrap:anywhere]" style={{ color: '#1C1410', fontFamily: OUTFIT, fontWeight: 500 }}>
-                  {swapA.profiles?.display_name}: {allocationLabel(swapA)} and {swapB.profiles?.display_name}: {allocationLabel(swapB)}
-                </p>
-                <button
-                  type="button"
-                  onClick={handleConfirmSwap}
-                  disabled={swapping}
-                  className={BTN_CLASS}
-                  style={{ ...primaryBtn, opacity: swapping ? 0.6 : 1, cursor: swapping ? 'default' : 'pointer' }}
-                >
-                  {swapping ? 'Processing…' : allocationSwapMode === 'self_serve' ? 'Confirm swap' : 'Confirm request'}
-                </button>
-              </div>
-            )}
-            {swapError && <p className="text-[13px] mt-2" role="alert" style={{ color: '#8B2020', fontFamily: OUTFIT, margin: '8px 0 0 0' }}>{swapError}</p>}
-          </div>
         )}
       </div>
     ) : null;

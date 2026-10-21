@@ -8,11 +8,11 @@
 // A pop-up never opens another pop-up: a second step replaces the content in
 // place with a back button, menus stay inside, confirms are asked in place.
 //
-// Header (owner, 20 Oct 2026, "looks very bland"): the big round crest
-// (DelegationCrest), the name, "City, Country" with its round flag, the
-// leaders as small avatars with their names, and ONE seats meter like the
-// Delegations table (seats given against paid tickets, the part with a person
-// on it darker) with one line under it.
+// Header (owner, 20 and 21 Oct 2026): the emphasis is the delegation itself,
+// its big round crest (DelegationCrest), its name large and bold with the
+// country's round flag beside it, then "City, Country" smaller, the leaders as
+// small avatars with their names, and Expected / Joined / Paid as a quiet
+// compact row (a modest number with its word beside it, CLAUDE.md §8 rule 9).
 //
 // Data: pass `data` from a screen that already ran useDelegationsData (the
 // Delegations tab does) so both read the same load; otherwise the pop-up runs
@@ -25,7 +25,8 @@ import type { DelegationMemberLite } from '../delegationRows';
 import { ACCEPTED, memberName } from '../delegationRows';
 import { useDelegationsData, type DelegationsData, type DelegationView } from './useDelegationsData';
 import DelegationCrest from '@/components/DelegationCrest';
-import { BTN_CLASS, FONT, HAIRLINE, INK, INK_SOFT, PlaceLine, RoundAvatar, SeatMeter, SkeletonRows, STROKE, plural } from './kit';
+import { CircleFlag } from '@/components/CircleFlag';
+import { BTN_CLASS, FONT, HAIRLINE, INK, INK_SOFT, RoundAvatar, SkeletonRows, STROKE, placeOf } from './kit';
 import PeopleTab from './PeopleTab';
 import SeatsTab from './SeatsTab';
 import PaymentsTab from './PaymentsTab';
@@ -86,35 +87,53 @@ function leadersOf(row: DelegationView): { id: string; name: string; avatarUrl: 
   return [...heads, ...advisors];
 }
 
-/** The one line under the seats meter (owner, 20 Oct 2026). */
-function seatsLine(row: DelegationView): string {
-  const parts = [
-    `${row.seatsGiven} of ${plural(row.paid, 'paid ticket')} ${row.seatsGiven === 1 ? 'has' : 'have'} an allocation`,
-    `${plural(row.registered, 'person', 'people')} joined`,
+/** Expected / Joined / Paid: a modest number with its word, quiet beside the name. */
+function CountsRow({ row }: { row: DelegationView }) {
+  const counts: { n: string; word: string; title: string }[] = [
+    ...(row.expected == null ? [] : [{ n: String(row.expected), word: 'expected', title: 'Expected size' }]),
+    { n: String(row.registered), word: 'joined', title: 'People who joined the delegation' },
+    { n: String(row.paid), word: 'paid', title: 'Delegate tickets paid' },
   ];
-  if (row.expected != null) parts.push(`expected size ${row.expected}`);
-  return parts.join(' · ');
+  return (
+    <div className="flex items-baseline flex-wrap" style={{ gap: '6px 20px' }}>
+      {counts.map(c => (
+        <span key={c.word} className="inline-flex items-baseline" title={c.title} style={{ gap: 5 }}>
+          <span style={{ fontFamily: FONT, fontSize: 17, fontWeight: 600, color: INK, fontVariantNumeric: 'tabular-nums', lineHeight: 1.2 }}>{c.n}</span>
+          <span style={{ fontFamily: FONT, fontSize: 13, color: INK_SOFT }}>{c.word}</span>
+        </span>
+      ))}
+      {row.expected == null && <span style={{ fontFamily: FONT, fontSize: 13, color: INK_SOFT }}>No expected size yet</span>}
+    </div>
+  );
 }
 
 function Header({ row, loading }: { row: DelegationView | null; loading: boolean }) {
   if (!row) {
     return (
       <div className="flex items-center gap-4 min-w-0">
-        <span aria-hidden style={{ width: 88, height: 88, borderRadius: '50%', background: '#F1ECE1', flexShrink: 0 }} />
-        <span style={{ fontFamily: FONT, fontSize: 26, fontWeight: 700, color: INK }}>{loading ? '' : 'Delegation'}</span>
+        <span aria-hidden style={{ width: 104, height: 104, borderRadius: '50%', background: '#F1ECE1', flexShrink: 0 }} />
+        <span style={{ fontFamily: FONT, fontSize: 32, fontWeight: 700, color: INK }}>{loading ? '' : 'Delegation'}</span>
       </div>
     );
   }
   const leaders = leadersOf(row);
+  const place = placeOf(row.city, row.countryCode);
   return (
     <div className="flex items-center gap-5 min-w-0">
-      <DelegationCrest name={row.name} logoUrl={row.logoUrl} size={88} />
+      <DelegationCrest name={row.name} logoUrl={row.logoUrl} size={104} />
       <div className="flex flex-col min-w-0" style={{ gap: 6 }}>
-        <span className="[overflow-wrap:anywhere]" style={{ fontFamily: FONT, fontSize: 26, fontWeight: 700, letterSpacing: '-0.01em', color: INK, lineHeight: 1.15 }}>
-          {row.name}
-        </span>
-        <PlaceLine city={row.city} countryCode={row.countryCode} size={22} fontSize={15} />
-        <div className="flex items-center flex-wrap" style={{ gap: '6px 14px' }}>
+        <div className="flex items-center min-w-0" style={{ gap: 12 }}>
+          <span className="[overflow-wrap:anywhere]" style={{ fontFamily: FONT, fontSize: 32, fontWeight: 700, letterSpacing: '-0.015em', color: INK, lineHeight: 1.1 }}>
+            {row.name}
+          </span>
+          {place?.code && (
+            <CircleFlag code={place.code} size={34} label={place.label} title={place.label} />
+          )}
+        </div>
+        {place && (
+          <span className="[overflow-wrap:anywhere]" style={{ fontFamily: FONT, fontSize: 13, color: INK_SOFT }}>{place.label}</span>
+        )}
+        <div className="flex items-center flex-wrap" style={{ gap: '6px 14px', marginTop: 2 }}>
           {leaders.length === 0 ? (
             <span style={{ fontFamily: FONT, fontSize: 13, color: INK_SOFT }}>No leader accepted yet</span>
           ) : leaders.map(l => (
@@ -161,12 +180,7 @@ function PopupFrame<M extends DelegationMemberLite>({
           <div className="flex items-start justify-between gap-4">
             <div className="flex-1 min-w-0 flex flex-wrap items-center justify-between" style={{ gap: '16px 28px' }}>
               <Header row={row} loading={data.loading} />
-              {row && (
-                <div className="flex flex-col" style={{ gap: 8, width: 'min(330px, 100%)' }}>
-                  <SeatMeter given={row.seatsGiven} filled={row.seatsFilled} paid={row.paid} height={10} />
-                  <span style={{ fontFamily: FONT, fontSize: 13.5, color: INK_SOFT, lineHeight: 1.45, fontVariantNumeric: 'tabular-nums' }}>{seatsLine(row)}</span>
-                </div>
-              )}
+              {row && <CountsRow row={row} />}
             </div>
             <button type="button" aria-label="Close" onClick={onClose} className={BTN_CLASS}
               style={{ width: 38, height: 38, borderRadius: '50%', border: 'none', background: '#F4F0E6', color: INK, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0 }}>

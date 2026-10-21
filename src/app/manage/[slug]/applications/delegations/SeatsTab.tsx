@@ -9,8 +9,10 @@
 //
 //   * Left: how many allocations the delegation holds (big number + word), the
 //     conference's seat limit when it has one (readDelegationSettings), and every
-//     allocation it holds as a compact list (flag + country, committee emblem +
-//     acronym, the person or "Open allocation"), with Take back on an empty one.
+//     allocation it holds as a compact list, A to Z by country across every
+//     committee (owner, 21 Oct 2026): the country's round flag and name, the
+//     committee emblem + acronym, and the person in it with their avatar (an
+//     empty one shows no person part), with Take back on an empty one.
 //   * Right: "Search countries" first (focused on open), then EVERY country that
 //     is a delegate slot in any committee, A to Z, filtered by name or code with
 //     accents ignored (societySeats.countryMatrix). Each country shows one chip
@@ -41,7 +43,7 @@ import { readDelegationSettings, type SeatLimit } from './v2';
 import InPlaceConfirm from '@/app/conferences/[slug]/participant/delegation/seat/InPlaceConfirm';
 import type { DelegationPopupConference, PopupStep } from './DelegationPopup';
 import {
-  BTN_CLASS, CommitteeDisc, FONT, FOREST, HAIRLINE, INK, INK_SOFT, STROKE,
+  BTN_CLASS, CommitteeDisc, FONT, FOREST, HAIRLINE, INK, INK_SOFT, RoundAvatar, STROKE,
   committeeEmblemSrc, committeeShort, plural, smallSecondaryBtn,
 } from './kit';
 
@@ -132,9 +134,12 @@ export default function SeatsTab<M extends DelegationMemberLite>({ conference, r
 
   const held = useMemo(() => countries
     .flatMap(c => c.chips.filter(ch => ch.state === 'mine'))
-    .sort((a, b) => a.committeeLabel.localeCompare(b.committeeLabel, undefined, { sensitivity: 'base' })
-      || a.countryName.localeCompare(b.countryName, undefined, { sensitivity: 'base' })
+    .sort((a, b) => a.countryName.localeCompare(b.countryName, undefined, { sensitivity: 'base' })
+      || a.committeeLabel.localeCompare(b.committeeLabel, undefined, { sensitivity: 'base' })
       || a.seat - b.seat), [countries]);
+
+  // A custom seat's own art (a character's crest) draws instead of a flag.
+  const seatArt = useMemo(() => new Map(countries.map(c => [c.code, c.logoUrl ?? null] as const)), [countries]);
 
   const mark = (keys: string[], p: Pending | null) => setPending(prev => {
     const next = new Map(prev);
@@ -192,7 +197,7 @@ export default function SeatsTab<M extends DelegationMemberLite>({ conference, r
   return (
     <div className="flex-1 min-h-0 flex flex-col md:flex-row overflow-y-auto md:overflow-hidden">
       {/* Left: what the delegation holds */}
-      <div className="flex flex-col md:overflow-y-auto md:w-[360px] md:flex-none"
+      <div className="flex flex-col md:overflow-y-auto md:w-[420px] md:flex-none"
         style={{ padding: '24px 24px', gap: 18, background: '#FCFAF6', borderRight: `1px solid ${HAIRLINE}` }}>
         <div className="flex flex-col" style={{ gap: 6 }}>
           <div className="flex items-baseline gap-2 flex-wrap">
@@ -209,21 +214,25 @@ export default function SeatsTab<M extends DelegationMemberLite>({ conference, r
             {held.map(h => {
               const person = h.applicationId ? memberById.get(h.applicationId) : undefined;
               const busy = pending.has(h.key);
-              const who = person ? memberName(person) : h.filled ? 'Someone is in this allocation' : 'Open allocation';
+              const personName = person ? memberName(person) : null;
               return (
                 <div key={h.key} className="flex items-center gap-3"
-                  style={{ padding: '8px 10px', borderRadius: 12, background: '#FFFFFF', boxShadow: '0 1px 2px rgba(27,56,40,0.06)', opacity: busy ? 0.6 : 1 }}>
-                  <CircleFlag code={h.countryCode} country={h.countryName} size={28} decorative />
-                  <div className="flex flex-col flex-1 min-w-0" style={{ gap: 2 }}>
-                    <span className="[overflow-wrap:anywhere]" style={{ fontFamily: FONT, fontSize: 14, fontWeight: 600, color: INK }}>{h.countryName}</span>
-                    <span className="inline-flex items-center gap-1.5 flex-wrap" style={{ fontFamily: FONT, fontSize: 12.5, color: INK_SOFT }}>
-                      <span className="inline-flex items-center gap-1.5" title={h.committeeName}>
-                        <CommitteeDisc src={committeeEmblemSrc(h.logoUrl, h.committeeName, h.abbreviation)} size={16} />
-                        <span style={{ color: INK }}>{h.committeeLabel}{h.slotSize > 1 ? `, seat ${h.seat}` : ''}</span>
-                      </span>
-                      <span aria-hidden>·</span>
-                      <span className="[overflow-wrap:anywhere]" style={{ color: person ? INK : INK_SOFT }}>{who}</span>
+                  style={{ padding: '10px 12px', borderRadius: 12, background: '#FFFFFF', boxShadow: '0 1px 2px rgba(27,56,40,0.06)', opacity: busy ? 0.6 : 1 }}>
+                  <CircleFlag code={h.countryCode} country={h.countryName} logoUrl={seatArt.get(h.countryCode) ?? undefined} label={h.countryName} size={40} decorative />
+                  <div className="flex flex-col flex-1 min-w-0" style={{ gap: 3 }}>
+                    <span className="[overflow-wrap:anywhere]" style={{ fontFamily: FONT, fontSize: 15, fontWeight: 600, color: INK }}>{h.countryName}</span>
+                    <span className="inline-flex items-center gap-1.5" title={h.committeeName} style={{ fontFamily: FONT, fontSize: 12.5 }}>
+                      <CommitteeDisc src={committeeEmblemSrc(h.logoUrl, h.committeeName, h.abbreviation)} size={16} />
+                      <span className="[overflow-wrap:anywhere]" style={{ color: INK }}>{h.committeeLabel}{h.slotSize > 1 ? `, seat ${h.seat}` : ''}</span>
                     </span>
+                    {person && personName ? (
+                      <span className="inline-flex items-center gap-1.5 min-w-0" style={{ marginTop: 2 }}>
+                        <RoundAvatar name={personName} url={person.profiles?.avatar_url ?? null} size={22} seed={person.id} />
+                        <span className="[overflow-wrap:anywhere]" style={{ fontFamily: FONT, fontSize: 13, fontWeight: 500, color: INK }}>{personName}</span>
+                      </span>
+                    ) : h.filled ? (
+                      <span style={{ fontFamily: FONT, fontSize: 12.5, color: INK_SOFT }}>Someone is in this allocation</span>
+                    ) : null}
                   </div>
                   {canTakeBack(h) && (
                     <button type="button" className={BTN_CLASS} onClick={e => askBack(h, e.currentTarget)}

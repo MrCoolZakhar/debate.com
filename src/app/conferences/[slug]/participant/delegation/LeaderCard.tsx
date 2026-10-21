@@ -24,8 +24,9 @@
 //                 separate), so it drops when a delegate leaves.
 //   People        PeopleTable, with the row menu (MemberMenu); it opens the
 //                 committee pop-up itself. Swap allocations sits in its header
-//                 beside Search people (owner, 21 Oct 2026); the swap banner
-//                 and the pick step stay under the table.
+//                 beside Search people and opens its picker in that same spot
+//                 (owner, 21 Oct 2026); a pending swap request and the recent
+//                 swap notice stay under the table.
 //   Right column  FinancialsCard, then the Open allocations list and the
 //                 reshuffle line (both DELEGATIONS_V2_DB only)
 
@@ -60,10 +61,13 @@ function payWord(m: RosterMember, pool: PoolMember | undefined): { word: string;
   return { word: m.role === 'faculty-advisor' ? 'Owes advisor fee' : 'Owes delegate fee', tone: 'owe' };
 }
 
-function paperWord(status: string | undefined, role: RosterMember['role'], seated: boolean): { word: string; tone: PayTone } {
+/** The position paper in words. Nothing for a person with no allocation, and
+ *  nothing for a seated person with no paper yet: the table draws the Upload
+ *  action in that cell instead (owner, 21 Oct 2026). */
+function paperWord(status: string | undefined, role: RosterMember['role'], seated: boolean): { word: string; tone: PayTone } | null {
   if (role === 'faculty-advisor') return { word: 'Not needed', tone: 'soft' };
-  if (!seated) return { word: 'No allocation yet', tone: 'soft' };
-  if (!status) return { word: 'Not yet', tone: 'soft' };
+  if (!seated) return null;
+  if (!status) return null;
   if (status === 'approved' || status === 'accepted') return { word: 'Accepted', tone: 'ok' };
   if (status === 'submitted' || status === 'reviewed') return { word: 'Submitted', tone: 'ok' };
   if (status === 'rejected' || status === 'needs_revision' || status === 'returned') return { word: 'Sent back', tone: 'owe' };
@@ -88,9 +92,9 @@ export default function LeaderCard({
   onImport: () => void;
   onChanged: () => Promise<void>;
   swap: { on: boolean; selected: string[]; toggle: (applicationId: string) => void };
-  /** DelegationPanel's Swap allocations button, drawn in the People header. */
+  /** DelegationPanel's Swap allocations button, or its picker while swapping, drawn in the People header. */
   swapButton?: React.ReactNode;
-  /** DelegationPanel's swap banner and pick step, drawn under the table. */
+  /** DelegationPanel's pending swap request and recent swap notice, drawn under the table. */
   swapTools: React.ReactNode;
   overlays: React.ReactNode;
 }) {
@@ -139,6 +143,7 @@ export default function LeaderCard({
       paper: DELEGATIONS_V2_DB && data.papers
         ? paperWord(p?.user_id ? data.papers.get(p.user_id) : undefined, m.role, seated)
         : null,
+      paperDue: DELEGATIONS_V2_DB && !!data.papers && seated && !(p?.user_id && data.papers.has(p.user_id)),
       pay: payWord(m, p),
     };
   }), [members, poolById, data.committees, data.papers, seatLogoFor]);

@@ -2,7 +2,9 @@
 
 // The delegation pop-up's People tab (taste board 3B, owner feedback 20 and 21
 // Oct 2026): every member coming or applying, with their role, their allocation
-// and where their payment stands, then the delegation's open allocations.
+// and where their payment stands. Open allocations live only in the
+// Allocations tab (owner, 21 Oct 2026); here an empty allocation is reached
+// through a person's "Allocate" (a second step listing them).
 // Organiser screens say "allocation" wherever a seat means an allocation.
 //
 // The seat column is the leader card's own SeatCell (participant/delegation/
@@ -14,17 +16,16 @@
 //   * a seat onto a seated member: Switch (perform_delegation_swap; organisers
 //     may always switch);
 //   * a seat onto a member with no seat: Move, the first person keeps no seat;
-//   * a seat onto the Open allocations area (or its Unallocate button, or the
-//     row menu's Unallocate): Unallocate, the allocation stays with the
-//     delegation as open;
-//   * an open allocation onto a member with no seat (or "Allocate"): Allocate.
+//   * the seat's Unallocate button, or the row menu's Unallocate: Unallocate,
+//     the allocation stays with the delegation as open;
+//   * "Allocate" on a member with no seat: Allocate, from a second step that
+//     lists the delegation's open allocations.
 // Writes: seatWrites.ts (the organiser allocation writes the assignment page
 // makes today). Seats only; no money is touched here.
 //
-// Payment words follow the payments ledger where it decides: "Owes ... fee"
-// is an open invoice balance of an accepted member (delegationRows.ts, the
-// same rule as conference_money_summary). "Paid" and "Paid by delegation" are
-// the member's access flag (`payment_status`, `self_paid`), never a sum.
+// Payment words: one vocabulary from the person's own invoices (paymentOf below
+// explains the rule): Owes <role> fee, Covered by delegation (with "Ticket not
+// paid yet"), Paid, Waived, Nothing due yet. Never a sum.
 //
 // Each person has a ··· menu (OrganiserMemberMenu, like the leader card's): Make
 // head delegate / faculty advisor / delegate (organiser_set_member_role, Christian's,
@@ -58,7 +59,7 @@ import { useSeatDrag } from '@/app/conferences/[slug]/participant/delegation/sea
 import { MemberDetailsBody, MemberDetailsHead } from '@/app/conferences/[slug]/participant/delegation/member/MemberDetailsPopup';
 import type { PayTone, PersonRow } from '@/app/conferences/[slug]/participant/delegation/PeopleTable';
 import { LIVE, ACCEPTED, memberName, type DelegationMemberLite } from '../delegationRows';
-import type { DelegationsData, DelegationView } from './useDelegationsData';
+import type { DelegationsData, DelegationView, InvoiceRow } from './useDelegationsData';
 import type { PopupStep } from './DelegationPopup';
 import { heldSeats, seatWords, type HeldSeat } from './seatPeople';
 import {
@@ -98,16 +99,73 @@ function roleLabel(m: DelegationMemberLite): string {
   return r ? ROLE_OPTIONS.find(o => o.value === r)!.label : (OTHER_ROLE_LABEL[m.role] ?? m.role);
 }
 
-function paymentOf(m: DelegationMemberLite, owes: boolean): { text: string; color: string; tone: PayTone } {
-  if (m.status === 'submitted') return { text: 'Waiting on you', color: '#8A5A12', tone: 'soft' };
-  if (owes) {
+/** The person's own invoices: everything in their name except what they hold for
+ *  the delegation (the tickets a leader buys, `pledge_spot` / `advisor_spot`, and
+ *  any other item carrying the delegation's society_id, such as a per-delegation
+ *  registration fee), which lives in the Payments tab. */
+const TICKET_KINDS = new Set(['pledge_spot', 'advisor_spot']);
+const OPEN_STATUSES = new Set(['open', 'partial']);
+
+type OwnInvoice = Pick<InvoiceRow, 'kind' | 'status' | 'amount_cents' | 'amount_paid_cents'>;
+
+interface PayWord { text: string; note: string | null; color: string; tone: PayTone }
+
+// ONE payment vocabulary for the People tab (owner, 21 Oct 2026: "Not paid yet"
+// and "Owes head delegate fee" side by side made no sense). What separated them:
+// "Owes ... fee" was any open ledger balance in the person's name, including a
+// leader's unpaid delegation tickets, and "Not paid yet" was everyone else whose
+// access flag was not paid, which in practice was a delegate COVERED by one of
+// the delegation's tickets (their own fee is a 0 "Covered by your delegation"
+// invoice, status waived) while that ticket is still unpaid. The words now:
+//   1. Owes <role> fee        their OWN fee invoice (role_fee) has an open or
+//                             partial balance; other own items left open are
+//                             named after it ("and registration fee", "and
+//                             extras"). Delegation tickets and other items
+//                             carrying the delegation never count here.
+//      Owes registration fee  / Owes extras: only those are open.
+//   2. Waived                 the organiser waived their fee (payment_status
+//                             'waived', written only by the fee-waiver RPCs).
+//   3. Covered by delegation  their own fee invoice is waived because a delegation
+//                             ticket covers it (or there is none and the access
+//                             flag says paid by someone else). The small note
+//                             "Ticket not paid yet" shows while the access flag is
+//                             not 'paid': fin_pledge_covers covers the earliest
+//                             delegates whether or not the ticket is paid, and
+//                             the flag turns paid only when that ticket settles.
+//   4. Paid                   their own fee invoice is settled, or no invoice and
+//                             the flag says they paid it themselves.
+//   5. Nothing due yet        no fee invoice yet (payments not set up, or not
+//                             accepted); "Waiting on you" while the application
+//                             waits for the organiser.
+// Money is never computed from payment_status: it only picks between words the
+// ledger leaves open (covered ticket paid or not, a waiver, an old row with no
+// invoice), as it did before.
+function paymentOf(m: DelegationMemberLite, own: OwnInvoice[]): PayWord {
+  if (m.status === 'submitted') return { text: 'Waiting on you', note: null, color: '#8A5A12', tone: 'soft' };
+  const accepted = ACCEPTED.has(m.status);
+  const open = accepted ? own.filter(i => OPEN_STATUSES.has(i.status) && i.amount_cents - i.amount_paid_cents > 0) : [];
+  if (open.length > 0) {
     const r = roleOf(m);
-    const fee = r === 'faculty-advisor' ? 'faculty advisor' : r === 'head-delegate' ? 'head delegate' : 'delegate';
-    return { text: `Owes ${fee} fee`, color: OWE, tone: 'owe' };
+    const parts: string[] = [];
+    if (open.some(i => i.kind === 'role_fee')) {
+      parts.push(`${r === 'faculty-advisor' ? 'faculty advisor' : r === 'head-delegate' ? 'head delegate' : 'delegate'} fee`);
+    }
+    if (open.some(i => i.kind === 'app_fee')) parts.push('registration fee');
+    if (open.some(i => i.kind !== 'role_fee' && i.kind !== 'app_fee')) parts.push('extras');
+    return { text: `Owes ${parts.join(' and ')}`, note: null, color: OWE, tone: 'owe' };
   }
-  if (m.payment_status === 'paid') return { text: m.self_paid ? 'Paid' : 'Paid by delegation', color: OK_GREEN, tone: 'ok' };
-  if (m.payment_status === 'waived') return { text: 'Waived', color: OK_GREEN, tone: 'ok' };
-  return { text: ACCEPTED.has(m.status) ? 'Not paid yet' : 'Nothing due yet', color: INK_SOFT, tone: 'soft' };
+  if (m.payment_status === 'waived') return { text: 'Waived', note: null, color: OK_GREEN, tone: 'ok' };
+  const fee = own.filter(i => i.kind === 'role_fee' && i.status !== 'void');
+  const covered = fee.some(i => i.status === 'waived')
+    || (fee.length === 0 && m.payment_status === 'paid' && !m.self_paid);
+  if (covered) {
+    const ticketPaid = m.payment_status === 'paid';
+    return { text: 'Covered by delegation', note: ticketPaid ? null : 'Ticket not paid yet', color: ticketPaid ? OK_GREEN : INK, tone: ticketPaid ? 'ok' : 'soft' };
+  }
+  if (fee.some(i => i.status === 'settled') || (fee.length === 0 && m.payment_status === 'paid')) {
+    return { text: 'Paid', note: null, color: OK_GREEN, tone: 'ok' };
+  }
+  return { text: 'Nothing due yet', note: null, color: INK_SOFT, tone: 'soft' };
 }
 
 interface Ask {
@@ -182,6 +240,18 @@ export default function PeopleTab<M extends DelegationMemberLite>({ conferenceId
   }, [seats, seatOfApp]);
 
   const memberById = useMemo(() => new Map(live.map(m => [m.id, m] as const)), [live]);
+
+  // Each member's own invoices (paymentOf), from the ledger the tab already reads.
+  const ownInvoices = useMemo(() => {
+    const map = new Map<string, OwnInvoice[]>();
+    for (const inv of data.invoices) {
+      if (!inv.application_id || !memberIds.has(inv.application_id) || TICKET_KINDS.has(inv.kind)) continue;
+      if (inv.society_id && inv.kind !== 'role_fee') continue;
+      const list = map.get(inv.application_id);
+      if (list) list.push(inv); else map.set(inv.application_id, [inv]);
+    }
+    return map;
+  }, [data.invoices, memberIds]);
 
   const ordered = useMemo(() => [...live].sort((a, b) => {
     const sa = seatOfApp.get(a.id);
@@ -368,7 +438,7 @@ export default function PeopleTab<M extends DelegationMemberLite>({ conferenceId
 
   function personRowOf(m: M): PersonRow {
     const held = seatOfApp.get(m.id);
-    const pay = paymentOf(m, row.owingMemberIds.includes(m.id));
+    const pay = paymentOf(m, ownInvoices.get(m.id) ?? []);
     return {
       application_id: m.id,
       name: memberName(m),
@@ -380,7 +450,7 @@ export default function PeopleTab<M extends DelegationMemberLite>({ conferenceId
       attending: m.attending,
       seat: held?.seat ?? null,
       paper: null,
-      pay: { word: pay.text, tone: pay.tone },
+      pay: { word: pay.note ? `${pay.text}, ${pay.note.toLowerCase()}` : pay.text, tone: pay.tone },
     };
   }
 
@@ -439,7 +509,7 @@ export default function PeopleTab<M extends DelegationMemberLite>({ conferenceId
     </button>
   );
 
-  if (live.length === 0 && openSeats.length === 0) {
+  if (live.length === 0) {
     return (
       <div style={{ padding: '24px 28px' }}>
         <div className="flex items-start justify-between gap-4 flex-wrap">
@@ -452,8 +522,6 @@ export default function PeopleTab<M extends DelegationMemberLite>({ conferenceId
       </div>
     );
   }
-  const openAreaTarget = !!drag && !drag.from.startsWith('open:');
-  const openAreaOver = !!drag && drag.over === OPEN_AREA;
 
   return (
     <div className="flex-1 min-h-0 overflow-auto" style={{ padding: '6px 0 16px' }}>
@@ -469,14 +537,11 @@ export default function PeopleTab<M extends DelegationMemberLite>({ conferenceId
             <span key={i} style={{ fontFamily: FONT, fontSize: 12, fontWeight: 500, color: INK_SOFT }}>{h}</span>
           ))}
         </div>
-        {live.length === 0 && (
-          <p style={{ borderTop: `1px solid ${ROW_LINE}`, padding: '16px 28px', fontFamily: FONT, fontSize: 14, color: INK_SOFT }}>Nobody has joined yet.</p>
-        )}
         {ordered.map(m => {
           const name = memberName(m);
           const email = m.profiles?.email || m.invited_email || '';
           const held = seatOfApp.get(m.id) ?? null;
-          const pay = paymentOf(m, row.owingMemberIds.includes(m.id));
+          const pay = paymentOf(m, ownInvoices.get(m.id) ?? []);
           const role = roleOf(m);
           const canSeat = seatable(m);
           const rowBusy = seatBusy.has(m.id) || (!!held && seatBusy.has(held.allocationId));
@@ -548,7 +613,10 @@ export default function PeopleTab<M extends DelegationMemberLite>({ conferenceId
                   />
                 </div>
 
-                <span style={{ fontFamily: FONT, fontSize: 14, color: pay.color }}>{pay.text}</span>
+                <span className="flex flex-col" style={{ gap: 2 }}>
+                  <span style={{ fontFamily: FONT, fontSize: 14, color: pay.color }}>{pay.text}</span>
+                  {pay.note && <span style={{ fontFamily: FONT, fontSize: 12, color: INK_SOFT }}>{pay.note}</span>}
+                </span>
 
                 <div className="flex justify-end">
                   <OrganiserMemberMenu
@@ -572,55 +640,6 @@ export default function PeopleTab<M extends DelegationMemberLite>({ conferenceId
           <p style={{ borderTop: `1px solid ${HAIRLINE}`, padding: '14px 28px', fontFamily: FONT, fontSize: 13, color: INK_SOFT }}>
             {gone === 1 ? '1 more person was turned down or withdrew.' : `${gone} more people were turned down or withdrew.`}
           </p>
-        )}
-
-        {/* Open allocations: drag one onto a person to allocate them, or a person's allocation here to unallocate them. */}
-        {(seats.length > 0 || openAreaTarget) && (
-          <div
-            data-seat-target={OPEN_AREA}
-            style={{
-              margin: '14px 28px 0', padding: '16px 18px', borderRadius: 16,
-              background: openAreaOver ? 'rgba(27,56,40,0.06)' : '#FCFAF6',
-              boxShadow: openAreaOver ? `inset 0 0 0 2px ${FOREST}` : openAreaTarget ? `inset 0 0 0 1.5px rgba(27,56,40,0.35)` : `inset 0 0 0 1px ${HAIRLINE}`,
-              transition: 'background-color 120ms ease, box-shadow 120ms ease',
-            }}
-          >
-            <div className="flex items-baseline gap-2 flex-wrap" style={{ marginBottom: openSeats.length > 0 ? 12 : 4 }}>
-              <span style={{ fontFamily: FONT, fontSize: 15, fontWeight: 600, color: INK }}>Open allocations</span>
-              <span style={{ fontFamily: FONT, fontSize: 13, color: INK_SOFT }}>
-                {openSeats.length > 0 ? 'Drag one onto a person to allocate them' : 'None. Drag an allocation here to unallocate someone'}
-              </span>
-            </div>
-            {openSeats.length > 0 && (
-              <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(190px, 1fr))', gap: 10 }}>
-                {openSeats.map(s => {
-                  const id = openId(s.allocationId);
-                  const busy = seatBusy.has(s.allocationId);
-                  return (
-                    <div
-                      key={s.allocationId}
-                      onPointerDown={busy ? undefined : (e) => start(e, id, { code: s.countryCode, logoUrl: s.seat.seatLogo, label: s.countryName, committee: s.seat.committee_label }, e.pointerType === 'touch')}
-                      title="Drag onto a person to allocate them"
-                      className="flex items-center gap-3 min-w-0"
-                      style={{
-                        padding: '10px 12px', borderRadius: 12, background: '#FFFFFF', border: '1.5px dashed rgba(27,56,40,0.28)',
-                        cursor: busy ? 'progress' : 'grab', touchAction: 'none', opacity: drag?.from === id || busy ? 0.45 : 1,
-                      }}
-                    >
-                      <CircleFlag code={s.countryCode} logoUrl={s.seat.seatLogo} label={s.countryName} size={36} decorative />
-                      <span className="flex flex-col min-w-0" style={{ gap: 3 }}>
-                        <span className="[overflow-wrap:anywhere]" style={{ fontFamily: FONT, fontSize: 14, fontWeight: 600, color: INK }}>{s.countryName}</span>
-                        <span className="inline-flex items-center gap-1.5 min-w-0" title={s.seat.committee_full ?? undefined}>
-                          <CommitteeDisc src={s.seat.emblem} size={18} />
-                          <span className="[overflow-wrap:anywhere]" style={{ fontFamily: FONT, fontSize: 12.5, color: INK_SOFT }}>{s.seat.committee_label}</span>
-                        </span>
-                      </span>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
         )}
       </div>
 

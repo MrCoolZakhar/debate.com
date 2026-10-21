@@ -12,7 +12,7 @@
 // country and name (seat/seatOrder), then everyone without a seat as read.
 // The avatar and the name open the member's pop-up (member/MemberDetailsPopup:
 // details and application answers); a committee acronym opens the committee's
-// pop-up (CommitteePopup, the whole committee under DELEGATIONS_V2_DB). Both
+// pop-up (CommitteePopup: every allocation in the committee, A to Z). Both
 // pop-ups are this table's own, so onOpenCommittee is no longer called.
 //
 // Seats move here (owner, 20 Oct 2026):
@@ -23,16 +23,21 @@
 //     same writes as DelegationPanel's Swap allocations; live today). Onto a
 //     member with no seat: the seat moves to them (moveSeat, DELEGATIONS_V2_DB and
 //     'self_serve' only). The keyboard way is "Switch with…" in the row menu.
-//   * The seat cell's icon buttons, DELEGATIONS_V2_DB only: Upload position paper
-//     and Unallocate (asked in place); "Allocate" for a member with
-//     no seat opens the row menu's place step.
+//   * "Allocate" in the seat cell for a member with no seat opens the row
+//     menu's place step (DELEGATIONS_V2_DB). Unallocate lives only in the
+//     three-dots menu (owner, 21 Oct 2026: no icon in the seat cell).
+//   * Position paper column (DELEGATIONS_V2_DB, owner 21 Oct 2026): empty for
+//     a person with no allocation; for a person with an allocation and no
+//     paper yet, the Upload action (thin icon, the word under it,
+//     delegation_submit_member_paper through v2.uploadPaperForMember); a paper
+//     that is in keeps its word.
 // Every seat change shows at once (a patch over the rows, and the Open seats
 // card through seat/pendingSeats), then the write; a refusal puts the rows
 // back with the server's sentence. Afterwards the card re-reads in place
 // (onChanged), never behind a loader.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Check, Mail, Search, UserX } from 'lucide-react';
+import { Check, Mail, Search, Upload, UserX } from 'lucide-react';
 import { committeeDisplayName } from '@/lib/presetNames';
 import { friendlyError } from '@/lib/friendlyError';
 import { notifyErr, notifyOk } from '@/lib/appNotify';
@@ -72,6 +77,8 @@ export interface PersonRow {
   } | null;
   /** V2 only: the position paper in words, with its tone. */
   paper: { word: string; tone: PayTone } | null;
+  /** V2 only: has an allocation and no paper in yet (the cell offers Upload). */
+  paperDue?: boolean;
   pay: { word: string; tone: PayTone } | null;
 }
 
@@ -340,17 +347,6 @@ export default function PeopleTable({ rows, societyId, societyName, conferenceId
     });
   }, [rowOf, runOp]);
 
-  const askUnplace = useCallback((id: string, anchor: HTMLElement) => {
-    const r = rowOf(id);
-    if (!r?.seat) return;
-    setAsk({
-      anchor, align: 'end',
-      title: r.is_me ? 'Unallocate yourself?' : `Unallocate ${r.name}?`,
-      line: r.is_me ? 'Your allocation stays with the delegation as an open allocation.' : 'Their allocation stays with the delegation as an open allocation.',
-      yes: 'Unallocate', danger: true,
-      onYes: () => { setAsk(null); doUnplace(id); },
-    });
-  }, [rowOf, doUnplace]);
 
   const doUpload = useCallback((id: string, file: File) => {
     const r = rowOf(id);
@@ -395,7 +391,12 @@ export default function PeopleTable({ rows, societyId, societyName, conferenceId
     ? live.filter(r => r.seat?.committee_id === committeeOpen).map(r => ({
         application_id: r.application_id, name: r.name, avatar_url: r.avatar_url,
         country_name: r.seat?.country_name ?? null, country_code: r.seat?.country_code ?? null, seatLogo: r.seat?.seatLogo ?? null,
+        is_me: r.is_me,
       }))
+    : [];
+  const committeeOpenSeats = committeeOpen
+    ? (shownOpenSeats ?? []).filter(s => s.conference_committee_id === committeeOpen && !!s.country_name)
+      .map(s => ({ country_code: s.country_code, country_name: s.country_name }))
     : [];
   const switchOffReason = canSwitchSeated || canMoveToEmpty
     ? 'Nobody to switch with right now'
@@ -530,8 +531,6 @@ export default function PeopleTable({ rows, societyId, societyName, conferenceId
                 onOpenCommittee={setCommitteeOpen}
                 wasJustDragged={wasJustDragged}
                 busy={rowBusy}
-                onTakeOut={seatToolsOn && seatable && r.seat && mode === 'self_serve' ? (el) => askUnplace(r.application_id, el) : undefined}
-                onUpload={seatToolsOn && seatable && r.seat?.committee_id && r.user_id ? () => pickPaper(r.application_id) : undefined}
                 onPlace={seatToolsOn && seatable && !r.seat && hasOpenSeats
                   ? (el) => menus.current.get(r.application_id)?.openAt('place', el)
                   : undefined}
@@ -541,7 +540,15 @@ export default function PeopleTable({ rows, societyId, societyName, conferenceId
             {/* Position paper (V2) */}
             {DELEGATIONS_V2_DB && (
               <div className="pl-[66px] @[760px]:pl-0">
-                {r.paper && <ToneWord word={r.paper.word} tone={r.paper.tone} />}
+                {r.paper ? (
+                  <ToneWord word={r.paper.word} tone={r.paper.tone} />
+                ) : r.paperDue && seatable && r.seat?.committee_id && !swap.on ? (
+                  <PaperUpload
+                    onPress={() => pickPaper(r.application_id)}
+                    disabled={rowBusy || !r.user_id}
+                    title={r.user_id ? `Upload a position paper for ${r.name}` : 'They have not joined yet'}
+                  />
+                ) : null}
               </div>
             )}
 
@@ -601,9 +608,29 @@ export default function PeopleTable({ rows, societyId, societyName, conferenceId
           abbreviation={committeeInfo.committee_label}
           emblem={committeeInfo.emblem}
           people={committeePeople}
+          openSeats={committeeOpenSeats}
           onClose={closeCommittee}
         />
       )}
     </section>
+  );
+}
+
+/** The Upload action in the position paper column: a thin icon with the word
+ *  right under it. */
+function PaperUpload({ onPress, disabled, title }: { onPress: () => void; disabled: boolean; title: string }) {
+  return (
+    <button
+      type="button"
+      onClick={(e) => { e.stopPropagation(); if (!disabled) onPress(); }}
+      aria-disabled={disabled}
+      title={title}
+      aria-label={title}
+      className="inline-flex flex-col items-center justify-center focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gv-main)] hover:bg-[#F1ECE1]"
+      style={{ minWidth: 56, minHeight: 48, padding: '4px 8px', gap: 2, borderRadius: 10, border: 'none', background: 'transparent', color: 'var(--gv-main)', cursor: disabled ? 'default' : 'pointer', opacity: disabled ? 0.45 : 1 }}
+    >
+      <Upload size={20} strokeWidth={STROKE} aria-hidden />
+      <span style={{ fontFamily: FONT, fontSize: 12.5, fontWeight: 600, lineHeight: 1.1 }}>Upload</span>
+    </button>
   );
 }

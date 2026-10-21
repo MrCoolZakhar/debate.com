@@ -4,13 +4,14 @@
 // country's round flag big (56px) with the country's name centred under it,
 // wrapping, never cut; beside that block, vertically centred, the committee's
 // round emblem smaller (28px) with its acronym, which stays the link that opens
-// the committee. Then the seat's small icon buttons (Unallocate, Upload
-// position paper, DELEGATIONS_V2_DB only). A seated member's block can be
+// the committee. Then, when given, the Upload position paper icon. There is no
+// Unallocate icon here (owner, 21 Oct 2026): Unallocate lives in the row's
+// three-dots menu, on the leader's table and the organiser's. A seated member's block can be
 // dragged onto another person's row (useSeatDrag); a finger drags from the
 // grip. A member with no seat shows "Allocate" when there is one to give.
 
 import { useRef } from 'react';
-import { Armchair, CircleMinus, FileUp, GripVertical } from 'lucide-react';
+import { Armchair, FileUp, GripVertical } from 'lucide-react';
 import { CircleFlag } from '@/components/CircleFlag';
 import { CommitteeDisc, FONT, FOREST, INK, INK_SOFT, STROKE } from '../leaderKit';
 import type { PersonRow } from '../PeopleTable';
@@ -37,7 +38,7 @@ function IconBtn({ label, onPress, disabled, children }: { label: string; onPres
 
 export default function SeatCell({
   seat, role, draggable, dragging, onDragStart, onOpenCommittee, wasJustDragged,
-  onTakeOut, onUpload, onPlace, busy,
+  onUpload, onPlace, busy,
 }: {
   seat: Seat | null;
   role: PersonRow['role'];
@@ -49,8 +50,10 @@ export default function SeatCell({
   /** Opens the committee; when left out the acronym is plain text (the organiser's pop-up). */
   onOpenCommittee?: (committeeId: string) => void;
   wasJustDragged: () => boolean;
-  /** Each is offered only when given. */
+  /** @deprecated Not drawn any more (owner, 21 Oct 2026): Unallocate is in the
+   *  three-dots menu. Kept so existing callers still compile; drop it there. */
   onTakeOut?: (anchor: HTMLElement) => void;
+  /** Offered only when given. */
   onUpload?: () => void;
   onPlace?: (anchor: HTMLElement) => void;
   busy: boolean;
@@ -114,18 +117,11 @@ export default function SeatCell({
           )}
         </div>
       </div>
-      {(onTakeOut || onUpload) && (
+      {onUpload && (
         <div className="flex items-center flex-none" style={{ gap: 2 }}>
-          {onUpload && (
-            <IconBtn label="Upload position paper" onPress={() => onUpload()} disabled={busy}>
-              <FileUp size={17} strokeWidth={STROKE} aria-hidden />
-            </IconBtn>
-          )}
-          {onTakeOut && (
-            <IconBtn label="Unallocate" onPress={onTakeOut} disabled={busy}>
-              <CircleMinus size={17} strokeWidth={STROKE} aria-hidden />
-            </IconBtn>
-          )}
+          <IconBtn label="Upload position paper" onPress={() => onUpload()} disabled={busy}>
+            <FileUp size={17} strokeWidth={STROKE} aria-hidden />
+          </IconBtn>
         </div>
       )}
     </div>

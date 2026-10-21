@@ -6,11 +6,26 @@
  *
  * Two steps. First WHO: a short "How it works" card (who counts, our team
  * checks every one, at most one every 14 days and never two from the same
- * conference, unsubscribe), then three product cards in the Conference
- * Store's look (a 3D emoji in a tinted disc, the flat price as a big
- * number, one line saying who counts): the delegates in the conference's city,
- * in its country, or the whole world. NO reach numbers anywhere (owner,
- * 11 Oct 2026): the database only says whether anyone can get one there.
+ * conference, unsubscribe), then the three choices, redesigned 21 Oct 2026
+ * (Peter: "add a little image ... delegates in our big countries and the
+ * whole world", in the feel of the credits pop-up):
+ *   - Country and The Whole World are two big white picture cards side by
+ *     side (stacked on phones): a map photo across the top with a clean edge
+ *     (no fade), the title, the flat price as a big number, one line saying
+ *     who counts and a full-width Choose button. The world card shows
+ *     `/marketing/world-map.jpg`; the country card shows the map of the
+ *     conference country's continent (`countryToContinent`, files
+ *     `/marketing/<continent>-map.jpg`, 960 x 536 JPEG copies of
+ *     `public/map/*.png`) with the country's round flag (`CircleFlag`)
+ *     hanging over the picture's bottom-left edge, and the country in the
+ *     title. A country we cannot place on a continent gets no picture.
+ *   - The city (and a country with no picture) is a slim full-width row card
+ *     under them: a fine-line Lucide icon, the title and who counts, the
+ *     price and Choose on the right. Lighter on purpose, never an empty
+ *     picture slot.
+ * NO reach numbers anywhere (owner, 11 Oct 2026): the database only says
+ * whether anyone can get one there. No Emoji3D on these cards (CLAUDE.md §8
+ * rule 8, style A).
  * Then the email: heading, message, and the button as ONE compact row (type
  * the label straight onto the button, the link beside it), a preview, and
  * Send for review. Submitting emails our team inbox; nothing goes to anyone
@@ -18,7 +33,8 @@
  *
  * Built from the organiser kits: STORE_CSS (storeKit) and DASH_CSS
  * (financials/dashboardKit), EmojiIcon (commsKit: a Fluent 3D emoji in a
- * tinted disc), GoldWord for the title.
+ * tinted disc, still on How it works and the cards of the email step until
+ * those are redesigned), GoldWord for the title.
  *
  * The place is never chosen here: the database reads the conference's own
  * city and country. Prices come only from the database
@@ -37,14 +53,16 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import { GoldWord } from '@/components/BrandHeading';
+import { CircleFlag } from '@/components/CircleFlag';
 import { notifyErr, notifyOk } from '@/lib/appNotify';
+import { countryToContinent, type Continent } from '@/lib/countries';
 import { useStoreBuy, rpcCall } from '../store/storeApi';
 import { STORE_CSS, INK, INK_SOFT, FOREST, GOLD, DANGER, IVORY } from '../store/storeKit';
 import { DASH_CSS } from '../financials/dashboardKit';
 import { InfoHint } from '../settings/applicationsUi';
 import {
   loadAnnouncementTargets, loadMyAnnouncements, cancelAnnouncement,
-  placeName, statusWords, scopeTitle, whoCounts, normaliseButtonUrl, conferencePageUrl,
+  placeName, statusWords, whoCounts, normaliseButtonUrl, conferencePageUrl,
   ANNOUNCEMENT_SCOPES,
   type AnnouncementScope, type AnnouncementTargets, type AnnouncementItem, type AnnouncementOption,
 } from '@/lib/paidAnnouncements';
@@ -61,12 +79,36 @@ const SCOPE_ICON: Record<AnnouncementScope, LucideIcon> = {
   country: MapPin,
   world: Globe2,
 };
-/** The Fluent 3D emoji per scope (SCOPE_ICON is its fallback). */
-const SCOPE_EMOJI: Record<AnnouncementScope, string> = {
-  city: 'Cityscape',
-  country: 'Round pushpin',
-  world: 'Globe showing europe-africa',
+
+/** Web copies of `public/map/*.png` (960 x 536 JPEG, made with sips). */
+const MAP_W = 960;
+const MAP_H = 536;
+const WORLD_MAP = '/marketing/world-map.jpg';
+const CONTINENT_MAP: Record<Continent, string> = {
+  Africa: '/marketing/africa-map.jpg',
+  Asia: '/marketing/asia-map.jpg',
+  Europe: '/marketing/europe-map.jpg',
+  'North America': '/marketing/north-america-map.jpg',
+  'South America': '/marketing/south-america-map.jpg',
+  Oceania: '/marketing/oceania-map.jpg',
 };
+
+/** The picture on a choice: the world map, the country's continent, or none (the city). */
+function scopeImage(scope: AnnouncementScope, country: string | null): string | null {
+  if (scope === 'world') return WORLD_MAP;
+  if (scope === 'country' && country) {
+    const continent = countryToContinent(country);
+    return continent ? CONTINENT_MAP[continent] : null;
+  }
+  return null;
+}
+
+/** The choice's title in Title Case. */
+function choiceTitle(scope: AnnouncementScope, city: string | null, country: string | null): string {
+  if (scope === 'city') return city ? `Delegates in ${city}` : 'Delegates in Your City';
+  if (scope === 'country') return country ? `Delegates in ${country}` : 'Delegates in Your Country';
+  return 'The Whole World';
+}
 
 /**
  * A white Store card with a 3D emoji in a gold disc, the title and an "i"
@@ -113,19 +155,36 @@ function HowItWorks({ capDays }: { capDays: number }) {
 }
 
 const ANN_CSS = `
-.gv-ann-choices{display:grid;grid-template-columns:minmax(0,1fr);gap:16px}
-@media (min-width:860px){.gv-ann-choices{grid-template-columns:repeat(3,minmax(0,1fr))}}
+.gv-ann-choices{display:grid;grid-template-columns:minmax(0,1fr);gap:18px}
+@media (min-width:760px){.gv-ann-choices{grid-template-columns:repeat(2,minmax(0,1fr))}.gv-ann-wide{grid-column:1/-1}}
 .gv-ann-choice{display:flex;flex-direction:column;width:100%;height:100%;text-align:left;border:none;font-family:inherit;cursor:pointer;transition:transform 200ms cubic-bezier(0.22,1,0.36,1),box-shadow 200ms ease}
+.gv-ann-choice.gv-st-card{padding:0;background:#FFFFFF;box-shadow:0 1px 0 rgba(27,56,40,0.08),0 22px 44px -30px rgba(27,56,40,0.42)}
+.gv-ann-media{position:relative;display:block}
+.gv-ann-photo{display:block;aspect-ratio:2/1;border-radius:20px 20px 0 0;overflow:hidden;background:#F0EBDD}
+@media (min-width:1600px){.gv-ann-photo{aspect-ratio:5/2}}
+.gv-ann-photo img{display:block;width:100%;height:100%;object-fit:cover}
+.gv-ann-body{display:flex;flex-direction:column;flex:1 1 auto;padding:20px 24px 24px}
+.gv-ann-media[data-flag]+.gv-ann-body{padding-top:40px}
+.gv-ann-body .gv-ann-name{margin:0}
+@media (min-width:760px){.gv-ann-choice.gv-st-card.gv-ann-lone{flex-direction:row}.gv-ann-lone .gv-ann-media{flex:0 0 46%}.gv-ann-lone .gv-ann-photo{height:100%;min-height:240px;aspect-ratio:auto;border-radius:20px 0 0 20px}}
+.gv-ann-choice.gv-st-card.gv-ann-row{flex-direction:row;flex-wrap:wrap;align-items:center;gap:14px 24px;padding:20px 24px}
+.gv-ann-row-glyph{flex-shrink:0;color:${INK}}
+.gv-ann-row-text{display:flex;flex-direction:column;flex:1 1 280px;min-width:0}
+.gv-ann-row-text .gv-ann-name{margin:0;font-size:19px}
+.gv-ann-row-text .gv-ann-who{margin-top:4px}
+.gv-ann-row .gv-ann-nums{margin:0}
+.gv-ann-row .gv-ann-num .gv-st-big{font-size:32px}
+.gv-ann-row .gv-ann-go{margin:0;padding:0;flex:0 0 auto;min-width:170px}
 .gv-ann-choice:hover{transform:translateY(-3px)}
 .gv-ann-choice:focus{outline:none}
 .gv-ann-choice:focus-visible{box-shadow:0 0 0 3px #FFFFFF,0 0 0 6px ${FOREST}}
 .gv-ann-choice[data-chosen]{box-shadow:0 0 0 2px ${FOREST},0 18px 40px -26px rgba(27,56,40,0.55)}
 .gv-ann-choice[aria-disabled="true"]{cursor:default}
 .gv-ann-choice[aria-disabled="true"]:hover{transform:none}
-.gv-ann-name{margin:14px 0 0;font-size:21px;font-weight:800;letter-spacing:-0.015em;line-height:1.2;color:${INK};overflow-wrap:anywhere;text-wrap:balance}
+.gv-ann-name{display:block;margin:14px 0 0;font-size:22px;font-weight:800;letter-spacing:-0.015em;line-height:1.2;color:${INK};overflow-wrap:anywhere;text-wrap:balance}
 .gv-ann-nums{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 22px;margin:12px 0 0}
 .gv-ann-num{display:inline-flex;align-items:baseline;gap:7px}
-.gv-ann-num .gv-st-big{font-size:38px}
+.gv-ann-num .gv-st-big{font-size:44px}
 .gv-ann-num-word{font-size:15px;font-weight:700;color:${INK}}
 .gv-ann-how{margin:0 0 22px}
 .gv-ann-how-list{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:minmax(0,1fr);gap:12px 24px}
@@ -133,10 +192,10 @@ const ANN_CSS = `
 .gv-ann-how-list li{display:flex;align-items:flex-start;gap:12px;font-size:14px;line-height:1.5;color:${INK}}
 .gv-ann-how-list li span:last-child{padding-top:7px}
 .gv-ann-how-note{margin:8px 0 0;font-size:13px;line-height:1.5;color:${INK_SOFT}}
-.gv-ann-who{margin:10px 0 0;font-size:14px;line-height:1.5;color:${INK_SOFT}}
-.gv-ann-go{margin-top:auto;padding-top:16px}
-.gv-ann-go .gv-st-btn{width:100%}
-.gv-ann-why{margin:10px 0 0;font-size:13.5px;font-weight:600;color:${DANGER}}
+.gv-ann-who{display:block;margin:10px 0 0;font-size:14.5px;line-height:1.5;color:${INK_SOFT}}
+.gv-ann-go{display:block;margin-top:auto;padding-top:18px}
+.gv-ann-go .gv-st-btn{width:100%;min-height:48px;font-size:14.5px}
+.gv-ann-why{display:block;margin:10px 0 0;font-size:13.5px;font-weight:600;color:${DANGER}}
 .gv-ann-head{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:16px 28px;margin:0 0 22px}
 .gv-ann-sum{display:flex;flex-wrap:wrap;align-items:center;gap:12px 18px;padding:14px 18px!important;margin:0 0 18px}
 .gv-ann-sum-name{font-size:17px;font-weight:800;color:${INK};overflow-wrap:anywhere}
@@ -325,7 +384,9 @@ export default function AnnounceView({
         <BackLink onClick={onBack} />
         {header}
         <div className="gv-ann-choices" aria-hidden>
-          {[0, 1, 2].map(i => <div key={i} className="gv-fd-ph" style={{ height: 250 }} />)}
+          <div className="gv-fd-ph" style={{ height: 440 }} />
+          <div className="gv-fd-ph" style={{ height: 440 }} />
+          <div className="gv-fd-ph gv-ann-wide" style={{ height: 96 }} />
         </div>
       </>,
     );
@@ -350,6 +411,12 @@ export default function AnnounceView({
 
   /* ─────────────────────────── Step 1: who gets it ─────────────────────────── */
   if (step === 'choose' || missing || !targets || !scope) {
+    // Picture cards first, then the slim row cards. A lone picture card (a
+    // country we cannot place) runs the full width with its map on the left.
+    const choices = ANNOUNCEMENT_SCOPES
+      .map(s => ({ s, img: scopeImage(s, placeCountry) }))
+      .sort((a, b) => Number(!a.img) - Number(!b.img));
+    const pictureCount = choices.filter(c => c.img).length;
     return shell(
       <>
         <BackLink onClick={onBack} />
@@ -373,51 +440,88 @@ export default function AnnounceView({
         <p className="gv-st-sec-line">One flat price. We send it over a few hours, after our check</p>
 
         <div className="gv-ann-choices" role="list">
-          {ANNOUNCEMENT_SCOPES.map(s => {
+          {choices.map(({ s, img }) => {
             const o = targets?.options.find(x => x.scope === s) ?? null;
             const usable = !missing && !!o && o.available && o.hasPeople !== false;
-            const wash = ' gv-fd-wash-gold';
-            const content = (
+            const Glyph = SCOPE_ICON[s];
+            const showFlag = s === 'country' && !!placeCountry;
+            const price = o ? (
+              <span className="gv-ann-nums">
+                <span className="gv-ann-num">
+                  <span className="gv-st-big">{o.credits.toLocaleString()}</span>
+                  <span className="gv-ann-num-word">{plural(o.credits, 'credit', 'credits')}</span>
+                </span>
+              </span>
+            ) : (
+              <span className="gv-st-soon-tag" style={{ margin: img ? '12px 0 0' : 0 }}>Coming soon</span>
+            );
+            const why = (
               <>
-                <EmojiIcon emoji={SCOPE_EMOJI[s]} icon={SCOPE_ICON[s]} size={60} />
-                <span className="gv-ann-name">{scopeTitle(s, placeCity, placeCountry)}</span>
-                {o ? (
-                  <span className="gv-ann-nums">
-                    <span className="gv-ann-num">
-                      <span className="gv-st-big">{o.credits.toLocaleString()}</span>
-                      <span className="gv-ann-num-word">{plural(o.credits, 'credit', 'credits')}</span>
-                    </span>
-                  </span>
-                ) : (
-                  <span className="gv-st-soon-tag" style={{ margin: '12px 0 0' }}>Coming soon</span>
-                )}
-                <span className="gv-ann-who">{whoCounts(s, placeCity, placeCountry)}</span>
                 {o && !o.available && o.reason && <span className="gv-ann-why">{o.reason}</span>}
                 {o && o.available && o.hasPeople === false && <span className="gv-ann-why">Nobody can get one here yet. Choose a bigger area</span>}
-                {usable && (
-                  <span className="gv-ann-go"><span className="gv-st-btn gv-st-forest">Choose</span></span>
-                )}
               </>
             );
+            const action = usable ? (
+              <span className="gv-ann-go"><span className="gv-st-btn gv-st-forest">Choose</span></span>
+            ) : o && !o.available ? (
+              <span className="gv-ann-go">
+                <Link href={`/manage/${slug}/settings?tab=conference`} className="gv-st-btn gv-st-outline" style={{ width: '100%' }}>Open Settings</Link>
+              </span>
+            ) : null;
+            const title = <span className="gv-ann-name">{choiceTitle(s, placeCity, placeCountry)}</span>;
+            const who = <span className="gv-ann-who">{whoCounts(s, placeCity, placeCountry)}</span>;
+
+            const content = img ? (
+              <>
+                <span className="gv-ann-media" data-flag={showFlag ? '' : undefined}>
+                  <span className="gv-ann-photo">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={img} alt="" width={MAP_W} height={MAP_H} loading="lazy" decoding="async" />
+                  </span>
+                  {showFlag && (
+                    <CircleFlag
+                      country={placeCountry}
+                      size={56}
+                      style={{ position: 'absolute', left: 22, bottom: -28, borderRadius: 999, boxShadow: '0 0 0 4px #FFFFFF, 0 12px 24px -12px rgba(27,56,40,0.55)' }}
+                    />
+                  )}
+                </span>
+                <span className="gv-ann-body">
+                  {title}
+                  {price}
+                  {who}
+                  {why}
+                  {action}
+                </span>
+              </>
+            ) : (
+              <>
+                <Glyph size={36} strokeWidth={1.5} aria-hidden className="gv-ann-row-glyph" />
+                <span className="gv-ann-row-text">
+                  {title}
+                  {who}
+                  {why}
+                </span>
+                {price}
+                {action}
+              </>
+            );
+            const lone = !!img && pictureCount === 1;
+            const cls = `gv-st-card gv-ann-choice${img ? '' : ' gv-ann-row'}${lone ? ' gv-ann-lone' : ''}`;
             return (
-              <div key={s} role="listitem" className="min-w-0">
+              <div key={s} role="listitem" className={`min-w-0${img && !lone ? '' : ' gv-ann-wide'}`}>
                 {usable ? (
                   <button
                     type="button"
                     onClick={() => choose(s)}
                     data-chosen={scope === s ? '' : undefined}
-                    className={`gv-st-card gv-ann-choice${wash}`}
+                    className={cls}
                   >
                     {content}
                   </button>
                 ) : (
-                  <div className={`gv-st-card gv-ann-choice${wash}`} aria-disabled="true">
+                  <div className={cls} aria-disabled="true">
                     {content}
-                    {o && !o.available && (
-                      <span className="gv-ann-go">
-                        <Link href={`/manage/${slug}/settings?tab=conference`} className="gv-st-btn gv-st-outline" style={{ width: '100%' }}>Open Settings</Link>
-                      </span>
-                    )}
                   </div>
                 )}
               </div>
@@ -442,8 +546,8 @@ export default function AnnounceView({
 
       {option && (
         <div className="gv-st-card gv-ann-sum gv-fd-wash-gold" style={{ boxShadow: `0 0 0 2px ${FOREST}, 0 18px 40px -30px rgba(27,56,40,0.5)` }}>
-          <EmojiIcon emoji={SCOPE_EMOJI[scope]} icon={ScopeIcon} size={44} />
-          <span className="gv-ann-sum-name">{scopeTitle(scope, placeCity, placeCountry)}</span>
+          <ScopeIcon size={30} strokeWidth={1.5} aria-hidden style={{ color: INK, flexShrink: 0 }} />
+          <span className="gv-ann-sum-name">{choiceTitle(scope, placeCity, placeCountry)}</span>
           <span className="gv-ann-sum-nums">
             <span><b>{option.credits.toLocaleString()}</b>{plural(option.credits, 'credit', 'credits')}</span>
           </span>

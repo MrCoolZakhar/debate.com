@@ -21,7 +21,7 @@ import { useConferencePaymentsReady } from './PaymentsLocked';
 import PressDeskEntry from './PressDeskEntry';
 import { DashboardShell, DashCard, OutlineLink, Pane, StatusRow, NextStepCard, NextStepReportProvider, useNextStepSlot, appStatusMark, type DashSection, type NextStep } from './dashboardKit';
 import PaymentPane from './PaymentPane';
-import DelegateParticipant from './DelegateParticipant';
+import DelegateParticipant, { OwnSeatCard } from './DelegateParticipant';
 import AdvisorParticipant from './AdvisorParticipant';
 import ChairParticipant from './ChairParticipant';
 import ObserverParticipant from './ObserverParticipant';
@@ -450,10 +450,20 @@ export default function ParticipantView({
   // no seat, so their Overview always says where things stand. A leader (head
   // delegate or faculty advisor) gets the recap under it (LeaderOverview,
   // owner, 21 Oct 2026).
+  // A head delegate's own seat goes right at the top of that recap (owner,
+  // 21 Oct 2026); the role's own Overview pane then draws only the awards.
+  const leaderSeatOnTop = delegationOverview && isLeader && isDelegateRole && !!selected.society_id;
   const delegationLead = delegationOverview && isLeader && selected.society_id ? (
     <LeaderOverview
       conferenceId={conferenceId}
       societyId={selected.society_id}
+      seat={leaderSeatOnTop ? (
+        <OwnSeatCard
+          committee={myAllocation ? committees.find(c => c.id === myAllocation.conference_committee_id) ?? null : null}
+          myAllocation={myAllocation}
+          alwaysTitled
+        />
+      ) : null}
       step={nextStep}
       status={selected.status}
       roomCode={isDelegateRole ? liveRoomCode(myAllocation, conferenceStartDate) : null}
@@ -483,6 +493,7 @@ export default function ParticipantView({
       allocationSwapMode={allocationSwapMode}
       section={activeSection}
       onSelectSection={selectSection}
+      seatShownByLeader={leaderSeatOnTop}
     />
   ) : selected.role === 'faculty-advisor' ? (
     <AdvisorParticipant

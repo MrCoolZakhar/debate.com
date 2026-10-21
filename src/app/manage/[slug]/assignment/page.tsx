@@ -35,6 +35,7 @@ import { useDraftNotices, DraftNoticeList } from '@/components/DraftNotice';
 import { useConfirmModal } from '@/components/ConfirmModal';
 import { NotRegisteredChip } from '@/app/manage/[slug]/assignment/delegationShared';
 import { LogoDisc } from '@/components/LogoDisc';
+import { committeeEmblemSrc } from '@/app/manage/[slug]/assignment/delegationSeatsGrid';
 import ProfileLink from '@/components/ProfileLink';
 import {
   NEU, NEU_GRADIENTS, NeuCard, NeuInset, NeuButton, NeuIconDisc, NeuProgress,
@@ -543,17 +544,44 @@ function scoreSlot(app: AcceptedApp, committee: CommitteeData, slot: SlotRow, fi
 //      to a top preference tier. Returned BEFORE the concentration check, so a
 //      genuine pair completion is never also penalised for "clumping". Carries
 //      its own reason chip, "COMPLETES PAIR +35".
-//   3. CONCENTRATION (−30) — not a pair completion, but a delegate from the
+//   3. CONCENTRATION (−20) — not a pair completion, but a delegate from the
 //      applicant's society is ALREADY allocated somewhere in this committee
 //      (a delegation block seat counts). Suggesting them here would clump the
 //      delegation, so we nudge them toward a different committee. Carries its
-//      own reason chip too, "DELEGATION CONCENTRATION -30", so the downrank is
+//      own reason chip too, "DELEGATION CONCENTRATION -20", so the downrank is
 //      as legible as the bonus.
+//      EXCEPT a delegation that is already spread: when it holds at least one
+//      allocation in SPREAD_SHARE (70%) or more of the conference's committees
+//      (committees with at least one seat), there is no concentration penalty
+//      at all. A big delegation has to sit everywhere, so penalising it only
+//      lowers every member's score for nothing (owner, 21 Oct 2026). The share
+//      is worked out across the whole board by spreadSocieties and passed in.
 //
 // An independent applicant (society_id null) never gets the pair bonus or the
 // concentration penalty; only the purity skip can apply to them.
 const PAIR_BONUS = 35;
-const CONCENTRATION_PENALTY = 30;
+const CONCENTRATION_PENALTY = 20;
+const SPREAD_SHARE = 0.7;
+
+/** The societies that already hold at least one allocation in SPREAD_SHARE or
+ *  more of the conference's committees (committees with no seats are not
+ *  counted). scoreSocietyFit skips the concentration penalty for them. */
+function spreadSocieties(committees: CommitteeData[]): Set<string> {
+  const seated = committees.filter(c => c.total_slots > 0 || c.committee_country_slots.length > 0);
+  const spread = new Set<string>();
+  if (seated.length === 0) return spread;
+  const reach = new Map<string, number>();
+  for (const c of seated) {
+    const here = new Set<string>();
+    for (const a of c.conference_allocations) {
+      const soc = allocationSocietyId(a);
+      if (soc) here.add(soc);
+    }
+    for (const soc of here) reach.set(soc, (reach.get(soc) ?? 0) + 1);
+  }
+  for (const [soc, n] of reach) if (n / seated.length >= SPREAD_SHARE) spread.add(soc);
+  return spread;
+}
 // The flag on a suggestion the swap-improvement pass produced, so an
 // organizer sees "this seat was traded for a better combined fit" rather
 // than silently landing on a lower own-score seat than expected.
@@ -564,6 +592,7 @@ function scoreSocietyFit(
   committee: CommitteeData,
   slot: SlotRow,
   byCountry: Map<string, AllocationRow[]>,
+  spread: ReadonlySet<string>,
 ): SocietyFit {
   const soc = app.society_id ?? null;
   // Non-null only for a DOUBLE country with exactly ONE of its two seats taken —
@@ -580,8 +609,9 @@ function scoreSocietyFit(
     return { delta: PAIR_BONUS, reasons: [`COMPLETES PAIR +${PAIR_BONUS}`], disallowed: false };
   }
   // (3) Same delegation already in this committee, and this is not a pair
-  // completion → spread them out.
-  if (soc !== null && committee.conference_allocations.some(a => allocationSocietyId(a) === soc)) {
+  // completion → spread them out, unless the delegation already reaches
+  // SPREAD_SHARE of the committees.
+  if (soc !== null && !spread.has(soc) && committee.conference_allocations.some(a => allocationSocietyId(a) === soc)) {
     return { delta: -CONCENTRATION_PENALTY, reasons: [`DELEGATION CONCENTRATION -${CONCENTRATION_PENALTY}`], disallowed: false };
   }
   return { delta: 0, reasons: [], disallowed: false };
@@ -613,9 +643,10 @@ function allocationScore(
   filled: number,
   total: number,
   byCountry: Map<string, AllocationRow[]>,
+  spread: ReadonlySet<string>,
 ): AllocationScore {
   const base = scoreSlot(app, committee, slot, filled, total);
-  const soc = scoreSocietyFit(app, committee, slot, byCountry);
+  const soc = scoreSocietyFit(app, committee, slot, byCountry, spread);
   return {
     total: base.score + soc.delta,
     base: base.score,
@@ -833,6 +864,30 @@ function committeeLabels(c: { name: string; abbreviation?: string | null }): { b
   return { big, full };
 }
 
+// ── CommitteeLogo ─────────────────────────────────────────────────────────────
+// Every committee logo on this page: a fixed square, the artwork contained.
+// A committee with no upload gets its preset emblem (ECOSOC, WHO...) or the UN
+// mark, the same emblem the delegation grid and the leader views draw. The
+// monogram only shows if that image fails, and is two or three letters so it
+// fits the disc: the full acronym ("ECOSOC") in an 18 px disc was clipped to an
+// unreadable smudge.
+function CommitteeLogo({ committee, size, alt = '' }: {
+  committee: { name: string; abbreviation?: string | null; logo_url: string | null };
+  size: number;
+  alt?: string;
+}) {
+  const big = committeeShortName(committee);
+  return (
+    <LogoDisc
+      bare
+      src={committeeEmblemSrc({ logo_url: committee.logo_url, name: committee.name, abbreviation: committee.abbreviation ?? null })}
+      size={size}
+      fallbackText={big.replace(/[^A-Za-z0-9]/g, '').slice(0, size < 24 ? 2 : 3) || '?'}
+      alt={alt}
+    />
+  );
+}
+
 // ── CommitteeDifficultyBadge ────────────────────────────────────────────────────
 // The committee's difficulty, as the account rank insignia on a tinted disc plus
 // the level word. Sized generously so every tier — the expert crowned star
@@ -916,6 +971,7 @@ function ReasonChip({ reason, why, more }: { reason: string; why?: string | null
       className="inline-flex items-center px-2 py-0.5 rounded-full"
       style={{
         fontSize: 9, fontWeight: 800, letterSpacing: '0.05em', fontFamily: MONO,
+        whiteSpace: 'nowrap', flexShrink: 0,
         backgroundColor: bg,
         color: fg,
         // Raised in its own hue: a coloured drop, an inner top highlight and
@@ -1610,13 +1666,15 @@ interface DropAllocateModalProps {
    *  decided once across all committees and passed in rather than re-derived
    *  from this one committee's fill. */
   needy?: boolean;
+  /** spreadSocieties across the whole board: no concentration penalty for these. */
+  spread: ReadonlySet<string>;
   pushDraftNotice?: (eventKey: string, outcome: 'unconfigured' | 'sent-default') => void;
   onClose: () => void;
   onConflict: (payload: { app: AcceptedApp; slot: SlotRow; seat: number; sibling: AllocationRow }) => void;
   onAssigned: (slot: SlotRow, seat: number, msg: string) => void;
 }
 
-function DropAllocateModal({ committee, app, needy = false, pushDraftNotice, onClose, onConflict, onAssigned }: DropAllocateModalProps) {
+function DropAllocateModal({ committee, app, needy = false, spread, pushDraftNotice, onClose, onConflict, onAssigned }: DropAllocateModalProps) {
   const { session } = useAuth();
   const { conference } = useManage();
   const [busySlotId, setBusySlotId] = useState<string | null>(null);
@@ -1643,7 +1701,7 @@ function DropAllocateModal({ committee, app, needy = false, pushDraftNotice, onC
   const rows = committee.committee_country_slots
     .filter(s => !isSlotFull(s, byCountry))
     .map(slot => {
-      const scored = allocationScore(app, committee, slot, filled, committee.total_slots, byCountry);
+      const scored = allocationScore(app, committee, slot, filled, committee.total_slots, byCountry, spread);
       return {
         slot,
         score: scored.total,
@@ -1694,7 +1752,7 @@ function DropAllocateModal({ committee, app, needy = false, pushDraftNotice, onC
               <PersonAvatar name={app.profiles?.display_name ?? app.invited_name ?? 'Unknown'} url={app.profiles?.avatar_url ?? null} size={28} userId={app.profiles?.id} />
               <span>{app.profiles?.display_name ?? app.invited_name}</span>
               <ArrowRight size={14} style={{ color: NEU.muted }} />
-              <LogoDisc bare src={committee.logo_url} size={30} fallbackText={committeeLabels(committee).big} alt={committee.name} />
+              <CommitteeLogo committee={committee} size={30} alt={committee.name} />
               <span title={committee.name}>{committeeLabels(committee).big}</span>
             </h2>
           </div>
@@ -1817,7 +1875,7 @@ function SocietyDropAllocateModal({ committee, society, onClose, onAssigned }: S
               <DelegationAvatar size={28} />
               <span>{society.name}</span>
               <ArrowRight size={14} style={{ color: NEU.muted }} />
-              <LogoDisc bare src={committee.logo_url} size={30} fallbackText={committeeLabels(committee).big} alt={committee.name} />
+              <CommitteeLogo committee={committee} size={30} alt={committee.name} />
               <span title={committee.name}>{committeeLabels(committee).big}</span>
             </h2>
           </div>
@@ -1879,13 +1937,15 @@ interface AssignModalProps {
    *  a single allocation_changed queues instead of a removal followed by
    *  an assignment. */
   moveFrom?: AllocationRow;
+  /** spreadSocieties across the whole board: no concentration penalty for these. */
+  spread: ReadonlySet<string>;
   pushDraftNotice?: (eventKey: string, outcome: 'unconfigured' | 'sent-default') => void;
   onClose: () => void;
   onConflict: (payload: { app: AcceptedApp; slot: SlotRow; seat: number; sibling: AllocationRow }) => void;
   onAssigned: (app: AcceptedApp, slot: SlotRow, seat: number, sentEmail: boolean) => void;
 }
 
-function AssignModal({ committee, unassigned, preSelectedSlot, preSelectedSeat, preSelectedApp, moveFrom, pushDraftNotice, onClose, onConflict, onAssigned }: AssignModalProps) {
+function AssignModal({ committee, unassigned, preSelectedSlot, preSelectedSeat, preSelectedApp, moveFrom, spread, pushDraftNotice, onClose, onConflict, onAssigned }: AssignModalProps) {
   const { session } = useAuth();
   const { conference } = useManage();
   const [selectedApp, setSelectedApp] = useState<AcceptedApp | null>(preSelectedApp ?? null);
@@ -1911,7 +1971,7 @@ function AssignModal({ committee, unassigned, preSelectedSlot, preSelectedSeat, 
   const scored = unassigned.map(app => ({
     app,
     score: selectedSlot
-      ? allocationScore(app, committee, selectedSlot, filled, committee.total_slots, byCountry).total
+      ? allocationScore(app, committee, selectedSlot, filled, committee.total_slots, byCountry, spread).total
       : scorePrefAndExp(app, committee, null).score,
   }));
   scored.sort((a, b) => b.score - a.score);
@@ -1970,7 +2030,7 @@ function AssignModal({ committee, unassigned, preSelectedSlot, preSelectedSeat, 
 
   const appScore = selectedApp
     ? (selectedSlot
-        ? allocationScore(selectedApp, committee, selectedSlot, filled, committee.total_slots, byCountry).total
+        ? allocationScore(selectedApp, committee, selectedSlot, filled, committee.total_slots, byCountry, spread).total
         : scorePrefAndExp(selectedApp, committee, null).score)
     : null;
   const appPrefs = selectedApp
@@ -1988,7 +2048,7 @@ function AssignModal({ committee, unassigned, preSelectedSlot, preSelectedSeat, 
         </div>
 
         <div className="flex items-center gap-2.5 mb-4">
-          <LogoDisc bare src={committee.logo_url} size={40} fallbackText={committeeLabels(committee).big} alt={committee.name} />
+          <CommitteeLogo committee={committee} size={40} alt={committee.name} />
           <div className="min-w-0">
             <p title={committee.name} style={{ fontSize: 18, fontWeight: 900, color: NEU.forest, fontFamily: OUTFIT, letterSpacing: '0.01em' }}>
               {committeeLabels(committee).big}
@@ -2675,7 +2735,7 @@ function CommitteeBoardPanel({
         style={{ cursor: 'pointer' }}
         title="Open committee overview"
       >
-        <LogoDisc bare src={committee.logo_url} size={54} fallbackText={labels.big} alt={committee.name} />
+        <CommitteeLogo committee={committee} size={54} alt={committee.name} />
         <div className="min-w-0 flex-1">
           <p title={committee.name} className="[overflow-wrap:anywhere]" style={{ fontSize: 22, fontWeight: 900, color: NEU.forest, fontFamily: OUTFIT, letterSpacing: '0.01em', lineHeight: 1.05 }}>
             {labels.big}
@@ -2847,7 +2907,7 @@ function CommitteeOverviewModal({
       <NeuModalCard width={620}>
         <div className="flex items-start justify-between gap-3 mb-4">
           <div className="flex items-center gap-3 min-w-0">
-            <LogoDisc bare src={committee.logo_url} size={54} fallbackText={labels.big} alt={committee.name} />
+            <CommitteeLogo committee={committee} size={54} alt={committee.name} />
             <div className="min-w-0">
               <div className="flex items-center gap-2 min-w-0">
                 <h2 title={committee.name} className="[overflow-wrap:anywhere]" style={{ fontSize: 24, fontWeight: 900, color: NEU.forest, fontFamily: OUTFIT, letterSpacing: '0.01em', lineHeight: 1.05 }}>
@@ -3104,7 +3164,7 @@ function InviteChairModal({ conferenceId, committee, onClose, onInvited }: {
       <NeuModalCard width={400}>
         <div className="flex items-start justify-between gap-3 mb-5">
           <div className="flex items-center gap-2.5 min-w-0">
-            <LogoDisc bare src={committee.logo_url} size={34} fallbackText={committeeLabels(committee).big} alt={committee.name} />
+            <CommitteeLogo committee={committee} size={34} alt={committee.name} />
             <div className="min-w-0">
               <p style={{ margin: 0, fontFamily: MONO, fontSize: 9, fontWeight: 700, letterSpacing: '0.16em', color: NEU.deepGold }}>
                 INVITE CHAIR
@@ -3256,7 +3316,7 @@ function ChairBoardPanel({
     >
       {/* Header: big free-floating logo + strong acronym */}
       <div className="flex items-center gap-3">
-        <LogoDisc bare src={committee.logo_url} size={54} fallbackText={labels.big} alt={committee.name} />
+        <CommitteeLogo committee={committee} size={54} alt={committee.name} />
         <div className="min-w-0 flex-1">
           <p title={committee.name} className="[overflow-wrap:anywhere]" style={{ fontSize: 22, fontWeight: 900, color: NEU.forest, fontFamily: OUTFIT, letterSpacing: '0.01em', lineHeight: 1.05 }}>
             {labels.big}
@@ -4556,6 +4616,9 @@ export default function AssignmentPage() {
   // included, so a seat taken a moment ago drops its holder out of the pool on
   // the very next render rather than at the next load.
   const seatedIdentities = useMemo(() => seatedIdentitiesIn(committees), [committees]);
+  // Delegations already in SPREAD_SHARE of the committees: no concentration
+  // penalty for them anywhere (see scoreSocietyFit).
+  const spread = useMemo(() => spreadSocieties(committees), [committees]);
 
   const suggestions = useMemo<Suggestion[]>(() => {
     // For every candidate, rank ALL their open-seat options best-first (not just
@@ -4589,7 +4652,7 @@ export default function AssignmentPage() {
             // the greedy or swap passes — keeping the whole builder
             // consistent (an option that can't exist is never a fall-through
             // target or a swap destination).
-            const scored = allocationScore(app, c, slot, filled, c.total_slots, byCountry);
+            const scored = allocationScore(app, c, slot, filled, c.total_slots, byCountry, spread);
             if (scored.disallowed) continue;
             options.push({
               app, committee: c, slot,
@@ -4700,7 +4763,7 @@ export default function AssignmentPage() {
         ? { ...s, reasons: [...s.reasons, 'NEEDS DELEGATES'] }
         : s
     );
-  }, [accepted, committees, needyCommitteeIds, seatedIdentities]);
+  }, [accepted, committees, needyCommitteeIds, seatedIdentities, spread]);
 
   if (!conference) return null;
 
@@ -4918,16 +4981,18 @@ export default function AssignmentPage() {
                           {busy ? '…' : 'Assign'}
                         </NeuButton>
                       </div>
-                      {/* Row 2 — committee + reason tags on a single line. The
-                          committee chip (with logo) truncates first so the tags
-                          always sit next to each other and never wrap to a third
-                          row. */}
-                      <div className="flex items-center gap-1.5 mt-2 min-w-0" style={{ flexWrap: 'nowrap', overflow: 'hidden' }}>
-                        <span className="inline-flex items-center gap-1.5 min-w-0" style={{ fontSize: 10, fontWeight: 800, color: NEU.forest, fontFamily: MONO }}>
-                          <LogoDisc bare src={sug.committee.logo_url} size={18} fallbackText={committeeLabels(sug.committee).big} alt="" />
-                          <span className="min-w-0 [overflow-wrap:anywhere]" style={{ lineHeight: 1.2 }} title={sug.committee.name}>{committeeLabels(sug.committee).big}</span>
+                      {/* Row 2 — committee + reason tags. The committee chip keeps
+                          its natural width and the tags wrap beneath it when the
+                          card is narrow. It used to be the one shrinkable item on
+                          a nowrap row beside three fixed chips, so a long chip
+                          ("DELEGATION CONCENTRATION") squeezed "ECOSOC" to one
+                          letter per line (owner, 21 Oct 2026). */}
+                      <div className="flex items-center gap-1.5 mt-2 min-w-0 flex-wrap">
+                        <span className="inline-flex items-center gap-1.5 flex-shrink-0 max-w-full" style={{ fontSize: 10, fontWeight: 800, color: NEU.forest, fontFamily: MONO }}>
+                          <CommitteeLogo committee={sug.committee} size={18} />
+                          <span className="min-w-0" style={{ lineHeight: 1.2 }} title={sug.committee.name}>{committeeLabels(sug.committee).big}</span>
                         </span>
-                        <span className="flex items-center gap-1.5 flex-shrink-0">
+                        <span className="flex items-center gap-1.5 flex-wrap min-w-0">
                           {(() => {
                             const ctx = reasonContext(sug.app, sug.committee, sug.slot);
                             const gaps = missingSignals(ctx, sug.reasons);
@@ -5299,6 +5364,7 @@ export default function AssignmentPage() {
           committee={dropModalCommittee}
           app={dropModalApp}
           needy={needyCommitteeIds.has(dropModalCommittee.id)}
+          spread={spread}
           pushDraftNotice={pushDraftNotice}
           onClose={() => setDropModal(null)}
           onConflict={payload => { setConflict({ committee: dropModalCommittee, ...payload }); setDropModal(null); }}
@@ -5345,6 +5411,7 @@ export default function AssignmentPage() {
         <AssignModal
           committee={assignModalCommittee}
           unassigned={accepted}
+          spread={spread}
           preSelectedSlot={assignModal.preSlot}
           preSelectedSeat={assignModal.preSeat}
           preSelectedApp={assignModal.preApp}

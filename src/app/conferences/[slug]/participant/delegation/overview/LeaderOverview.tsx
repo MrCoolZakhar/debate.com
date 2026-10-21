@@ -1,7 +1,12 @@
 'use client';
 
 // A leader's Overview (head delegates and faculty advisors; owner, 21 Oct 2026:
-// "a recap a faculty advisor would want"). Calm, one obvious next step:
+// "a recap a faculty advisor would want", then the same day: the seat right at
+// the top, a little about the delegation, deadlines "not too much", no Needs
+// your attention). In this order:
+//   Your Seat        a head delegate's own allocation card (`seat`, built by
+//                    ParticipantView from DelegateParticipant's OwnSeatCard),
+//                    drawn in every state, skeleton and error included.
 //   Your next step   DelegationLead with the page's step (pageNextStep). When
 //                    the page has nothing to DO, the delegation's own step takes
 //                    its place: people to allocate, papers due soon, members
@@ -12,28 +17,26 @@
 //                    leader's own Delegate and Advisor Tickets from
 //                    my_pay_overview, counted exactly as the Financials card
 //                    does; with no tickets bought, the members' own fees).
-//   Deadlines        every date ahead, in order, with relative words ("in 5
-//                    days"): the conference, each committee's position paper
-//                    deadline and study guide release, committees A to Z on a
-//                    shared day.
-//   Needs your attention
-//                    members without an allocation, members who owe their fee,
-//                    papers not in within 14 days of their deadline.
-// A head delegate's own seat ("Your seat") follows from DelegateParticipant's
-// Overview pane. Reads: useLeaderOverview (nothing new on the database). Grey
+//   Add delegate     AddDelegatePanel, in place: the invite link, or (when the
+//                    conference allows leader imports) a name and email.
+//   Deadlines        ONE compact card: the conference dates, then at most the
+//                    next two dates ahead (a committee's position paper
+//                    deadline or study guide release; committees sharing a
+//                    day and a kind are one entry), with relative words.
+// Reads: useLeaderOverview (nothing new on the database). Grey
 // skeletons on the first read only; every later read (the section shown again)
 // swaps in place. No pills, names never cut, flags and committee logos.
 
 import { useEffect, useMemo, useRef } from 'react';
-import { CalendarDays, CheckCircle2, CircleAlert } from 'lucide-react';
-import { CircleFlag } from '@/components/CircleFlag';
+import { CalendarDays } from 'lucide-react';
 import { SkeletonBlock } from '@/components/Skeleton';
 import { committeeDisplayName } from '@/lib/presetNames';
 import DelegationLead from '../DelegationLead';
 import type { NextStep } from '../../dashboardKit';
-import { BTN_CLASS, cardStyle, CommitteeDisc, committeeEmblemSrc, FONT, FOREST, INK, INK_SOFT, LINE, OWE, RoundAvatar, secondaryBtn, STROKE } from '../leaderKit';
+import { cardStyle, CommitteeDisc, committeeEmblemSrc, FONT, INK, INK_SOFT, STROKE } from '../leaderKit';
 import { tally } from '../FinancialsCard';
 import { useLeaderOverview, type LeaderOverviewData, type OverviewCommittee } from './useLeaderOverview';
+import AddDelegatePanel from './AddDelegatePanel';
 
 const DAY = 24 * 60 * 60 * 1000;
 const PAPER_SOON_DAYS = 14;
@@ -227,10 +230,12 @@ function delegationStep(r: Recap): NextStep | null {
 }
 
 export default function LeaderOverview({
-  conferenceId, societyId, step, status, roomCode, notice, showDone, active, onOpenSection,
+  conferenceId, societyId, seat, step, status, roomCode, notice, showDone, active, onOpenSection,
 }: {
   conferenceId: string;
   societyId: string;
+  /** A head delegate's own seat card, drawn first. */
+  seat?: React.ReactNode;
   /** The page's next step (pageNextStep). */
   step: NextStep | null;
   status: string;
@@ -244,6 +249,7 @@ export default function LeaderOverview({
   const { state, reload } = useLeaderOverview(conferenceId, societyId);
   const today = todayStart();
   const recap = useMemo(() => (state.kind === 'ready' && state.data.isLeader ? buildRecap(state.data, today) : null), [state, today]);
+  const confDates = state.kind === 'ready' ? state.data.conference : null;
 
   // Coming back to Overview (after moving people in Delegation) re-reads in place.
   const wasActive = useRef(active);
@@ -256,38 +262,34 @@ export default function LeaderOverview({
   const shownStep = step?.kind === 'action' ? step : own ?? step;
 
   const lead = (
-    <DelegationLead
-      step={shownStep}
-      status={status}
-      roomCode={roomCode}
-      notice={notice}
-      showDone={showDone}
-      onOpenSection={onOpenSection}
-    />
+    <>
+      {seat}
+      <DelegationLead
+        step={shownStep}
+        status={status}
+        roomCode={roomCode}
+        notice={notice}
+        showDone={showDone}
+        onOpenSection={onOpenSection}
+      />
+    </>
   );
 
   if (state.kind === 'loading') {
     return (
       <>
         {lead}
-        <div className="@container flex flex-col gap-6" aria-hidden>
-          <div className="grid grid-cols-2 @[880px]:grid-cols-4 gap-4">
+        <div className="@container flex flex-col gap-4" aria-hidden>
+          <div className="grid grid-cols-2 @[880px]:grid-cols-4 gap-3">
             {[0, 1, 2, 3].map(i => (
-              <div key={i} className="flex flex-col gap-3" style={{ ...cardStyle, padding: '20px 22px' }}>
-                <SkeletonBlock width="45%" height={30} radius={8} />
-                <SkeletonBlock width="70%" height={13} radius={6} />
+              <div key={i} className="flex flex-col gap-2.5" style={{ ...cardStyle, padding: '14px 18px' }}>
+                <SkeletonBlock width="45%" height={24} radius={8} />
+                <SkeletonBlock width="70%" height={12} radius={6} />
               </div>
             ))}
           </div>
-          <div className="grid grid-cols-1 @[880px]:grid-cols-2 gap-6">
-            {[0, 1].map(i => (
-              <div key={i} className="flex flex-col gap-3" style={{ ...cardStyle, padding: '22px 24px' }}>
-                <SkeletonBlock width="35%" height={18} radius={6} />
-                <SkeletonBlock height={14} radius={6} />
-                <SkeletonBlock height={14} radius={6} />
-                <SkeletonBlock width="80%" height={14} radius={6} />
-              </div>
-            ))}
+          <div style={{ ...cardStyle, padding: '14px 20px' }}>
+            <SkeletonBlock width="60%" height={16} radius={6} />
           </div>
         </div>
       </>
@@ -310,18 +312,22 @@ export default function LeaderOverview({
   return (
     <>
       {lead}
-      <div className="@container flex flex-col gap-6 min-w-0">
-        <section aria-label="Your delegation at a glance" className="grid grid-cols-2 @[880px]:grid-cols-4 gap-4">
+      <div className="@container flex flex-col gap-4 min-w-0">
+        <section aria-label="Your delegation at a glance" className="grid grid-cols-2 @[880px]:grid-cols-4 gap-3">
           <Tile n={recap.filled} of={recap.totalAllocations} word={plural(recap.totalAllocations, 'allocation filled', 'allocations filled')} />
           <Tile n={recap.open} word={plural(recap.open, 'open allocation', 'open allocations')} />
           <Tile n={recap.papersKnown ? recap.papersIn : null} of={recap.papersOf} word={plural(recap.papersOf, 'position paper in', 'position papers in')} />
           <Tile n={recap.ticketsPaid} of={recap.ticketsOf} word={recap.ticketsWord} />
         </section>
-
-        <div className="grid grid-cols-1 @[880px]:grid-cols-2 gap-6 items-start">
-          <DeadlinesCard rows={recap.dates} today={today} />
-          <AttentionCard recap={recap} onOpenDelegation={() => onOpenSection('delegation')} />
-        </div>
+        {/* Add delegate, right below the delegation (owner, 21 Oct 2026). */}
+        <AddDelegatePanel
+          societyId={societyId}
+          conferenceId={conferenceId}
+          societyName={state.kind === 'ready' ? state.data.societyName : null}
+          onAdded={() => { void reload(); }}
+          onOpenSection={onOpenSection}
+        />
+        <DeadlinesLine conference={confDates} rows={recap.dates} today={today} />
       </div>
     </>
   );
@@ -329,138 +335,89 @@ export default function LeaderOverview({
 
 function Tile({ n, of, word }: { n: number | null; of?: number; word: string }) {
   return (
-    <div className="flex flex-col gap-1.5 min-w-0" style={{ ...cardStyle, padding: '20px 22px' }}>
+    <div className="flex flex-col gap-1 min-w-0" style={{ ...cardStyle, padding: '14px 18px' }}>
       <span style={{ fontFamily: FONT, fontVariantNumeric: 'tabular-nums', lineHeight: 1.1 }}>
-        <span style={{ fontSize: 32, fontWeight: 600, color: INK }}>{n ?? '–'}</span>
-        {of !== undefined && of > 0 && <span style={{ fontSize: 18, fontWeight: 500, color: INK_SOFT }}> of {of}</span>}
+        <span style={{ fontSize: 26, fontWeight: 600, color: INK }}>{n ?? '–'}</span>
+        {of !== undefined && of > 0 && <span style={{ fontSize: 16, fontWeight: 500, color: INK_SOFT }}> of {of}</span>}
       </span>
-      <span style={{ fontFamily: FONT, fontSize: 14.5, color: INK_SOFT, lineHeight: 1.35 }}>{word}</span>
+      <span style={{ fontFamily: FONT, fontSize: 13.5, color: INK_SOFT, lineHeight: 1.35 }}>{word}</span>
     </div>
   );
 }
 
-function CardTitle({ icon: Icon, children }: { icon: typeof CalendarDays; children: React.ReactNode }) {
-  return (
-    <div className="flex items-center gap-2.5">
-      <Icon size={20} strokeWidth={STROKE} aria-hidden style={{ color: FOREST, flexShrink: 0 }} />
-      <h2 style={{ fontFamily: FONT, fontSize: 17, fontWeight: 600, color: INK, margin: 0 }}>{children}</h2>
-    </div>
-  );
+/** "12 to 14 Mar", "28 Feb to 2 Mar", "12 Mar"; the year when it is not this one. */
+function rangeWords(start: number, end: number | null): string {
+  if (end === null || end === start) return dayWords(start);
+  const a = new Date(start);
+  const b = new Date(end);
+  const thisYear = new Date().getFullYear();
+  const yearB = b.getFullYear() === thisYear ? '' : ` ${b.getFullYear()}`;
+  if (a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth()) return `${a.getDate()} to ${b.getDate()} ${MONTHS[b.getMonth()]}${yearB}`;
+  if (a.getFullYear() === b.getFullYear()) return `${a.getDate()} ${MONTHS[a.getMonth()]} to ${b.getDate()} ${MONTHS[b.getMonth()]}${yearB}`;
+  return `${dayWords(start)} to ${dayWords(end)}`;
 }
 
-function DeadlinesCard({ rows, today }: { rows: DateRow[]; today: number }) {
+interface DateGroup { key: string; day: number; what: string; committees: OverviewCommittee[] }
+
+/** The next two dates ahead; committees sharing a day and a kind are one entry. */
+function nextGroups(rows: DateRow[], cap: number): DateGroup[] {
+  const groups: DateGroup[] = [];
+  for (const r of rows) {
+    if (!r.committee) continue;
+    const g = groups.find(x => x.day === r.day && x.what === r.what);
+    if (g) g.committees.push(r.committee);
+    else if (groups.length < cap) groups.push({ key: r.key, day: r.day, what: r.what, committees: [r.committee] });
+    else if (r.day > groups[groups.length - 1].day) break;
+  }
+  return groups;
+}
+
+const NAMED_CAP = 3;
+
+/** Deadlines, kept small (owner, 21 Oct 2026: "not too much"): the conference
+ *  dates, then at most the next two dates, in one card. */
+function DeadlinesLine({ conference, rows, today }: {
+  conference: LeaderOverviewData['conference'];
+  rows: DateRow[];
+  today: number;
+}) {
+  const start = conference && !conference.dates_tbd ? dayOf(conference.start_date) : null;
+  const end = conference && !conference.dates_tbd ? dayOf(conference.end_date) : null;
+  const groups = nextGroups(rows, 2);
+  const itemStyle: React.CSSProperties = { fontFamily: FONT, fontSize: 14, color: INK, lineHeight: 1.4 };
+  const soft: React.CSSProperties = { color: INK_SOFT };
   return (
-    <section className="flex flex-col min-w-0" style={{ ...cardStyle, padding: '20px 24px', gap: 12 }} aria-label="Deadlines">
-      <CardTitle icon={CalendarDays}>Deadlines</CardTitle>
-      {rows.length === 0 ? (
-        <p style={{ fontFamily: FONT, fontSize: 14, color: INK_SOFT, margin: 0 }}>No dates ahead yet. They show here once the organisers set them.</p>
-      ) : (
-        <ul className="flex flex-col" style={{ listStyle: 'none', margin: 0, padding: 0 }}>
-          {rows.map((r, i) => (
-            <li key={r.key} className="flex items-center gap-3 min-w-0" style={{ padding: '10px 0', borderTop: i === 0 ? 'none' : `1px solid ${LINE}` }}>
-              {r.committee ? (
-                <CommitteeDisc src={committeeEmblemSrc(r.committee.logo_url, r.committee.name, r.committee.abbreviation)} size={30} />
-              ) : (
-                <span aria-hidden className="inline-flex items-center justify-center flex-shrink-0" style={{ width: 30, height: 30, color: FOREST }}>
-                  <CalendarDays size={20} strokeWidth={STROKE} aria-hidden />
+    <section aria-label="Deadlines" className="flex flex-wrap items-center gap-x-7 gap-y-2.5 min-w-0" style={{ ...cardStyle, padding: '14px 20px' }}>
+      <h2 className="inline-flex items-center gap-2" style={{ fontFamily: FONT, fontSize: 15, fontWeight: 600, color: INK, margin: 0 }}>
+        <CalendarDays size={18} strokeWidth={STROKE} aria-hidden style={{ color: 'var(--gv-main)', flexShrink: 0 }} />
+        Deadlines
+      </h2>
+      <span className="[overflow-wrap:anywhere] min-w-0" style={itemStyle}>
+        <span style={{ fontWeight: 600 }}>Conference </span>
+        {start !== null
+          ? <>{rangeWords(start, end)}{start > today && <span style={soft}>{` · ${relativeWords(start, today)}`}</span>}</>
+          : <span style={soft}>Dates to be decided</span>}
+      </span>
+      {groups.map(g => {
+        const named = g.committees.slice(0, NAMED_CAP).map(c => shortOf(c));
+        const more = g.committees.length - named.length;
+        return (
+          <span key={g.key} className="inline-flex items-center gap-2 min-w-0" style={itemStyle}>
+            <span className="inline-flex items-center flex-none">
+              {g.committees.slice(0, NAMED_CAP).map((c, i) => (
+                <span key={c.id} style={{ marginLeft: i === 0 ? 0 : -6 }}>
+                  <CommitteeDisc src={committeeEmblemSrc(c.logo_url, c.name, c.abbreviation)} size={22} />
                 </span>
-              )}
-              <div className="flex-1 min-w-0 flex flex-col">
-                <span className="[overflow-wrap:anywhere]" style={{ fontFamily: FONT, fontSize: 14.5, fontWeight: 500, color: INK, lineHeight: 1.3 }}>{r.what}</span>
-                {r.committee && (
-                  <span className="[overflow-wrap:anywhere]" style={{ fontFamily: FONT, fontSize: 13, color: INK_SOFT, lineHeight: 1.35 }}>
-                    {shortOf(r.committee)}{shortOf(r.committee) !== r.committee.name ? ` · ${r.committee.name}` : ''}
-                  </span>
-                )}
-              </div>
-              <div className="flex flex-col items-end flex-none" style={{ fontFamily: FONT, textAlign: 'right' }}>
-                <span style={{ fontSize: 14, fontWeight: 600, color: INK, fontVariantNumeric: 'tabular-nums' }}>{dayWords(r.day)}</span>
-                <span style={{ fontSize: 13, color: INK_SOFT }}>{relativeWords(r.day, today)}</span>
-              </div>
-            </li>
-          ))}
-        </ul>
-      )}
-    </section>
-  );
-}
-
-const GROUP_CAP = 6;
-
-function PersonLine({ p, detail }: { p: Person; detail?: React.ReactNode }) {
-  return (
-    <li className="flex items-center gap-3 min-w-0" style={{ padding: '7px 0' }}>
-      <RoundAvatar name={p.name} url={p.avatar_url} size={32} seed={p.application_id} />
-      <span className="flex-1 min-w-0 [overflow-wrap:anywhere]" style={{ fontFamily: FONT, fontSize: 14.5, fontWeight: 500, color: INK, lineHeight: 1.3 }}>
-        {p.name}
-        {p.is_me && <span style={{ fontSize: 12.5, fontWeight: 600, color: 'color-mix(in srgb, var(--gv-accent) 72%, #1C1410)', marginLeft: 6 }}>You</span>}
-      </span>
-      {detail && <span className="flex-none max-w-[50%] inline-flex items-center gap-1.5 [overflow-wrap:anywhere]" style={{ fontFamily: FONT, fontSize: 13, color: INK_SOFT, lineHeight: 1.3, textAlign: 'right' }}>{detail}</span>}
-    </li>
-  );
-}
-
-function Group({ n, word, children, more }: { n: number; word: string; children: React.ReactNode; more: number }) {
-  return (
-    <div className="flex flex-col min-w-0">
-      <p className="flex items-baseline gap-2" style={{ fontFamily: FONT, margin: '0 0 2px' }}>
-        <span style={{ fontSize: 22, fontWeight: 600, color: INK, fontVariantNumeric: 'tabular-nums' }}>{n}</span>
-        <span style={{ fontSize: 14.5, color: INK_SOFT }}>{word}</span>
-      </p>
-      <ul className="flex flex-col" style={{ listStyle: 'none', margin: 0, padding: 0 }}>{children}</ul>
-      {more > 0 && <p style={{ fontFamily: FONT, fontSize: 13, color: INK_SOFT, margin: '2px 0 0 44px' }}>And {more} more in Delegation</p>}
-    </div>
-  );
-}
-
-function SeatBits({ p }: { p: Person }) {
-  if (!p.country_name) return null;
-  return (
-    <>
-      <CircleFlag code={p.country_code} label={p.country_name} size={16} decorative />
-      {p.committee && <CommitteeDisc src={committeeEmblemSrc(p.committee.logo_url, p.committee.name, p.committee.abbreviation)} size={16} />}
-      {p.committee_label ?? p.country_name}
-    </>
-  );
-}
-
-function AttentionCard({ recap, onOpenDelegation }: { recap: Recap; onOpenDelegation: () => void }) {
-  const { unallocated, owing, paperDue } = recap;
-  const any = unallocated.length + owing.length + paperDue.length > 0;
-  return (
-    <section className="flex flex-col min-w-0" style={{ ...cardStyle, padding: '20px 24px', gap: 14 }} aria-label="Needs your attention">
-      <CardTitle icon={CircleAlert}>Needs Your Attention</CardTitle>
-      {!any ? (
-        <p className="inline-flex items-center gap-2" style={{ fontFamily: FONT, fontSize: 14, color: INK_SOFT, margin: 0 }}>
-          <CheckCircle2 size={18} strokeWidth={STROKE} aria-hidden style={{ color: FOREST, flexShrink: 0 }} />
-          Nothing needs your attention right now
-        </p>
-      ) : (
-        <>
-          {unallocated.length > 0 && (
-            <Group n={unallocated.length} word={plural(unallocated.length, 'person without an allocation', 'people without an allocation')} more={Math.max(0, unallocated.length - GROUP_CAP)}>
-              {unallocated.slice(0, GROUP_CAP).map(p => <PersonLine key={p.application_id} p={p} />)}
-            </Group>
-          )}
-          {paperDue.length > 0 && (
-            <Group n={paperDue.length} word={plural(paperDue.length, 'position paper not in yet', 'position papers not in yet')} more={Math.max(0, paperDue.length - GROUP_CAP)}>
-              {paperDue.slice(0, GROUP_CAP).map(p => (
-                <PersonLine key={p.application_id} p={p} detail={<><SeatBits p={p} /><span>{`· due ${relativeWords(p.day, todayStart())}`}</span></>} />
               ))}
-            </Group>
-          )}
-          {owing.length > 0 && (
-            <Group n={owing.length} word={plural(owing.length, 'member owes their fee', 'members owe their fee')} more={Math.max(0, owing.length - GROUP_CAP)}>
-              {owing.slice(0, GROUP_CAP).map(p => (
-                <PersonLine key={p.application_id} p={p} detail={<span style={{ color: OWE }}>{p.word}</span>} />
-              ))}
-            </Group>
-          )}
-          <div>
-            <button type="button" onClick={onOpenDelegation} className={BTN_CLASS} style={secondaryBtn}>Open delegation</button>
-          </div>
-        </>
-      )}
+            </span>
+            <span className="[overflow-wrap:anywhere] min-w-0">
+              <span style={{ fontWeight: 600 }}>{g.what}</span>
+              {` ${dayWords(g.day)}`}
+              <span style={soft}>{` · ${relativeWords(g.day, today)} · ${named.join(', ')}${more > 0 ? ` and ${more} more` : ''}`}</span>
+            </span>
+          </span>
+        );
+      })}
     </section>
   );
 }

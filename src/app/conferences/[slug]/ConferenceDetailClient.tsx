@@ -917,20 +917,65 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  // Someone who has applied lands on You (owner, 19 Oct 2026): once their
-  // applications are read, a plain visit to the landing URL opens their
-  // dashboard in place. Once per visit, never after the reader picked a tab,
-  // never for the organising team or on a ?tab= link.
+  // Every participant lands on You (owner, 19 Oct 2026; widened 21 Oct 2026:
+  // "anyone with an application or role in this conference", organisers who
+  // also applied included). A plain visit to the landing URL opens their
+  // dashboard in place, once per visit, never after the reader picked a tab
+  // and never on a ?tab= or ?preview= link. Visitors without a role keep the
+  // public Overview. No flash of Overview on a repeat visit: a per-user,
+  // per-conference hint in localStorage switches the moment the user is known
+  // (before the applications arrive; You shows its own skeleton meanwhile),
+  // and the read then confirms or undoes it. The switch is silent: no slide,
+  // no scroll, the URL rewritten in place.
   const autoYouDoneRef = useRef(false);
+  const autoYouByHintRef = useRef(false);
+  // While the hinted switch waits for the applications, the page already takes
+  // the You layout (no rail), so nothing jumps when they arrive.
+  const [youHinted, setYouHinted] = useState(false);
+  const autoYouHintKey = user ? `gavelling-conf-you:${slug}:${user.id}` : null;
+  const silentShowTab = useCallback((tab: TabKey) => {
+    activeTabRef.current = tab;
+    setActiveTab(tab);
+    setActiveRole(null);
+    const href = tabHref(tab, null);
+    if (href !== window.location.pathname || window.location.search) window.history.replaceState(null, '', href);
+  }, [tabHref]);
+  const autoYouBlocked = () => {
+    if (initialView !== 'overview' || hasSwitchedTab) return true;
+    const qs = new URLSearchParams(window.location.search);
+    return qs.has('tab') || qs.has('role') || qs.has('preview') || qs.has('payment') || qs.has('ask');
+  };
   useEffect(() => {
-    if (autoYouDoneRef.current || participantDataLoading) return;
-    if (initialView !== 'overview' || hasSwitchedTab || activeTabRef.current !== 'overview') return;
-    if (new URLSearchParams(window.location.search).has('tab')) return;
-    autoYouDoneRef.current = true;
-    if (myApplications.length === 0 || organizerRole || (!!user && user.id === conference?.organizer_id)) return;
-    showTab('participant', null, 'replace');
+    if (!autoYouHintKey || autoYouDoneRef.current || autoYouByHintRef.current) return;
+    if (autoYouBlocked() || activeTabRef.current !== 'overview') return;
+    let hinted = false;
+    try { hinted = localStorage.getItem(autoYouHintKey) === '1'; } catch { /* storage blocked */ }
+    if (!hinted) return;
+    autoYouByHintRef.current = true;
+    setYouHinted(true);
+    silentShowTab('participant');
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [participantDataLoading, myApplications]);
+  }, [autoYouHintKey]);
+  useEffect(() => {
+    if (autoYouDoneRef.current || participantDataLoading || authLoading) return;
+    autoYouDoneRef.current = true;
+    setYouHinted(false);
+    const participant = myApplications.some(a => a.status !== 'withdrawn');
+    if (autoYouHintKey) {
+      try {
+        if (participant) localStorage.setItem(autoYouHintKey, '1');
+        else localStorage.removeItem(autoYouHintKey);
+      } catch { /* storage blocked */ }
+    }
+    if (autoYouByHintRef.current) {
+      // The hint was wrong (no role any more) and the reader has not moved: back to Overview.
+      if (!participant && !hasSwitchedTab && activeTabRef.current === 'participant') silentShowTab('overview');
+      return;
+    }
+    if (!participant || autoYouBlocked() || activeTabRef.current !== 'overview') return;
+    silentShowTab('participant');
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [participantDataLoading, authLoading, myApplications]);
   // Perceived-perf: warm the apply route's JS chunk + loading UI so the "Apply"
   // CTA (which navigates via router.push) feels instant. Prefetch is a no-op in
   // dev and safe/idempotent in prod; does not change any data semantics.
@@ -1796,7 +1841,8 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
   // applied included) the rail is gone at every width and the page widens to
   // 1440, so the dashboard uses the whole page instead of a squeezed middle
   // column (owner, 19 Oct 2026). Overview keeps the rail.
-  const youWide = pane === 'participant' && !!myApplications[0] && !authLoading && !participantDataLoading;
+  const youWide = pane === 'participant' && !authLoading
+    && (participantDataLoading ? youHinted : !!myApplications[0]);
   const railBesideHero = !youWide;
   const pageMaxWidth = youWide ? '1440px' : '1200px';
 

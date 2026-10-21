@@ -92,7 +92,7 @@ export function explainReason(reason: string, ctx: ReasonContext): string | null
     return `${ctx.societyName ?? 'Their delegation'} already holds the other seat of ${ctx.countryName}. This completes the pair${tail}.`;
   }
   if (reason.startsWith('DELEGATION CONCENTRATION')) {
-    return `${ctx.societyName ?? 'Their delegation'} already has a delegate in ${ctx.committeeName}. Spreading a delegation out is preferred${tail}.`;
+    return `${ctx.societyName ?? 'Their delegation'} already has a delegate in ${ctx.committeeName}. Spreading a delegation out is preferred until it sits in 70% of the committees${tail}.`;
   }
   return null;
 }
