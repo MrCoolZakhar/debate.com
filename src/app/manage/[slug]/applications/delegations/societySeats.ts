@@ -17,6 +17,8 @@
 //     (a block seat, filled or not) or belongs to one of its members.
 //     A seat is FILLED when a person is on it.
 
+import { isIsoCode, parseGroups } from '@/lib/slotGroups';
+
 export interface SeatSlot {
   id: string;
   country_code: string;
@@ -42,6 +44,9 @@ export interface SeatCommittee {
   name: string;
   abbreviation: string | null;
   logo_url: string | null;
+  /** `conference_committees.committee_type` and `.groups`, when the read asked for them. */
+  committee_type?: string | null;
+  groups?: unknown;
   committee_country_slots: SeatSlot[];
   conference_allocations: SeatAllocation[];
 }
@@ -293,6 +298,9 @@ export interface SeatChip {
   filled: boolean;
   /** This delegation holds it as a block seat (society_id), so an empty one can be taken back. */
   block: boolean;
+  /** A custom seat: a custom committee, one with groups, or a seat that is not
+   *  a real country (a character). Listed after the countries. */
+  custom: boolean;
 }
 
 export interface CountryRow {
@@ -314,6 +322,7 @@ export function countryMatrix(
   const byCode = new Map<string, CountryRow>();
   for (const c of committees) {
     const committeeLabel = label(c.name, c.abbreviation);
+    const customCommittee = c.committee_type === 'custom' || parseGroups(c.groups).length > 0;
     const bySeat = new Map<string, SeatAllocation>();
     for (const a of c.conference_allocations) {
       const k = `${a.country_code}:${a.seat ?? 1}`;
@@ -343,6 +352,7 @@ export function countryMatrix(
           applicationId: a?.application_id ?? null,
           filled: !!(a && (a.application_id || a.user_id)),
           block: !!a && a.society_id === societyId,
+          custom: customCommittee || !isIsoCode(s.country_code),
         });
       }
     }

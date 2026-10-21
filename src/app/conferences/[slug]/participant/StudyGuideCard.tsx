@@ -6,7 +6,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useNow } from '@/lib/useNow';
-import { ExternalLink, FileText } from 'lucide-react';
+import { BookOpen, ExternalLink } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { SectionCard, OUTFIT } from './shared';
@@ -92,12 +92,8 @@ export default function StudyGuideCard({ committeeId }: { committeeId: string | 
               onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'color-mix(in srgb, var(--gv-main) 5%, transparent)'; }}
               onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(237,231,216,0.25)'; }}
             >
-              <div
-                className="flex-shrink-0 flex items-center justify-center"
-                style={{ width: '38px', height: '38px', borderRadius: '11px', backgroundColor: 'color-mix(in srgb, var(--gv-main) 7%, transparent)' }}
-              >
-                <FileText size={16} style={{ color: 'var(--gv-main)' }} />
-              </div>
+              {/* The Overview tile's icon (owner, 21 Oct 2026): BookOpen, fine line, bare ink. */}
+              <BookOpen size={22} strokeWidth={1.5} aria-hidden style={{ color: '#1C1410', flexShrink: 0 }} />
               <div className="flex-1 min-w-0">
                 <p title={sg.title} style={{ color: '#1C1410', fontFamily: OUTFIT, fontSize: 15.5, fontWeight: 800, lineHeight: 1.3, overflowWrap: 'anywhere', margin: 0 }}>{sg.title}</p>
                 <p style={{ color: INK_SOFT, fontFamily: OUTFIT, fontSize: 13, lineHeight: 1.45, margin: '3px 0 0', overflowWrap: 'anywhere' }}>{sg.file_name}</p>

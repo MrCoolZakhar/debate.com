@@ -16,8 +16,10 @@
 // my_committee_roster (published allocations; photos and user ids once
 // scratch-committee-roster-avatars.sql is applied, initials until then).
 // Every avatar with a known user id opens that person's public MUN CV.
-// The committee's topics sit under its name (as in Your Seat); the study guide,
-// the paper upload and the room code live on the Overview and in Documents.
+// The committee's topics sit in a SECOND column to the right of the name block
+// (owner, 21 Oct 2026), under it on a narrow card; the study guide, the paper
+// upload and the room code live on the Overview and in Documents, and every
+// paper link uses the Overview tile's icon (FileText; the guide is BookOpen).
 
 import { useMemo } from 'react';
 import { Landmark } from 'lucide-react';
@@ -113,15 +115,20 @@ export default function MyCommitteeSection({ committee, myAllocation, paper, lea
   const showFull = committee.name.trim() !== short.trim();
 
   return (
-    <section aria-label="Your committee" className="flex flex-col gap-5 min-w-0 p-[18px] sm:p-6" style={cardStyle}>
-      <div className="flex items-start gap-4">
-        <CommitteeDisc src={committeeEmblemSrc(committee.logo_url, committee.name, committee.abbreviation)} size={56} />
-        <div className="min-w-0 flex-1">
-          <h2 className="[overflow-wrap:anywhere]" style={{ fontFamily: FONT, fontSize: 24, fontWeight: 600, color: INK, margin: 0, lineHeight: 1.2 }}>{short}</h2>
-          {showFull && <p className="[overflow-wrap:anywhere]" style={{ fontFamily: FONT, fontSize: 15, color: INK_SOFT, margin: '3px 0 0 0' }}>{committee.name}</p>}
+    <section aria-label="Your committee" className="@container flex flex-col gap-5 min-w-0 p-[18px] sm:p-6" style={cardStyle}>
+      {/* The name block left, the topics in a second column top right. */}
+      <div className="grid gap-x-8 gap-y-4 grid-cols-1 @[640px]:grid-cols-2 items-start min-w-0">
+        <div className="flex items-start gap-4 min-w-0">
+          <CommitteeDisc src={committeeEmblemSrc(committee.logo_url, committee.name, committee.abbreviation)} size={56} />
+          <div className="min-w-0 flex-1">
+            <h2 className="[overflow-wrap:anywhere]" style={{ fontFamily: FONT, fontSize: 24, fontWeight: 600, color: INK, margin: 0, lineHeight: 1.2 }}>{short}</h2>
+            {showFull && <p className="[overflow-wrap:anywhere]" style={{ fontFamily: FONT, fontSize: 15, color: INK_SOFT, margin: '3px 0 0 0' }}>{committee.name}</p>}
+          </div>
+        </div>
+        <div className="min-w-0">
+          <TopicsList topics={committee.topics} />
         </div>
       </div>
-      <TopicsList topics={committee.topics} />
       <CommitteeMatrix
         committeeId={ccId}
         people={people}

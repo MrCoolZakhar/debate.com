@@ -219,6 +219,8 @@ The rest is in `AGENTS.md`.
 15. Work in small steps: targeted edits, a rebuild only when a section breaks a hard "no". Never redesign the chair console or the delegate phone. Buttons with an icon lead with the icon, the word small beneath. A photo not in `public/`: ask Peter.
 16. Clicking a person's avatar opens their public MUN CV (`/cv/<id>`, `CvAvatar` / `ProfileLink`) wherever we know who they are.
 17. People in a delegation are always listed faculty advisors first, then head delegates, then delegates (`roleRank` in `participant/delegation/leaderKit.tsx`).
+18. A level is always shown as its icon, large where the person is the focus, with what it means beneath (`LevelDisc` / `LevelHero` in `assignment/assignmentKit.tsx`).
+19. Signature detail: a logo, crest or avatar may overlap its card's or pop-up's border (half outside), never clipped; use it for the focus element of a card or pop-up.
 
 **Components.** The logo is always the image (`/gavelling-lockup.webp`, the gavel mark for square spots), never typed text, never a generated file. Never a native `<select>` or `<datalist>`: every dropdown is `GSelect` (`src/components/GSelect.tsx`); richer pickers keep their own components. Dates: the shared `DatePicker` only, never `<input type="date">`. Popovers through `Portal` at fixed coordinates, flipped near edges, never clipped. Info hints open on hover. Every button gets `focus:outline-none`. Consoles and dashboards fit one screen at 1280x800 and up (`docs/ui-audit/00-DESIGN-RULEBOOK.md` §9).
 

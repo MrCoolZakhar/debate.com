@@ -14,7 +14,7 @@
 //     committee emblem + acronym on one line with the person in it on the
 //     SAME line, on the other side (avatar + name; an empty one shows none), so
 //     every card is the same size (owner, 21 Oct 2026). Two Germanys are two
-//     cards. A small red minus (22px, a subtle gradient and a white ring)
+//     cards. A small light red minus (18px, a thin white ring, a 30px hit area)
 //     sitting ON the card's top-right corner, centred on it, removes the
 //     allocation from the delegation, asked
 //     in place: an empty one goes straight back (organiser_take_back_society_seat);
@@ -27,9 +27,12 @@
 //     to make the left column wider or narrower; the width is remembered per
 //     browser (localStorage gavelling-dlg-alloc-left), clamped so the right
 //     column always keeps room.
-//   * Right: "Search countries" first (focused on open), then EVERY country that
+//   * Right: "Search countries" first (focused on open), then every country that
 //     is a delegate slot in any committee, A to Z, filtered by name or code with
-//     accents ignored (societySeats.countryMatrix). Each country shows one chip
+//     accents ignored (societySeats.countryMatrix). Custom seats (a custom
+//     committee, one with groups, a character) come after the countries; a
+//     country with every allocation given out is hidden unless searched for,
+//     and then sits at the very bottom. Each country shows one chip
 //     per committee seat, A to Z by acronym (a double is Seat 1 and Seat 2):
 //       free    one tap gives that one seat (organiser_give_society_seats with
 //               that single seat), optimistic then verified;
@@ -62,7 +65,7 @@ import { readDelegationSettings, type SeatLimit } from './v2';
 import InPlaceConfirm from '@/app/conferences/[slug]/participant/delegation/seat/InPlaceConfirm';
 import type { DelegationPopupConference, PopupStep } from './DelegationPopup';
 import {
-  BTN_CLASS, CommitteeDisc, DANGER, FONT, FOREST, HAIRLINE, INK, INK_SOFT, RoundAvatar, STROKE,
+  BTN_CLASS, CommitteeDisc, FONT, FOREST, HAIRLINE, INK, INK_SOFT, RoundAvatar, STROKE,
   committeeEmblemSrc, committeeShort, plural, smallSecondaryBtn,
 } from './kit';
 
@@ -219,11 +222,28 @@ export default function SeatsTab<M extends DelegationMemberLite>({ conference, r
     }));
   }, [committees, row.id, memberIds, pending]);
 
-  const visible = useMemo(() => {
+  // The list's order (owner, 21 Oct 2026): real countries A to Z, then custom
+  // seats (a custom committee, one with groups, a character), then countries
+  // with nothing left to give. Those last ones show only when searched for.
+  const { visible, hiddenFull } = useMemo(() => {
     const q = foldForSearch(query);
-    if (!q) return countries;
-    return countries.filter(c => foldForSearch(c.name).includes(q) || c.code.toLowerCase().includes(q));
-  }, [countries, query]);
+    // A country just pressed stays where it is until its write settles, so it
+    // never vanishes under the pointer.
+    const full = (c: CountryRow) => c.chips.every(ch => ch.state !== 'free' && !pending.has(ch.key));
+    const rank = (c: CountryRow) => (full(c) ? 2 : c.chips.every(ch => ch.custom) ? 1 : 0);
+    const ranked = countries.map(c => ({
+      c: { ...c, chips: [...c.chips].sort((a, b) => Number(a.custom) - Number(b.custom)) },
+      r: rank(c),
+    }));
+    const matched = q
+      ? ranked.filter(({ c }) => foldForSearch(c.name).includes(q) || c.code.toLowerCase().includes(q))
+      : ranked.filter(x => x.r < 2);
+    return {
+      // A stable sort keeps the A to Z order inside each group.
+      visible: matched.sort((a, b) => a.r - b.r).map(x => x.c),
+      hiddenFull: q ? 0 : ranked.length - matched.length,
+    };
+  }, [countries, query, pending]);
 
   const held = useMemo(() => countries
     .flatMap(c => c.chips.filter(ch => ch.state === 'mine'))
@@ -330,11 +350,14 @@ export default function SeatsTab<M extends DelegationMemberLite>({ conference, r
       {/* Left: what the delegation holds, its own card */}
       <section className="flex flex-col md:overflow-y-auto md:w-[var(--dlg-left)] md:max-w-[calc(100%_-_340px)] md:flex-none"
         style={{ padding: '18px 20px 22px', gap: 16, background: '#FFFFFF', borderRadius: 16, boxShadow: '0 1px 2px rgba(27,56,40,0.05), 0 6px 18px rgba(27,56,40,0.06)' }}>
-        <h3 style={{ margin: 0, fontFamily: FONT, fontSize: 16, fontWeight: 600, color: INK }}>Given to this delegation</h3>
+        {/* The title and the count share one line, so more allocations fit (owner, 21 Oct 2026). */}
         <div className="flex flex-col" style={{ gap: 6 }}>
-          <div className="flex items-baseline gap-2 flex-wrap">
-            <span style={{ fontFamily: FONT, fontSize: 40, fontWeight: 600, letterSpacing: '-0.02em', color: INK, fontVariantNumeric: 'tabular-nums', lineHeight: 1.1 }}>{given}</span>
-            <span style={{ fontFamily: FONT, fontSize: 16, color: INK_SOFT }}>{given === 1 ? 'allocation given' : 'allocations given'}</span>
+          <div className="flex items-baseline justify-between flex-wrap" style={{ gap: '4px 16px' }}>
+            <h3 style={{ margin: 0, fontFamily: FONT, fontSize: 16, fontWeight: 600, color: INK }}>Given to this delegation</h3>
+            <span className="inline-flex items-baseline gap-1.5">
+              <span style={{ fontFamily: FONT, fontSize: 28, fontWeight: 600, letterSpacing: '-0.02em', color: INK, fontVariantNumeric: 'tabular-nums', lineHeight: 1.1 }}>{given}</span>
+              <span style={{ fontFamily: FONT, fontSize: 14, color: INK_SOFT }}>{given === 1 ? 'allocation given' : 'allocations given'}</span>
+            </span>
           </div>
           {limitLine && <span style={{ fontFamily: FONT, fontSize: 13.5, color: INK_SOFT, lineHeight: 1.45 }}>{limitLine}</span>}
         </div>
@@ -377,15 +400,17 @@ export default function SeatsTab<M extends DelegationMemberLite>({ conference, r
                     title={blocked === null ? `Remove ${seatLabel(h)} from ${row.name}` : blocked === 'Saving' ? undefined : blocked}
                     data-live={blocked === null ? 'true' : undefined}
                     style={{
-                      // Centred on the card's top-right corner, over its border.
-                      position: 'absolute', top: -11, right: -11, width: 22, height: 22, padding: 0, borderRadius: '50%',
+                      // Centred on the card's top-right corner, over its border. 18px,
+                      // a lighter red and a thin ring (owner, 21 Oct 2026); the
+                      // ::before below keeps a 30px hit area.
+                      position: 'absolute', top: -9, right: -9, width: 18, height: 18, padding: 0, borderRadius: '50%',
                       display: 'inline-flex', alignItems: 'center', justifyContent: 'center', border: 'none',
-                      background: blocked === null ? `linear-gradient(180deg, #C4503A, ${DANGER})` : 'linear-gradient(180deg, #EEE6E1, #E2D6CF)',
-                      boxShadow: '0 0 0 2px #FFFFFF, 0 1px 3px rgba(27,56,40,0.18)',
+                      background: blocked === null ? 'linear-gradient(180deg, #E8907F, #DA6E59)' : 'linear-gradient(180deg, #EEE6E1, #E2D6CF)',
+                      boxShadow: '0 0 0 1.5px #FFFFFF, 0 1px 2px rgba(27,56,40,0.14)',
                       color: '#FFFFFF', cursor: blocked === null ? 'pointer' : 'default', opacity: blocked === null ? 1 : 0.8,
                     }}
                   >
-                    <Minus size={12} strokeWidth={2.5} aria-hidden />
+                    <Minus size={10} strokeWidth={2.4} aria-hidden />
                   </button>
                 </div>
               );
@@ -434,7 +459,7 @@ export default function SeatsTab<M extends DelegationMemberLite>({ conference, r
           {countries.length === 0 && (
             <p style={{ fontFamily: FONT, fontSize: 14, color: INK_SOFT }}>No committee has countries yet. Add them in Committees.</p>
           )}
-          {countries.length > 0 && visible.length === 0 && (
+          {countries.length > 0 && visible.length === 0 && query.trim() !== '' && (
             <p style={{ fontFamily: FONT, fontSize: 14, color: INK_SOFT }}>No country matches that search.</p>
           )}
           {visible.map(c => {
@@ -465,6 +490,11 @@ export default function SeatsTab<M extends DelegationMemberLite>({ conference, r
               </div>
             );
           })}
+          {hiddenFull > 0 && (
+            <p style={{ fontFamily: FONT, fontSize: 13, color: INK_SOFT, padding: '4px 2px 0' }}>
+              {hiddenFull === 1 ? '1 country has every allocation given out. Search for it to see it.' : `${hiddenFull} countries have every allocation given out. Search for one to see it.`}
+            </p>
+          )}
         </div>
       </section>
       {ask && (
@@ -478,7 +508,9 @@ export default function SeatsTab<M extends DelegationMemberLite>({ conference, r
           onCancel={closeAsk} />
       )}
       <style>{`
-        .dlgSeatMinus { transition: transform 120ms cubic-bezier(0.22,1,0.36,1); }
+        .dlgSeatMinus { transition: transform 120ms cubic-bezier(0.22,1,0.36,1), filter 120ms; }
+        .dlgSeatMinus::before { content: ''; position: absolute; inset: -6px; border-radius: 50%; }
+        .dlgSeatMinus[data-live]:hover { filter: saturate(1.25) brightness(0.95); }
         .dlgSeatMinus[data-live]:active { transform: scale(0.88); }
         .dlgSplitLine { transition: background-color 140ms, width 140ms; }
         .dlgSplit:hover .dlgSplitLine, .dlgSplit:focus-visible .dlgSplitLine, .dlgSplit:active .dlgSplitLine { width: 4px; background: rgba(27,56,40,0.30); border-radius: 2px; }

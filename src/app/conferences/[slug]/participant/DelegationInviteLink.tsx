@@ -15,7 +15,10 @@
 //     /invites/delegation/<token>, from create_delegation_invite (leader-checked
 //     in the database, the same token every time)
 // The link starts from this site's own origin, which is https://gavelling.com
-// in production. /invites/delegation/<token> decides everything: no
+// in production. Owner, 21 Oct 2026: the row is ONE line: the label, the link
+// in a smaller font that never wraps (a field too narrow scrolls sideways
+// instead, never cut with "…"), and Copy, all on one row.
+// /invites/delegation/<token> decides everything: no
 // application yet → the delegate application with this delegation filled in;
 // an existing application → added to the delegation; another delegation →
 // asked before moving; leaders, chairs and observers are never moved.
@@ -88,19 +91,19 @@ export default function DelegationInviteLink({ societyId, conferenceId }: {
   };
 
   return (
-    <div className="flex flex-col gap-1.5 min-w-0" style={{ width: 'min(100%, 400px)' }}>
-      <span style={{ fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 600, color: '#6B5F52' }}>Invite link</span>
-      <div className="flex items-stretch gap-2 min-w-0">
+    <div className="flex flex-col gap-1.5 min-w-0" style={{ width: 'min(100%, 520px)' }}>
+      <div className="flex items-center gap-2 min-w-0">
+        <span className="flex-none" style={{ fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 600, color: '#6B5F52', whiteSpace: 'nowrap' }}>Invite link</span>
         <div
-          className="flex-1 min-w-0 flex items-center"
+          className="flex-1 min-w-0 flex items-center overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
           title={url ?? undefined}
           style={{
-            minHeight: 44, padding: '8px 12px', borderRadius: 10, background: '#FBF9F4',
+            minHeight: 44, padding: '0 12px', borderRadius: 10, background: '#FBF9F4',
             border: '1px solid color-mix(in srgb, var(--gv-main) 14%, transparent)',
           }}
         >
           {shown ? (
-            <span className="[overflow-wrap:anywhere]" style={{ fontFamily: OUTFIT, fontSize: 13.5, fontWeight: 600, color: 'var(--gv-main)', userSelect: 'all', lineHeight: 1.35 }}>
+            <span style={{ fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 600, color: 'var(--gv-main)', userSelect: 'all', lineHeight: 1.35, whiteSpace: 'nowrap' }}>
               {shown}
             </span>
           ) : (

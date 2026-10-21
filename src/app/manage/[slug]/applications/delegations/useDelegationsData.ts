@@ -62,6 +62,9 @@ export interface DelegationView<M extends DelegationMemberLite = DelegationMembe
   seatsFilled: number;
   /** Paid spots still without a seat. */
   needSeats: number;
+  /** The account that created the delegation (`societies.created_by`), always
+   *  among the leaders shown (memberOrder.shownLeaders). */
+  createdBy: string | null;
 }
 
 /** An invoice with the two columns the Payments tab also draws. */
@@ -104,7 +107,7 @@ export function useDelegationsData<M extends DelegationMemberLite>(args: {
   const userId = user?.id ?? null;
   const ownMembers = !applications;
 
-  const [societies, setSocieties] = useState<SocietyLite[] | null>(null);
+  const [societies, setSocieties] = useState<(SocietyLite & { created_by?: string | null })[] | null>(null);
   const [loadedMembers, setLoadedMembers] = useState<M[]>([]);
   const [advisorsPledged, setAdvisorsPledged] = useState<Map<string, number>>(new Map());
   const [invoices, setInvoices] = useState<InvoiceRow[]>([]);
@@ -142,7 +145,7 @@ export function useDelegationsData<M extends DelegationMemberLite>(args: {
       if (!supabase) return;
       const [socRes, advRes, invRes, payRes, comRes, memRes] = await Promise.all([
         supabase.from('societies')
-          .select('id, name, spots_purchased, advisor_spots_purchased, created_at, city, country_code, logo_url')
+          .select('id, name, spots_purchased, advisor_spots_purchased, created_at, city, country_code, logo_url, created_by')
           .eq('conference_id', conferenceId)
           .order('name', { ascending: true }),
         supabase.from('applications')
@@ -162,7 +165,7 @@ export function useDelegationsData<M extends DelegationMemberLite>(args: {
           .range(from, to)),
         supabase.from('conference_committees')
           .select(`
-            id, name, abbreviation, logo_url,
+            id, name, abbreviation, logo_url, committee_type, groups,
             committee_country_slots (id, country_code, country_name, delegation_size, is_observer, logo_url),
             conference_allocations (id, country_code, country_name, seat, society_id, application_id, user_id)
           `)
@@ -189,7 +192,7 @@ export function useDelegationsData<M extends DelegationMemberLite>(args: {
         return;
       }
       setLoadFailed(false);
-      const nextSocieties = (socRes.data ?? []) as SocietyLite[];
+      const nextSocieties = (socRes.data ?? []) as (SocietyLite & { created_by?: string | null })[];
       setSocieties(prev => keepIfSame(prev, nextSocieties));
       if (ownMembers) setLoadedMembers(prev => keepIfSame(prev, memRes.data as M[]));
       if (!(quiet && advRes.error)) {
@@ -315,11 +318,12 @@ export function useDelegationsData<M extends DelegationMemberLite>(args: {
       members,
       invoices.filter(i => i.kind === 'pledge_spot' && i.status === 'settled').map(i => i.application_id),
     );
+    const creatorOf = new Map(societies.map(s => [s.id, s.created_by ?? null] as const));
     return base.map(r => {
       const paid = paidBySociety.get(r.id) ?? 0;
       const ids = new Set(r.members.map(m => m.id));
       const { given, filled } = committees ? societySeatCounts(committees, r.id, ids) : { given: 0, filled: 0 };
-      return { ...r, paid, seatsGiven: given, seatsFilled: filled, needSeats: Math.max(0, paid - given) };
+      return { ...r, paid, seatsGiven: given, seatsFilled: filled, needSeats: Math.max(0, paid - given), createdBy: creatorOf.get(r.id) ?? null };
     });
   }, [societies, members, advisorsPledged, draftsBySociety, invoices, payments, currency, committees]);
 

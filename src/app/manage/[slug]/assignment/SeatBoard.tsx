@@ -4,9 +4,10 @@
 // The Assignment page's main view for delegates, in three columns:
 //   LEFT    the people still waiting (oldest accepted first) and the
 //           delegations, each column scrolling inside itself;
-//   MIDDLE  the only part that scrolls with content: every suggested seat
-//           (the existing suggestion cards), or one person opened in place
-//           with their best three seats;
+//   MIDDLE  the only part that scrolls with content: the smart allocations
+//           (white cards, reason badges with points and a "How this scores"
+//           breakdown), or one person opened in place with their level, where
+//           they are from and their best three seats;
 //   RIGHT   the committees as fill rings; a click (or a person dropped on one)
 //           opens that committee's pop-up (SeatBoardPopup.tsx).
 // Every Assign goes through the page's own assign path (`onAssign` is
@@ -19,7 +20,7 @@
 // on the first load when they are waiting, then leaves the URL.
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, ArrowUpDown, ChevronDown, Hand, Info, Search, X, Award } from 'lucide-react';
+import { ArrowLeft, ArrowUpDown, ChevronDown, Hand, Info, MapPin, Search, X, Award } from 'lucide-react';
 import GSelect, { type GSelectOption } from '@/components/GSelect';
 import { NEU, NeuButton } from '@/components/neu';
 import { getCountryByName } from '@/lib/countries';
@@ -33,19 +34,19 @@ import { replaceUrlInPlace } from '@/lib/replaceUrlInPlace';
 import {
   type AcceptedApp, type CommitteeData, type Suggestion, type UserHistory,
   CountryFlag, PersonAvatar, CommitteeLogo, committeeLabels, committeeSeatLogo, effectiveLevel, ageOf,
-  LevelTag, fitColor, slotLogoUrl, OUTFIT,
+  LevelDisc, LevelHero, slotLogoUrl, OUTFIT,
 } from '@/app/manage/[slug]/assignment/assignmentKit';
 import { SeatBoardPopup } from '@/app/manage/[slug]/assignment/SeatBoardPopup';
 import {
-  BigCount, CARD_SHADOW, CommitteeRing, FitPills, RankNumber, WELL,
-  acceptedAt, firstName, fmtDay, ordinal, personName, prefOrderByCommittee, schoolName, seatCounts,
+  BigCount, CARD_SHADOW, CommitteeRing, FitPills, RankNumber, ScoreBreakdown, ScoreDisc, WELL,
+  acceptedAt, choicesPhrase, firstName, fmtDay, personName, prefOrdersByCommittee, schoolName, seatCounts,
 } from '@/app/manage/[slug]/assignment/seatBoardShared';
 
-// The suggested seats are the board's main event: a soft gold surface with a
-// gold ring, the white seat tile inside, the forest Assign (owner, 21 Oct
-// 2026: the cards must pop more than the side columns).
-const GOLD_SURFACE = '#FFF8E3';
-const GOLD_CARD_SHADOW = 'inset 0 0 0 1px rgba(182,135,31,0.26), 0 1px 2px rgba(110,82,16,0.08), 0 10px 26px rgba(110,82,16,0.10)';
+// The smart allocations are the board's main event: white cards with the
+// standard forest-tinted shadow and a thin gold top edge; the gold score disc,
+// the round flag and the type carry the weight, never a tinted fill (owner,
+// 21 Oct 2026: the gold surface was rejected).
+const SMART_CARD_SHADOW = `inset 0 2.5px 0 #E2C66B, ${CARD_SHADOW}`;
 
 type SortKey = 'accepted' | 'name' | 'first';
 type SchoolFilter = 'all' | 'independent' | `s:${string}`;
@@ -177,7 +178,7 @@ export default function SeatBoard({
   const overCommittee = overCommitteeId ? committees.find(c => c.id === overCommitteeId) ?? null : null;
 
   const focus = draggedApp ?? openPerson;
-  const markers = useMemo(() => prefOrderByCommittee(focus), [focus]);
+  const markers = useMemo(() => prefOrdersByCommittee(focus), [focus]);
 
   /** Every assignment: close what is open, back to the suggestions, then the
    *  page's own path (which may show its first-assign pop-up, alone). */
@@ -275,7 +276,7 @@ export default function SeatBoard({
             title={c.name}
             className="focus:outline-none flex flex-col items-center"
             style={{
-              gap: 5, padding: '12px 2px 10px', borderRadius: 14, border: 'none', cursor: 'pointer',
+              gap: 3, padding: '6px 2px 10px', borderRadius: 14, border: 'none', cursor: 'pointer',
               background: lit ? '#FFFFFF' : '#FAF8F3',
               boxShadow: lit ? `0 0 0 2px #1B3828, 0 8px 20px rgba(27,56,40,0.18)` : '0 0 0 1px rgba(27,56,40,0.06)',
               transform: lit ? 'scale(1.04)' : 'none',
@@ -283,7 +284,7 @@ export default function SeatBoard({
               fontFamily: OUTFIT, color: NEU.ink,
             }}
           >
-            <CommitteeRing committee={c} marker={markers.get(c.id)} lit={lit} />
+            <CommitteeRing committee={c} markers={markers.get(c.id)} lit={lit} halo />
             <span className="[overflow-wrap:anywhere] text-center" style={{ fontSize: 12.5, fontWeight: 600, lineHeight: 1.15, padding: '0 2px' }}>{big}</span>
             <span style={{ fontSize: 11.5, color: NEU.inkSoft }}>
               <span style={{ fontWeight: 700, color: NEU.ink, fontVariantNumeric: 'tabular-nums' }}>{open}</span> open
@@ -314,9 +315,9 @@ export default function SeatBoard({
     <>
       <div className="flex items-center justify-between gap-3 flex-none" style={{ minHeight: 40 }}>
         <span className="inline-flex items-center gap-2">
-          <h2 style={{ margin: 0, fontSize: 20, fontWeight: 600, fontFamily: OUTFIT, color: NEU.ink }}>Suggested Seats</h2>
+          <h2 style={{ margin: 0, fontSize: 20, fontWeight: 600, fontFamily: OUTFIT, color: NEU.ink }}>Smart Allocations</h2>
           <span style={{ fontSize: 15, fontWeight: 600, color: NEU.inkSoft, fontVariantNumeric: 'tabular-nums', fontFamily: OUTFIT }}>{feed.length}</span>
-          <span title="Ranked by preferences, experience fit and how full each committee is" style={{ display: 'inline-flex', color: NEU.inkSoft }}>
+          <span title="Ranked by preferences, experience fit, seat importance and how full each committee is. Open How this scores on a card for every part" style={{ display: 'inline-flex', color: NEU.inkSoft }}>
             <Info size={16} strokeWidth={1.5} />
           </span>
         </span>
@@ -335,7 +336,7 @@ export default function SeatBoard({
           {feed.map(sug => {
             const key = `${sug.app.id}-${sug.slot.id}`;
             return (
-              <SeatSuggestionCard
+              <SmartAllocationCard
                 key={key}
                 sug={sug}
                 busy={busyKey === key}
@@ -494,10 +495,18 @@ export default function SeatBoard({
               >
                 <PersonAvatar name={name} url={a.profiles?.avatar_url ?? null} size={38} />
                 <span className="flex flex-col flex-1 min-w-0" style={{ lineHeight: 1.2 }}>
-                  <span className="[overflow-wrap:anywhere] inline-flex items-center gap-1.5 flex-wrap" style={{ fontSize: 16, fontWeight: 600, color: NEU.ink }}>
+                  <span className="[overflow-wrap:anywhere] inline-flex items-center gap-1.5 flex-wrap" style={{ fontSize: 16, fontWeight: 700, color: NEU.ink }}>
                     {name}{!a.profiles && <NotRegisteredChip />}
                   </span>
                   <span className="[overflow-wrap:anywhere]" style={{ fontSize: 12.5, color: NEU.inkSoft, marginTop: 1 }}>{schoolName(a)}</span>
+                </span>
+                <span className="flex flex-col items-end flex-shrink-0" style={{ gap: 3 }}>
+                  <LevelDisc level={effectiveLevel(a)} size={22} />
+                  {acceptedAt(a) && (
+                    <span title={`Accepted ${fmtDay(acceptedAt(a))}`} style={{ fontSize: 11, color: NEU.inkSoft, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
+                      {fmtDay(acceptedAt(a))}
+                    </span>
+                  )}
                 </span>
               </div>
             );
@@ -560,11 +569,11 @@ export default function SeatBoard({
             {overCommittee ? (
               <>
                 Let go to open <strong style={{ fontWeight: 600 }}>{committeeLabels(overCommittee).big}</strong>
-                {draggedApp && markers.get(overCommittee.id) ? `. Their ${ordinal(markers.get(overCommittee.id)!)} choice` : ''}
+                {draggedApp && markers.get(overCommittee.id) ? `. Their ${choicesPhrase(markers.get(overCommittee.id)!)}` : ''}
                 {`, ${seatCounts(overCommittee).open} open`}
               </>
             ) : focus && markers.size > 0 ? (
-              <>Gold numbers are {firstName(personName(focus))}&apos;s 1st, 2nd and 3rd choices</>
+              <>Gold numbers are {firstName(personName(focus))}&apos;s choices, 1 is their first</>
             ) : (
               'Click a committee to see every seat, or drag a person onto one'
             )}
@@ -578,10 +587,11 @@ export default function SeatBoard({
   );
 }
 
-// ── One suggested seat (the middle feed) ─────────────────────────────────────
-// The person (a click opens them in the middle), their fit score, then the
-// seat on a white tile with Assign, then the reasons as pills.
-function SeatSuggestionCard({ sug, busy, locked, onOpenPerson, onAssign }: {
+// ── One smart allocation (the middle feed) ───────────────────────────────────
+// The person (a click opens them in the middle) and the gold score disc, the
+// seat on an ivory well with Assign, then the reason badges with their points
+// and "How this scores", which opens every part of the score in place.
+function SmartAllocationCard({ sug, busy, locked, onOpenPerson, onAssign }: {
   sug: Suggestion;
   /** This card's assignment is saving. */
   busy: boolean;
@@ -590,12 +600,13 @@ function SeatSuggestionCard({ sug, busy, locked, onOpenPerson, onAssign }: {
   onOpenPerson: () => void;
   onAssign: () => void;
 }) {
+  const [open, setOpen] = useState(false);
   const name = personName(sug.app);
   const labels = committeeLabels(sug.committee);
   return (
     <div
-      className="flex flex-col transition-transform duration-200 hover:-translate-y-px"
-      style={{ padding: 12, gap: 10, borderRadius: 22, background: GOLD_SURFACE, boxShadow: GOLD_CARD_SHADOW }}
+      className="flex flex-col"
+      style={{ padding: '14px 12px 12px', gap: 10, borderRadius: 22, background: '#FFFFFF', boxShadow: SMART_CARD_SHADOW }}
     >
       <div className="flex items-center gap-3">
         <button
@@ -607,17 +618,17 @@ function SeatSuggestionCard({ sug, busy, locked, onOpenPerson, onAssign }: {
         >
           <PersonAvatar name={name} url={sug.app.profiles?.avatar_url ?? null} size={44} />
           <span className="flex flex-col min-w-0" style={{ lineHeight: 1.2 }}>
-            <span className="[overflow-wrap:anywhere]" style={{ fontSize: 17.5, fontWeight: 600, color: NEU.ink }}>{name}</span>
+            <span className="[overflow-wrap:anywhere]" style={{ fontSize: 17.5, fontWeight: 700, color: NEU.ink }}>{name}</span>
             <span className="[overflow-wrap:anywhere]" style={{ fontSize: 13, color: NEU.inkSoft, marginTop: 1 }}>{schoolName(sug.app)}</span>
           </span>
         </button>
-        <span
-          className="flex flex-col items-end flex-shrink-0"
-          style={{ paddingRight: 4, lineHeight: 1 }}
-          title={sug.swap ? `Suggested here at ${sug.score}; their own best open seat scored ${sug.swap.ownBestScore}` : 'Fit score'}
-        >
-          <span style={{ fontSize: 26, fontWeight: 700, color: fitColor(sug.score), fontVariantNumeric: 'tabular-nums' }}>{sug.score}</span>
-          <span style={{ fontSize: 11, color: NEU.inkSoft, marginTop: 3, fontVariantNumeric: 'tabular-nums' }}>
+        <span className="flex flex-col items-center flex-shrink-0" style={{ paddingRight: 2, gap: 3 }}>
+          <ScoreDisc
+            score={sug.score}
+            size={46}
+            title={sug.swap ? `Fit ${sug.score} here; their own best open seat scored ${sug.swap.ownBestScore}` : 'Fit score'}
+          />
+          <span style={{ fontSize: 11, color: NEU.inkSoft, fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>
             {sug.swap ? `best ${sug.swap.ownBestScore}` : 'fit'}
           </span>
         </span>
@@ -625,11 +636,11 @@ function SeatSuggestionCard({ sug, busy, locked, onOpenPerson, onAssign }: {
 
       <div
         className="flex items-center gap-3"
-        style={{ padding: '10px 10px 10px 12px', borderRadius: 12, background: '#FFFFFF', boxShadow: '0 0 0 1px rgba(182,135,31,0.16), 0 1px 3px rgba(110,82,16,0.07)' }}
+        style={{ padding: '10px 10px 10px 12px', borderRadius: 14, background: WELL }}
       >
-        <CountryFlag code={sug.slot.country_code} w={40} h={40} alt={sug.slot.country_name} logoUrl={slotLogoUrl(sug.committee, sug.slot)} />
+        <CountryFlag code={sug.slot.country_code} w={42} h={42} alt={sug.slot.country_name} logoUrl={slotLogoUrl(sug.committee, sug.slot)} />
         <span className="flex flex-col flex-1 min-w-0" style={{ lineHeight: 1.2 }}>
-          <CountryName name={sug.slot.country_name} code={sug.slot.country_code} style={{ fontSize: 17, fontWeight: 600, color: NEU.ink, whiteSpace: 'normal', overflowWrap: 'anywhere' }} />
+          <CountryName name={sug.slot.country_name} code={sug.slot.country_code} style={{ fontSize: 17, fontWeight: 700, color: NEU.ink, whiteSpace: 'normal', overflowWrap: 'anywhere' }} />
           <span className="inline-flex items-center gap-1.5 mt-1" style={{ fontSize: 13, color: NEU.inkSoft }} title={sug.committee.name}>
             <CommitteeLogo committee={sug.committee} size={18} alt={labels.big} />
             <span className="[overflow-wrap:anywhere]" style={{ fontWeight: 600 }}>{labels.big}</span>
@@ -640,11 +651,20 @@ function SeatSuggestionCard({ sug, busy, locked, onOpenPerson, onAssign }: {
         </NeuButton>
       </div>
 
-      {(sug.reasons.length > 0 || sug.swap) && (
-        <div className="flex items-center gap-1.5 flex-wrap" style={{ padding: '0 2px' }}>
-          <FitPills sug={sug} />
-        </div>
-      )}
+      <div className="flex items-center gap-1.5 flex-wrap" style={{ padding: '0 2px' }}>
+        <FitPills sug={sug} max={4} />
+        <button
+          type="button"
+          onClick={() => setOpen(v => !v)}
+          aria-expanded={open}
+          className="focus:outline-none inline-flex items-center gap-1"
+          style={{ marginLeft: 'auto', height: 26, padding: '0 4px 0 8px', border: 'none', background: 'transparent', cursor: 'pointer', fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 600, color: NEU.ink, textDecoration: 'underline', textUnderlineOffset: 3 }}
+        >
+          How this scores
+          <ChevronDown size={14} strokeWidth={1.75} aria-hidden style={{ transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 160ms cubic-bezier(0.22,1,0.36,1)' }} />
+        </button>
+      </div>
+      {open && <ScoreBreakdown sug={sug} />}
     </div>
   );
 }
@@ -678,6 +698,7 @@ function PersonPanel({
   const prefRows = Math.min(4, prefs.length);
   const prefCols = prefs.length > 4 ? 2 : 1;
   const independent = person.society_id == null;
+  const city = person.societies?.city?.trim() || null;
 
   return (
     <div className="flex flex-col gap-2.5">
@@ -688,7 +709,7 @@ function PersonPanel({
           className="focus:outline-none inline-flex items-center gap-2"
           style={{ height: 34, padding: '0 14px 0 10px', borderRadius: 11, border: '1px solid rgba(27,56,40,0.16)', background: '#FFFFFF', cursor: 'pointer', fontFamily: OUTFIT, fontSize: 13.5, fontWeight: 600, color: NEU.ink }}
         >
-          <ArrowLeft size={16} strokeWidth={1.5} /> Back to suggestions
+          <ArrowLeft size={16} strokeWidth={1.5} /> Back to smart allocations
         </button>
         {acceptedAt(person) && <span style={{ fontSize: 13, color: NEU.inkSoft }}>Accepted {fmtDay(acceptedAt(person))}</span>}
       </div>
@@ -699,7 +720,7 @@ function PersonPanel({
           <PersonAvatar name={name} url={person.profiles?.avatar_url ?? null} size={72} userId={person.profiles?.id} />
           <div className="flex-1 min-w-0" style={{ paddingTop: 2 }}>
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="[overflow-wrap:anywhere]" style={{ fontSize: 26, fontWeight: 600, lineHeight: 1.1, color: NEU.ink }}>{name}</span>
+              <span className="[overflow-wrap:anywhere]" style={{ fontSize: 26, fontWeight: 700, lineHeight: 1.1, color: NEU.ink }}>{name}</span>
               {!person.profiles && <NotRegisteredChip />}
             </div>
             <div className="[overflow-wrap:anywhere]" style={{ fontSize: 15.5, color: NEU.inkSoft, marginTop: 4, lineHeight: 1.25 }}>
@@ -707,18 +728,28 @@ function PersonPanel({
                 ? 'Independent'
                 : <DelegationPopupLink societyId={person.society_id} style={{ fontWeight: 700, color: NEU.ink, textDecoration: 'underline' }}>{schoolName(person)}</DelegationPopupLink>}
             </div>
+            {(nationality || city) && (
+              <div className="flex items-center gap-x-3 gap-y-1 flex-wrap" style={{ marginTop: 8 }}>
+                {nationality && (
+                  <span className="inline-flex items-center gap-2" style={{ fontSize: 14, fontWeight: 600, color: NEU.ink }}>
+                    <CountryFlag code={natCountry?.code ?? null} w={22} h={22} alt={nationality} />
+                    {nationality}
+                  </span>
+                )}
+                {city && (
+                  <span className="inline-flex items-center gap-1.5" style={{ fontSize: 13, color: NEU.inkSoft }} title={`${schoolName(person)} is in ${city}`}>
+                    <MapPin size={14} strokeWidth={1.5} style={{ color: NEU.ink }} aria-hidden />
+                    School in {city}
+                  </span>
+                )}
+              </div>
+            )}
             <div className="flex items-center gap-x-3 gap-y-1 flex-wrap" style={{ fontSize: 12.5, color: NEU.inkSoft, marginTop: 6 }}>
               {age != null && <span>{age} years old</span>}
-              {nationality && (
-                <span className="inline-flex items-center gap-1.5">
-                  {natCountry && <CountryFlag code={natCountry.code} w={15} h={15} alt={nationality} />}
-                  {nationality}
-                </span>
-              )}
               <span>{person.role === 'head-delegate' || person.is_head_delegate ? 'Head Delegate' : 'Delegate'}</span>
             </div>
           </div>
-          <span className="flex-shrink-0" style={{ paddingTop: 4 }}><LevelTag level={effectiveLevel(person)} /></span>
+          <LevelHero level={effectiveLevel(person)} conferences={history ? history.conferences : null} size={64} />
         </div>
 
         <div>
@@ -783,12 +814,12 @@ function PersonPanel({
           const key = `${sug.app.id}-${sug.slot.id}`;
           const labels = committeeLabels(sug.committee);
           return (
-            <div key={key} className="flex items-center gap-3" style={{ padding: '8px 10px 8px 12px', borderRadius: 14, background: GOLD_SURFACE, boxShadow: 'inset 0 0 0 1px rgba(182,135,31,0.22)' }}>
-              <span style={{ fontSize: 24, fontWeight: 700, color: fitColor(sug.score), fontVariantNumeric: 'tabular-nums', lineHeight: 1, minWidth: 36 }}>{sug.score}</span>
+            <div key={key} className="flex items-center gap-3" style={{ padding: '8px 10px', borderRadius: 14, background: WELL }}>
+              <ScoreDisc score={sug.score} size={38} />
               <CountryFlag code={sug.slot.country_code} w={32} h={32} alt={sug.slot.country_name} logoUrl={slotLogoUrl(sug.committee, sug.slot)} />
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-x-2 gap-y-0.5 flex-wrap">
-                  <CountryName name={sug.slot.country_name} code={sug.slot.country_code} style={{ fontSize: 15, fontWeight: 600, color: NEU.ink, whiteSpace: 'normal', overflowWrap: 'anywhere', lineHeight: 1.15 }} />
+                  <CountryName name={sug.slot.country_name} code={sug.slot.country_code} style={{ fontSize: 15, fontWeight: 700, color: NEU.ink, whiteSpace: 'normal', overflowWrap: 'anywhere', lineHeight: 1.15 }} />
                   <span className="inline-flex items-center gap-1" style={{ fontSize: 12.5, color: NEU.inkSoft }} title={sug.committee.name}>
                     <CommitteeLogo committee={sug.committee} size={18} alt={labels.big} />
                     <span style={{ fontWeight: 600 }}>{labels.big}</span>
@@ -812,21 +843,16 @@ function PersonPanel({
         </div>
       </div>
 
-      {/* What they have done before */}
-      {history && (history.conferences > 0 || history.awardLabels.length > 0) && (
-        <div className="flex flex-col gap-2" style={{ ...card, padding: 18 }}>
-          <h3 style={{ margin: 0, fontSize: 15, fontWeight: 600 }}>Experience</h3>
-          <span style={{ fontSize: 13, color: NEU.inkSoft }}>
-            <strong style={{ color: NEU.ink, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{history.conferences}</strong> {history.conferences === 1 ? 'conference' : 'conferences'} on their MUN CV
-          </span>
-          {history.awardLabels.length > 0 && (
-            <div className="flex items-center gap-1.5 flex-wrap">
-              <Award size={14} strokeWidth={1.5} style={{ color: NEU.ink, flexShrink: 0 }} />
-              {history.awardLabels.map((l, i) => (
-                <span key={`${l}-${i}`} style={{ fontSize: 12.5, color: NEU.ink }}>{l}{i < history.awardLabels.length - 1 ? ',' : ''}</span>
-              ))}
-            </div>
-          )}
+      {/* Awards (their conference count is under the level above) */}
+      {history && history.awardLabels.length > 0 && (
+        <div className="flex flex-col gap-2" style={{ ...card, padding: '14px 18px' }}>
+          <h3 style={{ margin: 0, fontSize: 15, fontWeight: 600 }}>Awards</h3>
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <Award size={14} strokeWidth={1.5} style={{ color: NEU.ink, flexShrink: 0 }} />
+            {history.awardLabels.map((l, i) => (
+              <span key={`${l}-${i}`} style={{ fontSize: 12.5, color: NEU.ink }}>{l}{i < history.awardLabels.length - 1 ? ',' : ''}</span>
+            ))}
+          </div>
         </div>
       )}
     </div>

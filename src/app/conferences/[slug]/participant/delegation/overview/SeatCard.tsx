@@ -3,17 +3,19 @@
 // "Your Seat", the left column of the delegation Overview (owner, 21 Oct 2026),
 // drawn the same height as "Your Delegation" beside it and compact enough that
 // both fit one screen at 1280x800:
-//   the country      its ROUND flag (CircleFlag, the seat's crest first; never
-//                    a rectangle, CLAUDE.md §8 rule 10), the name big beside
-//                    it, the co-delegate under it, then the committee's logo
-//                    with its short name over the full one
+//   the country      its ROUND flag CENTRED and big (CircleFlag, the seat's
+//                    crest first; never a rectangle, CLAUDE.md §8 rule 10),
+//                    right under it the country name, right under that the
+//                    committee's logo with its short name over the full one
+//                    (owner, 21 Oct 2026: "no other arrangement"), then the
+//                    co-delegate small
 //   the topics       conference_committees.topics, numbered 1 to 3, ALWAYS
-//                    shown when the committee has any (owner, 21 Oct 2026; the
-//                    data was there, the card never drew it)
+//                    shown when the committee has any
 //   two doc tiles    the study guide (GuideTile, opened through openStudyGuide)
-//                    and the position paper (PositionPaperCard's tile variant:
-//                    Upload, or Submitted), each one row with ONE big button
-//                    to the right of its text
+//                    and the position paper (PositionPaperCard's tile variant),
+//                    SIDE BY SIDE in two columns (stacked on a narrow card),
+//                    each with a quiet action: its icon, a small grey word
+//                    beneath (Open, Upload, Submitted)
 //   the payment      what is owed today from my_open_balances with Pay now,
 //                    else Paid, at the card's foot
 // Names wrap, never cut; the conference's own colours (var(--gv-main)).
@@ -119,44 +121,46 @@ export default function SeatCard({ seat, committee, payments, paperTile, emptyAc
     <section aria-label="Your seat" className={OVERVIEW_CARD} style={cardStyle}>
       <CardTitle>Your Seat</CardTitle>
 
-      {/* The country: its round flag big, the name beside it, the committee under the name. */}
-      <div className="flex items-center gap-4 min-w-0">
+      {/* The country: its round flag big and centred, the country right
+          under it, the committee right under that (owner, 21 Oct 2026). */}
+      <div className="flex flex-col items-center text-center gap-2 min-w-0">
         <CircleFlag
           code={seat.country_code}
           country={seat.country_code ? null : seat.country_name}
           logoUrl={crest}
           label={seat.country_name}
-          size={84}
+          size={100}
           loading="eager"
           decorative
           style={{ flexShrink: 0, filter: 'drop-shadow(0 10px 18px color-mix(in srgb, var(--gv-main) 22%, transparent))' }}
         />
-        <div className="min-w-0 flex flex-col gap-1">
-          <p className="[overflow-wrap:anywhere]" style={{ fontFamily: FONT, fontSize: 26, fontWeight: 700, color: INK, margin: 0, lineHeight: 1.15, letterSpacing: '-0.01em' }}>
-            {seat.country_name}
-          </p>
-          {partner?.name && (
-            <p className="[overflow-wrap:anywhere]" style={{ fontFamily: FONT, fontSize: 13.5, color: INK_SOFT, margin: 0 }}>
-              With <ProfileLink userId={partner.userId} name={partner.name}>{partner.name}</ProfileLink>
-            </p>
-          )}
-          <div className="flex items-center gap-2.5 min-w-0" style={{ marginTop: 4 }}>
-            <CommitteeDisc src={committeeEmblemSrc(committee.logo_url, committee.name, committee.abbreviation)} size={32} />
-            <div className="min-w-0 flex flex-col">
-              <span className="[overflow-wrap:anywhere]" style={{ fontFamily: FONT, fontSize: 16, fontWeight: 600, color: INK, lineHeight: 1.25 }}>{short}</span>
-              {showFull && (
-                <span className="[overflow-wrap:anywhere]" style={{ fontFamily: FONT, fontSize: 12.5, color: INK_SOFT, lineHeight: 1.35 }}>{committee.name}</span>
-              )}
-            </div>
+        <p className="[overflow-wrap:anywhere] max-w-full" style={{ fontFamily: FONT, fontSize: 26, fontWeight: 700, color: INK, margin: '4px 0 0 0', lineHeight: 1.15, letterSpacing: '-0.01em' }}>
+          {seat.country_name}
+        </p>
+        <div className="flex items-center justify-center gap-2.5 min-w-0 max-w-full">
+          <CommitteeDisc src={committeeEmblemSrc(committee.logo_url, committee.name, committee.abbreviation)} size={32} />
+          <div className="min-w-0 flex flex-col text-left">
+            <span className="[overflow-wrap:anywhere]" style={{ fontFamily: FONT, fontSize: 16, fontWeight: 600, color: INK, lineHeight: 1.25 }}>{short}</span>
+            {showFull && (
+              <span className="[overflow-wrap:anywhere]" style={{ fontFamily: FONT, fontSize: 12.5, color: INK_SOFT, lineHeight: 1.35 }}>{committee.name}</span>
+            )}
           </div>
         </div>
+        {partner?.name && (
+          <p className="[overflow-wrap:anywhere] max-w-full" style={{ fontFamily: FONT, fontSize: 13.5, color: INK_SOFT, margin: 0 }}>
+            With <ProfileLink userId={partner.userId} name={partner.name}>{partner.name}</ProfileLink>
+          </p>
+        )}
       </div>
 
       <TopicsList topics={committee.topics} />
 
-      <div className="flex flex-col gap-2.5">
-        <GuideTile committeeId={ccId} />
-        {paperTile}
+      {/* The two tiles side by side; stacked on a narrow card. */}
+      <div className="@container min-w-0">
+        <div className="grid gap-2.5 grid-cols-1 @[380px]:grid-cols-2">
+          <GuideTile committeeId={ccId} />
+          {paperTile}
+        </div>
       </div>
 
       <div className="mt-auto" style={{ borderTop: `1px solid ${LINE}`, paddingTop: 14 }}>{payments}</div>

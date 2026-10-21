@@ -138,7 +138,7 @@ export default function DelegationOverview({
           <div className="grid gap-6 @[760px]:grid-cols-2 items-start">
             <div className="flex flex-col items-center gap-4" style={{ ...cardStyle, padding: '22px 24px 28px' }}>
               <SkeletonBlock width="35%" height={18} radius={6} />
-              <SkeletonBlock width={84} height={84} radius={42} />
+              <SkeletonBlock width={100} height={100} radius={50} />
               <SkeletonBlock width="50%" height={24} radius={8} />
               <SkeletonBlock width="60%" height={16} radius={6} />
               <SkeletonBlock height={44} radius={10} />

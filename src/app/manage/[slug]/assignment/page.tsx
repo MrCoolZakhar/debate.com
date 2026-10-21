@@ -2847,7 +2847,7 @@ export default function AssignmentPage() {
           id, role, experience_level, is_head_delegate, society_id, payment_status,
           attending, invited_email, invited_name, submitted_at, decided_at,
           profiles (id, display_name, email, nationality, date_of_birth, mun_experience_level, avatar_url),
-          societies (name),
+          societies (name, city),
           application_preferences (
             preference_order, country_code, country_name, conference_committee_id,
             conference_committees (name, abbreviation)

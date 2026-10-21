@@ -129,7 +129,7 @@ export function ShareLinkRow({ conference }: { conference: ShareConference }) {
         {copied ? <Check size={18} strokeWidth={2.6} /> : <Share2 size={18} strokeWidth={2.4} />}
       </span>
       <span className="flex-1 min-w-0">
-        <span className="block truncate" style={{ fontSize: 12, fontWeight: 700, color: NEU.ink }}>
+        <span className="block [overflow-wrap:anywhere]" style={{ fontSize: 12.5, fontWeight: 700, color: NEU.ink, lineHeight: 1.3 }}>
           Share your conference link
         </span>
         <span className="block truncate" title={url} style={{ fontSize: 10.5, color: NEU.inkSoft, marginTop: 1 }}>

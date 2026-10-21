@@ -738,7 +738,7 @@ export function NeuChecklistRow({
       onMouseLeave={() => setHovered(false)}
       className={`flex items-center focus:outline-none ${dense ? 'gap-2.5' : 'gap-3.5'}`}
       style={{
-        padding: dense ? '4px 10px' : '11px 14px',
+        padding: dense ? '7px 10px' : '11px 14px',
         borderRadius: dense ? 12 : 16,
         backgroundColor: done ? NEU.base : NEU.surface,
         boxShadow: done ? NEU.inSm : clickable && hovered ? NEU.outSmHover : NEU.outSm,
@@ -754,10 +754,12 @@ export function NeuChecklistRow({
       )}
 
       <div className="flex-1 min-w-0">
+        {/* Title and description WRAP, never cut (owner, 21 Oct 2026: the
+            set-up priorities' descriptions did not fit). */}
         <p
-          className="truncate"
+          className="[overflow-wrap:anywhere] text-pretty"
           style={{
-            fontFamily: OUTFIT, fontSize: dense ? 12 : 13, fontWeight: 700,
+            fontFamily: OUTFIT, fontSize: dense ? 12.5 : 13, fontWeight: 700, lineHeight: 1.3,
             color: done ? NEU.muted : NEU.ink,
             textDecorationLine: done ? 'line-through' : 'none',
             textDecorationColor: 'rgba(154,138,120,0.55)',
@@ -766,7 +768,7 @@ export function NeuChecklistRow({
           {title}
         </p>
         {sub && (
-          <p className="truncate" style={{ fontFamily: OUTFIT, fontSize: dense ? 10.5 : 11, color: NEU.muted, marginTop: 1 }}>
+          <p className="[overflow-wrap:anywhere] text-pretty" style={{ fontFamily: OUTFIT, fontSize: dense ? 11 : 11.5, color: NEU.inkSoft, marginTop: 2, lineHeight: 1.35 }}>
             {sub}
           </p>
         )}

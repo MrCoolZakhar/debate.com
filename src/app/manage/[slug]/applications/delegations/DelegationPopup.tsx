@@ -28,7 +28,7 @@ import { useDelegationsData, type DelegationsData, type DelegationView } from '.
 import DelegationCrest from '@/components/DelegationCrest';
 import { CircleFlag } from '@/components/CircleFlag';
 import { BTN_CLASS, DelegationNameLines, FONT, HAIRLINE, INK, INK_SOFT, POPUP_BODY_BG, RoundAvatar, SkeletonRows, STROKE, placeOf } from './kit';
-import { sortMembers } from './memberOrder';
+import { leaderCount, memberRank, shownLeaders } from './memberOrder';
 import PeopleTab from './PeopleTab';
 import SeatsTab from './SeatsTab';
 import PaymentsTab from './PaymentsTab';
@@ -76,17 +76,21 @@ export interface PopupStep {
   body: React.ReactNode;
 }
 
-/** The delegation's accepted leaders, each once, in the one member order
- *  (memberOrder.ts): faculty advisors first, then head delegates, A to Z. */
-export function leadersOf(row: DelegationView): { id: string; name: string; avatarUrl: string | null; role: string }[] {
-  const leaders = row.members.filter(m => ACCEPTED.has(m.status)
-    && (m.role === 'faculty-advisor' || m.is_head_delegate || m.role === 'head-delegate'));
-  return sortMembers(leaders, memberName).map(m => ({
-    id: m.id,
-    name: memberName(m),
-    avatarUrl: m.profiles?.avatar_url ?? null,
-    role: m.role === 'faculty-advisor' ? 'Faculty advisor' : 'Head delegate',
-  }));
+/** The leaders a delegation screen names (memberOrder.shownLeaders): at most
+ *  two, the creator always, then faculty advisors, then head delegates.
+ *  `total` is every accepted leader, for a "+N more" beside them. */
+export function leadersOf(row: DelegationView): { shown: { id: string; name: string; avatarUrl: string | null; role: string }[]; total: number } {
+  const accepted = row.members.filter(m => ACCEPTED.has(m.status));
+  const shown = shownLeaders(accepted, row.createdBy, memberName).map(m => {
+    const rank = memberRank(m);
+    return {
+      id: m.id,
+      name: memberName(m),
+      avatarUrl: m.profiles?.avatar_url ?? null,
+      role: rank === 0 ? 'Faculty advisor' : rank === 1 ? 'Head delegate' : 'Created the delegation',
+    };
+  });
+  return { shown, total: leaderCount(accepted, row.createdBy) };
 }
 
 /** Expected / Joined / Paid: a modest number with its word, quiet beside the name. */
@@ -118,7 +122,7 @@ function Header({ row, loading }: { row: DelegationView | null; loading: boolean
       </div>
     );
   }
-  const leaders = leadersOf(row);
+  const leaders = leadersOf(row).shown;
   const place = placeOf(row.city, row.countryCode);
   return (
     <div className="flex items-center gap-5 min-w-0">

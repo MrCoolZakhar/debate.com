@@ -5,14 +5,16 @@
 //                    "Your Seat" beside it (both h-full in a stretched grid) and
 //                    compact enough that both fit one screen at 1280x800:
 //                    the crest and the name big, the city and country with its
-//                    round flag; the leaders "floating" in one line under the
-//                    name like a committee's chairs (small avatars + names,
-//                    faculty advisors first, each avatar opening the person's
-//                    public MUN CV when their account is readable); the counts
+//                    round flag; the leaders at the card's TOP RIGHT, beside
+//                    the title, like a committee's chairs on the live status
+//                    (small avatars + names, faculty advisors first, no "You"
+//                    label, each avatar opening the person's public MUN CV
+//                    when their account is readable); the counts
 //                    on one line; for a leader the position papers (N of M) and
 //                    their payments (paid, tickets, left to pay: the Financials
 //                    card's numbers from my_pay_overview); for everyone "Coming
-//                    up", at most the next three dates, one line each
+//                    up", at most the next three dates, one line each, and a
+//                    small "Open delegation" link at the foot
 //   CommitteesBrief  an advisor's left column (they hold no seat): the
 //                    committees their delegation sits in, logo + name + people
 // White lifted cards, fine-line icons, country = flag, committee = logo,
@@ -32,8 +34,6 @@ import { money, type PayOverview } from '../../../pay/payApi';
 import { itemsCurrency } from '../../../pay/BalanceHeader';
 import { tally } from '../FinancialsCard';
 
-const YOU: React.CSSProperties = { fontSize: 12, fontWeight: 600, color: 'color-mix(in srgb, var(--gv-accent) 72%, #1C1410)', marginLeft: 5 };
-
 function Count({ n, word }: { n: number; word: string }) {
   return (
     <span className="inline-flex items-baseline gap-1.5" style={{ fontFamily: FONT }}>
@@ -43,16 +43,17 @@ function Count({ n, word }: { n: number; word: string }) {
   );
 }
 
-/** The leaders in one line, like a committee's chairs: small avatar + name. */
+/** The leaders at the card's top right, like a committee's chairs on the
+ *  live status: small avatar + name, no "You" label. */
 function LeadersInline({ leaders }: { leaders: Person[] }) {
   const sorted = [...leaders].sort((a, b) => roleRank(a.role) - roleRank(b.role));
   return (
-    <ul className="flex flex-wrap items-center gap-x-4 gap-y-2" style={{ listStyle: 'none', margin: 0, padding: 0 }} aria-label="Your leaders">
+    <ul className="flex flex-wrap items-center justify-end gap-x-3 gap-y-1.5 min-w-0" style={{ listStyle: 'none', margin: 0, padding: 0, flex: '0 1 auto' }} aria-label="Your leaders">
       {sorted.map(p => (
-        <li key={p.application_id} className="inline-flex items-center gap-2 min-w-0" title={ROLE_WORD[p.role as keyof typeof ROLE_WORD] ?? undefined}>
-          <CvAvatar userId={p.user_id} name={p.name} url={p.avatar_url} size={28} seed={p.application_id} />
-          <span className="[overflow-wrap:anywhere]" style={{ fontFamily: FONT, fontSize: 14, fontWeight: 600, color: INK, lineHeight: 1.25 }}>
-            {p.name}{p.is_me && <span style={YOU}>You</span>}
+        <li key={p.application_id} className="inline-flex items-center gap-1.5 min-w-0" title={ROLE_WORD[p.role as keyof typeof ROLE_WORD] ?? undefined}>
+          <CvAvatar userId={p.user_id} name={p.name} url={p.avatar_url} size={24} seed={p.application_id} />
+          <span className="[overflow-wrap:anywhere]" style={{ fontFamily: FONT, fontSize: 13, fontWeight: 600, color: INK, lineHeight: 1.25 }}>
+            {p.name}
             <span className="sr-only">, {ROLE_WORD[p.role as keyof typeof ROLE_WORD] ?? 'Leader'}</span>
           </span>
         </li>
@@ -83,13 +84,17 @@ export function DelegationCard({ societyId, data, leaders, delegateCount, commit
   const place = [home?.city?.trim() || null, country].filter(Boolean).join(', ');
   return (
     <section aria-label="Your delegation" className={OVERVIEW_CARD} style={cardStyle}>
-      <CardTitle>Your Delegation</CardTitle>
-      <div className="flex items-center gap-4 min-w-0">
+      {/* The title, the leaders at the top right (owner, 21 Oct 2026). */}
+      <div className="flex items-start justify-between gap-x-4 gap-y-2 flex-wrap min-w-0">
+        <CardTitle>Your Delegation</CardTitle>
+        {leaders.length > 0 && <LeadersInline leaders={leaders} />}
+      </div>
+      <div className="flex items-center gap-3.5 min-w-0">
         <span style={{ borderRadius: '50%', boxShadow: '0 6px 18px color-mix(in srgb, var(--gv-main) 10%, transparent)', flexShrink: 0, background: '#FFFFFF' }}>
-          <DelegationCrest name={name} logoUrl={home?.logo_url ?? null} size={64} />
+          <DelegationCrest name={name} logoUrl={home?.logo_url ?? null} size={52} />
         </span>
         <div className="min-w-0 flex flex-col gap-1">
-          <span className="[overflow-wrap:anywhere]" style={{ fontFamily: FONT, fontSize: 28, fontWeight: 700, color: INK, lineHeight: 1.12, letterSpacing: '-0.01em' }}>{name}</span>
+          <span className="[overflow-wrap:anywhere]" style={{ fontFamily: FONT, fontSize: 24, fontWeight: 700, color: INK, lineHeight: 1.15, letterSpacing: '-0.01em' }}>{name}</span>
           {place && (
             <span className="flex items-center gap-2 [overflow-wrap:anywhere]" style={{ fontFamily: FONT, fontSize: 14, color: INK_SOFT }}>
               {home?.country_code && <CircleFlag code={home.country_code} size={18} decorative />}
@@ -98,8 +103,6 @@ export function DelegationCard({ societyId, data, leaders, delegateCount, commit
           )}
         </div>
       </div>
-
-      {leaders.length > 0 && <LeadersInline leaders={leaders} />}
 
       <div className="flex flex-wrap gap-x-6 gap-y-1">
         <Count n={delegateCount} word={plural(delegateCount, 'delegate', 'delegates')} />
@@ -110,14 +113,20 @@ export function DelegationCard({ societyId, data, leaders, delegateCount, commit
       {pay && <MoneyLines pay={pay} societyId={societyId} />}
       <ComingUp rows={deadlines} datesTbd={datesTbd} today={today} />
 
-      <div className="mt-auto">
-        <button type="button" onClick={onOpen} className={BTN_CLASS} style={secondaryBtn}>
-          Open delegation <ArrowRight size={16} strokeWidth={STROKE} aria-hidden />
+      <div className="mt-auto flex justify-end">
+        <button type="button" onClick={onOpen} className={`${BTN_CLASS} inline-flex items-center gap-1.5 rounded-lg`} style={smallLink}>
+          Open delegation <ArrowRight size={15} strokeWidth={STROKE} aria-hidden />
         </button>
       </div>
     </section>
   );
 }
+
+/** The Delegation card's small foot link (owner, 21 Oct 2026: smaller, so both cards match). */
+const smallLink: React.CSSProperties = {
+  minHeight: 36, padding: '0 8px', border: 'none', background: 'transparent', cursor: 'pointer',
+  fontFamily: FONT, fontSize: 13.5, fontWeight: 600, color: 'var(--gv-main)',
+};
 
 const blockStyle: React.CSSProperties = { borderTop: `1px solid ${LINE}`, paddingTop: 12 };
 const blockLabel: React.CSSProperties = { fontFamily: FONT, fontSize: 13, fontWeight: 600, color: INK_SOFT };

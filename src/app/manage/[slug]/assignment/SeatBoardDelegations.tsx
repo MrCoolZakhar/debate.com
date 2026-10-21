@@ -20,10 +20,11 @@
 //           ("Complete", or "Not accepted yet"). The open one stays listed.
 //   MIDDLE  one delegation opened, ONE card top to bottom:
 //             1. who: crest, name, place, leaders; "N of M given", "needs K more"
-//             2. Given: compact pills like the Applications allocation (the
-//                committee logo + acronym, the round flag + country, the holder
-//                small), wrapping in rows; a small red corner minus on an empty
-//                one takes it back, asked in place
+//             2. Given: a two-column grid of compact rows of one height (the
+//                committee logo + acronym, the round flag + country, then the
+//                holders with avatars), a double in ONE row with both seats
+//                side by side (no seat numbers); a small red corner minus on a
+//                row with an empty seat takes the empty seats back, asked in place
 //             3. Give more: a segmented control
 //                  One country        pick a country; every committee where it
 //                                     is free, ticked; one button gives them.
@@ -65,9 +66,9 @@ import { useDelegationsData, type DelegationView } from '@/app/manage/[slug]/app
 import { giveExactSeats, takeBackOneSeat } from '@/app/manage/[slug]/applications/delegations/seatWrites';
 import { readDelegationSettings, type GiveSeat, type SeatLimit } from '@/app/manage/[slug]/applications/delegations/v2';
 import { foldForSearch } from '@/app/manage/[slug]/applications/delegations/societySeats';
-import { LIVE, memberName, type DelegationMemberLite } from '@/app/manage/[slug]/applications/delegationRows';
+import { LIVE, memberName } from '@/app/manage/[slug]/applications/delegationRows';
 import { DelegationNameLines, PlaceLine, SkeletonRows } from '@/app/manage/[slug]/applications/delegations/kit';
-import { sortMembers } from '@/app/manage/[slug]/applications/delegations/memberOrder';
+import { memberRank, shownLeaders } from '@/app/manage/[slug]/applications/delegations/memberOrder';
 import InPlaceConfirm from '@/app/conferences/[slug]/participant/delegation/seat/InPlaceConfirm';
 import DelegationPopupLink from '@/app/manage/[slug]/DelegationPopupLink';
 import { useBoardDrag, dropAttr } from '@/app/manage/[slug]/assignment/boardDrag';
@@ -191,9 +192,6 @@ function needsMore(r: DelegationView, given: number): boolean {
   return r.accepted > 0 && given < needOf(r);
 }
 
-function isLeader(m: DelegationMemberLite): boolean {
-  return LIVE.has(m.status) && (m.is_head_delegate || m.role === 'head-delegate' || m.role === 'faculty-advisor');
-}
 
 type BoardProps = {
   /** The board's tab switcher and search, drawn at the top of the left column. */
@@ -233,7 +231,8 @@ function DelegationsBoard({
   /** The same map, read at tap time so quick taps never double-write a seat. */
   const pendingRef = useRef(pendingAll);
   const [give, setGive] = useState<{ committeeId: string; given: Set<string> } | null>(null);
-  const [ask, setAsk] = useState<{ anchor: HTMLElement; alloc: AllocationRow; committee: CommitteeData } | null>(null);
+  /** The corner minus asked in place: the row's empty seats, taken back together. */
+  const [ask, setAsk] = useState<{ anchor: HTMLElement; allocs: AllocationRow[]; committee: CommitteeData; country: string; keepsPeople: boolean } | null>(null);
   const [limit, setLimit] = useState<SeatLimit>('none');
   const [showAll, setShowAll] = useState(false);
   // One country
@@ -431,6 +430,19 @@ function DelegationsBoard({
       || (x.alloc.seat ?? 1) - (y.alloc.seat ?? 1));
   }, [board, openId]);
 
+  // The Given grid: one row per committee and country, so a double is one row
+  // with both of its seats side by side (in seat order).
+  const heldRows = useMemo(() => {
+    const m = new Map<string, { key: string; committee: CommitteeData; code: string; country: string; allocs: AllocationRow[] }>();
+    for (const { committee: c, alloc: a } of held) {
+      const key = `${c.id}:${a.country_code}`;
+      const r = m.get(key);
+      if (r) r.allocs.push(a);
+      else m.set(key, { key, committee: c, code: a.country_code, country: a.country_name, allocs: [a] });
+    }
+    return [...m.values()];
+  }, [held]);
+
   const members = useMemo(() => (openId ? waiting.filter(a => a.society_id === openId) : []), [waiting, openId]);
 
   // One country: every country with a committee it is free in for this delegation.
@@ -615,8 +627,8 @@ function DelegationsBoard({
     const need = needOf(open);
     const given = givenBySociety.get(open.id) ?? 0;
     const left = Math.max(0, need - given);
-    // Faculty advisors first, then head delegates, A to Z (memberOrder.ts).
-    const leaders = sortMembers(open.members.filter(isLeader), memberName);
+    // At most two: the creator always, then advisors, then head delegates (memberOrder.shownLeaders).
+    const leaders = shownLeaders(open.members.filter(m => LIVE.has(m.status)), open.createdBy, memberName);
     const cap = limit === 'paid' ? open.paid : limit === 'expected' ? open.expected : null;
     const capLeft = cap == null ? null : Math.max(0, cap - given);
     const sectionTitle: React.CSSProperties = { margin: 0, fontSize: 15, fontWeight: 600, color: NEU.ink };
@@ -813,7 +825,7 @@ function DelegationsBoard({
                   {leaders.map(m => {
                     const name = memberName(m);
                     return (
-                      <span key={m.id} className="inline-flex items-center gap-1.5 min-w-0" title={m.role === 'faculty-advisor' ? 'Faculty Advisor' : 'Head Delegate'}>
+                      <span key={m.id} className="inline-flex items-center gap-1.5 min-w-0" title={memberRank(m) === 0 ? 'Faculty Advisor' : memberRank(m) === 1 ? 'Head Delegate' : 'Created the delegation'}>
                         <PersonAvatar name={name} url={m.profiles?.avatar_url ?? null} size={20} />
                         <span className="[overflow-wrap:anywhere]" style={{ fontSize: 12.5 }}>{name}</span>
                       </span>
@@ -840,52 +852,65 @@ function DelegationsBoard({
             </div>
           </div>
 
-          {/* 2. Given: compact pills, like the Applications allocation */}
+          {/* 2. Given: a two-column grid of compact rows, a double in ONE row */}
           <div className="flex flex-col gap-2.5" style={{ borderTop: `1px solid ${HAIRLINE}`, paddingTop: 16 }}>
             <h3 style={sectionTitle}>Given</h3>
-            {held.length === 0 ? (
+            {heldRows.length === 0 ? (
               <p style={{ margin: 0, fontSize: 13.5, color: NEU.inkSoft }}>None yet</p>
             ) : (
-              <div className="flex flex-wrap" style={{ gap: '12px 10px', paddingTop: 6 }}>
-                {held.map(({ committee: c, alloc: a }) => {
+              <div className="grid grid-cols-1 sm:grid-cols-2" style={{ gap: 10, gridAutoRows: '1fr', paddingTop: 6 }}>
+                {heldRows.map(({ key, committee: c, code, country, allocs }) => {
                   const lbl = committeeLabels(c);
-                  const slot = c.committee_country_slots.find(s => s.country_code === a.country_code);
-                  const double = !!slot && slot.delegation_size > 1;
-                  const person = a.application_id || a.user_id ? holderOf(a, societyName) : null;
-                  const temp = a.id.startsWith('temp-');
-                  const canBack = !person && !temp && a.society_id === open.id;
-                  const label = `${a.country_name} in ${lbl.big}${double ? `, seat ${a.seat}` : ''}`;
+                  const people = allocs.map(a => (a.application_id || a.user_id ? holderOf(a, societyName) : null));
+                  const empties = allocs.filter((a, i) => !people[i] && !a.id.startsWith('temp-') && a.society_id === open.id);
+                  const allTemp = allocs.every(a => a.id.startsWith('temp-'));
+                  const named = people.filter((p): p is NonNullable<typeof p> => !!p).map(p => p.name);
                   return (
-                    <span
-                      key={a.id}
-                      className="relative inline-flex items-center flex-wrap max-w-full"
-                      title={`${a.country_name}, ${c.name}${double ? `, seat ${a.seat}` : ''}${person ? `, ${person.name}` : person === null && !temp ? ', nobody in it yet' : ''}`}
+                    <div
+                      key={key}
+                      className="relative flex flex-col justify-center min-w-0"
+                      title={`${country}, ${c.name}${named.length > 0 ? `, ${named.join(' and ')}` : allTemp ? '' : ', nobody in it yet'}`}
                       style={{
-                        gap: '4px 8px', minHeight: 34, padding: canBack ? '4px 14px 4px 6px' : '4px 12px 4px 6px', borderRadius: 999,
-                        background: '#FAF8F3', boxShadow: '0 0 0 1px rgba(27,56,40,0.08)', opacity: temp ? 0.6 : 1, fontSize: 13,
+                        gap: 6, minHeight: 66, padding: '8px 12px', borderRadius: 14, boxSizing: 'border-box',
+                        background: '#FAF8F3', boxShadow: '0 0 0 1px rgba(27,56,40,0.08)', opacity: allTemp ? 0.6 : 1,
                       }}
                     >
-                      <span className="inline-flex items-center gap-1.5">
-                        <CommitteeLogo committee={c} size={20} alt="" />
-                        <span className="[overflow-wrap:anywhere]" style={{ fontWeight: 600 }}>{lbl.big}</span>
-                      </span>
-                      <span className="inline-flex items-center gap-1.5 min-w-0">
-                        <CountryFlag code={a.country_code} w={20} h={20} alt="" logoUrl={committeeSeatLogo(c, a.country_code)} />
-                        <CountryName name={a.country_name} code={a.country_code} style={{ fontWeight: 600, whiteSpace: 'normal', overflowWrap: 'anywhere' }} />
-                        {double && <span style={{ fontSize: 11.5, color: NEU.inkSoft }}>Seat {a.seat}</span>}
-                      </span>
-                      {person && (
-                        <span className="inline-flex items-center gap-1 min-w-0" style={{ fontSize: 11.5, color: NEU.inkSoft }}>
-                          <PersonAvatar name={person.name} url={person.avatarUrl} size={16} />
-                          <span className="[overflow-wrap:anywhere]">{person.name}</span>
+                      <span className="flex items-center flex-wrap min-w-0" style={{ gap: '4px 10px', fontSize: 13 }}>
+                        <span className="inline-flex items-center gap-1.5 min-w-0">
+                          <CommitteeLogo committee={c} size={20} alt="" />
+                          <span className="[overflow-wrap:anywhere]" style={{ fontWeight: 600 }}>{lbl.big}</span>
                         </span>
-                      )}
-                      {canBack && (
+                        <span className="inline-flex items-center gap-1.5 min-w-0">
+                          <CountryFlag code={code} w={22} h={22} alt="" logoUrl={committeeSeatLogo(c, code)} />
+                          <CountryName name={country} code={code} style={{ fontSize: 13.5, fontWeight: 600, whiteSpace: 'normal', overflowWrap: 'anywhere' }} />
+                        </span>
+                      </span>
+                      {/* Every seat side by side: a holder, or an open slot */}
+                      <span className="flex items-center flex-wrap min-w-0" style={{ gap: '4px 12px' }}>
+                        {allocs.map((a, i) => {
+                          const p = people[i];
+                          return p ? (
+                            <span key={a.id} className="inline-flex items-center gap-1.5 min-w-0" style={{ fontSize: 12.5, color: NEU.ink }}>
+                              <PersonAvatar name={p.name} url={p.avatarUrl} size={20} />
+                              <span className="[overflow-wrap:anywhere]" style={{ fontWeight: 600 }}>{p.name}</span>
+                            </span>
+                          ) : (
+                            <span
+                              key={a.id}
+                              className="inline-flex items-center flex-shrink-0"
+                              style={{ height: 22, padding: '0 9px', borderRadius: 999, border: '1.5px dashed rgba(27,56,40,0.24)', fontSize: 11.5, fontWeight: 600, color: NEU.inkSoft, boxSizing: 'border-box' }}
+                            >
+                              Open
+                            </span>
+                          );
+                        })}
+                      </span>
+                      {empties.length > 0 && (
                         <button
                           type="button"
-                          onClick={e => setAsk({ anchor: e.currentTarget, alloc: a, committee: c })}
-                          aria-label={`Take ${label} back from ${open.name}`}
-                          title={`Take ${label} back`}
+                          onClick={e => setAsk({ anchor: e.currentTarget, allocs: empties, committee: c, country, keepsPeople: named.length > 0 })}
+                          aria-label={`Take ${country} in ${lbl.big} back from ${open.name}`}
+                          title={`Take ${country} in ${lbl.big} back`}
                           className="focus:outline-none"
                           style={{
                             position: 'absolute', top: -7, right: -7, width: 18, height: 18, padding: 0, borderRadius: '50%',
@@ -898,7 +923,7 @@ function DelegationsBoard({
                           <Minus size={10} strokeWidth={2.5} aria-hidden />
                         </button>
                       )}
-                    </span>
+                    </div>
                   );
                 })}
               </div>
@@ -1089,15 +1114,15 @@ function DelegationsBoard({
         <InPlaceConfirm
           anchor={ask.anchor}
           align="end"
-          title={`Take ${ask.alloc.country_name} in ${committeeLabels(ask.committee).big} back from ${open.name}?`}
-          line="It goes back to the open seats"
+          title={`Take ${ask.country} in ${committeeLabels(ask.committee).big} back from ${open.name}?`}
+          line={ask.keepsPeople ? 'The empty seat goes back to the open seats' : ask.allocs.length > 1 ? 'Both seats go back to the open seats' : 'It goes back to the open seats'}
           yes="Take back"
           danger
           onCancel={() => setAsk(null)}
           onYes={() => {
-            const a = ask.alloc;
+            const { allocs, country } = ask;
             setAsk(null);
-            void takeBack(open.id, [a]).then(ok => { if (ok) notifyOk(`${a.country_name} taken back from ${open.name}`, 'seat-board'); });
+            void takeBack(open.id, allocs).then(ok => { if (ok) notifyOk(`${country} taken back from ${open.name}`, 'seat-board'); });
           }}
         />
       )}

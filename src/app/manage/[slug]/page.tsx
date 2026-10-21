@@ -47,6 +47,8 @@ import { DASH_CSS, UnallocatedBadge, useDialSize } from '@/components/conference
 import { useScrollLock } from '@/hooks/useScrollLock';
 import VerifiedCheck, { minutesToCheckmarkLabel } from '@/components/VerifiedCheck';
 import PublishModal from './PublishModal';
+import { CircleFlag } from '@/components/CircleFlag';
+import { CommitteeDisc, committeeEmblemSrc, committeeShort } from '@/app/manage/[slug]/applications/delegations/kit';
 
 
 // ── First-delegate share modal ─────────────────────────────────────────────
@@ -305,6 +307,30 @@ export interface ActivityEvent {
    * existed, which are all null. Absent → the row renders exactly as before.
    */
   actor?: { id: string; name: string; avatarUrl: string | null };
+  /** An allocation's seat: drawn as the ROUND flag and the committee emblem
+   *  beside their names (owner, 21 Oct 2026), never a rectangle. */
+  seat?: {
+    countryCode: string | null;
+    countryName: string | null;
+    committee: { name: string; abbreviation: string | null; logoUrl: string | null } | null;
+  };
+}
+
+/** "France in DISEC" with France's round flag and DISEC's emblem inline. */
+function SeatMention({ seat }: { seat: NonNullable<ActivityEvent['seat']> }) {
+  const flag = seat.countryName ? (
+    <span className="inline-flex items-center gap-1" style={{ verticalAlign: 'middle' }}>
+      <CircleFlag code={seat.countryCode} country={seat.countryName} label={seat.countryName} size={15} decorative />
+      <span style={{ color: NEU.ink, fontWeight: 600 }}>{seat.countryName}</span>
+    </span>
+  ) : null;
+  const committee = seat.committee ? (
+    <span className="inline-flex items-center gap-1" style={{ verticalAlign: 'middle' }} title={seat.committee.name}>
+      <CommitteeDisc src={committeeEmblemSrc(seat.committee.logoUrl, seat.committee.name, seat.committee.abbreviation)} size={15} />
+      <span style={{ color: NEU.ink, fontWeight: 600 }}>{committeeShort(seat.committee.name, seat.committee.abbreviation)}</span>
+    </span>
+  ) : null;
+  return <>{flag}{flag && committee ? ' in ' : ''}{committee}</>;
 }
 
 const ACTIVITY_META: Record<ActivityKind, { icon: typeof Inbox; gradient: [string, string]; verb: string }> = {
@@ -368,6 +394,7 @@ function ActivityLine({ ev, now }: { ev: ActivityEvent; now: number }) {
     : ev.kind === 'accepted'  ? <><b style={{ color: NEU.ink }}>{ev.name}</b> was accepted</>
     : ev.kind === 'rejected'  ? <><b style={{ color: NEU.ink }}>{ev.name}</b> was rejected</>
     : ev.kind === 'decision'  ? <><b style={{ color: NEU.ink }}>{ev.name}</b> was {ev.detail}</>
+    : ev.seat                 ? <><b style={{ color: NEU.ink }}>{ev.name}</b> allocated to <SeatMention seat={ev.seat} /></>
     :                           <><b style={{ color: NEU.ink }}>{ev.name}</b> allocated{ev.detail ? ` to ${ev.detail}` : ''}</>;
   // The same sentence as plain text, so a line cut short by the card still
   // carries its full wording (and the whole name) as a tooltip.
@@ -609,6 +636,7 @@ function ActivityModal({ events, now, onClose }: { events: ActivityEvent[]; now:
                       : ev.kind === 'accepted' ? 'was accepted'
                       : ev.kind === 'rejected' ? 'was rejected'
                       : ev.kind === 'decision' ? `was ${ev.detail}`
+                      : ev.seat ? <>allocated to <SeatMention seat={ev.seat} /></>
                       : `allocated${ev.detail ? ` to ${ev.detail}` : ''}`}
                   </p>
                   <div className="flex items-center gap-2 flex-wrap" style={{ marginTop: 3 }}>
@@ -1055,7 +1083,7 @@ export default function DashboardPage() {
           .limit(25),
         supabase
           .from('conference_allocations')
-          .select('id, created_at, country_name, user_id, application_id, assigned_by, conference_committees:conference_committee_id(name, abbreviation), profiles:user_id(id, display_name, avatar_url), societies:society_id(name)')
+          .select('id, created_at, country_code, country_name, user_id, application_id, assigned_by, conference_committees:conference_committee_id(name, abbreviation, logo_url), profiles:user_id(id, display_name, avatar_url), societies:society_id(name)')
           .eq('conference_id', confId)
           .order('created_at', { ascending: false })
           .limit(15),
@@ -1099,7 +1127,7 @@ export default function DashboardPage() {
         if (a.resubmitted_at) evs.push({ key: `res-${a.id}`, ts: new Date(a.resubmitted_at).getTime(), kind: 'resubmit', name, subject });
       }
 
-      type ActAlloc = { id: string; created_at: string | null; country_name: string | null; user_id: string | null; application_id: string | null; assigned_by: string | null; conference_committees: { name: string; abbreviation: string | null } | null; profiles: { id: string; display_name: string; avatar_url: string | null } | null; societies: { name: string } | null };
+      type ActAlloc = { id: string; created_at: string | null; country_code: string | null; country_name: string | null; user_id: string | null; application_id: string | null; assigned_by: string | null; conference_committees: { name: string; abbreviation: string | null; logo_url: string | null } | null; profiles: { id: string; display_name: string; avatar_url: string | null } | null; societies: { name: string } | null };
       // Applications that already have an allocation event this pass; their
       // 'assigned' decision is the same moment told twice, so it is dropped.
       const allocatedAppIds = new Set<string>();
@@ -1107,10 +1135,16 @@ export default function DashboardPage() {
         if (!al.created_at) continue;
         const who = al.profiles?.display_name ?? al.societies?.name ?? 'A delegation';
         const committee = al.conference_committees?.abbreviation ?? al.conference_committees?.name;
-        const detail = [al.country_name, committee].filter(Boolean).join(' · ') || undefined;
+        const detail = [al.country_name, committee].filter(Boolean).join(' in ') || undefined;
+        const cc = al.conference_committees;
         const key = `alloc-${al.id}`;
         evs.push({
           key, ts: new Date(al.created_at).getTime(), kind: 'allocation', name: who, detail,
+          seat: (al.country_name || cc) ? {
+            countryCode: al.country_code,
+            countryName: al.country_name,
+            committee: cc ? { name: cc.name, abbreviation: cc.abbreviation, logoUrl: cc.logo_url } : null,
+          } : undefined,
           // A delegation-level allocation has no `profiles` row — `who` is the
           // society's name, which is an organisation and not a face.
           subject: { id: al.profiles?.id ?? null, avatarUrl: al.profiles?.avatar_url ?? null },

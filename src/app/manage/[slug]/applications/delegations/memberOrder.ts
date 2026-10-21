@@ -23,3 +23,39 @@ const collator = new Intl.Collator('en', { sensitivity: 'base', numeric: true })
 export function sortMembers<T extends OrderableMember>(list: readonly T[], nameOf: (m: T) => string): T[] {
   return [...list].sort((a, b) => memberRank(a) - memberRank(b) || collator.compare(nameOf(a), nameOf(b)));
 }
+
+/** The most leaders any delegation screen names (owner, 21 Oct 2026). */
+export const LEADERS_SHOWN_MAX = 2;
+
+export interface LeaderCandidate extends OrderableMember {
+  user_id: string | null;
+}
+
+/**
+ * The leaders a delegation screen names, at most LEADERS_SHOWN_MAX (owner,
+ * 21 Oct 2026): the person who CREATED the delegation always (even after being
+ * moved to delegate), then faculty advisors, then head delegates. With one
+ * advisor and two head delegates that is the advisor and one head delegate.
+ * Order: the creator first when they are a leader, then advisors, then head
+ * delegates; a creator who is no longer a leader comes last. `members` is
+ * already filtered to the caller's statuses (live or accepted). Pure.
+ */
+export function shownLeaders<T extends LeaderCandidate>(
+  members: readonly T[],
+  creatorUserId: string | null | undefined,
+  nameOf: (m: T) => string,
+  max: number = LEADERS_SHOWN_MAX,
+): T[] {
+  const creator = creatorUserId ? members.find(m => m.user_id === creatorUserId) ?? null : null;
+  const leaders = sortMembers(members.filter(m => memberRank(m) <= 1 && m !== creator), nameOf);
+  const room = Math.max(0, max - (creator ? 1 : 0));
+  const picked = leaders.slice(0, room);
+  if (!creator) return picked;
+  return memberRank(creator) <= 1 ? [creator, ...picked] : [...picked, creator];
+}
+
+/** Every leader a delegation has (advisors and head delegates, plus the
+ *  creator), for "+N more" counts beside the shown ones. */
+export function leaderCount<T extends LeaderCandidate>(members: readonly T[], creatorUserId: string | null | undefined): number {
+  return members.filter(m => memberRank(m) <= 1 || (!!creatorUserId && m.user_id === creatorUserId)).length;
+}

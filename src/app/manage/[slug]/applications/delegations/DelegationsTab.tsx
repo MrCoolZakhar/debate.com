@@ -54,8 +54,6 @@ import {
  *  1280 (owner, 21 Oct 2026: the Open button was cut off and the row was mostly
  *  blank). The whole row opens the pop-up; the chevron says so. */
 const ROW_COLUMNS = 'minmax(0, 1.55fr) minmax(0, 1.15fr) max-content minmax(150px, 1fr) 20px';
-/** Leaders named on a row; more show as "+N". */
-const LEADERS_SHOWN = 2;
 
 export interface DelegationsTabProps<M extends DelegationMemberLite> {
   conference: { id: string; slug: string; fee_currency: string };
@@ -188,9 +186,8 @@ export default function DelegationsTab<M extends DelegationMemberLite>(props: De
             </div>
             {visible.map((r, i) => {
               const giveSeats = r.seatsGiven < r.paid;
-              const leaders = leadersOf(r);
-              const shown = leaders.slice(0, LEADERS_SHOWN);
-              const more = leaders.length - shown.length;
+              const { shown, total } = leadersOf(r);
+              const more = Math.max(0, total - shown.length);
               return (
                 <div
                   key={r.id}
@@ -211,7 +208,7 @@ export default function DelegationsTab<M extends DelegationMemberLite>(props: De
                   </div>
 
                   <div className="flex flex-col min-w-0" style={{ gap: 6 }}>
-                    {leaders.length === 0 ? (
+                    {shown.length === 0 ? (
                       <span style={{ fontFamily: FONT, fontSize: 13, color: INK_SOFT }}>No leader accepted yet</span>
                     ) : shown.map(l => (
                       <span key={l.id} className="flex items-center gap-2 min-w-0" title={l.role}>
@@ -223,8 +220,7 @@ export default function DelegationsTab<M extends DelegationMemberLite>(props: De
                       </span>
                     ))}
                     {more > 0 && (
-                      <span style={{ fontFamily: FONT, fontSize: 12, color: INK_SOFT, paddingLeft: 34 }}
-                        title={leaders.slice(LEADERS_SHOWN).map(l => l.name).join(', ')}>+{more} more</span>
+                      <span style={{ fontFamily: FONT, fontSize: 12, color: INK_SOFT, paddingLeft: 34 }}>+{more} more</span>
                     )}
                   </div>
 

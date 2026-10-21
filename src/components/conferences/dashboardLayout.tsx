@@ -37,7 +37,7 @@ export const DASH_CSS = `
   .gv-dash { height: calc(100dvh - 56px); min-height: 0; padding: 12px 20px 16px; }
   .gv-dash-grid {
     flex: 1; min-height: 0; display: grid;
-    grid-template-columns: clamp(280px, 30%, 400px) minmax(0, 1fr) minmax(240px, 27%);
+    grid-template-columns: clamp(300px, 32%, 420px) minmax(0, 1fr) minmax(240px, 27%);
     grid-template-rows: auto minmax(0, 1fr);
   }
   .gv-dash-col1 { grid-column: 1; grid-row: 1 / 3; min-height: 0; }

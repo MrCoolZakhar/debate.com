@@ -17,6 +17,7 @@ import { CountryName, StackedName, committeeShortName } from '@/app/manage/[slug
 import { effectiveSlotArt, parseGroups } from '@/lib/slotGroups';
 import { ageAt } from '@/lib/age';
 import { LevelInsignia, LEVEL_ACCENT } from '@/app/account/accountUi';
+import { EXPERIENCE_BANDS } from '@/lib/munExperience';
 import DelegationPopupLink from '@/app/manage/[slug]/DelegationPopupLink';
 import { LogoDisc } from '@/components/LogoDisc';
 import { committeeEmblemSrc } from '@/app/manage/[slug]/assignment/delegationSeatsGrid';
@@ -57,7 +58,9 @@ export interface AcceptedApp {
     mun_experience_level: string | null;
     avatar_url: string | null;
   } | null;
-  societies: { name: string } | null;
+  /** `city` is read when the page's query asks for it (societies.city); the
+   *  seat board shows it as where the delegation's school is. */
+  societies: { name: string; city?: string | null } | null;
   application_preferences: AppPref[];
 }
 
@@ -495,6 +498,61 @@ export function LevelTag({ level }: { level: string | null | undefined }) {
       <span style={{ fontSize: 12, fontWeight: 700, color: accent, fontFamily: OUTFIT, textTransform: 'capitalize' }}>
         {lvl.toLowerCase()}
       </span>
+    </span>
+  );
+}
+
+// ── LevelDisc / LevelHero ─────────────────────────────────────────────────────
+// A level is always its insignia on a tinted disc (CLAUDE.md §8): small in a
+// list row, large where the person is the focus, with what it means beneath.
+export function levelWord(level: string | null | undefined): string {
+  const k = (level ?? '').trim().toLowerCase() || 'beginner';
+  return k.charAt(0).toUpperCase() + k.slice(1);
+}
+
+/** What a level means: the person's own conference count when known, else
+ *  the band's range (src/lib/munExperience.ts). */
+export function levelMeaning(level: string | null | undefined, conferences?: number | null): string {
+  if (conferences != null) return `${conferences} ${conferences === 1 ? 'conference' : 'conferences'}`;
+  const k = (level ?? '').trim().toLowerCase() || 'beginner';
+  const i = EXPERIENCE_BANDS.findIndex(b => b.level === k);
+  if (i < 0) return '';
+  const band = EXPERIENCE_BANDS[i];
+  const next = EXPERIENCE_BANDS[i + 1];
+  if (!next) return `${band.min} or more conferences`;
+  return `${band.min} to ${next.min - 1} conferences`;
+}
+
+export function LevelDisc({ level, size = 22 }: { level: string | null | undefined; size?: number }) {
+  const lvl = level && level.trim() ? level : 'beginner';
+  const accent = LEVEL_ACCENT[lvl.toLowerCase()] ?? '#9A8A78';
+  return (
+    <span
+      role="img"
+      aria-label={levelWord(lvl)}
+      title={`${levelWord(lvl)}, ${levelMeaning(lvl)}`}
+      className="inline-flex items-center justify-center flex-shrink-0"
+      style={{
+        width: size, height: size, borderRadius: 9999,
+        background: `linear-gradient(150deg, ${accent}26, ${accent}12)`,
+        boxShadow: `inset 0 0 0 ${size >= 40 ? 2 : 1}px ${accent}55${size >= 40 ? `, 0 6px 16px -6px ${accent}66` : ''}`,
+      }}
+    >
+      <LevelInsignia level={lvl} size={Math.round(size * 0.58)} />
+    </span>
+  );
+}
+
+/** The big level for the person in focus: the disc, the word, what it means. */
+export function LevelHero({ level, conferences, size = 64 }: { level: string | null | undefined; conferences?: number | null; size?: number }) {
+  const lvl = level && level.trim() ? level : 'beginner';
+  const accent = LEVEL_ACCENT[lvl.toLowerCase()] ?? '#9A8A78';
+  const meaning = levelMeaning(lvl, conferences);
+  return (
+    <span className="inline-flex flex-col items-center flex-shrink-0 text-center" style={{ gap: 5, fontFamily: OUTFIT, minWidth: size + 16 }}>
+      <LevelDisc level={lvl} size={size} />
+      <span style={{ fontSize: 14, fontWeight: 700, color: accent, lineHeight: 1.1 }}>{levelWord(lvl)}</span>
+      {meaning && <span style={{ fontSize: 12, color: NEU.inkSoft, lineHeight: 1.15, fontVariantNumeric: 'tabular-nums' }}>{meaning}</span>}
     </span>
   );
 }

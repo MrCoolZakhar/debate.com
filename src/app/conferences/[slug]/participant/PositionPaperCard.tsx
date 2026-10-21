@@ -488,9 +488,8 @@ export default function PositionPaperCard({ conferenceId, conferenceSlug, myAllo
           className="w-full flex items-center gap-3.5 text-left"
           style={{ padding: '12px 16px', borderRadius: 16 }}
         >
-          <div className="flex-shrink-0 flex items-center justify-center" style={{ width: 38, height: 38, borderRadius: 11, backgroundColor: 'color-mix(in srgb, var(--gv-main) 7%, transparent)' }}>
-            <FileText size={16} style={{ color: 'var(--gv-main)' }} />
-          </div>
+          {/* The Overview tile's icon (owner, 21 Oct 2026): FileText, fine line, bare ink. */}
+          <FileText size={22} strokeWidth={1.5} aria-hidden style={{ color: '#1C1410', flexShrink: 0 }} />
           <div className="flex-1 min-w-0">
             <p className="[overflow-wrap:anywhere]" title={myPositionPaper.file_name} style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 15.5, lineHeight: 1.3, color: '#1C1410', margin: 0 }}>{myPositionPaper.file_name}</p>
             <p style={{ fontFamily: OUTFIT, fontSize: 13, lineHeight: 1.45, color: INK_SOFT, margin: '3px 0 0 0' }}>
