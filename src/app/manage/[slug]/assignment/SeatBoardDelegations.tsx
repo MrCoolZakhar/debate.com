@@ -20,10 +20,11 @@
 //           ("Complete", or "Not accepted yet"). The open one stays listed.
 //   MIDDLE  one delegation opened, ONE card top to bottom:
 //             1. who: crest, name, place, leaders; "N of M given", "needs K more"
-//             2. Given: a two-column grid of compact rows of one height (the
-//                committee logo + acronym, the round flag + country, then the
-//                holders with avatars), a double in ONE row with both seats
-//                side by side (no seat numbers); a small red corner minus on a
+//             2. Given: a list view like the Applications pop-up's Allocations
+//                tab (owner, 21 Oct 2026), A to Z, one row each (the committee
+//                logo + acronym, the round flag + country, then the holders
+//                with avatars side by side, a double in ONE row, no seat
+//                numbers); the Allocations tab's light red corner minus on a
 //                row with an empty seat takes the empty seats back, asked in place
 //             3. Give more: a segmented control
 //                  One country        pick a country; every committee where it
@@ -852,13 +853,14 @@ function DelegationsBoard({
             </div>
           </div>
 
-          {/* 2. Given: a two-column grid of compact rows, a double in ONE row */}
-          <div className="flex flex-col gap-2.5" style={{ borderTop: `1px solid ${HAIRLINE}`, paddingTop: 16 }}>
+          {/* 2. Given: a list view like the Applications pop-up's Allocations tab,
+              A to Z, one row per committee and country, a double in ONE row */}
+          <div className="flex flex-col gap-2" style={{ borderTop: `1px solid ${HAIRLINE}`, paddingTop: 14 }}>
             <h3 style={sectionTitle}>Given</h3>
             {heldRows.length === 0 ? (
               <p style={{ margin: 0, fontSize: 13.5, color: NEU.inkSoft }}>None yet</p>
             ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2" style={{ gap: 10, gridAutoRows: '1fr', paddingTop: 6 }}>
+              <div className="flex flex-col" style={{ gap: 7, paddingTop: 4 }}>
                 {heldRows.map(({ key, committee: c, code, country, allocs }) => {
                   const lbl = committeeLabels(c);
                   const people = allocs.map(a => (a.application_id || a.user_id ? holderOf(a, societyName) : null));
@@ -868,31 +870,29 @@ function DelegationsBoard({
                   return (
                     <div
                       key={key}
-                      className="relative flex flex-col justify-center min-w-0"
+                      className="relative flex items-center flex-wrap min-w-0"
                       title={`${country}, ${c.name}${named.length > 0 ? `, ${named.join(' and ')}` : allTemp ? '' : ', nobody in it yet'}`}
                       style={{
-                        gap: 6, minHeight: 66, padding: '8px 12px', borderRadius: 14, boxSizing: 'border-box',
-                        background: '#FAF8F3', boxShadow: '0 0 0 1px rgba(27,56,40,0.08)', opacity: allTemp ? 0.6 : 1,
+                        gap: '4px 12px', minHeight: 44, padding: '6px 12px', borderRadius: 12, boxSizing: 'border-box',
+                        background: '#FAF8F3', boxShadow: '0 0 0 1px rgba(27,56,40,0.06)', opacity: allTemp ? 0.6 : 1,
                       }}
                     >
-                      <span className="flex items-center flex-wrap min-w-0" style={{ gap: '4px 10px', fontSize: 13 }}>
-                        <span className="inline-flex items-center gap-1.5 min-w-0">
-                          <CommitteeLogo committee={c} size={20} alt="" />
-                          <span className="[overflow-wrap:anywhere]" style={{ fontWeight: 600 }}>{lbl.big}</span>
-                        </span>
-                        <span className="inline-flex items-center gap-1.5 min-w-0">
-                          <CountryFlag code={code} w={22} h={22} alt="" logoUrl={committeeSeatLogo(c, code)} />
-                          <CountryName name={country} code={code} style={{ fontSize: 13.5, fontWeight: 600, whiteSpace: 'normal', overflowWrap: 'anywhere' }} />
-                        </span>
+                      <span className="inline-flex items-center gap-1.5 flex-shrink-0" style={{ minWidth: 84 }} title={c.name}>
+                        <CommitteeLogo committee={c} size={20} alt="" />
+                        <span className="[overflow-wrap:anywhere]" style={{ fontSize: 13, fontWeight: 600 }}>{lbl.big}</span>
+                      </span>
+                      <span className="inline-flex items-center gap-2 min-w-0" style={{ flex: '1 1 150px' }}>
+                        <CountryFlag code={code} w={24} h={24} alt="" logoUrl={committeeSeatLogo(c, code)} />
+                        <CountryName name={country} code={code} style={{ fontSize: 14, fontWeight: 600, whiteSpace: 'normal', overflowWrap: 'anywhere', lineHeight: 1.15 }} />
                       </span>
                       {/* Every seat side by side: a holder, or an open slot */}
-                      <span className="flex items-center flex-wrap min-w-0" style={{ gap: '4px 12px' }}>
+                      <span className="flex items-center justify-end flex-wrap min-w-0" style={{ gap: '4px 12px', marginLeft: 'auto', paddingRight: empties.length > 0 ? 4 : 0 }}>
                         {allocs.map((a, i) => {
                           const p = people[i];
                           return p ? (
-                            <span key={a.id} className="inline-flex items-center gap-1.5 min-w-0" style={{ fontSize: 12.5, color: NEU.ink }}>
-                              <PersonAvatar name={p.name} url={p.avatarUrl} size={20} />
-                              <span className="[overflow-wrap:anywhere]" style={{ fontWeight: 600 }}>{p.name}</span>
+                            <span key={a.id} className="inline-flex items-center gap-1.5 min-w-0" style={{ fontSize: 13, color: NEU.ink }}>
+                              <PersonAvatar name={p.name} url={p.avatarUrl} size={22} />
+                              <span className="[overflow-wrap:anywhere]" style={{ fontWeight: 500 }}>{p.name}</span>
                             </span>
                           ) : (
                             <span
@@ -911,16 +911,18 @@ function DelegationsBoard({
                           onClick={e => setAsk({ anchor: e.currentTarget, allocs: empties, committee: c, country, keepsPeople: named.length > 0 })}
                           aria-label={`Take ${country} in ${lbl.big} back from ${open.name}`}
                           title={`Take ${country} in ${lbl.big} back`}
-                          className="focus:outline-none"
+                          className="focus:outline-none sbdMinus"
                           style={{
-                            position: 'absolute', top: -7, right: -7, width: 18, height: 18, padding: 0, borderRadius: '50%',
+                            // The Allocations tab's corner minus: small, light red, a thin
+                            // white ring, centred on the row's top-right corner.
+                            position: 'absolute', top: -9, right: -9, width: 18, height: 18, padding: 0, borderRadius: '50%',
                             display: 'inline-flex', alignItems: 'center', justifyContent: 'center', border: 'none',
-                            background: 'linear-gradient(180deg, #C4503A, #A3361F)',
-                            boxShadow: '0 0 0 2px #FFFFFF, 0 1px 3px rgba(27,56,40,0.18)',
+                            background: 'linear-gradient(180deg, #E8907F, #DA6E59)',
+                            boxShadow: '0 0 0 1.5px #FFFFFF, 0 1px 2px rgba(27,56,40,0.14)',
                             color: '#FFFFFF', cursor: 'pointer',
                           }}
                         >
-                          <Minus size={10} strokeWidth={2.5} aria-hidden />
+                          <Minus size={10} strokeWidth={2.4} aria-hidden />
                         </button>
                       )}
                     </div>
@@ -1156,6 +1158,12 @@ function DelegationsBoard({
       )}
       {!give && overlay}
       {ghost}
+      <style>{`
+        .sbdMinus { transition: transform 120ms cubic-bezier(0.22,1,0.36,1), filter 120ms; }
+        .sbdMinus::before { content: ''; position: absolute; inset: -6px; border-radius: 50%; }
+        .sbdMinus:hover { filter: saturate(1.25) brightness(0.95); }
+        .sbdMinus:active { transform: scale(0.88); }
+      `}</style>
     </div>
   );
 }

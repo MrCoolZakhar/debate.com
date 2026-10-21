@@ -2,20 +2,22 @@
 
 // Small pieces the seat board (SeatBoard.tsx) and its committee pop-up
 // (SeatBoardPopup.tsx) share: names, dates, seat counts, the committee ring
-// with its gold choice bubbles, the seat importance mark, the reason badges
-// (one per reason type, its own icon, tone and points), the "How this scores"
-// breakdown, the gold score disc and the seat "double pill" of the classic
-// board. Presentation only; nothing here writes.
+// with its gold choice bubbles, the seat importance mark (the app's dashes),
+// the reason badges (one per reason type, its own icon, tone and points, one
+// row), the hover cards ("How this scores" on a score, "How smart allocations
+// are scored" beside the title), the gold score disc and the seat "double
+// pill" of the classic board. Presentation only; nothing here writes.
 
-import type { ReactNode } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import {
-  ArrowLeftRight, CircleDashed, Flag, Gem, GraduationCap, Link2, Minus, Plus, Star, StarHalf, ThumbsUp,
+  ArrowLeftRight, CircleDashed, Flag, GraduationCap, Info, Link2, Minus, Plus, Star, StarHalf, ThumbsUp,
   TrendingDown, TrendingUp, UserPlus, Users, UsersRound, type LucideIcon,
 } from 'lucide-react';
 import { NEU } from '@/components/neu';
+import Portal from '@/components/Portal';
 import {
-  CONCENTRATION_PENALTY, IMPORTANCE_NEED_WEIGHT, MEMBER_PICK_BONUS, NEEDS_DELEGATES_REASON, PAIR_BONUS, SWAP_REASON,
-  groupAllocationsByCountry, type ImportanceTier,
+  CONCENTRATION_PENALTY, EXPERIENCE_GAP_STEP, EXPERIENCE_MATCH_BONUS, IMPORTANCE_NEED_WEIGHT, MEMBER_PICK_BONUS,
+  NEEDS_DELEGATES_REASON, PAIR_BONUS, SWAP_REASON, groupAllocationsByCountry, type ImportanceTier,
 } from '@/lib/assignmentFit';
 import { FitTip, explainReason, missingSignals } from '@/app/manage/[slug]/assignment/fitReasons';
 import { CountryName } from '@/app/manage/[slug]/assignment/displayNames';
@@ -191,64 +193,79 @@ export function BigCount({ n, word, size = 26 }: { n: number; word: string; size
 }
 
 // ── Seat importance ──────────────────────────────────────────────────────────
-// The committee-setup indicator (ConferenceRosterPicker): bars whose count and
-// colour say the tier, 1 grey standard, 2 green low, 3 yellow medium, 4 red
-// high, with the word beside it for every tier but standard.
-const TIER: Record<ImportanceTier, { word: string; color: string; bars: number }> = {
-  high: { word: 'High', color: '#8B2020', bars: 4 },
-  medium: { word: 'Medium', color: '#B6871F', bars: 3 },
-  low: { word: 'Low', color: '#3D7A52', bars: 2 },
-  standard: { word: 'Standard', color: '#9A8A78', bars: 1 },
+// The app's one importance icon (ConferenceRosterPicker, the classic board's
+// TierBadge): vertical dashes of one height whose count AND colour say the
+// tier, 1 grey standard, 2 green low, 3 yellow medium, 4 red high. The seat
+// board shows it exactly as the classic board does (owner, 21 Oct 2026: back
+// to how it looked), the word only in the hover title.
+const TIER: Record<ImportanceTier, { word: string; color: string; dashes: number }> = {
+  high: { word: 'High', color: '#8B2020', dashes: 4 },
+  medium: { word: 'Medium', color: '#D4A72C', dashes: 3 },
+  low: { word: 'Low', color: '#3D7A52', dashes: 2 },
+  standard: { word: 'Standard', color: '#9A8A78', dashes: 1 },
 };
 
-export function ImportanceMark({ tier, showWord = true }: { tier: ImportanceTier; showWord?: boolean }) {
+/** The bare dashes, for a badge or a chip. */
+export function ImportanceDashes({ tier, barHeight = 11 }: { tier: ImportanceTier; barHeight?: number }) {
+  const t = TIER[tier] ?? TIER.standard;
+  return (
+    <span className="inline-flex items-end flex-shrink-0" style={{ gap: 2 }} aria-hidden>
+      {Array.from({ length: t.dashes }).map((_, i) => (
+        <span key={i} style={{ width: 2, height: barHeight, borderRadius: 1, backgroundColor: t.color, display: 'inline-block' }} />
+      ))}
+    </span>
+  );
+}
+
+/** A seat's importance as the classic board draws it: the dashes on a small
+ *  raised chip. `showWord` is kept for older callers and draws nothing more. */
+export function ImportanceMark({ tier }: { tier: ImportanceTier; showWord?: boolean }) {
   const t = TIER[tier] ?? TIER.standard;
   return (
     <span
       role="img"
-      aria-label={`${t.word} importance`}
-      title={`${t.word} importance`}
+      aria-label={`Importance: ${t.word}`}
+      title={`Country importance: ${t.word}`}
       className="inline-flex items-center flex-shrink-0"
-      style={{ gap: 5, fontFamily: OUTFIT }}
+      style={{ padding: '4px 8px', borderRadius: 8, backgroundColor: NEU.surface, boxShadow: NEU.outSm }}
     >
-      <span className="inline-flex items-end" style={{ gap: 2 }} aria-hidden>
-        {Array.from({ length: t.bars }).map((_, i) => (
-          <span key={i} style={{ width: 2.5, height: 6 + i * 2, borderRadius: 1, backgroundColor: t.color, display: 'inline-block' }} />
-        ))}
-      </span>
-      {showWord && tier !== 'standard' && (
-        <span style={{ fontSize: 11.5, fontWeight: 600, color: t.color, lineHeight: 1 }}>{t.word}</span>
-      )}
+      <ImportanceDashes tier={tier} />
     </span>
   );
 }
 
 // ── Reason badges ────────────────────────────────────────────────────────────
 // The engine's reasons are stable upper-case keys ("EXP MATCH +20",
-// "1ST CHOICE"). Each reason TYPE is its own badge: its own fine-line icon on
-// a small tinted disc, its own tone, one size, and the points it adds (the
-// same numbers src/lib/assignmentFit.ts scores with). Raised in its own hue
-// like the classic board's chips. The tooltip keeps the full explanation.
+// "1ST CHOICE"). Each reason TYPE is its own badge: its own icon on a solid
+// disc in its tone, a short label and the points it adds (the same numbers
+// src/lib/assignmentFit.ts scores with). The 1st choice is the strongest, a
+// gold pill; seat importance carries the app's importance dashes. Labels are
+// short so up to four sit on one row (owner, 21 Oct 2026); the tooltip keeps
+// the full explanation.
 
 interface BadgeSpec {
   label: string;
-  Icon: LucideIcon;
+  /** The icon; omitted when `tier` draws the importance dashes instead. */
+  Icon?: LucideIcon;
   /** Text and icon colour; the tint, ring and drop are mixed from it. */
   tone: string;
-  /** Fill the icon (the 1st choice star). */
+  /** Fill the icon (the stars). */
   filled?: boolean;
+  /** The strongest treatment (the 1st choice). */
+  strong?: boolean;
+  /** Seat importance: drawn with the importance dashes. */
+  tier?: ImportanceTier;
   /** The points this reason adds when its key carries none. */
   points?: number;
 }
 
 const TONE = {
   gold: '#8A6614',
-  silver: '#5F666E',
+  silver: '#59616B',
   bronze: '#8E5326',
   green: '#2C6B43',
-  teal: '#22686A',
+  teal: '#1F6668',
   blue: '#335E86',
-  plum: '#6B3F78',
   red: '#8B2020',
   amber: '#9A5A12',
   ink: '#3D352C',
@@ -256,29 +273,29 @@ const TONE = {
 
 // Points for reasons whose key carries none: the engine's own constants where
 // it exports them, and scorePrefAndExp's preference values (50 / 30 / 15, the
-// exact country +25), mirrored here.
+// exact country +25), mirrored here (SCORE_RULES below lists them all).
 const BADGES: Record<string, BadgeSpec> = {
-  '1ST CHOICE': { label: '1st choice', Icon: Star, tone: TONE.gold, filled: true, points: 50 },
-  '2ND CHOICE': { label: '2nd choice', Icon: Star, tone: TONE.silver, points: 30 },
+  '1ST CHOICE': { label: '1st choice', Icon: Star, tone: '#1B3828', filled: true, strong: true, points: 50 },
+  '2ND CHOICE': { label: '2nd choice', Icon: Star, tone: TONE.silver, filled: true, points: 30 },
   '3RD CHOICE': { label: '3rd choice', Icon: StarHalf, tone: TONE.bronze, points: 15 },
-  'COUNTRY PICK': { label: 'Asked for this country', Icon: Flag, tone: TONE.gold, points: 25 },
-  'EXP MATCH': { label: 'Experience fits', Icon: GraduationCap, tone: TONE.green },
-  'EXP TOO LOW': { label: 'Less experience than the room', Icon: TrendingDown, tone: TONE.red },
-  'EXP TOO HIGH': { label: 'More experience than the room', Icon: TrendingUp, tone: TONE.amber },
-  'HIGH PRIORITY': { label: 'High importance seat', Icon: Gem, tone: TONE.plum, points: IMPORTANCE_NEED_WEIGHT.high },
-  'PRIORITY SEAT': { label: 'Medium importance seat', Icon: Gem, tone: TONE.blue, points: IMPORTANCE_NEED_WEIGHT.medium },
-  'COMPLETES PAIR': { label: 'Completes a pair', Icon: Link2, tone: TONE.teal, points: PAIR_BONUS },
-  'DELEGATION CONCENTRATION': { label: 'Delegation already here', Icon: UsersRound, tone: TONE.red, points: -CONCENTRATION_PENALTY },
-  'MEMBER PICK': { label: 'A member asked for it', Icon: ThumbsUp, tone: TONE.green, points: MEMBER_PICK_BONUS },
-  [NEEDS_DELEGATES_REASON]: { label: 'Room needs people', Icon: UserPlus, tone: TONE.blue },
-  [SWAP_REASON]: { label: 'Swapped for a better total', Icon: ArrowLeftRight, tone: TONE.ink },
+  'COUNTRY PICK': { label: 'Country', Icon: Flag, tone: TONE.gold, points: 25 },
+  'EXP MATCH': { label: 'Level fits', Icon: GraduationCap, tone: TONE.green },
+  'EXP TOO LOW': { label: 'Low experience', Icon: TrendingDown, tone: TONE.red },
+  'EXP TOO HIGH': { label: 'High experience', Icon: TrendingUp, tone: TONE.amber },
+  'HIGH PRIORITY': { label: 'High seat', tone: TIER.high.color, tier: 'high', points: IMPORTANCE_NEED_WEIGHT.high },
+  'PRIORITY SEAT': { label: 'Medium seat', tone: '#8A6A12', tier: 'medium', points: IMPORTANCE_NEED_WEIGHT.medium },
+  'COMPLETES PAIR': { label: 'Pair', Icon: Link2, tone: TONE.teal, points: PAIR_BONUS },
+  'DELEGATION CONCENTRATION': { label: 'Delegation here', Icon: UsersRound, tone: TONE.red, points: -CONCENTRATION_PENALTY },
+  'MEMBER PICK': { label: 'Member pick', Icon: ThumbsUp, tone: TONE.green, points: MEMBER_PICK_BONUS },
+  [NEEDS_DELEGATES_REASON]: { label: 'Needs people', Icon: UserPlus, tone: TONE.blue },
+  [SWAP_REASON]: { label: 'Swapped', Icon: ArrowLeftRight, tone: TONE.ink },
 };
 
 /** How a badge looks, without its points. */
 type BadgeLook = Omit<BadgeSpec, 'points'>;
 
-const LOW_SEAT: BadgeSpec = { label: 'Low importance seat', Icon: Gem, tone: TONE.green, points: IMPORTANCE_NEED_WEIGHT.low };
-const ROOM_FILL: BadgeSpec = { label: 'Room still filling', Icon: CircleDashed, tone: TONE.ink };
+const LOW_SEAT: BadgeSpec = { label: 'Low seat', tone: TIER.low.color, tier: 'low', points: IMPORTANCE_NEED_WEIGHT.low };
+const ROOM_FILL: BadgeSpec = { label: 'Room fill', Icon: CircleDashed, tone: TONE.ink };
 
 /** One reason as a badge spec plus its points (null when it adds none). */
 export function reasonBadge(reason: string): BadgeLook & { points: number | null } {
@@ -304,72 +321,225 @@ function fmtPoints(n: number): string {
   return n > 0 ? `+${n}` : n < 0 ? `−${Math.abs(n)}` : '0';
 }
 
-/** The tinted disc with the reason's icon (badges and the score breakdown). */
-export function BadgeIcon({ spec, size = 18 }: { spec: Pick<BadgeSpec, 'Icon' | 'tone' | 'filled'>; size?: number }) {
-  const { Icon, tone, filled } = spec;
+/** The reason's icon on a solid disc in its tone (badges and the score
+ *  breakdown); seat importance draws its dashes on a white disc instead. */
+export function BadgeIcon({ spec, size = 18 }: { spec: Pick<BadgeSpec, 'Icon' | 'tone' | 'filled' | 'strong' | 'tier'>; size?: number }) {
+  const { Icon, tone, filled, strong, tier } = spec;
+  if (tier) {
+    return (
+      <span
+        aria-hidden
+        className="inline-flex items-center justify-center flex-shrink-0"
+        style={{ width: size, height: size, borderRadius: 999, background: '#FFFFFF', boxShadow: `inset 0 0 0 1px color-mix(in srgb, ${tone} 30%, transparent)` }}
+      >
+        <ImportanceDashes tier={tier} barHeight={Math.max(6, Math.round(size * 0.5))} />
+      </span>
+    );
+  }
+  if (!Icon) return null;
+  // The 1st choice sits on gold: its star is forest on a white disc (never a
+  // gold icon on a forest tile).
+  const bg = strong ? '#FFFFFF' : tone;
+  const fg = strong ? '#1B3828' : '#FFFFFF';
   return (
     <span
       aria-hidden
       className="inline-flex items-center justify-center flex-shrink-0"
       style={{
-        width: size, height: size, borderRadius: 999,
-        background: `color-mix(in srgb, ${tone} 16%, #FFFFFF)`,
-        boxShadow: `inset 0 0 0 1px color-mix(in srgb, ${tone} 26%, transparent)`,
+        width: size, height: size, borderRadius: 999, background: bg,
+        boxShadow: strong ? '0 1px 2px rgba(138,102,20,0.45)' : `inset 0 1px 0 rgba(255,255,255,0.25), 0 1px 2px color-mix(in srgb, ${tone} 40%, transparent)`,
       }}
     >
-      <Icon size={Math.round(size * 0.6)} strokeWidth={1.75} style={{ color: tone }} fill={filled ? tone : 'none'} />
+      <Icon size={Math.round(size * 0.62)} strokeWidth={2} style={{ color: fg }} fill={filled ? fg : 'none'} />
     </span>
   );
 }
 
-function BadgeBody({ spec, points, size }: { spec: BadgeLook; points: number | null; size: 'sm' | 'md' }) {
-  const h = size === 'sm' ? 24 : 26;
+function BadgeBody({ spec, points, size, showPoints }: { spec: BadgeLook; points: number | null; size: 'sm' | 'md'; showPoints: boolean }) {
+  const h = size === 'sm' ? 21 : 22;
+  const strong = !!spec.strong;
   return (
     <span
       className="inline-flex items-center flex-shrink-0"
       style={{
-        height: h, gap: 6, padding: '0 10px 0 3px', borderRadius: 999, boxSizing: 'border-box',
-        background: `color-mix(in srgb, ${spec.tone} 7%, #FFFFFF)`,
-        color: spec.tone,
-        boxShadow: `inset 0 0 0 1px color-mix(in srgb, ${spec.tone} 20%, transparent), inset 0 1px 0 rgba(255,255,255,0.7), 0 2px 6px -2px color-mix(in srgb, ${spec.tone} 34%, transparent)`,
-        fontFamily: OUTFIT, fontSize: size === 'sm' ? 11.5 : 12, fontWeight: 600, lineHeight: 1, whiteSpace: 'nowrap',
+        height: h, gap: 4, padding: '0 7px 0 2.5px', borderRadius: 999, boxSizing: 'border-box',
+        background: strong ? 'linear-gradient(180deg, #F7E6A6, #E8C863)' : `color-mix(in srgb, ${spec.tone} 13%, #FFFFFF)`,
+        color: strong ? '#1B3828' : spec.tone,
+        boxShadow: strong
+          ? 'inset 0 0 0 1px rgba(160,118,22,0.55), inset 0 1px 0 rgba(255,255,255,0.65), 0 2px 7px -2px rgba(182,135,31,0.7)'
+          : `inset 0 0 0 1px color-mix(in srgb, ${spec.tone} 32%, transparent), inset 0 1px 0 rgba(255,255,255,0.7), 0 2px 5px -2px color-mix(in srgb, ${spec.tone} 45%, transparent)`,
+        fontFamily: OUTFIT, fontSize: size === 'sm' ? 11 : 11.5, fontWeight: strong ? 700 : 600, lineHeight: 1, whiteSpace: 'nowrap',
       }}
     >
-      <BadgeIcon spec={spec} size={h - 6} />
+      <BadgeIcon spec={spec} size={h - 5} />
       {spec.label}
-      {points != null && points !== 0 && (
+      {showPoints && points != null && points !== 0 && (
         <span style={{ fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{fmtPoints(points)}</span>
       )}
     </span>
   );
 }
 
-export function FitPill({ reason, why, more, size = 'md' }: { reason: string; why?: string | null; more?: string[]; size?: 'sm' | 'md' }) {
+export function FitPill({ reason, why, more, size = 'md', showPoints = true }: { reason: string; why?: string | null; more?: string[]; size?: 'sm' | 'md'; showPoints?: boolean }) {
   const b = reasonBadge(reason);
-  const badge = <BadgeBody spec={b} points={b.points} size={size} />;
+  const badge = <BadgeBody spec={b} points={b.points} size={size} showPoints={showPoints} />;
   return why || (more && more.length > 0) ? <FitTip text={why ?? null} lines={more}>{badge}</FitTip> : badge;
 }
 
 type SugLike = Pick<Suggestion, 'app' | 'committee' | 'slot' | 'reasons' | 'swap' | 'score'>;
 
-/** A suggestion's first reasons as badges (the first carries the signals the
- *  engine could not read), then the swap badge. */
-export function FitPills({ sug, max = 3, size = 'md' }: { sug: Pick<Suggestion, 'app' | 'committee' | 'slot' | 'reasons' | 'swap'>; max?: number; size?: 'sm' | 'md' }) {
+/** A suggestion's first reasons as badges on ONE row (the first carries the
+ *  signals the engine could not read), the swap badge counted inside `max`.
+ *  When the row is too narrow the points step out first (they stay in the
+ *  score's hover breakdown), then the last badges; the row never wraps. */
+export function FitPills({ sug, max = 4, size = 'md', style }: {
+  sug: Pick<Suggestion, 'app' | 'committee' | 'slot' | 'reasons' | 'swap'>;
+  max?: number;
+  size?: 'sm' | 'md';
+  style?: CSSProperties;
+}) {
   const ctx = reasonContext(sug.app, sug.committee, sug.slot);
   const gaps = missingSignals(ctx, sug.reasons);
+  const items: { key: string; reason: string; why: string | null; more?: string[] }[] = sug.reasons.map((r, i) => ({
+    key: r, reason: r, why: explainReason(r, ctx), more: i === 0 ? gaps : undefined,
+  }));
+  if (sug.swap) {
+    items.push({
+      key: SWAP_REASON, reason: SWAP_REASON,
+      why: `Swapped with ${sug.swap.partnerName}: a net gain of +${sug.swap.netGain} across both delegates. Their own best open seat scored ${sug.swap.ownBestScore}.`,
+    });
+  }
+  // A swap badge keeps its place inside the cap.
+  const capped = items.length > max && sug.swap ? [...items.slice(0, max - 1), items[items.length - 1]] : items.slice(0, max);
+  const sig = capped.map(i => i.key).join('|');
+  const ref = useRef<HTMLSpanElement | null>(null);
+  // 0 everything, 1 no points, 2+ one badge fewer each step.
+  const [fit, setFit] = useState<{ sig: string; step: number }>({ sig, step: 0 });
+  const step = fit.sig === sig ? fit.step : 0;
+  const count = capped.length;
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    // A DOM measurement before paint: one step at a time, at most `count` steps.
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- the row's width is only known once laid out; stepping here keeps the overflow from ever painting
+    if (el.scrollWidth > el.clientWidth + 1 && step < count) setFit({ sig, step: step + 1 });
+  }, [step, count, sig]);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    let w = el.clientWidth;
+    const ro = new ResizeObserver(() => {
+      if (el.clientWidth === w) return;
+      w = el.clientWidth;
+      setFit({ sig, step: 0 });
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [sig]);
+  const shown = step >= 2 ? capped.slice(0, Math.max(1, capped.length - (step - 1))) : capped;
+  if (capped.length === 0) return null;
   return (
-    <>
-      {sug.reasons.slice(0, max).map((r, i) => (
-        <FitPill key={r} reason={r} why={explainReason(r, ctx)} more={i === 0 ? gaps : undefined} size={size} />
+    <span ref={ref} className="flex items-center flex-nowrap min-w-0" style={{ gap: 4, overflow: 'hidden', padding: '2px 1px 4px', margin: '-2px -1px -4px', ...style }}>
+      {shown.map(i => (
+        <FitPill key={i.key} reason={i.reason} why={i.why} more={i.more} size={size} showPoints={step === 0} />
       ))}
-      {sug.swap && (
-        <FitPill
-          reason={SWAP_REASON}
-          size={size}
-          why={`Swapped with ${sug.swap.partnerName}: a net gain of +${sug.swap.netGain} across both delegates. Their own best open seat scored ${sug.swap.ownBestScore}.`}
-        />
+    </span>
+  );
+}
+
+// ── Hover cards ──────────────────────────────────────────────────────────────
+// A white card on hover (and focus) of its trigger, through Portal at fixed
+// coordinates, flipped above near the bottom edge and kept inside the
+// viewport; a short close delay lets the pointer move onto it.
+export function HoverCard({ children, card, width = 300, label, align = 'end' }: {
+  children: ReactNode;
+  card: ReactNode;
+  width?: number;
+  /** The trigger's accessible name. */
+  label: string;
+  /** Which edge of the trigger the card lines up with. */
+  align?: 'start' | 'end' | 'center';
+}) {
+  const ref = useRef<HTMLSpanElement | null>(null);
+  const cardRef = useRef<HTMLDivElement | null>(null);
+  const hideT = useRef<number | null>(null);
+  const [open, setOpen] = useState(false);
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
+
+  const place = useCallback(() => {
+    const el = ref.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    const h = cardRef.current?.offsetHeight ?? 160;
+    const w = Math.min(width, vw - 16);
+    let left = align === 'start' ? r.left : align === 'center' ? r.left + r.width / 2 - w / 2 : r.right - w;
+    left = Math.max(8, Math.min(left, vw - 8 - w));
+    const below = r.bottom + 8;
+    const top = below + h > vh - 8 && r.top - 8 - h > 8 ? r.top - 8 - h : Math.max(8, Math.min(below, vh - 8 - h));
+    setPos({ top, left });
+  }, [width, align]);
+
+  const show = () => {
+    if (hideT.current) { window.clearTimeout(hideT.current); hideT.current = null; }
+    setOpen(true);
+  };
+  const hide = () => {
+    if (hideT.current) window.clearTimeout(hideT.current);
+    hideT.current = window.setTimeout(() => setOpen(false), 140);
+  };
+
+  useEffect(() => {
+    if (!open) return;
+    // Placed on the next frame, once the card has a measured height (it draws hidden until then).
+    const raf = requestAnimationFrame(place);
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false); };
+    window.addEventListener('scroll', place, true);
+    window.addEventListener('resize', place);
+    window.addEventListener('keydown', onKey);
+    return () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener('scroll', place, true);
+      window.removeEventListener('resize', place);
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [open, place]);
+  useEffect(() => () => { if (hideT.current) window.clearTimeout(hideT.current); }, []);
+
+  return (
+    <span
+      ref={ref}
+      tabIndex={0}
+      aria-label={label}
+      className="inline-flex flex-shrink-0 focus:outline-none focus-visible:ring-2"
+      style={{ cursor: 'help', borderRadius: 999 }}
+      onMouseEnter={show}
+      onMouseLeave={hide}
+      onFocus={show}
+      onBlur={hide}
+    >
+      {children}
+      {open && (
+        <Portal>
+          <div
+            ref={cardRef}
+            role="tooltip"
+            onMouseEnter={show}
+            onMouseLeave={hide}
+            style={{
+              position: 'fixed', top: pos?.top ?? -9999, left: pos?.left ?? -9999, width: `min(${width}px, calc(100vw - 16px))`, zIndex: 3000,
+              padding: '12px 14px', borderRadius: 16, background: '#FFFFFF', color: NEU.ink,
+              boxShadow: '0 18px 44px rgba(27,56,40,0.20), 0 2px 8px rgba(27,56,40,0.08), 0 0 0 1px rgba(27,56,40,0.06)',
+              fontFamily: OUTFIT, textAlign: 'left', cursor: 'default', textTransform: 'none', letterSpacing: 0,
+              visibility: pos ? 'visible' : 'hidden',
+            }}
+          >
+            {card}
+          </div>
+        </Portal>
       )}
-    </>
+    </span>
   );
 }
 
@@ -401,7 +571,8 @@ export function scoreParts(sug: SugLike): ScorePart[] {
 export function ScoreBreakdown({ sug }: { sug: SugLike }) {
   const parts = scoreParts(sug);
   return (
-    <div className="flex flex-col" style={{ gap: 4, padding: '10px 12px', borderRadius: 14, background: WELL, fontFamily: OUTFIT }}>
+    <div className="flex flex-col" style={{ gap: 4, fontFamily: OUTFIT }}>
+      <span style={{ fontSize: 13.5, fontWeight: 700, color: NEU.ink, marginBottom: 2 }}>How this scores</span>
       {parts.length === 0 && <span style={{ fontSize: 12.5, color: NEU.inkSoft }}>No part of the score applies to this seat</span>}
       {parts.map(p => (
         <div key={p.key} className="flex items-center gap-2" style={{ minHeight: 24 }}>
@@ -420,6 +591,63 @@ export function ScoreBreakdown({ sug }: { sug: SugLike }) {
         </span>
       )}
     </div>
+  );
+}
+
+/** The score disc with its breakdown on hover only. */
+export function ScoreHover({ sug, size = 34, title }: { sug: SugLike; size?: number; title?: string }) {
+  return (
+    <HoverCard label={title ?? `Fit score ${sug.score}. Hover for how it scores`} card={<ScoreBreakdown sug={sug} />} width={280}>
+      <ScoreDisc score={sug.score} size={size} title="" />
+    </HoverCard>
+  );
+}
+
+// ── How smart allocations are scored, in general ─────────────────────────────
+// The general rules beside the Smart Allocations title, the classic board's
+// explainer brought back (owner, 21 Oct 2026): every factor and its weight, the
+// engine's own constants where src/lib/assignmentFit.ts exports them.
+const SCORE_RULES: { spec: BadgeLook; title: string; points: string; line: string }[] = [
+  { spec: BADGES['1ST CHOICE'], title: 'Committee choice', points: '+50 / +30 / +15', line: 'Their 1st, 2nd or 3rd choice committee' },
+  { spec: BADGES['COUNTRY PICK'], title: 'Exact country', points: '+25', line: 'The seat is the country they asked for' },
+  { spec: BADGES['EXP MATCH'], title: 'Experience fit', points: `+${EXPERIENCE_MATCH_BONUS} / 0 / −${EXPERIENCE_GAP_STEP} per level`, line: 'Their level against the committee difficulty, either way round' },
+  { spec: BADGES['HIGH PRIORITY'], title: 'Seat importance', points: `+${IMPORTANCE_NEED_WEIGHT.high} / +${IMPORTANCE_NEED_WEIGHT.medium} / +${IMPORTANCE_NEED_WEIGHT.low}`, line: 'High, medium and low importance seats fill first' },
+  { spec: ROOM_FILL, title: 'Room fill', points: 'up to +12', line: 'Emptier committees score higher' },
+  { spec: BADGES['COMPLETES PAIR'], title: 'Completes a pair', points: `+${PAIR_BONUS}`, line: 'Their delegation holds the other seat of a double' },
+  { spec: BADGES['DELEGATION CONCENTRATION'], title: 'Delegation already here', points: `−${CONCENTRATION_PENALTY}`, line: 'Spreads a delegation across the rooms' },
+];
+
+export function ScoringHint() {
+  return (
+    <HoverCard
+      label="How smart allocations are scored"
+      align="center"
+      width={340}
+      card={(
+        <div className="flex flex-col" style={{ gap: 8 }}>
+          <span style={{ fontSize: 14, fontWeight: 700, color: NEU.ink }}>How smart allocations are scored</span>
+          {SCORE_RULES.map(r => (
+            <div key={r.title} className="flex items-start gap-2.5">
+              <span style={{ paddingTop: 1 }}><BadgeIcon spec={r.spec} size={20} /></span>
+              <span className="flex flex-col flex-1 min-w-0" style={{ lineHeight: 1.25 }}>
+                <span className="flex items-baseline justify-between gap-2">
+                  <span style={{ fontSize: 13, fontWeight: 600, color: NEU.ink }}>{r.title}</span>
+                  <span style={{ fontSize: 12.5, fontWeight: 700, color: NEU.ink, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>{r.points}</span>
+                </span>
+                <span style={{ fontSize: 12, color: NEU.inkSoft }}>{r.line}</span>
+              </span>
+            </div>
+          ))}
+          <span style={{ fontSize: 12, color: NEU.inkSoft, lineHeight: 1.4, borderTop: `1px solid ${HAIRLINE}`, paddingTop: 8 }}>
+            Two people may swap suggested seats when that raises their combined score. Hover a card&apos;s score for its own parts
+          </span>
+        </div>
+      )}
+    >
+      <span className="inline-flex items-center justify-center" style={{ width: 24, height: 24, color: NEU.inkSoft }}>
+        <Info size={17} strokeWidth={1.5} />
+      </span>
+    </HoverCard>
   );
 }
 
@@ -470,8 +698,9 @@ export function HolderChip({ alloc }: { alloc: AllocationRow }) {
   );
 }
 
-/** Who holds a seat, with their delegation beneath: the committee pop-up's
- *  taken seats. A delegation seat shows the delegation itself. */
+/** Who holds a seat, with their delegation beneath: the committee pop-ups'
+ *  taken seats, drawn small so a double sits side by side in a slim row. A
+ *  delegation seat shows the delegation itself. */
 export function HolderLine({ alloc }: { alloc: AllocationRow }) {
   const block = !!alloc.society_id && !alloc.application_id && !alloc.user_id;
   const name = seatHolderName(alloc);
@@ -479,26 +708,26 @@ export function HolderLine({ alloc }: { alloc: AllocationRow }) {
   const indep = !block && !soc && (alloc.applications?.society_id == null);
   const second = block ? 'Delegation seat' : soc ?? (indep ? 'Independent' : null);
   return (
-    <span className="inline-flex items-center gap-2 min-w-0" title={second ? `${name}, ${second}` : name}>
+    <span className="inline-flex items-center gap-1.5 min-w-0" title={second ? `${name}, ${second}` : name}>
       {block
-        ? <span className="inline-flex items-center justify-center flex-shrink-0" style={{ width: 28, height: 28, borderRadius: 999, background: WELL }}><Users size={15} strokeWidth={1.5} style={{ color: NEU.ink }} /></span>
-        : <PersonAvatar name={name} url={alloc.profiles?.avatar_url ?? null} size={28} />}
-      <span className="flex flex-col min-w-0" style={{ lineHeight: 1.15 }}>
-        <span className="[overflow-wrap:anywhere]" style={{ fontSize: 13.5, fontWeight: 700, color: NEU.ink }}>{name}</span>
-        {second && <span className="[overflow-wrap:anywhere]" style={{ fontSize: 12, color: NEU.inkSoft }}>{second}</span>}
+        ? <span className="inline-flex items-center justify-center flex-shrink-0" style={{ width: 22, height: 22, borderRadius: 999, background: WELL }}><Users size={13} strokeWidth={1.5} style={{ color: NEU.ink }} /></span>
+        : <PersonAvatar name={name} url={alloc.profiles?.avatar_url ?? null} size={22} />}
+      <span className="flex flex-col min-w-0" style={{ lineHeight: 1.12 }}>
+        <span className="[overflow-wrap:anywhere]" style={{ fontSize: 13, fontWeight: 700, color: NEU.ink }}>{name}</span>
+        {second && <span className="[overflow-wrap:anywhere]" style={{ fontSize: 11.5, color: NEU.inkSoft }}>{second}</span>}
       </span>
     </span>
   );
 }
 
-export function OpenChip({ label = 'Open' }: { label?: string }) {
+export function OpenChip({ label = 'Open', compact = false }: { label?: string; compact?: boolean }) {
   return (
     <span
       className="inline-flex items-center flex-shrink-0"
       style={{
-        minHeight: 30, padding: '0 12px', borderRadius: 999, boxSizing: 'border-box',
+        minHeight: compact ? 22 : 30, padding: compact ? '0 9px' : '0 12px', borderRadius: 999, boxSizing: 'border-box',
         border: '1.5px dashed rgba(27,56,40,0.28)', color: NEU.forest,
-        fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 600,
+        fontFamily: OUTFIT, fontSize: compact ? 11.5 : 12.5, fontWeight: 600,
       }}
     >
       {label}
@@ -557,10 +786,13 @@ export function RankNumber({ order, size = 20 }: { order: number; size?: number 
 // The committee ring on a white disc, half outside the pop-up card's top-left
 // edge (CLAUDE.md §8, the signature detail). The card sets `position:
 // relative` and `marginTop: POPUP_RING_RISE`; the header pads its left by
-// POPUP_RING_INSET. Used by the "Give to" pop-up (SeatBoardGivePopup.tsx).
-export const POPUP_RING = 76;
-export const POPUP_RING_RISE = 34;
-export const POPUP_RING_INSET = 22 + POPUP_RING + 10 + 16;
+// POPUP_RING_INSET. Both committee pop-ups use it (SeatBoardPopup.tsx and
+// SeatBoardGivePopup.tsx), at the slim width POPUP_WIDTH (owner, 21 Oct 2026:
+// "too much empty space, like it was before").
+export const POPUP_RING = 60;
+export const POPUP_RING_RISE = 28;
+export const POPUP_RING_INSET = 18 + POPUP_RING + 8 + 12;
+export const POPUP_WIDTH = 'min(94vw, 600px)';
 
 export function PopupRingBadge({ committee }: { committee: CommitteeData }) {
   return (
@@ -568,7 +800,7 @@ export function PopupRingBadge({ committee }: { committee: CommitteeData }) {
       aria-hidden
       className="absolute inline-flex items-center justify-center"
       style={{
-        top: -POPUP_RING_RISE, left: 22, width: POPUP_RING + 10, height: POPUP_RING + 10, borderRadius: 999, background: '#FFFFFF',
+        top: -POPUP_RING_RISE, left: 18, width: POPUP_RING + 8, height: POPUP_RING + 8, borderRadius: 999, background: '#FFFFFF',
         boxShadow: '0 8px 22px -8px rgba(27,56,40,0.35), 0 0 0 1px rgba(27,56,40,0.05)',
       }}
     >

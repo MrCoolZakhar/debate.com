@@ -27,14 +27,11 @@ import {
   CountryFlag, PersonAvatar, committeeLabels, effectiveLevel, LevelDisc, slotLogoUrl, OUTFIT,
 } from '@/app/manage/[slug]/assignment/assignmentKit';
 import {
-  CommitteeRing, FitPills, GoldMarker, HAIRLINE, HolderLine, ImportanceMark, OpenChip, ScoreDisc, SeatDoublePill, WELL,
-  firstName, personName, schoolName, seatCounts,
+  FitPills, GoldMarker, HAIRLINE, HolderLine, ImportanceMark, OpenChip, POPUP_RING_INSET, POPUP_RING_RISE, POPUP_WIDTH,
+  PopupRingBadge, ScoreHover, SeatDoublePill, WELL, firstName, personName, schoolName, seatCounts,
 } from '@/app/manage/[slug]/assignment/seatBoardShared';
 
 const ROW_DIVIDER = `1px solid ${HAIRLINE}`;
-/** The header ring, and how far it rises above the card. */
-const RING = 76;
-const RISE = 34;
 
 export function SeatBoardPopup({
   committee, person, waiting, spread, needy, emailsOnAssign, locked, onAssign, onClose,
@@ -60,29 +57,20 @@ export function SeatBoardPopup({
       <div
         className="relative flex flex-col"
         style={{
-          width: 'min(94vw, 820px)', maxHeight: `calc(90dvh - ${RISE}px)`, marginTop: RISE, backgroundColor: '#FFFFFF', borderRadius: 22,
+          width: POPUP_WIDTH, maxHeight: `calc(90dvh - ${POPUP_RING_RISE}px)`, marginTop: POPUP_RING_RISE, backgroundColor: '#FFFFFF', borderRadius: 20,
           boxShadow: '0 24px 60px rgba(27,56,40,0.28), 0 2px 8px rgba(27,56,40,0.08)', fontFamily: OUTFIT, color: NEU.ink,
         }}
       >
         {/* The committee ring, half outside the card's top-left edge */}
-        <span
-          aria-hidden
-          className="absolute inline-flex items-center justify-center"
-          style={{
-            top: -RISE, left: 22, width: RING + 10, height: RING + 10, borderRadius: 999, background: '#FFFFFF',
-            boxShadow: '0 8px 22px -8px rgba(27,56,40,0.35), 0 0 0 1px rgba(27,56,40,0.05)',
-          }}
-        >
-          <CommitteeRing committee={committee} size={RING} />
-        </span>
+        <PopupRingBadge committee={committee} />
 
         {/* Header */}
-        <div className="flex items-start gap-3 pr-3 pt-3 pb-3" style={{ borderBottom: ROW_DIVIDER, paddingLeft: 22 + RING + 10 + 16 }}>
-          <div className="flex-1 min-w-0" style={{ paddingTop: 2 }}>
-            <h2 id={titleId} className="[overflow-wrap:anywhere]" style={{ margin: 0, fontSize: 20, fontWeight: 600, lineHeight: 1.2, textWrap: 'balance' }}>
+        <div className="flex items-start gap-2 pr-2 pt-2.5 pb-2.5" style={{ borderBottom: ROW_DIVIDER, paddingLeft: POPUP_RING_INSET }}>
+          <div className="flex-1 min-w-0" style={{ paddingTop: 1 }}>
+            <h2 id={titleId} className="[overflow-wrap:anywhere]" style={{ margin: 0, fontSize: 18, fontWeight: 600, lineHeight: 1.2, textWrap: 'balance' }}>
               {person ? <>Seat <strong style={{ fontWeight: 700 }}>{personName(person)}</strong> in {labels.big}</> : labels.big}
             </h2>
-            <p className="[overflow-wrap:anywhere]" style={{ margin: '2px 0 0', fontSize: 13, color: NEU.inkSoft }}>
+            <p className="[overflow-wrap:anywhere]" style={{ margin: '1px 0 0', fontSize: 12.5, color: NEU.inkSoft }}>
               {labels.full ? <>{labels.full}, </> : null}
               <span style={{ fontWeight: 700, color: NEU.ink, fontVariantNumeric: 'tabular-nums' }}>{open}</span> of {total} seats open
             </p>
@@ -92,7 +80,7 @@ export function SeatBoardPopup({
             onClick={onClose}
             aria-label="Close"
             className="focus:outline-none flex-shrink-0 inline-flex items-center justify-center"
-            style={{ width: 40, height: 40, borderRadius: 12, border: 'none', background: 'transparent', color: NEU.inkSoft, cursor: 'pointer' }}
+            style={{ width: 34, height: 34, borderRadius: 10, border: 'none', background: 'transparent', color: NEU.inkSoft, cursor: 'pointer' }}
           >
             <X size={18} strokeWidth={1.5} />
           </button>
@@ -103,8 +91,8 @@ export function SeatBoardPopup({
           : <CommitteeMode committee={committee} waiting={waiting} spread={spread} needy={needy} locked={locked} onAssign={onAssign} />}
 
         {/* Footer */}
-        <div className="flex items-center justify-between gap-3 px-5 py-2.5" style={{ borderTop: ROW_DIVIDER }}>
-          <span style={{ fontSize: 12.5, color: NEU.inkSoft, lineHeight: 1.4 }}>
+        <div className="flex items-center justify-between gap-3 px-4 py-2" style={{ borderTop: ROW_DIVIDER }}>
+          <span style={{ fontSize: 12, color: NEU.inkSoft, lineHeight: 1.35 }}>
             {emailsOnAssign
               ? (person ? `${firstName(personName(person))} gets the allocation email when you assign` : 'Each person gets the allocation email when you assign')
               : 'Nobody is emailed until you release allocations'}
@@ -113,7 +101,7 @@ export function SeatBoardPopup({
             type="button"
             onClick={onClose}
             className="focus:outline-none flex-shrink-0"
-            style={{ height: 36, padding: '0 16px', borderRadius: 10, border: '1px solid rgba(27,56,40,0.16)', background: '#FFFFFF', color: NEU.ink, fontFamily: OUTFIT, fontSize: 13.5, fontWeight: 600, cursor: 'pointer' }}
+            style={{ height: 32, padding: '0 14px', borderRadius: 10, border: '1px solid rgba(27,56,40,0.16)', background: '#FFFFFF', color: NEU.ink, fontFamily: OUTFIT, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}
           >
             Cancel
           </button>
@@ -144,40 +132,42 @@ function PersonMode({ committee, person, spread, needy, locked, onAssign }: {
 
   return (
     <div className="flex-1 min-h-0 flex flex-col">
-      <div className="flex items-center gap-3 px-5 py-2.5" style={{ background: WELL }}>
-        <PersonAvatar name={name} url={person.profiles?.avatar_url ?? null} size={36} />
-        <span className="flex flex-col flex-1 min-w-0" style={{ lineHeight: 1.2 }}>
-          <span className="[overflow-wrap:anywhere]" style={{ fontSize: 15, fontWeight: 700 }}>{name}</span>
+      <div className="flex items-center gap-2.5 px-4 py-2" style={{ background: WELL }}>
+        <PersonAvatar name={name} url={person.profiles?.avatar_url ?? null} size={30} />
+        <span className="flex items-center flex-wrap flex-1 min-w-0" style={{ gap: '0 8px', lineHeight: 1.2 }}>
+          <span className="[overflow-wrap:anywhere]" style={{ fontSize: 14.5, fontWeight: 700 }}>{name}</span>
           <span className="[overflow-wrap:anywhere]" style={{ fontSize: 12.5, color: NEU.inkSoft }}>{schoolName(person)}</span>
         </span>
-        <LevelDisc level={effectiveLevel(person)} size={30} />
+        <LevelDisc level={effectiveLevel(person)} size={26} />
       </div>
-      <div className="flex items-baseline justify-between gap-3 px-5 pt-3 pb-1.5">
-        <h3 style={{ margin: 0, fontSize: 14.5, fontWeight: 600 }}>Best Fit First</h3>
-        <span style={{ fontSize: 12.5, color: NEU.inkSoft }}>One click assigns</span>
+      <div className="flex items-baseline justify-between gap-3 px-4 pt-2 pb-1">
+        <h3 style={{ margin: 0, fontSize: 14, fontWeight: 600 }}>Best Fit First</h3>
+        <span style={{ fontSize: 12, color: NEU.inkSoft }}>One click assigns</span>
       </div>
-      <div className="flex-1 min-h-0 overflow-y-auto px-3 pb-2" style={{ overscrollBehavior: 'contain' }}>
+      <div className="flex-1 min-h-0 overflow-y-auto px-2 pb-1.5" style={{ overscrollBehavior: 'contain' }}>
         {ranked.length === 0 ? (
           <p className="px-2 py-8 text-center" style={{ fontSize: 14, color: NEU.inkSoft }}>Every seat in {committeeLabels(committee).big} is taken</p>
         ) : ranked.map((r, i) => {
           const order = prefs.get(r.slot.country_code);
           return (
-            <div key={r.slot.id} className="flex items-center gap-3 flex-wrap px-2 py-1.5" style={{ borderTop: i === 0 ? 'none' : ROW_DIVIDER }}>
-              <ScoreDisc score={r.score} size={34} />
-              <span className="min-w-0" style={{ flex: '1 1 300px' }}>
-                <SeatDoublePill
-                  committee={committee}
-                  slot={r.slot}
-                  holders={byCountry.get(r.slot.country_code) ?? []}
-                  trailing={order ? <span className="inline-flex items-center" style={{ padding: '0 6px' }}><GoldMarker order={order} size={20} /></span> : null}
-                />
-              </span>
-              <span className="flex items-center gap-1 flex-wrap min-w-0" style={{ flex: '1 1 180px' }}>
+            <div key={r.slot.id} className="flex flex-col px-2 py-1.5" style={{ borderTop: i === 0 ? 'none' : ROW_DIVIDER, gap: 4 }}>
+              <div className="flex items-center gap-2.5">
+                <ScoreHover sug={r} size={30} />
+                <span className="min-w-0 flex-1">
+                  <SeatDoublePill
+                    committee={committee}
+                    slot={r.slot}
+                    holders={byCountry.get(r.slot.country_code) ?? []}
+                    trailing={order ? <span className="inline-flex items-center" style={{ padding: '0 6px' }}><GoldMarker order={order} size={18} /></span> : null}
+                  />
+                </span>
+                <NeuButton onClick={() => onAssign(r)} disabled={locked} style={{ padding: '6px 14px', fontSize: 12.5, letterSpacing: 0, flexShrink: 0 }}>Assign</NeuButton>
+              </div>
+              <span className="flex items-center min-w-0" style={{ paddingLeft: 40 }}>
                 {r.disallowed
                   ? <span style={{ fontSize: 12, color: NEU.inkSoft }}>The other seat of this country is another delegation&apos;s</span>
-                  : <FitPills sug={r} max={2} size="sm" />}
+                  : <FitPills sug={r} max={4} size="sm" />}
               </span>
-              <NeuButton onClick={() => onAssign(r)} disabled={locked} style={{ padding: '8px 16px', fontSize: 12.5, letterSpacing: 0, flexShrink: 0, marginLeft: 'auto' }}>Assign</NeuButton>
             </div>
           );
         })}
@@ -213,7 +203,7 @@ function CommitteeMode({ committee, waiting, spread, needy, locked, onAssign }: 
       onClick={() => setView(key)}
       className="focus:outline-none"
       style={{
-        height: 32, padding: '0 14px', borderRadius: 9, border: 'none', cursor: 'pointer',
+        height: 28, padding: '0 12px', borderRadius: 8, border: 'none', cursor: 'pointer',
         background: view === key ? '#FFFFFF' : 'transparent',
         boxShadow: view === key ? '0 1px 3px rgba(27,56,40,0.12)' : 'none',
         fontFamily: OUTFIT, fontSize: 13, fontWeight: view === key ? 600 : 500, color: view === key ? NEU.ink : NEU.inkSoft,
@@ -233,24 +223,22 @@ function CommitteeMode({ committee, waiting, spread, needy, locked, onAssign }: 
     const toggle = () => { setChooser(choosing ? null : s.id); setQuery(''); };
     const body = (
       <>
-        <span className="flex items-center gap-2.5 min-w-0" style={{ flex: '1 1 220px' }}>
-          <CountryFlag code={s.country_code} w={34} h={34} alt={s.country_name} logoUrl={slotLogoUrl(committee, s)} />
-          <span className="flex flex-col min-w-0" style={{ gap: 3 }}>
-            <CountryName name={s.country_name} code={s.country_code} style={{ fontSize: 14.5, fontWeight: 600, color: NEU.ink, whiteSpace: 'normal', overflowWrap: 'anywhere', lineHeight: 1.15 }} />
-            <ImportanceMark tier={s.importance} />
-          </span>
+        <span className="flex items-center gap-2 min-w-0" style={{ flex: '1 1 180px' }}>
+          <CountryFlag code={s.country_code} w={26} h={26} alt={s.country_name} logoUrl={slotLogoUrl(committee, s)} />
+          <CountryName name={s.country_name} code={s.country_code} style={{ fontSize: 14, fontWeight: 600, color: NEU.ink, whiteSpace: 'normal', overflowWrap: 'anywhere', lineHeight: 1.15 }} />
+          <ImportanceMark tier={s.importance} />
         </span>
-        <span className="flex items-center flex-wrap min-w-0" style={{ flex: '1 1 260px', gap: '6px 14px' }}>
+        <span className="flex items-center flex-wrap min-w-0" style={{ flex: '1 1 220px', gap: '4px 12px' }}>
           {seats.map(n => {
             const h = bySeat.get(n) ?? (n === 1 ? loose[0] : undefined);
-            return h ? <HolderLine key={n} alloc={h} /> : <OpenChip key={n} label={s.delegation_size > 1 ? `Seat ${n} open` : 'Open'} />;
+            return h ? <HolderLine key={n} alloc={h} /> : <OpenChip key={n} compact label={s.delegation_size > 1 ? `Seat ${n} open` : 'Open'} />;
           })}
         </span>
         {open && (
           <span
             aria-hidden
             className="inline-flex items-center justify-center flex-shrink-0"
-            style={{ width: 30, height: 30, borderRadius: 10, color: NEU.ink }}
+            style={{ width: 22, height: 22, borderRadius: 8, color: NEU.ink }}
           >
             <ChevronDown size={16} strokeWidth={1.75} style={{ transform: choosing ? 'rotate(180deg)' : 'none', transition: 'transform 160ms cubic-bezier(0.22,1,0.36,1)' }} />
           </span>
@@ -265,15 +253,15 @@ function CommitteeMode({ committee, waiting, spread, needy, locked, onAssign }: 
             onClick={toggle}
             aria-expanded={choosing}
             aria-label={choosing ? `Close the people for ${s.country_name}` : `Best people for ${s.country_name}`}
-            className="focus:outline-none focus-visible:ring-2 w-full flex items-center gap-3 flex-wrap text-left"
-            style={{ padding: '8px 8px', border: 'none', borderRadius: 12, background: choosing ? WELL : 'transparent', cursor: 'pointer', fontFamily: OUTFIT, transition: 'background-color 140ms cubic-bezier(0.22,1,0.36,1)' }}
+            className="focus:outline-none focus-visible:ring-2 w-full flex items-center gap-2.5 flex-wrap text-left"
+            style={{ padding: '5px 6px', border: 'none', borderRadius: 10, background: choosing ? WELL : 'transparent', cursor: 'pointer', fontFamily: OUTFIT, transition: 'background-color 140ms cubic-bezier(0.22,1,0.36,1)' }}
             onMouseEnter={e => { if (!choosing) (e.currentTarget as HTMLElement).style.background = '#FAF8F3'; }}
             onMouseLeave={e => { if (!choosing) (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
           >
             {body}
           </button>
         ) : (
-          <div className="flex items-center gap-3 flex-wrap" style={{ padding: '8px 8px' }}>{body}</div>
+          <div className="flex items-center gap-2.5 flex-wrap" style={{ padding: '5px 6px' }}>{body}</div>
         )}
         {choosing && (
           <Chooser
@@ -287,15 +275,15 @@ function CommitteeMode({ committee, waiting, spread, needy, locked, onAssign }: 
 
   return (
     <div className="flex-1 min-h-0 flex flex-col">
-      <div className="flex items-center gap-3 flex-wrap px-5 py-2.5">
-        <span role="tablist" aria-label="Which seats" className="inline-flex" style={{ gap: 2, padding: 3, borderRadius: 12, background: '#F1ECE1' }}>
+      <div className="flex items-center gap-3 flex-wrap px-4 py-2">
+        <span role="tablist" aria-label="Which seats" className="inline-flex" style={{ gap: 2, padding: 2.5, borderRadius: 10, background: '#F1ECE1' }}>
           {tab('all', 'All seats', slots.length)}
           {tab('open', 'Open', openCount)}
         </span>
-        {openCount > 0 && <span style={{ fontSize: 12.5, color: NEU.inkSoft }}>Click an open seat to see who fits it best</span>}
+        {openCount > 0 && <span style={{ fontSize: 12, color: NEU.inkSoft }}>Click an open seat to see who fits it best</span>}
       </div>
 
-      <div className="flex-1 min-h-0 overflow-y-auto px-3 pb-2" style={{ overscrollBehavior: 'contain' }}>
+      <div className="flex-1 min-h-0 overflow-y-auto px-2 pb-1.5" style={{ overscrollBehavior: 'contain' }}>
         {shown.length === 0 && (
           <p className="px-2 py-8 text-center" style={{ fontSize: 14, color: NEU.inkSoft }}>
             {slots.length === 0 ? 'This committee has no countries yet' : 'Every seat is taken'}
@@ -310,24 +298,18 @@ function CommitteeMode({ committee, waiting, spread, needy, locked, onAssign }: 
 function PickRow({ sug, locked, onAssign, note }: { sug: Suggestion; locked: boolean; onAssign: (s: Suggestion) => void; note?: string }) {
   const name = personName(sug.app);
   return (
-    <div className="flex items-center gap-2.5 flex-wrap px-2 py-1.5" style={{ borderRadius: 12, background: '#FFFFFF' }}>
-      <span className="flex items-center gap-2.5 min-w-0" style={{ flex: '1 1 200px' }}>
-        <PersonAvatar name={name} url={sug.app.profiles?.avatar_url ?? null} size={30} />
-        <span className="flex flex-col min-w-0" style={{ lineHeight: 1.2 }}>
+    <div className="flex flex-col px-2 py-1.5" style={{ borderRadius: 10, background: '#FFFFFF', gap: 4 }}>
+      <div className="flex items-center gap-2">
+        <PersonAvatar name={name} url={sug.app.profiles?.avatar_url ?? null} size={26} />
+        <span className="flex items-center flex-wrap flex-1 min-w-0" style={{ gap: '0 8px', lineHeight: 1.2 }}>
           <span className="[overflow-wrap:anywhere]" style={{ fontSize: 13.5, fontWeight: 700 }}>{name}</span>
           <span className="[overflow-wrap:anywhere]" style={{ fontSize: 12, color: NEU.inkSoft }}>{note ?? schoolName(sug.app)}</span>
         </span>
         <LevelDisc level={effectiveLevel(sug.app)} size={20} />
-      </span>
-      {!note && (
-        <span className="flex items-center gap-1 flex-wrap min-w-0" style={{ flex: '1 1 200px' }}>
-          <FitPills sug={sug} max={2} size="sm" />
-        </span>
-      )}
-      <span className="flex items-center gap-2.5 flex-shrink-0" style={{ marginLeft: 'auto' }}>
-        <ScoreDisc score={sug.score} size={32} />
-        <NeuButton onClick={() => onAssign(sug)} disabled={locked} style={{ padding: '7px 14px', fontSize: 12.5, letterSpacing: 0 }}>Assign</NeuButton>
-      </span>
+        <ScoreHover sug={sug} size={28} />
+        <NeuButton onClick={() => onAssign(sug)} disabled={locked} style={{ padding: '6px 12px', fontSize: 12, letterSpacing: 0, flexShrink: 0 }}>Assign</NeuButton>
+      </div>
+      {!note && <span className="flex min-w-0" style={{ paddingLeft: 34 }}><FitPills sug={sug} max={4} size="sm" /></span>}
     </div>
   );
 }
@@ -345,14 +327,14 @@ function Chooser({ committee, slot, waiting, spread, needy, query, onQuery, lock
     ? ranked.filter(r => personName(r.app).toLowerCase().includes(q) || schoolName(r.app).toLowerCase().includes(q))
     : ranked;
   return (
-    <div className="mt-1 mb-2 p-2" style={{ background: WELL, borderRadius: 14 }}>
+    <div className="mt-0.5 mb-1.5 p-1.5" style={{ background: WELL, borderRadius: 12 }}>
       {waiting.length === 0 ? (
         <p className="px-2 py-3" style={{ margin: 0, fontSize: 12.5, color: NEU.inkSoft }}>Nobody is waiting for a seat</p>
       ) : (
         <>
           <div className="flex items-center gap-2 flex-wrap">
             <span style={{ fontSize: 13, fontWeight: 600, paddingLeft: 4 }}>Best fit first</span>
-            <label className="flex items-center gap-2 px-3 flex-1" style={{ minWidth: 200, height: 34, borderRadius: 10, background: '#FFFFFF', boxShadow: '0 0 0 1px rgba(27,56,40,0.10)' }}>
+            <label className="flex items-center gap-2 px-3 flex-1" style={{ minWidth: 200, height: 32, borderRadius: 10, background: '#FFFFFF', boxShadow: '0 0 0 1px rgba(27,56,40,0.10)' }}>
               <Search size={15} strokeWidth={1.5} style={{ color: NEU.inkSoft, flexShrink: 0 }} />
               <input
                 type="text"
@@ -365,7 +347,7 @@ function Chooser({ committee, slot, waiting, spread, needy, query, onQuery, lock
               />
             </label>
           </div>
-          <div className="flex flex-col gap-1 mt-2 overflow-y-auto" style={{ maxHeight: 260, overscrollBehavior: 'contain' }}>
+          <div className="flex flex-col gap-1 mt-1.5 overflow-y-auto" style={{ maxHeight: 260, overscrollBehavior: 'contain' }}>
             {list.length === 0 && <p className="px-2 py-3" style={{ margin: 0, fontSize: 12.5, color: NEU.inkSoft }}>Nobody waiting matches</p>}
             {list.map(r => (
               <PickRow
