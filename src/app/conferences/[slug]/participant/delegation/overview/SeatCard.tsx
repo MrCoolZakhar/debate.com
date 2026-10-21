@@ -1,20 +1,26 @@
 'use client';
 
-// "Your Seat", the left column of the delegation Overview (owner, 21 Oct 2026:
-// "the country with a BIG flag on a taller, more vertical card, as the
-// delegate's seat card looked before"): the look of the earlier delegate
-// allocation card (AllocationCard's "Your country": the flag large and
-// centred, the country's name big under it, the co-delegate beneath), then the
-// committee's logo with its short name over the full one. Then ONE line of two
-// small, equal tiles (owner, 21 Oct 2026): the study guide (GuideTile, opened
-// through openStudyGuide) and the position paper (PositionPaperCard's tile
-// variant, handed in by the Overview: Upload, or Submitted). Then the payment
-// (what is owed today from my_open_balances with Pay now, else Paid).
+// "Your Seat", the left column of the delegation Overview (owner, 21 Oct 2026),
+// drawn the same height as "Your Delegation" beside it and compact enough that
+// both fit one screen at 1280x800:
+//   the country      its ROUND flag (CircleFlag, the seat's crest first; never
+//                    a rectangle, CLAUDE.md §8 rule 10), the name big beside
+//                    it, the co-delegate under it, then the committee's logo
+//                    with its short name over the full one
+//   the topics       conference_committees.topics, numbered 1 to 3, ALWAYS
+//                    shown when the committee has any (owner, 21 Oct 2026; the
+//                    data was there, the card never drew it)
+//   two doc tiles    the study guide (GuideTile, opened through openStudyGuide)
+//                    and the position paper (PositionPaperCard's tile variant:
+//                    Upload, or Submitted), each one row with ONE big button
+//                    to the right of its text
+//   the payment      what is owed today from my_open_balances with Pay now,
+//                    else Paid, at the card's foot
 // Names wrap, never cut; the conference's own colours (var(--gv-main)).
 
 import Link from 'next/link';
 import { ArrowRight, BookOpen, CalendarClock, CheckCircle2, Compass, CreditCard, ExternalLink } from 'lucide-react';
-import { FlagImg } from '@/components/FlagImg';
+import { CircleFlag } from '@/components/CircleFlag';
 import ProfileLink from '@/components/ProfileLink';
 import { SkeletonBlock } from '@/components/Skeleton';
 import { centsToFee } from '@/lib/invoices';
@@ -43,6 +49,36 @@ export function CardTitle({ children }: { children: React.ReactNode }) {
   return <h2 style={titleStyle}>{children}</h2>;
 }
 
+/** The two Overview cards' frame: tighter on a phone, the same on both. */
+export const OVERVIEW_CARD = 'flex flex-col flex-1 min-w-0 gap-4 p-[18px] sm:px-6 sm:py-[22px]';
+
+/** The committee's topics, numbered, whenever it has any. */
+export function TopicsList({ topics }: { topics: string[] | null | undefined }) {
+  const list = (topics ?? []).filter(t => typeof t === 'string' && t.trim()).slice(0, 3);
+  if (list.length === 0) return null;
+  return (
+    <div className="flex flex-col gap-1.5" aria-label="Topics">
+      <span style={{ fontFamily: FONT, fontSize: 13, fontWeight: 600, color: INK_SOFT }}>{list.length === 1 ? 'Topic' : 'Topics'}</span>
+      <ol className="flex flex-col gap-1.5" style={{ listStyle: 'none', margin: 0, padding: 0 }}>
+        {list.map((t, i) => (
+          <li key={i} className="flex items-start gap-2.5 min-w-0">
+            <span
+              aria-hidden
+              className="inline-flex items-center justify-center flex-none"
+              style={{ width: 22, height: 22, borderRadius: '50%', marginTop: 1, background: 'color-mix(in srgb, var(--gv-main) 9%, transparent)', color: 'var(--gv-main)', fontFamily: FONT, fontSize: 12, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}
+            >
+              {i + 1}
+            </span>
+            <span className="min-w-0 [overflow-wrap:anywhere]" style={{ fontFamily: FONT, fontSize: 14.5, color: INK, lineHeight: 1.4 }}>
+              <span className="sr-only">Topic {i + 1}: </span>{t.trim()}
+            </span>
+          </li>
+        ))}
+      </ol>
+    </div>
+  );
+}
+
 export default function SeatCard({ seat, committee, payments, paperTile, emptyAction }: {
   seat: ParticipantAllocation | null;
   committee: ParticipantCommittee | null;
@@ -59,19 +95,19 @@ export default function SeatCard({ seat, committee, payments, paperTile, emptyAc
 
   if (!seat || !committee) {
     return (
-      <section aria-label="Your seat" className="flex flex-col" style={{ ...cardStyle, padding: '22px 24px' }}>
+      <section aria-label="Your seat" className={OVERVIEW_CARD} style={cardStyle}>
         <CardTitle>Your Seat</CardTitle>
-        <div className="flex flex-col items-center text-center gap-3" style={{ padding: '28px 8px 24px' }}>
-          <span aria-hidden className="inline-flex items-center justify-center" style={{ width: 104, height: 104, borderRadius: '50%', background: '#F6F2EA' }}>
-            <Compass size={40} strokeWidth={STROKE} style={{ color: 'var(--gv-main)' }} />
+        <div className="flex-1 flex flex-col items-center justify-center text-center gap-3" style={{ padding: '12px 8px' }}>
+          <span aria-hidden className="inline-flex items-center justify-center" style={{ width: 84, height: 84, borderRadius: '50%', background: '#F6F2EA' }}>
+            <Compass size={34} strokeWidth={STROKE} style={{ color: 'var(--gv-main)' }} />
           </span>
-          <p style={{ fontFamily: FONT, fontSize: 20, fontWeight: 600, color: INK, margin: 0 }}>No allocation yet</p>
-          <p style={{ fontFamily: FONT, fontSize: 14.5, color: INK_SOFT, margin: 0, lineHeight: 1.5, maxWidth: 360 }}>
+          <p style={{ fontFamily: FONT, fontSize: 19, fontWeight: 600, color: INK, margin: 0 }}>No allocation yet</p>
+          <p style={{ fontFamily: FONT, fontSize: 14, color: INK_SOFT, margin: 0, lineHeight: 1.5, maxWidth: 360 }}>
             Your committee and country appear here once you are allocated.
           </p>
           {emptyAction}
         </div>
-        <div style={{ borderTop: `1px solid ${LINE}`, paddingTop: 16 }}>{payments}</div>
+        <div style={{ borderTop: `1px solid ${LINE}`, paddingTop: 14 }}>{payments}</div>
       </section>
     );
   }
@@ -80,49 +116,50 @@ export default function SeatCard({ seat, committee, payments, paperTile, emptyAc
   const showFull = committee.name.trim() !== short.trim();
 
   return (
-    <section aria-label="Your seat" className="flex flex-col" style={{ ...cardStyle, padding: '22px 24px' }}>
+    <section aria-label="Your seat" className={OVERVIEW_CARD} style={cardStyle}>
       <CardTitle>Your Seat</CardTitle>
 
-      {/* The country, large and centred. */}
-      <div className="flex flex-col items-center text-center" style={{ padding: '26px 8px 22px' }}>
-        {crest ? (
-          <FlagImg code={seat.country_code} logoUrl={crest} label={seat.country_name} size={112} style={{ borderRadius: 16 }} />
-        ) : (
-          <FlagImg
-            code={seat.country_code}
-            label={seat.country_name}
-            size={150}
-            style={{ width: 150, height: 104, filter: 'drop-shadow(0 12px 20px color-mix(in srgb, var(--gv-main) 26%, transparent))' }}
-          />
-        )}
-        <p className="[overflow-wrap:anywhere]" style={{ fontFamily: FONT, fontSize: 28, fontWeight: 700, color: INK, margin: '16px 0 0 0', lineHeight: 1.15, letterSpacing: '-0.01em' }}>
-          {seat.country_name}
-        </p>
-        {partner?.name && (
-          <p className="[overflow-wrap:anywhere]" style={{ fontFamily: FONT, fontSize: 13.5, color: INK_SOFT, margin: '6px 0 0 0' }}>
-            With <ProfileLink userId={partner.userId} name={partner.name}>{partner.name}</ProfileLink>
+      {/* The country: its round flag big, the name beside it, the committee under the name. */}
+      <div className="flex items-center gap-4 min-w-0">
+        <CircleFlag
+          code={seat.country_code}
+          country={seat.country_code ? null : seat.country_name}
+          logoUrl={crest}
+          label={seat.country_name}
+          size={84}
+          loading="eager"
+          decorative
+          style={{ flexShrink: 0, filter: 'drop-shadow(0 10px 18px color-mix(in srgb, var(--gv-main) 22%, transparent))' }}
+        />
+        <div className="min-w-0 flex flex-col gap-1">
+          <p className="[overflow-wrap:anywhere]" style={{ fontFamily: FONT, fontSize: 26, fontWeight: 700, color: INK, margin: 0, lineHeight: 1.15, letterSpacing: '-0.01em' }}>
+            {seat.country_name}
           </p>
-        )}
-
-        {/* The committee: its logo, the short name over the full one. */}
-        <div className="flex items-center gap-3 min-w-0 text-left" style={{ marginTop: 20 }}>
-          <CommitteeDisc src={committeeEmblemSrc(committee.logo_url, committee.name, committee.abbreviation)} size={52} />
-          <div className="min-w-0 flex flex-col gap-0.5">
-            <span className="[overflow-wrap:anywhere]" style={{ fontFamily: FONT, fontSize: 20, fontWeight: 600, color: INK, lineHeight: 1.2 }}>{short}</span>
-            {showFull && (
-              <span className="[overflow-wrap:anywhere]" style={{ fontFamily: FONT, fontSize: 13, color: INK_SOFT, lineHeight: 1.35 }}>{committee.name}</span>
-            )}
+          {partner?.name && (
+            <p className="[overflow-wrap:anywhere]" style={{ fontFamily: FONT, fontSize: 13.5, color: INK_SOFT, margin: 0 }}>
+              With <ProfileLink userId={partner.userId} name={partner.name}>{partner.name}</ProfileLink>
+            </p>
+          )}
+          <div className="flex items-center gap-2.5 min-w-0" style={{ marginTop: 4 }}>
+            <CommitteeDisc src={committeeEmblemSrc(committee.logo_url, committee.name, committee.abbreviation)} size={32} />
+            <div className="min-w-0 flex flex-col">
+              <span className="[overflow-wrap:anywhere]" style={{ fontFamily: FONT, fontSize: 16, fontWeight: 600, color: INK, lineHeight: 1.25 }}>{short}</span>
+              {showFull && (
+                <span className="[overflow-wrap:anywhere]" style={{ fontFamily: FONT, fontSize: 12.5, color: INK_SOFT, lineHeight: 1.35 }}>{committee.name}</span>
+              )}
+            </div>
           </div>
         </div>
       </div>
 
-      <div className="flex flex-col">
-        <div className="grid grid-cols-2 gap-3 items-stretch">
-          <GuideTile committeeId={ccId} />
-          {paperTile}
-        </div>
-        <div style={{ borderTop: `1px solid ${LINE}`, paddingTop: 16, marginTop: 16 }}>{payments}</div>
+      <TopicsList topics={committee.topics} />
+
+      <div className="flex flex-col gap-2.5">
+        <GuideTile committeeId={ccId} />
+        {paperTile}
       </div>
+
+      <div className="mt-auto" style={{ borderTop: `1px solid ${LINE}`, paddingTop: 14 }}>{payments}</div>
     </section>
   );
 }

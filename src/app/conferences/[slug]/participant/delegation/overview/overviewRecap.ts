@@ -21,6 +21,8 @@ export interface Person {
   avatar_url: string | null;
   is_me: boolean;
   role: string;
+  /** The person's account (their public MUN CV), when the viewer may read it. */
+  user_id: string | null;
 }
 
 export interface CommitteeBrief {
@@ -63,6 +65,7 @@ export function buildRecap(d: DelegationOverviewData, today: number, balances: O
   const live = d.members.filter(m => LIVE.has(m.status));
   const toPerson = (m: DelegationOverviewData['members'][number]): Person => ({
     application_id: m.application_id, name: m.name, avatar_url: m.avatar_url, is_me: m.is_me, role: m.role,
+    user_id: d.apps.get(m.application_id)?.user_id ?? null,
   });
   const committeeOf = (applicationId: string) => {
     const id = d.apps.get(applicationId)?.assigned_committee_id ?? null;

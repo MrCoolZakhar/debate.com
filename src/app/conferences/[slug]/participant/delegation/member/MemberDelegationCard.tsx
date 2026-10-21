@@ -3,9 +3,10 @@
 // The Delegation section for a member who does not lead it (taste board 5B,
 // 19 Oct 2026). Leaders get LeaderCard instead; DelegationPanel picks.
 //
-//   1. The delegation: its round crest, name and place with the flag, and
-//      counts as big numbers with their words.
-//   2. Your leaders: every head delegate and faculty advisor.
+//   1. The delegation: its round crest, the name big, place with the flag,
+//      the leaders floating in one line under the name (small avatars +
+//      names, faculty advisors first, no section of their own; owner, 21 Oct
+//      2026), and counts as big numbers with their words.
 //   3. Who is where: members grouped by committee, people without a seat last.
 //      my_delegation_roster gives a member only their OWN allocation today,
 //      so the grouping (and the committees / countries counts) render only
@@ -17,6 +18,10 @@
 //   5. The fee: covered by the delegation, paid, waived, or what is open with
 //      a pay button (my_open_balances, the Payment section's own read).
 //
+// People are listed faculty advisors first, then head delegates, then
+// delegates (CLAUDE.md §8). An avatar opens the person's public MUN CV when
+// their user id is readable (applications: a member reads their own row and
+// the leaders'). Phones get the same cards stacked, tighter.
 // Nothing here shows another member's payment, papers, chair notes or awards.
 
 import { useEffect, useMemo, useState } from 'react';
@@ -36,8 +41,8 @@ import { useOpenBalances } from '../../PayNowCard';
 import LockedPayButton from '../../PaymentsLocked';
 import type { ParticipantAllocation, ParticipantCommittee } from '../../types';
 import {
-  BTN_CLASS, CommitteeDisc, FONT, INK, INK_SOFT, OK_GREEN, RoundAvatar, STROKE,
-  cardStyle, committeeEmblemSrc, linkStyle, primaryBtn,
+  BTN_CLASS, CommitteeDisc, CvAvatar, FONT, INK, INK_SOFT, OK_GREEN, STROKE,
+  cardStyle, committeeEmblemSrc, linkStyle, primaryBtn, roleRank,
 } from '../leaderKit';
 import { DELEGATIONS_V2_DB } from '../v2';
 import { guideState, useCommitteeGuides, useOpenStudyGuide } from '../committee/useCommitteeGuides';
@@ -94,6 +99,30 @@ function useSocietyLook(societyId: string): SocietyLook | null {
   return loaded?.key === societyId ? loaded.look : null;
 }
 
+/** The members' accounts this viewer may read (their own row and the leaders'), by application id. */
+function useMemberUserIds(societyId: string): Map<string, string> {
+  const [loaded, setLoaded] = useState<{ key: string; ids: Map<string, string> } | null>(null);
+  useEffect(() => {
+    if (!societyId) return;
+    let cancelled = false;
+    (async () => {
+      const client = await getFreshAuthedClient();
+      if (!client || cancelled) return;
+      const { data, error } = await client.from('applications').select('id, user_id')
+        .eq('society_id', societyId).in('status', ['accepted', 'assigned', 'checked-in']);
+      if (cancelled || error) return;
+      const ids = new Map<string, string>();
+      for (const r of (data ?? []) as { id: string; user_id: string | null }[]) if (r.user_id) ids.set(r.id, r.user_id);
+      setLoaded({ key: societyId, ids });
+    })().catch(() => { /* no CV links, the avatars still draw */ });
+    return () => { cancelled = true; };
+  }, [societyId]);
+  return loaded?.key === societyId ? loaded.ids : EMPTY_IDS;
+}
+const EMPTY_IDS = new Map<string, string>();
+
+const byRole = (a: RosterMember, b: RosterMember) => roleRank(a.role) - roleRank(b.role) || a.name.localeCompare(b.name);
+
 function PersonName({ m }: { m: RosterMember }) {
   return (
     <span className="[overflow-wrap:anywhere]" style={{ fontFamily: FONT, fontSize: 14, fontWeight: 600, color: INK, lineHeight: 1.3 }}>
@@ -128,12 +157,14 @@ export default function MemberDelegationCard({ conferenceId, conferenceSlug, soc
   const { user } = useAuth();
   const now = useNow();
   const look = useSocietyLook(societyId);
+  const userIds = useMemberUserIds(societyId);
   const balances = useOpenBalances(user?.id ?? null, conferenceId);
 
   const me = members.find(m => m.is_me) ?? null;
-  const leaders = useMemo(() => members.filter(m => m.role === 'head-delegate' || m.role === 'faculty-advisor'), [members]);
+  const leaders = useMemo(() => members.filter(m => m.role === 'head-delegate' || m.role === 'faculty-advisor').sort(byRole), [members]);
   // Faculty advisors never sit in a committee, so "who is where" is students only.
-  const students = useMemo(() => members.filter(m => m.role !== 'faculty-advisor'), [members]);
+  const students = useMemo(() => members.filter(m => m.role !== 'faculty-advisor').sort(byRole), [members]);
+  const everyone = useMemo(() => [...members].sort(byRole), [members]);
 
   // Committee groups: only with every member's seat (DELEGATIONS_V2_DB).
   const groups = useMemo(() => {
@@ -220,18 +251,34 @@ export default function MemberDelegationCard({ conferenceId, conferenceSlug, soc
   );
 
   const header = (
-    <div style={cardStyle} className="flex flex-col gap-4 p-5 @[640px]:p-6 @[900px]:flex-row @[900px]:items-center @[900px]:justify-between">
-      <div className="flex items-center gap-3.5 min-w-0">
-        <DelegationCrest name={societyName} logoUrl={look?.logo_url ?? null} size={60} />
-        <div className="min-w-0 flex flex-col gap-1">
-          <span className="[overflow-wrap:anywhere]" style={{ fontFamily: FONT, fontSize: 21, fontWeight: 600, color: INK, lineHeight: 1.2 }}>{societyName}</span>
-          {place && (
-            <span className="flex items-center gap-1.5" style={{ fontFamily: FONT, fontSize: 13, color: INK_SOFT }}>
-              {look?.country_code && <CircleFlag code={look.country_code} size={16} decorative />}
-              <span className="[overflow-wrap:anywhere]">{place}</span>
-            </span>
-          )}
+    <div style={cardStyle} className="flex flex-col gap-4 p-[18px] @[640px]:p-6 @[900px]:flex-row @[900px]:items-center @[900px]:justify-between">
+      <div className="flex flex-col gap-3 min-w-0">
+        <div className="flex items-center gap-3.5 min-w-0">
+          <DelegationCrest name={societyName} logoUrl={look?.logo_url ?? null} size={60} />
+          <div className="min-w-0 flex flex-col gap-1">
+            <span className="[overflow-wrap:anywhere]" style={{ fontFamily: FONT, fontSize: 28, fontWeight: 700, color: INK, lineHeight: 1.12, letterSpacing: '-0.01em' }}>{societyName}</span>
+            {place && (
+              <span className="flex items-center gap-1.5" style={{ fontFamily: FONT, fontSize: 13.5, color: INK_SOFT }}>
+                {look?.country_code && <CircleFlag code={look.country_code} size={16} decorative />}
+                <span className="[overflow-wrap:anywhere]">{place}</span>
+              </span>
+            )}
+          </div>
         </div>
+        {leaders.length > 0 && (
+          <ul className="flex flex-wrap items-center gap-x-4 gap-y-2" style={{ listStyle: 'none', margin: 0, padding: 0 }} aria-label="Your leaders">
+            {leaders.map(l => (
+              <li key={l.application_id} className="inline-flex items-center gap-2 min-w-0" title={ROLE_WORD[l.role]}>
+                <CvAvatar userId={userIds.get(l.application_id)} name={l.name} url={l.avatar_url} size={28} seed={l.application_id} />
+                <span className="[overflow-wrap:anywhere]" style={{ fontFamily: FONT, fontSize: 14, fontWeight: 600, color: INK, lineHeight: 1.25 }}>
+                  {l.name}
+                  {l.is_me && <span style={{ fontWeight: 500, color: INK_SOFT }}> (you)</span>}
+                  <span className="sr-only">, {ROLE_WORD[l.role]}</span>
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
       <div
         className="grid text-center @[900px]:min-w-[360px]"
@@ -248,33 +295,13 @@ export default function MemberDelegationCard({ conferenceId, conferenceSlug, soc
     </div>
   );
 
-  const leadersCard = leaders.length > 0 && (
-    <div style={cardStyle} className="flex flex-col gap-3.5 p-[18px] @[640px]:p-6">
-      <CardTitle>Your Leaders</CardTitle>
-      <div className="grid grid-cols-2 gap-3.5 @[760px]:grid-cols-3 @[1100px]:grid-cols-4">
-        {leaders.map(l => (
-          <div key={l.application_id} className="flex items-center gap-2.5 min-w-0">
-            <RoundAvatar name={l.name} url={l.avatar_url} size={44} seed={l.application_id} />
-            <div className="min-w-0 flex flex-col gap-px">
-              <span className="[overflow-wrap:anywhere]" style={{ fontFamily: FONT, fontSize: 14, fontWeight: 600, color: INK, lineHeight: 1.3 }}>
-                {l.name}
-                {l.is_me && <span style={{ fontWeight: 500, color: INK_SOFT }}> (you)</span>}
-              </span>
-              <span style={{ fontFamily: FONT, fontSize: 12, color: INK_SOFT }}>{ROLE_WORD[l.role]}</span>
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-
   const personRow = (m: RosterMember, seat: MemberSeat | null, indent: boolean) => (
     <div
       key={m.application_id}
       className="flex items-center gap-3"
-      style={{ padding: indent ? '7px 18px 7px 52px' : '9px 18px', background: m.is_me ? MINE_TINT : 'transparent' }}
+      style={{ padding: indent ? '7px 18px 7px 40px' : '8px 18px', background: m.is_me ? MINE_TINT : 'transparent' }}
     >
-      <RoundAvatar name={m.name} url={m.avatar_url} size={38} seed={m.application_id} />
+      <CvAvatar userId={userIds.get(m.application_id)} name={m.name} url={m.avatar_url} size={38} seed={m.application_id} />
       <div className="flex-1 min-w-0 flex flex-col gap-px">
         <PersonName m={m} />
         {!indent && <span style={{ fontFamily: FONT, fontSize: 12, color: INK_SOFT }}>{ROLE_WORD[m.role]}{m.claimed ? '' : ', invited'}</span>}
@@ -310,7 +337,7 @@ export default function MemberDelegationCard({ conferenceId, conferenceSlug, soc
       ) : (
         <div className="@container">
           <div className="grid @[720px]:grid-cols-2" style={{ borderTop: ROW_LINE }}>
-            {members.map(m => personRow(m, m.is_me ? (m.allocation as MemberSeat | null) : null, false))}
+            {everyone.map(m => personRow(m, m.is_me ? (m.allocation as MemberSeat | null) : null, false))}
           </div>
         </div>
       )}
@@ -350,7 +377,6 @@ export default function MemberDelegationCard({ conferenceId, conferenceSlug, soc
   return (
     <div className="@container flex flex-col gap-4 @[640px]:gap-6">
       {header}
-      {leadersCard}
       <div className="grid gap-4 @[640px]:gap-6 @[900px]:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)] items-start">
         {whoCard}
         {(guidesCard || fee) && (

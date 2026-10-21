@@ -23,6 +23,19 @@
 // their identity), keeps everything on screen when it fails, and stands down
 // while a local write runs (`trackWrite`) or a drag or confirm is open
 // (`holdLive`); a quiet read that started before a local write is dropped.
+//
+// Queued writes (owner, 21 Oct 2026: two allocations given at once showed
+// loading, then one reverted and came back). `queueWrite(lane, work)` runs the
+// writes of one lane (a delegation) one at a time, in the order pressed, and
+// counts as a write in flight from the press, so the live re-read waits for the
+// whole queue. The caller lays its change over the screen at once and keeps it
+// until `settleRead()` (one re-read that is sure to be APPLIED, or to have
+// failed: a superseded read hands over to the newer one) has come back after
+// the lane drained; `landStamp()` / the stamp settleRead resolves with tell it
+// which landed writes that read already includes. A refusal drops only its own
+// change. Why the flicker happened: each press re-read on its own, a later read
+// superseded an earlier one (dropped without applying), and the earlier press
+// cleared its overlay before any read showing it had landed.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth } from '@/components/AuthProvider';
@@ -108,6 +121,12 @@ export function useDelegationsData<M extends DelegationMemberLite>(args: {
   const writeEpoch = useRef(0);
   /** Open drags and confirms that hold the live re-read back. */
   const holds = useRef(new Set<string>());
+  /** Write lanes: the tail of each lane's queue and how many writes it holds. */
+  const lanes = useRef(new Map<string, { tail: Promise<unknown>; count: number }>());
+  /** Bumped when a queued write lands (landStamp). */
+  const landSeq = useRef(0);
+  /** settleRead callers waiting for a load at or after their seq to finish. */
+  const waiters = useRef<{ seq: number; resolve: () => void }[]>([]);
 
   const load = useCallback(async (opts?: { quiet?: boolean }) => {
     if (!userId) return;
@@ -115,9 +134,12 @@ export function useDelegationsData<M extends DelegationMemberLite>(args: {
     const seq = ++loadSeq.current;
     const epoch = writeEpoch.current;
     loadsInFlight.current += 1;
+    // A load overtaken by a newer one hands its waiters over to it.
+    let superseded = false;
     try {
       const supabase = await getFreshAuthedClient();
-      if (!supabase || seq !== loadSeq.current) return;
+      if (seq !== loadSeq.current) { superseded = true; return; }
+      if (!supabase) return;
       const [socRes, advRes, invRes, payRes, comRes, memRes] = await Promise.all([
         supabase.from('societies')
           .select('id, name, spots_purchased, advisor_spots_purchased, created_at, city, country_code, logo_url')
@@ -155,7 +177,7 @@ export function useDelegationsData<M extends DelegationMemberLite>(args: {
             .range(from, to))
           : Promise.resolve({ data: [] as M[], error: null }),
       ]);
-      if (seq !== loadSeq.current) return;
+      if (seq !== loadSeq.current) { superseded = true; return; }
       // A quiet read that a local write overtook would undo it on screen: dropped.
       if (quiet && (epoch !== writeEpoch.current || writesInFlight.current > 0)) return;
       if (socRes.error || memRes.error) {
@@ -190,6 +212,13 @@ export function useDelegationsData<M extends DelegationMemberLite>(args: {
       }
     } finally {
       loadsInFlight.current -= 1;
+      if (!superseded) {
+        const done = waiters.current.filter(w => w.seq <= seq);
+        if (done.length > 0) {
+          waiters.current = waiters.current.filter(w => w.seq > seq);
+          for (const w of done) w.resolve();
+        }
+      }
     }
   }, [userId, conferenceId, ownMembers]);
 
@@ -203,6 +232,47 @@ export function useDelegationsData<M extends DelegationMemberLite>(args: {
       writesInFlight.current -= 1;
     }
   }, []);
+
+  /**
+   * Queues a write on a lane (one delegation): writes of a lane run one at a
+   * time in the order queued; each counts as in flight from the moment it is
+   * queued, so the live re-read waits for the whole queue. Resolves with the
+   * write's own result (a throw rejects only that write).
+   */
+  const queueWrite = useCallback(<T,>(lane: string, work: () => Promise<T>): Promise<T> => {
+    const l = lanes.current.get(lane) ?? { tail: Promise.resolve() as Promise<unknown>, count: 0 };
+    l.count += 1;
+    writesInFlight.current += 1;
+    writeEpoch.current += 1;
+    lanes.current.set(lane, l);
+    const run = l.tail.then(() => work()).finally(() => {
+      l.count -= 1;
+      writesInFlight.current -= 1;
+      if (l.count === 0 && lanes.current.get(lane) === l) lanes.current.delete(lane);
+    });
+    l.tail = run.catch(() => undefined);
+    return run;
+  }, []);
+
+  /** True while a lane still has a write queued or running. */
+  const laneBusy = useCallback((lane: string) => (lanes.current.get(lane)?.count ?? 0) > 0, []);
+
+  /** Marks a landed write: call right after it resolves ok; returns its stamp. */
+  const landStamp = useCallback(() => ++landSeq.current, []);
+
+  /**
+   * One re-read that is sure to have been applied (or to have failed) when it
+   * resolves, never one silently overtaken. Resolves with the landed-write
+   * stamp it started after: every write stamped at or below it is in the read.
+   */
+  const settleRead = useCallback((): Promise<number> => {
+    const stamp = landSeq.current;
+    if (!userId) return Promise.resolve(stamp);
+    const seq = loadSeq.current + 1;
+    const p = new Promise<number>(resolve => { waiters.current.push({ seq, resolve: () => resolve(stamp) }); });
+    void load();
+    return p;
+  }, [userId, load]);
 
   /** Holds the live re-read back while a drag or a confirm is open. */
   const holdLive = useCallback((key: string, on: boolean) => {
@@ -265,6 +335,10 @@ export function useDelegationsData<M extends DelegationMemberLite>(args: {
     reload: load,
     trackWrite,
     holdLive,
+    queueWrite,
+    laneBusy,
+    landStamp,
+    settleRead,
   };
 }
 

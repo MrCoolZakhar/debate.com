@@ -9,6 +9,7 @@ import { CircleFlag } from '@/components/CircleFlag';
 import { committeeDisplayName } from '@/lib/presetNames';
 import { getCountryByCode } from '@/lib/countries';
 import { countryShortName } from '@/app/manage/[slug]/assignment/displayNames';
+import { splitDelegationName } from '@/lib/delegationName';
 import {
   FONT, INK, INK_SOFT, FOREST, committeeEmblemSrc, CommitteeDisc,
 } from '@/app/conferences/[slug]/participant/delegation/leaderKit';
@@ -66,6 +67,24 @@ export function PlaceLine({ city, countryCode, extra, size = 16, fontSize = 13, 
   );
 }
 
+/** A delegation's name on two rows (src/lib/delegationName.ts): the main words
+ *  big, the trailing words ("MUN Society") small beneath, wrapping, never cut.
+ *  A long main line draws one step smaller. The font family is inherited. */
+export function DelegationNameLines({ name, size, restSize, weight = 700, color = INK, restColor = INK_SOFT, gap = 1 }: {
+  name: string; size: number; restSize?: number; weight?: number; color?: string; restColor?: string; gap?: number;
+}) {
+  const { main, rest, long } = splitDelegationName(name);
+  const mainSize = long ? Math.round(size * 0.86 * 2) / 2 : size;
+  return (
+    <span className="flex flex-col min-w-0" style={{ gap }}>
+      <span className="[overflow-wrap:anywhere]" style={{ fontSize: mainSize, fontWeight: weight, color, lineHeight: 1.18, letterSpacing: mainSize >= 20 ? '-0.015em' : undefined }}>{main}</span>
+      {rest && (
+        <span className="[overflow-wrap:anywhere]" style={{ fontSize: restSize ?? Math.max(11.5, Math.round(size * 0.62 * 2) / 2), fontWeight: 500, color: restColor, lineHeight: 1.25 }}>{rest}</span>
+      )}
+    </span>
+  );
+}
+
 /** A committee's short label: its acronym, else its display name. */
 export function committeeShort(name: string, abbreviation: string | null): string {
   return (abbreviation ?? '').trim() || committeeDisplayName(name, abbreviation);
@@ -117,3 +136,34 @@ export function SkeletonRows({ rows = 5, height = 44 }: { rows?: number; height?
   );
 }
 
+
+/** The delegation pop-up's body colour behind its section cards. */
+export const POPUP_BODY_BG = '#F7F3EA';
+
+/** One section of the delegation pop-up (owner, 21 Oct 2026: "sections run
+ *  together"): a white card with a soft shadow, a plain title on its own line
+ *  with an optional count or action beside it, then the content. */
+export function PopupSection({ title, aside, children, padded = true, className, style }: {
+  title?: string;
+  aside?: React.ReactNode;
+  children: React.ReactNode;
+  /** false: the content runs to the card's edges (tables with their own row padding). */
+  padded?: boolean;
+  className?: string;
+  style?: React.CSSProperties;
+}) {
+  return (
+    <section className={`flex flex-col ${className ?? ''}`}
+      style={{ background: '#FFFFFF', borderRadius: 16, boxShadow: '0 1px 2px rgba(27,56,40,0.05), 0 6px 18px rgba(27,56,40,0.06)', ...style }}>
+      {(title || aside) && (
+        <div className="flex items-center justify-between flex-wrap" style={{ gap: '8px 16px', padding: '16px 20px 4px' }}>
+          {title && <h3 style={{ margin: 0, fontFamily: FONT, fontSize: 16, fontWeight: 600, color: INK }}>{title}</h3>}
+          {aside}
+        </div>
+      )}
+      <div className="flex flex-col min-w-0" style={padded ? { padding: '12px 20px 18px' } : { paddingBottom: 8 }}>
+        {children}
+      </div>
+    </section>
+  );
+}

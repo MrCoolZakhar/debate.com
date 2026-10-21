@@ -1,12 +1,22 @@
 -- scratch-committee-roster-avatars.sql
 -- DRAFT, NOT APPLIED. Apply only through the chat's Supabase work. 21 Oct 2026.
 --
--- my_committee_roster returns no photo, so committee lists draw initials. This
--- adds avatar_url (profiles.avatar_url of the person already named on the row)
--- to the result. Nothing else changes: same gate, same rows, same order, and
--- the photo is null exactly where delegate_name is null (an open seat) or the
--- person has no photo. Based on the live body read with pg_get_functiondef on
--- 21 Oct 2026.
+-- my_committee_roster returns no photo and no account, so committee lists draw
+-- initials and cannot open anyone's MUN CV. This adds two columns:
+--   avatar_url  profiles.avatar_url of the person already named on the row
+--   user_id     that person's account (profiles.id), so the client links the
+--               avatar to their public MUN CV at /cv/<user_id> (21 Oct 2026,
+--               owner: "clicking a person's avatar opens their public MUN CV").
+--               The CV page enforces privacy itself (get_public_cv, the
+--               cv_entry_visible policy: a private CV shows only the name and
+--               photo), so handing out the id reveals nothing the CV page would
+--               not; it is the same id ProfileLink already puts in /cv/ links.
+-- Nothing else changes: same gate, same rows, same order, and both new columns
+-- are null exactly where delegate_name is null (an open seat); avatar_url is
+-- also null when the person has no photo, user_id when an imported person has
+-- not claimed their application yet. Based on the live body read with
+-- pg_get_functiondef on 21 Oct 2026 (re-checked the same day: the live return
+-- type is still the six columns).
 --
 -- The return type changes, so the function is dropped and re-created (CREATE OR
 -- REPLACE cannot add an OUT column). The grant is restated to match the live
@@ -14,16 +24,18 @@
 --   select grantee, privilege_type from information_schema.routine_privileges
 --    where routine_name = 'my_committee_roster';
 --
--- Client that would read it (NOT edited in this run):
---   src/app/conferences/[slug]/participant/delegation/committee/committeeSlots.ts
---   (map avatar_url onto the slot and pass it to the avatar instead of initials)
+-- Client that reads it (ALREADY WIRED, 21 Oct 2026; it reads both columns
+-- when present and falls back to initials and no link while they are absent):
+--   src/app/conferences/[slug]/participant/delegation/committee/committeeRoster.ts
+--   (avatar_url, user_id on CommitteeRosterRow), drawn by CommitteePopup.tsx
+--   (CommitteeMatrix) and committee/MyCommitteeSection.tsx through CvAvatar.
 
 begin;
 
 drop function if exists public.my_committee_roster(uuid);
 
 create function public.my_committee_roster(p_conference_committee uuid)
- returns table(country_code text, country_name text, seat smallint, delegate_name text, society_name text, is_mine boolean, avatar_url text)
+ returns table(country_code text, country_name text, seat smallint, delegate_name text, society_name text, is_mine boolean, avatar_url text, user_id uuid)
  language plpgsql
  stable security definer
  set search_path to 'public', 'pg_temp'
@@ -73,7 +85,10 @@ begin
          coalesce(s.id in (select public.my_society_ids()), false),
          -- NEW: the named person's photo, only where a person is named.
          case when ca.user_id is null and ca.application_id is null then null
-              else nullif(btrim(p.avatar_url), '') end
+              else nullif(btrim(p.avatar_url), '') end,
+         -- NEW: the named person's account, for the /cv/<user_id> link.
+         case when ca.user_id is null and ca.application_id is null then null
+              else p.id end
     from conference_allocations ca
     left join applications a on a.id = ca.application_id
     left join profiles p on p.id = coalesce(ca.user_id, a.user_id)

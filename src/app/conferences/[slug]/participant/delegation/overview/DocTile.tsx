@@ -1,17 +1,18 @@
 'use client';
 
-// One small document tile in "Your Seat" (owner, 21 Oct 2026: the study guide
-// and the position paper side by side in ONE line, two small equal tiles):
-// a thin Lucide icon, the name, the date small beneath, one action. Drawn by
-// SeatCard's GuideTile and PositionPaperCard's tile variant; two of them sit in
-// a two-column grid, so they are always the same width and height.
+// One small document tile in "Your Seat" (owner, 21 Oct 2026): the study guide
+// and the position paper. Compact and on ONE row (owner, 21 Oct 2026: "the
+// action is one big button right next to the text"): a thin Lucide icon, the
+// name with the date small beneath, then ONE big button to the right on the
+// same row (Open for the guide, Upload or Submitted for the paper). Drawn by
+// SeatCard's GuideTile and PositionPaperCard's tile variant.
 
 import type { LucideIcon } from 'lucide-react';
 import { BTN_CLASS, FONT, INK, INK_SOFT, STROKE } from '../leaderKit';
 
 const TILE_LINE = 'color-mix(in srgb, var(--gv-main) 12%, transparent)';
 
-/** The tile's one action: a small button in the conference's colour, icon first. */
+/** The tile's one action: a big button in the conference's colour, icon first. */
 export function TileAction({ Icon, label, onClick, busy, tone = 'main' }: {
   Icon?: LucideIcon;
   label: string;
@@ -27,14 +28,14 @@ export function TileAction({ Icon, label, onClick, busy, tone = 'main' }: {
       onClick={onClick}
       disabled={busy}
       aria-busy={busy || undefined}
-      className={`${BTN_CLASS} inline-flex items-center gap-1.5 rounded-lg text-left [overflow-wrap:anywhere]`}
+      className={`${BTN_CLASS} inline-flex items-center justify-center gap-2 rounded-[10px] text-left [overflow-wrap:anywhere]`}
       style={{
-        minHeight: 34, padding: '0 12px', border: done ? '1px solid color-mix(in srgb, #1F6B45 28%, transparent)' : 'none',
+        minHeight: 44, minWidth: 112, padding: '0 16px', border: done ? '1px solid color-mix(in srgb, #1F6B45 28%, transparent)' : 'none',
         background: done ? '#FFFFFF' : 'var(--gv-main)', color: done ? '#1F6B45' : 'var(--gv-on-main)',
-        fontFamily: FONT, fontSize: 13, fontWeight: 600, cursor: busy ? 'wait' : 'pointer', opacity: busy ? 0.7 : 1,
+        fontFamily: FONT, fontSize: 15, fontWeight: 600, cursor: busy ? 'wait' : 'pointer', opacity: busy ? 0.7 : 1,
       }}
     >
-      {Icon && <Icon size={15} strokeWidth={STROKE} aria-hidden />}
+      {Icon && <Icon size={18} strokeWidth={STROKE} aria-hidden />}
       {label}
     </button>
   );
@@ -50,17 +51,19 @@ export default function DocTile({ Icon, title, line, lineColor, action }: {
 }) {
   return (
     <div
-      className="flex flex-col gap-1 min-w-0 h-full"
-      style={{ padding: '14px 14px 12px', borderRadius: 14, border: `1px solid ${TILE_LINE}`, background: '#FFFFFF' }}
+      className="flex items-center gap-3 min-w-0"
+      style={{ padding: '10px 10px 10px 14px', borderRadius: 14, border: `1px solid ${TILE_LINE}`, background: '#FFFFFF', minHeight: 64 }}
     >
-      <Icon size={22} strokeWidth={STROKE} aria-hidden style={{ color: INK }} />
-      <span className="[overflow-wrap:anywhere]" style={{ fontFamily: FONT, fontSize: 14.5, fontWeight: 600, color: INK, marginTop: 6, lineHeight: 1.3 }}>
-        {title}
-      </span>
-      <span className="[overflow-wrap:anywhere]" style={{ fontFamily: FONT, fontSize: 12.5, color: lineColor ?? INK_SOFT, lineHeight: 1.4, minHeight: 17 }}>
-        {line}
-      </span>
-      {action && <div className="mt-auto pt-2 flex flex-wrap gap-1.5">{action}</div>}
+      <Icon size={22} strokeWidth={STROKE} aria-hidden style={{ color: INK, flexShrink: 0 }} />
+      <div className="flex-1 min-w-0 flex flex-col gap-0.5">
+        <span className="[overflow-wrap:anywhere]" style={{ fontFamily: FONT, fontSize: 15, fontWeight: 600, color: INK, lineHeight: 1.3 }}>
+          {title}
+        </span>
+        <span className="[overflow-wrap:anywhere]" style={{ fontFamily: FONT, fontSize: 12.5, color: lineColor ?? INK_SOFT, lineHeight: 1.35 }}>
+          {line}
+        </span>
+      </div>
+      {action && <div className="flex-none flex flex-col items-end gap-1.5">{action}</div>}
     </div>
   );
 }

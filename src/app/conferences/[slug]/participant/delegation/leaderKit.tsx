@@ -6,6 +6,7 @@
 
 import { matchPresetEmblem } from '@/lib/presetNames';
 import { NEU, OUTFIT } from '@/components/neu';
+import ProfileLink from '@/components/ProfileLink';
 
 export const FONT = OUTFIT;
 export const INK = NEU.ink;
@@ -92,6 +93,36 @@ export function RoundAvatar({ name, url, size = 54, seed }: { name: string; url:
     </span>
   );
 }
+
+/** A person's avatar that opens their public MUN CV (/cv/<id>) wherever we
+ *  know who they are (CLAUDE.md §8). No user id, no link: the bare avatar.
+ *  `nested` stops the click reaching a clickable row underneath. */
+export function CvAvatar({ userId, name, url, size = 40, seed, nested = true }: {
+  userId: string | null | undefined;
+  name: string;
+  url: string | null;
+  size?: number;
+  seed?: string;
+  nested?: boolean;
+}) {
+  const avatar = <RoundAvatar name={name} url={url} size={size} seed={seed} />;
+  if (!userId) return avatar;
+  return (
+    <ProfileLink
+      userId={userId}
+      name={name}
+      nested={nested}
+      className="inline-flex flex-shrink-0 rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gv-main)] focus-visible:ring-offset-2"
+      style={{ lineHeight: 0 }}
+    >
+      {avatar}
+    </ProfileLink>
+  );
+}
+
+/** Faculty advisors first, then head delegates, then delegates (CLAUDE.md §8). */
+export const ROLE_RANK: Record<string, number> = { 'faculty-advisor': 0, 'head-delegate': 1, delegate: 2 };
+export const roleRank = (role: string | null | undefined) => ROLE_RANK[role ?? ''] ?? 3;
 
 /** A big number with its word beside it (CLAUDE.md §8: never a count pill). */
 export function StatNumber({ n, word }: { n: number; word: string }) {

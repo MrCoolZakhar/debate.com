@@ -1,11 +1,12 @@
 'use client';
 
 // Study guide card, the delegate's committee's study guide(s). Same data
-// source the old documents tab used (study_guides table).
+// source the old documents tab used (study_guides table). Each guide is one
+// row with Open (owner, 21 Oct 2026), beside the position paper in Documents.
 
 import { useState, useEffect, useCallback } from 'react';
 import { useNow } from '@/lib/useNow';
-import { FileText, Download } from 'lucide-react';
+import { ExternalLink, FileText } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { SectionCard, OUTFIT } from './shared';
@@ -85,6 +86,7 @@ export default function StudyGuideCard({ committeeId }: { committeeId: string | 
               key={sg.id}
               type="button"
               onClick={() => openGuide(sg.file_url)}
+              aria-label={`Open ${sg.title}`}
               className="flex w-full items-center gap-3.5 rounded-2xl px-4 py-3 text-left transition-colors cursor-pointer focus:outline-none"
               style={{ border: '1px solid rgba(221,212,192,0.7)', backgroundColor: 'rgba(237,231,216,0.25)', textDecoration: 'none' }}
               onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'color-mix(in srgb, var(--gv-main) 5%, transparent)'; }}
@@ -100,7 +102,14 @@ export default function StudyGuideCard({ committeeId }: { committeeId: string | 
                 <p title={sg.title} style={{ color: '#1C1410', fontFamily: OUTFIT, fontSize: 15.5, fontWeight: 800, lineHeight: 1.3, overflowWrap: 'anywhere', margin: 0 }}>{sg.title}</p>
                 <p style={{ color: INK_SOFT, fontFamily: OUTFIT, fontSize: 13, lineHeight: 1.45, margin: '3px 0 0', overflowWrap: 'anywhere' }}>{sg.file_name}</p>
               </div>
-              <Download size={15} style={{ color: '#9A8A78', flexShrink: 0 }} />
+              <span
+                aria-hidden
+                className="inline-flex items-center justify-center gap-1.5 flex-shrink-0"
+                style={{ minHeight: 40, padding: '0 14px', borderRadius: 10, background: 'var(--gv-main)', color: 'var(--gv-on-main)', fontFamily: OUTFIT, fontSize: 14, fontWeight: 600 }}
+              >
+                <ExternalLink size={15} strokeWidth={1.5} />
+                Open
+              </span>
             </button>
           ))}
         </div>

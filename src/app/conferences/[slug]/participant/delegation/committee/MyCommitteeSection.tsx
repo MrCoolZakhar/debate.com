@@ -13,9 +13,11 @@
 //
 // People: the viewer is drawn from their own profile (photo and name) on their
 // allocation; their delegation's other rows and everyone else come from
-// my_committee_roster (published allocations, names but no photos: initials).
-// The study guide, the paper upload, the topics and the room code live on the
-// Overview and in Documents.
+// my_committee_roster (published allocations; photos and user ids once
+// scratch-committee-roster-avatars.sql is applied, initials until then).
+// Every avatar with a known user id opens that person's public MUN CV.
+// The committee's topics sit under its name (as in Your Seat); the study guide,
+// the paper upload and the room code live on the Overview and in Documents.
 
 import { useMemo } from 'react';
 import { Landmark } from 'lucide-react';
@@ -28,6 +30,7 @@ import { DELEGATIONS_V2_DB } from '../v2';
 import { CommitteeMatrix, type CommitteeOpenSeat, type CommitteeSeatPerson } from '../CommitteePopup';
 import { useCommitteeRoster, type CommitteeRosterRow } from './committeeRoster';
 import { paperKey } from './committeePapers';
+import { TopicsList } from '../overview/SeatCard';
 
 export interface PaperSummary {
   enabled: boolean;
@@ -45,7 +48,8 @@ export default function MyCommitteeSection({ committee, myAllocation, paper, lea
   /** A head delegate: their delegation's papers are readable today too. */
   leads: boolean;
 }) {
-  const { profile } = useAuth();
+  const { user, profile } = useAuth();
+  const myUserId = user?.id ?? null;
   const ccId = myAllocation?.conference_committee_id ?? null;
   const seatCrest = useSeatCrest(myAllocation);
   const roster = useCommitteeRoster(ccId);
@@ -71,6 +75,7 @@ export default function MyCommitteeSection({ committee, myAllocation, paper, lea
       country_code: myAllocation.country_code,
       seatLogo: seatCrest,
       is_me: true,
+      user_id: myUserId,
     };
     const rest = rows.filter(r => r !== meRow);
     const mates: CommitteeSeatPerson[] = rest
@@ -78,10 +83,11 @@ export default function MyCommitteeSection({ committee, myAllocation, paper, lea
       .map((r, i) => ({
         application_id: `mate-${paperKey(r.country_code, r.country_name)}-${r.seat ?? ''}-${i}`,
         name: r.display_name ?? 'Delegate',
-        avatar_url: null,
+        avatar_url: r.avatar_url,
         country_name: r.country_name,
         country_code: r.country_code,
         seatLogo: r.country_logo_url,
+        user_id: r.user_id,
       }));
     const everyoneElse = rest.filter(r => !r.is_mine && !!r.display_name);
     // The delegation's published allocation with nobody in it yet.
@@ -90,7 +96,7 @@ export default function MyCommitteeSection({ committee, myAllocation, paper, lea
       .map(r => ({ country_code: r.country_code, country_name: r.country_name }));
     const keys = [paperKey(me.country_code, me.country_name), ...(leads ? mates.map(m => paperKey(m.country_code, m.country_name)) : [])];
     return { people: [me, ...mates], others: everyoneElse, openSeats: open, paperKeys: keys };
-  }, [roster, myAllocation, myName, profile?.avatar_url, seatCrest, leads]);
+  }, [roster, myAllocation, myName, profile?.avatar_url, seatCrest, leads, myUserId]);
 
   if (!committee || !myAllocation || !ccId) {
     return (
@@ -107,14 +113,15 @@ export default function MyCommitteeSection({ committee, myAllocation, paper, lea
   const showFull = committee.name.trim() !== short.trim();
 
   return (
-    <section aria-label="Your committee" className="flex flex-col gap-5 min-w-0" style={{ ...cardStyle, padding: 24 }}>
+    <section aria-label="Your committee" className="flex flex-col gap-5 min-w-0 p-[18px] sm:p-6" style={cardStyle}>
       <div className="flex items-start gap-4">
         <CommitteeDisc src={committeeEmblemSrc(committee.logo_url, committee.name, committee.abbreviation)} size={56} />
         <div className="min-w-0 flex-1">
-          <h2 className="[overflow-wrap:anywhere]" style={{ fontFamily: FONT, fontSize: 22, fontWeight: 600, color: INK, margin: 0, lineHeight: 1.2 }}>{short}</h2>
-          {showFull && <p className="[overflow-wrap:anywhere]" style={{ fontFamily: FONT, fontSize: 14, color: INK_SOFT, margin: '3px 0 0 0' }}>{committee.name}</p>}
+          <h2 className="[overflow-wrap:anywhere]" style={{ fontFamily: FONT, fontSize: 24, fontWeight: 600, color: INK, margin: 0, lineHeight: 1.2 }}>{short}</h2>
+          {showFull && <p className="[overflow-wrap:anywhere]" style={{ fontFamily: FONT, fontSize: 15, color: INK_SOFT, margin: '3px 0 0 0' }}>{committee.name}</p>}
         </div>
       </div>
+      <TopicsList topics={committee.topics} />
       <CommitteeMatrix
         committeeId={ccId}
         people={people}

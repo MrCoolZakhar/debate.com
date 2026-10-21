@@ -7,19 +7,20 @@
 //                    `notice` (documents the organisers need back). There is
 //                    no "Your next step" line any more (owner, 21 Oct 2026):
 //                    the payment sits in Your Seat, papers in its tile.
-//   Two columns on laptops, stacked on phones:
-//     left           "Your Seat" (SeatCard: the big flag on a tall card, the
-//                    committee's logo and name, ONE line of two small tiles,
-//                    the study guide and the position paper
+//   Two columns on laptops, EXACTLY the same size and both inside one screen
+//   at 1280x800; stacked compact cards on phones (owner, 21 Oct 2026):
+//     left           "Your Seat" (SeatCard: the ROUND flag, the country, the
+//                    committee, its topics numbered, the study guide and the
+//                    position paper as one-row tiles with one big button each
 //                    (PositionPaperCard variant="tile": Upload or Submitted),
 //                    then the payment). An advisor holds no seat: their
 //                    delegation's committees (CommitteesBrief) and their
 //                    payment instead.
-//     right          "Your Delegation" (DelegationCard: crest, name, city and
-//                    country, counts, leaders with photos; for a leader the
-//                    papers submitted N of M and their own payments, the
-//                    Financials card's numbers; for everyone the next three
-//                    dates, compact).
+//     right          "Your Delegation" (DelegationCard: crest and the name
+//                    big, the leaders floating in one line under it, counts;
+//                    for a leader the papers submitted N of M and their own
+//                    payments; for everyone the next three dates, one line
+//                    each).
 // Reads: useDelegationOverview (re-read in place on every landed change on the
 // leader card, so "Your Seat" appears the moment a leader allocates
 // themselves), my_open_balances, and for a leader my_pay_overview
@@ -137,7 +138,7 @@ export default function DelegationOverview({
           <div className="grid gap-6 @[760px]:grid-cols-2 items-start">
             <div className="flex flex-col items-center gap-4" style={{ ...cardStyle, padding: '22px 24px 28px' }}>
               <SkeletonBlock width="35%" height={18} radius={6} />
-              <SkeletonBlock width={150} height={100} radius={12} />
+              <SkeletonBlock width={84} height={84} radius={42} />
               <SkeletonBlock width="50%" height={24} radius={8} />
               <SkeletonBlock width="60%" height={16} radius={6} />
               <SkeletonBlock height={44} radius={10} />
@@ -171,7 +172,7 @@ export default function DelegationOverview({
   const left = isAdvisor ? (
     <>
       <CommitteesBrief briefs={recap.committeesBrief} onOpen={() => onOpenSection('committees')} />
-      <section aria-label="Your payment" className="flex flex-col gap-4" style={{ ...cardStyle, padding: '22px 24px' }}>
+      <section aria-label="Your payment" className="flex flex-col gap-4 p-[18px] sm:px-6 sm:py-[22px]" style={cardStyle}>
         <CardTitle>Your Payment</CardTitle>
         {payments}
       </section>
@@ -197,10 +198,13 @@ export default function DelegationOverview({
   return (
     <>
       {lead}
-      <div className="@container flex flex-col gap-6 min-w-0">
-        <div className="grid gap-6 @[760px]:grid-cols-2 items-start">
-          <div className="flex flex-col gap-6 min-w-0">{left}</div>
-          <div className="flex flex-col gap-6 min-w-0">
+      <div className="@container flex flex-col gap-4 sm:gap-6 min-w-0">
+        {/* Your Seat and Your Delegation side by side, EXACTLY the same size
+            (owner, 21 Oct 2026): the grid stretches both rows to one height
+            and each card fills its cell. Stacked on a phone. */}
+        <div className="grid gap-4 sm:gap-6 @[760px]:grid-cols-2 items-stretch">
+          <div className="flex flex-col gap-4 sm:gap-6 min-w-0">{left}</div>
+          <div className="flex flex-col gap-4 sm:gap-6 min-w-0">
             <DelegationCard
               societyId={societyId}
               data={data}

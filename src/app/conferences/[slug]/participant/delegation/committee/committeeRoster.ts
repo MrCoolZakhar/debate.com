@@ -8,7 +8,8 @@
 // not rendered.
 //
 // Expected rows: { country_code, country_name, seat, delegate_name (or
-// display_name), society_name, country_logo_url?, is_mine }, where is_mine
+// display_name), society_name, country_logo_url?, is_mine, avatar_url?,
+// user_id? (both from scratch-committee-roster-avatars.sql) }, where is_mine
 // marks the viewer's own delegation. The leader card's committee pop-up
 // (CommitteePopup) reads the same rows.
 
@@ -25,6 +26,10 @@ export interface CommitteeRosterRow {
   /** A seat's custom crest, drawn before the flag, when the read sends one. */
   country_logo_url: string | null;
   is_mine: boolean;
+  /** The person's photo and account, once scratch-committee-roster-avatars.sql
+   *  is applied (null until then: initials, and no CV link). */
+  avatar_url: string | null;
+  user_id: string | null;
 }
 
 export type CommitteeRosterState = { kind: 'ok'; rows: CommitteeRosterRow[] } | { kind: 'error' };
@@ -54,6 +59,8 @@ export function useCommitteeRoster(conferenceCommitteeId: string | null): Commit
         society_name: str(r.society_name),
         country_logo_url: str(r.country_logo_url),
         is_mine: r.is_mine === true,
+        avatar_url: str(r.avatar_url),
+        user_id: str(r.user_id),
       }));
       setLoaded({ key, state: { kind: 'ok', rows } });
     })().catch(() => { if (!cancelled) setLoaded({ key, state: { kind: 'error' } }); });

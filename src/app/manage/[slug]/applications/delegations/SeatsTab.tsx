@@ -39,10 +39,15 @@
 //       taken   greyed, the hover title says by whom, not pressable.
 //     "Give in all free committees" on a country with 2+ free seats.
 //
-// Every write runs through data.trackWrite (the 10 s live re-read stands down
-// and a read that started before the write is dropped) and re-reads inside it;
-// an open confirm holds the re-read back (data.holdLive). A refusal shows the
-// server's sentence and the chip goes back.
+// Every press shows at once (owner, 21 Oct 2026: two chips pressed together
+// showed loading, then one reverted and came back). Writes queue on the
+// delegation's lane (data.queueWrite: one at a time, in the order pressed, the
+// live re-read waiting for the whole queue); each change stays laid over the
+// read until a re-read that includes it has been applied (data.settleRead,
+// after the lane drains, clearing only changes stamped before it started). A
+// refusal drops only its own chip, with the server's sentence. An open confirm
+// holds the re-read back (data.holdLive). A chip being saved stays pressable
+// as what it now shows, never greyed out.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Check, Minus, Plus, Search } from 'lucide-react';
@@ -67,6 +72,8 @@ interface Ask {
 }
 
 type Pending = 'give' | 'back';
+/** One chip's change: what it shows, and the land stamp once its write landed. */
+interface PendingEntry { kind: Pending; landed: number | null }
 
 // The draggable divider between the two columns (owner, 21 Oct 2026).
 const LEFT_KEY = 'gavelling-dlg-alloc-left';
@@ -101,10 +108,13 @@ export default function SeatsTab<M extends DelegationMemberLite>({ conference, r
   onStep?: (step: PopupStep | null) => void;
   onChanged?: () => void;
 }) {
-  const { trackWrite, holdLive, reload, committees } = data;
+  const { holdLive, committees, queueWrite, laneBusy, landStamp, settleRead } = data;
   const [query, setQuery] = useState('');
   const searchRef = useRef<HTMLInputElement>(null);
-  const [pending, setPending] = useState<Map<string, Pending>>(() => new Map());
+  const [pending, setPending] = useState<Map<string, PendingEntry>>(() => new Map());
+  /** The same map, read at press time so two quick presses never double-write a chip. */
+  const pendingRef = useRef(pending);
+  useEffect(() => { pendingRef.current = pending; }, [pending]);
   const [ask, setAsk] = useState<Ask | null>(null);
   const closeAsk = useCallback(() => setAsk(null), []);
   const [limit, setLimit] = useState<SeatLimit>('none');
@@ -201,7 +211,7 @@ export default function SeatsTab<M extends DelegationMemberLite>({ conference, r
     return base.map(r => ({
       ...r,
       chips: r.chips.map(c => {
-        const p = pending.get(c.key);
+        const p = pending.get(c.key)?.kind;
         if (p === 'give') return { ...c, state: 'mine' as const, block: true, filled: false, applicationId: null };
         if (p === 'back') return { ...c, state: 'free' as const, block: false, filled: false, allocationId: null, applicationId: null };
         return c;
@@ -224,25 +234,39 @@ export default function SeatsTab<M extends DelegationMemberLite>({ conference, r
   // A custom seat's own art (a character's crest) draws instead of a flag.
   const seatArt = useMemo(() => new Map(countries.map(c => [c.code, c.logoUrl ?? null] as const)), [countries]);
 
-  const mark = (keys: string[], p: Pending | null) => setPending(prev => {
-    const next = new Map(prev);
+  const mark = (keys: string[], p: PendingEntry | null) => {
+    const next = new Map(pendingRef.current);
     for (const k of keys) { if (p) next.set(k, p); else next.delete(k); }
-    return next;
-  });
+    pendingRef.current = next;
+    setPending(next);
+  };
+
+  /** After the lane drains: one applied re-read, then the landed changes it includes go. */
+  async function settle() {
+    if (laneBusy(row.id)) return;
+    let upTo: number;
+    try { upTo = await settleRead(); } catch { return; }
+    if (laneBusy(row.id)) return;
+    const next = new Map(pendingRef.current);
+    let changed = false;
+    for (const [k, e] of next) if (e.landed != null && e.landed <= upTo) { next.delete(k); changed = true; }
+    if (changed) { pendingRef.current = next; setPending(next); }
+  }
 
   async function give(chips: SeatChip[]) {
-    const free = chips.filter(c => c.state === 'free' && !pending.has(c.key));
+    const free = chips.filter(c => c.state === 'free' && !pendingRef.current.has(c.key));
     if (free.length === 0) return;
     const keys = free.map(c => c.key);
-    mark(keys, 'give');
-    const r = await trackWrite(async () => {
-      const res = await giveExactSeats(row.id, free.map(c => ({ conference_committee_id: c.committeeId, country_code: c.countryCode, seat: c.seat })));
-      if (res.ok) { try { await reload(); } catch { /* the next read corrects it */ } }
-      return res;
-    });
-    mark(keys, null);
-    if (!r.ok) notifyErr(r.error, 'applications');
-    else if (free.length > 1) notifyOk(`${plural(free.length, 'allocation')} in ${free[0].countryName} given to ${row.name}`, 'applications');
+    mark(keys, { kind: 'give', landed: null });
+    const r = await queueWrite(row.id, () => giveExactSeats(row.id, free.map(c => ({ conference_committee_id: c.committeeId, country_code: c.countryCode, seat: c.seat }))));
+    if (r.ok) {
+      mark(keys, { kind: 'give', landed: landStamp() });
+      if (free.length > 1) notifyOk(`${plural(free.length, 'allocation')} in ${free[0].countryName} given to ${row.name}`, 'applications');
+    } else {
+      mark(keys, null);
+      notifyErr(r.error, 'applications');
+    }
+    void settle();
   }
 
   /** Removes one allocation from the delegation. A member in it is unallocated
@@ -250,10 +274,10 @@ export default function SeatsTab<M extends DelegationMemberLite>({ conference, r
    *  delegation as open), then the empty allocation is removed. */
   async function removeAllocation(chip: SeatChip) {
     const id = chip.allocationId;
-    if (!id) return;
+    if (!id || pendingRef.current.has(chip.key)) return;
     const person = chip.applicationId ? memberById.get(chip.applicationId) : undefined;
-    mark([chip.key], 'back');
-    const r = await trackWrite(async () => {
+    mark([chip.key], { kind: 'back', landed: null });
+    const r = await queueWrite(row.id, async () => {
       if (person) {
         const out = await organiserTakeOutOfSeat({
           conferenceId: conference.id,
@@ -263,13 +287,13 @@ export default function SeatsTab<M extends DelegationMemberLite>({ conference, r
         });
         if (!out.ok) return out;
       }
-      const res = await takeBackOneSeat(id);
-      if (person || res.ok) { try { await reload(); } catch { /* the next read corrects it */ } }
-      return res;
+      return takeBackOneSeat(id);
     });
-    mark([chip.key], null);
-    if (!r.ok) { notifyErr(r.error, 'applications'); return; }
+    if (r.ok) mark([chip.key], { kind: 'back', landed: landStamp() });
+    else mark([chip.key], null);
+    void settle();
     if (person) onChanged?.();
+    if (!r.ok) { notifyErr(r.error, 'applications'); return; }
     notifyOk(person
       ? `${memberName(person)} is unallocated and ${chip.countryName} in ${chip.committeeLabel} is removed from ${row.name}`
       : `${chip.countryName} in ${chip.committeeLabel} is removed from ${row.name}`, 'applications');
@@ -302,10 +326,11 @@ export default function SeatsTab<M extends DelegationMemberLite>({ conference, r
 
   return (
     <div ref={splitRef} className="flex-1 min-h-0 flex flex-col md:flex-row overflow-y-auto md:overflow-hidden"
-      style={{ ['--dlg-left' as string]: `${leftW}px` } as React.CSSProperties}>
-      {/* Left: what the delegation holds */}
-      <div className="flex flex-col md:overflow-y-auto md:w-[var(--dlg-left)] md:max-w-[calc(100%_-_340px)] md:flex-none"
-        style={{ padding: '24px 24px', gap: 18, background: '#FCFAF6' }}>
+      style={{ ['--dlg-left' as string]: `${leftW}px`, padding: '18px 24px 24px', gap: 0 } as React.CSSProperties}>
+      {/* Left: what the delegation holds, its own card */}
+      <section className="flex flex-col md:overflow-y-auto md:w-[var(--dlg-left)] md:max-w-[calc(100%_-_340px)] md:flex-none"
+        style={{ padding: '18px 20px 22px', gap: 16, background: '#FFFFFF', borderRadius: 16, boxShadow: '0 1px 2px rgba(27,56,40,0.05), 0 6px 18px rgba(27,56,40,0.06)' }}>
+        <h3 style={{ margin: 0, fontFamily: FONT, fontSize: 16, fontWeight: 600, color: INK }}>Given to this delegation</h3>
         <div className="flex flex-col" style={{ gap: 6 }}>
           <div className="flex items-baseline gap-2 flex-wrap">
             <span style={{ fontFamily: FONT, fontSize: 40, fontWeight: 600, letterSpacing: '-0.02em', color: INK, fontVariantNumeric: 'tabular-nums', lineHeight: 1.1 }}>{given}</span>
@@ -320,12 +345,11 @@ export default function SeatsTab<M extends DelegationMemberLite>({ conference, r
           <div className="flex flex-col" style={{ gap: 12, paddingTop: 4 }}>
             {held.map(h => {
               const person = h.applicationId ? memberById.get(h.applicationId) : undefined;
-              const busy = pending.has(h.key);
               const personName = person ? memberName(person) : null;
               const blocked = removeBlock(h);
               return (
                 <div key={h.key} className="relative flex items-center gap-3"
-                  style={{ minHeight: 74, padding: '10px 12px', borderRadius: 12, background: '#FFFFFF', boxShadow: '0 1px 2px rgba(27,56,40,0.06)', opacity: busy ? 0.6 : 1 }}>
+                  style={{ minHeight: 74, padding: '10px 12px', borderRadius: 12, background: '#FAF8F3', boxShadow: '0 0 0 1px rgba(27,56,40,0.06)' }}>
                   <CircleFlag code={h.countryCode} country={h.countryName} logoUrl={seatArt.get(h.countryCode) ?? undefined} label={h.countryName} size={40} decorative />
                   <div className="flex flex-col flex-1 min-w-0" style={{ gap: 4 }}>
                     <span className="[overflow-wrap:anywhere]" style={{ fontFamily: FONT, fontSize: 15, fontWeight: 600, color: INK, paddingRight: 8 }}>{h.countryName}</span>
@@ -368,7 +392,7 @@ export default function SeatsTab<M extends DelegationMemberLite>({ conference, r
             })}
           </div>
         )}
-      </div>
+      </section>
 
       {/* The divider: drag or arrow keys to make the left column wider or narrower */}
       <div
@@ -385,13 +409,14 @@ export default function SeatsTab<M extends DelegationMemberLite>({ conference, r
         onPointerCancel={onDividerUp}
         onKeyDown={onDividerKey}
         className="dlgSplit hidden md:flex flex-none justify-center focus:outline-none"
-        style={{ width: 11, marginLeft: -5, marginRight: -6, cursor: 'col-resize', touchAction: 'none', position: 'relative', zIndex: 1 }}
+        style={{ width: 16, cursor: 'col-resize', touchAction: 'none', position: 'relative', zIndex: 1 }}
       >
-        <span aria-hidden className="dlgSplitLine" style={{ width: 1, height: '100%', background: HAIRLINE }} />
+        <span aria-hidden className="dlgSplitLine" style={{ width: 1, height: '40%', alignSelf: 'center', background: 'transparent' }} />
       </div>
 
-      {/* Right: search first, then every country */}
-      <div className="flex-1 min-w-0 flex flex-col" style={{ padding: '20px 24px', gap: 12 }}>
+      {/* Right: search first, then every country, its own card */}
+      <section className="flex-1 min-w-0 flex flex-col max-md:mt-4" style={{ padding: '18px 20px 20px', gap: 12, background: '#FFFFFF', borderRadius: 16, boxShadow: '0 1px 2px rgba(27,56,40,0.05), 0 6px 18px rgba(27,56,40,0.06)' }}>
+        <h3 style={{ margin: 0, fontFamily: FONT, fontSize: 16, fontWeight: 600, color: INK }}>Give an allocation</h3>
         <label className="flex items-center gap-2.5" style={{ height: 46, padding: '0 14px', borderRadius: 12, background: '#FFFFFF', border: '1px solid rgba(27,56,40,0.18)', color: INK_SOFT }}>
           <Search size={18} strokeWidth={STROKE} aria-hidden />
           <input
@@ -441,7 +466,7 @@ export default function SeatsTab<M extends DelegationMemberLite>({ conference, r
             );
           })}
         </div>
-      </div>
+      </section>
       {ask && (
         <InPlaceConfirm anchor={ask.anchor} align="end"
           title={`Remove ${seatLabel(ask.chip)} from ${row.name}?`}
@@ -456,7 +481,7 @@ export default function SeatsTab<M extends DelegationMemberLite>({ conference, r
         .dlgSeatMinus { transition: transform 120ms cubic-bezier(0.22,1,0.36,1); }
         .dlgSeatMinus[data-live]:active { transform: scale(0.88); }
         .dlgSplitLine { transition: background-color 140ms, width 140ms; }
-        .dlgSplit:hover .dlgSplitLine, .dlgSplit:focus-visible .dlgSplitLine, .dlgSplit:active .dlgSplitLine { width: 3px; background: rgba(27,56,40,0.35); border-radius: 2px; }
+        .dlgSplit:hover .dlgSplitLine, .dlgSplit:focus-visible .dlgSplitLine, .dlgSplit:active .dlgSplitLine { width: 4px; background: rgba(27,56,40,0.30); border-radius: 2px; }
       `}</style>
     </div>
   );
@@ -498,7 +523,7 @@ function Chip<M extends DelegationMemberLite>({ chip, busy, person, holder, dele
       <button type="button" disabled={busy} onClick={onGive} className={`${BTN_CLASS} hover:bg-[#F6F2EA]`}
         title={`Give ${seatLabel(chip)} to ${delegationName}`}
         aria-label={`Give ${seatLabel(chip)} to ${delegationName}`}
-        style={{ ...base, border: '1px solid rgba(27,56,40,0.18)', background: '#FFFFFF', cursor: busy ? 'progress' : 'pointer', opacity: busy ? 0.6 : 1 }}>
+        style={{ ...base, border: '1px solid rgba(27,56,40,0.18)', background: '#FFFFFF', cursor: busy ? 'default' : 'pointer' }}>
         <Plus size={14} strokeWidth={STROKE} aria-hidden style={{ color: INK_SOFT }} />
         {tag}
       </button>
@@ -506,7 +531,7 @@ function Chip<M extends DelegationMemberLite>({ chip, busy, person, holder, dele
   }
 
   // This delegation's.
-  const mineStyle: React.CSSProperties = { ...base, border: `1.5px solid ${FOREST}`, background: '#F3F7F4', opacity: busy ? 0.6 : 1 };
+  const mineStyle: React.CSSProperties = { ...base, border: `1.5px solid ${FOREST}`, background: '#F3F7F4' };
   const inner = (
     <>
       <Check size={14} strokeWidth={2} aria-hidden style={{ color: FOREST }} />

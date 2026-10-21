@@ -187,8 +187,8 @@ function AdvisorCommitteeCard({ committee: c, released, releaseMs }: {
 
 function SeatRow({ seat: s, showSeatNumber }: { seat: AdvisorCommitteeSeat; showSeatNumber: boolean }) {
   const country = (
-    <span className="inline-flex items-center gap-1.5 min-w-0" style={{ fontFamily: FONT, fontSize: 13, color: INK_SOFT }}>
-      <CircleFlag code={s.countryCode} country={s.countryName} size={18} decorative />
+    <span className="inline-flex items-center gap-1.5 min-w-0" style={{ fontFamily: FONT, fontSize: 14.5, color: INK_SOFT }}>
+      <CircleFlag code={s.countryCode} country={s.countryName} size={20} decorative />
       <span className="min-w-0 [overflow-wrap:anywhere]">
         {s.countryName}{showSeatNumber ? `, seat ${s.seat}` : ''}
       </span>
@@ -218,7 +218,7 @@ function SeatRow({ seat: s, showSeatNumber }: { seat: AdvisorCommitteeSeat; show
     <div className="flex items-center gap-3" style={{ padding: '10px 12px', borderRadius: 12, background: SOFT_PANEL }}>
       <RoundAvatar name={s.person.name ?? s.countryName} url={s.person.avatarUrl} size={40} seed={s.person.name ?? s.key} />
       <div className="flex-1 min-w-0 flex flex-col gap-0.5">
-        <span className="[overflow-wrap:anywhere]" style={{ fontFamily: FONT, fontSize: 15, fontWeight: 600, color: s.person.name ? INK : INK_SOFT }}>{name}</span>
+        <span className="[overflow-wrap:anywhere]" style={{ fontFamily: FONT, fontSize: 16, fontWeight: 600, color: s.person.name ? INK : INK_SOFT }}>{name}</span>
         {country}
       </div>
       <span className="text-right flex-shrink-0" style={{ fontFamily: FONT, fontSize: 12.5, color: INK_SOFT }}>{role}</span>
@@ -266,10 +266,10 @@ function CommitteeList({ committeeId }: { committeeId: string }) {
                 className="flex items-center gap-3"
                 style={{ padding: '9px 10px', borderTop: i > 0 ? ROW_LINE : undefined, borderRadius: r.is_mine ? 10 : 0, background: r.is_mine ? MINE_TINT : 'transparent' }}
               >
-                <CircleFlag code={r.country_code} country={r.country_name} size={26} decorative />
+                <CircleFlag code={r.country_code} country={r.country_name} size={32} decorative />
                 <div className="flex-1 min-w-0 flex flex-col gap-px">
-                  <span className="[overflow-wrap:anywhere]" style={{ fontFamily: FONT, fontSize: 14, fontWeight: 600, color: INK }}>{r.country_name}</span>
-                  <span className="[overflow-wrap:anywhere]" style={{ fontFamily: FONT, fontSize: 12.5, color: r.display_name ? '#3E352E' : INK_SOFT }}>
+                  <span className="[overflow-wrap:anywhere]" style={{ fontFamily: FONT, fontSize: 16, fontWeight: 600, color: INK }}>{r.country_name}</span>
+                  <span className="[overflow-wrap:anywhere]" style={{ fontFamily: FONT, fontSize: 14.5, color: r.display_name ? '#3E352E' : INK_SOFT }}>
                     {r.display_name ?? 'Not filled yet'}
                   </span>
                 </div>

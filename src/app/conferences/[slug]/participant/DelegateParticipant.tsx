@@ -14,7 +14,7 @@
 //   delegation  members of a delegation only, second: the leader or member card
 //   committee   the committee's members only, like the leader card's committee
 //               pop-up, each with their paper once it is in (owner, 21 Oct 2026)
-//   documents   the study guide and the position paper
+//   documents   the position paper and the study guide, two columns
 // Below lg (10 Oct 2026) there is no sub-nav: the panes stack in this order on
 // one page, with Payment and Support placed by the parent.
 
@@ -140,8 +140,13 @@ export default function DelegateParticipant({ conferenceId, conferenceSlug, conf
       </Pane>
 
       <Pane show={section === 'documents'} title="Documents" icon={FileText} phone={assigned} anchor="you-documents">
-        <PositionPaperCard conferenceId={conferenceId} conferenceSlug={conferenceSlug} myAllocation={myAllocation} onPaperState={setPaper} />
-        <StudyGuideCard committeeId={myAllocation?.conference_committee_id ?? null} />
+        {/* Two columns side by side (owner, 21 Oct 2026): the position paper
+            (already open: deadline, status, the big select area and Submit)
+            and the study guides with Open. Stacked on a phone. */}
+        <div className="grid gap-4 sm:gap-6 md:grid-cols-2 items-start">
+          <PositionPaperCard conferenceId={conferenceId} conferenceSlug={conferenceSlug} myAllocation={myAllocation} onPaperState={setPaper} />
+          <StudyGuideCard committeeId={myAllocation?.conference_committee_id ?? null} />
+        </div>
       </Pane>
     </>
   );

@@ -8,8 +8,9 @@
 //   * this delegation's people (the card's own rows): photo and name, the row
 //     tinted as "Your delegation", the viewer's own seat marked "You";
 //   * this delegation's open allocations: "Open allocation of your delegation";
-//   * someone else whose allocation is published (my_committee_roster, which
-//     sends names and schools but no photos: the avatar is their initials);
+//   * someone else whose allocation is published (my_committee_roster: names
+//     and schools; their photo and user id once scratch-committee-roster-
+//     avatars.sql is applied, initials and no link until then);
 //   * someone else whose allocation is not published yet (get_committee_
 //     occupancy counts it, nobody may read the name): "Taken";
 //   * otherwise "Open".
@@ -21,6 +22,9 @@
 // (committee/MyCommitteeSection) draws as well (owner, 21 Oct 2026: "exactly
 // like the committee pop-up"). Each country with a submitted position paper
 // the viewer may read gets an icon + "Paper" (committee/committeePapers.ts).
+// Country names and people's names are big (owner, 21 Oct 2026); a person's
+// avatar opens their public MUN CV whenever their user id is known (CLAUDE.md
+// §8), with no link otherwise.
 
 import { useEffect, useMemo } from 'react';
 import { FileText, X } from 'lucide-react';
@@ -32,7 +36,7 @@ import { DELEGATIONS_V2_DB } from './v2';
 import { useCommitteeRoster, type CommitteeRosterRow } from './committee/committeeRoster';
 import { useCommitteeSlots } from './committee/committeeSlots';
 import { useCommitteePapers, useOpenCommitteePaper, paperKey } from './committee/committeePapers';
-import { BTN_CLASS, CommitteeDisc, FONT, INK, INK_SOFT, LIFT_SHADOW, LINE, RoundAvatar, STROKE } from './leaderKit';
+import { BTN_CLASS, CommitteeDisc, CvAvatar, FONT, INK, INK_SOFT, LIFT_SHADOW, LINE, STROKE } from './leaderKit';
 
 export interface CommitteeSeatPerson {
   application_id: string;
@@ -43,6 +47,8 @@ export interface CommitteeSeatPerson {
   seatLogo: string | null;
   /** The viewer. */
   is_me?: boolean;
+  /** Their account: the avatar opens their public MUN CV (/cv/<id>). */
+  user_id?: string | null;
 }
 
 /** One of this delegation's open allocations in the committee. */
@@ -197,8 +203,8 @@ function HolderView({ h }: { h: Holder }) {
     const p = h.person;
     return (
       <span className="flex items-center gap-2.5 min-w-0">
-        <RoundAvatar name={p.name} url={p.avatar_url} size={32} seed={p.application_id} />
-        <span className="[overflow-wrap:anywhere] min-w-0" style={{ fontFamily: FONT, fontSize: 14, fontWeight: 600, color: INK, lineHeight: 1.3 }}>
+        <CvAvatar userId={p.user_id} name={p.name} url={p.avatar_url} size={38} seed={p.application_id} />
+        <span className="[overflow-wrap:anywhere] min-w-0" style={{ fontFamily: FONT, fontSize: 16, fontWeight: 600, color: INK, lineHeight: 1.3 }}>
           {p.name}
           {p.is_me && <span style={tag}>You</span>}
         </span>
@@ -210,17 +216,17 @@ function HolderView({ h }: { h: Holder }) {
     const name = r.display_name ?? 'Delegate';
     return (
       <span className="flex items-center gap-2.5 min-w-0">
-        <RoundAvatar name={name} url={null} size={32} seed={`${r.country_name}-${r.seat ?? ''}-${name}`} />
+        <CvAvatar userId={r.user_id} name={name} url={r.avatar_url} size={38} seed={`${r.country_name}-${r.seat ?? ''}-${name}`} />
         <span className="flex flex-col min-w-0" style={{ lineHeight: 1.3 }}>
-          <span className="[overflow-wrap:anywhere]" style={{ fontFamily: FONT, fontSize: 14, fontWeight: 600, color: INK }}>{name}</span>
-          {r.society_name && <span className="[overflow-wrap:anywhere]" style={{ fontFamily: FONT, fontSize: 12.5, color: INK_SOFT }}>{r.society_name}</span>}
+          <span className="[overflow-wrap:anywhere]" style={{ fontFamily: FONT, fontSize: 16, fontWeight: 600, color: INK }}>{name}</span>
+          {r.society_name && <span className="[overflow-wrap:anywhere]" style={{ fontFamily: FONT, fontSize: 13, color: INK_SOFT }}>{r.society_name}</span>}
         </span>
       </span>
     );
   }
   const word = h.kind === 'own-open' ? 'Open allocation of your delegation' : h.kind === 'taken' ? 'Taken' : 'Open';
   return (
-    <span style={{ fontFamily: FONT, fontSize: 14, fontWeight: h.kind === 'open' ? 400 : 500, color: h.kind === 'open' ? INK_SOFT : INK, lineHeight: 1.3 }}>
+    <span style={{ fontFamily: FONT, fontSize: 15, fontWeight: h.kind === 'open' ? 400 : 500, color: h.kind === 'open' ? INK_SOFT : INK, lineHeight: 1.3 }}>
       {word}
     </span>
   );
@@ -291,26 +297,26 @@ export function CommitteeMatrix({ committeeId, people, others, openSeats = [], r
             key={c.key}
             className="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)] items-center gap-x-4 gap-y-1.5"
             style={{
-              padding: '8px 10px', borderRadius: 10,
+              padding: '10px 10px', borderRadius: 10,
               borderTop: !firstOfCountry || i === 0 || yours ? 'none' : `1px solid ${LINE}`,
               background: yours ? YOURS_TINT : 'transparent',
               boxShadow: me ? 'inset 0 0 0 1.5px var(--gv-main)' : 'none',
             }}
           >
             <span className="flex items-center gap-3 min-w-0">
-              <CircleFlag code={c.country_code} logoUrl={c.logo} label={c.country_name} size={30} decorative />
+              <CircleFlag code={c.country_code} logoUrl={c.logo} label={c.country_name} size={36} decorative />
               <span className="flex flex-col min-w-0" style={{ lineHeight: 1.3 }}>
-                <span className="[overflow-wrap:anywhere]" style={{ fontFamily: FONT, fontSize: 14.5, fontWeight: 600, color: INK }}>
+                <span className="[overflow-wrap:anywhere]" style={{ fontFamily: FONT, fontSize: 17, fontWeight: 600, color: INK }}>
                   {c.country_name}
                 </span>
                 {(c.size > 1 || yours) && (
-                  <span className="[overflow-wrap:anywhere]" style={{ fontFamily: FONT, fontSize: 12.5, color: INK_SOFT }}>
+                  <span className="[overflow-wrap:anywhere]" style={{ fontFamily: FONT, fontSize: 13, color: INK_SOFT }}>
                     {[c.size > 1 ? `Seat ${c.seat}` : null, yours ? 'Your delegation' : null].filter(Boolean).join(' · ')}
                   </span>
                 )}
               </span>
             </span>
-            <span className="min-w-0 pl-[42px] sm:pl-0 flex items-center justify-between gap-2">
+            <span className="min-w-0 pl-[48px] sm:pl-0 flex items-center justify-between gap-2">
               <span className="min-w-0"><HolderView h={c.holder} /></span>
               {paperUrl && <PaperLink fileUrl={paperUrl} country={c.country_name} />}
             </span>

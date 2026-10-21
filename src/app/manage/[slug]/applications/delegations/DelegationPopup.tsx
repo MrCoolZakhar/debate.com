@@ -9,7 +9,8 @@
 // place with a back button, menus stay inside, confirms are asked in place.
 //
 // Header (owner, 20 and 21 Oct 2026): the emphasis is the delegation itself,
-// its big round crest (DelegationCrest), its name large and bold with the
+// its big round crest (DelegationCrest), its name large and bold on two rows
+// (the main words big, a trailing "MUN Society" small beneath) with the
 // country's round flag beside it, then "City, Country" smaller, the leaders as
 // small avatars with their names, and Expected / Joined / Paid as a quiet
 // compact row (a modest number with its word beside it, CLAUDE.md §8 rule 9).
@@ -26,7 +27,8 @@ import { ACCEPTED, memberName } from '../delegationRows';
 import { useDelegationsData, type DelegationsData, type DelegationView } from './useDelegationsData';
 import DelegationCrest from '@/components/DelegationCrest';
 import { CircleFlag } from '@/components/CircleFlag';
-import { BTN_CLASS, FONT, HAIRLINE, INK, INK_SOFT, RoundAvatar, SkeletonRows, STROKE, placeOf } from './kit';
+import { BTN_CLASS, DelegationNameLines, FONT, HAIRLINE, INK, INK_SOFT, POPUP_BODY_BG, RoundAvatar, SkeletonRows, STROKE, placeOf } from './kit';
+import { sortMembers } from './memberOrder';
 import PeopleTab from './PeopleTab';
 import SeatsTab from './SeatsTab';
 import PaymentsTab from './PaymentsTab';
@@ -74,17 +76,17 @@ export interface PopupStep {
   body: React.ReactNode;
 }
 
-/** The delegation's accepted leaders (head delegates, then faculty advisors), each once. */
+/** The delegation's accepted leaders, each once, in the one member order
+ *  (memberOrder.ts): faculty advisors first, then head delegates, A to Z. */
 export function leadersOf(row: DelegationView): { id: string; name: string; avatarUrl: string | null; role: string }[] {
-  const heads: { id: string; name: string; avatarUrl: string | null; role: string }[] = [];
-  const advisors: typeof heads = [];
-  for (const m of row.members) {
-    if (!ACCEPTED.has(m.status)) continue;
-    const who = { id: m.id, name: memberName(m), avatarUrl: m.profiles?.avatar_url ?? null, role: '' };
-    if (m.role === 'faculty-advisor') advisors.push({ ...who, role: 'Faculty advisor' });
-    else if (m.is_head_delegate || m.role === 'head-delegate') heads.push({ ...who, role: 'Head delegate' });
-  }
-  return [...heads, ...advisors];
+  const leaders = row.members.filter(m => ACCEPTED.has(m.status)
+    && (m.role === 'faculty-advisor' || m.is_head_delegate || m.role === 'head-delegate'));
+  return sortMembers(leaders, memberName).map(m => ({
+    id: m.id,
+    name: memberName(m),
+    avatarUrl: m.profiles?.avatar_url ?? null,
+    role: m.role === 'faculty-advisor' ? 'Faculty advisor' : 'Head delegate',
+  }));
 }
 
 /** Expected / Joined / Paid: a modest number with its word, quiet beside the name. */
@@ -111,7 +113,7 @@ function Header({ row, loading }: { row: DelegationView | null; loading: boolean
   if (!row) {
     return (
       <div className="flex items-center gap-4 min-w-0">
-        <span aria-hidden style={{ width: 104, height: 104, borderRadius: '50%', background: '#F1ECE1', flexShrink: 0 }} />
+        <span aria-hidden style={{ width: 96, height: 96, borderRadius: '50%', background: '#F1ECE1', flexShrink: 0 }} />
         <span style={{ fontFamily: FONT, fontSize: 32, fontWeight: 700, color: INK }}>{loading ? '' : 'Delegation'}</span>
       </div>
     );
@@ -120,12 +122,10 @@ function Header({ row, loading }: { row: DelegationView | null; loading: boolean
   const place = placeOf(row.city, row.countryCode);
   return (
     <div className="flex items-center gap-5 min-w-0">
-      <DelegationCrest name={row.name} logoUrl={row.logoUrl} size={104} />
+      <DelegationCrest name={row.name} logoUrl={row.logoUrl} size={96} />
       <div className="flex flex-col min-w-0" style={{ gap: 6 }}>
-        <div className="flex items-center min-w-0" style={{ gap: 12 }}>
-          <span className="[overflow-wrap:anywhere]" style={{ fontFamily: FONT, fontSize: 32, fontWeight: 700, letterSpacing: '-0.015em', color: INK, lineHeight: 1.1 }}>
-            {row.name}
-          </span>
+        <div className="flex items-center min-w-0" style={{ gap: 12, fontFamily: FONT }}>
+          <DelegationNameLines name={row.name} size={30} restSize={16} gap={2} />
           {place?.code && (
             <CircleFlag code={place.code} size={34} label={place.label} title={place.label} />
           )}
@@ -171,7 +171,9 @@ function PopupFrame<M extends DelegationMemberLite>({
         aria-label={row?.name ?? 'Delegation'}
         className="flex flex-col"
         style={{
-          width: 'min(1080px, calc(100vw - 32px))', height: 'min(780px, calc(100dvh - 48px))',
+          // A sensible width (owner, 21 Oct 2026: "too wide"): fills a 1440
+          // screen's middle well and never stretches at 1920.
+          width: 'min(1040px, calc(100vw - 32px))', height: 'min(800px, calc(100dvh - 48px))',
           background: '#FFFFFF', borderRadius: 22, boxShadow: '0 30px 80px rgba(27,56,40,0.30)', overflow: 'hidden',
         }}
       >
@@ -213,15 +215,19 @@ function PopupFrame<M extends DelegationMemberLite>({
         </div>
 
         {/* Body */}
-        <div className="flex-1 min-h-0 flex flex-col" style={{ borderTop: `1px solid ${HAIRLINE}` }}>
+        {/* The tabs draw their sections as white cards on this body colour, with
+            space between them, so sections never run together. */}
+        <div className="flex-1 min-h-0 flex flex-col" style={{ borderTop: `1px solid ${HAIRLINE}`, background: POPUP_BODY_BG }}>
           {step ? (
-            <div className="flex-1 min-h-0 overflow-y-auto" style={{ padding: '18px 28px 24px' }}>
+            <div className="flex-1 min-h-0 overflow-y-auto" style={{ padding: '18px 24px 24px' }}>
               <button type="button" onClick={() => setStep(null)} className={`${BTN_CLASS} inline-flex items-center gap-2`}
                 style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontFamily: FONT, fontSize: 14, fontWeight: 600, color: '#1B3828', marginBottom: 14 }}>
                 <ArrowLeft size={18} strokeWidth={STROKE} aria-hidden /> Back
               </button>
-              {step.title && <p style={{ fontFamily: FONT, fontSize: 18, fontWeight: 600, color: INK, marginBottom: 14 }}>{step.title}</p>}
-              {step.body}
+              <div style={{ background: '#FFFFFF', borderRadius: 16, padding: '18px 20px 20px', boxShadow: '0 1px 2px rgba(27,56,40,0.05), 0 6px 18px rgba(27,56,40,0.06)' }}>
+                {step.title && <p style={{ fontFamily: FONT, fontSize: 18, fontWeight: 600, color: INK, marginBottom: 14 }}>{step.title}</p>}
+                {step.body}
+              </div>
             </div>
           ) : data.loading ? (
             <div style={{ padding: '24px 28px' }}><SkeletonRows rows={6} /></div>

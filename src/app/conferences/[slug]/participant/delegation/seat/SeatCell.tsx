@@ -13,7 +13,7 @@
 import { useRef } from 'react';
 import { Armchair, FileUp, GripVertical } from 'lucide-react';
 import { CircleFlag } from '@/components/CircleFlag';
-import { CommitteeDisc, FONT, FOREST, INK, INK_SOFT, STROKE } from '../leaderKit';
+import { CommitteeDisc, FONT, INK, INK_SOFT, STROKE } from '../leaderKit';
 import type { PersonRow } from '../PeopleTable';
 
 export type Seat = NonNullable<PersonRow['seat']>;
@@ -105,7 +105,7 @@ export default function SeatCell({
               title={seat.committee_full ? `Open ${seat.committee_full}` : 'Open this committee'}
               onClick={(e) => { e.stopPropagation(); if (wasJustDragged()) return; if (seat.committee_id) onOpenCommittee?.(seat.committee_id); }}
               className="text-left [overflow-wrap:anywhere] min-w-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gv-main)] rounded"
-              style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontFamily: FONT, fontSize: 13, fontWeight: 700, color: FOREST, textDecoration: 'underline', textUnderlineOffset: 3, lineHeight: 1.35 }}
+              style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontFamily: FONT, fontSize: 13, fontWeight: 700, color: 'var(--gv-main)', textDecoration: 'underline', textUnderlineOffset: 3, lineHeight: 1.35 }}
             >
               {seat.committee_label}
             </button>
@@ -137,7 +137,7 @@ function PlaceButton({ onPlace, disabled }: { onPlace: (anchor: HTMLElement) => 
       disabled={disabled}
       onClick={(e) => { e.stopPropagation(); if (ref.current) onPlace(ref.current); }}
       className="inline-flex items-center gap-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gv-main)]"
-      style={{ minHeight: 40, padding: '0 12px', borderRadius: 10, border: '1px dashed color-mix(in srgb, var(--gv-main) 30%, transparent)', background: 'transparent', color: FOREST, fontFamily: FONT, fontSize: 13.5, fontWeight: 600, cursor: disabled ? 'default' : 'pointer', opacity: disabled ? 0.5 : 1 }}
+      style={{ minHeight: 40, padding: '0 12px', borderRadius: 10, border: '1px dashed color-mix(in srgb, var(--gv-main) 30%, transparent)', background: 'transparent', color: 'var(--gv-main)', fontFamily: FONT, fontSize: 13.5, fontWeight: 600, cursor: disabled ? 'default' : 'pointer', opacity: disabled ? 0.5 : 1 }}
     >
       <Armchair size={17} strokeWidth={STROKE} aria-hidden />
       Allocate

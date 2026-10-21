@@ -6,6 +6,9 @@
 // Allocations tab (owner, 21 Oct 2026); here an empty allocation is reached
 // through a person's "Allocate" (a second step listing them).
 // Organiser screens say "allocation" wherever a seat means an allocation.
+// People are always listed faculty advisors first, then head delegates, then
+// delegates, then others, A to Z inside each (memberOrder.ts), in one white
+// section card on the pop-up's body colour.
 //
 // The seat column is the leader card's own SeatCell (participant/delegation/
 // seat/SeatCell): the country's round flag big with its name under it, the
@@ -69,11 +72,12 @@ import {
 } from './seatWrites';
 import { ORGANISER_ADD_TO_DELEGATION_DB, WAITING_FOR_CHRISTIAN, organiserSetMemberRole } from './v2';
 import {
-  BTN_CLASS, CommitteeDisc, FONT, FOREST, HAIRLINE, INK, INK_SOFT, OK_GREEN, OWE, ROW_LINE, RoundAvatar, STROKE,
+  BTN_CLASS, CommitteeDisc, FONT, FOREST, HAIRLINE, INK, INK_SOFT, OK_GREEN, OWE, PopupSection, ROW_LINE, RoundAvatar, STROKE,
   smallSecondaryBtn,
 } from './kit';
+import { sortMembers } from './memberOrder';
 
-const GRID = 'minmax(0,1.15fr) 180px minmax(0,1.55fr) 150px 36px';
+const GRID = 'minmax(0,1.2fr) 150px minmax(0,1.5fr) 150px 36px';
 
 const ROLE_OPTIONS: { value: MemberRole; label: string }[] = [
   { value: 'delegate', label: 'Delegate' },
@@ -199,7 +203,6 @@ function seatable(m: DelegationMemberLite | undefined): boolean {
 const personOf = (m: DelegationMemberLite): SeatPerson => ({ id: m.id, user_id: m.user_id, status: m.status });
 const placeOf = (s: HeldSeat) => ({ allocationId: s.allocationId, committeeId: s.committeeId, countryCode: s.countryCode, countryName: s.countryName });
 
-const collator = new Intl.Collator('en', { sensitivity: 'base', numeric: true });
 
 export default function PeopleTab<M extends DelegationMemberLite>({ conferenceId, row, data, onChanged, onStep }: {
   conferenceId: string;
@@ -259,16 +262,9 @@ export default function PeopleTab<M extends DelegationMemberLite>({ conferenceId
     return map;
   }, [data.invoices, memberIds]);
 
-  const ordered = useMemo(() => [...live].sort((a, b) => {
-    const sa = seatOfApp.get(a.id);
-    const sb = seatOfApp.get(b.id);
-    if (sa && sb) {
-      return collator.compare(sa.seat.committee_label, sb.seat.committee_label)
-        || collator.compare(sa.countryName, sb.countryName) || sa.seatNo - sb.seatNo;
-    }
-    if (sa || sb) return sa ? -1 : 1;
-    return collator.compare(memberName(a), memberName(b));
-  }), [live, seatOfApp]);
+  // Always faculty advisors, then head delegates, then delegates, then others,
+  // A to Z inside each group (owner, 21 Oct 2026; memberOrder.ts).
+  const ordered = useMemo(() => sortMembers(live, memberName), [live]);
 
   // Read at event time by the drag rules.
   const stateRef = useRef({ seatOfApp, memberById, openSeats, seatBusy, seatById });
@@ -561,28 +557,32 @@ export default function PeopleTab<M extends DelegationMemberLite>({ conferenceId
 
   if (live.length === 0) {
     return (
-      <div style={{ padding: '24px 28px' }}>
-        <div className="flex items-start justify-between gap-4 flex-wrap">
-          <div>
-            <p style={{ fontFamily: FONT, fontSize: 15, fontWeight: 600, color: INK }}>Nobody has joined yet</p>
-            <p style={{ fontFamily: FONT, fontSize: 14, color: INK_SOFT, marginTop: 4 }}>People appear here once they apply with this delegation or join through its invite link.</p>
-          </div>
-          {addButton}
-        </div>
+      <div className="flex-1 min-h-0 overflow-auto" style={{ padding: '18px 24px 24px' }}>
+        <PopupSection title="People" aside={addButton}>
+          <p style={{ fontFamily: FONT, fontSize: 15, fontWeight: 600, color: INK }}>Nobody has joined yet</p>
+          <p style={{ fontFamily: FONT, fontSize: 14, color: INK_SOFT, marginTop: 4 }}>People appear here once they apply with this delegation or join through its invite link.</p>
+        </PopupSection>
       </div>
     );
   }
 
   return (
-    <div className="flex-1 min-h-0 overflow-auto" style={{ padding: '6px 0 16px' }}>
-      <div style={{ minWidth: 900 }}>
-        <div className="flex items-center justify-between gap-4" style={{ padding: '10px 28px 2px' }}>
-          <span style={{ fontFamily: FONT, fontSize: 14, color: INK_SOFT, fontVariantNumeric: 'tabular-nums' }}>
-            {live.length === 1 ? '1 person' : `${live.length} people`}
+    <div className="flex-1 min-h-0 overflow-auto" style={{ padding: '18px 24px 24px' }}>
+      <PopupSection
+        title="People"
+        padded={false}
+        aside={(
+          <span className="inline-flex items-center flex-wrap" style={{ gap: 14 }}>
+            <span style={{ fontFamily: FONT, fontSize: 14, color: INK_SOFT, fontVariantNumeric: 'tabular-nums' }}>
+              {live.length === 1 ? '1 person' : `${live.length} people`}
+            </span>
+            {addButton}
           </span>
-          {addButton}
-        </div>
-        <div className="grid" style={{ gridTemplateColumns: GRID, gap: 16, padding: '10px 28px' }}>
+        )}
+      >
+      <div className="overflow-x-auto">
+      <div style={{ minWidth: 820 }}>
+        <div className="grid" style={{ gridTemplateColumns: GRID, gap: 16, padding: '10px 20px' }}>
           {['Person', 'Role', 'Allocation', 'Payment', ''].map((h, i) => (
             <span key={i} style={{ fontFamily: FONT, fontSize: 12, fontWeight: 500, color: INK_SOFT }}>{h}</span>
           ))}
@@ -609,7 +609,7 @@ export default function PeopleTab<M extends DelegationMemberLite>({ conferenceId
                 transition: 'background-color 120ms ease, box-shadow 120ms ease',
               }}
             >
-              <div className="grid items-center" style={{ gridTemplateColumns: GRID, gap: 16, padding: '12px 28px' }}>
+              <div className="grid items-center" style={{ gridTemplateColumns: GRID, gap: 16, padding: '12px 20px' }}>
                 <div className="flex items-center gap-3 min-w-0">
                   <button
                     type="button"
@@ -675,11 +675,13 @@ export default function PeopleTab<M extends DelegationMemberLite>({ conferenceId
           );
         })}
         {gone > 0 && (
-          <p style={{ borderTop: `1px solid ${HAIRLINE}`, padding: '14px 28px', fontFamily: FONT, fontSize: 13, color: INK_SOFT }}>
+          <p style={{ borderTop: `1px solid ${HAIRLINE}`, padding: '14px 20px 6px', fontFamily: FONT, fontSize: 13, color: INK_SOFT }}>
             {gone === 1 ? '1 more person was turned down or withdrew.' : `${gone} more people were turned down or withdrew.`}
           </p>
         )}
       </div>
+      </div>
+      </PopupSection>
 
       {ghost}
       {ask && (

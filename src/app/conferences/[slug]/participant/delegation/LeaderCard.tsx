@@ -22,7 +22,9 @@
 //                 (Christian's answer 5: delegates, and head delegates who
 //                 bought no tickets; a ticket-buying leader's own ticket is
 //                 separate), so it drops when a delegate leaves.
-//   People        PeopleTable, with the row menu (MemberMenu); it opens the
+//   People        PeopleTable (faculty advisors first, then head delegates,
+//                 then delegates; one compact row per person on a phone), with
+//                 the row menu (MemberMenu); it opens the
 //                 committee pop-up itself and owns Swap allocations (its header
 //                 button turns into Cancel; two picks in the table run the
 //                 swap). Right under the table: Add a member (AddDelegatePanel,
@@ -277,10 +279,10 @@ export default function LeaderCard({
     );
   };
 
-  const statCell = 'flex items-center min-w-0 px-6 py-2 @[900px]:py-0 @[900px]:border-r @[900px]:border-[#EFEAE0]';
+  const statCell = 'flex items-center min-w-0 px-4 @[640px]:px-6 py-1.5 @[900px]:py-0 @[900px]:border-r @[900px]:border-[#EFEAE0]';
 
   return (
-    <div className="@container flex flex-col gap-6 min-w-0">
+    <div className="@container flex flex-col gap-4 @[640px]:gap-6 min-w-0">
       {/* Header */}
       <div className="flex items-center justify-between gap-x-6 gap-y-4 flex-wrap">
         <div className="flex items-center gap-4 min-w-0">
@@ -288,7 +290,7 @@ export default function LeaderCard({
             <DelegationCrest name={crestName} logoUrl={home?.logo_url ?? null} size={56} />
           </span>
           <div className="min-w-0 flex flex-col gap-1">
-            <h2 className="[overflow-wrap:anywhere]" style={{ fontFamily: FONT, fontSize: 36, fontWeight: 700, letterSpacing: '-0.015em', color: INK, margin: 0, lineHeight: 1.15 }}>{societyName}</h2>
+            <h2 className="[overflow-wrap:anywhere] text-[28px] @[640px]:text-[36px]" style={{ fontFamily: FONT, fontWeight: 700, letterSpacing: '-0.015em', color: INK, margin: 0, lineHeight: 1.15 }}>{societyName}</h2>
             <div className="flex items-center gap-2 [overflow-wrap:anywhere]" style={{ fontFamily: FONT, fontSize: 14, color: INK_SOFT }}>
               {home?.country_code && <CircleFlag code={home.country_code} size={18} decorative />}
               {place ? `Delegation · ${place}` : 'Delegation'}
@@ -307,11 +309,11 @@ export default function LeaderCard({
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-2 @[900px]:grid-cols-4" style={{ ...cardStyle, padding: '20px 0' }}>
+      <div className="grid grid-cols-2 @[900px]:grid-cols-4 py-3 @[640px]:py-5" style={cardStyle}>
         <div className={statCell}><StatNumber n={joined} word="joined" /></div>
         <div className={statCell}><StatNumber n={seatsGiven} word="allocations given" /></div>
         <div className={statCell}><StatNumber n={paidCount} word="paid" /></div>
-        <div className="flex items-center justify-between gap-3 min-w-0 px-6 py-2 @[900px]:py-0">
+        <div className="flex items-center justify-between gap-3 min-w-0 px-4 @[640px]:px-6 py-1.5 @[900px]:py-0">
           <span style={{ fontFamily: FONT, fontSize: 15, color: INK_SOFT }}>Expected size</span>
           <div className="flex items-center gap-2.5">
             {stepBtn(-1)}
@@ -324,7 +326,7 @@ export default function LeaderCard({
       </div>
 
       {/* People and Financials */}
-      <div className="flex flex-col @[1040px]:flex-row gap-6 items-stretch @[1040px]:items-start">
+      <div className="flex flex-col @[1040px]:flex-row gap-4 @[640px]:gap-6 items-stretch @[1040px]:items-start">
         <div className="flex-1 min-w-0 flex flex-col gap-4">
           <PeopleTable
             rows={rows}

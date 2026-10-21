@@ -1,15 +1,16 @@
 'use client';
 
-// Position paper card. Before a paper exists it's an expandable unit with
-// the upload flow (unchanged, minus the retired notify_on_feedback
-// checkbox). Once a paper exists it becomes a clickable row, study-guide-
+// Position paper card. Before a paper exists the upload flow is always open
+// (owner, 21 Oct 2026: no expand button in Documents): its deadline and
+// status, a big "Click to select PDF" area that also takes a dropped file,
+// and "Submit position paper". Once a paper exists it becomes a clickable row, study-guide-
 // card style, that opens the paper's chat + PDF page — the chair_feedback
 // column and the old inline FEEDBACK section are both gone, the thread on
 // the paper page replaces them entirely.
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { CheckCircle2, ChevronDown, ChevronRight, ChevronUp, Download, FileText, RotateCcw, Upload } from 'lucide-react';
+import { CheckCircle2, ChevronRight, Download, FileText, RotateCcw, Upload } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient, getFreshAuthedClient } from '@/lib/supabase-auth';
 import { isPaperLate, countUnread, downloadPositionPaper, type PaperMessageStub } from '@/lib/positionPapers';
@@ -93,7 +94,7 @@ export default function PositionPaperCard({ conferenceId, conferenceSlug, myAllo
   const { user, session } = useAuth();
   const router = useRouter();
 
-  const [expanded, setExpanded] = useState(false);
+  const [dragOver, setDragOver] = useState(false);
   const [ppEnabled, setPpEnabled] = useState(false);
   const [myPositionPaper, setMyPositionPaper] = useState<PositionPaper | null>(null);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -224,6 +225,11 @@ export default function PositionPaperCard({ conferenceId, conferenceSlug, myAllo
     // Let the same file be picked again after a refusal (onChange would not fire).
     input.value = '';
     if (!file) return;
+    await acceptFile(file);
+  }
+
+  /** A picked or dropped file: kept when it is a PDF the bucket takes. */
+  async function acceptFile(file: File) {
     const problem = await pdfProblem(file);
     if (problem) { setPPFile(null); setPPError(problem); return; }
     setPPError('');
@@ -534,7 +540,7 @@ export default function PositionPaperCard({ conferenceId, conferenceSlug, myAllo
               onClick={() => {
                 // A rejected paper goes straight to the upload; any other paper
                 // first says the new version reopens it for review.
-                if (myPositionPaper.status === 'rejected') { setIsReplacing(true); setExpanded(true); setPPFile(null); setPPError(''); }
+                if (myPositionPaper.status === 'rejected') { setIsReplacing(true); setPPFile(null); setPPError(''); }
                 else setShowPPWarning(true);
               }}
               background="linear-gradient(135deg, var(--gv-main), var(--gv-main-mid))"
@@ -582,7 +588,7 @@ export default function PositionPaperCard({ conferenceId, conferenceSlug, myAllo
                   Cancel
                 </ActionButton>
                 <ActionButton
-                  onClick={() => { setShowPPWarning(false); setIsReplacing(true); setExpanded(true); setPPFile(null); setPPError(''); }}
+                  onClick={() => { setShowPPWarning(false); setIsReplacing(true); setPPFile(null); setPPError(''); }}
                   background="linear-gradient(135deg, var(--gv-main), var(--gv-main-mid))"
                   color="var(--gv-on-main)"
                   boxShadowColor="color-mix(in srgb, var(--gv-main) 35%, transparent)"
@@ -629,27 +635,15 @@ export default function PositionPaperCard({ conferenceId, conferenceSlug, myAllo
 
   return (
     <SectionCard>
-      <button
-        onClick={() => setExpanded(v => !v)}
-        className="w-full flex items-center justify-between gap-3 rounded-xl focus:outline-none"
-        style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '4px 6px', margin: '-4px -6px', transition: `background-color 180ms ${EASE}` }}
-        onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'color-mix(in srgb, var(--gv-main) 4%, transparent)'; }}
-        onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
-      >
+      <div className="flex items-center justify-between gap-3">
         <h3 style={CARD_TITLE_STYLE}>Position Paper</h3>
-        <div className="flex items-center gap-2.5">
-          <span
-            style={{ color: collapsedStyle.color, fontSize: 12, fontFamily: OUTFIT, fontWeight: 700 }}
-          >
-            {collapsedLabel}
-          </span>
-          {expanded ? <ChevronUp size={15} style={{ color: '#9A8A78' }} /> : <ChevronDown size={15} style={{ color: '#9A8A78' }} />}
-        </div>
-      </button>
+        <span style={{ color: collapsedStyle.color, fontSize: 13, fontFamily: OUTFIT, fontWeight: 700 }}>
+          {collapsedLabel}
+        </span>
+      </div>
       {dueLine && <div className="mt-2.5">{dueLine}</div>}
 
-      {expanded && (
-        <div className="mt-5 pt-5" style={{ borderTop: '1px solid rgba(221,212,192,0.6)' }}>
+      <div className="mt-3">
           {!ppEnabled && !replacingRejected ? (
             <p style={{ fontFamily: OUTFIT, fontSize: 14, lineHeight: 1.5, color: INK_SOFT, margin: 0 }}>
               Position paper submissions are not yet open for your committee.
@@ -658,19 +652,30 @@ export default function PositionPaperCard({ conferenceId, conferenceSlug, myAllo
             <>
               <input type="file" accept="application/pdf,.pdf" onChange={handlePPFileSelect} className="hidden" ref={ppFileInputRef} />
               {!ppFile ? (
-                <div
+                <button
+                  type="button"
                   onClick={() => ppFileInputRef.current?.click()}
-                  style={{
-                    border: '1.5px dashed rgba(154,138,120,0.55)', borderRadius: 14, padding: '28px 12px', textAlign: 'center', cursor: 'pointer', marginBottom: 12,
-                    backgroundColor: NEU.base, boxShadow: NEU.inSm,
-                    transition: `box-shadow 220ms ${EASE}, border-color 220ms ${EASE}`,
+                  onDragOver={(e) => { e.preventDefault(); if (!dragOver) setDragOver(true); }}
+                  onDragLeave={() => setDragOver(false)}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    setDragOver(false);
+                    const file = e.dataTransfer.files?.[0];
+                    if (file) void acceptFile(file);
                   }}
-                  onMouseEnter={e => { const el = e.currentTarget as HTMLElement; el.style.borderColor = NEU.forest; el.style.boxShadow = NEU.in; }}
+                  className="w-full flex flex-col items-center justify-center gap-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gv-main)]"
+                  style={{
+                    border: `1.5px dashed ${dragOver ? 'var(--gv-main)' : 'rgba(154,138,120,0.55)'}`, borderRadius: 16, padding: '36px 16px', textAlign: 'center', cursor: 'pointer', marginBottom: 14,
+                    minHeight: 168, backgroundColor: dragOver ? 'color-mix(in srgb, var(--gv-main) 5%, #FFFFFF)' : NEU.base, boxShadow: dragOver ? NEU.in : NEU.inSm,
+                    transition: `box-shadow 220ms ${EASE}, border-color 220ms ${EASE}, background-color 220ms ${EASE}`,
+                  }}
+                  onMouseEnter={e => { const el = e.currentTarget as HTMLElement; el.style.borderColor = 'var(--gv-main)'; el.style.boxShadow = NEU.in; }}
                   onMouseLeave={e => { const el = e.currentTarget as HTMLElement; el.style.borderColor = 'rgba(154,138,120,0.55)'; el.style.boxShadow = NEU.inSm; }}
                 >
-                  <p style={{ fontSize: 13, color: '#4A4238', fontFamily: OUTFIT, marginBottom: 2, fontWeight: 600 }}>Click to select PDF</p>
-                  <p style={{ fontSize: 11, color: '#9A8A78', fontFamily: OUTFIT, fontWeight: 500, fontVariantNumeric: 'tabular-nums' }}>MAX 5MB</p>
-                </div>
+                  <Upload size={28} strokeWidth={1.5} aria-hidden style={{ color: 'var(--gv-main)' }} />
+                  <span style={{ fontSize: 16, color: '#1C1410', fontFamily: OUTFIT, fontWeight: 600 }}>Click to select PDF</span>
+                  <span style={{ fontSize: 13, color: INK_SOFT, fontFamily: OUTFIT, fontWeight: 500 }}>or drop it here · PDF, up to 5 MB</span>
+                </button>
               ) : (
                 <div style={{ borderRadius: 12, padding: '10px 14px', backgroundColor: 'color-mix(in srgb, var(--gv-main-light) 6%, transparent)', boxShadow: NEU.inSm, display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
                   <FileText size={15} style={{ color: 'var(--gv-main-mid)', flexShrink: 0 }} />
@@ -681,7 +686,7 @@ export default function PositionPaperCard({ conferenceId, conferenceSlug, myAllo
                     onClick={() => ppFileInputRef.current?.click()}
                     className="focus:outline-none"
                     style={{ fontSize: 11, fontWeight: 500, color: NEU.muted, fontFamily: OUTFIT, textDecoration: 'none', cursor: 'pointer', background: 'none', border: 'none', flexShrink: 0, transition: `color 160ms ${EASE}` }}
-                    onMouseEnter={e => { const el = e.currentTarget as HTMLElement; el.style.color = NEU.forest; el.style.textDecoration = 'underline'; }}
+                    onMouseEnter={e => { const el = e.currentTarget as HTMLElement; el.style.color = 'var(--gv-main)'; el.style.textDecoration = 'underline'; }}
                     onMouseLeave={e => { const el = e.currentTarget as HTMLElement; el.style.color = NEU.muted; el.style.textDecoration = 'none'; }}
                   >
                     Change
@@ -707,15 +712,14 @@ export default function PositionPaperCard({ conferenceId, conferenceSlug, myAllo
                   background="linear-gradient(135deg, var(--gv-main), var(--gv-main-mid))"
                   color="var(--gv-on-main)"
                   boxShadowColor="color-mix(in srgb, var(--gv-main) 35%, transparent)"
-                  style={{ flex: 1, padding: '10px 0', fontSize: 13, borderRadius: 12 }}
+                  style={{ flex: 1, minHeight: 48, padding: '12px 0', fontSize: 15, borderRadius: 12 }}
                 >
                   {ppUploading ? 'Uploading…' : isReplacing ? 'Submit new version' : 'Submit position paper'}
                 </ActionButton>
               </div>
             </>
           )}
-        </div>
-      )}
+      </div>
     </SectionCard>
   );
 }

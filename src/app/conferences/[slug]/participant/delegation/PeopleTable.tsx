@@ -5,13 +5,19 @@
 // the country's round flag big with its name under it, the committee's emblem
 // smaller beside it with the acronym that opens the committee, owner 20 Oct
 // 2026), position paper (V2 only), payment, and the row menu.
-// From 760px of card width it is a table; below it every row stacks.
+// From 760px of card width it is a table; below it (phones, owner 21 Oct
+// 2026) every person is ONE compact row: avatar, name with a role icon, the
+// allocation as a small round flag + committee acronym, the paper as an icon,
+// and the three-dots menu (Allocate, Unallocate and the rest live there).
 // Names wrap, never an ellipsis (CLAUDE.md §8).
-// Order (owner, 20 Oct 2026, "the committees should always be alphabetical
-// within the allocations"): you first, then the seated by committee acronym,
-// country and name (seat/seatOrder), then everyone without a seat as read.
-// The avatar and the name open the member's pop-up (member/MemberDetailsPopup:
-// details and application answers); a committee acronym opens the committee's
+// Order (CLAUDE.md §8): faculty advisors first, then head delegates, then
+// delegates; inside each role you first, then the seated by committee
+// acronym, country and name (seat/seatOrder, owner 20 Oct 2026), then everyone
+// without a seat by name.
+// The avatar opens the person's public MUN CV when their account is known
+// (CLAUDE.md §8), else the member's pop-up; the name opens the member's pop-up
+// (member/MemberDetailsPopup: details and application answers); a committee
+// acronym opens the committee's
 // pop-up (CommitteePopup: every allocation in the committee, A to Z). Both
 // pop-ups are this table's own, so onOpenCommittee is no longer called.
 //
@@ -43,13 +49,14 @@
 // (onChanged), never behind a loader.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeftRight, Check, Mail, Search, Upload, UserX, X } from 'lucide-react';
+import { ArrowLeftRight, Check, Crown, FileCheck2, FileText, GraduationCap, Mail, Search, Upload, User, UserX, X } from 'lucide-react';
+import { CircleFlag } from '@/components/CircleFlag';
 import { committeeDisplayName } from '@/lib/presetNames';
 import { friendlyError } from '@/lib/friendlyError';
 import { notifyErr, notifyOk } from '@/lib/appNotify';
 import { DELEGATIONS_V2_DB, placeMember, unplaceMember, uploadPaperForMember, type OpenSeat, type Result } from './v2';
 import MemberMenu, { type MemberMenuHandle, type MenuMember, type SeatOps, type SwitchTarget } from './MemberMenu';
-import { BTN_CLASS, cardStyle, committeeEmblemSrc, FONT, FOREST, INK, INK_SOFT, LINE, RoundAvatar, secondaryBtn, STROKE } from './leaderKit';
+import { BTN_CLASS, cardStyle, committeeEmblemSrc, CvAvatar, FONT, INK, INK_SOFT, LINE, OK_GREEN, OWE, roleRank, RoundAvatar, secondaryBtn, STROKE } from './leaderKit';
 import SeatCell, { type Seat } from './seat/SeatCell';
 import InPlaceConfirm from './seat/InPlaceConfirm';
 import { useSeatDrag } from './seat/useSeatDrag';
@@ -100,20 +107,27 @@ function bySeat(rows: PersonRow[]): PersonRow[] {
     || collator.compare(a.name, b.name));
 }
 
-/** You first, then the seated in seat order (then name), then the rest as read. */
+/** Faculty advisors, then head delegates, then delegates (CLAUDE.md §8); in
+ *  each role you first, then the seated in seat order (then name), then the
+ *  rest by name. */
 function orderRows(rows: PersonRow[]): PersonRow[] {
-  const index = new Map(rows.map((r, i) => [r.application_id, i] as const));
   const bucket = (r: PersonRow) => (r.is_me ? 0 : r.seat ? 1 : 2);
   return [...rows].sort((a, b) => {
+    const role = roleRank(a.role) - roleRank(b.role);
+    if (role !== 0) return role;
     const d = bucket(a) - bucket(b);
     if (d !== 0) return d;
     if (bucket(a) === 1) return compareSeatKeys(seatKeyOf(a), seatKeyOf(b)) || collator.compare(a.name, b.name);
-    return (index.get(a.application_id) ?? 0) - (index.get(b.application_id) ?? 0);
+    return collator.compare(a.name, b.name);
   });
 }
 
+const ROLE_ICON = { 'faculty-advisor': GraduationCap, 'head-delegate': Crown, delegate: User } as const;
+
 // The seat column is the widest: the 56px flag with its name under it, the
 // committee beside it, the seat's icon buttons stacked at its end (V2).
+/** Phones: avatar + name block, the paper icon, the menu. */
+const GRID_PHONE = 'grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-x-2';
 const GRID_V2 = '@[760px]:grid-cols-[minmax(0,1.25fr)_minmax(0,2.1fr)_minmax(0,0.75fr)_minmax(0,0.85fr)_36px]';
 const GRID = '@[760px]:grid-cols-[minmax(0,1.35fr)_minmax(0,1.75fr)_minmax(0,0.9fr)_36px]';
 
@@ -416,7 +430,7 @@ export default function PeopleTable({ rows, societyId, societyName, conferenceId
   const committeeInfo = committeeOpen ? live.find(r => r.seat?.committee_id === committeeOpen)?.seat ?? null : null;
   const committeePeople = committeeOpen
     ? live.filter(r => r.seat?.committee_id === committeeOpen).map(r => ({
-        application_id: r.application_id, name: r.name, avatar_url: r.avatar_url,
+        application_id: r.application_id, name: r.name, avatar_url: r.avatar_url, user_id: r.user_id,
         country_name: r.seat?.country_name ?? null, country_code: r.seat?.country_code ?? null, seatLogo: r.seat?.seatLogo ?? null,
         is_me: r.is_me,
       }))
@@ -458,7 +472,7 @@ export default function PeopleTable({ rows, societyId, societyName, conferenceId
 
   return (
     <section className="@container min-w-0" style={{ ...cardStyle, padding: '8px 0 12px' }} aria-label="People">
-      <div className="flex items-center justify-between gap-3 flex-wrap" style={{ padding: '16px 24px 12px' }}>
+      <div className="flex items-center justify-between gap-3 flex-wrap px-4 pt-3.5 pb-3 @[760px]:px-6 @[760px]:pt-4">
         <div className="flex items-baseline gap-3 min-w-0">
           <h2 style={{ fontFamily: FONT, fontSize: 19, fontWeight: 600, color: INK, margin: 0 }}>People</h2>
           {/* Swap mode's one hint, on the title's line so nothing below moves;
@@ -492,7 +506,7 @@ export default function PeopleTable({ rows, societyId, societyName, conferenceId
       </div>
 
       {shown.length === 0 ? (
-        <p style={{ fontFamily: FONT, fontSize: 14, color: INK_SOFT, margin: 0, padding: '18px 24px' }}>
+        <p className="px-4 py-4 @[760px]:px-6" style={{ fontFamily: FONT, fontSize: 14, color: INK_SOFT, margin: 0 }}>
           {rows.length === 0 ? 'Nobody has joined yet. Share the invite link to bring your people in.' : 'Nobody matches that search.'}
         </p>
       ) : shown.map(r => {
@@ -527,29 +541,44 @@ export default function PeopleTable({ rows, societyId, societyName, conferenceId
             tabIndex={selectable ? 0 : undefined}
             aria-pressed={selectable ? selected : undefined}
             aria-label={selectable ? `${selected ? 'Picked' : 'Pick'} ${r.name}, ${r.seat?.country_name ?? ''} ${r.seat?.committee_label ?? ''}` : undefined}
-            className={`relative flex flex-col gap-3 @[760px]:grid ${grid} @[760px]:gap-3 @[760px]:items-center`}
+            className={`relative ${GRID_PHONE} @[760px]:grid ${grid} @[760px]:gap-3 @[760px]:items-center px-4 py-2.5 @[760px]:px-6 @[760px]:py-3`}
             style={{
-              padding: '12px 24px', borderBottom: `1px solid ${LINE}`,
+              borderBottom: `1px solid ${LINE}`,
               background: isTarget ? 'color-mix(in srgb, var(--gv-main) 7%, transparent)' : selected ? 'color-mix(in srgb, var(--gv-main) 6%, transparent)' : r.is_me ? 'color-mix(in srgb, var(--gv-accent-light) 14%, transparent)' : 'transparent',
-              boxShadow: isTarget ? `inset 0 0 0 2px ${FOREST}` : 'none',
+              boxShadow: isTarget ? 'inset 0 0 0 2px var(--gv-main)' : 'none',
               opacity: !r.attending ? 0.6 : swap.on && !selectable ? 0.45 : 1,
               cursor: selectable ? 'pointer' : 'default',
               transition: 'background-color 120ms ease, box-shadow 120ms ease',
             }}
           >
             {/* Person */}
-            <div className="flex items-center gap-3 min-w-0 pr-10 @[760px]:pr-0">
-              <button
-                type="button"
-                onClick={(e) => openDetails(e, r.application_id)}
-                aria-label={`See ${r.name}'s details`}
-                title={swap.on ? undefined : 'See details and application'}
-                tabIndex={swap.on ? -1 : 0}
-                className="flex-shrink-0 rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gv-main)] focus-visible:ring-offset-2"
-                style={{ padding: 0, border: 'none', background: 'transparent', cursor: swap.on ? 'inherit' : 'pointer', lineHeight: 0 }}
-              >
-                <RoundAvatar name={r.name} url={r.avatar_url} size={54} seed={r.application_id} />
-              </button>
+            <div className="flex items-center gap-3 min-w-0">
+              {/* The avatar opens their public MUN CV when the account is known
+                  (CLAUDE.md §8), else their details. While swapping, a press
+                  anywhere on the row picks it. */}
+              {r.user_id && !swap.on ? (
+                <>
+                  <span className="flex-shrink-0 @[760px]:hidden" style={{ lineHeight: 0 }}>
+                    <CvAvatar userId={r.user_id} name={r.name} url={r.avatar_url} size={40} seed={r.application_id} />
+                  </span>
+                  <span className="flex-shrink-0 hidden @[760px]:inline-flex" style={{ lineHeight: 0 }}>
+                    <CvAvatar userId={r.user_id} name={r.name} url={r.avatar_url} size={54} seed={r.application_id} />
+                  </span>
+                </>
+              ) : (
+                <button
+                  type="button"
+                  onClick={(e) => openDetails(e, r.application_id)}
+                  aria-label={`See ${r.name}'s details`}
+                  title={swap.on ? undefined : 'See details and application'}
+                  tabIndex={swap.on ? -1 : 0}
+                  className="flex-shrink-0 rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gv-main)] focus-visible:ring-offset-2"
+                  style={{ padding: 0, border: 'none', background: 'transparent', cursor: swap.on ? 'inherit' : 'pointer', lineHeight: 0 }}
+                >
+                  <span className="@[760px]:hidden"><RoundAvatar name={r.name} url={r.avatar_url} size={40} seed={r.application_id} /></span>
+                  <span className="hidden @[760px]:inline"><RoundAvatar name={r.name} url={r.avatar_url} size={54} seed={r.application_id} /></span>
+                </button>
+              )}
               <div className="min-w-0 flex flex-col gap-0.5">
                 <span className="[overflow-wrap:anywhere]" style={{ fontFamily: FONT, fontSize: 15, fontWeight: 600, color: INK, lineHeight: 1.3 }}>
                   <button
@@ -564,7 +593,26 @@ export default function PeopleTable({ rows, societyId, societyName, conferenceId
                   {r.is_me && <span style={{ fontSize: 12.5, fontWeight: 600, color: 'color-mix(in srgb, var(--gv-accent) 72%, #1C1410)', marginLeft: 6 }}>You</span>}
                 </span>
                 <span className="flex items-center flex-wrap gap-x-2.5 gap-y-0.5" style={{ fontFamily: FONT, fontSize: 13, color: INK_SOFT }}>
-                  {ROLE_WORD[r.role]}
+                  <RoleMark role={r.role} />
+                  {/* Phones: the allocation in one line, a small round flag and the committee acronym. */}
+                  {r.seat && (
+                    <span className="inline-flex items-center gap-1.5 min-w-0 @[760px]:hidden" style={{ color: INK }}>
+                      <CircleFlag code={r.seat.country_code} logoUrl={r.seat.seatLogo} label={r.seat.country_name} size={18} decorative />
+                      <span className="[overflow-wrap:anywhere]">{r.seat.country_name}</span>
+                      {r.seat.committee_id && !swap.on ? (
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); if (r.seat?.committee_id) setCommitteeOpen(r.seat.committee_id); }}
+                          className="rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gv-main)]"
+                          style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontFamily: FONT, fontSize: 13, fontWeight: 700, color: 'var(--gv-main)', textDecoration: 'underline', textUnderlineOffset: 3 }}
+                        >
+                          {r.seat.committee_label}
+                        </button>
+                      ) : (
+                        <span style={{ fontWeight: 600 }}>{r.seat.committee_label}</span>
+                      )}
+                    </span>
+                  )}
                   {!r.claimed && (
                     <span className="inline-flex items-center gap-1"><Mail size={14} strokeWidth={STROKE} aria-hidden />Invited</span>
                   )}
@@ -576,7 +624,7 @@ export default function PeopleTable({ rows, societyId, societyName, conferenceId
             </div>
 
             {/* Seat */}
-            <div className="min-w-0 pl-[54px] @[760px]:pl-0">
+            <div className="hidden @[760px]:block min-w-0">
               <SeatCell
                 seat={r.seat}
                 role={r.role}
@@ -601,9 +649,12 @@ export default function PeopleTable({ rows, societyId, societyName, conferenceId
 
             {/* Position paper (V2) */}
             {DELEGATIONS_V2_DB && (
-              <div className="pl-[66px] @[760px]:pl-0">
+              <div className="flex justify-end @[760px]:block">
                 {r.paper ? (
-                  <ToneWord word={r.paper.word} tone={r.paper.tone} />
+                  <>
+                    <span className="hidden @[760px]:inline-flex"><ToneWord word={r.paper.word} tone={r.paper.tone} /></span>
+                    {r.role !== 'faculty-advisor' && <PaperIcon word={r.paper.word} tone={r.paper.tone} />}
+                  </>
                 ) : r.paperDue && seatable && r.seat?.committee_id && !swap.on ? (
                   <PaperUpload
                     onPress={() => pickPaper(r.application_id)}
@@ -615,12 +666,12 @@ export default function PeopleTable({ rows, societyId, societyName, conferenceId
             )}
 
             {/* Payment */}
-            <div className="pl-[66px] @[760px]:pl-0">
+            <div className="hidden @[760px]:block">
               {r.pay && <ToneWord word={r.pay.word} tone={r.pay.tone} />}
             </div>
 
             {/* Menu, or the swap pick */}
-            <div className="absolute right-6 top-[23px] @[760px]:static flex justify-end">
+            <div className="flex justify-end">
               {swap.on ? (
                 selectable ? (
                   <span aria-hidden className="inline-flex items-center justify-center" style={{ width: 20, height: 20, borderRadius: '50%', border: `1.5px solid ${selected ? 'var(--gv-main)' : 'color-mix(in srgb, var(--gv-main) 30%, transparent)'}`, background: selected ? 'var(--gv-main)' : 'transparent' }}>
@@ -689,10 +740,32 @@ function PaperUpload({ onPress, disabled, title }: { onPress: () => void; disabl
       title={title}
       aria-label={title}
       className="inline-flex flex-col items-center justify-center focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gv-main)] hover:bg-[#F1ECE1]"
-      style={{ minWidth: 56, minHeight: 48, padding: '4px 8px', gap: 2, borderRadius: 10, border: 'none', background: 'transparent', color: 'var(--gv-main)', cursor: disabled ? 'default' : 'pointer', opacity: disabled ? 0.45 : 1 }}
+      style={{ minWidth: 44, minHeight: 44, padding: '4px 8px', gap: 2, borderRadius: 10, border: 'none', background: 'transparent', color: 'var(--gv-main)', cursor: disabled ? 'default' : 'pointer', opacity: disabled ? 0.45 : 1 }}
     >
       <Upload size={20} strokeWidth={STROKE} aria-hidden />
-      <span style={{ fontFamily: FONT, fontSize: 12.5, fontWeight: 600, lineHeight: 1.1 }}>Upload</span>
+      <span className="hidden @[760px]:inline" style={{ fontFamily: FONT, fontSize: 12.5, fontWeight: 600, lineHeight: 1.1 }}>Upload</span>
     </button>
+  );
+}
+
+/** The role as a thin icon with its word beside it from 760px (phones: the icon alone). */
+function RoleMark({ role }: { role: PersonRow['role'] }) {
+  const Icon = ROLE_ICON[role] ?? User;
+  return (
+    <span className="inline-flex items-center gap-1" title={ROLE_WORD[role]}>
+      <Icon size={15} strokeWidth={STROKE} aria-hidden style={{ flexShrink: 0 }} />
+      <span className="sr-only @[760px]:not-sr-only">{ROLE_WORD[role]}</span>
+    </span>
+  );
+}
+
+/** Phones: the paper's word as one icon in its tone (the word is its title). */
+function PaperIcon({ word, tone }: { word: string; tone: 'ok' | 'owe' | 'soft' }) {
+  const Icon = tone === 'ok' ? FileCheck2 : FileText;
+  return (
+    <span className="inline-flex items-center justify-center @[760px]:hidden" title={word} style={{ width: 36, height: 36, color: tone === 'ok' ? OK_GREEN : tone === 'owe' ? OWE : INK_SOFT }}>
+      <Icon size={20} strokeWidth={STROKE} aria-hidden />
+      <span className="sr-only">Position paper: {word}</span>
+    </span>
   );
 }

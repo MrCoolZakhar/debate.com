@@ -8,7 +8,10 @@
 // its leaders (avatar and name), how many members, and the allocations given
 // (meter, given and filled), then the next step. Expected / Joined / Paid stay
 // in the pop-up's quiet row. A rail holds the totals and how delegations get
-// allocations. A row opens the delegation pop-up. Under 900px a row stacks.
+// allocations. The whole row opens the delegation pop-up (a small chevron says
+// so; "Give allocations" sits under the allocations meter when some are still
+// to give). Under 900px a row stacks. Names split on two rows
+// (DelegationNameLines); members big with the expected size small beneath.
 // Decisions: docs/conferences/delegations.md.
 //
 // Where every number comes from (useDelegationsData.ts, delegationRows.ts):
@@ -30,6 +33,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
+import { ChevronRight } from 'lucide-react';
 import { useManage } from '@/app/manage/[slug]/layout';
 import { DatePicker } from '@/components/DatePicker';
 import DelegationCrest from '@/components/DelegationCrest';
@@ -41,14 +45,15 @@ import { useDelegationsData } from './useDelegationsData';
 import DelegationPopup, { leadersOf, type DelegationTab } from './DelegationPopup';
 import { DELEGATIONS_V2_DB, SEAT_LIMIT_OPTIONS, readDelegationSettings, writeDelegationSetting, type SeatLimit } from './v2';
 import {
-  BTN_CLASS, FONT, FOREST, HAIRLINE, INK, INK_SOFT, PlaceLine, ROW_LINE, RoundAvatar, SeatMeter, SkeletonRows,
-  cardStyle, linkStyle, smallPrimaryBtn,
+  BTN_CLASS, DelegationNameLines, FONT, FOREST, HAIRLINE, INK, INK_SOFT, PlaceLine, ROW_LINE, RoundAvatar, STROKE, SeatMeter, SkeletonRows,
+  cardStyle, linkStyle,
 } from './kit';
 
-/** Delegation | Leaders | Members | Allocations given | next step. */
-const ROW_COLUMNS = 'minmax(240px, 1.5fr) minmax(180px, 1.3fr) minmax(90px, 0.55fr) minmax(170px, 1fr) 150px';
-/** Every row is this tall at least, so the list reads as one even table. */
-const ROW_HEIGHT = 92;
+/** Delegation | Leaders | Members | Allocations | chevron. Every column but the
+ *  counts shrinks (minmax 0) and wraps, so nothing is pushed past the card at
+ *  1280 (owner, 21 Oct 2026: the Open button was cut off and the row was mostly
+ *  blank). The whole row opens the pop-up; the chevron says so. */
+const ROW_COLUMNS = 'minmax(0, 1.55fr) minmax(0, 1.15fr) max-content minmax(150px, 1fr) 20px';
 /** Leaders named on a row; more show as "+N". */
 const LEADERS_SHOWN = 2;
 
@@ -176,7 +181,7 @@ export default function DelegationsTab<M extends DelegationMemberLite>(props: De
 
         {visible.length > 0 && (
           <div style={{ ...cardStyle, padding: 0, overflow: 'hidden' }}>
-            <div className="dlgV2Head" style={{ gridTemplateColumns: ROW_COLUMNS, gap: 20, padding: '12px 24px', borderBottom: `1px solid ${ROW_LINE}` }}>
+            <div className="dlgV2Head" style={{ gridTemplateColumns: ROW_COLUMNS, gap: 18, padding: '12px 20px', borderBottom: `1px solid ${ROW_LINE}` }}>
               {['Delegation', 'Leaders', 'Members', 'Allocations given', ''].map((h, i) => (
                 <span key={i} style={{ fontFamily: FONT, fontSize: 12, fontWeight: 500, color: INK_SOFT }}>{h}</span>
               ))}
@@ -195,13 +200,13 @@ export default function DelegationsTab<M extends DelegationMemberLite>(props: De
                   onClick={() => openRow(r.id, 'people')}
                   onKeyDown={e => { if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); openRow(r.id, 'people'); } }}
                   className="dlgV2Row focus:outline-none"
-                  style={{ gridTemplateColumns: ROW_COLUMNS, gap: 20, minHeight: ROW_HEIGHT, padding: '12px 24px', borderTop: i === 0 ? 'none' : `1px solid ${ROW_LINE}`, cursor: 'pointer' }}
+                  style={{ gridTemplateColumns: ROW_COLUMNS, gap: 18, padding: '14px 20px', borderTop: i === 0 ? 'none' : `1px solid ${ROW_LINE}`, cursor: 'pointer' }}
                 >
-                  <div className="flex items-center min-w-0" style={{ gap: 14 }}>
-                    <DelegationCrest name={r.name} logoUrl={r.logoUrl} size={60} />
+                  <div className="flex items-center min-w-0" style={{ gap: 12 }}>
+                    <DelegationCrest name={r.name} logoUrl={r.logoUrl} size={52} />
                     <div className="flex flex-col min-w-0" style={{ gap: 4 }}>
-                      <span className="[overflow-wrap:anywhere]" style={{ fontFamily: FONT, fontSize: 18, fontWeight: 700, letterSpacing: '-0.01em', color: INK, lineHeight: 1.25 }}>{r.name}</span>
-                      <PlaceLine city={r.city} countryCode={r.countryCode} short oneLine size={15} fontSize={12.5} />
+                      <DelegationNameLines name={r.name} size={17} restSize={12.5} />
+                      <PlaceLine city={r.city} countryCode={r.countryCode} short oneLine size={14} fontSize={12} />
                     </div>
                   </div>
 
@@ -211,7 +216,10 @@ export default function DelegationsTab<M extends DelegationMemberLite>(props: De
                     ) : shown.map(l => (
                       <span key={l.id} className="flex items-center gap-2 min-w-0" title={l.role}>
                         <RoundAvatar name={l.name} url={l.avatarUrl} size={26} seed={l.id} />
-                        <span className="[overflow-wrap:anywhere]" style={{ fontFamily: FONT, fontSize: 13.5, fontWeight: 500, color: INK, lineHeight: 1.25 }}>{l.name}</span>
+                        <span className="flex flex-col min-w-0" style={{ lineHeight: 1.2 }}>
+                          <span className="[overflow-wrap:anywhere]" style={{ fontFamily: FONT, fontSize: 13.5, fontWeight: 500, color: INK }}>{l.name}</span>
+                          <span style={{ fontFamily: FONT, fontSize: 11.5, color: INK_SOFT }}>{l.role}</span>
+                        </span>
                       </span>
                     ))}
                     {more > 0 && (
@@ -220,9 +228,15 @@ export default function DelegationsTab<M extends DelegationMemberLite>(props: De
                     )}
                   </div>
 
-                  <div className="flex items-baseline" style={{ gap: 6 }}>
-                    <span style={{ fontFamily: FONT, fontSize: 22, fontWeight: 600, color: INK, fontVariantNumeric: 'tabular-nums', lineHeight: 1.1 }}>{r.registered}</span>
-                    <span style={{ fontFamily: FONT, fontSize: 13, color: INK_SOFT }}>{r.registered === 1 ? 'member' : 'members'}</span>
+                  {/* Members big, the expected size small beneath (owner, 21 Oct 2026). */}
+                  <div className="flex flex-col" style={{ gap: 2, minWidth: 84 }}>
+                    <span className="inline-flex items-baseline" style={{ gap: 5 }}>
+                      <span style={{ fontFamily: FONT, fontSize: 22, fontWeight: 600, color: INK, fontVariantNumeric: 'tabular-nums', lineHeight: 1.1 }}>{r.registered}</span>
+                      <span style={{ fontFamily: FONT, fontSize: 13, color: INK_SOFT }}>{r.registered === 1 ? 'member' : 'members'}</span>
+                    </span>
+                    {r.expected != null && (
+                      <span style={{ fontFamily: FONT, fontSize: 12, color: INK_SOFT, fontVariantNumeric: 'tabular-nums' }}>{r.expected} expected</span>
+                    )}
                   </div>
 
                   <div className="flex flex-col min-w-0" style={{ gap: 6 }}>
@@ -230,22 +244,18 @@ export default function DelegationsTab<M extends DelegationMemberLite>(props: De
                     <span style={{ fontFamily: FONT, fontSize: 12.5, color: INK_SOFT, fontVariantNumeric: 'tabular-nums' }}>
                       <b style={{ color: INK, fontWeight: 600 }}>{r.seatsGiven}</b> {r.seatsGiven === 1 ? 'allocation' : 'allocations'} · <b style={{ color: INK, fontWeight: 600 }}>{r.seatsFilled}</b> filled
                     </span>
-                  </div>
-
-                  <div className="flex dlgV2Action">
-                    {giveSeats ? (
+                    {giveSeats && (
                       <Link href={`/manage/${conference.slug}/assignment?mode=delegation-seats&society=${encodeURIComponent(r.id)}`}
-                        className={BTN_CLASS} style={{ ...smallPrimaryBtn, textDecoration: 'none' }}
+                        className={`${BTN_CLASS} self-start`} style={{ ...linkStyle, fontSize: 13 }}
                         onClick={e => e.stopPropagation()}>
                         Give allocations
                       </Link>
-                    ) : (
-                      <button type="button" className={BTN_CLASS} style={{ ...linkStyle, fontSize: 14 }}
-                        onClick={e => { e.stopPropagation(); openRow(r.id, 'people'); }}>
-                        Open
-                      </button>
                     )}
                   </div>
+
+                  <span aria-hidden className="dlgV2Chevron flex items-center justify-end" style={{ color: INK_SOFT }}>
+                    <ChevronRight size={18} strokeWidth={STROKE} />
+                  </span>
                 </div>
               );
             })}
@@ -358,12 +368,14 @@ export default function DelegationsTab<M extends DelegationMemberLite>(props: De
       <style>{`
         .dlgV2Head { display: none; }
         .dlgV2Row { display: flex; flex-direction: column; align-items: stretch; transition: background-color 140ms; }
-        .dlgV2Action { justify-content: flex-start; }
+        .dlgV2Chevron { display: none !important; }
         @media (min-width: 900px) {
           .dlgV2Head { display: grid; align-items: center; }
           .dlgV2Row { display: grid; align-items: center; }
-          .dlgV2Action { justify-content: flex-end; }
+          .dlgV2Chevron { display: flex !important; }
         }
+        .dlgV2Chevron { transition: transform 160ms cubic-bezier(0.22,1,0.36,1); }
+        @media (hover: hover) { .dlgV2Row:hover .dlgV2Chevron { transform: translateX(2px); color: ${FOREST}; } }
         @media (hover: hover) { .dlgV2Row:hover { background: #FBF9F4; } }
         .dlgV2Row:focus-visible { outline: 2px solid #B6871F !important; outline-offset: -2px; }
       `}</style>

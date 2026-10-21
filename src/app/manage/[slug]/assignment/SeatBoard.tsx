@@ -19,7 +19,7 @@
 // on the first load when they are waiting, then leaves the URL.
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, Hand, Info, Search, X, Award } from 'lucide-react';
+import { ArrowLeft, ArrowUpDown, ChevronDown, Hand, Info, Search, X, Award } from 'lucide-react';
 import GSelect, { type GSelectOption } from '@/components/GSelect';
 import { NEU, NeuButton } from '@/components/neu';
 import { getCountryByName } from '@/lib/countries';
@@ -27,21 +27,27 @@ import { buildSuggestions, rankSeatsForPerson, type SeatedIdentities } from '@/l
 import { useBoardDrag, dropAttr } from '@/app/manage/[slug]/assignment/boardDrag';
 import { CountryName, committeeShortName } from '@/app/manage/[slug]/assignment/displayNames';
 import { NotRegisteredChip } from '@/app/manage/[slug]/assignment/delegationShared';
+import DelegationPopupLink from '@/app/manage/[slug]/DelegationPopupLink';
 import SeatBoardDelegations from '@/app/manage/[slug]/assignment/SeatBoardDelegations';
 import { replaceUrlInPlace } from '@/lib/replaceUrlInPlace';
 import {
   type AcceptedApp, type CommitteeData, type Suggestion, type UserHistory,
   CountryFlag, PersonAvatar, CommitteeLogo, committeeLabels, committeeSeatLogo, effectiveLevel, ageOf,
-  LevelTag, DelegationChip, SuggestionCard, SuggestionReasons, fitColor, slotLogoUrl, OUTFIT,
+  LevelTag, fitColor, slotLogoUrl, OUTFIT,
 } from '@/app/manage/[slug]/assignment/assignmentKit';
 import { SeatBoardPopup } from '@/app/manage/[slug]/assignment/SeatBoardPopup';
 import {
-  BigCount, CARD_SHADOW, CommitteeRing, GoldMarker, HAIRLINE, WELL,
+  BigCount, CARD_SHADOW, CommitteeRing, FitPills, RankNumber, WELL,
   acceptedAt, firstName, fmtDay, ordinal, personName, prefOrderByCommittee, schoolName, seatCounts,
 } from '@/app/manage/[slug]/assignment/seatBoardShared';
 
+// The suggested seats are the board's main event: a soft gold surface with a
+// gold ring, the white seat tile inside, the forest Assign (owner, 21 Oct
+// 2026: the cards must pop more than the side columns).
+const GOLD_SURFACE = '#FFF8E3';
+const GOLD_CARD_SHADOW = 'inset 0 0 0 1px rgba(182,135,31,0.26), 0 1px 2px rgba(110,82,16,0.08), 0 10px 26px rgba(110,82,16,0.10)';
+
 type SortKey = 'accepted' | 'name' | 'first';
-type CommitteeFilter = 'all' | 'none' | `c:${string}`;
 type SchoolFilter = 'all' | 'independent' | `s:${string}`;
 type LevelFilter = 'all' | 'beginner' | 'intermediate' | 'advanced' | 'expert';
 
@@ -99,7 +105,6 @@ export default function SeatBoard({
   const [tab, setTab] = useState<'people' | 'delegations'>('people');
   const [search, setSearch] = useState('');
   const [sort, setSort] = useState<SortKey>('accepted');
-  const [fCommittee, setFCommittee] = useState<CommitteeFilter>('all');
   const [fSchool, setFSchool] = useState<SchoolFilter>('all');
   const [fLevel, setFLevel] = useState<LevelFilter>('all');
   // The Applications pop-up links here with ?person=<application id>: that
@@ -114,7 +119,6 @@ export default function SeatBoard({
     return id;
   });
   const [popup, setPopup] = useState<{ committeeId: string; personId: string | null } | null>(null);
-  const [expandedKey, setExpandedKey] = useState<string | null>(null);
   const [pulse, setPulse] = useState(false);
   const middleRef = useRef<HTMLElement | null>(null);
   const ringsRef = useRef<HTMLElement | null>(null);
@@ -180,7 +184,6 @@ export default function SeatBoard({
   function assign(sug: Suggestion) {
     setPopup(null);
     setOpenPersonId(null);
-    setExpandedKey(null);
     onAssign(sug);
   }
 
@@ -197,19 +200,17 @@ export default function SeatBoard({
       if (a.society_id == null) independents = true;
       else if (!seen.has(a.society_id)) seen.set(a.society_id, schoolName(a));
     }
-    const opts: GSelectOption<SchoolFilter>[] = [{ value: 'all', label: 'School' }];
+    const opts: GSelectOption<SchoolFilter>[] = [{ value: 'all', label: 'Delegation' }];
     if (independents) opts.push({ value: 'independent', label: 'Independent' });
     for (const [id, name] of [...seen.entries()].sort((x, y) => byName(x[1], y[1]))) opts.push({ value: `s:${id}`, label: name });
     return opts;
   }, [waiting]);
-  const committeeOptions: GSelectOption<CommitteeFilter>[] = useMemo(() => [
-    { value: 'all', label: '1st choice' },
-    ...committees.map(c => {
-      const l = committeeLabels(c);
-      return { value: `c:${c.id}` as CommitteeFilter, label: l.big, hint: l.full ?? undefined, icon: <CommitteeLogo committee={c} size={18} /> };
-    }),
-    { value: 'none', label: 'No preference given' },
-  ], [committees]);
+  const sortOptions: GSelectOption<SortKey>[] = [
+    { value: 'accepted', label: 'Accepted', hint: 'Oldest first' },
+    { value: 'name', label: 'Name', hint: 'A to Z' },
+    { value: 'first', label: '1st choice', hint: 'By committee and country' },
+  ];
+  const sortLabel = sortOptions.find(o => o.value === sort)?.label ?? 'Accepted';
   const levelOptions: GSelectOption<LevelFilter>[] = [
     { value: 'all', label: 'Level' },
     { value: 'beginner', label: 'Beginner' },
@@ -222,9 +223,6 @@ export default function SeatBoard({
     const q = search.trim().toLowerCase();
     const list = waiting.filter(a => {
       if (q && !personName(a).toLowerCase().includes(q) && !schoolName(a).toLowerCase().includes(q)) return false;
-      const fp = firstPref(a);
-      if (fCommittee === 'none' && fp) return false;
-      if (fCommittee.startsWith('c:') && fp?.conference_committee_id !== fCommittee.slice(2)) return false;
       if (fSchool === 'independent' && a.society_id != null) return false;
       if (fSchool.startsWith('s:') && a.society_id !== fSchool.slice(2)) return false;
       if (fLevel !== 'all' && effectiveLevel(a).toLowerCase() !== fLevel) return false;
@@ -245,7 +243,7 @@ export default function SeatBoard({
       if (ta !== tb) return !ta ? 1 : !tb ? -1 : ta.localeCompare(tb);
       return byName(personName(a), personName(b));
     });
-  }, [waiting, search, fCommittee, fSchool, fLevel, sort, committeeById]);
+  }, [waiting, search, fSchool, fLevel, sort, committeeById]);
 
   // ── The opened person's best three seats (best seat in each committee) ──────
   const bestThree = useMemo(() => {
@@ -261,22 +259,6 @@ export default function SeatBoard({
   const totalOpen = committees.reduce((n, c) => n + seatCounts(c).open, 0);
 
   // ── Pieces ─────────────────────────────────────────────────────────────────
-  const sortHead = (key: SortKey, label: string, style: React.CSSProperties) => (
-    <button
-      type="button"
-      onClick={() => setSort(key)}
-      aria-pressed={sort === key}
-      className="focus:outline-none"
-      style={{
-        border: 'none', background: 'transparent', padding: 0, height: 26, cursor: 'pointer',
-        fontFamily: OUTFIT, fontSize: 12, fontWeight: sort === key ? 700 : 500,
-        color: sort === key ? NEU.forest : NEU.inkSoft, ...style,
-      }}
-    >
-      {label}
-    </button>
-  );
-
   const ringGrid = (inPanel: boolean) => (
     <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(auto-fill, minmax(${inPanel ? 72 : 70}px, 1fr))` }}>
       {committees.map(c => {
@@ -349,18 +331,16 @@ export default function SeatBoard({
           </p>
         </div>
       ) : (
-        <div className="grid gap-2.5" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 430px), 1fr))', alignItems: 'start' }}>
+        <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 400px), 1fr))', alignItems: 'start' }}>
           {feed.map(sug => {
             const key = `${sug.app.id}-${sug.slot.id}`;
             return (
-              <SuggestionCard
+              <SeatSuggestionCard
                 key={key}
                 sug={sug}
                 busy={busyKey === key}
                 locked={locked}
-                expanded={expandedKey === key}
-                onToggle={() => setExpandedKey(prev => (prev === key ? null : key))}
-                history={sug.app.profiles ? history[sug.app.profiles.id] : undefined}
+                onOpenPerson={() => setOpenPersonId(sug.app.id)}
                 onAssign={() => assign(sug)}
               />
             );
@@ -399,7 +379,7 @@ export default function SeatBoard({
           type="text"
           value={search}
           onChange={e => setSearch(e.target.value)}
-          placeholder={tab === 'people' ? 'Search a name or school' : 'Search a delegation'}
+          placeholder={tab === 'people' ? 'Search a name or delegation' : 'Search a delegation'}
           aria-label={tab === 'people' ? 'Search people' : 'Search delegations'}
           className="flex-1 min-w-0 focus:outline-none"
           style={{ border: 'none', background: 'transparent', fontFamily: OUTFIT, fontSize: 13.5, color: NEU.ink }}
@@ -412,9 +392,26 @@ export default function SeatBoard({
       </label>
       {tab === 'people' && (
         <div className="grid gap-1.5" style={{ gridTemplateColumns: 'repeat(3, minmax(0, 1fr))' }}>
-          <GSelect<CommitteeFilter> value={fCommittee} onChange={setFCommittee} options={committeeOptions} size="sm" aria-label="Filter by 1st choice committee" panelMinWidth={240} searchable={committees.length > 8} searchPlaceholder="Find a committee" />
-          <GSelect<SchoolFilter> value={fSchool} onChange={setFSchool} options={schoolOptions} size="sm" aria-label="Filter by school or delegation" panelMinWidth={240} searchPlaceholder="Find a school" />
-          <GSelect<LevelFilter> value={fLevel} onChange={setFLevel} options={levelOptions} size="sm" aria-label="Filter by level" panelMinWidth={180} align="end" />
+          <GSelect<SchoolFilter> value={fSchool} onChange={setFSchool} options={schoolOptions} size="sm" aria-label="Filter by delegation" panelMinWidth={240} searchPlaceholder="Find a delegation" />
+          <GSelect<LevelFilter> value={fLevel} onChange={setFLevel} options={levelOptions} size="sm" aria-label="Filter by level" panelMinWidth={180} />
+          {/* Sorting is its own control, set apart from the two filters. */}
+          <GSelect<SortKey>
+            value={sort}
+            onChange={setSort}
+            options={sortOptions}
+            size="sm"
+            aria-label={`Sort by ${sortLabel}`}
+            panelMinWidth={210}
+            align="end"
+            style={{ background: WELL }}
+            triggerContent={(
+              <span className="flex items-center gap-1.5 w-full min-w-0">
+                <ArrowUpDown size={13} strokeWidth={1.75} style={{ color: NEU.ink, flexShrink: 0 }} aria-hidden />
+                <span className="flex-1 min-w-0 text-left [overflow-wrap:anywhere]" style={{ fontWeight: 600 }}>{sortLabel}</span>
+                <ChevronDown size={14} strokeWidth={1.75} className="gv-gsel-chev" aria-hidden />
+              </span>
+            )}
+          />
         </div>
       )}
     </div>
@@ -453,7 +450,7 @@ export default function SeatBoard({
 
   return (
     <div
-      className="flex flex-col gap-4 lg:grid lg:flex-1 lg:min-h-0 lg:grid-cols-[296px_minmax(0,1fr)_312px] 2xl:grid-cols-[340px_minmax(0,1fr)_380px]"
+      className="flex flex-col gap-4 lg:grid lg:flex-1 lg:min-h-0 lg:grid-cols-[316px_minmax(0,1fr)_316px] 2xl:grid-cols-[380px_minmax(0,1fr)_396px]"
       style={{ fontFamily: OUTFIT, color: NEU.ink }}
     >
       {/* ── LEFT: who is waiting ─────────────────────────────────────────── */}
@@ -463,76 +460,49 @@ export default function SeatBoard({
       >
         {leftHeader}
 
-          <>
-            <div className="flex items-center gap-1.5 flex-none" style={{ margin: '0 8px', padding: '0 8px', height: 30, borderTop: `1px solid ${HAIRLINE}`, borderBottom: `1px solid ${HAIRLINE}` }}>
-              {sortHead('name', 'Name', { flex: 1, textAlign: 'left' })}
-              {sortHead('first', '1st choice', { width: 64, textAlign: 'left' })}
-              {sortHead('accepted', 'Accepted', { width: 56, textAlign: 'right' })}
-            </div>
-            <div className="flex-1 min-h-0 overflow-y-auto" style={{ padding: '4px 8px 8px', overscrollBehavior: 'contain' }}>
-              {people.length === 0 && (
-                <p className="text-center py-8" style={{ fontSize: 13.5, color: NEU.inkSoft }}>
-                  {waiting.length === 0 ? 'Nobody is waiting for a seat' : 'Nobody matches these filters'}
-                </p>
-              )}
-              {people.map(a => {
-                const name = personName(a);
-                const fp = firstPref(a);
-                const fpCommittee = fp ? committeeById.get(fp.conference_committee_id) : undefined;
-                const open = openPersonId === a.id;
-                const dragged = drag?.payload.kind === 'app' && drag.payload.id === a.id;
-                const toggle = () => setOpenPersonId(prev => (prev === a.id ? null : a.id));
-                return (
-                  <div
-                    key={a.id}
-                    {...sourceProps({ kind: 'app', id: a.id }, name)}
-                    role="button"
-                    tabIndex={0}
-                    aria-pressed={open}
-                    aria-label={`${name}. Open to see their best seats, or drag onto a committee`}
-                    onClick={toggle}
-                    onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); } }}
-                    className="flex items-center gap-1.5 focus:outline-none focus-visible:ring-2"
-                    style={{
-                      padding: '7px 8px', borderRadius: 11, cursor: 'grab',
-                      background: open ? WELL : 'transparent',
-                      boxShadow: open ? 'inset 0 0 0 1.5px #1B3828' : 'none',
-                      opacity: dragged ? 0.45 : 1,
-                    }}
-                    onMouseEnter={e => { if (!open) (e.currentTarget as HTMLElement).style.background = '#FAF8F3'; }}
-                    onMouseLeave={e => { if (!open) (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
-                  >
-                    <PersonAvatar name={name} url={a.profiles?.avatar_url ?? null} size={28} />
-                    <span className="flex flex-col flex-1 min-w-0" style={{ paddingLeft: 4, lineHeight: 1.2 }}>
-                      <span className="[overflow-wrap:anywhere] inline-flex items-center gap-1.5 flex-wrap" style={{ fontSize: 13, fontWeight: 600 }}>
-                        {name}{!a.profiles && <NotRegisteredChip />}
-                      </span>
-                      <span className="[overflow-wrap:anywhere]" style={{ fontSize: 11.5, color: NEU.inkSoft }}>{schoolName(a)}</span>
-                    </span>
-                    <span
-                      className="inline-flex items-center gap-1 flex-shrink-0"
-                      style={{ width: 64 }}
-                      title={fp ? `${fp.conference_committees?.name ?? (fpCommittee?.name ?? 'Committee')} · ${fp.country_name}` : 'No preference given'}
-                    >
-                      {fp ? (
-                        <>
-                          {fpCommittee
-                            ? <CommitteeLogo committee={fpCommittee} size={20} alt={committeeLabels(fpCommittee).big} />
-                            : <span style={{ fontSize: 11, fontWeight: 700 }}>{committeeShortName(fp.conference_committees)}</span>}
-                          <CountryFlag code={fp.country_code} w={18} h={18} alt={fp.country_name} logoUrl={fpCommittee ? committeeSeatLogo(fpCommittee, fp.country_code) : null} />
-                        </>
-                      ) : (
-                        <span style={{ fontSize: 11.5, color: NEU.inkSoft }}>None</span>
-                      )}
-                    </span>
-                    <span className="flex-shrink-0 text-right" style={{ width: 56, fontSize: 12, color: NEU.inkSoft, fontVariantNumeric: 'tabular-nums' }}>
-                      {fmtDay(acceptedAt(a))}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-          </>
+        <div className="flex-1 min-h-0 overflow-y-auto" style={{ padding: '6px 8px 8px', borderTop: '1px solid #EFEAE0', overscrollBehavior: 'contain' }}>
+          {people.length === 0 && (
+            <p className="text-center py-8" style={{ fontSize: 14, color: NEU.inkSoft }}>
+              {waiting.length === 0 ? 'Nobody is waiting for a seat' : 'Nobody matches these filters'}
+            </p>
+          )}
+          {people.map(a => {
+            const name = personName(a);
+            const open = openPersonId === a.id;
+            const dragged = drag?.payload.kind === 'app' && drag.payload.id === a.id;
+            const toggle = () => setOpenPersonId(prev => (prev === a.id ? null : a.id));
+            return (
+              <div
+                key={a.id}
+                {...sourceProps({ kind: 'app', id: a.id }, name)}
+                role="button"
+                tabIndex={0}
+                aria-pressed={open}
+                aria-label={`${name}. Open to see their best seats, or drag onto a committee`}
+                onClick={toggle}
+                onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); } }}
+                className="flex items-center gap-3 focus:outline-none focus-visible:ring-2"
+                style={{
+                  padding: '9px 10px', borderRadius: 14, cursor: 'grab',
+                  background: open ? WELL : 'transparent',
+                  boxShadow: open ? 'inset 0 0 0 1.5px #1B3828' : 'none',
+                  opacity: dragged ? 0.45 : 1,
+                  transition: 'background-color 140ms cubic-bezier(0.22,1,0.36,1)',
+                }}
+                onMouseEnter={e => { if (!open) (e.currentTarget as HTMLElement).style.background = '#FAF8F3'; }}
+                onMouseLeave={e => { if (!open) (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
+              >
+                <PersonAvatar name={name} url={a.profiles?.avatar_url ?? null} size={38} />
+                <span className="flex flex-col flex-1 min-w-0" style={{ lineHeight: 1.2 }}>
+                  <span className="[overflow-wrap:anywhere] inline-flex items-center gap-1.5 flex-wrap" style={{ fontSize: 16, fontWeight: 600, color: NEU.ink }}>
+                    {name}{!a.profiles && <NotRegisteredChip />}
+                  </span>
+                  <span className="[overflow-wrap:anywhere]" style={{ fontSize: 12.5, color: NEU.inkSoft, marginTop: 1 }}>{schoolName(a)}</span>
+                </span>
+              </div>
+            );
+          })}
+        </div>
       </section>
 
       {/* ── MIDDLE: the suggestions, or one person ───────────────────────── */}
@@ -608,7 +578,81 @@ export default function SeatBoard({
   );
 }
 
+// ── One suggested seat (the middle feed) ─────────────────────────────────────
+// The person (a click opens them in the middle), their fit score, then the
+// seat on a white tile with Assign, then the reasons as pills.
+function SeatSuggestionCard({ sug, busy, locked, onOpenPerson, onAssign }: {
+  sug: Suggestion;
+  /** This card's assignment is saving. */
+  busy: boolean;
+  /** Another assignment is waiting on the first-assign pop-up. */
+  locked: boolean;
+  onOpenPerson: () => void;
+  onAssign: () => void;
+}) {
+  const name = personName(sug.app);
+  const labels = committeeLabels(sug.committee);
+  return (
+    <div
+      className="flex flex-col transition-transform duration-200 hover:-translate-y-px"
+      style={{ padding: 12, gap: 10, borderRadius: 22, background: GOLD_SURFACE, boxShadow: GOLD_CARD_SHADOW }}
+    >
+      <div className="flex items-center gap-3">
+        <button
+          type="button"
+          onClick={onOpenPerson}
+          title={`Open ${name}`}
+          className="focus:outline-none focus-visible:ring-2 flex items-center gap-3 flex-1 min-w-0 text-left"
+          style={{ border: 'none', background: 'transparent', padding: '2px 4px', borderRadius: 12, cursor: 'pointer', fontFamily: OUTFIT }}
+        >
+          <PersonAvatar name={name} url={sug.app.profiles?.avatar_url ?? null} size={44} />
+          <span className="flex flex-col min-w-0" style={{ lineHeight: 1.2 }}>
+            <span className="[overflow-wrap:anywhere]" style={{ fontSize: 17.5, fontWeight: 600, color: NEU.ink }}>{name}</span>
+            <span className="[overflow-wrap:anywhere]" style={{ fontSize: 13, color: NEU.inkSoft, marginTop: 1 }}>{schoolName(sug.app)}</span>
+          </span>
+        </button>
+        <span
+          className="flex flex-col items-end flex-shrink-0"
+          style={{ paddingRight: 4, lineHeight: 1 }}
+          title={sug.swap ? `Suggested here at ${sug.score}; their own best open seat scored ${sug.swap.ownBestScore}` : 'Fit score'}
+        >
+          <span style={{ fontSize: 26, fontWeight: 700, color: fitColor(sug.score), fontVariantNumeric: 'tabular-nums' }}>{sug.score}</span>
+          <span style={{ fontSize: 11, color: NEU.inkSoft, marginTop: 3, fontVariantNumeric: 'tabular-nums' }}>
+            {sug.swap ? `best ${sug.swap.ownBestScore}` : 'fit'}
+          </span>
+        </span>
+      </div>
+
+      <div
+        className="flex items-center gap-3"
+        style={{ padding: '10px 10px 10px 12px', borderRadius: 12, background: '#FFFFFF', boxShadow: '0 0 0 1px rgba(182,135,31,0.16), 0 1px 3px rgba(110,82,16,0.07)' }}
+      >
+        <CountryFlag code={sug.slot.country_code} w={40} h={40} alt={sug.slot.country_name} logoUrl={slotLogoUrl(sug.committee, sug.slot)} />
+        <span className="flex flex-col flex-1 min-w-0" style={{ lineHeight: 1.2 }}>
+          <CountryName name={sug.slot.country_name} code={sug.slot.country_code} style={{ fontSize: 17, fontWeight: 600, color: NEU.ink, whiteSpace: 'normal', overflowWrap: 'anywhere' }} />
+          <span className="inline-flex items-center gap-1.5 mt-1" style={{ fontSize: 13, color: NEU.inkSoft }} title={sug.committee.name}>
+            <CommitteeLogo committee={sug.committee} size={18} alt={labels.big} />
+            <span className="[overflow-wrap:anywhere]" style={{ fontWeight: 600 }}>{labels.big}</span>
+          </span>
+        </span>
+        <NeuButton onClick={onAssign} disabled={busy || locked} style={{ padding: '10px 20px', fontSize: 13.5, letterSpacing: 0, flexShrink: 0 }}>
+          {busy ? 'Saving' : 'Assign'}
+        </NeuButton>
+      </div>
+
+      {(sug.reasons.length > 0 || sug.swap) && (
+        <div className="flex items-center gap-1.5 flex-wrap" style={{ padding: '0 2px' }}>
+          <FitPills sug={sug} />
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── One person, opened in the middle ─────────────────────────────────────────
+// Sized so the best three seats and "Choose another seat" fit at 1280x800
+// without scrolling: the person and their preferences in one card, the best
+// three in a second with the button in its title row.
 function PersonPanel({
   person, history, committees, bestThree, busyKey, locked, onAssign, onBack, onChooseAnother, phoneRings,
 }: {
@@ -628,75 +672,90 @@ function PersonPanel({
   const age = ageOf(person);
   const nationality = person.profiles?.nationality ?? null;
   const natCountry = nationality ? getCountryByName(nationality) : undefined;
-  const prefs = [...(person.application_preferences ?? [])].sort((a, b) => a.preference_order - b.preference_order).slice(0, 3);
+  const prefs = [...(person.application_preferences ?? [])].sort((a, b) => a.preference_order - b.preference_order).slice(0, 8);
   const byId = new Map(committees.map(c => [c.id, c]));
   const card: React.CSSProperties = { background: '#FFFFFF', borderRadius: 20, boxShadow: CARD_SHADOW };
+  const prefRows = Math.min(4, prefs.length);
+  const prefCols = prefs.length > 4 ? 2 : 1;
+  const independent = person.society_id == null;
 
   return (
-    <div className="flex flex-col gap-3">
-      <div className="flex items-center justify-between gap-3 flex-wrap" style={{ minHeight: 40 }}>
+    <div className="flex flex-col gap-2.5">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
         <button
           type="button"
           onClick={onBack}
           className="focus:outline-none inline-flex items-center gap-2"
-          style={{ height: 38, padding: '0 14px 0 10px', borderRadius: 12, border: '1px solid rgba(27,56,40,0.16)', background: '#FFFFFF', cursor: 'pointer', fontFamily: OUTFIT, fontSize: 13.5, fontWeight: 600, color: NEU.ink }}
+          style={{ height: 34, padding: '0 14px 0 10px', borderRadius: 11, border: '1px solid rgba(27,56,40,0.16)', background: '#FFFFFF', cursor: 'pointer', fontFamily: OUTFIT, fontSize: 13.5, fontWeight: 600, color: NEU.ink }}
         >
           <ArrowLeft size={16} strokeWidth={1.5} /> Back to suggestions
         </button>
         {acceptedAt(person) && <span style={{ fontSize: 13, color: NEU.inkSoft }}>Accepted {fmtDay(acceptedAt(person))}</span>}
       </div>
 
-      {/* Who they are */}
-      <div className="flex flex-col gap-4" style={{ ...card, padding: 20 }}>
+      {/* Who they are, and what they asked for */}
+      <div className="flex flex-col" style={{ ...card, padding: '16px 18px', gap: 14 }}>
         <div className="flex items-start gap-4">
-          <PersonAvatar name={name} url={person.profiles?.avatar_url ?? null} size={64} userId={person.profiles?.id} />
-          <div className="flex-1 min-w-0">
+          <PersonAvatar name={name} url={person.profiles?.avatar_url ?? null} size={72} userId={person.profiles?.id} />
+          <div className="flex-1 min-w-0" style={{ paddingTop: 2 }}>
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="[overflow-wrap:anywhere]" style={{ fontSize: 22, fontWeight: 600, lineHeight: 1.15 }}>{name}</span>
+              <span className="[overflow-wrap:anywhere]" style={{ fontSize: 26, fontWeight: 600, lineHeight: 1.1, color: NEU.ink }}>{name}</span>
               {!person.profiles && <NotRegisteredChip />}
             </div>
-            <div className="flex items-center gap-x-3 gap-y-1.5 flex-wrap mt-2" style={{ fontSize: 13, color: NEU.inkSoft }}>
+            <div className="[overflow-wrap:anywhere]" style={{ fontSize: 15.5, color: NEU.inkSoft, marginTop: 4, lineHeight: 1.25 }}>
+              {independent
+                ? 'Independent'
+                : <DelegationPopupLink societyId={person.society_id} style={{ fontWeight: 700, color: NEU.ink, textDecoration: 'underline' }}>{schoolName(person)}</DelegationPopupLink>}
+            </div>
+            <div className="flex items-center gap-x-3 gap-y-1 flex-wrap" style={{ fontSize: 12.5, color: NEU.inkSoft, marginTop: 6 }}>
               {age != null && <span>{age} years old</span>}
               {nationality && (
                 <span className="inline-flex items-center gap-1.5">
-                  {natCountry && <CountryFlag code={natCountry.code} w={16} h={16} alt={nationality} />}
+                  {natCountry && <CountryFlag code={natCountry.code} w={15} h={15} alt={nationality} />}
                   {nationality}
                 </span>
               )}
-              <LevelTag level={effectiveLevel(person)} />
               <span>{person.role === 'head-delegate' || person.is_head_delegate ? 'Head Delegate' : 'Delegate'}</span>
             </div>
-            <div className="flex items-center gap-2 flex-wrap mt-2.5">
-              <DelegationChip app={person} openable />
-            </div>
           </div>
+          <span className="flex-shrink-0" style={{ paddingTop: 4 }}><LevelTag level={effectiveLevel(person)} /></span>
         </div>
 
         <div>
-          <h3 style={{ margin: '0 0 8px', fontSize: 15, fontWeight: 600 }}>Preferences</h3>
+          <h3 style={{ margin: '0 0 6px', fontSize: 14.5, fontWeight: 600, color: NEU.ink }}>Preferences</h3>
           {prefs.length === 0 ? (
             <p style={{ margin: 0, fontSize: 13, color: NEU.inkSoft }}>No preference given</p>
           ) : (
-            <div className="grid gap-2" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 200px), 1fr))' }}>
+            <div
+              className="grid"
+              style={{
+                gridAutoFlow: 'column', gridTemplateRows: `repeat(${prefRows}, auto)`,
+                gridTemplateColumns: `repeat(${prefCols}, minmax(0, 1fr))`, columnGap: 18, rowGap: 2,
+              }}
+            >
               {prefs.map((p, i) => {
                 const c = byId.get(p.conference_committee_id);
                 const slot = c?.committee_country_slots.find(s => s.country_code === p.country_code);
                 const held = c ? c.conference_allocations.filter(a => a.country_code === p.country_code).length : 0;
                 const taken = !!slot && held >= slot.delegation_size;
+                const big = c ? committeeLabels(c).big : committeeShortName(p.conference_committees);
                 return (
-                  <div key={`${p.preference_order}-${p.conference_committee_id}`} className="flex items-center gap-2.5" style={{ padding: '10px 12px', borderRadius: 14, background: WELL }}>
-                    <GoldMarker order={i + 1} size={20} />
-                    {c ? <CommitteeLogo committee={c} size={26} alt={committeeLabels(c).big} /> : null}
-                    <span className="flex flex-col min-w-0" style={{ lineHeight: 1.2 }}>
-                      <span style={{ fontSize: 13, fontWeight: 600 }} title={p.conference_committees?.name ?? c?.name}>
-                        {c ? committeeLabels(c).big : committeeShortName(p.conference_committees)}
-                      </span>
-                      <span className="inline-flex items-center gap-1.5 flex-wrap" style={{ fontSize: 12.5 }}>
-                        <CountryFlag code={p.country_code} w={15} h={15} alt={p.country_name} logoUrl={c ? committeeSeatLogo(c, p.country_code) : null} />
-                        <CountryName name={p.country_name} code={p.country_code} style={{ whiteSpace: 'normal', overflowWrap: 'anywhere' }} />
-                        {taken && <span style={{ color: NEU.inkSoft }}>is taken</span>}
-                      </span>
+                  <div
+                    key={`${p.preference_order}-${p.conference_committee_id}-${p.country_code}`}
+                    className="flex items-center gap-2 min-w-0"
+                    style={{ minHeight: 28, opacity: taken ? 0.6 : 1 }}
+                    title={`${p.conference_committees?.name ?? c?.name ?? big}, ${p.country_name}${taken ? ', taken' : ''}`}
+                  >
+                    <RankNumber order={i + 1} size={20} />
+                    <span className="inline-flex items-center gap-1.5 flex-shrink-0">
+                      {c && <CommitteeLogo committee={c} size={20} alt={big} />}
+                      <span style={{ fontSize: 13, fontWeight: 600, color: NEU.ink }}>{big}</span>
                     </span>
+                    <span className="inline-flex items-center gap-1.5 min-w-0">
+                      <CountryFlag code={p.country_code} w={20} h={20} alt={p.country_name} logoUrl={c ? committeeSeatLogo(c, p.country_code) : null} />
+                      <CountryName name={p.country_name} code={p.country_code} style={{ fontSize: 13, color: NEU.ink, whiteSpace: 'normal', overflowWrap: 'anywhere', lineHeight: 1.15 }} />
+                    </span>
+                    {taken && <span className="flex-shrink-0" style={{ fontSize: 12, color: NEU.inkSoft }}>taken</span>}
                   </div>
                 );
               })}
@@ -706,42 +765,47 @@ function PersonPanel({
       </div>
 
       {/* Their best three seats */}
-      <div className="flex flex-col gap-2.5" style={{ ...card, padding: 20 }}>
-        <h3 style={{ margin: 0, fontSize: 15, fontWeight: 600 }}>Best Three Seats</h3>
-        {bestThree.length === 0 && <p style={{ margin: 0, fontSize: 13, color: NEU.inkSoft }}>No open seat fits {firstName(name)} right now</p>}
+      <div className="flex flex-col" style={{ ...card, padding: '12px 14px 14px', gap: 8 }}>
+        <div className="flex items-center justify-between gap-3 flex-wrap" style={{ minHeight: 34 }}>
+          <h3 style={{ margin: 0, fontSize: 15.5, fontWeight: 600, color: NEU.ink, paddingLeft: 2 }}>Best Three Seats</h3>
+          <button
+            type="button"
+            onClick={onChooseAnother}
+            title="For any other seat, click a committee on the right"
+            className="focus:outline-none max-lg:hidden"
+            style={{ height: 34, padding: '0 14px', borderRadius: 10, border: '1px solid rgba(27,56,40,0.16)', background: '#FFFFFF', cursor: 'pointer', fontFamily: OUTFIT, fontSize: 13, fontWeight: 600, color: NEU.ink }}
+          >
+            Choose another seat
+          </button>
+        </div>
+        {bestThree.length === 0 && <p style={{ margin: 0, fontSize: 13, color: NEU.inkSoft, paddingLeft: 2 }}>No open seat fits {firstName(name)} right now</p>}
         {bestThree.map(sug => {
           const key = `${sug.app.id}-${sug.slot.id}`;
+          const labels = committeeLabels(sug.committee);
           return (
-            <div key={key} className="flex items-center gap-4 flex-wrap" style={{ padding: '12px 14px', borderRadius: 16, background: '#FAF8F3', boxShadow: '0 0 0 1px rgba(27,56,40,0.06)' }}>
-              <span style={{ fontSize: 30, fontWeight: 700, color: fitColor(sug.score), fontVariantNumeric: 'tabular-nums', lineHeight: 1, minWidth: 44 }}>{sug.score}</span>
-              <div className="flex-1 min-w-0" style={{ minWidth: 180 }}>
-                <div className="flex items-center gap-2 flex-wrap">
-                  <CommitteeLogo committee={sug.committee} size={24} alt={committeeLabels(sug.committee).big} />
-                  <span style={{ fontSize: 14, fontWeight: 600 }} title={sug.committee.name}>{committeeLabels(sug.committee).big}</span>
-                  <CountryFlag code={sug.slot.country_code} w={18} h={18} alt={sug.slot.country_name} logoUrl={slotLogoUrl(sug.committee, sug.slot)} />
-                  <CountryName name={sug.slot.country_name} code={sug.slot.country_code} style={{ fontSize: 14, fontWeight: 600, whiteSpace: 'normal', overflowWrap: 'anywhere' }} />
+            <div key={key} className="flex items-center gap-3" style={{ padding: '8px 10px 8px 12px', borderRadius: 14, background: GOLD_SURFACE, boxShadow: 'inset 0 0 0 1px rgba(182,135,31,0.22)' }}>
+              <span style={{ fontSize: 24, fontWeight: 700, color: fitColor(sug.score), fontVariantNumeric: 'tabular-nums', lineHeight: 1, minWidth: 36 }}>{sug.score}</span>
+              <CountryFlag code={sug.slot.country_code} w={32} h={32} alt={sug.slot.country_name} logoUrl={slotLogoUrl(sug.committee, sug.slot)} />
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-x-2 gap-y-0.5 flex-wrap">
+                  <CountryName name={sug.slot.country_name} code={sug.slot.country_code} style={{ fontSize: 15, fontWeight: 600, color: NEU.ink, whiteSpace: 'normal', overflowWrap: 'anywhere', lineHeight: 1.15 }} />
+                  <span className="inline-flex items-center gap-1" style={{ fontSize: 12.5, color: NEU.inkSoft }} title={sug.committee.name}>
+                    <CommitteeLogo committee={sug.committee} size={18} alt={labels.big} />
+                    <span style={{ fontWeight: 600 }}>{labels.big}</span>
+                  </span>
                 </div>
-                <div className="flex items-center gap-1.5 flex-wrap mt-2">
-                  <SuggestionReasons sug={sug} max={4} />
-                </div>
+                {(sug.reasons.length > 0 || sug.swap) && (
+                  <div className="flex items-center gap-1 flex-wrap" style={{ marginTop: 5 }}>
+                    <FitPills sug={sug} max={2} size="sm" />
+                  </div>
+                )}
               </div>
-              <NeuButton onClick={() => onAssign(sug)} disabled={busyKey === key || locked} style={{ padding: '9px 18px', fontSize: 13, letterSpacing: 0 }}>
-                {busyKey === key ? '…' : 'Assign'}
+              <NeuButton onClick={() => onAssign(sug)} disabled={busyKey === key || locked} style={{ padding: '9px 18px', fontSize: 13, letterSpacing: 0, flexShrink: 0 }}>
+                {busyKey === key ? 'Saving' : 'Assign'}
               </NeuButton>
             </div>
           );
         })}
-        <div className="flex items-center gap-3 flex-wrap pt-1">
-          <button
-            type="button"
-            onClick={onChooseAnother}
-            className="focus:outline-none max-lg:hidden"
-            style={{ height: 36, padding: '0 14px', borderRadius: 10, border: '1px solid rgba(27,56,40,0.16)', background: '#FFFFFF', cursor: 'pointer', fontFamily: OUTFIT, fontSize: 13, fontWeight: 600, color: NEU.ink }}
-          >
-            Choose another seat
-          </button>
-          <span className="max-lg:hidden" style={{ fontSize: 12.5, color: NEU.inkSoft }}>For any other seat, click a committee on the right</span>
-        </div>
         <div className="lg:hidden flex flex-col gap-2 pt-1">
           <span style={{ fontSize: 13, fontWeight: 600 }}>Choose another seat</span>
           {phoneRings}
@@ -750,7 +814,7 @@ function PersonPanel({
 
       {/* What they have done before */}
       {history && (history.conferences > 0 || history.awardLabels.length > 0) && (
-        <div className="flex flex-col gap-2" style={{ ...card, padding: 20 }}>
+        <div className="flex flex-col gap-2" style={{ ...card, padding: 18 }}>
           <h3 style={{ margin: 0, fontSize: 15, fontWeight: 600 }}>Experience</h3>
           <span style={{ fontSize: 13, color: NEU.inkSoft }}>
             <strong style={{ color: NEU.ink, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{history.conferences}</strong> {history.conferences === 1 ? 'conference' : 'conferences'} on their MUN CV
@@ -768,4 +832,3 @@ function PersonPanel({
     </div>
   );
 }
-

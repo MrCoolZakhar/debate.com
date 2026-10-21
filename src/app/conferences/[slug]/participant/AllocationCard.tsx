@@ -11,7 +11,7 @@ import { useEffect, useState } from 'react';
 import { useNow } from '@/lib/useNow';
 import { Compass, ArrowRight, Copy, Check, Signal } from 'lucide-react';
 import Link from 'next/link';
-import { FlagImg } from '@/components/FlagImg';
+import { CircleFlag } from '@/components/CircleFlag';
 import { supabase } from '@/lib/supabase';
 import { effectiveSlotArt, parseGroups, type SlotArtSource } from '@/lib/slotGroups';
 import ProfileLink from '@/components/ProfileLink';
@@ -171,7 +171,7 @@ export default function AllocationCard({ committee, myAllocation, conferenceStar
           <p style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: 12, color: GOLD_DEEP, margin: '0 0 12px 0' }}>
             Your country
           </p>
-          <FlagImg code={myAllocation.country_code} size={56} className="rounded-lg shadow-lg" logoUrl={seatLogo} label={myAllocation.country_name} />
+          <CircleFlag code={myAllocation.country_code} size={56} className="shadow-lg rounded-full" logoUrl={seatLogo} label={myAllocation.country_name} />
           <p className="font-black text-xl mt-3" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
             {myAllocation.country_name}
           </p>
