@@ -12,13 +12,13 @@
 //               a delegation has their seat, guide, paper and payment on the
 //               delegation Overview (DelegationOverview, owner 21 Oct 2026)
 //   delegation  members of a delegation only, second: the leader or member card
-//   committee   the committee card (5A: topics, co-delegate, live room), the
-//               study guide and paper at a glance, the committee list
+//   committee   the committee's members only, like the leader card's committee
+//               pop-up, each with their paper once it is in (owner, 21 Oct 2026)
 //   documents   the study guide and the position paper
 // Below lg (10 Oct 2026) there is no sub-nav: the panes stack in this order on
 // one page, with Payment and Support placed by the parent.
 
-import { useCallback, useState } from 'react';
+import { useState } from 'react';
 import { FileText, Flag, Landmark, Users } from 'lucide-react';
 import AssignmentHero from './AssignmentHero';
 import MyCommitteeSection from './delegation/committee/MyCommitteeSection';
@@ -69,7 +69,7 @@ function delegateNextStep(
   return { kind: 'done', line: 'Read your study guide and prepare your speeches for the committee.' };
 }
 
-export default function DelegateParticipant({ conferenceId, conferenceSlug, conferenceStartDate, application, myAllocation, committees, allocationSwapMode, section, onSelectSection }: {
+export default function DelegateParticipant({ conferenceId, conferenceSlug, conferenceStartDate, application, myAllocation, committees, allocationSwapMode, section }: {
   conferenceId: string;
   conferenceSlug: string;
   conferenceStartDate: string | null;
@@ -78,7 +78,7 @@ export default function DelegateParticipant({ conferenceId, conferenceSlug, conf
   committees: ParticipantCommittee[];
   allocationSwapMode: string;
   section: string;
-  /** Switches the desktop sub-nav (the paper and guide cards lead to Documents). */
+  /** Switches the desktop sub-nav. Nothing here switches it any more. */
   onSelectSection?: (key: string) => void;
 }) {
   const committee = myAllocation ? committees.find(c => c.id === myAllocation.conference_committee_id) ?? null : null;
@@ -90,12 +90,6 @@ export default function DelegateParticipant({ conferenceId, conferenceSlug, conf
   // With no seat yet, the Committee and Documents sections would only repeat
   // "appears once you are assigned": the phone page leaves them out.
   const assigned = !!myAllocation;
-  // The Committee section's paper and guide cards open the full cards in
-  // Documents: the desktop switches section, the phone page scrolls to it.
-  const openDocuments = useCallback(() => {
-    onSelectSection?.('documents');
-    requestAnimationFrame(() => document.getElementById('you-documents')?.scrollIntoView({ block: 'start' }));
-  }, [onSelectSection]);
 
   const inDelegation = !!application.society_id;
 
@@ -134,16 +128,14 @@ export default function DelegateParticipant({ conferenceId, conferenceSlug, conf
       )}
 
       <Pane show={section === 'committee'} title="Your Committee" icon={Landmark} phone={assigned}>
-        {/* Taste board 5A: the committee (with a double delegate's partner),
-            the study guide and position paper at a glance, the committee list. */}
+        {/* Only the committee's members, exactly like the leader card's
+            committee pop-up, each with their paper once it is in (owner,
+            21 Oct 2026). */}
         <MyCommitteeSection
-          conferenceId={conferenceId}
-          conferenceStartDate={conferenceStartDate}
           committee={committee}
           myAllocation={myAllocation}
           paper={paper}
-          onOpenDocuments={openDocuments}
-          joinFromXlOnly={stacked}
+          leads={application.role === 'head-delegate'}
         />
       </Pane>
 

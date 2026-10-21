@@ -2,18 +2,19 @@
 
 // The delegation Overview's other cards (owner, 21 Oct 2026):
 //   DelegationCard   right column, "Your Delegation": the crest, the name, the
-//                    city and country with its round flag, the leaders with
-//                    their photos, two counts at most
+//                    city and country with its round flag, the counts, the
+//                    leaders with their photos; for a leader the position
+//                    papers submitted (N of M) and their payments (paid and
+//                    left to pay, the Financials card's numbers from
+//                    my_pay_overview); for everyone "Coming up", at most the
+//                    next three dates in a compact list (the big Deadlines
+//                    card is gone)
 //   CommitteesBrief  an advisor's left column (they hold no seat): the
 //                    committees their delegation sits in, logo + name + people
-//   PapersTile       leaders: position papers submitted N of M, who is still
-//                    to hand one in
-//   DeadlinesCard    every date ahead in order, with relative words, never
-//                    folded away
 // White lifted cards, fine-line icons, country = flag, committee = logo,
 // person = avatar + name, names wrap and are never cut.
 
-import { ArrowRight, CalendarDays, FileText, Landmark } from 'lucide-react';
+import { ArrowRight, CalendarDays, CreditCard, FileText, Landmark } from 'lucide-react';
 import { CircleFlag } from '@/components/CircleFlag';
 import DelegationCrest from '@/components/DelegationCrest';
 import { getCountryByCode } from '@/lib/countries';
@@ -23,6 +24,9 @@ import type { DelegationOverviewData } from './useDelegationOverview';
 import { plural, shortOf, type CommitteeBrief, type DeadlineRow, type Person } from './overviewRecap';
 import { DAY, MONTHS, rangeWords, relativeWords } from './overviewDates';
 import { CardTitle } from './SeatCard';
+import { money, type PayOverview } from '../../../pay/payApi';
+import { itemsCurrency } from '../../../pay/BalanceHeader';
+import { tally } from '../FinancialsCard';
 
 const YOU: React.CSSProperties = { fontSize: 12.5, fontWeight: 600, color: 'color-mix(in srgb, var(--gv-accent) 72%, #1C1410)', marginLeft: 6 };
 
@@ -35,12 +39,20 @@ function Count({ n, word }: { n: number; word: string }) {
   );
 }
 
-export function DelegationCard({ data, leaders, delegateCount, committeeCount, onOpen }: {
+export function DelegationCard({ societyId, data, leaders, delegateCount, committeeCount, papers, pay, deadlines, datesTbd, today, onOpen }: {
+  societyId: string;
   data: DelegationOverviewData;
   leaders: Person[];
   delegateCount: number;
   /** Leaders only: the committees the delegation sits in. */
   committeeCount: number | null;
+  /** Leaders only: position papers submitted of those due; null for a member. */
+  papers: { in: number; of: number; known: boolean } | null;
+  /** Leaders only: their own payments (my_pay_overview); null otherwise or before the read. */
+  pay: PayOverview | null;
+  deadlines: DeadlineRow[];
+  datesTbd: boolean;
+  today: number;
   onOpen: () => void;
 }) {
   const home = data.society;
@@ -87,12 +99,119 @@ export function DelegationCard({ data, leaders, delegateCount, committeeCount, o
         </div>
       )}
 
+      {papers && <PapersLine papersIn={papers.in} papersOf={papers.of} known={papers.known} />}
+      {pay && <MoneyLines pay={pay} societyId={societyId} />}
+      <ComingUp rows={deadlines} datesTbd={datesTbd} today={today} />
+
       <div>
         <button type="button" onClick={onOpen} className={BTN_CLASS} style={secondaryBtn}>
           Open delegation <ArrowRight size={16} strokeWidth={STROKE} aria-hidden />
         </button>
       </div>
     </section>
+  );
+}
+
+const blockStyle: React.CSSProperties = { borderTop: `1px solid ${LINE}`, paddingTop: 16 };
+const blockLabel: React.CSSProperties = { fontFamily: FONT, fontSize: 13, fontWeight: 600, color: INK_SOFT };
+
+/** Leaders: position papers submitted, N of M people with an allocation. */
+function PapersLine({ papersIn, papersOf, known }: { papersIn: number; papersOf: number; known: boolean }) {
+  const pct = papersOf > 0 ? Math.round((papersIn / papersOf) * 100) : 0;
+  return (
+    <div className="flex flex-col gap-2.5" style={blockStyle}>
+      <div className="flex items-center gap-3 min-w-0">
+        <FileText size={20} strokeWidth={STROKE} aria-hidden style={{ color: INK, flexShrink: 0 }} />
+        <span className="inline-flex items-baseline gap-1.5 flex-wrap" style={{ fontFamily: FONT }}>
+          <span style={{ fontSize: 22, fontWeight: 600, color: INK, fontVariantNumeric: 'tabular-nums', lineHeight: 1.1 }}>{known ? papersIn : '–'}</span>
+          {papersOf > 0 && <span style={{ fontSize: 15, fontWeight: 500, color: INK_SOFT, fontVariantNumeric: 'tabular-nums' }}>of {papersOf}</span>}
+          <span style={{ fontSize: 14, color: INK_SOFT }}>{plural(papersOf, 'position paper submitted', 'position papers submitted')}</span>
+        </span>
+      </div>
+      {known && papersOf > 0 && (
+        <div aria-hidden style={{ height: 6, borderRadius: 999, background: '#F1ECE1', overflow: 'hidden' }}>
+          <div style={{ width: `${pct}%`, height: '100%', borderRadius: 999, background: pct === 100 ? OK_GREEN : 'var(--gv-main)' }} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Leaders: what they paid and what is left, the Financials card's own numbers. */
+function MoneyLines({ pay, societyId }: { pay: PayOverview; societyId: string }) {
+  const cur = itemsCurrency(pay) ?? pay.conference.currency;
+  const delegate = tally(pay.items, 'delegate');
+  const advisor = tally(pay.items, 'advisor');
+  const owed = pay.totals.owed_cents;
+  // As the Financials card: "Your" when another leader holds tickets too.
+  const mine = pay.delegation?.find(d => d.society_id === societyId) ?? null;
+  const your = mine?.leaders.some(l => !l.is_me && (l.delegate_tickets > 0 || l.advisor_tickets > 0)) ? 'Your ' : '';
+  const row = (label: string, value: React.ReactNode, color?: string) => (
+    <div className="flex items-baseline justify-between gap-3" style={{ fontFamily: FONT, fontSize: 14 }}>
+      <span style={{ color: INK_SOFT }}>{label}</span>
+      <span style={{ color: color ?? INK, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{value}</span>
+    </div>
+  );
+  return (
+    <div className="flex flex-col gap-2" style={blockStyle}>
+      <div className="flex items-center gap-3 min-w-0">
+        <CreditCard size={20} strokeWidth={STROKE} aria-hidden style={{ color: INK, flexShrink: 0 }} />
+        <span className="inline-flex items-baseline gap-1.5 flex-wrap" style={{ fontFamily: FONT }}>
+          <span style={{ fontSize: 22, fontWeight: 600, color: INK, fontVariantNumeric: 'tabular-nums', lineHeight: 1.1 }}>
+            {money(pay.totals.paid_cents_in_currency ?? pay.totals.paid_cents, cur)}
+          </span>
+          <span style={{ fontSize: 14, color: INK_SOFT }}>paid</span>
+        </span>
+      </div>
+      {delegate.total > 0 && row(`${your}Delegate Tickets`, <><b style={{ fontWeight: 600 }}>{delegate.done}</b> of {delegate.total} paid</>)}
+      {advisor.total > 0 && row(`${your}Advisor Tickets`, <><b style={{ fontWeight: 600 }}>{advisor.done}</b> of {advisor.total} paid</>)}
+      {row('Left to pay', <b style={{ fontWeight: 600 }}>{money(owed, cur)}</b>, owed > 0 ? OWE : undefined)}
+    </div>
+  );
+}
+
+const COMING_CAP = 3;
+
+/** At most the next three dates, compact: a small date chip, what, when. */
+function ComingUp({ rows, datesTbd, today }: { rows: DeadlineRow[]; datesTbd: boolean; today: number }) {
+  const shown = rows.slice(0, COMING_CAP);
+  return (
+    <div className="flex flex-col gap-2" style={blockStyle}>
+      <span className="inline-flex items-center gap-2" style={blockLabel}>
+        <CalendarDays size={16} strokeWidth={STROKE} aria-hidden style={{ color: INK }} />
+        Coming up
+      </span>
+      {shown.length === 0 ? (
+        <p style={{ fontFamily: FONT, fontSize: 13.5, color: INK_SOFT, margin: 0, lineHeight: 1.45 }}>
+          {datesTbd ? 'The conference dates are to be decided.' : 'Nothing due right now.'}
+        </p>
+      ) : (
+        <ol className="flex flex-col gap-2" style={{ listStyle: 'none', margin: 0, padding: 0 }}>
+          {shown.map(r => {
+            const d = new Date(r.day);
+            const named = r.committees.length === 1 ? shortOf(r.committees[0]) : r.committees.length > 1 ? `${r.committees.length} committees` : null;
+            return (
+              <li key={r.key} className="flex items-center gap-3 min-w-0">
+                <span className="flex flex-col items-center justify-center flex-none" style={{ width: 40, height: 40, borderRadius: 10, background: '#F6F2EA' }}>
+                  <span style={{ fontFamily: FONT, fontSize: 15, fontWeight: 700, color: INK, lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>{d.getDate()}</span>
+                  <span style={{ fontFamily: FONT, fontSize: 10.5, fontWeight: 600, color: INK_SOFT, marginTop: 2 }}>{MONTHS[d.getMonth()]}</span>
+                </span>
+                <span className="flex-1 min-w-0 flex flex-col">
+                  <span className="[overflow-wrap:anywhere]" style={{ fontFamily: FONT, fontSize: 14, fontWeight: 600, color: INK, lineHeight: 1.3 }}>
+                    {r.what}
+                    {r.kind === 'conference' && <span style={{ fontWeight: 400, color: INK_SOFT }}>{` · ${rangeWords(r.day, r.endDay ?? null)}`}</span>}
+                  </span>
+                  {named && <span className="[overflow-wrap:anywhere]" style={{ fontFamily: FONT, fontSize: 12.5, color: INK_SOFT }}>{named}</span>}
+                </span>
+                <span className="flex-none text-right" style={{ fontFamily: FONT, fontSize: 13, fontWeight: 600, color: r.day - today <= 7 * DAY ? OWE : INK_SOFT }}>
+                  {relativeWords(r.day, today)}
+                </span>
+              </li>
+            );
+          })}
+        </ol>
+      )}
+    </div>
   );
 }
 
@@ -137,124 +256,6 @@ export function CommitteesBrief({ briefs, onOpen }: { briefs: CommitteeBrief[]; 
           See committees <ArrowRight size={16} strokeWidth={STROKE} aria-hidden />
         </button>
       </div>
-    </section>
-  );
-}
-
-const MISSING_CAP = 6;
-
-/** Leaders: position papers submitted, N of M people with an allocation. */
-export function PapersTile({ papersIn, papersOf, known, missing, onOpen }: {
-  papersIn: number;
-  papersOf: number;
-  known: boolean;
-  missing: Person[];
-  onOpen: () => void;
-}) {
-  const pct = papersOf > 0 ? Math.round((papersIn / papersOf) * 100) : 0;
-  const shown = missing.slice(0, MISSING_CAP);
-  const more = missing.length - shown.length;
-  return (
-    <section aria-label="Position papers" className="@container flex flex-col gap-4" style={{ ...cardStyle, padding: '20px 24px' }}>
-      <div className="flex items-center gap-x-6 gap-y-3 flex-wrap">
-        <div className="flex items-center gap-3 min-w-0">
-          <FileText size={24} strokeWidth={STROKE} aria-hidden style={{ color: INK, flexShrink: 0 }} />
-          <span className="inline-flex items-baseline gap-2 flex-wrap" style={{ fontFamily: FONT }}>
-            <span style={{ fontSize: 30, fontWeight: 600, color: INK, fontVariantNumeric: 'tabular-nums', lineHeight: 1.1 }}>{known ? papersIn : '–'}</span>
-            {papersOf > 0 && <span style={{ fontSize: 17, fontWeight: 500, color: INK_SOFT, fontVariantNumeric: 'tabular-nums' }}>of {papersOf}</span>}
-            <span style={{ fontSize: 15, color: INK_SOFT }}>{plural(papersOf, 'position paper submitted', 'position papers submitted')}</span>
-          </span>
-        </div>
-        {known && papersOf > 0 && (
-          <div aria-hidden className="flex-1" style={{ minWidth: 160, height: 8, borderRadius: 999, background: '#F1ECE1', overflow: 'hidden' }}>
-            <div style={{ width: `${pct}%`, height: '100%', borderRadius: 999, background: pct === 100 ? OK_GREEN : 'var(--gv-main)' }} />
-          </div>
-        )}
-        <button type="button" onClick={onOpen} className={BTN_CLASS} style={secondaryBtn}>
-          Open delegation <ArrowRight size={16} strokeWidth={STROKE} aria-hidden />
-        </button>
-      </div>
-      {known && papersOf === 0 && (
-        <p style={{ fontFamily: FONT, fontSize: 14, color: INK_SOFT, margin: 0 }}>Papers count once your people have allocations in committees that take them.</p>
-      )}
-      {known && shown.length > 0 && (
-        <div className="flex items-center flex-wrap gap-x-5 gap-y-2.5">
-          <span style={{ fontFamily: FONT, fontSize: 13.5, fontWeight: 600, color: INK_SOFT }}>Still to hand in</span>
-          {shown.map(p => (
-            <span key={p.application_id} className="inline-flex items-center gap-2 min-w-0">
-              <RoundAvatar name={p.name} url={p.avatar_url} size={30} seed={p.application_id} />
-              <span className="[overflow-wrap:anywhere]" style={{ fontFamily: FONT, fontSize: 14, color: INK }}>
-                {p.name}{p.is_me && <span style={YOU}>You</span>}
-              </span>
-            </span>
-          ))}
-          {more > 0 && <span style={{ fontFamily: FONT, fontSize: 13.5, color: INK_SOFT }}>and {more} more</span>}
-        </div>
-      )}
-    </section>
-  );
-}
-
-const DEADLINE_CAP = 8;
-const NAMED_CAP = 3;
-
-/** Every date ahead, in order, each with its relative words (owner, 21 Oct
- *  2026: deadlines easy to see, not hidden). */
-export function DeadlinesCard({ rows, datesTbd, today }: { rows: DeadlineRow[]; datesTbd: boolean; today: number }) {
-  const shown = rows.slice(0, DEADLINE_CAP);
-  const more = rows.length - shown.length;
-  return (
-    <section aria-label="Deadlines" className="flex flex-col gap-3" style={{ ...cardStyle, padding: '20px 24px' }}>
-      <h2 className="inline-flex items-center gap-2.5" style={{ fontFamily: FONT, fontSize: 19, fontWeight: 600, color: INK, margin: 0 }}>
-        <CalendarDays size={22} strokeWidth={STROKE} aria-hidden style={{ color: INK, flexShrink: 0 }} />
-        Deadlines
-      </h2>
-      {shown.length === 0 && (
-        <p style={{ fontFamily: FONT, fontSize: 14.5, color: INK_SOFT, margin: 0 }}>
-          {datesTbd ? 'The conference dates are to be decided. Deadlines appear here once they are set.' : 'Nothing due right now. New deadlines appear here.'}
-        </p>
-      )}
-      {shown.length > 0 && (
-        <ol className="flex flex-col" style={{ listStyle: 'none', margin: 0, padding: 0 }}>
-          {shown.map((r, i) => {
-            const d = new Date(r.day);
-            const named = r.committees.slice(0, NAMED_CAP);
-            const extra = r.committees.length - named.length;
-            return (
-              <li key={r.key} className="flex items-center gap-4 min-w-0" style={{ padding: '12px 0', borderTop: i === 0 ? 'none' : `1px solid ${LINE}` }}>
-                <span className="flex flex-col items-center justify-center flex-none" style={{ width: 56, height: 56, borderRadius: 14, background: '#F6F2EA' }}>
-                  <span style={{ fontFamily: FONT, fontSize: 20, fontWeight: 700, color: INK, lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>{d.getDate()}</span>
-                  <span style={{ fontFamily: FONT, fontSize: 12, fontWeight: 600, color: INK_SOFT, marginTop: 3 }}>{MONTHS[d.getMonth()]}</span>
-                </span>
-                <div className="flex-1 min-w-0 flex flex-col gap-1">
-                  <span className="[overflow-wrap:anywhere]" style={{ fontFamily: FONT, fontSize: 15.5, fontWeight: 600, color: INK, lineHeight: 1.3 }}>
-                    {r.what}
-                    {r.kind === 'conference' && <span style={{ fontWeight: 400, color: INK_SOFT }}>{` · ${rangeWords(r.day, r.endDay ?? null)}`}</span>}
-                  </span>
-                  {named.length > 0 && (
-                    <span className="flex items-center flex-wrap gap-x-3 gap-y-1">
-                      {named.map(c => (
-                        <span key={c.id} className="inline-flex items-center gap-1.5 min-w-0">
-                          <CommitteeDisc src={committeeEmblemSrc(c.logo_url, c.name, c.abbreviation)} size={20} />
-                          <span className="[overflow-wrap:anywhere]" style={{ fontFamily: FONT, fontSize: 13.5, color: INK_SOFT }}>{shortOf(c)}</span>
-                        </span>
-                      ))}
-                      {extra > 0 && <span style={{ fontFamily: FONT, fontSize: 13.5, color: INK_SOFT }}>and {extra} more</span>}
-                    </span>
-                  )}
-                </div>
-                <span className="flex-none text-right" style={{ fontFamily: FONT, fontSize: 14, fontWeight: 600, color: r.day - today <= 7 * DAY ? OWE : INK_SOFT }}>
-                  {relativeWords(r.day, today)}
-                </span>
-              </li>
-            );
-          })}
-        </ol>
-      )}
-      {more > 0 && <p style={{ fontFamily: FONT, fontSize: 13.5, color: INK_SOFT, margin: 0 }}>and {more} more {plural(more, 'date', 'dates')} after these</p>}
-      {datesTbd && shown.length > 0 && (
-        <p style={{ fontFamily: FONT, fontSize: 13.5, color: INK_SOFT, margin: 0 }}>The conference dates are to be decided.</p>
-      )}
     </section>
   );
 }

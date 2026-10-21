@@ -11,6 +11,8 @@ import { createJoinTranslations } from './translationsCreateJoin';
 import { restartTranslations } from './translationsRestart';
 import { sessionsVideoTranslations } from './translationsSessionsVideo';
 import { seatAdmissionTranslations } from './translationsSeatAdmission';
+import { rollCallPickerTranslations } from './translationsRollCallPicker';
+import { tutorialTranslations } from './translationsTutorial';
 import { broadcastsTranslations } from './translationsBroadcasts';
 import { ptTranslationsA } from './translationsPtA';
 import { ptTranslationsB } from './translationsPtB';
@@ -32,6 +34,8 @@ export const translations = {
     ...restartTranslations.en,
     ...sessionsVideoTranslations.en,
     ...seatAdmissionTranslations.en,
+    ...rollCallPickerTranslations.en,
+    ...tutorialTranslations.en,
     ...broadcastsTranslations.en,
     ...placeholderTranslations.en,
     // --- session surfaces, added 17 Sep 2026 (tutorial + translations pass) ---
@@ -82,8 +86,6 @@ export const translations = {
     motions_error_no_total_time: 'Total caucus time cannot be zero.',
     motions_error_no_speaking_time: 'Speaking time per delegate cannot be zero.',
     motions_tour_order_custom: 'Custom',
-    rollcall_slider_hint: 'Tap to cycle: Absent, Present, Present and Voting',
-    rollcall_slider_hint_observer: 'Tap to cycle: Absent, Present',
     hero_subtitle: 'The most user-friendly way to run your MUN committee.',
     hero_start_committee: 'START YOUR COMMITTEE →',
     // --- Sessions landing (sl_*), 24 Sep 2026; reworked 25 Sep 2026 ---
@@ -615,7 +617,7 @@ export const translations = {
     documents_working_papers_tab: 'Working Papers',
     documents_draft_resolutions_tab: 'Draft Resolutions',
     tutorial_have_you_used: 'Have You Used Gavelling Before?',
-    tutorial_gavin_prepared: 'Gavin has a short interactive run-through prepared for you.',
+    tutorial_gavin_prepared: 'Gavin has a short interactive tour ready. He lights up each part of the room, and you try the main controls as you go. Prefer to watch first? The guide below runs a whole committee, from roll call to the vote.',
     tutorial_show_me: 'Show me around',
     tutorial_skip: 'Skip tutorial',
     tutorial_start_exploring: 'Start exploring →',
@@ -1735,6 +1737,8 @@ export const translations = {
     ...restartTranslations.es,
     ...sessionsVideoTranslations.es,
     ...seatAdmissionTranslations.es,
+    ...rollCallPickerTranslations.es,
+    ...tutorialTranslations.es,
     ...broadcastsTranslations.es,
     ...placeholderTranslations.es,
     // --- session surfaces, added 17 Sep 2026 (tutorial + translations pass) ---
@@ -1785,8 +1789,6 @@ export const translations = {
     motions_error_no_total_time: 'El tiempo total del cáucus no puede ser cero.',
     motions_error_no_speaking_time: 'El tiempo de palabra por delegado no puede ser cero.',
     motions_tour_order_custom: 'Personalizado',
-    rollcall_slider_hint: 'Toca para cambiar: Ausente, Presente, Presente y Votante',
-    rollcall_slider_hint_observer: 'Toca para cambiar: Ausente, Presente',
     hero_subtitle: 'La forma más sencilla de dirigir tu comité de MUN.',
     hero_start_committee: 'CREAR MI COMITÉ →',
     // --- Sessions landing (sl_*), 24 Sep 2026; reworked 25 Sep 2026 ---
@@ -2316,7 +2318,7 @@ export const translations = {
     documents_working_papers_tab: 'Hojas de Trabajo',
     documents_draft_resolutions_tab: 'Proyectos de Resolución',
     tutorial_have_you_used: '¿Has usado Gavelling antes?',
-    tutorial_gavin_prepared: 'Gavin tiene un recorrido interactivo corto preparado para ti.',
+    tutorial_gavin_prepared: 'Gavin tiene listo un recorrido interactivo corto. Ilumina cada parte de la sala y tú pruebas los controles principales sobre la marcha. ¿Prefieres verlo antes? La guía de abajo dirige un comité completo, del pase de lista a la votación.',
     tutorial_show_me: 'Muéstrame',
     tutorial_skip: 'Saltar tutorial',
     tutorial_start_exploring: 'Empezar a explorar →',
@@ -3435,6 +3437,8 @@ export const translations = {
     ...restartTranslations.fr,
     ...sessionsVideoTranslations.fr,
     ...seatAdmissionTranslations.fr,
+    ...rollCallPickerTranslations.fr,
+    ...tutorialTranslations.fr,
     ...broadcastsTranslations.fr,
     ...placeholderTranslations.fr,
     // --- session surfaces, added 17 Sep 2026 (tutorial + translations pass) ---
@@ -3485,8 +3489,6 @@ export const translations = {
     motions_error_no_total_time: 'Le temps total du caucus ne peut pas être zéro.',
     motions_error_no_speaking_time: 'Le temps de parole par délégué ne peut pas être zéro.',
     motions_tour_order_custom: 'Personnalisé',
-    rollcall_slider_hint: 'Touchez pour changer : Absent, Présent, Présent et Votant',
-    rollcall_slider_hint_observer: 'Touchez pour changer : Absent, Présent',
     hero_subtitle: 'La façon la plus simple de gérer votre comité de MUN.',
     hero_start_committee: 'CRÉER MON COMITÉ →',
     // --- Sessions landing (sl_*), 24 Sep 2026; reworked 25 Sep 2026 ---
@@ -4016,7 +4018,7 @@ export const translations = {
     documents_working_papers_tab: 'Documents de Travail',
     documents_draft_resolutions_tab: 'Projets de Résolution',
     tutorial_have_you_used: 'Avez-vous déjà utilisé Gavelling ?',
-    tutorial_gavin_prepared: 'Gavin a préparé une courte visite guidée interactive pour vous.',
+    tutorial_gavin_prepared: "Gavin a préparé une courte visite interactive. Il éclaire chaque partie de la salle et vous essayez les commandes principales au fur et à mesure. Vous préférez regarder d'abord ? Le guide ci-dessous mène un comité entier, de l'appel au vote.",
     tutorial_show_me: 'Montrez-moi',
     tutorial_skip: 'Ignorer le tutoriel',
     tutorial_start_exploring: 'Commencer à explorer →',
@@ -5135,6 +5137,8 @@ export const translations = {
     ...restartTranslations.ar,
     ...sessionsVideoTranslations.ar,
     ...seatAdmissionTranslations.ar,
+    ...rollCallPickerTranslations.ar,
+    ...tutorialTranslations.ar,
     ...broadcastsTranslations.ar,
     ...placeholderTranslations.ar,
     // --- session surfaces, added 17 Sep 2026 (tutorial + translations pass) ---
@@ -5185,8 +5189,6 @@ export const translations = {
     motions_error_no_total_time: 'لا يمكن أن يكون وقت الحوار الإجمالي صفراً.',
     motions_error_no_speaking_time: 'لا يمكن أن يكون وقت الكلام لكل مندوب صفراً.',
     motions_tour_order_custom: 'مخصّص',
-    rollcall_slider_hint: 'انقر للتبديل بين غائب وحاضر وحاضر ومصوّت',
-    rollcall_slider_hint_observer: 'انقر للتبديل بين غائب وحاضر',
     hero_subtitle: 'أسهل طريقة لإدارة لجنة المحاكاة الخاصة بك.',
     hero_start_committee: 'ابدأ لجنتك ←',
     // --- Sessions landing (sl_*), 24 Sep 2026; reworked 25 Sep 2026 ---
@@ -5716,7 +5718,7 @@ export const translations = {
     documents_working_papers_tab: 'أوراق العمل',
     documents_draft_resolutions_tab: 'مشاريع القرارات',
     tutorial_have_you_used: 'هل استخدمت Gavelling من قبل؟',
-    tutorial_gavin_prepared: 'أعدّ Gavin جولة تفاعلية قصيرة لك.',
+    tutorial_gavin_prepared: 'أعدّ Gavin جولة تفاعلية قصيرة. يضيء كل جزء من القاعة وتجرّب أنت عناصر التحكم الرئيسية أثناء الجولة. تفضّل المشاهدة أولاً؟ الدليل أدناه يدير لجنة كاملة، من نداء الأسماء إلى التصويت.',
     tutorial_show_me: 'أرني الجولة',
     tutorial_skip: 'تخطّي الشرح',
     tutorial_start_exploring: 'ابدأ الاستكشاف ←',
@@ -6838,6 +6840,8 @@ export const translations = {
     ...restartTranslations.pt,
     ...sessionsVideoTranslations.pt,
     ...seatAdmissionTranslations.pt,
+    ...rollCallPickerTranslations.pt,
+    ...tutorialTranslations.pt,
     ...broadcastsTranslations.pt,
     ...placeholderTranslations.pt,
     ...ptTranslationsA,

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
-  X, Check, Sparkles, ChevronDown, ChevronUp, Award, Globe2, ArrowRight, GripVertical,
+  X, Check, Sparkles, ChevronDown, ChevronUp, Award, Globe2, ArrowRight,
   MousePointerClick, Plus, Info, Layers, Gavel, UserRound, Users, Trash2, Repeat, MoreVertical,
   CheckCircle2, Clock, Star,
 } from 'lucide-react';
@@ -26,7 +26,11 @@ import DelegationSeatsView from '@/app/manage/[slug]/assignment/DelegationSeatsV
 import DelegationPopupLink from '@/app/manage/[slug]/DelegationPopupLink';
 import { replaceUrlInPlace } from '@/lib/replaceUrlInPlace';
 import { queueEventEmail, notifyIfNeeded, turnOnDefaultEmail } from '@/lib/emailEvents';
-import { AssignConfirmDialog } from '@/app/manage/[slug]/assignment/AssignConfirmDialog';
+import { AssignConfirmDialog, assignIntroSeen, markAssignIntroSeen } from '@/app/manage/[slug]/assignment/AssignConfirmDialog';
+import { useBoardDrag, DragGrip, dropAttr, type BoardDragPayload, type BoardDropTarget } from '@/app/manage/[slug]/assignment/boardDrag';
+import { RailPreferenceFilter, matchesRailFilter, type RailFilter } from '@/app/manage/[slug]/assignment/RailPreferenceFilter';
+import { allocationBufferSendAfter, cancelBufferedAllocationEmails } from '@/lib/allocationEmail';
+import { serverNow, ensureServerClock } from '@/lib/serverClock';
 import {
   queueAllocationEmails, allocationSendMessage, AllocationEmailBar, saveAllocationEmailAuto, type AllocationTarget,
 } from '@/app/manage/[slug]/assignment/allocationEmails';
@@ -1326,7 +1330,11 @@ async function insertAllocation(
   // any earlier would email a delegate a blank allocation.
   if (emailNow) {
     try {
-      const result = await queueAllocationEmails(supabase, conferenceId, [app.id]);
+      // Buffered (allocationEmail.ts): a quick re-assign or unassign voids it
+      // before it leaves. Immediate while ALLOCATION_EMAIL_BUFFER_DB is off.
+      const result = await queueAllocationEmails(supabase, conferenceId, [app.id], {
+        sendAfter: allocationBufferSendAfter(serverNow()),
+      });
       if (pushDraftNotice) notifyIfNeeded(result, pushDraftNotice);
     } catch {
       // The seat is saved either way. A failed queue leaves allocation_sent
@@ -1937,6 +1945,11 @@ interface AssignModalProps {
    *  a single allocation_changed queues instead of a removal followed by
    *  an assignment. */
   moveFrom?: AllocationRow;
+  /** A drag from one seat to another (board drag, owner 21 Oct 2026): the old
+   *  row is STILL there and is freed only when Assign is pressed, so closing
+   *  this modal leaves the delegate exactly where they were. The committee
+   *  the old row is in, for putting it back if the new seat is refused. */
+  freeMoveFirst?: { committeeId: string };
   /** spreadSocieties across the whole board: no concentration penalty for these. */
   spread: ReadonlySet<string>;
   pushDraftNotice?: (eventKey: string, outcome: 'unconfigured' | 'sent-default') => void;
@@ -1945,7 +1958,7 @@ interface AssignModalProps {
   onAssigned: (app: AcceptedApp, slot: SlotRow, seat: number, sentEmail: boolean) => void;
 }
 
-function AssignModal({ committee, unassigned, preSelectedSlot, preSelectedSeat, preSelectedApp, moveFrom, spread, pushDraftNotice, onClose, onConflict, onAssigned }: AssignModalProps) {
+function AssignModal({ committee, unassigned, preSelectedSlot, preSelectedSeat, preSelectedApp, moveFrom, freeMoveFirst, spread, pushDraftNotice, onClose, onConflict, onAssigned }: AssignModalProps) {
   const { session } = useAuth();
   const { conference } = useManage();
   const [selectedApp, setSelectedApp] = useState<AcceptedApp | null>(preSelectedApp ?? null);
@@ -1994,20 +2007,60 @@ function AssignModal({ committee, unassigned, preSelectedSlot, preSelectedSeat, 
     setError('');
     const supabase = getAuthedClient(session.access_token);
 
+    // Was the delegate ever told the seat they are leaving? Only then is this a
+    // "changed" email. A delegate whose allocation was never released (manual
+    // release, or still in the 3-minute buffer) must not learn of the old seat
+    // from a "your allocation changed" email (owner, 21 Oct 2026); they get the
+    // ordinary allocation email for the new seat instead, under the usual rule.
+    let movedFromTold = !!moveFrom?.allocation_sent;
+    if (moveFrom && freeMoveFirst) {
+      const voided = moveFrom.application_id
+        ? await cancelBufferedAllocationEmails(supabase, conference.id, [moveFrom.application_id])
+        : new Set<string>();
+      const { data: freed, error: freeErr } = await supabase
+        .from('conference_allocations').delete().eq('id', moveFrom.id).select('allocation_sent');
+      if (freeErr || !freed || freed.length !== 1) {
+        setError('Could not free their current seat, so nothing changed. Try again.');
+        setSaving(false);
+        return;
+      }
+      movedFromTold = !!(freed[0] as { allocation_sent?: boolean }).allocation_sent && !(moveFrom.application_id && voided.has(moveFrom.application_id));
+    }
+    const announceAsChange = !!moveFrom && movedFromTold;
+
     // A move announces itself with allocation_changed further down, so it never
     // also queues the allocation_assigned announcement.
-    const emailNow = !moveFrom && sendEmail;
+    const emailNow = !announceAsChange && sendEmail;
     const insertErr = await insertAllocation(
       supabase, conference.id, committee, selectedApp, selectedSlot, seat, session.user.id,
       emailNow, pushDraftNotice,
     );
     if (insertErr) {
-      setError(insertErr);
+      if (moveFrom && freeMoveFirst) {
+        // Put them back where they were: the old seat was freed a moment ago.
+        const { error: restoreErr } = await supabase.from('conference_allocations').insert({
+          conference_id: conference.id,
+          conference_committee_id: freeMoveFirst.committeeId,
+          user_id: moveFrom.user_id,
+          country_code: moveFrom.country_code,
+          country_name: moveFrom.country_name,
+          application_id: moveFrom.application_id,
+          allocation_sent: movedFromTold,
+          allocation_sent_at: movedFromTold ? (moveFrom.allocation_sent_at ?? null) : null,
+          seat: moveFrom.seat,
+          assigned_by: session.user.id,
+        });
+        setError(restoreErr
+          ? `${insertErr} Their old seat (${moveFrom.country_name}) could not be put back. Seat them again from the rail.`
+          : insertErr);
+      } else {
+        setError(insertErr);
+      }
       setSaving(false);
       return;
     }
 
-    if (moveFrom) {
+    if (announceAsChange) {
       // The old row is already gone (freed before this modal opened, see
       // onChangeAllocation), so all that's left is the single move email.
       try {
@@ -2024,7 +2077,9 @@ function AssignModal({ committee, unassigned, preSelectedSlot, preSelectedSeat, 
     // (inside insertAllocation above) is now the only writer, and it marks only
     // the recipients that genuinely got an outbox row.
     setSaving(false);
-    onAssigned(selectedApp, selectedSlot, seat, emailNow);
+    // With the buffer on, "emailed" is stamped by the database when the row
+    // leaves, so the optimistic row says not yet.
+    onAssigned(selectedApp, selectedSlot, seat, emailNow && !allocationBufferSendAfter(0));
     onClose();
   }
 
@@ -2042,7 +2097,7 @@ function AssignModal({ committee, unassigned, preSelectedSlot, preSelectedSeat, 
       <NeuModalCard width={460}>
         <div className="flex items-center justify-between mb-4">
           <h2 className="font-black text-xl" style={{ color: NEU.ink, fontFamily: OUTFIT }}>
-            Assign Delegate
+            {freeMoveFirst ? 'Move Delegate' : 'Assign Delegate'}
           </h2>
           <button onClick={onClose} className="focus:outline-none" style={{ color: NEU.muted }}><X size={18} /></button>
         </div>
@@ -2173,7 +2228,7 @@ function AssignModal({ committee, unassigned, preSelectedSlot, preSelectedSeat, 
 
         {/* Allocation email. A move is announced by allocation_changed, so the
             choice is not offered there. */}
-        {moveFrom ? (
+        {moveFrom?.allocation_sent ? (
           <p className="text-xs mb-5" style={{ color: NEU.inkSoft, fontFamily: OUTFIT }}>
             They will be emailed that their allocation has changed.
           </p>
@@ -2442,14 +2497,21 @@ function DelegationConflictModal({
 // drag-and-drop target for applicant cards and a click target when an
 // applicant is selected.
 
+/** What a drag source spreads (boardDrag.tsx sourceProps). */
+type DragSourceProps = { onPointerDown: (e: React.PointerEvent) => void; onDragStart: (e: React.DragEvent) => void };
+
 interface CommitteeBoardPanelProps {
   committee: CommitteeData;
+  /** A board drag is in progress (boardDrag.tsx). */
   dragging: boolean;
+  /** The drop target under the pointer (`data-drop` string), if any. */
+  dragOver: string | null;
+  /** Open seats are drop targets of their own during this drag. */
+  slotDrops: boolean;
+  /** A seated delegate's chip as a drag source, or undefined when it stays put. */
+  seatChipSource: (alloc: AllocationRow, slotId: string) => DragSourceProps | undefined;
   isDropTarget: boolean;
   selectable: boolean;
-  onDragOverPanel: () => void;
-  onDragLeavePanel: () => void;
-  onDropPanel: (appId: string) => void;
   onClickPanel: () => void;
   onRemoveAllocation: (a: AllocationRow) => void;
   onOpenOverview: () => void;
@@ -2485,7 +2547,7 @@ function OpenTierChip({ tier, count, onClick }: { tier: ImportanceTier; count: n
 // One occupied-seat chip: holder name + its own deallocate X, exactly the
 // single-slot chip's look. Reused for both the delegation_size 1 case and
 // each occupied seat of a delegation_size 2 case.
-function OccupiedSeatChip({ alloc, onRemoveAllocation }: { alloc: AllocationRow; onRemoveAllocation?: (a: AllocationRow) => void }) {
+function OccupiedSeatChip({ alloc, onRemoveAllocation, dragSource }: { alloc: AllocationRow; onRemoveAllocation?: (a: AllocationRow) => void; dragSource?: DragSourceProps }) {
   const isSociety = !!alloc.society_id && !alloc.user_id;
   const name = isSociety
     ? (alloc.delegation?.name?.trim() || 'Delegation')
@@ -2497,8 +2559,10 @@ function OccupiedSeatChip({ alloc, onRemoveAllocation }: { alloc: AllocationRow;
     // centred beside the icon, and the side padding clears the rounded ends so
     // the text and the X always sit inside.
     <span
+      {...dragSource}
+      title={dragSource ? `Drag ${name} to another seat, or onto the list to unseat them` : undefined}
       className="inline-flex items-center gap-1.5 rounded-full"
-      style={{ backgroundColor: NEU.surface, boxShadow: NEU.outSm, padding: '4px 0', paddingLeft: isSociety ? 8 : 10, paddingRight: removable ? 7 : 11, minHeight: 28, maxWidth: '100%', boxSizing: 'border-box', flexShrink: 0 }}
+      style={{ backgroundColor: NEU.surface, boxShadow: NEU.outSm, padding: '4px 0', paddingLeft: isSociety ? 8 : 10, paddingRight: removable ? 7 : 11, minHeight: 28, maxWidth: '100%', boxSizing: 'border-box', flexShrink: 0, cursor: dragSource ? 'grab' : undefined }}
     >
       {isSociety && <Users size={12} strokeWidth={2.4} style={{ color: NEU.deepGold, flexShrink: 0 }} />}
       {/* Both consumers of CountrySlotGrid sit inside the committee panel's
@@ -2537,6 +2601,7 @@ function OccupiedSeatChip({ alloc, onRemoveAllocation }: { alloc: AllocationRow;
 
 function CountrySlotGrid({
   committee, flagSize = 28, maxHeight, inset = 0, onAssignSlot, onRemoveAllocation,
+  slotDrops = false, dragOver = null, seatChipSource,
 }: {
   committee: CommitteeData;
   flagSize?: number;
@@ -2546,6 +2611,12 @@ function CountrySlotGrid({
   inset?: number;
   onAssignSlot?: (slot: SlotRow, seat: number) => void;
   onRemoveAllocation?: (a: AllocationRow) => void;
+  /** Board drag in progress: every open seat is a drop target, ringed. */
+  slotDrops?: boolean;
+  /** The `data-drop` string under the pointer. */
+  dragOver?: string | null;
+  /** Seated delegates' chips as drag sources (board only). */
+  seatChipSource?: (alloc: AllocationRow, slotId: string) => DragSourceProps | undefined;
 }) {
   const byCountry = groupAllocationsByCountry(committee.conference_allocations);
   const slots = [...committee.committee_country_slots].sort(
@@ -2557,6 +2628,22 @@ function CountrySlotGrid({
   // A parliamentary ('custom') committee with groups renders its seats in
   // group order under a thin header (colour dot + name); ungrouped seats last.
   const groups: SlotGroup[] = committee.committee_type === 'custom' ? parseGroups(committee.groups) : [];
+  // An open seat during a board drag: a drop target with a ring, the ring
+  // solid while the pointer is over it.
+  const seatDrop = (slot: SlotRow, seat: number): { 'data-drop'?: string; style?: React.CSSProperties } => {
+    if (!slotDrops) return {};
+    const key = dropAttr({ kind: 'slot', committeeId: committee.id, slotId: slot.id, seat });
+    const over = dragOver === key;
+    return {
+      'data-drop': key,
+      style: {
+        borderRadius: 9999,
+        boxShadow: over ? `0 0 0 2.5px ${NEU.forest}` : `0 0 0 1.5px color-mix(in srgb, ${NEU.deepGold} 55%, transparent)`,
+        transform: over ? 'scale(1.12)' : undefined,
+        transition: 'box-shadow 140ms, transform 140ms',
+      },
+    };
+  };
   const renderSlot = (slot: SlotRow) => {
         const rows = byCountry.get(slot.country_code) ?? [];
         const flag = (
@@ -2588,7 +2675,7 @@ function CountrySlotGrid({
               {Array.from({ length: slot.delegation_size }, (_, i) => i + 1).map(seatNum => {
                 const alloc = bySeat.get(seatNum) ?? null;
                 if (alloc) {
-                  return <OccupiedSeatChip key={seatNum} alloc={alloc} onRemoveAllocation={onRemoveAllocation} />;
+                  return <OccupiedSeatChip key={seatNum} alloc={alloc} onRemoveAllocation={onRemoveAllocation} dragSource={seatChipSource?.(alloc, slot.id)} />;
                 }
                 if (onAssignSlot) {
                   return (
@@ -2603,8 +2690,9 @@ function CountrySlotGrid({
                     </button>
                   );
                 }
+                const drop = seatDrop(slot, seatNum);
                 return (
-                  <span key={seatNum} className="rounded-full" style={{ backgroundColor: NEU.base, padding: '4px 9px', opacity: 0.55 }}>
+                  <span key={seatNum} data-drop={drop['data-drop']} className="rounded-full" style={{ backgroundColor: NEU.base, padding: '4px 9px', opacity: slotDrops ? 1 : 0.55, ...drop.style }}>
                     <span style={{ fontSize: 10, fontWeight: 700, color: NEU.muted, fontFamily: OUTFIT }}>Seat {seatNum}</span>
                   </span>
                 );
@@ -2627,7 +2715,7 @@ function CountrySlotGrid({
               style={{ backgroundColor: NEU.surface, boxShadow: NEU.outSm, borderRadius: 9999, padding: 3, maxWidth: '100%', boxSizing: 'border-box' }}
             >
               {flag}
-              <OccupiedSeatChip alloc={alloc} onRemoveAllocation={onRemoveAllocation} />
+              <OccupiedSeatChip alloc={alloc} onRemoveAllocation={onRemoveAllocation} dragSource={seatChipSource?.(alloc, slot.id)} />
             </span>
           );
         }
@@ -2644,7 +2732,8 @@ function CountrySlotGrid({
             </button>
           );
         }
-        return <span key={slot.id} style={{ lineHeight: 0 }}>{flag}</span>;
+        const drop = seatDrop(slot, 1);
+        return <span key={slot.id} data-drop={drop['data-drop']} title={slotDrops ? `Drop on ${slot.country_name}` : undefined} style={{ lineHeight: 0, display: 'inline-block', ...drop.style }}>{flag}</span>;
   };
 
   if (groups.length > 0) {
@@ -2684,9 +2773,8 @@ function CountrySlotGrid({
 }
 
 function CommitteeBoardPanel({
-  committee, dragging, isDropTarget, selectable,
-  onDragOverPanel, onDragLeavePanel, onDropPanel, onClickPanel,
-  onRemoveAllocation, onOpenOverview,
+  committee, dragging, dragOver, slotDrops, seatChipSource, isDropTarget, selectable,
+  onClickPanel, onRemoveAllocation, onOpenOverview,
 }: CommitteeBoardPanelProps) {
   const filled = distinctCountryFilled(committee.conference_allocations);
   const total = committee.total_slots;
@@ -2700,19 +2788,9 @@ function CommitteeBoardPanel({
 
   return (
     <div
-      onDragOver={e => {
-        if (!dragging) return;
-        e.preventDefault();
-        e.dataTransfer.dropEffect = 'move';
-        onDragOverPanel();
-      }}
-      onDragLeave={e => {
-        if (dragging && !e.currentTarget.contains(e.relatedTarget as Node | null)) onDragLeavePanel();
-      }}
-      onDrop={e => {
-        e.preventDefault();
-        onDropPanel(e.dataTransfer.getData('text/plain'));
-      }}
+      // The whole panel is a drop target (boardDrag.tsx); during a drag its
+      // open seats are targets of their own too (CountrySlotGrid).
+      data-drop={dropAttr({ kind: 'committee', committeeId: committee.id })}
       onClick={() => { if (selectable) onClickPanel(); else onOpenOverview(); }}
       className="p-5 flex flex-col"
       style={{
@@ -2780,7 +2858,10 @@ function CommitteeBoardPanel({
             clipped by the scroll box (owner, 23 Sep 2026). Negative inline
             margin keeps the flags aligned with the label above. */}
         <div style={{ marginInline: -4 }}>
-          <CountrySlotGrid committee={committee} flagSize={24} maxHeight={214} inset={4} onRemoveAllocation={onRemoveAllocation} />
+          <CountrySlotGrid
+            committee={committee} flagSize={24} maxHeight={214} inset={4} onRemoveAllocation={onRemoveAllocation}
+            slotDrops={dragging && slotDrops} dragOver={dragOver} seatChipSource={seatChipSource}
+          />
         </div>
       </div>
 
@@ -3644,13 +3725,12 @@ export default function AssignmentPage() {
   const [expandedAppId, setExpandedAppId] = useState<string | null>(null);
   // Delegates board interactions
   const [selectedAppId, setSelectedAppId] = useState<string | null>(null);
-  const [dragAppId, setDragAppId] = useState<string | null>(null);
-  const [dropTargetId, setDropTargetId] = useState<string | null>(null);
+  // The rail's committee-preference filter (RailPreferenceFilter).
+  const [railFilter, setRailFilter] = useState<RailFilter>('all');
   const [dropModal, setDropModal] = useState<{ committeeId: string; appId: string } | null>(null);
   // Left-rail source in delegates mode: individual DELEGATES or whole DELEGATIONS
   // (societies) dragged onto a committee to own a block seat.
   const [railSource, setRailSource] = useState<'delegates' | 'delegations'>('delegates');
-  const [dragSocietyId, setDragSocietyId] = useState<string | null>(null);
   const [societyDropModal, setSocietyDropModal] = useState<{ committeeId: string; societyId: string } | null>(null);
   // Tap-to-select for delegation cards: HTML5 drag does not work on touch, so a
   // tap picks the delegation and the next tap on a committee opens the drop
@@ -3662,7 +3742,7 @@ export default function AssignmentPage() {
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [selectedSocietyId, societyDropModal]);
-  const [assignModal, setAssignModal] = useState<{ committeeId: string; preSlot?: SlotRow; preSeat?: number; preApp?: AcceptedApp; moveFrom?: AllocationRow } | null>(null);
+  const [assignModal, setAssignModal] = useState<{ committeeId: string; preSlot?: SlotRow; preSeat?: number; preApp?: AcceptedApp; moveFrom?: AllocationRow; freeMoveFirst?: { committeeId: string } } | null>(null);
   const [overviewCommitteeId, setOverviewCommitteeId] = useState<string | null>(null);
   // Delegation-purity safeguard: set whenever an individual-delegate
   // assignment path (drop modal, slot-first assign modal, one-click
@@ -3671,6 +3751,17 @@ export default function AssignmentPage() {
   // The suggestion awaiting confirmation (AssignConfirmDialog). ASSIGN on a
   // suggestion card only opens this; nothing is written until it is confirmed.
   const [confirmSuggestion, setConfirmSuggestion] = useState<Suggestion | null>(null);
+  // "Send allocation emails manually instead" in that pop-up is saving.
+  const [introSwitching, setIntroSwitching] = useState(false);
+  // The buffered allocation email stamps send_after from the database clock.
+  useEffect(() => { ensureServerClock(); }, []);
+  // Pointer drag for the delegates board (boardDrag.tsx). The callbacks are
+  // read at drop time, so the handlers they name (declared further down) are
+  // always this render's.
+  const { drag, sourceProps, ghost: dragGhost } = useBoardDrag({
+    canDrop: (payload, target) => boardCanDrop(payload, target),
+    onDrop: (payload, target) => handleBoardDrop(payload, target),
+  });
   const [conflict, setConflict] = useState<{ committee: CommitteeData; app: AcceptedApp; slot: SlotRow; seat: number; sibling: AllocationRow } | null>(null);
   // Chairs board interactions
   const [selectedChairAppId, setSelectedChairAppId] = useState<string | null>(null);
@@ -4091,7 +4182,9 @@ export default function AssignmentPage() {
     const supabase = getAuthedClient(session.access_token);
     const conferenceId = conference.id;
 
-    const tempRow = applyLocalAllocation(sug.committee, sug.app, sug.slot, seat, emailNow);
+    // With the buffer on, "emailed" is stamped by the database when the email
+    // actually leaves, so the optimistic row does not claim it yet.
+    const tempRow = applyLocalAllocation(sug.committee, sug.app, sug.slot, seat, emailNow && !allocationBufferSendAfter(0));
     showFlash('ok', `${sug.app.profiles?.display_name ?? sug.app.invited_name} assigned to ${sug.slot.country_name} in ${committeeShortName(sug.committee)}.`);
 
     (async () => {
@@ -4133,6 +4226,45 @@ export default function AssignmentPage() {
       inFlightAssignKeys.current.delete(key);
       setQuickAssigning(prev => (prev === cardKey ? null : prev));
     });
+  }
+
+  // ── Assign on a suggestion card (and a drop on an open seat) ──────────────
+  // Owner, 21 Oct 2026: the "this sends an email" pop-up is shown on the
+  // organiser's FIRST allocation only (per user, this browser), and only when
+  // assigning really emails. Every later press assigns at once.
+  function requestQuickAssign(sug: Suggestion) {
+    const emailsOnAssign = (conference?.allocation_email_auto ?? true) && allocTemplateEnabled !== false;
+    if (emailsOnAssign && !assignIntroSeen(session?.user?.id)) {
+      setConfirmSuggestion(sug);
+      return;
+    }
+    quickAssign(sug);
+  }
+
+  /** The pop-up's quiet way out: this conference goes to manual release (the
+   *  one shared verified save), then this delegate is assigned with no email. */
+  function assignWithManualRelease(sug: Suggestion, dontShowAgain: boolean) {
+    if (!session || !conference || introSwitching) return;
+    setIntroSwitching(true);
+    setPendingAuto(false);
+    const supabase = getAuthedClient(session.access_token);
+    (async () => {
+      const res = await saveAllocationEmailAuto(supabase, conference.id, false, false);
+      if (!res.ok) {
+        setPendingAuto(null);
+        showFlash('err', 'Could not switch to manual release. Nothing was assigned.');
+        return;
+      }
+      if (dontShowAgain) markAssignIntroSeen(session.user.id);
+      setConfirmSuggestion(null);
+      quickAssign(sug, false);
+      showFlash('ok', 'Nobody is notified until you release allocations.');
+      await refreshConferenceQuiet();
+      setPendingAuto(null);
+    })().catch(() => {
+      setPendingAuto(null);
+      showFlash('err', 'Could not switch to manual release. Nothing was assigned.');
+    }).finally(() => setIntroSwitching(false));
   }
 
   // ── Allocation email release ───────────────────────────────────────────────
@@ -4274,6 +4406,9 @@ export default function AssignmentPage() {
     setSendingAllocationEmails(true);
     const supabase = getAuthedClient(session.access_token);
     try {
+      // A wave sent by hand goes now: anyone of these still waiting in the
+      // 3-minute buffer has that copy voided first, so nobody gets it twice.
+      await cancelBufferedAllocationEmails(supabase, conference.id, ids);
       const result = await queueAllocationEmails(supabase, conference.id, ids);
       notifyIfNeeded(result, pushDraftNotice);
       const flash = allocationSendMessage(result, ids.length);
@@ -4333,8 +4468,14 @@ export default function AssignmentPage() {
 
     (async () => {
       // Same ordering as before: delete first (awaited), then the application
-      // status reset, then the email queue.
-      const { error: delErr } = await supabase.from('conference_allocations').delete().eq('id', allocation.id);
+      // status reset, then the email queue. An allocation email still waiting
+      // in the 3-minute buffer is voided first: the delegate was never told.
+      const voided = allocation.application_id
+        ? await cancelBufferedAllocationEmails(supabase, conferenceId, [allocation.application_id])
+        : new Set<string>();
+      // RETURNING the row's own allocation_sent, so "were they ever told" is the
+      // server's answer and not this board's possibly older snapshot.
+      const { data: freed, error: delErr } = await supabase.from('conference_allocations').delete().eq('id', allocation.id).select('allocation_sent');
       if (delErr) {
         rollback();
         // The seat visibly emptied and then came back. inFlightRemoveIds keeps
@@ -4357,12 +4498,19 @@ export default function AssignmentPage() {
           decided_by: session.user.id, decided_at: new Date().toISOString(),
         }).eq('id', allocation.application_id);
 
-        try {
-          const result = await queueEventEmail(supabase, conferenceId, 'allocation_removed', [allocation.application_id]);
-          notifyIfNeeded(result, pushDraftNotice);
-        } catch {
-          // Email queueing is secondary, the removal stands.
-          showFlash('err', 'Allocation removed, but the notification email could not be queued.');
+        // Only someone who was told their seat is told it is gone. An
+        // allocation never released (manual release, or voided in the buffer)
+        // must not reach the delegate through a "removed" email (owner, 21 Oct 2026).
+        const freedRow = (freed ?? [])[0] as { allocation_sent?: boolean } | undefined;
+        const wasTold = (freedRow ? !!freedRow.allocation_sent : allocation.allocation_sent) && !voided.has(allocation.application_id);
+        if (wasTold) {
+          try {
+            const result = await queueEventEmail(supabase, conferenceId, 'allocation_removed', [allocation.application_id]);
+            notifyIfNeeded(result, pushDraftNotice);
+          } catch {
+            // Email queueing is secondary, the removal stands.
+            showFlash('err', 'Allocation removed, but the notification email could not be queued.');
+          }
         }
       }
       settleLocalMutation(mutKey);
@@ -4803,23 +4951,83 @@ export default function AssignmentPage() {
     setSocietyDropModal({ committeeId, societyId });
   }
 
-  // One drop handler for both rail sources. A society drag encodes its payload
-  // as `society:<id>` (delegates drop their bare app id), so the target is
-  // routed to the right allocation flow.
-  function handleDropOnCommittee(committeeId: string, dropped: string) {
-    const payload = dropped || (dragSocietyId ? `society:${dragSocietyId}` : dragAppId) || '';
-    setDragAppId(null);
-    setDragSocietyId(null);
-    setDropTargetId(null);
-    if (!payload) return;
-    if (payload.startsWith('society:')) { openSocietyDropModal(committeeId, payload.slice(8)); return; }
-    openDropModal(committeeId, payload);
+  // ── Board drops (boardDrag.tsx) ──────────────────────────────────────────
+  // What can land where. The rail only takes a seated delegate (to unseat
+  // them); a seated delegate never lands on the seat they already hold.
+  function boardCanDrop(payload: BoardDragPayload, target: BoardDropTarget): boolean {
+    if (target.kind === 'rail') return payload.kind === 'alloc';
+    if (payload.kind === 'alloc' && target.kind === 'slot') {
+      return !(target.committeeId === payload.committeeId && target.slotId === payload.slotKey);
+    }
+    return true;
   }
 
-  // Left rail: search, in the order they applied (latest at the bottom)
+  // Every drop goes through the same paths a click would, so nothing about
+  // seating, emails or conflicts differs between dragging and clicking:
+  //   applicant on a committee   → the drop pop-up (pick the country)
+  //   applicant on an open seat  → Assign, exactly like a suggestion card
+  //   delegation on a committee  → the delegation drop pop-up
+  //   seated delegate on a seat or committee → the move pop-up (old seat freed on Assign)
+  //   seated delegate on the rail → unseated, exactly like its X
+  function handleBoardDrop(payload: BoardDragPayload, target: BoardDropTarget) {
+    if (payload.kind === 'society') {
+      if (target.kind !== 'rail') openSocietyDropModal(target.committeeId, payload.id);
+      return;
+    }
+    if (payload.kind === 'app') {
+      if (target.kind === 'committee') { openDropModal(target.committeeId, payload.id); return; }
+      if (target.kind === 'slot') {
+        const app = accepted.find(a => a.id === payload.id);
+        const committee = committees.find(c => c.id === target.committeeId);
+        const slot = committee?.committee_country_slots.find(sl => sl.id === target.slotId);
+        if (!app || !committee || !slot) return;
+        const byCountry = groupAllocationsByCountry(committee.conference_allocations);
+        if (isSlotFull(slot, byCountry)) { openDropModal(committee.id, app.id); return; }
+        const scored = allocationScore(app, committee, slot, distinctCountryFilled(committee.conference_allocations), committee.total_slots, byCountry, spread);
+        setSelectedAppId(null);
+        requestQuickAssign({ app, committee, slot, score: scored.total, reasons: scored.reasons });
+      }
+      return;
+    }
+    // A seated delegate.
+    const from = committees
+      .flatMap(c => c.conference_allocations.map(a => ({ c, a })))
+      .find(({ a }) => a.id === payload.id);
+    if (!from) return;
+    if (target.kind === 'rail') { handleRemoveAllocation(from.a); return; }
+    if (from.a.id.startsWith('temp-')) { showFlash('err', 'This allocation is still saving. Try again in a moment.'); return; }
+    const committee = committees.find(c => c.id === target.committeeId);
+    if (!committee) return;
+    const slot = target.kind === 'slot' ? committee.committee_country_slots.find(sl => sl.id === target.slotId) : undefined;
+    setAssignModal({
+      committeeId: committee.id,
+      preApp: allocationToApp(from.a),
+      preSlot: slot,
+      preSeat: slot && target.kind === 'slot' ? target.seat : undefined,
+      moveFrom: from.a,
+      freeMoveFirst: { committeeId: from.c.id },
+    });
+  }
+
+  /** The pointer is over this committee's panel or one of its open seats. */
+  function isOverCommittee(over: string | null, committeeId: string): boolean {
+    return over !== null && (over === dropAttr({ kind: 'committee', committeeId }) || over.startsWith(`slot:${committeeId}:`));
+  }
+
+  /** A seated delegate's chip as a drag source (individual seats only; a
+   *  delegation's block seat and a seat still saving stay put). */
+  function seatChipSource(alloc: AllocationRow, committeeId: string, slotId: string) {
+    if (!alloc.application_id || alloc.id.startsWith('temp-')) return undefined;
+    return sourceProps({ kind: 'alloc', id: alloc.id, committeeId, slotKey: slotId }, `${allocateeName(alloc)} · ${alloc.country_name}`);
+  }
+
+  // Left rail: search and the committee filter, in the order they applied
+  // (latest at the bottom).
   const filteredApps = [...accepted]
     .filter(app => (app.profiles?.display_name ?? app.invited_name ?? '').toLowerCase().includes(search.toLowerCase()))
+    .filter(app => matchesRailFilter(app.application_preferences, railFilter))
     .sort(byAppliedAt);
+  const railFilterCommittees = sortedCommittees.map(c => ({ id: c.id, label: committeeLabels(c).big, full: c.name }));
 
   // Delegations rail source: every society, searchable by name.
   const filteredSocieties = [...societies]
@@ -4982,7 +5190,7 @@ export default function AssignmentPage() {
                             {sug.score}
                           </span>
                         )}
-                        <NeuButton onClick={() => setConfirmSuggestion(sug)} disabled={busy || confirmSuggestion !== null} style={{ padding: '8px 16px', fontSize: 11, letterSpacing: 0 }}>
+                        <NeuButton onClick={() => requestQuickAssign(sug)} disabled={busy || confirmSuggestion !== null} style={{ padding: '8px 16px', fontSize: 11, letterSpacing: 0 }}>
                           {busy ? '…' : 'Assign'}
                         </NeuButton>
                       </div>
@@ -5064,8 +5272,27 @@ export default function AssignmentPage() {
 
           {mode === 'delegates' && (
             <div className="flex flex-col xl:flex-row gap-6 items-start">
-              {/* Left rail, unassigned applicants (or delegations to block-allocate) */}
-              <div className="w-full xl:w-[320px] flex-shrink-0">
+              {/* Left rail, unassigned applicants (or delegations to block-allocate).
+                  Sticky from xl with its own scrolling list, so it stays in reach
+                  while the organiser scrolls twenty committees (owner, 21 Oct
+                  2026; house rule: every left rail is sticky). It is also where a
+                  seated delegate is dropped to take them out of their seat. */}
+              <div
+                data-drop={dropAttr({ kind: 'rail' })}
+                className="w-full xl:w-[320px] flex-shrink-0 xl:sticky xl:top-[72px] xl:max-h-[calc(100dvh-88px)] xl:flex xl:flex-col"
+                style={{
+                  borderRadius: 22,
+                  boxShadow: drag?.payload.kind === 'alloc'
+                    ? (drag.over === 'rail' ? `0 0 0 2px ${NEU.forest}` : `0 0 0 1.5px color-mix(in srgb, ${NEU.deepGold} 45%, transparent)`)
+                    : 'none',
+                  transition: 'box-shadow 160ms cubic-bezier(0.22,1,0.36,1)',
+                }}
+              >
+                {drag?.payload.kind === 'alloc' && (
+                  <p className="mb-2 px-1" style={{ fontSize: 13, fontWeight: 700, color: NEU.forest, fontFamily: OUTFIT }}>
+                    Drop here to take them out of their seat
+                  </p>
+                )}
                 {/* Source toggle: drag individual delegates, or whole delegations. */}
                 <RailSourceToggle
                   value={railSource}
@@ -5081,6 +5308,16 @@ export default function AssignmentPage() {
                   placeholder={railSource === 'delegates' ? 'Search applicants...' : 'Search delegations...'}
                 />
 
+                {railSource === 'delegates' && committees.length > 1 && (
+                  <div className="mb-3">
+                    <RailPreferenceFilter value={railFilter} onChange={setRailFilter} committees={railFilterCommittees} />
+                  </div>
+                )}
+
+                {/* The list scrolls inside the sticky rail; the padding keeps the
+                    cards' raised shadows clear of the scroll box's edge. */}
+                <div className="xl:flex-1 xl:min-h-0 xl:overflow-y-auto" style={{ padding: 4, margin: -4, overscrollBehavior: 'contain' }}>
+
                 {railSource === 'delegations' ? (
                   filteredSocieties.length === 0 ? (
                     <p className="text-sm py-6 text-center" style={{ color: NEU.muted, fontFamily: OUTFIT }}>
@@ -5089,7 +5326,7 @@ export default function AssignmentPage() {
                   ) : (
                     <div className="flex flex-col gap-2">
                       {filteredSocieties.map(soc => {
-                        const beingDragged = dragSocietyId === soc.id;
+                        const beingDragged = drag?.payload.kind === 'society' && drag.payload.id === soc.id;
                         const socSelected = selectedSocietyId === soc.id;
                         const toggleSoc = () => setSelectedSocietyId(prev => (prev === soc.id ? null : soc.id));
                         return (
@@ -5101,13 +5338,7 @@ export default function AssignmentPage() {
                             aria-label={`${soc.name}. ${socSelected ? 'Selected. Tap a committee to give them a seat' : 'Select, then tap a committee'}`}
                             onClick={toggleSoc}
                             onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleSoc(); } }}
-                            draggable
-                            onDragStart={e => {
-                              e.dataTransfer.setData('text/plain', `society:${soc.id}`);
-                              e.dataTransfer.effectAllowed = 'move';
-                              setDragSocietyId(soc.id);
-                            }}
-                            onDragEnd={() => { setDragSocietyId(null); setDropTargetId(null); }}
+                            {...sourceProps({ kind: 'society', id: soc.id }, soc.name)}
                             className="p-3 flex items-center gap-2.5 focus:outline-none"
                             style={{
                               backgroundColor: NEU.surface,
@@ -5120,7 +5351,7 @@ export default function AssignmentPage() {
                             onMouseEnter={e => { if (!socSelected) (e.currentTarget as HTMLElement).style.boxShadow = NEU.outSmHover; }}
                             onMouseLeave={e => { if (!socSelected) (e.currentTarget as HTMLElement).style.boxShadow = NEU.outSm; }}
                           >
-                            <GripVertical size={13} style={{ color: NEU.muted, flexShrink: 0, opacity: 0.5 }} />
+                            <DragGrip label={soc.name} />
                             <DelegationAvatar size={40} />
                             <div className="flex-1 min-w-0">
                               <p className="[overflow-wrap:anywhere]" style={{ fontSize: 15, fontWeight: 800, color: NEU.ink, fontFamily: OUTFIT, lineHeight: 1.15 }}>
@@ -5145,7 +5376,7 @@ export default function AssignmentPage() {
                     {filteredApps.map(app => {
                       const expanded = expandedAppId === app.id;
                       const selected = selectedAppId === app.id;
-                      const beingDragged = dragAppId === app.id;
+                      const beingDragged = drag?.payload.kind === 'app' && drag.payload.id === app.id;
                       const userHistory = app.profiles ? history[app.profiles.id] : undefined;
                       const nationality = app.profiles?.nationality ?? null;
                       const natCountry = nationality ? getCountryByName(nationality) : undefined;
@@ -5158,15 +5389,17 @@ export default function AssignmentPage() {
                       return (
                         <div
                           key={app.id}
-                          draggable
-                          onDragStart={e => {
-                            e.dataTransfer.setData('text/plain', app.id);
-                            e.dataTransfer.effectAllowed = 'move';
-                            setDragAppId(app.id);
-                          }}
-                          onDragEnd={() => { setDragAppId(null); setDropTargetId(null); }}
+                          {...sourceProps({ kind: 'app', id: app.id }, displayName)}
+                          role="button"
+                          tabIndex={0}
+                          aria-pressed={selected}
+                          aria-label={`${displayName}. ${selected ? 'Selected. Click a committee to seat them' : 'Select, then click a committee'}`}
                           onClick={() => setSelectedAppId(prev => (prev === app.id ? null : app.id))}
-                          className="p-3"
+                          onKeyDown={e => {
+                            if (e.target !== e.currentTarget) return;
+                            if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSelectedAppId(prev => (prev === app.id ? null : app.id)); }
+                          }}
+                          className="p-3 focus:outline-none focus-visible:ring-2"
                           style={{
                             backgroundColor: NEU.surface,
                             borderRadius: 18,
@@ -5179,18 +5412,14 @@ export default function AssignmentPage() {
                           onMouseLeave={e => { if (!selected) (e.currentTarget as HTMLElement).style.boxShadow = NEU.outSm; }}
                         >
                           <div className="flex items-start gap-2.5">
-                            <GripVertical size={13} style={{ color: NEU.muted, flexShrink: 0, marginTop: 14, opacity: 0.5 }} />
+                            <span style={{ marginTop: 6, display: 'inline-flex' }}><DragGrip label={displayName} /></span>
                             {/* Avatar (~40% larger) with the delegate's home flag
                                 tucked into its bottom-right, slightly overlapping. */}
                             <div style={{ position: 'relative', flexShrink: 0 }}>
-                              {/* The card itself is the drag source (a <div draggable>,
-                                  not a <button>), so the link is legal. PersonAvatar
-                                  always renders its ProfileLink with draggable={false},
-                                  which per the HTML drag spec is NOT a drag source — the
-                                  browser walks up to the nearest draggable ancestor, i.e.
-                                  this card, so the card's own dataTransfer payload still
-                                  starts the drag from anywhere on the avatar. Same trick
-                                  the inner <img draggable={false}> already relies on.
+                              {/* The card is the drag source (boardDrag.tsx, pointer
+                                  events), not a <button>, so the link is legal. A mouse
+                                  drag may start on the avatar too: past the threshold
+                                  it is a drag and the link's click is swallowed.
                                   nested keeps the card's select-on-click working. */}
                               <PersonAvatar name={displayName} url={app.profiles?.avatar_url ?? null} size={48} userId={app.profiles?.id} nested />
                               {natCountry && (
@@ -5252,6 +5481,7 @@ export default function AssignmentPage() {
                     })}
                   </div>
                 )}
+                </div>
               </div>
 
               {/* Board, every committee visible at once. A masonry (CSS
@@ -5266,12 +5496,12 @@ export default function AssignmentPage() {
                     <div key={c.id} className="mb-4 break-inside-avoid">
                     <CommitteeBoardPanel
                       committee={c}
-                      dragging={dragAppId !== null || dragSocietyId !== null}
-                      isDropTarget={dropTargetId === c.id}
+                      dragging={drag !== null}
+                      dragOver={drag?.over ?? null}
+                      slotDrops={drag !== null && drag.payload.kind !== 'society'}
+                      seatChipSource={(alloc, slotId) => seatChipSource(alloc, c.id, slotId)}
+                      isDropTarget={isOverCommittee(drag?.over ?? null, c.id)}
                       selectable={selectedAppId !== null || (railSource === 'delegations' && selectedSocietyId !== null)}
-                      onDragOverPanel={() => setDropTargetId(c.id)}
-                      onDragLeavePanel={() => setDropTargetId(prev => (prev === c.id ? null : prev))}
-                      onDropPanel={appId => handleDropOnCommittee(c.id, appId)}
                       onClickPanel={() => {
                         if (railSource === 'delegations' && selectedSocietyId) openSocietyDropModal(c.id, selectedSocietyId);
                         else if (selectedAppId) openDropModal(c.id, selectedAppId);
@@ -5421,10 +5651,29 @@ export default function AssignmentPage() {
           preSelectedSeat={assignModal.preSeat}
           preSelectedApp={assignModal.preApp}
           moveFrom={assignModal.moveFrom}
+          freeMoveFirst={assignModal.freeMoveFirst}
           pushDraftNotice={pushDraftNotice}
           onClose={() => setAssignModal(null)}
           onConflict={payload => { setConflict({ committee: assignModalCommittee, ...payload }); setAssignModal(null); }}
           onAssigned={(app, slot, seat, sentEmail) => {
+            // A dragged move freed the old seat inside the modal: drop it here
+            // too, recorded like every other free so a stale load cannot bring
+            // it back.
+            const moved = assignModal.freeMoveFirst ? assignModal.moveFrom : undefined;
+            if (moved) {
+              setCommittees(prev => prev.map(c => ({
+                ...c,
+                conference_allocations: c.conference_allocations.filter(a => a.id !== moved.id),
+              })));
+              noteLocalMutation(`free:${moved.id}`, {
+                kind: 'free',
+                settled: ++mutSeq.current,
+                at: Date.now(),
+                allocationId: moved.id,
+                committeeId: assignModal.freeMoveFirst?.committeeId ?? null,
+                app: null,
+              });
+            }
             // Writes already succeeded inside the modal, commit the same
             // change locally and fetch the real row id silently.
             applyLocalAllocation(assignModalCommittee, app, slot, seat, sentEmail, true);
@@ -5451,7 +5700,14 @@ export default function AssignmentPage() {
             if (!session || !conference) return;
             const supabase = getAuthedClient(session.access_token);
             const committeeId = overviewCommittee.id;
-            const { error } = await supabase.from('conference_allocations').delete().eq('id', alloc.id);
+            // Void a buffered allocation email first, then free the seat and
+            // read back whether they were ever told it (see AssignModal).
+            const voided = alloc.application_id
+              ? await cancelBufferedAllocationEmails(supabase, conference.id, [alloc.application_id])
+              : new Set<string>();
+            const { data: freed, error } = await supabase.from('conference_allocations').delete().eq('id', alloc.id).select('allocation_sent');
+            const freedRow = (freed ?? [])[0] as { allocation_sent?: boolean } | undefined;
+            const told = (freedRow ? !!freedRow.allocation_sent : alloc.allocation_sent) && !(alloc.application_id && voided.has(alloc.application_id));
             if (error) {
               showFlash('err', 'Could not free that seat.');
               // Nothing local changed yet, but the delete was aimed at a row id
@@ -5484,7 +5740,7 @@ export default function AssignmentPage() {
               app: alloc.application_id ? allocationToApp(alloc) : null,
             });
             setOverviewCommitteeId(null);
-            setAssignModal({ committeeId, preApp: allocationToApp(alloc), moveFrom: alloc });
+            setAssignModal({ committeeId, preApp: allocationToApp(alloc), moveFrom: { ...alloc, allocation_sent: told } });
             scheduleReconcile();
           }}
         />
@@ -5497,14 +5753,15 @@ export default function AssignmentPage() {
           delegateName={confirmSuggestion.app.profiles?.display_name ?? confirmSuggestion.app.invited_name ?? 'This delegate'}
           countryName={confirmSuggestion.slot.country_name}
           committeeLabel={committeeShortName(confirmSuggestion.committee)}
-          emailsOnAssign={conference?.allocation_email_auto ?? true}
-          remainingSuggestions={Math.max(0, suggestions.length - 1)}
-          onCancel={() => setConfirmSuggestion(null)}
-          onConfirm={emailNow => {
+          switching={introSwitching}
+          onCancel={() => { if (!introSwitching) setConfirmSuggestion(null); }}
+          onConfirm={dontShowAgain => {
             const sug = confirmSuggestion;
+            if (dontShowAgain) markAssignIntroSeen(session?.user?.id);
             setConfirmSuggestion(null);
-            quickAssign(sug, emailNow);
+            quickAssign(sug, true);
           }}
+          onManualInstead={dontShowAgain => assignWithManualRelease(confirmSuggestion, dontShowAgain)}
         />
       )}
       {conflict && (
@@ -5545,6 +5802,7 @@ export default function AssignmentPage() {
       )}
 
       {confirmModal}
+      {dragGhost}
 
     </div>
   );

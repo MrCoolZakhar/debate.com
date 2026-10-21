@@ -54,7 +54,7 @@ export const ptTranslationsB = {
   documents_working_papers_tab: "Documentos de Trabalho",
   documents_draft_resolutions_tab: "Propostas de Resolução",
   tutorial_have_you_used: "Você já usou o Gavelling?",
-  tutorial_gavin_prepared: "O Gavin preparou um tour interativo rápido para você.",
+  tutorial_gavin_prepared: "O Gavin preparou um tour interativo rápido. Ele ilumina cada parte da sala e você testa os controles principais pelo caminho. Prefere assistir antes? O guia abaixo conduz um comitê inteiro, da chamada à votação.",
   tutorial_show_me: "Mostrar como funciona",
   tutorial_skip: "Pular tutorial",
   tutorial_start_exploring: "Começar a explorar →",

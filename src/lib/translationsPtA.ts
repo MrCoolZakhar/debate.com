@@ -58,8 +58,6 @@ export const ptTranslationsA = {
   motions_error_no_total_time: 'O tempo total do debate não pode ser zero.',
   motions_error_no_speaking_time: 'O tempo de discurso por delegação não pode ser zero.',
   motions_tour_order_custom: 'Personalizada',
-  rollcall_slider_hint: 'Toque para alternar: Ausente, Presente, Presente e votante',
-  rollcall_slider_hint_observer: 'Toque para alternar: Ausente, Presente',
   hero_subtitle: 'O jeito mais simples de conduzir o seu comitê de MUN.',
   hero_start_committee: 'CRIAR MEU COMITÊ →',
   // --- Sessions landing (sl_*), 24 Sep 2026; reworked 25 Sep 2026 ---

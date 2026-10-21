@@ -47,7 +47,9 @@ import { useScrollLock } from '@/hooks/useScrollLock';
 import { PeopleDelegationsSwitch } from './DelegationsBoard';
 import DelegationsTab from './delegations/DelegationsTab';
 import DelegationPopupLink from '@/app/manage/[slug]/DelegationPopupLink';
-import { DelegationIdentity, useDelegationSummaries } from './DelegationAvatar';
+import { useDelegationSummaries } from './DelegationAvatar';
+import { RowDelegation, RowDelegationBadge, rowDelegationTitle, type RowDelegationProps } from './RowDelegation';
+import { countryShortName } from '../assignment/displayNames';
 import OpenDelegateApplications from './OpenDelegateApplications';
 import { rejectUpdates, writeReject, rejectFollowUps } from './teamDecisions';
 import { useJobBoardApplicantExtras } from './useJobBoardApplicantExtras';
@@ -382,24 +384,26 @@ function LevelBadge({ level, count }: { level: string; count?: number }) {
   const label = key ? key.charAt(0).toUpperCase() + key.slice(1) : 'Unranked';
   return (
     <div
-      className="flex flex-col items-center flex-shrink-0"
-      style={{ width: 66, gap: 4 }}
+      className="flex items-center flex-shrink-0"
+      style={{ gap: 7 }}
       title={count !== undefined ? `${count} conference${count === 1 ? '' : 's'} on their MUN CV` : label}
     >
       <span
-        className="inline-flex items-center justify-center"
-        style={{ width: 48, height: 48, borderRadius: 9999, background: `linear-gradient(150deg, ${accent}2E, ${accent}17)`, border: `1.5px solid ${accent}66`, boxShadow: NEU.outSm }}
+        className="inline-flex items-center justify-center flex-shrink-0"
+        style={{ width: 36, height: 36, borderRadius: 9999, background: `linear-gradient(150deg, ${accent}2E, ${accent}17)`, border: `1.5px solid ${accent}66`, boxShadow: NEU.outSm }}
       >
-        <LevelInsignia level={key} size={30} />
+        <LevelInsignia level={key} size={22} />
       </span>
-      <span className="text-center leading-tight" style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: 12, color: NEU.ink }}>
-        {label}
-      </span>
-      {count !== undefined && (
-        <span style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: 12, color: NEU.muted, fontVariantNumeric: 'tabular-nums' }}>
-          {count} conf{count === 1 ? '' : 's'}
+      <span className="flex flex-col leading-tight">
+        <span style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: 12, color: NEU.ink }}>
+          {label}
         </span>
-      )}
+        {count !== undefined && (
+          <span style={{ fontFamily: OUTFIT, fontWeight: 600, fontSize: 11.5, color: NEU.inkSoft, fontVariantNumeric: 'tabular-nums' }}>
+            {count} conf{count === 1 ? '' : 's'}
+          </span>
+        )}
+      </span>
     </div>
   );
 }
@@ -4216,10 +4220,6 @@ export default function ApplicationsPage() {
             const isInvitedChair = isChair && app.fee_waiver_source === 'chair_invite';
             const showPayControl = roleChargesFee(app.role) && (app.status === 'accepted' || app.status === 'assigned' || app.status === 'submitted' || app.status === 'checked-in');
 
-            const factStyle: React.CSSProperties = {
-              fontFamily: OUTFIT, fontSize: 13, fontWeight: 600, color: NEU.inkSoft,
-              fontVariantNumeric: 'tabular-nums',
-            };
             // A state line: icon plus a plain word, no pill (CLAUDE.md §8).
             const chip = (color: string): React.CSSProperties => ({
               fontFamily: OUTFIT, fontSize: 12, fontWeight: 700, color, whiteSpace: 'nowrap',
@@ -4257,106 +4257,103 @@ export default function ApplicationsPage() {
                   className="appRowOpen flex flex-col lg:flex-row lg:items-stretch"
                 >
 
-                  {/* LEFT · select + identity + facts */}
-                  <div className="flex items-start gap-3 p-4 lg:p-5" style={{ flex: '1 1 0', minWidth: 0, ...notAttendingFade }}>
+                  {/* LEFT · select + identity + facts. Four lines at most
+                      (owner, 21 Oct 2026): the name big; one small line of
+                      email, nationality, notes and importer; the delegation
+                      name bold; one small line of its facts (RowDelegation).
+                      The delegation's disc overlaps the avatar's corner so the
+                      text keeps the column's width. Wider than the middle
+                      pane on desktop, since it carries the most text. */}
+                  <div className="flex items-start gap-3 p-4 lg:p-5 flex-[1_1_0] lg:flex-[1.3_1_0]" style={{ minWidth: 0, ...notAttendingFade }}>
                     <div className="pt-1"><SelectBox checked={selected} onClick={() => toggleSelected(app.id)} title={selected ? 'Deselect' : 'Select'} /></div>
-                    {/* The avatar alone: nationality is the real rectangular
-                        flag in the facts below, never a circle on a circle. */}
                     {/* Avatar → the applicant's public MUN CV. Unregistered
                         invitees (user_id NULL) render bare — ProfileLink owns
                         that case, hence no conditional here. */}
                     <ProfileLink userId={app.user_id} name={name} nested style={{ display: 'block', flexShrink: 0 }}>
                       <div style={{ position: 'relative', flexShrink: 0 }}>
-                        <MemberAvatar name={name} url={app.profiles?.avatar_url ?? null} size={62} />
+                        <MemberAvatar name={name} url={app.profiles?.avatar_url ?? null} size={52} />
+                        {app.societies?.name && <RowDelegationBadge name={app.societies.name} logoUrl={app.societies.logo_url} />}
                       </div>
                     </ProfileLink>
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2 flex-wrap">
                         {/* Age reads as part of the name: "Ada Lovelace, 23".
-                            Derived from profiles.date_of_birth, falling back to
-                            any date-of-birth custom answer (ageForApp). No age
-                            on file → the name alone, never a trailing comma. */}
-                        {/* Name → public MUN CV. minWidth:0 on the wrapper so
-                            the anchor stays shrinkable and the <p> still
-                            truncates exactly as it did unwrapped. */}
+                            No age on file → the name alone, never a trailing comma. */}
                         <ProfileLink userId={app.user_id} name={name} nested style={{ display: 'block', minWidth: 0, maxWidth: '100%' }}>
-                          <p className="[overflow-wrap:anywhere]" style={{ fontFamily: OUTFIT, fontSize: 19.5, fontWeight: 800, color: NEU.ink, maxWidth: '100%', letterSpacing: '-0.01em', lineHeight: 1.2 }}>
+                          <p className="[overflow-wrap:anywhere]" style={{ fontFamily: OUTFIT, fontSize: 18, fontWeight: 800, color: NEU.ink, maxWidth: '100%', letterSpacing: '-0.01em', lineHeight: 1.2 }}>
                             {name}{age !== null ? `, ${age}` : ''}
                           </p>
                         </ProfileLink>
                         {!app.user_id && <NotRegisteredChip />}
                       </div>
-                      {email && <p className="[overflow-wrap:anywhere]" style={{ fontFamily: OUTFIT, fontSize: 13, color: NEU.muted, marginTop: 2, fontWeight: 500 }}>{email}</p>}
-                      {/* A delegation leader imported this applicant. Keyed on
-                          the application id (conference_leader_imports returns
-                          claimed rows too), never on invited_email, so it stays
-                          after the delegate claims the invitation. */}
-                      {leaderImports.get(app.id) && (
-                        <span
-                          className="inline-flex items-center gap-1.5 mt-1.5 [overflow-wrap:anywhere]"
-                          style={{ fontFamily: OUTFIT, fontSize: 12, fontWeight: 700, color: '#1B3828', backgroundColor: 'rgba(27,56,40,0.07)', borderRadius: 8, padding: '3px 9px' }}
-                        >
-                          <UsersRound size={12} strokeWidth={2.4} aria-hidden style={{ flexShrink: 0 }} />
-                          Imported by {leaderImports.get(app.id)}
-                        </span>
+                      {/* One quiet line: email · nationality · notes · importer.
+                          The importer is keyed on the application id
+                          (conference_leader_imports returns claimed rows too),
+                          never on invited_email, so it stays after the claim. */}
+                      {(email || nationality || (noteCounts.get(app.id) ?? 0) > 0 || leaderImports.get(app.id)) && (
+                        <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 min-w-0" style={{ fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 500, color: NEU.inkSoft, marginTop: 2, lineHeight: 1.35 }}>
+                          {[
+                            email ? <span key="e" className="[overflow-wrap:anywhere] min-w-0">{email}</span> : null,
+                            nationality ? (
+                              <span key="n" className="inline-flex items-center gap-1" title={nationality}>
+                                <CountryFlag name={nationality} size={13} />
+                                <span style={{ fontWeight: 600 }}>{countryShortName(nationality)}</span>
+                              </span>
+                            ) : null,
+                            (noteCounts.get(app.id) ?? 0) > 0 ? (
+                              <span key="t" className="inline-flex items-center gap-1" style={{ fontWeight: 600, fontVariantNumeric: 'tabular-nums' }} title={`${noteCounts.get(app.id)} ${noteCounts.get(app.id) === 1 ? 'note' : 'notes'} from your team`}>
+                                <StickyNote size={12} strokeWidth={1.75} aria-hidden="true" />
+                                {noteCounts.get(app.id)}
+                              </span>
+                            ) : null,
+                            leaderImports.get(app.id) ? (
+                              <span key="i" className="inline-flex items-center gap-1 [overflow-wrap:anywhere]" style={{ fontWeight: 600, color: NEU.forest }} title={`Imported by ${leaderImports.get(app.id)}`}>
+                                <UsersRound size={12} strokeWidth={1.75} aria-hidden style={{ flexShrink: 0 }} />
+                                Imported by {leaderImports.get(app.id)}
+                              </span>
+                            ) : null,
+                          ].filter(Boolean).map((node, i) => (
+                            <span key={i} className="inline-flex items-center gap-1.5 min-w-0">
+                              {i > 0 && <span aria-hidden style={{ opacity: 0.55 }}>·</span>}
+                              {node}
+                            </span>
+                          ))}
+                        </div>
                       )}
 
-                      {app.societies?.name && (() => {
-                        // The delegation as its own identity: a round initials
-                        // disc, the name bold, members and who leads it beneath.
-                        // A click opens the delegation pop-up in place (DelegationPopupLink).
+                      {app.societies?.name ? (() => {
+                        // The delegation in two lines: its name bold, then its
+                        // facts and this applicant's expected size. A click opens
+                        // the delegation pop-up in place (DelegationPopupLink).
                         const d = app.society_id ? delegationSummaries.get(app.society_id) : undefined;
-                        const leads = !!d?.leadAppIds.includes(app.id);
-                        const body = (
-                          <DelegationIdentity
-                            name={app.societies.name}
-                            size={40}
-                            logoUrl={app.societies.logo_url}
-                            city={app.societies.city}
-                            countryCode={app.societies.country_code}
-                            nameSize={14.5}
-                            members={d?.members ?? null}
-                            lead={leads ? 'This Applicant' : (d?.lead ?? null)}
-                            leadRole={d?.leadRole ?? null}
-                          />
-                        );
+                        const rd: RowDelegationProps = {
+                          name: app.societies.name,
+                          city: app.societies.city,
+                          countryCode: app.societies.country_code,
+                          members: d?.members ?? null,
+                          lead: d?.lead ?? null,
+                          leadRole: d?.leadRole ?? null,
+                          leads: !!d?.leadAppIds.includes(app.id),
+                          pledge: app.pledge_type === 'delegation' ? { spots: app.spots_pledged ?? 0, received: !!app.pledge_confirmed_at } : null,
+                        };
                         return app.society_id ? (
                           <DelegationPopupLink
                             societyId={app.society_id}
                             tab="people"
-                            title={`Open the ${app.societies.name} delegation`}
+                            title={`Open the ${app.societies.name} delegation\n${rowDelegationTitle(rd)}`}
                             className="appDelegTag block max-w-full"
-                            style={{ padding: '4px 10px 4px 4px', margin: '8px 0 0 -4px', borderRadius: 999, textAlign: 'left' }}
+                            style={{ padding: '3px 8px', margin: '5px 0 0 -8px', borderRadius: 10, textAlign: 'left' }}
                             onChanged={() => { void loadApplications({ silent: true }); }}
                           >
-                            {body}
+                            <RowDelegation {...rd} />
                           </DelegationPopupLink>
                         ) : (
-                          <div style={{ marginTop: 10 }}>{body}</div>
+                          <div style={{ marginTop: 6 }} title={rowDelegationTitle(rd)}><RowDelegation {...rd} /></div>
                         );
-                      })()}
-
-                      {/* Age moved up beside the name (#3), so no separate age
-                          fact sits here any more. */}
-                      <div className="flex flex-wrap gap-x-3.5 gap-y-1.5 mt-2.5">
-                        {nationality && (
-                          <span className="inline-flex items-center gap-1.5" style={factStyle} title={nationality}>
-                            <CountryFlag name={nationality} size={15} />
-                            <span>{nationality}</span>
-                          </span>
-                        )}
-                        {(noteCounts.get(app.id) ?? 0) > 0 && (
-                          <span className="inline-flex items-center gap-1.5" style={{ ...factStyle, fontVariantNumeric: 'tabular-nums' }} title={`${noteCounts.get(app.id)} ${noteCounts.get(app.id) === 1 ? 'note' : 'notes'} from your team`}>
-                            <StickyNote size={14} strokeWidth={2.3} aria-hidden="true" />
-                            <span>{noteCounts.get(app.id)}</span>
-                          </span>
-                        )}
-                      </div>
-
-                      {pledgeLine && (
-                        <div className="flex flex-wrap gap-2 mt-2.5 items-center">
+                      })() : pledgeLine && (
+                        <div className="flex flex-wrap gap-2 mt-1.5 items-center">
                           <span className="inline-flex items-center gap-1.5" style={{ ...chip(NEU.forest), fontVariantNumeric: 'tabular-nums' }}>
-                            <HandCoins size={14} strokeWidth={2.4} aria-hidden="true" />
+                            <HandCoins size={13} strokeWidth={1.75} aria-hidden="true" />
                             {pledgeLine}{app.pledge_confirmed_at ? ' · received' : ''}
                           </span>
                         </div>
@@ -4412,7 +4409,7 @@ export default function ApplicationsPage() {
                       const disp = committeeDisplay(app.assigned_committee);
                       return (
                       <div className="flex items-center gap-4 min-w-0" style={{ minHeight: MID_BLOCK_H }}>
-                        <LogoDisc src={app.assigned_committee!.logo_url} size={92} fallbackText={committeeAbbr(app.assigned_committee)} alt={app.assigned_committee!.name} />
+                        <LogoDisc src={app.assigned_committee!.logo_url} size={80} fallbackText={committeeAbbr(app.assigned_committee)} alt={app.assigned_committee!.name} />
                         <div className="min-w-0">
                           <p className="[overflow-wrap:anywhere]" title={committeeFull(app.assigned_committee)} style={{ fontFamily: OUTFIT, fontSize: 27, fontWeight: 900, color: NEU.ink, letterSpacing: '-0.01em', lineHeight: 1.05 }}>
                             {disp.primary}
@@ -4423,9 +4420,9 @@ export default function ApplicationsPage() {
                             </p>
                           )}
                           {app.assigned_country_name && (
-                            <span className="inline-flex items-center gap-3 mt-2" style={{ fontFamily: OUTFIT, fontSize: 22, fontWeight: 800, color: NEU.ink }}>
-                              <CountryFlag name={app.assigned_country_name} code={app.assigned_country_code} size={40} />
-                              {app.assigned_country_name}
+                            <span className="inline-flex items-center gap-2.5 mt-1.5 [overflow-wrap:anywhere]" title={app.assigned_country_name} style={{ fontFamily: OUTFIT, fontSize: 20, fontWeight: 800, color: NEU.ink, lineHeight: 1.15 }}>
+                              <CountryFlag name={app.assigned_country_name} code={app.assigned_country_code} size={32} />
+                              {countryShortName(app.assigned_country_name, app.assigned_country_code)}
                             </span>
                           )}
                         </div>
@@ -4519,7 +4516,11 @@ export default function ApplicationsPage() {
                       </div>
                     )}
                     <div className="flex flex-col lg:items-end gap-2.5" style={{ width: '100%' }}>
-                    <div className="flex items-center gap-1.5 flex-wrap lg:justify-end" style={notAttendingFade}>
+                    <div
+                      className="flex items-center gap-1.5 flex-wrap lg:justify-end"
+                      style={notAttendingFade}
+                      title={app.status === 'checked-in' && app.checked_in_at ? `Checked in ${formatDateTime(app.checked_in_at)}` : undefined}
+                    >
                       <StatusPill
                         status={app.status}
                         awaitingResubmission={app.status === 'rejected' && (roleConfigs.find(rc => rc.role === app.role)?.allow_resubmission ?? false)}
@@ -4548,12 +4549,8 @@ export default function ApplicationsPage() {
                       )}
                     </div>
 
-                    {app.status === 'checked-in' && app.checked_in_at && (
-                      <span className="inline-flex items-center gap-1.5" style={{ fontFamily: OUTFIT, fontSize: 11, fontWeight: 600, color: '#1F6E52', fontVariantNumeric: 'tabular-nums', ...notAttendingFade }}>
-                        <UserRoundCheck size={12} strokeWidth={2.5} />
-                        Checked in {formatDateTime(app.checked_in_at)}
-                      </span>
-                    )}
+                    {/* The check-in time is the status line's title and the
+                        Undo check-in button's title: one line fewer per row. */}
 
                     {/* The undecided ACCEPT/REJECT pair used to live HERE, in
                         the 248px rail. It has moved to the MIDDLE pane, where
@@ -4618,6 +4615,7 @@ export default function ApplicationsPage() {
                         <button
                           onClick={() => handleUndoCheckIn(app)}
                           disabled={rowBusy || !app.attending}
+                          title={app.checked_in_at ? `Checked in ${formatDateTime(app.checked_in_at)}` : undefined}
                           className="inline-flex items-center justify-center gap-1.5 focus:outline-none"
                           style={{
                             padding: '8px 14px', borderRadius: 999,

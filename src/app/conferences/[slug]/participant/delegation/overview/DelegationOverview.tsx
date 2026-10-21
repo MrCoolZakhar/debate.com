@@ -3,46 +3,49 @@
 // The Overview of anyone in a delegation: head delegates, faculty advisors and
 // plain delegates (owner, 21 Oct 2026: "the dashboard for head delegates and
 // for plain delegates should look VERY similar"). In this order:
-//   Your next step   DelegationLead with the page's step (pageNextStep); for a
-//                    leader, when the page has nothing to DO, the delegation's
-//                    own step (people to allocate, papers due soon, members who
-//                    owe) whose button opens the Delegation section.
+//   Join session     only while the committee room is open, then the page's
+//                    `notice` (documents the organisers need back). There is
+//                    no "Your next step" line any more (owner, 21 Oct 2026):
+//                    the payment sits in Your Seat, papers in its tile.
 //   Two columns on laptops, stacked on phones:
 //     left           "Your Seat" (SeatCard: the big flag on a tall card, the
-//                    committee's logo and name, the study guide and the
-//                    payment), then the position paper's own card
-//                    (PositionPaperCard: the upload and its deadline). An
-//                    advisor holds no seat: their delegation's committees
-//                    (CommitteesBrief) and their payment instead.
+//                    committee's logo and name, ONE line of two small tiles,
+//                    the study guide and the position paper
+//                    (PositionPaperCard variant="tile": Upload or Submitted),
+//                    then the payment). An advisor holds no seat: their
+//                    delegation's committees (CommitteesBrief) and their
+//                    payment instead.
 //     right          "Your Delegation" (DelegationCard: crest, name, city and
-//                    country, leaders with photos, two counts).
-//   Position papers  leaders only: submitted N of M (PapersTile), with
-//   Deadlines        right under it, every date ahead in order with relative
-//                    words (DeadlinesCard), for everyone.
-// No recap tiles for allocations or tickets and no Add delegate here any more
-// (Add delegate lives under the People table in the Delegation section).
+//                    country, counts, leaders with photos; for a leader the
+//                    papers submitted N of M and their own payments, the
+//                    Financials card's numbers; for everyone the next three
+//                    dates, compact).
 // Reads: useDelegationOverview (re-read in place on every landed change on the
 // leader card, so "Your Seat" appears the moment a leader allocates
-// themselves) and my_open_balances. Grey skeletons on the first read only.
+// themselves), my_open_balances, and for a leader my_pay_overview
+// (useOverviewPay). Grey skeletons on the first read only.
 
 import { useCallback, useEffect, useMemo, useRef } from 'react';
+import Link from 'next/link';
+import { DoorOpen } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { SkeletonBlock } from '@/components/Skeleton';
-import DelegationLead, { liveRoomCode } from '../DelegationLead';
+import { liveRoomCode } from '../DelegationLead';
 import type { NextStep } from '../../dashboardKit';
 import PositionPaperCard from '../../PositionPaperCard';
 import { useOpenBalances } from '../../PayNowCard';
 import type { ParticipantAllocation, ParticipantApplication, ParticipantCommittee } from '../../types';
-import { BTN_CLASS, cardStyle, FONT, secondaryBtn } from '../leaderKit';
+import { BTN_CLASS, cardStyle, FONT, INK, primaryBtn, secondaryBtn, STROKE } from '../leaderKit';
 import { useDelegationOverview } from './useDelegationOverview';
-import { buildRecap, delegationStep } from './overviewRecap';
+import { useOverviewPay } from './useOverviewPay';
+import { buildRecap } from './overviewRecap';
 import { todayStart } from './overviewDates';
 import SeatCard, { CardTitle, PaymentsBlock } from './SeatCard';
-import { CommitteesBrief, DeadlinesCard, DelegationCard, PapersTile } from './OverviewCards';
+import { CommitteesBrief, DelegationCard } from './OverviewCards';
 
 export default function DelegationOverview({
   conferenceId, conferenceSlug, conferenceStartDate, societyId, application, committees, myAllocation, feeToday,
-  step, notice, showDone, active, onOpenSection,
+  notice, active, onOpenSection,
 }: {
   conferenceId: string;
   conferenceSlug: string;
@@ -54,9 +57,10 @@ export default function DelegationOverview({
   /** The page's copy of the viewer's allocation, until the Overview's own read lands. */
   myAllocation: ParticipantAllocation | null;
   feeToday: number;
-  /** The page's next step (pageNextStep). */
-  step: NextStep | null;
+  /** The page's next step (pageNextStep). No longer drawn here (owner, 21 Oct 2026). */
+  step?: NextStep | null;
   notice?: React.ReactNode;
+  /** Kept for the caller; there is no next-step card to draw it in. */
   showDone?: boolean;
   /** Overview is the section on screen: shown again, it re-reads in place. */
   active: boolean;
@@ -70,6 +74,7 @@ export default function DelegationOverview({
   const conferenceCommitteeIds = useMemo(() => committees.map(c => c.id), [committees]);
   const { state, reload } = useDelegationOverview({ conferenceId, societyId, userId, leader: leads, conferenceCommitteeIds });
   const balances = useOpenBalances(userId, conferenceId);
+  const pay = useOverviewPay(conferenceId, leads);
   const today = todayStart();
   const data = state.kind === 'ready' ? state.data : null;
   const recap = useMemo(() => (data ? buildRecap(data, today, balances) : null), [data, today, balances]);
@@ -95,8 +100,6 @@ export default function DelegationOverview({
   const seatCommittee = seat ? committees.find(c => c.id === seat.conference_committee_id) ?? null : null;
   const roomCode = isAdvisor ? null : liveRoomCode(seat, conferenceStartDate);
 
-  const own = recap && data?.isLeader ? delegationStep(recap, today) : null;
-  const shownStep = step?.kind === 'action' ? step : own ?? step;
   const openDelegation = () => onOpenSection('delegation');
 
   const payments = (
@@ -109,15 +112,21 @@ export default function DelegationOverview({
     />
   );
 
+  // Join session while the committee room is open, then what the organisers
+  // need back. No next-step line (owner, 21 Oct 2026).
   const lead = (
-    <DelegationLead
-      step={shownStep}
-      status={application.status}
-      roomCode={roomCode}
-      notice={notice}
-      showDone={showDone}
-      onOpenSection={onOpenSection}
-    />
+    <>
+      {roomCode && (
+        <section aria-label="Your committee room" className="flex items-center justify-between gap-3 flex-wrap" style={{ ...cardStyle, padding: '16px 22px' }}>
+          <span style={{ fontFamily: FONT, fontSize: 16, fontWeight: 600, color: INK }}>Your committee room is open</span>
+          <Link href={`/join?code=${roomCode}`} className={BTN_CLASS} style={primaryBtn}>
+            <DoorOpen size={17} strokeWidth={STROKE} aria-hidden />
+            Join session
+          </Link>
+        </section>
+      )}
+      {notice}
+    </>
   );
 
   if (state.kind === 'loading') {
@@ -141,9 +150,6 @@ export default function DelegationOverview({
               <SkeletonBlock height={40} radius={10} />
             </div>
           </div>
-        </div>
-        <div aria-hidden style={{ ...cardStyle, padding: '20px 24px' }}>
-          <SkeletonBlock width="30%" height={18} radius={6} />
         </div>
       </>
     );
@@ -176,15 +182,15 @@ export default function DelegationOverview({
         seat={seat}
         committee={seatCommittee}
         payments={payments}
+        paperTile={seat ? (
+          <PositionPaperCard variant="tile" conferenceId={conferenceId} conferenceSlug={conferenceSlug} myAllocation={seat} onPaperState={onPaperState} />
+        ) : undefined}
         emptyAction={data.isLeader && recap.openCount > 0 ? (
           <button type="button" onClick={openDelegation} className={BTN_CLASS} style={secondaryBtn}>
             Allocate yourself in Delegation
           </button>
         ) : undefined}
       />
-      {seat && (
-        <PositionPaperCard conferenceId={conferenceId} conferenceSlug={conferenceSlug} myAllocation={seat} onPaperState={onPaperState} />
-      )}
     </>
   );
 
@@ -196,24 +202,20 @@ export default function DelegationOverview({
           <div className="flex flex-col gap-6 min-w-0">{left}</div>
           <div className="flex flex-col gap-6 min-w-0">
             <DelegationCard
+              societyId={societyId}
               data={data}
               leaders={recap.leaders}
               delegateCount={recap.delegateCount}
               committeeCount={data.isLeader ? recap.committeesBrief.length : null}
+              papers={data.isLeader ? { in: recap.papersIn, of: recap.papersOf, known: recap.papersKnown } : null}
+              pay={data.isLeader ? pay : null}
+              deadlines={recap.deadlines}
+              datesTbd={recap.datesTbd}
+              today={today}
               onOpen={openDelegation}
             />
           </div>
         </div>
-        {data.isLeader && (
-          <PapersTile
-            papersIn={recap.papersIn}
-            papersOf={recap.papersOf}
-            known={recap.papersKnown}
-            missing={recap.papersMissing}
-            onOpen={openDelegation}
-          />
-        )}
-        <DeadlinesCard rows={recap.deadlines} datesTbd={recap.datesTbd} today={today} />
       </div>
     </>
   );

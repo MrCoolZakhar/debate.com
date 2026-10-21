@@ -75,7 +75,7 @@ export interface PopupStep {
 }
 
 /** The delegation's accepted leaders (head delegates, then faculty advisors), each once. */
-function leadersOf(row: DelegationView): { id: string; name: string; avatarUrl: string | null; role: string }[] {
+export function leadersOf(row: DelegationView): { id: string; name: string; avatarUrl: string | null; role: string }[] {
   const heads: { id: string; name: string; avatarUrl: string | null; role: string }[] = [];
   const advisors: typeof heads = [];
   for (const m of row.members) {

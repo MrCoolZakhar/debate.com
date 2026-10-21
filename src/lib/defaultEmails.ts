@@ -201,6 +201,23 @@ export const DEFAULT_EVENT_EMAILS: Record<string, DefaultEventEmail> = {
       VIEW_CONFERENCE_BUTTON,
     ],
   },
+  // Delegation leaders (owner, 21 Oct 2026). Queued ONLY by the database cron
+  // queue_delegation_allocation_notices (scratch-delegation-allocation-email.sql),
+  // which carries a SQL mirror of this copy: change one, change the other. The
+  // server adds one fact per seat (committee emblem, country flag) under these
+  // paragraphs, so the seat list is not a token here. The image is the
+  // conference's own banner and logo in the masthead, as on every email.
+  delegation_allocations: {
+    subject: "Your delegation's seats for {{conference_name}}",
+    blocks: [
+      { type: 'paragraph', variant: 'heading', content: 'Your delegation has its seats' },
+      { type: 'paragraph', content: 'Hi {{delegate_name}},\n\nThe organising team has given {{delegation_name}} its seats at {{conference_name}}. Place your delegates in them from your delegation page.' },
+      { type: 'facts', items: [
+        { label: 'Delegation', value: '{{delegation_name}}' },
+      ] },
+      { type: 'button', label: 'Open my delegation', destination: 'documents' },
+    ],
+  },
   allocation_changed: {
     subject: 'Your committee allocation has changed: {{conference_name}}',
     blocks: [

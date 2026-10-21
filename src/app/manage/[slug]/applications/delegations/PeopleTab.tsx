@@ -24,8 +24,8 @@
 // makes today). Seats only; no money is touched here.
 //
 // Payment words: one vocabulary from the person's own invoices (paymentOf below
-// explains the rule): Owes <role> fee, Covered by delegation (with "Ticket not
-// paid yet"), Paid, Waived, Nothing due yet. Never a sum.
+// explains the rule): Owes <role> fee, Paid by delegation, Delegation hasn't
+// paid yet, Paid, Waived, Nothing due yet. Never a sum.
 //
 // Each person has a ··· menu (OrganiserMemberMenu, like the leader card's): Make
 // head delegate / faculty advisor / delegate (organiser_set_member_role, Christian's,
@@ -109,7 +109,10 @@ const OPEN_STATUSES = new Set(['open', 'partial']);
 
 type OwnInvoice = Pick<InvoiceRow, 'kind' | 'status' | 'amount_cents' | 'amount_paid_cents'>;
 
-interface PayWord { text: string; note: string | null; color: string; tone: PayTone }
+interface PayWord { text: string; color: string; tone: PayTone }
+
+/** Amber: a delegation ticket covers the person but the delegation has not paid it yet. */
+const AMBER = '#A8670A';
 
 // ONE payment vocabulary for the People tab (owner, 21 Oct 2026: "Not paid yet"
 // and "Owes head delegate fee" side by side made no sense). What separated them:
@@ -126,13 +129,14 @@ interface PayWord { text: string; note: string | null; color: string; tone: PayT
 //      Owes registration fee  / Owes extras: only those are open.
 //   2. Waived                 the organiser waived their fee (payment_status
 //                             'waived', written only by the fee-waiver RPCs).
-//   3. Covered by delegation  their own fee invoice is waived because a delegation
-//                             ticket covers it (or there is none and the access
-//                             flag says paid by someone else). The small note
-//                             "Ticket not paid yet" shows while the access flag is
-//                             not 'paid': fin_pledge_covers covers the earliest
-//                             delegates whether or not the ticket is paid, and
-//                             the flag turns paid only when that ticket settles.
+//   3. A delegation ticket covers them: their own fee invoice is waived because
+//      a delegation ticket covers it (or there is none and the access flag says
+//      paid by someone else). fin_pledge_covers covers the earliest delegates
+//      whether or not the ticket is paid, and the flag turns paid only when
+//      that ticket settles, so (owner, 21 Oct 2026: "Covered by delegation" +
+//      "Ticket not paid yet" confused him) it reads as ONE plain line:
+//        Paid by delegation          the covering ticket is paid (flag 'paid')
+//        Delegation hasn't paid yet  the covering ticket is not paid yet (amber)
 //   4. Paid                   their own fee invoice is settled, or no invoice and
 //                             the flag says they paid it themselves.
 //   5. Nothing due yet        no fee invoice yet (payments not set up, or not
@@ -142,7 +146,7 @@ interface PayWord { text: string; note: string | null; color: string; tone: PayT
 // ledger leaves open (covered ticket paid or not, a waiver, an old row with no
 // invoice), as it did before.
 function paymentOf(m: DelegationMemberLite, own: OwnInvoice[]): PayWord {
-  if (m.status === 'submitted') return { text: 'Waiting on you', note: null, color: '#8A5A12', tone: 'soft' };
+  if (m.status === 'submitted') return { text: 'Waiting on you', color: '#8A5A12', tone: 'soft' };
   const accepted = ACCEPTED.has(m.status);
   const open = accepted ? own.filter(i => OPEN_STATUSES.has(i.status) && i.amount_cents - i.amount_paid_cents > 0) : [];
   if (open.length > 0) {
@@ -153,20 +157,21 @@ function paymentOf(m: DelegationMemberLite, own: OwnInvoice[]): PayWord {
     }
     if (open.some(i => i.kind === 'app_fee')) parts.push('registration fee');
     if (open.some(i => i.kind !== 'role_fee' && i.kind !== 'app_fee')) parts.push('extras');
-    return { text: `Owes ${parts.join(' and ')}`, note: null, color: OWE, tone: 'owe' };
+    return { text: `Owes ${parts.join(' and ')}`, color: OWE, tone: 'owe' };
   }
-  if (m.payment_status === 'waived') return { text: 'Waived', note: null, color: OK_GREEN, tone: 'ok' };
+  if (m.payment_status === 'waived') return { text: 'Waived', color: OK_GREEN, tone: 'ok' };
   const fee = own.filter(i => i.kind === 'role_fee' && i.status !== 'void');
   const covered = fee.some(i => i.status === 'waived')
     || (fee.length === 0 && m.payment_status === 'paid' && !m.self_paid);
   if (covered) {
-    const ticketPaid = m.payment_status === 'paid';
-    return { text: 'Covered by delegation', note: ticketPaid ? null : 'Ticket not paid yet', color: ticketPaid ? OK_GREEN : INK, tone: ticketPaid ? 'ok' : 'soft' };
+    return m.payment_status === 'paid'
+      ? { text: 'Paid by delegation', color: OK_GREEN, tone: 'ok' }
+      : { text: "Delegation hasn't paid yet", color: AMBER, tone: 'owe' };
   }
   if (fee.some(i => i.status === 'settled') || (fee.length === 0 && m.payment_status === 'paid')) {
-    return { text: 'Paid', note: null, color: OK_GREEN, tone: 'ok' };
+    return { text: 'Paid', color: OK_GREEN, tone: 'ok' };
   }
-  return { text: 'Nothing due yet', note: null, color: INK_SOFT, tone: 'soft' };
+  return { text: 'Nothing due yet', color: INK_SOFT, tone: 'soft' };
 }
 
 interface Ask {
@@ -451,7 +456,7 @@ export default function PeopleTab<M extends DelegationMemberLite>({ conferenceId
       attending: m.attending,
       seat: held?.seat ?? null,
       paper: null,
-      pay: { word: pay.note ? `${pay.text}, ${pay.note.toLowerCase()}` : pay.text, tone: pay.tone },
+      pay: { word: pay.text, tone: pay.tone },
     };
   }
 
@@ -468,30 +473,74 @@ export default function PeopleTab<M extends DelegationMemberLite>({ conferenceId
     });
   }
 
+  // "Allocate" on a person (owner, 21 Oct 2026): a LIST of every allocation the
+  // delegation was given, A to Z by country (then committee, then seat), each
+  // its own row, so two Germanys are two rows: the round flag and country, the
+  // committee emblem and acronym, and who holds it (avatar and name). An open
+  // one is pressed to allocate the person; a held one is shown, not pressable
+  // (move people between allocations by dragging on the People tab).
   function openPlaceStep(m: M) {
     const name = memberName(m);
+    const holderOf = new Map<string, string>();
+    for (const [appId, s] of seatOfApp) holderOf.set(s.allocationId, appId);
+    const openIds = new Set(openSeats.map(s => s.allocationId));
+    const list = [...seats].sort((x, y) =>
+      x.countryName.localeCompare(y.countryName, undefined, { sensitivity: 'base' })
+      || x.seat.committee_label.localeCompare(y.seat.committee_label, undefined, { sensitivity: 'base' })
+      || x.seatNo - y.seatNo);
     onStep({
       title: `Allocate ${name}`,
       body: (
-        <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 10 }}>
-          {openSeats.map(s => (
-            <button
-              key={s.allocationId}
-              type="button"
-              onClick={() => { onStep(null); doSeatChange(openId(s.allocationId), m.id); }}
-              className={`${BTN_CLASS} flex items-center gap-3 text-left`}
-              style={{ padding: '12px 14px', borderRadius: 14, border: `1px solid ${HAIRLINE}`, background: '#FFFFFF', cursor: 'pointer' }}
-            >
-              <CircleFlag code={s.countryCode} logoUrl={s.seat.seatLogo} label={s.countryName} size={36} decorative />
-              <span className="flex flex-col min-w-0" style={{ gap: 3 }}>
-                <span className="[overflow-wrap:anywhere]" style={{ fontFamily: FONT, fontSize: 15, fontWeight: 600, color: INK }}>{s.countryName}</span>
-                <span className="inline-flex items-center gap-1.5" title={s.seat.committee_full ?? undefined}>
-                  <CommitteeDisc src={s.seat.emblem} size={18} />
-                  <span className="[overflow-wrap:anywhere]" style={{ fontFamily: FONT, fontSize: 13, color: INK_SOFT }}>{s.seat.committee_label}</span>
+        <div className="flex flex-col" style={{ borderRadius: 14, border: `1px solid ${HAIRLINE}`, background: '#FFFFFF', overflow: 'hidden' }}>
+          {list.map((s, i) => {
+            const isOpen = openIds.has(s.allocationId);
+            const holderId = holderOf.get(s.allocationId);
+            const holder = holderId ? memberById.get(holderId) : undefined;
+            const holderName = holder ? memberName(holder) : null;
+            const cells = (
+              <>
+                <span className="flex items-center gap-3 min-w-0">
+                  <CircleFlag code={s.countryCode} logoUrl={s.seat.seatLogo} label={s.countryName} size={34} decorative />
+                  <span className="[overflow-wrap:anywhere]" style={{ fontFamily: FONT, fontSize: 15, fontWeight: 600, color: INK }}>{s.countryName}</span>
                 </span>
-              </span>
-            </button>
-          ))}
+                <span className="inline-flex items-center gap-1.5 min-w-0" title={s.seat.committee_full ?? undefined}>
+                  <CommitteeDisc src={s.seat.emblem} size={20} />
+                  <span className="[overflow-wrap:anywhere]" style={{ fontFamily: FONT, fontSize: 13.5, color: INK }}>{s.seat.committee_label}</span>
+                </span>
+                <span className="flex items-center justify-end gap-2 min-w-0">
+                  {isOpen ? (
+                    <span style={{ fontFamily: FONT, fontSize: 13.5, fontWeight: 600, color: FOREST }}>Allocate here</span>
+                  ) : holder && holderName ? (
+                    <>
+                      <RoundAvatar name={holderName} url={holder.profiles?.avatar_url ?? null} size={26} seed={holder.id} />
+                      <span className="[overflow-wrap:anywhere] text-right" style={{ fontFamily: FONT, fontSize: 13.5, fontWeight: 500, color: INK }}>{holderName}</span>
+                    </>
+                  ) : (
+                    <span style={{ fontFamily: FONT, fontSize: 13, color: INK_SOFT }}>Someone is in it</span>
+                  )}
+                </span>
+              </>
+            );
+            const rowStyle: React.CSSProperties = {
+              display: 'grid', gridTemplateColumns: 'minmax(0, 1.3fr) minmax(0, 1fr) minmax(0, 1.2fr)', alignItems: 'center', gap: 14,
+              minHeight: 58, padding: '10px 16px', width: '100%', textAlign: 'left', background: 'transparent', border: 'none',
+              borderTop: i === 0 ? 'none' : `1px solid ${ROW_LINE}`,
+            };
+            return isOpen ? (
+              <button key={s.allocationId} type="button"
+                onClick={() => { onStep(null); doSeatChange(openId(s.allocationId), m.id); }}
+                aria-label={`Allocate ${name} to ${seatWords(s)}`}
+                className={`${BTN_CLASS} hover:bg-[#F7F4EC]`}
+                style={{ ...rowStyle, cursor: 'pointer' }}>
+                {cells}
+              </button>
+            ) : (
+              <div key={s.allocationId} style={{ ...rowStyle, opacity: 0.75 }}
+                title={holderName ? `${holderName} holds this allocation` : 'Someone holds this allocation'}>
+                {cells}
+              </div>
+            );
+          })}
         </div>
       ),
     });
@@ -605,10 +654,7 @@ export default function PeopleTab<M extends DelegationMemberLite>({ conferenceId
                   />
                 </div>
 
-                <span className="flex flex-col" style={{ gap: 2 }}>
-                  <span style={{ fontFamily: FONT, fontSize: 14, color: pay.color }}>{pay.text}</span>
-                  {pay.note && <span style={{ fontFamily: FONT, fontSize: 12, color: INK_SOFT }}>{pay.note}</span>}
-                </span>
+                <span style={{ fontFamily: FONT, fontSize: 14, color: pay.color }}>{pay.text}</span>
 
                 <div className="flex justify-end">
                   <OrganiserMemberMenu

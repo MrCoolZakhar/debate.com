@@ -1,0 +1,436 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Assignment Page Proposals</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Playfair+Display:ital,wght@1,600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --page: #EDE7D8;
+  --surface: #FFFFFF;
+  --surface-soft: #F6F2E8;
+  --line: rgba(27, 56, 40, 0.12);
+  --ink: #1C1410;
+  --ink-soft: #4A4238;
+  --muted: #6B5E4E;
+  --forest: #1B3828;
+  --forest-2: #2A5039;
+  --on-forest: #EED98A;
+  --gold: #EED98A;
+  --gold-deep: #8A6614;
+  --gold-wash: rgba(238, 217, 138, 0.28);
+  --open: rgba(27, 56, 40, 0.06);
+  --good: #2F6B45;
+  --warn: #9A5B12;
+  --shadow: 0 1px 2px rgba(27, 56, 40, 0.06), 0 8px 24px rgba(27, 56, 40, 0.08);
+  --shadow-lift: 0 2px 4px rgba(27, 56, 40, 0.08), 0 16px 36px rgba(27, 56, 40, 0.14);
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --page: #12160F;
+    --surface: #1B211A;
+    --surface-soft: #222A21;
+    --line: rgba(238, 217, 138, 0.14);
+    --ink: #F1ECE0;
+    --ink-soft: #CFC6B4;
+    --muted: #A99D88;
+    --forest: #8FC3A0;
+    --forest-2: #6FA884;
+    --on-forest: #12160F;
+    --gold: #EED98A;
+    --gold-deep: #E2C66A;
+    --gold-wash: rgba(238, 217, 138, 0.12);
+    --open: rgba(238, 217, 138, 0.06);
+    --good: #8FC3A0;
+    --warn: #E2B36A;
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 24px rgba(0, 0, 0, 0.35);
+    --shadow-lift: 0 2px 4px rgba(0, 0, 0, 0.45), 0 16px 36px rgba(0, 0, 0, 0.5);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --page: #12160F;
+  --surface: #1B211A;
+  --surface-soft: #222A21;
+  --line: rgba(238, 217, 138, 0.14);
+  --ink: #F1ECE0;
+  --ink-soft: #CFC6B4;
+  --muted: #A99D88;
+  --forest: #8FC3A0;
+  --forest-2: #6FA884;
+  --on-forest: #12160F;
+  --gold: #EED98A;
+  --gold-deep: #E2C66A;
+  --gold-wash: rgba(238, 217, 138, 0.12);
+  --open: rgba(238, 217, 138, 0.06);
+  --good: #8FC3A0;
+  --warn: #E2B36A;
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 24px rgba(0, 0, 0, 0.35);
+  --shadow-lift: 0 2px 4px rgba(0, 0, 0, 0.45), 0 16px 36px rgba(0, 0, 0, 0.5);
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  background: var(--page);
+  color: var(--ink);
+  font-family: Inter, system-ui, sans-serif;
+  font-size: 16px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+}
+.wrap {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding-top: clamp(32px, 4vw, 64px);
+  padding-bottom: 80px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+@media (min-width: 720px) {
+  .wrap { padding-left: max(32px, env(safe-area-inset-left, 0px)); padding-right: max(32px, env(safe-area-inset-right, 0px)); }
+}
+h1 { font-size: clamp(30px, 3.4vw, 46px); line-height: 1.08; letter-spacing: -0.02em; margin: 0 0 14px; font-weight: 800; }
+h1 em { font-family: "Playfair Display", serif; font-style: italic; font-weight: 600; color: var(--gold-deep); }
+h2 { font-size: clamp(22px, 2.2vw, 30px); line-height: 1.15; margin: 0; font-weight: 800; letter-spacing: -0.01em; }
+h3 { font-size: 17px; margin: 0 0 8px; font-weight: 700; }
+p { margin: 0 0 12px; color: var(--ink-soft); text-wrap: pretty; }
+.lead { font-size: 18px; max-width: 760px; }
+.card { background: var(--surface); border-radius: 20px; box-shadow: var(--shadow); padding: clamp(18px, 2.4vw, 28px); }
+.grid2 { display: grid; gap: 16px; grid-template-columns: 1fr; }
+@media (min-width: 860px) { .grid2 { grid-template-columns: 1fr 1fr; } }
+ul.tight { margin: 0; padding-left: 18px; color: var(--ink-soft); }
+ul.tight li { margin: 4px 0; }
+.label { font-size: 12px; font-weight: 700; color: var(--gold-deep); margin-bottom: 6px; }
+section.proposal { margin-top: clamp(40px, 5vw, 72px); }
+.proposal-head { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; margin-bottom: 10px; }
+.num { font-size: 40px; font-weight: 800; color: var(--gold-deep); line-height: 1; font-variant-numeric: tabular-nums; }
+.verdict { display: grid; gap: 16px; grid-template-columns: 1fr; margin-top: 16px; }
+@media (min-width: 860px) { .verdict { grid-template-columns: repeat(3, 1fr); } }
+.pros h3 { color: var(--good); }
+.cons h3 { color: var(--warn); }
+
+/* ── Mockup kit ─────────────────────────────────────────── */
+.mock {
+  margin-top: 18px;
+  background: var(--page);
+  border-radius: 22px;
+  padding: 14px;
+  box-shadow: inset 0 0 0 1px var(--line);
+  overflow: hidden;
+}
+.mock-bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
+.mock-title { font-weight: 800; font-size: 18px; }
+.chip { display: inline-flex; align-items: center; gap: 6px; padding: 5px 11px; border-radius: 999px; background: var(--surface); box-shadow: var(--shadow); font-size: 12px; font-weight: 600; color: var(--ink-soft); white-space: nowrap; }
+.chip.on { background: var(--forest); color: var(--on-forest); }
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; border: 0; border-radius: 10px; padding: 7px 12px; font: 700 12px Inter, sans-serif; background: linear-gradient(135deg, var(--forest), var(--forest-2)); color: var(--on-forest); white-space: nowrap; }
+.btn.ghost { background: transparent; color: var(--ink); box-shadow: inset 0 0 0 1px var(--line); }
+.btn.gold { background: var(--gold); color: #1B3828; }
+.search { flex: 1 1 180px; min-width: 0; padding: 8px 12px; border-radius: 999px; background: var(--surface); box-shadow: inset 0 1px 3px rgba(27,56,40,0.12); font-size: 12px; color: var(--muted); }
+.flag { width: 20px; height: 20px; border-radius: 50%; flex-shrink: 0; box-shadow: 0 0 0 1.5px var(--surface), 0 1px 3px rgba(27,56,40,0.25); display: inline-block; }
+.av { width: 26px; height: 26px; border-radius: 50%; flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 800; color: #1B3828; background: var(--gold); }
+.small { font-size: 11px; color: var(--muted); }
+.name { font-size: 13px; font-weight: 700; color: var(--ink); overflow-wrap: anywhere; }
+.score { font-size: 12px; font-weight: 800; color: var(--good); font-variant-numeric: tabular-nums; }
+.bar { height: 6px; border-radius: 6px; background: var(--open); overflow: hidden; }
+.bar > i { display: block; height: 100%; border-radius: 6px; background: var(--forest); }
+.panel { background: var(--surface); border-radius: 16px; box-shadow: var(--shadow); padding: 12px; min-width: 0; }
+.row { display: flex; align-items: center; gap: 8px; padding: 7px 8px; border-radius: 10px; min-width: 0; }
+.row + .row { margin-top: 2px; }
+.row.open { background: var(--open); }
+.row.hot { box-shadow: inset 0 0 0 2px var(--forest); background: var(--gold-wash); }
+.grow { flex: 1; min-width: 0; }
+.drag { box-shadow: var(--shadow-lift); transform: rotate(-1.5deg); background: var(--surface); }
+.grip { color: var(--muted); font-size: 13px; letter-spacing: -2px; flex-shrink: 0; }
+
+/* flags as flat colour stand-ins */
+.f-fr { background: linear-gradient(90deg, #1F3F8F 33%, #FFFFFF 33% 66%, #D22B2B 66%); }
+.f-br { background: radial-gradient(circle at 50% 50%, #F6D23C 34%, #2F8F3E 35%); }
+.f-jp { background: radial-gradient(circle, #C8102E 32%, #FFFFFF 33%); }
+.f-ng { background: linear-gradient(90deg, #118C4F 33%, #FFFFFF 33% 66%, #118C4F 66%); }
+.f-de { background: linear-gradient(180deg, #111 33%, #D00 33% 66%, #FFCE00 66%); }
+.f-in { background: linear-gradient(180deg, #FF9933 33%, #FFFFFF 33% 66%, #138808 66%); }
+.f-ca { background: linear-gradient(90deg, #D52B1E 28%, #FFFFFF 28% 72%, #D52B1E 72%); }
+.f-mx { background: linear-gradient(90deg, #006847 33%, #FFFFFF 33% 66%, #CE1126 66%); }
+.f-za { background: linear-gradient(160deg, #E03C31 40%, #007749 40% 60%, #001489 60%); }
+.f-eg { background: linear-gradient(180deg, #CE1126 33%, #FFFFFF 33% 66%, #111 66%); }
+.f-se { background: linear-gradient(90deg, #006AA7 30%, #FECC02 30% 42%, #006AA7 42%); }
+.f-kr { background: radial-gradient(circle, #CD2E3A 20%, #0047A0 21% 30%, #FFFFFF 31%); }
+
+/* Proposal 1 layout */
+.p1 { display: grid; gap: 12px; grid-template-columns: 1fr; }
+@media (min-width: 980px) { .p1 { grid-template-columns: 220px minmax(0, 1fr) 260px; } }
+.cidx .row { cursor: default; }
+.cidx .row.sel { background: var(--gold-wash); box-shadow: inset 3px 0 0 var(--forest); }
+.cidx .abbr { font-size: 13px; font-weight: 800; color: var(--forest); width: 64px; flex-shrink: 0; }
+.seat-table .row { display: grid; grid-template-columns: 22px minmax(0, 1fr) auto; gap: 10px; }
+.sugg { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+
+/* Proposal 2 layout */
+.p2 { display: grid; gap: 12px; grid-template-columns: 1fr; }
+@media (min-width: 980px) { .p2 { grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); } }
+.person { display: flex; gap: 14px; align-items: flex-start; flex-wrap: wrap; }
+.big-av { width: 56px; height: 56px; border-radius: 50%; background: var(--gold); color: #1B3828; display: inline-flex; align-items: center; justify-content: center; font-weight: 800; font-size: 18px; flex-shrink: 0; }
+.opt { display: grid; grid-template-columns: 28px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 10px; border-radius: 14px; background: var(--surface-soft); }
+.opt + .opt { margin-top: 8px; }
+.key { width: 28px; height: 28px; border-radius: 8px; display: inline-flex; align-items: center; justify-content: center; font-weight: 800; font-size: 13px; background: var(--surface); box-shadow: inset 0 0 0 1px var(--line); }
+.strip { display: grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); gap: 8px; }
+.mini { background: var(--surface); border-radius: 12px; padding: 8px; box-shadow: var(--shadow); }
+.mini b { font-size: 12px; color: var(--forest); display: block; }
+
+/* Proposal 3 layout */
+.p3 { display: grid; gap: 12px; grid-template-columns: 1fr; }
+@media (min-width: 980px) { .p3 { grid-template-columns: 260px minmax(0, 1fr); } }
+.acc { background: var(--surface); border-radius: 16px; box-shadow: var(--shadow); padding: 10px 12px; }
+.acc + .acc { margin-top: 8px; }
+.acc-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.acc-head .abbr { font-weight: 800; color: var(--forest); font-size: 15px; }
+.seats { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.pill { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px 3px 3px; border-radius: 999px; background: var(--surface-soft); font-size: 12px; font-weight: 600; color: var(--ink); max-width: 100%; }
+.pill.open { background: transparent; box-shadow: inset 0 0 0 1.5px var(--line); color: var(--muted); }
+.matrix { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 12px; }
+.matrix th, .matrix td { padding: 7px 8px; text-align: center; border-bottom: 1px solid var(--line); }
+.matrix th:first-child, .matrix td:first-child { text-align: left; }
+.matrix th { font-weight: 700; color: var(--muted); font-size: 11px; }
+.matrix td b { color: var(--forest); }
+.scroll-x { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.rec { margin-top: clamp(40px, 5vw, 72px); background: var(--surface); border-radius: 24px; box-shadow: var(--shadow); padding: clamp(20px, 3vw, 36px); border-top: 4px solid var(--gold); }
+.facts { display: grid; gap: 12px; grid-template-columns: 1fr; margin-top: 18px; }
+@media (min-width: 720px) { .facts { grid-template-columns: repeat(3, 1fr); } }
+.fact { background: var(--surface-soft); border-radius: 16px; padding: 14px; }
+.fact .big { font-size: 30px; font-weight: 800; color: var(--forest); line-height: 1; font-variant-numeric: tabular-nums; }
+</style>
+</head>
+<body>
+<main class="wrap">
+
+  <h1>Seat Assignment, Three Ways <em>Forward</em></h1>
+  <p class="lead">Three redesigns of /manage/&lt;slug&gt;/assignment for conferences with up to 20 committees, individual applicants and delegations alike. Each keeps the suggested assignments engine and the click a card, then Assign flow exactly as they are today.</p>
+
+  <div class="facts">
+    <div class="fact"><div class="big">5,500</div><p class="small" style="margin:6px 0 0">lines in today's page.tsx, with the board, rail, modals and suggestions in one file</p></div>
+    <div class="fact"><div class="big">20</div><p class="small" style="margin:6px 0 0">committees to design for, stacked today in a masonry of panels the organiser scrolls through</p></div>
+    <div class="fact"><div class="big">5</div><p class="small" style="margin:6px 0 0">modes on one URL today: Delegates, Chairs, Delegations, Independents, Give seats</p></div>
+  </div>
+
+  <section class="proposal" style="margin-top:40px">
+    <div class="grid2">
+      <div class="card">
+        <h3>What works today</h3>
+        <ul class="tight">
+          <li>Suggested assignments: a ranked strip of up to six picks with a fit score, reason chips and a swap pass that improves the total. Organisers trust it.</li>
+          <li>Click a card, then Assign: one press seats a suggestion, with an optimistic board and a reconcile that never loses a write.</li>
+          <li>The drop pop-up after choosing a committee lists open seats by importance, then by fit for that person.</li>
+          <li>Allocation emails: automatic or manual release, a Send menu with All new, Everyone and Choose individually.</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3>What fails today</h3>
+        <ul class="tight">
+          <li>Scrolling: every committee is drawn at once. At 20 committees the organiser scrolls past rooms they are not filling to reach the one they are.</li>
+          <li>Drag: the rail scrolled away and HTML5 drag barely scrolled the page, so long drags failed (fixed in this run with pointer drag and a sticky rail, but the page shape still fights it).</li>
+          <li>Delegations: block seats live in a separate rail toggle, then a separate Delegations mode, then Give seats. Three places for one job: how many seats each delegation gets, and where.</li>
+          <li>No view of one committee's countries as a list with who sits where and who should.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════ Proposal 1 ═══════════════ -->
+  <section class="proposal">
+    <div class="proposal-head"><span class="num">1</span><h2>Committee Focus</h2></div>
+    <p>Fill one committee at a time. A sticky index of all committees on the left shows each room's fill at a glance; the middle is the chosen committee as a list of countries, each open seat carrying its best suggested delegate and an Assign button; the right rail is the unassigned list, already narrowed to the people who asked for this committee.</p>
+
+    <div class="mock" aria-label="Mockup of Committee Focus">
+      <div class="mock-bar">
+        <span class="mock-title">Seat Assignment</span>
+        <span class="chip on">Delegates</span><span class="chip">Delegations</span><span class="chip">Chairs</span>
+        <span style="margin-left:auto" class="chip">Allocation emails: sending automatically</span>
+      </div>
+      <div class="p1">
+        <div class="panel cidx">
+          <div class="label">Committees</div>
+          <div class="row sel"><span class="abbr">DISEC</span><span class="grow"><span class="bar"><i style="width:62%"></i></span></span><span class="small">18/29</span></div>
+          <div class="row"><span class="abbr">ECOSOC</span><span class="grow"><span class="bar"><i style="width:40%"></i></span></span><span class="small">12/30</span></div>
+          <div class="row"><span class="abbr">UNHRC</span><span class="grow"><span class="bar"><i style="width:88%"></i></span></span><span class="small">22/25</span></div>
+          <div class="row"><span class="abbr">UNSC</span><span class="grow"><span class="bar"><i style="width:100%"></i></span></span><span class="small">15/15</span></div>
+          <div class="row"><span class="abbr">WHO</span><span class="grow"><span class="bar"><i style="width:21%"></i></span></span><span class="small">6/28</span></div>
+          <div class="row"><span class="abbr">UNEP</span><span class="grow"><span class="bar"><i style="width:55%"></i></span></span><span class="small">11/20</span></div>
+          <p class="small" style="margin:8px 8px 0">and 14 more, scrolling inside this list</p>
+        </div>
+
+        <div class="panel seat-table">
+          <div class="mock-bar" style="margin-bottom:8px">
+            <span class="mock-title">DISEC</span><span class="small">Disarmament and International Security</span>
+            <span style="margin-left:auto" class="btn gold">Assign all 4 suggestions</span>
+          </div>
+          <div class="row"><span class="flag f-fr"></span><span class="grow"><span class="name">France</span> <span class="small">Lucas Martin</span></span><span class="small">Emailed</span></div>
+          <div class="row open hot"><span class="flag f-br"></span><span class="grow"><span class="name">Brazil</span> <span class="small">Open, high importance</span></span><span class="sugg"><span class="av">AS</span><span class="name">Ana Silva</span><span class="score">86</span><span class="btn">Assign</span></span></div>
+          <div class="row"><span class="flag f-jp"></span><span class="grow"><span class="name">Japan</span> <span class="small">Haruto Sato</span></span><span class="small">Waiting to send</span></div>
+          <div class="row open"><span class="flag f-ng"></span><span class="grow"><span class="name">Nigeria</span> <span class="small">Open</span></span><span class="sugg"><span class="av">CO</span><span class="name">Chidi Okafor</span><span class="score">79</span><span class="btn">Assign</span></span></div>
+          <div class="row open"><span class="flag f-de"></span><span class="grow"><span class="name">Germany</span> <span class="small">Open, 2 seats</span></span><span class="sugg"><span class="av">LW</span><span class="name">Lena Weber</span><span class="score">74</span><span class="btn">Assign</span></span></div>
+          <div class="row"><span class="flag f-in"></span><span class="grow"><span class="name">India</span> <span class="small">Riverside School (delegation seat)</span></span><span class="small">Delegation</span></div>
+        </div>
+
+        <div class="panel">
+          <div class="label">Unassigned, asked for DISEC</div>
+          <div class="search">Search 41 applicants</div>
+          <div style="margin-top:10px"></div>
+          <div class="row drag"><span class="grip">⋮⋮</span><span class="av">AS</span><span class="grow"><span class="name">Ana Silva</span><div class="small">1st choice DISEC, Brazil</div></span></div>
+          <div class="row"><span class="grip">⋮⋮</span><span class="av">MK</span><span class="grow"><span class="name">Min-jun Kim</span><div class="small">2nd choice DISEC, South Korea</div></span></div>
+          <div class="row"><span class="grip">⋮⋮</span><span class="av">EM</span><span class="grow"><span class="name">Emma Moreau</span><div class="small">3rd choice DISEC, Canada</div></span></div>
+          <p class="small" style="margin:8px 8px 0">Then everyone else, in the order they applied</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="verdict">
+      <div class="card"><h3>20 committees</h3><p>Only one is drawn in full. The index is 20 short rows with a fill bar, so the emptiest room is one glance away; clicking it never scrolls the page. Keyboard: up and down move through committees.</p></div>
+      <div class="card"><h3>Individuals and delegations</h3><p>One list per committee shows both: a person's seat, or a delegation's block seat with its name. The Delegations tab in the rail lists delegations with seats still to hand out, and dropping one on an open country gives it the block seat.</p></div>
+      <div class="card"><h3>Suggestions, drag and click</h3><p>The same engine, scoped to the open seats on screen: each open row carries its best pick. Assign stays one press; drag from the rail onto a row works as a second way, and the row is a large target, not a small flag.</p></div>
+    </div>
+    <div class="grid2" style="margin-top:16px">
+      <div class="card pros"><h3>Why it works</h3><ul class="tight"><li>Matches how organisers think: fill DISEC, then ECOSOC.</li><li>Drop targets are full rows, so drag is easy even on a trackpad.</li><li>The page is short at any committee count.</li></ul></div>
+      <div class="card cons"><h3>Trade-offs</h3><ul class="tight"><li>Loses the whole-board glance of today; the index bars have to carry it.</li><li>Moving someone between two committees takes two views (or the row menu's Move to).</li><li>The global suggestion strip becomes per committee; the cross-committee swap pass needs a home (Assign all suggestions on the index).</li></ul></div>
+    </div>
+  </section>
+
+  <!-- ═══════════════ Proposal 2 ═══════════════ -->
+  <section class="proposal">
+    <div class="proposal-head"><span class="num">2</span><h2>Person Queue</h2></div>
+    <p>Seat people, not rooms. One applicant at a time fills the screen with their three preferences and the three best open seats across every committee; press 1, 2 or 3 to assign, S to skip. The board shrinks to a strip of committee tiles that show progress and take a drop.</p>
+
+    <div class="mock" aria-label="Mockup of Person Queue">
+      <div class="mock-bar">
+        <span class="mock-title">Seat Assignment</span>
+        <span class="chip on">Next person</span><span class="chip">Next delegation</span>
+        <span style="margin-left:auto" class="small">23 of 64 seated</span>
+      </div>
+      <div class="p2">
+        <div class="panel">
+          <div class="person">
+            <span class="big-av">AS</span>
+            <div class="grow">
+              <div class="name" style="font-size:18px">Ana Silva, 17</div>
+              <div class="small">Delegate, intermediate, Riverside School</div>
+              <div class="small" style="margin-top:6px">Asked for: 1 DISEC Brazil, 2 UNHRC Mexico, 3 WHO South Africa</div>
+            </div>
+            <span class="btn ghost">Skip (S)</span>
+          </div>
+          <div style="margin-top:14px">
+            <div class="opt"><span class="key">1</span><span class="grow"><span class="flag f-br" style="vertical-align:-5px"></span> <span class="name">Brazil in DISEC</span><div class="small">First choice, high importance seat</div></span><span class="score">86</span></div>
+            <div class="opt"><span class="key">2</span><span class="grow"><span class="flag f-mx" style="vertical-align:-5px"></span> <span class="name">Mexico in UNHRC</span><div class="small">Second choice</div></span><span class="score">78</span></div>
+            <div class="opt"><span class="key">3</span><span class="grow"><span class="flag f-eg" style="vertical-align:-5px"></span> <span class="name">Egypt in WHO</span><div class="small">WHO needs delegates</div></span><span class="score">64</span></div>
+          </div>
+          <p class="small" style="margin:12px 0 0">Up next: Min-jun Kim, Emma Moreau, Chidi Okafor</p>
+        </div>
+        <div class="panel">
+          <div class="label">Committees, drop a person here to choose the country</div>
+          <div class="strip">
+            <div class="mini"><b>DISEC</b><div class="bar" style="margin:6px 0"><i style="width:62%"></i></div><span class="small">18/29</span></div>
+            <div class="mini"><b>ECOSOC</b><div class="bar" style="margin:6px 0"><i style="width:40%"></i></div><span class="small">12/30</span></div>
+            <div class="mini"><b>UNHRC</b><div class="bar" style="margin:6px 0"><i style="width:88%"></i></div><span class="small">22/25</span></div>
+            <div class="mini"><b>UNSC</b><div class="bar" style="margin:6px 0"><i style="width:100%"></i></div><span class="small">Full</span></div>
+            <div class="mini"><b>WHO</b><div class="bar" style="margin:6px 0"><i style="width:21%"></i></div><span class="small">6/28</span></div>
+            <div class="mini"><b>UNEP</b><div class="bar" style="margin:6px 0"><i style="width:55%"></i></div><span class="small">11/20</span></div>
+            <div class="mini"><b>HCC</b><div class="bar" style="margin:6px 0"><i style="width:30%"></i></div><span class="small">3/10</span></div>
+            <div class="mini"><b>ICJ</b><div class="bar" style="margin:6px 0"><i style="width:50%"></i></div><span class="small">6/12</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="verdict">
+      <div class="card"><h3>20 committees</h3><p>Committees are 92px tiles, 20 of them fit in two or three rows. Nothing scrolls while seating; a tile opens its committee list when the organiser wants to review a room.</p></div>
+      <div class="card"><h3>Individuals and delegations</h3><p>Next delegation runs the same queue for delegations: how many seats they asked for, then the best open countries for a block, assigned one country per key press.</p></div>
+      <div class="card"><h3>Suggestions, drag and click</h3><p>The suggestion engine becomes the whole page: each person's top three seats. Click or a number key assigns; drag is only for the exception (drop on a tile, pick the country).</p></div>
+    </div>
+    <div class="grid2" style="margin-top:16px">
+      <div class="card pros"><h3>Why it works</h3><ul class="tight"><li>Fastest for big first passes: 200 delegates is 200 key presses with a check each time.</li><li>Every person gets looked at once, so nobody is forgotten at the bottom of a rail.</li><li>Works on a phone: one card and three buttons.</li></ul></div>
+      <div class="card cons"><h3>Trade-offs</h3><ul class="tight"><li>Weak at review and rebalancing: seeing who sits in ECOSOC needs another view.</li><li>Speed is also risk: with automatic emails on, a run of presses emails many people (the first-allocation pop-up and the 3-minute buffer matter here).</li><li>Greedy, person by person: the global swap pass is lost unless the queue order is the engine's order.</li></ul></div>
+    </div>
+  </section>
+
+  <!-- ═══════════════ Proposal 3 ═══════════════ -->
+  <section class="proposal">
+    <div class="proposal-head"><span class="num">3</span><h2>Folded Board with a Delegation Plan</h2></div>
+    <p>Keep today's board, folded: every committee is one row with its fill and open count, and opens in place to show its seats. Delegations get their own first step, a plan of how many seats each delegation gets in each committee, before any country is picked.</p>
+
+    <div class="mock" aria-label="Mockup of Folded Board with a Delegation Plan">
+      <div class="mock-bar">
+        <span class="mock-title">Seat Assignment</span>
+        <span class="chip">1 Delegation plan</span><span class="chip on">2 Seats</span>
+        <span style="margin-left:auto" class="btn ghost">Open all</span>
+      </div>
+      <div class="p3">
+        <div class="panel">
+          <div class="label">Unassigned 41</div>
+          <div class="search">Search applicants</div>
+          <div style="margin-top:8px"><span class="chip">Asked for: every committee</span></div>
+          <div style="margin-top:10px"></div>
+          <div class="row"><span class="grip">⋮⋮</span><span class="av">MK</span><span class="grow"><span class="name">Min-jun Kim</span><div class="small">DISEC, South Korea</div></span></div>
+          <div class="row drag"><span class="grip">⋮⋮</span><span class="av">EM</span><span class="grow"><span class="name">Emma Moreau</span><div class="small">ECOSOC, Canada</div></span></div>
+          <div class="row"><span class="grip">⋮⋮</span><span class="av">CO</span><span class="grow"><span class="name">Chidi Okafor</span><div class="small">DISEC, Nigeria</div></span></div>
+        </div>
+        <div>
+          <div class="acc">
+            <div class="acc-head"><span class="abbr">DISEC</span><span class="small">Disarmament and International Security</span><span class="grow"></span><span class="small">18/29, 11 open</span><span class="small">▾</span></div>
+          </div>
+          <div class="acc" style="box-shadow: 0 0 0 2px var(--forest), var(--shadow)">
+            <div class="acc-head"><span class="abbr">ECOSOC</span><span class="small">Economic and Social Council</span><span class="grow"></span><span class="small">12/30, 18 open</span><span class="small">▴</span></div>
+            <div class="seats">
+              <span class="pill"><span class="flag f-ca"></span>Emma Moreau</span>
+              <span class="pill"><span class="flag f-de"></span>Lena Weber</span>
+              <span class="pill open"><span class="flag f-se"></span>Sweden</span>
+              <span class="pill open"><span class="flag f-kr"></span>South Korea</span>
+              <span class="pill"><span class="flag f-in"></span>Riverside School</span>
+              <span class="pill open"><span class="flag f-za"></span>South Africa</span>
+            </div>
+          </div>
+          <div class="acc"><div class="acc-head"><span class="abbr">UNHRC</span><span class="small">Human Rights Council</span><span class="grow"></span><span class="small">22/25, 3 open</span><span class="small">▾</span></div></div>
+          <div class="acc"><div class="acc-head"><span class="abbr">WHO</span><span class="small">World Health Organization</span><span class="grow"></span><span class="small">6/28, 22 open</span><span class="small">▾</span></div></div>
+          <div class="panel" style="margin-top:12px">
+            <div class="label">Step 1, the delegation plan</div>
+            <div class="scroll-x">
+              <table class="matrix">
+                <thead><tr><th>Delegation</th><th>Asked</th><th>DISEC</th><th>ECOSOC</th><th>UNHRC</th><th>WHO</th></tr></thead>
+                <tbody>
+                  <tr><td>Riverside School</td><td>8</td><td><b>2</b></td><td><b>2</b></td><td><b>2</b></td><td><b>2</b></td></tr>
+                  <tr><td>Lycée Saint Louis</td><td>6</td><td><b>2</b></td><td>1</td><td><b>2</b></td><td>1</td></tr>
+                  <tr><td>Nairobi Academy</td><td>4</td><td>1</td><td>1</td><td>1</td><td>1</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="verdict">
+      <div class="card"><h3>20 committees</h3><p>Folded, 20 rows fit one screen. The organiser opens the two or three rooms they are working on; open rows remember themselves. Drop on a folded row to choose the country in the pop-up, or on an open seat inside an opened row.</p></div>
+      <div class="card"><h3>Individuals and delegations</h3><p>The plan answers the delegation question first (how many seats, in which committees, kept fair with the existing concentration and spread rules), then the seats step places countries. One place instead of three.</p></div>
+      <div class="card"><h3>Suggestions, drag and click</h3><p>The suggestion strip stays exactly where it is above the board. Click then Assign unchanged; drag works on folded rows and open seats with the new pointer drag.</p></div>
+    </div>
+    <div class="grid2" style="margin-top:16px">
+      <div class="card pros"><h3>Why it works</h3><ul class="tight"><li>Smallest change: organisers who know today's page keep their habits.</li><li>The delegation plan is a real fix for the hardest part of the job.</li><li>Reuses today's panels, so it can ship in steps.</li></ul></div>
+      <div class="card cons"><h3>Trade-offs</h3><ul class="tight"><li>Still a long page when many rows are open.</li><li>Two steps for delegations is one more concept to teach.</li><li>Does not change the person-by-person pace of a first pass.</li></ul></div>
+    </div>
+  </section>
+
+  <section class="rec">
+    <div class="label">Recommendation</div>
+    <h2>Build Committee Focus, with the delegation plan from proposal 3</h2>
+    <p style="margin-top:12px">Committee Focus fixes the two complaints at their root: the page stops growing with the number of committees, and every drop target becomes a full row. Organisers already fill one room at a time; the index makes that the shape of the page, and its fill bars keep the whole-board glance. Suggestions move next to the seat they fill, which is easier to trust than a strip far above the room.</p>
+    <p>Take the delegation plan from proposal 3 as the Delegations tab: decide how many seats each delegation gets per committee first, then place countries in the same committee list. Keep proposal 2's number keys as a shortcut inside a committee (1 assigns the first open row's suggestion), so a fast first pass is still possible without a separate mode.</p>
+    <p style="margin:0">Order of work: split page.tsx into the index, the committee list and the rail (new files, mounted by a thin page), then move suggestions per seat, then the delegation plan. The pointer drag, the sticky rail and the allocation email buffer from this run carry over unchanged.</p>
+  </section>
+
+</main>
+</body>
+</html>

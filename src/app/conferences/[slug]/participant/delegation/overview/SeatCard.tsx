@@ -5,15 +5,15 @@
 // delegate's seat card looked before"): the look of the earlier delegate
 // allocation card (AllocationCard's "Your country": the flag large and
 // centred, the country's name big under it, the co-delegate beneath), then the
-// committee's logo with its short name over the full one. In the same card:
-// the study guide (opened through openStudyGuide, useOpenStudyGuide) and the
-// payment (what is owed today from my_open_balances with Pay now, else Paid).
-// The position paper's own card (PositionPaperCard, the existing upload flow
-// with its deadline) sits right under this card, drawn by the Overview.
+// committee's logo with its short name over the full one. Then ONE line of two
+// small, equal tiles (owner, 21 Oct 2026): the study guide (GuideTile, opened
+// through openStudyGuide) and the position paper (PositionPaperCard's tile
+// variant, handed in by the Overview: Upload, or Submitted). Then the payment
+// (what is owed today from my_open_balances with Pay now, else Paid).
 // Names wrap, never cut; the conference's own colours (var(--gv-main)).
 
 import Link from 'next/link';
-import { ArrowRight, BookOpen, CalendarClock, CheckCircle2, Compass, CreditCard } from 'lucide-react';
+import { ArrowRight, BookOpen, CalendarClock, CheckCircle2, Compass, CreditCard, ExternalLink } from 'lucide-react';
 import { FlagImg } from '@/components/FlagImg';
 import ProfileLink from '@/components/ProfileLink';
 import { SkeletonBlock } from '@/components/Skeleton';
@@ -26,6 +26,7 @@ import { useAllocationPartner } from '../../shared';
 import type { ParticipantAllocation, ParticipantCommittee } from '../../types';
 import { BTN_CLASS, cardStyle, CommitteeDisc, committeeEmblemSrc, FONT, INK, INK_SOFT, LINE, linkStyle, OK_GREEN, OWE, STROKE } from '../leaderKit';
 import { guideState, useCommitteeGuides, useOpenStudyGuide } from '../committee/useCommitteeGuides';
+import DocTile, { TileAction } from './DocTile';
 import { committeeDisplayName } from '@/lib/presetNames';
 import { dayOf, dayWords, relativeWords, todayStart } from './overviewDates';
 
@@ -42,9 +43,11 @@ export function CardTitle({ children }: { children: React.ReactNode }) {
   return <h2 style={titleStyle}>{children}</h2>;
 }
 
-export default function SeatCard({ seat, committee, payments, emptyAction }: {
+export default function SeatCard({ seat, committee, payments, paperTile, emptyAction }: {
   seat: ParticipantAllocation | null;
   committee: ParticipantCommittee | null;
+  /** The position paper's tile (PositionPaperCard variant="tile"), beside the study guide's. */
+  paperTile?: React.ReactNode;
   /** The payment block (PaymentsBlock), drawn at the card's foot. */
   payments: React.ReactNode;
   /** With no seat: what a leader can do about it (Open delegation). */
@@ -114,15 +117,18 @@ export default function SeatCard({ seat, committee, payments, emptyAction }: {
       </div>
 
       <div className="flex flex-col">
-        <GuideRow committeeId={ccId} />
+        <div className="grid grid-cols-2 gap-3 items-stretch">
+          <GuideTile committeeId={ccId} />
+          {paperTile}
+        </div>
         <div style={{ borderTop: `1px solid ${LINE}`, paddingTop: 16, marginTop: 16 }}>{payments}</div>
       </div>
     </section>
   );
 }
 
-/** The study guide in one row: released (Open), out on a date, or not out yet. */
-function GuideRow({ committeeId }: { committeeId: string | null }) {
+/** The study guide as a small tile: released (Open), out on a date, or not out yet. */
+function GuideTile({ committeeId }: { committeeId: string | null }) {
   const now = useNow();
   const guides = useCommitteeGuides(committeeId ? [committeeId] : []);
   const openGuide = useOpenStudyGuide();
@@ -130,24 +136,16 @@ function GuideRow({ committeeId }: { committeeId: string | null }) {
   const g = guideState(entry, now);
   const files = entry?.guides ?? [];
   return (
-    <div className="flex items-start gap-3" style={{ borderTop: `1px solid ${LINE}`, paddingTop: 16 }}>
-      <BookOpen size={22} strokeWidth={STROKE} aria-hidden style={{ color: INK, flexShrink: 0, marginTop: 1 }} />
-      <div className="flex-1 min-w-0 flex flex-col gap-0.5">
-        <span style={{ fontFamily: FONT, fontSize: 15, fontWeight: 600, color: INK }}>Study guide</span>
-        {guides === null && committeeId
-          ? <SkeletonBlock width="50%" height={12} />
-          : <span style={{ fontFamily: FONT, fontSize: 13.5, color: INK_SOFT }}>{g.line}</span>}
-      </div>
-      {g.kind === 'open' && files.length > 0 && (
-        <div className="flex flex-col items-end gap-1.5 flex-none" style={{ maxWidth: '50%' }}>
-          {files.map(f => (
-            <button key={f.id} type="button" onClick={() => openGuide(f.file_url)} className={`${BTN_CLASS} [overflow-wrap:anywhere] text-right`} style={linkStyle}>
-              {files.length === 1 ? 'Open' : f.title}
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
+    <DocTile
+      Icon={BookOpen}
+      title="Study guide"
+      line={guides === null && committeeId ? <SkeletonBlock width="60%" height={12} /> : g.line}
+      action={g.kind === 'open' && files.length > 0
+        ? files.map(f => (
+          <TileAction key={f.id} Icon={ExternalLink} label={files.length === 1 ? 'Open' : f.title} onClick={() => openGuide(f.file_url)} />
+        ))
+        : undefined}
+    />
   );
 }
 

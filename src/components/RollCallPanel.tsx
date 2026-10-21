@@ -54,54 +54,102 @@ function useQueueRowScale(): number {
   return k;
 }
 
-// ── 3-state slider ────────────────────────────────────────────────────────────
-function StatusSlider({ status, onCycle, isObserver = false, large = false }: { status: DelegateStatus; onCycle: () => void; isObserver?: boolean; large?: boolean }) {
+// ── Direct status picker ──────────────────────────────────────────────────────
+// Owner, 21 Oct 2026: chairs pick a status DIRECTLY instead of cycling absent → present →
+// present-voting. Three segments (A / P / PV, the full names as titles and accessible
+// names); one press sets that status. Observers get two (A / P): an observer never votes.
+// Arrow keys (Home / End too) move between segments, Enter or Space sets the one focused,
+// so walking the control never writes on its own. The thumb still slides to the chosen
+// segment. Presentational: `onPick` is the panel's setStatus, the same write path as the
+// old cycle.
+const STATUS_SEGMENTS: { status: DelegateStatus; letter: string; key: 'rollcall_status_absent' | 'rollcall_status_present' | 'rollcall_status_pv' }[] = [
+  { status: 'absent', letter: 'A', key: 'rollcall_status_absent' },
+  { status: 'present', letter: 'P', key: 'rollcall_status_present' },
+  { status: 'present-voting', letter: 'PV', key: 'rollcall_status_pv' },
+];
+
+function StatusPicker({ status, onPick, country, isObserver = false, large = false, disabled = false }: {
+  status: DelegateStatus; onPick: (status: DelegateStatus) => void; country: string;
+  isObserver?: boolean; large?: boolean; disabled?: boolean;
+}) {
   const t = useT();
-  // Observers can only be Absent or Present, no present-voting (PV) segment.
+  const groupRef = useRef<HTMLDivElement>(null);
   // `large`: the full-screen roll call (pre-session and the resume roll call), sized for a
   // projector and a finger: 44px tall, 44px per segment. The mid-session Roll Call tab in
-  // the sidebar keeps the compact 30px slider.
+  // the sidebar keeps the compact 30px control.
   const seg = large ? 44 : 30;       // width of one segment
   const h = large ? 44 : 30;         // track height (incl. the 1.5px border)
   const thumbW = large ? 40 : 26;
   const thumbH = large ? 36 : 22;
   const labelCls = large ? 'text-[13.5px] font-extrabold' : 'text-[10px] font-bold';
-  const segments: { key: string; on: boolean }[] = isObserver
-    ? [{ key: 'A', on: status === 'absent' }, { key: 'P', on: status !== 'absent' }]
-    : [{ key: 'A', on: status === 'absent' }, { key: 'P', on: status === 'present' }, { key: 'PV', on: status === 'present-voting' }];
-  const index = status === 'absent' ? 0 : isObserver || status === 'present' ? 1 : 2;
-  const thumbColor = status === 'absent' ? 'bg-[#8B2020]' : status === 'present' || isObserver ? 'bg-[#3D7A52]' : 'bg-[#B6871F]';
-  // The thumb is centred on its SEGMENT, and the segments are the padding box (16 Sep 2026).
-  // `seg` is a border-box width, but an absolutely positioned child is offset from the
-  // padding box, and so is the `inset-0` label grid: measuring the thumb against `seg` put it
-  // up to 2.5px off the letter it is meant to sit under, which reads as a crooked control on
-  // a projector. Both now divide the same inner width.
+  const segments = isObserver ? STATUS_SEGMENTS.slice(0, 2) : STATUS_SEGMENTS;
+  const shown: DelegateStatus = isObserver && status === 'present-voting' ? 'present' : status;
+  const index = Math.max(0, segments.findIndex((s) => s.status === shown));
+  const thumbColor = shown === 'absent' ? 'bg-[#8B2020]' : shown === 'present' ? 'bg-[#3D7A52]' : 'bg-[#B6871F]';
+  // The thumb is centred on its SEGMENT, and the segments are the padding box (16 Sep 2026):
+  // both divide the same inner width, so the thumb sits exactly under its letter.
   const innerW = seg * segments.length - 3;   // 1.5px border on each side
   const innerH = h - 3;
   const cellW = innerW / segments.length;
+
+  const focusSegment = (i: number) => {
+    const buttons = groupRef.current?.querySelectorAll<HTMLButtonElement>('button[data-seg]');
+    buttons?.[Math.max(0, Math.min(i, segments.length - 1))]?.focus();
+  };
+  const onKeyDown = (e: React.KeyboardEvent, i: number) => {
+    const rtl = typeof document !== 'undefined' && document.documentElement.dir === 'rtl';
+    const fwd = rtl ? 'ArrowLeft' : 'ArrowRight';
+    const back = rtl ? 'ArrowRight' : 'ArrowLeft';
+    if (e.key === fwd || e.key === 'ArrowDown') { e.preventDefault(); e.stopPropagation(); focusSegment(i + 1); }
+    else if (e.key === back || e.key === 'ArrowUp') { e.preventDefault(); e.stopPropagation(); focusSegment(i - 1); }
+    else if (e.key === 'Home') { e.preventDefault(); e.stopPropagation(); focusSegment(0); }
+    else if (e.key === 'End') { e.preventDefault(); e.stopPropagation(); focusSegment(segments.length - 1); }
+    else if (e.key === 'Enter' || e.key === ' ') e.stopPropagation();   // the button's own click sets it
+  };
+
   return (
-    <button
-      type="button"
-      onClick={(e) => { e.stopPropagation(); onCycle(); }}
-      className="relative rounded-full cursor-pointer shrink-0 select-none transition-[background-color,border-color] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#EED98A]/80"
+    <div
+      ref={groupRef}
+      role="group"
+      aria-label={t('rollcall_status_group', { country })}
+      className="relative rounded-full shrink-0 select-none"
       style={{ width: seg * segments.length, height: h, backgroundColor: 'rgba(255,255,255,0.10)', border: '1.5px solid rgba(255,255,255,0.22)' }}
-      title={isObserver ? t('rollcall_slider_hint_observer') : t('rollcall_slider_hint')}
     >
-      <div className="absolute inset-0 grid items-center pointer-events-none" style={{ gridTemplateColumns: `repeat(${segments.length}, 1fr)` }}>
-        {segments.map((s) => (
-          <span key={s.key} className={`${labelCls} text-center relative z-[1] ${s.on ? 'text-white' : 'text-white/40'}`}>{s.key}</span>
-        ))}
-      </div>
       {/* Keyed on the number of segments, and the track's width is never animated: the observer
-          toggle turns three segments into two (or back), and a track shrinking over 150 ms under
-          a thumb sliding from its old place read as the control glitching. A new thumb lands on
-          its segment at once; a tap within the same segments still slides. */}
+          toggle turns three segments into two (or back); a new thumb lands on its segment at
+          once, a press within the same segments still slides. */}
       <div
         key={segments.length}
-        className={`absolute rounded-full transition-[inset-inline-start,background-color] duration-200 motion-reduce:transition-none shadow-sm ${thumbColor}`}
+        aria-hidden
+        className={`absolute rounded-full transition-[inset-inline-start,background-color] duration-200 motion-reduce:transition-none shadow-sm pointer-events-none ${thumbColor}`}
         style={{ top: (innerH - thumbH) / 2, width: thumbW, height: thumbH, insetInlineStart: index * cellW + (cellW - thumbW) / 2 }}
       />
-    </button>
+      <div className="absolute inset-0 grid items-stretch" style={{ gridTemplateColumns: `repeat(${segments.length}, 1fr)` }}>
+        {segments.map((s, i) => {
+          const on = i === index;
+          const name = t(s.key);
+          return (
+            <button
+              key={s.status}
+              type="button"
+              data-seg
+              disabled={disabled}
+              tabIndex={on ? 0 : -1}
+              aria-pressed={on}
+              aria-label={name}
+              title={name}
+              onClick={(e) => { e.stopPropagation(); if (!on) onPick(s.status); }}
+              onKeyDown={(e) => onKeyDown(e, i)}
+              className={`${labelCls} relative z-[1] rounded-full text-center leading-none cursor-pointer transition-colors duration-150 motion-reduce:transition-none focus:outline-none focus-visible:ring-2 focus-visible:ring-[#EED98A]/80 disabled:cursor-default ${
+                on ? 'text-white' : 'text-white/45 hover:text-white/85'
+              }`}
+            >
+              {s.letter}
+            </button>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 
@@ -207,6 +255,17 @@ function tapTime(): number {
   return Date.now();
 }
 
+/** Did this room already hold a session before this roll call? True on the roll call after
+ *  a suspension (and after a restart): something was debated (a ledger row), a list or a
+ *  paused caucus is stored, or a GSL turn is held. The statuses on screen are then the ones
+ *  kept from that session, and the roll call says so in one line (owner, 21 Oct 2026). A
+ *  fresh room has none of these. Reads only the committee row; `some` stops at the first
+ *  ledger row, which in a resumed room is near the start. */
+function heldPriorSession(c: Committee): boolean {
+  if ((c.speakersList?.length ?? 0) > 0 || !!c.caucus || (c.dbGslHeldFloors?.length ?? 0) > 0) return true;
+  return (c.messages ?? []).some((m) => m.recipient === '__log__' || m.content.startsWith('__log__:'));
+}
+
 // ── Roll Call Panel ───────────────────────────────────────────────────────────
 function RollCallPanelInner({
   committee,
@@ -267,7 +326,7 @@ function RollCallPanelInner({
   isReadOnly?: boolean;
   isViewOnly?: boolean;
   /**
-   * A Commenter tried a Moderator-only action here (a row click, the status slider, the bulk
+   * A Commenter tried a Moderator-only action here (a row click, the status picker, the bulk
    * roll-call buttons, Begin Session): the chair page raises the "only the Moderator" notice.
    * Must be STABLE (it is in the memo comparator). UI only (rule 15): nothing is written.
    */
@@ -298,10 +357,10 @@ function RollCallPanelInner({
    */
   readyDelegateId?: string | null;
   /**
-   * Roll Call (the status slider) moved an absent delegation with a waiting-room request
+   * Roll Call (the status picker) moved an absent delegation with a waiting-room request
    * to Present or Present and Voting. The parent drops that country's pending join-request
    * motions from local state; the DB delete is done here, after the status write lands
-   * (see cycleStatus).
+   * (see setStatus).
    */
   onJoinRequestResolved?: (country: string) => void;
   /**
@@ -388,7 +447,7 @@ function RollCallPanelInner({
   }, [committee.delegates, observerTick]);
 
   // ── Optimistic status reconciliation ────────────────────────────────────────
-  // `localStatuses` exists only so the slider moves the instant it is tapped. It
+  // `localStatuses` exists only so the picker moves the instant it is pressed. It
   // MUST expire: an override that lives until the committee changes makes this
   // device ignore every later change another chair makes to that delegate, so the
   // present count, the majority pies and the quorum warning silently diverge on a
@@ -462,16 +521,18 @@ function RollCallPanelInner({
     onStatusChange?.(id, next);
   };
 
-  const cycleStatus = (id: string, current: DelegateStatus) => {
+  // One press sets the status the chair picked (StatusPicker), owner 21 Oct 2026. Same write
+  // path as the old cycle: optimistic localStatuses + the parent's onStatusChange (the
+  // roll-call chain), and the join-request answer below.
+  const setStatus = (id: string, current: DelegateStatus, target: DelegateStatus) => {
     const delegate = committee.delegates.find((d) => d.id === id);
     const isObserver = (localObservers[id] ?? delegate?.isObserver) === true;
-    // Rapid clicks: the ref holds the value set by the previous click, which the
-    // render that produced `current` has not necessarily seen yet.
+    // Rapid presses: the ref holds the value set by the previous press, which the render
+    // that produced `current` has not necessarily seen yet.
     const base = pendingStatusRef.current[id]?.value ?? current;
-    // Observers cycle absent → present → absent (no present-voting).
-    const next: DelegateStatus = isObserver
-      ? (base === 'absent' ? 'present' : 'absent')
-      : (base === 'absent' ? 'present' : base === 'present' ? 'present-voting' : 'absent');
+    // An observer is never present-voting.
+    const next: DelegateStatus = isObserver && target === 'present-voting' ? 'present' : target;
+    if (next === base) return;
     applyStatus(id, next);
     // Roll Call is now the only way an absent delegation becomes present (13 Oct 2026), so
     // it also answers that delegation's waiting-room request, as adding them to a list used
@@ -798,6 +859,8 @@ function RollCallPanelInner({
   // The footer holds only Begin Session now (the seat field moved beside the quorum tabs).
   // Without it the footer is not drawn at all rather than left as an empty strip.
   const showBeginSession = committee.phase === 'pre-session' || committee.phase === 'roll-call';
+  // The roll call after a suspension (or a restart) keeps the last session's statuses.
+  const showResumeLine = isRollCallPhase && committee.phase === 'pre-session' && heldPriorSession(committee);
 
   // Bulk roll-call buttons: projector and finger sized in the full-screen roll call.
   const bulkBtnCls = `font-bold uppercase tracking-wide transition-colors gv-lift-dark focus:outline-none focus-visible:ring-2 focus-visible:ring-[#EED98A]/70 ${
@@ -818,8 +881,15 @@ function RollCallPanelInner({
           rings (CommitteeIdentityBadge, in the chair sidebar and the pre-session card), so
           this block keeps only the roll-call bulk actions. No divider: the masthead's own
           tone ends where the list begins. */}
-      {(!hideIdentity || showBulkActions) && (
+      {(!hideIdentity || showBulkActions || showResumeLine) && (
       <div className={`${isRollCallPhase ? 'px-5' : 'px-4'} ${hideIdentity ? 'pt-2.5' : 'pt-4'} pb-2.5 shrink-0 relative z-10`}>
+        {/* The roll call after a suspension: the statuses are the ones kept from the last
+            session. One plain line; Begin Session stays one press and nothing is written. */}
+        {showResumeLine && (
+          <p className="mb-2.5 text-[14px] font-medium leading-snug [text-wrap:pretty]" style={{ color: 'rgba(237,231,216,0.88)' }}>
+            {t('rollcall_resume_kept')}
+          </p>
+        )}
         {!hideIdentity && (
           <>
             <p className="text-lg font-black leading-tight [overflow-wrap:anywhere] mb-0.5" style={{ color: '#EED98A' }}>{getCommitteeDisplayName(committee.name, language)}</p>
@@ -925,7 +995,7 @@ function RollCallPanelInner({
           const rowActionable = !!onAddToList && !isViewOnly && (!isAbsent || canNoticeAbsent);
           // The speaker holding the floor, in the queue view (#1) or the A-Z views.
           const isSpeakingRow = isUpNext || isCurrentSpeaker;
-          // The status slider (roll call, Roll Call tab) takes ~120px of the row, so that mode
+          // The status picker (roll call, Roll Call tab) takes ~120px of the row, so that mode
           // runs a size down to keep names readable at the sidebar's minimum width.
           const sliderMode = isRollCallPhase || showStatusSliders;
           // The full-screen roll call (pre-session and the resume roll call) is the one people
@@ -1117,7 +1187,7 @@ function RollCallPanelInner({
                 )}
                 {sliderMode && (
                   <div
-                    // A Commenter: the slider and the megaphone are inert (their own pointer events
+                    // A Commenter: the picker and the megaphone are inert (their own pointer events
                     // are off), and a press on them raises the "only the Moderator" notice here. It
                     // never falls through to the row, which says nothing for a Commenter.
                     onClick={(e) => { e.stopPropagation(); if (isViewOnly && !isReadOnly && !committee.endedAt) onCommenterAttempt?.(); }}
@@ -1128,9 +1198,9 @@ function RollCallPanelInner({
                         taking roll. Gold = observer, faint = not, and an observer says so in the
                         word underneath (16 Sep 2026: the only place the word "observer" appears,
                         and only while roll call is on the screen). Making an observer drops PV to
-                        P (toggleObserver). Read-only / Commenter: inert, like the slider. */}
+                        P (toggleObserver). Read-only / Commenter: inert, like the picker. */}
                     {/* Fixed width on EVERY row, observer or not, so the word appearing under one
-                        megaphone never shifts the slider column out of line with its neighbours. */}
+                        megaphone never shifts the picker column out of line with its neighbours. */}
                     <span className="shrink-0 relative flex flex-col items-center" style={{ width: bigRoll ? 66 : 50 }}>
                     <button
                       type="button"
@@ -1167,10 +1237,17 @@ function RollCallPanelInner({
                       </span>
                     )}
                     </span>
-                    {/* Fixed 3-segment width, so an observer's shorter A/P slider never shifts
+                    {/* Fixed 3-segment width, so an observer's shorter A/P picker never shifts
                         the megaphone column out of line with the rows around it. */}
                     <div className="flex justify-start" style={{ width: bigRoll ? 132 : 90 }}>
-                      <StatusSlider status={effectiveStatus} onCycle={() => cycleStatus(d.id, effectiveStatus)} isObserver={isObserver} large={bigRoll} />
+                      <StatusPicker
+                        status={effectiveStatus}
+                        onPick={(target) => setStatus(d.id, effectiveStatus, target)}
+                        country={getCountryDisplayName(d.country, language)}
+                        isObserver={isObserver}
+                        large={bigRoll}
+                        disabled={isReadOnly || isViewOnly}
+                      />
                     </div>
                   </div>
                 )}
@@ -1221,6 +1298,9 @@ const RollCallPanel = React.memo(RollCallPanelInner, (prev, next) => {
     prev.committee.endedAt === next.committee.endedAt &&
     prev.isRollCallPhase === next.isRollCallPhase &&
     prev.showStatusSliders === next.showStatusSliders &&
+    // The resume line: messages are compared only through what the line reads, and only
+    // while taking roll, so a chat message never re-renders the panel mid-session.
+    (!next.isRollCallPhase || heldPriorSession(prev.committee) === heldPriorSession(next.committee)) &&
     prev.showBulkActions === next.showBulkActions &&
     prev.speechRunning === next.speechRunning &&
     prev.readyDelegateId === next.readyDelegateId &&

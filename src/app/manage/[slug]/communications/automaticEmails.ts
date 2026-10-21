@@ -10,7 +10,7 @@
 // Presentation only. Nothing here decides whether an email sends: that stays
 // in emailEvents.ts (eventOnWhenMissing, the template's `enabled`, functional).
 
-import type { EventKey } from '@/lib/emailEvents';
+import { DELEGATION_ALLOCATION_EMAIL_DB, type EventKey } from '@/lib/emailEvents';
 
 export const JOURNEY = [
   'When They Apply',
@@ -36,6 +36,7 @@ export const EVENT_JOURNEY: Record<EventKey, Journey> = {
   application_rejected: 'When You Decide',
   allocation_assigned: 'When They Get a Seat',
   co_delegate_assigned: 'When They Get a Seat',
+  delegation_allocations: 'When They Get a Seat',
   allocation_changed: 'When They Get a Seat',
   allocation_removed: 'When They Get a Seat',
   delegation_swap: 'When They Get a Seat',
@@ -87,6 +88,7 @@ export const EVENT_COPY: Record<EventKey, { name: string; when: string }> = {
   application_rejected: { name: 'Not accepted', when: 'When you reject an application' },
   allocation_assigned: { name: 'Your seat', when: 'When you give a delegate a committee and country' },
   co_delegate_assigned: { name: 'Your co-delegate', when: 'When a double delegation partner is seated later' },
+  delegation_allocations: { name: 'Delegation allocations', when: "15 minutes after a delegation's allocations stop changing" },
   allocation_changed: { name: 'Seat changed', when: "When you change a delegate's committee or country" },
   allocation_removed: { name: 'Seat removed', when: "When you take a delegate's seat away" },
   delegation_swap: { name: 'Seats swapped', when: 'When two delegates in a delegation swap seats' },
@@ -137,3 +139,10 @@ export const REMINDER_OF: Partial<Record<EventKey, EventKey>> = {
   organizer_invite_reminder_2: 'organizer_invite',
   organizer_invite_reminder_3: 'organizer_invite',
 };
+
+/** Whether the Automatic tab lists an event. An email whose database half is
+ *  not live yet is hidden, so no organiser switches on an email that cannot send. */
+export function automaticEventListed(key: string): boolean {
+  if (key === 'delegation_allocations') return DELEGATION_ALLOCATION_EMAIL_DB;
+  return true;
+}

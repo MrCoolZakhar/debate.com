@@ -13,14 +13,20 @@
 //     committee (owner, 21 Oct 2026): the country's round flag and name, the
 //     committee emblem + acronym on one line with the person in it on the
 //     SAME line, on the other side (avatar + name; an empty one shows none), so
-//     every card is the same size (owner, 21 Oct 2026). A small red minus at
-//     the card's top right removes the allocation from the delegation, asked
+//     every card is the same size (owner, 21 Oct 2026). Two Germanys are two
+//     cards. A small red minus (22px, a subtle gradient and a white ring)
+//     sitting ON the card's top-right corner, centred on it, removes the
+//     allocation from the delegation, asked
 //     in place: an empty one goes straight back (organiser_take_back_society_seat);
 //     one with a member in it unallocates them first with the People tab's
 //     Unallocate call (organiserTakeOutOfSeat, which keeps the allocation with
 //     the delegation as open) and then removes it. One held by someone who is
 //     not a member of this delegation keeps the minus disabled, its hover title
 //     saying to unallocate them first.
+//   * Between them a divider the organiser drags (or moves with the arrow keys)
+//     to make the left column wider or narrower; the width is remembered per
+//     browser (localStorage gavelling-dlg-alloc-left), clamped so the right
+//     column always keeps room.
 //   * Right: "Search countries" first (focused on open), then EVERY country that
 //     is a delegate slot in any committee, A to Z, filtered by name or code with
 //     accents ignored (societySeats.countryMatrix). Each country shows one chip
@@ -62,6 +68,25 @@ interface Ask {
 
 type Pending = 'give' | 'back';
 
+// The draggable divider between the two columns (owner, 21 Oct 2026).
+const LEFT_KEY = 'gavelling-dlg-alloc-left';
+const LEFT_DEFAULT = 420;
+const LEFT_MIN = 300;
+const LEFT_MAX = 760;
+/** What the search and countries column keeps at least. */
+const RIGHT_MIN = 340;
+const KEY_STEP = 24;
+
+function readLeftWidth(): number {
+  try {
+    const n = Number(window.localStorage.getItem(LEFT_KEY));
+    return Number.isFinite(n) && n >= LEFT_MIN && n <= LEFT_MAX ? n : LEFT_DEFAULT;
+  } catch { return LEFT_DEFAULT; }
+}
+function saveLeftWidth(n: number) {
+  try { window.localStorage.setItem(LEFT_KEY, String(Math.round(n))); } catch { /* remembered per browser when it can be */ }
+}
+
 function seatLabel(c: SeatChip): string {
   return `${c.countryName} in ${c.committeeLabel}${c.slotSize > 1 ? `, seat ${c.seat}` : ''}`;
 }
@@ -83,6 +108,53 @@ export default function SeatsTab<M extends DelegationMemberLite>({ conference, r
   const [ask, setAsk] = useState<Ask | null>(null);
   const closeAsk = useCallback(() => setAsk(null), []);
   const [limit, setLimit] = useState<SeatLimit>('none');
+  // The left column's width: the tab only mounts after a press, so the stored
+  // width is read on the first render.
+  const [leftW, setLeftW] = useState<number>(() => (typeof window === 'undefined' ? LEFT_DEFAULT : readLeftWidth()));
+  const splitRef = useRef<HTMLDivElement>(null);
+  const dragRef = useRef<{ startX: number; startW: number; w: number } | null>(null);
+
+  /** The widest the left column may be in this pop-up right now. */
+  const clampLeft = useCallback((n: number) => {
+    const total = splitRef.current?.getBoundingClientRect().width ?? 0;
+    const max = total > 0 ? Math.min(LEFT_MAX, total - RIGHT_MIN) : LEFT_MAX;
+    return Math.round(Math.max(LEFT_MIN, Math.min(Math.max(LEFT_MIN, max), n)));
+  }, []);
+
+  const onDividerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    e.currentTarget.setPointerCapture(e.pointerId);
+    dragRef.current = { startX: e.clientX, startW: leftW, w: leftW };
+  };
+  const onDividerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    const d = dragRef.current;
+    if (!d) return;
+    d.w = clampLeft(d.startW + (e.clientX - d.startX));
+    // Written straight to the node while dragging; state once on release.
+    splitRef.current?.style.setProperty('--dlg-left', `${d.w}px`);
+  };
+  const onDividerUp = (e: React.PointerEvent<HTMLDivElement>) => {
+    const d = dragRef.current;
+    if (!d) return;
+    dragRef.current = null;
+    try { e.currentTarget.releasePointerCapture(e.pointerId); } catch { /* already released */ }
+    setLeftW(d.w);
+    saveLeftWidth(d.w);
+  };
+  const onDividerKey = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    const step = e.shiftKey ? KEY_STEP * 3 : KEY_STEP;
+    let next: number | null = null;
+    if (e.key === 'ArrowLeft') next = leftW - step;
+    else if (e.key === 'ArrowRight') next = leftW + step;
+    else if (e.key === 'Home') next = LEFT_MIN;
+    else if (e.key === 'End') next = LEFT_MAX;
+    if (next == null) return;
+    e.preventDefault();
+    const w = clampLeft(next);
+    setLeftW(w);
+    saveLeftWidth(w);
+  };
 
   // Search first: focused when the tab opens, on a laptop only (a phone would
   // throw its keyboard over the list).
@@ -229,10 +301,11 @@ export default function SeatsTab<M extends DelegationMemberLite>({ conference, r
       : `Limit ${cap}, ${limit === 'paid' ? 'the tickets paid for' : 'their expected size'}. ${Math.max(0, cap - given) === 0 ? 'No more can be given.' : `${Math.max(0, cap - given)} more can be given.`}`;
 
   return (
-    <div className="flex-1 min-h-0 flex flex-col md:flex-row overflow-y-auto md:overflow-hidden">
+    <div ref={splitRef} className="flex-1 min-h-0 flex flex-col md:flex-row overflow-y-auto md:overflow-hidden"
+      style={{ ['--dlg-left' as string]: `${leftW}px` } as React.CSSProperties}>
       {/* Left: what the delegation holds */}
-      <div className="flex flex-col md:overflow-y-auto md:w-[420px] md:flex-none"
-        style={{ padding: '24px 24px', gap: 18, background: '#FCFAF6', borderRight: `1px solid ${HAIRLINE}` }}>
+      <div className="flex flex-col md:overflow-y-auto md:w-[var(--dlg-left)] md:max-w-[calc(100%_-_340px)] md:flex-none"
+        style={{ padding: '24px 24px', gap: 18, background: '#FCFAF6' }}>
         <div className="flex flex-col" style={{ gap: 6 }}>
           <div className="flex items-baseline gap-2 flex-wrap">
             <span style={{ fontFamily: FONT, fontSize: 40, fontWeight: 600, letterSpacing: '-0.02em', color: INK, fontVariantNumeric: 'tabular-nums', lineHeight: 1.1 }}>{given}</span>
@@ -244,7 +317,7 @@ export default function SeatsTab<M extends DelegationMemberLite>({ conference, r
         {held.length === 0 ? (
           <p style={{ fontFamily: FONT, fontSize: 14, color: INK_SOFT, lineHeight: 1.5 }}>None yet. Search a country and tap a committee to give it.</p>
         ) : (
-          <div className="flex flex-col" style={{ gap: 6 }}>
+          <div className="flex flex-col" style={{ gap: 12, paddingTop: 4 }}>
             {held.map(h => {
               const person = h.applicationId ? memberById.get(h.applicationId) : undefined;
               const busy = pending.has(h.key);
@@ -255,7 +328,7 @@ export default function SeatsTab<M extends DelegationMemberLite>({ conference, r
                   style={{ minHeight: 74, padding: '10px 12px', borderRadius: 12, background: '#FFFFFF', boxShadow: '0 1px 2px rgba(27,56,40,0.06)', opacity: busy ? 0.6 : 1 }}>
                   <CircleFlag code={h.countryCode} country={h.countryName} logoUrl={seatArt.get(h.countryCode) ?? undefined} label={h.countryName} size={40} decorative />
                   <div className="flex flex-col flex-1 min-w-0" style={{ gap: 4 }}>
-                    <span className="[overflow-wrap:anywhere]" style={{ fontFamily: FONT, fontSize: 15, fontWeight: 600, color: INK, paddingRight: 26 }}>{h.countryName}</span>
+                    <span className="[overflow-wrap:anywhere]" style={{ fontFamily: FONT, fontSize: 15, fontWeight: 600, color: INK, paddingRight: 8 }}>{h.countryName}</span>
                     <div className="flex items-center justify-between" style={{ gap: 10 }}>
                       <span className="inline-flex items-center gap-1.5 min-w-0" title={h.committeeName} style={{ fontFamily: FONT, fontSize: 12.5, flex: '0 1 auto' }}>
                         <CommitteeDisc src={committeeEmblemSrc(h.logoUrl, h.committeeName, h.abbreviation)} size={18} />
@@ -273,25 +346,48 @@ export default function SeatsTab<M extends DelegationMemberLite>({ conference, r
                   </div>
                   <button
                     type="button"
-                    className={BTN_CLASS}
+                    className={`${BTN_CLASS} dlgSeatMinus`}
                     onClick={e => { if (blocked === null) askRemove(h, e.currentTarget); }}
                     aria-disabled={blocked !== null ? true : undefined}
                     aria-label={`Remove ${seatLabel(h)} from ${row.name}`}
                     title={blocked === null ? `Remove ${seatLabel(h)} from ${row.name}` : blocked === 'Saving' ? undefined : blocked}
+                    data-live={blocked === null ? 'true' : undefined}
                     style={{
-                      position: 'absolute', top: 8, right: 8, width: 22, height: 22, padding: 0, borderRadius: '50%',
+                      // Centred on the card's top-right corner, over its border.
+                      position: 'absolute', top: -11, right: -11, width: 22, height: 22, padding: 0, borderRadius: '50%',
                       display: 'inline-flex', alignItems: 'center', justifyContent: 'center', border: 'none',
-                      background: blocked === null ? DANGER : '#E7DCD6', color: '#FFFFFF',
-                      cursor: blocked === null ? 'pointer' : 'default', opacity: blocked === null ? 1 : 0.7,
+                      background: blocked === null ? `linear-gradient(180deg, #C4503A, ${DANGER})` : 'linear-gradient(180deg, #EEE6E1, #E2D6CF)',
+                      boxShadow: '0 0 0 2px #FFFFFF, 0 1px 3px rgba(27,56,40,0.18)',
+                      color: '#FFFFFF', cursor: blocked === null ? 'pointer' : 'default', opacity: blocked === null ? 1 : 0.8,
                     }}
                   >
-                    <Minus size={14} strokeWidth={2.25} aria-hidden />
+                    <Minus size={12} strokeWidth={2.5} aria-hidden />
                   </button>
                 </div>
               );
             })}
           </div>
         )}
+      </div>
+
+      {/* The divider: drag or arrow keys to make the left column wider or narrower */}
+      <div
+        role="separator"
+        aria-orientation="vertical"
+        aria-label="Resize the allocations given column"
+        aria-valuemin={LEFT_MIN}
+        aria-valuemax={LEFT_MAX}
+        aria-valuenow={leftW}
+        tabIndex={0}
+        onPointerDown={onDividerDown}
+        onPointerMove={onDividerMove}
+        onPointerUp={onDividerUp}
+        onPointerCancel={onDividerUp}
+        onKeyDown={onDividerKey}
+        className="dlgSplit hidden md:flex flex-none justify-center focus:outline-none"
+        style={{ width: 11, marginLeft: -5, marginRight: -6, cursor: 'col-resize', touchAction: 'none', position: 'relative', zIndex: 1 }}
+      >
+        <span aria-hidden className="dlgSplitLine" style={{ width: 1, height: '100%', background: HAIRLINE }} />
       </div>
 
       {/* Right: search first, then every country */}
@@ -356,6 +452,12 @@ export default function SeatsTab<M extends DelegationMemberLite>({ conference, r
           onYes={() => { const chip = ask.chip; setAsk(null); void removeAllocation(chip); }}
           onCancel={closeAsk} />
       )}
+      <style>{`
+        .dlgSeatMinus { transition: transform 120ms cubic-bezier(0.22,1,0.36,1); }
+        .dlgSeatMinus[data-live]:active { transform: scale(0.88); }
+        .dlgSplitLine { transition: background-color 140ms, width 140ms; }
+        .dlgSplit:hover .dlgSplitLine, .dlgSplit:focus-visible .dlgSplitLine, .dlgSplit:active .dlgSplitLine { width: 3px; background: rgba(27,56,40,0.35); border-radius: 2px; }
+      `}</style>
     </div>
   );
 }

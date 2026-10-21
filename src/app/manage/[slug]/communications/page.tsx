@@ -63,7 +63,7 @@ import MessagesHeader, { type MessagesTab } from './MessagesHeader';
 import { replaceUrlInPlace } from '@/lib/replaceUrlInPlace';
 import InboxSplit, { type SplitThread, type SplitDetail } from './InboxSplit';
 import AutomaticEmailsList, { type AutoGroup, type AutoRow } from './AutomaticEmailsList';
-import { JOURNEY, EVENT_JOURNEY, EVENT_COPY, REMINDER_OF } from './automaticEmails';
+import { JOURNEY, EVENT_JOURNEY, EVENT_COPY, REMINDER_OF, automaticEventListed } from './automaticEmails';
 import { eventEmailSource, eventEmailHtml } from '@/lib/eventEmailPreview';
 import { OnOffSwitch } from './commsKit';
 import AnnounceView from './AnnounceView';
@@ -3996,7 +3996,7 @@ function CommunicationsPageInner() {
   const automaticGroups: AutoGroup[] = JOURNEY.map(title => ({
     title,
     rows: (EVENT_REGISTRY as readonly EventDef[])
-      .filter(e => EVENT_JOURNEY[e.key as EventKey] === title && !REMINDER_OF[e.key as EventKey])
+      .filter(e => EVENT_JOURNEY[e.key as EventKey] === title && !REMINDER_OF[e.key as EventKey] && automaticEventListed(e.key))
       .map(automaticRow),
   })).filter(g => g.rows.length > 0);
 

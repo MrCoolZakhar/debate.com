@@ -2,6 +2,8 @@
 
 import { useState, useEffect, useLayoutEffect, useCallback, useMemo, useRef } from 'react';
 import Portal from '@/components/Portal';
+import { Clapperboard } from 'lucide-react';
+import YouTubeClickToLoad, { CHAIR_GUIDE_VIDEO_ID, CHAIR_GUIDE_THUMB } from '@/components/YouTubeClickToLoad';
 import type { Committee } from '@/lib/types';
 import { docName } from '@/lib/docNames';
 import { useT, useLanguage } from '@/contexts/LanguageContext';
@@ -12,15 +14,34 @@ interface Props {
   onStepId?: (id: string) => void;
 }
 
+// ─── The first card's videos ─────────────────────────────────────────────────
+// The chair guide is the /sessions video (CHAIR_GUIDE_VIDEO_ID in YouTubeClickToLoad).
+// The delegate and faculty advisor guides are PENDING Peter's YouTube ids (21 Oct 2026):
+// set an id here and its small slot appears under the chair guide. A thumbnail is optional
+// and must be our own copy in public/ (e.g. '/sessions/delegate-thumb.webp'), never a
+// YouTube image URL (CLAUDE.md §3); without one the slot is a plain forest poster.
+const DELEGATE_VIDEO_ID = null as string | null;
+const DELEGATE_VIDEO_THUMB = null as string | null;
+const ADVISOR_VIDEO_ID = null as string | null;
+const ADVISOR_VIDEO_THUMB = null as string | null;
+
 type StepKind = 'questionnaire' | 'spotlight' | 'action' | 'goodbye';
+
+/** One step's words (owner, 21 Oct 2026: "bullet points in some parts would be better"):
+ *  one short title, then one to four short points in plain words. */
+interface StepCopy {
+  title: string;
+  points: React.ReactNode[];
+}
 
 interface TutorialStep {
   id: string;
   kind: StepKind;
   otterImage: string;
-  /** Optional short title above the text (one line, plain). */
-  title?: React.ReactNode;
-  bubbleText: React.ReactNode;
+  /** Spotlight and action steps: a title and short points. */
+  copy?: StepCopy;
+  /** The goodbye slide's one paragraph. */
+  bubbleText?: React.ReactNode;
   // Array of data-tutorial values, all light up simultaneously
   spotlightTargets?: string[];
   spotlightRadius?: number;
@@ -38,13 +59,18 @@ function pick<T>(language: string, m: { en: T; es: T; fr: T; ar: T; pt: T }): T 
   return (m as unknown as Record<string, T>)[language] ?? m.en;
 }
 
+/** A step's copy: the title, then its points. */
+const c = (title: string, ...points: React.ReactNode[]): StepCopy => ({ title, points });
+
 // ─── Rich text helpers ────────────────────────────────────────────────────────
 const G  = (t: string) => <span style={{ color: '#B6871F', fontWeight: 700 }}>{t}</span>; // gold
 const GR = (t: string) => <span style={{ color: '#2A5A3C', fontWeight: 700 }}>{t}</span>; // green
+/** A control's name inside a point: bold ink, nothing else. */
+const K  = (t: string) => <strong style={{ fontWeight: 700, color: '#1B3828' }}>{t}</strong>;
 
 /** Chair-renameable document labels, already resolved + locale-defaulted via
  *  `docName()`. Passed in so the tutorial never hardcodes "Working Paper" /
- *  "Draft Resolution" — a committee that renamed them must read consistently. */
+ *  "Draft Resolution": a committee that renamed them must read consistently. */
 interface DocLabels {
   wpPlural: string;
   drPlural: string;
@@ -53,33 +79,59 @@ interface DocLabels {
 }
 
 function getSteps(language: string, docs: DocLabels): TutorialStep[] {
+  const { wpPlural: wp, drPlural: dr, wpSingular: wpS, drSingular: drS } = docs;
   return [
     {
       id: 'questionnaire', kind: 'questionnaire',
-      otterImage: '/Otter.Tutorial.Intro.webp', bubbleText: '',
+      otterImage: '/Otter.Tutorial.Intro.webp',
     },
     {
       id: 'welcome', kind: 'spotlight',
       otterImage: '/Otter.Tutorial.webp',
       spotlightTargets: [],
-      bubbleText: pick(language, {
-        ar: <>مرحباً بك في <strong>قاعة لجنتك</strong>. {GR('المتحدثون')}، {GR('المؤقّتات')}، {GR('التصويت')}، {GR('الاقتراحات')}، {GR('المحادثة')}، {GR('المستندات')}، كل ذلك في مكان واحد، مُصمَّم لإدارة <strong>جلسة المحاكاة الكاملة</strong> من أول ضربة مطرقة إلى آخرها.</>,
-        fr: <>Bienvenue dans votre <strong>salle de comité</strong>. {GR('Orateurs')}, {GR('chronomètres')}, {GR('votes')}, {GR('motions')}, {GR('chat')}, {GR('documents')}, tout en un seul endroit, conçu pour gérer votre <strong>session MUN complète</strong> du premier coup de maillet au dernier.</>,
-        es: <>Bienvenido a tu <strong>sala de comité</strong>. {GR('Oradores')}, {GR('cronómetros')}, {GR('votos')}, {GR('mociones')}, {GR('chat')}, {GR('documentos')}, todo en un solo lugar para dirigir tu <strong>sesión completa de MUN</strong>.</>,
-        pt: <>Boas-vindas à sua <strong>sala de comitê</strong>. {GR('Oradores')}, {GR('cronômetros')}, {GR('votações')}, {GR('moções')}, {GR('chat')}, {GR('documentos')}, tudo em um só lugar, feito para conduzir a sua <strong>sessão de MUN inteira</strong>, da primeira batida do martelo à última.</>,
-        en: <>Welcome to your <strong>committee room</strong>. {GR('Speakers')}, {GR('timers')}, {GR('voting')}, {GR('motions')}, {GR('chat')}, {GR('documents')}, all bundled in one place, built to run your <strong>entire MUN session</strong> from the first gavel to the last.</>,
+      copy: pick(language, {
+        en: c('Your committee room',
+          'Speakers, timers, motions, voting, chat and documents, all on one screen.',
+          'Built to run the whole session, from the first gavel to the last.',
+          <>Click anywhere or press {K('Next')} to keep going.</>),
+        es: c('Tu sala de comité',
+          'Oradores, cronómetros, mociones, votaciones, chat y documentos, todo en una pantalla.',
+          'Hecha para dirigir toda la sesión, del primer mazazo al último.',
+          <>Haz clic en cualquier sitio o pulsa {K('Siguiente')} para seguir.</>),
+        fr: c('Votre salle de comité',
+          'Orateurs, chronomètres, motions, votes, chat et documents, sur un seul écran.',
+          'Conçue pour mener toute la séance, du premier coup de maillet au dernier.',
+          <>Cliquez n&apos;importe où ou appuyez sur {K('Suivant')} pour continuer.</>),
+        ar: c('قاعة لجنتك',
+          'المتحدثون والمؤقّتات والاقتراحات والتصويت والمحادثة والمستندات، كلها على شاشة واحدة.',
+          'مصمَّمة لإدارة الجلسة كاملةً، من أول ضربة مطرقة إلى آخرها.',
+          <>انقر في أي مكان أو اضغط {K('التالي')} للمتابعة.</>),
+        pt: c('Sua sala de comitê',
+          'Oradores, cronômetros, moções, votações, chat e documentos, tudo em uma tela.',
+          'Feita para conduzir a sessão inteira, da primeira batida do martelo à última.',
+          <>Clique em qualquer lugar ou pressione {K('Próximo')} para continuar.</>),
       }),
     },
     {
       id: 'speakers-bottom-bar', kind: 'spotlight',
       otterImage: '/Otter.Tutorial.webp',
       spotlightTargets: ['speakers-bottom-bar'], spotlightRadius: 12,
-      bubbleText: pick(language, {
-        ar: <>هذا الشريط هو وسيلتك <strong>لإضافة المندوبين</strong> إلى قائمة المتحدثين. اكتب اسم أي {G('دولة')} ثم اضغط {G('Enter')}.</>,
-        fr: <>Cette barre vous permet d&apos;<strong>ajouter des délégués</strong> à la liste des orateurs. Tapez n&apos;importe quel {G('nom de pays')} et appuyez sur {G('Entrée')}.</>,
-        es: <>Esta barra sirve para <strong>agregar delegados</strong> a la lista de oradores. Escribe cualquier {G('nombre de país')} y presiona {G('Enter')}.</>,
-        pt: <>Esta barra serve para <strong>adicionar delegações</strong> à lista de oradores. Digite o {G('nome de qualquer país')} e pressione {G('Enter')}.</>,
-        en: <>This bar is how you <strong>add delegates</strong> to the speakers list. Type any {G('country name')} and press {G('Enter')}.</>,
+      copy: pick(language, {
+        en: c('Add speakers',
+          'This bar adds delegations to the speakers list.',
+          <>Type a country name and press {K('Enter')}.</>),
+        es: c('Añadir oradores',
+          'Esta barra añade delegaciones a la lista de oradores.',
+          <>Escribe el nombre de un país y pulsa {K('Enter')}.</>),
+        fr: c('Ajouter des orateurs',
+          'Cette barre ajoute des délégations à la liste des orateurs.',
+          <>Tapez le nom d&apos;un pays et appuyez sur {K('Entrée')}.</>),
+        ar: c('إضافة متحدثين',
+          'يضيف هذا الشريط الوفود إلى قائمة المتحدثين.',
+          <>اكتب اسم دولة ثم اضغط {K('Enter')}.</>),
+        pt: c('Adicionar oradores',
+          'Esta barra adiciona delegações à lista de oradores.',
+          <>Digite o nome de um país e pressione {K('Enter')}.</>),
       }),
     },
     {
@@ -87,178 +139,351 @@ function getSteps(language: string, docs: DocLabels): TutorialStep[] {
       otterImage: '/Otter.Tutorial.webp',
       spotlightTargets: ['speakers-bottom-bar', 'speakers-sidebar', 'speakers-autocomplete'],
       spotlightRadius: 12,
-      bubbleText: pick(language, {
-        ar: <>أضف <strong>3 دول</strong> إلى القائمة: استخدم {G('شريط البحث')} أو انقر على المندوبين في {G('اللوحة الجانبية')}. كلاهما يعمل!</>,
-        fr: <>Ajoutez <strong>3 pays</strong> à la liste : utilisez la {G('barre de recherche')} ou cliquez sur des délégués dans le {G('panneau latéral')}. Les deux fonctionnent !</>,
-        es: <>Agrega <strong>3 países</strong> a la lista: usa la {G('barra de búsqueda')} o haz clic en delegados del {G('panel lateral')}. ¡Ambos funcionan!</>,
-        pt: <>Adicione <strong>3 países quaisquer</strong> à lista de oradores: use a {G('barra de busca')} abaixo ou clique nas delegações da {G('barra lateral')}. As duas formas funcionam!</>,
-        en: <>Add <strong>any 3 countries</strong> to the speakers list: use the {G('input bar')} below or click delegates in the {G('sidebar')}. Both work!</>,
+      copy: pick(language, {
+        en: c('Try it: add 3 countries',
+          <>Type a country in the bar below and press {K('Enter')}.</>,
+          'Or click a delegation in the sidebar.',
+          'The tour moves on once 3 are on the list.'),
+        es: c('Pruébalo: añade 3 países',
+          <>Escribe un país en la barra de abajo y pulsa {K('Enter')}.</>,
+          'O haz clic en una delegación de la barra lateral.',
+          'El recorrido sigue cuando haya 3 en la lista.'),
+        fr: c('Essayez : ajoutez 3 pays',
+          <>Tapez un pays dans la barre ci-dessous et appuyez sur {K('Entrée')}.</>,
+          'Ou cliquez sur une délégation dans le panneau latéral.',
+          'La visite continue dès que 3 sont sur la liste.'),
+        ar: c('جرّبها: أضف 3 دول',
+          <>اكتب اسم دولة في الشريط أدناه واضغط {K('Enter')}.</>,
+          'أو انقر على وفد في اللوحة الجانبية.',
+          'تتابع الجولة بمجرد وجود 3 في القائمة.'),
+        pt: c('Experimente: adicione 3 países',
+          <>Digite um país na barra abaixo e pressione {K('Enter')}.</>,
+          'Ou clique em uma delegação na barra lateral.',
+          'O tour continua quando houver 3 na lista.'),
       }),
-      actionDone: (c) => c.speakersList.length >= 3,
+      actionDone: (cm) => cm.speakersList.length >= 3,
     },
     {
       id: 'call-first-speaker', kind: 'action',
       otterImage: '/Otter.Tutorial.webp',
       spotlightTargets: ['call-first-speaker'], spotlightRadius: 14,
-      bubbleText: pick(language, {
-        ar: <>صاحب المركز الأول في القائمة <strong>واقف على المنصّة</strong> بالفعل، ومؤقّته مضبوط وينتظر. اضغط {G('بدء')} لتمنحه الكلمة وتشغّل المؤقّت.</>,
-        fr: <>Le premier de la liste est <strong>déjà à la tribune</strong>, chronomètre réglé, en attente. Appuyez sur {G('DÉMARRER')} pour lui donner la parole et lancer le chronomètre.</>,
-        es: <>El primero de la lista <strong>ya está en la tribuna</strong>, con su cronómetro listo y esperando. Pulsa {G('INICIAR')} para darle la palabra y arrancar el reloj.</>,
-        pt: <>A primeira da lista <strong>já está pronta para falar</strong>, com o cronômetro ajustado e esperando. Pressione {G('INICIAR')} para dar a palavra e disparar o cronômetro.</>,
-        en: <>The top of the list is <strong>already standing on the floor</strong>, clock set and waiting. Press {G('START')} to give them the floor and run the timer.</>,
+      copy: pick(language, {
+        en: c('Give the floor',
+          'The first delegation on the list is already waiting, clock set.',
+          <>Press {K('Start')} to give them the floor and run the timer.</>),
+        es: c('Dar la palabra',
+          'La primera delegación de la lista ya está esperando, con el reloj listo.',
+          <>Pulsa {K('Iniciar')} para darle la palabra y arrancar el cronómetro.</>),
+        fr: c('Donner la parole',
+          'La première délégation de la liste attend déjà, chronomètre réglé.',
+          <>Appuyez sur {K('Démarrer')} pour lui donner la parole et lancer le chronomètre.</>),
+        ar: c('إعطاء الكلمة',
+          'الوفد الأول في القائمة ينتظر بالفعل، ومؤقّته جاهز.',
+          <>اضغط {K('بدء')} لتمنحه الكلمة وتشغّل المؤقّت.</>),
+        pt: c('Dar a palavra',
+          'A primeira delegação da lista já está esperando, com o cronômetro ajustado.',
+          <>Pressione {K('Iniciar')} para dar a palavra e disparar o cronômetro.</>),
       }),
-      actionDone: (c) => !!c.currentSpeaker,
+      actionDone: (cm) => !!cm.currentSpeaker,
     },
     {
       id: 'timer', kind: 'spotlight',
       otterImage: '/Otter.Tutorial.webp',
       spotlightTargets: ['timer'], spotlightRadius: 12,
-      bubbleText: pick(language, {
-        ar: <>يبدأ <strong>مؤقّت الكلام</strong> بالعد التنازلي للمندوب الحالي. يتحوّل إلى {G('الكهرماني')} في آخر 10 ثوانٍ. و{GR('انقر على المؤقّت نفسه')} لتشغيله أو إيقافه مؤقتاً، تماماً كزر البدء.</>,
-        fr: <>Le <strong>chronomètre</strong> décompte pour le délégué actuel. Il passe à l&apos;{G('ambre')} dans les 10 dernières secondes. {GR('Cliquez sur le chronomètre lui-même')} pour le lancer ou le mettre en pause, comme avec le bouton.</>,
-        es: <>El <strong>cronómetro</strong> cuenta regresivamente para el delegado actual. Se vuelve {G('ámbar')} en los últimos 10 segundos. {GR('Haz clic en el propio cronómetro')} para iniciarlo o pausarlo, igual que con el botón.</>,
-        pt: <>O <strong>cronômetro de discurso</strong> faz a contagem regressiva da delegação com a palavra. Ele fica {G('âmbar')} nos últimos 10 segundos. {GR('Clique no próprio cronômetro')} para iniciá-lo ou pausá-lo, exatamente como no botão.</>,
-        en: <>The <strong>speaking timer</strong> counts down for the current delegate. It turns {G('amber')} for the last 10 seconds. {GR('Click the clock itself')} to start or pause it, exactly like the button.</>,
+      copy: pick(language, {
+        en: c('The speaking timer',
+          'Counts down for the delegation speaking.',
+          <>Turns {G('amber')} in the last 10 seconds.</>,
+          <>{GR('Click the clock itself')} to start or pause it.</>),
+        es: c('El cronómetro',
+          'Cuenta hacia atrás para la delegación que habla.',
+          <>Se vuelve {G('ámbar')} en los últimos 10 segundos.</>,
+          <>{GR('Haz clic en el propio reloj')} para iniciarlo o pausarlo.</>),
+        fr: c('Le chronomètre',
+          'Décompte le temps de la délégation qui parle.',
+          <>Passe à l&apos;{G('ambre')} dans les 10 dernières secondes.</>,
+          <>{GR('Cliquez sur le chronomètre lui-même')} pour le lancer ou le mettre en pause.</>),
+        ar: c('مؤقّت الكلام',
+          'يعدّ تنازلياً للوفد المتحدث.',
+          <>يتحوّل إلى {G('الكهرماني')} في آخر 10 ثوانٍ.</>,
+          <>{GR('انقر على المؤقّت نفسه')} لتشغيله أو إيقافه مؤقتاً.</>),
+        pt: c('O cronômetro',
+          'Faz a contagem regressiva da delegação com a palavra.',
+          <>Fica {G('âmbar')} nos últimos 10 segundos.</>,
+          <>{GR('Clique no próprio cronômetro')} para iniciá-lo ou pausá-lo.</>),
       }),
     },
     {
       id: 'add-time', kind: 'spotlight',
       otterImage: '/Otter.Tutorial.webp',
       spotlightTargets: ['add-time-button'], spotlightRadius: 12,
-      bubbleText: pick(language, {
-        ar: <>تحتاج إلى منح وقت إضافي؟ زر {G('إضافة وقت')} (أيقونة الساعة) يضيف {G('15 / 30 / 60')} ثانية أو أي مقدار تكتبه. ويعمل أيضاً <strong>قبل الضغط على بدء</strong>، فتُجلس أول متحدث بمدّة أطول. أمّا {G('↺')} في الصف نفسه فيعيد المؤقّت إلى مدّة الكلام الكاملة.</>,
-        fr: <>Besoin d&apos;accorder plus de temps ? {G('Ajouter du temps')} (l&apos;icône horloge) ajoute {G('15 / 30 / 60')} secondes, ou le montant de votre choix. Cela marche aussi <strong>avant d&apos;appuyer sur Démarrer</strong>, pour installer le premier orateur avec un temps plus long. Le {G('↺')} de la même rangée remet le chronomètre au temps de parole complet.</>,
-        es: <>¿Necesitas dar más tiempo? {G('Añadir tiempo')} (el icono de reloj) agrega {G('15 / 30 / 60')} segundos, o los que escribas. También funciona <strong>antes de pulsar Iniciar</strong>, así sientas al primer orador con más tiempo. El {G('↺')} de la misma fila devuelve el cronómetro al tiempo completo.</>,
-        pt: <>Precisa conceder mais tempo? {G('Adicionar tempo')} (o ícone de relógio) soma {G('15 / 30 / 60')} segundos, ou o valor que você digitar. Também funciona <strong>antes de pressionar Iniciar</strong>, para a primeira delegação começar com mais tempo. O {G('↺')} na mesma fileira reinicia o cronômetro com o tempo de discurso completo.</>,
-        en: <>Need to grant more time? {G('Add time')} (the clock icon) adds {G('15 / 30 / 60')} seconds, or any amount you type. It also works <strong>before you press Start</strong>, so you can seat the first speaker with a longer slot. The {G('↺')} in the same row restarts the clock at the full speaking time.</>,
+      copy: pick(language, {
+        en: c('More time',
+          <>{K('Add time')} (the clock icon) gives 15, 30 or 60 seconds, or any amount you type.</>,
+          <>It works before {K('Start')} too, for a longer first slot.</>,
+          <>{K('↺')} restarts the clock at the full speaking time.</>),
+        es: c('Más tiempo',
+          <>{K('Añadir tiempo')} (el icono de reloj) da 15, 30 o 60 segundos, o lo que escribas.</>,
+          <>También funciona antes de {K('Iniciar')}, para un primer turno más largo.</>,
+          <>{K('↺')} reinicia el reloj con el tiempo completo.</>),
+        fr: c('Plus de temps',
+          <>{K('Ajouter du temps')} (l&apos;icône horloge) donne 15, 30 ou 60 secondes, ou la durée que vous tapez.</>,
+          <>Cela marche aussi avant {K('Démarrer')}, pour un premier tour plus long.</>,
+          <>{K('↺')} remet le chronomètre au temps de parole complet.</>),
+        ar: c('وقت إضافي',
+          <>زر {K('إضافة وقت')} (أيقونة الساعة) يمنح 15 أو 30 أو 60 ثانية، أو أي مقدار تكتبه.</>,
+          <>يعمل أيضاً قبل الضغط على {K('بدء')}، لمدّة أولى أطول.</>,
+          <>يعيد {K('↺')} المؤقّت إلى مدّة الكلام الكاملة.</>),
+        pt: c('Mais tempo',
+          <>{K('Adicionar tempo')} (o ícone de relógio) dá 15, 30 ou 60 segundos, ou o valor que você digitar.</>,
+          <>Também funciona antes de {K('Iniciar')}, para um primeiro turno mais longo.</>,
+          <>{K('↺')} reinicia o cronômetro com o tempo de discurso completo.</>),
       }),
     },
     {
       id: 'rtr', kind: 'spotlight',
       otterImage: '/Otter.Tutorial.webp',
       spotlightTargets: ['rtr-button'], spotlightRadius: 12,
-      bubbleText: pick(language, {
-        ar: <>يمنح {GR('حق الرد')} مندوباً مؤقّتاً منفصلاً للردّ. إنه <strong>لا يمسّ قائمة المتحدثين</strong> إطلاقاً، لذا لا يفقد أحد مكانه في الطابور.</>,
-        fr: <>{GR('Droit de Réponse')} donne à un délégué un chronomètre séparé pour répondre. Il <strong>ne touche jamais à la liste des orateurs</strong>, donc personne ne perd sa place.</>,
-        es: <>{GR('Derecho a Réplica')} le da al delegado un cronómetro aparte para responder. <strong>Nunca toca la lista de oradores</strong>, así que nadie pierde su lugar.</>,
-        pt: <>O {GR('Direito de Réplica')} dá a uma delegação citada um cronômetro separado para responder. Ele <strong>nunca mexe na lista de oradores</strong>, então ninguém perde o lugar na fila.</>,
-        en: <>{GR('Right to Reply')} gives an accused delegate a separate timer to answer. It <strong>never touches the speakers list</strong>, so nobody loses their place in the queue.</>,
+      copy: pick(language, {
+        en: c('Right to Reply',
+          'Gives a delegation its own timer to answer.',
+          'The speakers list stays exactly as it is, so nobody loses their place.'),
+        es: c('Derecho a Réplica',
+          'Da a una delegación su propio cronómetro para responder.',
+          'La lista de oradores no cambia, así que nadie pierde su lugar.'),
+        fr: c('Droit de Réponse',
+          'Donne à une délégation son propre chronomètre pour répondre.',
+          'La liste des orateurs ne bouge pas, personne ne perd sa place.'),
+        ar: c('حق الرد',
+          'يمنح الوفد مؤقّتاً خاصاً به للردّ.',
+          'تبقى قائمة المتحدثين كما هي، فلا يفقد أحد مكانه.'),
+        pt: c('Direito de Réplica',
+          'Dá a uma delegação um cronômetro próprio para responder.',
+          'A lista de oradores fica igual, então ninguém perde o lugar.'),
       }),
     },
     {
       id: 'tab-rollcall', kind: 'spotlight',
       otterImage: '/Otter.Tutorial.webp',
       spotlightTargets: ['tab-rollcall'], spotlightRadius: 6,
-      bubbleText: pick(language, {
-        ar: <>{G('تدقيق الحضور')}: انقر هنا لتحديد كل مندوب على أنه <strong>غائب</strong> أو <strong>حاضر</strong> أو <strong>حاضر ومصوّت</strong>. يمكنك تحديث الحضور في أي وقت أثناء الجلسة.</>,
-        fr: <>{G('Appel')} : cliquer ici pour marquer chaque délégué comme <strong>Absent</strong>, <strong>Présent</strong> ou <strong>Présent et Votant</strong>. Mettre à jour l&apos;assiduité à tout moment pendant la session.</>,
-        es: <>{G('Lista de Asistencia')}: marca a cada delegado como <strong>Ausente</strong>, <strong>Presente</strong> o <strong>Presente y Votante</strong>. Puedes actualizar la asistencia en cualquier momento.</>,
-        pt: <>{G('Chamada')}: clique aqui para marcar cada delegação como <strong>Ausente</strong>, <strong>Presente</strong> ou <strong>Presente e votante</strong>. Você pode atualizar a presença a qualquer momento da sessão.</>,
-        en: <>{G('Roll Call')}: click here to mark each delegate as <strong>Absent</strong>, <strong>Present</strong>, or <strong>Present & Voting</strong>. You can update attendance at any point during the session.</>,
+      copy: pick(language, {
+        en: c('Roll Call',
+          <>Mark each delegation {K('Absent')}, {K('Present')} or {K('Present and voting')} with one tap.</>,
+          'Update attendance at any point in the session.'),
+        es: c('Lista de Asistencia',
+          <>Marca cada delegación como {K('Ausente')}, {K('Presente')} o {K('Presente y votante')} con un toque.</>,
+          'Actualiza la asistencia en cualquier momento de la sesión.'),
+        fr: c('Appel',
+          <>Marquez chaque délégation {K('Absente')}, {K('Présente')} ou {K('Présente et votante')} d&apos;un seul geste.</>,
+          'Mettez la présence à jour à tout moment de la séance.'),
+        ar: c('تدقيق الحضور',
+          <>حدّد كل وفد {K('غائباً')} أو {K('حاضراً')} أو {K('حاضراً ومصوّتاً')} بنقرة واحدة.</>,
+          'حدّث الحضور في أي وقت أثناء الجلسة.'),
+        pt: c('Chamada',
+          <>Marque cada delegação como {K('Ausente')}, {K('Presente')} ou {K('Presente e votante')} com um toque.</>,
+          'Atualize a presença a qualquer momento da sessão.'),
       }),
     },
     {
       id: 'seat-add', kind: 'spotlight',
       otterImage: '/Otter.Tutorial.webp',
       spotlightTargets: ['seat-add'], spotlightRadius: 999,
-      bubbleText: pick(language, {
-        ar: <>هل ينقص أحدهم من قائمة المقاعد؟ الصندوق الصغير {G('إضافة مقعد')} بجانب مؤشّرات النِّصاب يقبل اسم أي {G('دولة')} أو أي اسم تكتبه. يضيفه {G('Enter')} <strong>حاضراً</strong> فوراً، و{G('Shift + Enter')} يضيفه <strong>مراقباً</strong>.</>,
-        fr: <>Quelqu&apos;un manque à la liste ? La petite case {G('Ajouter un siège')}, à côté des indicateurs de quorum, accepte n&apos;importe quel {G('pays')} ou n&apos;importe quel nom que vous tapez. {G('Entrée')} l&apos;installe <strong>présent</strong> tout de suite, {G('Maj + Entrée')} l&apos;installe comme <strong>observateur</strong>.</>,
-        es: <>¿Falta alguien en la lista? La cajita {G('Añadir un asiento')}, junto a los indicadores de cuórum, acepta cualquier {G('país')} o cualquier nombre que escribas. {G('Enter')} lo sienta <strong>presente</strong> al instante, y {G('Shift + Enter')} lo sienta como <strong>observador</strong>.</>,
-        pt: <>Falta alguém na lista? A caixinha {G('Adicionar assento')}, ao lado dos indicadores de quórum, aceita qualquer {G('país')} ou qualquer nome que você digitar. {G('Enter')} adiciona a delegação como <strong>presente</strong> na hora, e {G('Shift + Enter')} a adiciona como <strong>observadora</strong>.</>,
-        en: <>Somebody missing from the roster? The small {G('Add a seat')} box beside the quorum tabs takes any {G('country')} or any name you type. {G('Enter')} seats them <strong>present</strong> straight away; {G('Shift + Enter')} seats them as an <strong>observer</strong>.</>,
+      copy: pick(language, {
+        en: c('Add a seat',
+          'Somebody missing? Type any country or name in this box.',
+          <>{K('Enter')} adds them as present.</>,
+          <>{K('Shift + Enter')} adds them as an observer.</>),
+        es: c('Añadir un asiento',
+          '¿Falta alguien? Escribe cualquier país o nombre en esta caja.',
+          <>{K('Enter')} lo añade como presente.</>,
+          <>{K('Shift + Enter')} lo añade como observador.</>),
+        fr: c('Ajouter un siège',
+          'Quelqu’un manque ? Tapez n’importe quel pays ou nom dans cette case.',
+          <>{K('Entrée')} l&apos;ajoute présent.</>,
+          <>{K('Maj + Entrée')} l&apos;ajoute comme observateur.</>),
+        ar: c('إضافة مقعد',
+          'ينقص أحدهم؟ اكتب اسم أي دولة أو أي اسم في هذا الصندوق.',
+          <>يضيفه {K('Enter')} حاضراً.</>,
+          <>ويضيفه {K('Shift + Enter')} مراقباً.</>),
+        pt: c('Adicionar assento',
+          'Falta alguém? Digite qualquer país ou nome nesta caixa.',
+          <>{K('Enter')} adiciona como presente.</>,
+          <>{K('Shift + Enter')} adiciona como observador.</>),
       }),
     },
     {
       id: 'tab-motions', kind: 'spotlight',
       otterImage: '/Otter.Tutorial.webp',
       spotlightTargets: ['tab-motions'], spotlightRadius: 6,
-      bubbleText: pick(language, {
-        ar: <>{G('الاقتراحات')}: عندما يرفع مندوب لافتته، <strong>تُدخل الاقتراح أنت</strong> هنا وتختار مَن اقترحه: <strong>حوار منهجي</strong> أو <strong>حرّ</strong> أو <strong>جولة متحدثين</strong> أو <strong>مشاورات الهيئة</strong>. ومن هنا أيضاً {GR('تعليق')} أو {GR('إنهاء النقاش')}.</>,
-        fr: <>{G('Motions')} : quand un délégué lève sa pancarte, <strong>c&apos;est vous qui saisissez la motion</strong> ici et choisissez qui la propose : <strong>Caucus modéré</strong>, <strong>non modéré</strong>, <strong>Tour de table</strong> ou <strong>Consultation de l&apos;assemblée</strong>. C&apos;est aussi d&apos;ici qu&apos;on {GR('suspend')} ou {GR('clôture le débat')}.</>,
-        es: <>{G('Mociones')}: cuando un delegado levanta su placa, <strong>tú registras la moción</strong> aquí y eliges quién la propone: <strong>Cáucus Moderado</strong>, <strong>No Moderado</strong>, <strong>Round Robin</strong> o <strong>Consulta de Gabinete</strong>. También {GR('suspendes')} o {GR('cierras el debate')} desde aquí.</>,
-        pt: <>{G('Moções')}: quando uma delegação levanta a placa, <strong>é você quem registra a moção</strong> aqui e escolhe quem a propôs: <strong>Debate Moderado</strong>, <strong>Debate Não Moderado</strong>, <strong>Tour de Table</strong> ou <strong>Consulta Plenária</strong>. O {GR('adiamento')} e o {GR('encerramento do debate')} também ficam aqui.</>,
-        en: <>{G('Motions')}: when a delegate raises their placard, <strong>you key the motion in</strong> here and pick who proposed it: <strong>Moderated Caucus</strong>, <strong>Unmoderated</strong>, <strong>Tour de Table</strong>, or <strong>Consultation of the Whole</strong>. {GR('Suspend')} and {GR('close debate')} live here too.</>,
+      copy: pick(language, {
+        en: c('Motions',
+          'When a delegate raises their placard, you enter the motion here and pick who proposed it.',
+          'Moderated and unmoderated caucuses, Tour de Table, Consultation of the Whole.',
+          <>{K('Suspend')} and {K('close debate')} are here too.</>),
+        es: c('Mociones',
+          'Cuando un delegado levanta su placa, registras la moción aquí y eliges quién la propuso.',
+          'Cáucus moderado y no moderado, Round Robin, Consulta de Gabinete.',
+          <>{K('Suspender')} y {K('cerrar el debate')} también están aquí.</>),
+        fr: c('Motions',
+          'Quand un délégué lève sa pancarte, vous saisissez la motion ici et choisissez qui la propose.',
+          'Caucus modéré et non modéré, Tour de table, Consultation de l’assemblée.',
+          <>{K('Suspendre')} et {K('clore le débat')} se font ici aussi.</>),
+        ar: c('الاقتراحات',
+          'عندما يرفع مندوب لافتته، تُدخل الاقتراح هنا وتختار من اقترحه.',
+          'حوار منهجي وحرّ، وجولة متحدثين، ومشاورات الهيئة.',
+          <>{K('تعليق')} النقاش و{K('إنهاؤه')} من هنا أيضاً.</>),
+        pt: c('Moções',
+          'Quando uma delegação levanta a placa, você registra a moção aqui e escolhe quem a propôs.',
+          'Debate Moderado e Não Moderado, Tour de Table, Consulta Plenária.',
+          <>{K('Suspender')} e {K('encerrar o debate')} também ficam aqui.</>),
       }),
     },
     {
       id: 'tab-documents', kind: 'spotlight',
       otterImage: '/Otter.Tutorial.webp',
       spotlightTargets: ['tab-documents'], spotlightRadius: 6,
-      bubbleText: pick(language, {
-        ar: <>{G('المستندات')}: تصل هنا <strong>{docs.wpPlural}</strong> و<strong>{docs.drPlural}</strong> التي يقدّمها المندوبون. اضغط <strong>تقديم</strong> لتشغيل مراحل {GR('القراءة')} و{GR('العرض')} و{GR('الأسئلة')} على شاشتك؛ تُعتمد {docs.wpSingular} تلقائياً بعدها، أمّا {docs.drSingular} فينتقل إلى {GR('صفحة التصويت')}، حيث تُجري تدقيق الحضور ثم تصوّت من المنصّة أو تدع الوفود تصوّت من <strong>هواتفها</strong>.</>,
-        fr: <>{G('Documents')} : les <strong>{docs.wpPlural}</strong> et <strong>{docs.drPlural}</strong> soumis par les délégués arrivent ici. <strong>Introduire</strong> lance les étapes {GR('Lecture')}, {GR('Présentation')} et {GR('Q&R')} sur votre écran ; {docs.wpSingular} est adopté automatiquement ensuite, {docs.drSingular} part vers la {GR('page de vote')}, où vous faites l&apos;appel puis votez depuis la tribune ou laissez les délégations voter sur <strong>leur téléphone</strong>.</>,
-        es: <>{G('Documentos')}: aquí llegan <strong>{docs.wpPlural}</strong> y <strong>{docs.drPlural}</strong> que envían los delegados. <strong>Introducir</strong> lanza las etapas de {GR('Lectura')}, {GR('Presentación')} y {GR('Preguntas')} en tu pantalla; {docs.wpSingular} se aprueba automáticamente al terminar, y {docs.drSingular} pasa a la {GR('página de votación')}, donde pasas lista y votas desde la mesa o dejas que las delegaciones voten desde <strong>su teléfono</strong>.</>,
-        pt: <>{G('Documentos')}: aqui chegam <strong>{docs.wpPlural}</strong> e <strong>{docs.drPlural}</strong> enviados pelas delegações. <strong>Introduzir</strong> conduz as etapas de {GR('Leitura')}, {GR('Apresentação')} e {GR('Perguntas')} na sua tela; depois, cada {docs.wpSingular} vai direto à aprovação, e cada {docs.drSingular} segue para a {GR('página de votação')}, onde você faz a chamada e vota pela Mesa ou deixa as delegações votarem no <strong>próprio celular</strong>.</>,
-        en: <>{G('Documents')}: <strong>{docs.wpPlural}</strong> and <strong>{docs.drPlural}</strong> submitted by delegates land here. <strong>Introduce</strong> runs the {GR('Reading')}, {GR('Presentation')} and {GR('Q&A')} stages on your screen; a {docs.wpSingular} auto-passes afterwards, a {docs.drSingular} goes to the {GR('voting page')}, where you take the roll and then vote from the dais or let delegations vote on <strong>their own phones</strong>.</>,
+      copy: pick(language, {
+        en: c('Documents',
+          <>{K(wp)} and {K(dr)} that delegates submit arrive here.</>,
+          <>{K('Introduce')} runs the Reading, Presentation and Q&amp;A stages on your screen.</>,
+          <>A {wpS} passes after that. A {drS} goes to the voting page.</>,
+          'Vote from the dais, or let delegations vote on their own phones.'),
+        es: c('Documentos',
+          <>Aquí llegan {K(wp)} y {K(dr)} que envían los delegados.</>,
+          <>{K('Introducir')} lanza las etapas de Lectura, Presentación y Preguntas en tu pantalla.</>,
+          <>Después, cada {wpS} se aprueba y cada {drS} pasa a la página de votación.</>,
+          'Vota desde la mesa o deja que las delegaciones voten desde su teléfono.'),
+        fr: c('Documents',
+          <>Les {K(wp)} et {K(dr)} soumis par les délégués arrivent ici.</>,
+          <>{K('Introduire')} lance les étapes Lecture, Présentation et Q&amp;R sur votre écran.</>,
+          <>Ensuite, chaque {wpS} est adopté et chaque {drS} part vers la page de vote.</>,
+          'Votez depuis la tribune, ou laissez les délégations voter sur leur téléphone.'),
+        ar: c('المستندات',
+          <>تصل هنا {K(wp)} و{K(dr)} التي يقدّمها المندوبون.</>,
+          <>زر {K('تقديم')} يشغّل مراحل القراءة والعرض والأسئلة على شاشتك.</>,
+          <>بعدها تُعتمد {wpS}، وينتقل {drS} إلى صفحة التصويت.</>,
+          'صوّت من المنصّة، أو دع الوفود تصوّت من هواتفها.'),
+        pt: c('Documentos',
+          <>Aqui chegam {K(wp)} e {K(dr)} enviados pelas delegações.</>,
+          <>{K('Introduzir')} conduz as etapas de Leitura, Apresentação e Perguntas na sua tela.</>,
+          <>Depois, cada {wpS} é aprovado e cada {drS} segue para a página de votação.</>,
+          'Vote pela Mesa ou deixe as delegações votarem no próprio celular.'),
       }),
     },
     {
       id: 'tab-chat', kind: 'spotlight',
       otterImage: '/Otter.Tutorial.webp',
       spotlightTargets: ['tab-chat'], spotlightRadius: 6,
-      bubbleText: pick(language, {
-        ar: <>{G('المحادثة')}: راسل <strong>جميع المندوبين</strong> دفعة واحدة أو أرسل رسائل خاصة فردية. نوصي بإبقائها مفتوحة على <strong>جهازك الشخصي</strong> بدلاً من شاشة اللجنة الرئيسية.</>,
-        fr: <>{G('Chat')} : envoyez un message à <strong>tous les délégués</strong> ou des messages privés individuels. Nous recommandons de le garder ouvert sur votre <strong>appareil personnel</strong> plutôt que sur l&apos;écran principal du comité.</>,
-        es: <>{G('Chat')}: envía mensajes a <strong>todos los delegados</strong> o DM individuales. Recomendamos tenerlo abierto en tu <strong>dispositivo personal</strong>.</>,
-        pt: <>{G('Chat')}: envie mensagens a <strong>todas as delegações</strong> de uma vez ou mensagens privadas individuais. Recomendamos deixá-lo aberto no seu <strong>dispositivo pessoal</strong>, e não na tela principal do comitê.</>,
-        en: <>{G('Chat')}: message <strong>all delegates</strong> at once or DM individuals. We recommend keeping this open on your <strong>personal device</strong> rather than the main committee screen.</>,
+      copy: pick(language, {
+        en: c('Chat',
+          'Message every delegate at once, or one delegation privately.',
+          'Keep it open on your own device, not the room’s main screen.'),
+        es: c('Chat',
+          'Escribe a todos los delegados a la vez o a una delegación en privado.',
+          'Tenlo abierto en tu propio dispositivo, no en la pantalla principal de la sala.'),
+        fr: c('Chat',
+          'Écrivez à tous les délégués à la fois, ou à une délégation en privé.',
+          'Gardez-le ouvert sur votre propre appareil, pas sur l’écran principal de la salle.'),
+        ar: c('المحادثة',
+          'راسل جميع المندوبين دفعة واحدة، أو وفداً واحداً على انفراد.',
+          'أبقها مفتوحة على جهازك الشخصي، لا على شاشة القاعة الرئيسية.'),
+        pt: c('Chat',
+          'Envie mensagem a todas as delegações de uma vez, ou a uma delegação em particular.',
+          'Deixe-o aberto no seu próprio dispositivo, não na tela principal da sala.'),
       }),
     },
     {
       id: 'tab-settings', kind: 'spotlight',
       otterImage: '/Otter.Tutorial.webp',
       spotlightTargets: ['tab-settings'], spotlightRadius: 6,
-      bubbleText: pick(language, {
-        ar: <>{G('الإعدادات')} خمس تبويبات: {GR('الوصول')} (رمز الجلسة وكلمة مرور الرئاسة، وهيئة الرئاسة، وما يُسمح للمندوبين بفعله)، و{GR('الاقتراحات')} (تفعيل الاقتراحات وترتيبها وإعادة تسميتها، واعتماد المستندات وأسماؤها)، و{GR('التصويت')} (النِّصاب والأغلبيات وحق النقض)، و{GR('النقاط')}، و{GR('الأشخاص')} (كل المتصلين الآن، مع إمكانية إخراج من جلس على مقعد خطأ).</>,
-        fr: <>{G('Paramètres')}, cinq onglets : {GR('Accès')} (code de session et mot de passe de présidence, le présidium, ce que les délégués peuvent faire), {GR('Motions')} (activer, réordonner et renommer les motions, approbation et noms des documents), {GR('Vote')} (quorum, majorités, veto), {GR('Points')} et {GR('Personnes')} (tout le monde connecté en ce moment, et le retrait de qui occupe le mauvais siège).</>,
-        es: <>{G('Configuración')}, cinco pestañas: {GR('Acceso')} (código de sesión y contraseña de presidencia, la mesa, y qué pueden hacer los delegados), {GR('Mociones')} (activar, reordenar y renombrar mociones, aprobación y nombres de documentos), {GR('Votación')} (cuórum, mayorías, veto), {GR('Puntos')} y {GR('Personas')} (todos los conectados ahora mismo, y sacar a quien esté en el asiento equivocado).</>,
-        pt: <>{G('Configurações')} tem cinco abas: {GR('Acesso')} (código da sessão e senha da Mesa, quem está na Mesa, o que as delegações podem fazer), {GR('Moções')} (ativar, reordenar e renomear moções, aprovação e nomes dos documentos), {GR('Votação')} (quórum, maiorias, veto), {GR('Pontos')} e {GR('Pessoas')} (todos que estão conectados agora, e a opção de remover quem estiver no assento errado).</>,
-        en: <>{G('Settings')} has five tabs: {GR('Access')} (the session code and the chair password, the dais, what delegates may do), {GR('Motions')} (enable, reorder and rename motions, document approval and names), {GR('Voting')} (quorum, majorities, veto), {GR('Points')}, and {GR('People')} (everyone connected right now, and removing anyone on the wrong seat).</>,
+      copy: pick(language, {
+        en: c('Settings',
+          <>{K('Access')}: the session code, the chair password and what delegates may do.</>,
+          <>{K('Motions')}: turn motions on or off, reorder and rename them.</>,
+          <>{K('Voting')}: quorum, majorities and veto.</>,
+          <>{K('Points')} and {K('People')}: what scores, and who is connected right now.</>),
+        es: c('Configuración',
+          <>{K('Acceso')}: el código de sesión, la contraseña de presidencia y qué pueden hacer los delegados.</>,
+          <>{K('Mociones')}: activa, ordena y renombra las mociones.</>,
+          <>{K('Votación')}: cuórum, mayorías y veto.</>,
+          <>{K('Puntos')} y {K('Personas')}: qué puntúa y quién está conectado ahora.</>),
+        fr: c('Paramètres',
+          <>{K('Accès')} : le code de session, le mot de passe de présidence et ce que les délégués peuvent faire.</>,
+          <>{K('Motions')} : activez, réordonnez et renommez les motions.</>,
+          <>{K('Vote')} : quorum, majorités et veto.</>,
+          <>{K('Points')} et {K('Personnes')} : ce qui rapporte des points, et qui est connecté en ce moment.</>),
+        ar: c('الإعدادات',
+          <>{K('الوصول')}: رمز الجلسة وكلمة مرور الرئاسة وما يُسمح للمندوبين بفعله.</>,
+          <>{K('الاقتراحات')}: فعّلها أو أوقفها، ورتّبها وأعد تسميتها.</>,
+          <>{K('التصويت')}: النِّصاب والأغلبيات وحق النقض.</>,
+          <>{K('النقاط')} و{K('الأشخاص')}: ما يمنح النقاط، ومن المتصل الآن.</>),
+        pt: c('Configurações',
+          <>{K('Acesso')}: o código da sessão, a senha da Mesa e o que as delegações podem fazer.</>,
+          <>{K('Moções')}: ative, reordene e renomeie as moções.</>,
+          <>{K('Votação')}: quórum, maiorias e veto.</>,
+          <>{K('Pontos')} e {K('Pessoas')}: o que vale pontos e quem está conectado agora.</>),
       }),
     },
     {
       // 21 Oct 2026 (owner): the old full-page scoreboard explainer was too long. Now a
-      // step like every other: the trophy lit, one short title, one plain line.
+      // step like every other: the trophy lit, a short title and two points.
       id: 'scoreboard', kind: 'spotlight',
       otterImage: '/Otter.Tutorial.webp',
       spotlightTargets: ['tab-scoreboard'], spotlightRadius: 12,
-      title: pick(language, {
-        ar: 'لوحة النقاط',
-        fr: 'Tableau des scores',
-        es: 'Marcador',
-        pt: 'Placar',
-        en: 'Scoreboard',
-      }),
-      bubbleText: pick(language, {
-        ar: <>كل الوفود مرتّبة لحظياً، والنقاط تُحتسب تلقائياً. غيّر ما يمنح النقاط من {GR('الإعدادات ← النقاط')}.</>,
-        fr: <>Toutes les délégations, classées en direct, et les points s&apos;ajoutent tout seuls. Choisissez ce qui rapporte des points dans {GR('Paramètres → Points')}.</>,
-        es: <>Todas las delegaciones, clasificadas en vivo, y los puntos se suman solos. Elige qué da puntos en {GR('Configuración → Puntos')}.</>,
-        pt: <>Todas as delegações, classificadas ao vivo, e os pontos entram sozinhos. Escolha o que vale pontos em {GR('Configurações → Pontos')}.</>,
-        en: <>Every delegation, ranked live, and the points add up on their own. Choose what earns points in {GR('Settings → Points')}.</>,
+      copy: pick(language, {
+        en: c('Scoreboard',
+          'Every delegation, ranked live.',
+          <>Points add up on their own. Choose what scores in {GR('Settings → Points')}.</>),
+        es: c('Marcador',
+          'Todas las delegaciones, clasificadas en vivo.',
+          <>Los puntos se suman solos. Elige qué puntúa en {GR('Configuración → Puntos')}.</>),
+        fr: c('Tableau des scores',
+          'Toutes les délégations, classées en direct.',
+          <>Les points s&apos;ajoutent tout seuls. Choisissez ce qui compte dans {GR('Paramètres → Points')}.</>),
+        ar: c('لوحة النقاط',
+          'كل الوفود مرتّبة لحظياً.',
+          <>تُحتسب النقاط تلقائياً. اختر ما يمنح النقاط من {GR('الإعدادات ← النقاط')}.</>),
+        pt: c('Placar',
+          'Todas as delegações, classificadas ao vivo.',
+          <>Os pontos entram sozinhos. Escolha o que vale pontos em {GR('Configurações → Pontos')}.</>),
       }),
     },
     {
       id: 'join-code', kind: 'spotlight',
       otterImage: '/Otter.Tutorial.webp',
       spotlightTargets: ['join-code'], spotlightRadius: 8,
-      bubbleText: pick(language, {
-        ar: <>هذا <strong>رمز جلستك</strong>. {GR('انقر عليه')} لعرضه مع {G('رمز QR')} على الشاشة كاملةً أمام القاعة، أو لنسخه. يُدخله المندوبون في {G('gavelling.com')} للانضمام في الوقت الفعلي. أمّا الرؤساء الذين ينضمون إلى المنصة فيحتاجون كلمة مرور الرئاسة المكوّنة من 4 أرقام، الموجودة في {GR('الإعدادات ← الوصول')}.</>,
-        fr: <>Votre <strong>code de session</strong>. {GR('Cliquez dessus')} pour l&apos;afficher en plein écran avec un {G('QR code')} devant toute la salle, ou pour le copier. Les délégués l&apos;entrent sur {G('gavelling.com')} pour rejoindre en temps réel. Les présidents qui rejoignent le présidium ont besoin du mot de passe de présidence à 4 chiffres, dans {GR('Paramètres → Accès')}.</>,
-        es: <>Tu <strong>código de sesión</strong>. {GR('Haz clic')} para mostrarlo a pantalla completa con un {G('código QR')} para toda la sala, o para copiarlo. Los delegados lo ingresan en {G('gavelling.com')} para unirse en tiempo real. Las presidencias que se unen a la mesa necesitan la contraseña de presidencia de 4 dígitos, en {GR('Configuración → Acceso')}.</>,
-        pt: <>O seu <strong>código da sessão</strong>. {GR('Clique nele')} para mostrar o código e um {G('QR code')} em tela cheia para a sala toda, ou para copiá-lo. As delegações o digitam em {G('gavelling.com')} para entrar em tempo real. Os membros da Mesa precisam da senha da Mesa de 4 dígitos, que fica em {GR('Configurações → Acesso')}.</>,
-        en: <>Your <strong>session code</strong>. {GR('Click it')} to put the code and a {G('QR code')} on the screen for the whole room, or to copy it. Delegates enter it at {G('gavelling.com')} to join in real time. Chairs joining the dais need the 4-digit chair password instead, found in {GR('Settings → Access')}.</>,
+      copy: pick(language, {
+        en: c('Your session code',
+          <>{GR('Click it')} to show the code and a QR code to the whole room, or to copy it.</>,
+          <>Delegates enter it at {G('gavelling.com')} to join.</>,
+          <>Chairs joining the dais need the 4-digit chair password, in {GR('Settings → Access')}.</>),
+        es: c('Tu código de sesión',
+          <>{GR('Haz clic')} para mostrar el código y un código QR a toda la sala, o para copiarlo.</>,
+          <>Los delegados lo escriben en {G('gavelling.com')} para unirse.</>,
+          <>Las presidencias que se unen a la mesa necesitan la contraseña de 4 dígitos, en {GR('Configuración → Acceso')}.</>),
+        fr: c('Votre code de session',
+          <>{GR('Cliquez dessus')} pour afficher le code et un QR code à toute la salle, ou pour le copier.</>,
+          <>Les délégués le saisissent sur {G('gavelling.com')} pour rejoindre.</>,
+          <>Les présidents qui rejoignent le présidium ont besoin du mot de passe à 4 chiffres, dans {GR('Paramètres → Accès')}.</>),
+        ar: c('رمز جلستك',
+          <>{GR('انقر عليه')} لعرض الرمز ورمز QR أمام القاعة كلها، أو لنسخه.</>,
+          <>يُدخله المندوبون في {G('gavelling.com')} للانضمام.</>,
+          <>يحتاج الرؤساء المنضمون إلى المنصة كلمة مرور الرئاسة من 4 أرقام، في {GR('الإعدادات ← الوصول')}.</>),
+        pt: c('Seu código da sessão',
+          <>{GR('Clique nele')} para mostrar o código e um QR code para a sala toda, ou para copiá-lo.</>,
+          <>As delegações o digitam em {G('gavelling.com')} para entrar.</>,
+          <>Os membros da Mesa precisam da senha de 4 dígitos, em {GR('Configurações → Acesso')}.</>),
       }),
     },
     {
       id: 'goodbye', kind: 'goodbye',
       otterImage: '/Otter.Tutorial.Outro.webp',
       bubbleText: pick(language, {
-        ar: <>استمتع بالاستكشاف! وزوّدنا دائماً بـ {G('ملاحظاتك')}، فهكذا يتحسّن Gavelling. راسلنا على إنستغرام {GR('@wearegavelling')} في أي وقت 🎉</>,
-        fr: <>Amusez-vous à explorer ! Et donnez-nous toujours votre {G('avis')}, c&apos;est comme ça que Gavelling s&apos;améliore. Écrivez-nous sur IG {GR('@wearegavelling')} à tout moment 🎉</>,
-        es: <>¡Diviértete explorando! Y siempre {G('danos tu opinión')}, así mejora Gavelling. Escríbenos en IG {GR('@wearegavelling')} cuando quieras 🎉</>,
-        pt: <>Divirta-se explorando! E sempre {G('mande sua opinião')}, é assim que o Gavelling melhora. Fale com a gente no Instagram {GR('@wearegavelling')} quando quiser 🎉</>,
-        en: <>Have fun exploring! And always {G('give us feedback')}, it&apos;s how Gavelling gets better. Text us on IG {GR('@wearegavelling')} any time 🎉</>,
+        ar: <>استمتع بالاستكشاف! وزوّدنا دائماً بـ {G('ملاحظاتك')}، فهكذا يتحسّن Gavelling. راسلنا على إنستغرام {GR('@wearegavelling')} في أي وقت.</>,
+        fr: <>Amusez-vous à explorer ! Et donnez-nous toujours votre {G('avis')}, c&apos;est comme ça que Gavelling s&apos;améliore. Écrivez-nous sur IG {GR('@wearegavelling')} à tout moment.</>,
+        es: <>¡Diviértete explorando! Y siempre {G('danos tu opinión')}, así mejora Gavelling. Escríbenos en IG {GR('@wearegavelling')} cuando quieras.</>,
+        pt: <>Divirta-se explorando! E sempre {G('mande sua opinião')}, é assim que o Gavelling melhora. Fale com a gente no Instagram {GR('@wearegavelling')} quando quiser.</>,
+        en: <>Have fun exploring! And always {G('give us feedback')}, it&apos;s how Gavelling gets better. Text us on IG {GR('@wearegavelling')} any time.</>,
       }),
     },
   ];
@@ -488,6 +713,9 @@ export default function TutorialOverlay({ committee, onEnd, onStepId }: Props) {
         el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || el.isContentEditable
       );
       if (typing) return;
+      // Enter / Space on a focused button is that button's own press (Back, Skip tutorial,
+      // a video's play button), never "next step" on top of it.
+      if ((e.key === 'Enter' || e.key === ' ') && el?.closest('button')) return;
       if (e.key === 'ArrowLeft') { e.preventDefault(); goBack(); }
       else if (e.key === 'ArrowRight' || e.key === 'Enter' || e.key === ' ') {
         e.preventDefault();
@@ -515,42 +743,103 @@ export default function TutorialOverlay({ committee, onEnd, onStepId }: Props) {
   );
 
   // ── Questionnaire ─────────────────────────────────────────────────────────
+  // 21 Oct 2026 (owner): "way too small, Gavin is too small, way too little text. Like the
+  // YouTube video on the Sessions page, let people watch it directly from there." A wide
+  // card: Gavin standing on its top edge over the words and the two buttons, the chair
+  // guide video big beside them (click to load, nothing from YouTube before the press), and
+  // under it a small slot each for the delegate and faculty advisor videos, drawn only once
+  // their ids are set (DELEGATE_VIDEO_ID / ADVISOR_VIDEO_ID). Fits 1280x800 without
+  // scrolling with both slots; a narrow window stacks the two columns and the card scrolls.
   if (step.kind === 'questionnaire') {
+    const narrow = box.w > 0 && box.w < INTRO_CARD.minWideW;
+    const extraVideos = [
+      { id: DELEGATE_VIDEO_ID, thumb: DELEGATE_VIDEO_THUMB, label: t('tutorial_video_delegates') },
+      { id: ADVISOR_VIDEO_ID, thumb: ADVISOR_VIDEO_THUMB, label: t('tutorial_video_advisors') },
+    ].filter((v): v is { id: string; thumb: string | null; label: string } => !!v.id);
+    // Gavin stands over the middle of the words column (the inline-start column), or the
+    // middle of the card when the columns stack.
+    const otterStart = narrow ? undefined : INTRO_CARD.pad + INTRO_CARD.textW / 2 - INTRO_OTTER.size / 2;
     return (
-      <Portal><div className="fixed inset-0 z-[9990] flex items-center justify-center p-4"
+      <Portal><div className="fixed inset-0 z-[9990] flex items-center justify-center p-6"
         style={{ background: 'rgba(27,56,40,0.88)', backdropFilter: 'blur(4px)' }}>
-        {/* 21 Oct 2026 (owner): a smaller card with Gavin hanging over its top edge. The
-            otter is drawn OUTSIDE the card box (this wrapper does not clip), so the card
-            keeps no space for him inside and nothing is unclipped for him. */}
         <div role="dialog" aria-modal="true" aria-labelledby="tut-q-title"
-          className="relative w-full" style={{ maxWidth: 380, paddingTop: INTRO_OTTER.above }}>
+          className="relative w-full flex flex-col"
+          style={{ maxWidth: narrow ? 560 : INTRO_CARD.maxW, maxHeight: '100%', paddingTop: INTRO_OTTER.above }}>
+          {/* Drawn OUTSIDE the card box (this wrapper does not clip), so the card keeps no
+              space for him inside and nothing is unclipped for him. */}
           <img src="/Otter.Tutorial.Intro.webp" alt="" aria-hidden draggable={false}
             className="absolute select-none pointer-events-none"
             style={{
-              top: 0, left: '50%', transform: 'translateX(-50%)', zIndex: 1,
+              top: 0, zIndex: 1,
+              ...(otterStart === undefined
+                ? { left: '50%', transform: 'translateX(-50%)' }
+                : { insetInlineStart: otterStart }),
               width: INTRO_OTTER.size, height: INTRO_OTTER.size, objectFit: 'contain',
-              filter: 'drop-shadow(0 8px 14px rgba(18,42,29,0.28))',
+              filter: 'drop-shadow(0 10px 18px rgba(18,42,29,0.30))',
             }} />
-          <div className="rounded-3xl text-center flex flex-col items-center"
+          <div className="tut-scroll min-h-0 overflow-y-auto overscroll-contain"
             style={{
+              display: 'grid',
+              gridTemplateColumns: narrow ? 'minmax(0, 1fr)' : `${INTRO_CARD.textW}px minmax(0, 1fr)`,
+              gap: narrow ? 22 : 30,
+              borderRadius: 30,
               backgroundColor: '#FFFFFF',
-              padding: `${INTRO_OTTER.size - INTRO_OTTER.above + 14}px 24px 22px`,
-              boxShadow: '0 1px 2px rgba(27,56,40,0.10), 0 24px 60px rgba(18,42,29,0.38)',
+              padding: INTRO_CARD.pad,
+              boxShadow: '0 1px 2px rgba(27,56,40,0.10), 0 28px 70px rgba(18,42,29,0.40)',
             }}>
-            <h2 id="tut-q-title" className="text-[22px] font-extrabold text-[#1C1410] tracking-tight leading-tight [text-wrap:balance]">
-              {t('tutorial_have_you_used')}
-            </h2>
-            <p className="mt-2 text-sm leading-relaxed text-[#6A5A4A] [text-wrap:pretty]">{t('tutorial_gavin_prepared')}</p>
-            <div className="mt-5 flex w-full flex-col gap-2 sm:flex-row-reverse">
-              <button type="button" onClick={advance}
-                className={`${PRIMARY_BTN} flex-[1.3] py-3 text-[15px]`}
-                style={PRIMARY_BTN_STYLE}>
-                {t('tutorial_show_me')}
-              </button>
-              <button type="button" onClick={onEnd}
-                className={`${SECONDARY_BTN} flex-1 py-3 text-[15px]`}>
-                {t('tutorial_skip')}
-              </button>
+            {/* Words and buttons. The top padding is where Gavin's feet overlap the card. */}
+            <div className={`flex flex-col ${narrow ? 'items-center text-center' : ''}`}
+              style={{ paddingTop: INTRO_OTTER.size - INTRO_OTTER.above - INTRO_CARD.pad + 18 }}>
+              <h2 id="tut-q-title" className="text-[30px] font-extrabold text-[#1C1410] tracking-tight leading-[1.12] [text-wrap:balance]">
+                {t('tutorial_have_you_used')}
+              </h2>
+              <p className="mt-3 text-[16px] leading-[1.6] text-[#5A5046] [text-wrap:pretty]">{t('tutorial_gavin_prepared')}</p>
+              <div className="mt-6 flex w-full flex-col gap-2.5" style={{ marginTop: narrow ? 22 : 'auto' }}>
+                <button type="button" onClick={advance}
+                  className={`${PRIMARY_BTN} w-full py-3.5 text-[16px]`}
+                  style={PRIMARY_BTN_STYLE}>
+                  {t('tutorial_show_me')}
+                </button>
+                <button type="button" onClick={onEnd}
+                  className={`${SECONDARY_BTN} w-full py-3.5 text-[16px]`}>
+                  {t('tutorial_skip')}
+                </button>
+              </div>
+            </div>
+
+            {/* The videos: the chair guide big, the delegate and advisor guides under it. */}
+            <div className="min-w-0">
+              <p className="flex items-center gap-1.5 text-[13px] font-bold text-[#1B3828]">
+                <Clapperboard size={15} strokeWidth={1.75} aria-hidden /> {t('sl_video_kicker')}
+              </p>
+              <p className="mt-1 mb-3 text-[18px] font-bold leading-snug text-[#1C1410] [text-wrap:balance]">{t('sl_video_title')}</p>
+              <YouTubeClickToLoad
+                videoId={CHAIR_GUIDE_VIDEO_ID}
+                title={t('sl_video_title')}
+                playLabel={t('sl_video_play')}
+                thumbSrc={CHAIR_GUIDE_THUMB}
+                sizes="560px"
+                radius={16}
+              />
+              {extraVideos.length > 0 && (
+                <div className="mt-4 grid gap-3" style={{ gridTemplateColumns: `repeat(${extraVideos.length}, minmax(0, 1fr))` }}>
+                  {extraVideos.map((v) => (
+                    <div key={v.id} className="min-w-0">
+                      <p className="mb-1.5 text-[13.5px] font-semibold text-[#1C1410]">{v.label}</p>
+                      <YouTubeClickToLoad
+                        videoId={v.id}
+                        title={v.label}
+                        playLabel={v.label}
+                        thumbSrc={v.thumb}
+                        sizes="280px"
+                        radius={12}
+                        discPx={44}
+                        caption={v.thumb ? undefined : v.label}
+                      />
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -595,7 +884,7 @@ export default function TutorialOverlay({ committee, onEnd, onStepId }: Props) {
           }}>
             <div style={{ position: 'relative' }}>
               <div className="tut-scroll" style={{
-                padding: '14px 20px', borderRadius: 16, fontSize: 14, fontWeight: 500,
+                padding: '14px 20px', borderRadius: 16, fontSize: 15, fontWeight: 500,
                 lineHeight: 1.5, color: '#1C1410', textAlign: 'center',
                 backgroundColor: '#FAF8F3', border: '1.5px solid rgba(27,56,40,0.18)',
                 boxShadow: '0 4px 20px rgba(0,0,0,0.15)', maxWidth: 380,
@@ -698,8 +987,7 @@ export default function TutorialOverlay({ committee, onEnd, onStepId }: Props) {
       <TutorialCallout
         stepId={step.id}
         otterImage={step.otterImage}
-        title={step.title}
-        text={step.bubbleText}
+        copy={step.copy}
         targets={spotlightRects.filter((x): x is Rect => !!x)}
         avoid={avoidRects}
         box={box}
@@ -791,14 +1079,20 @@ const SECONDARY_BTN =
   'disabled:cursor-default disabled:opacity-40 disabled:active:scale-100 ' +
   'focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] focus-visible:ring-offset-2 motion-reduce:transition-none';
 
-/** The questionnaire's Gavin (Otter.Tutorial.Intro, full body, ~10% clear at the top):
- *  drawn `size` square, the card's top edge `above` px down, so only his feet overlap it. */
-const INTRO_OTTER = { size: 148, above: 117 };
+/** The first card's Gavin (Otter.Tutorial.Intro, full body, ~10% clear at the top): drawn
+ *  `size` square, the card's top edge `above` px down, so only his feet overlap it.
+ *  21 Oct 2026 (owner: "Gavin is too small"): 148 → 190. */
+const INTRO_OTTER = { size: 190, above: 150 };
+/** The first card: words column `textW` wide beside the videos, at most `maxW` wide; below
+ *  `minWideW` design px of screen the two columns stack. Sized so 1280x800 (FitToScreen's
+ *  820px tall layout) holds the card, Gavin and both small video slots without a scroll. */
+const INTRO_CARD = { maxW: 920, textW: 320, pad: 28, minWideW: 860 };
 
 /** The callout's Gavin (Otter.Tutorial, ~28% clear at the top): his head and shoulders
- *  stand above the card's top edge, the rest overlaps the card's header row. */
-const CALLOUT_OTTER = { size: 84, clearTop: 24, above: 30 };
-const CALLOUT_W = 372;
+ *  stand above the card's top edge, the rest overlaps the card's header row.
+ *  21 Oct 2026 (owner: "Gavin a little bigger"): 84 → 112, the card 372 → 424 wide. */
+const CALLOUT_OTTER = { size: 112, clearTop: 32, above: 40 };
+const CALLOUT_W = 424;
 
 // ─── Callout placement ───────────────────────────────────────────────────────
 // Pure. Everything in fit-root design units. The callout goes beside the lit targets
@@ -875,10 +1169,10 @@ function placeCallout(
 // layout px = design units inside fit-root) and placed by `placeCallout`; hidden until
 // its first measurement so it never flashes in the wrong place.
 function TutorialCallout({
-  stepId, otterImage, title, text, targets, avoid, box, idx, total, isAction, isLast, language,
+  stepId, otterImage, copy, targets, avoid, box, idx, total, isAction, isLast, language,
   onBack, onNext, onEnd,
 }: {
-  stepId: string; otterImage: string; title?: React.ReactNode; text: React.ReactNode;
+  stepId: string; otterImage: string; copy?: StepCopy;
   targets: Rect[]; avoid: Rect[]; box: DesignBox;
   idx: number; total: number; isAction: boolean; isLast: boolean; language: string;
   onBack: () => void; onNext: () => void; onEnd: () => void;
@@ -916,7 +1210,7 @@ function TutorialCallout({
       ref={ref}
       role="dialog"
       aria-live="polite"
-      aria-label={typeof title === 'string' ? title : undefined}
+      aria-label={copy?.title}
       style={{
         position: 'fixed', zIndex: 9995, left: 0, top: 0,
         transform: `translate(${Math.round(pos?.left ?? 0)}px, ${Math.round(pos?.top ?? 0)}px)`,
@@ -941,43 +1235,51 @@ function TutorialCallout({
       />
       <div
         style={{
-          borderRadius: 18, backgroundColor: '#FFFFFF', padding: '10px 14px 14px',
-          boxShadow: '0 1px 2px rgba(27,56,40,0.10), 0 14px 36px rgba(18,42,29,0.26)',
+          borderRadius: 22, backgroundColor: '#FFFFFF', padding: '12px 18px 16px',
+          boxShadow: '0 1px 2px rgba(27,56,40,0.10), 0 16px 40px rgba(18,42,29,0.28)',
         }}
       >
         {/* Header row: kept clear for Gavin's body at the inline start. */}
-        <div className="flex items-center gap-2" style={{ minHeight: 30, paddingInlineStart: CALLOUT_OTTER.size - 4 }}>
-          <span className="tabular-nums" style={{ fontSize: 12, fontWeight: 600, color: '#6A5A4A' }}>
+        <div className="flex items-center gap-2" style={{ minHeight: 40, paddingInlineStart: CALLOUT_OTTER.size - 6 }}>
+          <span className="tabular-nums" style={{ fontSize: 13, fontWeight: 600, color: '#5A5046' }}>
             {idx + 1}/{total}
           </span>
           <button
             type="button"
             onClick={onEnd}
-            className="ms-auto rounded-lg px-2 py-1 cursor-pointer transition-[background-color,transform] duration-150 hover:bg-[rgba(27,56,40,0.06)] active:scale-[0.97] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F]"
-            style={{ fontSize: 12.5, fontWeight: 600, color: '#6A5A4A' }}
+            className="ms-auto rounded-lg px-2.5 py-1.5 cursor-pointer transition-[background-color,transform] duration-150 hover:bg-[rgba(27,56,40,0.06)] active:scale-[0.96] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F]"
+            style={{ fontSize: 13, fontWeight: 600, color: '#5A5046' }}
           >
             {t('tutorial_end')}
           </button>
         </div>
 
-        <div className="tut-scroll mt-2" style={{ maxHeight: 220, overflowY: 'auto', overscrollBehavior: 'contain' }}>
-          {title && (
-            <div className="[text-wrap:balance]" style={{ fontSize: 16, fontWeight: 700, lineHeight: 1.3, color: '#1C1410', marginBottom: 4 }}>
-              {title}
-            </div>
+        {/* One short title, then the points. */}
+        <div className="tut-scroll mt-3" style={{ maxHeight: 300, overflowY: 'auto', overscrollBehavior: 'contain' }}>
+          {copy && (
+            <>
+              <div className="[text-wrap:balance]" style={{ fontSize: 19, fontWeight: 700, lineHeight: 1.25, color: '#1C1410', letterSpacing: '-0.01em' }}>
+                {copy.title}
+              </div>
+              <ul className="mt-2.5 flex flex-col" style={{ gap: 8 }}>
+                {copy.points.map((p, i) => (
+                  <li key={i} className="flex items-start [text-wrap:pretty]" style={{ gap: 10, fontSize: 15, fontWeight: 500, lineHeight: 1.5, color: '#1C1410' }}>
+                    <span aria-hidden className="shrink-0 rounded-full" style={{ width: 6, height: 6, marginTop: '0.62em', backgroundColor: '#B6871F' }} />
+                    <span className="min-w-0">{p}</span>
+                  </li>
+                ))}
+              </ul>
+            </>
           )}
-          <div className="[text-wrap:pretty]" style={{ fontSize: 14, fontWeight: 500, lineHeight: 1.5, color: '#1C1410' }}>
-            {text}
-          </div>
         </div>
 
-        <div className="mt-3 flex items-center justify-end gap-2">
+        <div className="mt-4 flex items-center justify-end gap-2">
           <button type="button" onClick={onBack} disabled={idx <= 0}
-            className={`${SECONDARY_BTN} px-3.5 py-2 text-[13.5px]`}>
+            className={`${SECONDARY_BTN} px-4 py-2.5 text-[14px]`}>
             {backLabel}
           </button>
           <button type="button" onClick={onNext}
-            className={`${PRIMARY_BTN} px-4 py-2 text-[13.5px]`}
+            className={`${PRIMARY_BTN} px-5 py-2.5 text-[14px]`}
             style={PRIMARY_BTN_STYLE}>
             {nextLabel}
           </button>

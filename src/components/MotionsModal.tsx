@@ -1367,6 +1367,7 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
         const caucus = {
           active: true, type: 'moderated' as const, motionLabel: typeMeta['tour'].label,
           purpose: 'Tour de Table (Room Order)',
+          topic: motion.topic || '',
           proposedBy: motion.proposedBy, totalTime: totalTourTime, remainingTime: totalTourTime,
           speakingTime: motion.speakingTime, speakerTimeRemaining: motion.speakingTime,
           currentSpeaker: null, proposerPosition: null, spokenCountries: [],
@@ -1406,6 +1407,7 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
       const caucus = {
         active: true, type: 'moderated' as const, motionLabel: typeMeta['tour'].label,
         purpose: `Tour de Table (${tourOrder === 'desc' ? 'Z→A' : 'A→Z'})`,
+        topic: motion.topic || '',
         proposedBy: motion.proposedBy, totalTime: totalTourTime, remainingTime: totalTourTime,
         speakingTime: motion.speakingTime, speakerTimeRemaining: motion.speakingTime,
         currentSpeaker: null, proposerPosition: null, spokenCountries: [],

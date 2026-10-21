@@ -18,8 +18,9 @@
 - Absent during resume roll call does NOT remove from GSL
 - Begin Session again → absent delegates removed from GSL
 
-### Status slider
-- 3-state: absent → present → present-voting → absent
+### Status picker (was the status slider)
+- 21 Oct 2026 (owner approved): chairs pick a status DIRECTLY instead of cycling absent → present → present-voting → absent. `StatusPicker` in `RollCallPanel.tsx` is three segments A / P / PV (an observer A / P), the full names (`rollcall_status_absent`, `rollcall_status_present`, `rollcall_status_pv`, `src/lib/translationsRollCallPicker.ts`) as titles and accessible names, the group named `rollcall_status_group`. One press sets that status through `setStatus`, which is the old `cycleStatus` write path unchanged (optimistic `localStatuses` + `pendingStatusRef`, the parent's `onStatusChange` riding `rollCallChain` / `claimRollCall`, `resolveJoinRequestsOnAdmit` when an ABSENT delegation with a waiting-room request goes to P or PV). Pressing the status already shown writes nothing. Keyboard: arrows / Home / End move focus between segments, Enter or Space sets the focused one, so walking the control never writes. Commenter or ended: disabled and dimmed, a press raises the "only the Moderator" notice as before. The bulk buttons are unchanged.
+- The resume roll call shows one line at the top, `rollcall_resume_kept` ("Statuses kept from the last session. Change only who is different, then Begin Session."), when `heldPriorSession(committee)` holds: any `__log__` ledger row, a non-empty GSL, a stored (paused) caucus or a held GSL turn. A fresh room has none of these, so it never shows on a first roll call; it does show on a room restarted after End Debate (its statuses were kept too). Nothing is written and Begin Session stays one press.
 - localStatuses state in RollCallPanel for instant optimistic updates
 - localStatuses resets when committee.id changes
 

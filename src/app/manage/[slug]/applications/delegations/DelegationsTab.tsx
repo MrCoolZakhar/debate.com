@@ -1,13 +1,14 @@
 'use client';
 
 // The Delegations tab inside Applications (taste board 2B, 19 Oct 2026; owner
-// 21 Oct 2026): a grid of compact delegation cards, all the same height. Each
-// card leads with the delegation: a big round crest, the name big and bold,
-// "City, Country" small on ONE line with the round flag (short names for long
-// countries: UK, USA, UAE), then one small line with the allocations meter and
-// the next step. Expected / Joined / Paid are NOT on the cards (they took most
-// of each card); they stay in the pop-up's quiet row. A rail holds the totals
-// and how delegations get allocations. A card opens the delegation pop-up.
+// 21 Oct 2026): full-width ROWS, one delegation per line, all the same height
+// (the card grid was too small). Each row leads with the delegation: a big
+// round crest, the name bold, "City, Country" small on ONE line with the round
+// flag (short names for long countries: UK, USA, UAE); then, using the width,
+// its leaders (avatar and name), how many members, and the allocations given
+// (meter, given and filled), then the next step. Expected / Joined / Paid stay
+// in the pop-up's quiet row. A rail holds the totals and how delegations get
+// allocations. A row opens the delegation pop-up. Under 900px a row stacks.
 // Decisions: docs/conferences/delegations.md.
 //
 // Where every number comes from (useDelegationsData.ts, delegationRows.ts):
@@ -37,16 +38,19 @@ import { friendlyError } from '@/lib/friendlyError';
 import { notifyErr, notifyOk } from '@/lib/appNotify';
 import { memberName, type DelegationMemberLite } from '../delegationRows';
 import { useDelegationsData } from './useDelegationsData';
-import DelegationPopup, { type DelegationTab } from './DelegationPopup';
+import DelegationPopup, { leadersOf, type DelegationTab } from './DelegationPopup';
 import { DELEGATIONS_V2_DB, SEAT_LIMIT_OPTIONS, readDelegationSettings, writeDelegationSetting, type SeatLimit } from './v2';
 import {
-  BTN_CLASS, FONT, FOREST, HAIRLINE, INK, INK_SOFT, PlaceLine, SeatMeter, SkeletonRows,
+  BTN_CLASS, FONT, FOREST, HAIRLINE, INK, INK_SOFT, PlaceLine, ROW_LINE, RoundAvatar, SeatMeter, SkeletonRows,
   cardStyle, linkStyle, smallPrimaryBtn,
 } from './kit';
 
-const CARD_GRID: React.CSSProperties = {
-  display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gridAutoRows: '1fr', gap: 14,
-};
+/** Delegation | Leaders | Members | Allocations given | next step. */
+const ROW_COLUMNS = 'minmax(240px, 1.5fr) minmax(180px, 1.3fr) minmax(90px, 0.55fr) minmax(170px, 1fr) 150px';
+/** Every row is this tall at least, so the list reads as one even table. */
+const ROW_HEIGHT = 92;
+/** Leaders named on a row; more show as "+N". */
+const LEADERS_SHOWN = 2;
 
 export interface DelegationsTabProps<M extends DelegationMemberLite> {
   conference: { id: string; slug: string; fee_currency: string };
@@ -171,9 +175,17 @@ export default function DelegationsTab<M extends DelegationMemberLite>(props: De
         )}
 
         {visible.length > 0 && (
-          <div style={CARD_GRID}>
-            {visible.map(r => {
+          <div style={{ ...cardStyle, padding: 0, overflow: 'hidden' }}>
+            <div className="dlgV2Head" style={{ gridTemplateColumns: ROW_COLUMNS, gap: 20, padding: '12px 24px', borderBottom: `1px solid ${ROW_LINE}` }}>
+              {['Delegation', 'Leaders', 'Members', 'Allocations given', ''].map((h, i) => (
+                <span key={i} style={{ fontFamily: FONT, fontSize: 12, fontWeight: 500, color: INK_SOFT }}>{h}</span>
+              ))}
+            </div>
+            {visible.map((r, i) => {
               const giveSeats = r.seatsGiven < r.paid;
+              const leaders = leadersOf(r);
+              const shown = leaders.slice(0, LEADERS_SHOWN);
+              const more = leaders.length - shown.length;
               return (
                 <div
                   key={r.id}
@@ -182,23 +194,45 @@ export default function DelegationsTab<M extends DelegationMemberLite>(props: De
                   aria-label={`Open ${r.name}`}
                   onClick={() => openRow(r.id, 'people')}
                   onKeyDown={e => { if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); openRow(r.id, 'people'); } }}
-                  className="dlgV2Card flex flex-col justify-between focus:outline-none"
-                  style={{ ...cardStyle, borderRadius: 18, padding: '16px 18px', gap: 14, cursor: 'pointer' }}
+                  className="dlgV2Row focus:outline-none"
+                  style={{ gridTemplateColumns: ROW_COLUMNS, gap: 20, minHeight: ROW_HEIGHT, padding: '12px 24px', borderTop: i === 0 ? 'none' : `1px solid ${ROW_LINE}`, cursor: 'pointer' }}
                 >
                   <div className="flex items-center min-w-0" style={{ gap: 14 }}>
-                    <DelegationCrest name={r.name} logoUrl={r.logoUrl} size={64} />
+                    <DelegationCrest name={r.name} logoUrl={r.logoUrl} size={60} />
                     <div className="flex flex-col min-w-0" style={{ gap: 4 }}>
-                      <span className="[overflow-wrap:anywhere]" style={{ fontFamily: FONT, fontSize: 20, fontWeight: 700, letterSpacing: '-0.01em', color: INK, lineHeight: 1.2 }}>{r.name}</span>
+                      <span className="[overflow-wrap:anywhere]" style={{ fontFamily: FONT, fontSize: 18, fontWeight: 700, letterSpacing: '-0.01em', color: INK, lineHeight: 1.25 }}>{r.name}</span>
                       <PlaceLine city={r.city} countryCode={r.countryCode} short oneLine size={15} fontSize={12.5} />
                     </div>
                   </div>
-                  <div className="flex items-center" style={{ gap: 12 }}>
-                    <div className="flex-1 min-w-0 flex flex-col" style={{ gap: 5 }}>
-                      <SeatMeter given={r.seatsGiven} filled={r.seatsFilled} paid={r.paid} height={6} />
-                      <span style={{ fontFamily: FONT, fontSize: 12, color: INK_SOFT, fontVariantNumeric: 'tabular-nums' }}>
-                        <b style={{ color: INK, fontWeight: 600 }}>{r.seatsGiven}</b> {r.seatsGiven === 1 ? 'allocation' : 'allocations'} · <b style={{ color: INK, fontWeight: 600 }}>{r.seatsFilled}</b> filled
+
+                  <div className="flex flex-col min-w-0" style={{ gap: 6 }}>
+                    {leaders.length === 0 ? (
+                      <span style={{ fontFamily: FONT, fontSize: 13, color: INK_SOFT }}>No leader accepted yet</span>
+                    ) : shown.map(l => (
+                      <span key={l.id} className="flex items-center gap-2 min-w-0" title={l.role}>
+                        <RoundAvatar name={l.name} url={l.avatarUrl} size={26} seed={l.id} />
+                        <span className="[overflow-wrap:anywhere]" style={{ fontFamily: FONT, fontSize: 13.5, fontWeight: 500, color: INK, lineHeight: 1.25 }}>{l.name}</span>
                       </span>
-                    </div>
+                    ))}
+                    {more > 0 && (
+                      <span style={{ fontFamily: FONT, fontSize: 12, color: INK_SOFT, paddingLeft: 34 }}
+                        title={leaders.slice(LEADERS_SHOWN).map(l => l.name).join(', ')}>+{more} more</span>
+                    )}
+                  </div>
+
+                  <div className="flex items-baseline" style={{ gap: 6 }}>
+                    <span style={{ fontFamily: FONT, fontSize: 22, fontWeight: 600, color: INK, fontVariantNumeric: 'tabular-nums', lineHeight: 1.1 }}>{r.registered}</span>
+                    <span style={{ fontFamily: FONT, fontSize: 13, color: INK_SOFT }}>{r.registered === 1 ? 'member' : 'members'}</span>
+                  </div>
+
+                  <div className="flex flex-col min-w-0" style={{ gap: 6 }}>
+                    <SeatMeter given={r.seatsGiven} filled={r.seatsFilled} paid={r.paid} height={6} />
+                    <span style={{ fontFamily: FONT, fontSize: 12.5, color: INK_SOFT, fontVariantNumeric: 'tabular-nums' }}>
+                      <b style={{ color: INK, fontWeight: 600 }}>{r.seatsGiven}</b> {r.seatsGiven === 1 ? 'allocation' : 'allocations'} · <b style={{ color: INK, fontWeight: 600 }}>{r.seatsFilled}</b> filled
+                    </span>
+                  </div>
+
+                  <div className="flex dlgV2Action">
                     {giveSeats ? (
                       <Link href={`/manage/${conference.slug}/assignment?mode=delegation-seats&society=${encodeURIComponent(r.id)}`}
                         className={BTN_CLASS} style={{ ...smallPrimaryBtn, textDecoration: 'none' }}
@@ -322,9 +356,16 @@ export default function DelegationsTab<M extends DelegationMemberLite>(props: De
       </div>
 
       <style>{`
-        .dlgV2Card { transition: transform 180ms cubic-bezier(0.22,1,0.36,1); }
-        @media (hover: hover) { .dlgV2Card:hover { transform: translateY(-2px); } }
-        .dlgV2Card:focus-visible { outline: 2px solid #B6871F !important; outline-offset: 2px; }
+        .dlgV2Head { display: none; }
+        .dlgV2Row { display: flex; flex-direction: column; align-items: stretch; transition: background-color 140ms; }
+        .dlgV2Action { justify-content: flex-start; }
+        @media (min-width: 900px) {
+          .dlgV2Head { display: grid; align-items: center; }
+          .dlgV2Row { display: grid; align-items: center; }
+          .dlgV2Action { justify-content: flex-end; }
+        }
+        @media (hover: hover) { .dlgV2Row:hover { background: #FBF9F4; } }
+        .dlgV2Row:focus-visible { outline: 2px solid #B6871F !important; outline-offset: -2px; }
       `}</style>
 
       {open && (

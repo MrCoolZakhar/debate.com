@@ -17,9 +17,13 @@
 // An allocation on a country that is not a slot is listed too. A failed slot
 // read falls back to the people known.
 // PopupShell is the frame the member pop-up (member/MemberDetailsPopup) uses too.
+// The list itself is CommitteeMatrix, which the delegate's Committee section
+// (committee/MyCommitteeSection) draws as well (owner, 21 Oct 2026: "exactly
+// like the committee pop-up"). Each country with a submitted position paper
+// the viewer may read gets an icon + "Paper" (committee/committeePapers.ts).
 
 import { useEffect, useMemo } from 'react';
-import { X } from 'lucide-react';
+import { FileText, X } from 'lucide-react';
 import Portal from '@/components/Portal';
 import { CircleFlag } from '@/components/CircleFlag';
 import { SkeletonBlock } from '@/components/Skeleton';
@@ -27,7 +31,8 @@ import { committeeDisplayName } from '@/lib/presetNames';
 import { DELEGATIONS_V2_DB } from './v2';
 import { useCommitteeRoster, type CommitteeRosterRow } from './committee/committeeRoster';
 import { useCommitteeSlots } from './committee/committeeSlots';
-import { CommitteeDisc, FONT, INK, INK_SOFT, LIFT_SHADOW, LINE, RoundAvatar, STROKE } from './leaderKit';
+import { useCommitteePapers, useOpenCommitteePaper, paperKey } from './committee/committeePapers';
+import { BTN_CLASS, CommitteeDisc, FONT, INK, INK_SOFT, LIFT_SHADOW, LINE, RoundAvatar, STROKE } from './leaderKit';
 
 export interface CommitteeSeatPerson {
   application_id: string;
@@ -221,6 +226,101 @@ function HolderView({ h }: { h: Holder }) {
   );
 }
 
+/** The paper link of one country: thin icon + "Paper", opened in a new tab. */
+function PaperLink({ fileUrl, country }: { fileUrl: string; country: string }) {
+  const open = useOpenCommitteePaper();
+  return (
+    <button
+      type="button"
+      onClick={() => open(fileUrl)}
+      aria-label={`Open the position paper of ${country}`}
+      className={`${BTN_CLASS} inline-flex items-center gap-1.5 rounded-lg flex-none`}
+      style={{ minHeight: 32, padding: '0 8px', border: 'none', background: 'transparent', cursor: 'pointer', fontFamily: FONT, fontSize: 13, fontWeight: 600, color: 'var(--gv-main)' }}
+    >
+      <FileText size={16} strokeWidth={STROKE} aria-hidden />
+      Paper
+    </button>
+  );
+}
+
+/**
+ * Every allocation of one committee, A to Z (the committee pop-up's list).
+ * `people` are this delegation's (or, for a delegate, their own and their
+ * delegation's) with photos; `others` the published rows of everyone else
+ * (my_committee_roster); `rosterSettled` holds the list back until that read
+ * answered, so names never pop in. `paperKeys` are the countries whose papers
+ * the viewer may open while COMMITTEE_PAPERS_DB is false.
+ */
+export function CommitteeMatrix({ committeeId, people, others, openSeats = [], rosterSettled, paperKeys, papersRefresh }: {
+  committeeId: string;
+  people: CommitteeSeatPerson[];
+  others: CommitteeRosterRow[];
+  openSeats?: CommitteeOpenSeat[];
+  rosterSettled: boolean;
+  paperKeys: string[];
+  /** Changes when the viewer's own paper changes, to read the papers again. */
+  papersRefresh?: string | number | boolean | null;
+}) {
+  const slots = useCommitteeSlots(committeeId);
+  const papers = useCommitteePapers(committeeId, paperKeys, papersRefresh);
+  const cells = useMemo(() => {
+    if (!slots || !rosterSettled) return null;
+    return buildCells(slots.kind === 'ok' ? slots.slots : [], people, others, openSeats);
+  }, [slots, rosterSettled, people, others, openSeats]);
+
+  if (cells === null) {
+    return (
+      <div className="flex flex-col gap-2" aria-busy="true">
+        {[0, 1, 2, 3, 4].map(i => <SkeletonBlock key={i} height={44} radius={10} />)}
+      </div>
+    );
+  }
+  if (cells.length === 0) {
+    return <p style={{ fontFamily: FONT, fontSize: 14, color: INK_SOFT, margin: 0 }}>The organisers have not added countries to this committee yet.</p>;
+  }
+  return (
+    <div className="flex flex-col" style={{ gap: 2 }}>
+      {cells.map((c, i) => {
+        const yours = c.holder.kind === 'own' || c.holder.kind === 'own-open';
+        const me = c.holder.kind === 'own' && c.holder.person.is_me === true;
+        const firstOfCountry = i === 0 || keyOf(cells[i - 1].country_code, cells[i - 1].country_name) !== keyOf(c.country_code, c.country_name);
+        // A double delegation shares one paper: drawn once, on its first seat.
+        const paperUrl = firstOfCountry ? papers?.get(paperKey(c.country_code, c.country_name)) ?? null : null;
+        return (
+          <div
+            key={c.key}
+            className="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)] items-center gap-x-4 gap-y-1.5"
+            style={{
+              padding: '8px 10px', borderRadius: 10,
+              borderTop: !firstOfCountry || i === 0 || yours ? 'none' : `1px solid ${LINE}`,
+              background: yours ? YOURS_TINT : 'transparent',
+              boxShadow: me ? 'inset 0 0 0 1.5px var(--gv-main)' : 'none',
+            }}
+          >
+            <span className="flex items-center gap-3 min-w-0">
+              <CircleFlag code={c.country_code} logoUrl={c.logo} label={c.country_name} size={30} decorative />
+              <span className="flex flex-col min-w-0" style={{ lineHeight: 1.3 }}>
+                <span className="[overflow-wrap:anywhere]" style={{ fontFamily: FONT, fontSize: 14.5, fontWeight: 600, color: INK }}>
+                  {c.country_name}
+                </span>
+                {(c.size > 1 || yours) && (
+                  <span className="[overflow-wrap:anywhere]" style={{ fontFamily: FONT, fontSize: 12.5, color: INK_SOFT }}>
+                    {[c.size > 1 ? `Seat ${c.seat}` : null, yours ? 'Your delegation' : null].filter(Boolean).join(' · ')}
+                  </span>
+                )}
+              </span>
+            </span>
+            <span className="min-w-0 pl-[42px] sm:pl-0 flex items-center justify-between gap-2">
+              <span className="min-w-0"><HolderView h={c.holder} /></span>
+              {paperUrl && <PaperLink fileUrl={paperUrl} country={c.country_name} />}
+            </span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 export default function CommitteePopup({ committeeId, name, abbreviation, emblem, people, openSeats = [], onClose }: {
   /** The conference committee; with it the full country matrix is listed. */
   committeeId?: string | null;
@@ -234,70 +334,26 @@ export default function CommitteePopup({ committeeId, name, abbreviation, emblem
   onClose: () => void;
 }) {
   const roster = useCommitteeRoster(committeeId ?? null);
-  const slots = useCommitteeSlots(committeeId ?? null);
   // A roster read that fails (no allocation of this delegation published here
   // yet) is no reason to hide the matrix: it is drawn without other names.
   const others = useMemo(() => (roster?.kind === 'ok' ? roster.rows.filter(r => !r.is_mine && !!r.display_name) : []), [roster]);
   const rosterSettled = !DELEGATIONS_V2_DB || roster !== null;
-  const cells = useMemo(() => {
-    if (!slots || !rosterSettled) return null;
-    return buildCells(slots.kind === 'ok' ? slots.slots : [], people, others, openSeats);
-  }, [slots, rosterSettled, people, others, openSeats]);
+  // A leader reads their own people's papers today (pp_leader_of_member).
+  const paperKeys = useMemo(() => people.filter(p => p.country_name).map(p => paperKey(p.country_code, p.country_name)), [people]);
 
   const short = (abbreviation ?? '').trim() || committeeDisplayName(name, abbreviation);
   const showFull = name.trim() !== short.trim();
 
-  let list: React.ReactNode;
-  if (!committeeId) {
-    list = null;
-  } else if (cells === null) {
-    list = (
-      <div className="flex flex-col gap-2" aria-busy="true">
-        {[0, 1, 2, 3, 4].map(i => <SkeletonBlock key={i} height={44} radius={10} />)}
-      </div>
-    );
-  } else if (cells.length === 0) {
-    list = <p style={{ fontFamily: FONT, fontSize: 14, color: INK_SOFT, margin: 0 }}>The organisers have not added countries to this committee yet.</p>;
-  } else {
-    list = (
-      <div className="flex flex-col" style={{ gap: 2 }}>
-        {cells.map((c, i) => {
-          const yours = c.holder.kind === 'own' || c.holder.kind === 'own-open';
-          const me = c.holder.kind === 'own' && c.holder.person.is_me === true;
-          const firstOfCountry = i === 0 || keyOf(cells[i - 1].country_code, cells[i - 1].country_name) !== keyOf(c.country_code, c.country_name);
-          return (
-            <div
-              key={c.key}
-              className="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)] items-center gap-x-4 gap-y-1.5"
-              style={{
-                padding: '8px 10px', borderRadius: 10,
-                borderTop: !firstOfCountry || i === 0 || yours ? 'none' : `1px solid ${LINE}`,
-                background: yours ? YOURS_TINT : 'transparent',
-                boxShadow: me ? 'inset 0 0 0 1.5px var(--gv-main)' : 'none',
-              }}
-            >
-              <span className="flex items-center gap-3 min-w-0">
-                <CircleFlag code={c.country_code} logoUrl={c.logo} label={c.country_name} size={30} decorative />
-                <span className="flex flex-col min-w-0" style={{ lineHeight: 1.3 }}>
-                  <span className="[overflow-wrap:anywhere]" style={{ fontFamily: FONT, fontSize: 14.5, fontWeight: 600, color: INK }}>
-                    {c.country_name}
-                  </span>
-                  {(c.size > 1 || yours) && (
-                    <span className="[overflow-wrap:anywhere]" style={{ fontFamily: FONT, fontSize: 12.5, color: INK_SOFT }}>
-                      {[c.size > 1 ? `Seat ${c.seat}` : null, yours ? 'Your delegation' : null].filter(Boolean).join(' · ')}
-                    </span>
-                  )}
-                </span>
-              </span>
-              <span className="min-w-0 pl-[42px] sm:pl-0">
-                <HolderView h={c.holder} />
-              </span>
-            </div>
-          );
-        })}
-      </div>
-    );
-  }
+  const list = committeeId ? (
+    <CommitteeMatrix
+      committeeId={committeeId}
+      people={people}
+      others={others}
+      openSeats={openSeats}
+      rosterSettled={rosterSettled}
+      paperKeys={paperKeys}
+    />
+  ) : null;
 
   return (
     <PopupShell

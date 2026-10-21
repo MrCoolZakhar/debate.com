@@ -30,11 +30,12 @@
 // floor".
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { GripHorizontal, X } from 'lucide-react';
 import { useT } from '@/contexts/LanguageContext';
 import { SeatCircleFlag } from '@/components/CircleFlag';
 import SeatName from '@/components/SeatName';
+import FloorModeHeader, { type StripHeader } from '@/components/FloorModeHeader';
 
 type Entry = { delegateId: string; country: string };
 
@@ -44,19 +45,8 @@ const PICKUP_PX = 6;
 /** Up to ten upcoming speakers (owner, 16 Sep 2026). The flags keep their size; the strip
  *  gets wider and the names clamp narrower instead. */
 const VISIBLE = 10;
-/** Where the floor is right now: the mode marker above the flags, a plain icon and a name. */
-export type StripHeader = {
-  /** Lucide glyph drawn bare beside the name (no disc). */
-  icon?: ReactNode;
-  /** "General Speaker's List", or the motion's own name. */
-  label: string;
-  /** Drawn right after the label as " - detail" in regular weight (the caucus topic,
-   *  owner 17 Sep 2026). Omitted on the GSL. */
-  detail?: string | null;
-  /** On the same line after the name: who raised the caucus (CaucusProposer, Oct 2026).
-   *  Never truncated: the motion name gives way first. */
-  trailing?: ReactNode;
-};
+// The header type and its drawing live in FloorModeHeader (one header for every floor mode).
+export type { StripHeader } from '@/components/FloorModeHeader';
 
 type Drag = {
   id: string;
@@ -238,22 +228,9 @@ export default function SpeakerStrip({
 
   return (
     <div className="flex flex-col items-center w-full mb-1 shrink-0 pt-4" data-tutorial="speakers-queue">
-      {header && (
-        // The icon and the motion's name (owner, 16 Sep 2026): no pill, no disc behind the
-        // icon, no queued / spoke count. A caucus adds its topic on the same line after
-        // " - ", not bolded (owner, 17 Sep 2026); the full line is the tooltip when truncated.
-        <div className="flex items-center justify-center gap-2 mb-3 px-4 max-w-full" style={{ color: '#1B3828' }}>
-          {header.icon && <span aria-hidden className="shrink-0 inline-flex">{header.icon}</span>}
-          <span
-            className="min-w-0 truncate text-[15px] tracking-tight"
-            title={header.detail ? `${header.label} - ${header.detail}` : header.label}
-          >
-            <span className="font-black">{header.label}</span>
-            {header.detail && <span className="font-normal">{' - '}{header.detail}</span>}
-          </span>
-          {header.trailing && <span className="shrink-0 max-w-[50%] flex items-center gap-2"><span aria-hidden style={{ color: '#9A8A78' }}>·</span>{header.trailing}</span>}
-        </div>
-      )}
+      {/* The icon and the motion's name, then the caucus topic large beneath it: one shared
+          header for the GSL and every caucus kind (FloorModeHeader, Oct 2026). */}
+      {header && <FloorModeHeader header={header} />}
       <div
         ref={rowRef}
         className={`flex flex-nowrap items-start justify-center min-w-0 px-2 ${dense ? 'gap-2' : 'gap-3'}`}

@@ -25,8 +25,8 @@
 //   People        PeopleTable, with the row menu (MemberMenu); it opens the
 //                 committee pop-up itself and owns Swap allocations (its header
 //                 button turns into Cancel; two picks in the table run the
-//                 swap). Right under the table: Add delegate (AddDelegatePanel,
-//                 moved here from Overview, owner 21 Oct 2026), then an open
+//                 swap). Right under the table: Add a member (AddDelegatePanel,
+//                 the Import delegates pop-up or the invite link), then an open
 //                 swap request's line. Every landed change re-reads in place
 //                 and tells the Overview (announceDelegationChanged).
 //   Right column  FinancialsCard, then the Open allocations list and the
@@ -335,12 +335,14 @@ export default function LeaderCard({
             societyName={societyName}
             allocationSwapMode={allocationSwapMode}
           />
-          {/* Add delegate, right below the people (owner, 21 Oct 2026). */}
+          {/* Add a member, right below the people (owner, 21 Oct 2026): the
+              Import delegates pop-up, or the invite link while imports are off. */}
           <AddDelegatePanel
             societyId={societyId}
             conferenceId={conferenceId}
             societyName={societyName}
-            onAdded={() => { void reloadPay(); announceDelegationChanged(); }}
+            importAvailable={importAvailable}
+            onImport={onImport}
           />
           {swapTools}
         </div>

@@ -143,7 +143,10 @@ function MyConferencesInner() {
         supabase
           .from('conference_allocations')
           .select(`country_name, conferences (${CONF}), conference_committees (name)`)
-          .eq('user_id', user!.id),
+          .eq('user_id', user!.id)
+          // Only an allocation the delegate has been told about (21 Oct 2026):
+          // an unsent one stays hidden everywhere until it is released.
+          .eq('allocation_sent', true),
       ]);
 
       // 1) Organiser
@@ -194,7 +197,6 @@ function MyConferencesInner() {
       for (const row of appRows) {
         const conf = first(row.conferences);
         const committee = first(row.conference_committees)?.name ?? null;
-        const country = row.assigned_country_name ?? null;
         let tag: RoleTag;
         switch (row.role) {
           case 'chair':
@@ -211,12 +213,10 @@ function MyConferencesInner() {
             break;
           case 'delegate':
           default:
-            tag = {
-              key: 'delegate',
-              label: country ? `Delegate · ${country}` : (committee ? `Delegate · ${committee}` : 'Delegate'),
-              tone: ROLE_TONE.delegate,
-              countryName: country ?? undefined,
-            };
+            // The country and committee come only from a SENT allocation
+            // (step 4 below); the application's own assigned_* copy is written
+            // before the delegate is told, so it is never shown here.
+            tag = { key: 'delegate', label: 'Delegate', tone: ROLE_TONE.delegate };
         }
         if (row.role === 'delegate' && row.is_head_delegate) {
           tag = { key: 'head-delegate', label: 'Head Delegate', tone: ROLE_TONE.delegate };

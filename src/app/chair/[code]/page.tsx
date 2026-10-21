@@ -14,6 +14,7 @@ import { moderatorNameOf, notifyCommenterOnly } from '@/lib/commenterNotice';
 import { notifyDelegationAbsent } from '@/lib/absentNotice';
 import DraggablePopover from '@/components/DraggablePopover';
 import SpeakerStrip, { type StripHeader } from '@/components/SpeakerStrip';
+import FloorModeHeader from '@/components/FloorModeHeader';
 import CommenterFloor from '@/components/CommenterFloor';
 import CommenterClock from '@/components/CommenterClock';
 import CaucusProposer from '@/components/CaucusProposer';
@@ -969,20 +970,18 @@ function UnmoderatedCaucusView({ committee, setCommittee, isViewOnly = false, ga
   };
 
   return (
-    <div className="relative flex-1 flex flex-col items-center justify-center px-8 py-12">
-      {/* Absolute overlay: motion name + topic — does not affect centred layout */}
-      <div className="absolute left-0 top-1/2 -translate-y-1/2 flex flex-col gap-2 max-w-[200px] ps-4 pointer-events-none select-none">
-        <span className="text-[#1C1410] font-black text-2xl leading-tight uppercase">
-          {caucus.motionLabel ?? unmoderatedName}
-        </span>
-        {caucus.purpose && (
-          <span className="text-[#1C1410]/70 text-lg font-medium leading-snug">
-            {caucus.purpose}
-          </span>
-        )}
-        {/* Who raised it (Oct 2026, owner): a round flag + the name, wrapping, never cut. */}
-        {caucus.proposedBy && <CaucusProposer proposedBy={caucus.proposedBy} size={26} fontSize={15} className="flex-wrap" />}
+    <div className="relative flex-1 flex flex-col items-center px-8 pb-12">
+      {/* The motion's name, who raised it and the topic: the SAME header, in the same place,
+          as the moderated caucus and the Tour de Table (FloorModeHeader, Oct 2026, owner). */}
+      <div className="w-full flex justify-center pt-4 shrink-0">
+        <FloorModeHeader header={{
+          icon: <Users size={18} strokeWidth={2.4} aria-hidden />,
+          label: caucus.motionLabel ?? unmoderatedName,
+          detail: caucus.purpose || null,
+          trailing: caucus.proposedBy ? <CaucusProposer proposedBy={caucus.proposedBy} size={24} fontSize={14} /> : null,
+        }} />
       </div>
+      <div className="flex-1 w-full flex flex-col items-center justify-center pt-4">
       {/* liveTotal, not caucus.remainingTime — the stored field is the value at the anchor,
           so rendering it raw is a clock that only moves when the chair writes. */}
       {/* A Commenter's gavel cue (Oct 2026): below the committee's gavel mark the running
@@ -1114,6 +1113,7 @@ function UnmoderatedCaucusView({ committee, setCommittee, isViewOnly = false, ga
           </button>
         </div>
       )}
+      </div>
     </div>
   );
 }
@@ -1284,11 +1284,11 @@ function ModeratedCaucusMain({
   // The slot Start will give them: the speaking time, capped to what the caucus has left.
   const onDeckSlot = capSpeakerSlot(speakerTime, liveRemaining);
   const toggleRtr = () => setPopover('rightToReply', 'toggle');
-  // The mode marker above the flags: a bare icon and the motion's name (owner, 16 Sep 2026),
-  // then " - <topic>" in regular weight on the same line (owner, 17 Sep 2026). A Tour de
-  // Table's purpose is an internal marker ("Tour de Table (A→Z)"), never a topic, so it is
-  // not shown.
-  const caucusTopic = !isTdT ? (caucus.purpose ?? '').trim() : '';
+  // The mode marker above the flags (FloorModeHeader, the SAME header as the unmoderated
+  // caucus and the Consultation): a bare icon, the motion's name and who raised it, then the
+  // topic large beneath. A Tour de Table's purpose is an internal marker ("Tour de Table
+  // (A→Z)"), never a topic: its topic rides in `caucus.topic`.
+  const caucusTopic = (isTdT ? (caucus.topic ?? '') : (caucus.purpose ?? '')).trim();
   const caucusStripHeader: StripHeader = {
     icon: <Users size={18} strokeWidth={2.4} aria-hidden />,
     label: committee.caucus?.motionLabel ?? caucusTitle,

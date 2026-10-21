@@ -30,7 +30,7 @@ import { type ReactNode, useEffect, useRef } from 'react';
 import { useT } from '@/contexts/LanguageContext';
 import SeatName from '@/components/SeatName';
 import { SeatCircleFlag } from '@/components/CircleFlag';
-import type { StripHeader } from '@/components/SpeakerStrip';
+import FloorModeHeader, { type StripHeader } from '@/components/FloorModeHeader';
 
 export type CommenterFloorEntry = { delegateId: string; country: string };
 
@@ -96,19 +96,8 @@ export default function CommenterFloor({
     return () => ro.disconnect();
   }, [queueKey]);
 
-  const marker = header ? (
-    <div className="flex items-center justify-center gap-2 mb-3 px-4 max-w-full shrink-0" style={{ color: '#1B3828' }}>
-      {header.icon && <span aria-hidden className="shrink-0 inline-flex">{header.icon}</span>}
-      <span
-        className="min-w-0 truncate text-[15px] tracking-tight"
-        title={header.detail ? `${header.label} - ${header.detail}` : header.label}
-      >
-        <span className="font-black">{header.label}</span>
-        {header.detail && <span className="font-normal">{' - '}{header.detail}</span>}
-      </span>
-      {header.trailing && <span className="shrink-0 max-w-[50%] flex items-center gap-2"><span aria-hidden style={{ color: '#9A8A78' }}>·</span>{header.trailing}</span>}
-    </div>
-  ) : null;
+  // The same header as the Moderator's floor (FloorModeHeader): name, then the topic large.
+  const marker = header ? <FloorModeHeader header={header} className="shrink-0" /> : null;
 
   // One entry per delegation: a stale realtime row can briefly list a delegation twice (or
   // still list the one on the floor), and two cells with one key break the row.

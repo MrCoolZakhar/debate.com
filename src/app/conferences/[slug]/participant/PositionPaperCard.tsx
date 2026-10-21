@@ -9,7 +9,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { ChevronDown, ChevronRight, ChevronUp, Download, FileText } from 'lucide-react';
+import { CheckCircle2, ChevronDown, ChevronRight, ChevronUp, Download, FileText, RotateCcw, Upload } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient, getFreshAuthedClient } from '@/lib/supabase-auth';
 import { isPaperLate, countUnread, downloadPositionPaper, type PaperMessageStub } from '@/lib/positionPapers';
@@ -20,8 +20,10 @@ import { SectionCard, OUTFIT, useAllocationPartner } from './shared';
 import { CardHeading, CARD_TITLE_STYLE, INK_SOFT } from './dashboardKit';
 import type { ParticipantAllocation } from './types';
 import { useScrollLock } from '@/hooks/useScrollLock';
+import DocTile, { TileAction } from './delegation/overview/DocTile';
 import { friendlyError } from '@/lib/friendlyError';
 import { isNoiseError, reportBlocked } from '@/lib/reportCrash';
+import { notifyErr, notifyOk } from '@/lib/appNotify';
 
 interface PositionPaper {
   id: string;
@@ -74,10 +76,15 @@ function storagePathFromUrl(url: string): string | null {
   return i === -1 ? null : url.slice(i + marker.length);
 }
 
-export default function PositionPaperCard({ conferenceId, conferenceSlug, myAllocation, onPaperState }: {
+export default function PositionPaperCard({ conferenceId, conferenceSlug, myAllocation, onPaperState, variant = 'card' }: {
   conferenceId: string;
   conferenceSlug: string;
   myAllocation: ParticipantAllocation | null;
+  /** 'tile': the small tile in the Overview's "Your Seat" (owner, 21 Oct 2026):
+   *  a thin icon, the name, the deadline small beneath and ONE action (Upload,
+   *  which picks a PDF and submits it at once, or Submitted, which opens the
+   *  paper's page). Same reads and writes as the card; outcomes are glass cards. */
+  variant?: 'card' | 'tile';
   /** Told what this card already read (no extra query), so the phone
    *  dashboard's "next step" never asks for a paper that is already in, or
    *  for one the committee is not taking. Null while the read is pending. */
@@ -90,7 +97,8 @@ export default function PositionPaperCard({ conferenceId, conferenceSlug, myAllo
   const [ppEnabled, setPpEnabled] = useState(false);
   const [myPositionPaper, setMyPositionPaper] = useState<PositionPaper | null>(null);
   const [unreadCount, setUnreadCount] = useState(0);
-  const [ppFile, setPPFile] = useState<File | null>(null);
+  const [ppFileState, setPPFile] = useState<File | null>(null);
+  const ppFile = ppFileState;
   const [ppUploading, setPPUploading] = useState(false);
   const [ppError, setPPError] = useState('');
   const [isReplacing, setIsReplacing] = useState(false);
@@ -185,27 +193,55 @@ export default function PositionPaperCard({ conferenceId, conferenceSlug, myAllo
 
   const partner = useAllocationPartner(myAllocation);
 
-  async function handlePPFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
-    const input = e.target;
-    const file = input.files?.[0];
-    // Let the same file be picked again after a refusal (onChange would not fire).
-    input.value = '';
-    if (!file) return;
+  // The tile has no room for an error line: a failed upload is a glass card.
+  useEffect(() => {
+    if (variant !== 'tile' || !ppError) return;
+    notifyErr(ppError);
+    setPPError('');
+  }, [variant, ppError]);
+
+  /** Null when the file is a PDF the bucket takes, else the sentence to show. */
+  async function pdfProblem(file: File): Promise<string | null> {
     // Some Android pickers, Windows set-ups and cloud downloads report '' or
     // application/x-pdf / octet-stream for a real PDF, so the name counts too,
     // and the first bytes decide (a renamed .docx never starts with %PDF-).
     const typeSaysPdf = file.type === 'application/pdf';
-    if (!typeSaysPdf && !/\.pdf$/i.test(file.name)) { setPPFile(null); setPPError(PP_NOT_PDF); return; }
-    if (file.size > PP_MAX_BYTES) { setPPFile(null); setPPError(PP_TOO_LARGE); return; }
+    if (!typeSaysPdf && !/\.pdf$/i.test(file.name)) return PP_NOT_PDF;
+    if (file.size > PP_MAX_BYTES) return PP_TOO_LARGE;
     let magic: string | null = null;
     try {
       magic = String.fromCharCode(...new Uint8Array(await file.slice(0, 5).arrayBuffer()));
     } catch {
       magic = null; // unreadable here: trust only a browser that said application/pdf
     }
-    if (magic === null ? !typeSaysPdf : magic !== '%PDF-') { setPPFile(null); setPPError(PP_NOT_PDF); return; }
+    if (magic === null ? !typeSaysPdf : magic !== '%PDF-') return PP_NOT_PDF;
+    return null;
+  }
+
+  async function handlePPFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const input = e.target;
+    const file = input.files?.[0];
+    // Let the same file be picked again after a refusal (onChange would not fire).
+    input.value = '';
+    if (!file) return;
+    const problem = await pdfProblem(file);
+    if (problem) { setPPFile(null); setPPError(problem); return; }
     setPPError('');
     setPPFile(file);
+  }
+
+  // The tile submits the picked file at once: a first paper, or a new version
+  // of one that was sent back.
+  async function handleTilePick(e: React.ChangeEvent<HTMLInputElement>) {
+    const input = e.target;
+    const file = input.files?.[0];
+    input.value = '';
+    if (!file || ppUploading) return;
+    const problem = await pdfProblem(file);
+    if (problem) { notifyErr(problem); return; }
+    setPPError('');
+    const ok = myPositionPaper ? await handleReplace(file) : await handlePPSubmit(file);
+    if (ok) notifyOk(myPositionPaper ? 'New version submitted' : 'Position paper submitted');
   }
 
   // Points the delegate's existing row at the new file (the chat thread hangs
@@ -249,15 +285,16 @@ export default function PositionPaperCard({ conferenceId, conferenceSlug, myAllo
     setPPUploading(false);
   }
 
-  async function handlePPSubmit() {
-    if (!ppFile || !myAllocation || !user || !session) return;
+  async function handlePPSubmit(fileArg?: File): Promise<boolean> {
+    const ppFile = fileArg ?? ppFileState;
+    if (!ppFile || !myAllocation || !user || !session) return false;
     setPPUploading(true);
     setPPError('');
     const supabase = await client();
-    if (!supabase) { setPPError(PP_SESSION_ENDED); setPPUploading(false); return; }
+    if (!supabase) { setPPError(PP_SESSION_ENDED); setPPUploading(false); return false; }
     const path = `${conferenceId}/${myAllocation.conference_committee_id}/${user.id}_${Date.now()}.pdf`;
     const { error: storageError } = await supabase.storage.from('position-papers').upload(path, ppFile, { contentType: 'application/pdf' });
-    if (storageError) { uploadFailed('upload position paper', 'storage', storageError, path); return; }
+    if (storageError) { uploadFailed('upload position paper', 'storage', storageError, path); return false; }
     const { data: { publicUrl } } = supabase.storage.from('position-papers').getPublicUrl(path);
     const { error: insertError } = await supabase.from('position_papers').insert({
       conference_id: conferenceId,
@@ -282,13 +319,13 @@ export default function PositionPaperCard({ conferenceId, conferenceSlug, myAllo
         // Unknown whether the row landed: keep the object (an orphan is
         // harmless, a paper pointing at a deleted file is not).
         uploadFailed('upload position paper', 'insert', insertError, path);
-        return;
+        return false;
       }
       const row = existing as { id: string; file_url: string } | null;
       if (!row) {
         await supabase.storage.from('position-papers').remove([path]);
         uploadFailed('upload position paper', 'insert', insertError, path);
-        return;
+        return false;
       }
       if (row.file_url !== publicUrl) {
         // An earlier attempt's row: the latest file wins.
@@ -296,38 +333,41 @@ export default function PositionPaperCard({ conferenceId, conferenceSlug, myAllo
         if (!res.ok) {
           if (!res.unknown) await supabase.storage.from('position-papers').remove([path]);
           uploadFailed('upload position paper', 'insert-then-replace', res.error, path);
-          return;
+          return false;
         }
       }
     }
     setPPUploading(false);
     setPPFile(null);
     await loadMyPositionPaper();
+    return true;
   }
 
   // Replace keeps the permanent row (the chat thread hangs off its id) —
   // upload the new file first, update the row in place, then clean up the
   // old storage object and drop a system message marking the new version.
-  async function handleReplace() {
-    if (!ppFile || !myAllocation || !myPositionPaper || !user || !session) return;
+  async function handleReplace(fileArg?: File): Promise<boolean> {
+    const ppFile = fileArg ?? ppFileState;
+    if (!ppFile || !myAllocation || !myPositionPaper || !user || !session) return false;
     setPPUploading(true);
     setPPError('');
     const supabase = await client();
-    if (!supabase) { setPPError(PP_SESSION_ENDED); setPPUploading(false); return; }
+    if (!supabase) { setPPError(PP_SESSION_ENDED); setPPUploading(false); return false; }
     const path = `${conferenceId}/${myAllocation.conference_committee_id}/${user.id}_${Date.now()}.pdf`;
     const { error: storageError } = await supabase.storage.from('position-papers').upload(path, ppFile, { contentType: 'application/pdf' });
-    if (storageError) { uploadFailed('replace position paper', 'storage', storageError, path); return; }
+    if (storageError) { uploadFailed('replace position paper', 'storage', storageError, path); return false; }
     const { data: { publicUrl } } = supabase.storage.from('position-papers').getPublicUrl(path);
     const res = await replaceRowFile(supabase, myPositionPaper.id, myPositionPaper.file_url, ppFile, publicUrl);
     if (!res.ok) {
       if (!res.unknown) await supabase.storage.from('position-papers').remove([path]);
       uploadFailed('replace position paper', 'update', res.error, path);
-      return;
+      return false;
     }
     setPPUploading(false);
     setPPFile(null);
     setIsReplacing(false);
     await loadMyPositionPaper();
+    return true;
   }
 
   async function downloadMine() {
@@ -338,6 +378,7 @@ export default function PositionPaperCard({ conferenceId, conferenceSlug, myAllo
   }
 
   if (!myAllocation) {
+    if (variant === 'tile') return null;
     return (
       <SectionCard>
         <CardHeading title="Position Paper" />
@@ -365,6 +406,60 @@ export default function PositionPaperCard({ conferenceId, conferenceSlug, myAllo
       Due {fmtDate(deadline)}
     </p>
   ) : null;
+
+  if (variant === 'tile') {
+    const picker = (
+      <input type="file" accept="application/pdf,.pdf" onChange={(e) => { void handleTilePick(e); }} className="hidden" ref={ppFileInputRef} />
+    );
+    const pick = () => ppFileInputRef.current?.click();
+    const dueWords = deadline ? (deadlinePassed ? `Was due ${fmtDate(deadline)}` : `Due ${fmtDate(deadline)}`) : null;
+    if (paperLoad === 'loading' && !myPositionPaper) {
+      return <DocTile Icon={FileText} title="Position paper" line={dueWords ?? 'Loading'} />;
+    }
+    if (paperLoad === 'error' && !myPositionPaper) {
+      return (
+        <DocTile
+          Icon={FileText}
+          title="Position paper"
+          line="Could not be read"
+          action={<TileAction Icon={RotateCcw} label="Try again" onClick={() => { setPaperLoad('loading'); void loadMyPositionPaper(); }} />}
+        />
+      );
+    }
+    if (myPositionPaper) {
+      const sentBack = myPositionPaper.status === 'rejected';
+      const accepted = myPositionPaper.status === 'approved';
+      return (
+        <>
+          {picker}
+          <DocTile
+            Icon={FileText}
+            title="Position paper"
+            line={sentBack ? 'Sent back. Upload a new version' : `${accepted ? 'Accepted' : 'Submitted'} ${fmtDate(myPositionPaper.submitted_at)}${unreadCount > 0 ? ` · ${unreadCount} new ${unreadCount === 1 ? 'message' : 'messages'}` : ''}`}
+            lineColor={sentBack ? '#8B2020' : undefined}
+            action={sentBack
+              ? <TileAction Icon={Upload} label={ppUploading ? 'Uploading' : 'Upload'} busy={ppUploading} onClick={pick} />
+              : <TileAction Icon={CheckCircle2} label="Submitted" tone="done" onClick={() => router.push(`/conferences/${conferenceSlug}/papers/${myPositionPaper.id}`)} />}
+          />
+        </>
+      );
+    }
+    if (!ppEnabled) {
+      return <DocTile Icon={FileText} title="Position paper" line={dueWords ? `Opens later. ${dueWords}` : 'Not open yet'} />;
+    }
+    return (
+      <>
+        {picker}
+        <DocTile
+          Icon={FileText}
+          title="Position paper"
+          line={dueWords ?? 'Not submitted yet'}
+          lineColor={deadlineSoon || deadlinePassed ? '#8A5A2E' : undefined}
+          action={<TileAction Icon={Upload} label={ppUploading ? 'Uploading' : 'Upload'} busy={ppUploading} onClick={pick} />}
+        />
+      </>
+    );
+  }
 
   // Once a paper exists (and we aren't mid-replace), the card is a static,
   // always-visible clickable row — no accordion, matching the study guide
@@ -607,7 +702,7 @@ export default function PositionPaperCard({ conferenceId, conferenceSlug, myAllo
                   </ActionButton>
                 )}
                 <ActionButton
-                  onClick={isReplacing ? handleReplace : handlePPSubmit}
+                  onClick={() => { void (isReplacing ? handleReplace() : handlePPSubmit()); }}
                   disabled={!ppFile || ppUploading}
                   background="linear-gradient(135deg, var(--gv-main), var(--gv-main-mid))"
                   color="var(--gv-on-main)"

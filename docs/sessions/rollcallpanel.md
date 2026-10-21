@@ -4,11 +4,11 @@
 
 ### Props that matter
 - `isRollCallPhase`: true during pre-session. Controls: show All P/PV/Clear buttons, suppress GSL removal on absent, and the plain A-Z ordering (see Ordering)
-- `isReadOnly`: true when session ended. Makes status sliders non-interactive.
+- `isReadOnly`: true when session ended. Makes the status pickers non-interactive (disabled).
 - `onListIds`: Set of delegateIds currently on the relevant list (GSL or caucus)
 - `onReorderList`: callback for drag-to-reorder in queue view
 - `speechRunning`: the chair page's `timerRunning` (a press-time state flip, never per second). Part of the scroll-to-top signal, and part of the memo comparator
-- `onJoinRequestResolved(country)`: parent drops that country's `join-request` motions from local state (functional updater) when Roll Call's slider makes an absent delegation with a waiting-room request present
+- `onJoinRequestResolved(country)`: parent drops that country's `join-request` motions from local state (functional updater) when Roll Call's status picker makes an absent delegation with a waiting-room request present
 - `canAddToList(delegateId)`: kept on the props and in the memo comparator; since 13 Oct 2026 an absent row never reaches a list, so the row click no longer asks it. The moderated-caucus panel passes `canAddToCaucusQueue`.
 
 ### Ordering (the A-Z / QUEUE toggle is GONE, 14 Sep 2026)
@@ -20,10 +20,10 @@
 - The onboarding tutorial's `sidebar-view-toggle` step was removed with the toggle.
 
 ### An absent delegate is never added to a list (13 Oct 2026, replaces "Recognising an absent delegate")
-- Owner, from sales calls: tapping an Absent delegation to add it silently marked it Present. Attendance now changes ONLY through Roll Call (the status slider, the bulk roll-call buttons, the waiting room's Approve).
+- Owner, from sales calls: tapping an Absent delegation to add it silently marked it Present. Attendance now changes ONLY through Roll Call (the status picker, the bulk roll-call buttons, the waiting room's Approve).
 - Every add entry point refuses an ABSENT delegation and changes nothing: the sidebar row (click, Enter / Space) on the GSL and the moderated caucus / Tour de Table queue, the GSL search bar (`AddSpeakerInput`, Enter or a suggestion) and the caucus search bar (`CaucusAddSpeakerInput`, Enter, a suggestion, Add first, Add last). Each raises ONE top-right card through `notifyDelegationAbsent` (`src/lib/absentNotice.ts`: `notify`, kind `info`, `NOTIFY_TTL.notice`, urgent, key `delegation-absent:<delegate id>` so repeated taps restart one card): `absent_add_title` "This delegation is Absent" / `absent_add_body` "Make them present using Roll Call.". Observers follow the same rule; every other status adds as before.
 - Absent rows keep their look, focus ring and keyboard access (`canNoticeAbsent`, never in roll call or the Roll Call tab, never read-only or ended); the search bars still list absent delegations with their `rollcall_absent` tag (`showAbsent`; the GSL bar hides them below quorum as before) and a pick leaves the field as it was. In the caucus bar the queue-full refusal is checked first.
-- **Waiting-room requests are answered by Roll Call now.** `cycleStatus` (the status slider), when it moves an ABSENT delegation that has a pending `join-request` to Present or Present and Voting, drops the request locally (`onJoinRequestResolved`, passed to every chair `RollCallPanel`) and calls `resolveJoinRequestsOnAdmit` with the new status (the status write repeated and awaited, then the motion deleted, so the phone never reads "denied"). Without a request nothing extra is written.
+- **Waiting-room requests are answered by Roll Call now.** `setStatus` (the status picker; `cycleStatus` until 21 Oct 2026), when it moves an ABSENT delegation that has a pending `join-request` to Present or Present and Voting, drops the request locally (`onJoinRequestResolved`, passed to every chair `RollCallPanel`) and calls `resolveJoinRequestsOnAdmit` with the new status (the status write repeated and awaited, then the motion deleted, so the phone never reads "denied"). Without a request nothing extra is written.
 - `recogniseAbsentDelegate`, `recogniseIfAbsent`, `onRecognise` and `recognisedStatus` are gone.
 
 ### Seats
@@ -65,3 +65,6 @@
 - The caucus panel's `onReorderList` is now the stable `handleReorderCaucusQueue` (refs for id / code / suffix) instead of an inline arrow, which re-rendered the memoised panel on every page render, timer ticks included.
 - Rows are keyboard operable (`role="button"`, Enter/Space) exactly when a click would do something for this chair (`rowActionable`: has `onAddToList`, not a Commenter, and not an absent row outside the place the absent notice applies). Focus ring is gold.
 - `hideIdentity` now drops the committee heading AND the majority pies: `CommitteeIdentityBadge` above owns both (see the chair page). With `hideIdentity` the panel header holds only the bulk roll-call buttons. Both chair call sites (sidebar and the pre-session card) pass it; `MajorityPie` is still exported for the voting and advisor pages.
+
+- **21 Oct 2026, the slider became a direct picker (owner approved).** `StatusSlider` (one button that cycled A → P → PV) is replaced by `StatusPicker`: the same track, sizes and sliding thumb (44px segments in the full-screen roll call, 30px in the Roll Call tab), but each letter is its own `<button aria-pressed>` with the full status name as `title` and `aria-label`, inside a `role="group"` named `rollcall_status_group`. One press sets that status (`setStatus`); arrows / Home / End move focus, Enter or Space sets. Observers get A / P. The keys `rollcall_slider_hint` and `rollcall_slider_hint_observer` were removed with it. Where this file still says "slider" or "slider mode" for the roll-call rows, read the picker; the local variable `sliderMode` and the prop `showStatusSliders` kept their names.
+- **The resume line** (`rollcall_resume_kept`) sits at the top of the header block on the full-screen roll call when `heldPriorSession(committee)` holds; the memo comparator compares that boolean while `isRollCallPhase`, so a chat message never re-renders the panel mid-session.

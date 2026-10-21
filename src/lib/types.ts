@@ -138,6 +138,10 @@ export interface CaucusState {
   /** Room Order Tour de Table only: database-clock ISO instant the motion passed. Names the
    *  tour instance in each credited speech's turn key. */
   tourStartedAt?: string;
+  /** Tour de Table only: the topic typed when the motion was raised (optional). A tour's
+   *  `purpose` is an internal marker ("Tour de Table (A→Z)"), never a topic, so the topic
+   *  rides here and the floor header shows it like every other caucus's topic. */
+  topic?: string;
 
   // ── Wall-clock ANCHOR for the TOTAL caucus countdown ────────────────────────
   // ISO timestamp of the instant the total clock last (re)started, or null when it is
