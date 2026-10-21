@@ -24,7 +24,7 @@ import {
   ModalOverlay,
   type PoolMember, type SearchApp,
 } from '@/app/manage/[slug]/assignment/delegationShared';
-import { PersonAvatar } from '@/app/manage/[slug]/assignment/page';
+import { PersonAvatar } from '@/app/manage/[slug]/assignment/assignmentKit';
 import { NEU, NeuCard, NeuInset, NeuButton } from '@/components/neu';
 import { StackedName, committeeShortName, byAppliedAt } from '@/app/manage/[slug]/assignment/displayNames';
 

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
-  X, Check, Sparkles, ChevronDown, ChevronUp, Award, Globe2, ArrowRight,
+  X, Check, Sparkles, ChevronDown, ChevronUp, ArrowRight,
   MousePointerClick, Plus, Info, Layers, Gavel, UserRound, Users, Trash2, Repeat, MoreVertical,
   CheckCircle2, Clock, Star,
 } from 'lucide-react';
@@ -13,13 +13,10 @@ import { getAuthedClient } from '@/lib/supabase-auth';
 import { reportBlocked } from '@/lib/reportCrash';
 import { useAuth } from '@/components/AuthProvider';
 import { getCountryByName } from '@/lib/countries';
-import { CircleFlag } from '@/components/CircleFlag';
-import { FitTip, explainReason, missingSignals, type ReasonContext } from '@/app/manage/[slug]/assignment/fitReasons';
+import { explainReason, missingSignals } from '@/app/manage/[slug]/assignment/fitReasons';
 import { CountryName, StackedName, committeeShortName, byAppliedAt } from '@/app/manage/[slug]/assignment/displayNames';
-import { effectiveSlotArt, parseGroups, type SlotGroup } from '@/lib/slotGroups';
+import { parseGroups, type SlotGroup } from '@/lib/slotGroups';
 import { friendlyError } from '@/lib/friendlyError';
-import { ageAt } from '@/lib/age';
-import { LevelInsignia, LEVEL_ACCENT } from '@/app/account/accountUi';
 import DelegationsView from '@/app/manage/[slug]/assignment/DelegationsView';
 import IndependentsView from '@/app/manage/[slug]/assignment/IndependentsView';
 import DelegationSeatsView from '@/app/manage/[slug]/assignment/DelegationSeatsView';
@@ -38,8 +35,6 @@ import { sendChairInvite, findChairInviteRoleConflict } from '@/lib/chairInvites
 import { useDraftNotices, DraftNoticeList } from '@/components/DraftNotice';
 import { useConfirmModal } from '@/components/ConfirmModal';
 import { NotRegisteredChip } from '@/app/manage/[slug]/assignment/delegationShared';
-import { LogoDisc } from '@/components/LogoDisc';
-import { committeeEmblemSrc } from '@/app/manage/[slug]/assignment/delegationSeatsGrid';
 import ProfileLink from '@/components/ProfileLink';
 import {
   NEU, NEU_GRADIENTS, NeuCard, NeuInset, NeuButton, NeuIconDisc, NeuProgress,
@@ -47,88 +42,19 @@ import {
 import Portal from '@/components/Portal';
 import { ModalOverlay as SharedModalOverlay } from '@/components/ModalOverlay';
 import { notifyOk, notifyErr } from '@/lib/appNotify';
+import SeatBoard, { SeatBoardStats } from '@/app/manage/[slug]/assignment/SeatBoard';
+import {
+  type AcceptedApp, type AllocationRow, type SlotRow, type CommitteeData, type UserHistory, type Suggestion,
+  slotLogoUrl, committeeSeatLogo, reasonContext, fitColor, OUTFIT, MONO, FLAG_SHADOW, PersonAvatar, DelegationAvatar,
+  CountryFlag, effectiveLevel, ageOf, committeeLabels, CommitteeLogo, CommitteeDifficultyBadge, PrefRankBadge, ReasonChip,
+  LevelTag, DelegationChip, DelegateDetail, SuggestionCard,
+} from '@/app/manage/[slug]/assignment/assignmentKit';
+import {
+  type ImportanceTier, groupAllocationsByCountry, isSlotFull, lowestOpenSeat, allocationSocietyId, siblingSeatAllocation,
+  distinctCountryFilled, difficultyRank, allocationScore, scorePrefAndExp, spreadSocieties, buildSuggestions,
+  needyCommitteeIds as computeNeedyCommitteeIds,
+} from '@/lib/assignmentFit';
 
-// ── Types ─────────────────────────────────────────────────────────────────────
-
-interface AppPref {
-  preference_order: number;
-  country_code: string;
-  country_name: string;
-  conference_committee_id: string;
-  conference_committees: { name: string; abbreviation: string | null } | null;
-}
-
-interface AcceptedApp {
-  id: string;
-  submitted_at?: string | null;
-  role: string;
-  experience_level: string | null;
-  is_head_delegate: boolean;
-  society_id: string | null;
-  payment_status: string | null;
-  attending: boolean;
-  invited_email: string | null;
-  invited_name: string | null;
-  profiles: {
-    id: string;
-    display_name: string;
-    email: string;
-    nationality: string | null;
-    date_of_birth: string | null;
-    mun_experience_level: string | null;
-    avatar_url: string | null;
-  } | null;
-  societies: { name: string } | null;
-  application_preferences: AppPref[];
-}
-
-interface AllocationRow {
-  id: string;
-  user_id: string | null;
-  country_code: string;
-  country_name: string;
-  // TRUE once this delegate has actually been queued their allocation email.
-  // Written in exactly one place — queueAllocationEmails — and only for
-  // recipients that really got an outbox row, so it is never a claim that
-  // somebody was told when they were not.
-  allocation_sent: boolean;
-  allocation_sent_at?: string | null;
-  application_id: string | null;
-  // Which seat of the slot this row occupies (1 or 2). Uniqueness is now
-  // (conference_committee_id, country_code, seat); a delegation_size 1 slot
-  // only ever has a seat-1 row.
-  seat: number;
-  // A DELEGATION (block) seat: society_id set, user_id + application_id null.
-  // The seat is owned by the delegation until it hands it to one of its
-  // delegates. `delegation` carries the society name for display.
-  society_id?: string | null;
-  delegation?: { name: string } | null;
-  // profiles/applications carry the extra fields the click-into list view and
-  // its reused delegate detail need (delegation, level, DOB, preferences).
-  // They stay optional so the optimistic temp row (applyLocalAllocation) can
-  // omit them; the silent refetch fills them in.
-  profiles: {
-    id?: string;
-    display_name: string;
-    email?: string | null;
-    nationality?: string | null;
-    date_of_birth?: string | null;
-    mun_experience_level?: string | null;
-    avatar_url: string | null;
-  } | null;
-  applications: {
-    invited_name: string | null;
-    experience_level?: string | null;
-    role?: string | null;
-    is_head_delegate?: boolean;
-    society_id?: string | null;
-    payment_status?: string | null;
-    attending?: boolean;
-    invited_email?: string | null;
-    societies?: { name: string } | null;
-    application_preferences?: AppPref[];
-  } | null;
-}
 
 // Rebuild an AcceptedApp shape from an allocation row so the existing
 // DelegateDetail / scoring paths can be reused for an already-assigned
@@ -160,10 +86,6 @@ function allocationToApp(a: AllocationRow): AcceptedApp {
   };
 }
 
-// Importance tiers. Mapping: green = LOW importance to the committee,
-// yellow/gold = MEDIUM, red = HIGH. 'standard' = unrated (neutral). This
-// matches the setup editor's canonical mapping (ConferenceRosterPicker.tsx).
-type ImportanceTier = 'standard' | 'high' | 'medium' | 'low';
 // Urgency order for the drop popup: high > medium > low > standard
 const TIER_RANK: Record<ImportanceTier, number> = { high: 0, medium: 1, low: 2, standard: 3 };
 // `dashes` + `color` both encode the tier, exactly mirroring the committee-setup
@@ -176,103 +98,7 @@ const TIER_META: Record<ImportanceTier, { label: string; color: string; bg: stri
   standard: { label: 'STD',  color: '#9A8A78', bg: 'rgba(154,138,120,0.12)', dashes: 1 },
 };
 
-interface SlotRow {
-  id: string;
-  country_code: string;
-  country_name: string;
-  delegation_size: number;
-  importance: ImportanceTier;
-  /** A seat's own crest; see `src/lib/slotGroups.ts`. */
-  logo_url?: string | null;
-  /** The seat's group in `CommitteeData.groups` (parliamentary committees). */
-  group_id?: string | null;
-}
 
-interface DisplayChair {
-  name: string;
-  avatar_url: string | null;
-}
-
-interface CommitteeData {
-  id: string;
-  name: string;
-  abbreviation: string | null;
-  difficulty: string;
-  total_slots: number;
-  logo_url: string | null;
-  chair_user_ids: string[] | null;
-  display_chairs: DisplayChair[] | null;
-  committee_country_slots: SlotRow[];
-  conference_allocations: AllocationRow[];
-  committee_type?: string | null;
-  /** `conference_committees.groups` jsonb, read through `parseGroups`. */
-  groups?: unknown;
-}
-
-// ── Seat art ──────────────────────────────────────────────────────────────────
-// A seat draws its own logo, then its group's logo, then the national flag
-// (`effectiveSlotArt`). These two helpers resolve the logo half so every
-// `CountryFlag` on the board can be handed a `logoUrl` in one line.
-function slotLogoUrl(committee: Pick<CommitteeData, 'groups'>, slot: SlotRow): string | null {
-  const art = effectiveSlotArt(slot, parseGroups(committee.groups));
-  return art.kind === 'logo' ? art.url : null;
-}
-function committeeSeatLogo(committee: Pick<CommitteeData, 'groups' | 'committee_country_slots'>, countryCode: string): string | null {
-  const slot = committee.committee_country_slots.find(s => s.country_code === countryCode);
-  return slot ? slotLogoUrl(committee, slot) : null;
-}
-
-// ── Double-delegation seat helpers ────────────────────────────────────────────
-// Groups allocation rows by country_code (each group sorted by seat ascending),
-// the shared building block every "is this country/seat open" check now uses
-// instead of the old one-row-per-country Map/Set.
-function groupAllocationsByCountry(allocations: AllocationRow[]): Map<string, AllocationRow[]> {
-  const map = new Map<string, AllocationRow[]>();
-  for (const a of allocations) {
-    const arr = map.get(a.country_code);
-    if (arr) arr.push(a); else map.set(a.country_code, [a]);
-  }
-  for (const arr of map.values()) arr.sort((x, y) => x.seat - y.seat);
-  return map;
-}
-
-// A slot is FULL once its allocation count reaches its delegation_size —
-// this is the "has no open seat" check that replaces every old
-// "has any allocation" (allocatedCodes.has / allocByCode.has) gate.
-function isSlotFull(slot: SlotRow, byCountry: Map<string, AllocationRow[]>): boolean {
-  return (byCountry.get(slot.country_code)?.length ?? 0) >= slot.delegation_size;
-}
-
-// Lowest seat number (1-based) not currently occupied for this slot. Used by
-// every assignment path that doesn't have an explicit seat choice.
-function lowestOpenSeat(slot: SlotRow, byCountry: Map<string, AllocationRow[]>): number {
-  const taken = new Set((byCountry.get(slot.country_code) ?? []).map(a => a.seat));
-  for (let s = 1; s <= slot.delegation_size; s++) if (!taken.has(s)) return s;
-  return slot.delegation_size;
-}
-
-// The delegation (society) behind an allocation row: its own society_id if
-// it's a block seat, else the society_id of the application behind it.
-function allocationSocietyId(a: AllocationRow): string | null {
-  return a.society_id ?? a.applications?.society_id ?? null;
-}
-
-// The row occupying the OTHER seat of a double country when exactly one of
-// its two seats is currently held — the delegation-purity safeguard only
-// applies in that exact situation (single-seat countries, empty double
-// countries, and already-full double countries are all unaffected).
-function siblingSeatAllocation(slot: SlotRow, byCountry: Map<string, AllocationRow[]>): AllocationRow | null {
-  if (slot.delegation_size < 2) return null;
-  const rows = byCountry.get(slot.country_code) ?? [];
-  return rows.length === 1 ? rows[0] : null;
-}
-
-// Distinct allocated COUNTRIES (not seats) — the "filled" numerator against
-// total_slots everywhere a committee shows a fill count. A double country
-// with only one seat taken still counts as filled-in-progress.
-function distinctCountryFilled(allocations: AllocationRow[]): number {
-  return new Set(allocations.map(a => a.country_code)).size;
-}
 
 // The display NAME for an occupied (delegate) allocation row. A profile can
 // carry a blank/whitespace display_name (a real occurrence when the row exists
@@ -317,679 +143,9 @@ interface PendingChairInvite {
   profiles: { display_name: string } | null;
 }
 
-// Per-user MUN history (from mun_cv_entries + conference_awards)
-interface UserHistory {
-  conferences: number;
-  awards: number;
-  awardLabels: string[];
-}
 
-// ── Scoring ───────────────────────────────────────────────────────────────────
-// score(applicant, committee, slot) =
-//   preference:  1st choice committee +50, 2nd +30, 3rd +15
-//                +25 more if the slot is the exact country they asked for in that preference
-//   experience:  a SYMMETRIC difficulty-match term keyed on the gap between the
-//                delegate's experience level and the committee's difficulty:
-//                gap 0 → +20, gap 1 → 0, gap 2 → −15, gap 3 → −30. See
-//                EXPERIENCE_GAP_SCORE / experienceFitScore. Neutral (0, no chip)
-//                when either side is unknown — never a silent penalty.
-//   society:     (suggestions only) +35 to complete a valid same-society double
-//                delegation, −30 to spread a clumping delegation, and a hard
-//                skip for a cross-society sibling seat. See scoreSocietyFit.
-//   fullness:    12 * (1 - filled/total) , nudges suggestions toward emptier committees
-//   importance:  +18 / +10 / +4 / 0 for an open high / medium / low / standard
-//                seat, so the algorithm fills seats — and the committees that
-//                still hold them — in order of importance.
 
-// ── The two skill scales, and how they map onto one another ──────────────────
-// A delegate's EXPERIENCE and a committee's DIFFICULTY are two SEPARATE
-// vocabularies that today happen to spell their rungs with the same four words.
-// The mapping between them is declared EXPLICITLY below — one rank map per
-// scale — rather than inferred from array position, so that if either scale
-// ever grows a rung (say difficulty gains 'crisis-veteran', or experience gains
-// 'novice') only the map changes and the scorer keeps working. Never re-derive
-// the correspondence from an index coincidence.
-//
-// Delegate experience (applications.experience_level, derived from the MUN CV
-// entry count in src/lib/munExperience.ts: 0-1 beginner, 2-4 intermediate,
-// 5-8 advanced, 9+ expert):
-const EXPERIENCE_LEVEL_RANK: Record<string, number> = {
-  beginner: 0, intermediate: 1, advanced: 2, expert: 3,
-};
-// Committee difficulty is the organiser-set `difficulty` field, picked from the
-// four buttons in CommitteeEditorModal — it is NEVER one of the committee_type
-// values (general-assembly / specialised / crisis), so those never map onto a
-// rung here (a GA committee is graded by its own `difficulty`, not its type).
-// Its rank map is DIFFICULTY_RANK, declared below and shared with the board
-// sort. `difficultyLevel` is the scoring-side reader: it converts that map's
-// "unknown sorts last" 99 sentinel into `null`, because for SCORING an unset
-// difficulty must be neutral, not the hardest rung.
-//
-// Both readers return `null` for a missing/blank/unrecognised value, and
-// experienceFitScore then contributes nothing at all — see there.
-function experienceLevelRank(s: string | null | undefined): number | null {
-  const r = EXPERIENCE_LEVEL_RANK[(s ?? '').toLowerCase().trim()];
-  return r === undefined ? null : r;
-}
 
-// Importance-weighted need: an open high/medium-importance seat is a higher
-// priority to fill than a standard one, so a committee still missing its
-// high/medium seats scores higher as a target than one only missing standard
-// seats. Mirrors the TIER_RANK urgency order (high > medium > low > standard).
-const IMPORTANCE_NEED_WEIGHT: Record<ImportanceTier, number> = { high: 18, medium: 10, low: 4, standard: 0 };
-
-// Committee difficulty ordering for the default board sort (ascending): the
-// gentlest committees first, hardest last. Mirrors the canonical DIFF_ORDER in
-// the committees page EXACTLY — difficulty is strictly one of the four rungs and
-// is NEVER inferred from committee_type (a general-assembly committee sorts by
-// its own real `difficulty` field, not by being a GA). An unset/unknown
-// difficulty sorts last (99), matching the committees board, rather than being
-// silently treated as 'intermediate'.
-const DIFFICULTY_RANK: Record<string, number> = {
-  beginner: 0, intermediate: 1, advanced: 2, expert: 3,
-};
-function difficultyRank(d: string | null | undefined): number {
-  return DIFFICULTY_RANK[(d ?? '').toLowerCase().trim()] ?? 99;
-}
-/** The SCORING-side read of committee difficulty: the same rung map as the
- *  board sort, but an unset/unrecognised difficulty comes back as `null`
- *  instead of the sort's "last" sentinel, so the fit term can stay neutral
- *  rather than treating a blank field as the hardest committee on the board. */
-function difficultyLevel(d: string | null | undefined): number | null {
-  const r = DIFFICULTY_RANK[(d ?? '').toLowerCase().trim()];
-  return r === undefined ? null : r;
-}
-
-// ── Experience ↔ difficulty fit ───────────────────────────────────────────────
-// The single most common allocation mistake organisers report is a delegate
-// landing at the wrong DIFFICULTY — a first-timer dropped into an expert crisis
-// room, or a nine-conference veteran parked in a beginner GA. So the term is
-// scored on the ABSOLUTE gap between the two rungs and is fully SYMMETRIC:
-// over-qualified is exactly as wrong as under-qualified, and neither direction
-// is favoured.
-//
-//   gap 0 (exact match) → +20   a real, decisive reward
-//   gap 1 (one rung)    →   0   acceptable stretch, neither rewarded nor punished
-//   gap 2               → −15
-//   gap 3               → −30
-//
-// Calibration against the rest of the model (preference 50/30/15, exact country
-// pick 25, fill up to 12, seat importance up to 18, society ±35/30): the term
-// now spans 50 points end to end, which is the same width as the single largest
-// signal in the model (a 1st-choice preference). That is deliberate — it makes
-// difficulty match co-equal with preference rather than a rounding error. A
-// 1st-choice seat two rungs off (50 − 15 = 35) no longer beats a 3rd-choice seat
-// that fits perfectly (15 + 20 = 35, a tie), and a 1st choice three rungs off
-// (50 − 30 = 20) loses outright to it. The +20 bonus sits between the 3rd- and
-// 2nd-choice preference tiers: strong enough to reorder seats within a
-// preference tier and to lift a well-fitted lower preference over a badly
-// fitted higher one, but never so large that it alone outranks a whole
-// preference step (a 2nd choice that fits, 30 + 20 = 50, exactly matches a bare
-// 1st choice at the same fit… which is the intended "fit is worth a tier").
-//
-// The four-rung scales cap the gap at 3, so gap ≥ 4 is unreachable today. If a
-// scale ever grows a rung, the penalty EXTRAPOLATES linearly at −15 per rung
-// beyond gap 1 (gap 4 → −45, gap 5 → −60) rather than clamping, keeping the
-// curve consistent in both directions.
-const EXPERIENCE_MATCH_BONUS = 20;
-const EXPERIENCE_GAP_STEP = 15;
-const EXPERIENCE_GAP_SCORE: Record<number, number> = {
-  0: EXPERIENCE_MATCH_BONUS,
-  1: 0,
-  2: -EXPERIENCE_GAP_STEP,
-  3: -2 * EXPERIENCE_GAP_STEP,
-};
-function experienceGapScore(gap: number): number {
-  const table = EXPERIENCE_GAP_SCORE[gap];
-  // Beyond the table (only reachable if a scale grows a rung): keep going at
-  // −15 per level, the same slope the table already describes.
-  return table === undefined ? -EXPERIENCE_GAP_STEP * (gap - 1) : table;
-}
-
-/** Pure scorer for the experience ↔ difficulty match. No I/O, no state.
- *
- *  MISSING DATA IS NEUTRAL. If the delegate has no usable experience level, or
- *  the committee has no difficulty set, we cannot know whether the match is
- *  good or bad — so the term contributes exactly 0 and adds no chip. It is NOT
- *  defaulted onto a rung: defaulting an unknown to 'beginner' (rung 0) would
- *  penalise every legacy/imported committee and every chair-role application
- *  into never being suggested, and defaulting it to 'intermediate' (the old
- *  behaviour) silently invented a −15 for any expert or beginner committee. A
- *  0 here reads as "this seat is decided on preference, fill and importance",
- *  which is the honest answer.
- *
- *  The delegate's level falls back to the profile mirror
- *  (profiles.mun_experience_level) when the application row carries none —
- *  same derived value, already loaded on the row, no extra fetch. */
-function experienceFitScore(
-  app: Pick<AcceptedApp, 'experience_level' | 'profiles'>,
-  difficulty: string | null | undefined,
-): { points: number; reasons: string[] } {
-  const expL = experienceLevelRank(app.experience_level ?? app.profiles?.mun_experience_level);
-  const diffL = difficultyLevel(difficulty);
-  if (expL === null || diffL === null) return { points: 0, reasons: [] };
-  const gap = Math.abs(expL - diffL);
-  const points = experienceGapScore(gap);
-  if (points > 0) return { points, reasons: [`EXP MATCH +${points}`] };
-  // ASCII hyphen on purpose: ReasonChip detects a penalty with
-  // reason.includes('-'), which a Unicode minus would not trip.
-  // The tag says WHICH WAY the mismatch goes (owner: "experience unmatched
-  // doesn't say if their experience is too low or too high").
-  if (points < 0) return { points, reasons: [expL < diffL ? `EXP TOO LOW ${points}` : `EXP TOO HIGH ${points}`] };
-  return { points: 0, reasons: [] };
-}
-
-interface ScoreResult {
-  score: number;
-  reasons: string[];
-}
-
-function scorePrefAndExp(app: AcceptedApp, committee: CommitteeData, slot: SlotRow | null): ScoreResult {
-  let score = 0;
-  const reasons: string[] = [];
-  const prefs = [...(app.application_preferences ?? [])].sort((a, b) => a.preference_order - b.preference_order);
-  const matchIdx = prefs.findIndex(p => p.conference_committee_id === committee.id);
-  if (matchIdx === 0) { score += 50; reasons.push('1ST CHOICE'); }
-  else if (matchIdx === 1) { score += 30; reasons.push('2ND CHOICE'); }
-  else if (matchIdx === 2) { score += 15; reasons.push('3RD CHOICE'); }
-  if (slot && matchIdx >= 0 && prefs[matchIdx].country_code === slot.country_code) {
-    score += 25;
-    reasons.push('COUNTRY PICK');
-  }
-  // Experience ↔ difficulty fit: symmetric, and decisive in both directions.
-  // A missing level on either side contributes 0 rather than a guessed rung —
-  // see experienceFitScore.
-  const exp = experienceFitScore(app, committee.difficulty);
-  score += exp.points;
-  reasons.push(...exp.reasons);
-  return { score, reasons };
-}
-
-function scoreSlot(app: AcceptedApp, committee: CommitteeData, slot: SlotRow, filled: number, total: number): ScoreResult {
-  const base = scorePrefAndExp(app, committee, slot);
-  const fullness = Math.round(12 * (1 - filled / Math.max(total, 1)));
-  base.score += fullness;
-  // NB: the 'NEEDS DELEGATES' chip is NOT decided here. It is a GLOBAL signal —
-  // a committee only "needs delegates" relative to how full the OTHER committees
-  // are — so it is computed once across the whole board (see needyCommitteeIds)
-  // and layered onto suggestions afterwards, not from this single committee's
-  // fill in isolation. The fullness score above still nudges emptier committees.
-  // Importance-weighted need signal: filling a higher-importance open seat
-  // matters more, so it lifts the fit score and the algorithm works through
-  // the priority seats — and the committees still holding them — first.
-  base.score += IMPORTANCE_NEED_WEIGHT[slot.importance];
-  if (slot.importance === 'high') base.reasons.push('HIGH PRIORITY');
-  else if (slot.importance === 'medium') base.reasons.push('PRIORITY SEAT');
-  return base;
-}
-
-// ── Society interaction ──────────────────────────────────────────────────────
-// Extra terms layered onto a seat's base fit score to keep whole delegations
-// coherent — folded into allocationScore below, so every display in this
-// file (suggestions, the drop-allocate modal, the slot-to-applicant modal)
-// shows the same honest total, society terms included. What DOES differ by
-// surface is disallowed handling: the suggestion BUILDER drops a disallowed
-// option before it ever becomes a suggestion, while the manual drop/assign
-// modals still surface every open seat and resolve a cross-society sibling
-// collision at drop time via siblingSeatAllocation → onConflict, so a chair
-// can still override. The three cases are mutually exclusive and resolved in
-// this strict priority order:
-//
-//   1. DISALLOWED (purity) — the seat is the empty half of a DOUBLE country
-//      whose other seat is already held by a DIFFERENT society. Because
-//      siblingSeatAllocation only returns a row when exactly one of the two
-//      seats is taken, `siblingSoc !== soc` catches both a different society AND
-//      an independent applicant (soc === null) sitting beside any society's
-//      occupant — exactly the allocations the drop modal rejects. Never suggest
-//      them.
-//   2. COMPLETES PAIR (+35) — the taken half belongs to the applicant's OWN
-//      society (both non-null and equal). Suggesting them here finishes a valid
-//      same-society double delegation, so it earns a strong positive comparable
-//      to a top preference tier. Returned BEFORE the concentration check, so a
-//      genuine pair completion is never also penalised for "clumping". Carries
-//      its own reason chip, "COMPLETES PAIR +35".
-//   3. CONCENTRATION (−20) — not a pair completion, but a delegate from the
-//      applicant's society is ALREADY allocated somewhere in this committee
-//      (a delegation block seat counts). Suggesting them here would clump the
-//      delegation, so we nudge them toward a different committee. Carries its
-//      own reason chip too, "DELEGATION CONCENTRATION -20", so the downrank is
-//      as legible as the bonus.
-//      EXCEPT a delegation that is already spread: when it holds at least one
-//      allocation in SPREAD_SHARE (70%) or more of the conference's committees
-//      (committees with at least one seat), there is no concentration penalty
-//      at all. A big delegation has to sit everywhere, so penalising it only
-//      lowers every member's score for nothing (owner, 21 Oct 2026). The share
-//      is worked out across the whole board by spreadSocieties and passed in.
-//
-// An independent applicant (society_id null) never gets the pair bonus or the
-// concentration penalty; only the purity skip can apply to them.
-const PAIR_BONUS = 35;
-const CONCENTRATION_PENALTY = 20;
-const SPREAD_SHARE = 0.7;
-
-/** The societies that already hold at least one allocation in SPREAD_SHARE or
- *  more of the conference's committees (committees with no seats are not
- *  counted). scoreSocietyFit skips the concentration penalty for them. */
-function spreadSocieties(committees: CommitteeData[]): Set<string> {
-  const seated = committees.filter(c => c.total_slots > 0 || c.committee_country_slots.length > 0);
-  const spread = new Set<string>();
-  if (seated.length === 0) return spread;
-  const reach = new Map<string, number>();
-  for (const c of seated) {
-    const here = new Set<string>();
-    for (const a of c.conference_allocations) {
-      const soc = allocationSocietyId(a);
-      if (soc) here.add(soc);
-    }
-    for (const soc of here) reach.set(soc, (reach.get(soc) ?? 0) + 1);
-  }
-  for (const [soc, n] of reach) if (n / seated.length >= SPREAD_SHARE) spread.add(soc);
-  return spread;
-}
-// The flag on a suggestion the swap-improvement pass produced, so an
-// organizer sees "this seat was traded for a better combined fit" rather
-// than silently landing on a lower own-score seat than expected.
-const SWAP_REASON = 'SWAPPED FOR BETTER TOTAL FIT';
-interface SocietyFit { delta: number; reasons: string[]; disallowed: boolean; }
-function scoreSocietyFit(
-  app: AcceptedApp,
-  committee: CommitteeData,
-  slot: SlotRow,
-  byCountry: Map<string, AllocationRow[]>,
-  spread: ReadonlySet<string>,
-): SocietyFit {
-  const soc = app.society_id ?? null;
-  // Non-null only for a DOUBLE country with exactly ONE of its two seats taken —
-  // the one situation where a sibling-society rule can bite.
-  const sibling = siblingSeatAllocation(slot, byCountry);
-  const siblingSoc = sibling ? allocationSocietyId(sibling) : null;
-
-  // (1) Purity: cross-society (or independent-beside-a-society) sibling seat.
-  if (sibling && siblingSoc !== soc) {
-    return { delta: 0, reasons: [], disallowed: true };
-  }
-  // (2) Complete a valid same-society double delegation.
-  if (sibling && soc !== null && siblingSoc === soc) {
-    return { delta: PAIR_BONUS, reasons: [`COMPLETES PAIR +${PAIR_BONUS}`], disallowed: false };
-  }
-  // (3) Same delegation already in this committee, and this is not a pair
-  // completion → spread them out, unless the delegation already reaches
-  // SPREAD_SHARE of the committees.
-  if (soc !== null && !spread.has(soc) && committee.conference_allocations.some(a => allocationSocietyId(a) === soc)) {
-    return { delta: -CONCENTRATION_PENALTY, reasons: [`DELEGATION CONCENTRATION -${CONCENTRATION_PENALTY}`], disallowed: false };
-  }
-  return { delta: 0, reasons: [], disallowed: false };
-}
-
-interface AllocationScore {
-  /** base + societyDelta — the ONE number that must be rendered anywhere in
-   *  this file that shows "this delegate's score on this slot". */
-  total: number;
-  /** scoreSlot's own score: preference, country pick, experience fit,
-   *  fill need, committee importance. */
-  base: number;
-  /** scoreSocietyFit's delta: +PAIR_BONUS, -CONCENTRATION_PENALTY, or 0. */
-  societyDelta: number;
-  /** base reasons followed by the society reason, when either applies. */
-  reasons: string[];
-  disallowed: boolean;
-}
-
-/** The single source of truth for "what score did the engine give this
- *  delegate on this slot" — every display in this file (suggestion rows,
- *  the drop-allocate modal, the slot-to-applicant modal) must route through
- *  this instead of computing its own variant, so the number an organiser
- *  sees always matches the number the ranking actually used. */
-function allocationScore(
-  app: AcceptedApp,
-  committee: CommitteeData,
-  slot: SlotRow,
-  filled: number,
-  total: number,
-  byCountry: Map<string, AllocationRow[]>,
-  spread: ReadonlySet<string>,
-): AllocationScore {
-  const base = scoreSlot(app, committee, slot, filled, total);
-  const soc = scoreSocietyFit(app, committee, slot, byCountry, spread);
-  return {
-    total: base.score + soc.delta,
-    base: base.score,
-    societyDelta: soc.delta,
-    reasons: [...base.reasons, ...soc.reasons],
-    disallowed: soc.disallowed,
-  };
-}
-
-/** Everything the fit tooltips need, from the same inputs the engine scored. */
-function reasonContext(app: AcceptedApp, committee: CommitteeData, slot: SlotRow): ReasonContext {
-  const prefs = [...(app.application_preferences ?? [])].sort((a, b) => a.preference_order - b.preference_order);
-  const prefIndex = prefs.findIndex(p => p.conference_committee_id === committee.id);
-  return {
-    committeeName: committeeLabels(committee).big,
-    difficulty: committee.difficulty ?? null,
-    countryName: slot.country_name,
-    importance: slot.importance,
-    experienceLevel: app.experience_level ?? app.profiles?.mun_experience_level ?? null,
-    prefIndex,
-    prefCountryName: prefIndex >= 0 ? prefs[prefIndex].country_name : null,
-    societyName: app.society_id == null ? null : (app.societies?.name ?? null),
-  };
-}
-
-function fitColor(score: number) {
-  if (score >= 50) return '#3D7A52';
-  if (score >= 20) return '#B6871F';
-  return '#9A8A78';
-}
-
-interface Suggestion {
-  app: AcceptedApp;
-  committee: CommitteeData;
-  slot: SlotRow;
-  score: number;
-  reasons: string[];
-  /** Set only when the swap-improvement pass moved this delegate off their
-   *  own best available seat and onto this one, because doing so raised the
-   *  combined score for both delegates involved. Drives the "SWAPPED FOR
-   *  BETTER TOTAL FIT" chip and the before/after score display. */
-  swap?: {
-    /** This delegate's own best available score, i.e. their greedy pick
-     *  before the swap moved them here. */
-    ownBestScore: number;
-    partnerName: string;
-    /** Combined score gained across both delegates by making the swap. */
-    netGain: number;
-  };
-}
-
-// ── Shared bits ───────────────────────────────────────────────────────────────
-
-const OUTFIT = "var(--font-brand), sans-serif";
-// Typography rule: no monospace on the conferences side, MONO now resolves to Outfit
-// so every stamp/eyebrow/code that referenced it renders in Outfit (family swap only).
-const MONO = "var(--font-brand), sans-serif";
-
-// Depth normalisation: small flag images carried the full dual neu relief
-// (NEU.outSm), which reads heavy and uneven on tiny rectangles/discs. One
-// soft, single-direction drop keeps flag depth consistent and subtle.
-const FLAG_SHADOW = '0 1px 3px rgba(27,56,40,0.18)';
-
-// ── PersonAvatar ───────────────────────────────────────────────────────────────
-// Every participant avatar on the assignment page. Renders avatar_url when it
-// loads; on a missing/blank url OR a load error it ALWAYS falls back to a
-// neumorphic user silhouette (a lucide UserRound head-and-shoulders glyph in
-// gold on a forest seat). Custom characters, unregistered invitees and broken
-// image URLs therefore never surface a broken <img> anywhere.
-export function PersonAvatar({ name, url, size = 28, userId, nested }: {
-  name: string; url: string | null; size?: number;
-  /**
-   * profiles.id — OPT-IN ONLY. When passed, the avatar wraps itself in a
-   * <ProfileLink> to that person's public MUN CV. When it is NOT passed the
-   * markup below is byte-identical to what it has always been, and that is
-   * load-bearing: several call sites render this avatar INSIDE a real
-   * <button>, where an <a> would be invalid HTML and break both controls.
-   * Only pass `userId` from a site you have verified has no <button>/<a>
-   * ancestor.
-   */
-  userId?: string | null;
-  /** Forwarded to ProfileLink — set when a clickable (onClick) ancestor exists. */
-  nested?: boolean;
-}) {
-  const [failed, setFailed] = useState(false);
-  const cleanUrl = typeof url === 'string' && url.trim() ? url.trim() : null;
-  const showImage = !!cleanUrl && !failed;
-  const inner = showImage ? (
-    // eslint-disable-next-line @next/next/no-img-element
-    <img
-      src={cleanUrl}
-      alt={name}
-      onError={() => setFailed(true)}
-      draggable={false}
-      className="rounded-full object-cover flex-shrink-0"
-      style={{ width: size, height: size, boxShadow: NEU.outSm }}
-    />
-  ) : (
-    <span
-      className="inline-flex items-center justify-center rounded-full flex-shrink-0"
-      style={{
-        width: size, height: size,
-        background: `linear-gradient(135deg, ${NEU_GRADIENTS.forest[0]}, ${NEU_GRADIENTS.forest[1]})`,
-        boxShadow: NEU.outSm,
-      }}
-      aria-label={name || 'Participant'}
-      title={name || undefined}
-    >
-      <UserRound size={Math.round(size * 0.56)} strokeWidth={2} style={{ color: NEU.gold }} />
-    </span>
-  );
-  if (!userId) return inner;
-  // inline-flex + flex-shrink:0 so the anchor occupies exactly the space the
-  // avatar did as a flex item — the link must not change any layout.
-  // draggable={false} always: an <a> is natively draggable, and this avatar
-  // sits inside draggable cards on the unassigned rail. Opting the anchor out
-  // hands the drag straight back to the nearest draggable ancestor (the card),
-  // and costs nothing on the sites that are not drag sources.
-  return (
-    <ProfileLink userId={userId} name={name} nested={nested} draggable={false}
-      style={{ display: 'inline-flex', flexShrink: 0, lineHeight: 0 }}>
-      {inner}
-    </ProfileLink>
-  );
-}
-
-// A delegation-owned seat's avatar: a multi-person (Users) glyph on the forest
-// disc, standing in for the individual PersonAvatar to signal "owned by the
-// delegation, not yet handed to a delegate".
-function DelegationAvatar({ size = 30 }: { size?: number }) {
-  return (
-    <span
-      className="inline-flex items-center justify-center rounded-full flex-shrink-0"
-      style={{
-        width: size, height: size,
-        background: `linear-gradient(135deg, ${NEU_GRADIENTS.forest[0]}, ${NEU_GRADIENTS.forest[1]})`,
-        boxShadow: NEU.outSm,
-      }}
-      aria-label="Delegation seat"
-      title="Owned by the delegation"
-    >
-      <Users size={Math.round(size * 0.54)} strokeWidth={2} style={{ color: NEU.gold }} />
-    </span>
-  );
-}
-
-// ── CountryFlag ────────────────────────────────────────────────────────────────
-// Every country flag on the assignment page. A country seat renders its twemoji
-// flag; a character/custom seat (JCC judges, cabinet posts, press) stores the
-// role NAME in country_code — never a 2-letter ISO code — so we detect that and
-// render a neutral USER placeholder (a person silhouette in a disc, matching the
-// applications page) instead of building a broken flag URL — a character seat is
-// a person, not a country. A genuine load failure (network, retired code) ALSO
-// falls back to it, so a broken <img> never surfaces anywhere.
-function isIsoCode(code: string | null | undefined): boolean {
-  return /^[A-Za-z]{2}$/.test((code ?? '').trim());
-}
-function CountryFlag({
-  code, w, h, shadow, dim, style, alt, title, logoUrl,
-}: {
-  code: string | null | undefined;
-  w: number; h: number;
-  /** Ignored: every flag on this page is round (owner, 23 Sep 2026). Kept so
-   *  call sites written for rectangles still compile. */
-  radius?: number;
-  shadow?: string; dim?: number;
-  style?: React.CSSProperties; alt?: string; title?: string;
-  /** A seat's own or group crest (`slotLogoUrl`). Wins over the flag. */
-  logoUrl?: string | null;
-}) {
-  const clean = (code ?? '').trim();
-  const label = alt ?? title ?? '';
-  // Every flag on the allocation portal is the shared ROUND flag (square
-  // artwork that fills the disc; crest, then flag, then the person glyph for a
-  // character seat). A rectangle-sized call site gets a disc about as tall as
-  // the rectangle was, a touch larger so the flag still reads.
-  const size = w === h ? w : Math.max(16, Math.round(h * 1.2));
-  return (
-    <CircleFlag
-      code={isIsoCode(clean) ? clean : null}
-      logoUrl={logoUrl}
-      size={size}
-      label={label}
-      title={title ?? (label || undefined)}
-      fallback={<UserRound size={Math.round(size * 0.6)} strokeWidth={2} style={{ color: NEU.forest }} />}
-      style={{ boxShadow: shadow, opacity: dim, ...style }}
-    />
-  );
-}
-
-// ── Level + age + committee-name helpers ────────────────────────────────────────
-// A delegate with no recorded MUN level is treated as the lowest tier
-// ('beginner') everywhere — rail cards, detail and overview — never blank.
-function effectiveLevel(app: { experience_level?: string | null; profiles?: { mun_experience_level?: string | null } | null } | null | undefined): string {
-  return app?.experience_level ?? app?.profiles?.mun_experience_level ?? 'beginner';
-}
-
-// Age is derived from a date of birth sourced robustly: the application row
-// first (if it ever carries one), then the linked profile. Shows whenever a DOB
-// exists anywhere.
-function ageOf(app: { date_of_birth?: string | null; profiles?: { date_of_birth?: string | null } | null } | null | undefined): number | null {
-  const dob = app?.date_of_birth ?? app?.profiles?.date_of_birth ?? null;
-  return ageAt(dob);
-}
-
-// Committee naming rule, one for the whole portal: the stored abbreviation,
-// else committeeDisplayName of the full name (committeeShortName in
-// displayNames.tsx). No acronym is ever DERIVED from the words: preference
-// lines used to read only the name and auto-built "DISC" for DISEC. The
-// subtitle is the full name, shown only when it differs from the big label.
-function committeeLabels(c: { name: string; abbreviation?: string | null }): { big: string; full: string | null } {
-  const name = (c.name ?? '').trim();
-  const big = committeeShortName(c);
-  const full = big.toLowerCase() !== name.toLowerCase() ? name : null;
-  return { big, full };
-}
-
-// ── CommitteeLogo ─────────────────────────────────────────────────────────────
-// Every committee logo on this page: a fixed square, the artwork contained.
-// A committee with no upload gets its preset emblem (ECOSOC, WHO...) or the UN
-// mark, the same emblem the delegation grid and the leader views draw. The
-// monogram only shows if that image fails, and is two or three letters so it
-// fits the disc: the full acronym ("ECOSOC") in an 18 px disc was clipped to an
-// unreadable smudge.
-function CommitteeLogo({ committee, size, alt = '' }: {
-  committee: { name: string; abbreviation?: string | null; logo_url: string | null };
-  size: number;
-  alt?: string;
-}) {
-  const big = committeeShortName(committee);
-  return (
-    <LogoDisc
-      bare
-      src={committeeEmblemSrc({ logo_url: committee.logo_url, name: committee.name, abbreviation: committee.abbreviation ?? null })}
-      size={size}
-      fallbackText={big.replace(/[^A-Za-z0-9]/g, '').slice(0, size < 24 ? 2 : 3) || '?'}
-      alt={alt}
-    />
-  );
-}
-
-// ── CommitteeDifficultyBadge ────────────────────────────────────────────────────
-// The committee's difficulty, as the account rank insignia on a tinted disc plus
-// the level word. Sized generously so every tier — the expert crowned star
-// especially — reads clearly in the panel header.
-function CommitteeDifficultyBadge({ level, disc = 34, glyph = 22, showWord = true }: { level: string; disc?: number; glyph?: number; showWord?: boolean }) {
-  const key = (level ?? '').toLowerCase();
-  const accent = LEVEL_ACCENT[key] ?? '#9A8A78';
-  return (
-    <span
-      className="inline-flex items-center gap-1.5 flex-shrink-0"
-      aria-label={`Difficulty: ${level}`}
-      title={`Difficulty: ${level}`}
-    >
-      <span
-        className="inline-flex items-center justify-center flex-shrink-0"
-        style={{
-          width: disc, height: disc, borderRadius: 9999,
-          background: `linear-gradient(150deg, ${accent}26, ${accent}14)`,
-          border: `1px solid ${accent}55`, boxShadow: NEU.outSm,
-        }}
-      >
-        <LevelInsignia level={level} size={glyph} />
-      </span>
-      {showWord && (
-        <span style={{ fontSize: 12, fontWeight: 700, color: accent, fontFamily: OUTFIT, textTransform: 'capitalize' }}>
-          {key || 'beginner'}
-        </span>
-      )}
-    </span>
-  );
-}
-
-// ── Preference medals ──────────────────────────────────────────────────────────
-// A delegate's preference rank is coloured like a podium: 1st = gold,
-// 2nd = silver, 3rd = bronze, 4th and beyond a calm muted stone.
-type Medal = { fg: string; bg: string; ring: string; label: string };
-function prefMedal(order: number): Medal {
-  switch (order) {
-    case 1: return { fg: '#9A7B1E', bg: 'rgba(238,217,138,0.30)', ring: 'rgba(182,135,31,0.45)', label: 'GOLD' };
-    case 2: return { fg: '#6E7278', bg: 'rgba(176,182,188,0.30)', ring: 'rgba(140,146,152,0.5)', label: 'SILVER' };
-    case 3: return { fg: '#9A5B2C', bg: 'rgba(184,115,51,0.22)', ring: 'rgba(169,116,60,0.5)', label: 'BRONZE' };
-    default: return { fg: NEU.muted, bg: 'rgba(154,138,120,0.16)', ring: 'rgba(154,138,120,0.4)', label: '' };
-  }
-}
-
-/** Small round medal badge carrying the preference number. */
-function PrefRankBadge({ order, size = 18 }: { order: number; size?: number }) {
-  const m = prefMedal(order);
-  return (
-    <span
-      className="inline-flex items-center justify-center flex-shrink-0"
-      style={{
-        width: size, height: size, borderRadius: 999,
-        backgroundColor: m.bg,
-        border: `1px solid ${m.ring}`,
-        color: m.fg,
-        fontFamily: OUTFIT, fontWeight: 800, fontSize: Math.round(size * 0.55),
-        fontVariantNumeric: 'tabular-nums', lineHeight: 1,
-        boxShadow: order <= 3 ? NEU.outSm : undefined,
-      }}
-      title={m.label ? `${order === 1 ? '1st' : order === 2 ? '2nd' : '3rd'} choice preference` : `Preference #${order}`}
-    >
-      {order}
-    </span>
-  );
-}
-
-/** A scoring-reason chip. Preference-rank reasons take the podium colours; a
- *  penalty (negative point value) reads as a calm red warning; the swap flag
- *  reads as gold, its own distinct tone since it's neither a bonus nor a
- *  penalty; everything else reads as a calm positive (green) neu chip. */
-function ReasonChip({ reason, why, more }: { reason: string; why?: string | null; more?: string[] }) {
-  const medalFor = reason === '1ST CHOICE' ? 1 : reason === '2ND CHOICE' ? 2 : reason === '3RD CHOICE' ? 3 : 0;
-  const m = medalFor ? prefMedal(medalFor) : null;
-  const isSwap = reason === SWAP_REASON;
-  const isPenalty = reason.includes('-');
-  const bg = m ? m.bg : isSwap ? 'rgba(182,135,31,0.16)' : isPenalty ? 'rgba(139,32,32,0.1)' : 'rgba(61,122,82,0.12)';
-  const fg = m ? m.fg : isSwap ? '#8A6614' : isPenalty ? '#8B2020' : NEU.green;
-  const chip = (
-    <span
-      className="inline-flex items-center px-2 py-0.5 rounded-full"
-      style={{
-        fontSize: 9, fontWeight: 800, letterSpacing: '0.05em', fontFamily: MONO,
-        whiteSpace: 'nowrap', flexShrink: 0,
-        backgroundColor: bg,
-        color: fg,
-        // Raised in its own hue: a coloured drop, an inner top highlight and
-        // a ring of its own colour. Never a white halo.
-        boxShadow: `inset 0 0 0 1px color-mix(in srgb, ${fg} 20%, transparent), inset 0 1px 0 rgba(255,255,255,0.5), 0 2px 6px -1px color-mix(in srgb, ${fg} 30%, transparent)`,
-      }}
-    >
-      {reason}
-    </span>
-  );
-  // Hover or focus explains the tag at once, with the direction and the
-  // actual values behind it (see fitReasons.tsx).
-  return why || (more && more.length > 0) ? <FitTip text={why ?? null} lines={more}>{chip}</FitTip> : chip;
-}
 
 // ── PointsInfo ───────────────────────────────────────────────────────────────
 // Hover-only neumorphic info affordance next to "Suggested Assignments". The
@@ -1471,55 +627,6 @@ function TierBadge({ tier, onCycle }: { tier: ImportanceTier; onCycle?: () => vo
   );
 }
 
-// ── LevelTag ───────────────────────────────────────────────────────────────────
-// A delegate's MUN level as the account chevron insignia (on its tinted disc)
-// plus the level word, for the unassigned rail. Nothing renders without a level.
-function LevelTag({ level }: { level: string | null | undefined }) {
-  // No recorded level → treat as the lowest tier ('beginner'), never blank.
-  const lvl = level && level.trim() ? level : 'beginner';
-  const accent = LEVEL_ACCENT[lvl.toLowerCase()] ?? '#9A8A78';
-  return (
-    <span className="inline-flex items-center gap-1 flex-shrink-0">
-      <span
-        className="inline-flex items-center justify-center flex-shrink-0"
-        style={{ width: 16, height: 16, borderRadius: 9999, background: `linear-gradient(150deg, ${accent}22, ${accent}12)`, border: `1px solid ${accent}55` }}
-        aria-hidden="true"
-      >
-        <LevelInsignia level={lvl} size={11} />
-      </span>
-      <span style={{ fontSize: 12, fontWeight: 700, color: accent, fontFamily: OUTFIT, textTransform: 'capitalize' }}>
-        {lvl.toLowerCase()}
-      </span>
-    </span>
-  );
-}
-
-function DelegationChip({ app, openable = false }: { app: AcceptedApp; openable?: boolean }) {
-  const indep = app.society_id == null;
-  const label = indep ? 'Independent' : app.societies?.name ?? null;
-  if (!label) return null;
-  return (
-    <span
-      className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full"
-      style={{
-        maxWidth: 170,
-        backgroundColor: NEU.surface,
-        boxShadow: NEU.outSm,
-        color: indep ? NEU.muted : NEU.forest,
-      }}
-    >
-      {/* A delegation is a group brought by an advisor/head delegate — the
-          multi-person glyph flags it as such at a glance. Independents stay plain. */}
-      {!indep && <Users size={11} strokeWidth={2.2} style={{ flexShrink: 0 }} />}
-      <span
-        className="[overflow-wrap:anywhere]"
-        style={{ fontSize: 10, fontWeight: 700, fontFamily: MONO, letterSpacing: '0.04em' }}
-      >
-        {openable && !indep ? <DelegationPopupLink societyId={app.society_id}>{label}</DelegationPopupLink> : label}
-      </span>
-    </span>
-  );
-}
 
 function ModalOverlay({ children, onClose }: { children: React.ReactNode; onClose: () => void }) {
   // Thin wrapper over the shared house backdrop (@/components/ModalOverlay),
@@ -1556,110 +663,6 @@ function ModalError({ msg }: { msg: string }) {
   );
 }
 
-// ── Delegate detail panel ─────────────────────────────────────────────────────
-
-function DelegateDetail({
-  app, history, contextCommitteeId, contextCountryCode,
-}: {
-  app: AcceptedApp;
-  history: UserHistory | undefined;
-  /** The committee + country of the slot currently in view (a suggestion
-   *  row, an already-allocated seat) — when both are set, the matching
-   *  preference row (if the delegate ranked it) gets a match marker, so an
-   *  organizer sees at a glance whether they're getting what they asked
-   *  for. Omitted where there's no specific slot in context (e.g. the
-   *  unassigned rail), in which case no row ever shows a marker. */
-  contextCommitteeId?: string;
-  contextCountryCode?: string;
-}) {
-  const nationality = app.profiles?.nationality ?? null;
-  const natCountry = nationality ? getCountryByName(nationality) : undefined;
-  const age = ageOf(app);
-  const [showAllPrefs, setShowAllPrefs] = useState(false);
-
-  // Same rank order scorePrefAndExp reads preferences in — 1st choice first.
-  const sortedPrefs = [...(app.application_preferences ?? [])].sort((a, b) => a.preference_order - b.preference_order);
-  const topThree = sortedPrefs.slice(0, 3);
-  const rest = sortedPrefs.slice(3);
-
-  const prefRow = (p: AppPref) => {
-    const isMatch = !!contextCommitteeId && !!contextCountryCode
-      && p.conference_committee_id === contextCommitteeId && p.country_code === contextCountryCode;
-    return (
-      <div key={p.preference_order} className="flex items-center gap-2 min-w-0">
-        <PrefRankBadge order={p.preference_order} />
-        <CountryFlag code={p.country_code} w={18} h={13} radius={2} alt={p.country_name} />
-        <span className="flex-1 min-w-0" style={{ fontSize: 12, color: NEU.ink, fontFamily: OUTFIT, lineHeight: 1.3 }} title={`${p.conference_committees?.name ?? 'Unknown committee'} · ${p.country_name}`}>
-          <span style={{ fontWeight: 700 }}>{committeeShortName(p.conference_committees)}</span> · <CountryName name={p.country_name} code={p.country_code} />
-        </span>
-        {isMatch && (
-          <span title="Matches the seat in view" style={{ flexShrink: 0, lineHeight: 0 }}>
-            <Check size={13} strokeWidth={2.8} style={{ color: NEU.green }} />
-          </span>
-        )}
-      </div>
-    );
-  };
-
-  return (
-    <div className="mt-3 pt-3" style={{ borderTop: `1px solid ${NEU.base}` }}>
-      {/* Nationality row */}
-      <div className="flex items-center gap-2 mb-2.5">
-        {natCountry ? (
-          <CountryFlag code={natCountry.code} w={22} h={15} radius={2} shadow="0 1px 3px rgba(27,56,40,0.2)" alt={nationality ?? ''} />
-        ) : (
-          <Globe2 size={14} style={{ color: '#9A8A78' }} />
-        )}
-        <span className="flex-shrink-0" style={{ fontSize: 12, color: '#1C1410', fontFamily: OUTFIT, fontWeight: 600 }}>
-          {nationality ?? 'Nationality not set'}
-          {age != null && <span style={{ color: NEU.muted, fontWeight: 500, fontVariantNumeric: 'tabular-nums' }}> · {age}</span>}
-        </span>
-        <span className="[overflow-wrap:anywhere] min-w-0" style={{ fontSize: 11, color: '#9A8A78', fontFamily: OUTFIT, marginLeft: 'auto' }}>
-          {app.profiles?.email}
-        </span>
-      </div>
-
-      {/* Top three preferences, rank order — the primary preference display */}
-      {topThree.length > 0 && (
-        <div className="mb-2.5">
-          <p style={{ fontSize: 10, color: NEU.deepGold, fontFamily: MONO, letterSpacing: '0.12em', fontWeight: 700, marginBottom: 5 }}>PREFERENCES</p>
-          <div className="flex flex-col gap-1">
-            {topThree.map(prefRow)}
-            {showAllPrefs && rest.map(prefRow)}
-          </div>
-          {rest.length > 0 && (
-            <button
-              type="button"
-              onClick={() => setShowAllPrefs(v => !v)}
-              className="focus:outline-none"
-              style={{
-                marginTop: 5, fontSize: 10, color: NEU.deepGold, fontFamily: MONO, fontWeight: 700,
-                letterSpacing: 0, background: 'none', border: 'none', cursor: 'pointer', padding: 0,
-              }}
-            >
-              {showAllPrefs ? 'Hide remaining preferences' : `Show all preferences (+${rest.length})`}
-            </button>
-          )}
-        </div>
-      )}
-
-      {/* Award labels */}
-      {history && history.awardLabels.length > 0 && (
-        <div className="flex flex-wrap items-center gap-1.5 mb-2.5">
-          <Award size={12} style={{ color: '#B6871F', flexShrink: 0 }} />
-          {history.awardLabels.slice(0, 4).map((lbl, i) => (
-            <span key={i} className="px-2 py-0.5 rounded-full" style={{ fontSize: 10, backgroundColor: 'rgba(182,135,31,0.12)', color: '#B6871F', fontFamily: MONO, border: '1px solid rgba(182,135,31,0.25)' }}>
-              {lbl}
-            </span>
-          ))}
-          {history.awardLabels.length > 4 && (
-            <span style={{ fontSize: 10, color: '#9A8A78', fontFamily: MONO, fontVariantNumeric: 'tabular-nums' }}>+{history.awardLabels.length - 4}</span>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
 
 // ── DropAllocateModal ─────────────────────────────────────────────────────────
 // Opens when an applicant is dropped on (or click-targeted at) a committee.
@@ -3678,6 +2681,9 @@ function mergeLocalMutations(
 // link: ?mode=chairs (chairs are also managed on the Committees page),
 // ?mode=delegations[&delegation=<society id>] (Applications → Delegations →
 // "Open in Assignment") and ?mode=independents (no link points at it).
+/** localStorage: '1' keeps this browser on the classic board. */
+const CLASSIC_VIEW_KEY = 'gavelling-assignment-classic';
+
 export default function AssignmentPage() {
   const { conference, refreshConferenceQuiet } = useManage();
   const { session, loading: authLoading } = useAuth();
@@ -3694,6 +2700,20 @@ export default function AssignmentPage() {
   const [societies, setSocieties] = useState<DelegationSource[]>([]);
   const [history, setHistory] = useState<Record<string, UserHistory>>({});
   const [mode, setMode] = useState<'delegates' | 'chairs' | 'delegations' | 'independents' | 'delegation-seats'>('delegates');
+  // Delegates open on the seat board (SeatBoard.tsx, owner 21 Oct 2026). The
+  // classic board stays one link away while the owner tests, remembered per
+  // browser. Read after mount, so the server render and the first client
+  // render agree.
+  const [classicView, setClassicView] = useState(false);
+  useEffect(() => {
+    try { setClassicView(window.localStorage.getItem(CLASSIC_VIEW_KEY) === '1'); } catch { /* storage blocked: the seat board */ }
+  }, []);
+  const chooseClassicView = useCallback((next: boolean) => {
+    setClassicView(next);
+    try { window.localStorage.setItem(CLASSIC_VIEW_KEY, next ? '1' : '0'); } catch { /* storage blocked: this visit only */ }
+  }, []);
+  // "Open the Delegations view" from the seat board shows a way back.
+  const [delegationsFromBoard, setDelegationsFromBoard] = useState(false);
   // ?release=unsent (the dashboard's "never told their seat" row) opens the
   // allocation email picker with the unsent delegates ticked. It only OPENS the
   // picker; sending is still the organiser's press. Read once, then dropped
@@ -3825,7 +2845,7 @@ export default function AssignmentPage() {
         .from('applications')
         .select(`
           id, role, experience_level, is_head_delegate, society_id, payment_status,
-          attending, invited_email, invited_name, submitted_at,
+          attending, invited_email, invited_name, submitted_at, decided_at,
           profiles (id, display_name, email, nationality, date_of_birth, mun_experience_level, avatar_url),
           societies (name),
           application_preferences (
@@ -4737,27 +3757,8 @@ export default function AssignmentPage() {
     [committees],
   );
 
-  // ── "Needs delegates" — a RELATIVE signal across the whole board ─────────────
-  // A committee is flagged only when it is conspicuously behind the pack: its
-  // fill ratio is more than 25% below the SECOND-least-populated committee's.
-  // Comparing against the second-least (not the least, which is always the
-  // emptiest and would compare to itself) gives a stable baseline, so the flag
-  // highlights the one or two committees that genuinely trail the rest rather
-  // than firing on every under-half-full committee.
-  const needyCommitteeIds = useMemo<Set<string>>(() => {
-    const needy = new Set<string>();
-    if (committees.length < 2) return needy;
-    const ratios = committees.map(c => ({
-      id: c.id,
-      // total_slots 0 → treat as "full" (ratio 1) so an empty-of-seats committee
-      // never reads as needing delegates.
-      ratio: c.total_slots > 0 ? distinctCountryFilled(c.conference_allocations) / c.total_slots : 1,
-    }));
-    const secondLeast = [...ratios].sort((a, b) => a.ratio - b.ratio)[1].ratio;
-    const threshold = secondLeast * 0.75; // >25% below the second-least-populated
-    for (const r of ratios) if (r.ratio < threshold) needy.add(r.id);
-    return needy;
-  }, [committees]);
+  // "Needs delegates": a relative signal across the whole board (assignmentFit.ts).
+  const needyCommitteeIds = useMemo(() => computeNeedyCommitteeIds(committees), [committees]);
 
   // ── Suggestions (global, across all committees) ─────────────────────────────
   // Every accepted, attending applicant is a candidate — INCLUDING those with
@@ -4773,150 +3774,15 @@ export default function AssignmentPage() {
   // penalty for them anywhere (see scoreSocietyFit).
   const spread = useMemo(() => spreadSocieties(committees), [committees]);
 
-  const suggestions = useMemo<Suggestion[]>(() => {
-    // For every candidate, rank ALL their open-seat options best-first (not just
-    // their single best). Keeping the full ranked list is what lets the greedy
-    // pass below fall through to a candidate's NEXT-best seat when their top pick
-    // is claimed by someone else — instead of dropping them entirely. The old
-    // code kept only each applicant's one best option, then discarded any whose
-    // slot was already taken by a higher scorer, so several applicants sharing a
-    // single best seat collapsed to one suggestion and the strip could show
-    // fewer than 3 even with plenty of unassigned applicants and open seats.
-    const ranked = accepted
-      // isSlotFull filters SEATS. This filters PEOPLE, which nothing did: a
-      // delegate whose application still read 'accepted' while an allocation
-      // row existed for them was suggested on every single load, and every
-      // click on that card failed on the one-seat-per-delegate index. user_id
-      // is the fallback because an imported delegate's row may carry no
-      // application_id.
-      .filter(app => !seatedIdentities.appIds.has(app.id)
-        && !(app.profiles?.id ? seatedIdentities.userIds.has(app.profiles.id) : false))
-      .map(app => {
-        const options: Suggestion[] = [];
-        for (const c of committees) {
-          const byCountry = groupAllocationsByCountry(c.conference_allocations);
-          const filled = distinctCountryFilled(c.conference_allocations);
-          for (const slot of c.committee_country_slots) {
-            if (isSlotFull(slot, byCountry)) continue;
-            // allocationScore folds the base fit and the society-coherence
-            // terms (purity skip / pair bonus / concentration penalty) into
-            // the ONE total every display in this file renders. A disallowed
-            // cross-society sibling seat is dropped here so it never reaches
-            // the greedy or swap passes — keeping the whole builder
-            // consistent (an option that can't exist is never a fall-through
-            // target or a swap destination).
-            const scored = allocationScore(app, c, slot, filled, c.total_slots, byCountry, spread);
-            if (scored.disallowed) continue;
-            options.push({
-              app, committee: c, slot,
-              score: scored.total,
-              reasons: scored.reasons,
-            });
-          }
-        }
-        options.sort((a, b) => b.score - a.score);
-        return options;
-      })
-      .filter(options => options.length > 0)
-      // Process the strongest candidates first (by their best available score).
-      .sort((a, b) => b[0].score - a[0].score);
-
-    // Fast lookup: for a given applicant (by app id) + slot (by slot id), the
-    // pre-scored Suggestion object. This lets the swap-improvement pass below
-    // re-cost a hypothetical reassignment — and reuse its reasons — without
-    // re-running scoreSlot. Only open (non-full) slots appear here, exactly the
-    // ones a suggestion may legally target.
-    const optionByAppSlot = new Map<string, Map<string, Suggestion>>();
-    for (const options of ranked) {
-      if (options.length === 0) continue;
-      const m = new Map<string, Suggestion>();
-      for (const s of options) m.set(s.slot.id, s);
-      optionByAppSlot.set(options[0].app.id, m);
-    }
-
-    // Greedy: each candidate takes their highest-scoring seat that still has an
-    // open seat left in this suggestion set — one suggestion per candidate, and
-    // never more suggestions for a slot than its open seats. Because a candidate
-    // whose top pick is gone falls through to their next-best seat, this yields
-    // as many suggestions as there are open seats: at least 3 whenever there are
-    // ≥3 unassigned candidates with a reachable committee and ≥3 open seats, and
-    // simply what exists when there are genuinely fewer.
-    const openSeatsLeft = new Map<string, number>();
-    const out: Suggestion[] = [];
-    for (const options of ranked) {
-      for (const s of options) {
-        if (!openSeatsLeft.has(s.slot.id)) {
-          const byCountry = groupAllocationsByCountry(s.committee.conference_allocations);
-          openSeatsLeft.set(s.slot.id, s.slot.delegation_size - (byCountry.get(s.slot.country_code)?.length ?? 0));
-        }
-        const remaining = openSeatsLeft.get(s.slot.id)!;
-        if (remaining <= 0) continue;
-        openSeatsLeft.set(s.slot.id, remaining - 1);
-        out.push(s);
-        break;
-      }
-      if (out.length >= 6) break;
-    }
-
-    // ── Local swap-improvement pass ───────────────────────────────────────────
-    // Pure greedy assigns each candidate their best STILL-OPEN seat in candidate
-    // order, which can be globally suboptimal AND unfair: a strong candidate can
-    // grab a seat a second candidate needed far more, leaving the second one a
-    // poor fallback. Worked example — seat S1 scores A=100 / B=90, seat S2 scores
-    // A=95 / B=10: greedy gives A→S1(100), B→S2(10) = 110, but A→S2(95) +
-    // B→S1(90) = 185 is clearly better for the conference AND fairer to B. We
-    // repair this with pairwise swaps: for any two suggestions, if exchanging
-    // their seats STRICTLY raises the combined score — and both candidates
-    // actually had the other's seat as an open, valid option — perform the swap.
-    //
-    // Seat capacity is always preserved: a swap exchanges exactly one occupant of
-    // slot i with one occupant of slot j, so every slot keeps its head-count (a
-    // double-delegation slot filled by two suggestions stays filled by two). Each
-    // swap strictly increases the total score, which is bounded above, so the
-    // loop always terminates; the guard is only a belt-and-braces safety cap.
-    // This stays a suggestion AID, not a full assignment solver — with ≤6
-    // suggestions the repeated O(n²) sweeps are trivially cheap and easy to
-    // reason about.
-    let improved = true;
-    let guard = 0;
-    while (improved && guard++ < 24) {
-      improved = false;
-      for (let i = 0; i < out.length; i++) {
-        for (let j = i + 1; j < out.length; j++) {
-          const si = out[i];
-          const sj = out[j];
-          if (si.slot.id === sj.slot.id) continue; // same seat → swap is a no-op
-          const iOnJ = optionByAppSlot.get(si.app.id)?.get(sj.slot.id);
-          const jOnI = optionByAppSlot.get(sj.app.id)?.get(si.slot.id);
-          if (!iOnJ || !jOnI) continue; // a candidate can't legally take the other's seat
-          if (iOnJ.score + jOnI.score > si.score + sj.score) {
-            // Legible instead of mysterious: tag both sides of the trade with
-            // what each delegate gave up (their own best available score,
-            // i.e. what they held right before this swap), who they traded
-            // with, and the combined gain — rendered as a reason chip plus a
-            // tooltip in the suggestion row.
-            const netGain = (iOnJ.score + jOnI.score) - (si.score + sj.score);
-            const siName = si.app.profiles?.display_name ?? si.app.invited_name ?? 'this delegate';
-            const sjName = sj.app.profiles?.display_name ?? sj.app.invited_name ?? 'this delegate';
-            out[i] = { ...iOnJ, swap: { ownBestScore: si.score, partnerName: sjName, netGain } }; // app i now sits in slot j (with slot-j reasons)
-            out[j] = { ...jOnI, swap: { ownBestScore: sj.score, partnerName: siName, netGain } }; // app j now sits in slot i (with slot-i reasons)
-            improved = true;
-          }
-        }
-      }
-    }
-
-    // Display strongest-first: greedy insertion + swaps mostly follow score
-    // order, but a fall-through pick can land lower, so re-sort the cards high → low.
-    out.sort((a, b) => b.score - a.score);
-    // Layer on the global "needs delegates" chip (see needyCommitteeIds) — added
-    // last so preference / country / experience reasons still lead the row.
-    return out.map(s =>
-      needyCommitteeIds.has(s.committee.id) && !s.reasons.includes('NEEDS DELEGATES')
-        ? { ...s, reasons: [...s.reasons, 'NEEDS DELEGATES'] }
-        : s
-    );
-  }, [accepted, committees, needyCommitteeIds, seatedIdentities, spread]);
+  // The classic board's strip: at most 6, built by the engine in
+  // src/lib/assignmentFit.ts (greedy pass, then the swap pass). The seat board
+  // builds its own full list, so this one is skipped while it shows.
+  const suggestions = useMemo<Suggestion[]>(
+    () => (classicView
+      ? buildSuggestions(accepted, committees, { seated: seatedIdentities, spread, needy: needyCommitteeIds, limit: 6 })
+      : []),
+    [accepted, committees, needyCommitteeIds, seatedIdentities, spread, classicView],
+  );
 
   if (!conference) return null;
 
@@ -5050,10 +3916,24 @@ export default function AssignmentPage() {
   }
   const inviteModalCommittee = inviteModalCommitteeId ? committees.find(c => c.id === inviteModalCommitteeId) ?? null : null;
 
+  // The seat board fills the window from lg up: the header stays put and only
+  // its middle column scrolls.
+  const seatBoardOn = mode === 'delegates' && !classicView && !loading && committees.length > 0;
+  const viewSwitch = mode === 'delegates' && (
+    <button
+      type="button"
+      onClick={() => chooseClassicView(!classicView)}
+      className="focus:outline-none"
+      style={{ border: 'none', background: 'none', padding: 0, cursor: 'pointer', fontFamily: OUTFIT, fontSize: 13, fontWeight: 700, color: NEU.ink, textDecoration: 'underline', textUnderlineOffset: 3 }}
+    >
+      {classicView ? 'Seat board' : 'Classic view'}
+    </button>
+  );
+
   return (
-    <div className="px-6 md:px-10 py-8">
+    <div className={seatBoardOn ? 'px-6 md:px-10 pt-6 pb-5 lg:h-[calc(100dvh-56px)] lg:flex lg:flex-col lg:overflow-hidden' : 'px-6 md:px-10 py-8'}>
       {/* Header */}
-      <div className="flex items-center justify-between gap-4 mb-4 flex-wrap">
+      <div className="flex items-center justify-between gap-4 mb-4 flex-wrap flex-none">
         <div>
           <p style={{ color: NEU.inkSoft, fontFamily: OUTFIT, fontSize: 13, fontWeight: 700, letterSpacing: '0.06em', marginBottom: 6 }}>
             {conference.acronym} / Assignment
@@ -5061,6 +3941,9 @@ export default function AssignmentPage() {
           <h1 style={{ color: NEU.ink, fontFamily: OUTFIT, fontWeight: 900, fontSize: 'clamp(32px, 3.4vw, 42px)', letterSpacing: '-0.025em', lineHeight: 1.05, margin: 0 }}>Seat <GoldWord>Assignment</GoldWord></h1>
         </div>
         {mode === 'delegates' && (
+          <div className="flex items-center gap-5 flex-wrap">
+          {seatBoardOn && <SeatBoardStats committees={committees} waiting={accepted.length} />}
+          {viewSwitch}
           <AllocationEmailBar
             autoSend={autoAllocationEmail}
             onToggleAuto={handleToggleAutoAllocationEmail}
@@ -5074,6 +3957,7 @@ export default function AssignmentPage() {
             openWithUnsent={releaseFromDashboard}
             onOpenedWithUnsent={clearReleaseFromDashboard}
           />
+          </div>
         )}
       </div>
 
@@ -5106,12 +3990,34 @@ export default function AssignmentPage() {
         </NeuCard>
       )}
 
+      {seatBoardOn && (
+        <SeatBoard
+          accepted={accepted}
+          committees={sortedCommittees}
+          societies={societies}
+          history={history}
+          seated={seatedIdentities}
+          spread={spread}
+          needy={needyCommitteeIds}
+          busyKey={quickAssigning}
+          locked={confirmSuggestion !== null}
+          emailsOnAssign={autoAllocationEmail && allocTemplateEnabled !== false}
+          onAssign={requestQuickAssign}
+          onRefresh={() => loadData({ silent: true })}
+          onOpenDelegationsView={() => {
+            setDelegationsFromBoard(true);
+            setMode('delegations');
+            replaceUrlInPlace(`/manage/${conference.slug}/assignment?mode=delegations`);
+          }}
+        />
+      )}
+
       {!loading && committees.length > 0 && (
         <>
           {/* Suggested assignments strip — deliberately set apart from the rest
               of the page with a warm gold wash + gold hairline frame, so the
               algorithmic picks read as their own distinct surface. */}
-          {mode === 'delegates' && suggestions.length > 0 && (
+          {mode === 'delegates' && classicView && suggestions.length > 0 && (
             <div
               className="p-4 mb-6"
               style={{
@@ -5133,96 +4039,17 @@ export default function AssignmentPage() {
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2.5">
                 {suggestions.map(sug => {
                   const key = `${sug.app.id}-${sug.slot.id}`;
-                  const busy = quickAssigning === key;
-                  const expanded = expandedSuggestionKey === key;
-                  const sugHistory = sug.app.profiles ? history[sug.app.profiles.id] : undefined;
-                  const toggle = () => setExpandedSuggestionKey(prev => (prev === key ? null : key));
                   return (
-                    <NeuInset key={key} small className="px-3 py-2.5">
-                      {/* Row 1 — identity + fit score + assign. Clicking the
-                          identity opens the applicant's full detail so the
-                          organizer can vet a pick before assigning. The score
-                          lives up here (next to ASSIGN) so Row 2 is reserved
-                          entirely for the committee + reason tags, keeping every
-                          card a consistent two rows with the tags side by side. */}
-                      <div className="flex items-center gap-2.5">
-                        <div
-                          role="button"
-                          tabIndex={0}
-                          onClick={toggle}
-                          onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); } }}
-                          className="flex items-center gap-2.5 flex-1 min-w-0 focus:outline-none"
-                          style={{ cursor: 'pointer' }}
-                          title={expanded ? 'Hide applicant detail' : 'View applicant detail'}
-                        >
-                          {/* role="button" <div>, not a real <button> — link is legal;
-                              nested keeps the expand/collapse toggle working. */}
-                          <PersonAvatar name={sug.app.profiles?.display_name ?? sug.app.invited_name ?? 'Unknown'} url={sug.app.profiles?.avatar_url ?? null} size={30} userId={sug.app.profiles?.id} nested />
-                          <div className="flex items-center gap-1.5 flex-1 min-w-0">
-                            {/* The person keeps up to half the row and the seat name
-                                wraps: a long custom seat ("Curtis LeMay") used to
-                                squeeze the name column to one letter per line. */}
-                            <span className="min-w-0 flex-shrink-0" style={{ fontFamily: OUTFIT, maxWidth: '50%' }}>
-                              <StackedName name={sug.app.profiles?.display_name ?? sug.app.invited_name ?? 'Unknown'} size={14} weight={700} color={NEU.ink} restColor={NEU.inkSoft} />
-                            </span>
-                            <ArrowRight size={12} style={{ color: NEU.muted, flexShrink: 0 }} />
-                            <CountryFlag code={sug.slot.country_code} w={19} h={13} radius={2} alt={sug.slot.country_name} logoUrl={slotLogoUrl(sug.committee, sug.slot)} />
-                            <CountryName name={sug.slot.country_name} code={sug.slot.country_code} className="min-w-0" style={{ fontSize: 14, color: NEU.ink, fontFamily: OUTFIT, fontWeight: 600, whiteSpace: 'normal', lineHeight: 1.15, overflowWrap: 'anywhere' }} />
-                          </div>
-                          {expanded
-                            ? <ChevronUp size={14} style={{ color: NEU.muted, flexShrink: 0 }} />
-                            : <ChevronDown size={14} style={{ color: NEU.muted, flexShrink: 0 }} />}
-                        </div>
-                        {sug.swap ? (
-                          <span
-                            className="inline-flex items-baseline gap-1 flex-shrink-0"
-                            title={`Suggested here at ${sug.score}; their own best available seat scored ${sug.swap.ownBestScore}.`}
-                          >
-                            <span style={{ fontSize: 11, fontWeight: 800, color: fitColor(sug.score), fontFamily: MONO, fontVariantNumeric: 'tabular-nums' }}>
-                              {sug.score}
-                            </span>
-                            <span style={{ fontSize: 9, fontWeight: 700, color: NEU.muted, fontFamily: MONO, fontVariantNumeric: 'tabular-nums' }}>
-                              (best {sug.swap.ownBestScore})
-                            </span>
-                          </span>
-                        ) : (
-                          <span className="flex-shrink-0" style={{ fontSize: 11, fontWeight: 800, color: fitColor(sug.score), fontFamily: MONO, fontVariantNumeric: 'tabular-nums' }}>
-                            {sug.score}
-                          </span>
-                        )}
-                        <NeuButton onClick={() => requestQuickAssign(sug)} disabled={busy || confirmSuggestion !== null} style={{ padding: '8px 16px', fontSize: 11, letterSpacing: 0 }}>
-                          {busy ? '…' : 'Assign'}
-                        </NeuButton>
-                      </div>
-                      {/* Row 2 — committee + reason tags. The committee chip keeps
-                          its natural width and the tags wrap beneath it when the
-                          card is narrow. It used to be the one shrinkable item on
-                          a nowrap row beside three fixed chips, so a long chip
-                          ("DELEGATION CONCENTRATION") squeezed "ECOSOC" to one
-                          letter per line (owner, 21 Oct 2026). */}
-                      <div className="flex items-center gap-1.5 mt-2 min-w-0 flex-wrap">
-                        <span className="inline-flex items-center gap-1.5 flex-shrink-0 max-w-full" style={{ fontSize: 10, fontWeight: 800, color: NEU.forest, fontFamily: MONO }}>
-                          <CommitteeLogo committee={sug.committee} size={18} />
-                          <span className="min-w-0" style={{ lineHeight: 1.2 }} title={sug.committee.name}>{committeeLabels(sug.committee).big}</span>
-                        </span>
-                        <span className="flex items-center gap-1.5 flex-wrap min-w-0">
-                          {(() => {
-                            const ctx = reasonContext(sug.app, sug.committee, sug.slot);
-                            const gaps = missingSignals(ctx, sug.reasons);
-                            return sug.reasons.slice(0, 3).map((r, i) => (
-                              <ReasonChip key={r} reason={r} why={explainReason(r, ctx)} more={i === 0 ? gaps : undefined} />
-                            ));
-                          })()}
-                          {sug.swap && (
-                            <ReasonChip
-                              reason={SWAP_REASON}
-                              why={`Swapped with ${sug.swap.partnerName}: a net gain of +${sug.swap.netGain} across both delegates. Their own best open seat scored ${sug.swap.ownBestScore}.`}
-                            />
-                          )}
-                        </span>
-                      </div>
-                      {expanded && <DelegateDetail app={sug.app} history={sugHistory} contextCommitteeId={sug.committee.id} contextCountryCode={sug.slot.country_code} />}
-                    </NeuInset>
+                    <SuggestionCard
+                      key={key}
+                      sug={sug}
+                      busy={quickAssigning === key}
+                      locked={confirmSuggestion !== null}
+                      expanded={expandedSuggestionKey === key}
+                      onToggle={() => setExpandedSuggestionKey(prev => (prev === key ? null : key))}
+                      history={sug.app.profiles ? history[sug.app.profiles.id] : undefined}
+                      onAssign={() => requestQuickAssign(sug)}
+                    />
                   );
                 })}
               </div>
@@ -5230,7 +4057,7 @@ export default function AssignmentPage() {
           )}
 
           {/* Selected-applicant banner (click path) */}
-          {mode === 'delegates' && selectedApp && (
+          {mode === 'delegates' && classicView && selectedApp && (
             <NeuInset className="flex items-center gap-2.5 px-4 py-2.5 mb-5">
               <MousePointerClick size={14} style={{ color: NEU.green, flexShrink: 0 }} />
               <p className="text-sm min-w-0 [overflow-wrap:anywhere]" style={{ color: NEU.forest, fontFamily: OUTFIT }}>
@@ -5248,7 +4075,7 @@ export default function AssignmentPage() {
           )}
 
           {/* Selected-delegation banner (tap path, works on touch) */}
-          {mode === 'delegates' && railSource === 'delegations' && selectedSocietyId && (() => {
+          {mode === 'delegates' && classicView && railSource === 'delegations' && selectedSocietyId && (() => {
             const soc = societies.find(s => s.id === selectedSocietyId);
             if (!soc) return null;
             return (
@@ -5270,7 +4097,7 @@ export default function AssignmentPage() {
             );
           })()}
 
-          {mode === 'delegates' && (
+          {mode === 'delegates' && classicView && (
             <div className="flex flex-col xl:flex-row gap-6 items-start">
               {/* Left rail, unassigned applicants (or delegations to block-allocate).
                   Sticky from xl with its own scrolling list, so it stays in reach
@@ -5632,6 +4459,17 @@ export default function AssignmentPage() {
         />
       )}
 
+
+      {mode === 'delegations' && delegationsFromBoard && (
+        <button
+          type="button"
+          onClick={() => { setDelegationsFromBoard(false); setMode('delegates'); replaceUrlInPlace(`/manage/${conference.slug}/assignment`); }}
+          className="focus:outline-none mb-4"
+          style={{ border: 'none', background: 'none', padding: 0, cursor: 'pointer', fontFamily: OUTFIT, fontSize: 13, fontWeight: 700, color: NEU.ink, textDecoration: 'underline', textUnderlineOffset: 3 }}
+        >
+          Back to the seat board
+        </button>
+      )}
 
       {mode === 'delegations' && (
         <DelegationsView conference={conference} showFlash={showFlash} initialSocietyId={deepDelegationId} />

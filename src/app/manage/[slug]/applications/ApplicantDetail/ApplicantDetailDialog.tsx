@@ -22,6 +22,7 @@ import { useApplicantCv, useApplicantLedger, ledgerTotals, type ApplicantApp } f
 import { OverviewTab, PreferencesTab, ExperienceTab, type AnswerItem, type OverviewDelegation } from './tabs';
 import PaymentTab, { type AidInfo } from './PaymentTab';
 import NotesPanel from './NotesPanel';
+import ApplicantBestSeats, { bestSeatsShown } from '../ApplicantBestSeats';
 import { C, OUTFIT, SeatFlag, fmtDay } from './kit';
 import { type ApplicantTab, initialApplicantTab, writeApplicantTab } from './url';
 import type { JobPick } from '../JobPicksBlock';
@@ -310,6 +311,9 @@ export default function ApplicantDetailDialog({
 
           {/* ── The one scrolling plane ── */}
           <div ref={bodyRef} id="apd-panel" role="tabpanel" aria-labelledby={`apd-tab-${tab}`} tabIndex={-1} className="apdBody">
+            {tab === 'overview' && isDelegate && (
+              <ApplicantBestSeats app={app} conferenceSlug={conferenceSlug} accessToken={accessToken} />
+            )}
             {tab === 'overview' && (
               <OverviewTab
                 app={app}
@@ -328,6 +332,7 @@ export default function ApplicantDetailDialog({
                 dob={dob}
                 age={age}
                 jobPicks={jobPicks}
+                prefsAbove={isDelegate && bestSeatsShown(app)}
               />
             )}
             {tab === 'preferences' && <PreferencesTab app={app} />}

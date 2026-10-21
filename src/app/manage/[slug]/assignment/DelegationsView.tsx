@@ -16,7 +16,7 @@ import {
   SectionLabel, DraggableChip, WaivedChip, NotAttendingChip, PaidSlotChip, OpenSlot, SwapConfirmModal, ModalOverlay, pledgeText,
   type PoolMember, type SearchApp,
 } from '@/app/manage/[slug]/assignment/delegationShared';
-import { PersonAvatar } from '@/app/manage/[slug]/assignment/page';
+import { PersonAvatar } from '@/app/manage/[slug]/assignment/assignmentKit';
 import { NEU, NEU_GRADIENTS, NeuCard, NeuInset, NeuButton, NeuIconDisc } from '@/components/neu';
 import { StackedName, committeeShortName, byAppliedAt } from '@/app/manage/[slug]/assignment/displayNames';
 import { Users } from 'lucide-react';

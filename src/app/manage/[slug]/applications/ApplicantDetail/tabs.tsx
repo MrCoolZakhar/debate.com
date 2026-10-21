@@ -75,7 +75,7 @@ export interface OverviewDelegation {
 
 export function OverviewTab({
   app, isDelegate, conferenceSlug, experienceLevel, cvCount, totals, ledgerLoading, feeCharged, onTab,
-  answerItems, orphanAnswers, delegation, onOpenDelegation, dob, age, jobPicks,
+  answerItems, orphanAnswers, delegation, onOpenDelegation, dob, age, jobPicks, prefsAbove = false,
 }: {
   app: ApplicantApp;
   isDelegate: boolean;
@@ -94,6 +94,8 @@ export function OverviewTab({
   age: number | null;
   /** A chair applicant's ranked Job Board picks (job_application_picks). */
   jobPicks?: JobPick[] | null;
+  /** ApplicantBestSeats above already lists the preferences (with the best seats). */
+  prefsAbove?: boolean;
 }) {
   const allocated = !!app.assigned_committee && (app.status === 'assigned' || app.status === 'checked-in' || !!app.assigned_country_name);
   const pref = matchedPreference(app);
@@ -154,7 +156,7 @@ export function OverviewTab({
         )}
 
         {/* What they asked for, before a seat exists. */}
-        {showsSeat && !allocated && (
+        {showsSeat && !allocated && !prefsAbove && (
           <section aria-labelledby="apd-prefs">
             <SectionTitle
               icon={ListOrdered}
