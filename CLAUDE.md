@@ -237,6 +237,7 @@ Database `store_flags` (as of 17 Oct 2026):
 | `leader_import_charged` | 1 leader credit per imported delegate | off (flip with `LEADER_IMPORTS_PAID_LAUNCH`) |
 | `docs_extra` | extra documents, ask-back, reminders | off (demo conferences behave as on) |
 | `email_attachments` | files on builder emails | off (demo conferences behave as on) |
+| `listings_live` | Gavelling listings go public when they meet the bar | on (21 Oct 2026, owner) |
 | `fin_refund_outcome` | refund outcomes | on |
 | `fin_checkout_vouchers` | discount codes at /pay checkout | on |
 | `fin_link_required` | payment setup must be complete before paying | on |
