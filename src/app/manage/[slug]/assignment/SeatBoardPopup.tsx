@@ -6,30 +6,46 @@
 // never as a second pop-up. The header's committee ring sits half outside the
 // card's top-left edge (CLAUDE.md §8, the signature detail).
 //   a) nobody open: the committee's allocations A to Z, nothing suggested on
-//      open (owner, 21 Oct 2026). Each row is the round flag and country, the
-//      seat's importance, and each seat's holder with their delegation, or
-//      Open. An "Open" filter keeps only the open seats. Clicking an open row
-//      expands the best-fit waiting delegates for that seat, with Assign.
+//      open (owner, 21 Oct 2026). Calm rows (round 5: "far too much
+//      information at once"): a bigger round flag, the country and the seat's
+//      importance, then each seat's holder (avatar and bold name, their
+//      delegation small beneath) or Open. An "Open" filter keeps only the
+//      open seats. Clicking an open row expands the best-fit waiting
+//      delegates for that seat, each with a soft Assign.
 //   b) a person open: "Seat <Name> in <Committee>", the open countries ranked
-//      by the person's fit, their choices marked, the badges with points.
+//      by the person's fit, their choices marked, a few badges beneath.
 // Every Assign hands a suggestion to the page's own assign path
 // (requestQuickAssign), so writes, emails and the first-assign pop-up are the
 // board's. Nothing here writes.
 
 import { useMemo, useState } from 'react';
 import { ChevronDown, Search, X } from 'lucide-react';
-import { NEU, NeuButton } from '@/components/neu';
+import { NEU } from '@/components/neu';
 import { ModalOverlay } from '@/components/ModalOverlay';
 import { groupAllocationsByCountry, rankPeopleForSeat, rankSeatsForPerson } from '@/lib/assignmentFit';
-import { CountryName } from '@/app/manage/[slug]/assignment/displayNames';
 import {
-  type AcceptedApp, type CommitteeData, type SlotRow, type Suggestion,
-  CountryFlag, PersonAvatar, committeeLabels, effectiveLevel, LevelDisc, slotLogoUrl, OUTFIT,
+  type AcceptedApp, type AllocationRow, type CommitteeData, type SlotRow, type Suggestion,
+  committeeLabels, effectiveLevel, LevelDisc, OUTFIT,
 } from '@/app/manage/[slug]/assignment/assignmentKit';
 import {
-  FitPills, GoldMarker, HAIRLINE, HolderLine, ImportanceMark, OpenChip, POPUP_RING_INSET, POPUP_RING_RISE, POPUP_WIDTH,
-  PopupRingBadge, ScoreHover, SeatDoublePill, WELL, firstName, personName, schoolName, seatCounts,
+  FitPills, GoldMarker, HAIRLINE, HolderLine, OpenChip, POPUP_RING_INSET, POPUP_RING_RISE, POPUP_WIDTH,
+  PersonIdentity, PopupRingBadge, ScoreHover, SeatCountry, SoftButton, WELL, firstName, personName, schoolName, seatCounts,
 } from '@/app/manage/[slug]/assignment/seatBoardShared';
+
+/** Each seat of a country: its holder, or Open; a double side by side. */
+function SeatHolders({ slot, holders }: { slot: SlotRow; holders: readonly AllocationRow[] }) {
+  const bySeat = new Map(holders.map(h => [h.seat, h]));
+  const seats = Array.from({ length: Math.max(1, slot.delegation_size) }, (_, k) => k + 1);
+  const loose = holders.filter(h => !seats.includes(h.seat));
+  return (
+    <span className="flex items-center flex-wrap min-w-0" style={{ flex: '1 1 200px', gap: '6px 14px' }}>
+      {seats.map(n => {
+        const h = bySeat.get(n) ?? (n === 1 ? loose[0] : undefined);
+        return h ? <HolderLine key={n} alloc={h} /> : <OpenChip key={n} compact label={slot.delegation_size > 1 ? `Seat ${n} open` : 'Open'} />;
+      })}
+    </span>
+  );
+}
 
 const ROW_DIVIDER = `1px solid ${HAIRLINE}`;
 
@@ -97,14 +113,7 @@ export function SeatBoardPopup({
               ? (person ? `${firstName(personName(person))} gets the allocation email when you assign` : 'Each person gets the allocation email when you assign')
               : 'Nobody is emailed until you release allocations'}
           </span>
-          <button
-            type="button"
-            onClick={onClose}
-            className="focus:outline-none flex-shrink-0"
-            style={{ height: 32, padding: '0 14px', borderRadius: 10, border: '1px solid rgba(27,56,40,0.16)', background: '#FFFFFF', color: NEU.ink, fontFamily: OUTFIT, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}
-          >
-            Cancel
-          </button>
+          <SoftButton onClick={onClose} size="sm">Cancel</SoftButton>
         </div>
       </div>
     </ModalOverlay>
@@ -128,45 +137,32 @@ function PersonMode({ committee, person, spread, needy, locked, onAssign }: {
     }
     return m;
   }, [person, committee.id]);
-  const name = personName(person);
 
   return (
     <div className="flex-1 min-h-0 flex flex-col">
-      <div className="flex items-center gap-2.5 px-4 py-2" style={{ background: WELL }}>
-        <PersonAvatar name={name} url={person.profiles?.avatar_url ?? null} size={30} />
-        <span className="flex items-center flex-wrap flex-1 min-w-0" style={{ gap: '0 8px', lineHeight: 1.2 }}>
-          <span className="[overflow-wrap:anywhere]" style={{ fontSize: 14.5, fontWeight: 700 }}>{name}</span>
-          <span className="[overflow-wrap:anywhere]" style={{ fontSize: 12.5, color: NEU.inkSoft }}>{schoolName(person)}</span>
-        </span>
+      <div className="flex items-center gap-3 px-4 py-2.5" style={{ background: WELL }}>
+        <span className="flex-1 min-w-0"><PersonIdentity app={person} avatar={34} nameSize={14.5} lineSize={12} /></span>
         <LevelDisc level={effectiveLevel(person)} size={26} />
       </div>
-      <div className="flex items-baseline justify-between gap-3 px-4 pt-2 pb-1">
-        <h3 style={{ margin: 0, fontSize: 14, fontWeight: 600 }}>Best Fit First</h3>
-        <span style={{ fontSize: 12, color: NEU.inkSoft }}>One click assigns</span>
-      </div>
+      <h3 className="px-4 pt-2.5 pb-1" style={{ margin: 0, fontSize: 14, fontWeight: 600 }}>Best Fit First</h3>
       <div className="flex-1 min-h-0 overflow-y-auto px-2 pb-1.5" style={{ overscrollBehavior: 'contain' }}>
         {ranked.length === 0 ? (
           <p className="px-2 py-8 text-center" style={{ fontSize: 14, color: NEU.inkSoft }}>Every seat in {committeeLabels(committee).big} is taken</p>
         ) : ranked.map((r, i) => {
           const order = prefs.get(r.slot.country_code);
+          const holders = byCountry.get(r.slot.country_code) ?? [];
           return (
-            <div key={r.slot.id} className="flex flex-col px-2 py-1.5" style={{ borderTop: i === 0 ? 'none' : ROW_DIVIDER, gap: 4 }}>
-              <div className="flex items-center gap-2.5">
-                <ScoreHover sug={r} size={30} />
-                <span className="min-w-0 flex-1">
-                  <SeatDoublePill
-                    committee={committee}
-                    slot={r.slot}
-                    holders={byCountry.get(r.slot.country_code) ?? []}
-                    trailing={order ? <span className="inline-flex items-center" style={{ padding: '0 6px' }}><GoldMarker order={order} size={18} /></span> : null}
-                  />
-                </span>
-                <NeuButton onClick={() => onAssign(r)} disabled={locked} style={{ padding: '6px 14px', fontSize: 12.5, letterSpacing: 0, flexShrink: 0 }}>Assign</NeuButton>
+            <div key={r.slot.id} className="flex flex-col" style={{ padding: '9px 8px', borderTop: i === 0 ? 'none' : ROW_DIVIDER, gap: 5 }}>
+              <div className="flex items-center gap-3 flex-wrap">
+                <ScoreHover sug={r} size={32} />
+                <SeatCountry committee={committee} slot={r.slot} marker={order ? <GoldMarker order={order} size={20} /> : null} />
+                {holders.length > 0 && <SeatHolders slot={r.slot} holders={holders} />}
+                <SoftButton onClick={() => onAssign(r)} disabled={locked} size="sm" style={{ marginLeft: 'auto' }}>Assign</SoftButton>
               </div>
-              <span className="flex items-center min-w-0" style={{ paddingLeft: 40 }}>
+              <span className="flex items-center min-w-0" style={{ paddingLeft: 44 }}>
                 {r.disallowed
                   ? <span style={{ fontSize: 12, color: NEU.inkSoft }}>The other seat of this country is another delegation&apos;s</span>
-                  : <FitPills sug={r} max={4} size="sm" />}
+                  : <FitPills sug={r} max={3} size="sm" />}
               </span>
             </div>
           );
@@ -217,30 +213,18 @@ function CommitteeMode({ committee, waiting, spread, needy, locked, onAssign }: 
     const holders = byCountry.get(s.country_code) ?? [];
     const open = isOpen(s);
     const choosing = open && chooser === s.id;
-    const bySeat = new Map(holders.map(h => [h.seat, h]));
-    const seats = Array.from({ length: Math.max(1, s.delegation_size) }, (_, k) => k + 1);
-    const loose = holders.filter(h => !seats.includes(h.seat));
     const toggle = () => { setChooser(choosing ? null : s.id); setQuery(''); };
     const body = (
       <>
-        <span className="flex items-center gap-2 min-w-0" style={{ flex: '1 1 180px' }}>
-          <CountryFlag code={s.country_code} w={26} h={26} alt={s.country_name} logoUrl={slotLogoUrl(committee, s)} />
-          <CountryName name={s.country_name} code={s.country_code} style={{ fontSize: 14, fontWeight: 600, color: NEU.ink, whiteSpace: 'normal', overflowWrap: 'anywhere', lineHeight: 1.15 }} />
-          <ImportanceMark tier={s.importance} />
-        </span>
-        <span className="flex items-center flex-wrap min-w-0" style={{ flex: '1 1 220px', gap: '4px 12px' }}>
-          {seats.map(n => {
-            const h = bySeat.get(n) ?? (n === 1 ? loose[0] : undefined);
-            return h ? <HolderLine key={n} alloc={h} /> : <OpenChip key={n} compact label={s.delegation_size > 1 ? `Seat ${n} open` : 'Open'} />;
-          })}
-        </span>
+        <SeatCountry committee={committee} slot={s} />
+        <SeatHolders slot={s} holders={holders} />
         {open && (
           <span
             aria-hidden
             className="inline-flex items-center justify-center flex-shrink-0"
-            style={{ width: 22, height: 22, borderRadius: 8, color: NEU.ink }}
+            style={{ width: 22, height: 22, borderRadius: 8, color: NEU.inkSoft }}
           >
-            <ChevronDown size={16} strokeWidth={1.75} style={{ transform: choosing ? 'rotate(180deg)' : 'none', transition: 'transform 160ms cubic-bezier(0.22,1,0.36,1)' }} />
+            <ChevronDown size={16} strokeWidth={1.5} style={{ transform: choosing ? 'rotate(180deg)' : 'none', transition: 'transform 160ms cubic-bezier(0.22,1,0.36,1)' }} />
           </span>
         )}
       </>
@@ -253,15 +237,15 @@ function CommitteeMode({ committee, waiting, spread, needy, locked, onAssign }: 
             onClick={toggle}
             aria-expanded={choosing}
             aria-label={choosing ? `Close the people for ${s.country_name}` : `Best people for ${s.country_name}`}
-            className="focus:outline-none focus-visible:ring-2 w-full flex items-center gap-2.5 flex-wrap text-left"
-            style={{ padding: '5px 6px', border: 'none', borderRadius: 10, background: choosing ? WELL : 'transparent', cursor: 'pointer', fontFamily: OUTFIT, transition: 'background-color 140ms cubic-bezier(0.22,1,0.36,1)' }}
+            className="focus:outline-none focus-visible:ring-2 w-full flex items-center gap-3 flex-wrap text-left"
+            style={{ padding: '9px 8px', border: 'none', borderRadius: 12, background: choosing ? WELL : 'transparent', cursor: 'pointer', fontFamily: OUTFIT, transition: 'background-color 140ms cubic-bezier(0.22,1,0.36,1)' }}
             onMouseEnter={e => { if (!choosing) (e.currentTarget as HTMLElement).style.background = '#FAF8F3'; }}
             onMouseLeave={e => { if (!choosing) (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
           >
             {body}
           </button>
         ) : (
-          <div className="flex items-center gap-2.5 flex-wrap" style={{ padding: '5px 6px' }}>{body}</div>
+          <div className="flex items-center gap-3 flex-wrap" style={{ padding: '9px 8px' }}>{body}</div>
         )}
         {choosing && (
           <Chooser
@@ -280,7 +264,7 @@ function CommitteeMode({ committee, waiting, spread, needy, locked, onAssign }: 
           {tab('all', 'All seats', slots.length)}
           {tab('open', 'Open', openCount)}
         </span>
-        {openCount > 0 && <span style={{ fontSize: 12, color: NEU.inkSoft }}>Click an open seat to see who fits it best</span>}
+        {openCount > 0 && <span style={{ fontSize: 12, color: NEU.inkSoft }}>Click an open seat to see who fits</span>}
       </div>
 
       <div className="flex-1 min-h-0 overflow-y-auto px-2 pb-1.5" style={{ overscrollBehavior: 'contain' }}>
@@ -296,20 +280,17 @@ function CommitteeMode({ committee, waiting, spread, needy, locked, onAssign }: 
 }
 
 function PickRow({ sug, locked, onAssign, note }: { sug: Suggestion; locked: boolean; onAssign: (s: Suggestion) => void; note?: string }) {
-  const name = personName(sug.app);
   return (
-    <div className="flex flex-col px-2 py-1.5" style={{ borderRadius: 10, background: '#FFFFFF', gap: 4 }}>
-      <div className="flex items-center gap-2">
-        <PersonAvatar name={name} url={sug.app.profiles?.avatar_url ?? null} size={26} />
-        <span className="flex items-center flex-wrap flex-1 min-w-0" style={{ gap: '0 8px', lineHeight: 1.2 }}>
-          <span className="[overflow-wrap:anywhere]" style={{ fontSize: 13.5, fontWeight: 700 }}>{name}</span>
-          <span className="[overflow-wrap:anywhere]" style={{ fontSize: 12, color: NEU.inkSoft }}>{note ?? schoolName(sug.app)}</span>
-        </span>
+    <div className="flex flex-col" style={{ padding: '8px 8px 8px 10px', borderRadius: 12, background: '#FFFFFF', gap: 5 }}>
+      <div className="flex items-center gap-2.5">
+        <span className="flex-1 min-w-0"><PersonIdentity app={sug.app} avatar={30} nameSize={13.5} lineSize={11.5} /></span>
         <LevelDisc level={effectiveLevel(sug.app)} size={20} />
-        <ScoreHover sug={sug} size={28} />
-        <NeuButton onClick={() => onAssign(sug)} disabled={locked} style={{ padding: '6px 12px', fontSize: 12, letterSpacing: 0, flexShrink: 0 }}>Assign</NeuButton>
+        <ScoreHover sug={sug} size={30} />
+        <SoftButton onClick={() => onAssign(sug)} disabled={locked} size="sm">Assign</SoftButton>
       </div>
-      {!note && <span className="flex min-w-0" style={{ paddingLeft: 34 }}><FitPills sug={sug} max={4} size="sm" /></span>}
+      {note
+        ? <span style={{ fontSize: 12, color: NEU.inkSoft, paddingLeft: 40 }}>{note}</span>
+        : <span className="flex min-w-0" style={{ paddingLeft: 40 }}><FitPills sug={sug} max={3} size="sm" /></span>}
     </div>
   );
 }

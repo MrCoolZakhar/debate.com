@@ -7,10 +7,11 @@
 // allocation, give this allocation, give this allocation'").
 // It looks like the people committee pop-up (SeatBoardPopup.tsx, owner, 21 Oct
 // 2026: "almost the same"): the committee ring half outside the card's
-// top-left edge, then every country A to Z in slim rows on a narrow card (the
-// round flag and country with the importance dashes beside it, each seat's
-// holder with their delegation, side by side for a double, or Open), with an
-// All seats / Open filter.
+// top-left edge, then every country A to Z in calm rows on a narrow card (a
+// bigger round flag and the country with the importance dashes beside it,
+// each seat's holder as avatar and bold name with the delegation small
+// beneath, side by side for a double, or Open), with an All seats / Open
+// filter. Each row's Give is a soft white pill; Done is the one solid button.
 //   * A row open to this delegation is one tap: it gives the country (every
 //     open seat of the slot, a double is both seats) and the pop-up STAYS OPEN
 //     for the next tap. A country given here reads "Given" with Undo.
@@ -26,15 +27,14 @@ import { Check, Plus, Search, X } from 'lucide-react';
 import { NEU } from '@/components/neu';
 import { ModalOverlay } from '@/components/ModalOverlay';
 import DelegationCrest from '@/components/DelegationCrest';
-import { CountryName } from '@/app/manage/[slug]/assignment/displayNames';
 import { allocationSocietyId, groupAllocationsByCountry, openSeatsForSociety } from '@/lib/assignmentFit';
 import { foldForSearch } from '@/app/manage/[slug]/applications/delegations/societySeats';
 import {
   type AllocationRow, type CommitteeData, type SlotRow,
-  CountryFlag, committeeLabels, slotLogoUrl, OUTFIT,
+  committeeLabels, OUTFIT,
 } from '@/app/manage/[slug]/assignment/assignmentKit';
 import {
-  HAIRLINE, HolderLine, ImportanceMark, OpenChip, POPUP_RING_INSET, POPUP_RING_RISE, POPUP_WIDTH, PopupRingBadge, WELL, seatCounts,
+  HAIRLINE, HolderLine, OpenChip, POPUP_RING_INSET, POPUP_RING_RISE, POPUP_WIDTH, PopupRingBadge, SeatCountry, WELL, seatCounts,
 } from '@/app/manage/[slug]/assignment/seatBoardShared';
 
 const ROW_DIVIDER = `1px solid ${HAIRLINE}`;
@@ -73,12 +73,9 @@ function SeatHolder({ alloc, societyName }: {
   const h = holderOf(alloc, societyName);
   if (h.kind === 'person') return <HolderLine alloc={alloc} />;
   return (
-    <span className="inline-flex items-center gap-1.5 min-w-0" title={`${h.name}, a delegation seat`}>
-      <DelegationCrest name={h.name} logoUrl={h.logoUrl} size={22} />
-      <span className="flex flex-col min-w-0" style={{ lineHeight: 1.12 }}>
-        <span className="[overflow-wrap:anywhere]" style={{ fontSize: 13, fontWeight: 700, color: NEU.ink }}>{h.name}</span>
-        <span style={{ fontSize: 11.5, color: NEU.inkSoft }}>Delegation seat</span>
-      </span>
+    <span className="inline-flex items-center gap-2 min-w-0" title={`${h.name}, a delegation seat`}>
+      <DelegationCrest name={h.name} logoUrl={h.logoUrl} size={28} />
+      <span className="[overflow-wrap:anywhere] min-w-0" style={{ fontSize: 13.5, fontWeight: 700, color: NEU.ink, lineHeight: 1.15 }}>{h.name}</span>
     </span>
   );
 }
@@ -158,13 +155,9 @@ export function SeatBoardGivePopup({
 
     const body = (
       <>
-        <span className="flex items-center gap-2 min-w-0" style={{ flex: '1 1 180px' }}>
-          <CountryFlag code={s.country_code} w={26} h={26} alt={s.country_name} logoUrl={slotLogoUrl(committee, s)} />
-          <CountryName name={s.country_name} code={s.country_code} style={{ fontSize: 14, fontWeight: 600, color: NEU.ink, whiteSpace: 'normal', overflowWrap: 'anywhere', lineHeight: 1.15 }} />
-          <ImportanceMark tier={s.importance} />
-        </span>
+        <SeatCountry committee={committee} slot={s} />
         {/* Every seat side by side: a double is one row with both holders */}
-        <span className="flex items-center flex-wrap min-w-0" style={{ flex: '1 1 200px', gap: '4px 12px' }}>
+        <span className="flex items-center flex-wrap min-w-0" style={{ flex: '1 1 200px', gap: '6px 14px' }}>
           {seats.map(n => {
             const h = bySeat.get(n) ?? (n === 1 ? loose[0] : undefined);
             return h ? <SeatHolder key={n} alloc={h} societyName={societyName} /> : <OpenChip key={n} compact />;
@@ -182,21 +175,21 @@ export function SeatBoardGivePopup({
           disabled={busy}
           onClick={() => onGive(s, free)}
           aria-label={`Give ${s.country_name} to ${society.name}`}
-          className="focus:outline-none focus-visible:ring-2 w-full flex items-center gap-2.5 flex-wrap text-left"
+          className="group focus:outline-none focus-visible:ring-2 w-full flex items-center gap-3 flex-wrap text-left"
           style={{
-            padding: '5px 6px', border: 'none', borderTop: i === 0 ? 'none' : ROW_DIVIDER, borderRadius: 0, background: 'transparent',
+            padding: '9px 8px', border: 'none', borderTop: i === 0 ? 'none' : ROW_DIVIDER, borderRadius: 0, background: 'transparent',
             cursor: busy ? 'default' : 'pointer', fontFamily: OUTFIT, color: NEU.ink, transition: 'background-color 140ms cubic-bezier(0.22,1,0.36,1)',
           }}
-          onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = '#FAF8F3'; }}
+          onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = '#FCFAF6'; }}
           onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
         >
           {body}
+          {/* The soft Give pill: lights with the row's hover, scales on press */}
           <span
-            className="flex-shrink-0 inline-flex items-center justify-center gap-1"
-            style={{
-              height: 28, minWidth: 68, padding: '0 11px 0 8px', borderRadius: 9, fontSize: 12.5, fontWeight: 600, marginLeft: 'auto',
-              background: busy ? WELL : FOREST_GRADIENT, color: busy ? NEU.inkSoft : '#FFFFFF',
-            }}
+            className={`flex-shrink-0 inline-flex items-center justify-center gap-1 rounded-full border transition-[background-color,border-color,box-shadow,transform] duration-150 ease-[cubic-bezier(0.22,1,0.36,1)] ${busy
+              ? 'bg-[#F4F0E6] border-transparent text-[#6B5F52]'
+              : 'bg-white border-[#1B3828]/20 text-[#1B3828] shadow-[0_1px_2px_rgba(27,56,40,0.07)] group-hover:bg-[#F4F0E6] group-hover:border-[#1B3828]/45 group-hover:shadow-[0_2px_8px_rgba(27,56,40,0.12)] group-active:scale-[0.96]'}`}
+            style={{ height: 30, minWidth: 72, padding: '0 13px 0 10px', fontSize: 12.5, fontWeight: 600, marginLeft: 'auto', boxSizing: 'border-box' }}
           >
             {!busy && <Plus size={13} strokeWidth={2} aria-hidden />}
             {busy ? 'Saving' : 'Give'}
@@ -208,8 +201,8 @@ export function SeatBoardGivePopup({
     return (
       <div
         key={s.id}
-        className="flex items-center gap-2.5 flex-wrap"
-        style={{ padding: '5px 6px', borderTop: i === 0 ? 'none' : ROW_DIVIDER, background: now ? WELL : 'transparent', borderRadius: now ? 10 : 0 }}
+        className="flex items-center gap-3 flex-wrap"
+        style={{ padding: '9px 8px', borderTop: i === 0 ? 'none' : ROW_DIVIDER, background: now ? WELL : 'transparent', borderRadius: now ? 10 : 0 }}
       >
         {body}
         {theirs && (
@@ -319,7 +312,7 @@ export function SeatBoardGivePopup({
           <button
             type="button"
             onClick={onClose}
-            className="focus:outline-none flex-shrink-0"
+            className="focus:outline-none flex-shrink-0 transition-transform duration-150 active:scale-[0.96]"
             style={{ height: 32, padding: '0 18px', borderRadius: 10, border: 'none', background: FOREST_GRADIENT, color: '#FFFFFF', fontFamily: OUTFIT, fontSize: 13.5, fontWeight: 600, cursor: 'pointer' }}
           >
             Done

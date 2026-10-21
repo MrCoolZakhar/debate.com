@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { NEU } from '@/components/neu';
 import Portal from '@/components/Portal';
+import { getCountryByName } from '@/lib/countries';
 import {
   CONCENTRATION_PENALTY, EXPERIENCE_GAP_STEP, EXPERIENCE_MATCH_BONUS, IMPORTANCE_NEED_WEIGHT, MEMBER_PICK_BONUS,
   NEEDS_DELEGATES_REASON, PAIR_BONUS, SWAP_REASON, groupAllocationsByCountry, type ImportanceTier,
@@ -23,7 +24,7 @@ import { FitTip, explainReason, missingSignals } from '@/app/manage/[slug]/assig
 import { CountryName } from '@/app/manage/[slug]/assignment/displayNames';
 import {
   type AcceptedApp, type AllocationRow, type CommitteeData, type SlotRow, type Suggestion,
-  CommitteeLogo, CountryFlag, PersonAvatar, committeeLabels, reasonContext, slotLogoUrl, OUTFIT,
+  CommitteeLogo, CountryFlag, PersonAvatar, ageOf, committeeLabels, reasonContext, slotLogoUrl, OUTFIT,
 } from '@/app/manage/[slug]/assignment/assignmentKit';
 
 export const CARD_SHADOW = '0 1px 2px rgba(27,56,40,0.06), 0 8px 24px rgba(27,56,40,0.08)';
@@ -37,6 +38,144 @@ export function personName(app: Pick<AcceptedApp, 'profiles' | 'invited_name'>):
 export function schoolName(app: Pick<AcceptedApp, 'society_id' | 'societies'>): string {
   if (app.society_id == null) return 'Independent';
   return app.societies?.name?.trim() || 'Delegation';
+}
+
+/** The delegation line under a person's name; null for an independent
+ *  applicant, who shows nothing there (owner, 21 Oct 2026). */
+export function delegationOf(app: Pick<AcceptedApp, 'society_id' | 'societies'>): string | null {
+  if (app.society_id == null) return null;
+  return app.societies?.name?.trim() || 'Delegation';
+}
+
+/** The person's nationality with its ISO code, when we know both. */
+export function nationalityOf(app: { profiles?: { nationality?: string | null } | null }): { name: string; code: string } | null {
+  const name = app.profiles?.nationality?.trim() || null;
+  if (!name) return null;
+  const c = getCountryByName(name);
+  return c ? { name, code: c.code } : null;
+}
+
+// ── A person's identity (owner, 21 Oct 2026) ────────────────────────────────
+// Everywhere on the seat board: the avatar with the nationality's ROUND flag
+// overlapping its border at the bottom right (its centre on the avatar's
+// edge, so it sits half outside: CLAUDE.md §8 rule 19), then "Name, 17" with
+// the name bold, and the delegation UNDER the name (nothing for an
+// independent applicant).
+
+export function AvatarWithFlag({ name, url, size, nationality, userId, nested }: {
+  name: string;
+  url: string | null;
+  size: number;
+  nationality: { name: string; code: string } | null;
+  /** Opens the public MUN CV; only where no button or link wraps the avatar. */
+  userId?: string | null;
+  nested?: boolean;
+}) {
+  const f = Math.max(14, Math.round(size * 0.4));
+  const r = size / 2;
+  // The flag's centre on the avatar's edge at 45 degrees, bottom right.
+  const off = Math.round(r + r * Math.SQRT1_2 - f / 2);
+  return (
+    <span className="relative inline-flex flex-shrink-0" style={{ width: size, height: size }}>
+      <PersonAvatar name={name} url={url} size={size} userId={userId} nested={nested} />
+      {nationality && (
+        <span
+          className="absolute inline-flex"
+          title={nationality.name}
+          style={{ left: off, top: off, lineHeight: 0, borderRadius: 999, boxShadow: '0 0 0 2px #FFFFFF, 0 1px 3px rgba(27,56,40,0.28)', pointerEvents: 'none' }}
+        >
+          <CountryFlag code={nationality.code} w={f} h={f} alt={nationality.name} />
+        </span>
+      )}
+    </span>
+  );
+}
+
+/** "Name, 17": the name bold, the age after a comma. Never cut, it wraps. */
+export function NameAge({ name, app, size = 15, after }: {
+  name: string;
+  app: Parameters<typeof ageOf>[0];
+  size?: number;
+  /** Drawn right after the name (a "not registered" chip, say). */
+  after?: ReactNode;
+}) {
+  const age = ageOf(app);
+  return (
+    <span className="[overflow-wrap:anywhere]" style={{ fontSize: size, fontWeight: 700, color: NEU.ink, lineHeight: 1.15 }}>
+      {name}
+      {age != null && (
+        <span style={{ fontWeight: 500, color: NEU.ink, fontVariantNumeric: 'tabular-nums' }} title={`${age} years old`}>, {age}</span>
+      )}
+      {after ? <span className="inline-flex align-middle" style={{ marginLeft: 6 }}>{after}</span> : null}
+    </span>
+  );
+}
+
+/** The avatar, then "Name, 17" with the delegation beneath. */
+export function PersonIdentity({ app, avatar = 38, nameSize = 15, lineSize = 12.5, userId, after, delegation }: {
+  app: AcceptedApp;
+  avatar?: number;
+  nameSize?: number;
+  lineSize?: number;
+  userId?: string | null;
+  after?: ReactNode;
+  /** Replaces the plain delegation line (a link, say). */
+  delegation?: ReactNode;
+}) {
+  const name = personName(app);
+  const soc = delegationOf(app);
+  const gap = Math.max(8, Math.round(avatar * 0.26));
+  return (
+    <span className="flex items-center min-w-0" style={{ gap }}>
+      <AvatarWithFlag name={name} url={app.profiles?.avatar_url ?? null} size={avatar} nationality={nationalityOf(app)} userId={userId} />
+      <span className="flex flex-col min-w-0" style={{ gap: 2 }}>
+        <NameAge name={name} app={app} size={nameSize} after={after} />
+        {(delegation ?? soc) && (
+          <span className="[overflow-wrap:anywhere]" style={{ fontSize: lineSize, color: NEU.inkSoft, lineHeight: 1.2 }}>{delegation ?? soc}</span>
+        )}
+      </span>
+    </span>
+  );
+}
+
+// ── The soft secondary button (owner, 21 Oct 2026) ──────────────────────────
+// "I really don't like the dark green buttons, especially when there are
+// multiple": at most ONE solid forest button per view; every repeated row
+// action (Assign, Give, Cancel) is this white pill with forest text and a thin
+// border, a tint on hover and a press scale.
+export const SOFT_BTN_CLASS = [
+  'focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]/25',
+  'inline-flex items-center justify-center gap-1.5 flex-shrink-0 whitespace-nowrap rounded-full',
+  'bg-white text-[#1B3828] font-semibold border border-[#1B3828]/20',
+  'shadow-[0_1px_2px_rgba(27,56,40,0.07)]',
+  'transition-[background-color,border-color,box-shadow,transform] duration-150 ease-[cubic-bezier(0.22,1,0.36,1)]',
+  'enabled:hover:bg-[#F4F0E6] enabled:hover:border-[#1B3828]/45 enabled:hover:shadow-[0_2px_8px_rgba(27,56,40,0.12)]',
+  'enabled:active:scale-[0.96] disabled:opacity-55 disabled:cursor-default',
+].join(' ');
+
+export function SoftButton({ children, onClick, disabled, size = 'md', title, ariaLabel, style }: {
+  children: ReactNode;
+  onClick?: () => void;
+  disabled?: boolean;
+  size?: 'sm' | 'md';
+  title?: string;
+  ariaLabel?: string;
+  style?: CSSProperties;
+}) {
+  const sm = size === 'sm';
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      title={title}
+      aria-label={ariaLabel}
+      className={SOFT_BTN_CLASS}
+      style={{ height: sm ? 30 : 34, padding: sm ? '0 13px' : '0 16px', fontFamily: OUTFIT, fontSize: sm ? 12.5 : 13, cursor: disabled ? 'default' : 'pointer', ...style }}
+    >
+      {children}
+    </button>
+  );
 }
 
 /** When the application was accepted; the submission time for rows that
@@ -206,15 +345,25 @@ const TIER: Record<ImportanceTier, { word: string; color: string; dashes: number
 };
 
 /** The bare dashes, for a badge or a chip. */
-export function ImportanceDashes({ tier, barHeight = 11 }: { tier: ImportanceTier; barHeight?: number }) {
+export function ImportanceDashes({ tier, barHeight = 11, barWidth = 2, gap = 2 }: { tier: ImportanceTier; barHeight?: number; barWidth?: number; gap?: number }) {
   const t = TIER[tier] ?? TIER.standard;
   return (
-    <span className="inline-flex items-end flex-shrink-0" style={{ gap: 2 }} aria-hidden>
+    <span className="inline-flex items-end flex-shrink-0" style={{ gap }} aria-hidden>
       {Array.from({ length: t.dashes }).map((_, i) => (
-        <span key={i} style={{ width: 2, height: barHeight, borderRadius: 1, backgroundColor: t.color, display: 'inline-block' }} />
+        <span key={i} style={{ width: barWidth, height: barHeight, borderRadius: barWidth / 2, backgroundColor: t.color, display: 'inline-block' }} />
       ))}
     </span>
   );
+}
+
+/** The dashes sized to sit inside a disc of `size`: the four red dashes of a
+ *  high seat used to touch the disc's ring (owner, 21 Oct 2026). Every tier's
+ *  dashes fill at most 56% of the disc's width, at the classic proportions. */
+export function dashesForDisc(tier: ImportanceTier, size: number): { barHeight: number; barWidth: number; gap: number } {
+  const n = (TIER[tier] ?? TIER.standard).dashes;
+  const inner = size * 0.56;
+  const w = Math.min(size * 0.1, inner / (n + 0.8 * (n - 1)));
+  return { barHeight: Math.round(size * 0.46), barWidth: Math.round(w * 4) / 4, gap: Math.round(w * 0.8 * 4) / 4 };
 }
 
 /** A seat's importance as the classic board draws it: the dashes on a small
@@ -332,7 +481,7 @@ export function BadgeIcon({ spec, size = 18 }: { spec: Pick<BadgeSpec, 'Icon' | 
         className="inline-flex items-center justify-center flex-shrink-0"
         style={{ width: size, height: size, borderRadius: 999, background: '#FFFFFF', boxShadow: `inset 0 0 0 1px color-mix(in srgb, ${tone} 30%, transparent)` }}
       >
-        <ImportanceDashes tier={tier} barHeight={Math.max(6, Math.round(size * 0.5))} />
+        <ImportanceDashes tier={tier} {...dashesForDisc(tier, size)} />
       </span>
     );
   }
@@ -698,24 +847,38 @@ export function HolderChip({ alloc }: { alloc: AllocationRow }) {
   );
 }
 
-/** Who holds a seat, with their delegation beneath: the committee pop-ups'
- *  taken seats, drawn small so a double sits side by side in a slim row. A
- *  delegation seat shows the delegation itself. */
+/** Who holds a seat in the committee pop-ups: the avatar and the bold name,
+ *  the delegation on a smaller second line (nothing for an independent
+ *  applicant). A delegation seat shows the delegation itself, "Delegation
+ *  seat" only on hover. Calm on purpose (owner, 21 Oct 2026: "far too much
+ *  information at once"). */
 export function HolderLine({ alloc }: { alloc: AllocationRow }) {
   const block = !!alloc.society_id && !alloc.application_id && !alloc.user_id;
   const name = seatHolderName(alloc);
-  const soc = alloc.applications?.societies?.name?.trim() || alloc.delegation?.name?.trim() || null;
-  const indep = !block && !soc && (alloc.applications?.society_id == null);
-  const second = block ? 'Delegation seat' : soc ?? (indep ? 'Independent' : null);
+  const soc = block ? null : alloc.applications?.societies?.name?.trim() || alloc.delegation?.name?.trim() || null;
   return (
-    <span className="inline-flex items-center gap-1.5 min-w-0" title={second ? `${name}, ${second}` : name}>
+    <span className="inline-flex items-center gap-2 min-w-0" title={block ? `${name}, a delegation seat` : soc ? `${name}, ${soc}` : name}>
       {block
-        ? <span className="inline-flex items-center justify-center flex-shrink-0" style={{ width: 22, height: 22, borderRadius: 999, background: WELL }}><Users size={13} strokeWidth={1.5} style={{ color: NEU.ink }} /></span>
-        : <PersonAvatar name={name} url={alloc.profiles?.avatar_url ?? null} size={22} />}
-      <span className="flex flex-col min-w-0" style={{ lineHeight: 1.12 }}>
-        <span className="[overflow-wrap:anywhere]" style={{ fontSize: 13, fontWeight: 700, color: NEU.ink }}>{name}</span>
-        {second && <span className="[overflow-wrap:anywhere]" style={{ fontSize: 11.5, color: NEU.inkSoft }}>{second}</span>}
+        ? <span className="inline-flex items-center justify-center flex-shrink-0" style={{ width: 28, height: 28, borderRadius: 999, background: WELL }}><Users size={15} strokeWidth={1.5} style={{ color: NEU.ink }} /></span>
+        : <PersonAvatar name={name} url={alloc.profiles?.avatar_url ?? null} size={28} />}
+      <span className="flex flex-col min-w-0" style={{ lineHeight: 1.15 }}>
+        <span className="[overflow-wrap:anywhere]" style={{ fontSize: 13.5, fontWeight: 700, color: NEU.ink }}>{name}</span>
+        {soc && <span className="[overflow-wrap:anywhere]" style={{ fontSize: 11.5, color: NEU.inkSoft }}>{soc}</span>}
       </span>
+    </span>
+  );
+}
+
+/** A committee pop-up row's country (owner, 21 Oct 2026: calmer, fewer rows
+ *  per screen is fine): a bigger round flag, the country and the seat's
+ *  importance, plus an optional gold choice marker. */
+export function SeatCountry({ committee, slot, marker }: { committee: CommitteeData; slot: SlotRow; marker?: ReactNode }) {
+  return (
+    <span className="flex items-center min-w-0" style={{ gap: 10, flex: '1 1 200px' }}>
+      <CountryFlag code={slot.country_code} w={36} h={36} alt={slot.country_name} logoUrl={slotLogoUrl(committee, slot)} />
+      <CountryName name={slot.country_name} code={slot.country_code} style={{ fontSize: 15, fontWeight: 600, color: NEU.ink, whiteSpace: 'normal', overflowWrap: 'anywhere', lineHeight: 1.15 }} />
+      <ImportanceMark tier={slot.importance} />
+      {marker}
     </span>
   );
 }

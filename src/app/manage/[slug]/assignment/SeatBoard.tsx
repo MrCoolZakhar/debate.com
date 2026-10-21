@@ -6,10 +6,12 @@
 //           delegations, each column scrolling inside itself;
 //   MIDDLE  the only part that scrolls with content: "Smart Allocations"
 //           (centred, with the general "How smart allocations are scored"
-//           hint), dense white cards (the person with flag and age on one
-//           line, the seat, one row of reason badges, "How this scores" on
-//           hover of the score), or one person opened in place with their
-//           level, where they are from and their best three seats;
+//           hint), white cards with a gold edge (the person: avatar with the
+//           nationality flag on its border, "Name, 17", the delegation
+//           beneath; the gold score disc, "How this scores" on hover; the
+//           seat on an ivory well with a soft Assign; one row of reason
+//           badges), or one person opened in place with their level, where
+//           they are from and their best three seats;
 //   RIGHT   the committees as fill rings; a click (or a person dropped on one)
 //           opens that committee's pop-up (SeatBoardPopup.tsx).
 // Every Assign goes through the page's own assign path (`onAssign` is
@@ -25,8 +27,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeft, ArrowUpDown, ChevronDown, Hand, Info, MapPin, Search, X, Award } from 'lucide-react';
 import { seatFitFontPx } from '@/lib/seatName';
 import GSelect, { type GSelectOption } from '@/components/GSelect';
-import { NEU, NeuButton } from '@/components/neu';
-import { getCountryByName } from '@/lib/countries';
+import { NEU } from '@/components/neu';
 import { buildSuggestions, rankSeatsForPerson, type SeatedIdentities } from '@/lib/assignmentFit';
 import { useBoardDrag, dropAttr } from '@/app/manage/[slug]/assignment/boardDrag';
 import { CountryName, committeeShortName } from '@/app/manage/[slug]/assignment/displayNames';
@@ -36,20 +37,22 @@ import SeatBoardDelegations from '@/app/manage/[slug]/assignment/SeatBoardDelega
 import { replaceUrlInPlace } from '@/lib/replaceUrlInPlace';
 import {
   type AcceptedApp, type CommitteeData, type Suggestion, type UserHistory,
-  CountryFlag, PersonAvatar, CommitteeLogo, committeeLabels, committeeSeatLogo, effectiveLevel, ageOf,
+  CountryFlag, CommitteeLogo, committeeLabels, committeeSeatLogo, effectiveLevel,
   LevelDisc, LevelHero, slotLogoUrl, OUTFIT,
 } from '@/app/manage/[slug]/assignment/assignmentKit';
 import { SeatBoardPopup } from '@/app/manage/[slug]/assignment/SeatBoardPopup';
 import {
-  BigCount, CARD_SHADOW, CommitteeRing, FitPills, RankNumber, ScoreHover, ScoringHint, WELL,
-  acceptedAt, choicesPhrase, firstName, fmtDay, personName, prefOrdersByCommittee, schoolName, seatCounts,
+  AvatarWithFlag, BigCount, CARD_SHADOW, CommitteeRing, FitPills, NameAge, PersonIdentity, RankNumber, ScoreHover, ScoringHint,
+  SoftButton, WELL, acceptedAt, choicesPhrase, delegationOf, firstName, fmtDay, nationalityOf, personName,
+  prefOrdersByCommittee, schoolName, seatCounts,
 } from '@/app/manage/[slug]/assignment/seatBoardShared';
 
-// The smart allocations are the board's main event: white cards with the
-// standard forest-tinted shadow and a thin gold top edge; the gold score disc,
-// the round flag and the type carry the weight, never a tinted fill (owner,
-// 21 Oct 2026: the gold surface was rejected).
-const SMART_CARD_SHADOW = `inset 0 2.5px 0 #E2C66B, ${CARD_SHADOW}`;
+// The smart allocations are the board's main event and must POP (owner, 21
+// Oct 2026: "they used to pop more"): white cards with a gold top edge, a thin
+// gold ring and a deeper forest-tinted lift; the gold score disc, the round
+// flags and the type carry the weight, never a tinted fill (the gold surface
+// was rejected).
+const SMART_CARD_SHADOW = 'inset 0 3px 0 #E2C66B, inset 0 0 0 1px rgba(182,135,31,0.20), 0 1px 2px rgba(27,56,40,0.08), 0 12px 28px -10px rgba(27,56,40,0.26)';
 
 type SortKey = 'accepted' | 'name' | 'first';
 type SchoolFilter = 'all' | 'independent' | `s:${string}`;
@@ -529,7 +532,7 @@ export default function SeatBoard({
                 onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); } }}
                 className="flex items-center gap-3 focus:outline-none focus-visible:ring-2"
                 style={{
-                  padding: '9px 10px', borderRadius: 14, cursor: 'grab',
+                  padding: '9px 12px 9px 10px', borderRadius: 14, cursor: 'grab',
                   background: open ? WELL : 'transparent',
                   boxShadow: open ? 'inset 0 0 0 1.5px #1B3828' : 'none',
                   opacity: dragged ? 0.45 : 1,
@@ -538,12 +541,8 @@ export default function SeatBoard({
                 onMouseEnter={e => { if (!open) (e.currentTarget as HTMLElement).style.background = '#FAF8F3'; }}
                 onMouseLeave={e => { if (!open) (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
               >
-                <PersonAvatar name={name} url={a.profiles?.avatar_url ?? null} size={38} />
-                <span className="flex flex-col flex-1 min-w-0" style={{ lineHeight: 1.2 }}>
-                  <span className="[overflow-wrap:anywhere] inline-flex items-center gap-1.5 flex-wrap" style={{ fontSize: 16, fontWeight: 700, color: NEU.ink }}>
-                    {name}{!a.profiles && <NotRegisteredChip />}
-                  </span>
-                  <span className="[overflow-wrap:anywhere]" style={{ fontSize: 12.5, color: NEU.inkSoft, marginTop: 1 }}>{schoolName(a)}</span>
+                <span className="flex-1 min-w-0">
+                  <PersonIdentity app={a} avatar={38} nameSize={15.5} after={!a.profiles ? <NotRegisteredChip /> : undefined} />
                 </span>
                 <span className="flex flex-col items-end flex-shrink-0" style={{ gap: 3 }}>
                   <LevelDisc level={effectiveLevel(a)} size={22} />
@@ -590,7 +589,7 @@ export default function SeatBoard({
 
         {(draggedApp || openPerson) && (
           <div className="flex items-center gap-2.5 flex-none" style={{ padding: '10px 12px', borderRadius: 14, background: WELL }}>
-            <PersonAvatar name={personName((draggedApp ?? openPerson)!)} url={(draggedApp ?? openPerson)!.profiles?.avatar_url ?? null} size={30} />
+            <AvatarWithFlag name={personName((draggedApp ?? openPerson)!)} url={(draggedApp ?? openPerson)!.profiles?.avatar_url ?? null} size={30} nationality={nationalityOf((draggedApp ?? openPerson)!)} />
             <span className="flex flex-col min-w-0" style={{ lineHeight: 1.25 }}>
               <span className="[overflow-wrap:anywhere]" style={{ fontSize: 13, fontWeight: 600 }}>
                 {draggedApp ? <>Drop {personName(draggedApp)} on a committee</> : <>Seating {personName(openPerson!)}</>}
@@ -632,37 +631,13 @@ export default function SeatBoard({
   );
 }
 
-// ── Where a person is from, and how old ──────────────────────────────────────
-// The round flag of their nationality and their age, one line (owner, 21 Oct
-// 2026: on every smart allocation and on the opened person).
-function PersonFacts({ app, size = 'sm' }: { app: AcceptedApp; size?: 'sm' | 'lg' }) {
-  const age = ageOf(app);
-  const nationality = app.profiles?.nationality?.trim() || null;
-  const nat = nationality ? getCountryByName(nationality) : undefined;
-  if (!nationality && age == null) return null;
-  const lg = size === 'lg';
-  return (
-    <span className="inline-flex items-center flex-shrink-0" style={{ gap: lg ? 10 : 6, fontSize: lg ? 14 : 12.5, color: NEU.ink, lineHeight: 1.15 }}>
-      {nationality && (
-        <span className="inline-flex items-center" style={{ gap: lg ? 6 : 4 }} title={nationality}>
-          <CountryFlag code={nat?.code ?? null} w={lg ? 20 : 15} h={lg ? 20 : 15} alt={nationality} />
-          {lg && <span style={{ fontWeight: 600 }}>{nationality}</span>}
-        </span>
-      )}
-      {age != null && (
-        <span style={{ fontWeight: lg ? 500 : 600, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }} title={`${age} years old`}>
-          {lg ? `${age} years old` : `Age ${age}`}
-        </span>
-      )}
-    </span>
-  );
-}
-
 // ── One smart allocation (the middle feed) ───────────────────────────────────
-// Dense, so five or six fit at 1280x800 (owner, 21 Oct 2026): the person on
-// one line (avatar, name, flag and age, delegation) with the gold score disc,
-// whose hover card is "How this scores"; the seat on an ivory well with a
-// compact Assign; the reason badges on one row.
+// Tight but strong (owner, 21 Oct 2026: "make them POP again, with less empty
+// space"): the person (avatar with the nationality flag on its border, "Name,
+// 17", the delegation beneath) beside the big gold score disc, whose hover
+// card is "How this scores"; the seat on an ivory well (a bigger round flag,
+// the country, the committee) with a soft Assign; the reason badges on one
+// row. A light lift on hover.
 function SmartAllocationCard({ sug, busy, locked, onOpenPerson, onAssign }: {
   sug: Suggestion;
   /** This card's assignment is saving. */
@@ -676,43 +651,36 @@ function SmartAllocationCard({ sug, busy, locked, onOpenPerson, onAssign }: {
   const labels = committeeLabels(sug.committee);
   return (
     <div
-      className="flex flex-col"
-      style={{ padding: '8px 10px 8px 10px', gap: 5, borderRadius: 18, background: '#FFFFFF', boxShadow: SMART_CARD_SHADOW }}
+      className="flex flex-col transition-transform duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] hover:-translate-y-px"
+      style={{ padding: '11px 11px 10px 12px', gap: 8, borderRadius: 18, background: '#FFFFFF', boxShadow: SMART_CARD_SHADOW }}
     >
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-3">
         <button
           type="button"
           onClick={onOpenPerson}
           title={`Open ${name}`}
-          className="focus:outline-none focus-visible:ring-2 flex items-center gap-2 flex-1 min-w-0 text-left"
-          style={{ border: 'none', background: 'transparent', padding: '1px 2px', borderRadius: 10, cursor: 'pointer', fontFamily: OUTFIT }}
+          className="focus:outline-none focus-visible:ring-2 flex-1 min-w-0 text-left"
+          style={{ border: 'none', background: 'transparent', padding: 0, borderRadius: 12, cursor: 'pointer', fontFamily: OUTFIT }}
         >
-          <PersonAvatar name={name} url={sug.app.profiles?.avatar_url ?? null} size={28} />
-          <span className="flex items-center flex-wrap min-w-0" style={{ gap: '1px 8px', lineHeight: 1.15 }}>
-            <span className="[overflow-wrap:anywhere]" style={{ fontSize: 15, fontWeight: 700, color: NEU.ink }}>{name}</span>
-            <PersonFacts app={sug.app} />
-            <span className="[overflow-wrap:anywhere]" style={{ fontSize: 12.5, color: NEU.inkSoft }}>{schoolName(sug.app)}</span>
-          </span>
+          <PersonIdentity app={sug.app} avatar={42} nameSize={16.5} lineSize={12.5} />
         </button>
         <ScoreHover
           sug={sug}
-          size={32}
+          size={44}
           title={sug.swap ? `Fit ${sug.score} here; their own best open seat scored ${sug.swap.ownBestScore}. Hover for how it scores` : undefined}
         />
       </div>
 
-      <div className="flex items-center gap-2" style={{ padding: '3px 3px 3px 7px', borderRadius: 12, background: WELL }}>
-        <CountryFlag code={sug.slot.country_code} w={24} h={24} alt={sug.slot.country_name} logoUrl={slotLogoUrl(sug.committee, sug.slot)} />
-        <span className="flex items-center flex-wrap flex-1 min-w-0" style={{ gap: '0 8px', lineHeight: 1.15 }}>
-          <CountryName name={sug.slot.country_name} code={sug.slot.country_code} style={{ fontSize: 14.5, fontWeight: 700, color: NEU.ink, whiteSpace: 'normal', overflowWrap: 'anywhere' }} />
-          <span className="inline-flex items-center gap-1" style={{ fontSize: 12.5, color: NEU.inkSoft }} title={sug.committee.name}>
-            <CommitteeLogo committee={sug.committee} size={16} alt={labels.big} />
-            <span className="[overflow-wrap:anywhere]" style={{ fontWeight: 600 }}>{labels.big}</span>
+      <div className="flex items-center gap-2.5" style={{ padding: '5px 5px 5px 7px', borderRadius: 13, background: WELL }}>
+        <CountryFlag code={sug.slot.country_code} w={34} h={34} alt={sug.slot.country_name} logoUrl={slotLogoUrl(sug.committee, sug.slot)} />
+        <span className="flex items-center flex-wrap flex-1 min-w-0" style={{ gap: '1px 9px', lineHeight: 1.15 }}>
+          <CountryName name={sug.slot.country_name} code={sug.slot.country_code} style={{ fontSize: 16, fontWeight: 700, color: NEU.ink, whiteSpace: 'normal', overflowWrap: 'anywhere' }} />
+          <span className="inline-flex items-center gap-1.5" style={{ fontSize: 12.5, color: NEU.inkSoft }} title={sug.committee.name}>
+            <CommitteeLogo committee={sug.committee} size={18} alt={labels.big} />
+            <span className="[overflow-wrap:anywhere]" style={{ fontWeight: 600, color: NEU.ink }}>{labels.big}</span>
           </span>
         </span>
-        <NeuButton onClick={onAssign} disabled={busy || locked} style={{ padding: '6px 14px', fontSize: 12.5, letterSpacing: 0, flexShrink: 0 }}>
-          {busy ? 'Saving' : 'Assign'}
-        </NeuButton>
+        <SoftButton onClick={onAssign} disabled={busy || locked}>{busy ? 'Saving' : 'Assign'}</SoftButton>
       </div>
 
       <FitPills sug={sug} max={4} />
@@ -745,6 +713,7 @@ function PersonPanel({
   const byId = new Map(committees.map(c => [c.id, c]));
   const card: React.CSSProperties = { background: '#FFFFFF', borderRadius: 18, boxShadow: CARD_SHADOW };
   const independent = person.society_id == null;
+  const nat = nationalityOf(person);
   const city = person.societies?.city?.trim() || null;
   const role = person.role === 'head-delegate' || person.is_head_delegate ? 'Head Delegate' : 'Delegate';
 
@@ -753,39 +722,33 @@ function PersonPanel({
       {/* Who they are */}
       <div className="flex flex-col" style={{ ...card, padding: '10px 14px 14px', gap: 8 }}>
         <div className="flex items-center justify-between gap-3 flex-wrap">
-          <button
-            type="button"
-            onClick={onBack}
-            className="focus:outline-none inline-flex items-center gap-1.5"
-            style={{ height: 30, padding: '0 12px 0 8px', marginLeft: -4, borderRadius: 10, border: '1px solid rgba(27,56,40,0.16)', background: '#FFFFFF', cursor: 'pointer', fontFamily: OUTFIT, fontSize: 13, fontWeight: 600, color: NEU.ink }}
-          >
+          <SoftButton onClick={onBack} size="sm" style={{ marginLeft: -4, paddingLeft: 9 }}>
             <ArrowLeft size={15} strokeWidth={1.5} /> Back to smart allocations
-          </button>
+          </SoftButton>
           {acceptedAt(person) && <span style={{ fontSize: 12.5, color: NEU.inkSoft }}>Accepted {fmtDay(acceptedAt(person))}</span>}
         </div>
         <div className="flex items-center gap-3.5">
-          <PersonAvatar name={name} url={person.profiles?.avatar_url ?? null} size={60} userId={person.profiles?.id} />
-          <div className="flex-1 min-w-0 flex flex-col" style={{ gap: 5 }}>
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="[overflow-wrap:anywhere]" style={{ fontSize: 23, fontWeight: 700, lineHeight: 1.1, color: NEU.ink }}>{name}</span>
-              {!person.profiles && <NotRegisteredChip />}
-            </div>
-            <div className="flex items-center flex-wrap" style={{ gap: '4px 12px' }}>
-              <PersonFacts app={person} size="lg" />
-              <span style={{ fontSize: 13, color: NEU.inkSoft }}>{role}</span>
-            </div>
-            <div className="flex items-center flex-wrap" style={{ gap: '2px 12px', fontSize: 13.5, lineHeight: 1.25 }}>
-              <span className="[overflow-wrap:anywhere]" style={{ color: NEU.inkSoft }}>
-                {independent
-                  ? 'Independent'
-                  : <DelegationPopupLink societyId={person.society_id} style={{ fontWeight: 700, color: NEU.ink, textDecoration: 'underline' }}>{schoolName(person)}</DelegationPopupLink>}
-              </span>
-              {city && (
-                <span className="inline-flex items-center gap-1" style={{ fontSize: 12.5, color: NEU.inkSoft }} title={`${schoolName(person)} is in ${city}`}>
-                  <MapPin size={13} strokeWidth={1.5} style={{ color: NEU.ink }} aria-hidden />
-                  {city}
-                </span>
-              )}
+          <AvatarWithFlag name={name} url={person.profiles?.avatar_url ?? null} size={60} nationality={nat} userId={person.profiles?.id} />
+          <div className="flex-1 min-w-0 flex flex-col" style={{ gap: 4 }}>
+            <NameAge name={name} app={person} size={23} after={!person.profiles ? <NotRegisteredChip /> : undefined} />
+            {(!independent || city) && (
+              <div className="flex items-center flex-wrap" style={{ gap: '2px 12px', fontSize: 13.5, lineHeight: 1.25 }}>
+                {!independent && (
+                  <span className="[overflow-wrap:anywhere]">
+                    <DelegationPopupLink societyId={person.society_id} style={{ fontWeight: 700, color: NEU.ink, textDecoration: 'underline' }}>{delegationOf(person)}</DelegationPopupLink>
+                  </span>
+                )}
+                {city && (
+                  <span className="inline-flex items-center gap-1" style={{ fontSize: 12.5, color: NEU.inkSoft }} title={`${schoolName(person)} is in ${city}`}>
+                    <MapPin size={13} strokeWidth={1.5} style={{ color: NEU.ink }} aria-hidden />
+                    {city}
+                  </span>
+                )}
+              </div>
+            )}
+            <div className="flex items-center flex-wrap" style={{ gap: '2px 12px', fontSize: 13, color: NEU.inkSoft }}>
+              <span>{role}</span>
+              {person.profiles?.nationality?.trim() && <span className="[overflow-wrap:anywhere]">{person.profiles.nationality.trim()}</span>}
             </div>
           </div>
           <LevelHero level={effectiveLevel(person)} conferences={history ? history.conferences : null} size={52} />
@@ -805,15 +768,9 @@ function PersonPanel({
         <div className="flex flex-col" style={{ ...card, padding: '10px 12px 12px', gap: 6 }}>
           <div className="flex items-center justify-between gap-3 flex-wrap" style={{ minHeight: 30 }}>
             <h3 style={{ margin: 0, fontSize: 15, fontWeight: 600, color: NEU.ink, paddingLeft: 2 }}>Best Three Seats</h3>
-            <button
-              type="button"
-              onClick={onChooseAnother}
-              title="For any other seat, click a committee on the right"
-              className="focus:outline-none max-lg:hidden"
-              style={{ height: 30, padding: '0 12px', borderRadius: 10, border: '1px solid rgba(27,56,40,0.16)', background: '#FFFFFF', cursor: 'pointer', fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 600, color: NEU.ink }}
-            >
-              Choose another seat
-            </button>
+            <span className="max-lg:hidden">
+              <SoftButton onClick={onChooseAnother} size="sm" title="For any other seat, click a committee on the right">Choose another seat</SoftButton>
+            </span>
           </div>
           {bestThree.length === 0 && <p style={{ margin: 0, fontSize: 13, color: NEU.inkSoft, paddingLeft: 2 }}>No open seat fits {firstName(name)} right now</p>}
           {bestThree.map(sug => {
@@ -831,9 +788,9 @@ function PersonPanel({
                       <span style={{ fontWeight: 600 }}>{labels.big}</span>
                     </span>
                   </span>
-                  <NeuButton onClick={() => onAssign(sug)} disabled={busyKey === key || locked} style={{ padding: '6px 14px', fontSize: 12.5, letterSpacing: 0, flexShrink: 0 }}>
+                  <SoftButton onClick={() => onAssign(sug)} disabled={busyKey === key || locked} size="sm">
                     {busyKey === key ? 'Saving' : 'Assign'}
-                  </NeuButton>
+                  </SoftButton>
                 </div>
                 {(sug.reasons.length > 0 || sug.swap) && <span className="flex min-w-0" style={{ paddingLeft: 40 }}><FitPills sug={sug} max={4} size="sm" /></span>}
               </div>

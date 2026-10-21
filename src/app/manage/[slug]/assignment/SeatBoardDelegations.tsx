@@ -18,20 +18,28 @@
 //           accepted members), with search: crest, name, place, "N more" big
 //           and "of M" small. "Show all delegations" adds the rest, greyed
 //           ("Complete", or "Not accepted yet"). The open one stays listed.
-//   MIDDLE  one delegation opened, ONE card top to bottom:
+//   MIDDLE  one delegation opened, ONE card top to bottom. When the tab opens
+//           the delegation that needs the most allocations is already open
+//           (ties: the earliest accepted; owner, 21 Oct 2026). Giving never
+//           makes the page jump (round 5): Give more sits right under who
+//           they are, and the Given list grows BELOW it, so nothing above the
+//           pointer moves and Give more stays in view.
 //             1. who: crest, name, place, leaders; "N of M given", "needs K more"
-//             2. Given: a list view like the Applications pop-up's Allocations
+//             2. Give more (below)
+//             3. Given: a list view like the Applications pop-up's Allocations
 //                tab (owner, 21 Oct 2026), A to Z, one row each (the committee
 //                logo + acronym, the round flag + country, then the holders
 //                with avatars side by side, a double in ONE row, no seat
 //                numbers); the Allocations tab's light red corner minus on a
 //                row with an empty seat takes the empty seats back, asked in place
-//             3. Give more: a segmented control
+//             Give more: a segmented control
 //                  One country        pick a country; every committee where it
 //                                     is free, ticked; one button gives them.
 //                  Best seat per room the engine's best free seat per committee
-//                                     (assignmentFit.rankSeatsForSociety), each
-//                                     row swappable or left out; one button.
+//                                     (assignmentFit.rankSeatsForSociety), only
+//                                     in rooms where the delegation holds no
+//                                     allocation yet, each row swappable or
+//                                     left out; one button.
 //                  Custom (default)   the committee rings on the right open the
 //                                     committee pop-up in "Give to" mode
 //                                     (SeatBoardGivePopup.tsx): one tap per
@@ -80,7 +88,7 @@ import {
 } from '@/app/manage/[slug]/assignment/assignmentKit';
 import { SeatBoardGivePopup, holderOf } from '@/app/manage/[slug]/assignment/SeatBoardGivePopup';
 import {
-  BigCount, CARD_SHADOW, CommitteeRing, HAIRLINE, WELL, seatCounts,
+  BigCount, CARD_SHADOW, CommitteeRing, HAIRLINE, SOFT_BTN_CLASS, SoftButton, WELL, seatCounts,
 } from '@/app/manage/[slug]/assignment/seatBoardShared';
 
 type Mode = 'one' | 'best' | 'custom';
@@ -107,6 +115,8 @@ const MODES: { key: Mode; label: string }[] = [
   { key: 'custom', label: 'Custom' },
 ];
 
+// The one solid forest button of the view (the mode's give); every other
+// action is a soft pill (owner, 21 Oct 2026).
 const BTN_PRIMARY: React.CSSProperties = {
   height: 38, padding: '0 18px', borderRadius: 11, border: 'none', cursor: 'pointer',
   background: 'linear-gradient(180deg, #2A5039, #1B3828)', color: '#FFFFFF',
@@ -144,18 +154,21 @@ function reasonLine(reasons: string[]): string {
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
-/** When each delegation's first member was accepted (the list's order). */
-function useAcceptedDates(conferenceId: string): Map<string, string> {
+const NO_DATES: ReadonlyMap<string, string> = new Map();
+
+/** When each delegation's first member was accepted (the list's order); null
+ *  until the read has answered (a failed read answers with no dates). */
+function useAcceptedDates(conferenceId: string): ReadonlyMap<string, string> | null {
   const { user } = useAuth();
   const userId = user?.id ?? null;
-  const [dates, setDates] = useState<Map<string, string>>(new Map());
+  const [dates, setDates] = useState<ReadonlyMap<string, string> | null>(null);
   useEffect(() => {
     if (!userId) return;
     let cancelled = false;
     void (async () => {
       try {
         const c = await getFreshAuthedClient();
-        if (!c) return;
+        if (!c) { if (!cancelled) setDates(NO_DATES); return; }
         const out = new Map<string, string>();
         for (let from = 0; from < 20_000; from += 1000) {
           const { data, error } = await c.from('applications')
@@ -165,7 +178,8 @@ function useAcceptedDates(conferenceId: string): Map<string, string> {
             .in('status', ['accepted', 'assigned', 'checked-in'])
             .order('id', { ascending: true })
             .range(from, from + 999);
-          if (error || cancelled) return;
+          if (cancelled) return;
+          if (error) { setDates(NO_DATES); return; }
           const rows = (data ?? []) as { society_id: string; decided_at: string | null }[];
           for (const r of rows) {
             if (!r.decided_at) continue;
@@ -175,7 +189,7 @@ function useAcceptedDates(conferenceId: string): Map<string, string> {
           if (rows.length < 1000) break;
         }
         if (!cancelled) setDates(out);
-      } catch { /* the list falls back to A to Z */ }
+      } catch { if (!cancelled) setDates(NO_DATES); /* the list falls back to A to Z */ }
     })();
     return () => { cancelled = true; };
   }, [userId, conferenceId]);
@@ -224,7 +238,8 @@ function DelegationsBoard({
 }: BoardProps & { conference: { id: string; fee_currency: string } }) {
   const data = useDelegationsData({ conferenceId: conference.id, currency: conference.fee_currency });
   const { holdLive, queueWrite, laneBusy, landStamp, settleRead } = data;
-  const acceptedDates = useAcceptedDates(conference.id);
+  const acceptedRead = useAcceptedDates(conference.id);
+  const acceptedDates = acceptedRead ?? NO_DATES;
 
   const [openId, setOpenId] = useState<string | null>(null);
   const [mode, setMode] = useState<Mode>('custom');
@@ -356,6 +371,30 @@ function DelegationsBoard({
     [data.rows, givenBySociety],
   );
 
+  // When the tab opens, the delegation that needs the most allocations is
+  // already open (ties: the earliest accepted, then A to Z), once the
+  // delegations and their accepted dates have been read. Decided once, during
+  // render (React's adjust-state-while-rendering pattern), so it never
+  // switches under the pointer as allocations are given.
+  const [autoOpened, setAutoOpened] = useState(false);
+  if (!autoOpened && !data.loading && acceptedRead) {
+    setAutoOpened(true);
+    // On a phone the opened delegation covers the screen, so it is not opened unasked there.
+    const wide = typeof window !== 'undefined' && window.matchMedia('(min-width: 1024px)').matches;
+    if (openId == null && wide) {
+      const first = [...needingRows].sort((a, b) => {
+        const la = needOf(a) - (givenBySociety.get(a.id) ?? 0);
+        const lb = needOf(b) - (givenBySociety.get(b.id) ?? 0);
+        if (la !== lb) return lb - la;
+        const ta = acceptedRead.get(a.id) ?? '';
+        const tb = acceptedRead.get(b.id) ?? '';
+        if (ta !== tb) return !ta ? 1 : !tb ? -1 : ta.localeCompare(tb);
+        return byName(a.name, b.name);
+      })[0];
+      if (first) openDelegation(first.id);
+    }
+  }
+
   const open = openId ? rowById.get(openId) ?? null : null;
 
   // ── Writes ─────────────────────────────────────────────────────────────────
@@ -480,22 +519,24 @@ function DelegationsBoard({
 
   // Best seat in each room.
   const bestOptions = useMemo(() => {
-    if (!openId) return [] as { committee: CommitteeData; options: SocietySeatOption<CommitteeData>[]; inRoom: boolean }[];
-    return board.map(c => ({
-      committee: c,
-      options: rankSeatsForSociety(openId, c, spread, { needy, members, skip: skipOf(c.id) }),
-      inRoom: c.conference_allocations.some(a => allocationSocietyId(a) === openId),
-    })).filter(r => r.options.length > 0);
+    if (!openId) return [] as { committee: CommitteeData; options: SocietySeatOption<CommitteeData>[] }[];
+    // Only the rooms where the delegation holds no allocation yet (owner, 21
+    // Oct 2026): a room they already sit in is never listed, nor left out.
+    return board
+      .filter(c => !c.conference_allocations.some(a => allocationSocietyId(a) === openId))
+      .map(c => ({
+        committee: c,
+        options: rankSeatsForSociety(openId, c, spread, { needy, members, skip: skipOf(c.id) }),
+      }))
+      .filter(r => r.options.length > 0);
   }, [board, openId, spread, needy, members, skipOf]);
 
   const remaining = open ? Math.max(0, needOf(open) - (givenBySociety.get(open.id) ?? 0)) : 0;
-  // Left out by default: rooms they already sit in, and the weakest rooms past what is still to give.
+  // Left out by default: the weakest rooms past what is still to give.
   const defaultLeftOut = useMemo(() => {
     const out = new Set<string>();
-    const fresh = bestOptions.filter(r => !r.inRoom);
-    for (const r of bestOptions) if (r.inRoom) out.add(r.committee.id);
-    if (remaining > 0 && fresh.length > remaining) {
-      const ranked = [...fresh].sort((a, b) => b.options[0].score - a.options[0].score);
+    if (remaining > 0 && bestOptions.length > remaining) {
+      const ranked = [...bestOptions].sort((a, b) => b.options[0].score - a.options[0].score);
       for (const r of ranked.slice(remaining)) out.add(r.committee.id);
     }
     return out;
@@ -697,7 +738,7 @@ function DelegationsBoard({
                   void giveSlots(open, oneTicked.map(r => ({ committee: r.committee, slot: r.slot, seats: r.seats })), () => setOneUnticked(new Set()))
                     .then(ok => { if (ok) notifyOk(`${oneRows[0]?.slot.country_name ?? 'The country'} given to ${open.name} in ${plural(oneTicked.length, 'committee')}`, 'seat-board'); });
                 }}
-                className="focus:outline-none"
+                className="focus:outline-none transition-transform duration-150 enabled:active:scale-[0.96]"
                 style={oneTicked.length === 0 ? BTN_DISABLED : BTN_PRIMARY}
               >
                 {oneTicked.length === 0 ? 'Give' : `Give in ${plural(oneTicked.length, 'committee')}`}
@@ -708,7 +749,7 @@ function DelegationsBoard({
       </div>
     ) : mode === 'best' ? (
       <div className="flex flex-col gap-3">
-        {bestRows.length === 0 && <p style={{ margin: 0, fontSize: 13.5, color: NEU.inkSoft }}>No committee has a free country for them</p>}
+        {bestRows.length === 0 && <p style={{ margin: 0, fontSize: 13.5, color: NEU.inkSoft }}>Every room with a free country already has one of theirs</p>}
         <div className="flex flex-col">
           {bestIn.map(r => {
             const lbl = committeeLabels(r.committee);
@@ -759,9 +800,9 @@ function DelegationsBoard({
                   key={r.committee.id}
                   type="button"
                   onClick={() => setLeftOut(s => s.delete(r.committee.id))}
-                  title={r.inRoom ? `${open.name} already has an allocation in ${lbl.big}. Tap to put it back` : `${r.committee.name}. Tap to put it back`}
-                  className="focus:outline-none inline-flex items-center gap-1.5"
-                  style={{ height: 30, padding: '0 10px 0 6px', borderRadius: 999, border: '1px solid rgba(27,56,40,0.14)', background: '#FFFFFF', cursor: 'pointer', fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 600, color: NEU.ink }}
+                  title={`${r.committee.name}. Tap to put it back`}
+                  className={SOFT_BTN_CLASS}
+                  style={{ height: 30, padding: '0 11px 0 7px', cursor: 'pointer', fontFamily: OUTFIT, fontSize: 12.5 }}
                 >
                   <Plus size={13} strokeWidth={1.5} aria-hidden />
                   <CommitteeLogo committee={r.committee} size={18} alt="" />
@@ -781,7 +822,7 @@ function DelegationsBoard({
                 void giveSlots(open, items, () => { setBestLeftOut(null); setBestSwap(new Map()); })
                   .then(ok => { if (ok) notifyOk(`${plural(n, 'allocation')} given to ${open.name}`, 'seat-board'); });
               }}
-              className="focus:outline-none"
+              className="focus:outline-none transition-transform duration-150 active:scale-[0.96]"
               style={BTN_PRIMARY}
             >
               Give all {bestIn.length}
@@ -802,14 +843,9 @@ function DelegationsBoard({
     middle = (
       <div className="flex flex-col gap-3">
         <div>
-          <button
-            type="button"
-            onClick={() => openDelegation(null)}
-            className="focus:outline-none inline-flex items-center gap-2"
-            style={{ height: 36, padding: '0 14px 0 10px', borderRadius: 12, border: '1px solid rgba(27,56,40,0.16)', background: '#FFFFFF', cursor: 'pointer', fontFamily: OUTFIT, fontSize: 13.5, fontWeight: 600, color: NEU.ink }}
-          >
-            <ArrowLeft size={16} strokeWidth={1.5} /> Back to delegations
-          </button>
+          <SoftButton onClick={() => openDelegation(null)} size="sm" style={{ paddingLeft: 9 }}>
+            <ArrowLeft size={15} strokeWidth={1.5} /> Back to delegations
+          </SoftButton>
         </div>
 
         <div className="flex flex-col" style={{ ...card, padding: 20, gap: 18 }}>
@@ -853,7 +889,33 @@ function DelegationsBoard({
             </div>
           </div>
 
-          {/* 2. Given: a list view like the Applications pop-up's Allocations tab,
+          {/* 2. Give more, right under who they are: the Given list grows below it,
+              so a give never moves what is under the pointer */}
+          <div className="flex flex-col gap-3" style={{ borderTop: `1px solid ${HAIRLINE}`, paddingTop: 16 }}>
+            <h3 style={sectionTitle}>Give more</h3>
+            <div role="tablist" aria-label="How to give" className="flex flex-wrap" style={{ gap: 2, padding: 3, borderRadius: 12, background: '#F1ECE1' }}>
+              {MODES.map(m => (
+                <button
+                  key={m.key}
+                  type="button"
+                  role="tab"
+                  aria-selected={mode === m.key}
+                  onClick={() => setMode(m.key)}
+                  className="focus:outline-none flex-1"
+                  style={{
+                    minHeight: 34, padding: '0 10px', borderRadius: 9, border: 'none', cursor: 'pointer',
+                    background: mode === m.key ? '#FFFFFF' : 'transparent',
+                    boxShadow: mode === m.key ? '0 1px 3px rgba(27,56,40,0.12)' : 'none',
+                    fontFamily: OUTFIT, fontSize: 13.5, fontWeight: mode === m.key ? 600 : 500, color: mode === m.key ? NEU.ink : NEU.inkSoft,
+                  }}
+                >
+                  {m.label}
+                </button>
+              ))}
+            </div>
+            {modeBody}
+          </div>
+          {/* 3. Given: a list view like the Applications pop-up's Allocations tab,
               A to Z, one row per committee and country, a double in ONE row */}
           <div className="flex flex-col gap-2" style={{ borderTop: `1px solid ${HAIRLINE}`, paddingTop: 14 }}>
             <h3 style={sectionTitle}>Given</h3>
@@ -932,31 +994,6 @@ function DelegationsBoard({
             )}
           </div>
 
-          {/* 3. Give more */}
-          <div className="flex flex-col gap-3" style={{ borderTop: `1px solid ${HAIRLINE}`, paddingTop: 16 }}>
-            <h3 style={sectionTitle}>Give more</h3>
-            <div role="tablist" aria-label="How to give" className="flex flex-wrap" style={{ gap: 2, padding: 3, borderRadius: 12, background: '#F1ECE1' }}>
-              {MODES.map(m => (
-                <button
-                  key={m.key}
-                  type="button"
-                  role="tab"
-                  aria-selected={mode === m.key}
-                  onClick={() => setMode(m.key)}
-                  className="focus:outline-none flex-1"
-                  style={{
-                    minHeight: 34, padding: '0 10px', borderRadius: 9, border: 'none', cursor: 'pointer',
-                    background: mode === m.key ? '#FFFFFF' : 'transparent',
-                    boxShadow: mode === m.key ? '0 1px 3px rgba(27,56,40,0.12)' : 'none',
-                    fontFamily: OUTFIT, fontSize: 13.5, fontWeight: mode === m.key ? 600 : 500, color: mode === m.key ? NEU.ink : NEU.inkSoft,
-                  }}
-                >
-                  {m.label}
-                </button>
-              ))}
-            </div>
-            {modeBody}
-          </div>
         </div>
       </div>
     );
