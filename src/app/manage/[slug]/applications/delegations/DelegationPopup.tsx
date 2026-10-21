@@ -35,7 +35,7 @@ export type DelegationTab = 'people' | 'seats' | 'payments' | 'documents';
 
 const TABS: { key: DelegationTab; label: string }[] = [
   { key: 'people', label: 'People' },
-  { key: 'seats', label: 'Seats' },
+  { key: 'seats', label: 'Allocations' },
   { key: 'payments', label: 'Payments' },
   { key: 'documents', label: 'Documents' },
 ];
@@ -89,7 +89,7 @@ function leadersOf(row: DelegationView): { id: string; name: string; avatarUrl: 
 /** The one line under the seats meter (owner, 20 Oct 2026). */
 function seatsLine(row: DelegationView): string {
   const parts = [
-    `${row.seatsGiven} of ${plural(row.paid, 'paid ticket')} ${row.seatsGiven === 1 ? 'has' : 'have'} a seat`,
+    `${row.seatsGiven} of ${plural(row.paid, 'paid ticket')} ${row.seatsGiven === 1 ? 'has' : 'have'} an allocation`,
     `${plural(row.registered, 'person', 'people')} joined`,
   ];
   if (row.expected != null) parts.push(`expected size ${row.expected}`);

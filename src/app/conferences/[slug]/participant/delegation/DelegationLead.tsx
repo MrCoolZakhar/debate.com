@@ -13,7 +13,9 @@
 // being reviewed, or with `showDone` (a faculty advisor, whose Overview would
 // otherwise be empty). Genuine actions (Pay now, a role's own step, Join
 // session) stay the one next step; documents needed back ride under it as
-// `notice`. Built and placed by ParticipantView.
+// `notice`. Built and placed by ParticipantView; for a leader by LeaderOverview
+// (delegation/overview), which may hand it a step whose button opens another
+// section of the dashboard (`scrollTo: 'section:<key>'`, through onOpenSection).
 
 import Link from 'next/link';
 import { ArrowDown, ArrowRight, DoorOpen } from 'lucide-react';
@@ -39,7 +41,7 @@ function scrollToAnchor(id: string) {
   el.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'start' });
 }
 
-export default function DelegationLead({ step, status, roomCode, notice, showDone = false }: {
+export default function DelegationLead({ step, status, roomCode, notice, showDone = false, onOpenSection }: {
   step: NextStep | null;
   /** The application's status: a 'done' step is drawn while it is 'submitted' (or with showDone). */
   status: string;
@@ -49,6 +51,8 @@ export default function DelegationLead({ step, status, roomCode, notice, showDon
   notice?: React.ReactNode;
   /** Draw a 'done' step whatever the status ("You're all set"). */
   showDone?: boolean;
+  /** Opens a dashboard section, for a step whose action is `scrollTo: 'section:<key>'`. */
+  onOpenSection?: (key: string) => void;
 }) {
   const action = step?.kind === 'action' ? step.action : undefined;
   const joinHref = roomCode ? `/join?code=${roomCode}` : null;
@@ -87,9 +91,15 @@ export default function DelegationLead({ step, status, roomCode, notice, showDon
                 ? <a href={action.href} className={BTN_CLASS} style={primaryBtn}>{action.label} <ArrowRight size={16} strokeWidth={STROKE} aria-hidden /></a>
                 : <Link href={action.href} className={BTN_CLASS} style={primaryBtn}>{action.label} <ArrowRight size={16} strokeWidth={STROKE} aria-hidden /></Link>
             ) : action ? (
-              <button type="button" onClick={() => scrollToAnchor(action.scrollTo)} className={BTN_CLASS} style={primaryBtn}>
-                {action.label} <ArrowDown size={16} strokeWidth={STROKE} aria-hidden />
-              </button>
+              action.scrollTo.startsWith('section:') ? (
+                <button type="button" onClick={() => onOpenSection?.(action.scrollTo.slice('section:'.length))} className={BTN_CLASS} style={primaryBtn}>
+                  {action.label} <ArrowRight size={16} strokeWidth={STROKE} aria-hidden />
+                </button>
+              ) : (
+                <button type="button" onClick={() => scrollToAnchor(action.scrollTo)} className={BTN_CLASS} style={primaryBtn}>
+                  {action.label} <ArrowDown size={16} strokeWidth={STROKE} aria-hidden />
+                </button>
+              )
             ) : null}
             {joinExtra && joinHref && (
               <Link href={joinHref} className={BTN_CLASS} style={action ? secondaryBtn : primaryBtn}>

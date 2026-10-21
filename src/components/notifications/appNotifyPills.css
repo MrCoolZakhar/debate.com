@@ -1,0 +1,196 @@
+/* ── App outcome pills (AppNotifyPills.tsx) ────────────────────────────────
+ *
+ * Liquid glass pills rising from the bottom centre (owner, 21 Oct 2026).
+ * Every class is `gvp-` prefixed so nothing here reaches the session cards
+ * (`dgn-*`, NotificationStack.tsx).
+ *
+ * Backdrop note: `backdrop-filter` only sees the page when no ANCESTOR has
+ * opacity < 1, a filter or a mask (each makes a "backdrop root"). So the slot
+ * (the ancestor) only ever moves with `transform`, and every fade happens on
+ * the pill itself, which is the element carrying the blur.
+ */
+
+.gvp-host {
+  position: fixed;
+  left: 0;
+  right: 0;
+  margin-inline: auto;
+  bottom: calc(24px + env(safe-area-inset-bottom, 0px));
+  width: min(460px, calc(100vw - 32px));
+  height: 0;
+  z-index: 10050;
+  pointer-events: none;
+}
+
+.gvp-slot {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  justify-content: center;
+  transform-origin: 50% 100%;
+  transition: transform 520ms cubic-bezier(0.32, 1.28, 0.54, 1);
+  transition-timing-function: linear(0, 0.009, 0.035 2.1%, 0.141 4.4%, 0.723 12.9%, 0.938 16.7%, 1.017 19.4%, 1.067, 1.089 24.3%, 1.093 26%, 1.08 28.7%, 1.018 36.1%, 0.996 41.3%, 0.991 46.7%, 1.001 63%, 1);
+}
+
+.gvp-pill {
+  pointer-events: auto;
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: fit-content;
+  min-width: min(280px, 100%);
+  max-width: 100%;
+  min-height: 52px;
+  padding: 4px 4px 4px 16px;
+  /* Half the one-line height: a true pill on one line, a soft capsule on two. */
+  border-radius: 26px;
+  color: #1C1410;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.82) 0%, rgba(255, 255, 255, 0.66) 100%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  backdrop-filter: blur(24px) saturate(180%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.6),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.28),
+    inset 0 -1px 0 rgba(27, 56, 40, 0.05),
+    0 0 0 0.5px rgba(27, 56, 40, 0.12),
+    0 2px 6px rgba(27, 56, 40, 0.08),
+    0 14px 34px -8px rgba(27, 56, 40, 0.24);
+  opacity: var(--gvp-o, 1);
+  transition: opacity 260ms cubic-bezier(0.2, 0, 0, 1), box-shadow 200ms cubic-bezier(0.2, 0, 0, 1);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  animation: gvp-in 560ms cubic-bezier(0.32, 1.28, 0.54, 1) backwards;
+  animation-timing-function: linear(0, 0.009, 0.035 2.1%, 0.141 4.4%, 0.723 12.9%, 0.938 16.7%, 1.017 19.4%, 1.067, 1.089 24.3%, 1.093 26%, 1.08 28.7%, 1.018 36.1%, 0.996 41.3%, 0.991 46.7%, 1.001 63%, 1);
+}
+
+/* The specular sheen: a lit top edge fading out by the middle, and a soft hot spot
+   top left, the way light sits on a curved pane. Behind the content, above the fill. */
+.gvp-pill::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  pointer-events: none;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.55) 0%, rgba(255, 255, 255, 0.1) 40%, rgba(255, 255, 255, 0) 62%),
+    radial-gradient(120% 90% at 18% 0%, rgba(255, 255, 255, 0.35) 0%, rgba(255, 255, 255, 0) 60%);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .gvp-pill:hover {
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.65),
+      inset 0 0 0 1px rgba(255, 255, 255, 0.3),
+      inset 0 -1px 0 rgba(27, 56, 40, 0.05),
+      0 0 0 0.5px rgba(27, 56, 40, 0.14),
+      0 3px 8px rgba(27, 56, 40, 0.09),
+      0 18px 40px -8px rgba(27, 56, 40, 0.28);
+  }
+  .gvp-x:hover .gvp-x-dot { background-color: rgba(27, 56, 40, 0.08); }
+}
+
+.gvp-pill.gvp-leaving {
+  pointer-events: none;
+  animation: gvp-out 220ms cubic-bezier(0.4, 0, 1, 1) forwards;
+}
+
+.gvp-glyph {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+}
+/* Forest for done; a warm red (#B42318, 6.5:1 on the pane) for a failure. */
+.gvp-glyph-ok { color: #1B3828; }
+.gvp-glyph-error { color: #B42318; }
+
+.gvp-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding-block: 9px;
+}
+.gvp-msg {
+  margin: 0;
+  font-family: var(--font-brand), sans-serif;
+  font-size: 14.5px;
+  line-height: 1.35;
+  font-weight: 500;
+  color: #1C1410;
+  text-wrap: pretty;
+  overflow-wrap: anywhere;
+}
+.gvp-body {
+  margin: 2px 0 0;
+  font-family: var(--font-brand), sans-serif;
+  font-size: 13px;
+  line-height: 1.35;
+  color: rgba(28, 20, 16, 0.78);
+  text-wrap: pretty;
+  overflow-wrap: anywhere;
+}
+
+/* 44px hit target; the visible circle is smaller and concentric with the pill
+   (pill radius 26 = 22 + 4px of padding). */
+.gvp-x {
+  flex: none;
+  align-self: center;
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: rgba(28, 20, 16, 0.64);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.gvp-x-dot {
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  transition: background-color 140ms cubic-bezier(0.2, 0, 0, 1), transform 120ms cubic-bezier(0.2, 0, 0, 1), box-shadow 140ms cubic-bezier(0.2, 0, 0, 1);
+}
+.gvp-x:active .gvp-x-dot { transform: scale(0.96); background-color: rgba(27, 56, 40, 0.1); }
+.gvp-x:focus-visible .gvp-x-dot { box-shadow: 0 0 0 2px #FFFFFF, 0 0 0 4px rgba(27, 56, 40, 0.55); }
+
+@keyframes gvp-in {
+  from { opacity: 0; transform: translate3d(0, 16px, 0) scale(0.96); }
+}
+@keyframes gvp-out {
+  to { opacity: 0; transform: translate3d(0, 14px, 0) scale(0.97); }
+}
+@keyframes gvp-fade-in {
+  from { opacity: 0; }
+}
+@keyframes gvp-fade-out {
+  to { opacity: 0; }
+}
+
+/* Phones: full width minus the 16px gutters. */
+@media (max-width: 639px) {
+  .gvp-pill { width: 100%; }
+}
+
+/* No backdrop-filter: a solid near-white pane, so the ink keeps its contrast. */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .gvp-pill { background: rgb(250, 249, 246); }
+}
+
+/* Fade only. Nothing slides, scales or springs. */
+@media (prefers-reduced-motion: reduce) {
+  .gvp-slot { transition: none; }
+  .gvp-pill { animation: gvp-fade-in 200ms ease-out backwards; }
+  .gvp-pill.gvp-leaving { animation: gvp-fade-out 180ms ease-in forwards; }
+  .gvp-x-dot { transition: background-color 140ms ease; }
+  .gvp-x:active .gvp-x-dot { transform: none; }
+}

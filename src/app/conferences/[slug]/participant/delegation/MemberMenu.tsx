@@ -4,7 +4,7 @@
 // sees the full menu (owner, 20 Oct 2026); an item a flag still holds back is
 // shown disabled with a hover title saying why:
 //   Make head delegate / Make delegate        delegation_set_head (live)
-//   Place in a seat / Take out of seat        DELEGATIONS_V2_DB (v2.ts), else "Coming soon";
+//   Allocate / Unallocate                     DELEGATIONS_V2_DB (v2.ts), else "Coming soon";
 //                                             Place lists the open seats in a second step
 //                                             (committee A to Z, country, seat: seat/seatOrder)
 //   Upload position paper                     DELEGATIONS_V2_DB, else "Coming soon"
@@ -97,7 +97,7 @@ interface Item {
 export default function MemberMenu({ member, societyId, openSeats, conferenceId, onDone, ops, handleRef }: {
   member: MenuMember;
   societyId: string;
-  /** The delegation's open seats (V2 only), for Place in a seat. */
+  /** The delegation's open seats (V2 only), for Allocate. */
   openSeats: OpenSeat[] | null;
   conferenceId: string;
   onDone: () => Promise<void> | void;
@@ -210,8 +210,8 @@ export default function MemberMenu({ member, societyId, openSeats, conferenceId,
     if (a.kind === 'remove') return run(() => removeMember(member.application_id), `${member.name} is no longer in the delegation.`);
     if (a.kind === 'switch') { setOpen(false); ops?.switchWith(a.to); return; }
     if (a.kind === 'unplace' && ops) { setOpen(false); ops.unplace(); return; }
-    // Like Place in a seat: the table is re-read by onDone once the write landed.
-    return run(() => unplaceMember(member.application_id), self ? 'You are out of your seat. It stays open for the delegation.' : `${member.name} is out of their seat. It stays open for the delegation.`);
+    // Like Allocate: the table is re-read by onDone once the write landed.
+    return run(() => unplaceMember(member.application_id), self ? 'You are unallocated. Your allocation stays with the delegation as an open allocation.' : `${member.name} is unallocated. Their allocation stays with the delegation as an open allocation.`);
   };
 
   const onPickFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -235,19 +235,19 @@ export default function MemberMenu({ member, societyId, openSeats, conferenceId,
   if (!isAdvisor) {
     if (member.seat) {
       items.push(DELEGATIONS_V2_DB
-        ? { key: 'unplace', icon: CircleMinus, label: 'Take out of seat', onPress: () => setStep({ confirm: { kind: 'unplace' } }) }
-        : { key: 'unplace', icon: CircleMinus, label: 'Take out of seat', onPress: noop, off: SOON });
+        ? { key: 'unplace', icon: CircleMinus, label: 'Unallocate', onPress: () => setStep({ confirm: { kind: 'unplace' } }) }
+        : { key: 'unplace', icon: CircleMinus, label: 'Unallocate', onPress: noop, off: SOON });
     } else {
       items.push(!DELEGATIONS_V2_DB
-        ? { key: 'place', icon: Armchair, label: 'Place in a seat', onPress: noop, off: SOON }
+        ? { key: 'place', icon: Armchair, label: 'Allocate', onPress: noop, off: SOON }
         : (seats?.length ?? 0) > 0
-          ? { key: 'place', icon: Armchair, label: 'Place in a seat', onPress: () => setStep('place') }
-          : { key: 'place', icon: Armchair, label: 'Place in a seat', onPress: noop, off: 'The delegation has no open seats' });
+          ? { key: 'place', icon: Armchair, label: 'Allocate', onPress: () => setStep('place') }
+          : { key: 'place', icon: Armchair, label: 'Allocate', onPress: noop, off: 'The delegation has no open allocations' });
     }
     items.push(!DELEGATIONS_V2_DB
       ? { key: 'upload', icon: Upload, label: 'Upload position paper', onPress: noop, off: SOON }
       : !member.seat
-        ? { key: 'upload', icon: Upload, label: 'Upload position paper', onPress: noop, off: 'Place them in a seat first' }
+        ? { key: 'upload', icon: Upload, label: 'Upload position paper', onPress: noop, off: 'Allocate them first' }
         : !member.user_id
           ? { key: 'upload', icon: Upload, label: 'Upload position paper', onPress: noop, off: 'They have not joined yet' }
           : { key: 'upload', icon: Upload, label: 'Upload position paper', onPress: () => fileRef.current?.click() });
@@ -271,13 +271,13 @@ export default function MemberMenu({ member, societyId, openSeats, conferenceId,
   };
 
   const confirmCopy = (a: Action): { title: string; line: string | null; yes: string; danger: boolean } => {
-    if (a.kind === 'switch') return { ...(ops?.switchCopy(a.to) ?? { title: 'Switch these seats?', line: null, yes: 'Switch' }), danger: false };
+    if (a.kind === 'switch') return { ...(ops?.switchCopy(a.to) ?? { title: 'Switch these allocations?', line: null, yes: 'Switch' }), danger: false };
     if (a.kind === 'unplace') return self
-      ? { title: 'Take yourself out of your seat?', line: 'The seat stays with the delegation as an open seat.', yes: 'Take out of seat', danger: true }
-      : { title: `Take ${member.name} out of their seat?`, line: 'The seat stays with the delegation as an open seat.', yes: 'Take out of seat', danger: true };
-    if (a.kind === 'remove') return { title: `Remove ${member.name}?`, line: 'Their seat goes back to the delegation as open. Money stays with whoever paid it.', yes: 'Remove', danger: true };
+      ? { title: 'Unallocate yourself?', line: 'Your allocation stays with the delegation as an open allocation.', yes: 'Unallocate', danger: true }
+      : { title: `Unallocate ${member.name}?`, line: 'Their allocation stays with the delegation as an open allocation.', yes: 'Unallocate', danger: true };
+    if (a.kind === 'remove') return { title: `Remove ${member.name}?`, line: 'Their allocation goes back to the delegation as an open allocation. Money stays with whoever paid it.', yes: 'Remove', danger: true };
     return self
-      ? { title: 'Make yourself a delegate?', line: 'You stop leading the delegation. Your seat stays yours.', yes: 'Make me a delegate', danger: true }
+      ? { title: 'Make yourself a delegate?', line: 'You stop leading the delegation. Your allocation stays yours.', yes: 'Make me a delegate', danger: true }
       : { title: `Make ${member.name} a delegate?`, line: 'They stop leading the delegation.', yes: 'Make delegate', danger: true };
   };
 
@@ -293,7 +293,7 @@ export default function MemberMenu({ member, societyId, openSeats, conferenceId,
     body = (
       <div>
         {backBtn}
-        <p style={{ fontFamily: FONT, fontSize: 13.5, fontWeight: 600, color: INK, margin: '4px 10px 6px' }}>Choose a seat for {member.name}</p>
+        <p style={{ fontFamily: FONT, fontSize: 13.5, fontWeight: 600, color: INK, margin: '4px 10px 6px' }}>Choose an allocation for {member.name}</p>
         <div style={{ maxHeight: 280, overflowY: 'auto' }}>
           {(seats ?? []).map((s, i) => (
             <button
@@ -345,7 +345,7 @@ export default function MemberMenu({ member, societyId, openSeats, conferenceId,
                       <CircleFlag code={t.seat.country_code} logoUrl={t.seat.seatLogo} label={t.seat.country_name} size={16} decorative />
                       {t.seat.country_name} · {t.seat.committee_label}
                     </>
-                  ) : 'No seat yet'}
+                  ) : 'No allocation yet'}
                 </span>
               </span>
             </button>

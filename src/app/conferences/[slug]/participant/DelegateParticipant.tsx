@@ -175,7 +175,7 @@ export default function DelegateParticipant({ conferenceId, conferenceSlug, conf
       {/* One delegation card for everyone in a delegation (25 Sep 2026): the
           leader card for leaders, the member card (5B) for everyone else. */}
       {application.society_id && (
-        <Pane show={section === 'delegation'} title="Your Delegation" icon={Users}>
+        <Pane show={section === 'delegation'} title="Your Delegation" icon={Users} anchor="you-delegation">
           <DelegationPanel
             conferenceId={conferenceId}
             conferenceSlug={conferenceSlug}

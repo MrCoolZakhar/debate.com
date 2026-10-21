@@ -15,6 +15,14 @@
 //
 // Keyed on the user id, never the token (CLAUDE.md §5); every read gets its
 // client at call time. A re-read never blanks the screen.
+//
+// Live (owner, 21 Oct 2026): conference_allocations is not in Realtime, so a
+// leader allocating, unallocating or swapping inside their delegation reaches
+// the organiser through a quiet re-read every 10 s while the tab is visible and
+// on focus (useLiveRefresh). It swaps the data in place (unchanged parts keep
+// their identity), keeps everything on screen when it fails, and stands down
+// while a local write runs (`trackWrite`) or a drag or confirm is open
+// (`holdLive`); a quiet read that started before a local write is dropped.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth } from '@/components/AuthProvider';
@@ -26,6 +34,7 @@ import {
 } from '../delegationRows';
 import { societySeatCounts, type SeatCommittee } from './societySeats';
 import { paidSpotsBySociety } from '@/app/manage/[slug]/assignment/delegationSeatsGrid';
+import { keepIfSame, useLiveRefresh } from './useLiveRefresh';
 
 export interface DelegationView<M extends DelegationMemberLite = DelegationMemberLite> extends DelegationRow<M> {
   /** Delegate spots paid for, from the ledger: settled `pledge_spot` invoices of
@@ -92,69 +101,118 @@ export function useDelegationsData<M extends DelegationMemberLite>(args: {
   const [moneyUnavailable, setMoneyUnavailable] = useState(false);
   const [seatsUnavailable, setSeatsUnavailable] = useState(false);
   const loadSeq = useRef(0);
+  /** Loads still running, so a quiet tick never supersedes a write's own re-read. */
+  const loadsInFlight = useRef(0);
+  /** Local writes still running, and the count of writes ever started. */
+  const writesInFlight = useRef(0);
+  const writeEpoch = useRef(0);
+  /** Open drags and confirms that hold the live re-read back. */
+  const holds = useRef(new Set<string>());
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (opts?: { quiet?: boolean }) => {
     if (!userId) return;
+    const quiet = !!opts?.quiet;
     const seq = ++loadSeq.current;
-    const supabase = await getFreshAuthedClient();
-    if (!supabase || seq !== loadSeq.current) return;
-    const [socRes, advRes, invRes, payRes, comRes, memRes] = await Promise.all([
-      supabase.from('societies')
-        .select('id, name, spots_purchased, advisor_spots_purchased, created_at, city, country_code, logo_url')
-        .eq('conference_id', conferenceId)
-        .order('name', { ascending: true }),
-      supabase.from('applications')
-        .select('id, advisors_pledged')
-        .eq('conference_id', conferenceId)
-        .gt('advisors_pledged', 0),
-      pageAll<InvoiceRow>((from, to) => supabase.from('invoices')
-        .select('id, application_id, society_id, kind, status, amount_cents, amount_paid_cents, currency, label, quantity')
-        .eq('conference_id', conferenceId)
-        .order('id', { ascending: true })
-        .range(from, to)),
-      pageAll<PaymentLite>((from, to) => supabase.from('payments')
-        .select('id, invoice_id, amount_cents, currency, method, invoices!inner(conference_id)')
-        .eq('invoices.conference_id', conferenceId)
-        .eq('status', 'succeeded')
-        .order('id', { ascending: true })
-        .range(from, to)),
-      supabase.from('conference_committees')
-        .select(`
-          id, name, abbreviation, logo_url,
-          committee_country_slots (id, country_code, country_name, delegation_size, is_observer, logo_url),
-          conference_allocations (id, country_code, country_name, seat, society_id, application_id, user_id)
-        `)
-        .eq('conference_id', conferenceId)
-        .order('name', { ascending: true }),
-      ownMembers
-        ? pageAll<M>((from, to) => supabase.from('applications')
-          .select(MEMBER_COLUMNS)
+    const epoch = writeEpoch.current;
+    loadsInFlight.current += 1;
+    try {
+      const supabase = await getFreshAuthedClient();
+      if (!supabase || seq !== loadSeq.current) return;
+      const [socRes, advRes, invRes, payRes, comRes, memRes] = await Promise.all([
+        supabase.from('societies')
+          .select('id, name, spots_purchased, advisor_spots_purchased, created_at, city, country_code, logo_url')
           .eq('conference_id', conferenceId)
-          .not('society_id', 'is', null)
+          .order('name', { ascending: true }),
+        supabase.from('applications')
+          .select('id, advisors_pledged')
+          .eq('conference_id', conferenceId)
+          .gt('advisors_pledged', 0),
+        pageAll<InvoiceRow>((from, to) => supabase.from('invoices')
+          .select('id, application_id, society_id, kind, status, amount_cents, amount_paid_cents, currency, label, quantity')
+          .eq('conference_id', conferenceId)
           .order('id', { ascending: true })
-          .range(from, to))
-        : Promise.resolve({ data: [] as M[], error: null }),
-    ]);
-    if (seq !== loadSeq.current) return;
-    if (socRes.error || memRes.error) {
-      setLoadFailed(true);
-      // Logged, never shown: the screen says what failed in plain words.
-      friendlyError(socRes.error ?? memRes.error, 'The delegations could not be loaded.');
-      return;
+          .range(from, to)),
+        pageAll<PaymentLite>((from, to) => supabase.from('payments')
+          .select('id, invoice_id, amount_cents, currency, method, invoices!inner(conference_id)')
+          .eq('invoices.conference_id', conferenceId)
+          .eq('status', 'succeeded')
+          .order('id', { ascending: true })
+          .range(from, to)),
+        supabase.from('conference_committees')
+          .select(`
+            id, name, abbreviation, logo_url,
+            committee_country_slots (id, country_code, country_name, delegation_size, is_observer, logo_url),
+            conference_allocations (id, country_code, country_name, seat, society_id, application_id, user_id)
+          `)
+          .eq('conference_id', conferenceId)
+          .order('name', { ascending: true }),
+        ownMembers
+          ? pageAll<M>((from, to) => supabase.from('applications')
+            .select(MEMBER_COLUMNS)
+            .eq('conference_id', conferenceId)
+            .not('society_id', 'is', null)
+            .order('id', { ascending: true })
+            .range(from, to))
+          : Promise.resolve({ data: [] as M[], error: null }),
+      ]);
+      if (seq !== loadSeq.current) return;
+      // A quiet read that a local write overtook would undo it on screen: dropped.
+      if (quiet && (epoch !== writeEpoch.current || writesInFlight.current > 0)) return;
+      if (socRes.error || memRes.error) {
+        // A quiet read that fails keeps what is on screen; the next tick tries again.
+        if (quiet) return;
+        setLoadFailed(true);
+        // Logged, never shown: the screen says what failed in plain words.
+        friendlyError(socRes.error ?? memRes.error, 'The delegations could not be loaded.');
+        return;
+      }
+      setLoadFailed(false);
+      const nextSocieties = (socRes.data ?? []) as SocietyLite[];
+      setSocieties(prev => keepIfSame(prev, nextSocieties));
+      if (ownMembers) setLoadedMembers(prev => keepIfSame(prev, memRes.data as M[]));
+      if (!(quiet && advRes.error)) {
+        const adv = new Map<string, number>();
+        for (const r of (advRes.data ?? []) as { id: string; advisors_pledged: number | null }[]) adv.set(r.id, r.advisors_pledged ?? 0);
+        setAdvisorsPledged(prev => (sameMap(prev, adv) ? prev : adv));
+      }
+      // Money or seats failing must not blank the list: each part says it could not be read.
+      // A quiet read keeps the last good copy instead.
+      if (!(quiet && (invRes.error || payRes.error))) {
+        setInvoices(prev => keepIfSame(prev, invRes.error ? [] : invRes.data));
+        setPayments(prev => keepIfSame(prev, payRes.error ? [] : payRes.data));
+        setMoneyUnavailable(!!(invRes.error || payRes.error));
+      }
+      if (comRes.error) { if (!quiet) setSeatsUnavailable(true); }
+      else {
+        setSeatsUnavailable(false);
+        const nextCommittees = (comRes.data ?? []) as unknown as SeatCommittee[];
+        setCommittees(prev => keepIfSame(prev, nextCommittees));
+      }
+    } finally {
+      loadsInFlight.current -= 1;
     }
-    setLoadFailed(false);
-    setSocieties((socRes.data ?? []) as SocietyLite[]);
-    if (ownMembers) setLoadedMembers(memRes.data as M[]);
-    const adv = new Map<string, number>();
-    for (const r of (advRes.data ?? []) as { id: string; advisors_pledged: number | null }[]) adv.set(r.id, r.advisors_pledged ?? 0);
-    setAdvisorsPledged(adv);
-    // Money or seats failing must not blank the list: each part says it could not be read.
-    setInvoices(invRes.error ? [] : invRes.data);
-    setPayments(payRes.error ? [] : payRes.data);
-    setMoneyUnavailable(!!(invRes.error || payRes.error));
-    if (comRes.error) setSeatsUnavailable(true);
-    else { setSeatsUnavailable(false); setCommittees((comRes.data ?? []) as unknown as SeatCommittee[]); }
   }, [userId, conferenceId, ownMembers]);
+
+  /** Wraps a local write: the live re-read stands down until it settles. */
+  const trackWrite = useCallback(async <T,>(work: () => Promise<T>): Promise<T> => {
+    writesInFlight.current += 1;
+    writeEpoch.current += 1;
+    try {
+      return await work();
+    } finally {
+      writesInFlight.current -= 1;
+    }
+  }, []);
+
+  /** Holds the live re-read back while a drag or a confirm is open. */
+  const holdLive = useCallback((key: string, on: boolean) => {
+    if (on) holds.current.add(key); else holds.current.delete(key);
+  }, []);
+
+  useLiveRefresh(() => load({ quiet: true }), {
+    enabled: !!userId,
+    paused: () => writesInFlight.current > 0 || holds.current.size > 0 || loadsInFlight.current > 0,
+  });
 
   const members = useMemo(() => applications ?? loadedMembers, [applications, loadedMembers]);
 
@@ -205,7 +263,15 @@ export function useDelegationsData<M extends DelegationMemberLite>(args: {
     moneyUnavailable,
     seatsUnavailable,
     reload: load,
+    trackWrite,
+    holdLive,
   };
+}
+
+function sameMap(a: Map<string, number>, b: Map<string, number>): boolean {
+  if (a.size !== b.size) return false;
+  for (const [k, v] of a) if (b.get(k) !== v) return false;
+  return true;
 }
 
 export type DelegationsData<M extends DelegationMemberLite = DelegationMemberLite> = ReturnType<typeof useDelegationsData<M>>;

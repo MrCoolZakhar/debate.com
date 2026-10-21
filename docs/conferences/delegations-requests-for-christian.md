@@ -101,3 +101,17 @@ Nothing on our side calls anything for this until you decide.
 ### (c) Expected size never below the delegates in the delegation
 
 The leader card now stops the minus button at the number of delegates already in the delegation. `remove_pledged_spot_invoice` (the X on /pay) can still go below it: it voids any open, unpaid `pledge_spot` and lowers `spots_pledged` with no check against the members. Please refuse it on the server when the delegation's expected size (your answer 5: the leaders' `spots_pledged` plus one for each head delegate) would drop below the number of delegates and head delegates in the delegation who are not rejected or withdrawn. A sentence we can show: "Your delegation already has {n} delegates. Remove a delegate first."
+
+## 21 Oct, round 3
+
+### Organisers adding an individual delegate to a delegation
+
+Peter asked for a "+" in the organiser's delegation pop-up that adds an accepted individual delegate (someone who applied on their own, `society_id` null) to the delegation. The client is built and waits behind `ORGANISER_ADD_TO_DELEGATION_DB = false` (`manage/[slug]/applications/delegations/v2.ts`); nothing calls the function until you say it is live.
+
+What we ask for: `organiser_add_to_delegation(p_application uuid, p_society uuid) returns jsonb`, organisers of the conference only, answering `{ ok, code, error }` with a sentence we show as given.
+
+- The person must be an accepted (or assigned) delegate of the same conference with no delegation yet. Head delegates and faculty advisors are not added this way.
+- **Peter's rule: the individual's registration fee must not carry over to the delegation.** What the person already paid, or still owes, on their own application stays theirs: it is never counted as the delegation's money, never moved onto a leader's invoices, and never turned into a Delegate Ticket. The delegation's own registration fee (the per-delegation line) is not charged to them either.
+- Your call how their own role fee works from there. Our guess: if they already paid it, they keep their paid spot and the delegation's tickets keep covering the others; if they have not paid, the delegation's tickets may cover them the usual way (`pledge_covered_application_ids`).
+- If they hold an allocation, it stays theirs and is not turned into an open seat of the delegation.
+- Refusals we expect: `not_organiser`, `not_individual` (already in a delegation), `wrong_role`, `wrong_conference`, `not_accepted`, and the seat limit if you think it applies.

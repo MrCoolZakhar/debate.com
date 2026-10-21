@@ -2,8 +2,8 @@
 
 // Advisor participant view. Advisors never hold a committee allocation
 // themselves. Owner, 20 Oct 2026: Overview is the advisor's OWN page, drawn by
-// ParticipantView (DelegationLead: the next step, documents needed back, or
-// "You're all set"); Delegation is the second section with the leader card
+// ParticipantView (LeaderOverview since 21 Oct 2026: the next step, then the
+// delegation's recap tiles, Deadlines and Needs Your Attention); Delegation is the second section with the leader card
 // (import, invite link, expected size, swaps); Committees the rooms the
 // delegation sits in (delegation/advisor/AdvisorCommitteesSection; every room
 // only without a delegation). Buying delegation credits and requesting
@@ -28,7 +28,7 @@ export default function AdvisorParticipant({ conferenceId, conferenceSlug, confe
 }) {
   return (
     <>
-      <Pane show={section === 'delegation'} title="Your Delegation" icon={Users}>
+      <Pane show={section === 'delegation'} title="Your Delegation" icon={Users} anchor="you-delegation">
         {application.society_id ? (
           <DelegationPanel
             conferenceId={conferenceId}

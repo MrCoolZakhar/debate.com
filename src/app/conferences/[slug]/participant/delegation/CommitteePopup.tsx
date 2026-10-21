@@ -141,7 +141,7 @@ export default function CommitteePopup({ committeeId, name, abbreviation, emblem
         </>
       );
     } else if ((sorted ?? []).length === 0) {
-      wholeList = <p style={{ fontFamily: FONT, fontSize: 14, color: INK_SOFT, margin: 0 }}>Nobody is seated here yet.</p>;
+      wholeList = <p style={{ fontFamily: FONT, fontSize: 14, color: INK_SOFT, margin: 0 }}>Nobody has an allocation here yet.</p>;
     } else {
       wholeList = (
         <div className="flex flex-col" style={{ gap: 2 }}>
@@ -161,7 +161,7 @@ export default function CommitteePopup({ committeeId, name, abbreviation, emblem
                   {r.is_mine && <span style={{ fontSize: 12, fontWeight: 600, color: 'color-mix(in srgb, var(--gv-accent) 72%, #1C1410)', marginLeft: 6 }}>Your delegation</span>}
                 </p>
                 <p className="[overflow-wrap:anywhere]" style={{ fontFamily: FONT, fontSize: 13.5, color: r.display_name ? INK : INK_SOFT, margin: '1px 0 0 0', lineHeight: 1.35 }}>
-                  {r.display_name ?? 'Open seat'}
+                  {r.display_name ?? 'Open allocation'}
                 </p>
                 {r.society_name && (
                   <p className="[overflow-wrap:anywhere]" style={{ fontFamily: FONT, fontSize: 12.5, color: INK_SOFT, margin: '1px 0 0 0', lineHeight: 1.35 }}>

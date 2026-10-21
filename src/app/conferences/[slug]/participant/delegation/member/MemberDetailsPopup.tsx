@@ -142,7 +142,7 @@ export function MemberDetailsBody({ person }: { person: PersonRow }) {
             </span>
           </Field>
         )}
-        <Field name="Seat">
+        <Field name="Allocation">
           {seat ? (
             <div className="flex items-center flex-wrap gap-x-5 gap-y-2 min-w-0">
               <span className="inline-flex items-center gap-2 min-w-0 [overflow-wrap:anywhere]" style={{ ...value, fontWeight: 500 }}>
@@ -160,7 +160,7 @@ export function MemberDetailsBody({ person }: { person: PersonRow }) {
               </span>
             </div>
           ) : (
-            <span style={{ ...value, color: INK_SOFT }}>{person.role === 'faculty-advisor' ? 'Advisors have no seat' : 'No seat yet'}</span>
+            <span style={{ ...value, color: INK_SOFT }}>{person.role === 'faculty-advisor' ? 'Advisors have no allocation' : 'No allocation yet'}</span>
           )}
         </Field>
         {person.paper && (

@@ -24,7 +24,7 @@ import { queueAllocationEmails } from '@/lib/allocationEmail';
 import { placeMember, unplaceMember } from '@/app/conferences/[slug]/participant/delegation/v2';
 import { moveSeat as leaderMoveSeat } from '@/app/conferences/[slug]/participant/delegation/seat/seatWrites';
 import type { FreeSlot } from './societySeats';
-import { DELEGATIONS_V2_DB, giveSocietySeatsRpc } from './v2';
+import { DELEGATIONS_V2_DB, giveSocietySeatsRpc, takeBackSocietySeatRpc, type GiveSeat } from './v2';
 
 export type GiveResult = { ok: true; given: number } | { ok: false; error: string };
 
@@ -73,6 +73,29 @@ export async function giveSocietySeats(args: {
   } catch (e) {
     return { ok: false, error: friendlyError(e, fallback) };
   }
+}
+
+/**
+ * Gives exactly these seats (one entry per seat: a double's seat 1 or seat 2 on
+ * its own), all or nothing, through organiser_give_society_seats, which also
+ * enforces the conference's seat limit. Verified: `created` must equal the
+ * seats sent. The Allocations tab's one-tap chips (owner, 21 Oct 2026).
+ */
+export async function giveExactSeats(societyId: string, seats: GiveSeat[]): Promise<GiveResult> {
+  const fallback = 'Those allocations were not given. Try again.';
+  if (seats.length === 0) return { ok: false, error: 'There are no free allocations to give.' };
+  if (!DELEGATIONS_V2_DB) return { ok: false, error: fallback };
+  const r = await giveSocietySeatsRpc(societyId, seats);
+  if (!r.ok) return r;
+  if (typeof r.given === 'number' && r.given !== seats.length) return { ok: false, error: fallback };
+  return { ok: true, given: r.given ?? seats.length };
+}
+
+/** Takes one empty block seat back from a delegation (organiser_take_back_society_seat). */
+export async function takeBackOneSeat(allocationId: string): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (allocationId.startsWith('temp-')) return { ok: false, error: 'That allocation was not taken back. Try again.' };
+  const r = await takeBackSocietySeatRpc(allocationId);
+  return r.ok ? { ok: true } : r;
 }
 
 // ── People in seats (the delegation pop-up's People tab, owner 20 Oct 2026) ──

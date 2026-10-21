@@ -23,9 +23,11 @@
 //                 bought no tickets; a ticket-buying leader's own ticket is
 //                 separate), so it drops when a delegate leaves.
 //   People        PeopleTable, with the row menu (MemberMenu); it opens the
-//                 committee pop-up itself
-//   Financials    FinancialsCard
-//   Open seats    and the reshuffle line, DELEGATIONS_V2_DB only
+//                 committee pop-up itself. Swap allocations sits in its header
+//                 beside Search people (owner, 21 Oct 2026); the swap banner
+//                 and the pick step stay under the table.
+//   Right column  FinancialsCard, then the Open allocations list and the
+//                 reshuffle line (both DELEGATIONS_V2_DB only)
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Minus, Plus, UserPlus } from 'lucide-react';
@@ -60,7 +62,7 @@ function payWord(m: RosterMember, pool: PoolMember | undefined): { word: string;
 
 function paperWord(status: string | undefined, role: RosterMember['role'], seated: boolean): { word: string; tone: PayTone } {
   if (role === 'faculty-advisor') return { word: 'Not needed', tone: 'soft' };
-  if (!seated) return { word: 'No seat yet', tone: 'soft' };
+  if (!seated) return { word: 'No allocation yet', tone: 'soft' };
   if (!status) return { word: 'Not yet', tone: 'soft' };
   if (status === 'approved' || status === 'accepted') return { word: 'Accepted', tone: 'ok' };
   if (status === 'submitted' || status === 'reviewed') return { word: 'Submitted', tone: 'ok' };
@@ -70,7 +72,7 @@ function paperWord(status: string | undefined, role: RosterMember['role'], seate
 
 export default function LeaderCard({
   conferenceId, conferenceSlug, societyId, societyName, members, pool, paidCount, seatLogoFor,
-  importAvailable, onImport, onChanged, swap, swapTools, overlays,
+  importAvailable, onImport, onChanged, swap, swapButton, swapTools, overlays,
 }: {
   conferenceId: string;
   conferenceSlug: string;
@@ -86,7 +88,9 @@ export default function LeaderCard({
   onImport: () => void;
   onChanged: () => Promise<void>;
   swap: { on: boolean; selected: string[]; toggle: (applicationId: string) => void };
-  /** DelegationPanel's swap banner and control, drawn under the table. */
+  /** DelegationPanel's Swap allocations button, drawn in the People header. */
+  swapButton?: React.ReactNode;
+  /** DelegationPanel's swap banner and pick step, drawn under the table. */
   swapTools: React.ReactNode;
   overlays: React.ReactNode;
 }) {
@@ -275,7 +279,7 @@ export default function LeaderCard({
             <DelegationCrest name={crestName} logoUrl={home?.logo_url ?? null} size={56} />
           </span>
           <div className="min-w-0 flex flex-col gap-1">
-            <h2 className="[overflow-wrap:anywhere]" style={{ fontFamily: FONT, fontSize: 30, fontWeight: 700, letterSpacing: '-0.01em', color: INK, margin: 0, lineHeight: 1.15 }}>{societyName}</h2>
+            <h2 className="[overflow-wrap:anywhere]" style={{ fontFamily: FONT, fontSize: 36, fontWeight: 700, letterSpacing: '-0.015em', color: INK, margin: 0, lineHeight: 1.15 }}>{societyName}</h2>
             <div className="flex items-center gap-2 [overflow-wrap:anywhere]" style={{ fontFamily: FONT, fontSize: 14, color: INK_SOFT }}>
               {home?.country_code && <CircleFlag code={home.country_code} size={18} decorative />}
               {place ? `Delegation · ${place}` : 'Delegation'}
@@ -296,7 +300,7 @@ export default function LeaderCard({
       {/* Stats */}
       <div className="grid grid-cols-2 @[900px]:grid-cols-4" style={{ ...cardStyle, padding: '20px 0' }}>
         <div className={statCell}><StatNumber n={joined} word="joined" /></div>
-        <div className={statCell}><StatNumber n={seatsGiven} word="seats given" /></div>
+        <div className={statCell}><StatNumber n={seatsGiven} word="allocations given" /></div>
         <div className={statCell}><StatNumber n={paidCount} word="paid" /></div>
         <div className="flex items-center justify-between gap-3 min-w-0 px-6 py-2 @[900px]:py-0">
           <span style={{ fontFamily: FONT, fontSize: 15, color: INK_SOFT }}>Expected size</span>
@@ -321,6 +325,7 @@ export default function LeaderCard({
             onChanged={refresh}
             swap={swap}
             societyName={societyName}
+            headerAction={swapButton}
           />
           {swapTools}
         </div>
@@ -333,11 +338,10 @@ export default function LeaderCard({
             conferenceId={conferenceId}
             slug={conferenceSlug}
           />
+          {DELEGATIONS_V2_DB && <OpenSeatsCard seats={openSeats} societyId={societyId} />}
           {DELEGATIONS_V2_DB && data.reshuffleUntil && <ReshuffleLine until={data.reshuffleUntil} />}
         </div>
       </div>
-
-      {DELEGATIONS_V2_DB && <OpenSeatsCard seats={openSeats} societyId={societyId} />}
 
       {overlays}
     </div>

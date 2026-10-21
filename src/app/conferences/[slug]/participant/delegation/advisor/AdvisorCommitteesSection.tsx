@@ -87,7 +87,7 @@ export default function AdvisorCommitteesSection({ conferenceId, conferenceStart
         <Landmark size={22} strokeWidth={STROKE} style={{ color: INK, flexShrink: 0, marginTop: 1 }} aria-hidden />
         <div className="flex flex-col gap-2 min-w-0">
           <p style={{ fontFamily: FONT, fontSize: 15, color: INK, margin: 0 }}>
-            Your delegation has no seats in a committee yet.
+            Your delegation has no allocations in a committee yet.
           </p>
           <button type="button" onClick={onOpenDelegation} className={BTN_CLASS} style={{ ...linkStyle, alignSelf: 'flex-start' }}>
             Go to Delegation
@@ -203,7 +203,7 @@ function SeatRow({ seat: s, showSeatNumber }: { seat: AdvisorCommitteeSeat; show
       >
         <CircleFlag code={s.countryCode} country={s.countryName} size={40} decorative />
         <div className="flex-1 min-w-0 flex flex-col gap-0.5">
-          <span style={{ fontFamily: FONT, fontSize: 15, fontWeight: 600, color: INK }}>Open seat</span>
+          <span style={{ fontFamily: FONT, fontSize: 15, fontWeight: 600, color: INK }}>Open allocation</span>
           <span className="[overflow-wrap:anywhere]" style={{ fontFamily: FONT, fontSize: 13, color: INK_SOFT }}>
             {s.countryName}{showSeatNumber ? `, seat ${s.seat}` : ''}
           </span>

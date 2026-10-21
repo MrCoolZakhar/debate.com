@@ -667,7 +667,19 @@ export default function DelegationPanel({ conferenceId, conferenceSlug, societyI
   function renderFull() {
   if (isLeader && roster) {
     const swapOn = allocationSwapMode !== 'off';
-    const swapTools = (pendingSwapRequest || recentSwapNotice || swapOn) ? (
+    // Swap allocations sits in the People header, beside Search people
+    // (owner, 21 Oct 2026); the banner and the pick step stay under the table.
+    const swapButton = swapOn && !swapMode ? (
+      <button
+        type="button"
+        onClick={() => { setSwapMode(true); setSwapSelection([]); setSwapError(''); }}
+        className={BTN_CLASS}
+        style={{ ...secondaryBtn, minHeight: 40 }}
+      >
+        <ArrowLeftRight size={17} strokeWidth={STROKE} aria-hidden /> Swap allocations
+      </button>
+    ) : null;
+    const swapTools = (pendingSwapRequest || recentSwapNotice || (swapOn && swapMode)) ? (
       <div className="flex flex-col gap-3" style={{ ...cardStyle, padding: '18px 24px' }}>
         {pendingSwapRequest && (
           <div className="flex items-start gap-2.5">
@@ -689,22 +701,11 @@ export default function DelegationPanel({ conferenceId, conferenceSlug, societyI
             {recentSwapNotice.metadata.member_a ?? 'A delegate'} and {recentSwapNotice.metadata.member_b ?? 'a delegate'} swapped allocations on {formatReleaseDate(new Date(recentSwapNotice.created_at).getTime())}.
           </p>
         )}
-        {swapOn && (!swapMode ? (
-          <div>
-            <button
-              type="button"
-              onClick={() => { setSwapMode(true); setSwapSelection([]); setSwapError(''); }}
-              className={BTN_CLASS}
-              style={secondaryBtn}
-            >
-              <ArrowLeftRight size={17} strokeWidth={STROKE} aria-hidden /> Swap allocations
-            </button>
-          </div>
-        ) : (
+        {swapOn && swapMode && (
           <div>
             <div className="flex items-center justify-between gap-3">
               <p className="text-[14px]" style={{ color: '#6B5F52', fontFamily: OUTFIT, margin: 0 }}>
-                Pick two seated people in the table to swap.
+                Pick two people with an allocation in the table to swap.
               </p>
               <button
                 type="button"
@@ -736,7 +737,7 @@ export default function DelegationPanel({ conferenceId, conferenceSlug, societyI
             )}
             {swapError && <p className="text-[13px] mt-2" role="alert" style={{ color: '#8B2020', fontFamily: OUTFIT, margin: '8px 0 0 0' }}>{swapError}</p>}
           </div>
-        ))}
+        )}
       </div>
     ) : null;
     return (
@@ -753,6 +754,7 @@ export default function DelegationPanel({ conferenceId, conferenceSlug, societyI
         onImport={() => setImportOpen(true)}
         onChanged={async () => { await Promise.all([loadRoster(), load(), loadSwapActivity()]); }}
         swap={{ on: swapMode, selected: swapSelection, toggle: toggleSwapSelect }}
+        swapButton={swapButton}
         swapTools={swapTools}
         overlays={overlays}
       />

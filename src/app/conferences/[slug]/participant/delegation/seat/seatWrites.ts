@@ -38,7 +38,7 @@ export async function switchSeats(args: {
   b: SeatSide;
 }): Promise<Result> {
   const { a, b, mode, conferenceId, societyId } = args;
-  const fallback = mode === 'self_serve' ? 'The seats could not be switched. Try again.' : 'The switch could not be requested. Try again.';
+  const fallback = mode === 'self_serve' ? 'The allocations could not be switched. Try again.' : 'The switch could not be requested. Try again.';
   try {
     const { data: { session } } = await supabaseAuthClient.auth.getSession();
     const c = await getFreshAuthedClient();
@@ -89,7 +89,7 @@ export async function switchSeats(args: {
 
 /** Takes a member out of their seat and answers the seat's allocation id. */
 async function unplaceForMove(applicationId: string): Promise<{ ok: true; allocationId: string } | { ok: false; error: string }> {
-  const fallback = 'The seat could not be moved. Try again.';
+  const fallback = 'The allocation could not be moved. Try again.';
   try {
     const c = await getFreshAuthedClient();
     if (!c) return { ok: false, error: SIGNED_OUT };

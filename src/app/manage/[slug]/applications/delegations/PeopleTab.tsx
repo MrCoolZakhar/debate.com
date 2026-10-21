@@ -1,8 +1,9 @@
 'use client';
 
-// The delegation pop-up's People tab (taste board 3B, owner feedback 20 Oct
-// 2026): every member coming or applying, with their role, their seat and where
-// their payment stands, then the delegation's open seats.
+// The delegation pop-up's People tab (taste board 3B, owner feedback 20 and 21
+// Oct 2026): every member coming or applying, with their role, their allocation
+// and where their payment stands, then the delegation's open allocations.
+// Organiser screens say "allocation" wherever a seat means an allocation.
 //
 // The seat column is the leader card's own SeatCell (participant/delegation/
 // seat/SeatCell): the country's round flag big with its name under it, the
@@ -13,9 +14,10 @@
 //   * a seat onto a seated member: Switch (perform_delegation_swap; organisers
 //     may always switch);
 //   * a seat onto a member with no seat: Move, the first person keeps no seat;
-//   * a seat onto the Open seats area (or its Take out button): Take out, the
-//     seat stays with the delegation as Open;
-//   * an open seat onto a member with no seat (or "Place in a seat"): Place.
+//   * a seat onto the Open allocations area (or its Unallocate button, or the
+//     row menu's Unallocate): Unallocate, the allocation stays with the
+//     delegation as open;
+//   * an open allocation onto a member with no seat (or "Allocate"): Allocate.
 // Writes: seatWrites.ts (the organiser allocation writes the assignment page
 // makes today). Seats only; no money is touched here.
 //
@@ -24,22 +26,32 @@
 // same rule as conference_money_summary). "Paid" and "Paid by delegation" are
 // the member's access flag (`payment_status`, `self_paid`), never a sum.
 //
-// Role and Remove are always drawn; they wait for Christian's functions behind
-// DELEGATIONS_MONEY_DB (v2.ts) and are disabled with "Coming soon, waiting for
-// Christian" until then: delegate <-> head delegate is organiser_set_head,
-// delegate <-> faculty advisor is organiser_set_member_role (asked in place,
-// the ticket moves with the person), Remove is delegation_remove_member.
+// Each person has a ··· menu (OrganiserMemberMenu, like the leader card's): Make
+// head delegate / faculty advisor / delegate (organiser_set_member_role, Christian's,
+// its sentence shown as given; a move to or from faculty advisor is asked in place,
+// the ticket follows the person), Unallocate (seated people) and Remove from
+// delegation (delegation_remove_member). Both wait for DELEGATIONS_MONEY_DB (v2.ts).
+//
+// "Add a person" in the header opens AddPersonStep as a second step: the
+// conference's individual applicants, added through organiser_add_to_delegation
+// (Christian's, not built yet: ORGANISER_ADD_TO_DELEGATION_DB in v2.ts, disabled
+// with "Coming soon, waiting for Christian" while it is off).
+//
+// Live: every write runs through data.trackWrite and a drag, a confirm or an
+// open menu holds the 10 s re-read back (data.holdLive), so a leader's change
+// arrives in place without ever undoing a change made here.
 //
 // The avatar or the name opens the member's details (the leader card's
 // member/MemberDetailsPopup content) as a second step in this pop-up.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { UserMinus } from 'lucide-react';
-import GSelect from '@/components/GSelect';
+import { Plus } from 'lucide-react';
 import { CircleFlag } from '@/components/CircleFlag';
 import { friendlyError } from '@/lib/friendlyError';
 import { notifyErr, notifyOk } from '@/lib/appNotify';
 import { removeMember, type MemberRole } from '@/app/conferences/[slug]/participant/delegation/v2';
+import OrganiserMemberMenu from './OrganiserMemberMenu';
+import AddPersonStep from './AddPersonStep';
 import SeatCell from '@/app/conferences/[slug]/participant/delegation/seat/SeatCell';
 import InPlaceConfirm from '@/app/conferences/[slug]/participant/delegation/seat/InPlaceConfirm';
 import { useSeatDrag } from '@/app/conferences/[slug]/participant/delegation/seat/useSeatDrag';
@@ -53,10 +65,10 @@ import {
   organiserMoveSeat, organiserPlaceInSeat, organiserSwitchSeats, organiserTakeOutOfSeat,
   type PersonSeatResult, type SeatPerson,
 } from './seatWrites';
-import { DELEGATIONS_MONEY_DB, WAITING_FOR_CHRISTIAN, organiserSetHead, organiserSetMemberRole } from './v2';
+import { ORGANISER_ADD_TO_DELEGATION_DB, WAITING_FOR_CHRISTIAN, organiserSetMemberRole } from './v2';
 import {
   BTN_CLASS, CommitteeDisc, FONT, FOREST, HAIRLINE, INK, INK_SOFT, OK_GREEN, OWE, ROW_LINE, RoundAvatar, STROKE,
-  firstName, smallPrimaryBtn, smallSecondaryBtn,
+  smallSecondaryBtn,
 } from './kit';
 
 const GRID = 'minmax(0,1.15fr) 180px minmax(0,1.55fr) 150px 36px';
@@ -98,10 +110,6 @@ function paymentOf(m: DelegationMemberLite, owes: boolean): { text: string; colo
   return { text: ACCEPTED.has(m.status) ? 'Not paid yet' : 'Nothing due yet', color: INK_SOFT, tone: 'soft' };
 }
 
-type Pending =
-  | { kind: 'role'; id: string; role: MemberRole }
-  | { kind: 'remove'; id: string };
-
 interface Ask {
   anchor: HTMLElement;
   align: 'start' | 'end';
@@ -136,8 +144,8 @@ export default function PeopleTab<M extends DelegationMemberLite>({ conferenceId
   onChanged?: () => void;
   onStep: (step: PopupStep | null) => void;
 }) {
-  const [pending, setPending] = useState<Pending | null>(null);
-  const [busyId, setBusyId] = useState<string | null>(null);
+  const { trackWrite, holdLive } = data;
+  const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
   const [patches, setPatches] = useState<SeatPatch[]>([]);
   const [seatBusy, setSeatBusy] = useState<Set<string>>(() => new Set());
   const [ask, setAsk] = useState<Ask | null>(null);
@@ -219,7 +227,7 @@ export default function PeopleTab<M extends DelegationMemberLite>({ conferenceId
     setPatches(prev => [...prev, { op, people: o.people }]);
     let r: PersonSeatResult;
     try {
-      r = await o.work();
+      r = await trackWrite(o.work);
     } catch (e) {
       r = { ok: false, error: friendlyError(e, 'That change was not saved. Try again.') };
     }
@@ -237,7 +245,7 @@ export default function PeopleTab<M extends DelegationMemberLite>({ conferenceId
       for (const id of o.busy) next.delete(id);
       return next;
     });
-  }, [data, onChanged]);
+  }, [data, onChanged, trackWrite]);
 
   const doSeatChange = useCallback((from: string, to: string) => {
     const st = stateRef.current;
@@ -263,7 +271,7 @@ export default function PeopleTab<M extends DelegationMemberLite>({ conferenceId
         people: { [a.id]: null },
         busy: [a.id, aSeat.allocationId],
         work: () => organiserTakeOutOfSeat({ conferenceId, societyId: row.id, seat: placeOf(aSeat), person: personOf(a) }),
-        ok: `${memberName(a)} is out of ${aSeat.countryName}. The seat stays open for ${row.name}.`,
+        ok: `${memberName(a)} is unallocated from ${aSeat.countryName}. The allocation stays open for ${row.name}.`,
       });
       return;
     }
@@ -275,7 +283,7 @@ export default function PeopleTab<M extends DelegationMemberLite>({ conferenceId
         people: { [a.id]: bSeat.allocationId, [b.id]: aSeat.allocationId },
         busy: [a.id, b.id, aSeat.allocationId, bSeat.allocationId],
         work: () => organiserSwitchSeats(a.id, b.id),
-        ok: `${memberName(a)} and ${memberName(b)} switched seats.`,
+        ok: `${memberName(a)} and ${memberName(b)} switched allocations.`,
       });
       return;
     }
@@ -294,14 +302,14 @@ export default function PeopleTab<M extends DelegationMemberLite>({ conferenceId
       const seat = st.seatById.get(from.slice(5));
       const m = st.memberById.get(to);
       if (!seat || !m) return;
-      setAsk({ anchor, align: 'start', title: `Place ${memberName(m)} in ${seatWords(seat)}?`, line: null, yes: 'Place', danger: false, onYes: go });
+      setAsk({ anchor, align: 'start', title: `Allocate ${memberName(m)} to ${seatWords(seat)}?`, line: null, yes: 'Allocate', danger: false, onYes: go });
       return;
     }
     const a = st.memberById.get(from);
     const aSeat = st.seatOfApp.get(from);
     if (!a || !aSeat) return;
     if (to === OPEN_AREA) {
-      setAsk({ anchor, align: 'start', title: `Take ${memberName(a)} out of ${seatWords(aSeat)}?`, line: 'The seat stays with the delegation as an open seat.', yes: 'Take out', danger: true, onYes: go });
+      setAsk({ anchor, align: 'start', title: `Unallocate ${memberName(a)} from ${seatWords(aSeat)}?`, line: 'The allocation stays with the delegation as an open allocation.', yes: 'Unallocate', danger: true, onYes: go });
       return;
     }
     const b = st.memberById.get(to);
@@ -311,45 +319,51 @@ export default function PeopleTab<M extends DelegationMemberLite>({ conferenceId
       setAsk({ anchor, align: 'start', title: `Switch ${seatWords(aSeat)} (${memberName(a)}) and ${seatWords(bSeat)} (${memberName(b)})?`, line: null, yes: 'Switch', danger: false, onYes: go });
       return;
     }
-    setAsk({ anchor, align: 'start', title: `Move ${seatWords(aSeat)} from ${memberName(a)} to ${memberName(b)}?`, line: `${memberName(a)} stays in the delegation with no seat.`, yes: 'Move', danger: false, onYes: go });
+    setAsk({ anchor, align: 'start', title: `Move ${seatWords(aSeat)} from ${memberName(a)} to ${memberName(b)}?`, line: `${memberName(a)} stays in the delegation with no allocation.`, yes: 'Move', danger: false, onYes: go });
   }, [doSeatChange]);
 
   const { drag, start, ghost, wasJustDragged } = useSeatDrag({ canDragFrom, canDropOn, onDrop: askSeatChange });
   const closeAsk = useCallback(() => setAsk(null), []);
 
+  // A drag, a confirm or an open menu holds the live re-read back.
+  const holding = !!drag || !!ask || menuOpenId !== null;
+  useEffect(() => {
+    holdLive('people-tab', holding);
+  }, [holdLive, holding]);
+  useEffect(() => () => holdLive('people-tab', false), [holdLive]);
+
   async function changeRole(m: M, role: MemberRole) {
-    if (busyId) return;
-    setBusyId(m.id);
-    const current = roleOf(m);
-    const headMove = role !== 'faculty-advisor' && current !== 'faculty-advisor';
-    const r = headMove ? await organiserSetHead(m.id, role === 'head-delegate') : await organiserSetMemberRole(m.id, role);
-    setBusyId(null);
-    setPending(null);
-    if (!r.ok) { notifyErr(r.error, 'applications'); return; }
+    const r = await trackWrite(() => organiserSetMemberRole(m.id, role));
+    if (!r.ok) return r;
     notifyOk(`${memberName(m)} is now a ${ROLE_OPTIONS.find(o => o.value === role)!.label.toLowerCase()}.`, 'applications');
     onChanged?.();
     void data.reload();
+    return r;
   }
 
   async function remove(m: M) {
-    if (busyId) return;
-    setBusyId(m.id);
-    const r = await removeMember(m.id);
-    setBusyId(null);
-    setPending(null);
-    if (!r.ok) { notifyErr(r.error, 'applications'); return; }
+    const r = await trackWrite(() => removeMember(m.id));
+    if (!r.ok) return r;
     notifyOk(`${memberName(m)} left ${row.name}.`, 'applications');
     onChanged?.();
     void data.reload();
+    return r;
   }
 
-  function onRolePick(m: M, next: MemberRole) {
-    if (!DELEGATIONS_MONEY_DB) return;
-    const current = roleOf(m);
-    if (next === current) return;
-    // Delegate or head delegate to faculty advisor, or back: asked first.
-    if ((next === 'faculty-advisor') !== (current === 'faculty-advisor')) { setPending({ kind: 'role', id: m.id, role: next }); return; }
-    void changeRole(m, next);
+  function openAddStep() {
+    if (!ORGANISER_ADD_TO_DELEGATION_DB) return;
+    onStep({
+      title: `Add a person to ${row.name}`,
+      body: (
+        <AddPersonStep
+          conferenceId={conferenceId}
+          societyId={row.id}
+          delegationName={row.name}
+          trackWrite={trackWrite}
+          onAdded={() => { onStep(null); onChanged?.(); void data.reload(); }}
+        />
+      ),
+    });
   }
 
   function personRowOf(m: M): PersonRow {
@@ -386,7 +400,7 @@ export default function PeopleTab<M extends DelegationMemberLite>({ conferenceId
   function openPlaceStep(m: M) {
     const name = memberName(m);
     onStep({
-      title: `Place ${name} in a seat`,
+      title: `Allocate ${name}`,
       body: (
         <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 10 }}>
           {openSeats.map(s => (
@@ -412,24 +426,46 @@ export default function PeopleTab<M extends DelegationMemberLite>({ conferenceId
     });
   }
 
+  const addButton = (
+    <button
+      type="button"
+      onClick={ORGANISER_ADD_TO_DELEGATION_DB ? openAddStep : (e) => e.preventDefault()}
+      aria-disabled={ORGANISER_ADD_TO_DELEGATION_DB ? undefined : true}
+      title={ORGANISER_ADD_TO_DELEGATION_DB ? undefined : WAITING_FOR_CHRISTIAN}
+      className={BTN_CLASS}
+      style={{ ...smallSecondaryBtn, opacity: ORGANISER_ADD_TO_DELEGATION_DB ? 1 : 0.45, cursor: ORGANISER_ADD_TO_DELEGATION_DB ? 'pointer' : 'default' }}
+    >
+      <Plus size={16} strokeWidth={STROKE} aria-hidden /> Add a person
+    </button>
+  );
+
   if (live.length === 0 && openSeats.length === 0) {
     return (
       <div style={{ padding: '24px 28px' }}>
-        <p style={{ fontFamily: FONT, fontSize: 15, fontWeight: 600, color: INK }}>Nobody has joined yet</p>
-        <p style={{ fontFamily: FONT, fontSize: 14, color: INK_SOFT, marginTop: 4 }}>People appear here once they apply with this delegation or join through its invite link.</p>
+        <div className="flex items-start justify-between gap-4 flex-wrap">
+          <div>
+            <p style={{ fontFamily: FONT, fontSize: 15, fontWeight: 600, color: INK }}>Nobody has joined yet</p>
+            <p style={{ fontFamily: FONT, fontSize: 14, color: INK_SOFT, marginTop: 4 }}>People appear here once they apply with this delegation or join through its invite link.</p>
+          </div>
+          {addButton}
+        </div>
       </div>
     );
   }
-
-  const roleTitle = DELEGATIONS_MONEY_DB ? undefined : WAITING_FOR_CHRISTIAN;
   const openAreaTarget = !!drag && !drag.from.startsWith('open:');
   const openAreaOver = !!drag && drag.over === OPEN_AREA;
 
   return (
     <div className="flex-1 min-h-0 overflow-auto" style={{ padding: '6px 0 16px' }}>
       <div style={{ minWidth: 900 }}>
+        <div className="flex items-center justify-between gap-4" style={{ padding: '10px 28px 2px' }}>
+          <span style={{ fontFamily: FONT, fontSize: 14, color: INK_SOFT, fontVariantNumeric: 'tabular-nums' }}>
+            {live.length === 1 ? '1 person' : `${live.length} people`}
+          </span>
+          {addButton}
+        </div>
         <div className="grid" style={{ gridTemplateColumns: GRID, gap: 16, padding: '10px 28px' }}>
-          {['Person', 'Role', 'Seat', 'Payment', ''].map((h, i) => (
+          {['Person', 'Role', 'Allocation', 'Payment', ''].map((h, i) => (
             <span key={i} style={{ fontFamily: FONT, fontSize: 12, fontWeight: 500, color: INK_SOFT }}>{h}</span>
           ))}
         </div>
@@ -441,7 +477,6 @@ export default function PeopleTab<M extends DelegationMemberLite>({ conferenceId
           const email = m.profiles?.email || m.invited_email || '';
           const held = seatOfApp.get(m.id) ?? null;
           const pay = paymentOf(m, row.owingMemberIds.includes(m.id));
-          const confirming = pending?.id === m.id ? pending : null;
           const role = roleOf(m);
           const canSeat = seatable(m);
           const rowBusy = seatBusy.has(m.id) || (!!held && seatBusy.has(held.allocationId));
@@ -453,7 +488,7 @@ export default function PeopleTab<M extends DelegationMemberLite>({ conferenceId
               data-seat-target={m.id}
               style={{
                 borderTop: `1px solid ${ROW_LINE}`,
-                background: isTarget ? 'rgba(27,56,40,0.06)' : confirming ? '#FAF7F0' : 'transparent',
+                background: isTarget ? 'rgba(27,56,40,0.06)' : menuOpenId === m.id ? '#FAF7F0' : 'transparent',
                 boxShadow: isTarget ? `inset 0 0 0 2px ${FOREST}` : 'none',
                 opacity: m.attending ? 1 : 0.6,
                 transition: 'background-color 120ms ease, box-shadow 120ms ease',
@@ -486,21 +521,7 @@ export default function PeopleTab<M extends DelegationMemberLite>({ conferenceId
                   </div>
                 </div>
 
-                <div className="min-w-0">
-                  {role && ACCEPTED.has(m.status) ? (
-                    <GSelect<MemberRole>
-                      value={confirming?.kind === 'role' ? confirming.role : role}
-                      onChange={v => onRolePick(m, v)}
-                      options={ROLE_OPTIONS}
-                      size="sm"
-                      disabled={!DELEGATIONS_MONEY_DB || busyId !== null}
-                      title={roleTitle}
-                      aria-label={`Role of ${name}`}
-                    />
-                  ) : (
-                    <span style={{ fontFamily: FONT, fontSize: 14, color: INK }}>{roleLabel(m)}</span>
-                  )}
-                </div>
+                <span style={{ fontFamily: FONT, fontSize: 14, color: INK }}>{roleLabel(m)}</span>
 
                 <div className="min-w-0">
                   <SeatCell
@@ -517,9 +538,9 @@ export default function PeopleTab<M extends DelegationMemberLite>({ conferenceId
                     onTakeOut={held && canSeat ? (el) => {
                       setAsk({
                         anchor: el, align: 'end',
-                        title: `Take ${name} out of ${seatWords(held)}?`,
-                        line: 'The seat stays with the delegation as an open seat.',
-                        yes: 'Take out', danger: true,
+                        title: `Unallocate ${name} from ${seatWords(held)}?`,
+                        line: 'The allocation stays with the delegation as an open allocation.',
+                        yes: 'Unallocate', danger: true,
                         onYes: () => { setAsk(null); doSeatChange(m.id, OPEN_AREA); },
                       });
                     } : undefined}
@@ -529,34 +550,21 @@ export default function PeopleTab<M extends DelegationMemberLite>({ conferenceId
 
                 <span style={{ fontFamily: FONT, fontSize: 14, color: pay.color }}>{pay.text}</span>
 
-                <button type="button" aria-label={`Remove ${name} from the delegation`}
-                  title={DELEGATIONS_MONEY_DB ? 'Remove from delegation' : WAITING_FOR_CHRISTIAN}
-                  disabled={!DELEGATIONS_MONEY_DB || busyId !== null}
-                  onClick={() => setPending({ kind: 'remove', id: m.id })}
-                  className={BTN_CLASS}
-                  style={{ width: 32, height: 32, borderRadius: 8, border: 'none', background: 'none', color: INK_SOFT, cursor: DELEGATIONS_MONEY_DB ? 'pointer' : 'default', opacity: DELEGATIONS_MONEY_DB ? 1 : 0.45, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <UserMinus size={18} strokeWidth={STROKE} aria-hidden />
-                </button>
-              </div>
-
-              {confirming && (
-                <div className="flex items-center justify-between gap-4 flex-wrap"
-                  style={{ margin: '0 28px 14px 90px', padding: '14px 16px', borderRadius: 12, background: '#FFFFFF', boxShadow: '0 1px 2px rgba(27,56,40,0.06), 0 6px 18px rgba(27,56,40,0.08)' }}>
-                  <span style={{ fontFamily: FONT, fontSize: 14, lineHeight: 1.45, color: INK }}>
-                    {confirming.kind === 'role'
-                      ? `Make ${firstName(name)} ${confirming.role === 'faculty-advisor' ? 'a faculty advisor' : confirming.role === 'head-delegate' ? 'a head delegate' : 'a delegate'}? Their ticket moves with them to the new role. Any price difference is charged, or refunded to whoever paid.`
-                      : `Remove ${firstName(name)} from the delegation? Their seat goes back to the delegation as Open.`}
-                  </span>
-                  <div className="flex gap-2 flex-shrink-0">
-                    <button type="button" onClick={() => setPending(null)} disabled={busyId !== null} className={BTN_CLASS} style={smallSecondaryBtn}>Cancel</button>
-                    <button type="button" disabled={busyId !== null} className={BTN_CLASS}
-                      onClick={() => { if (confirming.kind === 'role') void changeRole(m, confirming.role); else void remove(m); }}
-                      style={{ ...smallPrimaryBtn, height: 36, opacity: busyId ? 0.7 : 1 }}>
-                      {confirming.kind === 'role' ? (confirming.role === 'faculty-advisor' ? 'Make advisor' : confirming.role === 'head-delegate' ? 'Make head delegate' : 'Make delegate') : 'Remove'}
-                    </button>
-                  </div>
+                <div className="flex justify-end">
+                  <OrganiserMemberMenu
+                    name={name}
+                    role={role}
+                    canChangeRole={ACCEPTED.has(m.status)}
+                    allocationWords={held && canSeat && !rowBusy ? seatWords(held) : null}
+                    delegationName={row.name}
+                    onRole={next => changeRole(m, next)}
+                    onRemove={() => remove(m)}
+                    onUnallocate={() => doSeatChange(m.id, OPEN_AREA)}
+                    onOpenChange={o => setMenuOpenId(prev => (o ? m.id : prev === m.id ? null : prev))}
+                    disabled={rowBusy}
+                  />
                 </div>
-              )}
+              </div>
             </div>
           );
         })}
@@ -566,7 +574,7 @@ export default function PeopleTab<M extends DelegationMemberLite>({ conferenceId
           </p>
         )}
 
-        {/* Open seats: drag one onto a person to place them, or a person's seat here to take them out. */}
+        {/* Open allocations: drag one onto a person to allocate them, or a person's allocation here to unallocate them. */}
         {(seats.length > 0 || openAreaTarget) && (
           <div
             data-seat-target={OPEN_AREA}
@@ -578,9 +586,9 @@ export default function PeopleTab<M extends DelegationMemberLite>({ conferenceId
             }}
           >
             <div className="flex items-baseline gap-2 flex-wrap" style={{ marginBottom: openSeats.length > 0 ? 12 : 4 }}>
-              <span style={{ fontFamily: FONT, fontSize: 15, fontWeight: 600, color: INK }}>Open seats</span>
+              <span style={{ fontFamily: FONT, fontSize: 15, fontWeight: 600, color: INK }}>Open allocations</span>
               <span style={{ fontFamily: FONT, fontSize: 13, color: INK_SOFT }}>
-                {openSeats.length > 0 ? 'Drag one onto a person to place them' : 'None. Drag a seat here to take someone out of it'}
+                {openSeats.length > 0 ? 'Drag one onto a person to allocate them' : 'None. Drag an allocation here to unallocate someone'}
               </span>
             </div>
             {openSeats.length > 0 && (
@@ -592,7 +600,7 @@ export default function PeopleTab<M extends DelegationMemberLite>({ conferenceId
                     <div
                       key={s.allocationId}
                       onPointerDown={busy ? undefined : (e) => start(e, id, { code: s.countryCode, logoUrl: s.seat.seatLogo, label: s.countryName, committee: s.seat.committee_label }, e.pointerType === 'touch')}
-                      title="Drag onto a person to place them"
+                      title="Drag onto a person to allocate them"
                       className="flex items-center gap-3 min-w-0"
                       style={{
                         padding: '10px 12px', borderRadius: 12, background: '#FFFFFF', border: '1.5px dashed rgba(27,56,40,0.28)',

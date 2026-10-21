@@ -55,7 +55,7 @@ async function call(fn: string, args: Record<string, unknown>, fallback: string)
 }
 
 export function placeMember(applicationId: string, allocationId: string): Promise<Result> {
-  return call('delegation_place_member', { p_application: applicationId, p_allocation: allocationId }, 'They could not be placed in that seat. Try again.');
+  return call('delegation_place_member', { p_application: applicationId, p_allocation: allocationId }, 'They could not be given that allocation. Try again.');
 }
 
 export function removeMember(applicationId: string): Promise<Result> {
@@ -63,7 +63,7 @@ export function removeMember(applicationId: string): Promise<Result> {
 }
 
 export function unplaceMember(applicationId: string): Promise<Result> {
-  return call('delegation_unplace_member', { p_application: applicationId }, 'They could not be taken out of their seat. Try again.');
+  return call('delegation_unplace_member', { p_application: applicationId }, 'They could not be unallocated. Try again.');
 }
 
 /** The delegation's short invite code, or null (flag off, not a leader, or a failed read). */

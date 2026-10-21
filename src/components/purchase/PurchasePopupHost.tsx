@@ -9,7 +9,7 @@
 // mounts the site's notification stack on the pages that do not already have
 // one, so a success toast has somewhere to land.
 
-import { Suspense, useEffect } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/components/AuthProvider';
 import { usePurchasePopup } from '@/lib/purchasePopup';
@@ -43,10 +43,21 @@ export default function PurchasePopupHost() {
 }
 
 /** The stack runs one interval for the life of its mount, so it is mounted
- *  only while there is a card to show; with no card there is nothing to tick. */
+ *  only while there is a card to show; with no card there is nothing to tick.
+ *  It stays mounted a moment after the last card leaves the store, so the
+ *  outcome pill (AppNotifyPills) can play its slide-down exit. */
+const LAZY_STACK_LINGER_MS = 400;
 function LazyStack() {
   const { items } = useNotifications();
-  if (items.length === 0) return null;
+  const has = items.length > 0;
+  const [linger, setLinger] = useState(false);
+  if (has && !linger) setLinger(true);
+  useEffect(() => {
+    if (has || !linger) return;
+    const id = setTimeout(() => setLinger(false), LAZY_STACK_LINGER_MS);
+    return () => clearTimeout(id);
+  }, [has, linger]);
+  if (!has && !linger) return null;
   return <NotificationStack topPx={88} />;
 }
 

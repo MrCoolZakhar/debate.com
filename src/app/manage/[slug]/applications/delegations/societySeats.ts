@@ -255,3 +255,104 @@ export function suggestSeats(countries: CountrySeats[], need: number): Suggestio
   const total = picked.reduce((t, p) => t + p.n, 0);
   return { countries: picked, total, exact: total === need };
 }
+
+// ── Every country, seat by seat (the pop-up's Allocations tab, owner 21 Oct 2026) ──
+//
+// "Show all possible countries, not only those free in all committees; show
+// which committees each country is available in; add and remove simply."
+// Every country that is a delegate slot in ANY committee, A to Z, with one chip
+// per SEAT of each committee (a double is seat 1 and seat 2), A to Z by
+// committee acronym. A seat is this delegation's, another holder's, or free.
+// A seat is matched by (committee, country, seat number); a row with no seat
+// number is seat 1, as everywhere else.
+
+export type SeatChipState = 'free' | 'mine' | 'taken';
+
+export interface SeatChip {
+  /** committeeId:countryCode:seat, stable across reads. */
+  key: string;
+  committeeId: string;
+  committeeName: string;
+  abbreviation: string | null;
+  logoUrl: string | null;
+  /** The committee's short label (acronym, else its display name), what chips sort by. */
+  committeeLabel: string;
+  countryCode: string;
+  countryName: string;
+  /** 1, or 2 for the second seat of a double. */
+  seat: number;
+  /** Seats in the slot: 1, or 2 for a double delegation. */
+  slotSize: number;
+  state: SeatChipState;
+  /** The allocation on the seat, null when free. */
+  allocationId: string | null;
+  /** The delegation the allocation names (a block seat), any delegation. */
+  holderSocietyId: string | null;
+  applicationId: string | null;
+  /** Somebody is on the seat (an application or an account). */
+  filled: boolean;
+  /** This delegation holds it as a block seat (society_id), so an empty one can be taken back. */
+  block: boolean;
+}
+
+export interface CountryRow {
+  code: string;
+  name: string;
+  /** A custom seat's own crest, when any committee draws one. */
+  logoUrl: string | null;
+  chips: SeatChip[];
+}
+
+const seatCollator = new Intl.Collator(undefined, { sensitivity: 'base', numeric: true });
+
+export function countryMatrix(
+  committees: SeatCommittee[],
+  societyId: string,
+  memberApplicationIds: ReadonlySet<string>,
+  label: (name: string, abbreviation: string | null) => string,
+): CountryRow[] {
+  const byCode = new Map<string, CountryRow>();
+  for (const c of committees) {
+    const committeeLabel = label(c.name, c.abbreviation);
+    const bySeat = new Map<string, SeatAllocation>();
+    for (const a of c.conference_allocations) {
+      const k = `${a.country_code}:${a.seat ?? 1}`;
+      if (!bySeat.has(k)) bySeat.set(k, a);
+    }
+    for (const s of c.committee_country_slots) {
+      if (s.is_observer) continue;
+      let row = byCode.get(s.country_code);
+      if (!row) {
+        row = { code: s.country_code, name: s.country_name, logoUrl: s.logo_url ?? null, chips: [] };
+        byCode.set(s.country_code, row);
+      } else if (!row.logoUrl && s.logo_url) {
+        row.logoUrl = s.logo_url;
+      }
+      const size = slotSize(s);
+      for (let seat = 1; seat <= size; seat++) {
+        const a = bySeat.get(`${s.country_code}:${seat}`) ?? null;
+        const mine = !!a && (a.society_id === societyId || (!!a.application_id && memberApplicationIds.has(a.application_id)));
+        row.chips.push({
+          key: `${c.id}:${s.country_code}:${seat}`,
+          committeeId: c.id, committeeName: c.name, abbreviation: c.abbreviation, logoUrl: c.logo_url, committeeLabel,
+          countryCode: s.country_code, countryName: s.country_name,
+          seat, slotSize: size,
+          state: !a ? 'free' : mine ? 'mine' : 'taken',
+          allocationId: a?.id ?? null,
+          holderSocietyId: a?.society_id ?? null,
+          applicationId: a?.application_id ?? null,
+          filled: !!(a && (a.application_id || a.user_id)),
+          block: !!a && a.society_id === societyId,
+        });
+      }
+    }
+  }
+  const rows = Array.from(byCode.values());
+  for (const r of rows) r.chips.sort((a, b) => seatCollator.compare(a.committeeLabel, b.committeeLabel) || a.seat - b.seat);
+  return rows.sort((a, b) => seatCollator.compare(a.name, b.name));
+}
+
+/** Lower case with the accents taken off, for searching country names. */
+export function foldForSearch(s: string): string {
+  return s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
+}

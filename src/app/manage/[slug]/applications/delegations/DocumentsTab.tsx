@@ -76,7 +76,7 @@ export default function DocumentsTab<M extends DelegationMemberLite>({ conferenc
       ) : (
         <div style={{ minWidth: 700 }}>
           <div className="grid" style={{ gridTemplateColumns: GRID, gap: 16, padding: '10px 28px' }}>
-            {['Person', 'Seat', 'File', 'Status'].map(h => (
+            {['Person', 'Allocation', 'File', 'Status'].map(h => (
               <span key={h} style={{ fontFamily: FONT, fontSize: 12, fontWeight: 500, color: INK_SOFT }}>{h}</span>
             ))}
           </div>

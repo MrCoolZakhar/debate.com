@@ -38,7 +38,8 @@ function ticketOf(i: PayItem): 'delegate' | 'advisor' | null {
   return null;
 }
 
-function tally(items: PayItem[], which: 'delegate' | 'advisor') {
+/** The leader's own tickets of one kind: how many, how many paid, how many payable now. Also the Overview recap's count. */
+export function tally(items: PayItem[], which: 'delegate' | 'advisor') {
   const live = items.filter(i => i.owner_is_me && ticketOf(i) === which
     && i.status !== 'void' && i.status !== 'waived' && i.state !== 'refund_closed');
   return { total: live.length, done: live.filter(i => i.status === 'settled').length, payable: live.filter(i => i.payable).length };

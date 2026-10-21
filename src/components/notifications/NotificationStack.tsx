@@ -81,6 +81,7 @@
 //   animation and transition but keeps swipe, which is a control.
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { usePathname } from 'next/navigation';
 import {
   Check, X, Hand, MessageCircle, Megaphone, Info, AlertTriangle, ChevronDown, ChevronUp,
 } from 'lucide-react';
@@ -93,6 +94,11 @@ import {
 } from '@/lib/sessionNotifications';
 import { GLASS, GLASS_SAFE, glassFallbackCss, SPRING_BEZIER, SPRING_LINEAR } from './glass';
 import { serverNow } from '@/lib/serverClock';
+import { isAppNotifyKey } from '@/lib/appNotify';
+import AppNotifyPills from './AppNotifyPills';
+
+/** The sessions runtime keeps `notifyOk` / `notifyErr` in this corner stack, unchanged. */
+const SESSION_ROUTE_PREFIXES = ['/chair', '/delegate', '/voting', '/advisor'];
 
 const OUTFIT = "var(--font-brand), sans-serif";
 const EASE = 'cubic-bezier(0.22,1,0.36,1)';
@@ -726,7 +732,20 @@ export default function NotificationStack({
    */
   topPx?: number;
 }) {
-  const { items, suppressed } = useNotifications();
+  const { items: allItems, suppressed } = useNotifications();
+  /* Everywhere but the sessions runtime, the appNotify outcome cards are drawn as the
+     bottom-centre glass pills (AppNotifyPills); this stack keeps everything else. The
+     interval below still ages both, so there is one TTL clock. */
+  const pathname = usePathname();
+  const sessionRoute = SESSION_ROUTE_PREFIXES.some((p) => pathname === p || pathname?.startsWith(p + '/'));
+  const appItems = useMemo(
+    () => (sessionRoute ? [] : allItems.filter((n) => isAppNotifyKey(n.key))),
+    [allItems, sessionRoute],
+  );
+  const items = useMemo(
+    () => (sessionRoute ? allItems : allItems.filter((n) => !isAppNotifyKey(n.key))),
+    [allItems, sessionRoute],
+  );
   const t = useT();
   const { language } = useLanguage();
   const rtf = useMemo(() => {
@@ -845,7 +864,10 @@ export default function NotificationStack({
     return () => ro.disconnect();
   }, [host, column]);
 
-  if (hidden) return null;
+  /* Never mounted on the session routes, so the sessions runtime renders exactly as before. */
+  const pills = sessionRoute ? null : <AppNotifyPills items={appItems} dismissLabel={t('notif_dismiss')} />;
+
+  if (hidden) return pills;
 
   const deck = passive.length > 1 && !expanded;
   const actByKey = new Map(actionable.map((n) => [n.key, n]));
@@ -925,6 +947,7 @@ export default function NotificationStack({
   };
 
   return (
+    <>
     <Portal>
       <style>{`
         /* Enter: drop from the top on a spring, nudged in from the anchored edge on wide
@@ -1113,5 +1136,7 @@ export default function NotificationStack({
         </div>
       </div>
     </Portal>
+    {pills}
+    </>
   );
 }

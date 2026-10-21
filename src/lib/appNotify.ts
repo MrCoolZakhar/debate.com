@@ -14,10 +14,13 @@
 //
 //     notifyErr("Couldn't save, the change was reverted.")
 //
-// and get the corner card the live committee session uses — same store, same
-// renderer, same swipe and TTL rules. The bars those calls replaced pushed the
-// work down the page to report on it and then took the space back, which is
-// exactly the shape of thing a toast is for.
+// and get an outcome pill: the same store, TTLs and dedupe as the live committee
+// session's cards, but drawn by `AppNotifyPills` as a liquid glass pill rising
+// from the BOTTOM CENTRE of the screen (owner, 21 Oct 2026). On the session
+// routes (/chair, /delegate, /voting, /advisor) these keys keep the session's
+// own corner card, so nothing about the sessions runtime changes. The bars
+// those calls replaced pushed the work down the page to report on it and then
+// took the space back, which is exactly the shape of thing a toast is for.
 //
 // ── What these are NOT for ─────────────────────────────────────────────────
 //
@@ -46,8 +49,15 @@ import { notify, dismiss } from './sessionNotifications';
 const ERR_TTL_MS = 9_000;
 const OK_TTL_MS = 5_000;
 
-const errKey = (scope: string) => `app-err:${scope}`;
-const okKey = (scope: string) => `app-ok:${scope}`;
+const ERR_PREFIX = 'app-err:';
+const OK_PREFIX = 'app-ok:';
+const errKey = (scope: string) => `${ERR_PREFIX}${scope}`;
+const okKey = (scope: string) => `${OK_PREFIX}${scope}`;
+
+/** True for a card raised by `notifyErr` / `notifyOk`. The pill renderer draws exactly these. */
+export function isAppNotifyKey(key: string): boolean {
+  return key.startsWith(ERR_PREFIX) || key.startsWith(OK_PREFIX);
+}
 
 /**
  * Something the organiser tried did not work.

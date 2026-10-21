@@ -118,7 +118,7 @@ export default function DelegationsTab<M extends DelegationMemberLite>(props: De
         .select('id');
       if (error || !rows || rows.length !== 1) { notifyErr(friendlyError(error, 'That setting was not saved. Try again.'), 'applications'); return; }
       await refreshConferenceQuiet();
-      notifyOk(on ? 'Leaders can reshuffle their own seats.' : 'Only your team moves seats now.', 'applications');
+      notifyOk(on ? 'Leaders can reshuffle their own allocations.' : 'Only your team moves allocations now.', 'applications');
     } catch (e) {
       notifyErr(friendlyError(e, 'That setting was not saved. Try again.'), 'applications');
     } finally {
@@ -147,7 +147,7 @@ export default function DelegationsTab<M extends DelegationMemberLite>(props: De
         <div className="overflow-x-auto">
           <div style={{ minWidth: 900 }}>
             <div className="grid" style={{ gridTemplateColumns: GRID, gap: 16, padding: '14px 24px', borderBottom: `1px solid ${HAIRLINE}` }}>
-              {['Delegation', 'Expected', 'Joined', 'Paid', 'Seats given', ''].map((h, i) => (
+              {['Delegation', 'Expected', 'Joined', 'Paid', 'Allocations given', ''].map((h, i) => (
                 <span key={i} style={{ fontFamily: FONT, fontSize: 12, fontWeight: 500, color: INK_SOFT }}>{h}</span>
               ))}
             </div>
@@ -206,7 +206,7 @@ export default function DelegationsTab<M extends DelegationMemberLite>(props: De
                       <Link href={`/manage/${conference.slug}/assignment?mode=delegation-seats&society=${encodeURIComponent(r.id)}`}
                         className={BTN_CLASS} style={{ ...smallPrimaryBtn, textDecoration: 'none' }}
                         onClick={e => e.stopPropagation()}>
-                        Give seats
+                        Give allocations
                       </Link>
                     ) : (
                       <button type="button" className={BTN_CLASS} style={{ ...linkStyle, fontSize: 14 }}
@@ -221,7 +221,7 @@ export default function DelegationsTab<M extends DelegationMemberLite>(props: De
           </div>
         </div>
         {data.seatsUnavailable && (
-          <p style={{ padding: '12px 24px 4px', fontFamily: FONT, fontSize: 13, color: INK_SOFT }}>The seats could not be read just now, so seat counts may be out of date.</p>
+          <p style={{ padding: '12px 24px 4px', fontFamily: FONT, fontSize: 13, color: INK_SOFT }}>The allocations could not be read just now, so allocation counts may be out of date.</p>
         )}
       </div>
 
@@ -230,14 +230,14 @@ export default function DelegationsTab<M extends DelegationMemberLite>(props: De
         <div className="flex flex-col" style={{ ...cardStyle, padding: 22, gap: 14 }}>
           <div className="flex items-baseline gap-2 flex-wrap">
             <span style={{ fontFamily: FONT, fontSize: 30, fontWeight: 600, color: INK, fontVariantNumeric: 'tabular-nums', lineHeight: 1.1 }}>{totals.need}</span>
-            <span style={{ fontFamily: FONT, fontSize: 15, color: INK_SOFT }}>paid {totals.need === 1 ? 'spot' : 'spots'} without a seat</span>
+            <span style={{ fontFamily: FONT, fontSize: 15, color: INK_SOFT }}>paid {totals.need === 1 ? 'spot' : 'spots'} without an allocation</span>
           </div>
           <div className="flex flex-col" style={{ gap: 8, fontFamily: FONT, fontSize: 14 }}>
             {[
               ['Expected', totals.expected],
               ['Paid', totals.paid],
-              ['Seats given', totals.given],
-              ['Seats filled by a person', totals.filled],
+              ['Allocations given', totals.given],
+              ['Allocations filled by a person', totals.filled],
             ].map(([label, n]) => (
               <div key={label as string} className="flex justify-between gap-3">
                 <span style={{ color: INK_SOFT }}>{label}</span>
@@ -250,8 +250,8 @@ export default function DelegationsTab<M extends DelegationMemberLite>(props: De
         <div className="flex flex-col" style={{ ...cardStyle, padding: 22, gap: 12 }}>
           {DELEGATIONS_V2_DB && (
             <>
-              <span style={{ fontFamily: FONT, fontSize: 16, fontWeight: 600, color: INK }}>How many seats a delegation can get</span>
-              <div role="radiogroup" aria-label="How many seats a delegation can get" className="flex flex-col" style={{ gap: 8 }}>
+              <span style={{ fontFamily: FONT, fontSize: 16, fontWeight: 600, color: INK }}>How many allocations a delegation can get</span>
+              <div role="radiogroup" aria-label="How many allocations a delegation can get" className="flex flex-col" style={{ gap: 8 }}>
                 {SEAT_LIMIT_OPTIONS.map(o => {
                   const active = limit === o.value;
                   return (
@@ -284,7 +284,7 @@ export default function DelegationsTab<M extends DelegationMemberLite>(props: De
           )}
 
           <div className="flex items-center justify-between" style={{ gap: 12 }}>
-            <span id="dlg-reshuffle" style={{ fontFamily: FONT, fontSize: 14, color: INK }}>Leaders can reshuffle their seats</span>
+            <span id="dlg-reshuffle" style={{ fontFamily: FONT, fontSize: 14, color: INK }}>Leaders can reshuffle their allocations</span>
             <button
               type="button"
               role="switch"

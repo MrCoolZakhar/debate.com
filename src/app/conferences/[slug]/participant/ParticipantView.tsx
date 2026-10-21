@@ -30,6 +30,7 @@ import ApplyPointer from './ApplyPointer';
 import ConferenceDocsSection, { useConferenceDocs, docForRole, DOC_READER_STATUSES } from './ConferenceDocsSection';
 import ConferenceDocsExtra, { useMyConferenceDocs, requiredOutstanding, DocsRequiredNotice } from './ConferenceDocsExtra';
 import DelegationLead, { liveRoomCode } from './delegation/DelegationLead';
+import LeaderOverview from './delegation/overview/LeaderOverview';
 import type { ParticipantApplication, ParticipantRoleConfig, ParticipantAllocation, ParticipantCommittee } from './types';
 import { friendlyError, UserFacingError } from '@/lib/friendlyError';
 
@@ -435,10 +436,33 @@ export default function ParticipantView({
     paymentsReady,
   });
 
+  // Opens another section from Overview (a leader's recap): the desktop
+  // switches section, the phone page scrolls to it.
+  const openSection = (key: string) => {
+    selectSection(key);
+    window.setTimeout(() => {
+      document.getElementById(`you-${key}`)?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+    }, 60);
+  };
+
   // The next step at the top of Overview for anyone in a delegation (Join
   // session while the room is live, documents needed back). An advisor holds
-  // no seat, so their Overview always says where things stand.
-  const delegationLead = delegationOverview ? (
+  // no seat, so their Overview always says where things stand. A leader (head
+  // delegate or faculty advisor) gets the recap under it (LeaderOverview,
+  // owner, 21 Oct 2026).
+  const delegationLead = delegationOverview && isLeader && selected.society_id ? (
+    <LeaderOverview
+      conferenceId={conferenceId}
+      societyId={selected.society_id}
+      step={nextStep}
+      status={selected.status}
+      roomCode={isDelegateRole ? liveRoomCode(myAllocation, conferenceStartDate) : null}
+      notice={docsNotice}
+      showDone={selected.role === 'faculty-advisor'}
+      active={activeSection === 'overview'}
+      onOpenSection={openSection}
+    />
+  ) : delegationOverview ? (
     <DelegationLead
       step={nextStep}
       status={selected.status}

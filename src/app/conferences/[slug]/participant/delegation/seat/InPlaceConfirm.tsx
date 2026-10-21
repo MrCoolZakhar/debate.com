@@ -1,7 +1,7 @@
 'use client';
 
 // A small confirm asked IN PLACE, anchored to the thing it is about (the row a
-// seat was dropped on, the Take out of seat button). Never a modal and never on
+// seat was dropped on, the Unallocate button). Never a modal and never on
 // top of another pop-up (CLAUDE.md Owner Decisions): a Portal card at fixed
 // coordinates under the anchor, flipped above it near the bottom edge, kept on
 // screen, following the anchor on scroll and resize, closed by Cancel, Escape

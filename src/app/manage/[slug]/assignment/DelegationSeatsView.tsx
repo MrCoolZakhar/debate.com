@@ -1,7 +1,7 @@
 'use client';
 
-// "Give seats" (3C, docs/conferences/delegations.md): the organiser gives seats
-// to delegations by tapping. Mounted by the assignment page for
+// "Give allocations" (3C, docs/conferences/delegations.md): the organiser gives
+// allocations to delegations by tapping. Mounted by the assignment page for
 // ?mode=delegation-seats[&society=<id>].
 //
 // Left: the conference's delegations, each with the paid spots still needing a
@@ -12,7 +12,14 @@
 // (delegationSeatWrites.ts); a refusal puts the cell back and says why.
 //
 // Reads are keyed on the user id and get their client at call time; a re-read
-// never blanks the screen. Section access is the manage layout's gate, as for
+// never blanks the screen.
+//
+// Live (owner, 21 Oct 2026): conference_allocations is not in Realtime, so a
+// leader allocating, unallocating or swapping inside their delegation reaches
+// this page through a quiet re-read every 10 s while the tab is visible and on
+// focus (useLiveRefresh). It swaps the data in place, says nothing when it
+// fails, stands down while a give or take back runs, and a quiet read that
+// started before one of those writes is dropped. Section access is the manage layout's gate, as for
 // the rest of the assignment page.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -35,6 +42,7 @@ import {
 } from '@/app/manage/[slug]/assignment/delegationSeatsGrid';
 import { giveSeats, takeBackSeats } from '@/app/manage/[slug]/assignment/delegationSeatWrites';
 import DelegationPopupLink from '@/app/manage/[slug]/DelegationPopupLink';
+import { keepIfSame, useLiveRefresh } from '@/app/manage/[slug]/applications/delegations/useLiveRefresh';
 
 // ── Look ─────────────────────────────────────────────────────────────────────
 
@@ -120,10 +128,15 @@ export default function DelegationSeatsView({ conference, initialSocietyId, onSi
   const busyRef = useRef<Set<string>>(new Set());
   const loadSeq = useRef(0);
   const loadedOnce = useRef(false);
+  /** Gives and take backs still running, and the count ever started. */
+  const writesInFlight = useRef(0);
+  const writeEpoch = useRef(0);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (opts?: { quiet?: boolean }) => {
     if (!userId) return;
+    const quiet = !!opts?.quiet;
     const seq = ++loadSeq.current;
+    const epoch = writeEpoch.current;
     const c = await getFreshAuthedClient();
     if (!c || seq !== loadSeq.current) return;
     const [socRes, comRes, appRes, invRes] = await Promise.all([
@@ -144,9 +157,13 @@ export default function DelegationSeatsView({ conference, initialSocietyId, onSi
         .range(from, to)),
     ]);
     if (seq !== loadSeq.current) return;
+    // A quiet read that a local write overtook would undo it on screen: dropped.
+    if (quiet && (epoch !== writeEpoch.current || writesInFlight.current > 0)) return;
     const err = socRes.error ?? comRes.error ?? appRes.error ?? invRes.error;
     if (err) {
-      const msg = friendlyError(err, 'The seats could not be loaded.');
+      // A quiet read that fails keeps what is on screen and says nothing.
+      if (quiet) return;
+      const msg = friendlyError(err, 'The allocations could not be loaded.');
       // A re-read that fails keeps what is on screen; only a first load shows the failure.
       if (loadedOnce.current) notifyErr(msg, 'delegation-seats-load');
       else setLoadFailed(true);
@@ -154,10 +171,29 @@ export default function DelegationSeatsView({ conference, initialSocietyId, onSi
     }
     loadedOnce.current = true;
     setLoadFailed(false);
-    setSocieties((socRes.data ?? []) as GridSociety[]);
-    setCommittees((comRes.data ?? []) as unknown as GridCommittee[]);
-    setPaid(paidSpotsBySociety(appRes.data, invRes.data.map(r => r.application_id)));
+    const nextSocieties = (socRes.data ?? []) as GridSociety[];
+    const nextCommittees = (comRes.data ?? []) as unknown as GridCommittee[];
+    const nextPaid = paidSpotsBySociety(appRes.data, invRes.data.map(r => r.application_id));
+    setSocieties(prev => (prev === null ? nextSocieties : keepIfSame(prev, nextSocieties)));
+    setCommittees(prev => keepIfSame(prev, nextCommittees));
+    setPaid(prev => (sameCounts(prev, nextPaid) ? prev : nextPaid));
   }, [userId, conference.id]);
+
+  /** Wraps a give or a take back: the live re-read stands down until it settles. */
+  const trackWrite = useCallback(async <T,>(work: () => Promise<T>): Promise<T> => {
+    writesInFlight.current += 1;
+    writeEpoch.current += 1;
+    try {
+      return await work();
+    } finally {
+      writesInFlight.current -= 1;
+    }
+  }, []);
+
+  useLiveRefresh(() => load({ quiet: true }), {
+    enabled: !!userId && !loadFailed,
+    paused: () => writesInFlight.current > 0 || busyRef.current.size > 0,
+  });
 
   useEffect(() => {
     const t = setTimeout(() => { void load(); }, 0);
@@ -222,7 +258,7 @@ export default function DelegationSeatsView({ conference, initialSocietyId, onSi
       const add = temps.filter(t => t.committeeId === c.id).map(t => t.row);
       return add.length ? { ...c, conference_allocations: [...c.conference_allocations, ...add] } : c;
     }));
-    const r = await giveSeats({ conferenceId: conference.id, societyId, slots });
+    const r = await trackWrite(() => giveSeats({ conferenceId: conference.id, societyId, slots }));
     if (!r.ok) {
       setCommittees(prev => prev.map(c => ({ ...c, conference_allocations: c.conference_allocations.filter(a => !tempIds.has(a.id)) })));
       notifyErr(r.error, 'delegation-seats');
@@ -230,7 +266,7 @@ export default function DelegationSeatsView({ conference, initialSocietyId, onSi
     // The real ids come from the re-read; the cells stay busy until it lands.
     await load();
     markBusy(keys, false);
-  }, [selected, conference.id, load, markBusy]);
+  }, [selected, conference.id, load, markBusy, trackWrite]);
 
   const takeBack = useCallback(async (committeeId: string, code: string, allocationIds: string[]) => {
     if (!selected) return;
@@ -242,7 +278,7 @@ export default function DelegationSeatsView({ conference, initialSocietyId, onSi
     setCommittees(prev => prev.map(c => (c.id === committeeId
       ? { ...c, conference_allocations: c.conference_allocations.filter(a => !ids.has(a.id)) }
       : c)));
-    const r = await takeBackSeats({ societyId: selected.id, allocationIds });
+    const r = await trackWrite(() => takeBackSeats({ societyId: selected.id, allocationIds }));
     if (!r.ok) {
       setCommittees(prev => prev.map(c => (c.id === committeeId
         ? { ...c, conference_allocations: [...c.conference_allocations.filter(a => !ids.has(a.id)), ...back] }
@@ -251,16 +287,16 @@ export default function DelegationSeatsView({ conference, initialSocietyId, onSi
     }
     await load();
     markBusy([key], false);
-  }, [selected, committees, load, markBusy]);
+  }, [selected, committees, load, markBusy, trackWrite]);
 
   // ── Render ──
 
   const header = (
     <div className="flex items-end justify-between gap-4 flex-wrap">
       <h1 style={{ margin: 0, color: INK, fontFamily: OUTFIT, fontWeight: 600, fontSize: 'clamp(28px, 2.4vw, 36px)', letterSpacing: '-0.015em', lineHeight: 1.1 }}>
-        Give <GoldWord>seats</GoldWord>
+        Give <GoldWord>allocations</GoldWord>
       </h1>
-      <div role="tablist" aria-label="Who gets seats" className="inline-flex" style={{ gap: 2, padding: 3, borderRadius: 12, background: '#E3DCCB' }}>
+      <div role="tablist" aria-label="Who gets allocations" className="inline-flex" style={{ gap: 2, padding: 3, borderRadius: 12, background: '#E3DCCB' }}>
         <button
           type="button" role="tab" aria-selected
           className="focus:outline-none"
@@ -293,7 +329,7 @@ export default function DelegationSeatsView({ conference, initialSocietyId, onSi
   if (loadFailed) {
     return shell(
       <div style={{ ...CARD, padding: 28 }} className="flex items-center justify-between gap-4 flex-wrap">
-        <span style={{ fontFamily: OUTFIT, fontSize: 15, color: INK }}>The seats could not be loaded.</span>
+        <span style={{ fontFamily: OUTFIT, fontSize: 15, color: INK }}>The allocations could not be loaded.</span>
         <button type="button" onClick={() => { void load(); }} className="focus:outline-none" style={primaryBtn}>Try again</button>
       </div>,
     );
@@ -326,7 +362,7 @@ export default function DelegationSeatsView({ conference, initialSocietyId, onSi
       {/* Delegations */}
       <div className="flex flex-col lg:w-[300px] flex-none max-h-[320px] lg:max-h-none" style={{ ...CARD, padding: 16, gap: 4, minHeight: 0 }}>
         <span style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 500, color: INK_SOFT, padding: '4px 8px 8px' }}>
-          Pick a delegation, then tap seats
+          Pick a delegation, then tap allocations
         </span>
         <div className="flex flex-col overflow-y-auto" style={{ gap: 4, minHeight: 0 }}>
           {summaries.map(s => {
@@ -348,8 +384,8 @@ export default function DelegationSeatsView({ conference, initialSocietyId, onSi
                   <span className="[overflow-wrap:anywhere]" style={{ fontSize: 15, fontWeight: 600, color: INK }}>{s.society.name}</span>
                   <span style={{ fontSize: 12, color: s.need > 0 ? OWE : INK_SOFT }}>
                     {s.need > 0
-                      ? `${s.need} paid ${s.need === 1 ? 'spot still needs' : 'spots still need'} a seat`
-                      : s.paid > 0 ? 'Every paid spot has a seat' : 'No paid spots yet'}
+                      ? `${s.need} paid ${s.need === 1 ? 'spot still needs' : 'spots still need'} an allocation`
+                      : s.paid > 0 ? 'Every paid spot has an allocation' : 'No paid spots yet'}
                   </span>
                 </span>
               </button>
@@ -368,8 +404,8 @@ export default function DelegationSeatsView({ conference, initialSocietyId, onSi
                 <DelegationPopupLink societyId={selected.id} tab="people" onClosed={() => { void load(); }}>{selected.name}</DelegationPopupLink>{' '}
                 <span style={{ fontWeight: 400, color: INK_SOFT }}>
                   {selectedSummary.paid > 0
-                    ? `· ${selectedSummary.given} of ${selectedSummary.paid} paid spots have a seat`
-                    : `· ${selectedSummary.given} ${selectedSummary.given === 1 ? 'seat' : 'seats'} given, no paid spots yet`}
+                    ? `· ${selectedSummary.given} of ${selectedSummary.paid} paid spots have an allocation`
+                    : `· ${selectedSummary.given} ${selectedSummary.given === 1 ? 'allocation' : 'allocations'} given, no paid spots yet`}
                 </span>
               </span>
               <div
@@ -377,13 +413,13 @@ export default function DelegationSeatsView({ conference, initialSocietyId, onSi
                 aria-valuemin={0}
                 aria-valuemax={selectedSummary.paid}
                 aria-valuenow={Math.min(selectedSummary.given, selectedSummary.paid)}
-                aria-label="Paid spots with a seat"
+                aria-label="Paid spots with an allocation"
                 style={{ height: 8, borderRadius: 99, background: '#EAE4D6', overflow: 'hidden' }}
               >
                 <div style={{ width: `${Math.round(progress * 100)}%`, height: '100%', background: FOREST, transition: 'width 200ms ease' }} />
               </div>
             </div>
-            <span style={{ fontFamily: OUTFIT, fontSize: 14, color: INK_SOFT }}>Tap a free seat to give it, tap again to take it back</span>
+            <span style={{ fontFamily: OUTFIT, fontSize: 14, color: INK_SOFT }}>Tap a free allocation to give it, tap again to take it back</span>
             <Link href={doneHref} className="focus:outline-none" style={primaryBtn}>Done</Link>
           </div>
         )}
@@ -476,7 +512,7 @@ function GridRowView({ row, committees, selected, busy, onGive, onTakeBack }: {
           <button
             type="button"
             onClick={() => onGive(freeIdle)}
-            aria-label={`Give every free ${row.name} seat to ${selected.name}`}
+            aria-label={`Give every free ${row.name} allocation to ${selected.name}`}
             className="focus:outline-none"
             style={{ border: 0, background: 'transparent', padding: '4px 2px', fontFamily: OUTFIT, fontSize: 12, fontWeight: 700, color: FOREST, textDecoration: 'underline', whiteSpace: 'nowrap', cursor: 'pointer' }}
           >
@@ -586,4 +622,10 @@ function Cell({ cell, committee, countryName, countryCode, selected, isBusy, onG
   }
 
   return <div aria-hidden style={{ height: CELL_H }} />;
+}
+
+function sameCounts(a: Map<string, number>, b: Map<string, number>): boolean {
+  if (a.size !== b.size) return false;
+  for (const [k, v] of a) if (b.get(k) !== v) return false;
+  return true;
 }

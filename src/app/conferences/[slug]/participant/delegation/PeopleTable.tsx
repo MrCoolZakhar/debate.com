@@ -24,7 +24,7 @@
 //     member with no seat: the seat moves to them (moveSeat, DELEGATIONS_V2_DB and
 //     'self_serve' only). The keyboard way is "Switch with…" in the row menu.
 //   * The seat cell's icon buttons, DELEGATIONS_V2_DB only: Upload position paper
-//     and Take out of seat (asked in place); "Place in a seat" for a member with
+//     and Unallocate (asked in place); "Allocate" for a member with
 //     no seat opens the row menu's place step.
 // Every seat change shows at once (a patch over the rows, and the Open seats
 // card through seat/pendingSeats), then the write; a refusal puts the rows
@@ -119,7 +119,7 @@ interface Ask {
   onYes: () => void;
 }
 
-const seatWords = (s: Seat) => `${s.country_name ?? 'Their seat'} · ${s.committee_label}`;
+const seatWords = (s: Seat) => `${s.country_name ?? 'Their allocation'} · ${s.committee_label}`;
 const seatLabel = (s: Seat) => `${s.committee_label}: ${s.country_name ?? ''}`;
 
 function seatFromOpen(s: OpenSeat | PendingOpenSeat): Seat {
@@ -152,7 +152,7 @@ function openFromSeat(s: Seat): PendingOpenSeat {
   };
 }
 
-export default function PeopleTable({ rows, societyId, societyName, conferenceId, openSeats, onChanged, swap, allocationSwapMode }: {
+export default function PeopleTable({ rows, societyId, societyName, conferenceId, openSeats, onChanged, swap, allocationSwapMode, headerAction }: {
   rows: PersonRow[];
   societyId: string;
   /** For the swap request's subject; "this delegation" until LeaderCard passes it. */
@@ -166,6 +166,8 @@ export default function PeopleTable({ rows, societyId, societyName, conferenceId
   swap: { on: boolean; selected: string[]; toggle: (applicationId: string) => void };
   /** conferences.allocation_swap_mode; read here once when not passed. */
   allocationSwapMode?: string;
+  /** Drawn beside Search people in the header (the leader card's Swap allocations). */
+  headerAction?: React.ReactNode;
 }) {
   const [query, setQuery] = useState('');
   const mode = useSwapMode(conferenceId, allocationSwapMode);
@@ -263,7 +265,7 @@ export default function PeopleTable({ rows, societyId, societyName, conferenceId
   const switchCopy = useCallback((fromId: string, toId: string) => {
     const a = rowOf(fromId);
     const b = rowOf(toId);
-    if (!a?.seat || !b) return { title: 'Switch these seats?', line: null, yes: 'Switch' };
+    if (!a?.seat || !b) return { title: 'Switch these allocations?', line: null, yes: 'Switch' };
     if (b.seat) {
       return {
         title: `Switch ${seatWords(a.seat)} (${a.name}) and ${seatWords(b.seat)} (${b.name})?`,
@@ -271,7 +273,7 @@ export default function PeopleTable({ rows, societyId, societyName, conferenceId
         yes: mode === 'request' ? 'Request switch' : 'Switch',
       };
     }
-    return { title: `Move ${seatWords(a.seat)} from ${a.name} to ${b.name}?`, line: `${a.name} stays in the delegation with no seat.`, yes: 'Move' };
+    return { title: `Move ${seatWords(a.seat)} from ${a.name} to ${b.name}?`, line: `${a.name} stays in the delegation with no allocation.`, yes: 'Move' };
   }, [rowOf, mode]);
 
   const doSwitch = useCallback((fromId: string, toId: string) => {
@@ -297,14 +299,14 @@ export default function PeopleTable({ rows, societyId, societyName, conferenceId
       void runOp({
         patch: { [a.application_id]: { seat: { v: bSeat } }, [b.application_id]: { seat: { v: aSeat } } },
         work: () => switchSeats({ conferenceId, societyId, societyName: societyName ?? null, mode: 'self_serve', ...sides }),
-        ok: `${a.name} and ${b.name} switched seats.`,
+        ok: `${a.name} and ${b.name} switched allocations.`,
       });
       return;
     }
     void runOp({
       patch: { [a.application_id]: { seat: { v: null } }, [b.application_id]: { seat: { v: aSeat } } },
       work: () => moveSeat(a.application_id, b.application_id),
-      ok: `${b.name} is now in ${aSeat.country_name ?? 'that seat'}.`,
+      ok: `${b.name} is now in ${aSeat.country_name ?? 'that allocation'}.`,
     });
   }, [rowOf, canDropOn, mode, runOp, conferenceId, societyId, societyName]);
 
@@ -334,7 +336,7 @@ export default function PeopleTable({ rows, societyId, societyName, conferenceId
       patch: { [id]: { seat: { v: null } } },
       pending: { show: openFromSeat(r.seat) },
       work: () => unplaceMember(id),
-      ok: r.is_me ? 'You are out of your seat. It stays open for the delegation.' : `${r.name} is out of their seat. It stays open for the delegation.`,
+      ok: r.is_me ? 'You are unallocated. Your allocation stays with the delegation as an open allocation.' : `${r.name} is unallocated. Their allocation stays with the delegation as an open allocation.`,
     });
   }, [rowOf, runOp]);
 
@@ -343,9 +345,9 @@ export default function PeopleTable({ rows, societyId, societyName, conferenceId
     if (!r?.seat) return;
     setAsk({
       anchor, align: 'end',
-      title: r.is_me ? 'Take yourself out of your seat?' : `Take ${r.name} out of their seat?`,
-      line: 'The seat stays with the delegation as an open seat.',
-      yes: 'Take out of seat', danger: true,
+      title: r.is_me ? 'Unallocate yourself?' : `Unallocate ${r.name}?`,
+      line: r.is_me ? 'Your allocation stays with the delegation as an open allocation.' : 'Their allocation stays with the delegation as an open allocation.',
+      yes: 'Unallocate', danger: true,
       onYes: () => { setAsk(null); doUnplace(id); },
     });
   }, [rowOf, doUnplace]);
@@ -397,10 +399,10 @@ export default function PeopleTable({ rows, societyId, societyName, conferenceId
     : [];
   const switchOffReason = canSwitchSeated || canMoveToEmpty
     ? 'Nobody to switch with right now'
-    : 'Your conference does not let leaders switch seats';
+    : 'Your conference does not let leaders switch allocations';
 
   const grid = DELEGATIONS_V2_DB ? GRID_V2 : GRID;
-  const heads = DELEGATIONS_V2_DB ? ['Person', 'Seat', 'Position paper', 'Payment'] : ['Person', 'Seat', 'Payment'];
+  const heads = DELEGATIONS_V2_DB ? ['Person', 'Allocation', 'Position paper', 'Payment'] : ['Person', 'Allocation', 'Payment'];
   const hasOpenSeats = (shownOpenSeats?.length ?? 0) > 0;
   const seatToolsOn = DELEGATIONS_V2_DB && !swap.on;
 
@@ -408,6 +410,7 @@ export default function PeopleTable({ rows, societyId, societyName, conferenceId
     <section className="@container min-w-0" style={{ ...cardStyle, padding: '8px 0 12px' }} aria-label="People">
       <div className="flex items-center justify-between gap-3 flex-wrap" style={{ padding: '16px 24px 12px' }}>
         <h2 style={{ fontFamily: FONT, fontSize: 19, fontWeight: 600, color: INK, margin: 0 }}>People</h2>
+        <div className="flex items-center gap-2.5 flex-wrap min-w-0">
         {rows.length > 4 && (
           <label className="inline-flex items-center gap-2" style={{ height: 40, padding: '0 12px', borderRadius: 10, background: '#F6F2EA', color: INK_SOFT, width: 240, maxWidth: '100%' }}>
             <Search size={17} strokeWidth={STROKE} aria-hidden style={{ flexShrink: 0 }} />
@@ -422,6 +425,8 @@ export default function PeopleTable({ rows, societyId, societyName, conferenceId
             />
           </label>
         )}
+        {headerAction}
+        </div>
       </div>
 
       <div aria-hidden className={`hidden @[760px]:grid ${grid} gap-3`} style={{ padding: '8px 24px', borderBottom: `1px solid ${LINE}` }}>

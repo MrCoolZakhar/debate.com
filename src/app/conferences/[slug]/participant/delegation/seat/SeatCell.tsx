@@ -4,10 +4,10 @@
 // country's round flag big (56px) with the country's name centred under it,
 // wrapping, never cut; beside that block, vertically centred, the committee's
 // round emblem smaller (28px) with its acronym, which stays the link that opens
-// the committee. Then the seat's small icon buttons (Take out of seat, Upload
+// the committee. Then the seat's small icon buttons (Unallocate, Upload
 // position paper, DELEGATIONS_V2_DB only). A seated member's block can be
 // dragged onto another person's row (useSeatDrag); a finger drags from the
-// grip. A member with no seat shows "Place in a seat" when there is one to give.
+// grip. A member with no seat shows "Allocate" when there is one to give.
 
 import { useRef } from 'react';
 import { Armchair, CircleMinus, FileUp, GripVertical } from 'lucide-react';
@@ -63,7 +63,7 @@ export default function SeatCell({
     }
     return (
       <span style={{ fontFamily: FONT, fontSize: 14, color: INK_SOFT }}>
-        {role === 'faculty-advisor' ? 'Advisors have no seat' : 'No seat yet'}
+        {role === 'faculty-advisor' ? 'Advisors have no allocation' : 'No allocation yet'}
       </span>
     );
   }
@@ -73,7 +73,7 @@ export default function SeatCell({
       {draggable && (
         <span
           aria-hidden
-          title="Drag onto another person to switch seats"
+          title="Drag onto another person to switch allocations"
           onPointerDown={(e) => onDragStart(e, true)}
           className="inline-flex items-center justify-center flex-shrink-0"
           style={{ width: 20, height: 44, marginLeft: -6, color: 'color-mix(in srgb, var(--gv-main) 35%, transparent)', cursor: 'grab', touchAction: 'none' }}
@@ -122,7 +122,7 @@ export default function SeatCell({
             </IconBtn>
           )}
           {onTakeOut && (
-            <IconBtn label="Take out of seat" onPress={onTakeOut} disabled={busy}>
+            <IconBtn label="Unallocate" onPress={onTakeOut} disabled={busy}>
               <CircleMinus size={17} strokeWidth={STROKE} aria-hidden />
             </IconBtn>
           )}
@@ -144,7 +144,7 @@ function PlaceButton({ onPlace, disabled }: { onPlace: (anchor: HTMLElement) => 
       style={{ minHeight: 40, padding: '0 12px', borderRadius: 10, border: '1px dashed color-mix(in srgb, var(--gv-main) 30%, transparent)', background: 'transparent', color: FOREST, fontFamily: FONT, fontSize: 13.5, fontWeight: 600, cursor: disabled ? 'default' : 'pointer', opacity: disabled ? 0.5 : 1 }}
     >
       <Armchair size={17} strokeWidth={STROKE} aria-hidden />
-      Place in a seat
+      Allocate
     </button>
   );
 }

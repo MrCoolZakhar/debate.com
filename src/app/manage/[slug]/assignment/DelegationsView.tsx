@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { ChevronLeft, Check, CheckCircle2, CircleDashed, Clock, Trash2 } from 'lucide-react';
-import { getAuthedClient } from '@/lib/supabase-auth';
+import { getAuthedClient, getFreshAuthedClient } from '@/lib/supabase-auth';
 import { useAuth } from '@/components/AuthProvider';
 import { isPaymentsLive } from '@/lib/payments';
 import type { Conference } from '@/app/manage/[slug]/layout';
@@ -21,6 +21,7 @@ import { NEU, NEU_GRADIENTS, NeuCard, NeuInset, NeuButton, NeuIconDisc } from '@
 import { StackedName, committeeShortName, byAppliedAt } from '@/app/manage/[slug]/assignment/displayNames';
 import { Users } from 'lucide-react';
 import DelegationPopupLink from '@/app/manage/[slug]/DelegationPopupLink';
+import { keepIfSame, useLiveRefresh } from '@/app/manage/[slug]/applications/delegations/useLiveRefresh';
 
 function isHeadDelegate(m: PoolMember): boolean {
   return m.is_head_delegate || m.role === 'head-delegate';
@@ -287,6 +288,75 @@ export default function DelegationsView({ conference, showFlash, initialSocietyI
   // Started a microtask later so no state is set synchronously in the effect.
   useEffect(() => { void Promise.resolve().then(() => loadData()); }, [loadData]);
 
+  // Live (owner, 21 Oct 2026): conference_allocations is not in Realtime, so a
+  // leader allocating, unallocating or swapping inside their delegation reaches
+  // this page through a quiet re-read every 10 s while the tab is visible and
+  // on focus (useLiveRefresh). It reads the delegations and their members only
+  // (never the search pools), swaps them in place with no loader, keeps what is
+  // on screen when any read fails, stands down while a write, a drag, a
+  // selection or a confirm is open, and drops itself when a write started
+  // while it was reading. Its client is fetched at call time.
+  const busyCountRef = useRef(0);
+  const writeEpochRef = useRef(0);
+  const loadingRef = useRef(loading);
+  const holdRef = useRef(false);
+  const liveHold = !!dragMemberId || !!selectedMemberId || !!swapConfirm || !!advisorTransferPicker;
+  useEffect(() => {
+    loadingRef.current = loading;
+    holdRef.current = liveHold;
+  }, [loading, liveHold]);
+
+  const quietLoad = useCallback(async () => {
+    if (!conference) return;
+    const seq = ++loadSeqRef.current;
+    const epoch = writeEpochRef.current;
+    const supabase = await getFreshAuthedClient();
+    if (!supabase || seq !== loadSeqRef.current) return;
+    const [socRes, memberRes, swapReqRes, allSocietyAppsRes] = await Promise.all([
+      supabase.from('societies')
+        .select('id, name, spots_purchased, advisor_spots_purchased')
+        .eq('conference_id', conference.id)
+        .order('name', { ascending: true }),
+      supabase.from('applications')
+        .select(POOL_MEMBER_SELECT)
+        .eq('conference_id', conference.id)
+        .in('status', ['accepted', 'assigned'])
+        .not('society_id', 'is', null),
+      supabase.from('conference_requests')
+        .select('metadata')
+        .eq('conference_id', conference.id)
+        .in('kind', ['swap_request', 'swap_notice'])
+        .eq('seen_by_organizer', false),
+      supabase.from('applications')
+        .select('society_id')
+        .eq('conference_id', conference.id)
+        .not('society_id', 'is', null),
+    ]);
+    if (seq !== loadSeqRef.current) return;
+    if (epoch !== writeEpochRef.current || busyCountRef.current > 0) return;
+    if (socRes.error || memberRes.error || swapReqRes.error || allSocietyAppsRes.error) return;
+    const nextSocieties = (socRes.data ?? []) as unknown as Society[];
+    const nextMembers = (memberRes.data ?? []) as unknown as PoolMember[];
+    setSocieties(prev => keepIfSame(prev, nextSocieties));
+    setMembers(prev => keepIfSame(prev, nextMembers));
+    const countMap = new Map<string, number>();
+    for (const row of (allSocietyAppsRes.data ?? []) as { society_id: string }[]) {
+      countMap.set(row.society_id, (countMap.get(row.society_id) ?? 0) + 1);
+    }
+    setSocietyAppCounts(prev => (sameCounts(prev, countMap) ? prev : countMap));
+    const unseen = new Set(
+      ((swapReqRes.data ?? []) as { metadata: { society_id?: string } }[])
+        .map(r => r.metadata?.society_id)
+        .filter((id): id is string => !!id),
+    );
+    setUnseenSwapSocietyIds(prev => (prev.size === unseen.size && [...prev].every(id => unseen.has(id)) ? prev : unseen));
+  }, [conference]);
+
+  useLiveRefresh(quietLoad, {
+    enabled: !!accessToken,
+    paused: () => loadingRef.current || busyCountRef.current > 0 || holdRef.current || !!document.querySelector('[aria-modal="true"]'),
+  });
+
   // Opening a delegation marks its pending swap_request/swap_notice rows
   // seen, optimistic locally, fire-and-forget on the DB.
   function handleExpandSociety(societyId: string) {
@@ -325,6 +395,9 @@ export default function DelegationsView({ conference, showFlash, initialSocietyI
   // its own key is busy, and the relevant chip/button dims via busyIds.has(...).
   const [busyIds, setBusyIds] = useState<Set<string>>(new Set());
   function markBusy(id: string, busy: boolean) {
+    // The live re-read stands down while a write runs and drops a read it overtook.
+    if (busy) { busyCountRef.current += 1; writeEpochRef.current += 1; }
+    else busyCountRef.current = Math.max(0, busyCountRef.current - 1);
     setBusyIds(prev => {
       const next = new Set(prev);
       if (busy) next.add(id); else next.delete(id);
@@ -1217,4 +1290,10 @@ export default function DelegationsView({ conference, showFlash, initialSocietyI
       {confirmModal}
     </div>
   );
+}
+
+function sameCounts(a: Map<string, number>, b: Map<string, number>): boolean {
+  if (a.size !== b.size) return false;
+  for (const [k, v] of a) if (b.get(k) !== v) return false;
+  return true;
 }
