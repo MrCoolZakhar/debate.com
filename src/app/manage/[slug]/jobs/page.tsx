@@ -22,7 +22,8 @@ import { NEU, OUTFIT } from '@/components/neu';
 import { notifyErr, notifyOk } from '@/lib/appNotify';
 import { replaceUrlInPlace } from '@/lib/replaceUrlInPlace';
 import { STORE_CSS } from '../store/storeKit';
-import { ICON_STROKE, JOB_KIT_CSS, BoardCard, JobCount } from './jobKit';
+import { CARD_ACCENT, ICON_STROKE, JOB_KIT_CSS, BoardCard, EmptyArt, JobCount, RoleBand } from './jobKit';
+import type { JobRole } from '@/lib/jobBoard';
 import ListingRow, { ROW_CSS } from './ListingRow';
 import PostingPopup, { type ShortRequest } from './PostingPopup';
 import PromotePopup from './PromotePopup';
@@ -111,6 +112,12 @@ export default function JobBoardPage() {
     [panel],
   );
 
+  const liveByRole = useMemo(() => {
+    const n: Record<JobRole, number> = { chair: 0, secretariat: 0, staff: 0 };
+    for (const l of listings) if (l.shown === 'live' && l.role in n) n[l.role] += 1;
+    return n;
+  }, [listings]);
+
   const handOffShort = useCallback((req: ShortRequest) => {
     setPopup(null);
     topUp({ need: req.need, retry: req.retry, okMessage: req.okMessage, onSettled: () => { void reload(); } });
@@ -192,15 +199,19 @@ export default function JobBoardPage() {
                 onLater={() => { setOnboardingDone(true); void reload(); }}
               />
             ) : listings.length === 0 ? (
-              <div className="gv-jb-first">
-                <p className="gv-jb-first-title">Post your first listing</p>
-                <p className="gv-jb-first-line">Listings are free when people apply on Gavelling, as many as you like</p>
-                {/* The header carries the one solid forest button of the view. */}
-                <button type="button" className="gv-st-btn gv-st-outline" onClick={() => setPopup({ kind: 'post', listing: null })}>
-                  <Plus size={16} strokeWidth={ICON_STROKE} aria-hidden /> Post a listing
-                </button>
-              </div>
+              <EmptyArt image="/onboarding/hall-01.jpg">
+                <div className="gv-jb-first">
+                  <p className="gv-jb-first-title">Post your first listing</p>
+                  <p className="gv-jb-first-line">Listings are free when people apply on Gavelling, as many as you like</p>
+                  {/* The header carries the one solid forest button of the view. */}
+                  <button type="button" className="gv-st-btn gv-st-outline" onClick={() => setPopup({ kind: 'post', listing: null })}>
+                    <Plus size={16} strokeWidth={ICON_STROKE} aria-hidden /> Post a listing
+                  </button>
+                </div>
+              </EmptyArt>
             ) : (
+              <>
+              <RoleBand live={liveByRole} />
               <ul className="gv-jb-list">
                 {listings.map((l) => (
                   <ListingRow
@@ -213,6 +224,7 @@ export default function JobBoardPage() {
                   />
                 ))}
               </ul>
+              </>
             )}
           </BoardCard>
           <SentInvitesCard confId={conference.id} refreshKey={invitesKey} />
@@ -306,6 +318,7 @@ function DigestCard({ slug, digest, err, onRetry }: {
       title="Applicants"
       hint="New applicants who came through your listings, and how often the listings were seen this week. Chair applications open in Applications; secretariat and staff in Settings, Team"
       icon={BarChart3}
+      accent={CARD_ACCENT.forest}
     >
       {err && !digest ? (
         <p className="gv-st-err" role="alert">{err} <button type="button" className="gv-st-link" onClick={onRetry}>Try again</button></p>
@@ -427,7 +440,7 @@ const PAGE_CSS = `
 @media (min-width:1600px){.gv-jb-grid{grid-template-columns:minmax(0,1fr) minmax(360px,440px)}}
 .gv-jb-side{display:flex;flex-direction:column;gap:34px;min-width:0}
 .gv-jb-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:12px}
-.gv-jb-first{display:flex;flex-direction:column;align-items:flex-start;gap:10px;padding:24px 4px 8px}
+.gv-jb-first{display:flex;flex-direction:column;align-items:flex-start;gap:10px;padding:4px 4px 8px}
 .gv-jb-first-title{margin:0;font-family:${OUTFIT};font-size:22px;font-weight:800;color:${INK}}
 .gv-jb-first-line{margin:0 0 6px;font-family:${OUTFIT};font-size:15px;color:${INK_SOFT}}
 .gv-jb-quiet{margin:0;font-family:${OUTFIT};font-size:14.5px;color:${INK_SOFT}}
@@ -436,7 +449,7 @@ const PAGE_CSS = `
 .gv-jb-dlist{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
 .gv-jb-dl{font-family:${OUTFIT};font-size:14.5px;font-weight:700;line-height:1.45;color:${INK};text-decoration:underline;text-decoration-color:rgba(28,20,16,0.35);text-underline-offset:3px;overflow-wrap:anywhere}
 .gv-jb-dl:hover{text-decoration-color:${FOREST};color:${FOREST}}
-.gv-jb-dl b{font-weight:800;font-variant-numeric:tabular-nums}
+.gv-jb-dl b{font-weight:800;font-variant-numeric:tabular-nums;color:${FOREST}}
 .gv-jb-dstats{display:flex;flex-wrap:wrap;align-items:baseline;gap:8px 20px;padding-top:14px;border-top:1px solid #EFEAE0}
 .gv-jb-switchrow{display:flex;align-items:center;gap:12px}
 .gv-jb-switch{position:relative;flex-shrink:0;width:46px;height:26px;border-radius:9999px;border:none;cursor:pointer;background:rgba(28,20,16,0.2);transition:background-color 160ms ease}

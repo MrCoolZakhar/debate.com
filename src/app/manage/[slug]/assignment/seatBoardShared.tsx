@@ -16,6 +16,7 @@ import {
 import { NEU } from '@/components/neu';
 import Portal from '@/components/Portal';
 import { getCountryByName } from '@/lib/countries';
+import { LEVEL_ACCENT, LevelInsignia } from '@/app/account/accountUi';
 import {
   CONCENTRATION_PENALTY, COUNTRY_PICK_POINTS, EXPERIENCE_GAP_STEP, EXPERIENCE_MATCH_BONUS, IMPORTANCE_NEED_WEIGHT, MEMBER_PICK_BONUS,
   NEEDS_DELEGATES_REASON, PAIR_BONUS, PREF_POINTS, ROOM_FILL_MAX, SWAP_REASON, fitPercent, groupAllocationsByCountry, roomFill,
@@ -25,7 +26,7 @@ import { FitTip, explainReason, missingSignals } from '@/app/manage/[slug]/assig
 import { CountryName } from '@/app/manage/[slug]/assignment/displayNames';
 import {
   type AcceptedApp, type AllocationRow, type CommitteeData, type SlotRow, type Suggestion,
-  CommitteeLogo, CountryFlag, PersonAvatar, ageOf, committeeLabels, fitLightColors, fitPctLabel, reasonContext, slotLogoUrl, OUTFIT,
+  CommitteeLogo, CountryFlag, PersonAvatar, ageOf, committeeLabels, FIT_LIGHT_COLORS, fitLightColors, fitPctLabel, reasonContext, slotLogoUrl, OUTFIT,
 } from '@/app/manage/[slug]/assignment/assignmentKit';
 
 export const CARD_SHADOW = '0 1px 2px rgba(27,56,40,0.06), 0 8px 24px rgba(27,56,40,0.08)';
@@ -264,6 +265,44 @@ export function GoldMarker({ order, size = 20 }: { order: number; size?: number 
   );
 }
 
+// ── A committee's level (owner, 22 Oct 2026) ─────────────────────────────────
+// Each committee wears its level (difficulty) VERY subtly: a faint tint of the
+// level's own accent (the account insignia colours) on the ring's empty track
+// and on the ring tile, barely noticeable and never a traffic-light colour at
+// strength; plus the level itself very small at the top right of the tile and
+// of the committee pop-up's header. An unset difficulty draws nothing.
+export function committeeLevelAccent(difficulty: string | null | undefined): string | null {
+  return LEVEL_ACCENT[(difficulty ?? '').trim().toLowerCase()] ?? null;
+}
+
+/** A faint level tint over `base` (pct is the accent's share; keep it single
+ *  digits for surfaces). `base` itself when the level is unset. */
+export function committeeLevelTint(difficulty: string | null | undefined, base: string, pct: number): string {
+  const accent = committeeLevelAccent(difficulty);
+  return accent ? `color-mix(in srgb, ${accent} ${pct}%, ${base})` : base;
+}
+
+/** The committee's level, very small: the insignia, and with `word` the level
+ *  name beside it in the level's colour. Nothing for an unset difficulty. */
+export function CommitteeLevelMark({ difficulty, word = true, size = 13 }: { difficulty: string | null | undefined; word?: boolean; size?: number }) {
+  const accent = committeeLevelAccent(difficulty);
+  if (!accent) return null;
+  const key = (difficulty ?? '').trim().toLowerCase();
+  const label = key.charAt(0).toUpperCase() + key.slice(1);
+  return (
+    <span
+      role="img"
+      aria-label={`Level: ${label}`}
+      title={`Committee level: ${label}`}
+      className="inline-flex items-center flex-shrink-0"
+      style={{ gap: 3, lineHeight: 1, fontFamily: OUTFIT }}
+    >
+      <LevelInsignia level={key} size={size} />
+      {word && <span style={{ fontSize: 11, fontWeight: 600, color: accent, whiteSpace: 'nowrap' }}>{label}</span>}
+    </span>
+  );
+}
+
 /** A committee as a fill ring with its logo inside. With `markers` (the open
  *  person's choice numbers in this committee) the gold bubbles sit on the
  *  ring's edge, evenly spaced around it; `halo` reserves room for them so a
@@ -296,7 +335,7 @@ export function CommitteeRing({ committee, size = 52, marker, markers, lit, halo
         className="absolute inline-flex items-center justify-center"
         style={{
           left: pad, top: pad, width: size, height: size, borderRadius: 999, padding: ring, boxSizing: 'border-box',
-          background: `conic-gradient(${lit ? '#2A5039' : '#1B3828'} 0 ${pct}%, #E6DECB ${pct}% 100%)`,
+          background: `conic-gradient(${lit ? '#2A5039' : '#1B3828'} 0 ${pct}%, ${committeeLevelTint(committee.difficulty, '#E6DECB', 22)} ${pct}% 100%)`,
         }}
       >
         <span
@@ -792,7 +831,7 @@ const SCORE_RULES: { spec: BadgeLook; title: string; points: string; line: strin
   { spec: BADGES['EXP MATCH'], title: 'Experience fit', points: `+${EXPERIENCE_MATCH_BONUS} / 0 / −${EXPERIENCE_GAP_STEP} per level`, line: 'Their level against the committee difficulty, either way round' },
   { spec: BADGES['HIGH PRIORITY'], title: 'Seat importance', points: `+${IMPORTANCE_NEED_WEIGHT.high} / +${IMPORTANCE_NEED_WEIGHT.medium} / +${IMPORTANCE_NEED_WEIGHT.low}`, line: 'High, medium and low importance seats fill first' },
   { spec: ROOM_FILL, title: 'Room fill', points: `up to +${ROOM_FILL_MAX}`, line: `Emptier committees score higher: ${ROOM_FILL_MAX} x the share of seats still open (a room 25% full adds ${Math.round(ROOM_FILL_MAX * 0.75)})` },
-  { spec: BADGES['COMPLETES PAIR'], title: 'Completes a pair', points: `+${PAIR_BONUS}`, line: 'Their delegation holds the other seat of a double' },
+  { spec: BADGES['COMPLETES PAIR'], title: 'Completes a pair', points: `+${PAIR_BONUS}`, line: 'A bonus when their delegation holds the other seat of a double. Never needed for 100%, and a score never shows above it' },
   { spec: BADGES['DELEGATION CONCENTRATION'], title: 'Delegation already here', points: `−${CONCENTRATION_PENALTY}`, line: 'Spreads a delegation across the rooms' },
 ];
 
@@ -806,7 +845,7 @@ export function ScoringHint() {
         <div className="flex flex-col" style={{ gap: 8 }}>
           <span style={{ fontSize: 14, fontWeight: 700, color: NEU.ink }}>How smart allocations are scored</span>
           <span style={{ fontSize: 12, color: NEU.inkSoft, lineHeight: 1.4, marginTop: -4 }}>
-            Out of 100. The best seat a person can get scores 100%. <span style={{ color: '#23633A', fontWeight: 600 }}>80% and up</span> is a strong fit, <span style={{ color: '#8F5A0A', fontWeight: 600 }}>60 to 79%</span> fair, <span style={{ color: '#A12A22', fontWeight: 600 }}>under 60%</span> weak
+            Out of 100. Their 1st choice committee with the country they asked for is already {PREF_POINTS[0] + COUNTRY_PICK_POINTS}, so a strong seat is green. <span style={{ color: FIT_LIGHT_COLORS.green.fg, fontWeight: 700 }}>80% and up</span> is a strong fit, <span style={{ color: FIT_LIGHT_COLORS.amber.fg, fontWeight: 700 }}>60 to 79%</span> fair, <span style={{ color: FIT_LIGHT_COLORS.red.fg, fontWeight: 700 }}>under 60%</span> weak
           </span>
           {SCORE_RULES.map(r => (
             <div key={r.title} className="flex items-start gap-2.5">
@@ -844,9 +883,9 @@ export function ScoreDisc({ score, size = 48, title }: { score: number; size?: n
       className="inline-flex items-center justify-center flex-shrink-0"
       style={{
         width: size, height: size, borderRadius: 999,
-        background: `linear-gradient(160deg, #FFFFFF, ${c.bg} 70%)`,
-        boxShadow: `inset 0 0 0 1.5px ${c.ring}, inset 0 1px 0 rgba(255,255,255,0.8), 0 4px 12px -5px ${c.ring}`,
-        color: c.fg, fontFamily: OUTFIT, fontWeight: 700,
+        background: `linear-gradient(160deg, #FFFFFF 0%, ${c.bg} 55%)`,
+        boxShadow: `inset 0 0 0 ${size >= 40 ? 2.5 : 2}px ${c.solid}, inset 0 1px 0 rgba(255,255,255,0.8), 0 5px 14px -5px ${c.ring}`,
+        color: c.fg, fontFamily: OUTFIT, fontWeight: 800,
         fontVariantNumeric: 'tabular-nums', lineHeight: 1, letterSpacing: '-0.02em',
       }}
     >
@@ -866,8 +905,8 @@ export function FitBadge({ score, size = 'sm', title }: { score: number; size?: 
       className="inline-flex items-center justify-center flex-shrink-0"
       style={{
         minWidth: md ? 52 : 44, height: md ? 26 : 22, padding: '0 8px', borderRadius: 999, boxSizing: 'border-box',
-        background: c.bg, color: c.fg, boxShadow: `inset 0 0 0 1px ${c.ring}`,
-        fontFamily: OUTFIT, fontSize: md ? 14 : 12.5, fontWeight: 700, fontVariantNumeric: 'tabular-nums', lineHeight: 1,
+        background: c.bg, color: c.fg, boxShadow: `inset 0 0 0 1.5px ${c.solid}`,
+        fontFamily: OUTFIT, fontSize: md ? 14 : 12.5, fontWeight: 800, fontVariantNumeric: 'tabular-nums', lineHeight: 1,
       }}
     >
       {fitPctLabel(score)}

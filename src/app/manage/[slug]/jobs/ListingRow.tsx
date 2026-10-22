@@ -2,27 +2,29 @@
 
 // ── One listing on the organizer Job Board ─────────────────────────────────
 //
-// A roomy row: the title (never cut off), role and committee; the status as an
-// icon and a word; the closing date; views, clicks to apply and applicants as
+// A roomy row: the role's photo (RoleThumb, ringed in the role's accent) and a
+// thin top edge in that accent; the title (never cut off), the role word in its
+// colour and the committee; the status as an icon and a word (Live green,
+// Closed grey); the closing date, amber with an hourglass within 7 days; views, clicks to apply and applicants as
 // big numbers with their word; Promoted ("until 26 Oct", "On the homepage")
-// as a style A icon and words, never a chip, and a gold top edge on the row.
+// as a style A icon and words, never a chip, and a gold ring on the row.
 // The three-dot menu (Edit, Promote, View on Job Board, Close, Delete) is a
 // small portaled menu. Close and Delete are asked IN PLACE, in the row, never
 // in a modal. A hidden listing carries Gavelling's note; a paid outside
 // listing carries the lock and its hint.
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react';
 import Link from 'next/link';
 import {
-  CalendarClock, CircleDot, CircleSlash, EyeOff, FilePen, Gavel, House, Landmark, Lock, Megaphone, MoreHorizontal, Pencil, Sparkles, Trash2, ExternalLink, Users, XCircle, Share2,
+  CalendarClock, CircleDot, CircleSlash, EyeOff, FilePen, Hourglass, House, Lock, Megaphone, MoreHorizontal, Pencil, Sparkles, Trash2, ExternalLink, XCircle, Share2,
 } from 'lucide-react';
 import Portal from '@/components/Portal';
-import { JOB_ROLE_LABEL, type JobRole } from '@/lib/jobBoard';
+import { JOB_ROLE_LABEL } from '@/lib/jobBoard';
 import { InfoHint } from '../settings/applicationsUi';
 import { closeListing, dayLabel, type OrgListing, type ShownState } from './jobsApi';
 import ListingFunnel from '@/app/jobs/ListingFunnel';
 import ShareCardPopup from '@/app/jobs/ShareCardPopup';
-import { ICON_STROKE } from './jobKit';
+import { ICON_STROKE, ROLE_THEME, RoleThumb, STATUS_TONE } from './jobKit';
 
 const FONT = "var(--font-brand), sans-serif";
 const INK = '#1C1410';
@@ -30,15 +32,23 @@ const INK_SOFT = '#5C5140';
 const FOREST = '#1B3828';
 const DANGER = '#9E2A12';
 
-/** The role type as a style A icon beside its word. */
-const ROLE_ICON: Record<JobRole, typeof Gavel> = { chair: Gavel, secretariat: Landmark, staff: Users };
-
 const STATUS: Record<ShownState, { word: string; icon: typeof CircleDot; color: string }> = {
-  draft: { word: 'Draft', icon: FilePen, color: '#8A6614' },
-  live: { word: 'Live', icon: CircleDot, color: FOREST },
-  closed: { word: 'Closed', icon: CircleSlash, color: INK_SOFT },
-  hidden: { word: 'Hidden', icon: EyeOff, color: DANGER },
+  draft: { word: 'Draft', icon: FilePen, color: STATUS_TONE.draft },
+  live: { word: 'Live', icon: CircleDot, color: STATUS_TONE.open },
+  closed: { word: 'Closed', icon: CircleSlash, color: STATUS_TONE.closed },
+  hidden: { word: 'Hidden', icon: EyeOff, color: STATUS_TONE.hidden },
 };
+
+/** A live listing closing within this many days reads in amber. */
+const SOON_DAYS = 7;
+
+function closingSoon(listing: OrgListing): boolean {
+  if (listing.shown !== 'live' || !listing.closes_at) return false;
+  const iso = listing.closes_at;
+  const d = /^\d{4}-\d{2}-\d{2}$/.test(iso) ? new Date(`${iso}T23:59:59`) : new Date(iso);
+  const left = d.getTime() - Date.now();
+  return Number.isFinite(left) && left >= 0 && left <= SOON_DAYS * 86_400_000;
+}
 
 export default function ListingRow({ listing, canPromote, onEdit, onPromote, onChanged }: {
   listing: OrgListing;
@@ -57,8 +67,9 @@ export default function ListingRow({ listing, canPromote, onEdit, onPromote, onC
   const StatusIcon = st.icon;
   const paidOutside = listing.kind === 'outside' && (listing.charged_credits > 0 || listing.locked);
   const closes = dayLabel(listing.closes_at);
-  const sub = [JOB_ROLE_LABEL[listing.role], listing.committee].filter(Boolean).join(' · ');
-  const RoleIcon = ROLE_ICON[listing.role];
+  const theme = ROLE_THEME[listing.role] ?? ROLE_THEME.chair;
+  const RoleIcon = theme.icon;
+  const soon = closingSoon(listing);
 
   const confirm = async () => {
     if (busyRef.current) return;
@@ -77,24 +88,32 @@ export default function ListingRow({ listing, canPromote, onEdit, onPromote, onC
   };
 
   return (
-    <li className={`gv-jr${listing.promotion ? ' gv-jr-promoted' : ''}`}>
+    <li
+      className={`gv-jr${listing.promotion ? ' gv-jr-promoted' : ''}${listing.shown === 'closed' ? ' gv-jr-closed' : ''}`}
+      style={{ '--gv-jr-accent': theme.accent } as CSSProperties}
+    >
       <div className="gv-jr-main">
         <div className="gv-jr-id">
+        <RoleThumb role={listing.role} size={60} />
+        <div className="gv-jr-text">
           <p className="gv-jr-title">{listing.title || 'Untitled listing'}</p>
-          {sub && (
-            <p className="gv-jr-sub">
-              {RoleIcon && <RoleIcon size={15} strokeWidth={ICON_STROKE} aria-hidden className="gv-jr-sub-icon" />}
-              <span>{sub}</span>
-            </p>
-          )}
+          <p className="gv-jr-sub">
+            <span className="gv-jr-type" style={{ color: theme.text }}>
+              <RoleIcon size={15} strokeWidth={1.8} aria-hidden className="gv-jr-sub-icon" style={{ color: theme.accent }} />
+              {JOB_ROLE_LABEL[listing.role]}
+            </span>
+            {listing.committee && <span>· {listing.committee}</span>}
+          </p>
           <p className="gv-jr-facts">
             <span className="gv-jr-status" style={{ color: st.color }}>
               <StatusIcon size={15} strokeWidth={1.9} aria-hidden />
               {st.word}
             </span>
             {closes && (
-              <span className="gv-jr-fact">
-                <CalendarClock size={15} strokeWidth={ICON_STROKE} aria-hidden />
+              <span className={`gv-jr-fact${soon ? ' gv-jr-soon' : ''}`}>
+                {soon
+                  ? <Hourglass size={15} strokeWidth={1.8} aria-hidden />
+                  : <CalendarClock size={15} strokeWidth={ICON_STROKE} aria-hidden />}
                 {listing.shown === 'draft' ? `Would close ${closes}` : listing.shown === 'closed' ? `Closed ${closes}` : `Closes ${closes}`}
               </span>
             )}
@@ -129,6 +148,7 @@ export default function ListingRow({ listing, canPromote, onEdit, onPromote, onC
           {listing.shown === 'hidden' && listing.hidden_note && (
             <p className="gv-jr-hidden">Hidden by Gavelling: {listing.hidden_note}</p>
           )}
+        </div>
         </div>
 
         <div className="gv-jr-funnel">
@@ -251,13 +271,20 @@ function RowMenu({ items, label }: { items: MenuItem[]; label: string }) {
 }
 
 export const ROW_CSS = `
-.gv-jr{list-style:none;padding:16px 18px;border-radius:18px;background:#FFFFFF;box-shadow:0 1px 2px rgba(27,56,40,0.06),0 8px 24px rgba(27,56,40,0.08),inset 0 0 0 1px rgba(27,56,40,0.04);font-family:${FONT}}
-.gv-jr-promoted{padding-top:19px;box-shadow:inset 0 3px 0 #E2C66B,inset 0 0 0 1px rgba(182,135,31,0.20),0 1px 2px rgba(27,56,40,0.08),0 12px 28px -10px rgba(27,56,40,0.26)}
+.gv-jr{list-style:none;padding:19px 18px 16px;border-radius:18px;background:#FFFFFF;box-shadow:inset 0 3px 0 var(--gv-jr-accent,${FOREST}),0 1px 2px rgba(27,56,40,0.06),0 8px 24px rgba(27,56,40,0.08),inset 0 0 0 1px rgba(27,56,40,0.04);font-family:${FONT}}
+/* Promoted: the role's top edge stays; a gold ring and glow mark the promotion. */
+.gv-jr-promoted{box-shadow:inset 0 3px 0 var(--gv-jr-accent,${FOREST}),inset 0 0 0 1.5px rgba(201,161,62,0.55),0 0 0 4px rgba(238,217,138,0.28),0 1px 2px rgba(27,56,40,0.08),0 12px 28px -10px rgba(27,56,40,0.26)}
+.gv-jr-closed{background:#FBFAF6}
+.gv-jr-closed .gv-jk-thumb{filter:grayscale(0.85);opacity:0.75}
 .gv-jr-main{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:start;gap:12px 18px}
-.gv-jr-id{min-width:0}
+.gv-jr-id{min-width:0;display:flex;align-items:flex-start;gap:16px}
+.gv-jr-id .gv-jk-thumb{margin:4px 0 0 4px}
+.gv-jr-text{min-width:0;flex:1 1 auto}
+.gv-jr-type{display:inline-flex;align-items:center;gap:6px;font-weight:700}
+.gv-jr-soon{color:${STATUS_TONE.soon};font-weight:700}
 .gv-jr-title{margin:0;font-size:17px;font-weight:700;line-height:1.25;color:${INK};overflow-wrap:anywhere}
-.gv-jr-sub{margin:4px 0 0;display:flex;align-items:flex-start;gap:6px;font-size:13.5px;font-weight:600;color:${INK_SOFT};overflow-wrap:anywhere}
-.gv-jr-sub-icon{flex-shrink:0;margin-top:1px;color:${INK}}
+.gv-jr-sub{margin:4px 0 0;display:flex;flex-wrap:wrap;align-items:center;gap:2px 6px;font-size:13.5px;font-weight:600;color:${INK_SOFT};overflow-wrap:anywhere}
+.gv-jr-sub-icon{flex-shrink:0}
 .gv-jr-fact{display:inline-flex;align-items:center;gap:5px}
 .gv-jr-fact-gold{font-size:13px;font-weight:700;color:#8A6614}
 .gv-jr-facts{margin:8px 0 0;display:flex;flex-wrap:wrap;align-items:center;gap:6px 14px;font-size:13.5px;color:${INK_SOFT}}
@@ -266,6 +293,7 @@ export const ROW_CSS = `
 .gv-jr-promo{margin:8px 0 0;display:flex;flex-wrap:wrap;gap:6px 14px}
 .gv-jr-hidden{margin:10px 0 0;padding:8px 12px;border-radius:10px;background:rgba(158,42,18,0.07);font-size:13.5px;line-height:1.45;color:${DANGER};overflow-wrap:anywhere}
 .gv-jr-funnel{grid-column:1 / -1;grid-row:2;min-width:0}
+@media (max-width:600px){.gv-jr-id{gap:12px}.gv-jr-id .gv-jk-thumb{width:48px !important;height:48px !important;border-radius:13px}}
 .gv-jr-stats{grid-column:1 / -1;display:flex;flex-wrap:wrap;gap:8px 26px;margin:0}
 .gv-jr-stats div{display:flex;align-items:baseline;gap:6px;flex-direction:row-reverse;justify-content:flex-end}
 .gv-jr-stats dd{margin:0;font-size:22px;font-weight:800;letter-spacing:-0.02em;color:${INK};font-variant-numeric:tabular-nums}

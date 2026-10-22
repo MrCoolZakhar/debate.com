@@ -12,19 +12,18 @@
 //     page's classic assign flow, Change seat / Deallocate, expand a person);
 //   * person mode (the seat board with a person open, or a person dropped on a
 //     ring): the same pop-up, each open seat reads "Seat <First name>" and
-//     seats that person in that exact seat, then closes;
-//   * give mode (the seat board's Delegations tab): the same card, header,
-//     seats-filled bar and rows by importance; an open seat the delegation can
-//     take reads "Give" and the pop-up stays open for the next tap, with a
-//     running tally; a row given here takes it back on a second tap. Nothing
-//     here writes: the Delegations tab's queue does.
+//     seats that person in that exact seat, then closes.
+// (The give mode of the seat board's Delegations tab went with the tab, owner
+// 22 Oct 2026: delegation allocations are done only in Applications ›
+// Delegations.) The header shows the committee's level very small at the top
+// right, and the ring wears the level's faint tint (seatBoardShared).
 // The small pieces it is built from (the importance dashes, TierBadge, the
 // modal card, the row menu) stay shared with page.tsx through this file.
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import {
-  X, Check, ChevronDown, ChevronUp, Plus, Users, Trash2, Repeat, MoreVertical, CheckCircle2,
+  X, ChevronDown, ChevronUp, Plus, Users, Trash2, Repeat, MoreVertical, CheckCircle2,
 } from 'lucide-react';
 import { NEU } from '@/components/neu';
 import { ModalOverlay as SharedModalOverlay } from '@/components/ModalOverlay';
@@ -32,13 +31,13 @@ import { CountryName } from '@/app/manage/[slug]/assignment/displayNames';
 import {
   type AcceptedApp, type AllocationRow, type SlotRow, type CommitteeData, type UserHistory,
   slotLogoUrl, OUTFIT, MONO, CountryFlag, effectiveLevel,
-  committeeLabels, CommitteeDifficultyBadge, DelegateDetail, LevelBadge,
+  committeeLabels, DelegateDetail, LevelBadge,
 } from '@/app/manage/[slug]/assignment/assignmentKit';
 import {
-  AvatarWithFlag, ImportanceDisc, NameAge, POPUP_RING_INSET, POPUP_RING_RISE, PopupRingBadge, WELL, nationalityOf,
+  AvatarWithFlag, CommitteeLevelMark, ImportanceDisc, NameAge, POPUP_RING_INSET, POPUP_RING_RISE, PopupRingBadge, WELL, nationalityOf,
 } from '@/app/manage/[slug]/assignment/seatBoardShared';
 import {
-  type ImportanceTier, allocationSocietyId, distinctCountryFilled, groupAllocationsByCountry, isSlotFull, openSeatsForSociety,
+  type ImportanceTier, distinctCountryFilled, groupAllocationsByCountry, isSlotFull,
 } from '@/lib/assignmentFit';
 
 // Rebuild an AcceptedApp shape from an allocation row so the existing
@@ -230,8 +229,8 @@ export function LightModalCard({ children, width = 620 }: { children: React.Reac
 }
 
 /** The header of a light pop-up: the ring badge, the committee's short name
- *  with its difficulty, the full name beneath, a title above when given, and
- *  the close button. */
+ *  with the full name beneath and a title above when given, then at the top
+ *  right the committee's level, very small, and the close button. */
 export function LightModalHeader({ committee, eyebrow, onClose }: { committee: CommitteeData; eyebrow?: string; onClose: () => void }) {
   const labels = committeeLabels(committee);
   return (
@@ -240,25 +239,25 @@ export function LightModalHeader({ committee, eyebrow, onClose }: { committee: C
       <div className="flex items-start justify-between gap-3" style={{ marginLeft: POPUP_RING_INSET - 20, minHeight: 50 }}>
         <div className="min-w-0 flex flex-col" style={{ gap: 2 }}>
           {eyebrow && <span style={{ fontSize: 12.5, fontWeight: 600, color: NEU.inkSoft }}>{eyebrow}</span>}
-          <div className="flex items-center gap-2 min-w-0 flex-wrap">
-            <h2 title={committee.name} className="[overflow-wrap:anywhere]" style={{ margin: 0, fontSize: 22, fontWeight: 700, color: NEU.ink, letterSpacing: '-0.01em', lineHeight: 1.1 }}>
-              {labels.big}
-            </h2>
-            <CommitteeDifficultyBadge level={committee.difficulty} disc={26} glyph={17} />
-          </div>
+          <h2 title={committee.name} className="[overflow-wrap:anywhere]" style={{ margin: 0, fontSize: 22, fontWeight: 700, color: NEU.ink, letterSpacing: '-0.01em', lineHeight: 1.1 }}>
+            {labels.big}
+          </h2>
           {labels.full && (
             <p className="[overflow-wrap:anywhere]" style={{ margin: 0, fontSize: 13, color: NEU.inkSoft, lineHeight: 1.25 }}>{labels.full}</p>
           )}
         </div>
-        <button
-          type="button"
-          onClick={onClose}
-          aria-label="Close"
-          className="focus:outline-none focus-visible:ring-2 flex-shrink-0 inline-flex items-center justify-center transition-[background-color,transform] duration-150 hover:bg-[#F4F0E6] active:scale-[0.94]"
-          style={{ width: 34, height: 34, borderRadius: 999, border: 'none', background: '#FFFFFF', boxShadow: '0 0 0 1px rgba(27,56,40,0.10)', color: NEU.ink, cursor: 'pointer' }}
-        >
-          <X size={17} strokeWidth={1.5} />
-        </button>
+        <span className="inline-flex items-center flex-shrink-0" style={{ gap: 10 }}>
+          <CommitteeLevelMark difficulty={committee.difficulty} />
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close"
+            className="focus:outline-none focus-visible:ring-2 flex-shrink-0 inline-flex items-center justify-center transition-[background-color,transform] duration-150 hover:bg-[#F4F0E6] active:scale-[0.94]"
+            style={{ width: 34, height: 34, borderRadius: 999, border: 'none', background: '#FFFFFF', boxShadow: '0 0 0 1px rgba(27,56,40,0.10)', color: NEU.ink, cursor: 'pointer' }}
+          >
+            <X size={17} strokeWidth={1.5} />
+          </button>
+        </span>
       </div>
     </>
   );
@@ -381,23 +380,6 @@ export type CommitteeModalMode =
       firstName: string;
       /** Seats the person in this exact seat; the pop-up closes after it. */
       onSeat: (slot: SlotRow, seat: number) => void;
-    }
-  | {
-      kind: 'give';
-      societyId: string;
-      societyName: string;
-      /** Country codes never given to a delegation here (observer seats). */
-      skip: ReadonlySet<string>;
-      /** Countries given while this pop-up is open. */
-      givenNow: ReadonlySet<string>;
-      /** Allocations the delegation still needs. */
-      stillNeeds?: number;
-      /** Countries with a write still running. */
-      busyCodes: ReadonlySet<string>;
-      /** A delegation's name by id (rows laid over by the tab's own writes). */
-      delegationName?: (societyId: string) => string | null;
-      onGive: (slot: SlotRow, seats: number[]) => void;
-      onUndo: (slot: SlotRow) => void;
     };
 
 const NO_HISTORY: Record<string, UserHistory> = {};
@@ -416,7 +398,7 @@ export function CommitteeOverviewModal({
   committee: CommitteeData;
   history?: Record<string, UserHistory>;
   onClose: () => void;
-  /** Absent in give mode: a seat's row menu is not offered there. */
+  /** Absent: a seat's row menu is not offered. */
   onRemoveAllocation?: (a: AllocationRow) => void;
   onAssignSlot?: (slot: SlotRow, seat: number) => void;
   onChangeAllocation?: (a: AllocationRow) => void;
@@ -424,7 +406,6 @@ export function CommitteeOverviewModal({
 }) {
   // Keyed by `${slot.id}-${seat}` since a double slot now shows up to two rows.
   const [expandedSeatKey, setExpandedSeatKey] = useState<string | null>(null);
-  const give = mode?.kind === 'give' ? mode : null;
   const person = mode?.kind === 'person' ? mode : null;
   const filled = distinctCountryFilled(committee.conference_allocations);
   const total = committee.total_slots;
@@ -436,7 +417,7 @@ export function CommitteeOverviewModal({
   const openTierCounts: Record<ImportanceTier, number> = { high: 0, medium: 0, low: 0, standard: 0 };
   for (const s of openSlots) openTierCounts[s.importance] += 1;
   // Ordered by importance tier first (high first), then alphabetical within tier.
-  const slots = [...committee.committee_country_slots].filter(s => !give || !give.skip.has(s.country_code)).sort(
+  const slots = [...committee.committee_country_slots].sort(
     (a, b) => TIER_RANK[a.importance] - TIER_RANK[b.importance] || a.country_name.localeCompare(b.country_name)
   );
   const fillPct = total > 0 ? Math.min(100, Math.round((filled / total) * 100)) : 0;
@@ -446,30 +427,6 @@ export function CommitteeOverviewModal({
     <ModalOverlay onClose={onClose}>
       <LightModalCard width={640}>
         <LightModalHeader committee={committee} onClose={onClose} />
-
-        {/* Give mode: who the allocations go to, and the running tally */}
-        {give && (
-          <div
-            className="flex items-center justify-between gap-3 flex-wrap mt-4 px-3.5 py-2.5"
-            style={{ background: WELL, borderRadius: 14 }}
-            aria-live="polite"
-          >
-            <span className="[overflow-wrap:anywhere] min-w-0" style={{ fontSize: 14, color: NEU.ink }}>
-              Giving to <strong style={{ fontWeight: 700 }}>{give.societyName}</strong>
-            </span>
-            <span className="inline-flex items-baseline gap-2 flex-shrink-0">
-              <span className="inline-flex items-baseline gap-1">
-                <span style={{ fontSize: 17, fontWeight: 700, color: NEU.ink, fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>{give.givenNow.size}</span>
-                <span style={{ fontSize: 13, color: NEU.inkSoft }}>given</span>
-              </span>
-              {give.stillNeeds != null && (
-                <span style={{ fontSize: 13, fontWeight: give.stillNeeds > 0 ? 500 : 600, color: give.stillNeeds > 0 ? NEU.inkSoft : NEU.forest }}>
-                  {give.stillNeeds > 0 ? `${give.stillNeeds} still needed` : 'All needed given'}
-                </span>
-              )}
-            </span>
-          </div>
-        )}
 
         {/* Allocations filled */}
         <div className="mt-4">
@@ -541,38 +498,6 @@ export function CommitteeOverviewModal({
               const alloc = bySeat.get(seatNum) ?? null;
               const seatKey = `${slot.id}-${seatNum}`;
 
-              if (!alloc && give) {
-                // Give mode: an open seat this delegation can take gives the
-                // country (every seat of it still open to them, as the
-                // Delegations tab always has) and the pop-up stays open.
-                const free = openSeatsForSociety(slot, byCountry, give.societyId);
-                const busy = give.busyCodes.has(slot.country_code);
-                if (!free.includes(seatNum)) {
-                  return (
-                    <div key={seatKey} className="w-full flex items-center gap-3" style={{ ...LIGHT_OPEN_ROW, padding: rowPad, opacity: 0.6 }}>
-                      {flag(0.6)}
-                      {countryLine(seatNum)}
-                      <ImportanceDisc tier={slot.importance} />
-                    </div>
-                  );
-                }
-                return (
-                  <button
-                    key={seatKey}
-                    type="button"
-                    onClick={() => give.onGive(slot, free)}
-                    aria-label={`Give ${slot.country_name} to ${give.societyName}`}
-                    className="w-full flex items-center gap-3 focus:outline-none focus-visible:ring-2 text-left transition-colors duration-150 hover:!bg-[#FAF8F3]"
-                    style={{ ...LIGHT_OPEN_ROW, padding: rowPad, cursor: 'pointer' }}
-                  >
-                    {flag(0.6)}
-                    {countryLine(seatNum)}
-                    <ImportanceDisc tier={slot.importance} />
-                    <PillLook>{busy ? 'Saving' : <><Plus size={13} strokeWidth={1.75} aria-hidden /> Give</>}</PillLook>
-                  </button>
-                );
-              }
-
               if (!alloc) {
                 // Open seat — clicking assigns this exact seat. With a person
                 // open on the seat board it seats THAT person here instead.
@@ -602,55 +527,18 @@ export function CommitteeOverviewModal({
               const isSociety = !!alloc.society_id && !alloc.user_id;
               if (isSociety) {
                 const removableSoc = !alloc.id.startsWith('temp-');
-                const socId = allocationSocietyId(alloc);
-                const socName = (give && socId ? give.delegationName?.(socId) : null) ?? alloc.delegation?.name ?? 'Delegation';
-                const theirs = !!give && socId === give.societyId;
-                const inner = (
-                  <>
+                const socName = alloc.delegation?.name ?? 'Delegation';
+                return (
+                  <div key={seatKey} className="flex items-center gap-3" style={{ ...LIGHT_ROW, padding: rowPad }}>
                     {flag()}
                     <DelegationDisc />
                     <span className="flex flex-col flex-1 min-w-0" style={{ gap: 1 }}>
                       <span className="[overflow-wrap:anywhere]" style={{ fontSize: 15, fontWeight: 700, color: NEU.ink, lineHeight: 1.15 }}>{socName}</span>
                       <span style={{ fontSize: 12, color: NEU.inkSoft }}><CountryName name={slot.country_name} code={slot.country_code} suffix={seatLabel(seatNum)} /></span>
                     </span>
-                  </>
-                );
-                // Give mode: a country given in this pop-up takes it back on a
-                // second tap (only its empty seats go back).
-                if (give && theirs && give.givenNow.has(slot.country_code)) {
-                  const busy = give.busyCodes.has(slot.country_code);
-                  return (
-                    <button
-                      key={seatKey}
-                      type="button"
-                      onClick={() => give.onUndo(slot)}
-                      aria-label={`Take ${slot.country_name} back from ${give.societyName}`}
-                      title="Tap again to take it back"
-                      className="w-full flex items-center gap-3 focus:outline-none focus-visible:ring-2 text-left"
-                      style={{ ...LIGHT_ROW, background: '#FFFFFF', boxShadow: '0 0 0 1.5px #1B3828, 0 4px 12px -6px rgba(27,56,40,0.35)', padding: rowPad, cursor: 'pointer' }}
-                    >
-                      {inner}
-                      <span className="inline-flex items-center gap-2.5 flex-shrink-0" style={{ whiteSpace: 'nowrap' }}>
-                        <span className="inline-flex items-center gap-1" style={{ fontSize: 13, fontWeight: 600, color: NEU.forest }}>
-                          <Check size={15} strokeWidth={1.75} aria-hidden="true" /> {busy ? 'Saving' : 'Given'}
-                        </span>
-                        <span style={{ fontSize: 13, fontWeight: 700, color: NEU.ink, textDecoration: 'underline', textUnderlineOffset: 3 }}>Undo</span>
-                      </span>
-                    </button>
-                  );
-                }
-                return (
-                  <div key={seatKey} className="flex items-center gap-3" style={{ ...LIGHT_ROW, padding: rowPad }}>
-                    {inner}
-                    {theirs ? (
-                      <span className="inline-flex items-center gap-1 flex-shrink-0" style={{ fontSize: 13, fontWeight: 600, color: NEU.forest, whiteSpace: 'nowrap' }}>
-                        <Check size={15} strokeWidth={1.75} aria-hidden="true" /> Theirs
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center gap-1 flex-shrink-0" style={{ fontSize: 13, fontWeight: 600, color: '#8A6614', whiteSpace: 'nowrap' }}>
-                        <Users size={15} strokeWidth={1.5} aria-hidden="true" /> Delegation
-                      </span>
-                    )}
+                    <span className="inline-flex items-center gap-1 flex-shrink-0" style={{ fontSize: 13, fontWeight: 600, color: '#8A6614', whiteSpace: 'nowrap' }}>
+                      <Users size={15} strokeWidth={1.5} aria-hidden="true" /> Delegation
+                    </span>
                     {removableSoc && onRemoveAllocation && (
                       <RowMenu
                         items={[{ label: 'Deallocate', icon: <Trash2 size={14} strokeWidth={1.5} />, danger: true, onClick: () => onRemoveAllocation(alloc) }]}
@@ -724,23 +612,6 @@ export function CommitteeOverviewModal({
             <p className="py-2" style={{ margin: 0, fontSize: 13.5, color: NEU.inkSoft }}>No countries in this committee yet</p>
           )}
         </div>
-
-        {/* Give mode: many taps, then one way out */}
-        {give && (
-          <div className="flex items-center justify-between gap-3 mt-4 flex-wrap">
-            <span className="flex-1" style={{ fontSize: 12.5, color: NEU.inkSoft, lineHeight: 1.4, minWidth: 200 }}>
-              Tap an open seat to give it to {give.societyName}, tap again to take it back
-            </span>
-            <button
-              type="button"
-              onClick={onClose}
-              className="focus:outline-none focus-visible:ring-2 flex-shrink-0 transition-transform duration-150 active:scale-[0.96]"
-              style={LIGHT_PRIMARY}
-            >
-              Done
-            </button>
-          </div>
-        )}
       </LightModalCard>
     </ModalOverlay>
   );

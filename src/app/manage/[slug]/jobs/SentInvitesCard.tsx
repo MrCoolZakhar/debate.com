@@ -8,7 +8,7 @@
 
 import { useEffect, useState } from 'react';
 import { Ban, CheckCircle2, Clock, Send, XCircle } from 'lucide-react';
-import { ICON_STROKE, BoardCard } from './jobKit';
+import { CARD_ACCENT, ICON_STROKE, BoardCard } from './jobKit';
 import { conferenceInvites, dayLabel, type InviteStatus, type SentInvite } from './jobsApi';
 
 const FONT = "var(--font-brand), sans-serif";
@@ -68,6 +68,7 @@ export default function SentInvitesCard({ confId, refreshKey }: { confId: string
       title="Invites"
       hint="People you invited from Find people to apply to one of your listings. An invite reaches them by email and on Gavelling"
       icon={Send}
+      accent={CARD_ACCENT.blue}
     >
       <style>{INVITES_CSS}</style>
       <ul className="gv-si-list">

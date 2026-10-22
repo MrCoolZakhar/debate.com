@@ -50,7 +50,7 @@ function levelWord(s: string | null | undefined): string {
   return v ? v.charAt(0).toUpperCase() + v.slice(1) : 'Unknown';
 }
 
-/** Points carried by a tag like "EXP TOO LOW -11" or "COMPLETES PAIR +26". */
+/** Points carried by a tag like "EXP TOO LOW -8" or "COMPLETES PAIR +10". */
 function pointsOf(reason: string): string | null {
   const m = reason.match(/([+-]\d+)\s*$/);
   return m ? m[1] : null;

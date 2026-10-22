@@ -182,12 +182,15 @@ export function reasonContext(app: AcceptedApp, committee: CommitteeData, slot: 
 }
 
 /** The score's traffic light as colours (owner, 22 Oct 2026): 80 to 100%
- *  green, 60 to 79% amber, under 60% red. `fg` is the text, `bg` / `ring` the
- *  disc or badge behind it. Takes the engine's raw score. */
-export const FIT_LIGHT_COLORS: Record<FitLight, { fg: string; bg: string; ring: string; word: string }> = {
-  green: { fg: '#23633A', bg: '#E3F1E6', ring: 'rgba(35,99,58,0.30)', word: 'Strong fit' },
-  amber: { fg: '#8F5A0A', bg: '#FBEFD5', ring: 'rgba(170,110,15,0.32)', word: 'Fair fit' },
-  red: { fg: '#A12A22', bg: '#FBE4E1', ring: 'rgba(161,42,34,0.28)', word: 'Weak fit' },
+ *  green, 60 to 79% amber, under 60% red, and they must POP: saturated, never
+ *  toned down. `solid` is the light itself (rings, edges, glows); `fg` the
+ *  same family a step deeper so the number reads on `bg`, its light tint
+ *  (each `fg` on its `bg` is above 4.3:1, and the numbers are bold). Takes the
+ *  engine's raw score. */
+export const FIT_LIGHT_COLORS: Record<FitLight, { solid: string; fg: string; bg: string; ring: string; word: string }> = {
+  green: { solid: '#1E8E4E', fg: '#16743E', bg: '#DCF3E4', ring: 'rgba(30,142,78,0.55)', word: 'Strong fit' },
+  amber: { solid: '#D9822B', fg: '#A3570C', bg: '#FCEAD3', ring: 'rgba(217,130,43,0.60)', word: 'Fair fit' },
+  red: { solid: '#D33A2C', fg: '#B3291D', bg: '#FBE0DC', ring: 'rgba(211,58,44,0.55)', word: 'Weak fit' },
 };
 export function fitLightColors(score: number) {
   return FIT_LIGHT_COLORS[fitLight(score)];

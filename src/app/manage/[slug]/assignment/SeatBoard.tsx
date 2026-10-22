@@ -2,16 +2,19 @@
 
 // ── The seat board (owner, 21 Oct 2026) ──────────────────────────────────────
 // The Assignment page's main view for delegates, in three columns:
-//   LEFT    the people still waiting (oldest accepted first) and the
-//           delegations, each column scrolling inside itself;
+//   LEFT    the people still waiting (oldest accepted first) under the search
+//           bar, scrolling inside itself. There is no Delegations tab (owner,
+//           22 Oct 2026): delegation allocations are done only in
+//           Applications › Delegations;
 //   MIDDLE  the only part that scrolls with content: "Smart Allocations"
 //           (centred, with the general "How smart allocations are scored"
 //           hint), white cards with a gold edge (the person: avatar with the
 //           nationality flag on its border, "Name, 17", the delegation
 //           beneath; the gold score disc, "How this scores" on hover; the
 //           seat on an ivory well with a soft Assign; one row of reason
-//           badges), or one person opened in place with their level, where
-//           they are from, their preferences and their best three allocations;
+//           badges), or one person opened in place with their level and where
+//           they are from, then two tabs: Best three allocations (the default)
+//           and Preferences;
 //   RIGHT   the committees as fill rings; a click (or a person dropped on one)
 //           opens that committee's pop-up: the classic board's own pop-up
 //           (CommitteeDetailModal.tsx, owned by the page; owner, 22 Oct
@@ -21,8 +24,7 @@
 // requestQuickAssign), so the writes, the optimistic board, the first-assign
 // pop-up and the allocation email rules are exactly the classic board's.
 // Scores come from src/lib/assignmentFit.ts. Nothing here reads or writes the
-// database; the Delegations tab is SeatBoardDelegations.tsx, which gives and
-// takes back delegation allocations itself and asks the page to re-read.
+// database.
 // ?person=<application id> (the Applications pop-up's link) opens that person
 // on the first load when they are waiting, then leaves the URL.
 
@@ -36,7 +38,6 @@ import { useBoardDrag, dropAttr } from '@/app/manage/[slug]/assignment/boardDrag
 import { CountryName, committeeShortName } from '@/app/manage/[slug]/assignment/displayNames';
 import { NotRegisteredChip } from '@/app/manage/[slug]/assignment/delegationShared';
 import DelegationPopupLink from '@/app/manage/[slug]/DelegationPopupLink';
-import SeatBoardDelegations from '@/app/manage/[slug]/assignment/SeatBoardDelegations';
 import { replaceUrlInPlace } from '@/lib/replaceUrlInPlace';
 import {
   type AcceptedApp, type CommitteeData, type Suggestion, type UserHistory,
@@ -44,8 +45,8 @@ import {
   LevelBadge, LevelDisc, LevelHero, fitPctLabel, slotLogoUrl, OUTFIT,
 } from '@/app/manage/[slug]/assignment/assignmentKit';
 import {
-  AvatarWithFlag, BigCount, CARD_SHADOW, CommitteeRing, FitPills, NameAge, PersonIdentity, RankNumber, RingTally, ScoreHover, ScoringHint,
-  SoftButton, WELL, acceptedAt, choicesPhrase, delegationOf, firstName, fmtDay, nationalityOf, personName,
+  AvatarWithFlag, BigCount, CARD_SHADOW, CommitteeLevelMark, CommitteeRing, FitPills, NameAge, PersonIdentity, RankNumber, RingTally, ScoreHover, ScoringHint,
+  SoftButton, WELL, acceptedAt, choicesPhrase, committeeLevelTint, delegationOf, firstName, fmtDay, nationalityOf, personName,
   prefOrdersByCommittee, schoolName, seatCounts,
 } from '@/app/manage/[slug]/assignment/seatBoardShared';
 
@@ -60,21 +61,18 @@ type SortKey = 'accepted' | 'name';
 type SchoolFilter = 'all' | 'independent' | `s:${string}`;
 type LevelFilter = 'all' | 'beginner' | 'intermediate' | 'advanced' | 'expert';
 
-export interface SeatBoardSociety { id: string; name: string; memberCount: number }
-
 function byName(a: string, b: string) {
   return a.localeCompare(b, undefined, { sensitivity: 'base' });
 }
 
 export default function SeatBoard({
-  accepted, committees, societies, history, seated, spread, needy,
-  busyKey, locked, onAssign, onOpenCommittee, onRefresh, onOpenDelegationsView,
+  accepted, committees, history, seated, spread, needy,
+  busyKey, locked, onAssign, onOpenCommittee,
 }: {
   /** The waiting pool (accepted delegates without a seat). */
   accepted: AcceptedApp[];
   /** In the board's display order. */
   committees: CommitteeData[];
-  societies: SeatBoardSociety[];
   history: Record<string, UserHistory>;
   seated: SeatedIdentities;
   spread: ReadonlySet<string>;
@@ -87,11 +85,7 @@ export default function SeatBoard({
   /** Opens the classic committee pop-up (the page renders it). With `seat`,
    *  its open seats seat that person through `seat.onSeat`. */
   onOpenCommittee: (committeeId: string, seat: { personId: string; onSeat: (sug: Suggestion) => void } | null) => void;
-  /** Re-reads the board quietly (after a delegation allocation is given or taken back). */
-  onRefresh: () => Promise<void> | void;
-  onOpenDelegationsView: () => void;
 }) {
-  const [tab, setTab] = useState<'people' | 'delegations'>('people');
   const [search, setSearch] = useState('');
   const [sort, setSort] = useState<SortKey>('accepted');
   const [fSchool, setFSchool] = useState<SchoolFilter>('all');
@@ -252,18 +246,22 @@ export default function SeatBoard({
             type="button"
             data-drop={inPanel ? undefined : dropAttr({ kind: 'committee', committeeId: c.id })}
             onClick={() => clickCommittee(c)}
-            aria-label={`Open ${big}, ${open} open`}
+            aria-label={`Open ${big}, ${open} open${c.difficulty ? `, ${c.difficulty} level` : ''}`}
             title={c.name}
-            className="focus:outline-none flex flex-col items-center"
+            className="focus:outline-none flex flex-col items-center relative"
             style={{
               gap: 3, padding: '6px 2px 10px', borderRadius: 14, border: 'none', cursor: 'pointer',
-              background: lit ? '#FFFFFF' : '#FAF8F3',
+              // The committee's level as a barely-there tint (seatBoardShared).
+              background: lit ? '#FFFFFF' : committeeLevelTint(c.difficulty, '#FAF8F3', 6),
               boxShadow: lit ? `0 0 0 2px #1B3828, 0 8px 20px rgba(27,56,40,0.18)` : '0 0 0 1px rgba(27,56,40,0.06)',
               transform: lit ? 'scale(1.04)' : 'none',
               transition: 'box-shadow 160ms cubic-bezier(0.22,1,0.36,1), transform 160ms cubic-bezier(0.22,1,0.36,1)',
               fontFamily: OUTFIT, color: NEU.ink,
             }}
           >
+            <span className="absolute" style={{ top: 5, right: 5, lineHeight: 0, opacity: 0.85 }}>
+              <CommitteeLevelMark difficulty={c.difficulty} word={false} size={12} />
+            </span>
             <CommitteeRing committee={c} markers={markers.get(c.id)} lit={lit} halo />
             <span className="[overflow-wrap:anywhere] text-center" style={{ fontSize: 12.5, fontWeight: 600, lineHeight: 1.15, padding: '0 2px' }}>{big}</span>
             <RingTally committee={c} />
@@ -275,6 +273,7 @@ export default function SeatBoard({
 
   const middle = openPerson ? (
     <PersonPanel
+      key={openPerson.id}
       person={openPerson}
       history={openPerson.profiles ? history[openPerson.profiles.id] : undefined}
       committees={committees}
@@ -328,36 +327,15 @@ export default function SeatBoard({
   );
 
   const leftHeader = (
-    <div className="flex flex-col gap-2.5 flex-none" style={{ padding: '16px 16px 10px' }}>
-      <div role="tablist" aria-label="Who to seat" className="flex" style={{ gap: 2, padding: 3, borderRadius: 12, background: '#F1ECE1' }}>
-        {(['people', 'delegations'] as const).map(k => (
-          <button
-            key={k}
-            type="button"
-            role="tab"
-            aria-selected={tab === k}
-            onClick={() => { setTab(k); setOpenPersonId(null); }}
-            className="focus:outline-none flex-1"
-            style={{
-              height: 34, borderRadius: 9, border: 'none', cursor: 'pointer',
-              background: tab === k ? '#FFFFFF' : 'transparent',
-              boxShadow: tab === k ? '0 1px 3px rgba(27,56,40,0.12)' : 'none',
-              fontFamily: OUTFIT, fontSize: 13.5, fontWeight: tab === k ? 600 : 500, color: tab === k ? NEU.ink : NEU.inkSoft,
-            }}
-          >
-            {k === 'people' ? 'People' : 'Delegations'}{' '}
-            <span style={{ color: NEU.inkSoft, fontWeight: 500, fontVariantNumeric: 'tabular-nums' }}>{k === 'people' ? waiting.length : societies.length}</span>
-          </button>
-        ))}
-      </div>
+    <div className="flex flex-col gap-2 flex-none" style={{ padding: '14px 14px 10px' }}>
       <label className="flex items-center gap-2 px-3" style={{ height: 36, borderRadius: 10, background: '#FAF8F3', boxShadow: '0 0 0 1px rgba(27,56,40,0.10)' }}>
         <Search size={15} strokeWidth={1.5} style={{ color: NEU.inkSoft, flexShrink: 0 }} />
         <input
           type="text"
           value={search}
           onChange={e => setSearch(e.target.value)}
-          placeholder={tab === 'people' ? 'Search a name or delegation' : 'Search a delegation'}
-          aria-label={tab === 'people' ? 'Search people' : 'Search delegations'}
+          placeholder="Search a name or delegation"
+          aria-label="Search people"
           className="flex-1 min-w-0 focus:outline-none"
           style={{ border: 'none', background: 'transparent', fontFamily: OUTFIT, fontSize: 13.5, color: NEU.ink }}
         />
@@ -367,90 +345,75 @@ export default function SeatBoard({
           </button>
         )}
       </label>
-      {tab === 'people' && (
-        // One row: the two filters share the width, the sort is an icon control
-        // (owner, 21 Oct 2026: the Delegation filter split into two rows).
-        <div className="flex items-center gap-1.5">
-          <GSelect<SchoolFilter>
-            value={fSchool}
-            onChange={setFSchool}
-            options={schoolOptions}
-            size="sm"
-            aria-label={fSchool === 'all' ? 'Filter by delegation' : `Delegation: ${schoolLabel}`}
-            title={fSchool === 'all' ? undefined : schoolLabel}
-            panelMinWidth={240}
-            searchPlaceholder="Find a delegation"
-            className="flex-1 min-w-0"
-            triggerContent={(
-              <span className="flex items-center gap-1.5 w-full min-w-0">
-                <span
-                  className="flex-1 min-w-0 text-left [overflow-wrap:anywhere]"
-                  style={{
-                    whiteSpace: fSchool === 'all' ? 'nowrap' : 'normal',
-                    fontWeight: fSchool === 'all' ? 500 : 600,
-                    color: fSchool === 'all' ? NEU.inkSoft : NEU.ink,
-                    fontSize: fSchool === 'all' ? undefined : seatFitFontPx(schoolLabel, 92, 12.5, { lines: 1, minPx: 10 }),
-                    lineHeight: 1.15,
-                  }}
-                >
-                  {schoolLabel}
-                </span>
-                <ChevronDown size={13} strokeWidth={2.4} className="gv-gsel-chev" aria-hidden />
+      {/* One row: the two filters share the width, the sort is an icon control
+          (owner, 21 Oct 2026: the Delegation filter split into two rows). */}
+      <div className="flex items-center gap-1.5">
+        <GSelect<SchoolFilter>
+          value={fSchool}
+          onChange={setFSchool}
+          options={schoolOptions}
+          size="sm"
+          aria-label={fSchool === 'all' ? 'Filter by delegation' : `Delegation: ${schoolLabel}`}
+          title={fSchool === 'all' ? undefined : schoolLabel}
+          panelMinWidth={240}
+          searchPlaceholder="Find a delegation"
+          className="flex-1 min-w-0"
+          triggerContent={(
+            <span className="flex items-center gap-1.5 w-full min-w-0">
+              <span
+                className="flex-1 min-w-0 text-left [overflow-wrap:anywhere]"
+                style={{
+                  whiteSpace: fSchool === 'all' ? 'nowrap' : 'normal',
+                  fontWeight: fSchool === 'all' ? 500 : 600,
+                  color: fSchool === 'all' ? NEU.inkSoft : NEU.ink,
+                  fontSize: fSchool === 'all' ? undefined : seatFitFontPx(schoolLabel, 92, 12.5, { lines: 1, minPx: 10 }),
+                  lineHeight: 1.15,
+                }}
+              >
+                {schoolLabel}
               </span>
-            )}
-          />
-          <GSelect<LevelFilter>
-            value={fLevel}
-            onChange={setFLevel}
-            options={levelOptions}
-            size="sm"
-            aria-label="Filter by level"
-            panelMinWidth={180}
-            className="flex-1 min-w-0"
-            triggerContent={(
-              <span className="flex items-center gap-1.5 w-full min-w-0">
-                <span className="flex-1 min-w-0 text-left" style={{ whiteSpace: 'nowrap', fontWeight: fLevel === 'all' ? 500 : 600, color: fLevel === 'all' ? NEU.inkSoft : NEU.ink }}>
-                  {levelOptions.find(o => o.value === fLevel)?.label ?? 'Level'}
-                </span>
-                <ChevronDown size={13} strokeWidth={2.4} className="gv-gsel-chev" aria-hidden />
+              <ChevronDown size={13} strokeWidth={2.4} className="gv-gsel-chev" aria-hidden />
+            </span>
+          )}
+        />
+        <GSelect<LevelFilter>
+          value={fLevel}
+          onChange={setFLevel}
+          options={levelOptions}
+          size="sm"
+          aria-label="Filter by level"
+          panelMinWidth={180}
+          className="flex-1 min-w-0"
+          triggerContent={(
+            <span className="flex items-center gap-1.5 w-full min-w-0">
+              <span className="flex-1 min-w-0 text-left" style={{ whiteSpace: 'nowrap', fontWeight: fLevel === 'all' ? 500 : 600, color: fLevel === 'all' ? NEU.inkSoft : NEU.ink }}>
+                {levelOptions.find(o => o.value === fLevel)?.label ?? 'Level'}
               </span>
-            )}
-          />
-          {/* Sorting is its own control, set apart from the two filters. */}
-          <GSelect<SortKey>
-            value={sort}
-            onChange={setSort}
-            options={sortOptions}
-            size="sm"
-            aria-label={`Sort by ${sortLabel}`}
-            title={`Sorted by ${sortLabel}`}
-            panelMinWidth={210}
-            align="end"
-            style={{ background: WELL, width: 'auto', flexShrink: 0 }}
-            triggerContent={(
-              <span className="flex items-center gap-1">
-                <ArrowUpDown size={14} strokeWidth={1.75} style={{ color: NEU.ink, flexShrink: 0 }} aria-hidden />
-                <ChevronDown size={13} strokeWidth={2.4} className="gv-gsel-chev" aria-hidden />
-              </span>
-            )}
-          />
-        </div>
-      )}
+              <ChevronDown size={13} strokeWidth={2.4} className="gv-gsel-chev" aria-hidden />
+            </span>
+          )}
+        />
+        {/* Sorting is its own control, set apart from the two filters. */}
+        <GSelect<SortKey>
+          value={sort}
+          onChange={setSort}
+          options={sortOptions}
+          size="sm"
+          aria-label={`Sort by ${sortLabel}`}
+          title={`Sorted by ${sortLabel}`}
+          panelMinWidth={210}
+          align="end"
+          style={{ background: WELL, width: 'auto', flexShrink: 0 }}
+          triggerContent={(
+            <span className="flex items-center gap-1">
+              <ArrowUpDown size={14} strokeWidth={1.75} style={{ color: NEU.ink, flexShrink: 0 }} aria-hidden />
+              <ChevronDown size={13} strokeWidth={2.4} className="gv-gsel-chev" aria-hidden />
+            </span>
+          )}
+        />
+      </div>
     </div>
   );
-
-  if (tab === 'delegations') {
-    return (
-      <SeatBoardDelegations
-        leftHeader={leftHeader}
-        committees={committees}
-        search={search}
-        onRefresh={onRefresh}
-        onOpenDelegationsView={onOpenDelegationsView}
-        onOpenCommittee={id => onOpenCommittee(id, null)}
-      />
-    );
-  }
 
   return (
     <div
@@ -646,8 +609,8 @@ function SmartAllocationCard({ sug, busy, locked, onOpenPerson, onAssign }: {
 // ── One person, opened in the middle ─────────────────────────────────────────
 // Compact, no dead space (owner, 21 Oct 2026): one card for who they are (the
 // back button in its top row, the flag, age, role and school on one line, the
-// large level beside), then their preferences right beneath it (owner, 22 Oct
-// 2026: above the best allocations), then their best three allocations.
+// large level beside), then ONE card with two tabs (owner, 22 Oct 2026):
+// "Preferences" and "Best three allocations", the second open by default.
 function PersonPanel({
   person, history, committees, bestThree, busyKey, locked, onAssign, onBack, onChooseAnother, phoneRings,
 }: {
@@ -671,6 +634,11 @@ function PersonPanel({
   const nat = nationalityOf(person);
   const city = person.societies?.city?.trim() || null;
   const role = person.role === 'head-delegate' || person.is_head_delegate ? 'Head Delegate' : 'Delegate';
+  const [tab, setTab] = useState<'prefs' | 'best'>('best');
+  const tabs = [
+    { key: 'prefs' as const, label: 'Preferences' },
+    { key: 'best' as const, label: 'Best three allocations' },
+  ];
 
   return (
     <div className="flex flex-col gap-2">
@@ -718,80 +686,103 @@ function PersonPanel({
         )}
       </div>
 
-      {/* What they asked for, right under who they are (owner, 22 Oct
-          2026), four to a column when the middle is wide */}
-      <div className="flex flex-col" style={{ ...card, padding: '10px 14px 12px', gap: 4 }}>
-        <h3 style={{ margin: '0 0 2px', fontSize: 15, fontWeight: 600, color: NEU.ink, minHeight: 30, display: 'flex', alignItems: 'center' }}>Preferences</h3>
-        {prefs.length === 0 ? (
-          <p style={{ margin: 0, fontSize: 13, color: NEU.inkSoft }}>No preference given</p>
-        ) : (
-        <div className="grid gap-x-6 gap-y-1 sm:grid-flow-col sm:auto-cols-fr sm:[grid-template-rows:repeat(4,auto)]">
-        {prefs.map((p, i) => {
-          const c = byId.get(p.conference_committee_id);
-          const slot = c?.committee_country_slots.find(s => s.country_code === p.country_code);
-          const held = c ? c.conference_allocations.filter(a => a.country_code === p.country_code).length : 0;
-          const taken = !!slot && held >= slot.delegation_size;
-          const big = c ? committeeLabels(c).big : committeeShortName(p.conference_committees);
-          return (
-            <div
-              key={`${p.preference_order}-${p.conference_committee_id}-${p.country_code}`}
-              className="flex items-center gap-2 min-w-0"
-              style={{ minHeight: 26, opacity: taken ? 0.6 : 1 }}
-              title={`${p.conference_committees?.name ?? c?.name ?? big}, ${p.country_name}${taken ? ', taken' : ''}`}
-            >
-              <RankNumber order={i + 1} size={20} />
-              <span className="inline-flex items-center gap-1.5 flex-shrink-0" style={{ minWidth: 76 }}>
-                {c && <CommitteeLogo committee={c} size={18} alt={big} />}
-                <span style={{ fontSize: 13, fontWeight: 600, color: NEU.ink }}>{big}</span>
-              </span>
-              <span className="inline-flex items-center gap-1.5 min-w-0 flex-1">
-                <CountryFlag code={p.country_code} w={18} h={18} alt={p.country_name} logoUrl={c ? committeeSeatLogo(c, p.country_code) : null} />
-                <CountryName name={p.country_name} code={p.country_code} style={{ fontSize: 13, color: NEU.ink, whiteSpace: 'normal', overflowWrap: 'anywhere', lineHeight: 1.15 }} />
-              </span>
-              {taken && <span className="flex-shrink-0" style={{ fontSize: 12, color: NEU.inkSoft }}>taken</span>}
-            </div>
-          );
-        })}
+      {/* Preferences | Best three allocations, one card (owner, 22 Oct 2026) */}
+      <div className="flex flex-col" style={{ ...card, padding: '10px 12px 12px', gap: 8 }}>
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <div role="tablist" aria-label={`${firstName(name)}: preferences or best allocations`} className="inline-flex" style={{ gap: 2, padding: 3, borderRadius: 12, background: '#F1ECE1' }}>
+            {tabs.map(t => (
+              <button
+                key={t.key}
+                type="button"
+                role="tab"
+                aria-selected={tab === t.key}
+                onClick={() => setTab(t.key)}
+                className="focus:outline-none focus-visible:ring-2"
+                style={{
+                  height: 32, padding: '0 14px', borderRadius: 9, border: 'none', cursor: 'pointer', whiteSpace: 'nowrap',
+                  background: tab === t.key ? '#FFFFFF' : 'transparent',
+                  boxShadow: tab === t.key ? '0 1px 3px rgba(27,56,40,0.12)' : 'none',
+                  fontFamily: OUTFIT, fontSize: 13.5, fontWeight: tab === t.key ? 600 : 500, color: tab === t.key ? NEU.ink : NEU.inkSoft,
+                  transition: 'background-color 140ms cubic-bezier(0.22,1,0.36,1)',
+                }}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
+          {tab === 'best' && (
+            <span className="max-lg:hidden">
+              <SoftButton onClick={onChooseAnother} size="sm" title="For any other allocation, click a committee on the right">Choose another allocation</SoftButton>
+            </span>
+          )}
         </div>
-        )}
-      </div>
-
-      {/* Their best three allocations */}
-      <div className="flex flex-col" style={{ ...card, padding: '10px 12px 12px', gap: 6 }}>
-        <div className="flex items-center justify-between gap-3 flex-wrap" style={{ minHeight: 30 }}>
-          <h3 style={{ margin: 0, fontSize: 15, fontWeight: 600, color: NEU.ink, paddingLeft: 2 }}>Best Three Allocations</h3>
-          <span className="max-lg:hidden">
-            <SoftButton onClick={onChooseAnother} size="sm" title="For any other allocation, click a committee on the right">Choose another allocation</SoftButton>
-          </span>
-        </div>
-        {bestThree.length === 0 && <p style={{ margin: 0, fontSize: 13, color: NEU.inkSoft, paddingLeft: 2 }}>No open allocation fits {firstName(name)} right now</p>}
-        {bestThree.map(sug => {
-          const key = `${sug.app.id}-${sug.slot.id}`;
-          const labels = committeeLabels(sug.committee);
-          return (
-            <div key={key} className="flex flex-col" style={{ padding: '6px 6px 6px 8px', borderRadius: 13, background: WELL, gap: 5 }}>
-              <div className="flex items-center gap-2">
-                <ScoreHover sug={sug} size={32} />
-                <CountryFlag code={sug.slot.country_code} w={26} h={26} alt={sug.slot.country_name} logoUrl={slotLogoUrl(sug.committee, sug.slot)} />
-                <span className="flex items-center flex-wrap flex-1 min-w-0" style={{ gap: '0 8px', lineHeight: 1.15 }}>
-                  <CountryName name={sug.slot.country_name} code={sug.slot.country_code} style={{ fontSize: 14.5, fontWeight: 700, color: NEU.ink, whiteSpace: 'normal', overflowWrap: 'anywhere' }} />
-                  <span className="inline-flex items-center gap-1" style={{ fontSize: 12.5, color: NEU.inkSoft }} title={sug.committee.name}>
-                    <CommitteeLogo committee={sug.committee} size={16} alt={labels.big} />
-                    <span style={{ fontWeight: 600 }}>{labels.big}</span>
+        {tab === 'prefs' ? (
+          <div role="tabpanel" aria-label="Preferences" className="flex flex-col" style={{ gap: 4, padding: '0 2px' }}>
+            {prefs.length === 0 ? (
+              <p style={{ margin: 0, fontSize: 13, color: NEU.inkSoft }}>No preference given</p>
+            ) : (
+            <div className="grid gap-x-6 gap-y-1 sm:grid-flow-col sm:auto-cols-fr sm:[grid-template-rows:repeat(4,auto)]">
+            {prefs.map((p, i) => {
+              const c = byId.get(p.conference_committee_id);
+              const slot = c?.committee_country_slots.find(s => s.country_code === p.country_code);
+              const held = c ? c.conference_allocations.filter(a => a.country_code === p.country_code).length : 0;
+              const taken = !!slot && held >= slot.delegation_size;
+              const big = c ? committeeLabels(c).big : committeeShortName(p.conference_committees);
+              return (
+                <div
+                  key={`${p.preference_order}-${p.conference_committee_id}-${p.country_code}`}
+                  className="flex items-center gap-2 min-w-0"
+                  style={{ minHeight: 26, opacity: taken ? 0.6 : 1 }}
+                  title={`${p.conference_committees?.name ?? c?.name ?? big}, ${p.country_name}${taken ? ', taken' : ''}`}
+                >
+                  <RankNumber order={i + 1} size={20} />
+                  <span className="inline-flex items-center gap-1.5 flex-shrink-0" style={{ minWidth: 76 }}>
+                    {c && <CommitteeLogo committee={c} size={18} alt={big} />}
+                    <span style={{ fontSize: 13, fontWeight: 600, color: NEU.ink }}>{big}</span>
                   </span>
-                </span>
-                <SoftButton onClick={() => onAssign(sug)} disabled={busyKey === key || locked} size="sm">
-                  {busyKey === key ? 'Saving' : 'Assign'}
-                </SoftButton>
-              </div>
-              {(sug.reasons.length > 0 || sug.swap) && <span className="flex min-w-0" style={{ paddingLeft: 40 }}><FitPills sug={sug} max={4} size="sm" /></span>}
+                  <span className="inline-flex items-center gap-1.5 min-w-0 flex-1">
+                    <CountryFlag code={p.country_code} w={18} h={18} alt={p.country_name} logoUrl={c ? committeeSeatLogo(c, p.country_code) : null} />
+                    <CountryName name={p.country_name} code={p.country_code} style={{ fontSize: 13, color: NEU.ink, whiteSpace: 'normal', overflowWrap: 'anywhere', lineHeight: 1.15 }} />
+                  </span>
+                  {taken && <span className="flex-shrink-0" style={{ fontSize: 12, color: NEU.inkSoft }}>taken</span>}
+                </div>
+              );
+            })}
             </div>
-          );
-        })}
-        <div className="lg:hidden flex flex-col gap-2 pt-1">
-          <span style={{ fontSize: 13, fontWeight: 600 }}>Choose another allocation</span>
-          {phoneRings}
-        </div>
+            )}
+          </div>
+        ) : (
+          <div role="tabpanel" aria-label="Best three allocations" className="flex flex-col" style={{ gap: 6 }}>
+            {bestThree.length === 0 && <p style={{ margin: 0, fontSize: 13, color: NEU.inkSoft, paddingLeft: 2 }}>No open allocation fits {firstName(name)} right now</p>}
+            {bestThree.map(sug => {
+              const key = `${sug.app.id}-${sug.slot.id}`;
+              const labels = committeeLabels(sug.committee);
+              return (
+                <div key={key} className="flex flex-col" style={{ padding: '6px 6px 6px 8px', borderRadius: 13, background: WELL, gap: 5 }}>
+                  <div className="flex items-center gap-2">
+                    <ScoreHover sug={sug} size={32} />
+                    <CountryFlag code={sug.slot.country_code} w={26} h={26} alt={sug.slot.country_name} logoUrl={slotLogoUrl(sug.committee, sug.slot)} />
+                    <span className="flex items-center flex-wrap flex-1 min-w-0" style={{ gap: '0 8px', lineHeight: 1.15 }}>
+                      <CountryName name={sug.slot.country_name} code={sug.slot.country_code} style={{ fontSize: 14.5, fontWeight: 700, color: NEU.ink, whiteSpace: 'normal', overflowWrap: 'anywhere' }} />
+                      <span className="inline-flex items-center gap-1" style={{ fontSize: 12.5, color: NEU.inkSoft }} title={sug.committee.name}>
+                        <CommitteeLogo committee={sug.committee} size={16} alt={labels.big} />
+                        <span style={{ fontWeight: 600 }}>{labels.big}</span>
+                      </span>
+                    </span>
+                    <SoftButton onClick={() => onAssign(sug)} disabled={busyKey === key || locked} size="sm">
+                      {busyKey === key ? 'Saving' : 'Assign'}
+                    </SoftButton>
+                  </div>
+                  {(sug.reasons.length > 0 || sug.swap) && <span className="flex min-w-0" style={{ paddingLeft: 40 }}><FitPills sug={sug} max={4} size="sm" /></span>}
+                </div>
+              );
+            })}
+            <div className="lg:hidden flex flex-col gap-2 pt-1">
+              <span style={{ fontSize: 13, fontWeight: 600 }}>Choose another allocation</span>
+              {phoneRings}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

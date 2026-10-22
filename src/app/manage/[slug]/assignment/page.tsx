@@ -177,13 +177,13 @@ function PointsInfo() {
             <span style={{ fontFamily: OUTFIT, fontSize: 10, fontWeight: 800, letterSpacing: '0.12em', color: NEU.deepGold }}>
               HOW THE FIT SCORE IS BUILT
             </span>
-            {row('Out of 100', 'The best seat a person can get scores 100%. 80% and up is green, 60 to 79% amber, under 60% red.')}
+            {row('Out of 100', `The best seat a person can get scores 100%: their 1st choice committee, the country they asked for, their level, a high seat in an empty room. 80% and up is green, 60 to 79% amber, under 60% red. A 1st choice with their country, a high seat and their level in a half-full room reads ${PREF_POINTS[0] + COUNTRY_PICK_POINTS + IMPORTANCE_NEED_WEIGHT.high + EXPERIENCE_MATCH_BONUS + Math.round(ROOM_FILL_MAX / 2)}%.`)}
             {row(`Committee preference  +${PREF_POINTS[0]} / +${PREF_POINTS[1]} / +${PREF_POINTS[2]}`, `Their 1st choice committee scores ${PREF_POINTS[0]}, 2nd choice ${PREF_POINTS[1]}, 3rd choice ${PREF_POINTS[2]}.`)}
             {row(`Exact country pick  +${COUNTRY_PICK_POINTS}`, 'Added when the open seat is the exact country they asked for in that preference.')}
             {row(`Experience fit  +${EXPERIENCE_MATCH_BONUS} / 0 / −${EXPERIENCE_GAP_STEP} / −${EXPERIENCE_GAP_STEP * 2}`, `An exact match between their experience level and the committee difficulty adds ${EXPERIENCE_MATCH_BONUS}. One level apart scores 0. Two apart subtracts ${EXPERIENCE_GAP_STEP}, three apart ${EXPERIENCE_GAP_STEP * 2}, the same either way round, so an expert in a beginner committee is penalised exactly like a beginner in an expert one. Scores 0 if their level or the committee difficulty is unset.`)}
             {row(`Room fill  up to +${ROOM_FILL_MAX}`, `Emptier committees score higher: ${ROOM_FILL_MAX} x the share of the committee's seats still open, so a room 25% full adds ${Math.round(ROOM_FILL_MAX * 0.75)} and a full room adds 0.`)}
             {row(`Seat importance  up to +${IMPORTANCE_NEED_WEIGHT.high}`, `An open high-importance seat adds ${IMPORTANCE_NEED_WEIGHT.high}, medium ${IMPORTANCE_NEED_WEIGHT.medium}, low ${IMPORTANCE_NEED_WEIGHT.low}, standard 0, so higher-priority seats fill first and delegates with no preferences still slot into where they are most needed.`)}
-            {row(`Delegation coherence  +${PAIR_BONUS} / −${CONCENTRATION_PENALTY}`, `Completing a valid double delegation (their society already holds the country’s other seat) adds ${PAIR_BONUS}; placing them where a societymate is already seated but not as a pair subtracts ${CONCENTRATION_PENALTY} to spread the delegation. Cross-society double seats are never suggested.`)}
+            {row(`Delegation coherence  +${PAIR_BONUS} / −${CONCENTRATION_PENALTY}`, `Completing a valid double delegation (their society already holds the country’s other seat) adds a ${PAIR_BONUS} bonus, never needed for 100% and never shown above it; placing them where a societymate is already seated but not as a pair subtracts ${CONCENTRATION_PENALTY} to spread the delegation. Cross-society double seats are never suggested.`)}
             <span style={{ fontFamily: OUTFIT, fontSize: 10.5, color: NEU.muted, lineHeight: 1.4, paddingTop: 2, borderTop: `1px solid ${NEU.base}` }}>
               Seat importance also orders the seats inside a committee overview, most urgent first.
             </span>
@@ -2141,8 +2141,6 @@ export default function AssignmentPage() {
     setViewChosen(true);
     try { window.localStorage.setItem(CLASSIC_VIEW_KEY, next ? '1' : '0'); } catch { /* storage blocked: this visit only */ }
   }, []);
-  // "Open the Delegations view" from the seat board shows a way back.
-  const [delegationsFromBoard, setDelegationsFromBoard] = useState(false);
   // ?release=unsent (the dashboard's "never told their seat" row) opens the
   // allocation email picker with the unsent delegates ticked. It only OPENS the
   // picker; sending is still the organiser's press. Read once, then dropped
@@ -3434,7 +3432,6 @@ export default function AssignmentPage() {
         <SeatBoard
           accepted={accepted}
           committees={sortedCommittees}
-          societies={societies}
           history={history}
           seated={seatedIdentities}
           spread={spread}
@@ -3445,12 +3442,6 @@ export default function AssignmentPage() {
           onOpenCommittee={(committeeId, seat) => {
             setOverviewSeat(seat ? { committeeId, personId: seat.personId, onSeat: seat.onSeat } : null);
             setOverviewCommitteeId(committeeId);
-          }}
-          onRefresh={() => loadData({ silent: true })}
-          onOpenDelegationsView={() => {
-            setDelegationsFromBoard(true);
-            setMode('delegations');
-            replaceUrlInPlace(`/manage/${conference.slug}/assignment?mode=delegations`);
           }}
         />
       )}
@@ -3902,17 +3893,6 @@ export default function AssignmentPage() {
         />
       )}
 
-
-      {mode === 'delegations' && delegationsFromBoard && (
-        <button
-          type="button"
-          onClick={() => { setDelegationsFromBoard(false); setMode('delegates'); replaceUrlInPlace(`/manage/${conference.slug}/assignment`); }}
-          className="focus:outline-none mb-4"
-          style={{ border: 'none', background: 'none', padding: 0, cursor: 'pointer', fontFamily: OUTFIT, fontSize: 13, fontWeight: 700, color: NEU.ink, textDecoration: 'underline', textUnderlineOffset: 3 }}
-        >
-          Back to the seat board
-        </button>
-      )}
 
       {mode === 'delegations' && (
         <DelegationsView conference={conference} showFlash={showFlash} initialSocietyId={deepDelegationId} />

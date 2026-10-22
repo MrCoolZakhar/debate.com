@@ -14,6 +14,7 @@ import { useRef, useState } from 'react';
 import { Layers, Plus } from 'lucide-react';
 import { OUTFIT } from '@/components/neu';
 import { jobOnboardingLater } from './jobsApi';
+import { EmptyArt } from './jobKit';
 
 const INK = '#1C1410';
 const INK_SOFT = '#5C5140';
@@ -57,7 +58,8 @@ export default function JobBoardOnboarding({ confId, canPack, onPost, onPack, on
   };
 
   return (
-    <div style={{ fontFamily: OUTFIT, padding: '18px 4px 6px' }}>
+    <EmptyArt image="/onboarding/podium-01.jpg">
+    <div style={{ fontFamily: OUTFIT, padding: '4px 4px 6px' }}>
       <p style={{ margin: 0, fontSize: 22, fontWeight: 800, color: INK }}>Post your first listing</p>
       <ol style={{ listStyle: 'none', margin: '14px 0 0', padding: 0, display: 'flex', flexDirection: 'column', gap: 10 }}>
         {STEPS.map((t, i) => (
@@ -94,5 +96,6 @@ export default function JobBoardOnboarding({ confId, canPack, onPost, onPack, on
       </div>
       {err && <p role="alert" style={{ margin: '10px 0 0', fontSize: 13.5, color: '#9E2A12' }}>{err}</p>}
     </div>
+    </EmptyArt>
   );
 }
