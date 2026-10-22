@@ -3,21 +3,19 @@
 /**
  * Loader.tsx — the one branded indeterminate loader for Gavelling.
  *
- * Three laurel leaves cascade down the frame on a staggered loop. The
- * laurel is the half of the Gavelling gavel mark that survives being
- * shrunk: a gavel head + handle turns into an unreadable brown smudge
- * below ~32px, whereas a single leaf blade stays a clean, obviously
- * green silhouette all the way down to 20px. It is also the only brand
- * shape whose motion doesn't fight the existing gavel-strike loader on
- * the live-session routes.
+ * A gavel spinning a full turn inside a faint ring, with a gold arc chasing
+ * round the ring (owner, 22 Oct 2026: "a gavel spinning 360 degrees", option 3
+ * of the loader board: spin with a gold ring trail). Both turns share one
+ * eased curve, so the gavel and the arc start and settle together each loop.
  *
- * Use this for GENERIC, indeterminate waits — route transitions, auth
- * gates, "we don't know what's coming back yet". Where the incoming
- * content has a known shape, a skeleton that mimics it is still better
- * UX; reach for src/components/Skeleton.tsx there instead.
+ * Use this for GENERIC, indeterminate waits — route transitions, auth gates,
+ * "we don't know what's coming back yet". Where the incoming content has a
+ * known shape, a skeleton that mimics it is still better UX; reach for
+ * src/components/Skeleton.tsx there instead.
  *
- * Motion + scoping live in Loader.module.css. Everything below is sizing,
- * theming and accessibility.
+ * Motion + scoping live in Loader.module.css (hashed class and keyframe
+ * names, so nothing collides with the global stylesheet). Everything below
+ * is sizing, theming and accessibility. The public props are unchanged.
  */
 
 import { memo } from 'react';
@@ -28,7 +26,7 @@ export interface LoaderProps {
   size?: number;
   /**
    * Surface the loader sits on. 'light' (default) is the ivory page/card
-   * family; 'dark' is a forest-green surface. See the colour note below.
+   * family; 'dark' is a forest-green surface.
    */
   tone?: 'light' | 'dark';
   /** Screen-reader label. Keep it stable — it is a live region. Default 'Loading'. */
@@ -37,27 +35,13 @@ export interface LoaderProps {
   style?: React.CSSProperties;
 }
 
-/* ── Colour, measured not guessed ─────────────────────────────────────
- * Contrast against the surfaces this actually lands on (WCAG 1.4.11
- * non-text contrast wants >= 3:1 for a meaningful graphic):
- *
- *   NEU.green  #3D7A52  on NEU.base    #EDE7D8 -> 4.15:1  PASS
- *   NEU.green  #3D7A52  on NEU.surface #F0EBDD -> 4.30:1  PASS
- *   NEU.forest #1B3828  on NEU.base    #EDE7D8 -> 10.36:1 PASS
- *   NEU.green  #3D7A52  on NEU.forest  #1B3828 -> 2.50:1  FAIL
- *   sage       #7FA98C  on NEU.forest  #1B3828 -> 4.84:1  PASS
- *
- * forest wins on raw ratio, but at 10.36:1 on ivory it reads as near
- * black — a black spinner, which is exactly what Peter asked us to stop
- * shipping ("in green so that colours match with Gavelling"). NEU.green
- * clears the 3:1 bar with room to spare AND actually reads green, so it
- * is the light-tone fill. On a forest card NEU.green collapses to
- * 2.50:1, so the dark tone lifts to the light stop of NEU_GRADIENTS.sage
- * (#7FA98C, 4.84:1) — still unmistakably green, just inverted in value.
- */
-const FILL = { light: '#3D7A52', dark: '#7FA98C' } as const;
-/* Reference used a flat `#5c3d9933` (20% alpha) halo; same alpha here. */
-const SHINE = { light: '#3D7A5233', dark: '#7FA98C3D' } as const;
+/* Colours per surface. On ivory the gavel is forest (#1B3828, 10:1) with gold
+ * caps; on a forest card it lifts to sage (#7FA98C, 4.8:1) so it stays visible.
+ * The gold arc (#C9A646) reads on both. */
+const TONE = {
+  light: { head: '#1B3828', handle: '#2C4A39', track: 'rgba(27,56,40,0.14)', gold: '#C9A646' },
+  dark: { head: '#7FA98C', handle: '#9CC0A6', track: 'rgba(255,255,255,0.16)', gold: '#E4C76B' },
+} as const;
 
 function LoaderBase({
   size = 44,
@@ -66,70 +50,34 @@ function LoaderBase({
   className,
   style,
 }: LoaderProps) {
-  // A leaf that is a fixed fraction of the box disappears at inline sizes,
-  // so small loaders get a proportionally chunkier leaf. Above ~32px the
-  // cascade has room to read and the leaf can settle back to half the box.
-  const leafPct = size < 30 ? 66 : size < 44 ? 58 : 50;
-  // The reference's flat 10px halo swamps a 20px mark and vanishes on a
-  // 120px one — tie it to the size, with sane bounds.
-  const glow = Math.min(10, Math.max(3, Math.round(size * 0.14)));
+  const c = TONE[tone];
+  // A thin ring vanishes at inline sizes and shouts at 120px: tie its stroke
+  // to the box (in viewBox units of 80).
+  const stroke = size < 28 ? 6 : size < 48 ? 4 : 3;
 
   return (
     <span
       role="status"
       aria-live="polite"
-      // The SVGs are aria-hidden and nothing inside this element ever
-      // changes, so the live region announces exactly once when it is
-      // inserted and never re-announces on a parent re-render.
+      // The SVG is aria-hidden and nothing inside this element ever changes,
+      // so the live region announces exactly once when it is inserted.
       aria-label={label}
       className={`${styles.root}${className ? ` ${className}` : ''}`}
-      style={
-        {
-          width: size,
-          height: size,
-          '--gv-fill': FILL[tone],
-          '--gv-shine': SHINE[tone],
-          '--gv-leaf': `${leafPct}%`,
-          '--gv-glow': `${glow}px`,
-          ...style,
-        } as React.CSSProperties
-      }
+      style={{ width: size, height: size, ...style }}
     >
-      <span className={`${styles.leaf} ${styles.one}`} aria-hidden>
-        <Leaf />
-      </span>
-      <span className={`${styles.leaf} ${styles.two}`} aria-hidden>
-        <Leaf />
-      </span>
-      <span className={`${styles.leaf} ${styles.three}`} aria-hidden>
-        <Leaf />
-      </span>
+      <svg viewBox="0 0 80 80" xmlns="http://www.w3.org/2000/svg" focusable="false" aria-hidden className={styles.svg}>
+        <circle cx="40" cy="40" r="35" fill="none" stroke={c.track} strokeWidth={stroke} />
+        <g className={styles.trail}>
+          <path d="M40 5 A35 35 0 0 1 75 40" fill="none" stroke={c.gold} strokeWidth={stroke} strokeLinecap="round" />
+        </g>
+        <g className={styles.gavel}>
+          <rect x="22" y="20" width="36" height="15" rx="4.5" fill={c.head} />
+          <rect x="26" y="18" width="5" height="19" rx="2" fill={c.gold} />
+          <rect x="49" y="18" width="5" height="19" rx="2" fill={c.gold} />
+          <rect x="37.5" y="34" width="5" height="28" rx="2.5" fill={c.handle} />
+        </g>
+      </svg>
     </span>
-  );
-}
-
-/**
- * A single laurel leaf. Blade first (the stylesheet fills `path:first-child`
- * with the theme colour, mirroring the reference's `svg g path:first-child`
- * hook), midrib second so it darkens the blade rather than being covered.
- * Slightly canted rather than mirror-symmetric — a perfectly symmetric
- * almond reads as a generic "eye" shape, the cant reads as foliage.
- */
-function Leaf() {
-  return (
-    <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" focusable="false">
-      <g>
-        <path d="M12.3 1.2C18.9 7.1 20.2 14.8 11.3 22.8 3.4 14.9 6 6.9 12.3 1.2Z" />
-        <path
-          d="M12.3 3.4C13.8 9.2 13.4 15.6 11.7 21"
-          fill="none"
-          stroke="#000"
-          strokeOpacity="0.22"
-          strokeWidth="1.1"
-          strokeLinecap="round"
-        />
-      </g>
-    </svg>
   );
 }
 
