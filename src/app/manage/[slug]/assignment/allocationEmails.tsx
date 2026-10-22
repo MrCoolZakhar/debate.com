@@ -2,8 +2,8 @@
 
 // ── Allocation announcement emails: the organiser's control ──────────────────
 // "You are France in DISEC" is the single most important message this product
-// sends. This module owns the organiser side of it: the toggle between
-// automatic release (the default) and waves released by hand, the roster of
+// sends. This module owns the organiser side of it: the Automatic or Manual
+// choice (automatic release is the default; manual sends waves by hand), the roster of
 // who has already been told, and the picker for a custom wave.
 //
 // The queue itself is @/lib/allocationEmail.queueAllocationEmails, re-exported
@@ -24,7 +24,6 @@ import { CircleFlag } from '@/components/CircleFlag';
 import { NEU, NEU_GRADIENTS, OUTFIT, EASE, NeuButton, NeuInset } from '@/components/neu';
 import Portal from '@/components/Portal';
 import { ModalOverlay } from '@/components/ModalOverlay';
-import { PillToggle } from '@/app/account/accountUi';
 
 // The queue itself lives in @/lib/allocationEmail — server-safe, because the
 // same rules have to run for /api/emails/queue-participant when a DELEGATION
@@ -204,13 +203,11 @@ function HoverInfo({ title, lines }: { title: string; lines: [string, string][] 
 // like every other floating layer on this page.
 
 function SendMenu({
-  unsentCount, totalCount, busy, emphasise, onAllNew, onEveryone, onCustom,
+  unsentCount, totalCount, busy, onAllNew, onEveryone, onCustom,
 }: {
   unsentCount: number;
   totalCount: number;
   busy: boolean;
-  /** OFF = the organiser is driving, so the button carries the gold accent. */
-  emphasise: boolean;
   onAllNew: () => void;
   onEveryone: () => void;
   onCustom: () => void;
@@ -226,7 +223,7 @@ function SendMenu({
     if (!b) return;
     const r = b.getBoundingClientRect();
     const left = Math.max(10, Math.min(r.right - WIDTH, window.innerWidth - 10 - WIDTH));
-    const estH = 186;
+    const estH = 214;
     const flipUp = r.bottom + 8 + estH > window.innerHeight - 10 && r.top - 8 - estH > 10;
     setPos({ top: flipUp ? r.top - 8 - estH : r.bottom + 8, left });
   }, []);
@@ -265,36 +262,40 @@ function SendMenu({
       onMouseEnter={e => { if (!itemDisabled) (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.05)'; }}
       onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
     >
-      <Icon size={14} strokeWidth={2.4} style={{ color: NEU.deepGold, marginTop: 2, flexShrink: 0 }} />
+      <Icon size={15} strokeWidth={1.5} style={{ color: NEU.ink, marginTop: 1, flexShrink: 0 }} />
       <span style={{ display: 'flex', flexDirection: 'column', gap: 1, minWidth: 0 }}>
-        <span style={{ fontFamily: OUTFIT, fontSize: 12, fontWeight: 800, color: NEU.ink }}>{text}</span>
-        <span style={{ fontFamily: OUTFIT, fontSize: 10.5, color: NEU.inkSoft, lineHeight: 1.35 }}>{note}</span>
+        <span style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 600, color: NEU.ink }}>{text}</span>
+        <span style={{ fontFamily: OUTFIT, fontSize: 11.5, color: NEU.inkSoft, lineHeight: 1.35 }}>{note}</span>
       </span>
     </button>
   );
 
   return (
     <>
+      {/* "Send N waiting" (owner, 22 Oct 2026): the count IS the button, the
+          menu holds the other waves. A calm solid while people are waiting,
+          a soft pill when nobody is. */}
       <button
         ref={btnRef}
+        type="button"
         onClick={() => { if (!open) place(); setOpen(o => !o); }}
         disabled={busy || totalCount === 0}
-        className="gv-lift inline-flex items-center gap-1.5 focus:outline-none"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        className="inline-flex items-center gap-1.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]/25 transition-transform duration-150 enabled:active:scale-[0.96]"
         style={{
-          padding: '9px 15px', borderRadius: 999, border: 'none',
-          fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 800, letterSpacing: 0,
-          background: totalCount === 0
-            ? 'rgba(27,56,40,0.12)'
-            : emphasise
-            ? `linear-gradient(135deg, ${NEU_GRADIENTS.gold[0]}, ${NEU_GRADIENTS.gold[1]})`
-            : NEU.surface,
-          color: totalCount === 0 ? NEU.muted : emphasise ? NEU.forest : NEU.ink,
+          height: 34, padding: '0 12px 0 14px', borderRadius: 999, whiteSpace: 'nowrap',
+          fontFamily: OUTFIT, fontSize: 13, fontWeight: 600,
+          border: unsentCount > 0 ? 'none' : '1px solid rgba(27,56,40,0.20)',
+          background: unsentCount > 0 ? '#2C4A39' : '#FFFFFF',
+          color: unsentCount > 0 ? '#FFFFFF' : NEU.forest,
+          opacity: totalCount === 0 ? 0.55 : 1,
           cursor: busy || totalCount === 0 ? 'default' : 'pointer',
         }}
       >
-        <Send size={13} strokeWidth={2.5} style={{ color: totalCount === 0 ? NEU.muted : emphasise ? NEU.forest : NEU.deepGold }} />
-        {busy ? 'Sending…' : 'Send'}
-        <ChevronDown size={12} strokeWidth={2.6} style={{ transform: open ? 'rotate(180deg)' : 'none', transition: `transform 160ms ${EASE}` }} />
+        <Send size={14} strokeWidth={1.5} aria-hidden />
+        {busy ? 'Sending' : unsentCount > 0 ? `Send ${unsentCount} waiting` : 'Send'}
+        <ChevronDown size={14} strokeWidth={1.5} aria-hidden style={{ transform: open ? 'rotate(180deg)' : 'none', transition: `transform 160ms ${EASE}` }} />
       </button>
 
       {open && pos && (
@@ -309,12 +310,12 @@ function SendMenu({
             }}
           >
             <style>{'@keyframes allocMenuIn { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: translateY(0); } }'}</style>
-            <p style={{ fontFamily: OUTFIT, fontSize: 9.5, fontWeight: 800, letterSpacing: '0.13em', color: NEU.deepGold, padding: '6px 11px 4px' }}>
-              RELEASE ALLOCATIONS
+            <p style={{ fontFamily: OUTFIT, fontSize: 12, fontWeight: 600, color: NEU.inkSoft, padding: '6px 11px 4px' }}>
+              Send allocation emails
             </p>
-            {item(Send, `All new (${unsentCount})`, 'Everyone seated who has not been emailed yet.', onAllNew, unsentCount === 0)}
-            {item(Repeat, `Everyone (${totalCount})`, 'Re-sends to all seated delegates, including those already emailed.', onEveryone, totalCount === 0)}
-            {item(ListChecks, 'Choose individually…', 'Pick exactly who goes out in this wave.', onCustom, totalCount === 0)}
+            {item(Send, `Everyone waiting (${unsentCount})`, 'Everyone seated who has not been emailed yet', onAllNew, unsentCount === 0)}
+            {item(Repeat, `Everyone seated (${totalCount})`, 'Sends again to all seated delegates, including those already emailed', onEveryone, totalCount === 0)}
+            {item(ListChecks, 'Choose who', 'Pick exactly who goes out in this wave', onCustom, totalCount === 0)}
           </div>
         </Portal>
       )}
@@ -367,91 +368,93 @@ export function AllocationEmailBar({
     if (openWithUnsent && openedFromDashboard) onOpenedWithUnsent?.();
   }, [openWithUnsent, openedFromDashboard, onOpenedWithUnsent]);
 
+  // One clear control (owner, 22 Oct 2026): "Allocation emails: Automatic |
+  // Manual" with the current mode highlighted, the status beneath, and "Send N
+  // waiting" whenever the release is manual or someone is waiting. No on/off
+  // wording. The saves are the same verified write (saveAllocationEmailAuto).
+  const showSend = !templateOff && targets.length > 0 && (!autoSend || unsent.length > 0);
+  const mode = (key: 'auto' | 'manual', label: string, hint: string) => {
+    const on = autoSend === (key === 'auto');
+    return (
+      <button
+        type="button"
+        role="radio"
+        aria-checked={on}
+        title={hint}
+        disabled={togglePending}
+        onClick={() => { if (!on && !togglePending) onToggleAuto(key === 'auto'); }}
+        className="focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]/25"
+        style={{
+          height: 30, padding: '0 13px', borderRadius: 9, border: 'none',
+          background: on ? '#FFFFFF' : 'transparent',
+          boxShadow: on ? '0 1px 3px rgba(27,56,40,0.14)' : 'none',
+          fontFamily: OUTFIT, fontSize: 13, fontWeight: on ? 600 : 500,
+          color: on ? NEU.ink : NEU.inkSoft,
+          cursor: togglePending ? 'wait' : on ? 'default' : 'pointer',
+          transition: `background-color 160ms ${EASE}, box-shadow 160ms ${EASE}`,
+        }}
+      >
+        {label}
+      </button>
+    );
+  };
+
   return (
     <>
       <div
-        className="flex items-center gap-3 flex-wrap"
+        className="flex items-center gap-x-4 gap-y-2 flex-wrap"
         style={{
-          backgroundColor: NEU.surface, borderRadius: 20, padding: '10px 14px',
-          boxShadow: NEU.outSm,
+          backgroundColor: '#FFFFFF', borderRadius: 18, padding: '8px 10px 8px 14px',
+          boxShadow: '0 1px 2px rgba(27,56,40,0.06), 0 8px 24px rgba(27,56,40,0.08)',
           // So a narrow header makes the bar WRAP rather than run off the page:
           // without these a flex item refuses to shrink below its content.
           maxWidth: '100%', minWidth: 0,
         }}
       >
-        <span
-          className="inline-flex items-center justify-center flex-shrink-0"
-          style={{
-            width: 32, height: 32, borderRadius: 11,
-            background: `linear-gradient(135deg, ${NEU_GRADIENTS.gold[0]}, ${NEU_GRADIENTS.gold[1]})`,
-            color: NEU.forest, boxShadow: NEU.outSm,
-          }}
-        >
-          <Mail size={15} strokeWidth={2.4} />
-        </span>
-
-        <div style={{ minWidth: 0 }}>
-          <div className="flex items-center gap-1.5">
-            <p style={{ fontFamily: OUTFIT, fontSize: 10, fontWeight: 800, letterSpacing: '0.12em', color: NEU.deepGold }}>
-              ALLOCATION EMAILS
-            </p>
+        <div className="flex flex-col" style={{ minWidth: 0, gap: 1 }}>
+          <span className="inline-flex items-center gap-1.5" style={{ fontFamily: OUTFIT, fontSize: 13.5, fontWeight: 600, color: NEU.ink }}>
+            <Mail size={15} strokeWidth={1.5} aria-hidden />
+            Allocation emails
             <HoverInfo
               title="How allocation emails go out"
               lines={[
-                ['Automatic (default)', 'Each delegate is emailed their committee and country the moment you seat them. Nothing to remember, nothing to press.'],
-                ['Manual', 'Turn this off to release in waves. Nobody is emailed on assignment; you choose when, and who, from the Send menu.'],
-                ['Who has been told', 'Every seated delegate is tracked individually. "All new" covers only those not yet emailed; "Choose individually" shows each delegate\'s status.'],
-                ['The copy itself', 'Edit the Allocation Assigned template under Communications. Until you draft your own, Gavelling sends its default.'],
+                ['Automatic', 'Each delegate is emailed their committee and country the moment you seat them. Nothing to remember, nothing to press.'],
+                ['Manual', 'Nobody is emailed when you seat them. You choose when, and who, with Send.'],
+                ['Who has been told', 'Every seated delegate is tracked. "Everyone waiting" covers only those not emailed yet; "Choose who" shows each delegate.'],
+                ['The wording', 'Edit the Allocation Assigned email under Communications. Until you write your own, Gavelling sends its default.'],
               ]}
             />
-          </div>
-          <p style={{ fontFamily: OUTFIT, fontSize: 12, color: NEU.inkSoft, marginTop: 1 }}>
+          </span>
+          <span style={{ fontFamily: OUTFIT, fontSize: 12, color: NEU.inkSoft }}>
             {templateOff ? (
-              <span style={{ fontWeight: 700, color: NEU.amber }}>
-                Off in Communications. Nobody is emailed when you seat them{unsent.length > 0 ? ` (${unsent.length} waiting)` : ''}.
+              <span style={{ fontWeight: 600, color: NEU.amber }}>
+                Turned off in Communications{unsent.length > 0 ? `, ${unsent.length} waiting` : ''}
               </span>
             ) : targets.length === 0 ? (
-              'No delegates seated yet'
+              'Nobody seated yet'
             ) : (
               <>
-                <span style={{ fontWeight: 800, color: NEU.green }}>{sentCount} emailed</span>
+                <span style={{ fontWeight: 600, color: NEU.ink, fontVariantNumeric: 'tabular-nums' }}>{sentCount}</span> emailed
                 {unsent.length > 0 && (
                   <>
-                    <span style={{ color: NEU.muted }}> · </span>
-                    <span style={{ fontWeight: 800, color: unsent.length > 0 ? NEU.amber : NEU.inkSoft }}>
-                      {unsent.length} waiting
-                    </span>
+                    {' · '}
+                    <span style={{ fontWeight: 600, color: NEU.ink, fontVariantNumeric: 'tabular-nums' }}>{unsent.length}</span> waiting
                   </>
                 )}
               </>
             )}
-          </p>
+          </span>
         </div>
 
-        {/* Controls travel together, so a narrow header wraps this bar into two
-            clean halves — status above, controls below — instead of orphaning
-            the divider mid-row. */}
-        <div className="flex items-center gap-3" style={{ marginLeft: 'auto' }}>
+        <div className="flex items-center gap-2.5 flex-wrap" style={{ marginLeft: 'auto' }}>
           <span
-            aria-hidden
-            style={{ width: 1, alignSelf: 'stretch', minHeight: 26, backgroundColor: 'rgba(27,56,40,0.10)' }}
-          />
-
-          {/* A <label> cannot own a <button>, so the caption is not one — it
-              just mirrors the pill's click for the pointer. The pill stays the
-              single keyboard control. */}
-          <span className="flex items-center gap-2" role="group" aria-label="Allocation email release mode">
-            <PillToggle value={autoSend} onChange={onToggleAuto} size="sm" disabled={togglePending} />
-            <span
-              onClick={() => { if (!togglePending) onToggleAuto(!autoSend); }}
-              style={{
-                fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 700,
-                color: autoSend ? NEU.forest : NEU.amber, whiteSpace: 'nowrap',
-                cursor: togglePending ? 'wait' : 'pointer', userSelect: 'none',
-              }}
-            >
-              {templateOff ? 'Switched off' : autoSend ? 'Sending automatically' : 'Manual release'}
-            </span>
+            role="radiogroup"
+            aria-label="How allocation emails go out"
+            className="inline-flex"
+            style={{ gap: 2, padding: 2.5, borderRadius: 11, background: '#F1ECE1', opacity: templateOff ? 0.6 : 1 }}
+          >
+            {mode('auto', 'Automatic', 'Each delegate is emailed the moment you seat them')}
+            {mode('manual', 'Manual', 'Nobody is emailed until you send')}
           </span>
 
           {templateOff && onTurnOnTemplate && (
@@ -459,12 +462,12 @@ export function AllocationEmailBar({
               type="button"
               onClick={onTurnOnTemplate}
               disabled={turningOnTemplate}
-              title="Allocation emails are switched off under Communications, so nobody is emailed when you seat them. Turning them on emails the delegates you seat from now on. Anyone already waiting is sent only when you press Send."
-              className="focus:outline-none"
+              title="Allocation emails are turned off under Communications, so nobody is emailed when you seat them. Turning them on emails the delegates you seat from now on. Anyone already waiting is sent only when you press Send."
+              className="focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]/25"
               style={{
-                fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 800, whiteSpace: 'nowrap',
-                color: NEU.forest, backgroundColor: 'rgba(238,217,138,0.55)',
-                borderRadius: 999, padding: '6px 12px', boxShadow: NEU.outSm,
+                height: 32, padding: '0 14px', borderRadius: 999, whiteSpace: 'nowrap',
+                fontFamily: OUTFIT, fontSize: 13, fontWeight: 600,
+                color: NEU.forest, background: '#FFFFFF', border: '1px solid rgba(27,56,40,0.20)',
                 cursor: turningOnTemplate ? 'wait' : 'pointer', opacity: turningOnTemplate ? 0.6 : 1,
               }}
             >
@@ -472,15 +475,16 @@ export function AllocationEmailBar({
             </button>
           )}
 
-          <SendMenu
-            unsentCount={unsent.length}
-            totalCount={targets.length}
-            busy={busy}
-            emphasise={!autoSend}
-            onAllNew={() => onSend(unsent.map(t => t.applicationId), 'new')}
-            onEveryone={() => onSend(targets.map(t => t.applicationId), 'all')}
-            onCustom={() => { setInitialPicked([]); setPickerOpen(true); }}
-          />
+          {showSend && (
+            <SendMenu
+              unsentCount={unsent.length}
+              totalCount={targets.length}
+              busy={busy}
+              onAllNew={() => onSend(unsent.map(t => t.applicationId), 'new')}
+              onEveryone={() => onSend(targets.map(t => t.applicationId), 'all')}
+              onCustom={() => { setInitialPicked([]); setPickerOpen(true); }}
+            />
+          )}
         </div>
       </div>
 

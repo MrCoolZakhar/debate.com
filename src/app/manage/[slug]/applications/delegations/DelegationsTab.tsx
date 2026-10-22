@@ -14,11 +14,19 @@
 // (DelegationNameLines); members big with the expected size small beneath.
 // Decisions: docs/conferences/delegations.md.
 //
+// Owner, 22 Oct 2026: each row shows the delegation's COUNTRY clearly (its
+// round flag and short name, the city after it; a delegation with no country
+// on file falls back to where most members are from, said so on hover), the
+// allocations column leads with "N delegate spots paid" (the number
+// allocations are given against), and a Sort control sits over the list:
+// A to Z (the default), Needs allocations, Most members, Newest.
+//
 // Where every number comes from (useDelegationsData.ts, delegationRows.ts):
 //   Expected      the expected size the leaders gave (live pledges plus advisors
 //                 coming), else the spots paid for; 0 when neither exists
 //   Joined        members coming or applying (any role, attending)
-//   Paid          the ledger: settled delegation spots of live leaders plus delegates
+//   Paid          DELEGATE spots paid (advisor tickets never count), from
+//                 the ledger: settled delegation spots of live leaders plus delegates
 //                 who paid their own ticket or were waived (paidSpotsBySociety, the twin
 //                 of _society_paid_delegate_spots; the allocation page uses the same)
 //   Seats given   allocations carrying the delegation (block seats) or one of its
@@ -36,16 +44,20 @@ import Link from 'next/link';
 import { ChevronRight } from 'lucide-react';
 import { useManage } from '@/app/manage/[slug]/layout';
 import { DatePicker } from '@/components/DatePicker';
+import GSelect from '@/components/GSelect';
+import { CircleFlag } from '@/components/CircleFlag';
+import { getCountryByCode } from '@/lib/countries';
+import { countryShortName } from '@/app/manage/[slug]/assignment/displayNames';
 import DelegationCrest from '@/components/DelegationCrest';
 import { getFreshAuthedClient } from '@/lib/supabase-auth';
 import { friendlyError } from '@/lib/friendlyError';
 import { notifyErr, notifyOk } from '@/lib/appNotify';
 import { memberName, type DelegationMemberLite } from '../delegationRows';
-import { useDelegationsData } from './useDelegationsData';
+import { useDelegationsData, type DelegationView } from './useDelegationsData';
 import DelegationPopup, { leadersOf, type DelegationTab } from './DelegationPopup';
 import { DELEGATIONS_V2_DB, SEAT_LIMIT_OPTIONS, readDelegationSettings, writeDelegationSetting, type SeatLimit } from './v2';
 import {
-  BTN_CLASS, DelegationNameLines, FONT, FOREST, HAIRLINE, INK, INK_SOFT, PlaceLine, ROW_LINE, RoundAvatar, STROKE, SeatMeter, SkeletonRows,
+  BTN_CLASS, DelegationNameLines, FONT, FOREST, HAIRLINE, INK, INK_SOFT, ROW_LINE, RoundAvatar, STROKE, SeatMeter, SkeletonRows,
   cardStyle, linkStyle,
 } from './kit';
 
@@ -54,6 +66,54 @@ import {
  *  1280 (owner, 21 Oct 2026: the Open button was cut off and the row was mostly
  *  blank). The whole row opens the pop-up; the chevron says so. */
 const ROW_COLUMNS = 'minmax(0, 1.55fr) minmax(0, 1.15fr) max-content minmax(150px, 1fr) 20px';
+
+type SortKey = 'az' | 'needs' | 'members' | 'newest';
+
+const SORT_OPTIONS: { value: SortKey; label: string }[] = [
+  { value: 'az', label: 'A to Z' },
+  { value: 'needs', label: 'Needs allocations' },
+  { value: 'members', label: 'Most members' },
+  { value: 'newest', label: 'Newest' },
+];
+
+const byName = new Intl.Collator('en', { sensitivity: 'base', numeric: true });
+
+function sortRows<R extends DelegationView>(rows: R[], key: SortKey): R[] {
+  const az = (a: R, b: R) => byName.compare(a.name, b.name);
+  return rows.slice().sort((a, b) => {
+    if (key === 'needs') return b.needSeats - a.needSeats || az(a, b);
+    if (key === 'members') return b.registered - a.registered || az(a, b);
+    if (key === 'newest') return (b.createdAt ?? '').localeCompare(a.createdAt ?? '') || az(a, b);
+    return az(a, b);
+  });
+}
+
+/** The delegation's country, clearly: its round flag and short name (UK, USA),
+ *  the city after it. With no country on file, where most members are from. */
+function CountryLine({ row }: { row: DelegationView }) {
+  const code = row.countryCode?.trim().toUpperCase() || '';
+  const city = row.city?.trim() || '';
+  const full = code ? (getCountryByCode(code)?.name ?? code) : '';
+  const short = full ? countryShortName(full, code) : '';
+  if (!short && !row.country && !city) return null;
+  if (!short && row.country) {
+    return (
+      <span className="flex items-center gap-1.5 min-w-0" title={`Most members are from ${row.country}`} style={{ fontFamily: FONT, fontSize: 13, color: INK_SOFT }}>
+        <CircleFlag country={row.country} size={18} decorative />
+        <span className="[overflow-wrap:anywhere]">{countryShortName(row.country)}{city ? `, ${city}` : ''}</span>
+      </span>
+    );
+  }
+  return (
+    <span className="flex items-center gap-1.5 min-w-0" title={[city, full].filter(Boolean).join(', ') || undefined} style={{ fontFamily: FONT, fontSize: 13, color: INK_SOFT }}>
+      {code && <CircleFlag code={code} size={18} decorative />}
+      <span className="[overflow-wrap:anywhere]">
+        {short && <span style={{ fontWeight: 600, color: INK }}>{short}</span>}
+        {short && city ? ', ' : ''}{city}
+      </span>
+    </span>
+  );
+}
 
 export interface DelegationsTabProps<M extends DelegationMemberLite> {
   conference: { id: string; slug: string; fee_currency: string };
@@ -82,12 +142,15 @@ export default function DelegationsTab<M extends DelegationMemberLite>(props: De
     if (focusId) setOpen({ id: focusId, tab: 'people' });
   }
 
-  const visible = useMemo(() => data.rows.filter(r => {
+  const [sort, setSort] = useState<SortKey>('az');
+  const visible = useMemo(() => sortRows(data.rows.filter(r => {
     if (!search) return true;
-    const hay = [r.name, r.city ?? '', ...r.members.map(m => `${memberName(m)} ${m.profiles?.email ?? m.invited_email ?? ''}`)]
+    const code = r.countryCode?.trim().toUpperCase() || '';
+    const countryName = code ? (getCountryByCode(code)?.name ?? '') : (r.country ?? '');
+    const hay = [r.name, r.city ?? '', countryName, ...r.members.map(m => `${memberName(m)} ${m.profiles?.email ?? m.invited_email ?? ''}`)]
       .join(' ').toLowerCase();
     return hay.includes(search);
-  }), [data.rows, search]);
+  }), sort), [data.rows, search, sort]);
 
   const totals = useMemo(() => data.rows.reduce((t, r) => ({
     expected: t.expected + (r.expected ?? 0),
@@ -173,6 +236,26 @@ export default function DelegationsTab<M extends DelegationMemberLite>(props: De
           </div>
         )}
 
+        {data.rows.length > 0 && (
+          <div className="flex items-center justify-between flex-wrap" style={{ gap: 10, padding: '0 4px' }}>
+            <span style={{ fontFamily: FONT, fontSize: 14, color: INK_SOFT, fontVariantNumeric: 'tabular-nums' }}>
+              {visible.length === 1 ? '1 delegation' : `${visible.length} delegations`}
+            </span>
+            <span className="inline-flex items-center" style={{ gap: 8 }}>
+              <span id="dlg-sort" style={{ fontFamily: FONT, fontSize: 13, color: INK_SOFT }}>Sort</span>
+              <GSelect<SortKey>
+                aria-labelledby="dlg-sort"
+                value={sort}
+                onChange={setSort}
+                options={SORT_OPTIONS}
+                size="sm"
+                align="end"
+                style={{ width: 'auto', minWidth: 170 }}
+              />
+            </span>
+          </div>
+        )}
+
         {!data.loading && data.rows.length > 0 && visible.length === 0 && (
           <p style={{ ...cardStyle, padding: '22px 24px', fontFamily: FONT, fontSize: 14, color: INK_SOFT }}>No delegation matches that search.</p>
         )}
@@ -180,7 +263,7 @@ export default function DelegationsTab<M extends DelegationMemberLite>(props: De
         {visible.length > 0 && (
           <div style={{ ...cardStyle, padding: 0, overflow: 'hidden' }}>
             <div className="dlgV2Head" style={{ gridTemplateColumns: ROW_COLUMNS, gap: 18, padding: '12px 20px', borderBottom: `1px solid ${ROW_LINE}` }}>
-              {['Delegation', 'Leaders', 'Members', 'Allocations given', ''].map((h, i) => (
+              {['Delegation', 'Leaders', 'Members', 'Allocations', ''].map((h, i) => (
                 <span key={i} style={{ fontFamily: FONT, fontSize: 12, fontWeight: 500, color: INK_SOFT }}>{h}</span>
               ))}
             </div>
@@ -203,7 +286,7 @@ export default function DelegationsTab<M extends DelegationMemberLite>(props: De
                     <DelegationCrest name={r.name} logoUrl={r.logoUrl} size={52} />
                     <div className="flex flex-col min-w-0" style={{ gap: 4 }}>
                       <DelegationNameLines name={r.name} size={17} restSize={12.5} />
-                      <PlaceLine city={r.city} countryCode={r.countryCode} short oneLine size={14} fontSize={12} />
+                      <CountryLine row={r} />
                     </div>
                   </div>
 
@@ -236,9 +319,15 @@ export default function DelegationsTab<M extends DelegationMemberLite>(props: De
                   </div>
 
                   <div className="flex flex-col min-w-0" style={{ gap: 6 }}>
+                    {/* Paid DELEGATE spots lead: allocations are given against them
+                        (owner, 22 Oct 2026). Advisor tickets never count here. */}
+                    <span className="inline-flex items-baseline" title="Delegate tickets paid (advisor tickets not counted)" style={{ gap: 5, fontFamily: FONT, fontVariantNumeric: 'tabular-nums' }}>
+                      <span style={{ fontSize: 17, fontWeight: 600, color: INK, lineHeight: 1.1 }}>{r.paid}</span>
+                      <span style={{ fontSize: 12.5, color: INK_SOFT }}>delegate {r.paid === 1 ? 'spot' : 'spots'} paid</span>
+                    </span>
                     <SeatMeter given={r.seatsGiven} filled={r.seatsFilled} paid={r.paid} height={6} />
                     <span style={{ fontFamily: FONT, fontSize: 12.5, color: INK_SOFT, fontVariantNumeric: 'tabular-nums' }}>
-                      <b style={{ color: INK, fontWeight: 600 }}>{r.seatsGiven}</b> {r.seatsGiven === 1 ? 'allocation' : 'allocations'} · <b style={{ color: INK, fontWeight: 600 }}>{r.seatsFilled}</b> filled
+                      <b style={{ color: INK, fontWeight: 600 }}>{r.seatsGiven}</b> given · <b style={{ color: INK, fontWeight: 600 }}>{r.seatsFilled}</b> filled
                     </span>
                     {giveSeats && (
                       <Link href={`/manage/${conference.slug}/assignment?mode=delegation-seats&society=${encodeURIComponent(r.id)}`}
@@ -272,7 +361,7 @@ export default function DelegationsTab<M extends DelegationMemberLite>(props: De
           <div className="flex flex-col" style={{ gap: 8, fontFamily: FONT, fontSize: 14 }}>
             {[
               ['Expected', totals.expected],
-              ['Paid', totals.paid],
+              ['Delegate spots paid', totals.paid],
               ['Allocations given', totals.given],
               ['Allocations filled by a person', totals.filled],
             ].map(([label, n]) => (

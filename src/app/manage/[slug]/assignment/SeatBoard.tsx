@@ -54,36 +54,14 @@ import {
 // was rejected).
 const SMART_CARD_SHADOW = 'inset 0 3px 0 #E2C66B, inset 0 0 0 1px rgba(182,135,31,0.20), 0 1px 2px rgba(27,56,40,0.08), 0 12px 28px -10px rgba(27,56,40,0.26)';
 
-type SortKey = 'accepted' | 'name' | 'first';
+type SortKey = 'accepted' | 'name';
 type SchoolFilter = 'all' | 'independent' | `s:${string}`;
 type LevelFilter = 'all' | 'beginner' | 'intermediate' | 'advanced' | 'expert';
 
 export interface SeatBoardSociety { id: string; name: string; memberCount: number }
 
-function firstPref(app: AcceptedApp) {
-  return [...(app.application_preferences ?? [])].sort((a, b) => a.preference_order - b.preference_order)[0] ?? null;
-}
-
 function byName(a: string, b: string) {
   return a.localeCompare(b, undefined, { sensitivity: 'base' });
-}
-
-// ── Header counts ────────────────────────────────────────────────────────────
-export function SeatBoardStats({ committees, waiting }: { committees: CommitteeData[]; waiting: number }) {
-  let seated = 0;
-  let open = 0;
-  for (const c of committees) {
-    const n = seatCounts(c);
-    seated += n.filled;
-    open += n.open;
-  }
-  return (
-    <span className="flex items-center gap-5 flex-wrap">
-      <BigCount n={seated} word="seated" />
-      <BigCount n={waiting} word="waiting" />
-      <BigCount n={open} word={open === 1 ? 'open seat' : 'open seats'} />
-    </span>
-  );
 }
 
 export default function SeatBoard({
@@ -199,7 +177,6 @@ export default function SeatBoard({
   }
 
   // ── Left list ──────────────────────────────────────────────────────────────
-  const committeeById = useMemo(() => new Map(committees.map(c => [c.id, c])), [committees]);
   const schoolOptions = useMemo(() => {
     const seen = new Map<string, string>();
     let independents = false;
@@ -215,7 +192,6 @@ export default function SeatBoard({
   const sortOptions: GSelectOption<SortKey>[] = [
     { value: 'accepted', label: 'Accepted', hint: 'Oldest first' },
     { value: 'name', label: 'Name', hint: 'A to Z' },
-    { value: 'first', label: '1st choice', hint: 'By committee and country' },
   ];
   const sortLabel = sortOptions.find(o => o.value === sort)?.label ?? 'Accepted';
   const schoolLabel = schoolOptions.find(o => o.value === fSchool)?.label ?? 'Delegation';
@@ -236,22 +212,15 @@ export default function SeatBoard({
       if (fLevel !== 'all' && effectiveLevel(a).toLowerCase() !== fLevel) return false;
       return true;
     });
-    const firstLabel = (a: AcceptedApp) => {
-      const fp = firstPref(a);
-      if (!fp) return '￿';
-      const c = committeeById.get(fp.conference_committee_id);
-      return `${c ? committeeShortName(c) : committeeShortName(fp.conference_committees)} ${fp.country_name}`;
-    };
     return list.sort((a, b) => {
       if (sort === 'name') return byName(personName(a), personName(b));
-      if (sort === 'first') return byName(firstLabel(a), firstLabel(b)) || byName(personName(a), personName(b));
       // Oldest accepted first; undated last.
       const ta = acceptedAt(a) ?? '';
       const tb = acceptedAt(b) ?? '';
       if (ta !== tb) return !ta ? 1 : !tb ? -1 : ta.localeCompare(tb);
       return byName(personName(a), personName(b));
     });
-  }, [waiting, search, fSchool, fLevel, sort, committeeById]);
+  }, [waiting, search, fSchool, fLevel, sort]);
 
   // ── The opened person's best three seats (best seat in each committee) ──────
   const bestThree = useMemo(() => {
@@ -320,9 +289,11 @@ export default function SeatBoard({
     />
   ) : (
     <>
-      <div className="flex items-center justify-center gap-2 flex-none" style={{ minHeight: 36 }}>
-        <h2 style={{ margin: 0, fontSize: 24, fontWeight: 800, letterSpacing: '-0.01em', fontFamily: OUTFIT, color: NEU.ink }}>Smart Allocations</h2>
-        <span style={{ fontSize: 16, fontWeight: 600, color: NEU.inkSoft, fontVariantNumeric: 'tabular-nums', fontFamily: OUTFIT }}>{feed.length}</span>
+      {/* Bigger and at the very top of the column (owner, 22 Oct 2026): the
+          header's seated / waiting / open counts are gone, so this leads. */}
+      <div className="flex items-center justify-center gap-2.5 flex-none" style={{ paddingBottom: 2 }}>
+        <h2 style={{ margin: 0, fontSize: 32, fontWeight: 800, letterSpacing: '-0.02em', lineHeight: 1.05, fontFamily: OUTFIT, color: NEU.ink }}>Smart Allocations</h2>
+        <span style={{ fontSize: 19, fontWeight: 600, color: NEU.inkSoft, fontVariantNumeric: 'tabular-nums', fontFamily: OUTFIT }}>{feed.length}</span>
         <ScoringHint />
       </div>
       {feed.length === 0 ? (

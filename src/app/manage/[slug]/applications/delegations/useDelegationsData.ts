@@ -50,7 +50,8 @@ import { paidSpotsBySociety } from '@/app/manage/[slug]/assignment/delegationSea
 import { keepIfSame, useLiveRefresh } from './useLiveRefresh';
 
 export interface DelegationView<M extends DelegationMemberLite = DelegationMemberLite> extends DelegationRow<M> {
-  /** Delegate spots paid for, from the ledger: settled `pledge_spot` invoices of
+  /** Delegate spots paid for (delegate tickets only; advisor tickets never count),
+   *  from the ledger: settled `pledge_spot` invoices of
    *  the delegation's live leaders plus delegates and head delegates who paid
    *  their own ticket or were waived. `paidSpotsBySociety` (delegationSeatsGrid.ts),
    *  the twin of `_society_paid_delegate_spots`, so the tab, the pop-up and the
@@ -65,6 +66,8 @@ export interface DelegationView<M extends DelegationMemberLite = DelegationMembe
   /** The account that created the delegation (`societies.created_by`), always
    *  among the leaders shown (memberOrder.shownLeaders). */
   createdBy: string | null;
+  /** When the delegation was created (`societies.created_at`), for "Newest" in the list's sort. */
+  createdAt: string | null;
 }
 
 /** An invoice with the two columns the Payments tab also draws. */
@@ -319,11 +322,12 @@ export function useDelegationsData<M extends DelegationMemberLite>(args: {
       invoices.filter(i => i.kind === 'pledge_spot' && i.status === 'settled').map(i => i.application_id),
     );
     const creatorOf = new Map(societies.map(s => [s.id, s.created_by ?? null] as const));
+    const createdAtOf = new Map(societies.map(s => [s.id, s.created_at ?? null] as const));
     return base.map(r => {
       const paid = paidBySociety.get(r.id) ?? 0;
       const ids = new Set(r.members.map(m => m.id));
       const { given, filled } = committees ? societySeatCounts(committees, r.id, ids) : { given: 0, filled: 0 };
-      return { ...r, paid, seatsGiven: given, seatsFilled: filled, needSeats: Math.max(0, paid - given), createdBy: creatorOf.get(r.id) ?? null };
+      return { ...r, paid, seatsGiven: given, seatsFilled: filled, needSeats: Math.max(0, paid - given), createdBy: creatorOf.get(r.id) ?? null, createdAt: createdAtOf.get(r.id) ?? null };
     });
   }, [societies, members, advisorsPledged, draftsBySociety, invoices, payments, currency, committees]);
 

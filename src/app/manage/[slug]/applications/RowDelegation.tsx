@@ -1,20 +1,20 @@
 'use client';
 
-// The delegation as it reads inside one People row on Applications (owner,
-// 21 Oct 2026: "too many lines in a row ... the delegation cell should be 3,
-// max 4 lines"). Two lines instead of seven:
+// The delegation as it reads inside one People row on Applications.
 //
-//   1. the delegation name, bold (the one thing an organiser scans for)
-//   2. one small line of icon + value facts: members, where it is based (short
-//      country name), who leads it, the expected size it asked for
+// Owner, 22 Oct 2026: the delegation in a person's row was too small. It is now
+// ONE longer pill under the person, slightly indented: the delegation's round
+// crest, its name bold (never cut, it wraps), where it is based (round flag +
+// the city, else the country's short name: UK, USA, UAE) and
+// "N members · M expected". Who leads it and this applicant's own expected
+// size stay in the hover title (rowDelegationTitle).
 //
-// Its round disc no longer takes a column of its own: <RowDelegationBadge>
-// sits over the corner of the applicant's avatar, so the text gets the width.
-// Every value shown before is still here, either on the line or in a title.
-// Presentational only; the caller owns the click (DelegationPopupLink).
+// Presentational only; the caller owns the click (DelegationPopupLink) and
+// draws the pill's shape with ROW_DELEGATION_PILL so the hover tint of the
+// button is the pill itself.
 
-import { Crown, HandCoins, Users, Check } from 'lucide-react';
-import { FlagImg } from '@/components/FlagImg';
+import DelegationCrest from '@/components/DelegationCrest';
+import { CircleFlag } from '@/components/CircleFlag';
 import { getCountryByCode } from '@/lib/countries';
 import { DelegationAvatar, delegationPlace, plural } from './DelegationAvatar';
 import { countryShortName } from '../assignment/displayNames';
@@ -22,11 +22,9 @@ import { countryShortName } from '../assignment/displayNames';
 const OUTFIT = "var(--font-brand), sans-serif";
 const INK = '#1C1410';
 const INK_SOFT = '#5E5145';
-const GOLD_DEEP = '#B6871F';
-const FOREST = '#1B3828';
 
 /** The delegation's disc, small, over the bottom corner of the person's avatar.
- *  Decorative: the delegation line beside it is the click target. */
+ *  Kept for other callers; the People row now carries the crest in its pill. */
 export function RowDelegationBadge({ name, logoUrl, size = 26 }: { name: string; logoUrl?: string | null; size?: number }) {
   return (
     <span
@@ -39,11 +37,26 @@ export function RowDelegationBadge({ name, logoUrl, size = 26 }: { name: string;
   );
 }
 
+/** The pill's shape, drawn by whoever wraps <RowDelegation> (the button or a div). */
+export const ROW_DELEGATION_PILL: React.CSSProperties = {
+  display: 'inline-flex',
+  maxWidth: '100%',
+  margin: '8px 0 0 6px',
+  padding: '5px 14px 5px 5px',
+  borderRadius: 22,
+  background: '#F7F3EA',
+  border: '1px solid #EBE4D4',
+  textAlign: 'left',
+};
+
 export interface RowDelegationProps {
   name: string;
+  logoUrl?: string | null;
   city?: string | null;
   countryCode?: string | null;
   members?: number | null;
+  /** The delegation's expected size (its live pledges), or null when none was given. */
+  expected?: number | null;
   /** The leader's name ("Ana Pérez and 1 more"), or null when nobody leads. */
   lead?: string | null;
   leadRole?: string | null;
@@ -53,83 +66,52 @@ export interface RowDelegationProps {
   pledge?: { spots: number; received: boolean } | null;
 }
 
-/** The full sentence behind the short line, for the row's hover title. */
+/** The full sentence behind the pill, for the row's hover title. */
 export function rowDelegationTitle(p: RowDelegationProps): string {
   const parts: string[] = [];
   if (p.members != null) parts.push(plural(p.members, 'member'));
+  if (p.expected != null) parts.push(`${p.expected} expected`);
   const place = delegationPlace(p.city, p.countryCode);
   if (place) parts.push(`Based in ${place.label}`);
   if (p.leads) parts.push(`${p.leadRole ?? 'Head Delegate'}: this applicant`);
   else if (p.lead) parts.push(`${p.leadRole ?? 'Head Delegate'}: ${p.lead}`);
   else parts.push('No head delegate yet');
-  if (p.pledge) parts.push(`Expected size ${p.pledge.spots}${p.pledge.received ? ', received' : ''}`);
+  if (p.pledge) parts.push(`Asked for an expected size of ${p.pledge.spots}${p.pledge.received ? ', received' : ''}`);
   return parts.join(' · ');
 }
 
-const sep = <span aria-hidden style={{ opacity: 0.55 }}>·</span>;
-
 export function RowDelegation(p: RowDelegationProps) {
-  const facts: React.ReactNode[] = [];
-
-  if (p.members != null) {
-    facts.push(
-      <span key="m" className="inline-flex items-center gap-1" title={plural(p.members, 'member')} style={{ fontVariantNumeric: 'tabular-nums' }}>
-        <Users size={12} strokeWidth={1.75} aria-hidden />
-        {p.members}
-      </span>,
-    );
-  }
-
   const place = delegationPlace(p.city, p.countryCode);
-  if (place) {
-    const city = p.city?.trim() || '';
-    const countryName = place.code ? (getCountryByCode(place.code)?.name ?? place.code) : '';
-    // The city alone when there is one (the flag says the country), else the
-    // country's short name ("UK", "USA"). The full place is the title.
-    const shortLabel = city || countryShortName(countryName, place.code);
-    facts.push(
-      <span key="p" className="inline-flex items-center gap-1 min-w-0" title={`Based in ${place.label}`}>
-        {place.code && <span className="inline-flex items-center flex-shrink-0" style={{ lineHeight: 0 }}><FlagImg code={place.code} size={13} /></span>}
-        <span className="[overflow-wrap:anywhere]">{shortLabel}</span>
-      </span>,
-    );
-  }
+  const city = p.city?.trim() || '';
+  const countryName = place?.code ? (getCountryByCode(place.code)?.name ?? place.code) : '';
+  // The city when there is one (the flag says the country), else the country's short name.
+  const placeLabel = place ? (city || countryShortName(countryName, place.code ?? undefined)) : '';
 
-  const leadTitle = p.leads
-    ? `${p.leadRole ?? 'Head Delegate'}: this applicant`
-    : p.lead ? `${p.leadRole ?? 'Head Delegate'}: ${p.lead}` : 'No head delegate yet';
-  facts.push(
-    <span key="l" className="inline-flex items-center gap-1 min-w-0" title={leadTitle}>
-      <Crown size={12} strokeWidth={1.75} aria-hidden style={{ color: p.leads || p.lead ? GOLD_DEEP : INK_SOFT, flexShrink: 0 }} />
-      <span className="[overflow-wrap:anywhere]" style={p.leads ? { color: GOLD_DEEP, fontWeight: 700 } : undefined}>
-        {p.leads ? 'Leads it' : p.lead ?? 'No head yet'}
-      </span>
-    </span>,
-  );
-
-  if (p.pledge) {
-    const t = `Expected size ${p.pledge.spots}${p.pledge.received ? ', received' : ''}`;
-    facts.push(
-      <span key="e" className="inline-flex items-center gap-1" title={t} style={{ color: FOREST, fontVariantNumeric: 'tabular-nums' }}>
-        <HandCoins size={12} strokeWidth={1.75} aria-hidden />
-        {p.pledge.spots} expected
-        {p.pledge.received && <Check size={12} strokeWidth={2} aria-label="received" />}
-      </span>,
-    );
-  }
+  const counts: string[] = [];
+  if (p.members != null) counts.push(plural(p.members, 'member'));
+  if (p.expected != null && p.expected > 0) counts.push(`${p.expected} expected`);
 
   return (
-    <span className="block min-w-0">
-      <span className="block [overflow-wrap:anywhere]" style={{ fontFamily: OUTFIT, fontSize: 14.5, fontWeight: 800, color: INK, lineHeight: 1.2 }}>
-        {p.name}
+    <span className="flex items-center min-w-0" style={{ gap: 10, fontFamily: OUTFIT }}>
+      <span className="flex-shrink-0" style={{ lineHeight: 0 }}>
+        <DelegationCrest name={p.name} logoUrl={p.logoUrl ?? null} size={30} />
       </span>
-      <span className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 min-w-0" style={{ fontFamily: OUTFIT, fontSize: 12, fontWeight: 600, color: INK_SOFT, marginTop: 1, lineHeight: 1.35 }}>
-        {facts.map((f, i) => (
-          <span key={i} className="inline-flex items-center gap-1.5 min-w-0">
-            {i > 0 && sep}
-            {f}
+      <span className="flex flex-wrap items-center min-w-0" style={{ gap: '2px 12px' }}>
+        <span className="[overflow-wrap:anywhere] min-w-0" style={{ fontSize: 14.5, fontWeight: 700, color: INK, lineHeight: 1.25 }}>
+          {p.name}
+        </span>
+        {(placeLabel || counts.length > 0) && (
+          <span className="inline-flex flex-wrap items-center min-w-0" style={{ gap: '2px 6px', fontSize: 12.5, fontWeight: 500, color: INK_SOFT, lineHeight: 1.35, fontVariantNumeric: 'tabular-nums' }}>
+            {placeLabel && (
+              <span className="inline-flex items-center gap-1.5 min-w-0" title={place && place.label !== placeLabel ? place.label : undefined}>
+                {place?.code && <CircleFlag code={place.code} size={15} decorative />}
+                <span className="[overflow-wrap:anywhere]">{placeLabel}</span>
+              </span>
+            )}
+            {placeLabel && counts.length > 0 && <span aria-hidden style={{ opacity: 0.55 }}>·</span>}
+            {counts.length > 0 && <span>{counts.join(' · ')}</span>}
           </span>
-        ))}
+        )}
       </span>
     </span>
   );

@@ -14,7 +14,10 @@
 // filter. Each row's Give is a soft white pill; Done is the one solid button.
 //   * A row open to this delegation is one tap: it gives the country (every
 //     open seat of the slot, a double is both seats) and the pop-up STAYS OPEN
-//     for the next tap. A country given here reads "Given" with Undo.
+//     for the next tap. A country given here reads "Given" with Undo, and the
+//     whole row is the Undo: tapping it again takes it back (owner, 22 Oct
+//     2026). Nothing is locked while a write runs; the Delegations tab queues
+//     the taps in order and reconciles its overlay with what lands.
 //   * The Open filter keeps the countries that were open when the pop-up
 //     opened, so a row just given stays under the pointer with its Undo.
 //   * The header keeps a running tally and what the delegation still needs;
@@ -38,7 +41,7 @@ import {
 } from '@/app/manage/[slug]/assignment/seatBoardShared';
 
 const ROW_DIVIDER = `1px solid ${HAIRLINE}`;
-const FOREST_GRADIENT = 'linear-gradient(180deg, #2A5039, #1B3828)';
+const CALM_FOREST = '#2C4A39';
 
 export interface GiveSociety {
   id: string;
@@ -166,19 +169,20 @@ export function SeatBoardGivePopup({
       </>
     );
 
-    // Open to this delegation: the whole row gives it.
+    // Open to this delegation: the whole row gives it. A write still running
+    // only says "Saving": the delegation's lane keeps the taps in order, so
+    // nothing here is ever locked.
     if (free.length > 0) {
       return (
         <button
           key={s.id}
           type="button"
-          disabled={busy}
           onClick={() => onGive(s, free)}
           aria-label={`Give ${s.country_name} to ${society.name}`}
           className="group focus:outline-none focus-visible:ring-2 w-full flex items-center gap-3 flex-wrap text-left"
           style={{
             padding: '9px 8px', border: 'none', borderTop: i === 0 ? 'none' : ROW_DIVIDER, borderRadius: 0, background: 'transparent',
-            cursor: busy ? 'default' : 'pointer', fontFamily: OUTFIT, color: NEU.ink, transition: 'background-color 140ms cubic-bezier(0.22,1,0.36,1)',
+            cursor: 'pointer', fontFamily: OUTFIT, color: NEU.ink, transition: 'background-color 140ms cubic-bezier(0.22,1,0.36,1)',
           }}
           onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = '#FCFAF6'; }}
           onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
@@ -186,13 +190,43 @@ export function SeatBoardGivePopup({
           {body}
           {/* The soft Give pill: lights with the row's hover, scales on press */}
           <span
-            className={`flex-shrink-0 inline-flex items-center justify-center gap-1 rounded-full border transition-[background-color,border-color,box-shadow,transform] duration-150 ease-[cubic-bezier(0.22,1,0.36,1)] ${busy
-              ? 'bg-[#F4F0E6] border-transparent text-[#6B5F52]'
-              : 'bg-white border-[#1B3828]/20 text-[#1B3828] shadow-[0_1px_2px_rgba(27,56,40,0.07)] group-hover:bg-[#F4F0E6] group-hover:border-[#1B3828]/45 group-hover:shadow-[0_2px_8px_rgba(27,56,40,0.12)] group-active:scale-[0.96]'}`}
+            className="flex-shrink-0 inline-flex items-center justify-center gap-1 rounded-full border transition-[background-color,border-color,box-shadow,transform] duration-150 ease-[cubic-bezier(0.22,1,0.36,1)] bg-white border-[#1B3828]/20 text-[#1B3828] shadow-[0_1px_2px_rgba(27,56,40,0.07)] group-hover:bg-[#F4F0E6] group-hover:border-[#1B3828]/45 group-hover:shadow-[0_2px_8px_rgba(27,56,40,0.12)] group-active:scale-[0.96]"
             style={{ height: 30, minWidth: 72, padding: '0 13px 0 10px', fontSize: 12.5, fontWeight: 600, marginLeft: 'auto', boxSizing: 'border-box' }}
           >
-            {!busy && <Plus size={13} strokeWidth={2} aria-hidden />}
-            {busy ? 'Saving' : 'Give'}
+            {busy ? 'Saving' : <><Plus size={13} strokeWidth={2} aria-hidden /> Give</>}
+          </span>
+        </button>
+      );
+    }
+
+    // Given in this pop-up: tapping the row again takes it back (owner, 22
+    // Oct 2026: "easy unallocate of an accident"). Only its empty seats go
+    // back; nobody already in a seat is touched.
+    if (theirs && now) {
+      return (
+        <button
+          key={s.id}
+          type="button"
+          onClick={() => onUndo(s)}
+          aria-label={`Take ${s.country_name} back from ${society.name}`}
+          title="Tap again to take it back"
+          className="group focus:outline-none focus-visible:ring-2 w-full flex items-center gap-3 flex-wrap text-left"
+          style={{
+            padding: '9px 8px', border: 'none', borderTop: i === 0 ? 'none' : ROW_DIVIDER, borderRadius: 10, background: WELL,
+            cursor: 'pointer', fontFamily: OUTFIT, color: NEU.ink,
+          }}
+        >
+          {body}
+          <span className="flex-shrink-0 inline-flex items-center justify-end gap-2" style={{ minWidth: 72, marginLeft: 'auto' }}>
+            <span className="inline-flex items-center gap-1" style={{ fontSize: 12.5, fontWeight: 600, color: NEU.forest }}>
+              <Check size={14} strokeWidth={2} aria-hidden /> {busy ? 'Saving' : 'Given'}
+            </span>
+            <span
+              className="inline-flex items-center rounded-full transition-[background-color,transform] duration-150 group-hover:bg-white group-active:scale-[0.96]"
+              style={{ height: 26, padding: '0 9px', fontSize: 12.5, fontWeight: 700, textDecoration: 'underline', textUnderlineOffset: 3 }}
+            >
+              Undo
+            </span>
           </span>
         </button>
       );
@@ -202,25 +236,12 @@ export function SeatBoardGivePopup({
       <div
         key={s.id}
         className="flex items-center gap-3 flex-wrap"
-        style={{ padding: '9px 8px', borderTop: i === 0 ? 'none' : ROW_DIVIDER, background: now ? WELL : 'transparent', borderRadius: now ? 10 : 0 }}
+        style={{ padding: '9px 8px', borderTop: i === 0 ? 'none' : ROW_DIVIDER }}
       >
         {body}
         {theirs && (
-          <span className="flex-shrink-0 inline-flex items-center justify-end gap-2" style={{ minWidth: 68, marginLeft: 'auto' }}>
-            <span className="inline-flex items-center gap-1" style={{ fontSize: 12.5, fontWeight: 600, color: NEU.forest }}>
-              <Check size={14} strokeWidth={2} aria-hidden /> {now ? 'Given' : 'Theirs'}
-            </span>
-            {now && (
-              <button
-                type="button"
-                onClick={() => onUndo(s)}
-                disabled={busy}
-                className="focus:outline-none"
-                style={{ border: 'none', background: 'none', padding: '0 4px', cursor: busy ? 'default' : 'pointer', fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 700, color: NEU.ink, textDecoration: 'underline', textUnderlineOffset: 3, opacity: busy ? 0.5 : 1 }}
-              >
-                {busy ? 'Saving' : 'Undo'}
-              </button>
-            )}
+          <span className="flex-shrink-0 inline-flex items-center gap-1" style={{ minWidth: 68, marginLeft: 'auto', justifyContent: 'flex-end', fontSize: 12.5, fontWeight: 600, color: NEU.forest }}>
+            <Check size={14} strokeWidth={2} aria-hidden /> Theirs
           </span>
         )}
       </div>
@@ -308,12 +329,12 @@ export function SeatBoardGivePopup({
 
         {/* Footer */}
         <div className="flex items-center justify-between gap-3 px-4 py-2" style={{ borderTop: ROW_DIVIDER }}>
-          <span style={{ fontSize: 12, color: NEU.inkSoft, lineHeight: 1.35 }}>Each tap gives that country to {society.name}</span>
+          <span style={{ fontSize: 12, color: NEU.inkSoft, lineHeight: 1.35 }}>Tap a country to give it to {society.name}, tap again to take it back</span>
           <button
             type="button"
             onClick={onClose}
             className="focus:outline-none flex-shrink-0 transition-transform duration-150 active:scale-[0.96]"
-            style={{ height: 32, padding: '0 18px', borderRadius: 10, border: 'none', background: FOREST_GRADIENT, color: '#FFFFFF', fontFamily: OUTFIT, fontSize: 13.5, fontWeight: 600, cursor: 'pointer' }}
+            style={{ height: 32, padding: '0 18px', borderRadius: 10, border: 'none', background: CALM_FOREST, color: '#FFFFFF', fontFamily: OUTFIT, fontSize: 13.5, fontWeight: 600, cursor: 'pointer' }}
           >
             Done
           </button>

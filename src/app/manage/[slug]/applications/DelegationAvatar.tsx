@@ -185,6 +185,9 @@ export interface DelegationSummary {
   logoUrl: string | null;
   city: string | null;
   countryCode: string | null;
+  /** The expected size: every live delegation pledge's delegate tickets added
+   *  up (`spots_pledged`), or null when nobody gave one. */
+  expected: number | null;
 }
 
 interface SummaryApp {
@@ -193,6 +196,8 @@ interface SummaryApp {
   status: string;
   is_head_delegate: boolean;
   society_id: string | null;
+  pledge_type?: 'delegation' | null;
+  spots_pledged?: number | null;
   societies: { name: string; city?: string | null; country_code?: string | null; logo_url?: string | null } | null;
   invited_name: string | null;
   invited_email: string | null;
@@ -226,6 +231,7 @@ export function useDelegationSummaries(apps: SummaryApp[]): Map<string, Delegati
       const first = leaders[0];
       const nameOf = (a: SummaryApp) => a.profiles?.display_name || a.invited_name || a.invited_email || 'Unknown';
       const soc = g.find(a => a.societies?.name)?.societies ?? null;
+      const pledged = g.reduce((n, a) => n + (a.pledge_type === 'delegation' ? Math.max(0, a.spots_pledged ?? 0) : 0), 0);
       out.set(id, {
         name: soc?.name ?? 'Delegation',
         logoUrl: soc?.logo_url ?? null,
@@ -236,6 +242,7 @@ export function useDelegationSummaries(apps: SummaryApp[]): Map<string, Delegati
         lead: first ? `${nameOf(first)}${leaders.length > 1 ? ` and ${leaders.length - 1} more` : ''}` : null,
         leadRole: first ? (heads.length ? 'Head Delegate' : 'Faculty Advisor') : null,
         leadAppIds: leaders.map(a => a.id),
+        expected: pledged > 0 ? pledged : null,
       });
     }
     return out;

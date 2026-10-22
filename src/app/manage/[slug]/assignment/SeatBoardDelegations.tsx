@@ -47,7 +47,8 @@
 //   RIGHT   the committee rings, as on the People tab.
 // Every give is ONE giveExactSeats call (organiser_give_society_seats: all or
 // nothing, verified, the conference's seat limit enforced) and every take back
-// one takeBackOneSeat (organiser_take_back_society_seat). Both are optimistic:
+// is one country's empty seats, read when the write runs and taken back one
+// takeBackOneSeat each (organiser_take_back_society_seat). Both are optimistic:
 // the change is laid over the board at once and dropped on a refusal, whose
 // sentence shows through notifyErr. Taps in quick succession never race (owner,
 // 21 Oct 2026: two gives at once showed loading, then one reverted and came
@@ -56,7 +57,9 @@
 // lane drains the board and the delegations re-read once (settleRead +
 // onRefresh), and a landed change stays laid over the board until the board's
 // own read shows it (a give's seat is in the read, a take back's row is gone),
-// so nothing flickers back. Only mounted while the tab is open, so its reads (the
+// so nothing flickers back. A take back drops every give of its country from
+// the overlay and a give drops the country's take back, so Give, Undo, Give
+// in quick succession ends where the last tap says (owner, 22 Oct 2026). Only mounted while the tab is open, so its reads (the
 // delegations, their money and a 10 s live re-read) run only then.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -67,6 +70,7 @@ import DelegationCrest from '@/components/DelegationCrest';
 import { useAuth } from '@/components/AuthProvider';
 import { getFreshAuthedClient } from '@/lib/supabase-auth';
 import { notifyErr, notifyOk } from '@/lib/appNotify';
+import { friendlyError } from '@/lib/friendlyError';
 import { useManage } from '@/app/manage/[slug]/layout';
 import {
   allocationSocietyId, groupAllocationsByCountry, openSeatsForSociety, rankSeatsForSociety, type SocietySeatOption,
@@ -92,18 +96,62 @@ import {
 } from '@/app/manage/[slug]/assignment/seatBoardShared';
 
 type Mode = 'one' | 'best' | 'custom';
-type Pending = ({ kind: 'give'; societyId: string; societyName: string } | { kind: 'back'; allocationId: string }) & {
+/** A change laid over the board until the board's own read shows it. Keyed
+ *  `<committee>:<code>:<seat>` for a give and `undo:<committee>:<code>` for a
+ *  take back. `op` is the press that owns the entry: a write that comes back
+ *  only touches its own entry, so a later press on the same country (Undo
+ *  right after Give, or Give again after Undo) is never overwritten by an
+ *  earlier write landing late. */
+type Pending = (
+  | { kind: 'give'; societyId: string; societyName: string }
+  | { kind: 'undo'; societyId: string; committeeId: string; code: string }
+) & {
+  op: number;
   /** The land stamp once the write landed (data.landStamp), else null. */
   landed: number | null;
 };
 
+const isBlockOf = (a: AllocationRow, societyId: string, code: string) =>
+  a.country_code === code && allocationSocietyId(a) === societyId && !a.user_id && !a.application_id;
+
 /** A landed change the board's own read already shows is done. */
 function reflected(key: string, p: Pending, committees: CommitteeData[]): boolean {
   if (p.landed == null) return false;
-  if (p.kind === 'back') return !committees.some(c => c.conference_allocations.some(a => a.id === p.allocationId));
+  if (p.kind === 'undo') {
+    const c = committees.find(x => x.id === p.committeeId);
+    return !c || !c.conference_allocations.some(a => isBlockOf(a, p.societyId, p.code));
+  }
   const [cid, code, seat] = key.split(':');
   const c = committees.find(x => x.id === cid);
   return !!c && c.conference_allocations.some(a => a.country_code === code && (a.seat ?? 1) === Number(seat) && allocationSocietyId(a) === p.societyId);
+}
+
+/** Takes back every empty seat a delegation holds in one country of one
+ *  committee. The ids are read from the database when the write RUNS (it runs
+ *  on the delegation's lane, after every earlier give has landed), so Undo
+ *  right after Give takes back the rows that give really created, never a
+ *  temporary row or a stale id. Nothing there is a clean no-op. */
+async function takeBackCountryWrite(societyId: string, committeeId: string, code: string): Promise<{ ok: true } | { ok: false; error: string }> {
+  const fallback = 'That allocation was not taken back. Try again.';
+  try {
+    const c = await getFreshAuthedClient();
+    if (!c) return { ok: false, error: 'Your session has expired. Refresh the page and sign in again.' };
+    const { data, error } = await c.from('conference_allocations')
+      .select('id')
+      .eq('conference_committee_id', committeeId)
+      .eq('country_code', code)
+      .eq('society_id', societyId)
+      .is('user_id', null)
+      .is('application_id', null);
+    if (error) return { ok: false, error: friendlyError(error, fallback) };
+    for (const row of (data ?? []) as { id: string }[]) {
+      const r = await takeBackOneSeat(row.id);
+      if (!r.ok) return r;
+    }
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: friendlyError(e, fallback) };
+  }
 }
 
 /** How long a landed change the board's read never showed is kept (someone else moved it). */
@@ -115,13 +163,18 @@ const MODES: { key: Mode; label: string }[] = [
   { key: 'custom', label: 'Custom' },
 ];
 
-// The one solid forest button of the view (the mode's give); every other
-// action is a soft pill (owner, 21 Oct 2026).
+// The one primary button of the view (the mode's give): a calm solid forest,
+// never the dark gradient (owner, 22 Oct 2026: "no dark green gradient
+// buttons"); every other action is a soft pill.
 const BTN_PRIMARY: React.CSSProperties = {
   height: 38, padding: '0 18px', borderRadius: 11, border: 'none', cursor: 'pointer',
-  background: 'linear-gradient(180deg, #2A5039, #1B3828)', color: '#FFFFFF',
-  fontFamily: OUTFIT, fontSize: 13.5, fontWeight: 600, boxShadow: '0 2px 8px rgba(27,56,40,0.22)',
+  background: '#2C4A39', color: '#FFFFFF',
+  fontFamily: OUTFIT, fontSize: 13.5, fontWeight: 600, boxShadow: '0 1px 2px rgba(27,56,40,0.14)',
 };
+// The opened delegation must pop like the smart allocation cards (owner, 22
+// Oct 2026): white, a gold top edge over the header, a thin gold ring and a
+// deeper forest-tinted lift.
+const DELEGATION_CARD_SHADOW = 'inset 0 3px 0 #E2C66B, inset 0 0 0 1px rgba(182,135,31,0.20), 0 1px 2px rgba(27,56,40,0.08), 0 14px 32px -12px rgba(27,56,40,0.28)';
 const BTN_DISABLED: React.CSSProperties = { ...BTN_PRIMARY, background: WELL, color: NEU.inkSoft, boxShadow: 'none', cursor: 'default' };
 
 function seatKey(committeeId: string, code: string, seat: number) {
@@ -246,9 +299,11 @@ function DelegationsBoard({
   const [pendingAll, setPendingAll] = useState<Map<string, Pending>>(() => new Map());
   /** The same map, read at tap time so quick taps never double-write a seat. */
   const pendingRef = useRef(pendingAll);
+  /** Numbers each press, so a late write never overwrites a newer press's entry. */
+  const opSeq = useRef(0);
   const [give, setGive] = useState<{ committeeId: string; given: Set<string> } | null>(null);
   /** The corner minus asked in place: the row's empty seats, taken back together. */
-  const [ask, setAsk] = useState<{ anchor: HTMLElement; allocs: AllocationRow[]; committee: CommitteeData; country: string; keepsPeople: boolean } | null>(null);
+  const [ask, setAsk] = useState<{ anchor: HTMLElement; allocs: AllocationRow[]; committee: CommitteeData; code: string; country: string; keepsPeople: boolean } | null>(null);
   const [limit, setLimit] = useState<SeatLimit>('none');
   const [showAll, setShowAll] = useState(false);
   // One country
@@ -317,11 +372,11 @@ function DelegationsBoard({
   const board = useMemo<CommitteeData[]>(() => {
     if (pending.size === 0) return committees;
     return committees.map(c => {
-      const backIds = new Set<string>();
       const adds: AllocationRow[] = [];
       const real = new Set(c.conference_allocations.map(a => seatKey(c.id, a.country_code, a.seat ?? 1)));
+      const undone: { societyId: string; code: string }[] = [];
       for (const [key, p] of pending) {
-        if (p.kind === 'back') { backIds.add(p.allocationId); continue; }
+        if (p.kind === 'undo') { if (p.committeeId === c.id) undone.push(p); continue; }
         const [cid, code, seat] = key.split(':');
         if (cid !== c.id || real.has(key)) continue;
         const slot = c.committee_country_slots.find(s => s.country_code === code);
@@ -331,8 +386,9 @@ function DelegationsBoard({
           delegation: { name: p.societyName }, profiles: null, applications: null,
         });
       }
-      if (backIds.size === 0 && adds.length === 0) return c;
-      return { ...c, conference_allocations: [...c.conference_allocations.filter(a => !backIds.has(a.id)), ...adds] };
+      if (undone.length === 0 && adds.length === 0) return c;
+      const kept = c.conference_allocations.filter(a => !undone.some(u => isBlockOf(a, u.societyId, u.code)));
+      return { ...c, conference_allocations: [...kept, ...adds] };
     });
   }, [committees, pending]);
 
@@ -425,38 +481,66 @@ function DelegationsBoard({
     }, LANDED_KEEP_MS);
   }
 
+  /** Sets entries only while they still belong to this press (see Pending.op). */
+  const markOwn = (keys: string[], op: number, landed: number | null) => {
+    const next = new Map(pendingRef.current);
+    let changed = false;
+    for (const k of keys) {
+      const cur = next.get(k);
+      if (!cur || cur.op !== op) continue;
+      if (landed == null) next.delete(k); else next.set(k, { ...cur, landed });
+      changed = true;
+    }
+    if (changed) { pendingRef.current = next; setPendingAll(next); }
+  };
+
   /** Gives these slots (every open seat of each) in ONE verified write, queued on the delegation's lane. */
   async function giveSlots(society: DelegationView, items: { committee: CommitteeData; slot: SlotRow; seats: number[] }[], done?: () => void): Promise<boolean> {
     const seats: GiveSeat[] = items.flatMap(i => i.seats.map(seat => ({ conference_committee_id: i.committee.id, country_code: i.slot.country_code, seat })));
     if (seats.length === 0) return false;
     const keys = seats.map(s => seatKey(s.conference_committee_id, s.country_code, s.seat));
-    if (keys.some(k => pendingRef.current.has(k) && !reflected(k, pendingRef.current.get(k)!, committees))) return false;
-    const entry = { kind: 'give' as const, societyId: society.id, societyName: society.name };
-    mark(keys.map(k => [k, { ...entry, landed: null }]));
+    if (keys.some(k => { const cur = pendingRef.current.get(k); return cur?.kind === 'give' && !reflected(k, cur, committees); })) return false;
+    const op = ++opSeq.current;
+    // A give supersedes a take back of the same country still laid over the
+    // board: the lane runs the two in the order pressed, so the server ends
+    // where the last press says.
+    mark([
+      ...items.map(i => [`undo:${i.committee.id}:${i.slot.country_code}`, null] as [string, null]),
+      ...keys.map(k => [k, { kind: 'give', societyId: society.id, societyName: society.name, op, landed: null }] as [string, Pending]),
+    ]);
     done?.();
     const r = await queueWrite(society.id, () => giveExactSeats(society.id, seats));
-    if (r.ok) {
-      const stamp = landStamp();
-      mark(keys.map(k => [k, { ...entry, landed: stamp }]));
-    } else {
-      mark(keys.map(k => [k, null]));
-    }
+    markOwn(keys, op, r.ok ? landStamp() : null);
     void settle(society.id);
     if (!r.ok) { notifyErr(r.error, 'seat-board'); return false; }
     return true;
   }
 
-  /** Takes these empty block seats back, one verified write each, queued on the delegation's lane. */
-  async function takeBack(societyId: string, allocs: AllocationRow[]): Promise<boolean> {
-    const real = allocs.filter(a => !a.id.startsWith('temp-') && !pendingRef.current.has(`back:${a.id}`));
-    if (real.length === 0) return false;
-    mark(real.map(a => [`back:${a.id}`, { kind: 'back', allocationId: a.id, landed: null }]));
-    const results = await Promise.all(real.map(a => queueWrite(societyId, () => takeBackOneSeat(a.id))));
-    const stamp = landStamp();
-    mark(real.map((a, i) => [`back:${a.id}`, results[i].ok ? { kind: 'back', allocationId: a.id, landed: stamp } : null]));
+  /** Takes back the delegation's empty seats in one country of one committee
+   *  (Undo in the give pop-up, and the corner minus on a Given row). Queued
+   *  on the delegation's lane, so it runs after any give still in flight; the
+   *  ids are read when it runs (takeBackCountryWrite).
+   *
+   *  Why Undo used to misbehave (owner, 22 Oct 2026): a landed give stayed in
+   *  the pending map until a timer let it go, merely hidden while the board's
+   *  read showed its seat. The take back removed the seat, so that give was no
+   *  longer "shown" and its temporary row came back: the row read as theirs
+   *  again, Undo found only that temporary row and did nothing, and a new Give
+   *  was refused as a duplicate. Now the take back drops every give of that
+   *  country (landed or not) and stands in its place until the read shows the
+   *  seats are gone. */
+  async function takeBackCountry(societyId: string, committeeId: string, code: string): Promise<boolean> {
+    const key = `undo:${committeeId}:${code}`;
+    const op = ++opSeq.current;
+    const prefix = `${committeeId}:${code}:`;
+    const gives = [...pendingRef.current.entries()]
+      .filter(([k, p]) => p.kind === 'give' && p.societyId === societyId && k.startsWith(prefix))
+      .map(([k]) => [k, null] as [string, null]);
+    mark([...gives, [key, { kind: 'undo', societyId, committeeId, code, op, landed: null }]]);
+    const r = await queueWrite(societyId, () => takeBackCountryWrite(societyId, committeeId, code));
+    markOwn([key], op, r.ok ? landStamp() : null);
     void settle(societyId);
-    const failed = results.find(x => !x.ok);
-    if (failed && !failed.ok) { notifyErr(failed.error, 'seat-board'); return false; }
+    if (!r.ok) { notifyErr(r.error, 'seat-board'); return false; }
     return true;
   }
 
@@ -562,25 +646,25 @@ function DelegationsBoard({
 
   // ── The give pop-up ────────────────────────────────────────────────────────
   const giveCommittee = give ? board.find(c => c.id === give.committeeId) ?? null : null;
+  // Countries of the open give pop-up with a write still running: shown as
+  // "Saving", never disabled (the lane keeps the order of the presses).
   const busyCodes = useMemo(() => {
     const s = new Set<string>();
     if (!give) return s;
     for (const [k, p] of pending) {
+      if (p.landed != null) continue;
       if (p.kind === 'give') { const [cid, code] = k.split(':'); if (cid === give.committeeId) s.add(code); }
-      else {
-        const a = giveCommittee?.conference_allocations.find(x => x.id === p.allocationId);
-        if (a) s.add(a.country_code);
-      }
-    }
-    // A taken-back row is gone from the overlay; its code is found on the board as read.
-    const raw = committees.find(c => c.id === give.committeeId);
-    for (const p of pending.values()) {
-      if (p.kind !== 'back') continue;
-      const a = raw?.conference_allocations.find(x => x.id === p.allocationId);
-      if (a) s.add(a.country_code);
+      else if (p.committeeId === give.committeeId) s.add(p.code);
     }
     return s;
-  }, [give, pending, giveCommittee, committees]);
+  }, [give, pending]);
+
+  /** Done (or the X): close, and re-read once the lane is quiet so the board
+   *  shows the true state. */
+  function closeGive() {
+    setGive(null);
+    if (openId) void settle(openId);
+  }
 
   function openGive(committeeId: string, societyId?: string) {
     if (societyId && societyId !== openId) openDelegation(societyId);
@@ -848,7 +932,7 @@ function DelegationsBoard({
           </SoftButton>
         </div>
 
-        <div className="flex flex-col" style={{ ...card, padding: 20, gap: 18 }}>
+        <div className="flex flex-col" style={{ ...card, boxShadow: DELEGATION_CARD_SHADOW, padding: '22px 20px 20px', gap: 18 }}>
           {/* 1. Who they are, and where they stand */}
           <div className="flex items-start gap-4 flex-wrap">
             <DelegationCrest name={open.name} logoUrl={open.logoUrl} size={52} />
@@ -871,7 +955,7 @@ function DelegationsBoard({
                 </div>
               )}
             </div>
-            <div className="flex flex-col items-end flex-shrink-0" style={{ gap: 4 }} title={`${plural(open.paid, 'ticket')} paid, ${plural(open.seatable, 'accepted delegate')}`}>
+            <div className="flex flex-col items-end flex-shrink-0" style={{ gap: 4 }} title={`${plural(open.paid, 'delegate spot')} paid, ${plural(open.seatable, 'accepted delegate')}`}>
               <span className="inline-flex items-baseline gap-1.5">
                 <span style={{ fontSize: 30, fontWeight: 700, fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>{given}</span>
                 <span style={{ fontSize: 13.5, color: NEU.inkSoft }}>{need > 0 ? `of ${need} given` : 'given'}</span>
@@ -885,6 +969,12 @@ function DelegationsBoard({
                   <Check size={14} strokeWidth={2} aria-hidden /> Complete
                 </span>
               ) : null}
+              {/* The target: delegate tickets paid (advisor tickets never count), owner 22 Oct 2026 */}
+              <span style={{ fontSize: 12.5, color: NEU.inkSoft, fontVariantNumeric: 'tabular-nums' }}>
+                {open.paid > 0
+                  ? <><span style={{ fontWeight: 700, color: NEU.ink }}>{open.paid}</span> delegate {open.paid === 1 ? 'spot' : 'spots'} paid · <span style={{ fontWeight: 700, color: NEU.ink }}>{given}</span> given</>
+                  : <>No delegate spots paid yet · <span style={{ fontWeight: 700, color: NEU.ink }}>{given}</span> given</>}
+              </span>
               {left > 0 && capLeft === 0 && <span style={{ fontSize: 12, color: NEU.inkSoft }}>The seat limit allows no more</span>}
             </div>
           </div>
@@ -970,7 +1060,7 @@ function DelegationsBoard({
                       {empties.length > 0 && (
                         <button
                           type="button"
-                          onClick={e => setAsk({ anchor: e.currentTarget, allocs: empties, committee: c, country, keepsPeople: named.length > 0 })}
+                          onClick={e => setAsk({ anchor: e.currentTarget, allocs: empties, committee: c, code, country, keepsPeople: named.length > 0 })}
                           aria-label={`Take ${country} in ${lbl.big} back from ${open.name}`}
                           title={`Take ${country} in ${lbl.big} back`}
                           className="focus:outline-none sbdMinus"
@@ -1066,7 +1156,7 @@ function DelegationsBoard({
                 <span
                   className="flex flex-col items-end flex-shrink-0 text-right"
                   style={{ minWidth: 60, lineHeight: 1.15 }}
-                  title={needs ? `${g} of ${n} given: ${plural(r.paid, 'ticket')} paid, ${plural(r.seatable, 'accepted delegate')}` : undefined}
+                  title={needs ? `${g} of ${n} given: ${plural(r.paid, 'delegate spot')} paid, ${plural(r.seatable, 'accepted delegate')}` : undefined}
                 >
                   {needs ? (
                     <>
@@ -1159,9 +1249,9 @@ function DelegationsBoard({
           danger
           onCancel={() => setAsk(null)}
           onYes={() => {
-            const { allocs, country } = ask;
+            const { committee: c, code, country } = ask;
             setAsk(null);
-            void takeBack(open.id, allocs).then(ok => { if (ok) notifyOk(`${country} taken back from ${open.name}`, 'seat-board'); });
+            void takeBackCountry(open.id, c.id, code).then(ok => { if (ok) notifyOk(`${country} taken back from ${open.name}`, 'seat-board'); });
           }}
         />
       )}
@@ -1184,13 +1274,13 @@ function DelegationsBoard({
           }}
           onUndo={slot => {
             const code = slot.country_code;
-            const allocs = giveCommittee.conference_allocations.filter(a => a.country_code === code && a.society_id === open.id && !a.application_id && !a.user_id);
-            if (allocs.some(a => a.id.startsWith('temp-'))) return;
-            void takeBack(open.id, allocs).then(ok => {
-              if (ok) setGive(g => { if (!g) return g; const next = new Set(g.given); next.delete(code); return { ...g, given: next }; });
+            // Optimistic: the tally and the row change at once; a refusal puts them back.
+            setGive(g => { if (!g) return g; const next = new Set(g.given); next.delete(code); return { ...g, given: next }; });
+            void takeBackCountry(open.id, giveCommittee.id, code).then(ok => {
+              if (!ok) setGive(g => (g ? { ...g, given: new Set(g.given).add(code) } : g));
             });
           }}
-          onClose={() => setGive(null)}
+          onClose={closeGive}
         />
       )}
       {!give && overlay}

@@ -2,43 +2,81 @@
 
 // ── The seat board's committee pop-up ────────────────────────────────────────
 // Opened by a committee ring (a click, or a person dropped on it). One pop-up
-// at a time; a second step (the people for one seat) opens INSIDE its row,
-// never as a second pop-up. The header's committee ring sits half outside the
-// card's top-left edge (CLAUDE.md §8, the signature detail).
+// at a time. The header's committee ring sits half outside the card's
+// top-left edge (CLAUDE.md §8, the signature detail).
 //   a) nobody open: the committee's allocations A to Z, nothing suggested on
-//      open (owner, 21 Oct 2026). Calm rows (round 5: "far too much
-//      information at once"): a bigger round flag, the country and the seat's
-//      importance, then each seat's holder (avatar and bold name, their
-//      delegation small beneath) or Open. An "Open" filter keeps only the
-//      open seats. Clicking an open row expands the best-fit waiting
-//      delegates for that seat, each with a soft Assign.
+//      open (owner, 21 Oct 2026). Every row is the SAME height (owner, 22 Oct
+//      2026): a bigger round flag, the country and the seat's importance, then
+//      each seat's holder (avatar and bold name, their delegation small
+//      beneath) or Open. A double whose two seats belong to one delegation
+//      reads once, "University of Oxford ×2". An "Open" filter keeps only the
+//      open seats. Clicking an open row opens a DROPDOWN anchored to the row
+//      (portalled, flipped near the edges, closed on an outside click or
+//      Escape) with the best-fit waiting delegates and Assign. On a double
+//      with one seat left, the people from the other seat's delegation come
+//      first on a gold tint ("From University of Oxford"), or a tinted line
+//      says nobody from it is waiting; then everyone else, best fit first.
 //   b) a person open: "Seat <Name> in <Committee>", the open countries ranked
 //      by the person's fit, their choices marked, a few badges beneath.
 // Every Assign hands a suggestion to the page's own assign path
 // (requestQuickAssign), so writes, emails and the first-assign pop-up are the
 // board's. Nothing here writes.
 
-import { useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronDown, Search, X } from 'lucide-react';
 import { NEU } from '@/components/neu';
-import { ModalOverlay } from '@/components/ModalOverlay';
-import { groupAllocationsByCountry, rankPeopleForSeat, rankSeatsForPerson } from '@/lib/assignmentFit';
+import { ModalOverlay, useModalEscape } from '@/components/ModalOverlay';
+import Portal from '@/components/Portal';
+import DelegationCrest from '@/components/DelegationCrest';
+import { allocationSocietyId, groupAllocationsByCountry, rankPeopleForSeat, rankSeatsForPerson } from '@/lib/assignmentFit';
 import {
   type AcceptedApp, type AllocationRow, type CommitteeData, type SlotRow, type Suggestion,
-  committeeLabels, effectiveLevel, LevelDisc, OUTFIT,
+  committeeLabels, CountryFlag, effectiveLevel, LevelDisc, slotLogoUrl, OUTFIT,
 } from '@/app/manage/[slug]/assignment/assignmentKit';
 import {
   FitPills, GoldMarker, HAIRLINE, HolderLine, OpenChip, POPUP_RING_INSET, POPUP_RING_RISE, POPUP_WIDTH,
-  PersonIdentity, PopupRingBadge, ScoreHover, SeatCountry, SoftButton, WELL, firstName, personName, schoolName, seatCounts,
+  PersonIdentity, PopupRingBadge, ScoreHover, SeatCountry, SoftButton, WELL, firstName, personName, schoolName, seatCounts, seatHolderName,
 } from '@/app/manage/[slug]/assignment/seatBoardShared';
 
-/** Each seat of a country: its holder, or Open; a double side by side. */
+/** The delegation an allocation belongs to: a block seat's own, or the
+ *  holder's. Null for an independent applicant. */
+function allocDelegationName(a: AllocationRow): string | null {
+  if (a.society_id && !a.application_id && !a.user_id) return a.delegation?.name?.trim() || null;
+  return a.applications?.societies?.name?.trim() || a.delegation?.name?.trim() || null;
+}
+
+/** Both seats of a double held by ONE delegation: that delegation, else null. */
+function sameDelegation(slot: SlotRow, holders: readonly AllocationRow[]): { id: string; name: string } | null {
+  if (slot.delegation_size < 2 || holders.length < slot.delegation_size) return null;
+  const ids = new Set(holders.map(h => allocationSocietyId(h)));
+  const [id] = [...ids];
+  if (ids.size !== 1 || !id) return null;
+  const name = holders.map(allocDelegationName).find((n): n is string => !!n);
+  return name ? { id, name } : null;
+}
+
+/** Each seat of a country: its holder, or Open; a double side by side, or
+ *  once with "×2" when one delegation holds both seats. */
 function SeatHolders({ slot, holders }: { slot: SlotRow; holders: readonly AllocationRow[] }) {
+  const one = sameDelegation(slot, holders);
+  if (one) {
+    const people = holders.filter(h => h.application_id || h.user_id).map(seatHolderName);
+    return (
+      <span className="flex items-center min-w-0" style={{ flex: '1 1 200px' }}>
+        <span className="inline-flex items-center gap-2 min-w-0" title={people.length > 0 ? `${one.name}: ${people.join(' and ')}` : `${one.name}, both seats`}>
+          <DelegationCrest name={one.name} logoUrl={null} size={28} />
+          <span className="[overflow-wrap:anywhere] min-w-0" style={{ fontSize: 13.5, fontWeight: 700, color: NEU.ink, lineHeight: 1.15 }}>
+            {one.name} <span style={{ color: NEU.inkSoft, fontWeight: 600, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>×{holders.length}</span>
+          </span>
+        </span>
+      </span>
+    );
+  }
   const bySeat = new Map(holders.map(h => [h.seat, h]));
   const seats = Array.from({ length: Math.max(1, slot.delegation_size) }, (_, k) => k + 1);
   const loose = holders.filter(h => !seats.includes(h.seat));
   return (
-    <span className="flex items-center flex-wrap min-w-0" style={{ flex: '1 1 200px', gap: '6px 14px' }}>
+    <span className="flex items-center min-w-0" style={{ flex: '1 1 200px', gap: 14 }}>
       {seats.map(n => {
         const h = bySeat.get(n) ?? (n === 1 ? loose[0] : undefined);
         return h ? <HolderLine key={n} alloc={h} /> : <OpenChip key={n} compact label={slot.delegation_size > 1 ? `Seat ${n} open` : 'Open'} />;
@@ -46,6 +84,9 @@ function SeatHolders({ slot, holders }: { slot: SlotRow; holders: readonly Alloc
     </span>
   );
 }
+
+/** Every allocation row in committee mode is this tall (owner, 22 Oct 2026). */
+const ROW_H = 60;
 
 const ROW_DIVIDER = `1px solid ${HAIRLINE}`;
 
@@ -178,8 +219,7 @@ function CommitteeMode({ committee, waiting, spread, needy, locked, onAssign }: 
   locked: boolean; onAssign: (sug: Suggestion) => void;
 }) {
   const [view, setView] = useState<'all' | 'open'>('all');
-  const [chooser, setChooser] = useState<string | null>(null);
-  const [query, setQuery] = useState('');
+  const [chooser, setChooser] = useState<{ slotId: string; anchor: HTMLElement } | null>(null);
   const byCountry = useMemo(() => groupAllocationsByCountry(committee.conference_allocations), [committee]);
   // Every allocation A to Z, taken ones included; a double with one seat
   // left counts as open.
@@ -190,13 +230,15 @@ function CommitteeMode({ committee, waiting, spread, needy, locked, onAssign }: 
   const isOpen = (s: SlotRow) => (byCountry.get(s.country_code)?.length ?? 0) < s.delegation_size;
   const openCount = slots.filter(isOpen).length;
   const shown = view === 'open' ? slots.filter(isOpen) : slots;
+  const chooserSlot = chooser ? slots.find(s => s.id === chooser.slotId) ?? null : null;
+  const closeChooser = useCallback(() => setChooser(null), []);
 
   const tab = (key: 'all' | 'open', label: string, n: number) => (
     <button
       type="button"
       role="tab"
       aria-selected={view === key}
-      onClick={() => setView(key)}
+      onClick={() => { setView(key); setChooser(null); }}
       className="focus:outline-none"
       style={{
         height: 28, padding: '0 12px', borderRadius: 8, border: 'none', cursor: 'pointer',
@@ -212,46 +254,40 @@ function CommitteeMode({ committee, waiting, spread, needy, locked, onAssign }: 
   const row = (s: SlotRow, i: number) => {
     const holders = byCountry.get(s.country_code) ?? [];
     const open = isOpen(s);
-    const choosing = open && chooser === s.id;
-    const toggle = () => { setChooser(choosing ? null : s.id); setQuery(''); };
+    const choosing = open && chooser?.slotId === s.id;
+    const rowStyle: React.CSSProperties = {
+      minHeight: ROW_H, padding: '6px 8px', boxSizing: 'border-box', borderRadius: 12, fontFamily: OUTFIT,
+    };
     const body = (
       <>
         <SeatCountry committee={committee} slot={s} />
         <SeatHolders slot={s} holders={holders} />
-        {open && (
-          <span
-            aria-hidden
-            className="inline-flex items-center justify-center flex-shrink-0"
-            style={{ width: 22, height: 22, borderRadius: 8, color: NEU.inkSoft }}
-          >
-            <ChevronDown size={16} strokeWidth={1.5} style={{ transform: choosing ? 'rotate(180deg)' : 'none', transition: 'transform 160ms cubic-bezier(0.22,1,0.36,1)' }} />
-          </span>
-        )}
+        <span aria-hidden className="inline-flex items-center justify-center flex-shrink-0" style={{ width: 22, height: 22, color: NEU.inkSoft, visibility: open ? 'visible' : 'hidden' }}>
+          <ChevronDown size={16} strokeWidth={1.5} style={{ transform: choosing ? 'rotate(180deg)' : 'none', transition: 'transform 160ms cubic-bezier(0.22,1,0.36,1)' }} />
+        </span>
       </>
     );
     return (
-      <div key={s.id} style={{ borderTop: i === 0 ? 'none' : ROW_DIVIDER }}>
+      <div key={s.id} style={{ borderTop: i === 0 ? 'none' : ROW_DIVIDER, padding: '1px 0' }}>
         {open ? (
           <button
             type="button"
-            onClick={toggle}
+            onClick={e => {
+              const anchor = e.currentTarget;
+              setChooser(prev => (prev?.slotId === s.id ? null : { slotId: s.id, anchor }));
+            }}
             aria-expanded={choosing}
+            aria-haspopup="dialog"
             aria-label={choosing ? `Close the people for ${s.country_name}` : `Best people for ${s.country_name}`}
-            className="focus:outline-none focus-visible:ring-2 w-full flex items-center gap-3 flex-wrap text-left"
-            style={{ padding: '9px 8px', border: 'none', borderRadius: 12, background: choosing ? WELL : 'transparent', cursor: 'pointer', fontFamily: OUTFIT, transition: 'background-color 140ms cubic-bezier(0.22,1,0.36,1)' }}
+            className="focus:outline-none focus-visible:ring-2 w-full flex items-center gap-3 text-left"
+            style={{ ...rowStyle, border: 'none', background: choosing ? WELL : 'transparent', cursor: 'pointer', transition: 'background-color 140ms cubic-bezier(0.22,1,0.36,1)' }}
             onMouseEnter={e => { if (!choosing) (e.currentTarget as HTMLElement).style.background = '#FAF8F3'; }}
             onMouseLeave={e => { if (!choosing) (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
           >
             {body}
           </button>
         ) : (
-          <div className="flex items-center gap-3 flex-wrap" style={{ padding: '9px 8px' }}>{body}</div>
-        )}
-        {choosing && (
-          <Chooser
-            committee={committee} slot={s} waiting={waiting} spread={spread} needy={needy}
-            query={query} onQuery={setQuery} locked={locked} onAssign={onAssign}
-          />
+          <div className="flex items-center gap-3" style={rowStyle}>{body}</div>
         )}
       </div>
     );
@@ -275,6 +311,22 @@ function CommitteeMode({ committee, waiting, spread, needy, locked, onAssign }: 
         )}
         {shown.map((s, i) => row(s, i))}
       </div>
+
+      {chooser && chooserSlot && (
+        <SeatChooserMenu
+          key={chooserSlot.id}
+          anchor={chooser.anchor}
+          committee={committee}
+          slot={chooserSlot}
+          holders={byCountry.get(chooserSlot.country_code) ?? []}
+          waiting={waiting}
+          spread={spread}
+          needy={needy}
+          locked={locked}
+          onAssign={onAssign}
+          onClose={closeChooser}
+        />
+      )}
     </div>
   );
 }
@@ -295,53 +347,151 @@ function PickRow({ sug, locked, onAssign, note }: { sug: Suggestion; locked: boo
   );
 }
 
-function Chooser({ committee, slot, waiting, spread, needy, query, onQuery, locked, onAssign }: {
-  committee: CommitteeData; slot: SlotRow; waiting: AcceptedApp[]; spread: ReadonlySet<string>; needy: ReadonlySet<string>;
-  query: string; onQuery: (q: string) => void; locked: boolean; onAssign: (s: Suggestion) => void;
+const MENU_GAP = 6;
+const MENU_EDGE = 10;
+/** The gold tint of "From <delegation>": the other seat's people come first. */
+const SAME_TINT = '#FBF4DE';
+const SAME_EDGE = 'inset 0 0 0 1px rgba(182,135,31,0.28)';
+
+type MenuPos = { left: number; width: number; top?: number; bottom?: number; maxHeight: number };
+
+/** Below the row unless it is short there and the space above is bigger. */
+function menuPosition(anchor: HTMLElement): MenuPos {
+  const r = anchor.getBoundingClientRect();
+  const vw = window.innerWidth;
+  const vh = window.innerHeight;
+  const width = Math.min(Math.max(r.width, 340), vw - MENU_EDGE * 2);
+  const left = Math.max(MENU_EDGE, Math.min(r.left, vw - MENU_EDGE - width));
+  const below = vh - r.bottom - MENU_GAP - MENU_EDGE;
+  const above = r.top - MENU_GAP - MENU_EDGE;
+  if (below >= 320 || below >= above) return { left, width, top: r.bottom + MENU_GAP, maxHeight: Math.max(160, below) };
+  return { left, width, bottom: vh - r.top + MENU_GAP, maxHeight: Math.max(160, above) };
+}
+
+/** One open seat's people, as a dropdown anchored to its row (owner, 22 Oct
+ *  2026): portalled at fixed coordinates so the pop-up's scroll never clips
+ *  it, below the row or flipped above it when there is more room there,
+ *  scrolling itself, following the row on scroll and resize, closed on an
+ *  outside click or Escape (Escape closes only this, never the pop-up). */
+function SeatChooserMenu({ anchor, committee, slot, holders, waiting, spread, needy, locked, onAssign, onClose }: {
+  anchor: HTMLElement; committee: CommitteeData; slot: SlotRow; holders: readonly AllocationRow[];
+  waiting: AcceptedApp[]; spread: ReadonlySet<string>; needy: ReadonlySet<string>;
+  locked: boolean; onAssign: (s: Suggestion) => void; onClose: () => void;
 }) {
+  const menuRef = useRef<HTMLDivElement | null>(null);
+  const [query, setQuery] = useState('');
+  // Placed from the row on mount (the row exists: it was just clicked), then
+  // again on every scroll and resize.
+  const [pos, setPos] = useState(() => menuPosition(anchor));
+  useModalEscape(onClose);
+  const place = useCallback(() => setPos(menuPosition(anchor)), [anchor]);
+
+  useEffect(() => {
+    const onDown = (e: MouseEvent | TouchEvent) => {
+      const t = e.target as Node;
+      if (menuRef.current?.contains(t) || anchor.contains(t)) return;
+      onClose();
+    };
+    document.addEventListener('mousedown', onDown);
+    document.addEventListener('touchstart', onDown);
+    window.addEventListener('resize', place);
+    window.addEventListener('scroll', place, true);
+    return () => {
+      document.removeEventListener('mousedown', onDown);
+      document.removeEventListener('touchstart', onDown);
+      window.removeEventListener('resize', place);
+      window.removeEventListener('scroll', place, true);
+    };
+  }, [anchor, onClose, place]);
+
+  // A double with one seat left: the other seat's delegation, if it has one.
+  const sibling = slot.delegation_size > 1 && holders.length === slot.delegation_size - 1 ? holders[0] : null;
+  const siblingSociety = sibling ? allocationSocietyId(sibling) : null;
+  const siblingName = sibling && siblingSociety ? allocDelegationName(sibling) ?? 'their delegation' : null;
+
   const ranked = useMemo(
     () => rankPeopleForSeat(waiting, committee, slot, spread, needy, { includeDisallowed: true }),
     [waiting, committee, slot, spread, needy],
   );
   const q = query.trim().toLowerCase();
-  const list = q
-    ? ranked.filter(r => personName(r.app).toLowerCase().includes(q) || schoolName(r.app).toLowerCase().includes(q))
-    : ranked;
+  const match = (a: AcceptedApp) => !q || personName(a).toLowerCase().includes(q) || schoolName(a).toLowerCase().includes(q);
+  const same = siblingSociety ? ranked.filter(r => r.app.society_id === siblingSociety) : [];
+  const rest = siblingSociety ? ranked.filter(r => r.app.society_id !== siblingSociety) : ranked;
+  // The disallowed (another delegation's double) go last.
+  const others = [...rest.filter(r => !r.disallowed), ...rest.filter(r => r.disallowed)].filter(r => match(r.app));
+  const sameShown = same.filter(r => match(r.app));
+
   return (
-    <div className="mt-0.5 mb-1.5 p-1.5" style={{ background: WELL, borderRadius: 12 }}>
-      {waiting.length === 0 ? (
-        <p className="px-2 py-3" style={{ margin: 0, fontSize: 12.5, color: NEU.inkSoft }}>Nobody is waiting for a seat</p>
-      ) : (
-        <>
-          <div className="flex items-center gap-2 flex-wrap">
-            <span style={{ fontSize: 13, fontWeight: 600, paddingLeft: 4 }}>Best fit first</span>
-            <label className="flex items-center gap-2 px-3 flex-1" style={{ minWidth: 200, height: 32, borderRadius: 10, background: '#FFFFFF', boxShadow: '0 0 0 1px rgba(27,56,40,0.10)' }}>
-              <Search size={15} strokeWidth={1.5} style={{ color: NEU.inkSoft, flexShrink: 0 }} />
-              <input
-                type="text"
-                value={query}
-                onChange={e => onQuery(e.target.value)}
-                placeholder="Search a name or delegation"
-                aria-label="Search people waiting"
-                className="flex-1 min-w-0 focus:outline-none"
-                style={{ border: 'none', background: 'transparent', fontFamily: OUTFIT, fontSize: 13.5, color: NEU.ink }}
-              />
-            </label>
-          </div>
-          <div className="flex flex-col gap-1 mt-1.5 overflow-y-auto" style={{ maxHeight: 260, overscrollBehavior: 'contain' }}>
-            {list.length === 0 && <p className="px-2 py-3" style={{ margin: 0, fontSize: 12.5, color: NEU.inkSoft }}>Nobody waiting matches</p>}
-            {list.map(r => (
-              <PickRow
-                key={r.app.id}
-                sug={r}
-                locked={locked}
-                onAssign={onAssign}
-                note={r.disallowed ? 'The other seat is another delegation\'s' : undefined}
-              />
-            ))}
-          </div>
-        </>
-      )}
-    </div>
+    <Portal>
+      <div
+        ref={menuRef}
+        role="dialog"
+        aria-label={`People for ${slot.country_name}`}
+        className="flex flex-col"
+        style={{
+          position: 'fixed', zIndex: 60, left: pos.left, width: pos.width, top: pos.top, bottom: pos.bottom, maxHeight: pos.maxHeight,
+          background: '#FFFFFF', borderRadius: 16, overflow: 'hidden', fontFamily: OUTFIT, color: NEU.ink,
+          boxShadow: '0 18px 44px rgba(27,56,40,0.26), 0 2px 6px rgba(27,56,40,0.10), 0 0 0 1px rgba(27,56,40,0.06)',
+        }}
+      >
+        <div className="flex items-center gap-2 flex-none" style={{ padding: '10px 10px 8px 12px', borderBottom: ROW_DIVIDER }}>
+          <CountryFlag code={slot.country_code} w={24} h={24} alt="" logoUrl={slotLogoUrl(committee, slot)} />
+          <span className="[overflow-wrap:anywhere] flex-1 min-w-0" style={{ fontSize: 14, fontWeight: 600, lineHeight: 1.2 }}>
+            Best fit for {slot.country_name}
+          </span>
+          <button type="button" onClick={onClose} aria-label="Close" className="focus:outline-none flex-shrink-0 inline-flex items-center justify-center" style={{ width: 28, height: 28, borderRadius: 8, border: 'none', background: 'transparent', color: NEU.inkSoft, cursor: 'pointer' }}>
+            <X size={16} strokeWidth={1.5} />
+          </button>
+        </div>
+        {waiting.length === 0 ? (
+          <p className="px-3 py-4" style={{ margin: 0, fontSize: 13, color: NEU.inkSoft }}>Nobody is waiting for a seat</p>
+        ) : (
+          <>
+            <div className="flex-none px-2.5 pt-2">
+              <label className="flex items-center gap-2 px-3" style={{ height: 32, borderRadius: 10, background: '#FAF8F3', boxShadow: '0 0 0 1px rgba(27,56,40,0.10)' }}>
+                <Search size={15} strokeWidth={1.5} style={{ color: NEU.inkSoft, flexShrink: 0 }} />
+                <input
+                  type="text"
+                  value={query}
+                  onChange={e => setQuery(e.target.value)}
+                  placeholder="Search a name or delegation"
+                  aria-label="Search people waiting"
+                  className="flex-1 min-w-0 focus:outline-none"
+                  style={{ border: 'none', background: 'transparent', fontFamily: OUTFIT, fontSize: 13.5, color: NEU.ink }}
+                />
+              </label>
+            </div>
+            <div className="flex-1 min-h-0 overflow-y-auto flex flex-col gap-1 p-2" style={{ overscrollBehavior: 'contain', background: WELL, margin: '8px 0 0' }}>
+              {siblingName && (
+                same.length === 0 ? (
+                  <p className="[overflow-wrap:anywhere]" style={{ margin: 0, padding: '9px 12px', borderRadius: 12, background: SAME_TINT, boxShadow: SAME_EDGE, fontSize: 13, color: NEU.ink }}>
+                    Nobody from <strong style={{ fontWeight: 700 }}>{siblingName}</strong> is waiting
+                  </p>
+                ) : (
+                  <div className="flex flex-col gap-1" style={{ padding: 4, borderRadius: 14, background: SAME_TINT, boxShadow: SAME_EDGE }}>
+                    <span className="[overflow-wrap:anywhere]" style={{ fontSize: 12.5, fontWeight: 600, padding: '4px 6px 2px' }}>
+                      From {siblingName}
+                    </span>
+                    {sameShown.length === 0 && <span style={{ fontSize: 12.5, color: NEU.inkSoft, padding: '2px 6px 6px' }}>Nobody from it matches</span>}
+                    {sameShown.map(r => <PickRow key={r.app.id} sug={r} locked={locked} onAssign={onAssign} />)}
+                  </div>
+                )
+              )}
+              {siblingName && others.length > 0 && <span style={{ fontSize: 12.5, fontWeight: 600, padding: '6px 6px 0' }}>Everyone else, best fit first</span>}
+              {others.length === 0 && !siblingName && <p className="px-2 py-3" style={{ margin: 0, fontSize: 12.5, color: NEU.inkSoft }}>Nobody waiting matches</p>}
+              {others.map(r => (
+                <PickRow
+                  key={r.app.id}
+                  sug={r}
+                  locked={locked}
+                  onAssign={onAssign}
+                  note={r.disallowed ? 'The other seat is another delegation\'s' : undefined}
+                />
+              ))}
+            </div>
+          </>
+        )}
+      </div>
+    </Portal>
   );
 }

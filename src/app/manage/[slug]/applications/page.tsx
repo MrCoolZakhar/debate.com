@@ -48,7 +48,7 @@ import { PeopleDelegationsSwitch } from './DelegationsBoard';
 import DelegationsTab from './delegations/DelegationsTab';
 import DelegationPopupLink from '@/app/manage/[slug]/DelegationPopupLink';
 import { useDelegationSummaries } from './DelegationAvatar';
-import { RowDelegation, RowDelegationBadge, rowDelegationTitle, type RowDelegationProps } from './RowDelegation';
+import { RowDelegation, ROW_DELEGATION_PILL, rowDelegationTitle, type RowDelegationProps } from './RowDelegation';
 import { countryShortName } from '../assignment/displayNames';
 import OpenDelegateApplications from './OpenDelegateApplications';
 import { rejectUpdates, writeReject, rejectFollowUps } from './teamDecisions';
@@ -4259,10 +4259,9 @@ export default function ApplicationsPage() {
 
                   {/* LEFT · select + identity + facts. Four lines at most
                       (owner, 21 Oct 2026): the name big; one small line of
-                      email, nationality, notes and importer; the delegation
-                      name bold; one small line of its facts (RowDelegation).
-                      The delegation's disc overlaps the avatar's corner so the
-                      text keeps the column's width. Wider than the middle
+                      email, nationality, notes and importer; then the
+                      delegation as one pill, slightly indented (RowDelegation,
+                      owner 22 Oct 2026). Wider than the middle
                       pane on desktop, since it carries the most text. */}
                   <div className="flex items-start gap-3 p-4 lg:p-5 flex-[1_1_0] lg:flex-[1.3_1_0]" style={{ minWidth: 0, ...notAttendingFade }}>
                     <div className="pt-1"><SelectBox checked={selected} onClick={() => toggleSelected(app.id)} title={selected ? 'Deselect' : 'Select'} /></div>
@@ -4272,7 +4271,6 @@ export default function ApplicationsPage() {
                     <ProfileLink userId={app.user_id} name={name} nested style={{ display: 'block', flexShrink: 0 }}>
                       <div style={{ position: 'relative', flexShrink: 0 }}>
                         <MemberAvatar name={name} url={app.profiles?.avatar_url ?? null} size={52} />
-                        {app.societies?.name && <RowDelegationBadge name={app.societies.name} logoUrl={app.societies.logo_url} />}
                       </div>
                     </ProfileLink>
                     <div className="min-w-0 flex-1">
@@ -4322,15 +4320,18 @@ export default function ApplicationsPage() {
                       )}
 
                       {app.societies?.name ? (() => {
-                        // The delegation in two lines: its name bold, then its
-                        // facts and this applicant's expected size. A click opens
-                        // the delegation pop-up in place (DelegationPopupLink).
+                        // The delegation as one longer pill under the person
+                        // (owner, 22 Oct 2026): crest, name, place, members and
+                        // expected size. A click opens the delegation pop-up in
+                        // place (DelegationPopupLink).
                         const d = app.society_id ? delegationSummaries.get(app.society_id) : undefined;
                         const rd: RowDelegationProps = {
                           name: app.societies.name,
+                          logoUrl: app.societies.logo_url,
                           city: app.societies.city,
                           countryCode: app.societies.country_code,
                           members: d?.members ?? null,
+                          expected: d?.expected ?? null,
                           lead: d?.lead ?? null,
                           leadRole: d?.leadRole ?? null,
                           leads: !!d?.leadAppIds.includes(app.id),
@@ -4341,14 +4342,14 @@ export default function ApplicationsPage() {
                             societyId={app.society_id}
                             tab="people"
                             title={`Open the ${app.societies.name} delegation\n${rowDelegationTitle(rd)}`}
-                            className="appDelegTag block max-w-full"
-                            style={{ padding: '3px 8px', margin: '5px 0 0 -8px', borderRadius: 10, textAlign: 'left' }}
+                            className="appDelegTag max-w-full"
+                            style={ROW_DELEGATION_PILL}
                             onChanged={() => { void loadApplications({ silent: true }); }}
                           >
                             <RowDelegation {...rd} />
                           </DelegationPopupLink>
                         ) : (
-                          <div style={{ marginTop: 6 }} title={rowDelegationTitle(rd)}><RowDelegation {...rd} /></div>
+                          <div style={ROW_DELEGATION_PILL} title={rowDelegationTitle(rd)}><RowDelegation {...rd} /></div>
                         );
                       })() : pledgeLine && (
                         <div className="flex flex-wrap gap-2 mt-1.5 items-center">

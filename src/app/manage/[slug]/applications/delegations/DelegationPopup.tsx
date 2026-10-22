@@ -98,7 +98,9 @@ function CountsRow({ row }: { row: DelegationView }) {
   const counts: { n: string; word: string; title: string }[] = [
     ...(row.expected == null ? [] : [{ n: String(row.expected), word: 'expected', title: 'Expected size' }]),
     { n: String(row.registered), word: 'joined', title: 'People who joined the delegation' },
-    { n: String(row.paid), word: 'paid', title: 'Delegate tickets paid' },
+    // Delegate spots paid (owner, 22 Oct 2026): the number allocations are given
+    // against; advisor tickets never count here.
+    { n: String(row.paid), word: row.paid === 1 ? 'delegate spot paid' : 'delegate spots paid', title: 'Delegate tickets paid (advisor tickets not counted)' },
   ];
   return (
     <div className="flex items-baseline flex-wrap" style={{ gap: '6px 20px' }}>

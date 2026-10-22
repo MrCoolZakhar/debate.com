@@ -115,3 +115,9 @@ What we ask for: `organiser_add_to_delegation(p_application uuid, p_society uuid
 - Your call how their own role fee works from there. Our guess: if they already paid it, they keep their paid spot and the delegation's tickets keep covering the others; if they have not paid, the delegation's tickets may cover them the usual way (`pledge_covered_application_ids`).
 - If they hold an allocation, it stays theirs and is not turned into an open seat of the delegation.
 - Refusals we expect: `not_organiser`, `not_individual` (already in a delegation), `wrong_role`, `wrong_conference`, `not_accepted`, and the seat limit if you think it applies.
+
+## 22 Oct, round 4
+
+### Paid delegate spots count a head delegate's own ticket twice
+
+The "delegate spots paid" number (settled Delegate Tickets of the delegation's leaders, plus delegates who paid their own fee or were waived) counts a head delegate who has paid their own Delegate Ticket 1 twice: once as a settled leader ticket and once as a delegate who paid their own fee. VUBMUN shows 15 paid for 14 tickets. It happens in the database function and in the client twin under `src/app/manage/[slug]/assignment/**`. Please fix the database side; we will mirror the client twin to match whatever you decide (one count per person, the leader's own ticket counted once).

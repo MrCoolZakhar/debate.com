@@ -42,7 +42,8 @@ import {
 import Portal from '@/components/Portal';
 import { ModalOverlay as SharedModalOverlay } from '@/components/ModalOverlay';
 import { notifyOk, notifyErr } from '@/lib/appNotify';
-import SeatBoard, { SeatBoardStats } from '@/app/manage/[slug]/assignment/SeatBoard';
+import SeatBoard from '@/app/manage/[slug]/assignment/SeatBoard';
+import SeatBoardIntro, { CLASSIC_BY_DEFAULT } from '@/app/manage/[slug]/assignment/SeatBoardIntro';
 import {
   type AcceptedApp, type AllocationRow, type SlotRow, type CommitteeData, type UserHistory, type Suggestion,
   slotLogoUrl, committeeSeatLogo, reasonContext, fitColor, OUTFIT, MONO, FLAG_SHADOW, PersonAvatar, DelegationAvatar,
@@ -2681,7 +2682,8 @@ function mergeLocalMutations(
 // link: ?mode=chairs (chairs are also managed on the Committees page),
 // ?mode=delegations[&delegation=<society id>] (Applications → Delegations →
 // "Open in Assignment") and ?mode=independents (no link points at it).
-/** localStorage: '1' keeps this browser on the classic board. */
+/** localStorage: '1' keeps this browser on the classic board, '0' on the seat
+ *  board. No value = the default (CLASSIC_BY_DEFAULT, SeatBoardIntro.tsx). */
 const CLASSIC_VIEW_KEY = 'gavelling-assignment-classic';
 
 export default function AssignmentPage() {
@@ -2700,16 +2702,25 @@ export default function AssignmentPage() {
   const [societies, setSocieties] = useState<DelegationSource[]>([]);
   const [history, setHistory] = useState<Record<string, UserHistory>>({});
   const [mode, setMode] = useState<'delegates' | 'chairs' | 'delegations' | 'independents' | 'delegation-seats'>('delegates');
-  // Delegates open on the seat board (SeatBoard.tsx, owner 21 Oct 2026). The
-  // classic board stays one link away while the owner tests, remembered per
-  // browser. Read after mount, so the server render and the first client
-  // render agree.
-  const [classicView, setClassicView] = useState(false);
+  // Which delegates board opens (owner, 22 Oct 2026): for about two weeks
+  // while people get used to the seat board, the CLASSIC board by default
+  // (CLASSIC_BY_DEFAULT), with a small introduction beside the switch
+  // (SeatBoardIntro.tsx). A choice this browser made wins either way, and the
+  // Applications pop-up's ?person= link always opens the seat board. Read
+  // after mount, so the server render and the first client render agree.
+  const [classicView, setClassicView] = useState(CLASSIC_BY_DEFAULT);
+  /** This browser has picked a board before (so the introduction is not needed). */
+  const [viewChosen, setViewChosen] = useState(true);
   useEffect(() => {
-    try { setClassicView(window.localStorage.getItem(CLASSIC_VIEW_KEY) === '1'); } catch { /* storage blocked: the seat board */ }
+    let stored: string | null = null;
+    try { stored = window.localStorage.getItem(CLASSIC_VIEW_KEY); } catch { /* storage blocked: the default */ }
+    const toPerson = new URLSearchParams(window.location.search).has('person');
+    setViewChosen(stored === '1' || stored === '0');
+    setClassicView(toPerson ? false : stored === '1' ? true : stored === '0' ? false : CLASSIC_BY_DEFAULT);
   }, []);
   const chooseClassicView = useCallback((next: boolean) => {
     setClassicView(next);
+    setViewChosen(true);
     try { window.localStorage.setItem(CLASSIC_VIEW_KEY, next ? '1' : '0'); } catch { /* storage blocked: this visit only */ }
   }, []);
   // "Open the Delegations view" from the seat board shows a way back.
@@ -3929,6 +3940,9 @@ export default function AssignmentPage() {
       {classicView ? 'Seat board' : 'Classic view'}
     </button>
   );
+  const seatBoardIntro = mode === 'delegates' && classicView && !viewChosen && !loading && committees.length > 0 && (
+    <SeatBoardIntro onTry={() => chooseClassicView(false)} />
+  );
 
   return (
     <div className={seatBoardOn ? 'px-6 md:px-10 pt-6 pb-5 lg:h-[calc(100dvh-56px)] lg:flex lg:flex-col lg:overflow-hidden' : 'px-6 md:px-10 py-8'}>
@@ -3942,7 +3956,7 @@ export default function AssignmentPage() {
         </div>
         {mode === 'delegates' && (
           <div className="flex items-center gap-5 flex-wrap">
-          {seatBoardOn && <SeatBoardStats committees={committees} waiting={accepted.length} />}
+          {seatBoardIntro}
           {viewSwitch}
           <AllocationEmailBar
             autoSend={autoAllocationEmail}

@@ -10,16 +10,19 @@
 // delegates, then others, A to Z inside each (memberOrder.ts), in one white
 // section card on the pop-up's body colour.
 //
-// The seat column is the leader card's own SeatCell (participant/delegation/
-// seat/SeatCell): the country's round flag big with its name under it, the
-// committee's emblem smaller beside it with its acronym. Seats move by
-// dragging, like the leader card (seat/useSeatDrag), each move asked in place
+// The look (owner, 22 Oct 2026: "too messy", back to the earlier LIST): one
+// plain row per person on the card, no column headers: the avatar (48px), the
+// name bold with a crown for a head delegate, and under it ONE line "Role ·
+// Status · round flag + committee acronym + country". On the right the payment
+// word in its colour, a person-minus button (Remove from delegation, asked in
+// place) and the ··· menu. The allocation on that line is what you drag.
+// Seats move by dragging, like the leader card (seat/useSeatDrag), each move asked in place
 // (seat/InPlaceConfirm) and shown at once, put back if the write is refused,
 // then a quiet re-read (never a loader):
 //   * a seat onto a seated member: Switch (perform_delegation_swap; organisers
 //     may always switch);
 //   * a seat onto a member with no seat: Move, the first person keeps no seat;
-//   * the row menu's Unallocate (the seat cell has no button of its own):
+//   * the row menu's Unallocate (the allocation has no button of its own):
 //     Unallocate, the allocation stays with the delegation as open;
 //   * "Allocate" on a member with no seat: Allocate, from a second step that
 //     lists the delegation's open allocations.
@@ -50,14 +53,13 @@
 // member/MemberDetailsPopup content) as a second step in this pop-up.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Plus } from 'lucide-react';
+import { Armchair, Crown, Plus, UserMinus } from 'lucide-react';
 import { CircleFlag } from '@/components/CircleFlag';
 import { friendlyError } from '@/lib/friendlyError';
 import { notifyErr, notifyOk } from '@/lib/appNotify';
 import { removeMember, type MemberRole } from '@/app/conferences/[slug]/participant/delegation/v2';
 import OrganiserMemberMenu from './OrganiserMemberMenu';
 import AddPersonStep from './AddPersonStep';
-import SeatCell from '@/app/conferences/[slug]/participant/delegation/seat/SeatCell';
 import InPlaceConfirm from '@/app/conferences/[slug]/participant/delegation/seat/InPlaceConfirm';
 import { useSeatDrag } from '@/app/conferences/[slug]/participant/delegation/seat/useSeatDrag';
 import { MemberDetailsBody, MemberDetailsHead } from '@/app/conferences/[slug]/participant/delegation/member/MemberDetailsPopup';
@@ -70,14 +72,14 @@ import {
   organiserMoveSeat, organiserPlaceInSeat, organiserSwitchSeats, organiserTakeOutOfSeat,
   type PersonSeatResult, type SeatPerson,
 } from './seatWrites';
-import { ORGANISER_ADD_TO_DELEGATION_DB, WAITING_FOR_CHRISTIAN, organiserSetMemberRole } from './v2';
+import { DELEGATIONS_MONEY_DB, ORGANISER_ADD_TO_DELEGATION_DB, WAITING_FOR_CHRISTIAN, organiserSetMemberRole } from './v2';
 import {
-  BTN_CLASS, CommitteeDisc, FONT, FOREST, HAIRLINE, INK, INK_SOFT, OK_GREEN, OWE, PopupSection, ROW_LINE, RoundAvatar, STROKE,
+  BTN_CLASS, CommitteeDisc, DANGER, FONT, FOREST, HAIRLINE, INK, INK_SOFT, OK_GREEN, OWE, PopupSection, ROW_LINE, RoundAvatar, STROKE,
   smallSecondaryBtn,
 } from './kit';
 import { sortMembers } from './memberOrder';
 
-const GRID = 'minmax(0,1.2fr) 150px minmax(0,1.5fr) 150px 36px';
+const GOLD_DEEP = '#B6871F';
 
 const ROLE_OPTIONS: { value: MemberRole; label: string }[] = [
   { value: 'delegate', label: 'Delegate' },
@@ -102,6 +104,16 @@ function roleOf(m: DelegationMemberLite): MemberRole | null {
 function roleLabel(m: DelegationMemberLite): string {
   const r = roleOf(m);
   return r ? ROLE_OPTIONS.find(o => o.value === r)!.label : (OTHER_ROLE_LABEL[m.role] ?? m.role);
+}
+
+/** The application's status as one word on the person's line; accepted reads
+ *  green and bold. */
+function statusWord(m: DelegationMemberLite): { text: string; color: string; bold: boolean } {
+  if (!m.attending && ACCEPTED.has(m.status)) return { text: 'Not attending', color: INK_SOFT, bold: false };
+  if (m.status === 'checked-in') return { text: 'Checked in', color: OK_GREEN, bold: true };
+  if (ACCEPTED.has(m.status)) return { text: 'Accepted', color: OK_GREEN, bold: true };
+  if (m.status === 'submitted') return { text: 'Pending', color: AMBER, bold: true };
+  return { text: m.status.charAt(0).toUpperCase() + m.status.slice(1).replace(/-/g, ' '), color: INK_SOFT, bold: false };
 }
 
 /** The person's own invoices: everything in their name except what they hold for
@@ -146,11 +158,13 @@ const AMBER = '#A8670A';
 //   5. Nothing due yet        no fee invoice yet (payments not set up, or not
 //                             accepted); "Waiting on you" while the application
 //                             waits for the organiser.
+// Colours (owner's list reference, 22 Oct 2026): covered by the delegation
+// amber, Waived grey, Paid rust, Owes red.
 // Money is never computed from payment_status: it only picks between words the
 // ledger leaves open (covered ticket paid or not, a waiver, an old row with no
 // invoice), as it did before.
 function paymentOf(m: DelegationMemberLite, own: OwnInvoice[]): PayWord {
-  if (m.status === 'submitted') return { text: 'Waiting on you', color: '#8A5A12', tone: 'soft' };
+  if (m.status === 'submitted') return { text: 'Waiting on you', color: INK_SOFT, tone: 'soft' };
   const accepted = ACCEPTED.has(m.status);
   const open = accepted ? own.filter(i => OPEN_STATUSES.has(i.status) && i.amount_cents - i.amount_paid_cents > 0) : [];
   if (open.length > 0) {
@@ -161,19 +175,19 @@ function paymentOf(m: DelegationMemberLite, own: OwnInvoice[]): PayWord {
     }
     if (open.some(i => i.kind === 'app_fee')) parts.push('registration fee');
     if (open.some(i => i.kind !== 'role_fee' && i.kind !== 'app_fee')) parts.push('extras');
-    return { text: `Owes ${parts.join(' and ')}`, color: OWE, tone: 'owe' };
+    return { text: `Owes ${parts.join(' and ')}`, color: DANGER, tone: 'owe' };
   }
-  if (m.payment_status === 'waived') return { text: 'Waived', color: OK_GREEN, tone: 'ok' };
+  if (m.payment_status === 'waived') return { text: 'Waived', color: INK_SOFT, tone: 'ok' };
   const fee = own.filter(i => i.kind === 'role_fee' && i.status !== 'void');
   const covered = fee.some(i => i.status === 'waived')
     || (fee.length === 0 && m.payment_status === 'paid' && !m.self_paid);
   if (covered) {
     return m.payment_status === 'paid'
-      ? { text: 'Paid by delegation', color: OK_GREEN, tone: 'ok' }
+      ? { text: 'Paid by delegation', color: AMBER, tone: 'ok' }
       : { text: "Delegation hasn't paid yet", color: AMBER, tone: 'owe' };
   }
   if (fee.some(i => i.status === 'settled') || (fee.length === 0 && m.payment_status === 'paid')) {
-    return { text: 'Paid', color: OK_GREEN, tone: 'ok' };
+    return { text: 'Paid', color: OWE, tone: 'ok' };
   }
   return { text: 'Nothing due yet', color: INK_SOFT, tone: 'soft' };
 }
@@ -422,6 +436,22 @@ export default function PeopleTab<M extends DelegationMemberLite>({ conferenceId
     return r;
   }
 
+  /** The person-minus button: asked in place, then delegation_remove_member. */
+  function askRemove(m: M, anchor: HTMLElement) {
+    const name = memberName(m);
+    setAsk({
+      anchor, align: 'end', title: `Remove ${name} from ${row.name}?`,
+      line: 'Their allocation goes back to the delegation as open. Money stays with whoever paid it.',
+      yes: 'Remove', danger: true,
+      onYes: () => {
+        setAsk(null);
+        void remove(m)
+          .then(r => { if (!r.ok) notifyErr(r.error, 'applications'); })
+          .catch(e => notifyErr(friendlyError(e, 'They could not be removed. Try again.'), 'applications'));
+      },
+    });
+  }
+
   function openAddStep() {
     if (!ORGANISER_ADD_TO_DELEGATION_DB) return;
     onStep({
@@ -457,6 +487,8 @@ export default function PeopleTab<M extends DelegationMemberLite>({ conferenceId
   }
 
   function openDetails(m: M) {
+    // A drag that ends over a name is not a press on it.
+    if (wasJustDragged()) return;
     const person = personRowOf(m);
     onStep({
       title: '',
@@ -580,13 +612,7 @@ export default function PeopleTab<M extends DelegationMemberLite>({ conferenceId
           </span>
         )}
       >
-      <div className="overflow-x-auto">
-      <div style={{ minWidth: 820 }}>
-        <div className="grid" style={{ gridTemplateColumns: GRID, gap: 16, padding: '10px 20px' }}>
-          {['Person', 'Role', 'Allocation', 'Payment', ''].map((h, i) => (
-            <span key={i} style={{ fontFamily: FONT, fontSize: 12, fontWeight: 500, color: INK_SOFT }}>{h}</span>
-          ))}
-        </div>
+      <div className="flex flex-col">
         {ordered.map(m => {
           const name = memberName(m);
           const email = m.profiles?.email || m.invited_email || '';
@@ -597,11 +623,16 @@ export default function PeopleTab<M extends DelegationMemberLite>({ conferenceId
           const rowBusy = seatBusy.has(m.id) || (!!held && seatBusy.has(held.allocationId));
           const draggable = !!held && canSeat && !rowBusy;
           const isTarget = !!drag && drag.over === m.id;
+          const status = statusWord(m);
+          const isHead = role === 'head-delegate';
           return (
             <div
               key={m.id}
               data-seat-target={m.id}
+              className="flex items-center flex-wrap"
               style={{
+                gap: '10px 16px',
+                padding: '12px 20px',
                 borderTop: `1px solid ${ROW_LINE}`,
                 background: isTarget ? 'rgba(27,56,40,0.06)' : menuOpenId === m.id ? '#FAF7F0' : 'transparent',
                 boxShadow: isTarget ? `inset 0 0 0 2px ${FOREST}` : 'none',
@@ -609,67 +640,101 @@ export default function PeopleTab<M extends DelegationMemberLite>({ conferenceId
                 transition: 'background-color 120ms ease, box-shadow 120ms ease',
               }}
             >
-              <div className="grid items-center" style={{ gridTemplateColumns: GRID, gap: 16, padding: '12px 20px' }}>
-                <div className="flex items-center gap-3 min-w-0">
-                  <button
-                    type="button"
-                    onClick={() => openDetails(m)}
-                    aria-label={`See ${name}'s details`}
-                    title="See details and application"
-                    className="flex-shrink-0 rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gv-main)] focus-visible:ring-offset-2"
-                    style={{ padding: 0, border: 'none', background: 'transparent', cursor: 'pointer', lineHeight: 0 }}
-                  >
-                    <RoundAvatar name={name} url={m.profiles?.avatar_url ?? null} size={50} seed={m.id} />
-                  </button>
-                  <div className="flex flex-col min-w-0" style={{ gap: 1 }}>
+              {/* Who: the avatar, the name (a crown for a head delegate), then one
+                  line of role, status and allocation. Both open the details. */}
+              <div className="flex items-center min-w-0" style={{ gap: 14, flex: '1 1 340px' }}>
+                <button
+                  type="button"
+                  onClick={() => openDetails(m)}
+                  aria-label={`See ${name}'s details`}
+                  title="See details and application"
+                  className="flex-shrink-0 rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gv-main)] focus-visible:ring-offset-2"
+                  style={{ padding: 0, border: 'none', background: 'transparent', cursor: 'pointer', lineHeight: 0 }}
+                >
+                  <RoundAvatar name={name} url={m.profiles?.avatar_url ?? null} size={48} seed={m.id} />
+                </button>
+                <div className="flex flex-col min-w-0" style={{ gap: 3 }}>
+                  <span className="flex items-center min-w-0" style={{ gap: 6 }}>
                     <button
                       type="button"
                       onClick={() => openDetails(m)}
+                      title={email && email !== name ? email : undefined}
                       className="text-left [overflow-wrap:anywhere] rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gv-main)] hover:underline"
-                      style={{ padding: 0, border: 'none', background: 'transparent', cursor: 'pointer', fontFamily: FONT, fontSize: 15, fontWeight: 600, color: INK, textUnderlineOffset: 3 }}
+                      style={{ padding: 0, border: 'none', background: 'transparent', cursor: 'pointer', fontFamily: FONT, fontSize: 15.5, fontWeight: 700, color: INK, lineHeight: 1.25, textUnderlineOffset: 3 }}
                     >
                       {name}
                     </button>
-                    {email && email !== name && (
-                      <span className="[overflow-wrap:anywhere]" style={{ fontFamily: FONT, fontSize: 12, color: INK_SOFT }}>{email}</span>
-                    )}
-                  </div>
+                    {isHead && <Crown size={15} strokeWidth={STROKE} aria-label="Head delegate" style={{ color: GOLD_DEEP, flexShrink: 0 }} />}
+                  </span>
+                  <span className="flex flex-wrap items-center min-w-0" style={{ gap: '2px 7px', fontFamily: FONT, fontSize: 13, color: INK_SOFT, lineHeight: 1.35 }}>
+                    <span>{roleLabel(m)}</span>
+                    <span aria-hidden style={{ opacity: 0.55 }}>·</span>
+                    <span style={{ color: status.color, fontWeight: status.bold ? 700 : 500 }}>{status.text}</span>
+                    {held ? (
+                      <>
+                        <span aria-hidden style={{ opacity: 0.55 }}>·</span>
+                        <span
+                          onPointerDown={draggable ? (e) => start(e, m.id, { code: held.countryCode, logoUrl: held.seat.seatLogo, label: held.countryName, committee: held.seat.committee_label }, true) : undefined}
+                          title={draggable ? 'Drag onto another person to switch allocations' : (held.seat.committee_full ?? undefined)}
+                          className="inline-flex items-center min-w-0"
+                          style={{ gap: 6, cursor: draggable ? 'grab' : 'default', touchAction: draggable ? 'none' : undefined, opacity: drag && drag.from === m.id ? 0.45 : rowBusy ? 0.6 : 1 }}
+                        >
+                          <CircleFlag code={held.countryCode} logoUrl={held.seat.seatLogo} label={held.countryName} size={18} decorative />
+                          <span style={{ fontWeight: 600, color: INK }}>{held.seat.committee_label}</span>
+                          <span className="[overflow-wrap:anywhere]" style={{ color: INK }}>{held.countryName}</span>
+                        </span>
+                      </>
+                    ) : canSeat ? (
+                      <>
+                        <span aria-hidden style={{ opacity: 0.55 }}>·</span>
+                        {openSeats.length > 0 ? (
+                          <button
+                            type="button"
+                            onClick={() => openPlaceStep(m)}
+                            disabled={rowBusy}
+                            className={`${BTN_CLASS} inline-flex items-center`}
+                            style={{ gap: 5, padding: 0, border: 'none', background: 'none', cursor: rowBusy ? 'default' : 'pointer', fontFamily: FONT, fontSize: 13, fontWeight: 700, color: FOREST, textDecoration: 'underline', textUnderlineOffset: 3 }}
+                          >
+                            <Armchair size={14} strokeWidth={STROKE} aria-hidden /> Allocate
+                          </button>
+                        ) : (
+                          <span>No allocation yet</span>
+                        )}
+                      </>
+                    ) : null}
+                  </span>
                 </div>
+              </div>
 
-                <span style={{ fontFamily: FONT, fontSize: 14, color: INK }}>{roleLabel(m)}</span>
-
-                <div className="min-w-0">
-                  <SeatCell
-                    seat={held?.seat ?? null}
-                    role={role ?? 'delegate'}
-                    draggable={draggable}
-                    dragging={!!drag && drag.from === m.id}
-                    onDragStart={(e, fromGrip) => {
-                      if (!held) return;
-                      start(e, m.id, { code: held.countryCode, logoUrl: held.seat.seatLogo, label: held.countryName, committee: held.seat.committee_label }, fromGrip);
-                    }}
-                    wasJustDragged={wasJustDragged}
-                    busy={rowBusy}
-                    onPlace={!held && canSeat && openSeats.length > 0 ? () => openPlaceStep(m) : undefined}
-                  />
-                </div>
-
-                <span style={{ fontFamily: FONT, fontSize: 14, color: pay.color }}>{pay.text}</span>
-
-                <div className="flex justify-end">
-                  <OrganiserMemberMenu
-                    name={name}
-                    role={role}
-                    canChangeRole={ACCEPTED.has(m.status)}
-                    allocationWords={held && canSeat && !rowBusy ? seatWords(held) : null}
-                    delegationName={row.name}
-                    onRole={next => changeRole(m, next)}
-                    onRemove={() => remove(m)}
-                    onUnallocate={() => doSeatChange(m.id, OPEN_AREA)}
-                    onOpenChange={o => setMenuOpenId(prev => (o ? m.id : prev === m.id ? null : prev))}
-                    disabled={rowBusy}
-                  />
-                </div>
+              {/* Where their payment stands, then remove and the ··· menu. */}
+              <div className="flex items-center justify-end" style={{ gap: 6, marginLeft: 'auto' }}>
+                <span className="text-right" style={{ fontFamily: FONT, fontSize: 14, fontWeight: 600, color: pay.color, marginRight: 6 }}>{pay.text}</span>
+                <button
+                  type="button"
+                  aria-label={`Remove ${name} from ${row.name}`}
+                  title={DELEGATIONS_MONEY_DB ? `Remove ${name} from ${row.name}` : WAITING_FOR_CHRISTIAN}
+                  aria-disabled={!DELEGATIONS_MONEY_DB || rowBusy ? true : undefined}
+                  onClick={e => {
+                    if (!DELEGATIONS_MONEY_DB || rowBusy) return;
+                    askRemove(m, e.currentTarget);
+                  }}
+                  className={`${BTN_CLASS} inline-flex items-center justify-center flex-shrink-0 hover:bg-[#F1ECE1]`}
+                  style={{ width: 36, height: 36, borderRadius: 10, border: 'none', background: 'transparent', color: INK_SOFT, cursor: DELEGATIONS_MONEY_DB && !rowBusy ? 'pointer' : 'default', opacity: DELEGATIONS_MONEY_DB && !rowBusy ? 1 : 0.45 }}
+                >
+                  <UserMinus size={18} strokeWidth={STROKE} aria-hidden />
+                </button>
+                <OrganiserMemberMenu
+                  name={name}
+                  role={role}
+                  canChangeRole={ACCEPTED.has(m.status)}
+                  allocationWords={held && canSeat && !rowBusy ? seatWords(held) : null}
+                  delegationName={row.name}
+                  onRole={next => changeRole(m, next)}
+                  onRemove={() => remove(m)}
+                  onUnallocate={() => doSeatChange(m.id, OPEN_AREA)}
+                  onOpenChange={o => setMenuOpenId(prev => (o ? m.id : prev === m.id ? null : prev))}
+                  disabled={rowBusy}
+                />
               </div>
             </div>
           );
@@ -679,7 +744,6 @@ export default function PeopleTab<M extends DelegationMemberLite>({ conferenceId
             {gone === 1 ? '1 more person was turned down or withdrew.' : `${gone} more people were turned down or withdrew.`}
           </p>
         )}
-      </div>
       </div>
       </PopupSection>
 
