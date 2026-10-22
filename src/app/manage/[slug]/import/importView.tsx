@@ -14,11 +14,13 @@
 
 import { useState, type ReactNode } from 'react';
 import Link from 'next/link';
+import { useParams } from 'next/navigation';
 import {
-  Check, CheckCircle2, Download, FileSpreadsheet, Loader2, MinusCircle, Pencil, Upload as UploadIcon, XCircle, AlertTriangle,
+  Check, CheckCircle2, CircleHelp, Download, FileSpreadsheet, Loader2, MinusCircle, Pencil, Upload as UploadIcon, XCircle, AlertTriangle,
 } from 'lucide-react';
 import { CircleFlag } from '@/components/CircleFlag';
 import GSelect from '@/components/GSelect';
+import HowImportWorksPopup from './HowImportWorksPopup';
 import type { ClassifiedImportRow, CommitteeLite, ImportableRole, ParsedImportRow } from '@/lib/applicantImport';
 
 export const OUTFIT = "var(--font-brand), sans-serif";
@@ -401,6 +403,9 @@ export function ImportDropZone({ parsing, fileName, fileError, onChoose, onFile,
   onTemplate: () => void;
 }) {
   const [over, setOver] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
+  const params = useParams<{ slug: string }>();
+  const slug = typeof params?.slug === 'string' ? params.slug : '';
   return (
     <>
       <div
@@ -437,12 +442,18 @@ export function ImportDropZone({ parsing, fileName, fileError, onChoose, onFile,
           </>
         )}
       </div>
-      <div className="flex flex-wrap items-center gap-x-5 gap-y-2 mt-3">
-        <button type="button" className="gv-imp-link" onClick={onTemplate}>
-          <Download size={15} aria-hidden /> Download the template
+      <div className="flex flex-wrap items-center gap-3 mt-3">
+        <button type="button" className="gv-imp-secondary" style={{ gap: 8 }} onClick={onTemplate}>
+          <Download size={16} aria-hidden /> Download the template
+        </button>
+        <button type="button" className="gv-imp-secondary" style={{ gap: 8 }} onClick={() => setHelpOpen(true)}>
+          <CircleHelp size={16} aria-hidden /> How it Works
         </button>
       </div>
       {fileError && <p role="alert" className="gv-imp-error">{fileError}</p>}
+      {helpOpen && (
+        <HowImportWorksPopup slug={slug} onClose={() => setHelpOpen(false)} onDownloadTemplate={onTemplate} />
+      )}
     </>
   );
 }

@@ -60,6 +60,8 @@ export interface JobPanel {
   can_promote: boolean;
   conference_credits: number;
   your_credits: number;
+  /** True while the conference has never had a listing and has not chosen "Do it Later" (prompt 14). */
+  onboarding?: boolean;
 }
 
 /** Every refusal shape the organizer RPCs answer with. */
@@ -325,4 +327,10 @@ export async function conferenceInvites(confId: string): Promise<{ ok: true; inv
   } catch (e) {
     return { ok: false, message: friendlyError(e, fallback) };
   }
+}
+
+// ── Prompt 14: "Do it Later" on the first-time onboarding ──────────────────
+/** Records "Do it Later" (conferences.jobs_later_at) and recomputes the checkmark. */
+export function jobOnboardingLater(confId: string) {
+  return call<Record<string, never>>('job_onboarding_later', { p_conf: confId }, 'We could not save that. Try again.');
 }

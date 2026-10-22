@@ -8,10 +8,11 @@ import { notify } from '@/lib/sessionNotifications';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
-  Building2, Rocket, Mail, Gavel, UsersRound, UserPlus, Wallet, Palette, Store as StoreIcon,
+  Building2, Rocket, Mail, Gavel, UsersRound, UserPlus, Wallet, Palette, Store as StoreIcon, Briefcase,
   Inbox, Globe2, CheckCircle2, AlertCircle, ArrowRight,
   Activity, UserRoundCheck, MapPin, RotateCcw,
 } from 'lucide-react';
+import SponsorListRow from './SponsorListRow';
 import { useManage } from '@/app/manage/[slug]/layout';
 import { getAuthedClient, getFreshAuthedClient } from '@/lib/supabase-auth';
 import { useAuth } from '@/components/AuthProvider';
@@ -775,8 +776,8 @@ const SETUP_DONE_NOTICE: Record<string, { title: string; body: string }> = {
     body: 'You have enough seats for the head count you are expecting.',
   },
   chairs: {
-    title: 'Your dais has a chair',
-    body: 'Chairs can run their committee sessions from their own dashboard.',
+    title: 'Team positions are set',
+    body: 'Post or edit chair, secretariat and staff roles on the Job Board any time.',
   },
   applications: {
     title: 'Applications are open',
@@ -1372,6 +1373,19 @@ export default function DashboardPage() {
       onClick: () => router.push(`/manage/${slug}/committees`),
     },
     {
+      key: 'financials',
+      icon: Wallet,
+      emoji: 'Money bag',
+      gradient: NEU_GRADIENTS.amber,
+      title: 'Add financial information',
+      // Mirrors conference_payments_ready: a non-null fee_amount alone was
+      // never a real signal (the creation page always writes one), this row
+      // only clears once delegates actually have somewhere to pay.
+      done: conferencePaymentsReady(conference),
+      sub: 'Choose how you get paid so delegates can actually pay you.',
+      onClick: () => router.push(`/manage/${slug}/financials?open=payment`),
+    },
+    {
       // Checklist v2: at least one role switched on with a window that has not
       // closed (a window opening later counts). The server also counts a
       // conference that already has applicants' own applications, so closed
@@ -1397,19 +1411,6 @@ export default function DashboardPage() {
         : `/manage/${slug}/settings?tab=applications`),
     },
     {
-      key: 'financials',
-      icon: Wallet,
-      emoji: 'Money bag',
-      gradient: NEU_GRADIENTS.amber,
-      title: 'Add financial information',
-      // Mirrors conference_payments_ready: a non-null fee_amount alone was
-      // never a real signal (the creation page always writes one), this row
-      // only clears once delegates actually have somewhere to pay.
-      done: conferencePaymentsReady(conference),
-      sub: 'Choose how you get paid so delegates can actually pay you.',
-      onClick: () => router.push(`/manage/${slug}/financials?open=payment`),
-    },
-    {
       key: 'communications',
       icon: Mail,
       emoji: 'Envelope',
@@ -1421,41 +1422,19 @@ export default function DashboardPage() {
       onClick: () => router.push(`/manage/${slug}/communications`),
     },
     {
+      // Job Board prompt 14 (owner, 21 Oct 2026): the step is about the whole
+      // team and opens the Job Board. Done by the client's committee-chair
+      // rule (ONE chair invited or assigned is enough) OR the server's answer,
+      // which also counts a published job listing or "Do it Later"
+      // (conferences.jobs_later_at), so nobody is blocked.
       key: 'chairs',
-      icon: Gavel,
+      icon: Briefcase,
       emoji: 'Balance scale',
       gradient: NEU_GRADIENTS.gold,
-      title: 'Invite chairs',
-      sub: committeeCount === 0
-        ? 'Add committees first, then invite a chair to each dais.'
-        : committeesNeedingChairs === committeeCount
-          ? 'Invite a chair to any one committee to get started.'
-          : committeesNeedingChairs > 0
-            ? `${committeesNeedingChairs} of ${committeeCount} still need someone on the dais.`
-            : 'Every committee has a chair assigned or invited.',
-      // ONE chair invited is enough to tick this. Requiring every dais staffed
-      // made the bar scale with ambition and it was the single biggest killer
-      // on the checklist: conferences with 1-2 committees passed 49% of the
-      // time, those with 3-5 passed 14%. Harvard WorldMUN (10 committees) and
-      // MUNBU Workshop (73 delegate applications already in) were both marked
-      // incomplete for what is genuinely months of recruiting. Chasing the rest
-      // is the job of the chair-reminder emails, not of a binary tick.
-      done: committeeCount > 0 && committeesNeedingChairs < committeeCount,
-      // Committees, not assignment: inviting a chair starts from the committee
-      // you are staffing.
-      onClick: () => router.push(`/manage/${slug}/committees`),
-      action: (
-        <button
-          onClick={(e) => { e.stopPropagation(); router.push(`/manage/${slug}/jobs`); }}
-          className="focus:outline-none"
-          style={{
-            fontFamily: OUTFIT, fontSize: 10, fontWeight: 800,
-            color: NEU.deepGold, background: 'none', border: 'none', cursor: 'pointer', padding: '2px 4px',
-          }}
-        >
-          Recruit
-        </button>
-      ),
+      title: 'List Chair, Secretariat or Staff Positions',
+      sub: 'Post your chair, secretariat and staff roles on the Job Board so people can apply.',
+      done: (committeeCount > 0 && committeesNeedingChairs < committeeCount) || !!serverDone.chairs,
+      onClick: () => router.push(`/manage/${slug}/jobs`),
     },
     {
       key: 'store',
@@ -1604,9 +1583,10 @@ export default function DashboardPage() {
         />
 
         {allSetAndVerified ? (
-          <NeuCard className="gv-dash-prio flex flex-col" style={{ padding: '14px 15px', border: BENTO_BORDER, backgroundColor: BENTO_WASH_FOREST }}>
+          <NeuCard className="gv-dash-prio flex flex-col" style={{ padding: '14px 15px', border: BENTO_BORDER, backgroundColor: BENTO_WASH_FOREST, overflowY: 'auto' }}>
             <UntoldSeatsRow conferenceId={conference.id} slug={slug} />
             <ShareHero conference={conference} />
+            <SponsorListRow />
           </NeuCard>
         ) : (
         <NeuCard className="gv-dash-prio flex flex-col" style={{ padding: '13px 15px 11px', border: BENTO_BORDER, backgroundColor: BENTO_WASH_FOREST }}>
@@ -1675,7 +1655,6 @@ export default function DashboardPage() {
                       gradient={item.gradient}
                       title={item.title}
                       sub={item.sub}
-                      action={'action' in item ? item.action : undefined}
                       onClick={item.onClick}
                       dense
                     />

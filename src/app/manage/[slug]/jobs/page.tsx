@@ -27,6 +27,7 @@ import ListingRow, { ROW_CSS } from './ListingRow';
 import PostingPopup, { type ShortRequest } from './PostingPopup';
 import PromotePopup from './PromotePopup';
 import CommitteePackPopup from './CommitteePackPopup';
+import JobBoardOnboarding from './JobBoardOnboarding';
 import FindPeoplePopup from './FindPeoplePopup';
 import SentInvitesCard from './SentInvitesCard';
 import { useJobTopUp } from './useJobTopUp';
@@ -82,6 +83,8 @@ export default function JobBoardPage() {
   // listing when it is live and promotable, else a quiet line; the param then
   // leaves the URL.
   const [promoteGone, setPromoteGone] = useState(false);
+  // "Do it Later" landed this visit (the next panel read says onboarding false too).
+  const [onboardingDone, setOnboardingDone] = useState(false);
   const promoteDone = useRef(false);
   useEffect(() => {
     if (!panel || promoteDone.current) return;
@@ -179,7 +182,16 @@ export default function JobBoardPage() {
             hang="start"
             className="gv-jb-main"
           >
-            {listings.length === 0 ? (
+            {listings.length === 0 && panel.onboarding && !onboardingDone ? (
+              // First time on the Job Board (prompt 14): the onboarding in place of the empty state.
+              <JobBoardOnboarding
+                confId={conference.id}
+                canPack={panel.committees.length > 0 && panel.roles.some((r) => r.role === 'chair' && r.enabled)}
+                onPost={() => setPopup({ kind: 'post', listing: null })}
+                onPack={() => setPopup({ kind: 'pack' })}
+                onLater={() => { setOnboardingDone(true); void reload(); }}
+              />
+            ) : listings.length === 0 ? (
               <div className="gv-jb-first">
                 <p className="gv-jb-first-title">Post your first listing</p>
                 <p className="gv-jb-first-line">Listings are free when people apply on Gavelling, as many as you like</p>
