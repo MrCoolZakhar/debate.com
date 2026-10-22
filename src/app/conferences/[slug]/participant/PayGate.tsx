@@ -8,21 +8,18 @@
 import Link from 'next/link';
 import { Lock, Clock, XCircle, RotateCcw, LogOut } from 'lucide-react';
 import { SectionCard, OUTFIT, type GateState } from './shared';
+import { BTN_CLASS } from './delegation/leaderKit';
+import { mainBtn } from './delegation/overview/SeatCard';
 
 export function LockedCard() {
   return (
     <SectionCard>
       <div className="flex flex-col items-center text-center py-10">
-        <div
-          className="flex items-center justify-center mb-5"
-          style={{ width: '64px', height: '64px', borderRadius: '9999px', backgroundColor: 'color-mix(in srgb, var(--gv-main) 7%, transparent)', border: '1px solid color-mix(in srgb, var(--gv-main) 14%, transparent)' }}
-        >
-          <Lock size={24} strokeWidth={1.8} style={{ color: 'var(--gv-main)' }} />
-        </div>
-        <p className="text-[15px] font-semibold mb-1.5" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
+        <Lock size={36} strokeWidth={1.5} aria-hidden className="mb-4" style={{ color: 'var(--gv-main)' }} />
+        <p className="text-[19px] font-semibold mb-1.5" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
           Unlocks once your registration is paid
         </p>
-        <p className="text-[13px] max-w-[340px]" style={{ color: '#9A8A78', fontFamily: OUTFIT, lineHeight: 1.7 }}>
+        <p className="text-[14px] max-w-[380px]" style={{ color: '#6B5F52', fontFamily: OUTFIT, lineHeight: 1.7 }}>
           Settle your fee under Payment and this section opens up right away.
         </p>
       </div>
@@ -48,14 +45,9 @@ export function RejectedCard({
   return (
     <SectionCard>
       <div className="flex flex-col items-center text-center py-10">
-        <div
-          className="flex items-center justify-center mb-5"
-          style={{ width: '64px', height: '64px', borderRadius: '9999px', backgroundColor: 'rgba(139,32,32,0.08)', border: '1px solid rgba(139,32,32,0.2)' }}
-        >
-          <XCircle size={24} strokeWidth={1.8} style={{ color: '#8B2020' }} />
-        </div>
-        <p className="text-[15px] font-semibold mb-1.5" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
-          Your application wasn&apos;t accepted this time.
+        <XCircle size={36} strokeWidth={1.5} aria-hidden className="mb-4" style={{ color: '#8B2020' }} />
+        <p className="text-[19px] font-semibold mb-1.5" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
+          Your application wasn&apos;t accepted this time
         </p>
 
         {organizerNote && (
@@ -74,22 +66,20 @@ export function RejectedCard({
 
         {allowResubmission ? (
           <>
-            <p className="text-[13px] max-w-[340px] mb-6" style={{ color: '#9A8A78', fontFamily: OUTFIT, lineHeight: 1.7 }}>
+            <p className="text-[14px] max-w-[380px] mb-6" style={{ color: '#6B5F52', fontFamily: OUTFIT, lineHeight: 1.7 }}>
               You can edit your application and resubmit it for another look from the organizing team.
             </p>
             <Link
               href={`/conferences/${conferenceSlug}/apply?role=${role}&edit=1`}
-              className="inline-flex items-center gap-2 rounded-xl py-2.5 px-6 font-bold text-sm focus:outline-none transition-colors"
-              style={{ backgroundColor: 'var(--gv-main)', color: 'var(--gv-on-main)', textDecoration: 'none', fontFamily: OUTFIT }}
-              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--gv-main-mid)'; }}
-              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--gv-main)'; }}
+              className={BTN_CLASS}
+              style={mainBtn}
             >
-              <RotateCcw size={15} />
+              <RotateCcw size={16} strokeWidth={1.5} aria-hidden />
               Edit and resubmit
             </Link>
           </>
         ) : (
-          <p className="text-[13px] max-w-[340px]" style={{ color: '#9A8A78', fontFamily: OUTFIT, lineHeight: 1.7 }}>
+          <p className="text-[14px] max-w-[380px]" style={{ color: '#6B5F52', fontFamily: OUTFIT, lineHeight: 1.7 }}>
             This decision is final for this role.
           </p>
         )}
@@ -111,24 +101,17 @@ export function WithdrawnCard({ conferenceSlug }: { conferenceSlug: string; role
   return (
     <SectionCard>
       <div className="flex flex-col items-center text-center py-10">
-        <div
-          className="flex items-center justify-center mb-5"
-          style={{ width: '64px', height: '64px', borderRadius: '9999px', backgroundColor: 'rgba(154,138,120,0.14)', border: '1px solid rgba(154,138,120,0.3)' }}
-        >
-          <LogOut size={24} strokeWidth={1.8} style={{ color: '#6B5F52' }} />
-        </div>
-        <p className="text-[15px] font-semibold mb-1.5" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
+        <LogOut size={36} strokeWidth={1.5} aria-hidden className="mb-4" style={{ color: '#6B5F52' }} />
+        <p className="text-[19px] font-semibold mb-1.5" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
           You withdrew this application
         </p>
-        <p className="text-[13px] max-w-[340px] mb-6" style={{ color: '#9A8A78', fontFamily: OUTFIT, lineHeight: 1.7 }}>
+        <p className="text-[14px] max-w-[380px] mb-6" style={{ color: '#6B5F52', fontFamily: OUTFIT, lineHeight: 1.7 }}>
           The organizing team no longer has it under review. Any Gavelling credit you spent is refunded. To take part after all, contact the organizing team.
         </p>
         <Link
           href={`/conferences/${conferenceSlug}`}
-          className="inline-flex items-center gap-2 rounded-xl py-2.5 px-6 font-bold text-sm focus:outline-none transition-colors"
-          style={{ backgroundColor: 'var(--gv-main)', color: 'var(--gv-on-main)', textDecoration: 'none', fontFamily: OUTFIT }}
-          onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--gv-main-mid)'; }}
-          onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--gv-main)'; }}
+          className={BTN_CLASS}
+          style={mainBtn}
         >
           View conference
         </Link>
@@ -141,16 +124,11 @@ export function UnderReviewCard() {
   return (
     <SectionCard>
       <div className="flex flex-col items-center text-center py-10">
-        <div
-          className="flex items-center justify-center mb-5"
-          style={{ width: '64px', height: '64px', borderRadius: '9999px', backgroundColor: 'rgba(184,132,74,0.12)', border: '1px solid rgba(184,132,74,0.24)' }}
-        >
-          <Clock size={24} strokeWidth={1.8} style={{ color: '#B8844A' }} />
-        </div>
-        <p className="text-[15px] font-semibold mb-1.5" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
+        <Clock size={36} strokeWidth={1.5} aria-hidden className="mb-4" style={{ color: '#B8844A' }} />
+        <p className="text-[19px] font-semibold mb-1.5" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
           Application under review
         </p>
-        <p className="text-[13px] max-w-[340px]" style={{ color: '#9A8A78', fontFamily: OUTFIT, lineHeight: 1.7 }}>
+        <p className="text-[14px] max-w-[380px]" style={{ color: '#6B5F52', fontFamily: OUTFIT, lineHeight: 1.7 }}>
           We&apos;ll email you once a decision is made. Payment and this section open up once you&apos;re accepted.
         </p>
       </div>

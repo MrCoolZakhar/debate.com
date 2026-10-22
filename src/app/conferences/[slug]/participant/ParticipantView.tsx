@@ -9,17 +9,22 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import Link from 'next/link';
-import { Briefcase, ClipboardList, CreditCard, FileText, FolderOpen, Gavel, Landmark, LayoutDashboard, LifeBuoy, LogOut, MessageCircle, Pencil, Radio, Trophy, Users, X } from 'lucide-react';
+import { ClipboardList, CreditCard, FileText, FolderOpen, Gavel, Landmark, LayoutDashboard, LifeBuoy, LogOut, MessageCircle, Pencil, Radio, Trophy, Users, X } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { roleFeeToday } from '@/lib/freeRegistration';
 import { type FormBlock } from '@/lib/customQuestions';
 import { SectionCardSkeleton } from '@/components/Skeleton';
 import { SectionCard, OUTFIT, CARD_SHADOW, getGateState, roleLabel, statusPriority } from './shared';
+import { AccessRow, CommitteesRow, DashboardLink, NextCard, OverviewPair, TeamSections, YouCard, useTeamSeat } from './RoleOverview';
+import SeatCard from './delegation/overview/SeatCard';
+import PositionPaperCard from './PositionPaperCard';
+import { BTN_CLASS, secondaryBtn } from './delegation/leaderKit';
+import { mainBtn } from './delegation/overview/SeatCard';
 import { RejectedCard, WithdrawnCard } from './PayGate';
 import { useConferencePaymentsReady } from './PaymentsLocked';
 import PressDeskEntry from './PressDeskEntry';
-import { DashboardShell, DashCard, OutlineLink, Pane, StatusRow, NextStepCard, NextStepReportProvider, useNextStepSlot, appStatusMark, type DashSection, type NextStep } from './dashboardKit';
+import { DashboardShell, DashCard, OutlineLink, Pane, StatusRow, NextStepCard, NextStepReportProvider, useNextStepSlot, appStatusMark, nextStepSentence, type DashSection, type NextStep, type StatusRowInput } from './dashboardKit';
 import PaymentPane from './PaymentPane';
 import DelegateParticipant from './DelegateParticipant';
 import AdvisorParticipant from './AdvisorParticipant';
@@ -35,20 +40,8 @@ import { friendlyError, UserFacingError } from '@/lib/friendlyError';
 
 const DELEGATE_ROLES = new Set(['delegate', 'head-delegate']);
 
-function RolePlaceholder({ role }: { role: string }) {
-  return (
-    <SectionCard>
-      <div className="flex flex-col items-center text-center py-10">
-        <p className="text-[15px] font-semibold mb-1.5" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
-          Your {roleLabel(role).toLowerCase()} dashboard is coming soon
-        </p>
-        <p className="text-[13px] max-w-[340px]" style={{ color: '#9A8A78', fontFamily: OUTFIT, lineHeight: 1.7 }}>
-          Role-specific tools for {roleLabel(role).toLowerCase()}s are on the way.
-        </p>
-      </div>
-    </SectionCard>
-  );
-}
+/** The secretariat and the conference staff: their Overview is their team seat. */
+const TEAM_ROLES = new Set(['secretariat', 'staff']);
 
 // The dashboard's sections per role (26 Sep 2026, MyMUN's sub-nav). While the
 // pay gate is closed (under review, or a fee to settle first) only Overview,
@@ -284,6 +277,9 @@ export default function ParticipantView({
     ? ((holdsInitialRole ? myApplications.find(a => a.role === initialRole) : null) ?? pickDefault(myApplications))
     : null;
   const myDocs = useMyConferenceDocs(conferenceId, docsApp?.id ?? null, !!user);
+  // A secretariat or staff member on the team: their own team row (title and
+  // what they can open), read here above every early return.
+  const teamSeat = useTeamSeat(conferenceId, !!docsApp && TEAM_ROLES.has(docsApp.role) && isOrganizer);
 
   // Resolver (/role) and "not holding that role" fallback (/role/[role] for
   // a role the viewer doesn't actually have) both land here: once
@@ -345,24 +341,20 @@ export default function ParticipantView({
     return (
       <SectionCard>
         <div className="flex flex-col items-center text-center py-8">
-          <div
-            className="flex items-center justify-center mb-4"
-            style={{ width: 56, height: 56, borderRadius: 9999, backgroundColor: 'color-mix(in srgb, var(--gv-main-mid) 12%, transparent)', border: '1px solid color-mix(in srgb, var(--gv-main-mid) 28%, transparent)' }}
-          >
-            <Gavel size={24} strokeWidth={2} aria-hidden style={{ color: 'var(--gv-main)' }} />
-          </div>
-          <p className="text-[16px] font-extrabold mb-1" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
+          <Gavel size={34} strokeWidth={1.5} aria-hidden className="mb-3" style={{ color: '#1C1410' }} />
+          <p className="text-[19px] font-semibold mb-1" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
             You&apos;re the organizer
           </p>
-          <p className="text-[13.5px] mb-5 max-w-sm" style={{ color: '#9A8A78', fontFamily: OUTFIT, lineHeight: 1.6 }}>
+          <p className="text-[13.5px] mb-5 max-w-sm" style={{ color: '#6B5F52', fontFamily: OUTFIT, lineHeight: 1.6 }}>
             You run this conference. There&apos;s nothing to apply for here. Manage applications,
             committees and your public page from the organizer dashboard.
           </p>
           <Link
             href={`/manage/${conferenceSlug}`}
-            className="inline-flex items-center gap-2 rounded-full"
-            style={{ padding: '11px 20px', backgroundColor: 'var(--gv-main)', color: 'var(--gv-on-main)', fontFamily: OUTFIT, fontWeight: 800, fontSize: 13.5, textDecoration: 'none' }}
+            className={BTN_CLASS}
+            style={mainBtn}
           >
+            <LayoutDashboard size={16} strokeWidth={1.5} aria-hidden />
             Manage conference
           </Link>
         </div>
@@ -499,11 +491,81 @@ export default function ParticipantView({
       onSelectSection={selectSection}
     />
   ) : selected.role === 'chair' ? (
-    <ChairParticipant conferenceId={conferenceId} conferenceSlug={conferenceSlug} section={activeSection} onAwardsTab={onChairAwardsTab} />
+    <ChairParticipant conferenceId={conferenceId} conferenceSlug={conferenceSlug} section={activeSection} onAwardsTab={onChairAwardsTab} onSelectSection={selectSection} />
   ) : selected.role === 'observer' ? (
     <ObserverParticipant conferenceId={conferenceId} conferenceStartDate={conferenceStartDate} section={activeSection} />
+  ) : null;
+
+  // Every role outside a delegation (but the chair, whose dashboard draws its
+  // own) gets the two-card Overview (RoleOverview): what you are and where you
+  // sit on the left, What's Next on the right.
+  const statusInput: StatusRowInput = {
+    role: selected.role,
+    status: selected.status,
+    paymentStatus: selected.payment_status,
+    selfPaid: selected.self_paid,
+    amountPaid: selected.amount_paid,
+    feeToday,
+    paymentTiming,
+    hasAllocation: !!myAllocation,
+    paperDeadline: myAllocation?.conference_committees?.position_paper_deadline ?? null,
+    hasSociety: !!selected.society_id,
+    locked: gateState === 'locked',
+  };
+  const seatCommittee = myAllocation ? committees.find(c => c.id === myAllocation.conference_committee_id) ?? null : null;
+  const openCommittees = gateOpen && sections.some(x => x.key === 'committees') ? () => openSection('committees') : undefined;
+  const overviewLeft = isDelegateRole && gateOpen ? (
+    <SeatCard
+      seat={myAllocation}
+      committee={seatCommittee}
+      paperTile={myAllocation ? (
+        <PositionPaperCard variant="tile" conferenceId={conferenceId} conferenceSlug={conferenceSlug} myAllocation={myAllocation} />
+      ) : undefined}
+    />
+  ) : selected.role === 'observer' ? (
+    <YouCard role={selected.role} status={selected.status}>
+      <CommitteesRow committees={committees} line="Follow every committee's session once sessions open." onOpen={openCommittees} />
+    </YouCard>
+  ) : selected.role === 'faculty-advisor' ? (
+    <YouCard role={selected.role} status={selected.status}>
+      <AccessRow
+        icon={Users}
+        title="Your delegation"
+        line={selected.society_id ? 'Your delegation shows here once your dashboard opens.' : 'No delegation on file for this application yet. The organisers link it to your application.'}
+      />
+      <CommitteesRow committees={committees} line="Follow the rooms your delegates sit in once sessions open." onOpen={openCommittees} />
+    </YouCard>
+  ) : TEAM_ROLES.has(selected.role) ? (
+    <YouCard role={selected.role} status={selected.status} title={teamSeat?.publicTitle ?? null}>
+      <AccessRow
+        icon={LayoutDashboard}
+        title="Organiser dashboard"
+        line={isOrganizer
+          ? (teamSeat ? 'You are on the organising team. You can open:' : 'You are on the organising team.')
+          : selected.status === 'submitted'
+            ? 'The organisers add you to the team once they accept your application.'
+            : 'The organisers have not added you to the organising team yet.'}
+        action={isOrganizer ? <DashboardLink slug={conferenceSlug} primary={!(nextStep?.kind === 'action' && nextStep.action)} /> : undefined}
+      >
+        {isOrganizer && teamSeat && <TeamSections seat={teamSeat} />}
+      </AccessRow>
+    </YouCard>
   ) : (
-    <Pane show={activeSection === 'overview'} title="Your Role" icon={Briefcase}><RolePlaceholder role={selected.role} /></Pane>
+    <YouCard role={selected.role} status={selected.status} />
+  );
+  const roleOverview = (
+    <OverviewPair
+      left={overviewLeft}
+      right={(
+        <NextCard
+          step={nextStep}
+          fallbackLine={nextStepSentence(statusInput)}
+          status={selected.status}
+          payment={statusInput}
+          onAsk={() => openSection('support')}
+        />
+      )}
+    />
   );
 
   const closed = selected.status === 'withdrawn' || selected.status === 'rejected';
@@ -664,25 +726,12 @@ export default function ParticipantView({
             {delegationOverview ? (
             <Pane show={activeSection === 'overview'}>{delegationLead}</Pane>
             ) : (
+            selected.role === 'chair' ? (
             <Pane show={activeSection === 'overview'}>
               {nextStep && <NextStepCard step={nextStep} status={selected.status} />}
               {docsNotice}
               <div className="hidden xl:block">
-              <StatusRow
-                input={{
-                  role: selected.role,
-                  status: selected.status,
-                  paymentStatus: selected.payment_status,
-                  selfPaid: selected.self_paid,
-                  amountPaid: selected.amount_paid,
-                  feeToday,
-                  paymentTiming,
-                  hasAllocation: !!myAllocation,
-                  paperDeadline: myAllocation?.conference_committees?.position_paper_deadline ?? null,
-                  hasSociety: !!selected.society_id,
-                  locked: gateState === 'locked',
-                }}
-              />
+              <StatusRow input={statusInput} />
               </div>
               {gateState === 'locked' && (
                 <p className="hidden xl:block" style={{ fontFamily: OUTFIT, fontSize: 14, color: '#5A5046', lineHeight: 1.55, marginTop: 14 }}>
@@ -690,6 +739,12 @@ export default function ParticipantView({
                 </p>
               )}
             </Pane>
+            ) : (
+            <Pane show={activeSection === 'overview'}>
+              {docsNotice}
+              {roleOverview}
+            </Pane>
+            )
             )}
 
             {/* The role's own sections. Mounted once; each hides the panes
@@ -775,8 +830,8 @@ export default function ParticipantView({
                         <button
                           onClick={() => { setWithdrawConfirm(false); setWithdrawError(''); }}
                           disabled={withdrawing}
-                          className="inline-flex items-center focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gv-accent)]"
-                          style={{ minHeight: 44, padding: '0 18px', borderRadius: 10, border: '1.5px solid rgba(28,20,16,0.55)', color: '#1C1410', background: '#FFFFFF', fontFamily: OUTFIT, fontSize: 14, fontWeight: 700, cursor: withdrawing ? 'not-allowed' : 'pointer' }}
+                          className={BTN_CLASS}
+                          style={{ ...secondaryBtn, cursor: withdrawing ? 'not-allowed' : 'pointer' }}
                         >
                           Keep it
                         </button>

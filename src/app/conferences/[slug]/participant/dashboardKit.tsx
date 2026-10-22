@@ -98,24 +98,30 @@ const BTN_BASE: React.CSSProperties = {
   display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8,
 };
 
+/** The light second button (white, a soft line in the conference's main colour). */
+export const SECONDARY_BTN: React.CSSProperties = {
+  ...BTN_BASE, fontWeight: 600, background: '#FFFFFF', color: 'var(--gv-main)',
+  border: '1px solid color-mix(in srgb, var(--gv-main) 18%, transparent)',
+};
+
 /** The Airbnb button in forest (CLAUDE.md §8, taste board two). */
 export function ForestLink({ href, children, external, className = '' }: {
   href: string; children: React.ReactNode; external?: boolean; className?: string;
 }) {
-  const style: React.CSSProperties = { ...BTN_BASE, background: FOREST_GRADIENT, color: '#FFFFFF', border: 'none', boxShadow: '0 6px 16px -8px color-mix(in srgb, var(--gv-main) 55%, transparent)' };
+  const style: React.CSSProperties = { ...BTN_BASE, background: FOREST_GRADIENT, color: 'var(--gv-on-main)', border: 'none', boxShadow: '0 6px 16px -8px color-mix(in srgb, var(--gv-main) 55%, transparent)' };
   const cls = `focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[var(--gv-accent)] ${className}`;
   return external
     ? <a href={href} className={cls} style={style}>{children}</a>
     : <Link href={href} className={cls} style={style}>{children}</Link>;
 }
 
-/** The second action: an ink outline rectangle. */
+/** The second action: a light white button with a soft main-colour line (one primary per view). */
 export function OutlineLink({ href, children, className = '' }: { href: string; children: React.ReactNode; className?: string }) {
   return (
     <Link
       href={href}
       className={`focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gv-accent)] ${className}`}
-      style={{ ...BTN_BASE, background: '#FFFFFF', color: INK, border: '1.5px solid rgba(28,20,16,0.55)' }}
+      style={SECONDARY_BTN}
     >
       {children}
     </Link>
@@ -234,10 +240,18 @@ function Fact({ label, children, wide }: { label: string; children: React.ReactN
   );
 }
 
-export function StatusRow({ input }: { input: StatusRowInput }) {
+/** Where this person's own fee stands, as icon + word (the status row's Payment fact). */
+export function PaymentMark({ input, size = 'md' }: { input: Pick<StatusRowInput, 'feeToday' | 'paymentStatus' | 'selfPaid' | 'amountPaid' | 'paymentTiming' | 'status'>; size?: 'sm' | 'md' | 'lg' }) {
   const free = input.feeToday === 0;
   const chip = derivePaymentChip(input.paymentStatus, input.selfPaid, input.amountPaid);
   const beforeAcceptance = input.paymentTiming === 'after_acceptance' && input.status === 'submitted' && !PAID.has(input.paymentStatus);
+  if (free && !PAID.has(input.paymentStatus)) return <IconWord icon={MinusCircle} word="No fee" color={INK_SOFT} size={size} />;
+  if (free) return <IconWord icon={CheckCircle2} word="No fee" color="var(--gv-main-mid)" size={size} />;
+  if (beforeAcceptance) return <IconWord icon={Hourglass} word="After acceptance" color={INK_SOFT} size={size} />;
+  return <IconWord icon={CHIP_STYLES[chip].icon} word={CHIP_STYLES[chip].word} color={CHIP_STYLES[chip].color} size={size} />;
+}
+
+export function StatusRow({ input }: { input: StatusRowInput }) {
   return (
     <DashCard>
       <div className="grid grid-cols-2 gap-x-6 gap-y-5">
@@ -245,15 +259,7 @@ export function StatusRow({ input }: { input: StatusRowInput }) {
           <AppStatusMark status={input.status} size="lg" />
         </Fact>
         <Fact label="Payment">
-          {free && !PAID.has(input.paymentStatus) ? (
-            <IconWord icon={MinusCircle} word="No fee" color={INK_SOFT} size="lg" />
-          ) : free ? (
-            <IconWord icon={CheckCircle2} word="No fee" color="var(--gv-main-mid)" size="lg" />
-          ) : beforeAcceptance ? (
-            <IconWord icon={Hourglass} word="After acceptance" color={INK_SOFT} size="lg" />
-          ) : (
-            <IconWord icon={CHIP_STYLES[chip].icon} word={CHIP_STYLES[chip].word} color={CHIP_STYLES[chip].color} size="lg" />
-          )}
+          <PaymentMark input={input} size="lg" />
         </Fact>
         <div className="col-span-2" style={{ height: 1, background: 'color-mix(in srgb, var(--gv-main) 8%, transparent)' }} aria-hidden />
         <Fact label="What happens next" wide>
@@ -287,7 +293,7 @@ export function useDashStacked(): boolean {
 
 /** A section's heading on the one-page phone dashboard (10 Oct 2026, owner:
  *  "there is still multiple tabs in you ... not yet clear enough"): Title
- *  Case, a duotone icon in a soft tinted disc (CLAUDE.md §8), sitting closer
+ *  Case, a fine-line icon in bare ink (CLAUDE.md §8 rule 8), sitting closer
  *  to its own cards than to the section above. Below lg only: from lg the
  *  sub-nav names the section. */
 export function StackHeading({ title, icon: Icon }: { title: string; icon: LucideIcon }) {
@@ -296,13 +302,7 @@ export function StackHeading({ title, icon: Icon }: { title: string; icon: Lucid
       className="lg:hidden flex items-center gap-3 mt-5 -mb-2 [overflow-wrap:anywhere]"
       style={{ fontFamily: OUTFIT, fontSize: 20, fontWeight: 800, color: INK, lineHeight: 1.25 }}
     >
-      <span
-        aria-hidden
-        className="inline-flex items-center justify-center flex-shrink-0"
-        style={{ width: 38, height: 38, borderRadius: 999, backgroundColor: 'color-mix(in srgb, var(--gv-main-light) 13%, transparent)' }}
-      >
-        <Icon size={18} strokeWidth={2.2} style={{ color: FOREST, fill: 'color-mix(in srgb, var(--gv-accent-light) 60%, transparent)' }} />
-      </span>
+      <Icon size={22} strokeWidth={1.5} aria-hidden style={{ color: INK, flexShrink: 0 }} />
       <span className="min-w-0">{title}</span>
     </h2>
   );
@@ -406,9 +406,7 @@ export function NextStepCard({ step, status }: { step: NextStep; status: string 
           <p style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 700, color: GOLD_DEEP, margin: 0 }}>Your next step</p>
         ) : (
           <p className="inline-flex items-center gap-2.5" style={{ fontFamily: OUTFIT, fontSize: 19, fontWeight: 800, color: INK, margin: 0 }}>
-            <span aria-hidden className="inline-flex items-center justify-center flex-shrink-0" style={{ width: 36, height: 36, borderRadius: 999, backgroundColor: 'color-mix(in srgb, var(--gv-main-light) 14%, transparent)' }}>
-              <CheckCircle2 size={19} strokeWidth={2.3} style={{ color: FOREST, fill: 'color-mix(in srgb, var(--gv-accent-light) 60%, transparent)' }} />
-            </span>
+            <CheckCircle2 size={22} strokeWidth={1.5} aria-hidden style={{ color: FOREST, flexShrink: 0 }} />
             You&apos;re all set
           </p>
         )}
@@ -426,7 +424,7 @@ export function NextStepCard({ step, status }: { step: NextStep; status: string 
         <div className="mt-4">
           {'href' in action && action.lockedSlug ? (
             <LockedPayButton slug={action.lockedSlug} label={<>{action.label}</>} className="w-full sm:w-auto"
-              style={{ ...BTN_BASE, background: FOREST_GRADIENT, color: '#FFFFFF', border: 'none' }} />
+              style={{ ...BTN_BASE, background: FOREST_GRADIENT, color: 'var(--gv-on-main)', border: 'none' }} />
           ) : 'href' in action ? (
             <ForestLink href={action.href} external={action.external} className="w-full sm:w-auto">
               {action.label} <ArrowRight size={16} strokeWidth={2.4} aria-hidden />
@@ -436,7 +434,7 @@ export function NextStepCard({ step, status }: { step: NextStep; status: string 
               type="button"
               onClick={() => scrollToAnchor(action.scrollTo)}
               className="w-full sm:w-auto focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[var(--gv-accent)]"
-              style={{ ...BTN_BASE, background: FOREST_GRADIENT, color: '#FFFFFF', border: 'none', boxShadow: '0 6px 16px -8px color-mix(in srgb, var(--gv-main) 55%, transparent)' }}
+              style={{ ...BTN_BASE, background: FOREST_GRADIENT, color: 'var(--gv-on-main)', border: 'none', boxShadow: '0 6px 16px -8px color-mix(in srgb, var(--gv-main) 55%, transparent)' }}
             >
               {action.label} <ArrowDown size={16} strokeWidth={2.4} aria-hidden />
             </button>
@@ -472,13 +470,9 @@ function NavItem({ s, on, onSelect, row }: { s: DashSection; on: boolean; onSele
         transition: 'box-shadow 180ms ease, color 180ms ease, transform 160ms ease',
       }}
     >
-      {/* The icon in forest on a soft disc: tinted and filled when open. */}
-      <span
-        aria-hidden
-        className="inline-flex items-center justify-center flex-shrink-0"
-        style={{ width: 32, height: 32, borderRadius: 999, backgroundColor: on ? 'color-mix(in srgb, var(--gv-main-light) 16%, transparent)' : 'color-mix(in srgb, var(--gv-main) 6%, transparent)' }}
-      >
-        <Icon size={16} strokeWidth={2.2} style={{ color: FOREST, fill: on ? 'color-mix(in srgb, var(--gv-accent-light) 55%, transparent)' : 'none' }} />
+      {/* Fine line, bare (icon style A): ink at rest, the main colour when open. */}
+      <span aria-hidden className="inline-flex items-center justify-center flex-shrink-0" style={{ width: 32, height: 32 }}>
+        <Icon size={18} strokeWidth={1.5} style={{ color: on ? FOREST : INK }} />
       </span>
       <span style={{ whiteSpace: 'nowrap' }}>{s.label}</span>
     </button>

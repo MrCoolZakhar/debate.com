@@ -6,11 +6,10 @@
 // committee" RLS, row-level, so session_code etc. only comes back for
 // committees they actually chair) and stacks a full block per committee.
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Copy, Check, FileText, Gavel, Landmark, Radio, Signal, Trophy, Users } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
-import { friendlyError } from '@/lib/friendlyError';
 import { MonogramMedallion } from '@/components/CommitteeEditorModal';
 import { getSiteUrl } from '@/lib/emailBlocks';
 import PositionPaperRoster, { type RosterAllocation, type RosterPaper } from '@/components/PositionPaperRoster';
@@ -21,7 +20,9 @@ import { awardsOfferedFor, getAwardsConfig } from '@/lib/awards';
 import { dayInZone } from '@/lib/applicationWindow';
 import Loader from '@/components/Loader';
 import { SectionCard, OUTFIT, capitalize, effectiveReleaseTime } from './shared';
-import { DashCard, CardHeading, CommitteeEmblem, TwoRowName, ForestLink, IconWord, BigCount, Pane, committeeShort, useDashStacked, useReportNextStep, type NextStep, FOREST, FOREST_GRADIENT, INK, INK_SOFT } from './dashboardKit';
+import { DashCard, CardHeading, ForestLink, Pane, committeeShort, useDashStacked, useReportNextStep, type NextStep, FOREST, FOREST_GRADIENT, INK, INK_SOFT } from './dashboardKit';
+import ChairOverview, { type ChairRosterSummary } from './chair/ChairOverview';
+import { useStartChairRoom, type ChairRoomStart } from './chair/useStartChairRoom';
 
 const DIFFICULTY_STYLES: Record<string, { color: string }> = {
   beginner: { color: 'var(--gv-main-mid)' },
@@ -95,12 +96,7 @@ interface RosterAllocationRow {
 
 // ── Committee header card (item 1), mirrors the public committee card ─────
 
-function CommitteeHeaderCard({ committee, headerFromXlOnly = false }: {
-  committee: ChairCommittee;
-  /** The phone page shows the emblem and name in Your assignment just above,
-   *  so below xl this card starts at the difficulty and the topics. */
-  headerFromXlOnly?: boolean;
-}) {
+function CommitteeHeaderCard({ committee }: { committee: ChairCommittee }) {
   const diff = committee.difficulty?.toLowerCase() ?? '';
   const diffStyle = DIFFICULTY_STYLES[diff] ?? DIFFICULTY_STYLES.intermediate;
   const isCrisis = committee.committee_type === 'crisis';
@@ -109,7 +105,7 @@ function CommitteeHeaderCard({ committee, headerFromXlOnly = false }: {
   return (
     <SectionCard>
       <div className="flex flex-col items-center text-center">
-        <div className={headerFromXlOnly ? 'hidden lg:flex flex-col items-center' : 'flex flex-col items-center'}>
+        <div className="flex flex-col items-center">
         {committee.logo_url ? (
           <img
             src={committee.logo_url}
@@ -168,96 +164,25 @@ function chairHref(committee: ChairCommittee, chairDisplayName: string): string 
   return `${getSiteUrl()}/chair/${committee.session_code}?chairName=${encodeURIComponent(chairDisplayName)}`;
 }
 
-function SessionCard({ committee, chairDisplayName, conferenceStartDate, showCommittee, onSessionCreated, joinFromXlOnly = false }: {
+function SessionCard({ committee, chairDisplayName, conferenceStartDate, showCommittee, room }: {
   committee: ChairCommittee;
-  /** The phone page's next-step card already offers "Join as chair" for this
-   *  room, so this button shows from xl only (the code and Copy stay). */
-  joinFromXlOnly?: boolean;
   chairDisplayName: string;
   conferenceStartDate: string | null;
   showCommittee: boolean;
-  /**
-   * Whether THIS viewer may actually create the room. See the comment on
-   * `handleCreateSession`: minting ends in an UPDATE of
-  /** Re-reads this committee so the new code and session_id land on screen. */
-  onSessionCreated: () => void;
+  /** The Start press (useStartChairRoom), shared with the Overview's card:
+   *  start_my_chair_session, one press one room, then a re-read of the row. */
+  room: ChairRoomStart;
 }) {
-  const { session } = useAuth();
   const [copied, setCopied] = useState(false);
-  const [creating, setCreating] = useState(false);
-  const [createError, setCreateError] = useState('');
-  // ONE PRESS, ONE ROOM. `mintConferenceSession`'s retry handles a code
-  // collision between two DIFFERENT mints; it does nothing about two
-  // concurrent mints of the SAME committee, which would leave this committee
-  // with two live rooms and the link pointing at whichever wrote last. A ref,
-  // not the `creating` state, because state is a render behind a fast
-  // double-click.
-  const mintingRef = useRef(false);
+  const creating = room.creating;
+  const createError = room.error;
+  const handleCreateSession = room.start;
 
   function handleCopy() {
     if (!committee.session_code) return;
     navigator.clipboard.writeText(committee.session_code);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
-  }
-
-  // The dais asks for its own room (owner, 7 Oct 2026: "committees should only
-  // be started when chairs want it to"). Mints through the shared helper, so
-  // this is the same four writes, the same seating from
-  // committee_country_slots and the same conference link as the organiser's
-  // button; `onSessionCreated` then re-reads the row and the card turns into
-  // the ordinary code + "Join as chair" it has always been.
-  //
-  // ── IT GOES THROUGH AN RPC, NOT FOUR CLIENT WRITES ───────────────────────
-  //
-  // The last write of a mint is
-  // `update conference_committees set session_id, session_code`, and
-  // `conference_committees` has exactly ONE non-SELECT policy:
-  // `Organizers manage committees USING is_conference_organizer(conference_id)`.
-  // A chair sits in `chair_user_ids`, which grants SELECT only, so from the
-  // browser that UPDATE matches zero rows for any chair who is not also an
-  // organiser — and PostgREST reports a zero-row UPDATE as success, never as an
-  // error. The room would be created and seated, the chair handed a working
-  // code, and nothing on the conference side would point at it: the live wall,
-  // the cross-committee scoreboard and awards all join through
-  // `conference_committees.session_id`. An orphan from birth.
-  //
-  // So the mint happens in ONE transaction server-side:
-  // `start_my_chair_session(p_committee)` (SECURITY DEFINER, authenticated
-  // only, applied 7 Oct 2026) checks `auth.uid() = any(chair_user_ids)` or the
-  // organising team, takes the committee's own advisory lock, and writes the
-  // same four things as `mintConferenceSession` — so a room can never exist
-  // unlinked and two chairs pressing at the same instant get ONE room. It is
-  // idempotent: a second press returns the code that already exists.
-  //
-  // Every chair of the committee can press it; there is no organiser gate any
-  // more. The server decides, and `message` is written for the chair to read.
-  function handleCreateSession() {
-    if (!session || mintingRef.current || committee.session_code) return;
-    mintingRef.current = true;
-    setCreating(true);
-    setCreateError('');
-    (async () => {
-      try {
-        const { data, error } = await getAuthedClient(session.access_token)
-          .rpc('start_my_chair_session', { p_committee: committee.id });
-        const answer = (data ?? null) as { ok?: boolean; code?: string; message?: string } | null;
-        if (error || !answer?.ok || !answer.code) {
-          // The RPC writes a plain sentence for every refusal it knows about;
-          // anything else goes through friendlyError (never a raw error).
-          setCreateError(
-            answer?.message
-            ?? (error
-              ? `Your session couldn't be started: ${friendlyError(error, 'the request was rejected')}`
-              : "Your session couldn't be started. Please try again, or ask the organizing team."),
-          );
-          return;
-        }
-        onSessionCreated();
-      } catch (e) {
-        setCreateError(`Your session couldn't be started: ${friendlyError(e, 'the request was rejected')}`);
-      }
-    })().finally(() => { mintingRef.current = false; setCreating(false); });
   }
 
   const released = sessionReleased(committee, conferenceStartDate);
@@ -321,7 +246,7 @@ function SessionCard({ committee, chairDisplayName, conferenceStartDate, showCom
               </button>
             </div>
           </div>
-          <span className={joinFromXlOnly ? 'hidden lg:inline-flex' : 'inline-flex'}>
+          <span className="inline-flex">
             <ForestLink href={chairHref(committee, chairDisplayName)} external>
               <Radio size={16} aria-hidden /> Join as chair
             </ForestLink>
@@ -332,55 +257,12 @@ function SessionCard({ committee, chairDisplayName, conferenceStartDate, showCom
   );
 }
 
-// ── Overview tile: the assignment (MyMUN's committee + position) ────────────
-
-function AssignmentTile({ committee, chairDisplayName, conferenceStartDate, delegations, papers, loading }: {
-  committee: ChairCommittee;
-  chairDisplayName: string;
-  conferenceStartDate: string | null;
-  delegations: number;
-  papers: number;
-  loading: boolean;
-}) {
-  const coChairs = Math.max(0, (committee.chair_user_ids?.length ?? 1) - 1);
-  const released = sessionReleased(committee, conferenceStartDate) && !!committee.session_code;
-  // On the phone page the room's own card (and the next step) carry "Join as
-  // chair", so this one is the desktop Overview's only.
-  const stacked = useDashStacked();
-  return (
-    <DashCard className="@container">
-      <CardHeading title="Your assignment" stackedHide />
-      <div className="flex items-center gap-4 mb-5">
-        <CommitteeEmblem logoUrl={committee.logo_url} name={committee.name} abbreviation={committee.abbreviation} isCrisis={committee.committee_type === 'crisis'} size={64} />
-        <TwoRowName short={committeeShort(committee.name, committee.abbreviation)} full={committee.name} size={21} />
-      </div>
-      <div className="grid grid-cols-2 @[480px]:grid-cols-4 gap-x-5 gap-y-4">
-        <div>
-          <p style={{ fontFamily: OUTFIT, fontSize: 12, fontWeight: 700, color: INK_SOFT, margin: '0 0 4px 0' }}>Position</p>
-          <IconWord icon={Gavel} word="Chair" color={FOREST} size="lg" />
-        </div>
-        <div>
-          <p style={{ fontFamily: OUTFIT, fontSize: 12, fontWeight: 700, color: INK_SOFT, margin: '0 0 4px 0' }}>Dais</p>
-          <IconWord icon={Users} word={coChairs === 0 ? 'Just you' : `You + ${coChairs}`} color={INK} size="lg" />
-        </div>
-        {!loading && <BigCount n={delegations} word={delegations === 1 ? 'delegation' : 'delegations'} />}
-        {!loading && <BigCount n={papers} word={papers === 1 ? 'paper in' : 'papers in'} />}
-      </div>
-      {released && (
-        <div className={`${stacked ? 'hidden lg:flex' : 'flex'} mt-5 justify-end`}>
-          <ForestLink href={chairHref(committee, chairDisplayName)} external>
-            <Radio size={16} aria-hidden /> Join as chair
-          </ForestLink>
-        </div>
-      )}
-    </DashCard>
-  );
-}
-
 // ── One committee's full block ──────────────────────────────────────────────
 
-function ChairCommitteeBlock({ conferenceId, conferenceSlug, committee, chairDisplayName, conference, section, showCommittee, onSessionCreated, joinInNextStep, awardsTab }: {
+function ChairCommitteeBlock({ conferenceId, conferenceSlug, committee, chairDisplayName, conference, section, showCommittee, onSessionCreated, joinInNextStep, awardsTab, onSelectSection }: {
   conferenceId: string;
+  /** Opens a dashboard section (the Overview cards' Review, Nominate, See delegates). */
+  onSelectSection?: (key: string) => void;
   /** The Awards tab is open (7 days before the start, awards set up) and whether the conference has started. */
   awardsTab: { open: boolean; started: boolean };
   /** This room's "Join as chair" is the phone page's next step. */
@@ -390,7 +272,7 @@ function ChairCommitteeBlock({ conferenceId, conferenceSlug, committee, chairDis
   chairDisplayName: string;
   conference: ChairConference;
   section: string;
-  /** Passed to SessionCard: re-reads this committee after the chair starts it. */
+  /** Re-reads this committee after the chair starts its room. */
   onSessionCreated: () => void;
   /** More than one committee: name it on the cards that do not already. */
   showCommittee: boolean;
@@ -462,6 +344,34 @@ function ChairCommitteeBlock({ conferenceId, conferenceSlug, committee, chairDis
 
   const submittedPapers = papers.length;
 
+  // The Start press, ONE per committee block, shared by the Overview card and
+  // the Session section (one in-flight guard for both buttons).
+  const room = useStartChairRoom(committee.id, !!committee.session_code, onSessionCreated);
+
+  // The roster numbers the Overview shows, from the reads above: one
+  // delegation per country, seated when a person holds an allocation of it.
+  const countries = new Set(allocations.map(a => a.country_code));
+  const seatedCountries = new Set(allocations.filter(a => a.user_id || a.applications).map(a => a.country_code));
+  const roster: ChairRosterSummary = {
+    loading,
+    delegations: countries.size,
+    seated: seatedCountries.size,
+    papersIn: new Set(papers.map(p => p.country_code)).size,
+    toReview: papers.filter(p => (p.status ?? '').toLowerCase() === 'submitted').length,
+  };
+
+  // The Overview cards' buttons: from lg the dashboard shows one section at a
+  // time, so they open it; on the one-page phone dashboard every section is
+  // already on the page, so they scroll to its pane.
+  const go = (key: string, anchor: string) => {
+    const wide = typeof window !== 'undefined' && window.matchMedia?.('(min-width: 1024px)').matches;
+    if (wide && onSelectSection) { onSelectSection(key); return; }
+    const el = document.getElementById(anchor);
+    if (!el) return;
+    const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    el.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'start' });
+  };
+
   // Every part stays mounted (Pane), so a half-made awards slate or a paper
   // decision in flight survives switching sections. On the phone page (below
   // xl) they stack in this order, each under its heading: the committee, the
@@ -473,26 +383,35 @@ function ChairCommitteeBlock({ conferenceId, conferenceSlug, committee, chairDis
   const heading = (base: string) => (showCommittee ? `${base}: ${short}` : base);
   return (
     <>
-      <Pane show={section === 'overview'} title={heading('Your Committee')} icon={Landmark}>
-        <AssignmentTile
+      {/* Overview (owner, 22 Oct 2026): Your Committee and Up Next, on the
+          head delegate's Overview system. Its room block carries the
+          `you-session-<id>` anchor the phone page's next step scrolls to. */}
+      <Pane show={section === 'overview'} title={showCommittee ? heading('Overview') : undefined} icon={Landmark}>
+        <ChairOverview
           committee={committee}
-          chairDisplayName={chairDisplayName}
-          conferenceStartDate={conferenceStartDate}
-          delegations={allocations.length}
-          papers={submittedPapers}
-          loading={loading}
+          conference={conference}
+          roster={roster}
+          room={room}
+          released={sessionReleased(committee, conferenceStartDate)}
+          chairHref={committee.session_code ? chairHref(committee, chairDisplayName) : ''}
+          joinInNextStep={joinInNextStep}
+          stacked={stacked}
+          awardsTabOpen={awardsTab.open}
+          go={go}
         />
       </Pane>
 
-      <Pane show={section === 'committee'}>
-        <CommitteeHeaderCard committee={committee} headerFromXlOnly={stacked} />
+      {/* From lg only: on the phone page Your Committee above already shows
+          the emblem, the name, the topics and the room. */}
+      <Pane show={section === 'committee'} phone={false}>
+        <CommitteeHeaderCard committee={committee} />
       </Pane>
 
-      <Pane show={section === 'session'} title={heading('Your Room')} icon={Radio} anchor={`you-session-${committee.id}`}>
-        <SessionCard committee={committee} chairDisplayName={chairDisplayName} conferenceStartDate={conferenceStartDate} showCommittee={showCommittee} onSessionCreated={onSessionCreated} joinFromXlOnly={stacked && joinInNextStep} />
+      <Pane show={section === 'session'} phone={false}>
+        <SessionCard committee={committee} chairDisplayName={chairDisplayName} conferenceStartDate={conferenceStartDate} showCommittee={showCommittee} room={room} />
       </Pane>
 
-      <Pane show={section === 'committee'} title={heading('Delegates and Papers')} icon={Users}>
+      <Pane show={section === 'committee'} title={heading('Delegates and Papers')} icon={Users} anchor={`you-papers-${committee.id}`}>
         <DashCard className="@container">
           <CardHeading
             label={showCommittee ? committeeShort(committee.name, committee.abbreviation) : undefined}
@@ -530,7 +449,7 @@ function ChairCommitteeBlock({ conferenceId, conferenceSlug, committee, chairDis
       </Pane>
 
       {awardsTab.open && (
-        <Pane show={section === 'awards'} title={heading('Awards')} icon={Trophy}>
+        <Pane show={section === 'awards'} title={heading('Awards')} icon={Trophy} anchor={`you-awards-${committee.id}`}>
         {/* Awards (prompt 134: a tab of its own, from 7 days before the start).
             The card renders nothing while awards are off for the conference.
             Fed the roster and papers this block already loaded, so the card
@@ -562,8 +481,10 @@ function ChairCommitteeBlock({ conferenceId, conferenceSlug, committee, chairDis
 
 // ── ChairParticipant ─────────────────────────────────────────────────────────
 
-export default function ChairParticipant({ conferenceId, conferenceSlug, section, onAwardsTab }: {
+export default function ChairParticipant({ conferenceId, conferenceSlug, section, onAwardsTab, onSelectSection }: {
   conferenceId: string; conferenceSlug: string; section: string;
+  /** Opens a dashboard section from the Overview cards (ParticipantView's selectSection). */
+  onSelectSection?: (key: string) => void;
   /** Tells the dashboard whether to show the Awards tab (prompt 134). */
   onAwardsTab?: (open: boolean) => void;
 }) {
@@ -695,6 +616,7 @@ export default function ChairParticipant({ conferenceId, conferenceSlug, section
           showCommittee={committees.length > 1}
           joinInNextStep={joinable?.id === c.id}
           awardsTab={awardsTab}
+          onSelectSection={onSelectSection}
           onSessionCreated={() => { void refreshCommittee(c.id); }}
         />
       ))}

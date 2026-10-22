@@ -25,6 +25,7 @@ export default function CaucusProposer({
   fontSize = 14,
   className = '',
   hideLabel = false,
+  hideName = false,
 }: {
   proposedBy: string | null | undefined;
   /** Flag diameter in px. */
@@ -35,6 +36,9 @@ export default function CaucusProposer({
   className?: string;
   /** Drop the "Raised by" word (when the surrounding line already says it). */
   hideLabel?: boolean;
+  /** "Raised by" and the round flag only, the name as the tooltip (the floor header,
+   *  22 Oct 2026, owner). The aria-label still names them. */
+  hideName?: boolean;
 }) {
   const t = useT();
   const { language } = useLanguage();
@@ -49,6 +53,7 @@ export default function CaucusProposer({
       className={`inline-flex items-center min-w-0 max-w-full ${className}`}
       style={{ gap: Math.max(6, Math.round(size * 0.3)), fontSize, lineHeight: 1.2 }}
       aria-label={t('caucus_raised_by_aria').replace('{name}', name)}
+      title={hideName ? name : undefined}
       role="note"
     >
       {!hideLabel && <span aria-hidden className="shrink-0 font-semibold" style={{ color: soft }}>{t('caucus_raised_by')}</span>}
@@ -68,9 +73,11 @@ export default function CaucusProposer({
         />
       )}
       {/* A long seat is two rows, short form over the full name (src/components/SeatName.tsx). */}
-      <span aria-hidden className="min-w-0 inline-flex">
-        <SeatName name={name} max={22} className="min-w-0 font-extrabold" style={{ color: ink }} />
-      </span>
+      {!hideName && (
+        <span aria-hidden className="min-w-0 inline-flex">
+          <SeatName name={name} max={22} className="min-w-0 font-extrabold" style={{ color: ink }} />
+        </span>
+      )}
     </span>
   );
 }

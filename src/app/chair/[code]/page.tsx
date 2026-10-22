@@ -486,6 +486,20 @@ const FLOOR_NAME_REM = '2.16rem';
 /** The Room Order Tour de Table number disc, the floor "flag" of a numbered turn. */
 const FLOOR_DISC_PX = 173;
 const FLOOR_FLAG_SHADOW = '0 0 0 4px #F0EBDD, 0 2px 6px rgba(27,56,40,0.12), 0 12px 28px rgba(27,56,40,0.20)';
+// The floor's centre (zone 2) is a size container (FLOOR_ZONE_STYLE, 22 Oct 2026). At the
+// fixed 820px FitToScreen height a moderated caucus (two-line topic, strip, total bar, add
+// bar) left zone 2 about 150px shorter than its content; `flex-1 min-h-0` + `justify-center`
+// let the flag, clock and progress bar spill out both ways, and zone 2 being `relative`
+// painted the spill-over ON TOP of the Start / Next row: the gold progress bar and its RTR
+// button sat over the buttons and took their clicks. Now the flag gives way first (down to
+// 96px), then the clock (down to 3rem), so the content always fits; full size whenever there
+// is room. 246px / 214px are the rest of zone 2 (name, on-deck line, clock, progress + RTR)
+// with a little slack. Pure CSS: no state, no measuring, nothing per second.
+const FLOOR_ZONE_STYLE = { containerType: 'size' } as const;
+const FLOOR_FLAG_CSS = `clamp(96px, calc(100cqh - 246px), ${FLOOR_FLAG_PX}px)`;
+const FLOOR_DISC_CSS = `clamp(96px, calc(100cqh - 246px), ${FLOOR_DISC_PX}px)`;
+const FLOOR_CLOCK_FONT = 'clamp(3rem, calc(87cqh - 214px), 5rem)';
+const FLOOR_FLAG_FIT = { width: FLOOR_FLAG_CSS, height: FLOOR_FLAG_CSS, minWidth: FLOOR_FLAG_CSS } as const;
 
 function DraggableSpeakersQueue({ list, onReorder, onRemove, onRemoveCurrent, lastSpeakerDelegateId, currentSpeakerDelegateId, onDeckDelegateId, header, isRoomOrderTdT }: {
   list: { delegateId: string; country: string }[];
@@ -973,12 +987,12 @@ function UnmoderatedCaucusView({ committee, setCommittee, isViewOnly = false, ga
     <div className="relative flex-1 flex flex-col items-center px-8 pb-12">
       {/* The motion's name, who raised it and the topic: the SAME header, in the same place,
           as the moderated caucus and the Tour de Table (FloorModeHeader, Oct 2026, owner). */}
-      <div className="w-full flex justify-center pt-4 shrink-0">
+      <div className="w-full flex justify-center pt-2 shrink-0">
         <FloorModeHeader header={{
           icon: <Users size={18} strokeWidth={2.4} aria-hidden />,
           label: caucus.motionLabel ?? unmoderatedName,
           detail: caucus.purpose || null,
-          trailing: caucus.proposedBy ? <CaucusProposer proposedBy={caucus.proposedBy} size={24} fontSize={14} /> : null,
+          trailing: caucus.proposedBy ? <CaucusProposer proposedBy={caucus.proposedBy} size={24} fontSize={14} hideName /> : null,
         }} />
       </div>
       <div className="flex-1 w-full flex flex-col items-center justify-center pt-4">
@@ -1293,8 +1307,8 @@ function ModeratedCaucusMain({
     icon: <Users size={18} strokeWidth={2.4} aria-hidden />,
     label: committee.caucus?.motionLabel ?? caucusTitle,
     detail: caucusTopic || null,
-    // Who raised it, as a round flag + name on the same line (Oct 2026, owner).
-    trailing: caucus.proposedBy ? <CaucusProposer proposedBy={caucus.proposedBy} size={24} fontSize={14} /> : null,
+    // Who raised it: "Raised by" and the round flag only, the name as its tooltip (22 Oct 2026, owner).
+    trailing: caucus.proposedBy ? <CaucusProposer proposedBy={caucus.proposedBy} size={24} fontSize={14} hideName /> : null,
   };
   // Not drawn for a Commenter (see gslControls): the dock leaves no room for the row.
   const caucusControls = !sessionEnded && !isViewOnly ? (
@@ -1393,9 +1407,10 @@ function ModeratedCaucusMain({
             />
           </div>
           {/* ZONE 2 — Flag + name + timer + progress: compresses as viewport shrinks */}
-          <div className="relative flex-1 min-h-0 flex flex-col items-center justify-center px-4 py-2">
+          {/* overflow-hidden: a backstop only; FLOOR_ZONE_STYLE sizes the content to fit. */}
+          <div className="relative flex-1 min-h-0 overflow-hidden flex flex-col items-center justify-center px-4 py-2" style={FLOOR_ZONE_STYLE}>
             {isRoomOrderTdT ? (
-              <div className="floor-emblem-anchor relative rounded-full bg-[#DDD4C0] shrink-0 flex items-center justify-center" style={{ width: FLOOR_DISC_PX, height: FLOOR_DISC_PX }}>
+              <div className="floor-emblem-anchor relative rounded-full bg-[#DDD4C0] shrink-0 flex items-center justify-center" style={{ width: FLOOR_DISC_CSS, height: FLOOR_DISC_CSS }}>
                 <span className="font-black" style={{ color: '#1B3828', fontSize: '4.5rem' }}>{(() => {
                   const match = floorCountry.match(/(\d+)$/);
                   return match ? match[1] : '1';
@@ -1408,7 +1423,7 @@ function ModeratedCaucusMain({
                 decorative
                 loading="eager"
                 className="floor-emblem-anchor"
-                style={{ boxShadow: FLOOR_FLAG_SHADOW }}
+                style={{ boxShadow: FLOOR_FLAG_SHADOW, ...FLOOR_FLAG_FIT }}
               />
             )}
             {/* No X beside the caucus speaker's name (owner, 15 Sep 2026): taking a delegation
@@ -1426,7 +1441,7 @@ function ModeratedCaucusMain({
                 ? (caucusHasSpeaker ? handleToggleTimer : () => { void handleStartOnDeck(); })
                 : undefined}
               className={`font-black font-mono tabular-nums ${caucusHasSpeaker && speakerTimeRemaining <= 10 ? 'text-[#B8844A]' : 'text-[#1C1410]'}`}
-              style={{ fontSize: '5rem', margin: '4px 0', lineHeight: 1.15 }}
+              style={{ fontSize: FLOOR_CLOCK_FONT, margin: '4px 0', lineHeight: 1.15 }}
             >
               {/* On deck nothing is seated: show the slot Start will give them. */}
               {formatTime(caucusHasSpeaker ? speakerTimeRemaining : onDeckSlot)}
@@ -1464,7 +1479,7 @@ function ModeratedCaucusMain({
         <FloorBarExtent active={!isViewOnly} className="border-t border-[#DDD4C0] px-6 py-2" style={{ backgroundColor: '#F6F1E9' }}>
           {/* Total timer bar — hidden for Tour de Table */}
           {!isTdT && (
-            <div className="flex items-center gap-3 mb-4">
+            <div className="flex items-center gap-3 mb-2">
               <span className="text-xs text-[#9A8A78] font-mono shrink-0">{t('gsl_total')}</span>
               <p className={`text-lg font-black font-mono shrink-0 ${liveRemaining <= 30 ? 'text-red-500' : 'text-[#1C1410]'}`}>{formatTime(liveRemaining)}</p>
               <div className="flex-1 h-2 bg-[#DDD4C0] rounded-full overflow-hidden">
@@ -6014,14 +6029,15 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                         />
                       </div>
                       {/* ZONE 2 — Flag + name + timer + progress: compresses as viewport shrinks */}
-                      <div className="flex-1 min-h-0 flex flex-col items-center justify-center px-4 py-1">
+                      {/* Sized to fit like the caucus floor (FLOOR_ZONE_STYLE); full size when there is room. */}
+                      <div className="flex-1 min-h-0 overflow-hidden flex flex-col items-center justify-center px-4 py-1" style={FLOOR_ZONE_STYLE}>
                         <SeatCircleFlag
                           country={gslFloor.country}
                           size={FLOOR_FLAG_PX}
                           decorative
                           loading="eager"
                           className="floor-emblem-anchor"
-                          style={{ boxShadow: FLOOR_FLAG_SHADOW }}
+                          style={{ boxShadow: FLOOR_FLAG_SHADOW, ...FLOOR_FLAG_FIT }}
                         />
                         <h1 className="font-black text-[#1C1410] text-center" style={{ fontSize: FLOOR_NAME_REM, margin: '8px 0' }}><FloorSeatName name={getCountryDisplayName(gslFloor.country, language)} /></h1>
                         {isViewOnly ? (
@@ -6036,7 +6052,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                               onToggle={!sessionEnded ? handleGslToggleTimer : undefined}
                               blockedReason={gslStartBlockedReason}
                               className={`font-black font-mono tabular-nums ${committee.currentSpeaker && speakerTimeRemaining <= 10 ? 'text-[#B8844A]' : 'text-[#1C1410]'}`}
-                              style={{ fontSize: '5rem', marginBottom: '4px', lineHeight: 1.15 }}
+                              style={{ fontSize: FLOOR_CLOCK_FONT, marginBottom: '4px', lineHeight: 1.15 }}
                             >
                               {/* On deck nothing is seated, so the clock the row still holds may
                                   belong to the last turn: show the slot Start will give them. */}

@@ -317,7 +317,9 @@ export default function SpeakerControls({
     // No wrapping: two icon squares plus two flexible buttons always fit on one line, and
     // a long label (fr "APPELER LE PREMIER ORATEUR") truncates with its full text in the
     // tooltip instead of pushing Next onto a second row.
-    <div className="shrink-0 flex flex-nowrap items-center justify-center gap-2 w-full max-w-3xl px-4 pb-3 pt-1 mx-auto">
+    // relative z-[1]: nothing on the floor above (the flag, the clock, the progress bar) can
+    // ever paint over these buttons or take their clicks (22 Oct 2026).
+    <div className="relative z-[1] shrink-0 flex flex-nowrap items-center justify-center gap-2 w-full max-w-3xl px-4 pb-3 pt-1 mx-auto">
       <ControlButton tone={TONES.neutral} label={t('speaker_ctl_restart')} variant="icon" blockedReason={needSpeaker} onClick={onRestart}>
         <RotateCcw size={19} strokeWidth={2.4} aria-hidden className="rtl:-scale-x-100" />
       </ControlButton>

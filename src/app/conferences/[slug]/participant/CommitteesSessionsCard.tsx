@@ -10,13 +10,16 @@
 // therefore fetched separately and merged in only where it actually came
 // back, so a committee always renders even when its button can't.
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import Link from 'next/link';
+import { Eye } from 'lucide-react';
 import { useNow } from '@/lib/useNow';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { supabase as anonSupabase } from '@/lib/supabase';
 import { OUTFIT, effectiveReleaseTime, formatReleaseDate } from './shared';
-import { DashCard, CardHeading, CommitteeEmblem, TwoRowName, ForestLink, committeeShort, INK, INK_SOFT } from './dashboardKit';
+import { DashCard, CardHeading, TwoRowName, committeeShort, INK, INK_SOFT } from './dashboardKit';
+import { BTN_CLASS, CommitteeDisc, committeeEmblemSrc, secondaryBtn, STROKE } from './delegation/leaderKit';
 
 interface SessionCommittee {
   id: string;
@@ -31,7 +34,12 @@ export default function CommitteesSessionsCard({ conferenceId, conferenceStartDa
   conferenceStartDate: string | null;
 }) {
   const now = useNow();
-  const { session } = useAuth();
+  const { user, session } = useAuth();
+  const userId = user?.id ?? null;
+  // Keyed on the user id, never the token (CLAUDE.md §5): the client below
+  // sends the SDK's current token whatever this ref holds.
+  const sessionRef = useRef(session);
+  useEffect(() => { sessionRef.current = session; }, [session]);
   const [committees, setCommittees] = useState<SessionCommittee[] | null>(null);
   const [releaseAt, setReleaseAt] = useState<string | null>(null);
 
@@ -55,8 +63,9 @@ export default function CommitteesSessionsCard({ conferenceId, conferenceStartDa
 
       const base = (baseData ?? []) as Omit<SessionCommittee, 'session_code'>[];
       let codeById = new Map<string, string | null>();
-      if (session) {
-        const authed = getAuthedClient(session.access_token);
+      const live = sessionRef.current;
+      if (live) {
+        const authed = getAuthedClient(live.access_token);
         const { data: codeData } = await authed
           .from('conference_committees')
           .select('id, session_code')
@@ -67,7 +76,7 @@ export default function CommitteesSessionsCard({ conferenceId, conferenceStartDa
       setCommittees(base.map(c => ({ ...c, session_code: codeById.get(c.id) ?? null })));
     })();
     return () => { cancelled = true; };
-  }, [conferenceId, session?.access_token]);
+  }, [conferenceId, userId]);
 
   if (!committees) return null;
 
@@ -101,14 +110,15 @@ export default function CommitteesSessionsCard({ conferenceId, conferenceStartDa
             className="flex items-center gap-3 py-3"
             style={i > 0 ? { borderTop: '1px solid color-mix(in srgb, var(--gv-main) 7%, transparent)' } : undefined}
           >
-            <CommitteeEmblem logoUrl={c.logo_url} name={c.name} abbreviation={c.abbreviation} size={40} />
+            <CommitteeDisc src={committeeEmblemSrc(c.logo_url, c.name, c.abbreviation)} size={40} />
             <div className="flex-1 min-w-0">
               <TwoRowName short={committeeShort(c.name, c.abbreviation)} full={c.name} size={15} />
             </div>
             {released && c.session_code && (
-              <ForestLink href={`/advisor?add=${encodeURIComponent(c.session_code)}`} className="flex-shrink-0">
+              <Link href={`/advisor?add=${encodeURIComponent(c.session_code)}`} className={`${BTN_CLASS} flex-shrink-0`} style={secondaryBtn}>
+                <Eye size={16} strokeWidth={STROKE} aria-hidden />
                 View session
-              </ForestLink>
+              </Link>
             )}
           </div>
         ))}

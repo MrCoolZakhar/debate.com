@@ -75,7 +75,7 @@ export default function PressDeskPage() {
             <AuthLink
               next={`/conferences/${slug}/press`}
               className="mt-4 inline-flex items-center justify-center rounded-[10px] px-5 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gv-accent)]"
-              style={{ minHeight: 44, background: 'linear-gradient(90deg, var(--gv-main) 0%, var(--gv-main-mid) 100%)', color: '#FFFFFF', fontFamily: OUTFIT, fontSize: 15, fontWeight: 700 }}
+              style={{ minHeight: 44, background: 'linear-gradient(90deg, var(--gv-main) 0%, var(--gv-main-mid) 100%)', color: 'var(--gv-on-main)', fontFamily: OUTFIT, fontSize: 15, fontWeight: 700 }}
             >
               Sign in
             </AuthLink>

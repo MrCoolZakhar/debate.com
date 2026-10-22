@@ -86,8 +86,9 @@ export default function SeatCard({ seat, committee, payments, paperTile, emptyAc
   committee: ParticipantCommittee | null;
   /** The position paper's tile (PositionPaperCard variant="tile"), beside the study guide's. */
   paperTile?: React.ReactNode;
-  /** The payment block (PaymentsBlock), drawn at the card's foot. */
-  payments: React.ReactNode;
+  /** The payment block (PaymentsBlock), drawn at the card's foot. Left out
+   *  where the card beside it already says where the fee stands. */
+  payments?: React.ReactNode;
   /** With no seat: what a leader can do about it (Open delegation). */
   emptyAction?: React.ReactNode;
 }) {
@@ -109,7 +110,7 @@ export default function SeatCard({ seat, committee, payments, paperTile, emptyAc
           </p>
           {emptyAction}
         </div>
-        <div style={{ borderTop: `1px solid ${LINE}`, paddingTop: 14 }}>{payments}</div>
+        {payments && <div style={{ borderTop: `1px solid ${LINE}`, paddingTop: 14 }}>{payments}</div>}
       </section>
     );
   }
@@ -163,7 +164,7 @@ export default function SeatCard({ seat, committee, payments, paperTile, emptyAc
         </div>
       </div>
 
-      <div className="mt-auto" style={{ borderTop: `1px solid ${LINE}`, paddingTop: 14 }}>{payments}</div>
+      {payments && <div className="mt-auto" style={{ borderTop: `1px solid ${LINE}`, paddingTop: 14 }}>{payments}</div>}
     </section>
   );
 }

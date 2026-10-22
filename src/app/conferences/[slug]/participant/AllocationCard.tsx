@@ -176,7 +176,7 @@ export default function AllocationCard({ committee, myAllocation, conferenceStar
             {myAllocation.country_name}
           </p>
           {partner?.name && (
-            <p className="text-[12px] mt-1.5" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>
+            <p className="text-[12px] mt-1.5" style={{ color: '#6B5F52', fontFamily: OUTFIT }}>
               {/* Co-delegate links to their MUN CV. No clickable ancestor here,
                   so no `nested`. A seat filled by an unclaimed import invite
                   carries a name but no userId — ProfileLink renders it bare. */}
@@ -233,7 +233,7 @@ export default function AllocationCard({ committee, myAllocation, conferenceStar
                 </Link>
               </>
             ) : releaseMs !== null ? (
-              <p className="text-[12.5px]" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>
+              <p className="text-[12.5px]" style={{ color: '#6B5F52', fontFamily: OUTFIT }}>
                 Session opens {formatReleaseDate(releaseMs)}
               </p>
             ) : null}

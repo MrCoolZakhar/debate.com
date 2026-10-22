@@ -47,6 +47,7 @@ select public.upsert_gavelling_listing('{ ... }'::jsonb);
 - `banner_url`: the conference's own banner/hero image from its site if there is one; otherwise a free-to-use photo of the city from Wikimedia Commons (public domain, CC0, CC BY or CC BY-SA only; use the direct upload.wikimedia.org file URL) with `banner_credit`: `{ "author": "...", "source_url": "<the Commons file page>", "license": "CC BY-SA 4.0", "license_url": "https://creativecommons.org/licenses/by-sa/4.0/" }`. Never use a photo of people.
 - Image rules (21 Oct 2026, after 35 banners and 3 logos failed to load on the live site): `/api/listing-image` refuses SVG and anything over 5 MB. A Wikimedia banner is ALWAYS its thumbnail URL, `https://upload.wikimedia.org/wikipedia/commons/thumb/<a>/<ab>/<File>/1920px-<File>` (never the original file, which is usually far over 5 MB); never an SVG logo (use a PNG, JPG or WebP from the site, or leave `logo_url` null); and open every image URL once before sending it: it must answer 200 with an image type.
 - `committees`: `[{ "name": "...", "abbreviation": "...", "type": "general-assembly|specialised|crisis|press", "difficulty": "beginner|intermediate|advanced|expert", "topics": ["..."] }]` from their site, study guides or public pages. Up to 3 topics each. `difficulty` is the conference's own label when it gives one; otherwise the usual level: expert for crisis, historical committees and courts (ICJ, ICC); advanced for the Security Council, NATO, the G20, the African Union and other small specialised councils; intermediate for General Assembly main committees (DISEC, SPECPOL, ECOSOC, SOCHUM, Legal), UNODC, trade, development and press; beginner for UNESCO, UNEP, WHO, the Human Rights Council, UN Women, youth and middle school committees.
+- `contact_email` (owner, 22 Oct 2026): the conference's own general address, for one outreach email offering them the listing. Look on its website (Contact, About, Imprint or Impressum, the footer, the FAQ), then its mymun.com page. Prefer a general or role address on the conference's own domain (info@, contact@, secretariat@, sg@, mun@). Never a named private person's address (a personal gmail of the Secretary-General, a teacher's name), never a guessed or constructed one: it must appear verbatim on a page you opened, and that page goes in `sources`. None found: leave it out (the listing keeps our inbox). It is never shown on the page; a later re-check without it keeps the stored one.
 - `sources`: every page you used, as `[{ "url": "..." }]`
 - `checked_at`: now
 
@@ -54,7 +55,7 @@ A listing goes live only when it passes the quality bar (real dates, a place, a 
 
 ## Rules
 
-- No personal data: no names of secretariat members, no emails, no phone numbers, no photos of people.
+- No personal data: no names of secretariat members, no personal emails, no phone numbers, no photos of people. The one email collected is the conference's own general address (`contact_email` above).
 - Facts only; if unsure about a fact, leave it out.
 - Never touch a conference whose `listed_by` is `organiser`. The upsert refuses anyway.
 - Never call any function that sends email. The upsert sends none.

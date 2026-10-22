@@ -9,7 +9,8 @@ import { BookOpen, Check, FileText, Mic, Vote, X } from 'lucide-react';
 import { CircleFlag } from '@/components/CircleFlag';
 import SeatName from '@/components/SeatName';
 import { OUTFIT } from '@/components/neu';
-import { CommitteeEmblem, TwoRowName, committeeShort } from '../participant/dashboardKit';
+import { TwoRowName, committeeShort } from '../participant/dashboardKit';
+import { CommitteeDisc, committeeEmblemSrc } from '../participant/delegation/leaderKit';
 import type { PressDocument, PressRoom } from '@/lib/press';
 import { CARD_SHADOW, FOREST, INK, INK_SOFT, SLATE, SeatLine, roomMode } from './pressKit';
 
@@ -46,7 +47,7 @@ export default function PressRoomCard({ room, onOpenDoc }: {
     >
       {/* Who the room is, and what it is doing */}
       <header className="flex items-start gap-3">
-        <CommitteeEmblem logoUrl={room.logoUrl} name={room.name} abbreviation={room.abbreviation} size={42} isCrisis={room.committeeType === 'crisis'} />
+        <CommitteeDisc src={committeeEmblemSrc(room.logoUrl, room.name, room.abbreviation)} size={42} />
         <div className="min-w-0 flex-1">
           <TwoRowName short={short} full={room.name} size={17} />
           {topic && (

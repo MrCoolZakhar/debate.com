@@ -8,19 +8,19 @@
 // release reaches every room at once and uses one of the three.
 
 import { useRef, useState } from 'react';
-import { ImagePlus, Loader2, Send, X } from 'lucide-react';
-import { Emoji3D, OUTFIT } from '@/components/neu';
+import { ImagePlus, Loader2, Newspaper, Send, X } from 'lucide-react';
+import { OUTFIT } from '@/components/neu';
 import { PRESS_RELEASE_MAX, PRESS_RELEASES_PER_DAY, sendPressRelease, uploadPressImage } from '@/lib/press';
 import { CARD_SHADOW, FOREST, INK, INK_SOFT } from './pressKit';
 
 const PRIMARY: React.CSSProperties = {
   minHeight: 44, padding: '0 18px', borderRadius: 10, border: 'none',
-  background: 'linear-gradient(90deg, var(--gv-main) 0%, var(--gv-main-mid) 100%)', color: '#FFFFFF',
+  background: 'linear-gradient(90deg, var(--gv-main) 0%, var(--gv-main-mid) 100%)', color: 'var(--gv-on-main)',
   fontFamily: OUTFIT, fontSize: 15, fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 8,
 };
 const SECOND: React.CSSProperties = {
-  minHeight: 44, padding: '0 16px', borderRadius: 10, background: '#FFFFFF', color: INK,
-  border: '1.5px solid rgba(28,20,16,0.55)', fontFamily: OUTFIT, fontSize: 15, fontWeight: 700,
+  minHeight: 44, padding: '0 16px', borderRadius: 10, background: '#FFFFFF', color: 'var(--gv-main)',
+  border: '1px solid color-mix(in srgb, var(--gv-main) 18%, transparent)', fontFamily: OUTFIT, fontSize: 15, fontWeight: 600,
   display: 'inline-flex', alignItems: 'center', gap: 8,
 };
 
@@ -79,9 +79,7 @@ export default function PressReleaseComposer({ conferenceId, label, releasesLeft
   return (
     <section className="rounded-[20px] p-5 md:p-6" style={{ backgroundColor: '#FFFFFF', boxShadow: CARD_SHADOW }} aria-labelledby="press-release-title">
       <div className="flex items-start gap-3">
-        <span aria-hidden className="inline-flex items-center justify-center flex-shrink-0" style={{ width: 46, height: 46, borderRadius: 999, backgroundColor: 'rgba(47,96,118,0.12)' }}>
-          <Emoji3D name="Newspaper" size={28} />
-        </span>
+        <Newspaper size={30} strokeWidth={1.5} aria-hidden style={{ color: INK, flexShrink: 0, marginTop: 2 }} />
         <div className="min-w-0 flex-1">
           <h2 id="press-release-title" style={{ fontFamily: OUTFIT, fontSize: 19, fontWeight: 800, color: INK, margin: 0, lineHeight: 1.25 }}>Send a Press Release</h2>
           <p className="[overflow-wrap:anywhere]" style={{ fontFamily: OUTFIT, fontSize: 13.5, color: INK_SOFT, margin: '3px 0 0 0', lineHeight: 1.45 }}>
