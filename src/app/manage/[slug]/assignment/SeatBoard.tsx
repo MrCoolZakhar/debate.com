@@ -13,7 +13,10 @@
 //           badges), or one person opened in place with their level, where
 //           they are from and their best three seats;
 //   RIGHT   the committees as fill rings; a click (or a person dropped on one)
-//           opens that committee's pop-up (SeatBoardPopup.tsx).
+//           opens that committee's pop-up: the classic board's own pop-up
+//           (CommitteeDetailModal.tsx, owned by the page; owner, 22 Oct
+//           2026), whose open seats read "Seat <First name>" while a person
+//           is open here or was dropped on the ring.
 // Every Assign goes through the page's own assign path (`onAssign` is
 // requestQuickAssign), so the writes, the optimistic board, the first-assign
 // pop-up and the allocation email rules are exactly the classic board's.
@@ -40,7 +43,6 @@ import {
   CountryFlag, CommitteeLogo, committeeLabels, committeeSeatLogo, effectiveLevel,
   LevelBadge, LevelDisc, LevelHero, slotLogoUrl, OUTFIT,
 } from '@/app/manage/[slug]/assignment/assignmentKit';
-import { SeatBoardPopup } from '@/app/manage/[slug]/assignment/SeatBoardPopup';
 import {
   AvatarWithFlag, BigCount, CARD_SHADOW, CommitteeRing, FitPills, NameAge, PersonIdentity, RankNumber, RingTally, ScoreHover, ScoringHint,
   SoftButton, WELL, acceptedAt, choicesPhrase, delegationOf, firstName, fmtDay, nationalityOf, personName,
@@ -66,7 +68,7 @@ function byName(a: string, b: string) {
 
 export default function SeatBoard({
   accepted, committees, societies, history, seated, spread, needy,
-  busyKey, locked, emailsOnAssign, onAssign, onRefresh, onOpenDelegationsView,
+  busyKey, locked, onAssign, onOpenCommittee, onRefresh, onOpenDelegationsView,
 }: {
   /** The waiting pool (accepted delegates without a seat). */
   accepted: AcceptedApp[];
@@ -81,8 +83,10 @@ export default function SeatBoard({
   busyKey: string | null;
   /** The first-assign pop-up is waiting on an answer. */
   locked: boolean;
-  emailsOnAssign: boolean;
   onAssign: (sug: Suggestion) => void;
+  /** Opens the classic committee pop-up (the page renders it). With `seat`,
+   *  its open seats seat that person through `seat.onSeat`. */
+  onOpenCommittee: (committeeId: string, seat: { personId: string; onSeat: (sug: Suggestion) => void } | null) => void;
   /** Re-reads the board quietly (after a delegation allocation is given or taken back). */
   onRefresh: () => Promise<void> | void;
   onOpenDelegationsView: () => void;
@@ -103,7 +107,6 @@ export default function SeatBoard({
     if (!app || seated.appIds.has(app.id) || (app.profiles?.id ? seated.userIds.has(app.profiles.id) : false)) return null;
     return id;
   });
-  const [popup, setPopup] = useState<{ committeeId: string; personId: string | null } | null>(null);
   const [pulse, setPulse] = useState(false);
   const middleRef = useRef<HTMLElement | null>(null);
   const ringsRef = useRef<HTMLElement | null>(null);
@@ -131,18 +134,20 @@ export default function SeatBoard({
   }, []);
 
   const openPerson = openPersonId ? waiting.find(a => a.id === openPersonId) ?? null : null;
-  const popupCommittee = popup ? committees.find(c => c.id === popup.committeeId) ?? null : null;
-  const popupPerson = popup?.personId ? waiting.find(a => a.id === popup.personId) ?? null : null;
 
   // The middle starts at the top whenever what it shows changes.
   useEffect(() => { middleRef.current?.scrollTo({ top: 0 }); }, [openPersonId]);
 
   useEffect(() => {
-    if (!openPersonId || popup) return;
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpenPersonId(null); };
+    if (!openPersonId) return;
+    // Escape closes the committee pop-up first when one is open (the page's).
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape' || document.querySelector('[aria-modal="true"]')) return;
+      setOpenPersonId(null);
+    };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [openPersonId, popup]);
+  }, [openPersonId]);
 
   useEffect(() => {
     if (!pulse) return;
@@ -154,7 +159,7 @@ export default function SeatBoard({
   const { drag, sourceProps, ghost } = useBoardDrag({
     canDrop: (payload, target) => target.kind === 'committee' && payload.kind === 'app',
     onDrop: (payload, target) => {
-      if (target.kind === 'committee' && payload.kind === 'app') setPopup({ committeeId: target.committeeId, personId: payload.id });
+      if (target.kind === 'committee' && payload.kind === 'app') onOpenCommittee(target.committeeId, { personId: payload.id, onSeat: assign });
     },
   });
   const draggedApp = drag?.payload.kind === 'app' ? waiting.find(a => a.id === drag.payload.id) ?? null : null;
@@ -167,13 +172,12 @@ export default function SeatBoard({
   /** Every assignment: close what is open, back to the suggestions, then the
    *  page's own path (which may show its first-assign pop-up, alone). */
   function assign(sug: Suggestion) {
-    setPopup(null);
     setOpenPersonId(null);
     onAssign(sug);
   }
 
   function clickCommittee(c: CommitteeData) {
-    setPopup({ committeeId: c.id, personId: openPerson?.id ?? null });
+    onOpenCommittee(c.id, openPerson ? { personId: openPerson.id, onSeat: assign } : null);
   }
 
   // ── Left list ──────────────────────────────────────────────────────────────
@@ -435,20 +439,6 @@ export default function SeatBoard({
     </div>
   );
 
-  const popupNode = popup && popupCommittee ? (
-    <SeatBoardPopup
-      committee={popupCommittee}
-      person={popupPerson}
-      waiting={waiting}
-      spread={spread}
-      needy={needy}
-      emailsOnAssign={emailsOnAssign}
-      locked={locked}
-      onAssign={assign}
-      onClose={() => setPopup(null)}
-    />
-  ) : null;
-
   if (tab === 'delegations') {
     return (
       <SeatBoardDelegations
@@ -460,8 +450,7 @@ export default function SeatBoard({
         needy={needy}
         onRefresh={onRefresh}
         onOpenDelegationsView={onOpenDelegationsView}
-        onOpenCommittee={id => setPopup({ committeeId: id, personId: null })}
-        overlay={popupNode}
+        onOpenCommittee={id => onOpenCommittee(id, null)}
       />
     );
   }
@@ -594,7 +583,6 @@ export default function SeatBoard({
         </div>
       </section>
 
-      {popupNode}
       {ghost}
     </div>
   );

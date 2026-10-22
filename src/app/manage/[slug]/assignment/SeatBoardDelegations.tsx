@@ -289,10 +289,8 @@ type BoardProps = {
   /** Re-reads the board's committees quietly. */
   onRefresh: () => Promise<void> | void;
   onOpenDelegationsView: () => void;
-  /** A ring pressed while no delegation is open: the board's own committee pop-up. */
+  /** A ring pressed while no delegation is open: the classic committee pop-up (the page's). */
   onOpenCommittee: (committeeId: string) => void;
-  /** The board's committee pop-up, when open. */
-  overlay: React.ReactNode;
 };
 
 export default function SeatBoardDelegations(props: BoardProps) {
@@ -303,7 +301,7 @@ export default function SeatBoardDelegations(props: BoardProps) {
 }
 
 function DelegationsBoard({
-  leftHeader, committees, waiting, search, spread, needy, onRefresh, onOpenDelegationsView, onOpenCommittee, overlay, conference,
+  leftHeader, committees, waiting, search, spread, needy, onRefresh, onOpenDelegationsView, onOpenCommittee, conference,
 }: BoardProps & { conference: { id: string; fee_currency: string } }) {
   const data = useDelegationsData({ conferenceId: conference.id, currency: conference.fee_currency });
   const { holdLive, queueWrite, laneBusy, landStamp, settleRead } = data;
@@ -1310,8 +1308,7 @@ function DelegationsBoard({
           onClose={closeGive}
         />
       )}
-      {!give && overlay}
-      {ghost}
+            {ghost}
       <style>{`
         .sbdMinus { transition: transform 120ms cubic-bezier(0.22,1,0.36,1), filter 120ms; }
         .sbdMinus::before { content: ''; position: absolute; inset: -6px; border-radius: 50%; }

@@ -1,7 +1,7 @@
 'use client';
 
 // Small pieces the seat board (SeatBoard.tsx) and its committee pop-up
-// (SeatBoardPopup.tsx) share: names, dates, seat counts, the committee ring
+// share: names, dates, seat counts, the committee ring
 // with its gold choice bubbles, the seat importance mark (the app's dashes),
 // the reason badges (one per reason type, its own icon, tone and points, one
 // row), the hover cards ("How this scores" on a score, "How smart allocations
@@ -966,8 +966,8 @@ export function RankNumber({ order, size = 20 }: { order: number; size?: number 
 // The committee ring on a white disc, half outside the pop-up card's top-left
 // edge (CLAUDE.md §8, the signature detail). The card sets `position:
 // relative` and `marginTop: POPUP_RING_RISE`; the header pads its left by
-// POPUP_RING_INSET. Both committee pop-ups use it (SeatBoardPopup.tsx and
-// SeatBoardGivePopup.tsx), at the slim width POPUP_WIDTH (owner, 21 Oct 2026:
+// POPUP_RING_INSET. No pop-up uses it since Round 14 (both committee pop-ups
+// are the classic one now); it was drawn at the slim width POPUP_WIDTH (owner, 21 Oct 2026:
 // "too much empty space, like it was before").
 export const POPUP_RING = 60;
 export const POPUP_RING_RISE = 28;

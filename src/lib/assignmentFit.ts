@@ -533,6 +533,9 @@ export interface FitSuggestion<A extends FitApp = FitApp, C extends FitCommittee
   slot: SlotOf<C>;
   score: number;
   reasons: string[];
+  /** An exact seat of a double country, set only when the organiser picked
+   *  it in the committee pop-up; otherwise the assign takes the lowest open seat. */
+  seat?: number;
   /** Set only when the swap-improvement pass moved this delegate off their
    *  own best available seat and onto this one, because doing so raised the
    *  combined score for both delegates involved. Drives the "SWAPPED FOR

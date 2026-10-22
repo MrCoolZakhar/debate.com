@@ -164,3 +164,9 @@ Taste board: https://claude.ai/artifact/CAVUg2YLKyTj5Y6yuVmLup
 - The opened delegation card stands on a gold plate offset behind it, with a deeper layered lift and a light line over its gold top edge.
 - A double in the Delegations views (the Given list and the give pop-up) always reads as two rows: the holders first, an open seat on its own row beneath, never beside a name.
 - Committee ring tiles (People and Delegations tabs) show seats given of all seats beneath the ring ("9/15").
+
+## Round 14: the classic committee pop-up everywhere (Peter, 22 Oct 2026)
+
+- "It needs to be similar to BEFORE in a committee, I liked it that way." The classic board's committee pop-up moved unchanged into `assignment/CommitteeDetailModal.tsx` (`CommitteeOverviewModal`, with the importance dashes, `TierBadge`, the modal card and the row menu page.tsx shares). The seat board opens THIS pop-up for a committee (the page renders it, same handlers: + Assign through the classic assign flow, Change seat, Deallocate, a person's detail). `SeatBoardPopup.tsx` (its dropdown and in-row expansion) is gone; this supersedes the pop-up parts of Rounds 7, 9, 10 and 12.
+- With a person open in the middle, or a person dropped on a ring, the same pop-up's open seats read "Seat <First name>" and seat that person in that exact seat (`Suggestion.seat`, honoured by `quickAssign` while the seat is still open) through `requestQuickAssign`, then close.
+- The Delegations tab's give pop-up (`SeatBoardGivePopup.tsx`) is the same pop-up in give mode: the same card, header, seats-filled bar and rows by importance; "Giving to <Delegation>" with the tally above the bar; an open seat the delegation can take reads "Give" (gives the country, the pop-up stays open), a country given here reads "Given · Undo" and a second tap takes it back; Done closes. Its write queue is unchanged.
