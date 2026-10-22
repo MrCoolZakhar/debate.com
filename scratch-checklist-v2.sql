@@ -153,12 +153,17 @@ grant execute on function public.mark_organiser_visit(uuid, text) to authenticat
 -- ── 3. conference_setup_status(): the 7 items ────────────────────────────────
 -- Same output shape as before (every key kept). setup_total stays
 -- jsonb_array_length(v_items) = 7. verification_* now covers the first six.
-create or replace function public.conference_setup_status(p_conference_id uuid)
-returns jsonb
-language plpgsql
-stable security definer
-set search_path to 'public'
-as $function$
+-- REFRESHED 21 Oct 2026 (Christian's chat): this block is now the LIVE definition of
+-- conference_setup_status() as of 21 Oct (financials before applications; the 'chairs' stage is
+-- 'List Chair, Secretariat or Staff Positions', done by a chair, a published job listing or
+-- conferences.jobs_later_at). The older copy that stood here would have undone that if re-run.
+-- The database is the truth: before re-running, compare with pg_get_functiondef.
+CREATE OR REPLACE FUNCTION public.conference_setup_status(p_conference_id uuid)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
 declare
   c                 conferences%rowtype;
   v_committees      int;
@@ -176,7 +181,7 @@ declare
   v_year            text;
   v_base            text;
   v_display         text;
-  v_ver_keys        text[] := array['page','committees','applications','financials','communications','chairs'];
+  v_ver_keys        text[] := array['page','committees','applications','financials','communications','chairs','store'];
   v_ver_pending     jsonb;
   v_ver_minutes     int;
 begin
@@ -219,13 +224,6 @@ begin
 
   v_payments_ready := public.conference_payments_ready(c.id);
 
-  -- Launch applications. A role is "launched" when it is switched on and its
-  -- window has not closed (a window that opens later counts: the organiser has
-  -- done their part and applications open by themselves). A conference that has
-  -- already received applicants' own applications also counts, so a conference
-  -- whose windows have closed does not lose the step (or its checkmark) in the
-  -- run-up to the event. "Listed" on Settings → Applications is a per-browser
-  -- display preference (localStorage) and is not readable here.
   select count(*) filter (where r.is_enabled),
          count(*) filter (where r.is_enabled
                             and (r.applications_close_at is null or r.applications_close_at > now()))
@@ -236,8 +234,6 @@ begin
                           where a.conference_id = c.id and a.invited_email is null);
   v_apps_done := v_roles_live > 0 or v_self_apps;
 
-  -- Go to the Communications page. emails_explored_at is the older stamp the
-  -- same page has written on every visit since Sep 2026, so it counts too.
   v_comms_done := c.comms_visited_at is not null or c.emails_explored_at is not null;
 
   v_items := jsonb_build_array(
@@ -260,28 +256,28 @@ begin
           format('You are expecting %s delegates but your committees only seat %s. About %s more seats would cover most of them.',
                  v_expected, v_capacity, v_required - v_capacity)
         else 'Committees are ready.' end, 'href','/committees'),
+    jsonb_build_object('key','financials','title','Add financial information','minutes',5,'done', v_payments_ready,
+      'todo','Choose how you get paid, or tell us it is free, so delegates know how to pay.',
+      'href','/financials?open=payment'),
     jsonb_build_object('key','applications','title','Launch applications','minutes',5,
       'done', v_apps_done,
       'todo', case
         when v_apps_done then 'Applications are open.'
         when v_roles_enabled > 0 then 'Your application windows have closed. Reopen a role or move its closing date.'
-        when not v_payments_ready then 'Add your financial information, then open applications for at least one role.'
+        when false then ''
         else 'Open applications for at least one role so delegates can apply.' end,
       'href','/settings?tab=applications'),
-    jsonb_build_object('key','financials','title','Add financial information','minutes',5,'done', v_payments_ready,
-      'todo','Choose how you get paid, so delegates have somewhere to pay. Even a free conference needs a method on file.',
-      'href','/financials?open=payment'),
     jsonb_build_object('key','communications','title','Go to the Communications page','minutes',2,
       'done', v_comms_done,
       'todo','Take a look at the emails applicants get automatically and the questions they send you.',
       'href','/communications'),
-    jsonb_build_object('key','chairs','title','Invite chairs','minutes',3,
-      'done', (v_committees > 0 and v_missing_chairs < v_committees),
-      'todo', case when v_committees = 0 then 'Add committees first, then invite a chair to each dais.'
-        when v_missing_chairs = v_committees then 'Invite a chair to any one committee to get started.'
-        when v_missing_chairs > 0 then format('%s of %s still need someone on the dais.', v_missing_chairs, v_committees)
-        else 'Every committee has a chair assigned or invited.' end,
-      'href','/committees'),
+    jsonb_build_object('key','chairs','title','List Chair, Secretariat or Staff Positions','minutes',3,
+      -- 21 Oct 2026 (owner): a listing on the Job Board, a chair already invited or assigned, or "Do it Later" ticks it.
+      'done', ((v_committees > 0 and v_missing_chairs < v_committees)
+               or exists (select 1 from job_listings l where l.conference_id = c.id and l.published_at is not null)
+               or c.jobs_later_at is not null),
+      'todo', 'Post your chair, secretariat and staff roles on the Job Board so people can apply.',
+      'href','/jobs'),
     jsonb_build_object('key','store','title','Visit the Store','minutes',1,
       'done', (c.store_visited_at is not null),
       'todo','See how Spotlights and email packs can bring your conference more delegates.',
@@ -291,7 +287,9 @@ begin
   select coalesce(jsonb_agg(i->>'key'), '[]'::jsonb), coalesce(sum((i->>'minutes')::int), 0)
     into v_ver_pending, v_ver_minutes
     from jsonb_array_elements(v_items) i
-   where not (i->>'done')::boolean and (i->>'key') = any (v_ver_keys);
+   where not (i->>'done')::boolean and (i->>'key') = any (v_ver_keys)
+     and not ((i->>'key') = 'store'
+              and exists (select 1 from checkmark_store_exempt e where e.conference_id = c.id));
 
   return jsonb_build_object(
     'conference_id', c.id, 'slug', c.slug, 'acronym', c.acronym, 'full_name', c.full_name,

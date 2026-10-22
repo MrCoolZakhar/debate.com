@@ -20,135 +20,160 @@
 --   verification_ready         true when verification_pending is empty
 --   is_verified / verified_at  the stored mark (refresh_conference_verification)
 
+-- REFRESHED 21 Oct 2026 (Christian's chat): this block is now the LIVE definition of
+-- conference_setup_status() as of 21 Oct (financials before applications; the 'chairs' stage is
+-- 'List Chair, Secretariat or Staff Positions', done by a chair, a published job listing or
+-- conferences.jobs_later_at). The older copy that stood here would have undone that if re-run.
+-- The database is the truth: before re-running, compare with pg_get_functiondef.
 CREATE OR REPLACE FUNCTION public.conference_setup_status(p_conference_id uuid)
  RETURNS jsonb
  LANGUAGE plpgsql
  STABLE SECURITY DEFINER
  SET search_path TO 'public'
 AS $function$
-DECLARE
-  c                 conferences%ROWTYPE;
+declare
+  c                 conferences%rowtype;
   v_committees      int;
   v_missing_chairs  int;
   v_capacity        int;
   v_expected        int;
   v_required        int;
-  v_emails          int;
-  v_organizers      int;
-  v_org_invites     int;
-  v_delegate_apps   int;
+  v_roles_enabled   int;
+  v_roles_live      int;
+  v_self_apps       boolean;
+  v_apps_done       boolean;
+  v_comms_done      boolean;
   v_payments_ready  boolean;
   v_items           jsonb;
   v_year            text;
   v_base            text;
   v_display         text;
-  v_ver_keys        text[] := array['page','committees','chairs','email','secretariat','financials','publish'];
+  v_ver_keys        text[] := array['page','committees','applications','financials','communications','chairs','store'];
   v_ver_pending     jsonb;
   v_ver_minutes     int;
-BEGIN
-  IF auth.uid() IS NOT NULL
-     AND NOT public.is_conference_organizer(p_conference_id) THEN
-    RETURN NULL;
-  END IF;
+begin
+  if auth.uid() is not null
+     and not public.is_conference_organizer(p_conference_id) then
+    return null;
+  end if;
 
-  SELECT * INTO c FROM conferences WHERE id = p_conference_id;
-  IF NOT FOUND THEN RETURN NULL; END IF;
+  select * into c from conferences where id = p_conference_id;
+  if not found then return null; end if;
 
   v_base := coalesce(nullif(btrim(c.acronym), ''), c.full_name);
   v_year := to_char(coalesce(c.start_date, c.end_date), 'YYYY');
-  v_display := CASE
-    WHEN v_year IS NULL THEN v_base
-    WHEN v_base LIKE '%' || v_year || '%' THEN v_base
-    WHEN v_base LIKE '%''' || right(v_year, 2) || '%' THEN v_base
-    WHEN v_base ~ ('(^|[^0-9])' || right(v_year, 2) || '$') THEN v_base
-    ELSE v_base || ' ' || v_year
-  END;
+  v_display := case
+    when v_year is null then v_base
+    when v_base like '%' || v_year || '%' then v_base
+    when v_base like '%''' || right(v_year, 2) || '%' then v_base
+    when v_base ~ ('(^|[^0-9])' || right(v_year, 2) || '$') then v_base
+    else v_base || ' ' || v_year
+  end;
 
-  SELECT count(*) INTO v_committees FROM conference_committees WHERE conference_id = c.id;
+  select count(*) into v_committees from conference_committees where conference_id = c.id;
 
-  SELECT count(*) INTO v_missing_chairs FROM conference_committees cc
-   WHERE cc.conference_id = c.id
-     AND (cc.chair_user_ids IS NULL OR cardinality(cc.chair_user_ids) = 0)
-     AND NOT EXISTS (
-       SELECT 1 FROM conference_chair_invites ci
-        WHERE ci.committee_id = cc.id
-          AND ci.conference_id = c.id
-          AND ci.status = 'pending');
+  select count(*) into v_missing_chairs from conference_committees cc
+   where cc.conference_id = c.id
+     and (cc.chair_user_ids is null or cardinality(cc.chair_user_ids) = 0)
+     and not exists (
+       select 1 from conference_chair_invites ci
+        where ci.committee_id = cc.id
+          and ci.conference_id = c.id
+          and ci.status = 'pending');
 
-  SELECT coalesce(sum(s.delegation_size), 0) INTO v_capacity
-    FROM conference_committees cc
-    JOIN committee_country_slots s ON s.conference_committee_id = cc.id
-   WHERE cc.conference_id = c.id;
+  select coalesce(sum(s.delegation_size), 0) into v_capacity
+    from conference_committees cc
+    join committee_country_slots s on s.conference_committee_id = cc.id
+   where cc.conference_id = c.id;
 
   v_expected := coalesce(c.expected_delegates, 0);
   v_required := ceil(v_expected * 0.7);
 
-  SELECT count(*) INTO v_emails FROM email_templates WHERE conference_id = c.id AND enabled = true;
-  SELECT count(*) INTO v_organizers FROM conference_organizers WHERE conference_id = c.id;
-  SELECT count(*) INTO v_org_invites FROM conference_organizer_invites
-   WHERE conference_id = c.id AND status = 'pending';
-  SELECT count(*) INTO v_delegate_apps FROM applications
-   WHERE conference_id = c.id AND role IN ('delegate','head-delegate');
+  v_payments_ready := public.conference_payments_ready(c.id);
 
-  v_payments_ready := CASE
-    WHEN c.payment_method = 'manual' THEN
-      coalesce(btrim(c.external_payment_url), '') <> '' OR coalesce(btrim(c.external_payment_note), '') <> ''
-    WHEN c.payment_method = 'stripe' THEN c.connect_onboarding_status = 'complete'
-    ELSE false END;
+  select count(*) filter (where r.is_enabled),
+         count(*) filter (where r.is_enabled
+                            and (r.applications_close_at is null or r.applications_close_at > now()))
+    into v_roles_enabled, v_roles_live
+    from application_role_configs r
+   where r.conference_id = c.id;
+  v_self_apps := exists (select 1 from applications a
+                          where a.conference_id = c.id and a.invited_email is null);
+  v_apps_done := v_roles_live > 0 or v_self_apps;
+
+  v_comms_done := c.comms_visited_at is not null or c.emails_explored_at is not null;
 
   v_items := jsonb_build_array(
     jsonb_build_object('key','page','title','Set up your conference page','minutes',5,
-      'done', (c.banner_url IS NOT NULL AND coalesce(btrim(c.description),'') <> ''),
-      'todo','Add a banner image and a description delegates will actually read.','href','/settings?tab=conference'),
+      'done', (c.banner_url is not null and coalesce(btrim(c.description),'') <> ''
+                and not c.dates_tbd and c.start_date is not null),
+      'todo', case
+        when (c.dates_tbd or c.start_date is null)
+         and (c.banner_url is null or coalesce(btrim(c.description),'') = '')
+          then 'Add your conference dates, a banner image and a description.'
+        when (c.dates_tbd or c.start_date is null)
+          then 'Add your conference dates so delegates can plan their trip.'
+        else 'Add a banner image and a description delegates will actually read.' end,
+      'href', case when (c.dates_tbd or c.start_date is null)
+        then '/settings?tab=general&focus=dates' else '/settings?tab=general' end),
     jsonb_build_object('key','committees','title','Add committees with enough seats','minutes',10,
-      'done', (v_committees > 0 AND (v_expected = 0 OR v_capacity >= v_required)),
-      'todo', CASE WHEN v_committees = 0 THEN 'Create your committees and set their country lists.'
-        WHEN v_expected > 0 AND v_capacity < v_required THEN
+      'done', (v_committees > 0 and (v_expected = 0 or v_capacity >= v_required)),
+      'todo', case when v_committees = 0 then 'Create your committees and set their country lists, so they appear in applications.'
+        when v_expected > 0 and v_capacity < v_required then
           format('You are expecting %s delegates but your committees only seat %s. About %s more seats would cover most of them.',
                  v_expected, v_capacity, v_required - v_capacity)
-        ELSE 'Committees are ready.' END, 'href','/committees'),
-    jsonb_build_object('key','chairs','title','Invite chairs','minutes',3,
-      'done', (v_committees > 0 AND v_missing_chairs < v_committees),
-      'todo', CASE WHEN v_committees = 0 THEN 'Add committees first, then invite a chair to each dais.'
-        WHEN v_missing_chairs = v_committees THEN 'Invite a chair to any one committee to get started.'
-        WHEN v_missing_chairs > 0 THEN format('%s of %s still need someone on the dais.', v_missing_chairs, v_committees)
-        ELSE 'Every committee has a chair assigned or invited.' END,
-      'href','/committees'),
-    jsonb_build_object('key','email','title','Explore emails','minutes',2,
-      'done', (v_emails > 0 OR c.emails_explored_at IS NOT NULL),
-      'todo','Take a look at the emails you can send applicants automatically.','href','/communications'),
-    jsonb_build_object('key','secretariat','title','Add your secretariat','minutes',2,
-      'done', (v_organizers > 1 OR v_org_invites > 0),
-      'todo','Invite your co-organizers so you are not running this alone.','href','/settings?tab=organizers'),
+        else 'Committees are ready.' end, 'href','/committees'),
     jsonb_build_object('key','financials','title','Add financial information','minutes',5,'done', v_payments_ready,
-      'todo','Choose how you get paid, so delegates have somewhere to pay. Even a free conference needs a method on file.','href','/financials/settings'),
-    jsonb_build_object('key','delegate','title','Get your first delegate','minutes',0,'done', (v_delegate_apps > 0),
-      'todo','Share your conference link and get that first application in.','href','/applications'),
-    jsonb_build_object('key','publish','title','Publish your conference','minutes',1,'done', c.is_public,
-      'todo','Publish it so delegates can find it on gavelling.com and apply.','href','/settings?tab=privacy')
+      'todo','Choose how you get paid, or tell us it is free, so delegates know how to pay.',
+      'href','/financials?open=payment'),
+    jsonb_build_object('key','applications','title','Launch applications','minutes',5,
+      'done', v_apps_done,
+      'todo', case
+        when v_apps_done then 'Applications are open.'
+        when v_roles_enabled > 0 then 'Your application windows have closed. Reopen a role or move its closing date.'
+        when false then ''
+        else 'Open applications for at least one role so delegates can apply.' end,
+      'href','/settings?tab=applications'),
+    jsonb_build_object('key','communications','title','Go to the Communications page','minutes',2,
+      'done', v_comms_done,
+      'todo','Take a look at the emails applicants get automatically and the questions they send you.',
+      'href','/communications'),
+    jsonb_build_object('key','chairs','title','List Chair, Secretariat or Staff Positions','minutes',3,
+      -- 21 Oct 2026 (owner): a listing on the Job Board, a chair already invited or assigned, or "Do it Later" ticks it.
+      'done', ((v_committees > 0 and v_missing_chairs < v_committees)
+               or exists (select 1 from job_listings l where l.conference_id = c.id and l.published_at is not null)
+               or c.jobs_later_at is not null),
+      'todo', 'Post your chair, secretariat and staff roles on the Job Board so people can apply.',
+      'href','/jobs'),
+    jsonb_build_object('key','store','title','Visit the Store','minutes',1,
+      'done', (c.store_visited_at is not null),
+      'todo','See how Spotlights and email packs can bring your conference more delegates.',
+      'href','/store')
   );
 
-  SELECT coalesce(jsonb_agg(i->>'key'), '[]'::jsonb), coalesce(sum((i->>'minutes')::int), 0)
-    INTO v_ver_pending, v_ver_minutes
-    FROM jsonb_array_elements(v_items) i
-   WHERE NOT (i->>'done')::boolean AND (i->>'key') = ANY (v_ver_keys);
+  select coalesce(jsonb_agg(i->>'key'), '[]'::jsonb), coalesce(sum((i->>'minutes')::int), 0)
+    into v_ver_pending, v_ver_minutes
+    from jsonb_array_elements(v_items) i
+   where not (i->>'done')::boolean and (i->>'key') = any (v_ver_keys)
+     and not ((i->>'key') = 'store'
+              and exists (select 1 from checkmark_store_exempt e where e.conference_id = c.id));
 
-  RETURN jsonb_build_object(
+  return jsonb_build_object(
     'conference_id', c.id, 'slug', c.slug, 'acronym', c.acronym, 'full_name', c.full_name,
     'display_name', v_display, 'year', v_year,
     'is_public', c.is_public, 'status', c.status,
     'expected_delegates', v_expected, 'seat_capacity', v_capacity, 'required_seats', v_required,
     'items', v_items,
-    'setup_total', 7,
-    'setup_done', (SELECT count(*) FROM jsonb_array_elements(v_items) i
-                    WHERE (i->>'done')::boolean AND i->>'key' <> 'publish'),
-    'setup_complete', NOT EXISTS (SELECT 1 FROM jsonb_array_elements(v_items) i
-                                   WHERE NOT (i->>'done')::boolean AND i->>'key' <> 'publish'),
+    'setup_total', jsonb_array_length(v_items),
+    'setup_done', (select count(*) from jsonb_array_elements(v_items) i
+                    where (i->>'done')::boolean),
+    'setup_complete', not exists (select 1 from jsonb_array_elements(v_items) i
+                                   where not (i->>'done')::boolean),
     'verification_keys', to_jsonb(v_ver_keys),
     'verification_pending', v_ver_pending,
     'verification_minutes_left', v_ver_minutes,
     'verification_ready', (jsonb_array_length(v_ver_pending) = 0),
     'is_verified', c.is_verified,
     'verified_at', c.verified_at);
-END;
+end;
 $function$;
