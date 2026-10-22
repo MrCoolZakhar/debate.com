@@ -131,7 +131,11 @@ export function distinctCountryFilled(allocations: readonly { country_code: stri
 //   society:     (suggestions only) +35 to complete a valid same-society double
 //                delegation, −30 to spread a clumping delegation, and a hard
 //                skip for a cross-society sibling seat. See scoreSocietyFit.
-//   fullness:    12 * (1 - filled/total) , nudges suggestions toward emptier committees
+//   room fill:   round(24 * (1 - seats filled / seats in the committee)), so an
+//                emptier committee scores higher. Read off the SHARE of seats
+//                taken (a double country is two seats), never a raw count, so a
+//                small room and a big room at the same fill score the same.
+//                See roomFill (owner, 22 Oct 2026: twice the old 12, by %).
 //   importance:  +18 / +10 / +4 / 0 for an open high / medium / low / standard
 //                seat, so the algorithm fills seats — and the committees that
 //                still hold them — in order of importance.
@@ -209,7 +213,7 @@ export function difficultyLevel(d: string | null | undefined): number | null {
 //   gap 3               → −30
 //
 // Calibration against the rest of the model (preference 50/30/15, exact country
-// pick 25, fill up to 12, seat importance up to 18, society ±35/30): the term
+// pick 25, room fill up to 24, seat importance up to 18, society ±35/30): the term
 // now spans 50 points end to end, which is the same width as the single largest
 // signal in the model (a 1st-choice preference). That is deliberate — it makes
 // difficulty match co-equal with preference rather than a rounding error. A
@@ -300,15 +304,58 @@ export function scorePrefAndExp(app: FitApp, committee: FitCommittee, slot: FitS
   return { score, reasons };
 }
 
-export function scoreSlot(app: FitApp, committee: FitCommittee, slot: FitSlot, filled: number, total: number): ScoreResult {
+// ── Room fill ────────────────────────────────────────────────────────────────
+// How much an emptier committee lifts a seat in it: up to ROOM_FILL_MAX for an
+// empty room, 0 for a full one, linear in the SHARE of its seats still open
+// (owner, 22 Oct 2026: count twice as much as the old 12, and from the
+// percentage of seats filled, not raw counts). Seats, not countries: a double
+// country is two seats, and a seat counts as filled once an allocation row
+// holds it (rows beyond a slot's delegation_size never count twice). A
+// committee whose slots are not set up yet falls back to its countries
+// against total_slots. A room with no seats at all reads as full (0 points).
+export const ROOM_FILL_MAX = 24;
+
+export interface RoomFill {
+  /** The points the room adds to every seat in it. */
+  points: number;
+  /** Seats filled, as a whole percentage (what the breakdown prints). */
+  pctFull: number;
+  seatsFilled: number;
+  seatsTotal: number;
+}
+
+export function roomFill(committee: Pick<FitCommittee, 'total_slots' | 'committee_country_slots' | 'conference_allocations'>): RoomFill {
+  let seatsTotal = 0;
+  let seatsFilled = 0;
+  if (committee.committee_country_slots.length > 0) {
+    const byCountry = groupAllocationsByCountry(committee.conference_allocations);
+    for (const s of committee.committee_country_slots) {
+      const size = Math.max(0, s.delegation_size);
+      seatsTotal += size;
+      seatsFilled += Math.min(size, byCountry.get(s.country_code)?.length ?? 0);
+    }
+  } else {
+    seatsTotal = Math.max(0, committee.total_slots);
+    seatsFilled = Math.min(seatsTotal, distinctCountryFilled(committee.conference_allocations));
+  }
+  if (seatsTotal <= 0) return { points: 0, pctFull: 100, seatsFilled: 0, seatsTotal: 0 };
+  const share = seatsFilled / seatsTotal;
+  return {
+    points: Math.round(ROOM_FILL_MAX * (1 - share)),
+    pctFull: Math.round(share * 100),
+    seatsFilled,
+    seatsTotal,
+  };
+}
+
+export function scoreSlot(app: FitApp, committee: FitCommittee, slot: FitSlot): ScoreResult {
   const base = scorePrefAndExp(app, committee, slot);
-  const fullness = Math.round(12 * (1 - filled / Math.max(total, 1)));
-  base.score += fullness;
+  base.score += roomFill(committee).points;
   // NB: the 'NEEDS DELEGATES' chip is NOT decided here. It is a GLOBAL signal —
   // a committee only "needs delegates" relative to how full the OTHER committees
   // are — so it is computed once across the whole board (see needyCommitteeIds)
   // and layered onto suggestions afterwards, not from this single committee's
-  // fill in isolation. The fullness score above still nudges emptier committees.
+  // fill in isolation. The room fill points above still nudge emptier committees.
   // Importance-weighted need signal: filling a higher-importance open seat
   // matters more, so it lifts the fit score and the algorithm works through
   // the priority seats — and the committees still holding them — first.
@@ -421,7 +468,7 @@ export interface AllocationScore {
    *  this file that shows "this delegate's score on this slot". */
   total: number;
   /** scoreSlot's own score: preference, country pick, experience fit,
-   *  fill need, committee importance. */
+   *  room fill (roomFill), seat importance. */
   base: number;
   /** scoreSocietyFit's delta: +PAIR_BONUS, -CONCENTRATION_PENALTY, or 0. */
   societyDelta: number;
@@ -439,12 +486,10 @@ export function allocationScore(
   app: FitApp,
   committee: FitCommittee,
   slot: FitSlot,
-  filled: number,
-  total: number,
   byCountry: ReadonlyMap<string, readonly FitAllocation[]>,
   spread: ReadonlySet<string>,
 ): AllocationScore {
-  const base = scoreSlot(app, committee, slot, filled, total);
+  const base = scoreSlot(app, committee, slot);
   const soc = scoreSocietyFit(app, committee, slot, byCountry, spread);
   return {
     total: base.score + soc.delta,
@@ -526,11 +571,10 @@ export function rankSeatsForPerson<A extends FitApp, C extends FitCommittee>(
   opts?: { includeDisallowed?: boolean },
 ): RankedSeat<A, C>[] {
   const byCountry = groupAllocationsByCountry(committee.conference_allocations);
-  const filled = distinctCountryFilled(committee.conference_allocations);
   const out: RankedSeat<A, C>[] = [];
   for (const slot of committee.committee_country_slots as readonly SlotOf<C>[]) {
     if (isSlotFull(slot, byCountry)) continue;
-    const scored = allocationScore(app, committee, slot, filled, committee.total_slots, byCountry, spread);
+    const scored = allocationScore(app, committee, slot, byCountry, spread);
     if (scored.disallowed && !opts?.includeDisallowed) continue;
     const reasons = needy?.has(committee.id) && !scored.reasons.includes(NEEDS_DELEGATES_REASON)
       ? [...scored.reasons, NEEDS_DELEGATES_REASON]
@@ -552,10 +596,9 @@ export function rankPeopleForSeat<A extends FitApp, C extends FitCommittee>(
   opts?: { includeDisallowed?: boolean },
 ): RankedSeat<A, C>[] {
   const byCountry = groupAllocationsByCountry(committee.conference_allocations);
-  const filled = distinctCountryFilled(committee.conference_allocations);
   const out: RankedSeat<A, C>[] = [];
   for (const app of people) {
-    const scored = allocationScore(app, committee, slot, filled, committee.total_slots, byCountry, spread);
+    const scored = allocationScore(app, committee, slot, byCountry, spread);
     if (scored.disallowed && !opts?.includeDisallowed) continue;
     const reasons = needy?.has(committee.id) && !scored.reasons.includes(NEEDS_DELEGATES_REASON)
       ? [...scored.reasons, NEEDS_DELEGATES_REASON]
@@ -610,7 +653,6 @@ export function buildSuggestions<A extends FitApp, C extends FitCommittee>(
       const options: Suggestion[] = [];
       for (const c of committees) {
         const byCountry = groupAllocationsByCountry(c.conference_allocations);
-        const filled = distinctCountryFilled(c.conference_allocations);
         for (const slot of c.committee_country_slots as readonly SlotOf<C>[]) {
           if (isSlotFull(slot, byCountry)) continue;
           // allocationScore folds the base fit and the society-coherence
@@ -620,7 +662,7 @@ export function buildSuggestions<A extends FitApp, C extends FitCommittee>(
           // the greedy or swap passes — keeping the whole builder
           // consistent (an option that can't exist is never a fall-through
           // target or a swap destination).
-          const scored = allocationScore(app, c, slot, filled, c.total_slots, byCountry, spread);
+          const scored = allocationScore(app, c, slot, byCountry, spread);
           if (scored.disallowed) continue;
           options.push({
             app, committee: c, slot,
@@ -784,8 +826,7 @@ export function rankSeatsForSociety<C extends FitCommittee>(
   },
 ): SocietySeatOption<C>[] {
   const byCountry = groupAllocationsByCountry(committee.conference_allocations);
-  const filled = distinctCountryFilled(committee.conference_allocations);
-  const fullness = Math.round(12 * (1 - filled / Math.max(committee.total_slots, 1)));
+  const fullness = roomFill(committee).points;
   const inRoom = committee.conference_allocations.some(a => allocationSocietyId(a) === societyId);
   const asked = new Map<string, number>();
   for (const m of opts?.members ?? []) {

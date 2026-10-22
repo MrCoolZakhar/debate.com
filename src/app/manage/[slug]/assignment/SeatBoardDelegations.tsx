@@ -29,7 +29,7 @@
 //             3. Given: a list view like the Applications pop-up's Allocations
 //                tab (owner, 21 Oct 2026), A to Z, one row each (the committee
 //                logo + acronym, the round flag + country, then the holders
-//                with avatars side by side, a double in ONE row, no seat
+//                with avatars, a double as two rows (holder, then Open), no seat
 //                numbers); the Allocations tab's light red corner minus on a
 //                row with an empty seat takes the empty seats back, asked in place
 //             Give more: a segmented control
@@ -92,7 +92,7 @@ import {
 } from '@/app/manage/[slug]/assignment/assignmentKit';
 import { SeatBoardGivePopup, holderOf } from '@/app/manage/[slug]/assignment/SeatBoardGivePopup';
 import {
-  BigCount, CARD_SHADOW, CommitteeRing, HAIRLINE, SOFT_BTN_CLASS, SoftButton, WELL, seatCounts,
+  BigCount, CARD_SHADOW, CommitteeRing, HAIRLINE, RingTally, SOFT_BTN_CLASS, SoftButton, WELL, seatCounts,
 } from '@/app/manage/[slug]/assignment/seatBoardShared';
 
 type Mode = 'one' | 'best' | 'custom';
@@ -173,8 +173,24 @@ const BTN_PRIMARY: React.CSSProperties = {
 };
 // The opened delegation must pop like the smart allocation cards (owner, 22
 // Oct 2026): white, a gold top edge over the header, a thin gold ring and a
-// deeper forest-tinted lift.
-const DELEGATION_CARD_SHADOW = 'inset 0 3px 0 #E2C66B, inset 0 0 0 1px rgba(182,135,31,0.20), 0 1px 2px rgba(27,56,40,0.08), 0 14px 32px -12px rgba(27,56,40,0.28)';
+// deeper forest-tinted lift. Round 7 (owner, 22 Oct 2026: "raise it more, as
+// if it literally stands out"): a light line on top of the gold edge, a
+// deeper layered lift, and a gold plate behind the card, offset downward like
+// the raised plate it stands on (DELEGATION_PLATE).
+const DELEGATION_CARD_SHADOW = [
+  'inset 0 1px 0 #F8EBBE',
+  'inset 0 4px 0 #DFC164',
+  'inset 0 0 0 1px rgba(182,135,31,0.24)',
+  '0 1px 1px rgba(27,56,40,0.06)',
+  '0 3px 6px -1px rgba(27,56,40,0.08)',
+  '0 10px 20px -6px rgba(27,56,40,0.16)',
+  '0 26px 48px -18px rgba(27,56,40,0.36)',
+].join(', ');
+const DELEGATION_PLATE: React.CSSProperties = {
+  position: 'absolute', top: 14, left: 8, right: 8, bottom: -9, zIndex: -1, borderRadius: 22,
+  background: 'linear-gradient(180deg, #F4E3A2 0%, #E6CB72 48%, #CDA94A 100%)',
+  boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.55), inset 0 -1px 0 rgba(138,102,20,0.35), 0 6px 14px -4px rgba(138,102,20,0.45), 0 18px 34px -14px rgba(27,56,40,0.32)',
+};
 const BTN_DISABLED: React.CSSProperties = { ...BTN_PRIMARY, background: WELL, color: NEU.inkSoft, boxShadow: 'none', cursor: 'default' };
 
 function seatKey(committeeId: string, code: string, seat: number) {
@@ -555,7 +571,7 @@ function DelegationsBoard({
   }, [board, openId]);
 
   // The Given grid: one row per committee and country, so a double is one row
-  // with both of its seats side by side (in seat order).
+  // with both of its seats (drawn as two rows: holders, then open seats).
   const heldRows = useMemo(() => {
     const m = new Map<string, { key: string; committee: CommitteeData; code: string; country: string; allocs: AllocationRow[] }>();
     for (const { committee: c, alloc: a } of held) {
@@ -716,9 +732,7 @@ function DelegationsBoard({
           >
             <CommitteeRing committee={c} lit={lit} />
             <span className="[overflow-wrap:anywhere] text-center" style={{ fontSize: 12.5, fontWeight: 600, lineHeight: 1.15, padding: '0 2px' }}>{big}</span>
-            <span style={{ fontSize: 11.5, color: NEU.inkSoft }}>
-              <span style={{ fontWeight: 700, color: NEU.ink, fontVariantNumeric: 'tabular-nums' }}>{openN}</span> open
-            </span>
+            <RingTally committee={c} />
           </button>
         );
       })}
@@ -932,6 +946,9 @@ function DelegationsBoard({
           </SoftButton>
         </div>
 
+        {/* The card on its gold plate: the plate sits behind, offset down */}
+        <div className="relative isolate" style={{ marginBottom: 12 }}>
+        <div aria-hidden style={DELEGATION_PLATE} />
         <div className="flex flex-col" style={{ ...card, boxShadow: DELEGATION_CARD_SHADOW, padding: '22px 20px 20px', gap: 18 }}>
           {/* 1. Who they are, and where they stand */}
           <div className="flex items-start gap-4 flex-wrap">
@@ -1019,6 +1036,10 @@ function DelegationsBoard({
                   const empties = allocs.filter((a, i) => !people[i] && !a.id.startsWith('temp-') && a.society_id === open.id);
                   const allTemp = allocs.every(a => a.id.startsWith('temp-'));
                   const named = people.filter((p): p is NonNullable<typeof p> => !!p).map(p => p.name);
+                  // A double always reads as two rows (owner, 22 Oct 2026): the
+                  // holders first, each open seat on its own row beneath them.
+                  const double = allocs.length > 1;
+                  const seatOrder = allocs.map((a, i) => i).sort((x, y) => Number(!people[x]) - Number(!people[y]) || x - y);
                   return (
                     <div
                       key={key}
@@ -1037,9 +1058,14 @@ function DelegationsBoard({
                         <CountryFlag code={code} w={24} h={24} alt="" logoUrl={committeeSeatLogo(c, code)} />
                         <CountryName name={country} code={code} style={{ fontSize: 14, fontWeight: 600, whiteSpace: 'normal', overflowWrap: 'anywhere', lineHeight: 1.15 }} />
                       </span>
-                      {/* Every seat side by side: a holder, or an open slot */}
-                      <span className="flex items-center justify-end flex-wrap min-w-0" style={{ gap: '4px 12px', marginLeft: 'auto', paddingRight: empties.length > 0 ? 4 : 0 }}>
-                        {allocs.map((a, i) => {
+                      {/* One seat: its holder or Open. A double: two rows, the holder
+                          first and an open seat on its own row under it, never beside */}
+                      <span
+                        className={double ? 'flex flex-col items-start min-w-0' : 'flex items-center justify-end flex-wrap min-w-0'}
+                        style={{ gap: double ? 5 : '4px 12px', marginLeft: 'auto', paddingRight: empties.length > 0 ? 4 : 0 }}
+                      >
+                        {seatOrder.map(i => {
+                          const a = allocs[i];
                           const p = people[i];
                           return p ? (
                             <span key={a.id} className="inline-flex items-center gap-1.5 min-w-0" style={{ fontSize: 13, color: NEU.ink }}>
@@ -1084,6 +1110,7 @@ function DelegationsBoard({
             )}
           </div>
 
+        </div>
         </div>
       </div>
     );
@@ -1202,7 +1229,7 @@ function DelegationsBoard({
         <div className="flex items-center justify-between flex-none" style={{ padding: '0 4px' }}>
           <span className="inline-flex items-center gap-2">
             <h2 style={{ margin: 0, fontSize: 17, fontWeight: 600 }}>Committees</h2>
-            <span title="The ring shows how full each committee is. The number is its open seats." style={{ display: 'inline-flex', color: NEU.inkSoft }}>
+            <span title="The ring shows how full each committee is. Beneath it, seats given of all seats" style={{ display: 'inline-flex', color: NEU.inkSoft }}>
               <Info size={15} strokeWidth={1.5} />
             </span>
           </span>

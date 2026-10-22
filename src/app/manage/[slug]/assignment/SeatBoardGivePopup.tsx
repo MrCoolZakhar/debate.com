@@ -10,7 +10,7 @@
 // top-left edge, then every country A to Z in calm rows on a narrow card (a
 // bigger round flag and the country with the importance dashes beside it,
 // each seat's holder as avatar and bold name with the delegation small
-// beneath, side by side for a double, or Open), with an All seats / Open
+// beneath, or Open; a double always on two rows, the holder first), with an All seats / Open
 // filter. Each row's Give is a soft white pill; Done is the one solid button.
 //   * A row open to this delegation is one tap: it gives the country (every
 //     open seat of the slot, a double is both seats) and the pop-up STAYS OPEN
@@ -159,12 +159,17 @@ export function SeatBoardGivePopup({
     const body = (
       <>
         <SeatCountry committee={committee} slot={s} />
-        {/* Every seat side by side: a double is one row with both holders */}
-        <span className="flex items-center flex-wrap min-w-0" style={{ flex: '1 1 200px', gap: '6px 14px' }}>
-          {seats.map(n => {
-            const h = bySeat.get(n) ?? (n === 1 ? loose[0] : undefined);
-            return h ? <SeatHolder key={n} alloc={h} societyName={societyName} /> : <OpenChip key={n} compact />;
-          })}
+        {/* One seat: its holder or Open. A double always reads as two rows
+            (owner, 22 Oct 2026): the holders first, an open seat on its own
+            row beneath, never beside a name */}
+        <span
+          className={seats.length > 1 ? 'flex flex-col items-start min-w-0' : 'flex items-center flex-wrap min-w-0'}
+          style={{ flex: '1 1 200px', gap: seats.length > 1 ? 6 : '6px 14px' }}
+        >
+          {seats
+            .map(n => ({ n, h: bySeat.get(n) ?? (n === 1 ? loose[0] : undefined) }))
+            .sort((x, y) => Number(!x.h) - Number(!y.h) || x.n - y.n)
+            .map(({ n, h }) => (h ? <SeatHolder key={n} alloc={h} societyName={societyName} /> : <OpenChip key={n} compact />))}
         </span>
       </>
     );

@@ -543,6 +543,19 @@ export function LevelDisc({ level, size = 22 }: { level: string | null | undefin
   );
 }
 
+/** A level as its insignia disc with the word beside it, in the level's own
+ *  colour (the seat board's smart allocation cards, owner 22 Oct 2026). */
+export function LevelBadge({ level, size = 18, fontSize = 12.5 }: { level: string | null | undefined; size?: number; fontSize?: number }) {
+  const lvl = level && level.trim() ? level : 'beginner';
+  const accent = LEVEL_ACCENT[lvl.toLowerCase()] ?? '#9A8A78';
+  return (
+    <span className="inline-flex items-center flex-shrink-0" style={{ gap: 5, fontFamily: OUTFIT, whiteSpace: 'nowrap' }}>
+      <LevelDisc level={lvl} size={size} />
+      <span style={{ fontSize, fontWeight: 600, color: accent, lineHeight: 1 }}>{levelWord(lvl)}</span>
+    </span>
+  );
+}
+
 /** The big level for the person in focus: the disc, the word, what it means. */
 export function LevelHero({ level, conferences, size = 64 }: { level: string | null | undefined; conferences?: number | null; size?: number }) {
   const lvl = level && level.trim() ? level : 'beginner';

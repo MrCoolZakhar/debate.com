@@ -18,7 +18,7 @@ import Portal from '@/components/Portal';
 import { getCountryByName } from '@/lib/countries';
 import {
   CONCENTRATION_PENALTY, EXPERIENCE_GAP_STEP, EXPERIENCE_MATCH_BONUS, IMPORTANCE_NEED_WEIGHT, MEMBER_PICK_BONUS,
-  NEEDS_DELEGATES_REASON, PAIR_BONUS, SWAP_REASON, groupAllocationsByCountry, type ImportanceTier,
+  NEEDS_DELEGATES_REASON, PAIR_BONUS, ROOM_FILL_MAX, SWAP_REASON, groupAllocationsByCountry, roomFill, type ImportanceTier,
 } from '@/lib/assignmentFit';
 import { FitTip, explainReason, missingSignals } from '@/app/manage/[slug]/assignment/fitReasons';
 import { CountryName } from '@/app/manage/[slug]/assignment/displayNames';
@@ -318,6 +318,17 @@ export function CommitteeRing({ committee, size = 52, marker, markers, lit, halo
           </span>
         );
       })}
+    </span>
+  );
+}
+
+/** Under a committee ring: seats given of all seats, "9/15" (owner, 22 Oct
+ *  2026), a double country counting as two seats. */
+export function RingTally({ committee }: { committee: CommitteeData }) {
+  const { total, filled } = seatCounts(committee);
+  return (
+    <span title={`${filled} of ${total} seats given`} style={{ fontSize: 12, color: NEU.inkSoft, fontVariantNumeric: 'tabular-nums', lineHeight: 1.1 }}>
+      <span style={{ fontWeight: 700, color: NEU.ink }}>{filled}</span>/{total}
     </span>
   );
 }
@@ -696,10 +707,11 @@ export function HoverCard({ children, card, width = 300, label, align = 'end' }:
 // Every part of the fit score with its points. The reasons carry the
 // preference, country, experience, importance and delegation parts; a low
 // importance seat (+4) adds points without a reason; what is left is the room
-// fill nudge (up to +12 for an emptier committee), so the lines always add up
-// to the score the engine ranked by.
+// fill (up to +ROOM_FILL_MAX, from the share of the committee's seats filled:
+// roomFill in the engine), printed with how full the room is, so the lines
+// always add up to the score the engine ranked by.
 
-export interface ScorePart { key: string; spec: BadgeLook; points: number }
+export interface ScorePart { key: string; spec: BadgeLook; points: number; note?: string }
 
 export function scoreParts(sug: SugLike): ScorePart[] {
   const parts: ScorePart[] = [];
@@ -711,8 +723,10 @@ export function scoreParts(sug: SugLike): ScorePart[] {
   if (sug.slot.importance === 'low' && IMPORTANCE_NEED_WEIGHT.low) {
     parts.push({ key: 'LOW SEAT', spec: LOW_SEAT, points: IMPORTANCE_NEED_WEIGHT.low });
   }
+  // The remainder IS the room fill (the engine adds nothing else without a
+  // reason), so the total always adds up; the room's own share names it.
   const rest = sug.score - parts.reduce((n, p) => n + p.points, 0);
-  if (rest !== 0) parts.push({ key: 'ROOM FILL', spec: ROOM_FILL, points: rest });
+  if (rest !== 0) parts.push({ key: 'ROOM FILL', spec: ROOM_FILL, points: rest, note: `${roomFill(sug.committee).pctFull}% full` });
   return parts;
 }
 
@@ -726,7 +740,10 @@ export function ScoreBreakdown({ sug }: { sug: SugLike }) {
       {parts.map(p => (
         <div key={p.key} className="flex items-center gap-2" style={{ minHeight: 24 }}>
           <BadgeIcon spec={p.spec} size={20} />
-          <span className="flex-1 min-w-0" style={{ fontSize: 13, color: NEU.ink, lineHeight: 1.2 }}>{p.spec.label}</span>
+          <span className="flex-1 min-w-0" style={{ fontSize: 13, color: NEU.ink, lineHeight: 1.2 }}>
+            {p.spec.label}
+            {p.note && <span style={{ color: NEU.inkSoft, fontVariantNumeric: 'tabular-nums' }}>, {p.note}</span>}
+          </span>
           <span style={{ fontSize: 13, fontWeight: 600, color: p.points < 0 ? TONE.red : NEU.ink, fontVariantNumeric: 'tabular-nums' }}>{fmtPoints(p.points)}</span>
         </div>
       ))}
@@ -761,7 +778,7 @@ const SCORE_RULES: { spec: BadgeLook; title: string; points: string; line: strin
   { spec: BADGES['COUNTRY PICK'], title: 'Exact country', points: '+25', line: 'The seat is the country they asked for' },
   { spec: BADGES['EXP MATCH'], title: 'Experience fit', points: `+${EXPERIENCE_MATCH_BONUS} / 0 / −${EXPERIENCE_GAP_STEP} per level`, line: 'Their level against the committee difficulty, either way round' },
   { spec: BADGES['HIGH PRIORITY'], title: 'Seat importance', points: `+${IMPORTANCE_NEED_WEIGHT.high} / +${IMPORTANCE_NEED_WEIGHT.medium} / +${IMPORTANCE_NEED_WEIGHT.low}`, line: 'High, medium and low importance seats fill first' },
-  { spec: ROOM_FILL, title: 'Room fill', points: 'up to +12', line: 'Emptier committees score higher' },
+  { spec: ROOM_FILL, title: 'Room fill', points: `up to +${ROOM_FILL_MAX}`, line: `Emptier committees score higher: ${ROOM_FILL_MAX} x the share of seats still open (a room 25% full adds ${Math.round(ROOM_FILL_MAX * 0.75)})` },
   { spec: BADGES['COMPLETES PAIR'], title: 'Completes a pair', points: `+${PAIR_BONUS}`, line: 'Their delegation holds the other seat of a double' },
   { spec: BADGES['DELEGATION CONCENTRATION'], title: 'Delegation already here', points: `−${CONCENTRATION_PENALTY}`, line: 'Spreads a delegation across the rooms' },
 ];

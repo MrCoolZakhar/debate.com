@@ -38,11 +38,11 @@ import { replaceUrlInPlace } from '@/lib/replaceUrlInPlace';
 import {
   type AcceptedApp, type CommitteeData, type Suggestion, type UserHistory,
   CountryFlag, CommitteeLogo, committeeLabels, committeeSeatLogo, effectiveLevel,
-  LevelDisc, LevelHero, slotLogoUrl, OUTFIT,
+  LevelBadge, LevelDisc, LevelHero, slotLogoUrl, OUTFIT,
 } from '@/app/manage/[slug]/assignment/assignmentKit';
 import { SeatBoardPopup } from '@/app/manage/[slug]/assignment/SeatBoardPopup';
 import {
-  AvatarWithFlag, BigCount, CARD_SHADOW, CommitteeRing, FitPills, NameAge, PersonIdentity, RankNumber, ScoreHover, ScoringHint,
+  AvatarWithFlag, BigCount, CARD_SHADOW, CommitteeRing, FitPills, NameAge, PersonIdentity, RankNumber, RingTally, ScoreHover, ScoringHint,
   SoftButton, WELL, acceptedAt, choicesPhrase, delegationOf, firstName, fmtDay, nationalityOf, personName,
   prefOrdersByCommittee, schoolName, seatCounts,
 } from '@/app/manage/[slug]/assignment/seatBoardShared';
@@ -262,9 +262,7 @@ export default function SeatBoard({
           >
             <CommitteeRing committee={c} markers={markers.get(c.id)} lit={lit} halo />
             <span className="[overflow-wrap:anywhere] text-center" style={{ fontSize: 12.5, fontWeight: 600, lineHeight: 1.15, padding: '0 2px' }}>{big}</span>
-            <span style={{ fontSize: 11.5, color: NEU.inkSoft }}>
-              <span style={{ fontWeight: 700, color: NEU.ink, fontVariantNumeric: 'tabular-nums' }}>{open}</span> open
-            </span>
+            <RingTally committee={c} />
           </button>
         );
       })}
@@ -551,7 +549,7 @@ export default function SeatBoard({
         <div className="flex items-center justify-between flex-none" style={{ padding: '0 4px' }}>
           <span className="inline-flex items-center gap-2">
             <h2 style={{ margin: 0, fontSize: 17, fontWeight: 600 }}>Committees</h2>
-            <span title="The ring shows how full each committee is. The number is its open seats." style={{ display: 'inline-flex', color: NEU.inkSoft }}>
+            <span title="The ring shows how full each committee is. Beneath it, seats given of all seats" style={{ display: 'inline-flex', color: NEU.inkSoft }}>
               <Info size={15} strokeWidth={1.5} />
             </span>
           </span>
@@ -608,7 +606,8 @@ export default function SeatBoard({
 // 17", the delegation beneath) beside the big gold score disc, whose hover
 // card is "How this scores"; the seat on an ivory well (a bigger round flag,
 // the country, the committee) with a soft Assign; the reason badges on one
-// row. A light lift on hover.
+// row. A light lift on hover. The person's experience level (its insignia and
+// word) follows the name (owner, 22 Oct 2026).
 function SmartAllocationCard({ sug, busy, locked, onOpenPerson, onAssign }: {
   sug: Suggestion;
   /** This card's assignment is saving. */
@@ -633,7 +632,7 @@ function SmartAllocationCard({ sug, busy, locked, onOpenPerson, onAssign }: {
           className="focus:outline-none focus-visible:ring-2 flex-1 min-w-0 text-left"
           style={{ border: 'none', background: 'transparent', padding: 0, borderRadius: 12, cursor: 'pointer', fontFamily: OUTFIT }}
         >
-          <PersonIdentity app={sug.app} avatar={42} nameSize={16.5} lineSize={12.5} />
+          <PersonIdentity app={sug.app} avatar={42} nameSize={16.5} lineSize={12.5} after={<LevelBadge level={effectiveLevel(sug.app)} />} />
         </button>
         <ScoreHover
           sug={sug}

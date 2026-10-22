@@ -156,3 +156,11 @@ Taste board: https://claude.ai/artifact/CAVUg2YLKyTj5Y6yuVmLup
 - Committee pop-up rows are one height; a double held by one delegation reads "<Delegation> ×2"; an open seat opens an anchored dropdown of best-fit people, the other seat's delegation first on a gold tint (or a line saying nobody from it is waiting).
 - Allocation emails read "Automatic | Manual" with "Send N waiting". The 1st choice sort is gone. The opened delegation card shows "N delegate spots paid · M given".
 - Give pop-up: tapping a given row takes it back; give and take back share one queue and late results never overwrite a newer tap.
+
+## Round 13: seat board round 7 (Peter, 22 Oct 2026)
+
+- Smart allocation cards show the delegate's experience level (insignia and word, `LevelBadge` in assignmentKit) after the name.
+- Room fill in the fit engine (`roomFill` in `src/lib/assignmentFit.ts`): `round(24 x (1 - seats filled / seats in the committee))`, twice the old 12 and read from the share of SEATS filled (a double country is two seats), so rooms of any size at the same fill score the same. The score's hover breakdown prints "Room fill, X% full" with its points; the general scoring hint and the classic board's explainer say up to +24. The classic board, the seat board and Applications Best Seats all score through it.
+- The opened delegation card stands on a gold plate offset behind it, with a deeper layered lift and a light line over its gold top edge.
+- A double in the Delegations views (the Given list and the give pop-up) always reads as two rows: the holders first, an open seat on its own row beneath, never beside a name.
+- Committee ring tiles (People and Delegations tabs) show seats given of all seats beneath the ring ("9/15").

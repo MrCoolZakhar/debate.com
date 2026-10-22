@@ -41,11 +41,12 @@ export function RowDelegationBadge({ name, logoUrl, size = 26 }: { name: string;
 export const ROW_DELEGATION_PILL: React.CSSProperties = {
   display: 'inline-flex',
   maxWidth: '100%',
-  margin: '8px 0 0 6px',
-  padding: '5px 14px 5px 5px',
+  margin: '10px 0 8px 6px',
+  padding: '6px 16px 6px 6px',
   borderRadius: 22,
-  background: '#F7F3EA',
-  border: '1px solid #EBE4D4',
+  background: '#FFFFFF',
+  border: '1px solid rgba(182,135,31,0.30)',
+  boxShadow: '0 1px 2px rgba(27,56,40,0.06), 0 6px 16px -8px rgba(27,56,40,0.22)',
   textAlign: 'left',
 };
 
@@ -84,8 +85,9 @@ export function RowDelegation(p: RowDelegationProps) {
   const place = delegationPlace(p.city, p.countryCode);
   const city = p.city?.trim() || '';
   const countryName = place?.code ? (getCountryByCode(place.code)?.name ?? place.code) : '';
-  // The city when there is one (the flag says the country), else the country's short name.
-  const placeLabel = place ? (city || countryShortName(countryName, place.code ?? undefined)) : '';
+  // "City, Country" with the country's short name (London, UK); the country alone when there is no city.
+  const shortCountry = place?.code ? countryShortName(countryName, place.code) : '';
+  const placeLabel = place ? [city, shortCountry].filter(Boolean).join(', ') : '';
 
   const counts: string[] = [];
   if (p.members != null) counts.push(plural(p.members, 'member'));
@@ -108,8 +110,12 @@ export function RowDelegation(p: RowDelegationProps) {
                 <span className="[overflow-wrap:anywhere]">{placeLabel}</span>
               </span>
             )}
-            {placeLabel && counts.length > 0 && <span aria-hidden style={{ opacity: 0.55 }}>·</span>}
-            {counts.length > 0 && <span>{counts.join(' · ')}</span>}
+            {counts.length > 0 && (
+              <span className="whitespace-nowrap">
+                {placeLabel && <span aria-hidden style={{ opacity: 0.55, marginRight: 6 }}>·</span>}
+                {counts.join(' · ')}
+              </span>
+            )}
           </span>
         )}
       </span>

@@ -52,7 +52,7 @@ import {
 } from '@/app/manage/[slug]/assignment/assignmentKit';
 import {
   type ImportanceTier, groupAllocationsByCountry, isSlotFull, lowestOpenSeat, allocationSocietyId, siblingSeatAllocation,
-  distinctCountryFilled, difficultyRank, allocationScore, scorePrefAndExp, spreadSocieties, buildSuggestions,
+  distinctCountryFilled, difficultyRank, allocationScore, ROOM_FILL_MAX, scorePrefAndExp, spreadSocieties, buildSuggestions,
   needyCommitteeIds as computeNeedyCommitteeIds,
 } from '@/lib/assignmentFit';
 
@@ -235,9 +235,9 @@ function PointsInfo() {
             {row('Committee preference  +50 / +30 / +15', 'Their 1st choice committee scores 50, 2nd choice 30, 3rd choice 15.')}
             {row('Exact country pick  +25', 'Added when the open seat is the exact country they asked for in that preference.')}
             {row('Experience fit  +20 / 0 / −15 / −30', 'An exact match between their experience level and the committee difficulty adds 20. One level apart scores 0. Two apart subtracts 15, three apart 30, the same either way round, so an expert in a beginner committee is penalised exactly like a beginner in an expert one. Scores 0 if their level or the committee difficulty is unset.')}
-            {row('Committee fill  up to +12', 'Emptier committees score higher (12 x share still open), nudging suggestions to where seats are needed.')}
+            {row(`Room fill  up to +${ROOM_FILL_MAX}`, `Emptier committees score higher: ${ROOM_FILL_MAX} x the share of the committee's seats still open, so a room 25% full adds ${Math.round(ROOM_FILL_MAX * 0.75)} and a full room adds 0.`)}
             {row('Seat importance  up to +18', 'An open high-importance seat adds 18, medium 10, low 4, standard 0, so higher-priority seats fill first and delegates with no preferences still slot into where they are most needed.')}
-            {row('Delegation coherence  +35 / −30', 'Completing a valid double delegation (their society already holds the country’s other seat) adds 35; placing them where a societymate is already seated but not as a pair subtracts 30 to spread the delegation. Cross-society double seats are never suggested.')}
+            {row('Delegation coherence  +35 / −20', 'Completing a valid double delegation (their society already holds the country’s other seat) adds 35; placing them where a societymate is already seated but not as a pair subtracts 20 to spread the delegation. Cross-society double seats are never suggested.')}
             <span style={{ fontFamily: OUTFIT, fontSize: 10.5, color: NEU.muted, lineHeight: 1.4, paddingTop: 2, borderTop: `1px solid ${NEU.base}` }}>
               Seat importance also orders the seats inside a committee overview, most urgent first.
             </span>
@@ -705,7 +705,6 @@ function DropAllocateModal({ committee, app, needy = false, spread, pushDraftNot
   const [error, setError] = useState('');
 
   const byCountry = groupAllocationsByCountry(committee.conference_allocations);
-  const filled = distinctCountryFilled(committee.conference_allocations);
   // The same allocationScore total the suggestion builder ranks on — this
   // modal still surfaces every open seat (a sibling conflict is resolved via
   // onConflict below, not by hiding the seat), but the number shown must
@@ -713,7 +712,7 @@ function DropAllocateModal({ committee, app, needy = false, spread, pushDraftNot
   const rows = committee.committee_country_slots
     .filter(s => !isSlotFull(s, byCountry))
     .map(slot => {
-      const scored = allocationScore(app, committee, slot, filled, committee.total_slots, byCountry, spread);
+      const scored = allocationScore(app, committee, slot, byCountry, spread);
       return {
         slot,
         score: scored.total,
@@ -979,7 +978,6 @@ function AssignModal({ committee, unassigned, preSelectedSlot, preSelectedSeat, 
   const byCountry = groupAllocationsByCountry(committee.conference_allocations);
   // Empty slots = slots with an open seat
   const emptySlots = committee.committee_country_slots.filter(s => !isSlotFull(s, byCountry));
-  const filled = distinctCountryFilled(committee.conference_allocations);
 
   // Sort unassigned by score against the selected slot (the same
   // allocationScore total every other display in this file uses, society
@@ -988,7 +986,7 @@ function AssignModal({ committee, unassigned, preSelectedSlot, preSelectedSeat, 
   const scored = unassigned.map(app => ({
     app,
     score: selectedSlot
-      ? allocationScore(app, committee, selectedSlot, filled, committee.total_slots, byCountry, spread).total
+      ? allocationScore(app, committee, selectedSlot, byCountry, spread).total
       : scorePrefAndExp(app, committee, null).score,
   }));
   scored.sort((a, b) => b.score - a.score);
@@ -1089,7 +1087,7 @@ function AssignModal({ committee, unassigned, preSelectedSlot, preSelectedSeat, 
 
   const appScore = selectedApp
     ? (selectedSlot
-        ? allocationScore(selectedApp, committee, selectedSlot, filled, committee.total_slots, byCountry, spread).total
+        ? allocationScore(selectedApp, committee, selectedSlot, byCountry, spread).total
         : scorePrefAndExp(selectedApp, committee, null).score)
     : null;
   const appPrefs = selectedApp
@@ -2684,7 +2682,10 @@ function mergeLocalMutations(
 // "Open in Assignment") and ?mode=independents (no link points at it).
 /** localStorage: '1' keeps this browser on the classic board, '0' on the seat
  *  board. No value = the default (CLASSIC_BY_DEFAULT, SeatBoardIntro.tsx). */
-const CLASSIC_VIEW_KEY = 'gavelling-assignment-classic';
+// Renamed 22 Oct 2026 (was 'gavelling-assignment-classic') so every browser,
+// including ones that tried the seat board while it was being built, starts
+// on the classic board with the introduction card.
+const CLASSIC_VIEW_KEY = 'gavelling-assignment-view-v2';
 
 export default function AssignmentPage() {
   const { conference, refreshConferenceQuiet } = useManage();
@@ -3860,7 +3861,7 @@ export default function AssignmentPage() {
         if (!app || !committee || !slot) return;
         const byCountry = groupAllocationsByCountry(committee.conference_allocations);
         if (isSlotFull(slot, byCountry)) { openDropModal(committee.id, app.id); return; }
-        const scored = allocationScore(app, committee, slot, distinctCountryFilled(committee.conference_allocations), committee.total_slots, byCountry, spread);
+        const scored = allocationScore(app, committee, slot, byCountry, spread);
         setSelectedAppId(null);
         requestQuickAssign({ app, committee, slot, score: scored.total, reasons: scored.reasons });
       }
