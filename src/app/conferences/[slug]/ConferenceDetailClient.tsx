@@ -1987,7 +1987,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
               {/* Partners ride the logo's rim. Without a logo a visitor still
                   gets the monogram disc when there are partners to hang on it. */}
               {logoSrc || (orbitPartners.length > 0 && !isOrganizerViewer) ? (
-                <PartnerOrbit partners={orbitPartners} size={150} dot={40} maxSlots={9} className="hidden sm:block flex-shrink-0">
+                <PartnerOrbit partners={orbitPartners} size={150} dot={30} maxSlots={9} className="hidden sm:block flex-shrink-0">
                   <LogoDisc
                     src={logoSrc}
                     alt={conference.acronym}
@@ -2029,7 +2029,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                 {/* Phones hide the big logo; with partners a small one sits on
                     its own row above the title, partners on its rim. */}
                 {orbitPartners.length > 0 && (
-                  <PartnerOrbit partners={orbitPartners} size={60} dot={24} maxSlots={6} className="sm:hidden" style={{ marginBottom: 18 }}>
+                  <PartnerOrbit partners={orbitPartners} size={60} dot={18} maxSlots={6} className="sm:hidden" style={{ marginBottom: 18 }}>
                     <LogoDisc src={logoSrc} alt={conference.acronym} size={60} fallbackText={conference.acronym.slice(0, 3)} style={{ boxShadow: '0 8px 18px rgba(0,0,0,0.4)' }} />
                   </PartnerOrbit>
                 )}
