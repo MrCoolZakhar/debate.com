@@ -773,7 +773,6 @@ export function scoreParts(sug: SugLike): ScorePart[] {
  *  the bold total as a percentage in its traffic light. */
 export function ScoreBreakdown({ sug }: { sug: SugLike }) {
   const parts = scoreParts(sug);
-  const pct = fitPercent(sug.score);
   const light = fitLightColors(sug.score);
   const raw = Math.round(sug.score);
   return (
@@ -797,11 +796,11 @@ export function ScoreBreakdown({ sug }: { sug: SugLike }) {
         <span className="flex-1" style={{ fontSize: 13.5, fontWeight: 700, color: NEU.ink }}>Total</span>
         <FitBadge score={sug.score} size="md" />
       </div>
-      {raw !== pct && (
-        <span style={{ fontSize: 12, color: NEU.inkSoft, lineHeight: 1.35 }}>
-          {raw > pct ? `The parts add up to ${raw}, shown as the full 100%` : `The parts add up to ${raw}, shown as 0%`}
-        </span>
-      )}
+      <span style={{ fontSize: 12, color: NEU.inkSoft, lineHeight: 1.35 }}>
+        {raw > 100
+          ? `The parts add up to ${raw} points, shown as the full 100%`
+          : `${Math.max(0, raw)} points out of 100, shown from 50% to 100%`}
+      </span>
       <span style={{ fontSize: 12, color: light.fg, lineHeight: 1.35, fontWeight: 600 }}>{light.word}</span>
       {sug.swap && (
         <span style={{ fontSize: 12, color: NEU.inkSoft, lineHeight: 1.35 }}>
@@ -845,7 +844,7 @@ export function ScoringHint() {
         <div className="flex flex-col" style={{ gap: 8 }}>
           <span style={{ fontSize: 14, fontWeight: 700, color: NEU.ink }}>How smart allocations are scored</span>
           <span style={{ fontSize: 12, color: NEU.inkSoft, lineHeight: 1.4, marginTop: -4 }}>
-            Out of 100. Their 1st choice committee with the country they asked for is already {PREF_POINTS[0] + COUNTRY_PICK_POINTS}, so a strong seat is green. <span style={{ color: FIT_LIGHT_COLORS.green.fg, fontWeight: 700 }}>80% and up</span> is a strong fit, <span style={{ color: FIT_LIGHT_COLORS.amber.fg, fontWeight: 700 }}>60 to 79%</span> fair, <span style={{ color: FIT_LIGHT_COLORS.red.fg, fontWeight: 700 }}>under 60%</span> weak
+            Points out of 100, shown from 50% (no points) to 100%. Their 1st choice committee with the country they asked for is already {PREF_POINTS[0] + COUNTRY_PICK_POINTS} points, so a strong seat is green. <span style={{ color: FIT_LIGHT_COLORS.green.fg, fontWeight: 700 }}>80% and up</span> is a strong fit, <span style={{ color: FIT_LIGHT_COLORS.amber.fg, fontWeight: 700 }}>60 to 79%</span> fair, <span style={{ color: FIT_LIGHT_COLORS.red.fg, fontWeight: 700 }}>under 60%</span> weak
           </span>
           {SCORE_RULES.map(r => (
             <div key={r.title} className="flex items-start gap-2.5">

@@ -13,8 +13,8 @@
 //           beneath; the gold score disc, "How this scores" on hover; the
 //           seat on an ivory well with a soft Assign; one row of reason
 //           badges), or one person opened in place with their level and where
-//           they are from, then two tabs: Best three allocations (the default)
-//           and Preferences;
+//           they are from and their preferences, then their best three
+//           allocations beneath (no tabs);
 //   RIGHT   the committees as fill rings; a click (or a person dropped on one)
 //           opens that committee's pop-up: the classic board's own pop-up
 //           (CommitteeDetailModal.tsx, owned by the page; owner, 22 Oct
@@ -609,8 +609,8 @@ function SmartAllocationCard({ sug, busy, locked, onOpenPerson, onAssign }: {
 // ── One person, opened in the middle ─────────────────────────────────────────
 // Compact, no dead space (owner, 21 Oct 2026): one card for who they are (the
 // back button in its top row, the flag, age, role and school on one line, the
-// large level beside), then ONE card with two tabs (owner, 22 Oct 2026):
-// "Preferences" and "Best three allocations", the second open by default.
+// large level beside) with their preferences beneath in the same card, then
+// the best three allocations in a card below (owner, 22 Oct 2026: no tabs).
 function PersonPanel({
   person, history, committees, bestThree, busyKey, locked, onAssign, onBack, onChooseAnother, phoneRings,
 }: {
@@ -634,11 +634,6 @@ function PersonPanel({
   const nat = nationalityOf(person);
   const city = person.societies?.city?.trim() || null;
   const role = person.role === 'head-delegate' || person.is_head_delegate ? 'Head Delegate' : 'Delegate';
-  const [tab, setTab] = useState<'prefs' | 'best'>('best');
-  const tabs = [
-    { key: 'prefs' as const, label: 'Preferences' },
-    { key: 'best' as const, label: 'Best three allocations' },
-  ];
 
   return (
     <div className="flex flex-col gap-2">
@@ -684,75 +679,54 @@ function PersonPanel({
             ))}
           </div>
         )}
+        <div className="flex flex-col" style={{ gap: 4, paddingTop: 6, borderTop: '1px solid rgba(27,56,40,0.08)' }}>
+          <span style={{ fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 600, color: NEU.inkSoft, padding: '0 2px' }}>Preferences</span>
+            <div aria-label="Preferences" className="flex flex-col" style={{ gap: 4, padding: '0 2px' }}>
+              {prefs.length === 0 ? (
+                <p style={{ margin: 0, fontSize: 13, color: NEU.inkSoft }}>No preference given</p>
+              ) : (
+              <div className="grid gap-x-6 gap-y-1 sm:grid-flow-col sm:auto-cols-fr sm:[grid-template-rows:repeat(4,auto)]">
+              {prefs.map((p, i) => {
+                const c = byId.get(p.conference_committee_id);
+                const slot = c?.committee_country_slots.find(s => s.country_code === p.country_code);
+                const held = c ? c.conference_allocations.filter(a => a.country_code === p.country_code).length : 0;
+                const taken = !!slot && held >= slot.delegation_size;
+                const big = c ? committeeLabels(c).big : committeeShortName(p.conference_committees);
+                return (
+                  <div
+                    key={`${p.preference_order}-${p.conference_committee_id}-${p.country_code}`}
+                    className="flex items-center gap-2 min-w-0"
+                    style={{ minHeight: 26, opacity: taken ? 0.6 : 1 }}
+                    title={`${p.conference_committees?.name ?? c?.name ?? big}, ${p.country_name}${taken ? ', taken' : ''}`}
+                  >
+                    <RankNumber order={i + 1} size={20} />
+                    <span className="inline-flex items-center gap-1.5 flex-shrink-0" style={{ minWidth: 76 }}>
+                      {c && <CommitteeLogo committee={c} size={18} alt={big} />}
+                      <span style={{ fontSize: 13, fontWeight: 600, color: NEU.ink }}>{big}</span>
+                    </span>
+                    <span className="inline-flex items-center gap-1.5 min-w-0 flex-1">
+                      <CountryFlag code={p.country_code} w={18} h={18} alt={p.country_name} logoUrl={c ? committeeSeatLogo(c, p.country_code) : null} />
+                      <CountryName name={p.country_name} code={p.country_code} style={{ fontSize: 13, color: NEU.ink, whiteSpace: 'normal', overflowWrap: 'anywhere', lineHeight: 1.15 }} />
+                    </span>
+                    {taken && <span className="flex-shrink-0" style={{ fontSize: 12, color: NEU.inkSoft }}>taken</span>}
+                  </div>
+                );
+              })}
+              </div>
+              )}
+            </div>
+        </div>
       </div>
 
-      {/* Preferences | Best three allocations, one card (owner, 22 Oct 2026) */}
+      {/* Best three allocations, under the person (owner, 22 Oct 2026: no tabs) */}
       <div className="flex flex-col" style={{ ...card, padding: '10px 12px 12px', gap: 8 }}>
-        <div className="flex items-center justify-between gap-3 flex-wrap">
-          <div role="tablist" aria-label={`${firstName(name)}: preferences or best allocations`} className="inline-flex" style={{ gap: 2, padding: 3, borderRadius: 12, background: '#F1ECE1' }}>
-            {tabs.map(t => (
-              <button
-                key={t.key}
-                type="button"
-                role="tab"
-                aria-selected={tab === t.key}
-                onClick={() => setTab(t.key)}
-                className="focus:outline-none focus-visible:ring-2"
-                style={{
-                  height: 32, padding: '0 14px', borderRadius: 9, border: 'none', cursor: 'pointer', whiteSpace: 'nowrap',
-                  background: tab === t.key ? '#FFFFFF' : 'transparent',
-                  boxShadow: tab === t.key ? '0 1px 3px rgba(27,56,40,0.12)' : 'none',
-                  fontFamily: OUTFIT, fontSize: 13.5, fontWeight: tab === t.key ? 600 : 500, color: tab === t.key ? NEU.ink : NEU.inkSoft,
-                  transition: 'background-color 140ms cubic-bezier(0.22,1,0.36,1)',
-                }}
-              >
-                {t.label}
-              </button>
-            ))}
-          </div>
-          {tab === 'best' && (
-            <span className="max-lg:hidden">
-              <SoftButton onClick={onChooseAnother} size="sm" title="For any other allocation, click a committee on the right">Choose another allocation</SoftButton>
-            </span>
-          )}
+        <div className="flex items-center justify-between gap-3 flex-wrap" style={{ padding: '0 2px' }}>
+          <span style={{ fontFamily: OUTFIT, fontSize: 15, fontWeight: 700, color: NEU.ink }}>Best Three Allocations</span>
+          <span className="max-lg:hidden">
+            <SoftButton onClick={onChooseAnother} size="sm" title="For any other allocation, click a committee on the right">Choose another allocation</SoftButton>
+          </span>
         </div>
-        {tab === 'prefs' ? (
-          <div role="tabpanel" aria-label="Preferences" className="flex flex-col" style={{ gap: 4, padding: '0 2px' }}>
-            {prefs.length === 0 ? (
-              <p style={{ margin: 0, fontSize: 13, color: NEU.inkSoft }}>No preference given</p>
-            ) : (
-            <div className="grid gap-x-6 gap-y-1 sm:grid-flow-col sm:auto-cols-fr sm:[grid-template-rows:repeat(4,auto)]">
-            {prefs.map((p, i) => {
-              const c = byId.get(p.conference_committee_id);
-              const slot = c?.committee_country_slots.find(s => s.country_code === p.country_code);
-              const held = c ? c.conference_allocations.filter(a => a.country_code === p.country_code).length : 0;
-              const taken = !!slot && held >= slot.delegation_size;
-              const big = c ? committeeLabels(c).big : committeeShortName(p.conference_committees);
-              return (
-                <div
-                  key={`${p.preference_order}-${p.conference_committee_id}-${p.country_code}`}
-                  className="flex items-center gap-2 min-w-0"
-                  style={{ minHeight: 26, opacity: taken ? 0.6 : 1 }}
-                  title={`${p.conference_committees?.name ?? c?.name ?? big}, ${p.country_name}${taken ? ', taken' : ''}`}
-                >
-                  <RankNumber order={i + 1} size={20} />
-                  <span className="inline-flex items-center gap-1.5 flex-shrink-0" style={{ minWidth: 76 }}>
-                    {c && <CommitteeLogo committee={c} size={18} alt={big} />}
-                    <span style={{ fontSize: 13, fontWeight: 600, color: NEU.ink }}>{big}</span>
-                  </span>
-                  <span className="inline-flex items-center gap-1.5 min-w-0 flex-1">
-                    <CountryFlag code={p.country_code} w={18} h={18} alt={p.country_name} logoUrl={c ? committeeSeatLogo(c, p.country_code) : null} />
-                    <CountryName name={p.country_name} code={p.country_code} style={{ fontSize: 13, color: NEU.ink, whiteSpace: 'normal', overflowWrap: 'anywhere', lineHeight: 1.15 }} />
-                  </span>
-                  {taken && <span className="flex-shrink-0" style={{ fontSize: 12, color: NEU.inkSoft }}>taken</span>}
-                </div>
-              );
-            })}
-            </div>
-            )}
-          </div>
-        ) : (
-          <div role="tabpanel" aria-label="Best three allocations" className="flex flex-col" style={{ gap: 6 }}>
+          <div aria-label="Best three allocations" className="flex flex-col" style={{ gap: 6 }}>
             {bestThree.length === 0 && <p style={{ margin: 0, fontSize: 13, color: NEU.inkSoft, paddingLeft: 2 }}>No open allocation fits {firstName(name)} right now</p>}
             {bestThree.map(sug => {
               const key = `${sug.app.id}-${sug.slot.id}`;
@@ -782,7 +756,6 @@ function PersonPanel({
               {phoneRings}
             </div>
           </div>
-        )}
       </div>
     </div>
   );

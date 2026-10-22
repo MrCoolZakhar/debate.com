@@ -331,17 +331,24 @@ export const ROOM_FILL_MAX = 12;
  *  + an empty room + a high-importance seat. 100 by construction (see Scoring). */
 export const FIT_MAX = PREF_POINTS[0] + COUNTRY_PICK_POINTS + EXPERIENCE_MATCH_BONUS + ROOM_FILL_MAX + IMPORTANCE_NEED_WEIGHT.high;
 
-/** What a person reads for a score: a whole percentage, 0 to 100. The parts
- *  are already points out of 100 (FIT_MAX is 100), so this only rounds and
- *  caps: a bonus (pair, member pick) can take the raw total past 100 and reads
- *  as 100%; penalties below 0 read as 0%. */
+/** The lowest percentage anyone reads (owner, 22 Oct 2026: "the lowest
+ *  somebody can get is 50%", so a weak seat never looks daunting). */
+export const FIT_FLOOR = 50;
+
+/** What a person reads for a score: a whole percentage, 50 to 100. The raw
+ *  points (out of FIT_MAX = 100, capped at 0..100: a bonus can take the raw
+ *  total past 100, a penalty below 0) are mapped onto 50..100, so 0 points
+ *  reads 50%, 50 points 75%, 100 points 100%. Ranking still uses the raw
+ *  total; the hover breakdown lists the raw points. */
 export function fitPercent(score: number): number {
-  if (!Number.isFinite(score)) return 0;
-  return Math.max(0, Math.min(100, Math.round((score / FIT_MAX) * 100)));
+  if (!Number.isFinite(score)) return FIT_FLOOR;
+  const raw = Math.max(0, Math.min(100, (score / FIT_MAX) * 100));
+  return Math.round(FIT_FLOOR + (raw * (100 - FIT_FLOOR)) / 100);
 }
 
-/** The score's traffic light (owner, 22 Oct 2026): 80 to 100 green, 60 to 79
- *  amber, under 60 red. */
+/** The score's traffic light (owner, 22 Oct 2026) on the shown percentage:
+ *  80 to 100 green, 60 to 79 amber, under 60 red (so red means fewer than 20
+ *  raw points out of 100). */
 export type FitLight = 'green' | 'amber' | 'red';
 export function fitLight(score: number): FitLight {
   const p = fitPercent(score);
