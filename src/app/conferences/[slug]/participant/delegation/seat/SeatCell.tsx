@@ -73,17 +73,18 @@ export default function SeatCell({
 
   return (
     <div className="flex items-center gap-2 min-w-0" style={{ opacity: dragging ? 0.45 : 1 }}>
-      {draggable && (
-        <span
-          aria-hidden
-          title="Drag onto another person to switch allocations"
-          onPointerDown={(e) => onDragStart(e, true)}
-          className="inline-flex items-center justify-center flex-shrink-0"
-          style={{ width: 20, height: 44, marginLeft: -6, color: 'color-mix(in srgb, var(--gv-main) 35%, transparent)', cursor: 'grab', touchAction: 'none' }}
-        >
-          <GripVertical size={16} strokeWidth={STROKE} aria-hidden />
-        </span>
-      )}
+      {/* The grip's place is ALWAYS kept (owner, 22 Oct 2026): while a row is
+          busy, in swap mode or not movable the grip is only hidden, so the
+          flag never jumps sideways when an allocation changes. */}
+      <span
+        aria-hidden
+        title={draggable ? 'Drag onto another person to switch allocations' : undefined}
+        onPointerDown={draggable ? (e) => onDragStart(e, true) : undefined}
+        className="inline-flex items-center justify-center flex-shrink-0"
+        style={{ width: 20, height: 44, marginLeft: -6, color: 'color-mix(in srgb, var(--gv-main) 35%, transparent)', cursor: draggable ? 'grab' : 'default', touchAction: draggable ? 'none' : undefined, visibility: draggable ? 'visible' : 'hidden' }}
+      >
+        <GripVertical size={16} strokeWidth={STROKE} aria-hidden />
+      </span>
       <div
         onPointerDown={draggable ? (e) => onDragStart(e, false) : undefined}
         className="flex items-center gap-3 min-w-0 flex-1"

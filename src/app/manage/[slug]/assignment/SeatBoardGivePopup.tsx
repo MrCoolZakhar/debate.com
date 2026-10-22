@@ -5,7 +5,7 @@
 // committee ring while a delegation is open, or by a delegation dropped on a
 // ring. It IS the classic board's committee pop-up (CommitteeDetailModal.tsx,
 // owner, 22 Oct 2026: "similar to BEFORE in a committee"): the same card,
-// header, seats-filled bar and rows by importance, in its give mode:
+// header, allocations-filled bar and rows by importance, in its give mode:
 //   * an open seat this delegation can take reads "Give": one tap gives the
 //     country (every seat of it still open to them, a double is both seats)
 //     and the pop-up STAYS OPEN for the next tap, with a running tally and

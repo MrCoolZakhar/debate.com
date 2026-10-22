@@ -14,8 +14,8 @@
 // plain row per person on the card, no column headers: the avatar (48px), the
 // name bold with a crown for a head delegate, and under it ONE line "Role ·
 // Status · round flag + committee acronym + country". On the right the payment
-// word in its colour, a person-minus button (Remove from delegation, asked in
-// place) and the ··· menu. The allocation on that line is what you drag.
+// word in its colour and the ··· menu (owner, 22 Oct 2026: no person-minus
+// button on the row; Remove from delegation is asked in place inside the menu). The allocation on that line is what you drag.
 // Seats move by dragging, like the leader card (seat/useSeatDrag), each move asked in place
 // (seat/InPlaceConfirm) and shown at once, put back if the write is refused,
 // then a quiet re-read (never a loader):
@@ -53,7 +53,7 @@
 // member/MemberDetailsPopup content) as a second step in this pop-up.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Armchair, Crown, Plus, UserMinus } from 'lucide-react';
+import { Armchair, Crown, Plus } from 'lucide-react';
 import { CircleFlag } from '@/components/CircleFlag';
 import { friendlyError } from '@/lib/friendlyError';
 import { notifyErr, notifyOk } from '@/lib/appNotify';
@@ -72,7 +72,7 @@ import {
   organiserMoveSeat, organiserPlaceInSeat, organiserSwitchSeats, organiserTakeOutOfSeat,
   type PersonSeatResult, type SeatPerson,
 } from './seatWrites';
-import { DELEGATIONS_MONEY_DB, ORGANISER_ADD_TO_DELEGATION_DB, WAITING_FOR_CHRISTIAN, organiserSetMemberRole } from './v2';
+import { ORGANISER_ADD_TO_DELEGATION_DB, WAITING_FOR_CHRISTIAN, organiserSetMemberRole } from './v2';
 import {
   BTN_CLASS, CommitteeDisc, DANGER, FONT, FOREST, HAIRLINE, INK, INK_SOFT, OK_GREEN, OWE, PopupSection, ROW_LINE, RoundAvatar, STROKE,
   smallSecondaryBtn,
@@ -436,22 +436,6 @@ export default function PeopleTab<M extends DelegationMemberLite>({ conferenceId
     return r;
   }
 
-  /** The person-minus button: asked in place, then delegation_remove_member. */
-  function askRemove(m: M, anchor: HTMLElement) {
-    const name = memberName(m);
-    setAsk({
-      anchor, align: 'end', title: `Remove ${name} from ${row.name}?`,
-      line: 'Their allocation goes back to the delegation as open. Money stays with whoever paid it.',
-      yes: 'Remove', danger: true,
-      onYes: () => {
-        setAsk(null);
-        void remove(m)
-          .then(r => { if (!r.ok) notifyErr(r.error, 'applications'); })
-          .catch(e => notifyErr(friendlyError(e, 'They could not be removed. Try again.'), 'applications'));
-      },
-    });
-  }
-
   function openAddStep() {
     if (!ORGANISER_ADD_TO_DELEGATION_DB) return;
     onStep({
@@ -706,23 +690,9 @@ export default function PeopleTab<M extends DelegationMemberLite>({ conferenceId
                 </div>
               </div>
 
-              {/* Where their payment stands, then remove and the ··· menu. */}
+              {/* Where their payment stands, then the ··· menu (Remove from delegation lives there). */}
               <div className="flex items-center justify-end" style={{ gap: 6, marginLeft: 'auto' }}>
                 <span className="text-right" style={{ fontFamily: FONT, fontSize: 14, fontWeight: 600, color: pay.color, marginRight: 6 }}>{pay.text}</span>
-                <button
-                  type="button"
-                  aria-label={`Remove ${name} from ${row.name}`}
-                  title={DELEGATIONS_MONEY_DB ? `Remove ${name} from ${row.name}` : WAITING_FOR_CHRISTIAN}
-                  aria-disabled={!DELEGATIONS_MONEY_DB || rowBusy ? true : undefined}
-                  onClick={e => {
-                    if (!DELEGATIONS_MONEY_DB || rowBusy) return;
-                    askRemove(m, e.currentTarget);
-                  }}
-                  className={`${BTN_CLASS} inline-flex items-center justify-center flex-shrink-0 hover:bg-[#F1ECE1]`}
-                  style={{ width: 36, height: 36, borderRadius: 10, border: 'none', background: 'transparent', color: INK_SOFT, cursor: DELEGATIONS_MONEY_DB && !rowBusy ? 'pointer' : 'default', opacity: DELEGATIONS_MONEY_DB && !rowBusy ? 1 : 0.45 }}
-                >
-                  <UserMinus size={18} strokeWidth={STROKE} aria-hidden />
-                </button>
                 <OrganiserMemberMenu
                   name={name}
                   role={role}

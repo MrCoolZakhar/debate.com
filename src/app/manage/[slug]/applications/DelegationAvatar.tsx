@@ -15,6 +15,7 @@ import { useMemo, useState } from 'react';
 import { Crown } from 'lucide-react';
 import { FlagImg } from '@/components/FlagImg';
 import { getCountryByName, getCountryByCode } from '@/lib/countries';
+import { delegationExpected } from '@/lib/delegationExpected';
 
 const OUTFIT = "var(--font-brand), sans-serif";
 const FOREST = '#1B3828';
@@ -185,8 +186,8 @@ export interface DelegationSummary {
   logoUrl: string | null;
   city: string | null;
   countryCode: string | null;
-  /** The expected size: every live delegation pledge's delegate tickets added
-   *  up (`spots_pledged`), or null when nobody gave one. */
+  /** The expected size (delegationExpected): the bigger of the live pledges'
+   *  delegate tickets and the delegates who joined, or null when both are 0. */
   expected: number | null;
 }
 
@@ -232,6 +233,12 @@ export function useDelegationSummaries(apps: SummaryApp[]): Map<string, Delegati
       const nameOf = (a: SummaryApp) => a.profiles?.display_name || a.invited_name || a.invited_email || 'Unknown';
       const soc = g.find(a => a.societies?.name)?.societies ?? null;
       const pledged = g.reduce((n, a) => n + (a.pledge_type === 'delegation' ? Math.max(0, a.spots_pledged ?? 0) : 0), 0);
+      // Expected size (src/lib/delegationExpected.ts, owner 22 Oct 2026): the
+      // bigger of the pledged delegate tickets and the delegates and head
+      // delegates who joined. Paid spots need the ledger, which this page-wide
+      // pass does not read; the Delegations tab and pop-up add them.
+      const joined = g.filter(a => a.is_head_delegate || a.role === 'delegate' || a.role === 'head-delegate').length;
+      const expected = delegationExpected({ pledged, joinedDelegates: joined });
       out.set(id, {
         name: soc?.name ?? 'Delegation',
         logoUrl: soc?.logo_url ?? null,
@@ -242,7 +249,7 @@ export function useDelegationSummaries(apps: SummaryApp[]): Map<string, Delegati
         lead: first ? `${nameOf(first)}${leaders.length > 1 ? ` and ${leaders.length - 1} more` : ''}` : null,
         leadRole: first ? (heads.length ? 'Head Delegate' : 'Faculty Advisor') : null,
         leadAppIds: leaders.map(a => a.id),
-        expected: pledged > 0 ? pledged : null,
+        expected: expected > 0 ? expected : null,
       });
     }
     return out;

@@ -27,6 +27,13 @@
 //     applied  = accepted + pending chair invites + chair applications still
 //                waiting for a decision, again one per account. Declined and
 //                revoked invites are not counted.
+//     An accepted or pending invite whose account's chair application was
+//     later rejected or withdrawn (and who has no live chair application) is
+//     NOT counted either: that person is not coming (22 Oct 2026; 7 such
+//     invites were live in production and still counted as chairs).
+//
+// Statuses that count as coming: submitted, accepted, assigned, checked-in
+// (the whole applications.status CHECK minus rejected and withdrawn).
 //
 // Roles are disjoint (a person holds one role row), so the per-role counts can
 // honestly share one ring.
@@ -75,6 +82,15 @@ export function applicationsByRole(apps: InviteAppRow[], chairInvites: ChairInvi
   let chairsInAnon = 0;
   let chairsWaitingAnon = 0;
 
+  // Accounts whose chair application was rejected or withdrawn: their invite
+  // row stays 'accepted', so without this they would still read as chairs.
+  const chairsLive = new Set<string>();
+  const chairsClosed = new Set<string>();
+  for (const a of apps) {
+    if (a.role !== 'chair' || !a.user_id) continue;
+    (CLOSED.has(a.status) ? chairsClosed : chairsLive).add(a.user_id);
+  }
+
   for (const a of apps) {
     if (CLOSED.has(a.status)) continue;
     if (a.submitted_at === null) continue;
@@ -91,6 +107,7 @@ export function applicationsByRole(apps: InviteAppRow[], chairInvites: ChairInvi
     if (placed) tally[key].accepted += 1;
   }
   for (const inv of chairInvites) {
+    if (inv.invited_user_id && chairsClosed.has(inv.invited_user_id) && !chairsLive.has(inv.invited_user_id)) continue;
     if (inv.status === 'accepted') {
       if (inv.invited_user_id) chairsIn.add(inv.invited_user_id);
       else chairsInAnon += 1;

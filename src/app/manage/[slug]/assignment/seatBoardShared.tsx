@@ -17,14 +17,15 @@ import { NEU } from '@/components/neu';
 import Portal from '@/components/Portal';
 import { getCountryByName } from '@/lib/countries';
 import {
-  CONCENTRATION_PENALTY, EXPERIENCE_GAP_STEP, EXPERIENCE_MATCH_BONUS, IMPORTANCE_NEED_WEIGHT, MEMBER_PICK_BONUS,
-  NEEDS_DELEGATES_REASON, PAIR_BONUS, ROOM_FILL_MAX, SWAP_REASON, groupAllocationsByCountry, roomFill, type ImportanceTier,
+  CONCENTRATION_PENALTY, COUNTRY_PICK_POINTS, EXPERIENCE_GAP_STEP, EXPERIENCE_MATCH_BONUS, IMPORTANCE_NEED_WEIGHT, MEMBER_PICK_BONUS,
+  NEEDS_DELEGATES_REASON, PAIR_BONUS, PREF_POINTS, ROOM_FILL_MAX, SWAP_REASON, fitPercent, groupAllocationsByCountry, roomFill,
+  type ImportanceTier,
 } from '@/lib/assignmentFit';
 import { FitTip, explainReason, missingSignals } from '@/app/manage/[slug]/assignment/fitReasons';
 import { CountryName } from '@/app/manage/[slug]/assignment/displayNames';
 import {
   type AcceptedApp, type AllocationRow, type CommitteeData, type SlotRow, type Suggestion,
-  CommitteeLogo, CountryFlag, PersonAvatar, ageOf, committeeLabels, reasonContext, slotLogoUrl, OUTFIT,
+  CommitteeLogo, CountryFlag, PersonAvatar, ageOf, committeeLabels, fitLightColors, fitPctLabel, reasonContext, slotLogoUrl, OUTFIT,
 } from '@/app/manage/[slug]/assignment/assignmentKit';
 
 export const CARD_SHADOW = '0 1px 2px rgba(27,56,40,0.06), 0 8px 24px rgba(27,56,40,0.08)';
@@ -327,7 +328,7 @@ export function CommitteeRing({ committee, size = 52, marker, markers, lit, halo
 export function RingTally({ committee }: { committee: CommitteeData }) {
   const { total, filled } = seatCounts(committee);
   return (
-    <span title={`${filled} of ${total} seats given`} style={{ fontSize: 12, color: NEU.inkSoft, fontVariantNumeric: 'tabular-nums', lineHeight: 1.1 }}>
+    <span title={`${filled} of ${total} allocations given`} style={{ fontSize: 12, color: NEU.inkSoft, fontVariantNumeric: 'tabular-nums', lineHeight: 1.1 }}>
       <span style={{ fontWeight: 700, color: NEU.ink }}>{filled}</span>/{total}
     </span>
   );
@@ -431,14 +432,13 @@ const TONE = {
   ink: '#3D352C',
 };
 
-// Points for reasons whose key carries none: the engine's own constants where
-// it exports them, and scorePrefAndExp's preference values (50 / 30 / 15, the
-// exact country +25), mirrored here (SCORE_RULES below lists them all).
+// Points for reasons whose key carries none: the engine's own constants
+// (out of 100, see Scoring in src/lib/assignmentFit.ts; SCORE_RULES below lists them all).
 const BADGES: Record<string, BadgeSpec> = {
-  '1ST CHOICE': { label: '1st choice', Icon: Star, tone: '#1B3828', filled: true, strong: true, points: 50 },
-  '2ND CHOICE': { label: '2nd choice', Icon: Star, tone: TONE.silver, filled: true, points: 30 },
-  '3RD CHOICE': { label: '3rd choice', Icon: StarHalf, tone: TONE.bronze, points: 15 },
-  'COUNTRY PICK': { label: 'Country', Icon: Flag, tone: TONE.gold, points: 25 },
+  '1ST CHOICE': { label: '1st choice', Icon: Star, tone: '#1B3828', filled: true, strong: true, points: PREF_POINTS[0] },
+  '2ND CHOICE': { label: '2nd choice', Icon: Star, tone: TONE.silver, filled: true, points: PREF_POINTS[1] },
+  '3RD CHOICE': { label: '3rd choice', Icon: StarHalf, tone: TONE.bronze, points: PREF_POINTS[2] },
+  'COUNTRY PICK': { label: 'Country', Icon: Flag, tone: TONE.gold, points: COUNTRY_PICK_POINTS },
   'EXP MATCH': { label: 'Level fits', Icon: GraduationCap, tone: TONE.green },
   'EXP TOO LOW': { label: 'Low experience', Icon: TrendingDown, tone: TONE.red },
   'EXP TOO HIGH': { label: 'High experience', Icon: TrendingUp, tone: TONE.amber },
@@ -566,7 +566,7 @@ export function FitPills({ sug, max = 4, size = 'md', style }: {
   if (sug.swap) {
     items.push({
       key: SWAP_REASON, reason: SWAP_REASON,
-      why: `Swapped with ${sug.swap.partnerName}: a net gain of +${sug.swap.netGain} across both delegates. Their own best open seat scored ${sug.swap.ownBestScore}.`,
+      why: `Swapped with ${sug.swap.partnerName}: a net gain of +${sug.swap.netGain} across both delegates. Their own best open seat scored ${fitPctLabel(sug.swap.ownBestScore)}.`,
     });
   }
   // A swap badge keeps its place inside the cap.
@@ -704,9 +704,9 @@ export function HoverCard({ children, card, width = 300, label, align = 'end' }:
 }
 
 // ── How a suggestion scores ──────────────────────────────────────────────────
-// Every part of the fit score with its points. The reasons carry the
+// Every part of the fit score with its points out of 100. The reasons carry the
 // preference, country, experience, importance and delegation parts; a low
-// importance seat (+4) adds points without a reason; what is left is the room
+// importance seat (+3) adds points without a reason; what is left is the room
 // fill (up to +ROOM_FILL_MAX, from the share of the committee's seats filled:
 // roomFill in the engine), printed with how full the room is, so the lines
 // always add up to the score the engine ranked by.
@@ -730,12 +730,19 @@ export function scoreParts(sug: SugLike): ScorePart[] {
   return parts;
 }
 
-/** The "How this scores" list: one line per part, then the bold total. */
+/** The "How this scores" list: one line per part (points out of 100), then
+ *  the bold total as a percentage in its traffic light. */
 export function ScoreBreakdown({ sug }: { sug: SugLike }) {
   const parts = scoreParts(sug);
+  const pct = fitPercent(sug.score);
+  const light = fitLightColors(sug.score);
+  const raw = Math.round(sug.score);
   return (
     <div className="flex flex-col" style={{ gap: 4, fontFamily: OUTFIT }}>
-      <span style={{ fontSize: 13.5, fontWeight: 700, color: NEU.ink, marginBottom: 2 }}>How this scores</span>
+      <span className="flex items-baseline justify-between gap-2" style={{ marginBottom: 2 }}>
+        <span style={{ fontSize: 13.5, fontWeight: 700, color: NEU.ink }}>How this scores</span>
+        <span style={{ fontSize: 11.5, color: NEU.inkSoft }}>Points out of 100</span>
+      </span>
       {parts.length === 0 && <span style={{ fontSize: 12.5, color: NEU.inkSoft }}>No part of the score applies to this seat</span>}
       {parts.map(p => (
         <div key={p.key} className="flex items-center gap-2" style={{ minHeight: 24 }}>
@@ -749,11 +756,17 @@ export function ScoreBreakdown({ sug }: { sug: SugLike }) {
       ))}
       <div className="flex items-center gap-2" style={{ borderTop: `1px solid ${HAIRLINE}`, paddingTop: 6, marginTop: 2 }}>
         <span className="flex-1" style={{ fontSize: 13.5, fontWeight: 700, color: NEU.ink }}>Total</span>
-        <span style={{ fontSize: 15, fontWeight: 700, color: NEU.ink, fontVariantNumeric: 'tabular-nums' }}>{sug.score}</span>
+        <FitBadge score={sug.score} size="md" />
       </div>
+      {raw !== pct && (
+        <span style={{ fontSize: 12, color: NEU.inkSoft, lineHeight: 1.35 }}>
+          {raw > pct ? `The parts add up to ${raw}, shown as the full 100%` : `The parts add up to ${raw}, shown as 0%`}
+        </span>
+      )}
+      <span style={{ fontSize: 12, color: light.fg, lineHeight: 1.35, fontWeight: 600 }}>{light.word}</span>
       {sug.swap && (
         <span style={{ fontSize: 12, color: NEU.inkSoft, lineHeight: 1.35 }}>
-          Swapped with {sug.swap.partnerName}: {fmtPoints(sug.swap.netGain)} across both. Their own best open seat scored {sug.swap.ownBestScore}
+          Swapped with {sug.swap.partnerName}: {fmtPoints(sug.swap.netGain)} across both. Their own best open seat scored {fitPctLabel(sug.swap.ownBestScore)}
         </span>
       )}
     </div>
@@ -763,7 +776,7 @@ export function ScoreBreakdown({ sug }: { sug: SugLike }) {
 /** The score disc with its breakdown on hover only. */
 export function ScoreHover({ sug, size = 34, title }: { sug: SugLike; size?: number; title?: string }) {
   return (
-    <HoverCard label={title ?? `Fit score ${sug.score}. Hover for how it scores`} card={<ScoreBreakdown sug={sug} />} width={280}>
+    <HoverCard label={title ?? `Fit ${fitPctLabel(sug.score)}. Hover for how it scores`} card={<ScoreBreakdown sug={sug} />} width={280}>
       <ScoreDisc score={sug.score} size={size} title="" />
     </HoverCard>
   );
@@ -774,8 +787,8 @@ export function ScoreHover({ sug, size = 34, title }: { sug: SugLike; size?: num
 // explainer brought back (owner, 21 Oct 2026): every factor and its weight, the
 // engine's own constants where src/lib/assignmentFit.ts exports them.
 const SCORE_RULES: { spec: BadgeLook; title: string; points: string; line: string }[] = [
-  { spec: BADGES['1ST CHOICE'], title: 'Committee choice', points: '+50 / +30 / +15', line: 'Their 1st, 2nd or 3rd choice committee' },
-  { spec: BADGES['COUNTRY PICK'], title: 'Exact country', points: '+25', line: 'The seat is the country they asked for' },
+  { spec: BADGES['1ST CHOICE'], title: 'Committee choice', points: `+${PREF_POINTS[0]} / +${PREF_POINTS[1]} / +${PREF_POINTS[2]}`, line: 'Their 1st, 2nd or 3rd choice committee' },
+  { spec: BADGES['COUNTRY PICK'], title: 'Exact country', points: `+${COUNTRY_PICK_POINTS}`, line: 'The seat is the country they asked for' },
   { spec: BADGES['EXP MATCH'], title: 'Experience fit', points: `+${EXPERIENCE_MATCH_BONUS} / 0 / −${EXPERIENCE_GAP_STEP} per level`, line: 'Their level against the committee difficulty, either way round' },
   { spec: BADGES['HIGH PRIORITY'], title: 'Seat importance', points: `+${IMPORTANCE_NEED_WEIGHT.high} / +${IMPORTANCE_NEED_WEIGHT.medium} / +${IMPORTANCE_NEED_WEIGHT.low}`, line: 'High, medium and low importance seats fill first' },
   { spec: ROOM_FILL, title: 'Room fill', points: `up to +${ROOM_FILL_MAX}`, line: `Emptier committees score higher: ${ROOM_FILL_MAX} x the share of seats still open (a room 25% full adds ${Math.round(ROOM_FILL_MAX * 0.75)})` },
@@ -792,6 +805,9 @@ export function ScoringHint() {
       card={(
         <div className="flex flex-col" style={{ gap: 8 }}>
           <span style={{ fontSize: 14, fontWeight: 700, color: NEU.ink }}>How smart allocations are scored</span>
+          <span style={{ fontSize: 12, color: NEU.inkSoft, lineHeight: 1.4, marginTop: -4 }}>
+            Out of 100. The best seat a person can get scores 100%. <span style={{ color: '#23633A', fontWeight: 600 }}>80% and up</span> is a strong fit, <span style={{ color: '#8F5A0A', fontWeight: 600 }}>60 to 79%</span> fair, <span style={{ color: '#A12A22', fontWeight: 600 }}>under 60%</span> weak
+          </span>
           {SCORE_RULES.map(r => (
             <div key={r.title} className="flex items-start gap-2.5">
               <span style={{ paddingTop: 1 }}><BadgeIcon spec={r.spec} size={20} /></span>
@@ -817,21 +833,64 @@ export function ScoringHint() {
   );
 }
 
-/** The gold score disc of a smart allocation. */
+/** The score disc of a smart allocation: the percentage in its traffic light
+ *  (80 to 100% green, 60 to 79% amber, under 60% red). Takes the raw score. */
 export function ScoreDisc({ score, size = 48, title }: { score: number; size?: number; title?: string }) {
+  const pct = fitPercent(score);
+  const c = fitLightColors(score);
   return (
     <span
-      title={title ?? 'Fit score'}
+      title={title ?? `Fit ${pct}%`}
       className="inline-flex items-center justify-center flex-shrink-0"
       style={{
         width: size, height: size, borderRadius: 999,
-        background: 'linear-gradient(160deg, #F7EAB8, #EED98A)',
-        boxShadow: 'inset 0 0 0 1px rgba(182,135,31,0.35), inset 0 1px 0 rgba(255,255,255,0.7), 0 4px 12px -4px rgba(182,135,31,0.55)',
-        color: '#1B3828', fontFamily: OUTFIT, fontSize: Math.round(size * 0.4), fontWeight: 700,
-        fontVariantNumeric: 'tabular-nums', lineHeight: 1,
+        background: `linear-gradient(160deg, #FFFFFF, ${c.bg} 70%)`,
+        boxShadow: `inset 0 0 0 1.5px ${c.ring}, inset 0 1px 0 rgba(255,255,255,0.8), 0 4px 12px -5px ${c.ring}`,
+        color: c.fg, fontFamily: OUTFIT, fontWeight: 700,
+        fontVariantNumeric: 'tabular-nums', lineHeight: 1, letterSpacing: '-0.02em',
       }}
     >
-      {score}
+      <span style={{ fontSize: Math.round(size * (pct >= 100 ? 0.31 : 0.36)) }}>{pct}</span>
+      <span style={{ fontSize: Math.round(size * 0.2), fontWeight: 600, marginLeft: 1, marginTop: Math.round(size * 0.06) }}>%</span>
+    </span>
+  );
+}
+
+/** The score as a small pill in its traffic light, for lists ("87%"). */
+export function FitBadge({ score, size = 'sm', title }: { score: number; size?: 'sm' | 'md'; title?: string }) {
+  const c = fitLightColors(score);
+  const md = size === 'md';
+  return (
+    <span
+      title={title ?? `Fit ${fitPctLabel(score)}`}
+      className="inline-flex items-center justify-center flex-shrink-0"
+      style={{
+        minWidth: md ? 52 : 44, height: md ? 26 : 22, padding: '0 8px', borderRadius: 999, boxSizing: 'border-box',
+        background: c.bg, color: c.fg, boxShadow: `inset 0 0 0 1px ${c.ring}`,
+        fontFamily: OUTFIT, fontSize: md ? 14 : 12.5, fontWeight: 700, fontVariantNumeric: 'tabular-nums', lineHeight: 1,
+      }}
+    >
+      {fitPctLabel(score)}
+    </span>
+  );
+}
+
+/** A seat's importance as the seat board's badges draw it: the app's dashes
+ *  on a small white disc with a thin ring in the tier's colour. */
+export function ImportanceDisc({ tier, size = 26 }: { tier: ImportanceTier; size?: number }) {
+  const t = TIER[tier] ?? TIER.standard;
+  return (
+    <span
+      role="img"
+      aria-label={`Importance: ${t.word}`}
+      title={`Country importance: ${t.word}`}
+      className="inline-flex items-center justify-center flex-shrink-0"
+      style={{
+        width: size, height: size, borderRadius: 999, background: '#FFFFFF',
+        boxShadow: `inset 0 0 0 1px color-mix(in srgb, ${t.color} 34%, transparent), 0 1px 2px rgba(27,56,40,0.08)`,
+      }}
+    >
+      <ImportanceDashes tier={tier} {...dashesForDisc(tier, size)} />
     </span>
   );
 }
@@ -966,9 +1025,9 @@ export function RankNumber({ order, size = 20 }: { order: number; size?: number 
 // The committee ring on a white disc, half outside the pop-up card's top-left
 // edge (CLAUDE.md §8, the signature detail). The card sets `position:
 // relative` and `marginTop: POPUP_RING_RISE`; the header pads its left by
-// POPUP_RING_INSET. No pop-up uses it since Round 14 (both committee pop-ups
-// are the classic one now); it was drawn at the slim width POPUP_WIDTH (owner, 21 Oct 2026:
-// "too much empty space, like it was before").
+// POPUP_RING_INSET. The classic committee pop-up and the "choose who" pop-up
+// wear it since the restyle (owner, 22 Oct 2026; LightModalCard in
+// CommitteeDetailModal.tsx). POPUP_WIDTH is the old slim seat board width.
 export const POPUP_RING = 60;
 export const POPUP_RING_RISE = 28;
 export const POPUP_RING_INSET = 18 + POPUP_RING + 8 + 12;

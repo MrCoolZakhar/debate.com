@@ -23,7 +23,7 @@ import { LogoDisc } from '@/components/LogoDisc';
 import { committeeEmblemSrc } from '@/app/manage/[slug]/assignment/delegationSeatsGrid';
 import ProfileLink from '@/components/ProfileLink';
 import { NEU, NEU_GRADIENTS, NeuInset, NeuButton } from '@/components/neu';
-import { SWAP_REASON, type FitSuggestion, type ImportanceTier } from '@/lib/assignmentFit';
+import { SWAP_REASON, fitLight, fitPercent, type FitLight, type FitSuggestion, type ImportanceTier } from '@/lib/assignmentFit';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -181,10 +181,23 @@ export function reasonContext(app: AcceptedApp, committee: CommitteeData, slot: 
   };
 }
 
+/** The score's traffic light as colours (owner, 22 Oct 2026): 80 to 100%
+ *  green, 60 to 79% amber, under 60% red. `fg` is the text, `bg` / `ring` the
+ *  disc or badge behind it. Takes the engine's raw score. */
+export const FIT_LIGHT_COLORS: Record<FitLight, { fg: string; bg: string; ring: string; word: string }> = {
+  green: { fg: '#23633A', bg: '#E3F1E6', ring: 'rgba(35,99,58,0.30)', word: 'Strong fit' },
+  amber: { fg: '#8F5A0A', bg: '#FBEFD5', ring: 'rgba(170,110,15,0.32)', word: 'Fair fit' },
+  red: { fg: '#A12A22', bg: '#FBE4E1', ring: 'rgba(161,42,34,0.28)', word: 'Weak fit' },
+};
+export function fitLightColors(score: number) {
+  return FIT_LIGHT_COLORS[fitLight(score)];
+}
 export function fitColor(score: number) {
-  if (score >= 50) return '#3D7A52';
-  if (score >= 20) return '#B6871F';
-  return '#9A8A78';
+  return fitLightColors(score).fg;
+}
+/** "87%": what a person reads for a raw engine score. */
+export function fitPctLabel(score: number): string {
+  return `${fitPercent(score)}%`;
 }
 
 /** One suggested seat: the engine's FitSuggestion over this page's row types. */
@@ -756,18 +769,18 @@ export function SuggestionCard({ sug, busy, locked, expanded, onToggle, history,
         {sug.swap ? (
           <span
             className="inline-flex items-baseline gap-1 flex-shrink-0"
-            title={`Suggested here at ${sug.score}; their own best available seat scored ${sug.swap.ownBestScore}.`}
+            title={`Suggested here at ${fitPctLabel(sug.score)}; their own best available seat scored ${fitPctLabel(sug.swap.ownBestScore)}`}
           >
             <span style={{ fontSize: 11, fontWeight: 800, color: fitColor(sug.score), fontFamily: MONO, fontVariantNumeric: 'tabular-nums' }}>
-              {sug.score}
+              {fitPctLabel(sug.score)}
             </span>
             <span style={{ fontSize: 9, fontWeight: 700, color: NEU.muted, fontFamily: MONO, fontVariantNumeric: 'tabular-nums' }}>
-              (best {sug.swap.ownBestScore})
+              (best {fitPctLabel(sug.swap.ownBestScore)})
             </span>
           </span>
         ) : (
           <span className="flex-shrink-0" style={{ fontSize: 11, fontWeight: 800, color: fitColor(sug.score), fontFamily: MONO, fontVariantNumeric: 'tabular-nums' }}>
-            {sug.score}
+            {fitPctLabel(sug.score)}
           </span>
         )}
         <NeuButton onClick={onAssign} disabled={busy || locked} style={{ padding: '8px 16px', fontSize: 11, letterSpacing: 0 }}>
@@ -807,7 +820,7 @@ export function SuggestionReasons({ sug, max = 3 }: { sug: Pick<Suggestion, 'app
       {sug.swap && (
         <ReasonChip
           reason={SWAP_REASON}
-          why={`Swapped with ${sug.swap.partnerName}: a net gain of +${sug.swap.netGain} across both delegates. Their own best open seat scored ${sug.swap.ownBestScore}.`}
+          why={`Swapped with ${sug.swap.partnerName}: a net gain of +${sug.swap.netGain} across both delegates. Their own best open seat scored ${fitPctLabel(sug.swap.ownBestScore)}.`}
         />
       )}
     </>

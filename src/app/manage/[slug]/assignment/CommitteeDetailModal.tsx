@@ -1,8 +1,12 @@
 'use client';
 
 // ── The classic committee pop-up ─────────────────────────────────────────────
-// Moved out of assignment/page.tsx unchanged (owner, 22 Oct 2026: "It needs to
-// be similar to BEFORE in a committee, I liked it that way"). The classic
+// Moved out of assignment/page.tsx (owner, 22 Oct 2026: "It needs to be
+// similar to BEFORE in a committee, I liked it that way"), then restyled in
+// the seat board's design with its structure and behaviour kept (owner, 22 Oct
+// 2026): a white card, the committee ring half outside its top-left edge,
+// round flags, avatars with the nationality flag, bold names, the light
+// secondary pills and the importance dashes on a white disc. The classic
 // board and the seat board both open THIS pop-up for a committee:
 //   * no mode: the classic pop-up exactly (open seats "+ Assign" through the
 //     page's classic assign flow, Change seat / Deallocate, expand a person);
@@ -22,14 +26,17 @@ import { createPortal } from 'react-dom';
 import {
   X, Check, ChevronDown, ChevronUp, Plus, Users, Trash2, Repeat, MoreVertical, CheckCircle2,
 } from 'lucide-react';
-import { NEU, NEU_GRADIENTS, NeuProgress } from '@/components/neu';
+import { NEU } from '@/components/neu';
 import { ModalOverlay as SharedModalOverlay } from '@/components/ModalOverlay';
-import { CountryName, StackedName } from '@/app/manage/[slug]/assignment/displayNames';
+import { CountryName } from '@/app/manage/[slug]/assignment/displayNames';
 import {
   type AcceptedApp, type AllocationRow, type SlotRow, type CommitteeData, type UserHistory,
-  slotLogoUrl, OUTFIT, MONO, FLAG_SHADOW, PersonAvatar, DelegationAvatar, CountryFlag, effectiveLevel, ageOf,
-  committeeLabels, CommitteeLogo, CommitteeDifficultyBadge, LevelTag, DelegationChip, DelegateDetail,
+  slotLogoUrl, OUTFIT, MONO, CountryFlag, effectiveLevel,
+  committeeLabels, CommitteeDifficultyBadge, DelegateDetail, LevelBadge,
 } from '@/app/manage/[slug]/assignment/assignmentKit';
+import {
+  AvatarWithFlag, ImportanceDisc, NameAge, POPUP_RING_INSET, POPUP_RING_RISE, PopupRingBadge, WELL, nationalityOf,
+} from '@/app/manage/[slug]/assignment/seatBoardShared';
 import {
   type ImportanceTier, allocationSocietyId, distinctCountryFilled, groupAllocationsByCountry, isSlotFull, openSeatsForSociety,
 } from '@/lib/assignmentFit';
@@ -185,6 +192,95 @@ export function OpenTierChip({ tier, count, onClick }: { tier: ImportanceTier; c
   );
 }
 
+// ── The seat board look (owner, 22 Oct 2026) ────────────────────────────────
+// The committee pop-up and the "choose who" pop-up keep their structure but
+// wear the seat board's design: a white card, the committee ring on a white
+// disc half outside the card's top-left edge, round flags, avatars with the
+// nationality flag on their border, bold names, the light secondary pills and
+// the importance dashes on a small white disc.
+
+const LIGHT_CARD_SHADOW = '0 1px 2px rgba(27,56,40,0.06), 0 10px 26px rgba(27,56,40,0.12), 0 30px 70px -20px rgba(27,56,40,0.38)';
+/** A row inside a light pop-up. */
+export const LIGHT_ROW: React.CSSProperties = { background: '#FAF8F3', borderRadius: 14, boxShadow: '0 0 0 1px rgba(27,56,40,0.06)' };
+/** An open seat: white with a dashed edge, so it reads as free at a glance. */
+export const LIGHT_OPEN_ROW: React.CSSProperties = { background: '#FFFFFF', borderRadius: 14, border: '1.5px dashed rgba(27,56,40,0.22)' };
+/** The one solid button of a light pop-up: a calm forest, never the dark gradient. */
+export const LIGHT_PRIMARY: React.CSSProperties = {
+  height: 38, padding: '0 20px', borderRadius: 11, border: 'none', cursor: 'pointer',
+  background: '#2C4A39', color: '#FFFFFF', fontFamily: OUTFIT, fontSize: 13.5, fontWeight: 600,
+  boxShadow: '0 1px 2px rgba(27,56,40,0.14)',
+};
+
+/** The white card of a light pop-up. The committee ring rises out of its top
+ *  edge, so the card never clips (the list inside scrolls on its own; the
+ *  backdrop scrolls a card taller than the screen). */
+export function LightModalCard({ children, width = 620 }: { children: React.ReactNode; width?: number }) {
+  return (
+    <div
+      className="relative"
+      style={{
+        width: `min(94vw, ${width}px)`, marginTop: POPUP_RING_RISE + 8, marginBottom: 16,
+        padding: '16px 20px 20px', borderRadius: 24, background: '#FFFFFF', boxShadow: LIGHT_CARD_SHADOW,
+        fontFamily: OUTFIT, color: NEU.ink, boxSizing: 'border-box',
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
+/** The header of a light pop-up: the ring badge, the committee's short name
+ *  with its difficulty, the full name beneath, a title above when given, and
+ *  the close button. */
+export function LightModalHeader({ committee, eyebrow, onClose }: { committee: CommitteeData; eyebrow?: string; onClose: () => void }) {
+  const labels = committeeLabels(committee);
+  return (
+    <>
+      <PopupRingBadge committee={committee} />
+      <div className="flex items-start justify-between gap-3" style={{ marginLeft: POPUP_RING_INSET - 20, minHeight: 50 }}>
+        <div className="min-w-0 flex flex-col" style={{ gap: 2 }}>
+          {eyebrow && <span style={{ fontSize: 12.5, fontWeight: 600, color: NEU.inkSoft }}>{eyebrow}</span>}
+          <div className="flex items-center gap-2 min-w-0 flex-wrap">
+            <h2 title={committee.name} className="[overflow-wrap:anywhere]" style={{ margin: 0, fontSize: 22, fontWeight: 700, color: NEU.ink, letterSpacing: '-0.01em', lineHeight: 1.1 }}>
+              {labels.big}
+            </h2>
+            <CommitteeDifficultyBadge level={committee.difficulty} disc={26} glyph={17} />
+          </div>
+          {labels.full && (
+            <p className="[overflow-wrap:anywhere]" style={{ margin: 0, fontSize: 13, color: NEU.inkSoft, lineHeight: 1.25 }}>{labels.full}</p>
+          )}
+        </div>
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="Close"
+          className="focus:outline-none focus-visible:ring-2 flex-shrink-0 inline-flex items-center justify-center transition-[background-color,transform] duration-150 hover:bg-[#F4F0E6] active:scale-[0.94]"
+          style={{ width: 34, height: 34, borderRadius: 999, border: 'none', background: '#FFFFFF', boxShadow: '0 0 0 1px rgba(27,56,40,0.10)', color: NEU.ink, cursor: 'pointer' }}
+        >
+          <X size={17} strokeWidth={1.5} />
+        </button>
+      </div>
+    </>
+  );
+}
+
+/** The soft pill's look on a span (inside a row that is itself the button). */
+export function PillLook({ children, tone = 'forest' }: { children: React.ReactNode; tone?: 'forest' | 'quiet' }) {
+  return (
+    <span
+      className="inline-flex items-center justify-center gap-1 flex-shrink-0 whitespace-nowrap"
+      style={{
+        height: 30, padding: '0 13px', borderRadius: 999, boxSizing: 'border-box',
+        background: '#FFFFFF', color: tone === 'forest' ? '#1B3828' : NEU.inkSoft,
+        border: '1px solid rgba(27,56,40,0.20)', boxShadow: '0 1px 2px rgba(27,56,40,0.07)',
+        fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 600, lineHeight: 1,
+      }}
+    >
+      {children}
+    </span>
+  );
+}
+
 // ── RowMenu ─────────────────────────────────────────────────────────────────
 // A portaled, edge-flipped action dropdown for one overview list row. Rendered
 // in a Portal at fixed viewport coords computed from the trigger and flipped
@@ -228,13 +324,14 @@ export function RowMenu({ items }: { items: { label: string; icon: React.ReactNo
     <>
       <button
         ref={btnRef}
+        type="button"
         onClick={e => { e.stopPropagation(); setOpen(o => !o); }}
         title="Allocation options"
         aria-label="Allocation options"
-        className="focus:outline-none inline-flex items-center justify-center flex-shrink-0"
-        style={{ width: 28, height: 28, borderRadius: 9999, backgroundColor: NEU.surface, boxShadow: open ? NEU.outSmHover : NEU.outSm, color: NEU.muted }}
+        className="focus:outline-none focus-visible:ring-2 inline-flex items-center justify-center flex-shrink-0 transition-[background-color,transform] duration-150 hover:bg-[#F4F0E6] active:scale-[0.94]"
+        style={{ width: 30, height: 30, borderRadius: 9999, border: 'none', backgroundColor: open ? '#F4F0E6' : '#FFFFFF', boxShadow: '0 0 0 1px rgba(27,56,40,0.12)', color: NEU.ink, cursor: 'pointer' }}
       >
-        <MoreVertical size={15} />
+        <MoreVertical size={15} strokeWidth={1.5} />
       </button>
       {open && pos && createPortal(
         <>
@@ -243,19 +340,18 @@ export function RowMenu({ items }: { items: { label: string; icon: React.ReactNo
             className="fixed"
             style={{
               top: pos.top, left: pos.left, width: MENU_W, zIndex: 61,
-              backgroundColor: NEU.surface, borderRadius: 14, padding: 6,
-              boxShadow: `${NEU.out}, 0 14px 34px rgba(27,56,40,0.22)`,
+              backgroundColor: '#FFFFFF', borderRadius: 14, padding: 6,
+              boxShadow: '0 18px 44px rgba(27,56,40,0.20), 0 2px 8px rgba(27,56,40,0.08), 0 0 0 1px rgba(27,56,40,0.06)',
             }}
             onClick={e => e.stopPropagation()}
           >
             {items.map((it, i) => (
               <button
                 key={i}
+                type="button"
                 onClick={() => { setOpen(false); it.onClick(); }}
-                className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg focus:outline-none"
-                style={{ fontSize: 12.5, fontWeight: 700, fontFamily: OUTFIT, color: it.danger ? '#8B2020' : NEU.ink, background: 'transparent' }}
-                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = NEU.base; }}
-                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+                className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg focus:outline-none hover:bg-[#F4F0E6]"
+                style={{ fontSize: 13, fontWeight: 600, fontFamily: OUTFIT, color: it.danger ? '#8B2020' : NEU.ink, background: 'transparent', border: 'none', cursor: 'pointer' }}
               >
                 {it.icon}
                 {it.label}
@@ -270,12 +366,12 @@ export function RowMenu({ items }: { items: { label: string; icon: React.ReactNo
 }
 
 // ── CommitteeOverviewModal ────────────────────────────────────────────────────
-// Click-into overview of a single committee: the whole roster as a simple
-// alphabetical LIST — one row per seat with the country flag, the delegate's
-// photo, name (+ age), their delegation and their level, plus a per-row
-// allocation dropdown (deallocate / change). Clicking an allocated row expands
-// that delegate's full application detail (reusing DelegateDetail). Empty seats
-// read as open and assign on click.
+// Click-into overview of a single committee: the whole roster as a list, one
+// row per seat (high importance first, then A to Z) with the round flag, the
+// delegate's avatar with their nationality flag, the bold name (+ age), their
+// delegation and their level, plus a per-row allocation menu (deallocate /
+// change). Clicking an allocated row expands that delegate's full application
+// detail (DelegateDetail). Empty seats read as open and assign on click.
 /** What the pop-up is opened for besides the classic overview (see the top
  *  of this file). */
 export type CommitteeModalMode =
@@ -306,6 +402,14 @@ export type CommitteeModalMode =
 
 const NO_HISTORY: Record<string, UserHistory> = {};
 
+function DelegationDisc({ size = 36 }: { size?: number }) {
+  return (
+    <span aria-hidden className="inline-flex items-center justify-center flex-shrink-0" style={{ width: size, height: size, borderRadius: 999, background: WELL }}>
+      <Users size={Math.round(size * 0.5)} strokeWidth={1.5} style={{ color: NEU.ink }} />
+    </span>
+  );
+}
+
 export function CommitteeOverviewModal({
   committee, history = NO_HISTORY, onClose, onRemoveAllocation, onAssignSlot, onChangeAllocation, mode,
 }: {
@@ -327,54 +431,39 @@ export function CommitteeOverviewModal({
   const hasDoubleSlot = committee.committee_country_slots.some(s => s.delegation_size >= 2);
   const seatsFilled = committee.conference_allocations.length;
   const seatsTotal = committee.committee_country_slots.reduce((sum, s) => sum + s.delegation_size, 0);
-  const labels = committeeLabels(committee);
   const byCountry = groupAllocationsByCountry(committee.conference_allocations);
   const openSlots = committee.committee_country_slots.filter(s => !isSlotFull(s, byCountry));
   const openTierCounts: Record<ImportanceTier, number> = { high: 0, medium: 0, low: 0, standard: 0 };
   for (const s of openSlots) openTierCounts[s.importance] += 1;
-  // Always alphabetical by country/character name.
   // Ordered by importance tier first (high first), then alphabetical within tier.
   const slots = [...committee.committee_country_slots].filter(s => !give || !give.skip.has(s.country_code)).sort(
     (a, b) => TIER_RANK[a.importance] - TIER_RANK[b.importance] || a.country_name.localeCompare(b.country_name)
   );
+  const fillPct = total > 0 ? Math.min(100, Math.round((filled / total) * 100)) : 0;
+  const rowPad = '9px 10px 9px 12px';
 
   return (
     <ModalOverlay onClose={onClose}>
-      <NeuModalCard width={620}>
-        <div className="flex items-start justify-between gap-3 mb-4">
-          <div className="flex items-center gap-3 min-w-0">
-            <CommitteeLogo committee={committee} size={54} alt={committee.name} />
-            <div className="min-w-0">
-              <div className="flex items-center gap-2 min-w-0">
-                <h2 title={committee.name} className="[overflow-wrap:anywhere]" style={{ fontSize: 24, fontWeight: 900, color: NEU.forest, fontFamily: OUTFIT, letterSpacing: '0.01em', lineHeight: 1.05 }}>
-                  {labels.big}
-                </h2>
-                <CommitteeDifficultyBadge level={committee.difficulty} disc={30} glyph={20} />
-              </div>
-              {labels.full && (
-                <p className="[overflow-wrap:anywhere]" style={{ fontSize: 12, color: NEU.muted, fontFamily: OUTFIT, marginTop: 1 }}>{labels.full}</p>
-              )}
-            </div>
-          </div>
-          <button onClick={onClose} className="focus:outline-none flex-shrink-0 mt-1" style={{ color: NEU.muted }}><X size={18} /></button>
-        </div>
+      <LightModalCard width={640}>
+        <LightModalHeader committee={committee} onClose={onClose} />
 
-        {/* Give mode: who the seats go to, and the running tally */}
+        {/* Give mode: who the allocations go to, and the running tally */}
         {give && (
           <div
-            className="flex items-center justify-between gap-3 flex-wrap mb-4 px-3 py-2.5"
-            style={{ backgroundColor: NEU.base, borderRadius: 14, boxShadow: NEU.inSm, fontFamily: OUTFIT }}
+            className="flex items-center justify-between gap-3 flex-wrap mt-4 px-3.5 py-2.5"
+            style={{ background: WELL, borderRadius: 14 }}
             aria-live="polite"
           >
-            <span className="[overflow-wrap:anywhere] min-w-0" style={{ fontSize: 13.5, color: NEU.ink }}>
-              Giving to <strong style={{ fontWeight: 800 }}>{give.societyName}</strong>
+            <span className="[overflow-wrap:anywhere] min-w-0" style={{ fontSize: 14, color: NEU.ink }}>
+              Giving to <strong style={{ fontWeight: 700 }}>{give.societyName}</strong>
             </span>
             <span className="inline-flex items-baseline gap-2 flex-shrink-0">
-              <span style={{ fontSize: 13, fontWeight: 900, color: NEU.ink, fontFamily: MONO, fontVariantNumeric: 'tabular-nums' }}>
-                {give.givenNow.size} <span style={{ fontWeight: 600, color: NEU.inkSoft }}>given</span>
+              <span className="inline-flex items-baseline gap-1">
+                <span style={{ fontSize: 17, fontWeight: 700, color: NEU.ink, fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>{give.givenNow.size}</span>
+                <span style={{ fontSize: 13, color: NEU.inkSoft }}>given</span>
               </span>
               {give.stillNeeds != null && (
-                <span style={{ fontSize: 12, fontWeight: give.stillNeeds > 0 ? 600 : 700, color: give.stillNeeds > 0 ? NEU.inkSoft : NEU.forest }}>
+                <span style={{ fontSize: 13, fontWeight: give.stillNeeds > 0 ? 500 : 600, color: give.stillNeeds > 0 ? NEU.inkSoft : NEU.forest }}>
                   {give.stillNeeds > 0 ? `${give.stillNeeds} still needed` : 'All needed given'}
                 </span>
               )}
@@ -382,45 +471,71 @@ export function CommitteeOverviewModal({
           </div>
         )}
 
-        <div className="mb-4">
-          <div className="flex items-center justify-between mb-1.5">
-            <span style={{ fontSize: 11, color: NEU.deepGold, fontFamily: MONO, letterSpacing: '0.12em', fontWeight: 700 }}>SEATS FILLED</span>
-            <span className="flex items-baseline gap-1.5">
-              <span style={{ fontSize: 13, fontWeight: 900, color: NEU.ink, fontFamily: MONO, fontVariantNumeric: 'tabular-nums' }}>
-                {filled}<span style={{ color: NEU.muted, fontWeight: 600 }}>/{total}</span>
+        {/* Allocations filled */}
+        <div className="mt-4">
+          <div className="flex items-baseline justify-between gap-3 mb-2">
+            <span style={{ fontSize: 13.5, fontWeight: 600, color: NEU.ink }}>Allocations filled</span>
+            <span className="inline-flex items-baseline gap-2">
+              <span style={{ fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>
+                <span style={{ fontSize: 19, fontWeight: 700, color: NEU.ink }}>{filled}</span>
+                <span style={{ fontSize: 14, color: NEU.inkSoft }}>/{total}</span>
               </span>
               {hasDoubleSlot && (
-                <span style={{ fontSize: 10.5, color: NEU.muted, fontFamily: MONO, fontVariantNumeric: 'tabular-nums' }}>
-                  {seatsFilled}/{seatsTotal} seats
-                </span>
+                <span style={{ fontSize: 12, color: NEU.inkSoft, fontVariantNumeric: 'tabular-nums' }}>{seatsFilled}/{seatsTotal} seats</span>
               )}
             </span>
           </div>
-          <NeuProgress value={filled} max={total} height={8} gradient={filled >= total ? NEU_GRADIENTS.green : NEU_GRADIENTS.forest} />
+          <div
+            role="progressbar"
+            aria-label="Allocations filled"
+            aria-valuemin={0}
+            aria-valuemax={total}
+            aria-valuenow={filled}
+            style={{ height: 8, borderRadius: 999, background: '#ECE5D6', overflow: 'hidden' }}
+          >
+            <div style={{ width: `${fillPct}%`, height: '100%', borderRadius: 999, background: filled >= total && total > 0 ? '#2C6B43' : '#1B3828', transition: 'width 320ms cubic-bezier(0.22,1,0.36,1)' }} />
+          </div>
         </div>
 
-        {/* Open-seat importance summary: dash indicator + count, no words. */}
-        <div className="flex flex-wrap items-center gap-1.5 mb-4">
+        {/* Open allocations by importance: the dashes and a count */}
+        <div className="flex flex-wrap items-center gap-x-3.5 gap-y-1.5 mt-3">
           {openSlots.length === 0 ? (
-            <span className="inline-flex items-center gap-1" style={{ fontSize: 12, fontWeight: 700, color: NEU.forest, fontFamily: OUTFIT }}>
-              <CheckCircle2 size={14} strokeWidth={2.4} aria-hidden="true" /> Fully allocated
+            <span className="inline-flex items-center gap-1.5" style={{ fontSize: 13, fontWeight: 600, color: NEU.forest }}>
+              <CheckCircle2 size={15} strokeWidth={1.75} aria-hidden="true" /> Fully allocated
             </span>
           ) : (
             (['high', 'medium', 'low', 'standard'] as ImportanceTier[]).map(t =>
-              openTierCounts[t] === 0 ? null : <OpenTierChip key={t} tier={t} count={openTierCounts[t]} />
+              openTierCounts[t] === 0 ? null : (
+                <span
+                  key={t}
+                  className="inline-flex items-center gap-1.5"
+                  title={`${openTierCounts[t]} open ${TIER_META[t].label.toLowerCase()}-importance allocation${openTierCounts[t] === 1 ? '' : 's'}`}
+                >
+                  <ImportanceDisc tier={t} size={22} />
+                  <span style={{ fontSize: 14, fontWeight: 700, color: NEU.ink, fontVariantNumeric: 'tabular-nums' }}>{openTierCounts[t]}</span>
+                </span>
+              )
             )
           )}
         </div>
 
-        <p style={{ fontSize: 10, color: NEU.deepGold, fontFamily: MONO, letterSpacing: '0.12em', fontWeight: 700, marginBottom: 8 }}>
-          ALLOCATION OVERVIEW
-        </p>
+        <h3 style={{ margin: '18px 0 8px', fontSize: 15, fontWeight: 600, color: NEU.ink }}>Allocation Overview</h3>
 
-        <div className="flex flex-col gap-1.5" style={{ maxHeight: 420, overflowY: 'auto' }}>
+        <div className="flex flex-col" style={{ gap: 6, maxHeight: 'min(440px, 52dvh)', overflowY: 'auto', padding: 2, margin: -2, overscrollBehavior: 'contain' }}>
           {slots.flatMap(slot => {
             const rows = byCountry.get(slot.country_code) ?? [];
             const bySeat = new Map(rows.map(r => [r.seat, r]));
             const seatLabel = (seatNum: number) => (slot.delegation_size >= 2 ? `, seat ${seatNum}` : '');
+            const openLine = (seatNum: number) => (slot.delegation_size >= 2 ? `Open, seat ${seatNum}` : 'Open');
+            const flag = (dim?: number) => (
+              <CountryFlag code={slot.country_code} w={34} h={34} dim={dim} alt={slot.country_name} title={slot.country_name} logoUrl={slotLogoUrl(committee, slot)} />
+            );
+            const countryLine = (seatNum: number) => (
+              <span className="flex flex-col min-w-0 flex-1" style={{ gap: 1 }}>
+                <CountryName name={slot.country_name} code={slot.country_code} style={{ fontSize: 15, fontWeight: 700, color: NEU.ink, whiteSpace: 'normal', overflowWrap: 'anywhere', lineHeight: 1.15 }} />
+                <span style={{ fontSize: 12, color: NEU.inkSoft }}>{openLine(seatNum)}</span>
+              </span>
+            );
 
             return Array.from({ length: slot.delegation_size }, (_, i) => i + 1).map(seatNum => {
               const alloc = bySeat.get(seatNum) ?? null;
@@ -432,35 +547,28 @@ export function CommitteeOverviewModal({
                 // Delegations tab always has) and the pop-up stays open.
                 const free = openSeatsForSociety(slot, byCountry, give.societyId);
                 const busy = give.busyCodes.has(slot.country_code);
-                const inner = (
-                  <>
-                    <CountryFlag code={slot.country_code} w={30} h={30} radius={9999} shadow={FLAG_SHADOW} dim={0.5} alt={slot.country_name} logoUrl={slotLogoUrl(committee, slot)} />
-                    <div className="flex-1 min-w-0">
-                      <p style={{ fontSize: 13.5, fontWeight: 700, color: NEU.ink, fontFamily: OUTFIT }}><CountryName name={slot.country_name} code={slot.country_code} /></p>
-                      <p style={{ fontSize: 11.5, color: NEU.inkSoft, fontFamily: OUTFIT, marginTop: 1 }}>Open seat{seatLabel(seatNum)}</p>
-                    </div>
-                    <TierBadge tier={slot.importance} />
-                  </>
-                );
                 if (!free.includes(seatNum)) {
                   return (
-                    <div key={seatKey} className="w-full flex items-center gap-3 px-3 py-2.5" style={{ backgroundColor: NEU.base, borderRadius: 14, boxShadow: NEU.inSm }}>
-                      {inner}
+                    <div key={seatKey} className="w-full flex items-center gap-3" style={{ ...LIGHT_OPEN_ROW, padding: rowPad, opacity: 0.6 }}>
+                      {flag(0.6)}
+                      {countryLine(seatNum)}
+                      <ImportanceDisc tier={slot.importance} />
                     </div>
                   );
                 }
                 return (
                   <button
                     key={seatKey}
+                    type="button"
                     onClick={() => give.onGive(slot, free)}
                     aria-label={`Give ${slot.country_name} to ${give.societyName}`}
-                    className="w-full flex items-center gap-3 px-3 py-2.5 focus:outline-none text-left"
-                    style={{ backgroundColor: NEU.base, borderRadius: 14, boxShadow: NEU.inSm }}
+                    className="w-full flex items-center gap-3 focus:outline-none focus-visible:ring-2 text-left transition-colors duration-150 hover:!bg-[#FAF8F3]"
+                    style={{ ...LIGHT_OPEN_ROW, padding: rowPad, cursor: 'pointer' }}
                   >
-                    {inner}
-                    <span className="inline-flex items-center gap-1 flex-shrink-0" style={{ fontSize: 10.5, fontWeight: 800, color: NEU.forest, fontFamily: MONO, letterSpacing: 0 }}>
-                      {busy ? 'Saving' : <><Plus size={12} strokeWidth={2.6} /> Give</>}
-                    </span>
+                    {flag(0.6)}
+                    {countryLine(seatNum)}
+                    <ImportanceDisc tier={slot.importance} />
+                    <PillLook>{busy ? 'Saving' : <><Plus size={13} strokeWidth={1.75} aria-hidden /> Give</>}</PillLook>
                   </button>
                 );
               }
@@ -471,23 +579,19 @@ export function CommitteeOverviewModal({
                 return (
                   <button
                     key={seatKey}
+                    type="button"
                     onClick={() => {
                       if (person) person.onSeat(slot, seatNum);
                       else onAssignSlot?.(slot, seatNum);
                       onClose();
                     }}
-                    className="w-full flex items-center gap-3 px-3 py-2.5 focus:outline-none text-left"
-                    style={{ backgroundColor: NEU.base, borderRadius: 14, boxShadow: NEU.inSm }}
+                    className="w-full flex items-center gap-3 focus:outline-none focus-visible:ring-2 text-left transition-colors duration-150 hover:!bg-[#FAF8F3]"
+                    style={{ ...LIGHT_OPEN_ROW, padding: rowPad, cursor: 'pointer' }}
                   >
-                    <CountryFlag code={slot.country_code} w={30} h={30} radius={9999} shadow={FLAG_SHADOW} dim={0.5} alt={slot.country_name} logoUrl={slotLogoUrl(committee, slot)} />
-                    <div className="flex-1 min-w-0">
-                      <p style={{ fontSize: 13.5, fontWeight: 700, color: NEU.ink, fontFamily: OUTFIT }}><CountryName name={slot.country_name} code={slot.country_code} /></p>
-                      <p style={{ fontSize: 11.5, color: NEU.inkSoft, fontFamily: OUTFIT, marginTop: 1 }}>Open seat{seatLabel(seatNum)}</p>
-                    </div>
-                    <TierBadge tier={slot.importance} />
-                    <span className="inline-flex items-center gap-1 flex-shrink-0" style={{ fontSize: 10.5, fontWeight: 800, color: NEU.forest, fontFamily: MONO, letterSpacing: 0 }}>
-                      <Plus size={12} strokeWidth={2.6} /> {person ? `Seat ${person.firstName}` : 'Assign'}
-                    </span>
+                    {flag(0.6)}
+                    {countryLine(seatNum)}
+                    <ImportanceDisc tier={slot.importance} />
+                    <PillLook><Plus size={13} strokeWidth={1.75} aria-hidden /> {person ? `Seat ${person.firstName}` : 'Assign'}</PillLook>
                   </button>
                 );
               }
@@ -503,14 +607,12 @@ export function CommitteeOverviewModal({
                 const theirs = !!give && socId === give.societyId;
                 const inner = (
                   <>
-                    <CountryFlag code={slot.country_code} w={30} h={30} radius={9999} shadow={FLAG_SHADOW} alt={slot.country_name} title={slot.country_name} logoUrl={slotLogoUrl(committee, slot)} />
-                    <DelegationAvatar size={30} />
-                    <div className="flex-1 min-w-0">
-                      <p style={{ fontSize: 14, fontWeight: 800, color: NEU.ink, fontFamily: OUTFIT, lineHeight: 1.15, overflowWrap: 'anywhere' }}>
-                        {socName}
-                      </p>
-                      <p style={{ fontSize: 11, color: NEU.inkSoft, fontFamily: OUTFIT, marginTop: 1 }}><CountryName name={slot.country_name} code={slot.country_code} suffix={seatLabel(seatNum)} /></p>
-                    </div>
+                    {flag()}
+                    <DelegationDisc />
+                    <span className="flex flex-col flex-1 min-w-0" style={{ gap: 1 }}>
+                      <span className="[overflow-wrap:anywhere]" style={{ fontSize: 15, fontWeight: 700, color: NEU.ink, lineHeight: 1.15 }}>{socName}</span>
+                      <span style={{ fontSize: 12, color: NEU.inkSoft }}><CountryName name={slot.country_name} code={slot.country_code} suffix={seatLabel(seatNum)} /></span>
+                    </span>
                   </>
                 );
                 // Give mode: a country given in this pop-up takes it back on a
@@ -520,44 +622,38 @@ export function CommitteeOverviewModal({
                   return (
                     <button
                       key={seatKey}
+                      type="button"
                       onClick={() => give.onUndo(slot)}
                       aria-label={`Take ${slot.country_name} back from ${give.societyName}`}
                       title="Tap again to take it back"
-                      className="w-full flex items-center gap-3 px-3 py-2.5 focus:outline-none text-left"
-                      style={{ backgroundColor: NEU.surface, borderRadius: 14, boxShadow: NEU.outSm }}
+                      className="w-full flex items-center gap-3 focus:outline-none focus-visible:ring-2 text-left"
+                      style={{ ...LIGHT_ROW, background: '#FFFFFF', boxShadow: '0 0 0 1.5px #1B3828, 0 4px 12px -6px rgba(27,56,40,0.35)', padding: rowPad, cursor: 'pointer' }}
                     >
                       {inner}
-                      <span className="inline-flex items-center gap-2 flex-shrink-0" style={{ fontFamily: OUTFIT, whiteSpace: 'nowrap' }}>
-                        <span className="inline-flex items-center gap-1" style={{ fontSize: 12, fontWeight: 700, color: NEU.forest }}>
-                          <Check size={14} strokeWidth={2.4} aria-hidden="true" /> {busy ? 'Saving' : 'Given'}
+                      <span className="inline-flex items-center gap-2.5 flex-shrink-0" style={{ whiteSpace: 'nowrap' }}>
+                        <span className="inline-flex items-center gap-1" style={{ fontSize: 13, fontWeight: 600, color: NEU.forest }}>
+                          <Check size={15} strokeWidth={1.75} aria-hidden="true" /> {busy ? 'Saving' : 'Given'}
                         </span>
-                        <span style={{ fontSize: 12, fontWeight: 700, color: NEU.ink, textDecoration: 'underline', textUnderlineOffset: 3 }}>Undo</span>
+                        <span style={{ fontSize: 13, fontWeight: 700, color: NEU.ink, textDecoration: 'underline', textUnderlineOffset: 3 }}>Undo</span>
                       </span>
                     </button>
                   );
                 }
                 return (
-                  <div
-                    key={seatKey}
-                    className="flex items-center gap-3 px-3 py-2.5"
-                    style={{ backgroundColor: NEU.surface, borderRadius: 14, boxShadow: NEU.outSm }}
-                  >
+                  <div key={seatKey} className="flex items-center gap-3" style={{ ...LIGHT_ROW, padding: rowPad }}>
                     {inner}
                     {theirs ? (
-                      <span className="inline-flex items-center gap-1 flex-shrink-0" style={{ fontSize: 12, fontWeight: 700, color: NEU.forest, fontFamily: OUTFIT, whiteSpace: 'nowrap' }}>
-                        <Check size={14} strokeWidth={2.4} aria-hidden="true" /> Theirs
+                      <span className="inline-flex items-center gap-1 flex-shrink-0" style={{ fontSize: 13, fontWeight: 600, color: NEU.forest, whiteSpace: 'nowrap' }}>
+                        <Check size={15} strokeWidth={1.75} aria-hidden="true" /> Theirs
                       </span>
                     ) : (
-                      <span
-                        className="inline-flex items-center gap-1 flex-shrink-0"
-                        style={{ fontSize: 12, fontWeight: 700, color: '#8A6614', fontFamily: OUTFIT, whiteSpace: 'nowrap' }}
-                      >
-                        <Users size={14} strokeWidth={2.4} aria-hidden="true" /> Delegation
+                      <span className="inline-flex items-center gap-1 flex-shrink-0" style={{ fontSize: 13, fontWeight: 600, color: '#8A6614', whiteSpace: 'nowrap' }}>
+                        <Users size={15} strokeWidth={1.5} aria-hidden="true" /> Delegation
                       </span>
                     )}
                     {removableSoc && onRemoveAllocation && (
                       <RowMenu
-                        items={[{ label: 'Deallocate', icon: <Trash2 size={14} />, danger: true, onClick: () => onRemoveAllocation(alloc) }]}
+                        items={[{ label: 'Deallocate', icon: <Trash2 size={14} strokeWidth={1.5} />, danger: true, onClick: () => onRemoveAllocation(alloc) }]}
                       />
                     )}
                   </div>
@@ -566,7 +662,7 @@ export function CommitteeOverviewModal({
 
               const app = allocationToApp(alloc);
               const name = allocateeName(alloc);
-              const age = ageOf(app);
+              const soc = app.societies?.name?.trim() || alloc.delegation?.name?.trim() || null;
               const userHistory = alloc.user_id ? history[alloc.user_id] : undefined;
               const expanded = expandedSeatKey === seatKey;
               const removable = !alloc.id.startsWith('temp-');
@@ -575,48 +671,45 @@ export function CommitteeOverviewModal({
                 <div
                   key={seatKey}
                   className="flex flex-col"
-                  style={{ backgroundColor: NEU.surface, borderRadius: 14, boxShadow: expanded ? NEU.outSmHover : NEU.outSm }}
+                  style={{ ...LIGHT_ROW, background: expanded ? '#FFFFFF' : LIGHT_ROW.background, boxShadow: expanded ? '0 0 0 1px rgba(27,56,40,0.10), 0 10px 24px -12px rgba(27,56,40,0.30)' : LIGHT_ROW.boxShadow }}
                 >
                   <div
                     role="button"
                     tabIndex={0}
                     onClick={() => setExpandedSeatKey(expanded ? null : seatKey)}
                     onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setExpandedSeatKey(expanded ? null : seatKey); } }}
-                    className="flex items-center gap-3 px-3 py-2.5 focus:outline-none"
-                    style={{ cursor: 'pointer' }}
+                    className="flex items-center gap-3 focus:outline-none focus-visible:ring-2 rounded-[14px]"
+                    style={{ cursor: 'pointer', padding: rowPad }}
                     title="Open application detail"
+                    aria-expanded={expanded}
                   >
-                    <CountryFlag code={slot.country_code} w={30} h={30} radius={9999} shadow={FLAG_SHADOW} alt={slot.country_name} title={slot.country_name} logoUrl={slotLogoUrl(committee, slot)} />
-                    {/* Seat row is a role="button" <div> (not a real <button>), so the
-                        link is legal; nested keeps the expand/collapse toggle intact. */}
-                    <PersonAvatar name={name} url={alloc.profiles?.avatar_url ?? null} size={30} userId={alloc.user_id} nested />
-                    <div className="flex-1 min-w-0">
-                      <div style={{ fontFamily: OUTFIT }}>
-                        <StackedName
-                          name={name} size={14} color={NEU.ink} restColor={NEU.inkSoft}
-                          after={age != null ? <span style={{ fontWeight: 600, color: NEU.muted, fontVariantNumeric: 'tabular-nums' }}>, {age}</span> : undefined}
-                        />
-                      </div>
-                      <p style={{ fontSize: 11, color: NEU.inkSoft, fontFamily: OUTFIT, marginTop: 1 }}><CountryName name={slot.country_name} code={slot.country_code} suffix={seatLabel(seatNum)} /></p>
-                    </div>
-                    <div className="hidden sm:flex items-center gap-1.5 flex-shrink-0">
-                      <DelegationChip app={app} />
-                      <LevelTag level={effectiveLevel(app)} />
-                    </div>
+                    {flag()}
+                    {/* The row is a role="button" <div> (not a real <button>), so the
+                        avatar's CV link is legal; nested keeps the toggle intact. */}
+                    <AvatarWithFlag name={name} url={alloc.profiles?.avatar_url ?? null} size={36} nationality={nationalityOf(app)} userId={alloc.user_id} nested />
+                    <span className="flex flex-col flex-1 min-w-0" style={{ gap: 2 }}>
+                      <NameAge name={name} app={app} size={15} />
+                      <span className="[overflow-wrap:anywhere]" style={{ fontSize: 12, color: NEU.inkSoft, lineHeight: 1.25 }}>
+                        <CountryName name={slot.country_name} code={slot.country_code} suffix={seatLabel(seatNum)} />
+                        {soc ? <> · {soc}</> : null}
+                      </span>
+                    </span>
+                    <span className="hidden sm:inline-flex flex-shrink-0"><LevelBadge level={effectiveLevel(app)} /></span>
                     {onChangeAllocation && onRemoveAllocation && (
                       <RowMenu
                         items={[
-                          { label: 'Change seat', icon: <Repeat size={14} />, onClick: () => onChangeAllocation(alloc) },
-                          ...(removable ? [{ label: 'Deallocate', icon: <Trash2 size={14} />, danger: true, onClick: () => onRemoveAllocation(alloc) }] : []),
+                          { label: 'Change seat', icon: <Repeat size={14} strokeWidth={1.5} />, onClick: () => onChangeAllocation(alloc) },
+                          ...(removable ? [{ label: 'Deallocate', icon: <Trash2 size={14} strokeWidth={1.5} />, danger: true, onClick: () => onRemoveAllocation(alloc) }] : []),
                         ]}
                       />
                     )}
-                    {expanded ? <ChevronUp size={15} style={{ color: NEU.muted, flexShrink: 0 }} /> : <ChevronDown size={15} style={{ color: NEU.muted, flexShrink: 0 }} />}
+                    {expanded
+                      ? <ChevronUp size={16} strokeWidth={1.5} style={{ color: NEU.inkSoft, flexShrink: 0 }} />
+                      : <ChevronDown size={16} strokeWidth={1.5} style={{ color: NEU.inkSoft, flexShrink: 0 }} />}
                   </div>
-                  {/* Compact delegation/level row for narrow widths */}
-                  <div className="sm:hidden flex items-center gap-1.5 flex-wrap px-3 pb-2.5">
-                    <DelegationChip app={app} />
-                    <LevelTag level={effectiveLevel(app)} />
+                  {/* The level on narrow widths */}
+                  <div className="sm:hidden flex items-center gap-1.5 flex-wrap" style={{ padding: '0 12px 9px 59px' }}>
+                    <LevelBadge level={effectiveLevel(app)} />
                   </div>
                   {expanded && (
                     <div className="px-3 pb-3">
@@ -628,27 +721,27 @@ export function CommitteeOverviewModal({
             });
           })}
           {slots.length === 0 && (
-            <p className="text-xs py-2" style={{ color: NEU.muted, fontFamily: OUTFIT }}>No country slots in this committee.</p>
+            <p className="py-2" style={{ margin: 0, fontSize: 13.5, color: NEU.inkSoft }}>No countries in this committee yet</p>
           )}
         </div>
 
         {/* Give mode: many taps, then one way out */}
         {give && (
-          <div className="flex items-center justify-between gap-3 mt-4">
-            <span style={{ fontSize: 12, color: NEU.inkSoft, fontFamily: OUTFIT, lineHeight: 1.35 }}>
+          <div className="flex items-center justify-between gap-3 mt-4 flex-wrap">
+            <span className="flex-1" style={{ fontSize: 12.5, color: NEU.inkSoft, lineHeight: 1.4, minWidth: 200 }}>
               Tap an open seat to give it to {give.societyName}, tap again to take it back
             </span>
             <button
               type="button"
               onClick={onClose}
-              className="focus:outline-none flex-shrink-0 transition-transform duration-150 active:scale-[0.96]"
-              style={{ height: 34, padding: '0 18px', borderRadius: 10, border: 'none', background: NEU.forest, color: '#FFFFFF', fontFamily: OUTFIT, fontSize: 13.5, fontWeight: 700, cursor: 'pointer' }}
+              className="focus:outline-none focus-visible:ring-2 flex-shrink-0 transition-transform duration-150 active:scale-[0.96]"
+              style={LIGHT_PRIMARY}
             >
               Done
             </button>
           </div>
         )}
-      </NeuModalCard>
+      </LightModalCard>
     </ModalOverlay>
   );
 }

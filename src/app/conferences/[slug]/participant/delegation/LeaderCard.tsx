@@ -49,6 +49,7 @@ import AddDelegatePanel from './overview/AddDelegatePanel';
 import { announceDelegationChanged } from './delegationEvents';
 import type { RosterMember } from '../DelegationPanel';
 import { removePledgedTicket, type PayOverview } from '../../pay/payApi';
+import { delegationExpected } from '@/lib/delegationExpected';
 import { DELEGATIONS_V2_DB } from './v2';
 import { useLeaderData } from './useLeaderData';
 import PeopleTable, { type PayTone, type PersonRow } from './PeopleTable';
@@ -108,10 +109,10 @@ export default function LeaderCard({
   const memberUserIds = useMemo(() => pool.map(p => p.user_id).filter((x): x is string => !!x), [pool]);
   const data = useLeaderData({ conferenceId, societyId, committeeIds, memberUserIds });
   const { pay, reloadPay, reloadV2 } = data;
-  // Expected size, optimistic: the number shown while taps are queued or in
-  // flight (null = the server's number). Taps wait in stepQueue and one
-  // drain sends them in order, so the shown number and the server agree.
-  const [shownExpected, setShownExpected] = useState<number | null>(null);
+  // Tickets queued or in flight on top of the server's number (0 = none).
+  // Taps wait in stepQueue and one drain sends them in order, so the shown
+  // number and the server agree.
+  const [pendingTickets, setPendingTickets] = useState(0);
   const stepQueue = useRef<Array<1 | -1>>([]);
   const draining = useRef(false);
   const payRef = useRef<PayOverview | null>(pay);
@@ -159,16 +160,41 @@ export default function LeaderCard({
   const seatsGiven = seated + openSeats.length;
   const membersOwing = rows.filter(r => !r.is_me && r.pay?.tone === 'owe').length;
 
-  // Expected size: the delegation's delegate tickets, every leader's together.
+  // The delegate tickets, every leader's together (the sum of spots_pledged).
+  // This is what the stepper moves; the number SHOWN is delegationExpected
+  // (owner, 22 Oct 2026): the biggest of the paid delegate spots, the
+  // delegates and head delegates in the delegation, and these tickets. Nothing
+  // is added per head delegate here (the database's _society_expected_size
+  // adds one per head delegate on top of spots_pledged; the screen never does).
   const myDelegation = pay?.delegation?.find(d => d.society_id === societyId) ?? null;
-  const expected = myDelegation?.delegate_tickets ?? null;
+  const tickets = myDelegation?.delegate_tickets ?? null;
   const myLeaderApp = pay?.me.find(m => m.society_id === societyId && m.is_leader) ?? null;
   const removableCount = useMemo(
     () => (pay?.items ?? []).filter(i => i.kind === 'pledge_spot' && i.owner_is_me && i.removable).length,
     [pay],
   );
   const leaderAppId = myLeaderApp?.application_id ?? null;
-  const shown = shownExpected ?? expected ?? 0;
+  const ticketsNow = (tickets ?? 0) + pendingTickets;
+  // Delegates and head delegates still in it (not turned down or withdrawn).
+  const joinedDelegates = useMemo(() => members.filter(m =>
+    (m.role === 'delegate' || m.role === 'head-delegate') && m.status !== 'withdrawn' && m.status !== 'rejected',
+  ).length, [members]);
+  // Paid delegate spots, the same count as the database's
+  // _society_paid_delegate_spots as far as this leader can see it: the
+  // delegate tickets they paid for, plus every delegate or head delegate whose
+  // own fee is paid by themselves or waived. Other leaders' paid tickets are
+  // inside their pledge, which the helper counts anyway.
+  const paidDelegateSpots = useMemo(() => {
+    const ownPaidTickets = (pay?.items ?? []).filter(i => i.kind === 'pledge_spot' && i.owner_is_me && i.state === 'paid').length;
+    const selfPaid = members.filter(m => {
+      if (m.role !== 'delegate' && m.role !== 'head-delegate') return false;
+      if (m.status === 'withdrawn' || m.status === 'rejected') return false;
+      if (m.payment_status === 'waived') return true;
+      return m.payment_status === 'paid' && poolById.get(m.application_id)?.self_paid !== false;
+    }).length;
+    return ownPaidTickets + selfPaid;
+  }, [pay, members, poolById]);
+  const shown = delegationExpected({ paidDelegateSpots, joinedDelegates, pledged: ticketsNow });
   // The floor: delegates, plus head delegates who bought no tickets (a buyer's
   // own ticket is separate), who are not withdrawn or turned down.
   const floor = useMemo(() => members.filter(m => {
@@ -180,7 +206,7 @@ export default function LeaderCard({
   const floorHint = `You have ${floor} ${floor === 1 ? 'delegate' : 'delegates'}, so you need at least ${floor} ${floor === 1 ? 'ticket' : 'tickets'}`;
   // Spots this leader could still take off: the unpaid ones they added, plus
   // the ones queued on top that the server has not drawn yet.
-  const lowerable = removableCount + (shown - (expected ?? 0));
+  const lowerable = removableCount + pendingTickets;
 
   // Re-reads everything in place after a row action (a role change, a move):
   // DelegationPanel's own re-read keeps the card mounted, never a loader.
@@ -242,16 +268,16 @@ export default function LeaderCard({
         notifyOk('Expected size saved. New spots are on your Payments page.');
       }
       draining.current = false;
-      setShownExpected(null);
+      setPendingTickets(0);
     }
   }, [sendStep, reloadPay]);
 
   const step = useCallback((dir: 1 | -1) => {
-    if (dir > 0 ? !leaderAppId : lowerable <= 0 || shown <= 0 || shown <= floor) return;
+    if (dir > 0 ? !leaderAppId : lowerable <= 0 || ticketsNow <= 0 || ticketsNow <= floor) return;
     stepQueue.current.push(dir);
-    setShownExpected(prev => (prev ?? expected ?? 0) + dir);
+    setPendingTickets(prev => prev + dir);
     void drain();
-  }, [leaderAppId, lowerable, shown, floor, expected, drain]);
+  }, [leaderAppId, lowerable, ticketsNow, floor, drain]);
 
   const home = data.society;
   const countryName = home?.country_code ? getCountryByCode(home.country_code)?.name ?? null : null;
@@ -259,8 +285,8 @@ export default function LeaderCard({
   const crestName = home?.name ?? societyName;
 
   const stepBtn = (dir: 1 | -1) => {
-    const atFloor = dir < 0 && floor > 0 && shown <= floor;
-    const off = dir > 0 ? !leaderAppId : lowerable <= 0 || shown <= 0 || atFloor;
+    const atFloor = dir < 0 && floor > 0 && ticketsNow <= floor;
+    const off = dir > 0 ? !leaderAppId : lowerable <= 0 || ticketsNow <= 0 || atFloor;
     const Icon = dir > 0 ? Plus : Minus;
     return (
       <button

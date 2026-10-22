@@ -4,7 +4,8 @@
 //
 // A roomy row: the title (never cut off), role and committee; the status as an
 // icon and a word; the closing date; views, clicks to apply and applicants as
-// big numbers with their word; the Promoted chip ("until 26 Oct", "Homepage").
+// big numbers with their word; Promoted ("until 26 Oct", "On the homepage")
+// as a style A icon and words, never a chip, and a gold top edge on the row.
 // The three-dot menu (Edit, Promote, View on Job Board, Close, Delete) is a
 // small portaled menu. Close and Delete are asked IN PLACE, in the row, never
 // in a modal. A hidden listing carries Gavelling's note; a paid outside
@@ -13,20 +14,24 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import {
-  CircleDot, CircleSlash, EyeOff, FilePen, Lock, Megaphone, MoreHorizontal, Pencil, Sparkles, Trash2, ExternalLink, XCircle, Share2,
+  CalendarClock, CircleDot, CircleSlash, EyeOff, FilePen, Gavel, House, Landmark, Lock, Megaphone, MoreHorizontal, Pencil, Sparkles, Trash2, ExternalLink, Users, XCircle, Share2,
 } from 'lucide-react';
 import Portal from '@/components/Portal';
-import { JOB_ROLE_LABEL } from '@/lib/jobBoard';
+import { JOB_ROLE_LABEL, type JobRole } from '@/lib/jobBoard';
 import { InfoHint } from '../settings/applicationsUi';
 import { closeListing, dayLabel, type OrgListing, type ShownState } from './jobsApi';
 import ListingFunnel from '@/app/jobs/ListingFunnel';
 import ShareCardPopup from '@/app/jobs/ShareCardPopup';
+import { ICON_STROKE } from './jobKit';
 
 const FONT = "var(--font-brand), sans-serif";
 const INK = '#1C1410';
 const INK_SOFT = '#5C5140';
 const FOREST = '#1B3828';
 const DANGER = '#9E2A12';
+
+/** The role type as a style A icon beside its word. */
+const ROLE_ICON: Record<JobRole, typeof Gavel> = { chair: Gavel, secretariat: Landmark, staff: Users };
 
 const STATUS: Record<ShownState, { word: string; icon: typeof CircleDot; color: string }> = {
   draft: { word: 'Draft', icon: FilePen, color: '#8A6614' },
@@ -53,6 +58,7 @@ export default function ListingRow({ listing, canPromote, onEdit, onPromote, onC
   const paidOutside = listing.kind === 'outside' && (listing.charged_credits > 0 || listing.locked);
   const closes = dayLabel(listing.closes_at);
   const sub = [JOB_ROLE_LABEL[listing.role], listing.committee].filter(Boolean).join(' · ');
+  const RoleIcon = ROLE_ICON[listing.role];
 
   const confirm = async () => {
     if (busyRef.current) return;
@@ -71,22 +77,31 @@ export default function ListingRow({ listing, canPromote, onEdit, onPromote, onC
   };
 
   return (
-    <li className="gv-jr">
+    <li className={`gv-jr${listing.promotion ? ' gv-jr-promoted' : ''}`}>
       <div className="gv-jr-main">
         <div className="gv-jr-id">
           <p className="gv-jr-title">{listing.title || 'Untitled listing'}</p>
-          {sub && <p className="gv-jr-sub">{sub}</p>}
+          {sub && (
+            <p className="gv-jr-sub">
+              {RoleIcon && <RoleIcon size={15} strokeWidth={ICON_STROKE} aria-hidden className="gv-jr-sub-icon" />}
+              <span>{sub}</span>
+            </p>
+          )}
           <p className="gv-jr-facts">
             <span className="gv-jr-status" style={{ color: st.color }}>
-              <StatusIcon size={15} strokeWidth={2.4} aria-hidden />
+              <StatusIcon size={15} strokeWidth={1.9} aria-hidden />
               {st.word}
             </span>
-            {closes && listing.shown !== 'draft' && <span>{listing.shown === 'closed' ? `Closed ${closes}` : `Closes ${closes}`}</span>}
-            {closes && listing.shown === 'draft' && <span>Would close {closes}</span>}
+            {closes && (
+              <span className="gv-jr-fact">
+                <CalendarClock size={15} strokeWidth={ICON_STROKE} aria-hidden />
+                {listing.shown === 'draft' ? `Would close ${closes}` : listing.shown === 'closed' ? `Closed ${closes}` : `Closes ${closes}`}
+              </span>
+            )}
             {listing.kind === 'outside' && <span>Applies on another site</span>}
             {paidOutside && (
               <span className="gv-jr-lock">
-                <Lock size={13} strokeWidth={2.4} aria-hidden />
+                <Lock size={14} strokeWidth={ICON_STROKE} aria-hidden />
                 <InfoHint
                   label="What is fixed"
                   text={listing.fix_available
@@ -99,11 +114,16 @@ export default function ListingRow({ listing, canPromote, onEdit, onPromote, onC
           </p>
           {listing.promotion && (
             <p className="gv-jr-promo">
-              <span className="gv-jr-chip">
-                <Sparkles size={12} strokeWidth={2.4} aria-hidden />
+              <span className="gv-jr-fact gv-jr-fact-gold">
+                <Sparkles size={15} strokeWidth={ICON_STROKE} aria-hidden />
                 Promoted until {dayLabel(listing.promotion.ends_on)}
               </span>
-              {listing.promotion.with_homepage && <span className="gv-jr-chip gv-jr-chip-soft">Homepage</span>}
+              {listing.promotion.with_homepage && (
+                <span className="gv-jr-fact gv-jr-fact-gold">
+                  <House size={15} strokeWidth={ICON_STROKE} aria-hidden />
+                  On the homepage
+                </span>
+              )}
             </p>
           )}
           {listing.shown === 'hidden' && listing.hidden_note && (
@@ -204,7 +224,7 @@ function RowMenu({ items, label }: { items: MenuItem[]; label: string }) {
         aria-expanded={open}
         onClick={() => { if (!open) place(); setOpen((v) => !v); }}
       >
-        <MoreHorizontal size={18} strokeWidth={2.4} aria-hidden />
+        <MoreHorizontal size={18} strokeWidth={2} aria-hidden />
       </button>
       {open && (
         <Portal>
@@ -216,7 +236,7 @@ function RowMenu({ items, label }: { items: MenuItem[]; label: string }) {
           >
             {items.map((it) => {
               const Icon = it.icon;
-              const body = (<><Icon size={16} strokeWidth={2.3} aria-hidden />{it.label}</>);
+              const body = (<><Icon size={16} strokeWidth={ICON_STROKE} aria-hidden />{it.label}</>);
               return it.href ? (
                 <Link key={it.key} role="menuitem" href={it.href} target="_blank" className="gv-jr-mi" onClick={() => setOpen(false)}>{body}</Link>
               ) : (
@@ -231,17 +251,19 @@ function RowMenu({ items, label }: { items: MenuItem[]; label: string }) {
 }
 
 export const ROW_CSS = `
-.gv-jr{list-style:none;padding:16px 18px;border-radius:16px;background:#FFFFFF;box-shadow:0 1px 2px rgba(27,56,40,0.05),0 6px 18px rgba(27,56,40,0.07);font-family:${FONT}}
+.gv-jr{list-style:none;padding:16px 18px;border-radius:18px;background:#FFFFFF;box-shadow:0 1px 2px rgba(27,56,40,0.06),0 8px 24px rgba(27,56,40,0.08),inset 0 0 0 1px rgba(27,56,40,0.04);font-family:${FONT}}
+.gv-jr-promoted{padding-top:19px;box-shadow:inset 0 3px 0 #E2C66B,inset 0 0 0 1px rgba(182,135,31,0.20),0 1px 2px rgba(27,56,40,0.08),0 12px 28px -10px rgba(27,56,40,0.26)}
 .gv-jr-main{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:start;gap:12px 18px}
 .gv-jr-id{min-width:0}
 .gv-jr-title{margin:0;font-size:17px;font-weight:700;line-height:1.25;color:${INK};overflow-wrap:anywhere}
-.gv-jr-sub{margin:3px 0 0;font-size:13.5px;font-weight:600;color:${FOREST};overflow-wrap:anywhere}
+.gv-jr-sub{margin:4px 0 0;display:flex;align-items:flex-start;gap:6px;font-size:13.5px;font-weight:600;color:${INK_SOFT};overflow-wrap:anywhere}
+.gv-jr-sub-icon{flex-shrink:0;margin-top:1px;color:${INK}}
+.gv-jr-fact{display:inline-flex;align-items:center;gap:5px}
+.gv-jr-fact-gold{font-size:13px;font-weight:700;color:#8A6614}
 .gv-jr-facts{margin:8px 0 0;display:flex;flex-wrap:wrap;align-items:center;gap:6px 14px;font-size:13.5px;color:${INK_SOFT}}
 .gv-jr-status{display:inline-flex;align-items:center;gap:5px;font-weight:700}
 .gv-jr-lock{display:inline-flex;align-items:center;gap:4px;color:${INK_SOFT}}
-.gv-jr-promo{margin:10px 0 0;display:flex;flex-wrap:wrap;gap:6px}
-.gv-jr-chip{display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border-radius:9999px;font-size:12px;font-weight:700;color:#4A3410;background:linear-gradient(145deg,#F3E3A1 0%,#EED98A 55%,#D9B44A 100%);box-shadow:0 1px 4px rgba(182,135,31,0.3)}
-.gv-jr-chip-soft{background:rgba(238,217,138,0.4);box-shadow:none}
+.gv-jr-promo{margin:8px 0 0;display:flex;flex-wrap:wrap;gap:6px 14px}
 .gv-jr-hidden{margin:10px 0 0;padding:8px 12px;border-radius:10px;background:rgba(158,42,18,0.07);font-size:13.5px;line-height:1.45;color:${DANGER};overflow-wrap:anywhere}
 .gv-jr-funnel{grid-column:1 / -1;grid-row:2;min-width:0}
 .gv-jr-stats{grid-column:1 / -1;display:flex;flex-wrap:wrap;gap:8px 26px;margin:0}
@@ -249,7 +271,8 @@ export const ROW_CSS = `
 .gv-jr-stats dd{margin:0;font-size:22px;font-weight:800;letter-spacing:-0.02em;color:${INK};font-variant-numeric:tabular-nums}
 .gv-jr-stats dt{font-size:13px;font-weight:600;color:${INK_SOFT}}
 .gv-jr-more{grid-column:2;grid-row:1;width:40px;height:40px;border-radius:9999px;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;color:${FOREST};
-  background:linear-gradient(180deg,#FFFFFF 0%,#F2EDE2 100%);border:1px solid rgba(27,56,40,0.16);box-shadow:inset 0 1px 0 #FFFFFF,0 2px 6px rgba(27,56,40,0.14)}
+  background:#FFFFFF;border:1px solid rgba(27,56,40,0.20);box-shadow:0 1px 2px rgba(27,56,40,0.07);transition:background-color 150ms cubic-bezier(0.22,1,0.36,1),border-color 150ms cubic-bezier(0.22,1,0.36,1),box-shadow 150ms cubic-bezier(0.22,1,0.36,1)}
+.gv-jr-more:hover{background:#F4F0E6;border-color:rgba(27,56,40,0.45);box-shadow:0 2px 8px rgba(27,56,40,0.12)}
 .gv-jr-more:focus{outline:none}
 .gv-jr-more:focus-visible{outline:2px solid ${FOREST};outline-offset:2px}
 @media (min-width:1100px){

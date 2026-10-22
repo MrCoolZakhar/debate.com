@@ -105,9 +105,10 @@ export function CommitteeTag({ name, abbreviation, logoUrl, size = 20, struck = 
   );
 }
 
-/** Seats given against paid spots: the light part is given, the dark part has a person on it. */
-export function SeatMeter({ given, filled, paid, height = 8 }: { given: number; filled: number; paid: number; height?: number }) {
-  const base = Math.max(paid, given, 1);
+/** Allocations given against the target (the expected size, delegationExpected):
+ *  the light part is given, the dark part has a person on it. */
+export function SeatMeter({ given, filled, target, height = 8 }: { given: number; filled: number; target: number; height?: number }) {
+  const base = Math.max(target, given, 1);
   const pct = (n: number) => `${Math.min(100, Math.round((n / base) * 100))}%`;
   return (
     <div aria-hidden style={{ height, borderRadius: 99, background: HAIRLINE, position: 'relative', overflow: 'hidden' }}>

@@ -397,6 +397,13 @@ export default function ParticipantView({
     : [];
   const hasDocs = docsExtraOn ? gateOpen && (extraDocs?.documents.length ?? 0) > 0 : roleDocs.length > 0;
   const docsDue = gateOpen && extraDocs && extraDocs.warnings > 0 ? requiredOutstanding(extraDocs.documents) : [];
+  // A delegate's Documents section draws the conference documents to READ as
+  // its third part, beside the paper and the study guide (owner, 22 Oct 2026);
+  // the card below then keeps only the ones the organisers want sent back.
+  const docsInRole = isDelegateRole && gateOpen;
+  const additionalDocs = !docsInRole ? [] : extraDocs ? extraDocs.documents.filter(d => !d.can_send_back) : roleDocs;
+  const paneExtraDocs = extraDocs && docsInRole ? { ...extraDocs, documents: extraDocs.documents.filter(d => d.can_send_back) } : extraDocs;
+  const showDocsPane = hasDocs && (!docsInRole || (paneExtraDocs?.documents.length ?? 0) > 0);
   const sections = sectionsFor(selected, gateOpen, hasDocs, chairAwardsTab);
   // In a delegation with the gate open, Overview is drawn by DelegationOverview.
   const delegationOverview = gateOpen && inDelegation(selected);
@@ -479,6 +486,7 @@ export default function ParticipantView({
       allocationSwapMode={allocationSwapMode}
       section={activeSection}
       onSelectSection={selectSection}
+      additionalDocs={additionalDocs}
     />
   ) : selected.role === 'faculty-advisor' ? (
     <AdvisorParticipant
@@ -703,10 +711,10 @@ export default function ParticipantView({
             {/* Conference Documents: the Rules of Procedure, logistics and the
                 rest the organisers shared with everyone accepted. In the
                 Documents section; its own heading on the phone page. */}
-            {hasDocs && (
-              <Pane show={activeSection === 'documents'} title="Conference Documents" icon={FolderOpen} anchor="conference-documents">
-                {extraDocs
-                  ? <ConferenceDocsExtra conferenceId={conferenceId} data={extraDocs} onChanged={() => { void myDocs.reload(); }} />
+            {showDocsPane && (
+              <Pane show={activeSection === 'documents'} title={docsInRole ? 'Documents to Send Back' : 'Conference Documents'} icon={FolderOpen} anchor="conference-documents">
+                {paneExtraDocs
+                  ? <ConferenceDocsExtra conferenceId={conferenceId} data={paneExtraDocs} onChanged={() => { void myDocs.reload(); }} />
                   : <ConferenceDocsSection docs={roleDocs} />}
               </Pane>
             )}

@@ -11,7 +11,7 @@
 //           beneath; the gold score disc, "How this scores" on hover; the
 //           seat on an ivory well with a soft Assign; one row of reason
 //           badges), or one person opened in place with their level, where
-//           they are from and their best three seats;
+//           they are from, their preferences and their best three allocations;
 //   RIGHT   the committees as fill rings; a click (or a person dropped on one)
 //           opens that committee's pop-up: the classic board's own pop-up
 //           (CommitteeDetailModal.tsx, owned by the page; owner, 22 Oct
@@ -41,7 +41,7 @@ import { replaceUrlInPlace } from '@/lib/replaceUrlInPlace';
 import {
   type AcceptedApp, type CommitteeData, type Suggestion, type UserHistory,
   CountryFlag, CommitteeLogo, committeeLabels, committeeSeatLogo, effectiveLevel,
-  LevelBadge, LevelDisc, LevelHero, slotLogoUrl, OUTFIT,
+  LevelBadge, LevelDisc, LevelHero, fitPctLabel, slotLogoUrl, OUTFIT,
 } from '@/app/manage/[slug]/assignment/assignmentKit';
 import {
   AvatarWithFlag, BigCount, CARD_SHADOW, CommitteeRing, FitPills, NameAge, PersonIdentity, RankNumber, RingTally, ScoreHover, ScoringHint,
@@ -301,10 +301,10 @@ export default function SeatBoard({
       {feed.length === 0 ? (
         <div className="flex flex-col items-center justify-center text-center gap-2 py-16 px-6" style={{ background: '#FFFFFF', borderRadius: 18, boxShadow: CARD_SHADOW, fontFamily: OUTFIT }}>
           <p style={{ margin: 0, fontSize: 16, fontWeight: 600, color: NEU.ink }}>
-            {waiting.length === 0 ? 'Everyone accepted has a seat' : 'No open seat fits anyone waiting'}
+            {waiting.length === 0 ? 'Everyone accepted has an allocation' : 'No open allocation fits anyone waiting'}
           </p>
           <p style={{ margin: 0, fontSize: 13.5, color: NEU.inkSoft }}>
-            {waiting.length === 0 ? 'New people appear here once you accept them' : 'Open a committee on the right to seat someone by hand'}
+            {waiting.length === 0 ? 'New people appear here once you accept them' : 'Open a committee on the right to allocate someone by hand'}
           </p>
         </div>
       ) : (
@@ -444,10 +444,7 @@ export default function SeatBoard({
       <SeatBoardDelegations
         leftHeader={leftHeader}
         committees={committees}
-        waiting={waiting}
         search={search}
-        spread={spread}
-        needy={needy}
         onRefresh={onRefresh}
         onOpenDelegationsView={onOpenDelegationsView}
         onOpenCommittee={id => onOpenCommittee(id, null)}
@@ -470,7 +467,7 @@ export default function SeatBoard({
         <div className="flex-1 min-h-0 overflow-y-auto" style={{ padding: '6px 8px 8px', borderTop: '1px solid #EFEAE0', overscrollBehavior: 'contain' }}>
           {people.length === 0 && (
             <p className="text-center py-8" style={{ fontSize: 14, color: NEU.inkSoft }}>
-              {waiting.length === 0 ? 'Nobody is waiting for a seat' : 'Nobody matches these filters'}
+              {waiting.length === 0 ? 'Nobody is waiting for an allocation' : 'Nobody matches these filters'}
             </p>
           )}
           {people.map(a => {
@@ -485,7 +482,7 @@ export default function SeatBoard({
                 role="button"
                 tabIndex={0}
                 aria-pressed={open}
-                aria-label={`${name}. Open to see their best seats, or drag onto a committee`}
+                aria-label={`${name}. Open to see their best allocations, or drag onto a committee`}
                 onClick={toggle}
                 onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); } }}
                 className="flex items-center gap-3 focus:outline-none focus-visible:ring-2"
@@ -538,7 +535,7 @@ export default function SeatBoard({
         <div className="flex items-center justify-between flex-none" style={{ padding: '0 4px' }}>
           <span className="inline-flex items-center gap-2">
             <h2 style={{ margin: 0, fontSize: 17, fontWeight: 600 }}>Committees</h2>
-            <span title="The ring shows how full each committee is. Beneath it, seats given of all seats" style={{ display: 'inline-flex', color: NEU.inkSoft }}>
+            <span title="The ring shows how full each committee is. Beneath it, allocations given of all allocations" style={{ display: 'inline-flex', color: NEU.inkSoft }}>
               <Info size={15} strokeWidth={1.5} />
             </span>
           </span>
@@ -577,7 +574,7 @@ export default function SeatBoard({
             ) : focus && markers.size > 0 ? (
               <>Gold numbers are {firstName(personName(focus))}&apos;s choices, 1 is their first</>
             ) : (
-              'Click a committee to see every seat, or drag a person onto one'
+              'Click a committee to see every allocation, or drag a person onto one'
             )}
           </span>
         </div>
@@ -625,7 +622,7 @@ function SmartAllocationCard({ sug, busy, locked, onOpenPerson, onAssign }: {
         <ScoreHover
           sug={sug}
           size={44}
-          title={sug.swap ? `Fit ${sug.score} here; their own best open seat scored ${sug.swap.ownBestScore}. Hover for how it scores` : undefined}
+          title={sug.swap ? `Fit ${fitPctLabel(sug.score)} here; their own best open allocation scored ${fitPctLabel(sug.swap.ownBestScore)}. Hover for how it scores` : undefined}
         />
       </div>
 
@@ -649,8 +646,8 @@ function SmartAllocationCard({ sug, busy, locked, onOpenPerson, onAssign }: {
 // ── One person, opened in the middle ─────────────────────────────────────────
 // Compact, no dead space (owner, 21 Oct 2026): one card for who they are (the
 // back button in its top row, the flag, age, role and school on one line, the
-// large level beside), then their preferences and their best three seats,
-// side by side when the column is wide and stacked when it is not.
+// large level beside), then their preferences right beneath it (owner, 22 Oct
+// 2026: above the best allocations), then their best three allocations.
 function PersonPanel({
   person, history, committees, bestThree, busyKey, locked, onAssign, onBack, onChooseAnother, phoneRings,
 }: {
@@ -721,76 +718,79 @@ function PersonPanel({
         )}
       </div>
 
-      <div className="grid gap-2" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 340px), 1fr))', alignItems: 'start' }}>
-        {/* Their best three seats */}
-        <div className="flex flex-col" style={{ ...card, padding: '10px 12px 12px', gap: 6 }}>
-          <div className="flex items-center justify-between gap-3 flex-wrap" style={{ minHeight: 30 }}>
-            <h3 style={{ margin: 0, fontSize: 15, fontWeight: 600, color: NEU.ink, paddingLeft: 2 }}>Best Three Seats</h3>
-            <span className="max-lg:hidden">
-              <SoftButton onClick={onChooseAnother} size="sm" title="For any other seat, click a committee on the right">Choose another seat</SoftButton>
-            </span>
-          </div>
-          {bestThree.length === 0 && <p style={{ margin: 0, fontSize: 13, color: NEU.inkSoft, paddingLeft: 2 }}>No open seat fits {firstName(name)} right now</p>}
-          {bestThree.map(sug => {
-            const key = `${sug.app.id}-${sug.slot.id}`;
-            const labels = committeeLabels(sug.committee);
-            return (
-              <div key={key} className="flex flex-col" style={{ padding: '6px 6px 6px 8px', borderRadius: 13, background: WELL, gap: 5 }}>
-                <div className="flex items-center gap-2">
-                  <ScoreHover sug={sug} size={32} />
-                  <CountryFlag code={sug.slot.country_code} w={26} h={26} alt={sug.slot.country_name} logoUrl={slotLogoUrl(sug.committee, sug.slot)} />
-                  <span className="flex items-center flex-wrap flex-1 min-w-0" style={{ gap: '0 8px', lineHeight: 1.15 }}>
-                    <CountryName name={sug.slot.country_name} code={sug.slot.country_code} style={{ fontSize: 14.5, fontWeight: 700, color: NEU.ink, whiteSpace: 'normal', overflowWrap: 'anywhere' }} />
-                    <span className="inline-flex items-center gap-1" style={{ fontSize: 12.5, color: NEU.inkSoft }} title={sug.committee.name}>
-                      <CommitteeLogo committee={sug.committee} size={16} alt={labels.big} />
-                      <span style={{ fontWeight: 600 }}>{labels.big}</span>
-                    </span>
-                  </span>
-                  <SoftButton onClick={() => onAssign(sug)} disabled={busyKey === key || locked} size="sm">
-                    {busyKey === key ? 'Saving' : 'Assign'}
-                  </SoftButton>
-                </div>
-                {(sug.reasons.length > 0 || sug.swap) && <span className="flex min-w-0" style={{ paddingLeft: 40 }}><FitPills sug={sug} max={4} size="sm" /></span>}
-              </div>
-            );
-          })}
-          <div className="lg:hidden flex flex-col gap-2 pt-1">
-            <span style={{ fontSize: 13, fontWeight: 600 }}>Choose another seat</span>
-            {phoneRings}
-          </div>
+      {/* What they asked for, right under who they are (owner, 22 Oct
+          2026), four to a column when the middle is wide */}
+      <div className="flex flex-col" style={{ ...card, padding: '10px 14px 12px', gap: 4 }}>
+        <h3 style={{ margin: '0 0 2px', fontSize: 15, fontWeight: 600, color: NEU.ink, minHeight: 30, display: 'flex', alignItems: 'center' }}>Preferences</h3>
+        {prefs.length === 0 ? (
+          <p style={{ margin: 0, fontSize: 13, color: NEU.inkSoft }}>No preference given</p>
+        ) : (
+        <div className="grid gap-x-6 gap-y-1 sm:grid-flow-col sm:auto-cols-fr sm:[grid-template-rows:repeat(4,auto)]">
+        {prefs.map((p, i) => {
+          const c = byId.get(p.conference_committee_id);
+          const slot = c?.committee_country_slots.find(s => s.country_code === p.country_code);
+          const held = c ? c.conference_allocations.filter(a => a.country_code === p.country_code).length : 0;
+          const taken = !!slot && held >= slot.delegation_size;
+          const big = c ? committeeLabels(c).big : committeeShortName(p.conference_committees);
+          return (
+            <div
+              key={`${p.preference_order}-${p.conference_committee_id}-${p.country_code}`}
+              className="flex items-center gap-2 min-w-0"
+              style={{ minHeight: 26, opacity: taken ? 0.6 : 1 }}
+              title={`${p.conference_committees?.name ?? c?.name ?? big}, ${p.country_name}${taken ? ', taken' : ''}`}
+            >
+              <RankNumber order={i + 1} size={20} />
+              <span className="inline-flex items-center gap-1.5 flex-shrink-0" style={{ minWidth: 76 }}>
+                {c && <CommitteeLogo committee={c} size={18} alt={big} />}
+                <span style={{ fontSize: 13, fontWeight: 600, color: NEU.ink }}>{big}</span>
+              </span>
+              <span className="inline-flex items-center gap-1.5 min-w-0 flex-1">
+                <CountryFlag code={p.country_code} w={18} h={18} alt={p.country_name} logoUrl={c ? committeeSeatLogo(c, p.country_code) : null} />
+                <CountryName name={p.country_name} code={p.country_code} style={{ fontSize: 13, color: NEU.ink, whiteSpace: 'normal', overflowWrap: 'anywhere', lineHeight: 1.15 }} />
+              </span>
+              {taken && <span className="flex-shrink-0" style={{ fontSize: 12, color: NEU.inkSoft }}>taken</span>}
+            </div>
+          );
+        })}
         </div>
+        )}
+      </div>
 
-        {/* What they asked for */}
-        <div className="flex flex-col" style={{ ...card, padding: '10px 14px 12px', gap: 4 }}>
-          <h3 style={{ margin: '0 0 2px', fontSize: 15, fontWeight: 600, color: NEU.ink, minHeight: 30, display: 'flex', alignItems: 'center' }}>Preferences</h3>
-          {prefs.length === 0 ? (
-            <p style={{ margin: 0, fontSize: 13, color: NEU.inkSoft }}>No preference given</p>
-          ) : prefs.map((p, i) => {
-            const c = byId.get(p.conference_committee_id);
-            const slot = c?.committee_country_slots.find(s => s.country_code === p.country_code);
-            const held = c ? c.conference_allocations.filter(a => a.country_code === p.country_code).length : 0;
-            const taken = !!slot && held >= slot.delegation_size;
-            const big = c ? committeeLabels(c).big : committeeShortName(p.conference_committees);
-            return (
-              <div
-                key={`${p.preference_order}-${p.conference_committee_id}-${p.country_code}`}
-                className="flex items-center gap-2 min-w-0"
-                style={{ minHeight: 26, opacity: taken ? 0.6 : 1 }}
-                title={`${p.conference_committees?.name ?? c?.name ?? big}, ${p.country_name}${taken ? ', taken' : ''}`}
-              >
-                <RankNumber order={i + 1} size={20} />
-                <span className="inline-flex items-center gap-1.5 flex-shrink-0" style={{ minWidth: 76 }}>
-                  {c && <CommitteeLogo committee={c} size={18} alt={big} />}
-                  <span style={{ fontSize: 13, fontWeight: 600, color: NEU.ink }}>{big}</span>
+      {/* Their best three allocations */}
+      <div className="flex flex-col" style={{ ...card, padding: '10px 12px 12px', gap: 6 }}>
+        <div className="flex items-center justify-between gap-3 flex-wrap" style={{ minHeight: 30 }}>
+          <h3 style={{ margin: 0, fontSize: 15, fontWeight: 600, color: NEU.ink, paddingLeft: 2 }}>Best Three Allocations</h3>
+          <span className="max-lg:hidden">
+            <SoftButton onClick={onChooseAnother} size="sm" title="For any other allocation, click a committee on the right">Choose another allocation</SoftButton>
+          </span>
+        </div>
+        {bestThree.length === 0 && <p style={{ margin: 0, fontSize: 13, color: NEU.inkSoft, paddingLeft: 2 }}>No open allocation fits {firstName(name)} right now</p>}
+        {bestThree.map(sug => {
+          const key = `${sug.app.id}-${sug.slot.id}`;
+          const labels = committeeLabels(sug.committee);
+          return (
+            <div key={key} className="flex flex-col" style={{ padding: '6px 6px 6px 8px', borderRadius: 13, background: WELL, gap: 5 }}>
+              <div className="flex items-center gap-2">
+                <ScoreHover sug={sug} size={32} />
+                <CountryFlag code={sug.slot.country_code} w={26} h={26} alt={sug.slot.country_name} logoUrl={slotLogoUrl(sug.committee, sug.slot)} />
+                <span className="flex items-center flex-wrap flex-1 min-w-0" style={{ gap: '0 8px', lineHeight: 1.15 }}>
+                  <CountryName name={sug.slot.country_name} code={sug.slot.country_code} style={{ fontSize: 14.5, fontWeight: 700, color: NEU.ink, whiteSpace: 'normal', overflowWrap: 'anywhere' }} />
+                  <span className="inline-flex items-center gap-1" style={{ fontSize: 12.5, color: NEU.inkSoft }} title={sug.committee.name}>
+                    <CommitteeLogo committee={sug.committee} size={16} alt={labels.big} />
+                    <span style={{ fontWeight: 600 }}>{labels.big}</span>
+                  </span>
                 </span>
-                <span className="inline-flex items-center gap-1.5 min-w-0 flex-1">
-                  <CountryFlag code={p.country_code} w={18} h={18} alt={p.country_name} logoUrl={c ? committeeSeatLogo(c, p.country_code) : null} />
-                  <CountryName name={p.country_name} code={p.country_code} style={{ fontSize: 13, color: NEU.ink, whiteSpace: 'normal', overflowWrap: 'anywhere', lineHeight: 1.15 }} />
-                </span>
-                {taken && <span className="flex-shrink-0" style={{ fontSize: 12, color: NEU.inkSoft }}>taken</span>}
+                <SoftButton onClick={() => onAssign(sug)} disabled={busyKey === key || locked} size="sm">
+                  {busyKey === key ? 'Saving' : 'Assign'}
+                </SoftButton>
               </div>
-            );
-          })}
+              {(sug.reasons.length > 0 || sug.swap) && <span className="flex min-w-0" style={{ paddingLeft: 40 }}><FitPills sug={sug} max={4} size="sm" /></span>}
+            </div>
+          );
+        })}
+        <div className="lg:hidden flex flex-col gap-2 pt-1">
+          <span style={{ fontSize: 13, fontWeight: 600 }}>Choose another allocation</span>
+          {phoneRings}
         </div>
       </div>
     </div>

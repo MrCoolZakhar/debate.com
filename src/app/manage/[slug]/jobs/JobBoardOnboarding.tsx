@@ -73,12 +73,13 @@ export default function JobBoardOnboarding({ confId, canPack, onPost, onPack, on
         ))}
       </ol>
       <div className="flex flex-wrap items-center" style={{ gap: 10, marginTop: 18 }}>
-        <button type="button" className="gv-st-btn gv-st-forest" onClick={onPost}>
-          <Plus size={16} strokeWidth={2.6} aria-hidden /> Post your first listing
+        {/* Light: the page header carries the view's one solid forest button. */}
+        <button type="button" className="gv-st-btn gv-st-outline" onClick={onPost}>
+          <Plus size={16} strokeWidth={1.6} aria-hidden /> Post your first listing
         </button>
         {canPack && (
           <button type="button" className="gv-st-btn gv-st-outline" onClick={onPack}>
-            <Layers size={16} strokeWidth={2.4} aria-hidden /> Post chair roles for every committee
+            <Layers size={16} strokeWidth={1.6} aria-hidden /> Post chair roles for every committee
           </button>
         )}
         <button

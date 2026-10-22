@@ -12,9 +12,9 @@
 // are way too big: show them like the allocations in the Applications tab."
 //
 //   LEFT    only the delegations that still need allocations: accepted (any
-//           accepted member or leader) and given < max(paid tickets, accepted
-//           delegates), so a delegation leaves the list only once BOTH are met
-//           (needOf). Oldest accepted first (the earliest decided_at of its
+//           accepted member or leader) and given < its expected size (needOf:
+//           src/lib/delegationExpected.ts, the biggest of delegate spots paid,
+//           delegates joined and the leaders' pledge; owner, 22 Oct 2026). Oldest accepted first (the earliest decided_at of its
 //           accepted members), with search: crest, name, place, "N more" big
 //           and "of M" small. "Show all delegations" adds the rest, greyed
 //           ("Complete", or "Not accepted yet"). The open one stays listed.
@@ -32,18 +32,11 @@
 //                with avatars, a double as two rows (holder, then Open), no seat
 //                numbers); the Allocations tab's light red corner minus on a
 //                row with an empty seat takes the empty seats back, asked in place
-//             Give more: a segmented control
-//                  One country        pick a country; every committee where it
-//                                     is free, ticked; one button gives them.
-//                  Best seat per room the engine's best free seat per committee
-//                                     (assignmentFit.rankSeatsForSociety), only
-//                                     in rooms where the delegation holds no
-//                                     allocation yet, each row swappable or
-//                                     left out; one button.
-//                  Custom (default)   the committee rings on the right open the
-//                                     committee pop-up in "Give to" mode
-//                                     (SeatBoardGivePopup.tsx): one tap per
-//                                     country, the pop-up stays open.
+//             Give more: by clicking a committee only (owner, 22 Oct 2026:
+//                the One country / Best seat per room / Custom choice is
+//                gone): the committee rings on the right open the committee
+//                pop-up in "Give to" mode (SeatBoardGivePopup.tsx): one tap
+//                per country, the pop-up stays open.
 //   RIGHT   the committee rings, as on the People tab.
 // Every give is ONE giveExactSeats call (organiser_give_society_seats: all or
 // nothing, verified, the conference's seat limit enforced) and every take back
@@ -63,8 +56,7 @@
 // delegations, their money and a 10 s live re-read) run only then.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, Check, Info, Minus, Plus, X } from 'lucide-react';
-import GSelect, { type GSelectOption } from '@/components/GSelect';
+import { ArrowLeft, Check, Info, Minus, X } from 'lucide-react';
 import { NEU } from '@/components/neu';
 import DelegationCrest from '@/components/DelegationCrest';
 import { useAuth } from '@/components/AuthProvider';
@@ -72,9 +64,8 @@ import { getFreshAuthedClient } from '@/lib/supabase-auth';
 import { notifyErr, notifyOk } from '@/lib/appNotify';
 import { friendlyError } from '@/lib/friendlyError';
 import { useManage } from '@/app/manage/[slug]/layout';
-import {
-  allocationSocietyId, groupAllocationsByCountry, openSeatsForSociety, rankSeatsForSociety, type SocietySeatOption,
-} from '@/lib/assignmentFit';
+import { allocationSocietyId } from '@/lib/assignmentFit';
+import { delegationExpected } from '@/lib/delegationExpected';
 import { useDelegationsData, type DelegationView } from '@/app/manage/[slug]/applications/delegations/useDelegationsData';
 import { giveExactSeats, takeBackOneSeat } from '@/app/manage/[slug]/applications/delegations/seatWrites';
 import { readDelegationSettings, type GiveSeat, type SeatLimit } from '@/app/manage/[slug]/applications/delegations/v2';
@@ -87,15 +78,14 @@ import DelegationPopupLink from '@/app/manage/[slug]/DelegationPopupLink';
 import { useBoardDrag, dropAttr } from '@/app/manage/[slug]/assignment/boardDrag';
 import { CountryName } from '@/app/manage/[slug]/assignment/displayNames';
 import {
-  type AcceptedApp, type AllocationRow, type CommitteeData, type SlotRow,
-  CountryFlag, PersonAvatar, CommitteeLogo, committeeLabels, committeeSeatLogo, fitColor, slotLogoUrl, OUTFIT,
+  type AllocationRow, type CommitteeData, type SlotRow,
+  CountryFlag, PersonAvatar, CommitteeLogo, committeeLabels, committeeSeatLogo, OUTFIT,
 } from '@/app/manage/[slug]/assignment/assignmentKit';
 import { SeatBoardGivePopup, holderOf } from '@/app/manage/[slug]/assignment/SeatBoardGivePopup';
 import {
-  BigCount, CARD_SHADOW, CommitteeRing, HAIRLINE, RingTally, SOFT_BTN_CLASS, SoftButton, WELL, seatCounts,
+  BigCount, CARD_SHADOW, CommitteeRing, HAIRLINE, RingTally, SoftButton, WELL, seatCounts,
 } from '@/app/manage/[slug]/assignment/seatBoardShared';
 
-type Mode = 'one' | 'best' | 'custom';
 /** A change laid over the board until the board's own read shows it. Keyed
  *  `<committee>:<code>:<seat>` for a give and `undo:<committee>:<code>` for a
  *  take back. `op` is the press that owns the entry: a write that comes back
@@ -157,20 +147,6 @@ async function takeBackCountryWrite(societyId: string, committeeId: string, code
 /** How long a landed change the board's read never showed is kept (someone else moved it). */
 const LANDED_KEEP_MS = 8_000;
 
-const MODES: { key: Mode; label: string }[] = [
-  { key: 'one', label: 'One country' },
-  { key: 'best', label: 'Best seat per room' },
-  { key: 'custom', label: 'Custom' },
-];
-
-// The one primary button of the view (the mode's give): a calm solid forest,
-// never the dark gradient (owner, 22 Oct 2026: "no dark green gradient
-// buttons"); every other action is a soft pill.
-const BTN_PRIMARY: React.CSSProperties = {
-  height: 38, padding: '0 18px', borderRadius: 11, border: 'none', cursor: 'pointer',
-  background: '#2C4A39', color: '#FFFFFF',
-  fontFamily: OUTFIT, fontSize: 13.5, fontWeight: 600, boxShadow: '0 1px 2px rgba(27,56,40,0.14)',
-};
 // The opened delegation must pop like the smart allocation cards (owner, 22
 // Oct 2026): white, a gold top edge over the header, a thin gold ring and a
 // deeper forest-tinted lift. Round 7 (owner, 22 Oct 2026: "raise it more, as
@@ -191,7 +167,6 @@ const DELEGATION_PLATE: React.CSSProperties = {
   background: 'linear-gradient(180deg, #F4E3A2 0%, #E6CB72 48%, #CDA94A 100%)',
   boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.55), inset 0 -1px 0 rgba(138,102,20,0.35), 0 6px 14px -4px rgba(138,102,20,0.45), 0 18px 34px -14px rgba(27,56,40,0.32)',
 };
-const BTN_DISABLED: React.CSSProperties = { ...BTN_PRIMARY, background: WELL, color: NEU.inkSoft, boxShadow: 'none', cursor: 'default' };
 
 function seatKey(committeeId: string, code: string, seat: number) {
   return `${committeeId}:${code}:${seat}`;
@@ -203,24 +178,6 @@ function byName(a: string, b: string) {
 
 function plural(n: number, one: string, many = `${one}s`) {
   return `${n} ${n === 1 ? one : many}`;
-}
-
-/** The engine's reason codes as plain words. */
-const REASON_WORDS: Record<string, string> = {
-  'HIGH PRIORITY': 'high priority seat',
-  'PRIORITY SEAT': 'priority seat',
-  'MEMBER PICK': 'a member asked for it',
-  'NEEDS DELEGATES': 'the room needs delegates',
-};
-function reasonLine(reasons: string[]): string {
-  const words = reasons.map(r => {
-    if (r.startsWith('COMPLETES PAIR')) return 'completes their double';
-    if (r.startsWith('DELEGATION CONCENTRATION')) return 'they already sit in this room';
-    return REASON_WORDS[r] ?? null;
-  }).filter((w): w is string => !!w);
-  if (words.length === 0) return 'An open seat';
-  const s = words.join(', ');
-  return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
 const NO_DATES: ReadonlyMap<string, string> = new Map();
@@ -265,10 +222,35 @@ function useAcceptedDates(conferenceId: string): ReadonlyMap<string, string> | n
   return dates;
 }
 
-/** What a delegation must hold before it leaves the left list: its paid tickets
- *  AND its accepted delegates, so nobody misses out (owner, 21 Oct 2026). */
+const SEATED_ROLES = new Set(['delegate', 'head-delegate']);
+
+/** Delegates and head delegates in the delegation who are not turned down or
+ *  withdrawn, and the delegate spots the leaders pledged (Expected size). */
+function joinedAndPledged(r: DelegationView): { joined: number; pledged: number } {
+  let joined = 0;
+  let pledged = 0;
+  for (const m of r.members) {
+    if (!LIVE.has(m.status)) continue;
+    if (SEATED_ROLES.has(m.role)) joined += 1;
+    if (m.pledge_type === 'delegation' && (m.spots_pledged ?? 0) > 0) pledged += m.spots_pledged ?? 0;
+  }
+  return { joined, pledged };
+}
+
+/** What a delegation must hold before it leaves the left list: its expected
+ *  size, the biggest of delegate spots paid, delegates joined and the
+ *  leaders' pledge (owner, 22 Oct 2026; src/lib/delegationExpected.ts). */
 function needOf(r: DelegationView): number {
-  return Math.max(r.paid, r.seatable);
+  const { joined, pledged } = joinedAndPledged(r);
+  return delegationExpected({ paidDelegateSpots: r.paid, joinedDelegates: joined, pledged });
+}
+
+/** "12 delegate spots paid, 10 joined, 15 pledged": what the expected size is made of. */
+function expectedWhy(r: DelegationView): string {
+  const { joined, pledged } = joinedAndPledged(r);
+  const parts = [`${plural(r.paid, 'delegate spot')} paid`, `${joined} joined`];
+  if (pledged > 0) parts.push(`${pledged} pledged`);
+  return `Expected size ${needOf(r)}: ${parts.join(', ')}`;
 }
 
 /** Accepted (any accepted member or leader) and short of what it needs. */
@@ -281,11 +263,7 @@ type BoardProps = {
   /** The board's tab switcher and search, drawn at the top of the left column. */
   leftHeader: React.ReactNode;
   committees: CommitteeData[];
-  /** Everyone waiting for a seat (their preferences nudge a delegation's best seats). */
-  waiting: AcceptedApp[];
   search: string;
-  spread: ReadonlySet<string>;
-  needy: ReadonlySet<string>;
   /** Re-reads the board's committees quietly. */
   onRefresh: () => Promise<void> | void;
   onOpenDelegationsView: () => void;
@@ -301,7 +279,7 @@ export default function SeatBoardDelegations(props: BoardProps) {
 }
 
 function DelegationsBoard({
-  leftHeader, committees, waiting, search, spread, needy, onRefresh, onOpenDelegationsView, onOpenCommittee, conference,
+  leftHeader, committees, search, onRefresh, onOpenDelegationsView, onOpenCommittee, conference,
 }: BoardProps & { conference: { id: string; fee_currency: string } }) {
   const data = useDelegationsData({ conferenceId: conference.id, currency: conference.fee_currency });
   const { holdLive, queueWrite, laneBusy, landStamp, settleRead } = data;
@@ -309,7 +287,6 @@ function DelegationsBoard({
   const acceptedDates = acceptedRead ?? NO_DATES;
 
   const [openId, setOpenId] = useState<string | null>(null);
-  const [mode, setMode] = useState<Mode>('custom');
   const [pendingAll, setPendingAll] = useState<Map<string, Pending>>(() => new Map());
   /** The same map, read at tap time so quick taps never double-write a seat. */
   const pendingRef = useRef(pendingAll);
@@ -320,12 +297,6 @@ function DelegationsBoard({
   const [ask, setAsk] = useState<{ anchor: HTMLElement; allocs: AllocationRow[]; committee: CommitteeData; code: string; country: string; keepsPeople: boolean } | null>(null);
   const [limit, setLimit] = useState<SeatLimit>('none');
   const [showAll, setShowAll] = useState(false);
-  // One country
-  const [oneCode, setOneCode] = useState<string | null>(null);
-  const [oneUnticked, setOneUnticked] = useState<Set<string>>(() => new Set());
-  // Best seat in each room
-  const [bestLeftOut, setBestLeftOut] = useState<Set<string> | null>(null);
-  const [bestSwap, setBestSwap] = useState<Map<string, string>>(() => new Map());
   const middleRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
@@ -337,11 +308,6 @@ function DelegationsBoard({
   // A fresh start for every delegation opened.
   const openDelegation = useCallback((id: string | null) => {
     setOpenId(id);
-    setMode('custom');
-    setOneCode(null);
-    setOneUnticked(new Set());
-    setBestLeftOut(null);
-    setBestSwap(new Map());
     setAsk(null);
   }, [setAsk]);
   useEffect(() => { middleRef.current?.scrollTo({ top: 0 }); }, [openId]);
@@ -581,82 +547,6 @@ function DelegationsBoard({
     return [...m.values()];
   }, [held]);
 
-  const members = useMemo(() => (openId ? waiting.filter(a => a.society_id === openId) : []), [waiting, openId]);
-
-  // One country: every country with a committee it is free in for this delegation.
-  const countryOptions = useMemo(() => {
-    if (!openId) return [] as { code: string; name: string; free: number; logo: string | null }[];
-    const m = new Map<string, { code: string; name: string; free: number; logo: string | null }>();
-    for (const c of board) {
-      const byCountry = groupAllocationsByCountry(c.conference_allocations);
-      const skip = skipOf(c.id);
-      for (const s of c.committee_country_slots) {
-        if (skip.has(s.country_code)) continue;
-        const e = m.get(s.country_code) ?? { code: s.country_code, name: s.country_name, free: 0, logo: slotLogoUrl(c, s) };
-        if (openSeatsForSociety(s, byCountry, openId).length > 0) e.free += 1;
-        m.set(s.country_code, e);
-      }
-    }
-    return [...m.values()].filter(e => e.free > 0).sort((a, b) => byName(a.name, b.name));
-  }, [board, openId, skipOf]);
-
-  const oneRows = useMemo(() => {
-    if (!openId || !oneCode) return [];
-    return board.flatMap(c => {
-      const slot = c.committee_country_slots.find(s => s.country_code === oneCode);
-      if (!slot || skipOf(c.id).has(oneCode)) return [];
-      const byCountry = groupAllocationsByCountry(c.conference_allocations);
-      const rows = byCountry.get(oneCode) ?? [];
-      const seats = openSeatsForSociety(slot, byCountry, openId);
-      const theirs = rows.length > 0 && rows.every(r => allocationSocietyId(r) === openId);
-      return [{ committee: c, slot, seats, theirs, holders: rows.filter(r => allocationSocietyId(r) !== openId) }];
-    });
-  }, [board, openId, oneCode, skipOf]);
-  const oneFree = oneRows.filter(r => r.seats.length > 0);
-  const oneTicked = oneFree.filter(r => !oneUnticked.has(r.committee.id));
-
-  // Best seat in each room.
-  const bestOptions = useMemo(() => {
-    if (!openId) return [] as { committee: CommitteeData; options: SocietySeatOption<CommitteeData>[] }[];
-    // Only the rooms where the delegation holds no allocation yet (owner, 21
-    // Oct 2026): a room they already sit in is never listed, nor left out.
-    return board
-      .filter(c => !c.conference_allocations.some(a => allocationSocietyId(a) === openId))
-      .map(c => ({
-        committee: c,
-        options: rankSeatsForSociety(openId, c, spread, { needy, members, skip: skipOf(c.id) }),
-      }))
-      .filter(r => r.options.length > 0);
-  }, [board, openId, spread, needy, members, skipOf]);
-
-  const remaining = open ? Math.max(0, needOf(open) - (givenBySociety.get(open.id) ?? 0)) : 0;
-  // Left out by default: the weakest rooms past what is still to give.
-  const defaultLeftOut = useMemo(() => {
-    const out = new Set<string>();
-    if (remaining > 0 && bestOptions.length > remaining) {
-      const ranked = [...bestOptions].sort((a, b) => b.options[0].score - a.options[0].score);
-      for (const r of ranked.slice(remaining)) out.add(r.committee.id);
-    }
-    return out;
-  }, [bestOptions, remaining]);
-  const leftOut = bestLeftOut ?? defaultLeftOut;
-  const bestRows = bestOptions.map(r => {
-    const code = bestSwap.get(r.committee.id);
-    const chosen = (code ? r.options.find(o => o.slot.country_code === code) : undefined) ?? r.options[0];
-    return { ...r, chosen };
-  });
-  const bestIn = bestRows.filter(r => !leftOut.has(r.committee.id));
-  const bestOut = bestRows.filter(r => leftOut.has(r.committee.id));
-  const setLeftOut = (fn: (s: Set<string>) => void) => {
-    const next = new Set(leftOut);
-    fn(next);
-    setBestLeftOut(next);
-  };
-
-  // Rings lit for the mode's set.
-  const highlight = new Set<string>();
-  if (mode === 'one') for (const r of oneTicked) highlight.add(r.committee.id);
-  if (mode === 'best') for (const r of bestIn) highlight.add(r.committee.id);
 
   // ── The give pop-up ────────────────────────────────────────────────────────
   const giveCommittee = give ? board.find(c => c.id === give.committeeId) ?? null : null;
@@ -707,7 +597,6 @@ function DelegationsBoard({
     <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(auto-fill, minmax(${inPanel ? 72 : 70}px, 1fr))` }}>
       {committees.map(c => {
         const lit = overCommitteeId === c.id;
-        const on = highlight.has(c.id);
         const { open: openN } = seatCounts(c);
         const big = committeeLabels(c).big;
         return (
@@ -721,8 +610,8 @@ function DelegationsBoard({
             className="focus:outline-none flex flex-col items-center"
             style={{
               gap: 5, padding: '12px 2px 10px', borderRadius: 14, border: 'none', cursor: 'pointer',
-              background: lit || on ? '#FFFFFF' : '#FAF8F3',
-              boxShadow: lit ? '0 0 0 2px #1B3828, 0 8px 20px rgba(27,56,40,0.18)' : on ? '0 0 0 2px #B6871F' : '0 0 0 1px rgba(27,56,40,0.06)',
+              background: lit ? '#FFFFFF' : '#FAF8F3',
+              boxShadow: lit ? '0 0 0 2px #1B3828, 0 8px 20px rgba(27,56,40,0.18)' : '0 0 0 1px rgba(27,56,40,0.06)',
               transform: lit ? 'scale(1.04)' : 'none',
               transition: 'box-shadow 160ms cubic-bezier(0.22,1,0.36,1), transform 160ms cubic-bezier(0.22,1,0.36,1)',
               fontFamily: OUTFIT, color: NEU.ink,
@@ -771,162 +660,8 @@ function DelegationsBoard({
     const capLeft = cap == null ? null : Math.max(0, cap - given);
     const sectionTitle: React.CSSProperties = { margin: 0, fontSize: 15, fontWeight: 600, color: NEU.ink };
 
-    const modeBody = mode === 'one' ? (
-      <div className="flex flex-col gap-3">
-        <GSelect<string>
-          value={oneCode ?? ''}
-          onChange={v => { setOneCode(v || null); setOneUnticked(new Set()); }}
-          options={countryOptions.map<GSelectOption<string>>(o => ({
-            value: o.code, label: o.name,
-            hint: `Free in ${plural(o.free, 'committee')}`,
-            icon: <CountryFlag code={o.code} w={18} h={18} alt="" logoUrl={o.logo} />,
-          }))}
-          placeholder={countryOptions.length === 0 ? 'No country is free for them' : 'Pick a country'}
-          searchable
-          searchPlaceholder="Search a country"
-          aria-label="Pick a country"
-          panelMinWidth={280}
-          disabled={countryOptions.length === 0}
-        />
-        {oneCode && (
-          <>
-            <div className="flex flex-col">
-              {oneRows.map(r => {
-                const free = r.seats.length > 0;
-                const ticked = free && !oneUnticked.has(r.committee.id);
-                const holders = r.holders.map(h => holderOf(h, societyName));
-                const lbl = committeeLabels(r.committee);
-                return (
-                  <label
-                    key={r.committee.id}
-                    className="flex items-center gap-3 px-2 py-2"
-                    title={r.committee.name}
-                    style={{ borderTop: `1px solid ${HAIRLINE}`, cursor: free ? 'pointer' : 'default', opacity: free || r.theirs ? 1 : 0.55 }}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={ticked}
-                      disabled={!free}
-                      onChange={() => setOneUnticked(prev => {
-                        const next = new Set(prev);
-                        if (next.has(r.committee.id)) next.delete(r.committee.id); else next.add(r.committee.id);
-                        return next;
-                      })}
-                      aria-label={`Give ${r.slot.country_name} in ${lbl.big}`}
-                      style={{ width: 17, height: 17, accentColor: '#1B3828', visibility: free ? 'visible' : 'hidden', flexShrink: 0 }}
-                    />
-                    <CommitteeLogo committee={r.committee} size={22} alt={lbl.big} />
-                    <span className="flex-1 min-w-0 [overflow-wrap:anywhere]" style={{ fontSize: 14, fontWeight: 600 }}>{lbl.big}</span>
-                    <span className="flex-shrink-0 text-right [overflow-wrap:anywhere]" style={{ fontSize: 12.5, color: free ? NEU.forest : NEU.inkSoft, maxWidth: '50%' }}>
-                      {free
-                        ? (r.slot.delegation_size > 1 ? `Free, ${plural(r.seats.length, 'seat')}` : 'Free')
-                        : r.theirs ? 'Theirs already' : `Taken by ${holders.map(h => h.name).join(', ')}`}
-                    </span>
-                  </label>
-                );
-              })}
-            </div>
-            <div>
-              <button
-                type="button"
-                disabled={oneTicked.length === 0}
-                onClick={() => {
-                  void giveSlots(open, oneTicked.map(r => ({ committee: r.committee, slot: r.slot, seats: r.seats })), () => setOneUnticked(new Set()))
-                    .then(ok => { if (ok) notifyOk(`${oneRows[0]?.slot.country_name ?? 'The country'} given to ${open.name} in ${plural(oneTicked.length, 'committee')}`, 'seat-board'); });
-                }}
-                className="focus:outline-none transition-transform duration-150 enabled:active:scale-[0.96]"
-                style={oneTicked.length === 0 ? BTN_DISABLED : BTN_PRIMARY}
-              >
-                {oneTicked.length === 0 ? 'Give' : `Give in ${plural(oneTicked.length, 'committee')}`}
-              </button>
-            </div>
-          </>
-        )}
-      </div>
-    ) : mode === 'best' ? (
-      <div className="flex flex-col gap-3">
-        {bestRows.length === 0 && <p style={{ margin: 0, fontSize: 13.5, color: NEU.inkSoft }}>Every room with a free country already has one of theirs</p>}
-        <div className="flex flex-col">
-          {bestIn.map(r => {
-            const lbl = committeeLabels(r.committee);
-            const o = r.chosen;
-            return (
-              <div key={r.committee.id} className="flex items-center gap-3 px-2 py-2 flex-wrap" title={reasonLine(o.reasons)} style={{ borderTop: `1px solid ${HAIRLINE}` }}>
-                <span style={{ fontSize: 17, fontWeight: 700, color: fitColor(o.score), fontVariantNumeric: 'tabular-nums', lineHeight: 1, minWidth: 28 }}>{o.score}</span>
-                <span className="inline-flex items-center gap-2 flex-shrink-0" style={{ minWidth: 88 }} title={r.committee.name}>
-                  <CommitteeLogo committee={r.committee} size={22} alt={lbl.big} />
-                  <span className="[overflow-wrap:anywhere]" style={{ fontSize: 13.5, fontWeight: 600 }}>{lbl.big}</span>
-                </span>
-                <span className="flex-1 min-w-0" style={{ minWidth: 160 }}>
-                  <GSelect<string>
-                    value={o.slot.country_code}
-                    onChange={v => setBestSwap(prev => new Map(prev).set(r.committee.id, v))}
-                    options={r.options.map<GSelectOption<string>>(x => ({
-                      value: x.slot.country_code, label: x.slot.country_name, hint: String(x.score),
-                      icon: <CountryFlag code={x.slot.country_code} w={18} h={18} alt="" logoUrl={slotLogoUrl(r.committee, x.slot)} />,
-                    }))}
-                    size="sm"
-                    searchable={r.options.length > 8}
-                    searchPlaceholder="Search a country"
-                    aria-label={`Country in ${lbl.big}`}
-                    panelMinWidth={240}
-                  />
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setLeftOut(s => s.add(r.committee.id))}
-                  aria-label={`Leave ${lbl.big} out`}
-                  title="Leave this room out"
-                  className="focus:outline-none flex-shrink-0 inline-flex items-center justify-center"
-                  style={{ width: 30, height: 30, borderRadius: 9, border: 'none', background: 'transparent', color: NEU.inkSoft, cursor: 'pointer' }}
-                >
-                  <X size={16} strokeWidth={1.5} />
-                </button>
-              </div>
-            );
-          })}
-        </div>
-        {bestOut.length > 0 && (
-          <div className="flex items-center flex-wrap gap-2">
-            <span style={{ fontSize: 12.5, color: NEU.inkSoft }}>Left out</span>
-            {bestOut.map(r => {
-              const lbl = committeeLabels(r.committee);
-              return (
-                <button
-                  key={r.committee.id}
-                  type="button"
-                  onClick={() => setLeftOut(s => s.delete(r.committee.id))}
-                  title={`${r.committee.name}. Tap to put it back`}
-                  className={SOFT_BTN_CLASS}
-                  style={{ height: 30, padding: '0 11px 0 7px', cursor: 'pointer', fontFamily: OUTFIT, fontSize: 12.5 }}
-                >
-                  <Plus size={13} strokeWidth={1.5} aria-hidden />
-                  <CommitteeLogo committee={r.committee} size={18} alt="" />
-                  {lbl.big}
-                </button>
-              );
-            })}
-          </div>
-        )}
-        {bestIn.length > 0 && (
-          <div>
-            <button
-              type="button"
-              onClick={() => {
-                const items = bestIn.map(r => ({ committee: r.committee, slot: r.chosen.slot, seats: r.chosen.seats }));
-                const n = items.length;
-                void giveSlots(open, items, () => { setBestLeftOut(null); setBestSwap(new Map()); })
-                  .then(ok => { if (ok) notifyOk(`${plural(n, 'allocation')} given to ${open.name}`, 'seat-board'); });
-              }}
-              className="focus:outline-none transition-transform duration-150 active:scale-[0.96]"
-              style={BTN_PRIMARY}
-            >
-              Give all {bestIn.length}
-            </button>
-          </div>
-        )}
-      </div>
-    ) : (
+    // Giving is by clicking a committee only (owner, 22 Oct 2026).
+    const giveBody = (
       <div className="flex flex-col gap-3">
         <p style={{ margin: 0, fontSize: 13.5, color: NEU.inkSoft }}>
           <span className="max-lg:hidden">Click a committee on the right to give its countries</span>
@@ -970,7 +705,7 @@ function DelegationsBoard({
                 </div>
               )}
             </div>
-            <div className="flex flex-col items-end flex-shrink-0" style={{ gap: 4 }} title={`${plural(open.paid, 'delegate spot')} paid, ${plural(open.seatable, 'accepted delegate')}`}>
+            <div className="flex flex-col items-end flex-shrink-0" style={{ gap: 4 }} title={expectedWhy(open)}>
               <span className="inline-flex items-baseline gap-1.5">
                 <span style={{ fontSize: 30, fontWeight: 700, fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>{given}</span>
                 <span style={{ fontSize: 13.5, color: NEU.inkSoft }}>{need > 0 ? `of ${need} given` : 'given'}</span>
@@ -984,11 +719,15 @@ function DelegationsBoard({
                   <Check size={14} strokeWidth={2} aria-hidden /> Complete
                 </span>
               ) : null}
-              {/* The target: delegate tickets paid (advisor tickets never count), owner 22 Oct 2026 */}
+              {/* The target is the expected size (owner, 22 Oct 2026): the biggest of
+                  delegate spots paid (advisor tickets never count), delegates
+                  joined and the leaders' pledge */}
               <span style={{ fontSize: 12.5, color: NEU.inkSoft, fontVariantNumeric: 'tabular-nums' }}>
+                Expected <span style={{ fontWeight: 700, color: NEU.ink }}>{need}</span>
+                {' · '}
                 {open.paid > 0
-                  ? <><span style={{ fontWeight: 700, color: NEU.ink }}>{open.paid}</span> delegate {open.paid === 1 ? 'spot' : 'spots'} paid · <span style={{ fontWeight: 700, color: NEU.ink }}>{given}</span> given</>
-                  : <>No delegate spots paid yet · <span style={{ fontWeight: 700, color: NEU.ink }}>{given}</span> given</>}
+                  ? <><span style={{ fontWeight: 700, color: NEU.ink }}>{open.paid}</span> delegate {open.paid === 1 ? 'spot' : 'spots'} paid</>
+                  : <>No delegate spots paid yet</>}
               </span>
               {left > 0 && capLeft === 0 && <span style={{ fontSize: 12, color: NEU.inkSoft }}>The seat limit allows no more</span>}
             </div>
@@ -998,27 +737,7 @@ function DelegationsBoard({
               so a give never moves what is under the pointer */}
           <div className="flex flex-col gap-3" style={{ borderTop: `1px solid ${HAIRLINE}`, paddingTop: 16 }}>
             <h3 style={sectionTitle}>Give more</h3>
-            <div role="tablist" aria-label="How to give" className="flex flex-wrap" style={{ gap: 2, padding: 3, borderRadius: 12, background: '#F1ECE1' }}>
-              {MODES.map(m => (
-                <button
-                  key={m.key}
-                  type="button"
-                  role="tab"
-                  aria-selected={mode === m.key}
-                  onClick={() => setMode(m.key)}
-                  className="focus:outline-none flex-1"
-                  style={{
-                    minHeight: 34, padding: '0 10px', borderRadius: 9, border: 'none', cursor: 'pointer',
-                    background: mode === m.key ? '#FFFFFF' : 'transparent',
-                    boxShadow: mode === m.key ? '0 1px 3px rgba(27,56,40,0.12)' : 'none',
-                    fontFamily: OUTFIT, fontSize: 13.5, fontWeight: mode === m.key ? 600 : 500, color: mode === m.key ? NEU.ink : NEU.inkSoft,
-                  }}
-                >
-                  {m.label}
-                </button>
-              ))}
-            </div>
-            {modeBody}
+            {giveBody}
           </div>
           {/* 3. Given: a list view like the Applications pop-up's Allocations tab,
               A to Z, one row per committee and country, a double in ONE row */}
@@ -1181,7 +900,7 @@ function DelegationsBoard({
                 <span
                   className="flex flex-col items-end flex-shrink-0 text-right"
                   style={{ minWidth: 60, lineHeight: 1.15 }}
-                  title={needs ? `${g} of ${n} given: ${plural(r.paid, 'delegate spot')} paid, ${plural(r.seatable, 'accepted delegate')}` : undefined}
+                  title={needs ? `${g} of ${n} given. ${expectedWhy(r)}` : undefined}
                 >
                   {needs ? (
                     <>
@@ -1227,7 +946,7 @@ function DelegationsBoard({
         <div className="flex items-center justify-between flex-none" style={{ padding: '0 4px' }}>
           <span className="inline-flex items-center gap-2">
             <h2 style={{ margin: 0, fontSize: 17, fontWeight: 600 }}>Committees</h2>
-            <span title="The ring shows how full each committee is. Beneath it, seats given of all seats" style={{ display: 'inline-flex', color: NEU.inkSoft }}>
+            <span title="The ring shows how full each committee is. Beneath it, allocations given of all allocations" style={{ display: 'inline-flex', color: NEU.inkSoft }}>
               <Info size={15} strokeWidth={1.5} />
             </span>
           </span>
@@ -1242,10 +961,7 @@ function DelegationsBoard({
                 {draggedRow ? <>Drop {draggedRow.name} on a committee</> : <>Giving to {bannerRow.name}</>}
               </span>
               <span style={{ fontSize: 12, color: NEU.inkSoft }}>
-                {draggedRow ? 'You pick the countries next'
-                  : mode === 'one' && oneCode ? 'Gold rings are where the country is ticked'
-                    : mode === 'best' && bestIn.length > 0 ? 'Gold rings are in the suggested set'
-                      : 'Click a committee to give its countries'}
+                {draggedRow ? 'You pick the countries next' : 'Click a committee to give its countries'}
               </span>
             </span>
             {!draggedRow && (

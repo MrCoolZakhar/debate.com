@@ -6,7 +6,7 @@
 // The WHY behind every fit indicator on the allocation portal.
 //
 // The engine in page.tsx (scorePrefAndExp, scoreSlot, scoreSocietyFit) writes a
-// short tag per term it applied ("2ND CHOICE", "EXP TOO LOW -15", ...). A tag
+// short tag per term it applied ("2ND CHOICE", "EXP TOO LOW -11", ...). A tag
 // alone never said which way a mismatch went, so hovering or focusing a tag now
 // opens a tooltip at once with the concrete reason, built from the SAME inputs
 // the engine scored: the delegate's level, the committee's difficulty, their
@@ -20,6 +20,7 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import Portal from '@/components/Portal';
 import { NEU } from '@/components/neu';
+import { COUNTRY_PICK_POINTS, IMPORTANCE_NEED_WEIGHT, PREF_POINTS } from '@/lib/assignmentFit';
 
 const OUTFIT = "var(--font-brand), sans-serif";
 
@@ -49,7 +50,7 @@ function levelWord(s: string | null | undefined): string {
   return v ? v.charAt(0).toUpperCase() + v.slice(1) : 'Unknown';
 }
 
-/** Points carried by a tag like "EXP TOO LOW -15" or "COMPLETES PAIR +35". */
+/** Points carried by a tag like "EXP TOO LOW -11" or "COMPLETES PAIR +26". */
 function pointsOf(reason: string): string | null {
   const m = reason.match(/([+-]\d+)\s*$/);
   return m ? m[1] : null;
@@ -63,12 +64,12 @@ export function explainReason(reason: string, ctx: ReasonContext): string | null
 
   if (reason === '1ST CHOICE' || reason === '2ND CHOICE' || reason === '3RD CHOICE') {
     const i = reason.startsWith('1') ? 0 : reason.startsWith('2') ? 1 : 2;
-    const points = i === 0 ? 50 : i === 1 ? 30 : 15;
+    const points = PREF_POINTS[i];
     return `${ctx.committeeName} is their ${ordinal(i)} choice committee (+${points} points).`;
   }
   if (reason === 'COUNTRY PICK') {
     const which = ctx.prefIndex >= 0 ? `their ${ordinal(ctx.prefIndex)} choice` : 'their preferences';
-    return `They asked for ${ctx.countryName} in ${ctx.committeeName} as ${which} (+25 points).`;
+    return `They asked for ${ctx.countryName} in ${ctx.committeeName} as ${which} (+${COUNTRY_PICK_POINTS} points).`;
   }
   if (reason.startsWith('EXP MATCH')) {
     return `Experience fits: they are ${lvl}, and ${ctx.committeeName} is set to ${diff}${tail}.`;
@@ -80,10 +81,10 @@ export function explainReason(reason: string, ctx: ReasonContext): string | null
     return `Experience too high: they are ${lvl}, ${ctx.committeeName} is set to ${diff}${tail}.`;
   }
   if (reason === 'HIGH PRIORITY') {
-    return `${ctx.countryName} is a high-importance seat, so it is filled first (+18 points).`;
+    return `${ctx.countryName} is a high-importance seat, so it is filled first (+${IMPORTANCE_NEED_WEIGHT.high} points).`;
   }
   if (reason === 'PRIORITY SEAT') {
-    return `${ctx.countryName} is a medium-importance seat, filled before standard ones (+10 points).`;
+    return `${ctx.countryName} is a medium-importance seat, filled before standard ones (+${IMPORTANCE_NEED_WEIGHT.medium} points).`;
   }
   if (reason === 'NEEDS DELEGATES') {
     return `${ctx.committeeName} has fewer seats filled than the other committees.`;

@@ -226,13 +226,19 @@ export function CountryField({
                 onMouseEnter={(e) => { setActive(i); (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.06)'; }}
                 onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = i === active ? 'rgba(27,56,40,0.09)' : 'transparent'; }}
               >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={getFlagUrl(c.code)}
-                  alt=""
-                  style={{ width: '20px', height: '14px', objectFit: 'cover', borderRadius: '2px', flexShrink: 0 }}
-                />
-                {c.name}
+                {/* One flag shape per field (CLAUDE.md §8 rule 10): round in the
+                    list too when the chosen value is drawn round. */}
+                {circleFlag ? (
+                  <CircleFlag code={c.code} size={20} decorative />
+                ) : (
+                  /* eslint-disable-next-line @next/next/no-img-element */
+                  <img
+                    src={getFlagUrl(c.code)}
+                    alt=""
+                    style={{ width: '20px', height: '14px', objectFit: 'cover', borderRadius: '2px', flexShrink: 0 }}
+                  />
+                )}
+                <span className="min-w-0 [overflow-wrap:anywhere]">{c.name}</span>
               </button>
             ))}
           </div>

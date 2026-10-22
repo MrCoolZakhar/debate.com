@@ -120,25 +120,40 @@ export function distinctCountryFilled(allocations: readonly { country_code: stri
 }
 
 // ── Scoring ───────────────────────────────────────────────────────────────────
-// score(applicant, committee, slot) =
-//   preference:  1st choice committee +50, 2nd +30, 3rd +15
-//                +25 more if the slot is the exact country they asked for in that preference
+// SCORES ARE OUT OF 100 (owner, 22 Oct 2026: "scores out of 100, shown as a
+// percentage", with a traffic light: 80 to 100 green, 60 to 79 amber, under 60
+// red). The ratios between the parts are the ones the engine always used; only
+// the scale moved. The old raw weights were preference 50 / 30 / 15, exact
+// country 25, experience +20 / 0 / -15 / -30, room fill up to 24, importance
+// 18 / 10 / 4, pair +35, concentration -20, member pick 25. The best seat one
+// person can get adds up the positive person parts at their maximum:
+//   1st choice 50 + exact country 25 + level match 20 + empty room 24 + high seat 18 = 137.
+// Every part is scaled by 100 / 137 and rounded, so that best seat is exactly
+// 100 (FIT_MAX) and every penalty keeps its proportion:
+//   preference:  1st choice committee +36, 2nd +22, 3rd +11 (PREF_POINTS)
+//                +18 more if the slot is the exact country they asked for in
+//                that preference (COUNTRY_PICK_POINTS)
 //   experience:  a SYMMETRIC difficulty-match term keyed on the gap between the
 //                delegate's experience level and the committee's difficulty:
-//                gap 0 → +20, gap 1 → 0, gap 2 → −15, gap 3 → −30. See
+//                gap 0 → +15, gap 1 → 0, gap 2 → −11, gap 3 → −22. See
 //                EXPERIENCE_GAP_SCORE / experienceFitScore. Neutral (0, no chip)
 //                when either side is unknown — never a silent penalty.
-//   society:     (suggestions only) +35 to complete a valid same-society double
-//                delegation, −30 to spread a clumping delegation, and a hard
+//   society:     (suggestions only) +26 to complete a valid same-society double
+//                delegation, −15 to spread a clumping delegation, and a hard
 //                skip for a cross-society sibling seat. See scoreSocietyFit.
-//   room fill:   round(24 * (1 - seats filled / seats in the committee)), so an
+//   room fill:   round(18 * (1 - seats filled / seats in the committee)), so an
 //                emptier committee scores higher. Read off the SHARE of seats
 //                taken (a double country is two seats), never a raw count, so a
 //                small room and a big room at the same fill score the same.
-//                See roomFill (owner, 22 Oct 2026: twice the old 12, by %).
-//   importance:  +18 / +10 / +4 / 0 for an open high / medium / low / standard
+//                See roomFill.
+//   importance:  +13 / +7 / +3 / 0 for an open high / medium / low / standard
 //                seat, so the algorithm fills seats — and the committees that
 //                still hold them — in order of importance.
+// The ranking itself uses the unclamped total (a pair completion on top of a
+// perfect seat still ranks above a plain perfect seat); what a person READS
+// is fitPercent(score): rounded and clamped to 0..100.
+export const PREF_POINTS: readonly number[] = [36, 22, 11];
+export const COUNTRY_PICK_POINTS = 18;
 
 // ── The two skill scales, and how they map onto one another ──────────────────
 // A delegate's EXPERIENCE and a committee's DIFFICULTY are two SEPARATE
@@ -175,7 +190,7 @@ export function experienceLevelRank(s: string | null | undefined): number | null
 // priority to fill than a standard one, so a committee still missing its
 // high/medium seats scores higher as a target than one only missing standard
 // seats. Mirrors the TIER_RANK urgency order (high > medium > low > standard).
-export const IMPORTANCE_NEED_WEIGHT: Record<ImportanceTier, number> = { high: 18, medium: 10, low: 4, standard: 0 };
+export const IMPORTANCE_NEED_WEIGHT: Record<ImportanceTier, number> = { high: 13, medium: 7, low: 3, standard: 0 };
 
 // Committee difficulty ordering for the default board sort (ascending): the
 // gentlest committees first, hardest last. Mirrors the canonical DIFF_ORDER in
@@ -207,31 +222,30 @@ export function difficultyLevel(d: string | null | undefined): number | null {
 // over-qualified is exactly as wrong as under-qualified, and neither direction
 // is favoured.
 //
-//   gap 0 (exact match) → +20   a real, decisive reward
+//   gap 0 (exact match) → +15   a real, decisive reward
 //   gap 1 (one rung)    →   0   acceptable stretch, neither rewarded nor punished
-//   gap 2               → −15
-//   gap 3               → −30
+//   gap 2               → −11
+//   gap 3               → −22
 //
-// Calibration against the rest of the model (preference 50/30/15, exact country
-// pick 25, room fill up to 24, seat importance up to 18, society ±35/30): the term
-// now spans 50 points end to end, which is the same width as the single largest
-// signal in the model (a 1st-choice preference). That is deliberate — it makes
-// difficulty match co-equal with preference rather than a rounding error. A
-// 1st-choice seat two rungs off (50 − 15 = 35) no longer beats a 3rd-choice seat
-// that fits perfectly (15 + 20 = 35, a tie), and a 1st choice three rungs off
-// (50 − 30 = 20) loses outright to it. The +20 bonus sits between the 3rd- and
-// 2nd-choice preference tiers: strong enough to reorder seats within a
-// preference tier and to lift a well-fitted lower preference over a badly
-// fitted higher one, but never so large that it alone outranks a whole
-// preference step (a 2nd choice that fits, 30 + 20 = 50, exactly matches a bare
-// 1st choice at the same fit… which is the intended "fit is worth a tier").
+// Calibration against the rest of the model (preference 36/22/11, exact country
+// pick 18, room fill up to 18, seat importance up to 13, society +26/−15; the old
+// 50/30/15 scale times 100/137, see Scoring): the term spans 37 points end to
+// end, about the width of the single largest signal in the model (a 1st-choice
+// preference). That is deliberate — it makes difficulty match co-equal with
+// preference rather than a rounding error. A 1st-choice seat two rungs off
+// (36 − 11 = 25) about ties a 3rd-choice seat that fits perfectly (11 + 15 =
+// 26), and a 1st choice three rungs off (36 − 22 = 14) loses outright to it.
+// The +15 bonus sits between the 3rd- and 2nd-choice preference tiers: strong
+// enough to reorder seats within a preference tier and to lift a well-fitted
+// lower preference over a badly fitted higher one, but never so large that it
+// alone outranks a whole preference step.
 //
 // The four-rung scales cap the gap at 3, so gap ≥ 4 is unreachable today. If a
-// scale ever grows a rung, the penalty EXTRAPOLATES linearly at −15 per rung
-// beyond gap 1 (gap 4 → −45, gap 5 → −60) rather than clamping, keeping the
-// curve consistent in both directions.
-export const EXPERIENCE_MATCH_BONUS = 20;
-export const EXPERIENCE_GAP_STEP = 15;
+// scale ever grows a rung, the penalty EXTRAPOLATES linearly at −11 per rung
+// beyond gap 1 rather than clamping, keeping the curve consistent in both
+// directions.
+export const EXPERIENCE_MATCH_BONUS = 15;
+export const EXPERIENCE_GAP_STEP = 11;
 const EXPERIENCE_GAP_SCORE: Record<number, number> = {
   0: EXPERIENCE_MATCH_BONUS,
   1: 0,
@@ -241,7 +255,7 @@ const EXPERIENCE_GAP_SCORE: Record<number, number> = {
 export function experienceGapScore(gap: number): number {
   const table = EXPERIENCE_GAP_SCORE[gap];
   // Beyond the table (only reachable if a scale grows a rung): keep going at
-  // −15 per level, the same slope the table already describes.
+  // −EXPERIENCE_GAP_STEP per level, the same slope the table already describes.
   return table === undefined ? -EXPERIENCE_GAP_STEP * (gap - 1) : table;
 }
 
@@ -288,11 +302,11 @@ export function scorePrefAndExp(app: FitApp, committee: FitCommittee, slot: FitS
   const reasons: string[] = [];
   const prefs = [...(app.application_preferences ?? [])].sort((a, b) => a.preference_order - b.preference_order);
   const matchIdx = prefs.findIndex(p => p.conference_committee_id === committee.id);
-  if (matchIdx === 0) { score += 50; reasons.push('1ST CHOICE'); }
-  else if (matchIdx === 1) { score += 30; reasons.push('2ND CHOICE'); }
-  else if (matchIdx === 2) { score += 15; reasons.push('3RD CHOICE'); }
+  if (matchIdx === 0) { score += PREF_POINTS[0]; reasons.push('1ST CHOICE'); }
+  else if (matchIdx === 1) { score += PREF_POINTS[1]; reasons.push('2ND CHOICE'); }
+  else if (matchIdx === 2) { score += PREF_POINTS[2]; reasons.push('3RD CHOICE'); }
   if (slot && matchIdx >= 0 && prefs[matchIdx].country_code === slot.country_code) {
-    score += 25;
+    score += COUNTRY_PICK_POINTS;
     reasons.push('COUNTRY PICK');
   }
   // Experience ↔ difficulty fit: symmetric, and decisive in both directions.
@@ -308,12 +322,32 @@ export function scorePrefAndExp(app: FitApp, committee: FitCommittee, slot: FitS
 // How much an emptier committee lifts a seat in it: up to ROOM_FILL_MAX for an
 // empty room, 0 for a full one, linear in the SHARE of its seats still open
 // (owner, 22 Oct 2026: count twice as much as the old 12, and from the
-// percentage of seats filled, not raw counts). Seats, not countries: a double
+// percentage of seats filled, not raw counts; 24 on the old scale, 18 out of 100). Seats, not countries: a double
 // country is two seats, and a seat counts as filled once an allocation row
 // holds it (rows beyond a slot's delegation_size never count twice). A
 // committee whose slots are not set up yet falls back to its countries
 // against total_slots. A room with no seats at all reads as full (0 points).
-export const ROOM_FILL_MAX = 24;
+export const ROOM_FILL_MAX = 18;
+
+/** The best seat one person can get: 1st choice + exact country + level match
+ *  + an empty room + a high-importance seat. 100 by construction (see Scoring). */
+export const FIT_MAX = PREF_POINTS[0] + COUNTRY_PICK_POINTS + EXPERIENCE_MATCH_BONUS + ROOM_FILL_MAX + IMPORTANCE_NEED_WEIGHT.high;
+
+/** What a person reads for a score: a whole percentage, 0 to 100. A pair
+ *  completion can take the raw total past 100 and penalties below 0; both
+ *  read as the edge. */
+export function fitPercent(score: number): number {
+  if (!Number.isFinite(score)) return 0;
+  return Math.max(0, Math.min(100, Math.round((score / FIT_MAX) * 100)));
+}
+
+/** The score's traffic light (owner, 22 Oct 2026): 80 to 100 green, 60 to 79
+ *  amber, under 60 red. */
+export type FitLight = 'green' | 'amber' | 'red';
+export function fitLight(score: number): FitLight {
+  const p = fitPercent(score);
+  return p >= 80 ? 'green' : p >= 60 ? 'amber' : 'red';
+}
 
 export interface RoomFill {
   /** The points the room adds to every seat in it. */
@@ -384,17 +418,17 @@ export function scoreSlot(app: FitApp, committee: FitCommittee, slot: FitSlot): 
 //      an independent applicant (soc === null) sitting beside any society's
 //      occupant — exactly the allocations the drop modal rejects. Never suggest
 //      them.
-//   2. COMPLETES PAIR (+35) — the taken half belongs to the applicant's OWN
+//   2. COMPLETES PAIR (+26) — the taken half belongs to the applicant's OWN
 //      society (both non-null and equal). Suggesting them here finishes a valid
 //      same-society double delegation, so it earns a strong positive comparable
 //      to a top preference tier. Returned BEFORE the concentration check, so a
 //      genuine pair completion is never also penalised for "clumping". Carries
-//      its own reason chip, "COMPLETES PAIR +35".
-//   3. CONCENTRATION (−20) — not a pair completion, but a delegate from the
+//      its own reason chip, "COMPLETES PAIR +26".
+//   3. CONCENTRATION (−15) — not a pair completion, but a delegate from the
 //      applicant's society is ALREADY allocated somewhere in this committee
 //      (a delegation block seat counts). Suggesting them here would clump the
 //      delegation, so we nudge them toward a different committee. Carries its
-//      own reason chip too, "DELEGATION CONCENTRATION -20", so the downrank is
+//      own reason chip too, "DELEGATION CONCENTRATION -15", so the downrank is
 //      as legible as the bonus.
 //      EXCEPT a delegation that is already spread: when it holds at least one
 //      allocation in SPREAD_SHARE (70%) or more of the conference's committees
@@ -405,8 +439,9 @@ export function scoreSlot(app: FitApp, committee: FitCommittee, slot: FitSlot): 
 //
 // An independent applicant (society_id null) never gets the pair bonus or the
 // concentration penalty; only the purity skip can apply to them.
-export const PAIR_BONUS = 35;
-export const CONCENTRATION_PENALTY = 20;
+// 35 and 20 on the old scale, times 100/137 (see Scoring).
+export const PAIR_BONUS = 26;
+export const CONCENTRATION_PENALTY = 15;
 export const SPREAD_SHARE = 0.7;
 
 /** The societies that already hold at least one allocation in SPREAD_SHARE or
@@ -790,7 +825,8 @@ export function buildSuggestions<A extends FitApp, C extends FitCommittee>(
 // room (skipped for a spread delegation), and a nudge for a seat one of its
 // members asked for in a preference. Pure; nothing here reads or writes.
 
-export const MEMBER_PICK_BONUS = 25;
+// 25 on the old scale, times 100/137 (see Scoring).
+export const MEMBER_PICK_BONUS = 18;
 
 /** The open seat numbers of `slot` this delegation may take, or [] when none. */
 export function openSeatsForSociety<A extends FitAllocation>(

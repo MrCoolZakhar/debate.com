@@ -254,7 +254,7 @@ function PopupFrame<M extends DelegationMemberLite>({
           ) : tab === 'payments' ? (
             <PaymentsTab row={row} data={data} currency={conference.fee_currency} slug={conference.slug} />
           ) : (
-            <DocumentsTab conferenceId={conference.id} slug={conference.slug} row={row} data={data} />
+            <DocumentsTab conferenceId={conference.id} slug={conference.slug} row={row} data={data} onStep={setStep} />
           )}
         </div>
       </div>

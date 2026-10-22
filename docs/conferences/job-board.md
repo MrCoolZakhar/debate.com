@@ -101,6 +101,7 @@ The legacy `job_postings` / `job_applications` code is gone from `src/` (the tab
 - `src/app/manage/[slug]/jobs/jobsApi.ts`: the organizer RPC wrappers.
 - `src/app/manage/[slug]/jobs/useJobTopUp.ts`: the top-up one-shot.
 - `src/app/manage/[slug]/jobs/ListingRow.tsx`: a listing row and its menu.
+- `src/app/manage/[slug]/jobs/jobKit.tsx`: the organizer page's card look (22 Oct 2026, CLAUDE.md §8): `BoardCard` (white, soft forest-tinted shadow, a gold top edge on the focus card Your Listings, a style A Lucide icon before the title, no 3D emoji), `JobCount` (big number + word), light secondary buttons; the header's Post a listing is the view's one solid forest button. Rows: the role type as an icon (Gavel chair, Landmark secretariat, Users staff), the closing date with a calendar icon, Promoted and On the homepage as icon + words (no chip) and a gold top edge on a promoted row. Presentation only.
 - `src/app/manage/[slug]/jobs/PostingPopup.tsx`: the posting steps.
 - `src/app/manage/[slug]/jobs/PromotePopup.tsx`: promotion.
 - `src/app/manage/[slug]/store/JobBoardStoreCard.tsx`: the Store card.

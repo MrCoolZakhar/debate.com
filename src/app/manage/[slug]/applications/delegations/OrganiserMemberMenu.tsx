@@ -19,7 +19,7 @@
 // with the hover title "Coming soon, waiting for Christian" while it is off.
 
 import { useCallback, useRef, useState } from 'react';
-import { CircleMinus, Crown, GraduationCap, MoreHorizontal, UserRound, X } from 'lucide-react';
+import { CircleMinus, Crown, GraduationCap, MoreHorizontal, UserMinus, UserRound } from 'lucide-react';
 import Portal from '@/components/Portal';
 import { useModalEscape } from '@/components/ModalOverlay';
 import { friendlyError } from '@/lib/friendlyError';
@@ -175,7 +175,7 @@ export default function OrganiserMemberMenu({
     items.push({ key: 'unallocate', icon: CircleMinus, label: 'Unallocate', action: { kind: 'unallocate' }, asks: true });
   }
   items.push({
-    key: 'remove', icon: X, label: 'Remove from delegation', action: { kind: 'remove' }, asks: true, danger: true,
+    key: 'remove', icon: UserMinus, label: 'Remove from delegation', action: { kind: 'remove' }, asks: true, danger: true,
     off: DELEGATIONS_MONEY_DB ? undefined : WAITING_FOR_CHRISTIAN,
   });
 

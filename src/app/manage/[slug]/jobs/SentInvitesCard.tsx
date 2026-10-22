@@ -8,7 +8,7 @@
 
 import { useEffect, useState } from 'react';
 import { Ban, CheckCircle2, Clock, Send, XCircle } from 'lucide-react';
-import { DashCard, TINT_GREEN } from '../financials/dashboardKit';
+import { ICON_STROKE, BoardCard } from './jobKit';
 import { conferenceInvites, dayLabel, type InviteStatus, type SentInvite } from './jobsApi';
 
 const FONT = "var(--font-brand), sans-serif";
@@ -64,11 +64,10 @@ export default function SentInvitesCard({ confId, refreshKey }: { confId: string
   if (!invites || invites.length === 0) return null;
 
   return (
-    <DashCard
+    <BoardCard
       title="Invites"
       hint="People you invited from Find people to apply to one of your listings. An invite reaches them by email and on Gavelling"
-      icon={{ emoji: 'Envelope with arrow', lucide: Send, tint: TINT_GREEN }}
-      hang="start"
+      icon={Send}
     >
       <style>{INVITES_CSS}</style>
       <ul className="gv-si-list">
@@ -84,7 +83,7 @@ export default function SentInvitesCard({ confId, refreshKey }: { confId: string
               </div>
               <div className="gv-si-meta">
                 <span className="gv-si-status" style={{ color: s.color }}>
-                  <Icon size={15} strokeWidth={2.4} aria-hidden /> {s.label}
+                  <Icon size={15} strokeWidth={ICON_STROKE} aria-hidden /> {s.label}
                 </span>
                 <span className="gv-si-sub">
                   {dayLabel(i.created_at)}{i.invited_by ? ` · by ${i.invited_by}` : ''}
@@ -94,13 +93,13 @@ export default function SentInvitesCard({ confId, refreshKey }: { confId: string
           );
         })}
       </ul>
-    </DashCard>
+    </BoardCard>
   );
 }
 
 const INVITES_CSS = `
 .gv-si-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column}
-.gv-si-row{display:flex;align-items:center;gap:12px;padding:12px 0;border-top:1px solid rgba(28,20,16,0.08)}
+.gv-si-row{display:flex;align-items:center;gap:12px;padding:12px 0;border-top:1px solid #EFEAE0}
 .gv-si-row:first-child{border-top:none;padding-top:4px}
 .gv-si-who{flex:1 1 auto;min-width:0}
 .gv-si-name{margin:0;font-family:${FONT};font-size:15px;font-weight:700;line-height:1.3;color:${INK};overflow-wrap:anywhere}

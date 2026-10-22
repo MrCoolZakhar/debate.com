@@ -23,7 +23,7 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { friendlyError } from '@/lib/friendlyError';
-import { needyCommitteeIds, rankSeatsForPerson, spreadSocieties } from '@/lib/assignmentFit';
+import { fitPercent, needyCommitteeIds, rankSeatsForPerson, spreadSocieties } from '@/lib/assignmentFit';
 import {
   type AcceptedApp, type CommitteeData, type Suggestion,
   CommitteeLogo, CountryFlag, SuggestionReasons, committeeLabels, committeeSeatLogo, fitColor, slotLogoUrl,
@@ -292,7 +292,7 @@ export default function ApplicantBestSeats({ app, conferenceSlug, accessToken }:
             const labels = committeeLabels(sug.committee);
             return (
               <div key={`${sug.committee.id}-${sug.slot.id}`} className="flex items-center gap-3.5 flex-wrap" style={{ ...rowCard, padding: '12px 14px' }}>
-                <span style={{ fontFamily: OUTFIT, fontSize: 30, fontWeight: 700, color: fitColor(sug.score), fontVariantNumeric: 'tabular-nums', lineHeight: 1, minWidth: 44 }}>{sug.score}</span>
+                <span style={{ fontFamily: OUTFIT, fontSize: 30, fontWeight: 700, color: fitColor(sug.score), fontVariantNumeric: 'tabular-nums', lineHeight: 1, minWidth: 44 }}>{fitPercent(sug.score)}%</span>
                 <div className="flex-1 min-w-0" style={{ minWidth: 170 }}>
                   <div className="flex items-center gap-2 flex-wrap">
                     <CommitteeLogo committee={sug.committee} size={24} alt={labels.big} />

@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   X, Check, Sparkles, ChevronDown, ChevronUp, ArrowRight,
   MousePointerClick, Plus, Info, Layers, Gavel, UserRound, Users,
-  Clock, Star,
+  Clock,
 } from 'lucide-react';
 import { GoldWord } from '@/components/BrandHeading';
 import { useManage } from '@/app/manage/[slug]/layout';
@@ -41,6 +41,7 @@ import {
 import Portal from '@/components/Portal';
 import { notifyOk, notifyErr } from '@/lib/appNotify';
 import SeatBoard from '@/app/manage/[slug]/assignment/SeatBoard';
+import AssignSeatPanel from '@/app/manage/[slug]/assignment/AssignSeatPanel';
 import SeatBoardIntro, { CLASSIC_BY_DEFAULT } from '@/app/manage/[slug]/assignment/SeatBoardIntro';
 import {
   allocationToApp, allocateeName, TIER_RANK, TierBadge, ModalOverlay, NeuModalCard, CommitteeOverviewModal,
@@ -48,13 +49,14 @@ import {
 import { firstName, personName } from '@/app/manage/[slug]/assignment/seatBoardShared';
 import {
   type AcceptedApp, type AllocationRow, type SlotRow, type CommitteeData, type UserHistory, type Suggestion,
-  slotLogoUrl, committeeSeatLogo, reasonContext, fitColor, OUTFIT, MONO, FLAG_SHADOW, PersonAvatar, DelegationAvatar,
+  slotLogoUrl, committeeSeatLogo, reasonContext, fitColor, fitPctLabel, OUTFIT, MONO, FLAG_SHADOW, PersonAvatar, DelegationAvatar,
   CountryFlag, effectiveLevel, ageOf, committeeLabels, CommitteeLogo, CommitteeDifficultyBadge, PrefRankBadge, ReasonChip,
   LevelTag, DelegationChip, DelegateDetail, SuggestionCard,
 } from '@/app/manage/[slug]/assignment/assignmentKit';
 import {
   groupAllocationsByCountry, isSlotFull, lowestOpenSeat, allocationSocietyId, siblingSeatAllocation,
   distinctCountryFilled, difficultyRank, allocationScore, ROOM_FILL_MAX, scorePrefAndExp, spreadSocieties, buildSuggestions,
+  PREF_POINTS, COUNTRY_PICK_POINTS, EXPERIENCE_MATCH_BONUS, EXPERIENCE_GAP_STEP, IMPORTANCE_NEED_WEIGHT, PAIR_BONUS, CONCENTRATION_PENALTY,
   needyCommitteeIds as computeNeedyCommitteeIds, rankSeatsForPerson,
 } from '@/lib/assignmentFit';
 
@@ -175,12 +177,13 @@ function PointsInfo() {
             <span style={{ fontFamily: OUTFIT, fontSize: 10, fontWeight: 800, letterSpacing: '0.12em', color: NEU.deepGold }}>
               HOW THE FIT SCORE IS BUILT
             </span>
-            {row('Committee preference  +50 / +30 / +15', 'Their 1st choice committee scores 50, 2nd choice 30, 3rd choice 15.')}
-            {row('Exact country pick  +25', 'Added when the open seat is the exact country they asked for in that preference.')}
-            {row('Experience fit  +20 / 0 / −15 / −30', 'An exact match between their experience level and the committee difficulty adds 20. One level apart scores 0. Two apart subtracts 15, three apart 30, the same either way round, so an expert in a beginner committee is penalised exactly like a beginner in an expert one. Scores 0 if their level or the committee difficulty is unset.')}
+            {row('Out of 100', 'The best seat a person can get scores 100%. 80% and up is green, 60 to 79% amber, under 60% red.')}
+            {row(`Committee preference  +${PREF_POINTS[0]} / +${PREF_POINTS[1]} / +${PREF_POINTS[2]}`, `Their 1st choice committee scores ${PREF_POINTS[0]}, 2nd choice ${PREF_POINTS[1]}, 3rd choice ${PREF_POINTS[2]}.`)}
+            {row(`Exact country pick  +${COUNTRY_PICK_POINTS}`, 'Added when the open seat is the exact country they asked for in that preference.')}
+            {row(`Experience fit  +${EXPERIENCE_MATCH_BONUS} / 0 / −${EXPERIENCE_GAP_STEP} / −${EXPERIENCE_GAP_STEP * 2}`, `An exact match between their experience level and the committee difficulty adds ${EXPERIENCE_MATCH_BONUS}. One level apart scores 0. Two apart subtracts ${EXPERIENCE_GAP_STEP}, three apart ${EXPERIENCE_GAP_STEP * 2}, the same either way round, so an expert in a beginner committee is penalised exactly like a beginner in an expert one. Scores 0 if their level or the committee difficulty is unset.`)}
             {row(`Room fill  up to +${ROOM_FILL_MAX}`, `Emptier committees score higher: ${ROOM_FILL_MAX} x the share of the committee's seats still open, so a room 25% full adds ${Math.round(ROOM_FILL_MAX * 0.75)} and a full room adds 0.`)}
-            {row('Seat importance  up to +18', 'An open high-importance seat adds 18, medium 10, low 4, standard 0, so higher-priority seats fill first and delegates with no preferences still slot into where they are most needed.')}
-            {row('Delegation coherence  +35 / −20', 'Completing a valid double delegation (their society already holds the country’s other seat) adds 35; placing them where a societymate is already seated but not as a pair subtracts 20 to spread the delegation. Cross-society double seats are never suggested.')}
+            {row(`Seat importance  up to +${IMPORTANCE_NEED_WEIGHT.high}`, `An open high-importance seat adds ${IMPORTANCE_NEED_WEIGHT.high}, medium ${IMPORTANCE_NEED_WEIGHT.medium}, low ${IMPORTANCE_NEED_WEIGHT.low}, standard 0, so higher-priority seats fill first and delegates with no preferences still slot into where they are most needed.`)}
+            {row(`Delegation coherence  +${PAIR_BONUS} / −${CONCENTRATION_PENALTY}`, `Completing a valid double delegation (their society already holds the country’s other seat) adds ${PAIR_BONUS}; placing them where a societymate is already seated but not as a pair subtracts ${CONCENTRATION_PENALTY} to spread the delegation. Cross-society double seats are never suggested.`)}
             <span style={{ fontFamily: OUTFIT, fontSize: 10.5, color: NEU.muted, lineHeight: 1.4, paddingTop: 2, borderTop: `1px solid ${NEU.base}` }}>
               Seat importance also orders the seats inside a committee overview, most urgent first.
             </span>
@@ -675,7 +678,7 @@ function DropAllocateModal({ committee, app, needy = false, spread, pushDraftNot
                       </div>
                     )}
                   </div>
-                  <span style={{ fontSize: 13, fontWeight: 800, color: fitColor(score), fontFamily: MONO, flexShrink: 0, fontVariantNumeric: 'tabular-nums' }}>{score}</span>
+                  <span style={{ fontSize: 13, fontWeight: 800, color: fitColor(score), fontFamily: MONO, flexShrink: 0, fontVariantNumeric: 'tabular-nums' }}>{fitPctLabel(score)}</span>
                   <NeuButton
                     onClick={() => handleAllocate(slot)}
                     disabled={busySlotId !== null}
@@ -966,148 +969,29 @@ function AssignModal({ committee, unassigned, preSelectedSlot, preSelectedSeat, 
     ? [...(selectedApp.application_preferences ?? [])].sort((a, b) => a.preference_order - b.preference_order)
     : [];
 
+  // The look is the seat board's (AssignSeatPanel.tsx, owner 22 Oct 2026);
+  // every state and the write above stay here.
   return (
-    <ModalOverlay onClose={onClose}>
-      <NeuModalCard width={460}>
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="font-black text-xl" style={{ color: NEU.ink, fontFamily: OUTFIT }}>
-            {freeMoveFirst ? 'Move Delegate' : 'Assign Delegate'}
-          </h2>
-          <button onClick={onClose} className="focus:outline-none" style={{ color: NEU.muted }}><X size={18} /></button>
-        </div>
-
-        <div className="flex items-center gap-2.5 mb-4">
-          <CommitteeLogo committee={committee} size={40} alt={committee.name} />
-          <div className="min-w-0">
-            <p title={committee.name} style={{ fontSize: 18, fontWeight: 900, color: NEU.forest, fontFamily: OUTFIT, letterSpacing: '0.01em' }}>
-              {committeeLabels(committee).big}
-            </p>
-            {committeeLabels(committee).full && (
-              <p className="[overflow-wrap:anywhere]" style={{ fontSize: 11.5, color: NEU.muted, fontFamily: OUTFIT }}>{committeeLabels(committee).full}</p>
-            )}
-          </div>
-        </div>
-
-        {/* Applicant picker (if not pre-selected) */}
-        <div className="mb-4">
-          <p className="mb-2" style={{ color: NEU.deepGold, fontFamily: MONO, letterSpacing: '0.12em', fontSize: 10, fontWeight: 700 }}>APPLICANT</p>
-          {preSelectedApp ? (
-            <NeuInset small className="flex items-center gap-3 p-3">
-              {/* Pre-selected applicant: static NeuInset (a div), nothing clickable above it. */}
-              <PersonAvatar name={preSelectedApp.profiles?.display_name ?? preSelectedApp.invited_name ?? 'Unknown'} url={preSelectedApp.profiles?.avatar_url ?? null} size={34} userId={preSelectedApp.profiles?.id} />
-              <div className="min-w-0">
-                <StackedName name={preSelectedApp.profiles?.display_name ?? preSelectedApp.invited_name ?? 'Unknown'} size={14} weight={700} color={NEU.ink} restColor={NEU.inkSoft} />
-                <p className="text-xs mt-0.5" style={{ color: NEU.muted, fontFamily: OUTFIT }}>{preSelectedApp.role} · {effectiveLevel(preSelectedApp)}</p>
-              </div>
-            </NeuInset>
-          ) : (
-            <NeuInset small style={{ maxHeight: 200, overflowY: 'auto', padding: 5 }}>
-              {scored.length === 0 ? (
-                <p className="text-sm p-3" style={{ color: NEU.muted, fontFamily: OUTFIT }}>No unassigned applicants.</p>
-              ) : scored.map(({ app, score }, idx) => {
-                const selected = selectedApp?.id === app.id;
-                return (
-                  <div
-                    key={app.id}
-                    className="flex items-center gap-3 px-2.5 py-2 rounded-xl transition-colors"
-                    style={{
-                      backgroundColor: selected ? NEU.surface : 'transparent',
-                      boxShadow: selected ? NEU.outSm : 'none',
-                      cursor: 'pointer',
-                    }}
-                    onClick={() => setSelectedApp(app)}
-                  >
-                    {/* Picker row is a plain <div> with onClick — nested so picking the
-                        applicant still works and only the avatar opens the CV. */}
-                    <PersonAvatar name={app.profiles?.display_name ?? app.invited_name ?? 'Unknown'} url={app.profiles?.avatar_url ?? null} size={30} userId={app.profiles?.id} nested />
-                    <div className="flex-1 min-w-0">
-                      <StackedName name={app.profiles?.display_name ?? app.invited_name ?? 'Unknown'} size={14} weight={700} color={NEU.ink} restColor={NEU.inkSoft} />
-                      <p className="text-xs" style={{ color: NEU.muted, fontFamily: OUTFIT }}>{app.role} · {effectiveLevel(app)}</p>
-                    </div>
-                    <div className="flex items-center gap-1.5 flex-shrink-0">
-                      {idx === 0 && score >= 20 && (
-                        <span className="inline-flex items-center gap-1" style={{ fontSize: 12, fontWeight: 700, color: '#8A6614', fontFamily: OUTFIT }}>
-                          <Star size={14} strokeWidth={2.4} aria-hidden="true" />
-                          Best
-                        </span>
-                      )}
-                      <span style={{ fontSize: 12, fontWeight: 800, color: fitColor(score), fontFamily: MONO, fontVariantNumeric: 'tabular-nums' }}>{score}</span>
-                    </div>
-                  </div>
-                );
-              })}
-            </NeuInset>
-          )}
-        </div>
-
-        {/* Show selected applicant preferences */}
-        {selectedApp && appPrefs.length > 0 && (
-          <div className="mb-4">
-            <p className="mb-1.5" style={{ color: NEU.deepGold, fontFamily: MONO, letterSpacing: '0.12em', fontSize: 10, fontWeight: 700 }}>PREFERENCES</p>
-            <div className="flex flex-col gap-1.5">
-              {appPrefs.slice(0, 3).map(p => {
-                const here = p.conference_committee_id === committee.id;
-                return (
-                  <div key={p.preference_order} className="flex items-center gap-2">
-                    <PrefRankBadge order={p.preference_order} />
-                    <span className="text-xs" title={`${p.conference_committees?.name ?? 'Unknown committee'} · ${p.country_name}`} style={{ color: here ? NEU.forest : NEU.inkSoft, fontWeight: here ? 700 : 400, fontFamily: OUTFIT, lineHeight: 1.3 }}>
-                      {committeeShortName(p.conference_committees)} · <CountryName name={p.country_name} code={p.country_code} />
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-            {appScore !== null && (
-              <p className="text-xs mt-2 font-bold" style={{ color: fitColor(appScore), fontFamily: MONO }}>
-                FIT SCORE: {appScore}
-              </p>
-            )}
-          </div>
-        )}
-
-        {/* Country picker */}
-        <div className="mb-5">
-          <p className="mb-2" style={{ color: NEU.deepGold, fontFamily: MONO, letterSpacing: '0.12em', fontSize: 10, fontWeight: 700 }}>COUNTRY</p>
-          {preSelectedSlot ? (
-            <NeuInset small className="flex items-center gap-3 p-3">
-              <CountryFlag code={preSelectedSlot.country_code} w={24} h={17} radius={3} alt={preSelectedSlot.country_name} logoUrl={slotLogoUrl(committee, preSelectedSlot)} />
-              <p className="text-sm font-semibold" style={{ color: NEU.ink, fontFamily: OUTFIT }}><CountryName name={preSelectedSlot.country_name} code={preSelectedSlot.country_code} /></p>
-              <div style={{ marginLeft: 'auto' }}><TierBadge tier={preSelectedSlot.importance} /></div>
-            </NeuInset>
-          ) : (
-            <NeuInset small style={{ maxHeight: 160, overflowY: 'auto', padding: 5 }}>
-              {emptySlots.length === 0 ? (
-                <p className="text-sm p-3" style={{ color: NEU.muted, fontFamily: OUTFIT }}>All seats filled.</p>
-              ) : emptySlots.map(slot => {
-                const selected = selectedSlot?.id === slot.id;
-                return (
-                  <div
-                    key={slot.id}
-                    className="flex items-center gap-3 px-2.5 py-2 rounded-xl cursor-pointer transition-colors"
-                    style={{ backgroundColor: selected ? NEU.surface : 'transparent', boxShadow: selected ? NEU.outSm : 'none' }}
-                    onClick={() => setSelectedSlot(slot)}
-                  >
-                    <CountryFlag code={slot.country_code} w={20} h={14} radius={2} alt={slot.country_name} logoUrl={slotLogoUrl(committee, slot)} />
-                    <p className="text-sm" style={{ color: NEU.ink, fontFamily: OUTFIT }}><CountryName name={slot.country_name} code={slot.country_code} /></p>
-                    <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <TierBadge tier={slot.importance} />
-                      {selected && <Check size={13} style={{ color: NEU.green }} />}
-                    </div>
-                  </div>
-                );
-              })}
-            </NeuInset>
-          )}
-        </div>
-
-        {/* Allocation email. A move is announced by allocation_changed, so the
-            choice is not offered there. */}
-        {moveFrom?.allocation_sent ? (
-          <p className="text-xs mb-5" style={{ color: NEU.inkSoft, fontFamily: OUTFIT }}>
-            They will be emailed that their allocation has changed.
+    <AssignSeatPanel
+      committee={committee}
+      moving={!!freeMoveFirst}
+      preSelectedApp={preSelectedApp}
+      scored={scored}
+      selectedApp={selectedApp}
+      onSelectApp={setSelectedApp}
+      appPrefs={appPrefs}
+      appScore={appScore}
+      preSelectedSlot={preSelectedSlot}
+      emptySlots={emptySlots}
+      selectedSlot={selectedSlot}
+      onSelectSlot={setSelectedSlot}
+      emailChoice={(
+        moveFrom?.allocation_sent ? (
+          <p style={{ margin: 0, fontSize: 13, color: NEU.inkSoft, fontFamily: OUTFIT }}>
+            They will be emailed that their allocation has changed
           </p>
         ) : (
-          <label className="flex items-center gap-3 mb-5 cursor-pointer">
+          <label className="flex items-center gap-3 cursor-pointer">
             <input
               type="checkbox"
               checked={sendEmail}
@@ -1115,31 +999,20 @@ function AssignModal({ committee, unassigned, preSelectedSlot, preSelectedSeat, 
               className="rounded"
               style={{ accentColor: NEU.forest, width: 16, height: 16 }}
             />
-            <span className="text-xs" style={{ color: NEU.inkSoft, fontFamily: OUTFIT }}>
+            <span style={{ fontSize: 13, color: NEU.ink, fontFamily: OUTFIT }}>
               Email them their committee and country now
               {!conference?.allocation_email_auto && (
-                <span style={{ color: NEU.muted }}> (allocation emails are on manual release)</span>
+                <span style={{ color: NEU.inkSoft }}> (allocation emails are on manual release)</span>
               )}
             </span>
           </label>
-        )}
-
-        {error && <ModalError msg={error} />}
-
-        <div className="flex gap-3">
-          <button onClick={onClose} className="flex-1 rounded-full py-2.5 font-bold text-sm focus:outline-none" style={{ border: 'none', color: NEU.ink, backgroundColor: NEU.surface, boxShadow: NEU.outSm, fontFamily: OUTFIT, letterSpacing: 0 }}>
-            Cancel
-          </button>
-          <NeuButton
-            onClick={handleAssign}
-            disabled={saving || !selectedApp || !selectedSlot}
-            style={{ flex: 1, padding: '11px 22px', letterSpacing: 0 }}
-          >
-            {saving ? 'Assigning…' : 'Assign'}
-          </NeuButton>
-        </div>
-      </NeuModalCard>
-    </ModalOverlay>
+        )
+      )}
+      error={error ? <ModalError msg={error} /> : null}
+      saving={saving}
+      onAssign={handleAssign}
+      onClose={onClose}
+    />
   );
 }
 

@@ -126,8 +126,15 @@ const ROLE_ICON = { 'faculty-advisor': GraduationCap, 'head-delegate': Crown, de
 
 // The seat column is the widest: the 56px flag with its name under it, the
 // committee beside it, the seat's icon buttons stacked at its end (V2).
-/** Phones: avatar + name block, the paper icon, the menu. */
-const GRID_PHONE = 'grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-x-2';
+/** Phones: avatar + name block, the paper icon, the menu. The two end
+ *  columns have FIXED widths (owner, 22 Oct 2026), so a row never shifts
+ *  sideways when the paper action, the swap pick or the menu swap places. */
+const GRID_PHONE = DELEGATIONS_V2_DB
+  ? 'grid grid-cols-[minmax(0,1fr)_44px_32px] items-center gap-x-2'
+  : 'grid grid-cols-[minmax(0,1fr)_32px] items-center gap-x-2';
+/** The allocation cell keeps the seated block's height on every seatable row,
+ *  so allocating or unallocating never pushes the rows below. */
+const SEAT_CELL_MIN_H = 78;
 const GRID_V2 = '@[760px]:grid-cols-[minmax(0,1.25fr)_minmax(0,2.1fr)_minmax(0,0.75fr)_minmax(0,0.85fr)_36px]';
 const GRID = '@[760px]:grid-cols-[minmax(0,1.35fr)_minmax(0,1.75fr)_minmax(0,0.9fr)_36px]';
 
@@ -624,7 +631,8 @@ export default function PeopleTable({ rows, societyId, societyName, conferenceId
             </div>
 
             {/* Seat */}
-            <div className="hidden @[760px]:block min-w-0">
+            <div className="hidden @[760px]:flex items-center min-w-0" style={{ minHeight: seatable ? SEAT_CELL_MIN_H : undefined }}>
+              <div className="w-full min-w-0">
               <SeatCell
                 seat={r.seat}
                 role={r.role}
@@ -645,6 +653,7 @@ export default function PeopleTable({ rows, societyId, societyName, conferenceId
                   ? (el) => menus.current.get(r.application_id)?.openAt('place', el)
                   : undefined}
               />
+              </div>
             </div>
 
             {/* Position paper (V2) */}

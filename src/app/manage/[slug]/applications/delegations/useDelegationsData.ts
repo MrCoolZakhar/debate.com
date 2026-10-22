@@ -48,6 +48,11 @@ import {
 import { societySeatCounts, type SeatCommittee } from './societySeats';
 import { paidSpotsBySociety } from '@/app/manage/[slug]/assignment/delegationSeatsGrid';
 import { keepIfSame, useLiveRefresh } from './useLiveRefresh';
+import { delegationExpected } from '@/lib/delegationExpected';
+
+/** Statuses that no longer count a person as joined (delegationExpected). */
+const GONE = new Set(['rejected', 'withdrawn', 'cancelled']);
+const SEATED_ROLES = new Set(['delegate', 'head-delegate']);
 
 export interface DelegationView<M extends DelegationMemberLite = DelegationMemberLite> extends DelegationRow<M> {
   /** Delegate spots paid for (delegate tickets only; advisor tickets never count),
@@ -61,7 +66,10 @@ export interface DelegationView<M extends DelegationMemberLite = DelegationMembe
   seatsGiven: number;
   /** Of those, seats with a person on them. */
   seatsFilled: number;
-  /** Paid spots still without a seat. */
+  /** The allocation target: the expected size (`expected`, 0 when unknown).
+   *  Allocations default to it (owner, 22 Oct 2026). */
+  target: number;
+  /** Allocations still to give against the target. */
   needSeats: number;
   /** The account that created the delegation (`societies.created_by`), always
    *  among the leaders shown (memberOrder.shownLeaders). */
@@ -327,7 +335,19 @@ export function useDelegationsData<M extends DelegationMemberLite>(args: {
       const paid = paidBySociety.get(r.id) ?? 0;
       const ids = new Set(r.members.map(m => m.id));
       const { given, filled } = committees ? societySeatCounts(committees, r.id, ids) : { given: 0, filled: 0 };
-      return { ...r, paid, seatsGiven: given, seatsFilled: filled, needSeats: Math.max(0, paid - given), createdBy: creatorOf.get(r.id) ?? null, createdAt: createdAtOf.get(r.id) ?? null };
+      // Expected size (owner, 22 Oct 2026, src/lib/delegationExpected.ts): the
+      // biggest of delegate spots paid, delegates and head delegates who joined,
+      // and the leaders' pledged DELEGATE tickets. The old figure added the
+      // advisors coming (applications.advisors_pledged) to the pledge, which is
+      // why it read one more than makes sense; advisors are never delegate spots.
+      const live = r.members.filter(m => !GONE.has(m.status));
+      const pledged = live.reduce((n, m) => n + (m.pledge_type === 'delegation' ? Math.max(0, m.spots_pledged ?? 0) : 0), 0);
+      const joined = live.filter(m => m.is_head_delegate || SEATED_ROLES.has(m.role)).length;
+      const target = delegationExpected({ paidDelegateSpots: paid, joinedDelegates: joined, pledged });
+      return {
+        ...r, expected: target > 0 ? target : null, target, paid, seatsGiven: given, seatsFilled: filled,
+        needSeats: Math.max(0, target - given), createdBy: creatorOf.get(r.id) ?? null, createdAt: createdAtOf.get(r.id) ?? null,
+      };
     });
   }, [societies, members, advisorsPledged, draftsBySociety, invoices, payments, currency, committees]);
 

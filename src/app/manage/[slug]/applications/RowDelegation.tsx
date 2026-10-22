@@ -56,7 +56,7 @@ export interface RowDelegationProps {
   city?: string | null;
   countryCode?: string | null;
   members?: number | null;
-  /** The delegation's expected size (its live pledges), or null when none was given. */
+  /** The delegation's expected size (src/lib/delegationExpected.ts), or null when unknown. */
   expected?: number | null;
   /** The leader's name ("Ana Pérez and 1 more"), or null when nobody leads. */
   lead?: string | null;

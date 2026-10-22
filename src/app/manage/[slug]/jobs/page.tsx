@@ -14,7 +14,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
-import { BarChart3, Briefcase, Layers, Mail, Plus, UserSearch } from 'lucide-react';
+import { BarChart3, Briefcase, Eye, Layers, Mail, MousePointerClick, Plus, UserSearch } from 'lucide-react';
 import { useManage } from '@/app/manage/[slug]/layout';
 import { useAuth } from '@/components/AuthProvider';
 import { GoldWord } from '@/components/BrandHeading';
@@ -22,7 +22,7 @@ import { NEU, OUTFIT } from '@/components/neu';
 import { notifyErr, notifyOk } from '@/lib/appNotify';
 import { replaceUrlInPlace } from '@/lib/replaceUrlInPlace';
 import { STORE_CSS } from '../store/storeKit';
-import { DASH_CSS, DashCard, TINT_GOLD, TINT_GREEN } from '../financials/dashboardKit';
+import { ICON_STROKE, JOB_KIT_CSS, BoardCard, JobCount } from './jobKit';
 import ListingRow, { ROW_CSS } from './ListingRow';
 import PostingPopup, { type ShortRequest } from './PostingPopup';
 import PromotePopup from './PromotePopup';
@@ -128,7 +128,7 @@ export default function JobBoardPage() {
   return (
     <div className="gv-jb px-6 md:px-10 py-8">
       <style>{STORE_CSS}</style>
-      <style>{DASH_CSS}</style>
+      <style>{JOB_KIT_CSS}</style>
       <style>{ROW_CSS}</style>
       <style>{PAGE_CSS}</style>
 
@@ -145,16 +145,16 @@ export default function JobBoardPage() {
           <div className="flex flex-wrap items-center gap-2.5">
             {panel.listings.some((l) => l.shown === 'live' && l.kind === 'gavelling') && (
               <button type="button" className="gv-st-btn gv-st-outline gv-jb-post" onClick={() => setPopup({ kind: 'find' })}>
-                <UserSearch size={17} strokeWidth={2.4} aria-hidden /> Find people
+                <UserSearch size={17} strokeWidth={ICON_STROKE} aria-hidden /> Find people
               </button>
             )}
             {panel.committees.length > 0 && panel.roles.some((r) => r.role === 'chair' && r.enabled) && (
               <button type="button" className="gv-st-btn gv-st-outline gv-jb-post" onClick={() => setPopup({ kind: 'pack' })}>
-                <Layers size={17} strokeWidth={2.4} aria-hidden /> Post chair roles for every committee
+                <Layers size={17} strokeWidth={ICON_STROKE} aria-hidden /> Post chair roles for every committee
               </button>
             )}
             <button type="button" className="gv-st-btn gv-st-forest gv-jb-post" onClick={() => setPopup({ kind: 'post', listing: null })}>
-              <Plus size={17} strokeWidth={2.6} aria-hidden /> Post a listing
+              <Plus size={17} strokeWidth={2} aria-hidden /> Post a listing
             </button>
           </div>
         )}
@@ -175,11 +175,11 @@ export default function JobBoardPage() {
         <div className="gv-jb-grid">
           {/* ── Listings, then the invites beneath ── */}
           <div className="gv-jb-side">
-          <DashCard
+          <BoardCard
             title="Your Listings"
             hint="Chair, secretariat and staff listings on the Job Board. Listings where people apply on Gavelling are free; a listing that applies on another site costs credits once"
-            icon={{ emoji: 'Briefcase', lucide: Briefcase, tint: TINT_GOLD }}
-            hang="start"
+            icon={Briefcase}
+            focus
             className="gv-jb-main"
           >
             {listings.length === 0 && panel.onboarding && !onboardingDone ? (
@@ -195,8 +195,9 @@ export default function JobBoardPage() {
               <div className="gv-jb-first">
                 <p className="gv-jb-first-title">Post your first listing</p>
                 <p className="gv-jb-first-line">Listings are free when people apply on Gavelling, as many as you like</p>
-                <button type="button" className="gv-st-btn gv-st-forest" onClick={() => setPopup({ kind: 'post', listing: null })}>
-                  <Plus size={16} strokeWidth={2.6} aria-hidden /> Post a listing
+                {/* The header carries the one solid forest button of the view. */}
+                <button type="button" className="gv-st-btn gv-st-outline" onClick={() => setPopup({ kind: 'post', listing: null })}>
+                  <Plus size={16} strokeWidth={ICON_STROKE} aria-hidden /> Post a listing
                 </button>
               </div>
             ) : (
@@ -213,7 +214,7 @@ export default function JobBoardPage() {
                 ))}
               </ul>
             )}
-          </DashCard>
+          </BoardCard>
           <SentInvitesCard confId={conference.id} refreshKey={invitesKey} />
           </div>
 
@@ -301,11 +302,10 @@ function DigestCard({ slug, digest, err, onRetry }: {
     </li>
   );
   return (
-    <DashCard
+    <BoardCard
       title="Applicants"
       hint="New applicants who came through your listings, and how often the listings were seen this week. Chair applications open in Applications; secretariat and staff in Settings, Team"
-      icon={{ emoji: 'Bar chart', lucide: BarChart3, tint: TINT_GREEN }}
-      hang="start"
+      icon={BarChart3}
     >
       {err && !digest ? (
         <p className="gv-st-err" role="alert">{err} <button type="button" className="gv-st-link" onClick={onRetry}>Try again</button></p>
@@ -330,13 +330,13 @@ function DigestCard({ slug, digest, err, onRetry }: {
             </>
           )}
           <div className="gv-jb-dstats">
-            <p><b>{digest.views_week.toLocaleString('en-US')}</b> views</p>
-            <p><b>{digest.clicks_week.toLocaleString('en-US')}</b> clicks to apply</p>
+            <JobCount n={digest.views_week} word={digest.views_week === 1 ? 'view' : 'views'} icon={Eye} />
+            <JobCount n={digest.clicks_week} word={digest.clicks_week === 1 ? 'click to apply' : 'clicks to apply'} icon={MousePointerClick} />
             <span className="gv-jb-quiet" style={{ fontSize: 12.5 }}>this week</span>
           </div>
         </>
       )}
-    </DashCard>
+    </BoardCard>
   );
 }
 
@@ -378,11 +378,10 @@ function EmailsCard({ confId, settings, onSaved }: {
   ];
 
   return (
-    <DashCard
+    <BoardCard
       title="Emails"
       hint="The switch is for the whole conference. When it is on, each organizer chooses for themselves how often they hear about new applicants"
-      icon={{ emoji: 'Envelope', lucide: Mail, tint: TINT_GOLD }}
-      hang="start"
+      icon={Mail}
     >
       <div className="gv-jb-switchrow">
         <button
@@ -416,7 +415,7 @@ function EmailsCard({ confId, settings, onSaved }: {
           ))}
         </div>
       )}
-    </DashCard>
+    </BoardCard>
   );
 }
 
@@ -435,12 +434,10 @@ const PAGE_CSS = `
 .gv-jb-dsec{margin-bottom:14px}
 .gv-jb-dh{margin:0 0 8px;font-family:${OUTFIT};font-size:14px;font-weight:800;color:${INK}}
 .gv-jb-dlist{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
-.gv-jb-dl{font-family:${OUTFIT};font-size:14.5px;line-height:1.45;color:${INK};text-decoration:underline;text-decoration-color:rgba(28,20,16,0.25);text-underline-offset:3px;overflow-wrap:anywhere}
+.gv-jb-dl{font-family:${OUTFIT};font-size:14.5px;font-weight:700;line-height:1.45;color:${INK};text-decoration:underline;text-decoration-color:rgba(28,20,16,0.35);text-underline-offset:3px;overflow-wrap:anywhere}
 .gv-jb-dl:hover{text-decoration-color:${FOREST};color:${FOREST}}
 .gv-jb-dl b{font-weight:800;font-variant-numeric:tabular-nums}
-.gv-jb-dstats{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 18px;padding-top:14px;border-top:1px solid rgba(28,20,16,0.08)}
-.gv-jb-dstats p{margin:0;font-family:${OUTFIT};font-size:13.5px;color:${INK_SOFT}}
-.gv-jb-dstats b{font-size:22px;font-weight:800;color:${INK};font-variant-numeric:tabular-nums;margin-right:4px}
+.gv-jb-dstats{display:flex;flex-wrap:wrap;align-items:baseline;gap:8px 20px;padding-top:14px;border-top:1px solid #EFEAE0}
 .gv-jb-switchrow{display:flex;align-items:center;gap:12px}
 .gv-jb-switch{position:relative;flex-shrink:0;width:46px;height:26px;border-radius:9999px;border:none;cursor:pointer;background:rgba(28,20,16,0.2);transition:background-color 160ms ease}
 .gv-jb-switch span{position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:9999px;background:#FFFFFF;box-shadow:0 1px 3px rgba(0,0,0,0.25);transition:transform 180ms cubic-bezier(0.22,1,0.36,1)}
@@ -452,7 +449,7 @@ const PAGE_CSS = `
 .gv-jb-switch-label{font-family:${OUTFIT};font-size:14.5px;font-weight:600;color:${INK}}
 .gv-jb-modes{display:flex;flex-direction:column;gap:6px;margin-top:14px}
 .gv-jb-mode{display:flex;align-items:center;gap:10px;min-height:44px;padding:0 12px;border-radius:12px;border:1.5px solid rgba(28,20,16,0.12);background:#FFFFFF;cursor:pointer;font-family:${OUTFIT};font-size:14.5px;font-weight:600;color:${INK};text-align:left}
-.gv-jb-mode-on{border-color:${FOREST};background:#EEF3EC}
+.gv-jb-mode-on{border-color:${FOREST};background:#F4F0E6}
 .gv-jb-mode:disabled{cursor:default}
 .gv-jb-mode:focus{outline:none}
 .gv-jb-mode:focus-visible{outline:2px solid ${FOREST};outline-offset:2px}

@@ -7,7 +7,9 @@
 // first; show which committees each country is available in; add and remove
 // simply."
 //
-//   * Left: how many allocations the delegation holds (big number + word), the
+//   * Left: how many allocations the delegation holds (big number + word), a
+//     meter and "N more to give" against its TARGET, the expected size
+//     (row.target, src/lib/delegationExpected.ts; owner, 22 Oct 2026), the
 //     conference's seat limit when it has one (readDelegationSettings), and every
 //     allocation it holds as a compact list, A to Z by country across every
 //     committee (owner, 21 Oct 2026): the country's round flag and name, the
@@ -66,7 +68,7 @@ import InPlaceConfirm from '@/app/conferences/[slug]/participant/delegation/seat
 import type { DelegationPopupConference, PopupStep } from './DelegationPopup';
 import {
   BTN_CLASS, CommitteeDisc, FONT, FOREST, HAIRLINE, INK, INK_SOFT, RoundAvatar, STROKE,
-  committeeEmblemSrc, committeeShort, plural, smallSecondaryBtn,
+  SeatMeter, committeeEmblemSrc, committeeShort, plural, smallSecondaryBtn,
 } from './kit';
 
 interface Ask {
@@ -337,12 +339,18 @@ export default function SeatsTab<M extends DelegationMemberLite>({ conference, r
   }
 
   const given = held.length;
+  // The target is the expected size (owner, 22 Oct 2026, src/lib/delegationExpected.ts).
+  const target = row.target;
+  const toGive = Math.max(0, target - given);
+  const targetLine = target > 0
+    ? `Their expected size is ${target}. ${toGive === 0 ? 'Nothing left to give.' : `${toGive} more to give.`}`
+    : 'No expected size yet.';
   const cap = limit === 'paid' ? row.paid : limit === 'expected' ? row.expected : null;
   const limitLine = limit === 'none'
     ? null
-    : cap == null
-      ? 'Limit: their expected size'
-      : `Limit ${cap}, ${limit === 'paid' ? 'the tickets paid for' : 'their expected size'}. ${Math.max(0, cap - given) === 0 ? 'No more can be given.' : `${Math.max(0, cap - given)} more can be given.`}`;
+    : limit === 'expected'
+      ? 'The conference limit is their expected size.'
+      : `The conference limit is the ${cap ?? 0} delegate ${cap === 1 ? 'spot' : 'spots'} paid for. ${Math.max(0, (cap ?? 0) - given) === 0 ? 'No more can be given.' : `${Math.max(0, (cap ?? 0) - given)} more can be given.`}`;
 
   return (
     <div ref={splitRef} className="flex-1 min-h-0 flex flex-col md:flex-row overflow-y-auto md:overflow-hidden"
@@ -359,6 +367,8 @@ export default function SeatsTab<M extends DelegationMemberLite>({ conference, r
               <span style={{ fontFamily: FONT, fontSize: 14, color: INK_SOFT }}>{given === 1 ? 'allocation given' : 'allocations given'}</span>
             </span>
           </div>
+          <SeatMeter given={given} filled={held.filter(h => h.filled).length} target={target} height={6} />
+          <span style={{ fontFamily: FONT, fontSize: 13.5, color: INK_SOFT, lineHeight: 1.45 }}>{targetLine}</span>
           {limitLine && <span style={{ fontFamily: FONT, fontSize: 13.5, color: INK_SOFT, lineHeight: 1.45 }}>{limitLine}</span>}
         </div>
 

@@ -121,3 +121,7 @@ What we ask for: `organiser_add_to_delegation(p_application uuid, p_society uuid
 ### Paid delegate spots count a head delegate's own ticket twice
 
 The "delegate spots paid" number (settled Delegate Tickets of the delegation's leaders, plus delegates who paid their own fee or were waived) counts a head delegate who has paid their own Delegate Ticket 1 twice: once as a settled leader ticket and once as a delegate who paid their own fee. VUBMUN shows 15 paid for 14 tickets. It happens in the database function and in the client twin under `src/app/manage/[slug]/assignment/**`. Please fix the database side; we will mirror the client twin to match whatever you decide (one count per person, the leader's own ticket counted once).
+
+### Expected size: one rule everywhere (Peter, 22 Oct 2026)
+
+Peter's rule: a delegation's expected size is the biggest of (a) delegate spots paid, (b) delegates and head delegates who have joined (not rejected or withdrawn), and (c) what the leaders pledged. The client now shows exactly that everywhere (`src/lib/delegationExpected.ts`). The database's `_society_expected_size` (used only by `organiser_give_society_seats` for the "Up to their expected size" seat limit) still returns `spots_pledged` plus one per head delegate, so the limit can disagree with the screen by one. Please change it to the same rule (and Peter also wants allocations to default to the expected size: the "expected" seat limit as the default for new conferences, if you agree).

@@ -22,8 +22,11 @@
 // A to Z (the default), Needs allocations, Most members, Newest.
 //
 // Where every number comes from (useDelegationsData.ts, delegationRows.ts):
-//   Expected      the expected size the leaders gave (live pledges plus advisors
-//                 coming), else the spots paid for; 0 when neither exists
+//   Expected      src/lib/delegationExpected.ts (owner, 22 Oct 2026): the biggest
+//                 of delegate spots paid, delegates and head delegates joined, and
+//                 the leaders' pledged delegate tickets (advisors never added).
+//                 It is also the allocation TARGET: "N to give", the meter and
+//                 "Give allocations" count against it
 //   Joined        members coming or applying (any role, attending)
 //   Paid          DELEGATE spots paid (advisor tickets never count), from
 //                 the ledger: settled delegation spots of live leaders plus delegates
@@ -268,7 +271,7 @@ export default function DelegationsTab<M extends DelegationMemberLite>(props: De
               ))}
             </div>
             {visible.map((r, i) => {
-              const giveSeats = r.seatsGiven < r.paid;
+              const giveSeats = r.seatsGiven < r.target;
               const { shown, total } = leadersOf(r);
               const more = Math.max(0, total - shown.length);
               return (
@@ -325,9 +328,10 @@ export default function DelegationsTab<M extends DelegationMemberLite>(props: De
                       <span style={{ fontSize: 17, fontWeight: 600, color: INK, lineHeight: 1.1 }}>{r.paid}</span>
                       <span style={{ fontSize: 12.5, color: INK_SOFT }}>delegate {r.paid === 1 ? 'spot' : 'spots'} paid</span>
                     </span>
-                    <SeatMeter given={r.seatsGiven} filled={r.seatsFilled} paid={r.paid} height={6} />
+                    <SeatMeter given={r.seatsGiven} filled={r.seatsFilled} target={r.target} height={6} />
                     <span style={{ fontFamily: FONT, fontSize: 12.5, color: INK_SOFT, fontVariantNumeric: 'tabular-nums' }}>
-                      <b style={{ color: INK, fontWeight: 600 }}>{r.seatsGiven}</b> given · <b style={{ color: INK, fontWeight: 600 }}>{r.seatsFilled}</b> filled
+                      <b style={{ color: INK, fontWeight: 600 }}>{r.seatsGiven}</b>{r.target > 0 ? ` of ${r.target}` : ''} given · <b style={{ color: INK, fontWeight: 600 }}>{r.seatsFilled}</b> filled
+                      {r.needSeats > 0 && <> · <b style={{ color: INK, fontWeight: 600 }}>{r.needSeats}</b> to give</>}
                     </span>
                     {giveSeats && (
                       <Link href={`/manage/${conference.slug}/assignment?mode=delegation-seats&society=${encodeURIComponent(r.id)}`}
@@ -356,7 +360,7 @@ export default function DelegationsTab<M extends DelegationMemberLite>(props: De
         <div className="flex flex-col" style={{ ...cardStyle, padding: 22, gap: 14 }}>
           <div className="flex items-baseline gap-2 flex-wrap">
             <span style={{ fontFamily: FONT, fontSize: 30, fontWeight: 600, color: INK, fontVariantNumeric: 'tabular-nums', lineHeight: 1.1 }}>{totals.need}</span>
-            <span style={{ fontFamily: FONT, fontSize: 15, color: INK_SOFT }}>paid {totals.need === 1 ? 'spot' : 'spots'} without an allocation</span>
+            <span style={{ fontFamily: FONT, fontSize: 15, color: INK_SOFT }}>{totals.need === 1 ? 'allocation' : 'allocations'} still to give</span>
           </div>
           <div className="flex flex-col" style={{ gap: 8, fontFamily: FONT, fontSize: 14 }}>
             {[

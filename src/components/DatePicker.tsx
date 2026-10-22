@@ -25,8 +25,15 @@ function toISO(d: Date): string {
   const dd = String(d.getDate()).padStart(2, '0');
   return `${d.getFullYear()}-${mm}-${dd}`;
 }
-function fmt(d: Date): string {
-  return `${d.getDate()} ${MONTHS[d.getMonth()].slice(0, 3)} ${d.getFullYear()}`;
+/** The trigger's date in unbreakable pieces ("22 Oct", "2026"): a narrow field
+ *  wraps between them, never inside one, and never cuts the date with '…'. */
+function DateText({ d }: { d: Date }) {
+  return (
+    <>
+      <span style={{ whiteSpace: 'nowrap' }}>{d.getDate()} {MONTHS[d.getMonth()].slice(0, 3)}</span>{' '}
+      <span style={{ whiteSpace: 'nowrap' }}>{d.getFullYear()}</span>
+    </>
+  );
 }
 
 // ── Time mode ──────────────────────────────────────────────────────────────
@@ -307,7 +314,7 @@ export function DatePicker({
           transition: 'border-color 180ms cubic-bezier(0.22,1,0.36,1), box-shadow 220ms cubic-bezier(0.22,1,0.36,1)',
           fontVariantNumeric: 'tabular-nums',
           ...(variant === 'well' ? {
-            height: 52, padding: '0 16px', borderRadius: 14,
+            minHeight: 52, padding: '6px 16px', borderRadius: 14,
             // NEU.in, plus the same 3px focus ring the other wells use.
             boxShadow: open
               ? 'inset 3px 3px 8px rgba(27,56,40,0.14), inset -3px -3px 8px rgba(255,255,255,0.7), 0 0 0 3px rgba(27,56,40,0.13)'
@@ -316,8 +323,18 @@ export function DatePicker({
         }}
       >
         <CalendarDays size={17} style={{ color: '#B6871F', flexShrink: 0 }} />
-        <span className="flex-1 truncate" title={selected ? (withTime ? `${fmt(selected)} · ${fmtTime(hour, minute)}` : fmt(selected)) : undefined}>
-          {selected ? (withTime ? `${fmt(selected)} · ${fmtTime(hour, minute)}` : fmt(selected)) : placeholder}
+        {/* Never cut a date with '…' (owner, 22 Oct 2026): the text wraps
+            instead, only between whole pieces ("22 Oct", "2026", "· 09:00"),
+            and the trigger grows. */}
+        <span className="flex-1 min-w-0" style={{ whiteSpace: 'normal', lineHeight: 1.3 }}>
+          {selected ? (
+            withTime ? (
+              <>
+                <DateText d={selected} />{' '}
+                <span style={{ whiteSpace: 'nowrap' }}>· {fmtTime(hour, minute)}</span>
+              </>
+            ) : <DateText d={selected} />
+          ) : placeholder}
         </span>
         {clearable && selected && !disabled && (
           <span
