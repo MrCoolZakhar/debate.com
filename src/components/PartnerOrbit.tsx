@@ -87,11 +87,15 @@ export default function PartnerOrbit({
   const active = open && (open.startWith === null ? extra > 0 : ordered.some(p => p.id === open.startWith!.id)) ? open : null;
 
   const r = size / 2;
+  // The circles' centres sit a little OUTSIDE the logo's rim (owner, 22 Oct
+  // 2026: "it covers the logo too much"): about a third of a circle out, so
+  // each still crosses the border but hides far less of the logo.
+  const orbit = r + dot * 0.34;
   const at = (i: number): CSSProperties => {
     const a = ((START_DEG + STEP_DEG * i) * Math.PI) / 180;
     return {
-      left: r + r * Math.cos(a) - dot / 2,
-      top: r + r * Math.sin(a) - dot / 2,
+      left: r + orbit * Math.cos(a) - dot / 2,
+      top: r + orbit * Math.sin(a) - dot / 2,
       width: dot,
       height: dot,
       animationDelay: `${120 + i * 45}ms`,
