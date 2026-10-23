@@ -251,8 +251,8 @@ function formatCooldown(ms: number): string {
 
 // Speaking log parsing — only SPEECH events (the channel now also carries motion/RTR/manual
 // events, which must not be counted as speeches in the speaking history).
-function parseSpeakingLogs(committee: Committee): SpeakingLogEntry[] {
-  return committee.messages
+function parseSpeakingLogs(messages: Committee['messages']): SpeakingLogEntry[] {
+  return (messages ?? [])
     .filter((m) => m.sender === '__system__' && m.recipient === '__log__' && m.content.startsWith('__log__:'))
     .map((m) => {
       try { return JSON.parse(m.content.slice('__log__:'.length)) as SpeakingLogEntry & { type?: string }; }
@@ -261,6 +261,14 @@ function parseSpeakingLogs(committee: Committee): SpeakingLogEntry[] {
     .filter((e): e is SpeakingLogEntry & { type?: string } =>
       !!e && (!e.type || e.type === 'speech') && typeof e.seconds === 'number')
     .map((e) => e as SpeakingLogEntry);
+}
+
+// The same delegation, whatever its case or outer spaces: the seat claim matches this way
+// (seatKey, src/lib/seatClaims.ts), so this page must too, or a seat the server lets in
+// finds no roster row and every button goes dead.
+function sameSeat(a: string | null | undefined, b: string | null | undefined): boolean {
+  if (!a || !b) return false;
+  return seatKey(a) === seatKey(b);
 }
 
 // Tips no longer live here. They are chosen in `selectDelegateTips`
@@ -701,11 +709,14 @@ function StatisticsTab({ committee, country }: { committee: Committee; country: 
 
   // Newest first. Reverse first so entries that share (or lack) a timestamp keep a stable
   // newest-first order under the sort rather than falling back to chronological.
-  const myLogs = parseSpeakingLogs(committee)
-    .filter((l) => l.country === country)
+  // Memoised on the messages array (never mutated in place, AGENTS.md scoring), so the
+  // board's caucus clock re-rendering this sheet does not re-parse every message.
+  const messages = committee.messages;
+  const myLogs = useMemo(() => parseSpeakingLogs(messages)
+    .filter((l) => sameSeat(l.country, country))
     .slice()
     .reverse()
-    .sort((a, b) => (b.timestamp ?? '').localeCompare(a.timestamp ?? ''));
+    .sort((a, b) => (b.timestamp ?? '').localeCompare(a.timestamp ?? '')), [messages, country]);
   const totalSeconds = myLogs.reduce((s, l) => s + l.seconds, 0);
 
   const contextLabel = (ctx: SpeakingLogEntry['context']): string => {
@@ -806,6 +817,49 @@ function StatisticsTab({ committee, country }: { committee: Committee; country: 
 /** The tabs are gone: every secondary surface is now a bottom sheet. */
 type DelegateSheet = null | 'stats' | 'documents' | 'chat' | 'queue';
 
+// ── Live caucus clock ─────────────────────────────────────────────────────────
+// Re-seeds whenever the anchor OR the anchored value changes (start, pause, extend,
+// speaker advance), and ticks only while the anchor is set: a null `totalStartedAt` IS
+// the paused signal. Recomputed from the anchor each second instead of decremented, so a
+// backgrounded phone catches up on wake. A moderated caucus total is speaking time: it
+// stops when the speaker's clock reaches zero, read from the same current_speaker anchor
+// (moderatedCaucusRemainingNow), so this phone stops with the chair even before the
+// chair's re-anchor write arrives. Its own component so only it re-renders per second.
+// Reader only: it NEVER writes (MUST NEVER HAPPEN #4).
+function LiveCaucusClock({ caucus, moderated, speakerBase, speakerStartedAt }: {
+  caucus: CaucusState;
+  moderated: boolean;
+  speakerBase: number;
+  speakerStartedAt: string | null;
+}) {
+  const anchor = caucus.totalStartedAt ?? null;
+  const anchoredRemaining = caucus.remainingTime ?? null;
+  // A tick only while the anchor runs; the seconds are derived from the anchor on every
+  // render, so a new anchor, a pause or a speaker change shows at once without a tick.
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    if (!anchor) return;
+    const id = setInterval(() => setTick((n) => n + 1), 1000);
+    return () => clearInterval(id);
+  }, [anchor]);
+  const pair = anchoredRemaining === null
+    ? null
+    : ({ remainingTime: anchoredRemaining, totalStartedAt: anchor } as CaucusState);
+  const seconds = moderated
+    ? moderatedCaucusRemainingNow(pair, speakerBase, speakerStartedAt)
+    : caucusRemainingNow(pair);
+  return (
+    <>
+      <div style={{ fontFamily: OUTFIT, fontSize: 'clamp(26px, 8vw, 44px)', fontWeight: 900, color: DG.ink, lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>
+        {formatTime(seconds)}
+      </div>
+      <div style={{ marginTop: 8, height: 8, borderRadius: 999, background: DG.ivory, boxShadow: LIFT.inSm, overflow: 'hidden' }}>
+        <div style={{ height: '100%', borderRadius: 999, background: DG.forest, width: `${caucus.totalTime > 0 ? Math.max(0, Math.min(100, (seconds / caucus.totalTime) * 100)) : 0}%` }} />
+      </div>
+    </>
+  );
+}
+
 function DelegateSessionInner({ params }: { params: Promise<{ code: string }> }) {
   const t = useT();
   const { language, setLanguage } = useLanguage();
@@ -848,6 +902,8 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
     || accessState === 'denied' || accessState === 'signin';
   // The live room subscription, so losing the seat can stop it from outside the loader.
   const syncRef = useRef<{ stop: () => void; mark: (slice: 'lists') => void } | null>(null);
+  // Losing the seat stopped the room feed and nothing has restarted it yet.
+  const feedStoppedRef = useRef(false);
 
   const [committee, setCommittee] = useState<Committee | null>(null);
   /* Latest committee, for callbacks that fire on a delay. The delayed denial
@@ -934,12 +990,6 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
      list before it fires — see the denial-detection effect. */
   const pendingDenialTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [gslNow, setGslNow] = useState<number>(() => Date.now());
-
-  // Live seconds on the TOTAL caucus clock. The committee row only ever carries
-  // the value AT the anchor instant, so rendering it raw freezes the countdown
-  // between chair writes. Recomputed from the anchor on every tick rather than
-  // decremented, so a phone that was asleep wakes up on the right number.
-  const [caucusSeconds, setCaucusSeconds] = useState(0);
 
   // Transient "N status changes remaining" reminder — shown when the delegate
   // actually moves the switch, then faded out. See the footnote block below.
@@ -1052,8 +1102,13 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
   // device for as long as the tab stayed open. "Removed" has to mean the feed ends too.
   // The seat guard's own screens are all reachable again through retrySeat, which bumps
   // loadAttempt and brings the room back.
+  // The stop is remembered (feedStoppedRef) so that a refusal which clears BY ITSELF also
+  // brings the room back: the guard effect below re-runs on a user id change (a signed-in
+  // delegate rendered signed out by the auth failsafe, then the token refresh finishing)
+  // and lands on 'allowed' with no button pressed. Without this the board kept the data
+  // from before the stop forever.
   useEffect(() => {
-    if (seatLost) { syncRef.current?.stop(); syncRef.current = null; }
+    if (seatLost) { feedStoppedRef.current = true; syncRef.current?.stop(); syncRef.current = null; }
   }, [seatLost]);
 
   // The floor changed hands: re-read the speakers lists. A delegation that spoke in a
@@ -1094,7 +1149,11 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
       // or the absent state, and every write still needs a real delegates row. A RESERVED
       // country that is not on the roster yet never gets here: the server answers
       // signin / reserved for it before it looks at the roster.
-      if (res.ok || res.reason === 'no_seat' || res.reason === 'not_found') setAccessState('allowed');
+      if (res.ok || res.reason === 'no_seat' || res.reason === 'not_found') {
+        setAccessState('allowed');
+        // Allowed again after a stop screen: restart the room feed the stop took down.
+        if (feedStoppedRef.current) { feedStoppedRef.current = false; setLoadAttempt((n) => n + 1); }
+      }
       else if (res.reason === 'taken') setAccessState('taken');
       else if (res.reason === 'kicked') setAccessState('kicked');
       else if (res.reason === 'other_device') setAccessState('elsewhere');
@@ -1318,11 +1377,11 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
   // Detect GSL request denial — and waiting-room (join-request) denial
   useEffect(() => {
     if (!committee) return;
-    const isOnSpeakersListNow = committee.speakersList.some((s) => s.country === country);
-    const isCurrentSpeakerNow = committee.currentSpeaker?.country === country;
+    const isOnSpeakersListNow = committee.speakersList.some((s) => sameSeat(s.country, country));
+    const isCurrentSpeakerNow = sameSeat(committee.currentSpeaker?.country, country);
     const prev = prevPendingRef.current;
-    const hadRequest = (prev ?? []).some((m) => (m.type as string) === 'gsl-request' && m.proposedBy === country);
-    const hasRequest = (committee.pendingMotions ?? []).some((m) => (m.type as string) === 'gsl-request' && m.proposedBy === country);
+    const hadRequest = (prev ?? []).some((m) => (m.type as string) === 'gsl-request' && sameSeat(m.proposedBy, country));
+    const hasRequest = (committee.pendingMotions ?? []).some((m) => (m.type as string) === 'gsl-request' && sameSeat(m.proposedBy, country));
     if (hadRequest && !hasRequest && !isOnSpeakersListNow && !isCurrentSpeakerNow) {
       /* DO NOT conclude denial here. "Motion gone and not on the list" is also
          what an APPROVAL looks like for a moment: approveGslRequest performs two
@@ -1341,10 +1400,10 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
           pendingDenialTimer.current = null;
           const c = committeeRef.current;
           if (!c) return;
-          const onList = c.speakersList.some((s) => s.country === country)
-            || c.currentSpeaker?.country === country;
+          const onList = c.speakersList.some((s) => sameSeat(s.country, country))
+            || sameSeat(c.currentSpeaker?.country, country);
           const nowPending = (c.pendingMotions ?? [])
-            .some((m) => (m.type as string) === 'gsl-request' && m.proposedBy === country);
+            .some((m) => (m.type as string) === 'gsl-request' && sameSeat(m.proposedBy, country));
           /* Landed on the list, or re-requested in the meantime → not a denial. */
           if (onList || nowPending) return;
           setGslDenied(true);
@@ -1412,7 +1471,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
       const s = await readJoinRequestStatus(pendingReqId);
       if (!alive || s === null || s === 'pending') return;
       const c = committeeRef.current;
-      const present = (c?.delegates.find((d) => d.country === country)?.status ?? 'absent') !== 'absent';
+      const present = (c?.delegates.find((d) => sameSeat(d.country, country))?.status ?? 'absent') !== 'absent';
       if (s === 'approved' || (s === 'gone' && present)) {
         const rec: AdmissionRecord = { state: 'admitted', at: Date.now() };
         writeAdmission(code, country, rec);
@@ -1454,36 +1513,28 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
   }, [gslCooldown]);
 
   // ── Live caucus clock ─────────────────────────────────────────────────────
-  // Re-seed whenever the anchor OR the anchored value changes (start, pause,
-  // extend, speaker advance), and tick only while the anchor is set — null
-  // `totalStartedAt` IS the paused signal, so no schema or type change is
-  // needed. Recomputes from caucusRemainingNow each second instead of
-  // decrementing, so a backgrounded phone catches up on wake rather than
-  // drifting behind by however long it was asleep. Reader only: this tick NEVER
-  // writes to the DB (MUST NEVER HAPPEN #4 — a per-second write would re-arm the
-  // realtime debounce for every device in the committee).
-  const caucusAnchor = committee?.caucus?.totalStartedAt ?? null;
-  const caucusAnchoredRemaining = committee?.caucus?.remainingTime ?? null;
-  // A moderated caucus total is speaking time: it stops when the speaker's clock reaches
-  // zero, read from the same current_speaker anchor (moderatedCaucusRemainingNow), so this
-  // phone stops with the chair even before the chair's re-anchor write arrives.
-  const caucusIsModerated = committee?.phase === 'moderated-caucus';
-  const caucusSpeakerBase = committee?.speakerTimeRemaining ?? 0;
-  const caucusSpeakerStartedAt = committee?.speakerStartedAt ?? null;
-  useEffect(() => {
-    const read = () => {
-      const pair = caucusAnchoredRemaining === null
-        ? null
-        : ({ remainingTime: caucusAnchoredRemaining, totalStartedAt: caucusAnchor } as CaucusState);
-      return caucusIsModerated
-        ? moderatedCaucusRemainingNow(pair, caucusSpeakerBase, caucusSpeakerStartedAt)
-        : caucusRemainingNow(pair);
-    };
-    setCaucusSeconds(read());
-    if (!caucusAnchor) return;
-    const id = setInterval(() => setCaucusSeconds(read()), 1000);
-    return () => clearInterval(id);
-  }, [caucusAnchor, caucusAnchoredRemaining, caucusIsModerated, caucusSpeakerBase, caucusSpeakerStartedAt]);
+  // The per-second tick lives in <LiveCaucusClock> (below this component), so only the
+  // numerals and the bar re-render each second, never the whole board. Reader only: it
+  // NEVER writes to the DB (MUST NEVER HAPPEN #4).
+
+  // ── Message-derived numbers, parsed once per messages change ─────────────
+  // Above every early return (hooks). `committee.messages` is never mutated in place
+  // (AGENTS.md scoring), so its identity is the honest dependency: an unrelated render
+  // (a status pin, a sheet opening) re-parses nothing.
+  const roomMessages = committee?.messages;
+  const allSpeechLogs = useMemo(() => parseSpeakingLogs(roomMessages ?? []), [roomMessages]);
+  const speechCounts = useMemo(() => {
+    const out: Record<string, number> = {};
+    for (const e of allSpeechLogs) {
+      if (e.country) out[e.country] = (out[e.country] ?? 0) + 1;
+    }
+    return out;
+  }, [allSpeechLogs]);
+  const roomChairNames = committee?.chairNames;
+  const roomDelegates = committee?.delegates;
+  const unreadTotal = useMemo(() => chatUnreadTotal(
+    withBroadcastMessages(roomMessages ?? [], broadcastHistory), country, false, roomChairNames ?? [], chatReadCounts, (roomDelegates ?? []).map((d) => d.country),
+  ), [roomMessages, broadcastHistory, country, roomChairNames, chatReadCounts, roomDelegates]);
 
   /* ── Board sizing ───────────────────────────────────────────────────────
      Declared above the early returns: hooks must run in the same order on
@@ -1544,7 +1595,8 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
   // Also bumps loadAttempt, because losing the seat stopped the room subscription: without
   // this a delegate who took the seat back with "Use this device instead" would sit in a
   // room that never updates again.
-  const retrySeat = () => { setSeatRetry((n) => n + 1); setLoadAttempt((n) => n + 1); };
+  // It restarts the load itself, so the guard must not restart it a second time.
+  const retrySeat = () => { feedStoppedRef.current = false; setSeatRetry((n) => n + 1); setLoadAttempt((n) => n + 1); };
   // Signed in with the wrong account: "Sign in" would bounce straight back here, so
   // sign out first and then sign in.
   const switchAccountThenJoin = () => { void signOut().finally(signInThenJoin); };
@@ -1642,11 +1694,11 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
   }
 
   const requireChairApproval = getCommitteeFlags(committee).requireChairApproval;
-  const myDelegate = committee.delegates.find((d) => d.country === country);
+  const myDelegate = committee.delegates.find((d) => sameSeat(d.country, country));
   const isAbsent = !myDelegate || myDelegate.status === 'absent';
-  const myQueueIndex = committee.speakersList.findIndex((s) => s.country === country);
+  const myQueueIndex = committee.speakersList.findIndex((s) => sameSeat(s.country, country));
   const isOnSpeakersList = myQueueIndex !== -1;
-  const isCurrentSpeaker = committee.currentSpeaker?.country === country;
+  const isCurrentSpeaker = sameSeat(committee.currentSpeaker?.country, country);
   const changesLeft = myDelegate ? statusChangesRemaining(committee.id, country) : 0;
 
   // The chair's renamed motion names, read off the committee row so they reach this
@@ -1730,10 +1782,12 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
     setJoinRequesting(true);
     setJoinError(false);
     const id = newRequestId();
-    const ok = await requestSeatAdmission(committee.id, myDelegate.id, country, desiredStatus, committee.code, id);
+    // Follow the id it returns: a delegation's request already waiting (from another phone or
+    // an earlier press) is followed instead of this id, which then never landed.
+    const followId = await requestSeatAdmission(committee.id, myDelegate.id, country, desiredStatus, committee.code, id);
     setJoinRequesting(false);
-    if (!ok) { setJoinError(true); return; }
-    const rec: AdmissionRecord = { state: 'pending', id, desired: desiredStatus, at: Date.now() };
+    if (!followId) { setJoinError(true); return; }
+    const rec: AdmissionRecord = { state: 'pending', id: followId, desired: desiredStatus, at: Date.now() };
     writeAdmission(code, country, rec);
     setAdmission(rec);
     setJoinStatus(desiredStatus);
@@ -1741,7 +1795,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
 
   // ── Request to be added to speakers list (chair must approve)
   const isGslRequestPending = (committee.pendingMotions ?? []).some(
-    (m) => (m.type as string) === 'gsl-request' && m.proposedBy === country
+    (m) => (m.type as string) === 'gsl-request' && sameSeat(m.proposedBy, country)
   );
   const handleAddMeToSpeakers = () => {
     if (!myDelegate || isAbsent) return;
@@ -1775,13 +1829,11 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
   const myName = getCountryDisplayName(country, language);
   // This seat's own crest, when the conference gave it one. Null everywhere else.
   const mySeatLogo = myDelegate?.logoUrl ?? null;
-  const unreadTotal = chatUnreadTotal(
-    withBroadcastMessages(committee.messages, broadcastHistory), country, false, committee.chairNames ?? [], chatReadCounts, committee.delegates.map((d) => d.country),
-  );
+  // `unreadTotal`, `allSpeechLogs` and `speechCounts` are memoised above the early returns.
 
   // Speaking + chat counters. The tiles and StatisticsTab both derive from the same
   // pure helpers over the same committee row, so the two surfaces can never disagree.
-  const myLogs = parseSpeakingLogs(committee).filter((l) => l.country === country);
+  const myLogs = allSpeechLogs.filter((l) => sameSeat(l.country, country));
   const mySpokenSeconds = myLogs.reduce((s, l) => s + l.seconds, 0);
   // A speaking log is a '__system__' message on the '__log__' channel (see
   // parseSpeakingLogs) — everything else this delegation sent is a real chat message.
@@ -1968,8 +2020,21 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
     </header>
   );
 
+  // ── Not in the room yet: the seat let this phone in, but the room has no row for this
+  // delegation (the claim answered 'no_seat'), so a status button would have nothing to
+  // write to. Shown in place of the status controls; the re-verify effect claims the seat
+  // the moment the chair adds the delegation, and the board takes over from there.
+  const notInRoom = (
+    <>
+      <div style={{ fontFamily: OUTFIT, fontSize: 14, fontWeight: 900, color: DG.forest }}>{t('delegate_not_in_room_title')}</div>
+      <div style={{ fontFamily: OUTFIT, fontSize: 13, color: DG.body, marginTop: 4 }}>{t('delegate_not_in_room_body')}</div>
+    </>
+  );
+
   // ── Absent banner (blocks active interaction)
-  const AbsentBanner = () => (
+  const AbsentBanner = () => !myDelegate ? (
+    <Panel className="dgv-rise" style={{ marginBottom: 16 }}>{notInRoom}</Panel>
+  ) : (
     <Panel className="dgv-rise" style={{ marginBottom: 16 }}>
       <div style={{ fontFamily: OUTFIT, fontSize: 14, fontWeight: 900, color: DG.forest }}>{t('delegate_absent_title')}</div>
       <div style={{ fontFamily: OUTFIT, fontSize: 13, color: DG.body, margin: '4px 0 14px' }}>{t('delegate_absent_desc')}</div>
@@ -2041,6 +2106,12 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
         </div>
 
         <Panel className="w-full max-w-sm">
+          {!myDelegate ? (
+            <>
+              <h1 style={{ margin: '0 0 10px', fontFamily: OUTFIT, fontSize: 22, fontWeight: 900, color: DG.forest }}>{t('delegate_not_in_room_title')}</h1>
+              <p style={{ margin: 0, fontFamily: OUTFIT, fontSize: 14, color: DG.body }}>{t('delegate_not_in_room_body')}</p>
+            </>
+          ) : (<>
           <h1 style={{ margin: '0 0 10px', fontFamily: OUTFIT, fontSize: 22, fontWeight: 900, color: DG.forest }}>{waitingHeading}</h1>
           {joinDenied ? (
             <>
@@ -2074,6 +2145,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
               )}
             </>
           )}
+          </>)}
         </Panel>
         <p style={{ marginTop: 30, fontFamily: OUTFIT, fontSize: 12, color: DG.faint }}>{t('delegate_adjourned_esc')}</p>
       </div>
@@ -2081,17 +2153,8 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
   }
 
   // ── Queue rows ────────────────────────────────────────────────────────────
-  /* Speeches per country. `parseSpeakingLogs` already runs on this page for
-     the delegate's own stats and returns every country's entries, not just
-     theirs — the rest was being filtered away and thrown out. Counted once
-     here rather than per row. */
-  /* Deliberately not a useMemo: this sits below the page's early returns, so a
-     hook here would be called conditionally. It is one pass over the message
-     list, and this view has no per-second timer to re-render it. */
-  const speechCounts: Record<string, number> = {};
-  for (const e of parseSpeakingLogs(committee)) {
-    if (e.country) speechCounts[e.country] = (speechCounts[e.country] ?? 0) + 1;
-  }
+  /* Speeches per country: `speechCounts`, memoised above the early returns from the
+     same single parse as the delegate's own stats. */
 
   const queueRows = (limit?: number) =>
     (typeof limit === 'number' ? committee.speakersList.slice(0, limit) : committee.speakersList).map((s, i) => (
@@ -2100,7 +2163,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
         position={i + 1}
         code={getCountryByName(s.country)?.code ?? ''}
         name={getCountryDisplayName(s.country, language)}
-        isSelf={s.country === country}
+        isSelf={sameSeat(s.country, country)}
         spoken={speechCounts[s.country] ?? 0}
         speakingLabel={t('delegate_speaking_chip')}
         youLabel={t('delegate_you_chip')}
@@ -2128,19 +2191,16 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
     : votingLive ? t('delegate_voting_procedure')
       : `${t('delegate_speakers_list_header')}:`;
 
-  /* `caucusSeconds`, not `caucus.remainingTime` — the row only holds the value at
-     the anchor instant, so the raw field is a clock that moves once per chair
-     write. Both the numerals and the bar read the live value so they can never
-     disagree. */
+  /* The live value, not `caucus.remainingTime`: the row only holds the value at the
+     anchor instant. <LiveCaucusClock> ticks by itself so the board does not re-render
+     every second; the numerals and the bar read the same live value. */
   const caucusClock = committee.caucus && (
-    <>
-      <div style={{ fontFamily: OUTFIT, fontSize: 'clamp(26px, 8vw, 44px)', fontWeight: 900, color: DG.ink, lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>
-        {formatTime(caucusSeconds)}
-      </div>
-      <div style={{ marginTop: 8, height: 8, borderRadius: 999, background: DG.ivory, boxShadow: LIFT.inSm, overflow: 'hidden' }}>
-        <div style={{ height: '100%', borderRadius: 999, background: DG.forest, width: `${committee.caucus.totalTime > 0 ? Math.max(0, Math.min(100, (caucusSeconds / committee.caucus.totalTime) * 100)) : 0}%` }} />
-      </div>
-    </>
+    <LiveCaucusClock
+      caucus={committee.caucus}
+      moderated={committee.phase === 'moderated-caucus'}
+      speakerBase={committee.speakerTimeRemaining ?? 0}
+      speakerStartedAt={committee.speakerStartedAt ?? null}
+    />
   );
 
   /* Whatever occupies the bottom-left slot: the GSL by default, or the live
@@ -2189,9 +2249,9 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
                 ring={DG.ivory}
                 logoUrl={committee.delegates.find((d) => d.country === committee.caucus!.currentSpeaker)?.logoUrl ?? null}
               />
-              <span style={{ minWidth: 0, flex: 1, fontFamily: OUTFIT, fontSize: 13, fontWeight: 800, color: committee.caucus.currentSpeaker === country ? DG.deepGold : DG.forest, lineHeight: 1.15, overflowWrap: 'anywhere' }}>
+              <span style={{ minWidth: 0, flex: 1, fontFamily: OUTFIT, fontSize: 13, fontWeight: 800, color: sameSeat(committee.caucus.currentSpeaker, country) ? DG.deepGold : DG.forest, lineHeight: 1.15, overflowWrap: 'anywhere' }}>
                 <SeatName name={getCountryDisplayName(committee.caucus.currentSpeaker, language)} max={22} style={{ verticalAlign: 'top' }} subScale={0.8} />
-                {committee.caucus.currentSpeaker === country && t('delegate_you_suffix')}
+                {sameSeat(committee.caucus.currentSpeaker, country) && t('delegate_you_suffix')}
               </span>
             </div>
           )}
@@ -2204,7 +2264,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
                   compact
                   code={getCountryByName(s.country)?.code ?? ''}
                   name={getCountryDisplayName(s.country, language)}
-                  isSelf={s.country === country}
+                  isSelf={sameSeat(s.country, country)}
                   spoken={speechCounts[s.country] ?? 0}
                   speakingLabel={t('delegate_speaking_chip')}
                   youLabel={t('delegate_you_chip')}

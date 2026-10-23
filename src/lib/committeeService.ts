@@ -313,14 +313,18 @@ export async function createCommittee(
   delegateNames: string[],
   observerCountries: string[] = [],
 ): Promise<{ code: string; chairJoinSuffix: string } | null> {
-  const timeoutPromise = new Promise<null>((resolve) => setTimeout(() => resolve(null), 15000));
+  // The code and the chair password are chosen HERE, before anything is sent, so the timeout
+  // path below can look the room up by the code it was creating (owner, 23 Oct 2026).
+  const code = generateCode();
+  const chairJoinSuffix = Math.floor(1000 + Math.random() * 9000).toString();
+  // A delegates batch that errored: the room exists with a partial roster, so the create is
+  // reported as failed (the create page shows its error) instead of opening a half-built room.
+  let rosterFailed = false;
   const createPromise = async (): Promise<{ code: string; chairJoinSuffix: string } | null> => {
     // Where the room was created from (owner, 21 Oct 2026): our own /api/geo,
     // country code only, prefetched by /create/sessions; at most 1.5 s, and the
     // room is created without it when it is not there (src/lib/creatorCountry.ts).
     const creatorCountry = await creatorCountryWithin();
-    const code = generateCode();
-    const chairJoinSuffix = Math.floor(1000 + Math.random() * 9000).toString();
     const client = sessionClient(code, chairJoinSuffix, { timeout: false });   // D6: creation + whole roster, never timed out
 
     const { data: committeeRow, error: committeeError } = await client
@@ -345,7 +349,11 @@ export async function createCommittee(
       for (let i = 0; i < delegateRows.length; i += BATCH_SIZE) {
         const batch = delegateRows.slice(i, i + BATCH_SIZE);
         const { error: delegateError } = await client.from('delegates').insert(batch);
-        if (delegateError) console.error('Error inserting delegates batch:', delegateError);
+        if (delegateError) {
+          console.error('Error inserting delegates batch:', delegateError);
+          rosterFailed = true;
+          return null;
+        }
       }
     }
 
@@ -354,7 +362,26 @@ export async function createCommittee(
     });
     return { code, chairJoinSuffix };
   };
-  return Promise.race([createPromise(), timeoutPromise]);
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timedOut = new Promise<'timeout'>((resolve) => { timer = setTimeout(() => resolve('timeout'), 15000); });
+  const outcome = await Promise.race([createPromise(), timedOut]);
+  if (timer) clearTimeout(timer);
+  if (outcome !== 'timeout') return outcome;
+  // Slow Wi-Fi: the insert may still be running, or may have landed with its answer lost.
+  // Reporting failure here made the chair tap again and get a SECOND room. Look the room up by
+  // the code it was creating first, and only when it is not there (or its roster failed)
+  // report failure. The password check guards against a code another room already holds.
+  if (rosterFailed) return null;
+  try {
+    const { data: row, error } = await sessionReadClient().from('committees')
+      .select('id, settings').eq('code', code).maybeSingle();
+    if (error || !row) return null;
+    const stored = (row.settings as Record<string, unknown> | null)?.chairJoinSuffix;
+    if (stored !== chairJoinSuffix || rosterFailed) return null;
+    return { code, chairJoinSuffix };
+  } catch {
+    return null;
+  }
 }
 
 export async function getCommitteeByCode(code: string): Promise<Committee | null> {
@@ -379,11 +406,25 @@ export type CommitteeLoadResult =
   | { status: 'not_found' }
   | { status: 'error' };
 
+/** One attempt gives up after this long and answers 'error' (owner, 23 Oct 2026): the plain
+ *  client has no timeout, so a read that never answered kept the first load up forever with
+ *  no Try again. A timeout is never 'not_found'. */
+export const COMMITTEE_LOAD_TIMEOUT_MS = 15_000;
+
 export async function getCommitteeByCodeResult(code: string): Promise<CommitteeLoadResult> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timedOut = new Promise<CommitteeLoadResult>((resolve) => {
+    timer = setTimeout(() => resolve({ status: 'error' }), COMMITTEE_LOAD_TIMEOUT_MS);
+  });
   try {
-    return await loadCommitteeByCode(code, true);
+    return await Promise.race([
+      loadCommitteeByCode(code, true).catch((): CommitteeLoadResult => ({ status: 'error' })),
+      timedOut,
+    ]);
   } catch {
     return { status: 'error' };
+  } finally {
+    if (timer) clearTimeout(timer);
   }
 }
 
@@ -1907,12 +1948,17 @@ async function answerJoinRequest(motionId: string, answer: 'approved' | 'denied'
   if (delErr) console.error('Error removing join request:', delErr);
 }
 
-/** A phone asks to be admitted to its seat. The id is chosen by the phone so it can follow
- *  its own request; a second press of the same request is a no-op (23505). */
+/** A phone asks to be admitted to its seat. Resolves the id of the request the phone must
+ *  FOLLOW, or null when it could not ask. The id is chosen by the phone, so on success it is
+ *  `requestId`. A 23505 has two causes: this very request already landed (a retried press),
+ *  or the unique index `motions_one_pending_request_per_delegation` (one PENDING join-request
+ *  per committee + country) refused a second request with a NEW id. In the second case the
+ *  phone follows the request already waiting; following its own id, which never landed, read
+ *  as 'gone' and let a Present phone in without the chair's Approve (AGENTS.md #17). */
 export async function requestSeatAdmission(
   committeeId: string, delegateId: string, country: string,
   desiredStatus: 'present' | 'present-voting', code: string, requestId: string,
-): Promise<boolean> {
+): Promise<string | null> {
   const { error } = await sessionClient(code).from('motions').insert({
     id: requestId,
     committee_id: committeeId,
@@ -1924,8 +1970,19 @@ export async function requestSeatAdmission(
     status: 'pending',
     disruptiveness: 99_000_000, // shown at very top
   });
-  if (error && error.code !== '23505') { console.error('Error requesting admission:', error); return false; }
-  return true;
+  if (!error) return requestId;
+  if (error.code !== '23505') { console.error('Error requesting admission:', error); return null; }
+  // Ours already (a retry of a press whose insert landed)?
+  const own = await sessionClient(code).from('motions').select('id').eq('id', requestId).maybeSingle();
+  if (own.error) { console.error('Error reading admission request:', own.error); return null; }
+  if (own.data) return requestId;
+  // Another request from this delegation is already waiting: follow that one.
+  const existing = await sessionClient(code).from('motions').select('id')
+    .eq('committee_id', committeeId).eq('type', 'join-request').eq('proposed_by', country).eq('status', 'pending')
+    .limit(1);   // the unique index allows only one
+  if (existing.error) { console.error('Error reading pending admission request:', existing.error); return null; }
+  const id = (existing.data?.[0] as { id?: string } | undefined)?.id;
+  return id ?? null;
 }
 
 /** Where a waiting-room request stands: 'gone' = deleted (an older chair bundle, or Roll

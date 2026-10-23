@@ -1,6 +1,10 @@
 # GAVELLING — TRANSLATIONS AGENT BRIEFING
 ## Up-to-date guide for adding a new language to Gavelling
 
+**23 Oct 2026, every non-English locale is code-split (no key added, removed or reworded; 1917 keys per locale at HEAD, all five identical before and after, checked key by key and value by value):** `src/lib/translations.ts` now holds ONLY English (`enTranslations`, plus the `Language`, `TranslationKey` and `LocaleStrings` types); it is the default, the fallback, and the only locale in the shared bundle. The es, fr, ar and pt blocks moved verbatim (line ranges, spreads and order unchanged) to `src/lib/locales/es.ts`, `fr.ts`, `ar.ts`, `pt.ts` (each `const xx: LocaleStrings = { ...areaTranslations.xx, ...base }`; `pt.ts` also spreads `translationsPtA/B/C`). `src/lib/loadLocale.ts` loads one with a dynamic `import()` (one chunk each) the first time a visitor picks it or has it stored on a sessions route, and caches it for the page. `LanguageContext`: English renders until the chunk arrives, then the whole page switches in one step; `language` (and with it `<html lang dir>`, so Arabic RTL) follows the strings that are showing; a failed load keeps English and logs `[i18n] could not load`. The area files `translations<Area>.ts` keep their `{ en, es, fr, ar, pt }` shape and are still imported by English, so their non-English entries (about 65 KB raw) stay in the shared bundle: an honest limit, splitting them would change how every agent adds a key.
+
+**23 Oct 2026, the delegate's "not in the room yet" panel (not recounted: other sessions are adding keys too):** ADDED to `src/lib/translationsSeatAdmission.ts` (+2 keys x 5 locales): `delegate_not_in_room_title`, `delegate_not_in_room_body`. Read by `src/app/delegate/[code]/page.tsx` when the seat let the phone in but the room has no row for its delegation yet (claim answered `no_seat`): shown in place of the Present / P+V buttons in the absent banner and the Waiting Room.
+
 **21 Oct 2026, the roll-call status picker and the tutorial's first card (not recounted: other sessions are adding keys too):** NEW module `src/lib/translationsRollCallPicker.ts` (+5 keys x 5 locales, spread after `seatAdmissionTranslations`): `rollcall_resume_kept` (the one line on a resumed roll call), `rollcall_status_absent`, `rollcall_status_present`, `rollcall_status_pv` (titles and accessible names of the A / P / PV segments), `rollcall_status_group` (`{country}`, the picker's group name), all read by `src/components/RollCallPanel.tsx`. NEW module `src/lib/translationsTutorial.ts` (+2 keys x 5): `tutorial_video_delegates`, `tutorial_video_advisors` (the small video slots on the tutorial's first card, drawn once their ids are set). REWORDED in all five: `tutorial_gavin_prepared` (now three sentences, pointing at the video). REMOVED in all five: `rollcall_slider_hint`, `rollcall_slider_hint_observer` (the cycling slider is gone). The first card reuses `sl_video_kicker`, `sl_video_title`, `sl_video_play`. Inline copy in `TutorialOverlay.tsx` (rule 8): every spotlight / action step is now `copy: { title, points }` (a short title and one to four bullet points) in all five `pick` locales, rewritten; the goodbye paragraph lost its emoji.
 
 **21 Oct 2026, session tutorial callouts and the first-run card (not recounted, no key added or removed):** REWORDED in `translations.ts` (en, es, fr; ar has no letter case and is unchanged) and `translationsPtB.ts` (pt) to the casing rules, buttons sentence case and the English title in Title Case: `tutorial_have_you_used` ("Have You Used Gavelling Before?"), `tutorial_show_me` ("Show me around"), `tutorial_skip` ("Skip tutorial"), `tutorial_start_exploring` ("Start exploring →"), `tutorial_end` ("End tutorial", now inside each step's callout). Inline copy in `TutorialOverlay.tsx` (rule 8): the `scoreboard` step is now an ordinary spotlight step on the trophy (`data-tutorial="tab-scoreboard"`) with a new `title` plus one line, in all five `pick` locales; `SB_COPY` and the full-page scoreboard card are REMOVED. The callout's Back / Next / Skip / Finish labels reuse the `TutorialNav` `pick` strings.
@@ -159,10 +163,11 @@
 
 | File | Purpose |
 |------|---------|
-| `src/lib/translations.ts` | Full EN/ES/FR/AR dictionary (1056 keys per locale). New language block goes here. `Language` type is also here. |
-| `src/lib/translations<Area>.ts` | **Key modules** (Oct 2026 pattern): one object `{ en, es, fr, ar }` per area, spread at the TOP of each locale block in `translations.ts` (`...commentDockTranslations.en,` and so on), so several changes can land without colliding in the big file. Every key must exist in all four locales; the `TranslationKey` type and the audits in section A cover them like any other key. Modules: `translationsAdvisorBoard.ts`, `translationsAdvisorRoom.ts`, `translationsAdvisorConf.ts`, `translationsCommentDock.ts`, `translationsDocIntro.ts`, `translationsMotionCards.ts`, `translationsScoreAdjust.ts`, `translationsFloorTools.ts`, `translationsCreateJoin.ts`, `translationsRestart.ts`, `translationsBroadcasts.ts`, `translationsRollCallPicker.ts`, `translationsTutorial.ts`. Put new keys in a module of their own rather than in `translations.ts`. |
+| `src/lib/translations.ts` | ENGLISH ONLY (`enTranslations`), the static default and fallback, plus the `Language`, `TranslationKey` (= `keyof typeof enTranslations`) and `LocaleStrings` types. |
+| `src/lib/locales/{es,fr,ar,pt}.ts` | One file per non-English locale (`const xx: LocaleStrings = { ...area spreads, ...keys }`, default export), code-split and loaded on demand by `src/lib/loadLocale.ts`. A new language is a new file here plus a line in `LOADERS`. Never import these statically: that puts the locale back in every page's bundle. |
+| `src/lib/translations<Area>.ts` | **Key modules** (Oct 2026 pattern): one object `{ en, es, fr, ar, pt }` per area, spread at the TOP of `enTranslations` in `translations.ts` and of each `src/lib/locales/<code>.ts` (`...commentDockTranslations.en,` / `...commentDockTranslations.es,` and so on; a NEW module needs its import and spread in all five files), so several changes can land without colliding in the big file. Every key must exist in all four locales; the `TranslationKey` type and the audits in section A cover them like any other key. Modules: `translationsAdvisorBoard.ts`, `translationsAdvisorRoom.ts`, `translationsAdvisorConf.ts`, `translationsCommentDock.ts`, `translationsDocIntro.ts`, `translationsMotionCards.ts`, `translationsScoreAdjust.ts`, `translationsFloorTools.ts`, `translationsCreateJoin.ts`, `translationsRestart.ts`, `translationsBroadcasts.ts`, `translationsRollCallPicker.ts`, `translationsTutorial.ts`. Put new keys in a module of their own rather than in `translations.ts`. |
 | `src/lib/delegateTips.ts` | `selectDelegateTips()` — picks which `delegate_tip_*` keys a delegate sees, and fills their `{wp}` / `{dr}` / `{mod}` / `{unmod}` / `{tour}` / `{end}` / `{source}` vars. The ONLY consumer of that corpus. |
-| `src/contexts/LanguageContext.tsx` | `LanguageProvider`, `useLanguage()`, `useT()` hooks, localStorage persistence. |
+| `src/contexts/LanguageContext.tsx` | `LanguageProvider`, `useLanguage()`, `useT()` hooks, localStorage persistence (`gavelling-language`). Loads a non-English locale through `loadLocale`; English shows until it has arrived. |
 | `src/app/layout.tsx` | Wrapped in `LanguageProvider`. |
 | `src/lib/countries.ts` | `COUNTRY_NAMES_ES`, `COUNTRY_NAMES_FR`, `getCountryDisplayName()`, `matchesCountryQuery()`, `startsWithCountryQuery()`. |
 | `src/lib/presetNames.ts` | `PRESET_NAME_ES`, `PRESET_NAME_FR`, `getCommitteeDisplayName()` for preset committee names. |
@@ -252,9 +257,9 @@ Already converted to translation keys — just add the new language keys to `tra
 `src/components/SiteNav.tsx` has a `NAV_LINKS_CONFIG` array where each entry has `en`, `es`, `fr` keys. Add the new language key to every entry or TypeScript will error (`Language` type used to index it).
 
 ### 11. Language type and localStorage
-- `src/lib/translations.ts` line 1: expand `Language` type to include the new code.
+- `src/lib/translations.ts`: expand the `Language` type to include the new code; add the new file to `LOADERS` in `src/lib/loadLocale.ts`.
 - `src/contexts/LanguageContext.tsx`: update the localStorage validation `if (saved === 'en' || saved === 'es' || saved === 'fr')` to include the new code.
-- `src/contexts/LanguageContext.tsx`: the `t()` function uses `(translations as Record<string, Record<string, string>>)[language]` — this cast is required to handle languages not yet in the `translations` object (before the new block is added in Step 6).
+- `src/contexts/LanguageContext.tsx`: `t()` reads the loaded locale's strings, then `enTranslations`, then the key itself, so a language with no file yet (or a missing key) simply renders English.
 
 ---
 
@@ -287,10 +292,10 @@ Files: `src/components/MotionsModal.tsx`, `src/app/delegate/[code]/page.tsx`, `s
 
 Add `language === 'xx'` branch to all motion name objects and all 15 tutorial `bubbleText` ternaries.
 
-### Step 4 — Full `translations.ts` language block
-File: `src/lib/translations.ts`
+### Step 4 — The new locale file
+Files: `src/lib/locales/xx.ts` (new), `src/lib/loadLocale.ts`
 
-Add a complete `xx: { ... }` block before the `} as const;` closing line. The block must have **exactly the same keys** as the `en` block. Also add `settings_xx: 'LanguageName'` to the `en`, `es`, and `fr` blocks.
+Copy `src/lib/locales/es.ts` to `xx.ts`, rename the const, spread each area module's `.xx`, and translate every value. The file must have **exactly the same keys** as `enTranslations` (`LocaleStrings` makes an unknown key a type error; a missing one silently renders English, so run audit A). Add `xx: () => import('./locales/xx')` to `LOADERS`. Also add `settings_xx: 'LanguageName'` to English and every locale file.
 
 Use the ES and FR blocks as structural references — same keys, new values.
 
@@ -394,7 +399,7 @@ Verify one-line fit at 1024px before committing.
 
 9. **`NAV_LINKS_CONFIG` must be updated.** Adding a new `Language` type value will cause a TypeScript error on `NAV_LINKS_CONFIG` because it's indexed by `Language`. Always add the new key to every entry.
 
-10. **`LanguageContext` cast is required.** The `t()` function uses a permissive cast so it can fall back to `en` before the new language block is added in Step 4. The cast `(translations as Record<string, Record<string, string>>)[language]` allows this safely.
+10. **English is the fallback at every step.** `t()` returns the loaded locale's string, else English, else the key, so a language whose file is not written yet, a key missing from one, or a chunk that failed to load all render English, never a blank.
 
 11. **Hero heading font sizes must be derived, not guessed.** Longer phrases need smaller `vw` values. Use the formula above and always verify at 1024px before calling it done. The fixed-height wrapper (`md:h-[195px]`) ensures buttons don't shift.
 
@@ -475,21 +480,22 @@ Typography: `Outfit` for all UI (UPPERCASE for buttons). `DM Mono` for codes/bad
 
 ## MAINTENANCE & AUDIT (run before declaring a locale "done")
 
-### A. Key completeness — `translations.ts`
-`en` is canonical (`TranslationKey = keyof typeof translations.en`). Every key must exist in every locale block, same order. Audit script:
+### A. Key completeness — `translations.ts` + `src/lib/locales/*.ts`
+`en` is canonical (`TranslationKey = keyof typeof enTranslations`). Every key must exist in every locale file, same order. Audit script (resolves the area-file spreads through jiti, which ships with Next):
 ```js
-// node this against repo root
-const fs=require('fs');let s=fs.readFileSync('src/lib/translations.ts','utf8');
-s=s.replace(/export type Language[^\n]*\n/,'').replace(/export const translations =/,'module.exports =').replace(/\} as const;/,'};').replace(/export type TranslationKey[^\n]*\n?/,'');
-fs.writeFileSync('/tmp/_t.js',s);const T=require('/tmp/_t.js');const en=Object.keys(T.en);
-for(const L of ['es','fr','ar']){const k=new Set(Object.keys(T[L]));
+// paste into `node -e '...'` from the repo root (require resolves jiti from there)
+const jiti=require('jiti')(process.cwd()+'/x.cjs',{interopDefault:false});
+const T={en:jiti('./src/lib/translations.ts').enTranslations};
+for(const L of ['es','fr','ar','pt'])T[L]=jiti(`./src/lib/locales/${L}.ts`).default;
+const en=Object.keys(T.en);
+for(const L of ['es','fr','ar','pt']){const k=new Set(Object.keys(T[L]));
   const missing=en.filter(x=>!k.has(x)), extra=[...k].filter(x=>!en.includes(x)), same=en.filter(x=>k.has(x)&&T[L][x]===T.en[x]);
   console.log(`\n${L}: present ${k.size} | MISSING ${missing.length} | EXTRA ${extra.length} | identical-to-EN ${same.length}`);
   if(missing.length)console.log('  MISSING:',missing.join(', '));
   if(extra.length)console.log('  EXTRA:',extra.join(', '));
   same.forEach(x=>console.log('  ~',x,'=',JSON.stringify(T.en[x])));}
 // Single-replace hazard: the same placeholder twice in one string renders the second literally.
-for(const L of ['en','es','fr','ar'])for(const [k,v] of Object.entries(T[L])){
+for(const L of Object.keys(T))for(const [k,v] of Object.entries(T[L])){
   const m=String(v).match(/\{[a-zA-Z0-9_]+\}/g)||[]; const dup=[...new Set(m.filter((x,i)=>m.indexOf(x)!==i))];
   if(dup.length)console.log(`  DUPLICATE PLACEHOLDER ${L}.${k}: ${dup.join(',')}`);}
 ```

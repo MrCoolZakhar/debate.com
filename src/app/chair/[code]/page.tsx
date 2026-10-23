@@ -93,7 +93,7 @@ import {
   NOTIFY_TTL,
 } from '@/lib/sessionNotifications';
 import {
-  getCommitteeByCode,
+  getCommitteeByCodeResult,
   getCommitteeByCodeWithRetry,
   logEvent,
   setPhase as setPhaseInDB,
@@ -245,7 +245,12 @@ const MAX_TIMEOUT_MS = 2_147_483_647;
  *  latch) but hand the state merge to a forced catch-up instead. */
 async function fetchCommitteeGuarded(code: string): Promise<{ fresh: Committee | null; stale: boolean }> {
   const seqAtStart = localWriteSeq.current;
-  const fresh = await getCommitteeByCode(code);
+  // STRICT read (owner, 23 Oct 2026): the lenient getCommitteeByCode turns a failed sub-query
+  // into an empty list, and the gavel handover replaces the whole committee with the
+  // snapshot, which blanked the roster, the lists or the chat. A failed read ('error', or a
+  // 'not_found' we cannot act on) is no fresh data: callers fall back as they do on null.
+  const r = await getCommitteeByCodeResult(code);
+  const fresh = r.status === 'ok' ? r.committee : null;
   return { fresh, stale: localWriteSeq.current !== seqAtStart };
 }
 
@@ -2668,7 +2673,10 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
     let cancelled = false;
     (async () => {
       const { fresh, stale } = await fetchCommitteeGuarded(code);
-      if (cancelled || !fresh) return;
+      if (cancelled) return;
+      // The read failed: no snapshot to merge, so the guarded session sync refetches every
+      // slice (and the Moderator's catch-up reads current_speaker back) instead.
+      if (!fresh) { syncRef.current?.catchUp(undefined, { force: true }); return; }
       // R-1: this device wrote something while the resync was in flight (a Start pressed the
       // moment the gavel arrived). The snapshot predates it: let the guarded session sync
       // land the fresh slices instead of replacing the committee wholesale.
@@ -3720,6 +3728,21 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
   // can broadcast to it) or any room that has received one.
   const secretariatChatShown = committee?.sessionOrigin === 'conference' || broadcastHistory.length > 0;
 
+  // The chat icon's unread total. Memoised on its real inputs (owner, 23 Oct 2026): the page
+  // re-renders every second while a clock runs (RULE 3's tick atoms), and each render used to
+  // rebuild the whole chat directory over every message. Same numbers, computed only when a
+  // message, a broadcast, the roster, the dais or a read mark changes. 0 while chat is open.
+  const chatMessages = committee?.messages;
+  const chatChairNames = committee?.chairNames;
+  const chatDelegates = committee?.delegates;
+  const chatIconUnread = useMemo(() => {
+    if (showChat || !chatMessages) return 0;
+    return chatUnreadTotal(
+      withBroadcastMessages(chatMessages, broadcastHistory), myChairName || 'Chair', true,
+      chatChairNames ?? [], chatReadCounts, (chatDelegates ?? []).map((d) => d.country),
+    );
+  }, [showChat, chatMessages, broadcastHistory, myChairName, chatChairNames, chatReadCounts, chatDelegates]);
+
   // Dealing with a broadcast card (acknowledge or dismiss) counts its Secretariat message as
   // read, so it does not linger as a phantom unread on the chat icon. Read counts are a
   // high-water count of received messages, so this moves the Everyone mark up by one only
@@ -3887,8 +3910,8 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
     }
   }, [pendingMotions, language, t]);
 
-  // Chat → CO-CHAIR ONLY, and never with message content.
-  const chatMessages = committee?.messages;
+  // Chat → CO-CHAIR ONLY, and never with message content. (`chatMessages` = committee?.messages,
+  // declared with the chat icon's unread memo above.)
   useEffect(() => {
     const committeeId = committee?.id ?? null;
     if (!committeeId) return;
@@ -4913,12 +4936,23 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
     seatSpeakerClock(committee.speakerTimeLimit, null);
   };
 
+  // The GSL speaking time. Changing it never touches a SEATED speaker's clock: the new limit
+  // applies from the next speaker (owner, 23 Oct 2026). Re-seating the clock mid-speech used
+  // to reset it while `timerRunning` stayed true, freezing it; the custom box's blur re-applied
+  // the same value and did it again. Only with nobody on the floor is the floor clock re-seated
+  // at the new limit (the on-deck display reads `speakerTimeLimit` either way).
   const handleSetSpeakerTimeLimit = (seconds: number) => {
-    setSpeakerTimeLimitLocal(seconds);
     setSpeakerTimeLimitInput(String(seconds));
-    seatSpeakerClock(seconds, null);
-    syncSpeakerTimeInDB(committee.id, seconds, committee.code, committee.dbChairJoinSuffix ?? undefined, seconds);   // fresh grant (T-3)
-    updateLocal(setCommittee, (c) => ({ ...c, speakerTimeLimit: seconds, speakerTimeRemaining: seconds }));
+    if (seconds === speakerTimeLimit) return;
+    setSpeakerTimeLimitLocal(seconds);
+    const nobodySeated = !committee.currentSpeaker && !committee.caucus;
+    if (nobodySeated) {
+      seatSpeakerClock(seconds, null);
+      syncSpeakerTimeInDB(committee.id, seconds, committee.code, committee.dbChairJoinSuffix ?? undefined, seconds);   // fresh grant (T-3)
+    }
+    updateLocal(setCommittee, (c) => (nobodySeated
+      ? { ...c, speakerTimeLimit: seconds, speakerTimeRemaining: seconds }
+      : { ...c, speakerTimeLimit: seconds }));
     updateSpeakerTimeLimit(committee.id, seconds, committee.code, committee.dbChairJoinSuffix ?? undefined);
   };
 
@@ -5558,7 +5592,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
           // received message. Chat off: only those, under their own read key.
           const totalUnread = showChat ? 0
             : getCommitteeFlags(committee).disableChat ? (secretariatChatShown ? secretariatUnread(broadcastHistory, chatReadCounts) : 0)
-            : chatUnreadTotal(withBroadcastMessages(committee.messages, broadcastHistory), myChairName || 'Chair', true, committee.chairNames ?? [], chatReadCounts, committee.delegates.map((d) => d.country));
+            : chatIconUnread;
           return (
             <TopBarIconButton tutorial="tab-chat" onClick={() => { if (!isPreSession) handleToggleChat(); }} active={showChat}
               count={totalUnread}

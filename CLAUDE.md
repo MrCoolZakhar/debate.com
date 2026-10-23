@@ -226,7 +226,7 @@ The rest is in `AGENTS.md`.
 
 **Errors.** Never render `error.message`, a Postgres, PostgREST, Storage or Stripe string, or a stack trace to a user. Route every caught error through `friendlyError(error, fallback)` (`src/lib/friendlyError.ts`); when a migration adds a CHECK a user can reach, add its sentence to `CONSTRAINT_MESSAGES` in the same change; our own thrown errors are `new UserFacingError('...')`. Only `src/app/admin/*` keeps raw errors. `reportCrash.ts` drops noise and records expected refusals; crash alerts go to wearegavelling@gmail.com.
 
-**i18n.** Four locales in `src/lib/translations.ts` (en, es, fr, ar with RTL), sessions only; English everywhere else. New keys go in `src/lib/translations<Area>.ts`; keep `.claude/TRANSLATIONS.md` updated. Polish reference: `.claude/skills/make-interfaces-feel-better/SKILL.md`.
+**i18n.** Five locales, sessions only; English everywhere else. English lives in `src/lib/translations.ts` (`enTranslations`, static, the fallback and the only locale in the shared bundle); es, fr, ar (RTL) and pt live in `src/lib/locales/<code>.ts` and are code-split, loaded by `src/lib/loadLocale.ts` only when picked or stored (English shows until they arrive). Never import a locale file statically. New keys go in an area file `src/lib/translations<Area>.ts` (all five locales; a new area file is spread into `translations.ts` and all four locale files); keep `.claude/TRANSLATIONS.md` updated. Polish reference: `.claude/skills/make-interfaces-feel-better/SKILL.md`.
 
 ---
 
@@ -300,7 +300,7 @@ npm run check:text-overlaps  # text clipped or overlapping because of the brand 
 
 No unit tests and no CI; the build, the two prebuild gates, `check:og`, `check:indexability` and the one e2e test are the quality gates. `.env.local` needs `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY`; `GIPHY_API_KEY` is server-only. Payments, email and account deletion run in edge functions with their own secrets; nothing in this repo deploys them.
 
-Largest files, as of Oct 2026 (lines): `translations.ts` 6.8k, `chair/[code]/page.tsx` 6.4k, `ConferenceApplyClient.tsx` 6.3k, `applications/page.tsx` 5.9k, `settings/page.tsx` 5.5k, `assignment/page.tsx` 5.5k, `communications/page.tsx` 4.6k. Keep diffs in these small; put new features in new files and mount them.
+Largest files, as of Oct 2026 (lines): `chair/[code]/page.tsx` 6.4k, `ConferenceApplyClient.tsx` 6.3k, `applications/page.tsx` 5.9k, `settings/page.tsx` 5.5k, `assignment/page.tsx` 5.5k, `communications/page.tsx` 4.6k. Keep diffs in these small; put new features in new files and mount them.
 
 ---
 

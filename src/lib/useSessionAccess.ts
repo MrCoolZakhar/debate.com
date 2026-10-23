@@ -42,6 +42,18 @@ export type SessionAccessState = 'checking' | 'standalone' | 'allowed' | 'denied
 
 const settled = (s: SessionAccessState) => s === 'allowed' || s === 'standalone';
 
+/** Each read of the check gives up after this long (owner, 23 Oct 2026): the conference
+ *  lookup and the membership read have no timeout of their own, so a read that never
+ *  answered kept a first load on the loader forever. A timeout is an unanswered read
+ *  ('error' / null), never a verdict, so a settled page stays as it is. */
+const ACCESS_CHECK_TIMEOUT_MS = 15_000;
+
+function within<T>(p: Promise<T>, onTimeout: T): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timedOut = new Promise<T>((resolve) => { timer = setTimeout(() => resolve(onTimeout), ACCESS_CHECK_TIMEOUT_MS); });
+  return Promise.race([p.catch(() => onTimeout), timedOut]).finally(() => { if (timer) clearTimeout(timer); });
+}
+
 export function useSessionAccess(opts: {
   code: string;
   /** 'dais' = detectConferenceSession (chair, voting); 'origin' = isConferenceSession (the retired advisor room view; no caller today). */
@@ -70,15 +82,16 @@ export function useSessionAccess(opts: {
     void (async () => {
       if (cancelled) return;
       setState(keepOr('checking'));
-      const isConf = gate === 'dais'
-        ? await detectConferenceSessionOrNull(code)
-        : await isConferenceSessionOrNull(code);
+      const isConf = await within(
+        gate === 'dais' ? detectConferenceSessionOrNull(code) : isConferenceSessionOrNull(code),
+        null,
+      );
       if (cancelled) return;
       if (isConf === null) { setState(keepOr('error')); return; }
       if (!isConf) { setState('standalone'); return; }
       const token = tokenRef.current;
       if (!token || !userId) { setState('signin'); return; }
-      const access = await verifyConferenceAccess(code, token, userId);
+      const access = await within<ConferenceAccess>(verifyConferenceAccess(code, token, userId), { kind: 'error' });
       if (cancelled) return;
       if (access.kind === 'error') { setState(keepOr('error')); return; }
       setState(allowRef.current(access.kind) ? 'allowed' : 'denied');

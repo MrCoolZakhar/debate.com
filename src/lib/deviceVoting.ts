@@ -54,6 +54,18 @@ async function delegateClient(accessToken?: string | null): Promise<SupabaseClie
   return getAuthedClient(accessToken);
 }
 
+// The delegate-side calls run on clients with no request timeout, and the ballot screen
+// waits on them ("Saving", with the confirm locked). A call that never answers must end in
+// the normal error outcome so the screen offers its retry, so each is raced against this.
+// A timed-out cast is ALWAYS 'error', never 'ok': it may still land late, and the next
+// ballot read (every 10 s) then shows the choice the server holds.
+export const DEVICE_CALL_TIMEOUT_MS = 15_000;
+function withTimeout<T>(work: Promise<T>, onTimeout: T): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<T>((resolve) => { timer = setTimeout(() => resolve(onTimeout), DEVICE_CALL_TIMEOUT_MS); });
+  return Promise.race([work, timeout]).finally(() => { if (timer) clearTimeout(timer); });
+}
+
 type Raw = Record<string, unknown>;
 const CHOICES: VoteChoice[] = ['for', 'against', 'for-rights', 'against-rights', 'abstain'];
 const isChoice = (v: unknown): v is VoteChoice => typeof v === 'string' && (CHOICES as string[]).includes(v);
@@ -75,7 +87,11 @@ export interface MyDeviceBallot {
 }
 
 /** undefined = could not read; null = no device ballot open for this delegation. */
-export async function getMyDeviceBallot(code: string, country: string, accessToken?: string | null): Promise<MyDeviceBallot | null | undefined> {
+export function getMyDeviceBallot(code: string, country: string, accessToken?: string | null): Promise<MyDeviceBallot | null | undefined> {
+  return withTimeout(readMyDeviceBallot(code, country, accessToken), undefined);
+}
+
+async function readMyDeviceBallot(code: string, country: string, accessToken?: string | null): Promise<MyDeviceBallot | null | undefined> {
   try {
     const client = await delegateClient(accessToken);
     const { data, error } = await client.rpc('my_device_ballot', {
@@ -102,7 +118,11 @@ export async function getMyDeviceBallot(code: string, country: string, accessTok
 
 export type CastResult = 'ok' | 'closed' | 'revealed' | 'not_holder' | 'voted_elsewhere' | 'not_in_ballot' | 'no_abstain' | 'no_rights' | 'no_ballot' | 'error';
 
-export async function castDeviceVote(code: string, documentId: string, country: string, choice: VoteChoice, accessToken?: string | null): Promise<CastResult> {
+export function castDeviceVote(code: string, documentId: string, country: string, choice: VoteChoice, accessToken?: string | null): Promise<CastResult> {
+  return withTimeout(sendDeviceVote(code, documentId, country, choice, accessToken), 'error');
+}
+
+async function sendDeviceVote(code: string, documentId: string, country: string, choice: VoteChoice, accessToken?: string | null): Promise<CastResult> {
   try {
     const client = await delegateClient(accessToken);
     const { data, error } = await client.rpc('cast_device_vote', {
