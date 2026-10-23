@@ -1,3 +1,4 @@
+-- APPLIED 23 Oct 2026 from Claude Code at Peter's request (migration seat_kick_one_claim_and_shared_allowance).
 -- ============================================================================================
 -- scratch-seat-kick-and-allowance.sql
 -- STATUS: NOT APPLIED. Drafted 23 Oct 2026 (owner approved the behaviour: "kicking allow one

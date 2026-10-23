@@ -1,3 +1,4 @@
+-- PARTLY APPLIED 23 Oct 2026 from Claude Code at Peter's request: C1+C8, C3, C6, C11, C12. NOT applied: C5 (waits for Peter: emails ~32 chairs), CP2 (dropped: the masked hint stays).
 -- ============================================================================
 -- scratch-conference-rooms.sql
 --
