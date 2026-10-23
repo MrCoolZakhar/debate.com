@@ -154,7 +154,7 @@ export default function Article2() {
         </ul>
         <H3>Conferences layer (live)</H3>
         <p>
-          Gavelling Conferences adds end-to-end conference management at no cost: delegate applications, <Link href="/blog/mun-country-allocation" style={{ color: '#1B3828', fontWeight: 600 }}>smart country-role allocations</Link>, delegation management for schools, <Link href="/blog/mun-conference-registration-payments" style={{ color: '#1B3828', fontWeight: 600 }}>payments and financial aid</Link>, study guide distribution, position paper review, chair and staff recruitment, a shareable MUN CV for every delegate (awards are coming soon), and a public conference directory where delegates <Link href="/conferences/explore" style={{ color: '#1B3828', fontWeight: 600 }}>find and apply to conferences worldwide</Link>.
+          Gavelling Conferences adds end-to-end conference management at no cost: delegate applications, <Link href="/blog/mun-country-allocation" style={{ color: '#1B3828', fontWeight: 600 }}>smart country-role allocations</Link>, delegation management for schools, <Link href="/blog/mun-conference-registration-payments" style={{ color: '#1B3828', fontWeight: 600 }}>payments and financial aid</Link>, study guide distribution, position paper review, chair and staff recruitment, awards that chairs nominate and the secretariat approves and publishes, each one landing as a verified entry on the delegate&rsquo;s shareable MUN CV, and a public conference directory where delegates <Link href="/conferences/explore" style={{ color: '#1B3828', fontWeight: 600 }}>find and apply to conferences worldwide</Link>.
         </p>
         <H3>Limitations</H3>
         <p>
@@ -259,6 +259,7 @@ export default function Article2() {
                 ['Voting module', '✓', '✓', '✓', 'Manual'],
                 ['Delegate-to-chair chat', '✓', '✓', '✗', '✗'],
                 ['Faculty advisor view', '✓', '✓', '✗', '✗'],
+                ['Awards published to a verified delegate CV', '✓', 'Not listed', '✗', 'Manual'],
                 ['No delegate accounts needed', '✓', '✗', 'n/a (dais only)', '✓'],
                 ['Conference registration & payments', '✓', 'Partial', '✗', '✗'],
                 ['Public conference directory', '✓', 'mymun listings', '✗', '✗'],
