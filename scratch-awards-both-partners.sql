@@ -1,0 +1,7 @@
+-- APPLIED 23 Oct 2026 from Claude Code at Peter's request (migration awards_publish_to_every_delegation_partner).
+-- Owner: an award to a double delegation is issued to BOTH people. publish_conference_awards now
+-- mints / updates the verified CV entry for the award's own user_id AND every person allocated to
+-- the same committee and country (allocation user, else its application's user; withdrawn or
+-- rejected applications excluded). Each person's `awards` list counts every published award of the
+-- conference that names them directly or names their delegation. No email, no points (unchanged).
+-- The live definition: select pg_get_functiondef('public.publish_conference_awards'::regproc);
