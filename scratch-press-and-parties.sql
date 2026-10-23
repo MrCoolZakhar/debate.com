@@ -1,3 +1,4 @@
+-- APPLIED 23 Oct 2026 from Claude Code at Peter's request: K1, P4, PA-PF, P7. Section T sent once to wearegavelling@gmail.com.
 -- =============================================================================
 -- scratch-press-and-parties.sql
 --
