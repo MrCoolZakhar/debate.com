@@ -7,6 +7,7 @@ import { useManage } from '@/app/manage/[slug]/layout';
 import { useAuth } from '@/components/AuthProvider';
 import { getFreshAuthedClient, refreshSessionNow } from '@/lib/supabase-auth';
 import { supabase as anonSupabase } from '@/lib/supabase';
+import { fetchAllRows } from '@/lib/fetchAllRows';
 import {
   NeuCard, NeuInset, NeuIconDisc, Emoji3D,
   NEU, NEU_GRADIENTS, OUTFIT, EASE,
@@ -253,9 +254,13 @@ export default function LiveStatusPage() {
           // narrowing the clock back to `updated_at`.
           // `recipient` is what marks a ledger row (`__log__`) for scoring.ts, which scores
           // this committee exactly as the chair's board does (`sessionHeadlineScores`).
-          anonSupabase.from('messages')
-            .select('committee_id, sender, recipient, content, created_at')
-            .in('committee_id', sessionIds),
+          // Paged (fetchAllRows): one request stops at 1,000 rows across EVERY room here,
+          // silently, so a conference past that scored its rooms from a cut ledger.
+          fetchAllRows((from, to) => anonSupabase.from('messages')
+            .select('id, committee_id, sender, recipient, content, created_at')
+            .in('committee_id', sessionIds)
+            .order('created_at', { ascending: true }).order('id', { ascending: true })
+            .range(from, to)),
           // Chair feedback: ratings AND private notes. In practice almost every
           // row is a factor rating with no prose, so factor_scores is as much
           // the payload as `content` is.

@@ -23,6 +23,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { supabase as anonSupabase } from '@/lib/supabase';
+import { fetchAllRows } from '@/lib/fetchAllRows';
 import { getFreshAuthedClient } from '@/lib/supabase-auth';
 import { getScoringConfig } from '@/lib/scoring';
 import type { ScoringConfig } from '@/lib/settingsStore';
@@ -72,9 +73,12 @@ export async function loadAdminRoom(sessionId: string, conferenceId: string | nu
     anonSupabase.from('documents')
       .select('committee_id, type, status, doc_code, title, sponsors, file_url, file_name, content, created_at')
       .eq('committee_id', sessionId),
-    anonSupabase.from('messages')
-      .select('committee_id, sender, recipient, content, created_at')
-      .eq('committee_id', sessionId),
+    // Paged: one request stops at 1,000 rows.
+    fetchAllRows((from, to) => anonSupabase.from('messages')
+      .select('id, committee_id, sender, recipient, content, created_at')
+      .eq('committee_id', sessionId)
+      .order('created_at', { ascending: true }).order('id', { ascending: true })
+      .range(from, to)),
     anonSupabase.from('feedback')
       .select('committee_id, country, chair_name, content, created_at, level, factor_scores, speech_context, speech_seconds, speech_topic, spoken_at')
       .eq('committee_id', sessionId)

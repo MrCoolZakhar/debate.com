@@ -15,6 +15,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { RealtimeChannel } from '@supabase/supabase-js';
 import { supabase } from '../supabase';
+import { fetchAllRows } from '../fetchAllRows';
 import { serverNow } from '../serverClock';
 import type { CaucusState } from '../types';
 import type { BoardLogEvent, RoomData, RoomDelegate, RoomDocument, RoomQueueRow } from './types';
@@ -161,10 +162,11 @@ async function fetchRooms(by: { codes?: string[]; ids?: string[] }): Promise<Fet
         .order('position', { ascending: true }).order('created_at', { ascending: true }).order('id', { ascending: true }),
       supabase.from('delegates').select('id, committee_id, country, is_observer, logo_url, status').in('committee_id', ids),
       supabase.from('documents').select('committee_id, type, status, doc_code, title, sponsors').in('committee_id', ids),
-      // The ledger ONLY, one read per room so the 1,000-row page cap applies per room.
-      ...ids.map((id) => supabase.from('messages').select('content, created_at')
+      // The ledger ONLY, one paged read per room (a single request stops at 1,000 rows).
+      ...ids.map((id) => fetchAllRows((from, to) => supabase.from('messages').select('id, content, created_at')
         .eq('committee_id', id).eq('recipient', '__log__').eq('sender', '__system__')
-        .order('created_at', { ascending: true })),
+        .order('created_at', { ascending: true }).order('id', { ascending: true })
+        .range(from, to))),
     ]);
     for (const r of [csRes, slRes, dRes, docRes, ...msgRes]) if (r.error) return { ok: false, error: r.error };
 

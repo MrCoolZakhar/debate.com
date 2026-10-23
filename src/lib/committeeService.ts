@@ -21,6 +21,7 @@ import { creatorCountryWithin } from './creatorCountry';
 // The one home for how long a room is kept (roomRetention.ts): End Debate's
 // expires_at and the reopen window must stay the same number.
 import { ENDED_KEEP_HOURS, REOPEN_WINDOW_HOURS } from './roomRetention';
+import { fetchAllRows } from './fetchAllRows';
 import {
   Committee,
   type HeldGslFloor,
@@ -484,7 +485,12 @@ async function loadCommitteeByCode(code: string, strict: boolean): Promise<Commi
     // level or request-to-speak and join requests silently break.
     supabase.from('motions').select('*').eq('committee_id', committeeRow.id).eq('status', 'pending').order('disruptiveness', { ascending: false }).retry(!strict),
     supabase.from('documents').select('*').eq('committee_id', committeeRow.id).order('created_at', { ascending: true }).retry(!strict),
-    supabase.from('messages').select('*').eq('committee_id', committeeRow.id).order('created_at', { ascending: true }).retry(!strict),
+    // Paged (fetchAllRows): one request stops at 1,000 rows WITHOUT saying so, and a busy
+    // conference room passes that (chat plus the scoring ledger). The newest rows were the ones
+    // lost: chat, scores, History and the speech-turn keys that stop a double log. `id` last so
+    // pages never overlap or skip a row.
+    fetchAllRows((from, to) => supabase.from('messages').select('*').eq('committee_id', committeeRow.id)
+      .order('created_at', { ascending: true }).order('id', { ascending: true }).range(from, to).retry(!strict)),
   ]);
   if (strict && subResults.some((r) => r.error)) return { status: 'error' };
   const [
@@ -1534,9 +1540,11 @@ export async function getSpeakersLists(committeeId: string): Promise<{ speakersL
 }
 
 export async function getMessagesList(committeeId: string): Promise<Committee['messages'] | null> {
-  const { data, error } = await supabase.from('messages')
+  // Paged like the room load: a single request stops at 1,000 rows.
+  const { data, error } = await fetchAllRows<DbRow>((from, to) => supabase.from('messages')
     .select('id, sender, content, created_at, is_private, recipient')
-    .eq('committee_id', committeeId).order('created_at', { ascending: true });
+    .eq('committee_id', committeeId).order('created_at', { ascending: true }).order('id', { ascending: true })
+    .range(from, to));
   if (error) { console.error('Error fetching messages:', error); return null; }
   return (data ?? []).map((m: DbRow) => ({
     id: m.id as string, sender: m.sender as string, content: m.content as string,
