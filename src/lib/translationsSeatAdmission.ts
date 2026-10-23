@@ -20,6 +20,8 @@ export const seatAdmissionTranslations = {
     delegate_absent_locked_desc: 'Your chair marks attendance in this committee. Ask them to mark you Present',
     delegate_absent_desc_observer: 'Mark yourself Present to take part',
     delegate_caucus_queue_title: 'Caucus Speakers',
+    // A Room Order Tour de Table's numbered turn (not a delegation), in the caucus queue.
+    delegate_room_order_speaker: 'Speaker {n}',
   },
   es: {
     delegate_admit_present_desc: 'La mesa deja entrar a cada teléfono. Pide entrar y espera su aprobación',
@@ -33,6 +35,7 @@ export const seatAdmissionTranslations = {
     delegate_absent_locked_desc: 'La mesa marca la asistencia en este comité. Pídele que te marque como Presente',
     delegate_absent_desc_observer: 'Márcate como Presente para participar',
     delegate_caucus_queue_title: 'Oradores del Cáucus',
+    delegate_room_order_speaker: 'Orador {n}',
   },
   fr: {
     delegate_admit_present_desc: 'La présidence fait entrer chaque téléphone. Demandez à entrer et attendez son accord',
@@ -46,6 +49,7 @@ export const seatAdmissionTranslations = {
     delegate_absent_locked_desc: "La présidence fait l'appel dans ce comité. Demandez-lui de vous marquer Présent",
     delegate_absent_desc_observer: 'Marquez-vous Présent pour participer',
     delegate_caucus_queue_title: 'Orateurs du Caucus',
+    delegate_room_order_speaker: 'Orateur {n}',
   },
   ar: {
     delegate_admit_present_desc: 'يسمح الرئيس بدخول كل هاتف. اطلب الدخول وانتظر موافقته',
@@ -59,6 +63,7 @@ export const seatAdmissionTranslations = {
     delegate_absent_locked_desc: 'يسجّل الرئيس الحضور في هذه اللجنة. اطلب منه تسجيلك حاضراً',
     delegate_absent_desc_observer: 'سجّل نفسك حاضراً للمشاركة',
     delegate_caucus_queue_title: 'متحدثو الحوار المنهجي',
+    delegate_room_order_speaker: 'المتحدث {n}',
   },
   pt: {
     delegate_admit_present_desc: 'A mesa deixa entrar cada telefone. Peça para entrar e aguarde a aprovação',
@@ -72,5 +77,6 @@ export const seatAdmissionTranslations = {
     delegate_absent_locked_desc: 'A mesa registra a presença neste comitê. Peça para ela marcar você como Presente',
     delegate_absent_desc_observer: 'Marque-se como Presente para participar',
     delegate_caucus_queue_title: 'Oradores do Caucus',
+    delegate_room_order_speaker: 'Orador {n}',
   },
 };

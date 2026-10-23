@@ -67,7 +67,9 @@ export function StateLine({ state, big = false }: { state: SeatState; big?: bool
       text = t('adv_state_ahead', { n: state.ahead, wait: waitText(t, secs) });
       break;
     case 'in-room':
-      text = state.clock && state.mode === 'unmoderated'
+      text = state.roomOrderLeft !== null
+        ? (state.roomOrderLeft === 1 ? t('adv_state_in_room_order_one') : t('adv_state_in_room_order', { n: state.roomOrderLeft }))
+        : state.clock && state.mode === 'unmoderated'
         ? t('adv_state_in_room_unmod', { time: clock(secs) })
         : state.clock && state.mode === 'consultation'
           ? t('adv_state_in_room_consult', { time: clock(secs) })
@@ -130,6 +132,9 @@ function useWhen(state: SeatState): { main: string; sub: string | null; tone: 'f
     case 'ahead':
       return { main: t('adv_when_ahead', { n: state.ahead }), sub: waitText(t, secs), tone: 'soon' };
     case 'in-room':
+      if (state.roomOrderLeft !== null) {
+        return { main: t('adv_state_in_room'), sub: state.roomOrderLeft === 1 ? t('adv_when_room_order_one') : t('adv_when_room_order', { n: state.roomOrderLeft }), tone: 'room' };
+      }
       return { main: t('adv_state_in_room'), sub: state.clock ? t('adv_when_left', { time: clock(secs) }) : null, tone: 'room' };
     case 'absent':
       return { main: state.notOnRoster ? t('adv_state_not_on_roster') : t('adv_state_absent'), sub: null, tone: 'look' };

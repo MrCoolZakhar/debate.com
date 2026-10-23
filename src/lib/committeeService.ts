@@ -365,15 +365,21 @@ export async function createCommittee(
     });
     return { code, chairJoinSuffix };
   };
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  const timedOut = new Promise<'timeout'>((resolve) => { timer = setTimeout(() => resolve('timeout'), 15000); });
-  const outcome = await Promise.race([createPromise(), timedOut]);
-  if (timer) clearTimeout(timer);
+  const waitFor = async <T>(p: Promise<T>, ms: number): Promise<T | 'timeout'> => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const timedOut = new Promise<'timeout'>((resolve) => { timer = setTimeout(() => resolve('timeout'), ms); });
+    try { return await Promise.race([p, timedOut]); } finally { if (timer) clearTimeout(timer); }
+  };
+  const creating = createPromise();
+  let outcome = await waitFor(creating, 15000);
+  // Slow Wi-Fi: the insert may still be running. Keep waiting on the SAME create for up to
+  // another 20 s before looking anything up: a lookup while the insert is in flight finds
+  // nothing, reports failure, and the chair's next tap makes a SECOND room.
+  if (outcome === 'timeout') outcome = await waitFor(creating, 20000);
   if (outcome !== 'timeout') return outcome;
-  // Slow Wi-Fi: the insert may still be running, or may have landed with its answer lost.
-  // Reporting failure here made the chair tap again and get a SECOND room. Look the room up by
-  // the code it was creating first, and only when it is not there (or its roster failed)
-  // report failure. The password check guards against a code another room already holds.
+  // Still no answer: the insert may have landed with its answer lost. Look the room up by the
+  // code it was creating, and only when it is not there (or its roster failed) report
+  // failure. The password check guards against a code another room already holds.
   if (rosterFailed) return null;
   try {
     const { data: row, error } = await sessionReadClient().from('committees')

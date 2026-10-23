@@ -32,6 +32,7 @@ import { useBroadcastHistory } from '@/lib/broadcastHistory';
 import { withBroadcastMessages } from '@/lib/broadcastMessages';
 import { loadChatReadCounts, saveChatReadCounts } from '@/lib/chatReadKey';
 import { startSessionSync, rowFields, withCurrentSpeaker, withLists, type ConnectionState } from '@/lib/sessionSync';
+import { withRoomOrderQueue, roomOrderNumber, isRoomOrderCaucus, ROOM_ORDER_ID_PREFIX } from '@/lib/roomOrderQueue';
 import ConnectionPill from '@/components/ConnectionPill';
 import CaucusProposer from '@/components/CaucusProposer';
 import {
@@ -1079,7 +1080,9 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
                 setSessionEnded(false);
                 setSessionSuspended(false);
               }
-              setCommittee((prev) => prev ? { ...prev, ...rowFields(updated) } : prev);
+              // A Room Order tour's queue is derived from the caucus (src/lib/roomOrderQueue.ts),
+              // so a new caucus row re-derives it here like withLists and the chair page do.
+              setCommittee((prev) => prev ? withRoomOrderQueue({ ...prev, ...rowFields(updated) }) : prev);
               return;
             }
             setCommittee((prev) => {
@@ -2250,14 +2253,22 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
 
   // The moderated caucus queue: the panel's first rows, and the whole list in the sheet.
   const CAUCUS_PANEL_ROWS = 5;
+  // A Room Order tour's turns are numbered placeholders ("Speaker N", roomOrderQueue.ts), not
+  // delegations: shown with a translated label and no flag.
+  const roomOrderTurn = (name: string, id?: string): number | null =>
+    (id === undefined || id.startsWith(ROOM_ORDER_ID_PREFIX)) && isRoomOrderCaucus(committee.caucus) ? roomOrderNumber(name) : null;
+  const queueSeatName = (name: string, id?: string) => {
+    const n = roomOrderTurn(name, id);
+    return n !== null ? t('delegate_room_order_speaker', { n }) : getCountryDisplayName(name, language);
+  };
   const caucusQueueRows = (limit?: number, compact?: boolean) =>
     (typeof limit === 'number' ? (committee.caucusQueue ?? []).slice(0, limit) : (committee.caucusQueue ?? [])).map((s, i) => (
       <QueueRow
         key={s.delegateId}
         position={i + 1}
         compact={compact}
-        code={getCountryByName(s.country)?.code ?? ''}
-        name={getCountryDisplayName(s.country, language)}
+        code={roomOrderTurn(s.country, s.delegateId) !== null ? '' : (getCountryByName(s.country)?.code ?? '')}
+        name={queueSeatName(s.country, s.delegateId)}
         isSelf={sameSeat(s.country, country)}
         spoken={speechCounts[s.country] ?? 0}
         speakingLabel={t('delegate_speaking_chip')}
@@ -2269,8 +2280,8 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
     <QueueRow
       position={0}
       speaking
-      code={getCountryByName(caucusFloorName)?.code ?? ''}
-      name={getCountryDisplayName(caucusFloorName, language)}
+      code={roomOrderTurn(caucusFloorName) !== null ? '' : (getCountryByName(caucusFloorName)?.code ?? '')}
+      name={queueSeatName(caucusFloorName)}
       isSelf={sameSeat(caucusFloorName, country)}
       speakingLabel={t('delegate_speaking_chip')}
       youLabel={t('delegate_you_chip')}
@@ -2338,14 +2349,14 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
             <div style={{ marginTop: 12, display: 'flex', alignItems: 'center', gap: 9 }}>
               <Equalizer color={DG.forest} size={14} />
               <FlagDisc
-                code={getCountryByName(committee.caucus.currentSpeaker)?.code ?? ''}
+                code={roomOrderTurn(committee.caucus.currentSpeaker) !== null ? '' : (getCountryByName(committee.caucus.currentSpeaker)?.code ?? '')}
                 name={committee.caucus.currentSpeaker}
                 size={26}
                 ring={DG.ivory}
                 logoUrl={committee.delegates.find((d) => d.country === committee.caucus!.currentSpeaker)?.logoUrl ?? null}
               />
               <span style={{ minWidth: 0, flex: 1, fontFamily: OUTFIT, fontSize: 13, fontWeight: 800, color: sameSeat(committee.caucus.currentSpeaker, country) ? DG.deepGold : DG.forest, lineHeight: 1.15, overflowWrap: 'anywhere' }}>
-                <SeatName name={getCountryDisplayName(committee.caucus.currentSpeaker, language)} max={22} style={{ verticalAlign: 'top' }} subScale={0.8} />
+                <SeatName name={queueSeatName(committee.caucus.currentSpeaker)} max={22} style={{ verticalAlign: 'top' }} subScale={0.8} />
                 {sameSeat(committee.caucus.currentSpeaker, country) && t('delegate_you_suffix')}
               </span>
             </div>

@@ -11,6 +11,7 @@
 
 import { speakerRemainingNow, moderatedCaucusRemainingNow, caucusRemainingNow } from '../committeeService';
 import type { CaucusState } from '../types';
+import { isRoomOrderCaucus, roomOrderNumber, roomOrderQueue } from '../roomOrderQueue';
 import type { BoardLogEvent, RoomData, RoomDelegate, RoomQueueRow } from './types';
 
 /** A reminder fires when a student is this many speakers away (and again when they speak). */
@@ -52,6 +53,24 @@ export interface SeatState {
   speakingKey: string | null;
   /** Stable key of the queue row, for the "2 speakers away" reminder. */
   queueKey: string | null;
+  /** A Room Order Tour de Table runs (everyone speaks in seating order, the turns are
+   *  numbered placeholders, never delegations): the turns still to be called. Null otherwise. */
+  roomOrderLeft: number | null;
+}
+
+/** The caucus queue as every device derives it (src/lib/roomOrderQueue.ts): during a Room
+ *  Order tour the numbered placeholders are never in speakers_list, so they are rebuilt from
+ *  the caucus, then any real delegation the chair queued after them. */
+function caucusQueueOf(room: RoomData): { queue: RoomQueueRow[]; roomOrderLeft: number | null } {
+  const placeholders = room.phase === 'moderated-caucus' ? roomOrderQueue(room.caucus) : null;
+  if (!placeholders) return { queue: room.caucusQueue, roomOrderLeft: null };
+  return {
+    queue: [
+      ...placeholders.map((p, i) => ({ id: p.delegateId, country: p.country, position: i })),
+      ...room.caucusQueue,
+    ],
+    roomOrderLeft: placeholders.length,
+  };
 }
 
 const lc = (s: string | null | undefined) => (s ?? '').trim().toLowerCase();
@@ -113,7 +132,7 @@ export function deriveSeat(room: RoomData | null, country: string, countryCode: 
   const mode = roomMode(room, codeKnown, loading);
   const base: SeatState = {
     kind: 'not-in-session', ahead: 0, mode, caucusLabel: null, clock: null,
-    notOnRoster: false, delegate: null, speakingKey: null, queueKey: null,
+    notOnRoster: false, delegate: null, speakingKey: null, queueKey: null, roomOrderLeft: null,
   };
   if (!room || !inSession(mode)) {
     if (room) base.delegate = findDelegate(room, country, countryCode);
@@ -149,7 +168,8 @@ export function deriveSeat(room: RoomData | null, country: string, countryCode: 
   if (!delegate) { base.kind = 'absent'; base.notOnRoster = true; return base; }
   if (delegate.status === 'absent') { base.kind = 'absent'; return base; }
 
-  const queue: RoomQueueRow[] = mode === 'gsl' ? room.gsl : moderated ? room.caucusQueue : [];
+  const caucusQ = moderated ? caucusQueueOf(room) : null;
+  const queue: RoomQueueRow[] = mode === 'gsl' ? room.gsl : caucusQ ? caucusQ.queue : [];
   const idx = queue.findIndex((q) => sameSeat(q.country, name));
   if (idx >= 0) {
     const floorBusy = !!floor;
@@ -171,6 +191,7 @@ export function deriveSeat(room: RoomData | null, country: string, countryCode: 
   }
 
   base.kind = 'in-room';
+  if (caucusQ && caucusQ.roomOrderLeft !== null) base.roomOrderLeft = caucusQ.roomOrderLeft;
   if ((mode === 'unmoderated' || mode === 'consultation') && caucus) {
     base.clock = { speaker: null, extra: 0, caucusCap: null, total: caucus };
   }
@@ -210,8 +231,10 @@ export function groupOf(s: SeatState): BoardGroup {
   return 'out';
 }
 
-/** Who holds the floor in a room that is in session, with their clock when it is theirs. */
-export function roomFloor(room: RoomData | null): { country: string; clock: ClockSpec | null } | null {
+/** Who holds the floor in a room that is in session, with their clock when it is theirs.
+ *  `placeholder` is the turn number when the floor is a Room Order tour's numbered turn
+ *  ("Speaker N"), which is not a delegation: draw it with no flag. */
+export function roomFloor(room: RoomData | null): { country: string; clock: ClockSpec | null; placeholder: number | null } | null {
   const mode = roomMode(room);
   if (!room || !inSession(mode)) return null;
   const cs = room.current;
@@ -221,7 +244,9 @@ export function roomFloor(room: RoomData | null): { country: string; clock: Cloc
   else if (mode === 'consultation') floor = room.caucus?.currentSpeaker ?? null;
   if (!floor) return null;
   const mine = cs && sameSeat(cs.country, floor) && mode !== 'consultation';
+  const placeholder = isRoomOrderCaucus(room.caucus) ? roomOrderNumber(floor) : null;
   return {
+    placeholder,
     country: findDelegate(room, floor)?.country ?? floor,
     clock: mine ? { speaker: { timeRemaining: cs!.timeRemaining, startedAt: cs!.startedAt }, extra: 0, caucusCap: null, total: null } : null,
   };
@@ -280,6 +305,8 @@ export function foldMotions(events: BoardLogEvent[]): MotionItem[] {
       if (prev && e.motionId) {
         byId.set(e.motionId, prev);
         Object.assign(prev, fields, { outcome: null });
+        // The edit may correct the proposer: credit whoever the latest edit names (scoring.ts).
+        if (e.country) prev.country = e.country;
       }
     } else if (e.type === 'motion-passed' || e.type === 'motion-failed') {
       const outcome = e.type === 'motion-passed' ? 'passed' : ((e.outcome as MotionItem['outcome']) ?? 'failed');

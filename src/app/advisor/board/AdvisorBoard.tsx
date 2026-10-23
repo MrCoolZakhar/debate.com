@@ -566,8 +566,11 @@ function RoomGroupHeader({ id, code, name, abbreviation, room, mode, caucusLabel
             <span aria-hidden style={{ color: C.inkSoft }}>·</span>
             <Mic size={14} strokeWidth={2.4} aria-hidden style={{ color: C.forest }} />
             <span className="sr-only">{t('adv_floor_now')}</span>
-            <CircleFlag country={floor.country} size={18} decorative />
-            <span className="min-w-0 [overflow-wrap:anywhere]">{getCountryDisplayName(floor.country, language)}</span>
+            {/* A Room Order turn is a numbered placeholder, not a delegation: no flag. */}
+            {floor.placeholder === null && <CircleFlag country={floor.country} size={18} decorative />}
+            <span className="min-w-0 [overflow-wrap:anywhere]">
+              {floor.placeholder !== null ? t('adv_room_order_speaker', { n: floor.placeholder }) : getCountryDisplayName(floor.country, language)}
+            </span>
             {floor.clock && <span style={{ color: C.inkSoft, fontVariantNumeric: 'tabular-nums' }}>{clock(secs)}</span>}
           </span>
         )}

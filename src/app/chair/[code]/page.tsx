@@ -2961,7 +2961,15 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
     const expiredSuffix = committee.dbChairJoinSuffix ?? undefined;
     void endModeratedCaucusIfAnchorUnchanged(committee.id, committee.caucus.totalStartedAt, committee.code, committee.dbChairJoinSuffix ?? undefined)
       .then((landed) => {
-        if (landed) { clearCaucusListInDB(expiredId, expiredCode, expiredSuffix); return; }
+        if (landed) {
+          // A late landing (parked offline) may arrive after a NEW caucus started: its
+          // queue must stay. Clear only while the room is still back on the GSL.
+          const now = committeeNowRef.current;
+          if (now && now.id === expiredId && now.phase === 'speakers-list' && !now.caucus) {
+            clearCaucusListInDB(expiredId, expiredCode, expiredSuffix);
+          }
+          return;
+        }
         localUpdateTime.current = 0; syncRef.current?.catchUp(undefined, { force: true });
       });
     updateLocal(setCommittee, (prev) => {
@@ -3889,7 +3897,9 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
       if (raisedGslKeysRef.current.has(key)) {
         // Raised before. Still on the stack: nothing to do. Dismissed (its x): only a NEW
         // nudge from the phone brings it back (a touched topic or a Realtime nudge).
-        if (hasNotification(key)) continue;
+        // A change seen while the card is showing is already on it: record it, or the
+        // dismissed card would come back for a nudge the chair has already seen.
+        if (hasNotification(key)) { raisedGslForRef.current.set(key, { topic: m.topic ?? '', nudge }); continue; }
         if (raisedFor && raisedFor.topic === (m.topic ?? '') && raisedFor.nudge === nudge) continue;
       }
 

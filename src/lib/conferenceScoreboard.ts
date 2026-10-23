@@ -48,6 +48,7 @@ import {
   computeLedger,
   raisedMotionsFor,
   type ScoringOptions,
+  everPresentFromHistory,
   computeQualityScore,
   computeHeadline,
   getScoringConfig,
@@ -55,6 +56,7 @@ import {
   type LedgerRow,
 } from './scoring';
 import type { FeedbackEntry, FeedbackLevel } from './committeeService';
+import { readStatusHistory } from './attendanceHistory';
 
 type DbRow = Record<string, unknown>;
 
@@ -424,6 +426,12 @@ export async function loadConferenceScoreboard(
     ),
   ]);
 
+  // The roll-call history per session, so attendance scores "present at any point"
+  // like the chair's board (attendanceHistory.ts). A refused or failed read is null and
+  // that room's attendance follows the current status.
+  const histories = await Promise.all(sessionIds.map((id) => readStatusHistory(supabase, id)));
+  const everPresentBy = new Map(sessionIds.map((id, i) => [id, everPresentFromHistory(histories[i])] as const));
+
   const delegatesBy = groupBy(delegateRows);
   const messagesBy = groupBy(messageRows);
   const documentsBy = groupBy(documentRows);
@@ -464,9 +472,10 @@ export async function loadConferenceScoreboard(
 
     let speeches = 0;
     let seconds = 0;
+    const scoringOpts: ScoringOptions = { everPresent: everPresentBy.get(sessionId) ?? null };
 
     for (const d of committee.delegates) {
-      const activity = buildActivityRow(committee, d.country);
+      const activity = buildActivityRow(committee, d.country, scoringOpts);
       const quality = computeQualityScore(feedback, d.country, cfg);
       const comments = feedback
         .filter((f) => f.country === d.country)
@@ -514,7 +523,7 @@ export async function loadConferenceScoreboard(
         draftResolutions: activity.dr,
         manual: activity.manual,
 
-        ledger: computeLedger(committee, d.country),
+        ledger: computeLedger(committee, d.country, scoringOpts),
         comments,
         factors: foldFactors(feedback, d.country, cfg.factors, cfg.factorScaleMax),
       });

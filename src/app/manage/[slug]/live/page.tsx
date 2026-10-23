@@ -12,7 +12,8 @@ import {
   NeuCard, NeuInset, NeuIconDisc, Emoji3D,
   NEU, NEU_GRADIENTS, OUTFIT, EASE,
 } from '@/components/neu';
-import { getScoringConfig } from '@/lib/scoring';
+import { getScoringConfig, everPresentFromHistory } from '@/lib/scoring';
+import { readStatusHistory } from '@/lib/attendanceHistory';
 import type { ScoringConfig } from '@/lib/settingsStore';
 import { loadConferenceScoreboard, sessionHeadlineScores, type ConferenceScoreboard } from '@/lib/conferenceScoreboard';
 import { getAwardsConfig } from '@/lib/awards';
@@ -204,6 +205,10 @@ export default function LiveStatusPage() {
       let documents: Record<string, unknown>[] = [];
       let sysMessages: Record<string, unknown>[] = [];
       let feedback: Record<string, unknown>[] = [];
+      // Delegations ever present per session (the roll-call history), so attendance
+      // scores "present at any point" like the chair's board. A failed read is null:
+      // that room's attendance follows the current status.
+      const everPresentBy = new Map<string, Set<string> | null>();
 
       if (sessionIds.length > 0) {
         // The `motions` table is NOT read here. The cards state the stage a room
@@ -286,6 +291,9 @@ export default function LiveStatusPage() {
         documents = docRes.data ?? [];
         sysMessages = msgRes.data ?? [];
         feedback = fbRes.data ?? [];
+
+        const histories = await Promise.all(sessionIds.map((id) => readStatusHistory(authed, id)));
+        sessionIds.forEach((id, i) => everPresentBy.set(id, everPresentFromHistory(histories[i])));
 
         // Everything failed: the floor is unknown, not empty. Do not draw it and
         // do not stamp a refresh time over it.
@@ -490,7 +498,7 @@ export default function LiveStatusPage() {
           // The chair's own arithmetic (scoring.ts over this committee's config, blend
           // included), so the live wall, the organiser scoreboard and the chair's board agree.
           scores: sid && sRow
-            ? sessionHeadlineScores(sRow, bySession(delegates, sid), bySession(sysMessages, sid), bySession(documents, sid), bySession(feedback, sid))
+            ? sessionHeadlineScores(sRow, bySession(delegates, sid), bySession(sysMessages, sid), bySession(documents, sid), bySession(feedback, sid), { everPresent: everPresentBy.get(sid) ?? null })
                 .map((x) => ({ country: x.country, total: x.headline }))
             : [],
           lastActivityAt,

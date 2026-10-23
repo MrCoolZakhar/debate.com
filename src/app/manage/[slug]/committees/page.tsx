@@ -1644,7 +1644,9 @@ export default function CommitteesPage() {
       // SET NULL`, so the session can always be deleted independently. Session
       // first means the only possible half-finished state is a conference
       // committee that has lost its session code — visible on the card,
-      // recoverable with GENERATE CODE, and harmless. The other order recreates
+      // recoverable by its chair's "Start your committee room" on their page
+      // (`start_my_chair_session`; the organiser's code buttons are gone,
+      // owner 23 Oct 2026), and harmless. The other order recreates
       // the exact orphan this is fixing, because once conference_committees is
       // gone nothing remembers the room existed.
       if (c.session_id) {
@@ -1692,7 +1694,7 @@ export default function CommitteesPage() {
         });
       }
       setActionError(sessionGone
-        ? `The live room for "${c.name}" is gone, but the committee itself was not deleted: ${reason}. It is back on the list without its session code. Try deleting it again.`
+        ? `The live room for "${c.name}" is gone, but the committee itself was not deleted: ${reason}. Try deleting it again. If you keep it, its chair can start the room again from their page with "Start your committee room".`
         : `Couldn't delete "${c.name}": ${reason}. It was restored, and its live room is still running.`);
       loadCommittees({ silent: true });
     }).finally(() => markBusy(c.id, false));
