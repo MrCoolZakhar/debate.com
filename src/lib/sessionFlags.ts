@@ -47,6 +47,43 @@ export type { SlotArt };
 export interface SessionSeat {
   country: string;
   logoUrl?: string | null;
+  /** The seat's party, custom committees only (see Delegate.groupColor). */
+  groupColor?: string | null;
+  groupShort?: string | null;
+}
+
+/** A seat's party as the room carries it. */
+export interface SeatGroup { color: string | null; short: string | null }
+
+/** country name → its party, built once per roster (seats with a party only). */
+export type SeatGroupIndex = ReadonlyMap<string, SeatGroup>;
+
+export function buildSeatGroupIndex(delegates: readonly SessionSeat[] | undefined | null): SeatGroupIndex {
+  const index = new Map<string, SeatGroup>();
+  for (const d of delegates ?? []) {
+    if (d?.country && (d.groupColor || d.groupShort)) {
+      index.set(seatKey(d.country), { color: d.groupColor ?? null, short: d.groupShort ?? null });
+    }
+  }
+  return index;
+}
+
+export function seatGroupFor(index: SeatGroupIndex | null | undefined, country: string): SeatGroup | null {
+  if (!index || !country) return null;
+  return index.get(seatKey(country)) ?? null;
+}
+
+/** Ink or white on a party colour, whichever reads better (WCAG relative luminance). */
+export function partyTextColor(hex: string | null | undefined): string {
+  const m = /^#?([0-9a-f]{6})$/i.exec((hex ?? '').trim());
+  if (!m) return '#1C1410';
+  const n = parseInt(m[1], 16);
+  const lin = (c: number) => { const v = c / 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; };
+  const L = 0.2126 * lin((n >> 16) & 255) + 0.7152 * lin((n >> 8) & 255) + 0.0722 * lin(n & 255);
+  // Contrast against white (1.05 / (L + .05)) vs against ink (#1C1410, L about 0.008).
+  const onWhite = 1.05 / (L + 0.05);
+  const onInk = (L + 0.05) / 0.058;
+  return onWhite >= onInk ? '#FFFFFF' : '#1C1410';
 }
 
 /** What to draw for a seat in a live session. */

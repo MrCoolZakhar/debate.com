@@ -69,6 +69,28 @@ export async function cancelBufferedAllocationEmails(
 
 type Client = ReturnType<typeof getAuthedClient>;
 
+/** The press seat's allocation email (src/lib/defaultEmails.ts). */
+export const PRESS_ALLOCATION_EVENT_KEY = 'press_allocation_assigned';
+
+/** Which of these applications are seated in a press committee. Empty on any failure. */
+async function pressSeatApplicationIds(supabase: Client, applicationIds: string[]): Promise<Set<string>> {
+  try {
+    const { data, error } = await supabase
+      .from('applications')
+      .select('id, assigned_committee:conference_committees!assigned_committee_id (committee_type)')
+      .in('id', applicationIds);
+    if (error || !Array.isArray(data)) return new Set();
+    const out = new Set<string>();
+    for (const row of data as { id: string; assigned_committee: { committee_type?: string | null } | { committee_type?: string | null }[] | null }[]) {
+      const cc = Array.isArray(row.assigned_committee) ? row.assigned_committee[0] : row.assigned_committee;
+      if (cc?.committee_type === 'press') out.add(row.id);
+    }
+    return out;
+  } catch {
+    return new Set();
+  }
+}
+
 /**
  * Queues the allocation announcement for `applicationIds` and marks exactly
  * the recipients that actually got an outbox row as sent.
@@ -108,10 +130,28 @@ export async function queueAllocationEmails(
 
   const buffered = ALLOCATION_EMAIL_BUFFER_DB && !!opts?.sendAfter;
   const queueOpts = buffered ? { sendAfter: opts!.sendAfter! } : undefined;
-  let result = await queueEventEmail(supabase, conferenceId, ALLOCATION_EVENT_KEY, ids, undefined, queueOpts);
-  if (result.outcome === 'unconfigured') {
-    const { ok } = await turnOnDefaultEmail(supabase, conferenceId, ALLOCATION_EVENT_KEY);
-    if (ok) result = await queueEventEmail(supabase, conferenceId, ALLOCATION_EVENT_KEY, ids, undefined, queueOpts);
+
+  // A seat in a press committee gets the press email INSTEAD (owner, 23 Oct 2026). A failed
+  // lookup sends everyone the ordinary allocation email, as before.
+  const pressIds = await pressSeatApplicationIds(supabase, ids);
+  const regularIds = ids.filter((id) => !pressIds.has(id));
+
+  const queueOne = async (eventKey: string, list: string[]): Promise<QueueEventEmailResult | null> => {
+    if (list.length === 0) return null;
+    let r = await queueEventEmail(supabase, conferenceId, eventKey, list, undefined, queueOpts);
+    if (r.outcome === 'unconfigured') {
+      const { ok } = await turnOnDefaultEmail(supabase, conferenceId, eventKey);
+      if (ok) r = await queueEventEmail(supabase, conferenceId, eventKey, list, undefined, queueOpts);
+    }
+    return r;
+  };
+  const regular = await queueOne(ALLOCATION_EVENT_KEY, regularIds);
+  const press = await queueOne(PRESS_ALLOCATION_EVENT_KEY, Array.from(pressIds));
+  // The caller reads one result: the ordinary one when there was one, with both queues' rows.
+  const result: QueueEventEmailResult = regular ?? press!;
+  if (regular && press) {
+    result.queued = (regular.queued ?? 0) + (press.queued ?? 0);
+    result.queuedApplicationIds = [...(regular.queuedApplicationIds ?? []), ...(press.queuedApplicationIds ?? [])];
   }
 
   const queued = result.queuedApplicationIds ?? [];

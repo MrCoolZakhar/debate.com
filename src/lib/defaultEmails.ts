@@ -184,6 +184,23 @@ export const DEFAULT_EVENT_EMAILS: Record<string, DefaultEventEmail> = {
       VIEW_CONFERENCE_BUTTON,
     ],
   },
+  // A press committee's seat gets this instead of allocation_assigned
+  // (queueAllocationEmails). The test send in scratch-press-and-parties.sql
+  // (section T) mirrors this copy: change one, change the other.
+  press_allocation_assigned: {
+    subject: 'Your press seat at {{conference_name}}',
+    blocks: [
+      { type: 'paragraph', variant: 'heading', content: 'You are on the press team' },
+      { type: 'paragraph', content: 'Hi {{delegate_name}},\n\nYou are on the press team for {{conference_name}}.' },
+      { type: 'facts', items: [
+        { label: 'Committee', value: '{{committee}}', iconFrom: 'committee' },
+        { label: 'Your outlet', value: '{{country}}' },
+      ] },
+      { type: 'paragraph', content: 'During the conference your Press Desk follows every committee room live: who is speaking, the motions on the floor and the papers introduced, which you can read in full.\n\nFrom the desk you can send a press release of up to 600 characters with a photo. Pick which committee rooms it goes to, or send it to all of them. It appears in each room\'s chat under your outlet\'s name.\n\nYou can send 3 in any 24 hours. If your press chair has approval on, a release waits for their OK before it goes out. You can also join the press room itself from the desk.' },
+      { type: 'paragraph', variant: 'small', content: 'The Press Desk opens from your conference page once the conference starts.' },
+      VIEW_CONFERENCE_BUTTON,
+    ],
+  },
   // Queued by the notify_co_delegate_on_allocation_sent trigger in the
   // database, which carries a SQL mirror of this copy (like draft_reminder):
   // change one, change the other.

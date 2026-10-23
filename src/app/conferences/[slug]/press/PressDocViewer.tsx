@@ -71,7 +71,7 @@ export default function PressDocViewer({ room, doc, onClose }: {
                 {doc.docCode && <span style={{ color: SLATE }}>{doc.docCode} </span>}
                 {doc.title || 'Untitled paper'}
               </h2>
-              <SponsorChips sponsors={doc.sponsors} />
+              <SponsorChips sponsors={doc.sponsors} logos={room.session?.seatLogos} />
             </div>
             <button
               ref={closeRef}

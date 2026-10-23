@@ -545,15 +545,22 @@ export default function LiveStatusPage() {
     if (!conference || !authUserId) return;
     const authed = await getFreshAuthedClient();
     if (!authed) return;
-    const { data } = await authed
+    // Press releases (source 'press') share the table and are not the organisers' sends:
+    // they are left out IN THE QUERY, so a busy press corps can never push the organisers'
+    // own broadcasts past the 120-row limit. '*' because an older database had no `source`
+    // column; that answer (42703) is read again without the filter.
+    const base = () => authed
       .from('session_broadcasts')
-      // '*' rather than BROADCAST_COLUMNS: press releases (source 'press', scratch-press.sql)
-      // share the table and are not the organisers' sends, so they are left out of this list.
-      // The column may not exist yet; a row without it is the organisers'.
       .select('*')
-      .eq('conference_id', conference.id)
+      .eq('conference_id', conference.id);
+    let { data, error } = await base()
+      .or('source.is.null,source.eq.organiser')
       .order('created_at', { ascending: false })
       .limit(120);
+    if (error && (error.code === '42703' || /source/i.test(error.message ?? ''))) {
+      ({ data, error } = await base().order('created_at', { ascending: false }).limit(120));
+    }
+    if (error) return;
     setBroadcasts(((data ?? []) as Record<string, unknown>[]).filter((r) => r.source !== 'press').map(mapBroadcastRow));
   }, [conference?.id, authUserId]); // eslint-disable-line react-hooks/exhaustive-deps
 

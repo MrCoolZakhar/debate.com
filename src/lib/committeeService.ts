@@ -515,6 +515,7 @@ async function loadCommitteeByCode(code: string, strict: boolean): Promise<Commi
     id: d.id as string, country: d.country as string, status: d.status as DelegateStatus,
     isObserver: (d.is_observer as boolean) ?? false,
     logoUrl: (d.logo_url as string | null) ?? null,
+    ...seatGroupFromRow(d),
   }));
 
   // GSL only — caucus list is never loaded into speakersList
@@ -1524,15 +1525,28 @@ export async function getCurrentSpeakerRow(committeeId: string): Promise<{
 // list is a real answer ("nobody is on the GSL"); a network blip is not, and treating it as
 // one used to empty the roster on phones, show the waiting room, and stamp false GSL
 // denials. Callers skip applying a null and keep what they already have.
+/**
+ * A seat's party (custom committees): the group's colour and short name, flattened onto
+ * `delegates` when the room is seeded (scratch-press-and-parties.sql, section K1). Both
+ * columns are optional: before they exist, or on a seat with no group, nothing is set.
+ */
+export function seatGroupFromRow(d: DbRow): { groupColor?: string | null; groupShort?: string | null } {
+  const color = typeof d.group_color === 'string' && /^#[0-9a-f]{6}$/i.test(d.group_color.trim()) ? d.group_color.trim() : null;
+  const short = typeof d.group_short === 'string' && d.group_short.trim() ? d.group_short.trim().slice(0, 12) : null;
+  return color || short ? { groupColor: color, groupShort: short } : {};
+}
+
 export async function getDelegatesList(committeeId: string): Promise<Delegate[] | null> {
   const { data, error } = await readDb().from('delegates')
-    .select('id, country, status, is_observer, logo_url')
+    // '*': the optional group columns (group_color, group_short) arrive once they exist.
+    .select('*')
     .eq('committee_id', committeeId).order('country', { ascending: true });
   if (error) { console.error('Error fetching delegates:', error); return null; }
   return (data ?? []).map((d: DbRow) => ({
     id: d.id as string, country: d.country as string, status: d.status as DelegateStatus,
     isObserver: (d.is_observer as boolean) ?? false,
     logoUrl: (d.logo_url as string | null) ?? null,
+    ...seatGroupFromRow(d),
   }));
 }
 
@@ -1627,7 +1641,7 @@ export async function getCommitteeRowById(committeeId: string): Promise<Committe
  */
 export async function getCommitteeRosterByCode(code: string): Promise<Committee | null | undefined> {
   const { data, error } = await supabase.from('committees')
-    .select('*, delegates(id, country, status, is_observer, logo_url)')
+    .select('*, delegates(*)')
     .eq('code', code.toUpperCase()).maybeSingle();
   if (error) { console.error('Error looking up committee:', error); return undefined; }
   if (!data) return null;
@@ -1637,6 +1651,7 @@ export async function getCommitteeRosterByCode(code: string): Promise<Committee 
       id: d.id as string, country: d.country as string, status: d.status as DelegateStatus,
       isObserver: (d.is_observer as boolean) ?? false,
       logoUrl: (d.logo_url as string | null) ?? null,
+      ...seatGroupFromRow(d),
     }))
     .sort((a, b) => (a.country < b.country ? -1 : a.country > b.country ? 1 : 0));
   return rowToCommittee(row, delegates);

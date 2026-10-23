@@ -1,14 +1,16 @@
 'use client';
 
 // A press release: up to 600 characters and an optional photo, sent to the Everyone chat of
-// every open committee room as "Press · <outlet>". Three in any 24 hours. Press seats and
-// press chairs only (never observers). It is not a chat: nobody can answer it.
+// the committee rooms the reporter picks (every open room by default, never the press room
+// itself) as "Press · <outlet>". Three in any 24 hours. Press seats and press chairs only
+// (never observers). It is not a chat: nobody can answer it. With the press chair's approval
+// on (the default), a press seat's release waits for a press chair before it goes out.
 //
-// Sending asks first in place ("This goes to every committee room. Send it now?"), because a
-// release reaches every room at once and uses one of the three.
+// Sending asks first in place, because a release reaches every picked room at once and uses
+// one of the three.
 
 import { useRef, useState } from 'react';
-import { ImagePlus, Loader2, Newspaper, Send, X } from 'lucide-react';
+import { Check, ImagePlus, Loader2, Newspaper, Send, X } from 'lucide-react';
 import { OUTFIT } from '@/components/neu';
 import { PRESS_RELEASE_MAX, PRESS_RELEASES_PER_DAY, sendPressRelease, uploadPressImage } from '@/lib/press';
 import { CARD_SHADOW, FOREST, INK, INK_SOFT } from './pressKit';
@@ -47,7 +49,7 @@ function validZone(tz: string | null): string | null {
 }
 
 /** null = open now; otherwise the one plain line that says why not. */
-function pressClosedLine(d: PressDates, now: number): string | null {
+export function pressClosedLine(d: PressDates, now: number): string | null {
   const start = (d.start_date ?? '').slice(0, 10);
   const last = (d.end_date || d.start_date || '').slice(0, 10);
   if (d.dates_tbd || !/^\d{4}-\d{2}-\d{2}$/.test(start)) return 'Press releases open once the conference has dates';
@@ -68,7 +70,9 @@ function timeOf(iso: string | null): string {
   try { return new Date(iso).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' }); } catch { return ''; }
 }
 
-export default function PressReleaseComposer({ conferenceId, dates, label, releasesLeft, nextReleaseAt, onSent }: {
+export interface PressTargetRoom { id: string; label: string; full: string }
+
+export default function PressReleaseComposer({ conferenceId, dates, label, releasesLeft, nextReleaseAt, onSent, rooms, canPick, needsApproval }: {
   conferenceId: string;
   dates: PressDates;
   /** What the release is signed with ("BBC"). */
@@ -76,6 +80,12 @@ export default function PressReleaseComposer({ conferenceId, dates, label, relea
   releasesLeft: number;
   nextReleaseAt: string | null;
   onSent: (left: number, next: string | null) => void;
+  /** The open committee rooms a release can go to (never the press room). */
+  rooms: PressTargetRoom[];
+  /** Picking rooms needs the new send_press_release (scratch-press-and-parties.sql PC). */
+  canPick: boolean;
+  /** This release waits for a press chair before it goes out. */
+  needsApproval: boolean;
 }) {
   const [text, setText] = useState('');
   const [imageUrl, setImageUrl] = useState<string | null>(null);
@@ -86,6 +96,17 @@ export default function PressReleaseComposer({ conferenceId, dates, label, relea
   const [error, setError] = useState('');
   const [done, setDone] = useState('');
   const fileRef = useRef<HTMLInputElement>(null);
+  // Picked rooms by conference_committees id; empty = every open room (the default).
+  const [picked, setPicked] = useState<string[]>([]);
+  const livePicked = picked.filter((id) => rooms.some((r) => r.id === id));
+  const allRooms = !canPick || livePicked.length === 0;
+  const toggleRoom = (id: string) => {
+    setDone(''); setAsking(false);
+    setPicked((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev.filter((x) => rooms.some((r) => r.id === x)), id]));
+  };
+  const targetLine = allRooms
+    ? 'every committee room'
+    : livePicked.length === 1 ? (rooms.find((r) => r.id === livePicked[0])?.label ?? '1 committee room') : `${livePicked.length} committee rooms`;
 
   const trimmed = text.trim();
   const now = useNow(60_000);
@@ -106,7 +127,7 @@ export default function PressReleaseComposer({ conferenceId, dates, label, relea
   async function send() {
     if (!canSend) return;
     setSending(true); setError('');
-    const r = await sendPressRelease(conferenceId, trimmed, imageUrl);
+    const r = await sendPressRelease(conferenceId, trimmed, imageUrl, allRooms ? null : livePicked);
     setSending(false); setAsking(false);
     if (!r.ok) {
       setError(r.message);
@@ -114,7 +135,9 @@ export default function PressReleaseComposer({ conferenceId, dates, label, relea
       return;
     }
     setText(''); setImageUrl(null); setImageName('');
-    setDone(r.sentTo === 1 ? 'Sent to 1 committee room' : `Sent to ${r.sentTo} committee rooms`);
+    setDone(r.pending
+      ? 'Sent to your press chair. It goes out once they approve it'
+      : r.sentTo === 1 ? 'Sent to 1 committee room' : `Sent to ${r.sentTo} committee rooms`);
     onSent(r.releasesLeft, r.nextReleaseAt);
   }
 
@@ -125,7 +148,8 @@ export default function PressReleaseComposer({ conferenceId, dates, label, relea
         <div className="min-w-0 flex-1">
           <h2 id="press-release-title" style={{ fontFamily: OUTFIT, fontSize: 19, fontWeight: 800, color: INK, margin: 0, lineHeight: 1.25 }}>Send a Press Release</h2>
           <p className="[overflow-wrap:anywhere]" style={{ fontFamily: OUTFIT, fontSize: 13.5, color: INK_SOFT, margin: '3px 0 0 0', lineHeight: 1.45 }}>
-            It appears in every committee&apos;s Everyone chat{label ? <> as <strong style={{ color: INK }}>Press · {label}</strong></> : null}
+            It appears in the committees&apos; Everyone chat{label ? <> as <strong style={{ color: INK }}>Press · {label}</strong></> : null}
+            {needsApproval ? '. Your press chair approves it first' : null}
           </p>
         </div>
       </div>
@@ -174,10 +198,46 @@ export default function PressReleaseComposer({ conferenceId, dates, label, relea
         </span>
       </div>
 
+      {canPick && rooms.length > 1 && (
+        <fieldset className="mt-4" style={{ border: 'none', margin: '16px 0 0 0', padding: 0 }}>
+          <legend style={{ fontFamily: OUTFIT, fontSize: 13.5, fontWeight: 700, color: INK, marginBottom: 8 }}>Send to</legend>
+          <div className="flex flex-wrap gap-2">
+            {[{ id: '__all__', label: 'All committee rooms', full: 'All committee rooms' }, ...rooms].map((r) => {
+              const on = r.id === '__all__' ? allRooms : livePicked.includes(r.id);
+              return (
+                <button
+                  key={r.id}
+                  type="button"
+                  aria-pressed={on}
+                  title={r.full !== r.label ? r.full : undefined}
+                  disabled={out}
+                  onClick={() => {
+                    if (r.id !== '__all__') { toggleRoom(r.id); return; }
+                    setPicked([]); setDone(''); setAsking(false);
+                  }}
+                  className="inline-flex items-center gap-1.5 rounded-full px-3 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gv-accent)] disabled:opacity-50 [overflow-wrap:anywhere]"
+                  style={{
+                    minHeight: 36, fontFamily: OUTFIT, fontSize: 13.5, fontWeight: on ? 700 : 600,
+                    color: on ? 'var(--gv-on-main)' : INK,
+                    background: on ? 'linear-gradient(90deg, var(--gv-main) 0%, var(--gv-main-mid) 100%)' : '#FFFFFF',
+                    border: on ? '1px solid transparent' : '1px solid color-mix(in srgb, var(--gv-main) 18%, transparent)',
+                  }}
+                >
+                  {on && <Check size={14} strokeWidth={2.6} aria-hidden />}
+                  {r.label}
+                </button>
+              );
+            })}
+          </div>
+        </fieldset>
+      )}
+
       <div className="mt-4 flex flex-wrap items-center gap-3">
         {asking ? (
           <>
-            <span style={{ fontFamily: OUTFIT, fontSize: 14, fontWeight: 600, color: INK }}>This goes to every committee room. Send it now?</span>
+            <span style={{ fontFamily: OUTFIT, fontSize: 14, fontWeight: 600, color: INK }}>
+              {needsApproval ? `Your press chair approves it, then it goes to ${targetLine}. Send it now?` : `This goes to ${targetLine}. Send it now?`}
+            </span>
             <button type="button" style={SECOND} onClick={() => setAsking(false)} disabled={sending} className="focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gv-accent)]">Cancel</button>
             <button type="button" style={{ ...PRIMARY, opacity: sending ? 0.7 : 1 }} onClick={() => void send()} disabled={sending} className="focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gv-accent)]">
               {sending ? <Loader2 size={16} className="animate-spin" aria-hidden /> : <Send size={16} aria-hidden />}
@@ -187,7 +247,7 @@ export default function PressReleaseComposer({ conferenceId, dates, label, relea
         ) : (
           <button type="button" style={{ ...PRIMARY, opacity: canSend ? 1 : 0.5 }} disabled={!canSend} onClick={() => { setDone(''); setAsking(true); }}
             className="focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gv-accent)]">
-            <Send size={16} aria-hidden /> Send to all committees
+            <Send size={16} aria-hidden /> {needsApproval ? 'Send for approval' : allRooms ? 'Send to all committees' : 'Send to the rooms picked'}
           </button>
         )}
         <span style={{ fontFamily: OUTFIT, fontSize: 13.5, color: INK_SOFT }}>

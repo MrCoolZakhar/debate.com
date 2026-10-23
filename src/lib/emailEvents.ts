@@ -52,6 +52,9 @@ export const EVENT_REGISTRY = [
   { key: 'aid_approved', label: 'Financial Aid Approved', description: "Sent when you approve a financial aid request.", defaultDelivery: 'immediate' },
   { key: 'aid_denied', label: 'Financial Aid Denied', description: "Sent when you decline a financial aid request.", defaultDelivery: 'immediate' },
   { key: 'allocation_assigned', label: 'Allocation Assigned', description: 'Sent when a delegate is allocated a committee and country.', defaultDelivery: 'immediate' },
+  // A seat in a press committee gets this INSTEAD of Allocation Assigned (owner, 23 Oct 2026):
+  // what the press can do at the conference. Raised only by queueAllocationEmails.
+  { key: 'press_allocation_assigned', label: 'Press Seat Assigned', description: "Sent instead of Allocation Assigned when someone is given a seat in a press committee. Explains the Press Desk: following every committee room live, press releases of up to 600 characters with a photo sent to the rooms they pick, the press chair's approval when it is on, 3 a day, and joining the press room.", defaultDelivery: 'immediate' },
   // Delegations (owner, 21 Oct 2026). Sent ONLY by the server: the cron
   // queue_delegation_allocation_notices (scratch-delegation-allocation-email.sql)
   // emails a delegation's leaders once its block seats stop changing for 15
@@ -150,6 +153,7 @@ export const NOTIFICATION_CATEGORY: Record<EventKey, NotificationCategory> = {
   aid_approved: 'applications',
   aid_denied: 'applications',
   allocation_assigned: 'applications',
+  press_allocation_assigned: 'applications',
   co_delegate_assigned: 'applications',
   delegation_allocations: 'applications',
   allocation_changed: 'applications',
@@ -301,6 +305,8 @@ export const DEFAULT_ENABLED_EVENTS = new Set<string>(['session_join_invite', 's
 export const ESSENTIAL_DEFAULT_ON_EVENTS = new Set<string>([
   'application_received', 'application_accepted', 'application_rejected',
   'allocation_assigned', 'payment_received',
+  // The press seat's allocation email stands in for allocation_assigned, so it is on the same way.
+  'press_allocation_assigned',
   // The double-delegation partner notice (see queueCoDelegateAssigned).
   'co_delegate_assigned',
   // The delegation seats notice, sent only by the server (owner, 21 Oct 2026).

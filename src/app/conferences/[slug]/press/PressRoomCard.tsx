@@ -137,13 +137,14 @@ export default function PressRoomCard({ room, onOpenDoc }: {
 }
 
 /** A delegation named in a paper's sponsor list, flag and name, for the reader's header. */
-export function SponsorChips({ sponsors }: { sponsors: string[] }) {
+export function SponsorChips({ sponsors, logos }: { sponsors: string[]; logos?: Record<string, string> }) {
   if (sponsors.length === 0) return null;
   return (
     <div className="flex flex-wrap gap-x-4 gap-y-2">
       {sponsors.map((sp, i) => (
         <span key={`${sp}-${i}`} className="inline-flex items-center gap-1.5">
-          <CircleFlag country={sp} size={20} decorative />
+          {/* The seat's own crest when the room has one (a party, a character), else its flag. */}
+          <CircleFlag country={sp} logoUrl={logos?.[sp] ?? null} size={20} decorative />
           <SeatName name={sp} style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 600, color: INK }} subStyle={{ color: INK_SOFT, fontWeight: 500 }} />
         </span>
       ))}

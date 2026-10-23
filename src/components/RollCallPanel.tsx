@@ -4,6 +4,7 @@ import React, { useRef, useState, useEffect, useCallback, useLayoutEffect } from
 import { Committee, DelegateStatus } from '@/lib/types';
 import { getCountryDisplayName, compareCountryNames } from '@/lib/countries';
 import { SeatCircleFlag, SIDEBAR_MONOGRAM } from '@/components/CircleFlag';
+import SeatGroupTag from '@/components/SeatGroupTag';
 import SeatName from '@/components/SeatName';
 import { getCommitteeDisplayName } from '@/lib/presetNames';
 import {
@@ -1160,6 +1161,10 @@ function RollCallPanelInner({
                       color: '#F4EFE3',
                     }}
                   />
+                  {/* The seat's party (custom committees), under the name. */}
+                  {d.groupShort && (
+                    <SeatGroupTag short={d.groupShort} color={d.groupColor} onDark size={sliderMode ? 11.5 : qr(11.5)} />
+                  )}
                   {isSpeakingRow && !sliderMode && (
                     <span className="truncate uppercase" style={{ fontSize: qr(11), fontWeight: 800, letterSpacing: '0.08em', lineHeight: 1.3, color: '#EED98A' }}>
                       {t('rollcall_speaking')}

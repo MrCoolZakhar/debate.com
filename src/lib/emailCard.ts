@@ -156,6 +156,7 @@ const EVENT_CARD: Record<string, { pill: string; snapshot?: keyof typeof EMAIL_S
   aid_denied: { pill: 'Aid update' },
   // No snapshot: this email is the share card, and it stays short.
   allocation_assigned: { pill: 'Allocated', icon: 'seats' },
+  press_allocation_assigned: { pill: 'Press', icon: 'seats' },
   allocation_changed: { pill: 'Allocation changed', icon: 'seats' },
   allocation_removed: { pill: 'Allocation removed' },
   pledge_received: { pill: 'Spots paid', icon: 'payments' },

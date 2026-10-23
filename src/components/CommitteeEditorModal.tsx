@@ -36,6 +36,7 @@ import {
   type CommitteeType,
   type CommitteeSetupDraft,
 } from '@/components/committeeSetupKit';
+import { resolveSeatGroup, seatsWithMovedGroup, syncSeatGroupsToRoom } from '@/lib/seatGroupSync';
 import { type SlotGroup, parseGroups } from '@/lib/slotGroups';
 import { uploadConferenceAsset } from '@/lib/conferenceAssets';
 import { LogoCropModal } from '@/components/LogoCropModal';
@@ -865,6 +866,13 @@ function CommitteeEditor({ conferenceId, committeeType, existing, initialRoster,
       // The committee and its room are fine; only some flags are missing on the floor.
       if (!artOk) notifyErr(`"${name.trim()}" was added, but some group flags did not reach its live room.`);
     }
+    // Party colours and short names (K1): best effort, a separate write, skipped silently
+    // while the columns do not exist (src/lib/seatGroupSync.ts).
+    const grouped = roster.map((r) => ({ name: r.name, group: resolveSeatGroup(r, groups, isCustom) }));
+    if (grouped.some((g) => g.group)) {
+      const res = await sessionCommitteeClient(supabase, started.session_id);
+      if (!('error' in res)) await syncSeatGroupsToRoom(res.client, started.session_id, grouped.filter((g) => g.group));
+    }
     return true;
   }
 
@@ -1065,6 +1073,15 @@ function CommitteeEditor({ conferenceId, committeeType, existing, initialRoster,
           .eq('committee_id', ex.session_id!)
           .in('country', names);
         if (e) noteSess(`the flag for ${names.length === 1 ? names[0] : `${names.length} seats`} did not reach the live room`, e.message);
+      }
+
+      // The seat's party (colour + short name, K1), the same way: every added seat and
+      // every kept seat whose party, or whose party's colour or short name, changed.
+      // (An added seat has no "before", so it counts exactly when it has a party.)
+      const groupMoved = seatsWithMovedGroup(baseRow, roster, baselineGroups, groups, isCustom);
+      if (groupMoved.length > 0) {
+        const r = await syncSeatGroupsToRoom(sessDb, ex.session_id!, groupMoved.map((x) => ({ name: x.name, group: resolveSeatGroup(x, groups, isCustom) })));
+        if (r === 'failed') noteSess('some party colours did not reach the live room', 'seat groups');
       }
     }
 

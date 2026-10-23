@@ -39,6 +39,9 @@ export interface LiveRoomInfo {
   committeeName: string;
   committeeAbbreviation: string | null;
   committeeLogoUrl: string | null;
+  /** `conference_committees.committee_type` ('press' sends a reporter to the Press Desk).
+   *  Null from an older `my_live_rooms` (scratch-press-and-parties.sql, section P4). */
+  committeeType: string | null;
   conferenceName: string;
   conferenceAcronym: string | null;
   conferenceLogoUrl: string | null;
@@ -114,6 +117,7 @@ function roomFrom(r: Row): LiveRoomInfo | null {
     committeeName: name,
     committeeAbbreviation: str(r.committee_abbreviation),
     committeeLogoUrl: str(r.committee_logo_url),
+    committeeType: str(r.committee_type),
     conferenceName: str(r.conference_name) ?? '',
     conferenceAcronym: str(r.conference_acronym),
     conferenceLogoUrl: str(r.conference_logo_url),
@@ -214,6 +218,11 @@ function groupAdvisorRows(parsed: ParsedRow[]): LiveEntry[] {
   return out;
 }
 
+/** A delegate entry whose seat is in a press committee: it opens the Press Desk. */
+export function isPressSeat(e: LiveEntry): boolean {
+  return e.role === 'delegate' && e.room.committeeType === 'press' && !!e.room.conferenceSlug;
+}
+
 /** Where each entry goes: exactly the path the join page takes after verification. */
 export function liveEntryHref(e: LiveEntry): string {
   switch (e.role) {
@@ -224,6 +233,10 @@ export function liveEntryHref(e: LiveEntry): string {
       // and it records the chair name and the Moderator / Commenter choice.
       return `/join?code=${encodeURIComponent(e.room.sessionCode)}&mode=chair`;
     case 'delegate':
+      // A reporter (a seat of a press committee) works from the Press Desk, which follows
+      // every room and sends releases; the press room itself is one press away from there
+      // (owner, 23 Oct 2026).
+      if (isPressSeat(e)) return `/conferences/${encodeURIComponent(e.room.conferenceSlug!)}/press`;
       // What /join routes a verified allocated delegate to (join/page.tsx handleJoin):
       // the allocation's country NAME, locked.
       return `/delegate/${e.room.sessionCode}?country=${encodeURIComponent(e.countryName)}&locked=1`;

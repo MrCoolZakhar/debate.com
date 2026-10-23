@@ -14,6 +14,12 @@ export interface Delegate {
    *  before. Resolve it with `sessionSeatArt` in `src/lib/sessionFlags.ts` —
    *  never read it raw at a render site. */
   logoUrl?: string | null;
+  /** A custom committee seat's party colour ("#1D4ED8") and short name ("EPP"), flattened
+   *  from `conference_committees.groups` when the room is seeded (`delegates.group_color` /
+   *  `group_short`). Absent on every other seat. Drawn as a coloured disc when the seat has
+   *  no crest (`SeatCircleFlag`), and as the short name beside the seat's name. */
+  groupColor?: string | null;
+  groupShort?: string | null;
 }
 
 export type SessionPhase =

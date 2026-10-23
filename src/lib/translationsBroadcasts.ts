@@ -11,6 +11,9 @@
 // Press releases (bc_press*, 12 Oct 2026) are the same messages signed "Press · <outlet>"
 // (scratch-press.sql, src/lib/press.ts).
 //
+// srp_press_note (23 Oct 2026): the "Your room is live" line for a reporter, whose entry opens
+// the Press Desk (src/lib/liveRooms.ts isPressSeat).
+//
 // Copy rules (CLAUDE.md §8): no em dashes, no full stop on a title or a one-line caption.
 export const broadcastsTranslations = {
   en: {
@@ -25,6 +28,7 @@ export const broadcastsTranslations = {
     bc_press: 'Press',
     bc_press_from: 'Press · {name}',
     bc_press_image: 'Image from the press',
+    srp_press_note: 'Your Press Desk is open: follow every room and send press releases',
   },
   es: {
     bc_secretariat: 'Secretaría',
@@ -38,6 +42,7 @@ export const broadcastsTranslations = {
     bc_press: 'Prensa',
     bc_press_from: 'Prensa · {name}',
     bc_press_image: 'Imagen de la prensa',
+    srp_press_note: 'Tu mesa de prensa está abierta: sigue todas las salas y envía comunicados de prensa',
   },
   fr: {
     bc_secretariat: 'Secrétariat',
@@ -51,6 +56,7 @@ export const broadcastsTranslations = {
     bc_press: 'Presse',
     bc_press_from: 'Presse · {name}',
     bc_press_image: 'Image de la presse',
+    srp_press_note: 'Votre bureau de presse est ouvert : suivez toutes les salles et envoyez des communiqués',
   },
   ar: {
     bc_secretariat: 'الأمانة العامة',
@@ -64,6 +70,7 @@ export const broadcastsTranslations = {
     bc_press: 'الصحافة',
     bc_press_from: 'الصحافة · {name}',
     bc_press_image: 'صورة من الصحافة',
+    srp_press_note: 'مكتب الصحافة مفتوح: تابع كل القاعات وأرسل بيانات صحفية',
   },
   pt: {
     bc_secretariat: 'Secretariado',
@@ -77,5 +84,6 @@ export const broadcastsTranslations = {
     bc_press: 'Imprensa',
     bc_press_from: 'Imprensa · {name}',
     bc_press_image: 'Imagem da imprensa',
+    srp_press_note: 'Sua mesa de imprensa está aberta: acompanhe todas as salas e envie comunicados',
   },
 };

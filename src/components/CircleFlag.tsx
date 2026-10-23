@@ -42,7 +42,8 @@
 import { useState, type CSSProperties, type ReactNode } from 'react';
 import { getCircleFlagUrl, getCountryByName } from '@/lib/countries';
 import type { SlotArt } from '@/lib/slotGroups';
-import { useSeatArt } from '@/components/SeatFlag';
+import { useSeatArt, useSeatGroup } from '@/components/SeatFlag';
+import { partyTextColor } from '@/lib/sessionFlags';
 import type { SessionSeat } from '@/lib/sessionFlags';
 import { UnknownSeatIcon } from '@/components/UnknownSeatIcon';
 
@@ -233,6 +234,26 @@ export function SeatCircleFlag({
 }) {
   const name = seat?.country ?? country ?? '';
   const art = useSeatArt(name, seat ? seat.logoUrl : logoUrl);
+  const group = useSeatGroup(name, seat);
+  // A party member with no crest of their own or their party's (custom committees, owner
+  // 23 Oct 2026): the party's colour as the disc, its short name inside, ink or white
+  // whichever reads better. A crest or a national flag still wins.
+  if (art.kind === 'none' && group?.color) {
+    const px = Math.max(12, Math.round(rest.size ?? 24));
+    const short = (group.short ?? '').trim();
+    const text = short ? (px < 22 ? short.slice(0, 1) : short.slice(0, 5)) : '';
+    const scale = text.length <= 1 ? 0.5 : text.length === 2 ? 0.4 : text.length === 3 ? 0.32 : text.length === 4 ? 0.26 : 0.22;
+    const fg = partyTextColor(group.color);
+    return (
+      <CircleFlag
+        {...rest}
+        art={art}
+        label={rest.label ?? (short ? `${name}, ${short}` : name)}
+        monogramColors={{ bg: group.color, fg }}
+        fallback={text ? <span style={{ fontSize: Math.max(7, Math.round(px * scale)), color: fg, letterSpacing: 0 }}>{text}</span> : <span />}
+      />
+    );
+  }
   // A session seat that is not a country and has no crest (a custom speaker) draws the
   // unknown-user glyph, not a monogram (15 Sep 2026). Callers can still pass their own.
   const fallback = rest.fallback === 'initials' ? undefined : (rest.fallback ?? <UnknownSeatIcon size={rest.size ?? 24} bare />);

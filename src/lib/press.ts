@@ -73,6 +73,9 @@ export interface PressRoomSession {
   next: PressSeat[];
   motions: PressMotion[];
   documents: PressDocument[];
+  /** Each seat's crest by its name, for sponsor chips (`seat_logos`, scratch-press-and-parties.sql
+   *  section P8). Empty from an older `press_desk`: the chips then draw flags and initials. */
+  seatLogos: Record<string, string>;
 }
 
 export interface PressRoom {
@@ -84,7 +87,25 @@ export interface PressRoom {
   session: PressRoomSession | null;
 }
 
-export interface PressDesk extends PressAccess { rooms: PressRoom[] }
+/** The caller's own press room, for "Join the press room" (press seats and chairs only). */
+export interface PressOwnRoom {
+  committeeId: string;
+  code: string;
+  ended: boolean;
+  /** The press seat's name (the outlet), so a reporter enters locked to it; null for a chair. */
+  country: string | null;
+}
+
+export interface PressDesk extends PressAccess {
+  rooms: PressRoom[];
+  /** Null from an older `press_desk` (scratch-press-and-parties.sql section PF), or no room yet. */
+  pressRoom: PressOwnRoom | null;
+  /** Releases from a press seat wait for a press chair (on by default). Null = not known
+   *  (older `press_desk`): then nothing waits. */
+  approvalOn: boolean | null;
+  /** Press chairs and organisers: approve, reject, flip the switch. */
+  canReview: boolean;
+}
 
 export type PressResult<T> =
   | { kind: 'ok'; value: T }
@@ -123,6 +144,16 @@ function parseSeat(v: unknown): PressSeat | null {
   return country ? { country, logoUrl: str(o.logo_url) } : null;
 }
 
+function parseSeatLogos(v: unknown): Record<string, string> {
+  const out: Record<string, string> = {};
+  if (!v || typeof v !== 'object' || Array.isArray(v)) return out;
+  for (const [k, u] of Object.entries(v as Record<string, unknown>)) {
+    const url = str(u);
+    if (k && url && /^https:\/\//i.test(url)) out[k] = url;
+  }
+  return out;
+}
+
 function parseRoom(v: unknown): PressRoom | null {
   if (!v || typeof v !== 'object') return null;
   const o = v as Record<string, unknown>;
@@ -147,6 +178,7 @@ function parseRoom(v: unknown): PressRoom | null {
         if (!mid || !type) return [];
         return [{ id: mid, type, proposedBy: str(r.proposed_by) ?? '', topic: str(r.topic), totalTime: num(r.total_time), speakingTime: num(r.speaking_time), tourOrder: str(r.tour_order) }];
       }) : [],
+      seatLogos: parseSeatLogos(s.seat_logos),
       documents: Array.isArray(s.documents) ? s.documents.flatMap((d): PressDocument[] => {
         if (!d || typeof d !== 'object') return [];
         const r = d as Record<string, unknown>;
@@ -192,7 +224,20 @@ export async function fetchPressDesk(conferenceId: string): Promise<PressResult<
   }
   const access = parseAccess({ ...o, eligible: true });
   const rooms = Array.isArray(o.rooms) ? o.rooms.map(parseRoom).filter((r): r is PressRoom => !!r) : [];
-  return { kind: 'ok', value: { ...access, rooms } };
+  let pressRoom: PressOwnRoom | null = null;
+  if (o.press_room && typeof o.press_room === 'object') {
+    const pr = o.press_room as Record<string, unknown>;
+    const code = str(pr.code); const cid = str(pr.committee_id);
+    if (code && cid) pressRoom = { committeeId: cid, code: code.toUpperCase(), ended: pr.ended === true, country: str(pr.country) };
+  }
+  return {
+    kind: 'ok',
+    value: {
+      ...access, rooms, pressRoom,
+      approvalOn: typeof o.approval_on === 'boolean' ? o.approval_on : null,
+      canReview: o.can_review === true,
+    },
+  };
 }
 
 /** Whether press committees are switched on (the SQL is applied). One probe per page load,
@@ -230,15 +275,18 @@ export const PRESS_RELEASE_MAX = 600;
 export const PRESS_RELEASES_PER_DAY = 3;
 
 export type SendReleaseResult =
-  | { ok: true; sentTo: number; releasesLeft: number; nextReleaseAt: string | null }
+  | { ok: true; sentTo: number; pending: boolean; releasesLeft: number; nextReleaseAt: string | null }
   | { ok: false; message: string; releasesLeft?: number; nextReleaseAt?: string | null };
 
-export async function sendPressRelease(conferenceId: string, message: string, imageUrl: string | null): Promise<SendReleaseResult> {
+/** `committees`: the conference_committees ids picked, or null for every open room. The
+ *  argument is sent only when rooms were picked, so an older `send_press_release` (three
+ *  arguments) still answers a send to every room. */
+export async function sendPressRelease(conferenceId: string, message: string, imageUrl: string | null, committees: string[] | null = null): Promise<SendReleaseResult> {
   const supabase = await getFreshAuthedClient();
   if (!supabase) return { ok: false, message: 'Your session has expired. Sign in again, then send it.' };
-  const { data, error } = await supabase.rpc('send_press_release', {
-    p_conference: conferenceId, p_message: message, p_image_url: imageUrl,
-  });
+  const args: Record<string, unknown> = { p_conference: conferenceId, p_message: message, p_image_url: imageUrl };
+  if (committees) args.p_committees = committees;
+  const { data, error } = await supabase.rpc('send_press_release', args);
   if (error) {
     return { ok: false, message: isMissingFunction(error) ? 'Press releases are not switched on yet.' : friendlyError(error, "Couldn't send the press release. Try again.") };
   }
@@ -251,7 +299,92 @@ export async function sendPressRelease(conferenceId: string, message: string, im
       nextReleaseAt: str(o.next_release_at),
     };
   }
-  return { ok: true, sentTo: num(o.sent_to) ?? 0, releasesLeft: num(o.releases_left) ?? 0, nextReleaseAt: str(o.next_release_at) };
+  return { ok: true, sentTo: num(o.sent_to) ?? 0, pending: o.pending === true, releasesLeft: num(o.releases_left) ?? 0, nextReleaseAt: str(o.next_release_at) };
+}
+
+// ── Sent releases and the approval queue (scratch-press-and-parties.sql, PE / PD) ──
+
+export type ReleaseStatus = 'pending' | 'sent' | 'rejected';
+
+export interface MyRelease {
+  id: string;
+  message: string;
+  imageUrl: string | null;
+  status: ReleaseStatus;
+  sentTo: number;
+  createdAt: string;
+  sentAt: string | null;
+  /** The rooms picked (short names); empty = every room. */
+  rooms: string[];
+}
+
+export interface PendingRelease {
+  id: string;
+  authorLabel: string | null;
+  message: string;
+  imageUrl: string | null;
+  createdAt: string;
+  rooms: string[];
+}
+
+export interface ReleasesBoard {
+  approvalOn: boolean;
+  canReview: boolean;
+  mine: MyRelease[];
+  pending: PendingRelease[];
+}
+
+const strList = (v: unknown): string[] => (Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string' && !!x.trim()) : []);
+
+export async function fetchReleasesBoard(conferenceId: string): Promise<PressResult<ReleasesBoard>> {
+  const supabase = await getFreshAuthedClient();
+  if (!supabase) return { kind: 'error' };
+  const { data, error } = await supabase.rpc('press_releases_board', { p_conference: conferenceId });
+  if (error) return isMissingFunction(error) ? { kind: 'missing' } : { kind: 'error' };
+  const o = (data ?? {}) as Record<string, unknown>;
+  if (o.ok !== true) return { kind: 'denied', message: '' };
+  const status = (v: unknown): ReleaseStatus => (v === 'pending' || v === 'rejected' ? v : 'sent');
+  const mine = Array.isArray(o.mine) ? o.mine.flatMap((m): MyRelease[] => {
+    if (!m || typeof m !== 'object') return [];
+    const r = m as Record<string, unknown>;
+    const id = str(r.id); const created = str(r.created_at);
+    if (!id || !created) return [];
+    return [{
+      id, message: typeof r.message === 'string' ? r.message : '', imageUrl: str(r.image_url), status: status(r.status),
+      sentTo: num(r.sent_to) ?? 0, createdAt: created, sentAt: str(r.sent_at), rooms: strList(r.rooms),
+    }];
+  }) : [];
+  const pending = Array.isArray(o.pending) ? o.pending.flatMap((m): PendingRelease[] => {
+    if (!m || typeof m !== 'object') return [];
+    const r = m as Record<string, unknown>;
+    const id = str(r.id); const created = str(r.created_at);
+    if (!id || !created) return [];
+    return [{
+      id, authorLabel: str(r.author_label), message: typeof r.message === 'string' ? r.message : '',
+      imageUrl: str(r.image_url), createdAt: created, rooms: strList(r.rooms),
+    }];
+  }) : [];
+  return { kind: 'ok', value: { approvalOn: o.approval_on !== false, canReview: o.can_review === true, mine, pending } };
+}
+
+export async function reviewPressRelease(releaseId: string, approve: boolean): Promise<{ ok: true; sentTo: number } | { ok: false; message: string }> {
+  const supabase = await getFreshAuthedClient();
+  if (!supabase) return { ok: false, message: 'Your session has expired. Sign in again, then try again.' };
+  const { data, error } = await supabase.rpc('review_press_release', { p_release: releaseId, p_approve: approve });
+  if (error) return { ok: false, message: isMissingFunction(error) ? 'Approval is not switched on yet.' : friendlyError(error, "Couldn't save that. Try again.") };
+  const o = (data ?? {}) as Record<string, unknown>;
+  if (o.ok !== true) return { ok: false, message: str(o.message) ?? "Couldn't save that. Try again." };
+  return { ok: true, sentTo: num(o.sent_to) ?? 0 };
+}
+
+export async function setPressApproval(conferenceId: string, on: boolean): Promise<{ ok: true; on: boolean } | { ok: false; message: string }> {
+  const supabase = await getFreshAuthedClient();
+  if (!supabase) return { ok: false, message: 'Your session has expired. Sign in again, then try again.' };
+  const { data, error } = await supabase.rpc('set_press_release_approval', { p_conference: conferenceId, p_on: on });
+  if (error) return { ok: false, message: isMissingFunction(error) ? 'Approval is not switched on yet.' : friendlyError(error, "Couldn't save that. Try again.") };
+  const o = (data ?? {}) as Record<string, unknown>;
+  if (o.ok !== true) return { ok: false, message: str(o.message) ?? "Couldn't save that. Try again." };
+  return { ok: true, on: o.approval_on !== false };
 }
 
 const IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];

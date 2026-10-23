@@ -21,7 +21,7 @@ import { CircleFlag, flagMonogram } from '@/components/CircleFlag';
 import { useScrollLock } from '@/hooks/useScrollLock';
 import { useT } from '@/contexts/LanguageContext';
 import { committeeDisplayName, deriveCommitteeAcronym, matchPresetEmblem } from '@/lib/presetNames';
-import { liveEntryHref, useChairPresence, type LiveEntry, type LiveRoomInfo } from '@/lib/liveRooms';
+import { isPressSeat, liveEntryHref, useChairPresence, type LiveEntry, type LiveRoomInfo } from '@/lib/liveRooms';
 import {
   ChairRoleCards, ModeratorTakeoverDialog, liveModeratorName, type ChairRoleKey,
 } from '@/components/chairRole/ChairRoleChoice';
@@ -521,7 +521,8 @@ function SingleCard({ item, t, primaryRef, onGo, onClose, onForget }: ViewProps 
     const conferenceLabel = r.conferenceAcronym || r.conferenceName;
     code = r.sessionCode;
     topic = r.topic;
-    note = t('srp_deleg_note');
+    // A reporter goes to the Press Desk, not into the press room (liveEntryHref).
+    note = isPressSeat(item) ? t('srp_press_note') : t('srp_deleg_note');
     hero = (
       <div className="srp-hero">
         <div className="relative shrink-0" style={{ width: 104, height: 104 }}>

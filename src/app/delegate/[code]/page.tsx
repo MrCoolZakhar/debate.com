@@ -29,7 +29,9 @@ import { getCommitteeFlags, sponsorLabel, motionNames } from '@/lib/committeeFla
 import { docName, docCount, docLimit, docLimitReached } from '@/lib/docNames';
 import { chatUnreadTotal, mergeMessagesById } from '@/lib/chatConversations';
 import { useBroadcastHistory } from '@/lib/broadcastHistory';
-import { withBroadcastMessages } from '@/lib/broadcastMessages';
+import { withBroadcastMessages, secretariatUnread } from '@/lib/broadcastMessages';
+import DelegateBroadcastCards from '@/components/delegate/DelegateBroadcastCards';
+import SeatGroupTag from '@/components/SeatGroupTag';
 import { loadChatReadCounts, saveChatReadCounts } from '@/lib/chatReadKey';
 import { startSessionSync, rowFields, withCurrentSpeaker, withLists, type ConnectionState } from '@/lib/sessionSync';
 import { withRoomOrderQueue, roomOrderNumber, isRoomOrderCaucus, ROOM_ORDER_ID_PREFIX } from '@/lib/roomOrderQueue';
@@ -2741,6 +2743,9 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
                 >
                   <SeatName name={myName} max={16} block align="center" subScale={0.66} />
                 </span>
+                {myDelegate?.groupShort && (
+                  <SeatGroupTag short={myDelegate.groupShort} color={myDelegate.groupColor} size={12.5} style={{ justifyContent: 'center' }} />
+                )}
               </div>
 
               {/* RIGHT — the three live stats, curved around the disc */}
@@ -2892,7 +2897,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
                 <SquareButton
                   skin="gold"
                   onClick={() => setSheet('chat')}
-                  badge={chatDisabled ? undefined : unreadTotal}
+                  badge={chatDisabled ? (secretariatUnread(broadcastHistory, chatReadCounts) || undefined) : unreadTotal}
                   icon={<MessageCircle size={actionIcon} strokeWidth={2.25} />}
                 >
                   {t('tab_chat')}
@@ -2936,9 +2941,32 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
 
       {idleWarning}
 
+      {/* Messages from the Secretariat and press releases come up as glass cards whether
+          chat is on or off (owner, 23 Oct 2026). Reads the list above; writes nothing. */}
+      <DelegateBroadcastCards code={committee.code} broadcasts={broadcastHistory} enabled={seatAllowed && !sessionEnded} topPx={64} />
+
       <Sheet open={sheet === 'chat'} onClose={() => setSheet(null)} title={t('tab_chat')}>
         {chatDisabled ? (
-          <ChatDisabledNotice />
+          // Chat off: the Everyone thread, read only, holding only the Secretariat's
+          // messages and press releases (as the chair gets), once the room has any.
+          broadcastHistory.length > 0 ? (
+            <div className="flex overflow-hidden" style={{ height: 'min(62dvh, calc(86dvh - var(--dgv-kb, 0px) - 120px))', minHeight: 200, margin: '0 -16px calc(-24px - env(safe-area-inset-bottom, 0px))', paddingBottom: 'env(safe-area-inset-bottom, 0px)', borderRadius: 0 }}>
+              <ChatPanel
+                key="secretariat-only"
+                committee={committee}
+                senderName={country}
+                isChair={false}
+                embedded
+                readOnly
+                secretariatOnly
+                broadcasts={broadcastHistory}
+                readCounts={chatReadCounts}
+                onReadCountsChange={setChatReadCounts}
+              />
+            </div>
+          ) : (
+            <ChatDisabledNotice />
+          )
         ) : (
           // Full-bleed inside the sheet. ChatPanel measures its own width: one pane (list, then
           // thread with a back button) on a phone, two panes when the sheet is wide.
