@@ -951,6 +951,8 @@ create policy "Conference assets: press photos stay once sent (update)"
 -- (`press_allocation_assigned`, src/lib/defaultEmails.ts) with sample values
 -- for Tilburg Model United Nations' International Press Corps. Sent from the
 -- Gavelling domain. Nothing else is queued.
+-- SUPERSEDED 23 Oct 2026: the press seat email now shows three Press Desk
+-- screens (src/lib/defaultEmails.ts); this text-only copy is no longer its mirror.
 -- =============================================================================
 
 -- insert into public.email_outbox (conference_id, recipient_email, subject, body, body_html, status, from_name, from_address, reply_to)

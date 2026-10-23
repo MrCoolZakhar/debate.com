@@ -30,6 +30,23 @@ the public storage bucket `email-assets` (same paths); `EMAIL_ASSET_BASE` /
     banners-wide/preset-N.jpg the preset banners as 4:1 strips (1200 x 300, full width kept)
     awards/<kind>.png   the award medallions the website draws (AwardArtwork), 192px
     shots/live-wall.jpg  the organiser live wall, LIMUN demo data (fictional)
+    shots/chair-speakers-list.jpg     chair console, GSL running (France speaking, 1:07 left)
+    shots/chair-moderated-caucus.jpg  chair console in a moderated caucus (Japan speaking, total 14:41)
+    shots/chair-motions.jpg           Vote on Motions dialog, three motions ranked (Tour de Table, unmod, mod)
+    shots/chair-voting.jpg            /voting mid-vote on DR 1/1 (Kenya called, tally 4 for 1 against)
+    shots/chair-scoreboard.jpg        session scoreboard, Ranking tab
+    shots/delegate-phone.jpg          delegate board on a phone (Kenya, 1st in the queue), 600px wide
+        The six above: a real standalone session made at /create/sessions on a local
+        production build, 23 Oct 2026 ("Security Council", 12 delegations, fictional).
+        Used by the chair reminders (scratch-chair-reminder-redesign.sql).
+    shots/press-desk-rooms.jpg        two Press Desk room cards (UNSC, DISEC)
+    shots/press-release-composer.jpg  Send a Press Release: text, Add a photo, rooms picked, approval
+    shots/press-releases-sent.jpg     Your Press Releases: one sent to 3 rooms, with its photo
+        The three press shots: the real PressRoomCard / PressReleaseComposer /
+        MyReleasesCard components drawn with demo data (fictional, outlet "The Daily
+        Gavel") on a temporary local page that was deleted afterwards. Used by the
+        press seat email (press_allocation_assigned, src/lib/defaultEmails.ts).
+    All JPEG, 1200px wide (the phone 600px), under 90 KB each.
     disc-white.png      the white circle drawn behind uploaded logos (dark-mode safe)
     shots/check-in.jpg   PLACEHOLDER, not captured yet: applications page with check-in buttons
     social/<name>.png   conference social icons, forest glyph on pale gold, 64px (shown at 32)

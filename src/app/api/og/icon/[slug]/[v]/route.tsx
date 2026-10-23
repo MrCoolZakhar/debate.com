@@ -125,8 +125,7 @@ function IconArt({
   const disc = Math.round(size * 0.64);
   // The inscribed square of the disc, a little inside it, so square logo art
   // is never clipped by the circle.
-  const logoBox = Math.round(disc * 0.7);
-  const darkPlate = logo?.plate === 'forest';
+  const logoBox = Math.round(disc * 0.78);
   return (
     <div
       style={{
@@ -157,8 +156,10 @@ function IconArt({
           width: disc,
           height: disc,
           borderRadius: 9999,
-          backgroundColor: darkPlate ? mix(main, '#000000', 0.35) : '#FFFFFF',
-          boxShadow: `0 ${Math.round(size * 0.025)}px ${Math.round(size * 0.07)}px rgba(6,16,11,0.42)`,
+          // Always a plain white disc, no ring (owner, 23 Oct 2026): a logo on a white
+          // square blends into it. A light shadow lifts it off the banner.
+          backgroundColor: '#FFFFFF',
+          boxShadow: `0 ${Math.round(size * 0.012)}px ${Math.round(size * 0.04)}px rgba(6,16,11,0.18)`,
         }}
       >
         {logo ? (
@@ -205,7 +206,7 @@ export async function GET(
   const [backdrop, logo] = conf
     ? await Promise.all([
         banner ? withinBudget(loadBannerDataUri(banner, size, size, isListing), markLate) : Promise.resolve(null),
-        conf.logo_url ? withinBudget(loadLogo(conf.logo_url, Math.round(disc * 0.7), isListing), markLate) : Promise.resolve(null),
+        conf.logo_url ? withinBudget(loadLogo(conf.logo_url, Math.round(disc * 0.78), isListing), markLate) : Promise.resolve(null),
       ])
     : [null, null];
   // An image the row has but we could not draw: short cache, drawn again soon.

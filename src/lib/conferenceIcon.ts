@@ -22,7 +22,7 @@
 import type { Metadata } from 'next';
 
 /** Bump when the icon's DRAWING changes (src/app/api/og/icon/...). */
-export const ICON_DESIGN = 'i1';
+export const ICON_DESIGN = 'i2';
 
 /** The two sizes we serve: the iOS / Linktree touch icon and the large icon. */
 export const ICON_SIZES = [180, 512] as const;
