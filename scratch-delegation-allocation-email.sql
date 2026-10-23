@@ -1,3 +1,4 @@
+-- APPLIED 23 Oct 2026 from Claude Code at Peter's request (migrations delegation_allocation_notices_opt_in + _fix_order), WITH TWO CHANGES: (1) OPT-IN per conference: only an ENABLED delegation_allocations template row sends (no stub, no default ON); enabled for WorldMUN only. (2) applications has no created_at: ordered by submitted_at, id; head delegates by role OR is_head_delegate. Cron delegation-allocation-notices (every 5 min) scheduled. One-off send to WorldMUN: 12 leaders, 10 delegations, all sent. Section C NOT applied.
 -- scratch-delegation-allocation-email.sql
 -- DRAFT, NOT APPLIED. Apply only through the chat's Supabase work (CLAUDE.md:
 -- every database object is changed only there). Written 21 Oct 2026.
