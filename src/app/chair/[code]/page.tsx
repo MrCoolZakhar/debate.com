@@ -4936,21 +4936,25 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
     seatSpeakerClock(committee.speakerTimeLimit, null);
   };
 
-  // The GSL speaking time. Changing it never touches a SEATED speaker's clock: the new limit
-  // applies from the next speaker (owner, 23 Oct 2026). Re-seating the clock mid-speech used
-  // to reset it while `timerRunning` stayed true, freezing it; the custom box's blur re-applied
-  // the same value and did it again. Only with nobody on the floor is the floor clock re-seated
-  // at the new limit (the on-deck display reads `speakerTimeLimit` either way).
+  // The GSL speaking time (owner, 23 Oct 2026: a change applies to the current speaker too:
+  // their time resets to the new limit and the clock STOPS, like Restart with the new slot).
+  // Re-seating the clock used to leave `timerRunning` true, freezing a clock that still showed
+  // Pause; the custom box's blur re-applied the same value and reset the speaker again, so an
+  // unchanged value now does nothing. One current_speaker write (`stop`: time_remaining,
+  // time_granted and started_at null together). In a caucus only the limit is stored.
   const handleSetSpeakerTimeLimit = (seconds: number) => {
     setSpeakerTimeLimitInput(String(seconds));
     if (seconds === speakerTimeLimit) return;
     setSpeakerTimeLimitLocal(seconds);
-    const nobodySeated = !committee.currentSpeaker && !committee.caucus;
-    if (nobodySeated) {
+    const onGsl = !committee.caucus;
+    if (onGsl) {
+      setTimerRunning(false);
+      setExtraTimeAdded(false);
+      extraTimeAddedSecsRef.current = 0;
       seatSpeakerClock(seconds, null);
-      syncSpeakerTimeInDB(committee.id, seconds, committee.code, committee.dbChairJoinSuffix ?? undefined, seconds);   // fresh grant (T-3)
+      syncSpeakerTimeInDB(committee.id, seconds, committee.code, committee.dbChairJoinSuffix ?? undefined, seconds, true);   // fresh grant (T-3), clock stopped, one write
     }
-    updateLocal(setCommittee, (c) => (nobodySeated
+    updateLocal(setCommittee, (c) => (onGsl
       ? { ...c, speakerTimeLimit: seconds, speakerTimeRemaining: seconds }
       : { ...c, speakerTimeLimit: seconds }));
     updateSpeakerTimeLimit(committee.id, seconds, committee.code, committee.dbChairJoinSuffix ?? undefined);
