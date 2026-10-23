@@ -62,7 +62,7 @@ export function ChairCodeChip({ code, copiedCode, onCopy, layout }: {
   code: string | null;
   copiedCode: string | null;
   onCopy: (code: string) => void;
-  layout: 'row' | 'card';
+  layout: 'row' | 'tile';
 }) {
   if (!code) return null;
   const copied = copiedCode === code;
@@ -104,23 +104,35 @@ export function ChairCodeChip({ code, copiedCode, onCopy, layout }: {
     );
   }
 
+  // The card's tile (owner, 23 Oct 2026): one of two equal tiles on a row
+  // beside the session code tile, the label on top (it may wrap, never cut)
+  // and the digits with the copy icon beneath. The whole tile copies: the click
+  // lands on the tile, the inner button is the keyboard target (its click
+  // bubbles to the tile), and the Info hint stops its own click.
   return (
     <div
-      className="mt-1.5 w-full flex items-center justify-between gap-2 rounded-[10px] ps-2.5 pe-1 py-1"
+      onClick={() => onCopy(code)}
+      title="Copy chair password"
+      className="flex-1 basis-0 min-w-0 flex flex-col items-start justify-center gap-1 rounded-[10px] px-2 py-2"
       style={{
-        minHeight: 34,
+        minHeight: 48,
+        cursor: 'pointer',
         backgroundColor: copied ? 'rgba(61,122,82,0.12)' : NEU.surface,
         boxShadow: copied ? 'none' : NEU.outSm,
         transition: `background-color 300ms ${EASE}`,
       }}
     >
-      {label}
+      <span className="flex flex-wrap items-center gap-x-1">
+        <span style={{ fontFamily: OUTFIT, fontSize: 8.5, fontWeight: 700, letterSpacing: '0.14em', color: '#6B5F52' }}>
+          CHAIR PASSWORD
+        </span>
+        <InfoHint text={HINT} />
+      </span>
       <button
         type="button"
-        onClick={() => onCopy(code)}
         aria-label="Copy chair password"
-        className={`inline-flex items-center gap-1.5 min-w-0 rounded-lg px-2 py-1 active:scale-[0.96] ${FOCUS}`}
-        style={{ cursor: 'pointer', background: 'transparent', border: 'none', transitionProperty: 'scale', transitionDuration: '300ms', transitionTimingFunction: EASE }}
+        className={`inline-flex items-center gap-1.5 min-w-0 rounded-md active:scale-[0.96] ${FOCUS}`}
+        style={{ padding: 0, cursor: 'pointer', background: 'transparent', border: 'none', transitionProperty: 'scale', transitionDuration: '300ms', transitionTimingFunction: EASE }}
       >
         {copied ? copiedMark : (<>{digits}<Copy size={11} style={{ color: 'rgba(27,56,40,0.55)', flexShrink: 0 }} /></>)}
       </button>

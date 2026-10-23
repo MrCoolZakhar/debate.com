@@ -3,7 +3,7 @@
 import { CircleFlag } from '@/components/CircleFlag';
 import { committeeLanguageFlag } from '@/lib/committeeLanguage';
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Plus, X, Copy, Check, Building2, CalendarClock, Clock, Trash2, ArrowDown, ArrowUp, ArrowUpDown, Send, LayoutGrid, LayoutList, UserRound, Languages, Radio } from 'lucide-react';
+import { Plus, X, Copy, Check, Building2, CalendarClock, Clock, Trash2, ArrowDown, ArrowUp, ArrowUpDown, Send, LayoutGrid, LayoutList, UserRound, Languages } from 'lucide-react';
 import { useManage } from '@/app/manage/[slug]/layout';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { useAuth } from '@/components/AuthProvider';
@@ -40,7 +40,6 @@ import {
   ModalOverlay,
   sessionCommitteeClient,
 } from '@/components/CommitteeEditorModal';
-import { mintSessionForCommittee } from '@/lib/mintSessionForCommittee';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -291,50 +290,6 @@ function ReleaseTimePicker({ value, onSave, placeholder, disabled }: {
         )}
       </div>
     </div>
-  );
-}
-
-// What stands where the "Creating code…" read-out used to, which in turn
-// stood where GENERATE CODE used to. It is a real control again, on purpose
-// (owner, 7 Oct 2026: "committees should only be started when chairs want it
-// to"): a live room is four writes and a code handed to a dais, so it happens
-// when somebody asks for it and never as a side effect of opening a page. See
-// the block comment above `handleCreateSessionCode` for the 735 unused rooms
-// that made this a rule.
-function CreateSessionCodeButton({ busy, failed, block = false, onCreate }: {
-  busy: boolean;
-  failed: boolean;
-  block?: boolean;
-  onCreate: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onCreate}
-      disabled={busy}
-      aria-busy={busy || undefined}
-      title={failed
-        ? 'The session could not be created. Press to try again.'
-        : 'Creates this committee\u2019s live session room and its join code.'}
-      className={block
-        ? 'w-full inline-flex items-center justify-center gap-1.5 rounded-[10px] focus:outline-none'
-        : 'inline-flex items-center gap-1.5 flex-shrink-0 focus:outline-none'}
-      style={{
-        minHeight: block ? 34 : undefined,
-        padding: block ? '0 10px' : '6px 12px',
-        borderRadius: block ? 10 : 9999,
-        border: 'none',
-        backgroundColor: NEU.surface,
-        boxShadow: busy ? 'none' : NEU.outSm,
-        color: failed ? '#8B2020' : NEU.forest,
-        fontFamily: OUTFIT, fontSize: 11, fontWeight: 800,
-        cursor: busy ? 'default' : 'pointer',
-        opacity: busy ? 0.6 : 1,
-      }}
-    >
-      <Radio size={11} strokeWidth={2.5} aria-hidden style={{ flexShrink: 0 }} />
-      {busy ? 'Creating…' : failed ? 'Try again' : 'Create session code'}
-    </button>
   );
 }
 
@@ -1642,95 +1597,14 @@ export default function CommitteesPage() {
     })().finally(() => setSendingAllToParticipants(false));
   }
 
-  // ── A LIVE ROOM IS ONLY EVER CREATED BY A PRESS (owner, 7 Oct 2026) ───────
-  //
-  // Owner's instruction: "committees should only be started when chairs want
-  // it to."
-  //
-  // WHAT USED TO BE HERE: an effect that ran on arrival at this page and
-  // minted a room for EVERY codeless committee, in a loop, triggered by
-  // nothing but `loadCommittees` landing. It was added on 23 Sep 2026 to stop
-  // committees silently missing their chair reminder emails
-  // (`queue_chair_session_reminders`, cron `chair-session-reminders`, selects
-  // `where cc.session_code is not null`), and it did fix that — by starting
-  // rooms nobody had asked for. One conference minted thirteen rooms in a
-  // minute, and 735 rooms across production were created by a page load and
-  // never used by anyone.
-  //
-  // WHAT REPLACES IT: real presses, in three places, all going through the one
-  // shared helper `mintSessionForCommittee` (src/lib/mintSessionForCommittee.ts).
-  //   - this page, per committee: the "Create session code" button that stands
-  //     where the old "Creating code…" read-out was;
-  //   - this page, once: "Create codes for every committee", so a secretariat
-  //     with thirty committees presses once rather than thirty times;
-  //   - the chair's own role page (participant/ChairParticipant.tsx), which is
-  //     the owner's actual request: the dais asks for its own room.
-  //
-  // DO NOT PUT THE EFFECT BACK. Nothing may mint on mount, on a load, on
-  // publish, or from any effect. The chair reminder emails are the known cost
-  // of this rule: a committee with no code still gets none, and whether to
-  // create the room is now the organiser's or the chair's decision, not ours.
-  //
-  // NEVER REGENERATES, NEVER TOUCHES A LIVE ROOM: every path below is offered
-  // only for, and refuses to run on anything but, a committee with no
-  // `session_id` and no `session_code`, so nothing handed out or already
-  // started can be disturbed.
-  const [mintFailedIds, setMintFailedIds] = useState<Set<string>>(new Set());
-  const codelessCount = committees.filter(c => !c.session_id && !c.session_code).length;
-
-  // One committee, one press. `mint-<id>` keys the busy set, so only that
-  // committee's own button is disabled while its four writes run.
-  function handleCreateSessionCode(c: CommitteeRow) {
-    const key = `mint-${c.id}`;
-    if (!accessToken || busyIds.has(key) || c.session_id || c.session_code) return;
-    markBusy(key, true);
-    setActionError('');
-    (async () => {
-      const { ok, problems } = await mintSessionForCommittee(getAuthedClient(accessToken), c);
-      setMintFailedIds(prev => {
-        const next = new Set(prev);
-        if (ok) next.delete(c.id); else next.add(c.id);
-        return next;
-      });
-      if (ok) showFlash(`"${c.name}" now has a session code.`);
-      else setActionError(problems.length > 0
-        ? `The session for "${c.name}" was not fully set up (${problems.join('; ')}). Do not hand that code out yet.`
-        : `A session code could not be created for "${c.name}". Try again.`);
-      loadCommittees({ silent: true });
-    })().finally(() => markBusy(key, false));
-  }
-
-  // Every codeless committee in one press. Sequential on purpose: each mint is
-  // four writes, and a burst of thirty in parallel is how a code-collision
-  // retry turns into a stampede.
-  function handleCreateAllSessionCodes() {
-    const key = 'mint-all';
-    if (!accessToken || busyIds.has(key)) return;
-    const pending = committees.filter(c => !c.session_id && !c.session_code);
-    if (pending.length === 0) return;
-    markBusy(key, true);
-    setActionError('');
-    (async () => {
-      const supabase = getAuthedClient(accessToken);
-      const broken: string[] = [];
-      let created = 0;
-      for (const c of pending) {
-        const { ok, problems } = await mintSessionForCommittee(supabase, c);
-        if (ok) {
-          created++;
-        } else {
-          setMintFailedIds(prev => new Set(prev).add(c.id));
-          broken.push(problems.length > 0 ? `"${c.name}" (${problems.join('; ')})` : `"${c.name}"`);
-        }
-      }
-      if (broken.length > 0) {
-        setActionError(`A session code could not be created for ${broken.join(', ')}. Press the button on those committees to try again, and do not hand those codes out yet.`);
-      } else {
-        showFlash(created === 1 ? 'One session code created.' : `${created} session codes created.`);
-      }
-      loadCommittees({ silent: true });
-    })().finally(() => markBusy(key, false));
-  }
+  // ── Live rooms (owner, 23 Oct 2026) ───────────────────────────────────────
+  // A committee's live room and code are created when the committee is
+  // created: saving a new committee in the editor (CommitteeEditorModal) and
+  // creating a conference in the wizard (conferences/new, through
+  // `start_my_chair_session`). A committee left without one (an older
+  // committee, or a create whose mint failed) gets it from its chair's
+  // "Start your committee room" button. This page never mints: not on load,
+  // not from an effect, not from any button.
 
   function handleCopyCode(code: string) {
     navigator.clipboard.writeText(code);
@@ -2162,45 +2036,6 @@ export default function CommitteesPage() {
 
       {!loading && committees.length > 0 && (
         <>
-          {codelessCount > 0 && (
-          <div className="flex items-center gap-2 mb-4 flex-wrap">
-
-            {/* One press for every committee that has no room yet. Shown only
-                while at least one is codeless, because the page no longer
-                mints anything by itself (owner, 7 Oct 2026) and a secretariat
-                with thirty committees must not have to press thirty buttons.
-                It runs the SAME per-committee helper, sequentially, on exactly
-                the codeless committees. */}
-            {codelessCount > 0 && (
-              <button
-                type="button"
-                onClick={handleCreateAllSessionCodes}
-                disabled={busyIds.has('mint-all')}
-                aria-busy={busyIds.has('mint-all') || undefined}
-                title="Creates the live session room and join code for every committee that has none yet."
-                className="gv-lift inline-flex items-center gap-2 rounded-xl focus:outline-none"
-                style={{
-                  padding: '0 20px',
-                  minHeight: 48,
-                  background: 'linear-gradient(90deg,#1B3828 0%,#2A5A3C 100%)',
-                  color: '#EED98A',
-                  border: 'none',
-                  fontFamily: OUTFIT, fontSize: 15, fontWeight: 700,
-                  cursor: busyIds.has('mint-all') ? 'default' : 'pointer',
-                  opacity: busyIds.has('mint-all') ? 0.7 : 1,
-                }}
-              >
-                <Radio size={17} strokeWidth={2.4} aria-hidden />
-                {busyIds.has('mint-all')
-                  ? 'Creating codes…'
-                  : codelessCount === 1
-                    ? 'Create the missing session code'
-                    : `Create codes for ${codelessCount} committees`}
-              </button>
-            )}
-          </div>
-          )}
-
           {/* Sort bar + Settings + cards/list view toggle */}
           <div className="flex items-center justify-between gap-3 flex-wrap mb-5">
             <div className="flex items-center gap-2.5 flex-wrap">
@@ -2332,8 +2167,9 @@ export default function CommitteesPage() {
                       />
                     </div>
 
-                    {/* Session code */}
-                    {c.session_code ? (
+                    {/* Session code (a committee without one shows nothing here:
+                        its chair starts the room, see "Live rooms" above) */}
+                    {c.session_code && (
                       <button
                         onClick={() => handleCopyCode(c.session_code!)}
                         title="Copy session code"
@@ -2352,12 +2188,6 @@ export default function CommitteesPage() {
                           </>
                         )}
                       </button>
-                    ) : (
-                      <CreateSessionCodeButton
-                        busy={busyIds.has(`mint-${c.id}`) || busyIds.has('mint-all')}
-                        failed={mintFailedIds.has(c.id)}
-                        onCreate={() => handleCreateSessionCode(c)}
-                      />
                     )}
                     <ChairCodeChip layout="row" code={chairCodeFor(c)} copiedCode={copiedCode} onCopy={handleCopyCode} />
 
@@ -2607,77 +2437,74 @@ export default function CommitteesPage() {
                         />
                       </div>
 
-                      {/* THE SESSION WELL, HALVED.
-                          It carried a full-width code button, then a labelled
-                          row per audience with a SEND/SENT+RESEND control, then
-                          a position-paper line — four stacked bands inside a
-                          padded inset. The sends are gone from the card
-                          entirely now (owner, 23 Sep 2026); the code is the
-                          card's most-copied thing, so it stays a full-width
-                          control and the card is that plus the chair code. */}
-                      <div className="w-full mt-2">
-                        <NeuInset small style={{ padding: 9 }}>
-                          {/* Session code */}
-                          {c.session_code ? (
-                            <button
-                              onClick={() => handleCopyCode(c.session_code!)}
-                              title={`Copy session code ${c.session_code}`}
-                              className="w-full flex items-center justify-between gap-2 rounded-[10px] px-2.5 py-2 focus:outline-none active:scale-[0.96]"
-                              style={{
-                                minHeight: 34,
-                                backgroundColor: copied ? 'rgba(61,122,82,0.12)' : NEU.surface,
-                                boxShadow: copied ? 'none' : NEU.outSm,
-                                cursor: 'pointer',
-                                transitionProperty: 'background-color, scale',
-                                transitionDuration: '300ms', transitionTimingFunction: EASE,
-                              }}
-                            >
-                              <span style={{ fontFamily: OUTFIT, fontSize: 8.5, fontWeight: 700, letterSpacing: '0.14em', color: '#6B5F52' }}>
-                                CODE
-                              </span>
-                              {copied ? (
-                                <span className="inline-flex items-center gap-1.5">
-                                  <Check size={12} style={{ color: NEU.green }} />
-                                  <span style={{ fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 800, color: '#2F6644' }}>Copied</span>
-                                </span>
-                              ) : (
-                                <span className="inline-flex items-center gap-1.5 min-w-0">
-                                  <span style={{ fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 700, letterSpacing: '0.12em', color: NEU.forest, fontVariantNumeric: 'tabular-nums', overflowWrap: 'anywhere' }}>
-                                    {c.session_code}
+                      {/* THE SESSION WELL: the code and the chair password
+                          side by side, two equal tiles on one row (owner,
+                          23 Oct 2026: "instead of vertical just make it
+                          horizontal"). Each tile is its own copy target. With
+                          no chair password (a gated dais) the code fills the
+                          row alone; with neither, the well is not drawn. */}
+                      {(c.session_code || chairCodeFor(c)) && (
+                        <div className="w-full mt-2">
+                          <NeuInset small style={{ padding: 9 }}>
+                            <div className="flex items-stretch gap-2">
+                              {c.session_code && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleCopyCode(c.session_code!)}
+                                  title={`Copy session code ${c.session_code}`}
+                                  aria-label={`Copy session code ${c.session_code}`}
+                                  className="flex-1 basis-0 min-w-0 flex flex-col items-start justify-center gap-1 rounded-[10px] px-2 py-2 text-start focus:outline-none active:scale-[0.96]"
+                                  style={{
+                                    minHeight: 48,
+                                    border: 'none',
+                                    backgroundColor: copied ? 'rgba(61,122,82,0.12)' : NEU.surface,
+                                    boxShadow: copied ? 'none' : NEU.outSm,
+                                    cursor: 'pointer',
+                                    transitionProperty: 'background-color, scale',
+                                    transitionDuration: '300ms', transitionTimingFunction: EASE,
+                                  }}
+                                >
+                                  <span style={{ fontFamily: OUTFIT, fontSize: 8.5, fontWeight: 700, letterSpacing: '0.14em', color: '#6B5F52' }}>
+                                    CODE
                                   </span>
-                                  <Copy size={11} style={{ color: 'rgba(27,56,40,0.55)', flexShrink: 0 }} />
-                                </span>
+                                  {copied ? (
+                                    <span className="inline-flex items-center gap-1.5">
+                                      <Check size={12} style={{ color: NEU.green }} />
+                                      <span style={{ fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 800, color: '#2F6644' }}>Copied</span>
+                                    </span>
+                                  ) : (
+                                    <span className="inline-flex items-center gap-1.5 min-w-0">
+                                      <span style={{ fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 700, letterSpacing: '0.12em', color: NEU.forest, fontVariantNumeric: 'tabular-nums', overflowWrap: 'anywhere' }}>
+                                        {c.session_code}
+                                      </span>
+                                      <Copy size={11} style={{ color: 'rgba(27,56,40,0.55)', flexShrink: 0 }} />
+                                    </span>
+                                  )}
+                                </button>
                               )}
-                            </button>
-                          ) : (
-                            <CreateSessionCodeButton
-                              block
-                              busy={busyIds.has(`mint-${c.id}`) || busyIds.has('mint-all')}
-                              failed={mintFailedIds.has(c.id)}
-                              onCreate={() => handleCreateSessionCode(c)}
-                            />
-                          )}
-                          <ChairCodeChip layout="card" code={chairCodeFor(c)} copiedCode={copiedCode} onCopy={handleCopyCode} />
+                              <ChairCodeChip layout="tile" code={chairCodeFor(c)} copiedCode={copiedCode} onCopy={handleCopyCode} />
+                            </div>
 
-                          {/* The DELEGATES send left this card on 23 Sep 2026
-                              (owner: "it shouldn't be on that card"). It is one
-                              press that writes to every allocated delegate, and
-                              a grid of cards is the wrong place to keep it. It
-                              still lives in Settings → the per-committee
-                              release list above (and SEND ALL TO PARTICIPANTS),
-                              and in the email builder's Session Join Invite.
-                              Chairs stay: that send reaches at most two people
-                              and is the one the dais waits on. */}
+                            {/* The DELEGATES send left this card on 23 Sep 2026
+                                (owner: "it shouldn't be on that card"). It is one
+                                press that writes to every allocated delegate, and
+                                a grid of cards is the wrong place to keep it. It
+                                still lives in Settings → the per-committee
+                                release list above (and SEND ALL TO PARTICIPANTS),
+                                and in the email builder's Session Join Invite.
+                                Chairs stay: that send reaches at most two people
+                                and is the one the dais waits on. */}
 
-                          {/* The position-paper deadline used to print a third
-                              band here ("Papers due 4 Mar"). Removed: it is a
-                              date the organiser sets in the editor and reads on
-                              the Documents page, never something they act on
-                              from this grid, and it was costing the card the
-                              room the dais now uses. Still on the list row,
-                              where it is free. */}
-                        </NeuInset>
-                      </div>
+                            {/* The position-paper deadline used to print a third
+                                band here ("Papers due 4 Mar"). Removed: it is a
+                                date the organiser sets in the editor and reads on
+                                the Documents page, never something they act on
+                                from this grid, and it was costing the card the
+                                room the dais now uses. Still on the list row,
+                                where it is free. */}
+                          </NeuInset>
+                        </div>
+                      )}
                     </div>
                   </div>
 
