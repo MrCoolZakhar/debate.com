@@ -69,6 +69,7 @@ export const AMBASSADORS: Ambassador[] = [
   { name: 'Arun Kaloo',                 country: 'Malaysia',       initials: 'AK', photo: '/ambassador-photos/arun_ambassador.webp' },
   { name: 'Nolan Taarea',               country: 'United States',  initials: 'NT', photo: '/ambassador-photos/nolan_ambassador.webp' },
   { name: 'Alejandro Ospina Gil',       country: 'Colombia',       initials: 'AO', photo: '/ambassador-photos/alejandro_ambassador.webp' },
+  { name: 'Khalida Gul',                country: 'Pakistan',       initials: 'KG', photo: '/ambassador-photos/khalida_ambassador.webp' },
 ];
 
 /** [latitude, longitude] of the point a country's pins gather around (the capital). */
