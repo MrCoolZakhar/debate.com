@@ -54,11 +54,16 @@ const ALLOWED_ASSET_HOSTS = new Set([
   // the only thing we ever build against this host is a two-letter ISO code
   // resolved from our own country table, so no row can steer a fetch here.
   'cdn.jsdelivr.net',
+  // Our own site, for the preset banners only (`/banners/preset-N.jpg`, see the
+  // path check below). A preset is stored as a relative path; the conference
+  // icon route turns it into this absolute address (`presetBannerUrl`).
+  'gavelling.com',
 ]);
 
 function isAllowedAssetUrl(raw: string): boolean {
   try {
     const url = new URL(raw);
+    if (url.hostname === 'gavelling.com' && !/^\/banners\/[a-z0-9-]+\.(jpe?g|png|webp)$/i.test(url.pathname)) return false;
     return url.protocol === 'https:' && ALLOWED_ASSET_HOSTS.has(url.hostname);
   } catch {
     return false;
