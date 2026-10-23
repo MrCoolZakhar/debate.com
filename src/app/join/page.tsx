@@ -36,6 +36,7 @@ import {
   Loader2, Lock, LogIn, Mail, Plus, RotateCw, UserRound, Users,
 } from 'lucide-react';
 import { chairNameProblem, safeChairName } from '@/lib/chairNameRules';
+import { chairIdentity } from '@/lib/liveRooms';
 import { getCommitteeRosterByCode, addChairName, updateCommitteeHeadChairInDB } from '@/lib/committeeService';
 import { getGavelDeviceId } from '@/lib/gavelDevice';
 import { chairActiveElsewhere } from '@/lib/chairDeviceClaims';
@@ -548,7 +549,10 @@ function JoinPageInner() {
       // Conference chair: no country allocation — route to the chair view using their profile name.
       if (mode === 'chair') {
         // Never equal to a seat (chat keys chairs by name): "Name (chair)" when it would be.
-        const chairDisplayName = safeChairName((profile?.display_name ?? user.email ?? 'Chair').trim(), foundCommittee!.delegates.map((d) => d.country));
+        // The name is `chairIdentity`, the same one "Your room is live" uses: the profile name,
+        // else the part of the email before @, never the full email (chair_names is
+        // anon-readable and shown in chat) and never empty.
+        const chairDisplayName = myChairIdentity;
         addChairName(foundCommittee!.id, chairDisplayName, foundCommittee!.code, foundCommittee!.dbChairJoinSuffix ?? undefined);
         const goChair = () => router.push(`/chair/${foundCommittee!.code}?chairName=${encodeURIComponent(chairDisplayName)}`);
         // Claim-at-will Moderator works for conference sessions too; no password required —
@@ -653,7 +657,7 @@ function JoinPageInner() {
   // The chair's name as the chair page will know it: the profile name on the verified
   // conference path, else the name picked or typed below.
   const myChairIdentity = isConferenceSession && !openPath
-    ? (profile?.display_name ?? user?.email ?? 'Chair').trim()
+    ? safeChairName(chairIdentity(profile?.display_name, user?.email), (foundCommittee?.delegates ?? []).map((d) => d.country))
     : selectedChairName;
   // An ended room is read only, so nobody takes the gavel there: no question, Commenter.
   const chairRoleNeeded = !!foundCommittee && !foundCommittee.endedAt;
@@ -1003,7 +1007,7 @@ function JoinPageInner() {
                         <div className="flex items-center gap-3 rounded-2xl px-4 py-3" style={{ backgroundColor: 'rgba(27,56,40,0.06)', boxShadow: 'inset 0 0 0 1px rgba(27,56,40,0.12)' }}>
                           <Gavel size={18} strokeWidth={2.2} color={C.forest} />
                           <p style={{ fontFamily: OUTFIT, fontSize: 13.5, color: C.forest }}>
-                            {t('join_chair_joining_as', { name: profile?.display_name ?? user?.email ?? '' })}
+                            {t('join_chair_joining_as', { name: myChairIdentity })}
                           </p>
                         </div>
                       )}

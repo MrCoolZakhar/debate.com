@@ -46,6 +46,8 @@ import type { RankingFactor, ScoringConfig } from './settingsStore';
 import {
   computeObjectiveScore,
   computeLedger,
+  raisedMotionsFor,
+  type ScoringOptions,
   computeQualityScore,
   computeHeadline,
   getScoringConfig,
@@ -226,6 +228,8 @@ function assembleScoringCommittee(
     content: '',
     status: d.status as DocumentStatus,
     submittedAt: d.created_at as string,
+    // A rejected paper earns no points; rows read without the column count as before.
+    approval: (d.approval as CommitteeDocument['approval']) ?? undefined,
   }));
 
   return {
@@ -275,6 +279,9 @@ export function sessionHeadlineScores(
   messageRows: DbRow[],
   documentRows: DbRow[],
   feedbackRows: DbRow[],
+  // The roll-call history as a set (`everPresentFromHistory`) when the caller has it;
+  // without it attendance follows the current status.
+  opts?: ScoringOptions,
 ): { country: string; objective: number; headline: number }[] {
   const committee = assembleScoringCommittee(row, delegateRows, messageRows, documentRows);
   const cfg = getScoringConfig(committee);
@@ -285,7 +292,7 @@ export function sessionHeadlineScores(
     createdAt: (f.created_at as string) ?? '',
   }));
   return committee.delegates.map((d) => {
-    const objective = computeObjectiveScore(committee, d.country).total;
+    const objective = computeObjectiveScore(committee, d.country, opts).total;
     const quality = computeQualityScore(feedback, d.country, cfg);
     return { country: d.country, objective, headline: computeHeadline(objective, quality, cfg) };
   });
@@ -299,22 +306,24 @@ export function sessionHeadlineScores(
  * `total` still comes from computeObjectiveScore, so the arithmetic lives in
  * exactly one place.
  */
-export function buildActivityRow(committee: Committee, country: string) {
+export function buildActivityRow(committee: Committee, country: string, opts?: ScoringOptions) {
   const mine = parseLedgerEvents(committee).filter((e) => e.country === country);
   const speeches = mine.filter((e) => (e.type ?? 'speech') === 'speech');
-  const docs = (committee.documents ?? []).filter((doc) => doc.sponsors.includes(country));
+  // Rejected papers earn nothing and are not counted (scoring.ts, owner 23 Oct 2026).
+  const docs = (committee.documents ?? []).filter((doc) => doc.sponsors.includes(country) && doc.approval !== 'rejected');
   return {
     gsl: speeches.filter((e) => e.context === 'speakers-list').length,
     caucus: speeches.filter((e) => e.context !== 'speakers-list').length,
     seconds: speeches.reduce((s, e) => s + (e.seconds ?? 0), 0),
-    motions: mine.filter((e) => e.type === 'motion-raised').length,
+    // Credited to the proposer as last edited (scoring.ts `raisedMotionsFor`).
+    motions: raisedMotionsFor(committee, country).length,
     rtr: mine.filter((e) => e.type === 'right-of-reply').length,
     wp: docs.filter((doc) => doc.type === 'working-paper').length,
     dr: docs.filter((doc) => doc.type === 'draft-resolution').length,
     manual: mine
       .filter((e) => e.type === 'manual-award' || e.type === 'manual-deduct')
       .reduce((s, e) => s + (e.type === 'manual-deduct' ? -Math.abs(e.value ?? 0) : Math.abs(e.value ?? 0)), 0),
-    total: computeObjectiveScore(committee, country).total,
+    total: computeObjectiveScore(committee, country, opts).total,
   };
 }
 
@@ -407,7 +416,7 @@ export async function loadConferenceScoreboard(
       supabase, 'messages', 'id, committee_id, sender, recipient, content, created_at', sessionIds,
       { sender: '__system__', recipient: '__log__' },
     ),
-    fetchAllByCommittee(supabase, 'documents', 'id, committee_id, type, doc_code, title, sponsors, status, created_at', sessionIds),
+    fetchAllByCommittee(supabase, 'documents', 'id, committee_id, type, doc_code, title, sponsors, status, approval, created_at', sessionIds),
     fetchAllByCommittee(
       supabase, 'feedback',
       'id, committee_id, country, chair_name, content, level, factor_scores, speech_context, speech_seconds, speech_topic, spoken_at, created_at',

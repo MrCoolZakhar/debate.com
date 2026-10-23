@@ -25,6 +25,8 @@ export const createJoinTranslations = {
     cj_join_a_lang: 'English, Spanish, French, Portuguese and Arabic. Pick yours from the language menu at the top of this page.',
     cj_join_create_lead: 'Chairing your own committee?',
     cj_join_create_link: 'Create a committee',
+    // /create: the inline line when the committee could not be created (replaces an English alert).
+    create_failed: 'The committee was not created. Check your connection and try again',
   },
   es: {
     cj_join_title_lead: 'Cómo Unirse',
@@ -43,6 +45,7 @@ export const createJoinTranslations = {
     cj_join_a_lang: 'Inglés, español, francés, portugués y árabe. Elige el tuyo en el menú de idioma en la parte superior de esta página.',
     cj_join_create_lead: '¿Vas a moderar tu propio comité?',
     cj_join_create_link: 'Crea un comité',
+    create_failed: 'No se creó el comité. Revisa tu conexión e inténtalo de nuevo',
   },
   fr: {
     cj_join_title_lead: 'Comment Rejoindre',
@@ -61,6 +64,7 @@ export const createJoinTranslations = {
     cj_join_a_lang: 'Anglais, espagnol, français, portugais et arabe. Choisissez la vôtre dans le menu de langue en haut de cette page.',
     cj_join_create_lead: 'Vous présidez votre propre comité ?',
     cj_join_create_link: 'Créer un comité',
+    create_failed: "Le comité n'a pas été créé. Vérifiez votre connexion et réessayez",
   },
   ar: {
     cj_join_title_lead: 'كيف تنضم',
@@ -79,6 +83,7 @@ export const createJoinTranslations = {
     cj_join_a_lang: 'الإنجليزية والإسبانية والفرنسية والبرتغالية والعربية. اختر لغتك من قائمة اللغة أعلى هذه الصفحة.',
     cj_join_create_lead: 'هل تترأس لجنتك الخاصة؟',
     cj_join_create_link: 'أنشئ لجنة',
+    create_failed: 'لم يتم إنشاء اللجنة. تحقق من اتصالك وحاول مرة أخرى',
   },
   // pt-BR: scaffold, values still English. Translate per .claude/pt-glossary.md.
   pt: {
@@ -98,5 +103,6 @@ export const createJoinTranslations = {
     cj_join_a_lang: "Inglês, espanhol, francês, português e árabe. Escolha o seu no menu de idioma no topo desta página.",
     cj_join_create_lead: "Vai conduzir o seu próprio comitê?",
     cj_join_create_link: "Criar um comitê",
+    create_failed: 'O comitê não foi criado. Verifique sua conexão e tente novamente',
   },
 };

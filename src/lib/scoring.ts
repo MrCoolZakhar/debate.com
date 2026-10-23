@@ -139,21 +139,128 @@ function parseLogEvents(committee: Committee): LedgerEvent[] {
   return events;
 }
 
+// ── Attendance across the whole session (owner, 23 Oct 2026) ────────────────
+// A delegation earns the attendance point when it was in the room (Present or
+// Present and voting) at ANY point of the session, not only when it is present at
+// the moment the board is drawn: one that leaves before the end still attended.
+// The roll-call history is `delegate_status_history(p_committee)`; this module
+// stays pure, so a caller that has read it passes the set of delegations that were
+// ever present (`everPresentFromHistory`). A caller without the history passes
+// nothing and the current status decides, exactly as before.
+export interface ScoringOptions {
+  /** Delegations present at some point of the session, keyed by `attendanceKey`. */
+  everPresent?: ReadonlySet<string> | null;
+}
+
+/** The key a delegation is matched by in `ScoringOptions.everPresent`. */
+export function attendanceKey(country: string): string {
+  return (country ?? '').trim().toLowerCase();
+}
+
+/** The delegations that were ever Present or Present and voting in a roll-call history. */
+export function everPresentFromHistory(rows: ReadonlyArray<{ country?: string | null; status?: string | null }> | null | undefined): Set<string> | null {
+  if (!rows) return null;
+  const out = new Set<string>();
+  for (const r of rows) {
+    if (r.status === 'present' || r.status === 'present-voting') out.add(attendanceKey(r.country ?? ''));
+  }
+  return out;
+}
+
+// ── Who raised a motion, after Edit (owner, 23 Oct 2026) ───────────────────
+// Editing a motion re-raises it under a new id and writes `motion-edited` with
+// `prevMotionId` (motionLog.ts) instead of a second `motion-raised`. The edit may
+// correct the PROPOSER, so the `motionRaised` point belongs to whoever the latest
+// edit in the chain names, never to the delegation first typed in. Memoised on the
+// parsed events array, which is itself memoised on the messages array.
+interface RaiseCredit { country: string; motion: MotionFields }
+const raiseCreditCache = new WeakMap<LedgerEvent[], Map<LedgerEvent, RaiseCredit | null>>();
+
+function raiseCredits(events: LedgerEvent[]): Map<LedgerEvent, RaiseCredit | null> {
+  const hit = raiseCreditCache.get(events);
+  if (hit) return hit;
+  // prev id -> the edit that replaced it (the latest one, should two ever name it).
+  const nextEdit = new Map<string, LedgerEvent>();
+  const editedTo = new Set<string>();
+  for (const e of events) {
+    if (e.type === 'motion-edited' && e.prevMotionId && e.motionId && e.prevMotionId !== e.motionId) {
+      nextEdit.set(e.prevMotionId, e);
+      editedTo.add(e.motionId);
+    }
+  }
+  const raisedIds = new Set(events.filter((e) => e.type === 'motion-raised' && e.motionId).map((e) => e.motionId as string));
+  // Walking BACK from an id: true when an earlier id in its chain already has a raise.
+  const prevOf = new Map<string, string>();
+  for (const [prev, e] of nextEdit) prevOf.set(e.motionId as string, prev);
+  const hasEarlierRaise = (id: string): boolean => {
+    const seen = new Set<string>([id]);
+    let cur = prevOf.get(id);
+    while (cur && !seen.has(cur)) {
+      if (raisedIds.has(cur)) return true;
+      seen.add(cur);
+      cur = prevOf.get(cur);
+    }
+    return false;
+  };
+  const out = new Map<LedgerEvent, RaiseCredit | null>();
+  for (const e of events) {
+    if (e.type !== 'motion-raised') continue;
+    const base: MotionFields = { motionId: e.motionId, motionType: e.motionType, topic: e.topic, totalTime: e.totalTime, speakingTime: e.speakingTime, tourOrder: e.tourOrder };
+    if (!e.motionId) { out.set(e, { country: e.country, motion: base }); continue; }
+    // A raise of an id that an edit produced, whose chain already scored: never twice.
+    if (editedTo.has(e.motionId) && hasEarlierRaise(e.motionId)) { out.set(e, null); continue; }
+    let country = e.country;
+    let motion = base;
+    const seen = new Set<string>([e.motionId]);
+    let edit = nextEdit.get(e.motionId);
+    while (edit && edit.motionId && !seen.has(edit.motionId)) {
+      seen.add(edit.motionId);
+      country = edit.country;
+      motion = { motionId: edit.motionId, motionType: edit.motionType, topic: edit.topic, totalTime: edit.totalTime, speakingTime: edit.speakingTime, tourOrder: edit.tourOrder };
+      edit = nextEdit.get(edit.motionId);
+    }
+    out.set(e, { country, motion });
+  }
+  raiseCreditCache.set(events, out);
+  return out;
+}
+
+/** The `motion-raised` events that score for `country`, each with the motion as last edited. */
+export function raisedMotionsFor(committee: Committee, country: string): { event: LedgerEvent; motion: MotionFields }[] {
+  const events = parseLogEvents(committee);
+  const credits = raiseCredits(events);
+  const out: { event: LedgerEvent; motion: MotionFields }[] = [];
+  for (const e of events) {
+    if (e.type !== 'motion-raised') continue;
+    const c = credits.get(e);
+    if (c && c.country === country) out.push({ event: e, motion: c.motion });
+  }
+  return out;
+}
+
 // Itemized list: every speech / motion / RTR / document / manual adjustment as its own row.
 // Each row's pts comes from the matching sources[].value and is omitted if that source is disabled.
-export function computeLedger(committee: Committee, country: string): LedgerRow[] {
+export function computeLedger(committee: Committee, country: string, opts?: ScoringOptions): LedgerRow[] {
   const cfg = getScoringConfig(committee);
   const rows: LedgerRow[] = [];
 
-  // Attendance
+  // Attendance: present now, or present at any point of the roll-call history.
   const delegate = committee.delegates.find((d) => d.country === country);
   const attVal = val(cfg, 'attendance');
-  if (delegate && delegate.status !== 'absent' && attVal != null) {
-    rows.push({ type: 'attendance', sourceId: 'attendance', label: name(cfg, 'attendance'), country, pts: attVal, detail: delegate.status, timestamp: '' });
+  const presentNow = !!delegate && delegate.status !== 'absent';
+  const presentEver = !!opts?.everPresent?.has(attendanceKey(country));
+  if (delegate && (presentNow || presentEver) && attVal != null) {
+    rows.push({ type: 'attendance', sourceId: 'attendance', label: name(cfg, 'attendance'), country, pts: attVal, detail: presentNow ? delegate.status : 'present', timestamp: '' });
   }
 
   const per10 = val(cfg, 'speakingTimePer10s');
-  const events = parseLogEvents(committee).filter((e) => e.country === country);
+  const allEvents = parseLogEvents(committee);
+  const credits = raiseCredits(allEvents);
+  // A motion-raised scores for whoever its latest edit names (see raiseCredits).
+  const events = allEvents.filter((e) => {
+    if (e.type === 'motion-raised') return credits.get(e)?.country === country;
+    return e.country === country;
+  });
   for (const e of events) {
     const type = e.type ?? 'speech';
     if (type === 'speech') {
@@ -169,7 +276,8 @@ export function computeLedger(committee: Committee, country: string): LedgerRow[
       // motion-raised before 18 Sep 2026 was written on ACCEPT; it still scores motionRaised.
       const sid = type === 'motion-raised' ? 'motionRaised' : 'motionPassed';
       const v = val(cfg, sid); if (v == null) continue;
-      const motion: MotionFields = { motionId: e.motionId, motionType: e.motionType, topic: e.topic, totalTime: e.totalTime, speakingTime: e.speakingTime, tourOrder: e.tourOrder };
+      const motion: MotionFields = (type === 'motion-raised' ? credits.get(e)?.motion : undefined)
+        ?? { motionId: e.motionId, motionType: e.motionType, topic: e.topic, totalTime: e.totalTime, speakingTime: e.speakingTime, tourOrder: e.tourOrder };
       // The detail is in the committee's own motion names in English (the organiser board
       // is English by design); session surfaces re-describe `motion` in their language.
       rows.push({ type, sourceId: sid, label: name(cfg, sid), country, pts: v, detail: describeMotion(committee, motion, 'en') ?? '', timestamp: e.timestamp ?? '', motion });
@@ -196,7 +304,8 @@ export function computeLedger(committee: Committee, country: string): LedgerRow[
   const drPassedLabel = drRenamed === DEFAULT_DOCUMENT_NAMES.draftResolution
     ? name(cfg, 'drPassed')
     : `${drRenamed} passed`;
-  const myDocs = (committee.documents ?? []).filter((d) => d.sponsors.includes(country));
+  // A paper the chair REJECTED earns nothing (owner, 23 Oct 2026).
+  const myDocs = (committee.documents ?? []).filter((d) => d.sponsors.includes(country) && d.approval !== 'rejected');
   for (const d of myDocs) {
     if (d.type === 'working-paper') {
       const v = val(cfg, 'wpSponsor');
@@ -215,8 +324,8 @@ export function computeLedger(committee: Committee, country: string): LedgerRow[
   return rows;
 }
 
-export function computeObjectiveScore(committee: Committee, country: string): { total: number; rows: LedgerRow[] } {
-  const rows = computeLedger(committee, country);
+export function computeObjectiveScore(committee: Committee, country: string, opts?: ScoringOptions): { total: number; rows: LedgerRow[] } {
+  const rows = computeLedger(committee, country, opts);
   const total = rows.reduce((s, r) => s + r.pts, 0);
   return { total, rows };
 }
@@ -229,9 +338,9 @@ export function computeObjectiveScore(committee: Committee, country: string): { 
 // source, so "you are short on speaking time" is answerable separately from
 // "you are short on speeches". Row totals are untouched — summing this record
 // still equals computeObjectiveScore().total.
-export function computeSourceTotals(committee: Committee, country: string): Record<string, number> {
+export function computeSourceTotals(committee: Committee, country: string, opts?: ScoringOptions): Record<string, number> {
   const out: Record<string, number> = {};
-  for (const r of computeLedger(committee, country)) {
+  for (const r of computeLedger(committee, country, opts)) {
     const timePts = r.timePts ?? 0;
     out[r.sourceId] = (out[r.sourceId] ?? 0) + (r.pts - timePts);
     if (timePts) out.speakingTimePer10s = (out.speakingTimePer10s ?? 0) + timePts;

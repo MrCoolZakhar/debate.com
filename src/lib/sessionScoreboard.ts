@@ -36,6 +36,7 @@ import {
   computeHeadline,
   getScoringConfig,
   parseLedgerEvents,
+  type ScoringOptions,
 } from './scoring';
 import type { FeedbackEntry } from './committeeService';
 
@@ -59,6 +60,10 @@ export function buildSessionScoreboardRows(
   // Session-only. The organiser board builds its rows through
   // `loadConferenceScoreboard` and stays English, which is correct for that surface.
   language: string = 'en',
+  // The roll-call history as a set (`everPresentFromHistory`), when the caller has read
+  // it: attendance then counts a delegation present at ANY point. Without it, the
+  // current status decides (scoring.ts `ScoringOptions`).
+  opts?: ScoringOptions,
 ): ScoreboardDelegateRow[] {
   const cfg = getScoringConfig(committee);
 
@@ -70,7 +75,7 @@ export function buildSessionScoreboardRows(
     sourceName({ id, name: cfg.sources.find((x) => x.id === id)?.name ?? fallback }, language);
 
   return committee.delegates.map((d) => {
-    const activity = buildActivityRow(committee, d.country);
+    const activity = buildActivityRow(committee, d.country, opts);
     const quality = computeQualityScore(feedback, d.country, cfg);
 
     // WHO WROTE THIS. Two chairs can now write on the same speech, so a note
@@ -124,7 +129,7 @@ export function buildSessionScoreboardRows(
 
       // A motion row's detail is re-described in the reader's language (the ledger itself
       // writes English, for the organiser board).
-      ledger: computeLedger(committee, d.country).map((r) => ({
+      ledger: computeLedger(committee, d.country, opts).map((r) => ({
         ...r,
         label: sourceLabel(r.sourceId, r.label),
         detail: r.motion ? (describeMotion(committee, r.motion, language) ?? r.detail) : r.detail,

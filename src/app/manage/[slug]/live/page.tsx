@@ -238,7 +238,7 @@ export default function LiveStatusPage() {
           // same `file_url` in its inline viewer (DocumentsModal.tsx:877), and
           // `documents` carries a public SELECT policy, so no new RLS is needed.
           anonSupabase.from('documents')
-            .select('committee_id, type, status, doc_code, title, sponsors, file_url, file_name, content, created_at')
+            .select('committee_id, type, status, approval, doc_code, title, sponsors, file_url, file_name, content, created_at')
             .in('committee_id', sessionIds),
           // The `sender = '__system__'` filter is deliberately GONE. The ledger
           // still only ever comes from `__system__` rows (filtered below), but

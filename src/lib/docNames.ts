@@ -82,12 +82,14 @@ export function docLimit(
   return typeof raw === 'number' && Number.isFinite(raw) && raw >= 0 ? raw : null;
 }
 
-/** How many documents of this type the committee already has. */
+/** How many documents of this type the committee already has. A paper the chair
+ *  REJECTED (`approval === 'rejected'`) is not counted: it can never reach the floor,
+ *  so it must not use up a place under the limit (owner, 23 Oct 2026). */
 export function docCount(
   committee: Pick<Committee, 'documents'> | null | undefined,
   type: DocumentType,
 ): number {
-  return (committee?.documents ?? []).filter((d) => d.type === type).length;
+  return (committee?.documents ?? []).filter((d) => d.type === type && d.approval !== 'rejected').length;
 }
 
 /** True when no further document of this type may be submitted. */

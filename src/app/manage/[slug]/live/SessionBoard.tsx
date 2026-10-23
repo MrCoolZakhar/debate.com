@@ -45,6 +45,8 @@ import { motionNames } from '@/lib/committeeFlags';
 import { useT } from '@/contexts/LanguageContext';
 import { buildSessionScoreboardRows, sessionPointSlices } from '@/lib/sessionScoreboard';
 import { buildSessionHistory, type HistorySpeech } from '@/lib/sessionHistory';
+import { useEverPresent, readStatusHistory, rosterStatusSig } from '@/lib/attendanceHistory';
+import { getFreshAuthedClient } from '@/lib/supabase-auth';
 import { formatSpeakingTime, type ScoreboardDelegateRow, type ConferenceScoreboard } from '@/lib/conferenceScoreboard';
 import type { Committee } from '@/lib/types';
 import type { FeedbackEntry } from '@/lib/committeeService';
@@ -190,7 +192,14 @@ export function SessionScoreboardBoard({ committee, feedback, tabs = ['ranking',
   const [sortDir, setSortDir] = useState<SortDir>(naturalSortDir('score'));
   const [expanded, setExpanded] = useState<string | null>(null);
 
-  const allRows = useMemo(() => buildSessionScoreboardRows(committee, feedback, 'en'), [committee, feedback]);
+  // Attendance from the whole roll-call history, like the chair's board (organisers may
+  // read it); until it lands, or when refused, the current status decides.
+  const everPresent = useEverPresent(
+    committee.id,
+    async () => readStatusHistory(await getFreshAuthedClient(), committee.id),
+    rosterStatusSig(committee.delegates),
+  );
+  const allRows = useMemo(() => buildSessionScoreboardRows(committee, feedback, 'en', { everPresent }), [committee, feedback, everPresent]);
   const rows = useMemo(() => sortScoreboardRows(allRows, sortKey, 'en', sortDir), [allRows, sortKey, sortDir]);
   const totals = useMemo(() => ({
     delegations: allRows.length,

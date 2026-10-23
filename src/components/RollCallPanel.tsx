@@ -574,14 +574,26 @@ function RollCallPanelInner({
 
   // Bulk set: localStatuses is flushed ATOMICALLY (one setState, one render) and
   // the parent owns the writes — one per delegate, not two.
+  // An observer is never present-voting, here as on a single press: "All P+V" sets every
+  // observer to Present instead, as a second bulk call with only their ids.
   const setAllStatuses = (status: DelegateStatus) => {
     if (isViewOnly) { onCommenterAttempt?.(); return; }
     const newStatuses: Record<string, DelegateStatus> = {};
     const at = Date.now();
-    committee.delegates.forEach((d) => { newStatuses[d.id] = status; pendingStatusRef.current[d.id] = { value: status, at }; });
+    const groups = new Map<DelegateStatus, string[]>();
+    committee.delegates.forEach((d) => {
+      const isObserver = (localObservers[d.id] ?? d.isObserver) === true;
+      const value: DelegateStatus = isObserver && status === 'present-voting' ? 'present' : status;
+      newStatuses[d.id] = value;
+      pendingStatusRef.current[d.id] = { value, at };
+      const ids = groups.get(value);
+      if (ids) ids.push(d.id); else groups.set(value, [d.id]);
+    });
     setLocalStatuses(newStatuses);
-    if (onBulkStatusChange) onBulkStatusChange(status, committee.delegates.map((d) => d.id));
-    else committee.delegates.forEach((d) => onStatusChange?.(d.id, status));
+    for (const [value, ids] of groups) {
+      if (onBulkStatusChange) onBulkStatusChange(value, ids);
+      else ids.forEach((id) => onStatusChange?.(id, value));
+    }
   };
 
   const handleAllPresent = () => setAllStatuses('present');

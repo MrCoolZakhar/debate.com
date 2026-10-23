@@ -11,7 +11,7 @@ import { getCountryDisplayName, compareCountryNames, matchesCountryQuery, starts
 import SeatName from '@/components/SeatName';
 import { Emoji } from '@/components/Emoji';
 import { useSettingsStore, DEFAULT_MOTION_NAMES, MotionNames } from '@/lib/settingsStore';
-import { logFloorSpeech, creditRoomOrderTour, type FloorClock } from '@/lib/floorSpeech';
+import { logFloorSpeech, creditRoomOrderTour, logCowHolder, type FloorClock } from '@/lib/floorSpeech';
 import { interruptedGslSpeaker, returnSpeakerToGslFront, holdInterruptedGslSpeaker, settleHeldFloors } from '@/lib/gslFloorReturn';
 import {
   useTempMotionIds, isTempMotionId, raiseMotionOptimistic, removeMotionEverywhere,
@@ -451,11 +451,11 @@ function RaiseMotionForm({ committee, typeMeta, onBack, onRaised, editingMotion,
 
     const isSuspendOrEnd = type === 'suspend-debate' || type === 'end-debate';
     if (!isSuspendOrEnd) {
-      if ((type === 'moderated' || type === 'unmoderated') && totalTime === 0) {
+      if ((type === 'moderated' || type === 'unmoderated' || type === 'consultation') && totalTime === 0) {
         setError(t('motions_error_no_total_time'));
         return;
       }
-      if (type === 'moderated' && speakingTime === 0) {
+      if ((type === 'moderated' || type === 'tour') && speakingTime === 0) {
         setError(t('motions_error_no_speaking_time'));
         return;
       }
@@ -1201,12 +1201,24 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
   const handleEdited = (motion: Omit<PendingMotion, 'id' | 'disruptiveness'>) => {
     if (!editingMotionId) return;
     const oldId = editingMotionId;
+    const existing = committee.pendingMotions ?? [];
+    const original = existing.find((m) => m.id === oldId);
+    // One floor motion per delegation applies to an edit too (23 Oct 2026): an edit that
+    // hands the motion to a delegation (or the chair) already holding another floor motion
+    // is refused exactly like raising one, before anything is removed. Keeping the same
+    // proposer is never refused: the motion being edited is its own slot.
+    const proposerChanged = !original || original.proposedBy !== motion.proposedBy || !isFloorMotion(original);
+    if (motion.type !== 'custom' && proposerChanged
+      && existing.some((m) => m.id !== oldId && isFloorMotion(m) && m.proposedBy === motion.proposedBy)) {
+      showMotionNotice(committee.id, { kind: 'blocked', country: motion.proposedBy === CHAIR_KEY ? chairDisplayName(language) : motion.proposedBy });
+      return;
+    }
 
     // Remove old motion from local state immediately (same as handleRemove but inline
     // so committee.pendingMotions is clean before the re-add, avoiding the duplicate check)
     removeMotionEverywhere(committee, oldId, update);
 
-    // Add replacement, same logic as handleRaised but NO duplicate check
+    // Add replacement, same logic as handleRaised; the one-motion check ran above
     raiseMotionOptimistic({
       committee, motion, update, motionOrder,
       disruptiveness: localCalcDisruptiveness(motion.type, motion.totalTime),
@@ -1276,8 +1288,12 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
     const clearFloorForCaucus = () => {
       fellOtherFloorMotions({ committee, passedId: motion.id, update, motionOrder, rank: rankMotion });
       // A Room Order Tour de Table this caucus replaces has ended: one speech per delegation
-      // on its roster snapshot (idempotent per tour + country; no-op for any other caucus).
+      // on its roster snapshot, only when it ran to its end (idempotent per tour + country;
+      // no-op for any other caucus).
       void creditRoomOrderTour(committee);
+      // A Consultation of the Whole this caucus replaces: its floor holder spoke until now
+      // (same turn key as a flag tap; no-op for any other caucus). Before the caucus is replaced.
+      void logCowHolder(committee);
       if (floorSpeaker) {
         const clock = floorClock?.();
         // A GSL speaker with time left keeps their GSL place AND their time: back at the
@@ -1308,6 +1324,7 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
         // Total clock starts PAUSED — the chair presses play. remainingTime is the truth
         // until then, so every device reads the full time and nothing drains early.
         totalStartedAt: null,
+        acceptedAt: serverNowIso(),   // names this caucus instance (src/lib/caucusIdentity.ts)
       };
       update((c) => ({ ...c, phase: 'unmoderated-caucus', caucus, pendingMotions: (c.pendingMotions ?? []).filter((m) => m.id !== motion.id), caucusQueue: [], currentSpeaker: null }));
       onClose();
@@ -1325,6 +1342,7 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
         speakingTime: 0, speakerTimeRemaining: 0, currentSpeaker: null,
         proposerPosition: null, spokenCountries: [], isConsultation: true,
         totalStartedAt: null,   // paused until the chair presses play
+        acceptedAt: serverNowIso(),   // names this caucus instance (src/lib/caucusIdentity.ts)
       };
       // GSL preserved, caucusQueue cleared, phase → unmoderated-caucus
       update((c) => ({ ...c, phase: 'unmoderated-caucus', caucus, pendingMotions: (c.pendingMotions ?? []).filter((m) => m.id !== motion.id), caucusQueue: [], currentSpeaker: null }));
@@ -1343,6 +1361,7 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
         speakingTime: motion.speakingTime, speakerTimeRemaining: motion.speakingTime,
         currentSpeaker: null, proposerPosition: null, spokenCountries: [],
         totalStartedAt: null,   // paused until the chair starts the first speaker
+        acceptedAt: serverNowIso(),   // names this caucus instance (src/lib/caucusIdentity.ts)
       };
       update((c) => ({ ...c, phase: 'moderated-caucus', caucus, pendingMotions: (c.pendingMotions ?? []).filter((m) => m.id !== motion.id), caucusQueue: [], currentSpeaker: null }));
       onClose();
@@ -1372,10 +1391,14 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
           speakingTime: motion.speakingTime, speakerTimeRemaining: motion.speakingTime,
           currentSpeaker: null, proposerPosition: null, spokenCountries: [],
           totalStartedAt: null,   // paused until the chair starts the first speaker
+          acceptedAt: serverNowIso(),   // names this caucus instance (src/lib/caucusIdentity.ts)
           // Placeholders credit nobody per turn, so the room is snapshotted here and every
           // delegation on it gets ONE speech when the tour ends (creditRoomOrderTour).
           roomOrderCountries: alphabetical.map((d) => d.country),
           tourStartedAt: serverNowIso(),
+          // How many numbered turns: the queue is derived from this (src/lib/roomOrderQueue.ts),
+          // since a placeholder can never be stored in speakers_list.
+          roomOrderSize: n,
         };
         // Numbered placeholder queue, "Speaker 1", "Speaker 2", etc.
         const caucusQueue = alphabetical.map((_, i) => ({
@@ -1387,9 +1410,9 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
         clearFloorForCaucus();
         removePendingMotionInDB(motion.id, committee.code, committee.dbChairJoinSuffix ?? undefined);
         setPhaseAndCaucusInDB(committee.id, 'moderated-caucus', caucus, committee.code, committee.dbChairJoinSuffix ?? undefined);   // one update (R-7)
-        clearCaucusListInDB(committee.id, committee.code, committee.dbChairJoinSuffix ?? undefined).then(() =>
-          batchAddToCaucusListInDB(committee.id, caucusQueue, committee.code, committee.dbChairJoinSuffix ?? undefined)
-        );
+        // Only the clear: the placeholders are not delegations and can never be stored (uuid
+        // column). Every device derives the queue from `caucus.roomOrderSize` instead.
+        clearCaucusListInDB(committee.id, committee.code, committee.dbChairJoinSuffix ?? undefined);
         return;
       }
 
@@ -1412,6 +1435,7 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
         speakingTime: motion.speakingTime, speakerTimeRemaining: motion.speakingTime,
         currentSpeaker: null, proposerPosition: null, spokenCountries: [],
         totalStartedAt: null,   // paused until the chair starts the first speaker
+        acceptedAt: serverNowIso(),   // names this caucus instance (src/lib/caucusIdentity.ts)
       };
       const caucusQueue = presentDelegates.map((d) => ({ delegateId: d.id, country: d.country }));
 
@@ -1477,6 +1501,9 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
               // below returns (offline that await can take the whole write timeout).
               const pressedAt = serverNow();
               const pressedClock = floorClock?.();
+              // The committee as it was at the press: the Consultation floor holder below is
+              // logged from it, before the break freezes the caucus.
+              const atPress = committee;
               setSpecialDeleting(true);
               try {
                 await removePendingMotionInDB(motionId, committee.code, committee.dbChairJoinSuffix ?? undefined);
@@ -1494,6 +1521,10 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
               if (!isSuspend) void creditRoomOrderTour(committee);
               // End Debate: every held GSL part (src/lib/gslFloorReturn.ts) is logged now, once.
               if (!isSuspend) settleHeldFloors(committee, 'all');
+              // A Consultation of the Whole floor holder spoke up to the press (Suspend or End):
+              // logged once with the flag tap's turn key, before the break freezes the caucus
+              // (freezeCaucusForBreak nulls the holder and floorSince).
+              void logCowHolder(atPress, { at: pressedAt });
               const floor = committee.currentSpeaker;
               if (floor) {
                 // Suspend only: a GSL speaker with time left is back at the front of the GSL

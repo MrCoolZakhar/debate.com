@@ -176,16 +176,14 @@ const QUORUM_FRACTION: Record<string, number> = {
   none: 0, '1-4': 1 / 4, '1-3': 1 / 3, '1-2': 1 / 2,
 };
 
-/** Quorum, computed exactly as the chair console computes it
- *  (`chair/[code]/page.tsx:2628-2632`): observers excluded from BOTH sides.
+/** Quorum, computed exactly as the chair console computes it (its `presentCount`
+ *  / `totalCount`): observers INCLUDED on both sides (AGENTS.md, QuorumRings).
  *
  *  In production only 13 of 509 committees set `quorumThreshold` at all, and
  *  the default is 'none', so this warning is silent for almost every room —
  *  which is correct. A committee with no quorum rule cannot be below quorum. */
 export function belowQuorum(lc: LiveCommittee): { below: boolean; present: number; total: number } {
-  const body = votingBody(lc);
-  const total = body.length;
-  const present = body.filter((d) => d.status !== 'absent').length;
+  const { present, total } = presence(lc);
   const fraction = QUORUM_FRACTION[lc.session?.quorumThreshold ?? 'none'] ?? 0;
   return { below: fraction > 0 && total > 0 && present / total < fraction, present, total };
 }

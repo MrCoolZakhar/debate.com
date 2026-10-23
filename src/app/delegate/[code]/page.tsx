@@ -56,6 +56,7 @@ import DeviceBallotScreen from '@/components/delegate/DeviceBallotScreen';
 import { safeStorageKey } from '@/lib/storageKey';
 import { initialAdmission, writeAdmission, clearAdmission, newRequestId, type AdmissionRecord } from '@/lib/seatAdmission';
 import { UnknownSeatIcon } from '@/components/UnknownSeatIcon';
+import { replaceUrlInPlace } from '@/lib/replaceUrlInPlace';
 import PdfViewer, { type PdfZoom } from '@/components/documents/PdfViewer';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -243,10 +244,12 @@ function gslRetryRemaining(cd: GslCooldown, now: number): number {
   return Math.max(0, GSL_RETRY_MS - (now - cd.requestedAt));
 }
 
-/** "14m" / "45s" — coarse on purpose, this is a wait, not a stopwatch. */
-function formatCooldown(ms: number): string {
+/** "14 min" / "45 s", coarse on purpose: this is a wait, not a stopwatch. The units are
+ *  translated keys (delegate_wait_min / delegate_wait_sec), never English glued into a
+ *  translated sentence. */
+function formatCooldown(ms: number, t: ReturnType<typeof useT>): string {
   const secs = Math.ceil(ms / 1000);
-  return secs >= 60 ? `${Math.ceil(secs / 60)}m` : `${secs}s`;
+  return secs >= 60 ? t('delegate_wait_min', { n: Math.ceil(secs / 60) }) : t('delegate_wait_sec', { n: secs });
 }
 
 // Speaking log parsing — only SPEECH events (the channel now also carries motion/RTR/manual
@@ -877,7 +880,9 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
   const { code } = use(params);
   const router = useRouter();
   const searchParams = useSearchParams();
-  const country = searchParams.get('country') || '';
+  // The seat as the URL spells it. Only the first render (before the room is read) uses it
+  // raw: `country` below is the ROOM's spelling once the roster row is matched.
+  const urlCountry = searchParams.get('country') || '';
 
   const { user, session, loading: authLoading, signOut } = useAuth();
   // Seat guard state, 'checking' until claim_delegate_seat answers (see the effect below).
@@ -906,6 +911,15 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
   const feedStoppedRef = useRef(false);
 
   const [committee, setCommittee] = useState<Committee | null>(null);
+  // ONE identity for this phone (23 Oct 2026). The seat is matched case-insensitively, so
+  // `?country=france` sits in the room's `France`; every write and every reader on this page
+  // (chat sender, sponsors, the device ballot, the join request, the cooldown keys) must use
+  // the room's spelling, or chairs see two France threads, a chair's DM never reaches this
+  // phone and a paper credits a name that is not on the roster. The URL is rewritten to the
+  // room's spelling below, so a reload keeps it.
+  const roomSeatCountry = committee?.delegates.find((d) => sameSeat(d.country, urlCountry))?.country ?? null;
+  const country = roomSeatCountry ?? urlCountry;
+  const countryKey = seatKey(country);
   /* Latest committee, for callbacks that fire on a delay. The delayed denial
      check must re-read CURRENT state, never the closure it was armed in. */
   const committeeRef = useRef<Committee | null>(null);
@@ -1166,8 +1180,19 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
     setAccessState((prev) => (prev === 'allowed' ? prev : 'checking'));
     guard();
     return () => { cancelled = true; };
+  // Keyed on the seat KEY, not the spelling: the URL's `france` becoming the room's `France`
+  // is the same seat and must not run a second load claim (with takeover) moments later.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [code, country, authLoading, user?.id, seatRetry]);
+  }, [code, countryKey, authLoading, user?.id, seatRetry]);
+
+  // The URL follows the room's spelling of the seat, in place (no server round trip), so a
+  // reload, the idle notice and a shared link all name the seat the way the roster does.
+  useEffect(() => {
+    if (!roomSeatCountry || roomSeatCountry === urlCountry) return;
+    const params = new URLSearchParams(window.location.search);
+    params.set('country', roomSeatCountry);
+    replaceUrlInPlace(`${window.location.pathname}?${params.toString()}${window.location.hash}`);
+  }, [roomSeatCountry, urlCountry]);
 
   // Idle logout (src/lib/delegateIdle.ts). An hour with no pointer, touch, key, scroll,
   // tab focus or delegate action signs this device out of the seat: it gives up its OWN
@@ -1178,7 +1203,10 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
   const [idleLoggedOut, setIdleLoggedOut] = useState(false);
   // Paused while the session is suspended: delegates waiting out a break are not idle, and
   // a lunch longer than an hour must not sign the whole room out. Resuming restarts the hour.
-  const idleEnabled = accessState === 'allowed' && !sessionEnded && !sessionSuspended && !!country && !idleLoggedOut;
+  // Set by Leave (handleLeave below): the seat is being given back, so nothing re-takes it.
+  const [leaving, setLeaving] = useState(false);
+  const leavingRef = useRef(false);
+  const idleEnabled = accessState === 'allowed' && !sessionEnded && !sessionSuspended && !!country && !idleLoggedOut && !leaving;
   const handleIdleLogout = useCallback(() => {
     setIdleLoggedOut(true);
     const target = '/join?code=' + encodeURIComponent(code.toUpperCase()) + '&idle=' + encodeURIComponent(country);
@@ -1187,6 +1215,19 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
     const leave = leaveDelegateSeat(code, country, seatAccessTokenRef.current);
     const timeout = new Promise((resolve) => setTimeout(resolve, 3000));
     Promise.race([leave, timeout]).finally(() => router.replace(target));
+  }, [code, country, router]);
+  // Leave (the header button, the Leave link on the waiting screens, Escape on the break and
+  // ended screens) gives this device's seat back the same way, so the next phone can take it
+  // at once instead of after the 65-minute expiry. Best effort with the same 3 s cap: a slow
+  // or failed call never keeps the delegate on the page. `leaving` stops the re-verify from
+  // re-taking the seat while the call is in flight.
+  const handleLeave = useCallback(() => {
+    if (leavingRef.current) return;
+    leavingRef.current = true;
+    setLeaving(true);
+    const leave = country ? leaveDelegateSeat(code, country, seatAccessTokenRef.current) : Promise.resolve(false);
+    const timeout = new Promise((resolve) => setTimeout(resolve, 3000));
+    Promise.race([leave, timeout]).finally(() => router.push('/sessions'));
   }, [code, country, router]);
   // Never idle on the floor or in a queue (delegateIdle.ts): read at check time from the
   // latest committee through a ref, so this costs no render.
@@ -1224,7 +1265,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
   // the claim's last_seen_at, so the server lets the seat go even if the logout never runs.
   const idleIsIdle = idle.isIdle;
   useEffect(() => {
-    if (!seatAllowed || sessionEnded || authLoading || !country || idleLoggedOut) return;
+    if (!seatAllowed || sessionEnded || authLoading || !country || idleLoggedOut || leaving) return;
     let alive = true;
     // 0 = nothing in flight. Timestamped, not a boolean: a check that never answers must
     // not wedge every later one (claimDelegateSeat has its own timeout; this is the belt
@@ -1279,7 +1320,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
       document.removeEventListener('visibilitychange', onVisible);
       if (kickChannel) void supabase.removeChannel(kickChannel);
     };
-  }, [seatAllowed, sessionEnded, authLoading, code, country, hasMySeatRow, seatNoSeat, idleLoggedOut, idleIsIdle, seatCommitteeId]);
+  }, [seatAllowed, sessionEnded, authLoading, code, country, hasMySeatRow, seatNoSeat, idleLoggedOut, leaving, idleIsIdle, seatCommitteeId]);
 
   // Browser title abbreviation
   useEffect(() => {
@@ -1321,10 +1362,11 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
 
   useEffect(() => {
     if (!sessionEnded && !sessionSuspended) return;
-    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') router.push('/sessions'); };
+    // Same way out as the Leave button: the seat is given back first (best effort, 3 s cap).
+    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') handleLeave(); };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [sessionEnded, sessionSuspended, router]);
+  }, [sessionEnded, sessionSuspended, handleLeave]);
 
   /**
    * The lifecycle mirror. It used to be SET-ONLY, so a stamp that went back to null (a
@@ -1356,8 +1398,11 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
     }
   }, [committee?.endedAt, committee?.suspendedAt, committee?.phase]);
 
+  // Standalone rooms only, like the chair's End View: a conference room is never deleted, so
+  // its phones must not be told it will be (its `expires_at` is inert).
+  const roomIsConference = committee?.sessionOrigin === 'conference';
   useEffect(() => {
-    if (!committee?.expiresAt) { setHoursRemaining(null); return; }
+    if (!committee?.expiresAt || roomIsConference) { setHoursRemaining(null); return; }
     function calc() {
       const ms = new Date(committee!.expiresAt!).getTime() - serverNow();   // database clock (T-1)
       setHoursRemaining(Math.max(0, Math.floor(ms / (1000 * 60 * 60))));
@@ -1365,7 +1410,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
     calc();
     const id = setInterval(calc, 60_000);
     return () => clearInterval(id);
-  }, [committee?.expiresAt]);
+  }, [committee?.expiresAt, roomIsConference]);
 
   useEffect(() => { committeeRef.current = committee; }, [committee]);
 
@@ -1587,7 +1632,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
      into the flag. Small and constant-ish is the honest bound here. */
   const arcDepth = Math.round(Math.max(4, Math.min(9, 640 / Math.max(discSize, 1))));
 
-  if (loading || authLoading || accessState === 'checking' || idleLoggedOut) return <GavelLoader />;
+  if (loading || authLoading || accessState === 'checking' || idleLoggedOut || leaving) return <GavelLoader />;
 
   // Seat guard screens (see the claim effect above). Every one of them has a way back.
   const backToJoin = () => router.push('/join?code=' + encodeURIComponent(code.toUpperCase()));
@@ -1700,6 +1745,9 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
   const isOnSpeakersList = myQueueIndex !== -1;
   const isCurrentSpeaker = sameSeat(committee.currentSpeaker?.country, country);
   const changesLeft = myDelegate ? statusChangesRemaining(committee.id, country) : 0;
+  // An observer delegation is Absent or Present, never Present and Voting, exactly like the
+  // chair's picker (A / P for an observer): the phone never offers or writes PV for it.
+  const isObserverSeat = !!myDelegate?.isObserver;
 
   // The chair's renamed motion names, read off the committee row so they reach this
   // device whether or not a caucus is running (AGENTS.md rule 14 — never getSettings here).
@@ -1728,6 +1776,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
     const heldStatus = pin && Date.now() - pin.at < STATUS_PIN_TTL_MS ? pin.value : myDelegate.status;
     if (heldStatus === newStatus) return;
     if (changesLeft <= 0) return;
+    if (newStatus === 'present-voting' && myDelegate.isObserver) return;
     const previousStatus = myDelegate.status;
     setStatusError(false);
     // Real change → surface the remaining-changes reminder, briefly. The line is
@@ -1765,16 +1814,17 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
     if (!myDelegate) return;
     markDelegateActivity();
     setJoinDenied(false);
+    // An observer asks to be Present, never Present and Voting (see isObserverSeat).
+    if (myDelegate.isObserver) desiredStatus = 'present';
     // Chair approval OFF → delegates self-admit instantly (no waiting room).
     if (!requireChairApproval) {
-      // Same pin as handleStatusChange — self-admitting is a status write like any other,
-      // and an in-flight refetch would otherwise drop the delegate straight back to absent.
-      pendingStatusWrites.current[myDelegate.id] = { value: desiredStatus, at: Date.now() };
-      setCommittee((prev) => prev ? {
-        ...prev,
-        delegates: prev.delegates.map((d) => d.id === myDelegate.id ? { ...d, status: desiredStatus } : d),
-      } : prev);
-      setDelegateStatusInDB(myDelegate.id, desiredStatus, committee.code);
+      // "Change own status" off: the chair marks attendance, so this phone writes nothing
+      // (the Absent banner shows that line instead of the buttons; this is the backstop).
+      if (getCommitteeFlags(committee).lockDelegateRollCall) return;
+      // Self-admitting IS a status change, so it goes through the same path as the switch:
+      // the 3-per-3-hours limit, the pin against an in-flight refetch, and a refused write
+      // giving the slot back and putting the delegation back to absent with the error line.
+      void handleStatusChange(desiredStatus);
       return;
     }
     // Chair approval ON → ask for this device to be let in, and wait in the waiting room.
@@ -1846,29 +1896,14 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
      state that still changes the treatment. */
   const inQueue = isCurrentSpeaker || isOnSpeakersList;
 
-  // No plural engine — one key per grammatical number.
-  const aheadLabel = isCurrentSpeaker
-    ? undefined
-    : myQueueIndex === 0
-      ? t('delegate_on_deck')
-      : myQueueIndex === 1
-        ? t('delegate_speaker_ahead_one')
-        : myQueueIndex > 1
-          ? t('delegate_speakers_ahead', { n: myQueueIndex })
-          : undefined;
-
-  // ETA is a pure function of (speakers ahead × the committee's configured per-speaker
-  // seconds), so it recomputes only when the committee row changes — never on a per-second
-  // tick. With no configured speaking time the line is omitted entirely rather than guessed.
-  const etaLabel = (() => {
-    const per = committee.speakerTimeLimit;
-    if (isCurrentSpeaker || myQueueIndex < 1 || !per || per <= 0) return undefined;
-    const mins = Math.max(5, Math.round((myQueueIndex * per) / 60 / 5) * 5);
-    if (mins <= 60) return t('delegate_eta_about', { t: `${mins} min` });
-    const h = Math.floor(mins / 60);
-    const m = mins % 60;
-    return t('delegate_eta_about', { t: m ? `${h} hr ${m} min` : `${h} hr` });
-  })();
+  // In a moderated caucus the place that matters is in the CAUCUS queue (RULE 1: a separate
+  // list), and the current_speaker row is the caucus floor holder. The big position on the
+  // flag follows it; the GSL place stays on the speak button, as before.
+  const modCaucusLive = committee.phase === 'moderated-caucus' && !!committee.caucus;
+  const myCaucusIndex = modCaucusLive ? (committee.caucusQueue ?? []).findIndex((s) => sameSeat(s.country, country)) : -1;
+  const heroLive = modCaucusLive ? (isCurrentSpeaker || sameSeat(committee.caucus?.currentSpeaker, country)) : isCurrentSpeaker;
+  const heroIndex = modCaucusLive ? myCaucusIndex : myQueueIndex;
+  const heroInQueue = modCaucusLive ? heroLive || myCaucusIndex !== -1 : inQueue;
 
   // Request-to-speak reflects the existing GSL states plus the two cooldowns; the
   // underlying action is unchanged. Order matters: what the committee can see
@@ -1895,7 +1930,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
     // Denied: locked out for 15 minutes, with the wait stated on the button so
     // it reads as a rule rather than a broken control.
     if (deniedLeft > 0) {
-      return { label: t('delegate_request_retry_in', { t: formatCooldown(deniedLeft) }), disabled: true, onClick: undefined as (() => void) | undefined };
+      return { label: t('delegate_request_retry_in', { t: formatCooldown(deniedLeft, t) }), disabled: true, onClick: undefined as (() => void) | undefined };
     }
     if (isGslRequestPending) {
       // Still pending and inside the no-response window → wait. Past it, the
@@ -2010,8 +2045,9 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
 
       <button
         type="button"
-        aria-label={t('delegate_adjourned_esc')}
-        onClick={() => router.push('/sessions')}
+        aria-label={t('delegate_leave_label')}
+        title={t('delegate_leave_label')}
+        onClick={handleLeave}
         className="dgv-tap dgv-focus"
         style={iconBtn}
       >
@@ -2037,7 +2073,12 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
   ) : (
     <Panel className="dgv-rise" style={{ marginBottom: 16 }}>
       <div style={{ fontFamily: OUTFIT, fontSize: 14, fontWeight: 900, color: DG.forest }}>{t('delegate_absent_title')}</div>
-      <div style={{ fontFamily: OUTFIT, fontSize: 13, color: DG.body, margin: '4px 0 14px' }}>{t('delegate_absent_desc')}</div>
+      {/* "Change own status" off (with joining open): the chair marks attendance, so there is
+          nothing to press here. One plain line instead of buttons that would write. */}
+      {lockRollCall && !requireChairApproval ? (
+        <div style={{ fontFamily: OUTFIT, fontSize: 13, color: DG.body, marginTop: 4 }}>{t('delegate_absent_locked_desc')}</div>
+      ) : (<>
+      <div style={{ fontFamily: OUTFIT, fontSize: 13, color: DG.body, margin: '4px 0 14px' }}>{t(isObserverSeat ? 'delegate_absent_desc_observer' : 'delegate_absent_desc')}</div>
       {joinStatus && !joinDenied ? (
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontFamily: OUTFIT, fontSize: 13, fontWeight: 600, color: DG.forest }}>
           <span className="animate-spin" style={{ width: 12, height: 12, borderRadius: '50%', border: `2px solid ${DG.forest}`, borderTopColor: 'transparent', display: 'inline-block' }} />
@@ -2045,18 +2086,41 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
         </div>
       ) : (
         <div className="flex flex-col sm:flex-row gap-2.5">
-          <ChunkyButton tone="outline" disabled={joinRequesting} onClick={() => handleRequestJoin('present')}>
+          <ChunkyButton tone={isObserverSeat ? 'primary' : 'outline'} disabled={joinRequesting || (!requireChairApproval && changesLeft <= 0)} onClick={() => handleRequestJoin('present')}>
             {t('delegate_present_btn')}
           </ChunkyButton>
-          <ChunkyButton tone="primary" disabled={joinRequesting} onClick={() => handleRequestJoin('present-voting')}>
-            {t('delegate_pv_btn')}
-          </ChunkyButton>
+          {!isObserverSeat && (
+            <ChunkyButton tone="primary" disabled={joinRequesting || (!requireChairApproval && changesLeft <= 0)} onClick={() => handleRequestJoin('present-voting')}>
+              {t('delegate_pv_btn')}
+            </ChunkyButton>
+          )}
         </div>
       )}
+      {!requireChairApproval && statusError && (
+        <p role="alert" style={{ marginTop: 10, fontFamily: OUTFIT, fontSize: 13, fontWeight: 700, color: DG.danger }}>{t('delegate_status_change_failed')}</p>
+      )}
+      {!requireChairApproval && changesLeft <= 0 && (
+        <p style={{ marginTop: 10, fontFamily: OUTFIT, fontSize: 13, fontWeight: 700, color: DG.danger }}>{t('delegate_status_changes_left', { n: 0, s: 's' })}</p>
+      )}
+      </>)}
       {joinDenied && (
         <p style={{ marginTop: 10, fontFamily: OUTFIT, fontSize: 13, fontWeight: 700, color: DG.danger }}>{t('delegate_join_denied')}</p>
       )}
     </Panel>
+  );
+
+  // The way out of the break and Waiting Room screens, which have no header. It used to be
+  // "Press ESC to return to main menu", which a phone cannot do (and on the Waiting Room
+  // nothing listened for Escape at all). Gives the seat back like the header's Leave.
+  const leaveLink = (marginTop: number) => (
+    <button
+      type="button"
+      onClick={handleLeave}
+      className="dgv-focus focus:outline-none"
+      style={{ marginTop, padding: '8px 12px', minHeight: 44, background: 'none', border: 'none', fontFamily: OUTFIT, fontSize: 13, fontWeight: 700, color: DG.forest, textDecoration: 'underline', textUnderlineOffset: 3, cursor: 'pointer' }}
+    >
+      {t('delegate_leave_label')}
+    </button>
   );
 
   // The idle warning must reach a delegate on every screen that holds a seat, including the
@@ -2077,7 +2141,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
           {t('delegate_adjourned_title')}
         </h1>
         <p style={{ fontFamily: OUTFIT, fontSize: 17, color: DG.body }}>{t('delegate_adjourned_desc')}</p>
-        <p style={{ marginTop: 32, fontFamily: OUTFIT, fontSize: 12, color: DG.faint }}>{t('delegate_adjourned_esc')}</p>
+        {leaveLink(28)}
       </div>
     );
   }
@@ -2087,7 +2151,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
     // Present already (roll call marked the delegation in): ask to join as that status;
     // the chair's Approve changes nothing about attendance.
     const presentStatus: 'present' | 'present-voting' | null = !isAbsent && myDelegate
-      ? (myDelegate.status === 'present-voting' ? 'present-voting' : 'present') : null;
+      ? (myDelegate.status === 'present-voting' && !isObserverSeat ? 'present-voting' : 'present') : null;
     const waitingHeading = language === 'ar' ? 'غرفة الانتظار' : language === 'fr' ? "Salle d'attente" : language === 'pt' ? 'Sala de Espera' : language === 'es' ? 'Sala de Espera' : 'Waiting Room';
     return (
       <div className="min-h-dvh flex flex-col items-center justify-center text-center px-6 py-10" style={{ background: DG.ivory }}>
@@ -2132,12 +2196,14 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
                 </ChunkyButton>
               ) : (
                 <div className="flex flex-col gap-2.5">
-                  <ChunkyButton tone="outline" disabled={joinRequesting} onClick={() => handleRequestJoin('present')}>
+                  <ChunkyButton tone={isObserverSeat ? 'primary' : 'outline'} disabled={joinRequesting} onClick={() => handleRequestJoin('present')}>
                     {t('delegate_present_btn')}
                   </ChunkyButton>
-                  <ChunkyButton tone="primary" disabled={joinRequesting} onClick={() => handleRequestJoin('present-voting')}>
-                    {t('delegate_pv_btn')}
-                  </ChunkyButton>
+                  {!isObserverSeat && (
+                    <ChunkyButton tone="primary" disabled={joinRequesting} onClick={() => handleRequestJoin('present-voting')}>
+                      {t('delegate_pv_btn')}
+                    </ChunkyButton>
+                  )}
                 </div>
               )}
               {joinError && (
@@ -2147,7 +2213,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
           )}
           </>)}
         </Panel>
-        <p style={{ marginTop: 30, fontFamily: OUTFIT, fontSize: 12, color: DG.faint }}>{t('delegate_adjourned_esc')}</p>
+        {leaveLink(26)}
       </div>
     );
   }
@@ -2177,6 +2243,35 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
       code={getCountryByName(committee.currentSpeaker.country)?.code ?? ''}
       name={getCountryDisplayName(committee.currentSpeaker.country, language)}
       isSelf={isCurrentSpeaker}
+      speakingLabel={t('delegate_speaking_chip')}
+      youLabel={t('delegate_you_chip')}
+    />
+  );
+
+  // The moderated caucus queue: the panel's first rows, and the whole list in the sheet.
+  const CAUCUS_PANEL_ROWS = 5;
+  const caucusQueueRows = (limit?: number, compact?: boolean) =>
+    (typeof limit === 'number' ? (committee.caucusQueue ?? []).slice(0, limit) : (committee.caucusQueue ?? [])).map((s, i) => (
+      <QueueRow
+        key={s.delegateId}
+        position={i + 1}
+        compact={compact}
+        code={getCountryByName(s.country)?.code ?? ''}
+        name={getCountryDisplayName(s.country, language)}
+        isSelf={sameSeat(s.country, country)}
+        spoken={speechCounts[s.country] ?? 0}
+        speakingLabel={t('delegate_speaking_chip')}
+        youLabel={t('delegate_you_chip')}
+      />
+    ));
+  const caucusFloorName = modCaucusLive ? (committee.caucus?.currentSpeaker ?? null) : null;
+  const caucusFloorRow = caucusFloorName && (
+    <QueueRow
+      position={0}
+      speaking
+      code={getCountryByName(caucusFloorName)?.code ?? ''}
+      name={getCountryDisplayName(caucusFloorName, language)}
+      isSelf={sameSeat(caucusFloorName, country)}
       speakingLabel={t('delegate_speaking_chip')}
       youLabel={t('delegate_you_chip')}
     />
@@ -2257,20 +2352,24 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
           )}
           {isMod && (committee.caucusQueue ?? []).length > 0 && (
             <div className="dgv-noscroll" style={{ marginTop: 10, minHeight: 0, overflowX: 'hidden', overflowY: 'auto', scrollbarWidth: 'none', display: 'flex', flexDirection: 'column', gap: 1 }}>
-              {committee.caucusQueue.slice(0, 5).map((s, i) => (
-                <QueueRow
-                  key={s.delegateId}
-                  position={i + 1}
-                  compact
-                  code={getCountryByName(s.country)?.code ?? ''}
-                  name={getCountryDisplayName(s.country, language)}
-                  isSelf={sameSeat(s.country, country)}
-                  spoken={speechCounts[s.country] ?? 0}
-                  speakingLabel={t('delegate_speaking_chip')}
-                  youLabel={t('delegate_you_chip')}
-                />
-              ))}
+              {caucusQueueRows(CAUCUS_PANEL_ROWS, true)}
             </div>
+          )}
+          {/* The panel shows the first few; the whole caucus queue is one tap away, in the
+              same sheet the speakers list uses. */}
+          {isMod && (committee.caucusQueue ?? []).length > CAUCUS_PANEL_ROWS && (
+            <button
+              type="button"
+              onClick={() => setSheet('queue')}
+              className="dgv-focus"
+              style={{
+                flexShrink: 0, marginTop: 4, border: 'none', background: 'transparent',
+                cursor: 'pointer', textAlign: 'start', padding: '4px 6px',
+                fontFamily: OUTFIT, fontSize: 12, fontWeight: 700, color: DG.body,
+              }}
+            >
+              {t('delegate_view_all_queue')}
+            </button>
           )}
           {!isMod && committee.caucus.isConsultation && (
             // Scrolls (no visible bar) instead of clipping: a hidden overflow here cut the bottom
@@ -2358,12 +2457,13 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
       </h1>
       <p style={{ margin: '14px 0 2px', fontFamily: OUTFIT, fontSize: 19, color: DG.body }}>{getCommitteeDisplayName(committee.name, language)}</p>
       <p style={{ margin: '0 0 28px', fontFamily: OUTFIT, fontSize: 15, color: DG.faint }}>{committee.topic}</p>
-      {hoursRemaining !== null && (
+      {hoursRemaining !== null && committee.sessionOrigin !== 'conference' && (
         <p style={{ fontFamily: OUTFIT, fontSize: 13, color: DG.body }}>
           {t('session_hours_until_delete', { n: hoursRemaining, s: hoursRemaining !== 1 ? 's' : '' })}
         </p>
       )}
-      <p style={{ marginTop: 30, fontFamily: OUTFIT, fontSize: 12, color: DG.faint }}>{t('session_ended_hint')}</p>
+      {/* Escape works only with a keyboard; a phone leaves with the header's Leave button. */}
+      <p className="hidden pointer-fine:block" style={{ marginTop: 30, fontFamily: OUTFIT, fontSize: 12, color: DG.faint }}>{t('session_ended_hint')}</p>
     </div>
   );
 
@@ -2455,7 +2555,9 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
                   </span>
                 </button>
 
-                {!isAbsent && !sessionEnded && !lockRollCall && (
+                {/* Not for an observer: its only choice besides Absent is Present, which it
+                    already is, and the phone never offers PV to an observer. */}
+                {!isAbsent && !sessionEnded && !lockRollCall && !isObserverSeat && (
                   /* Outer point of the left arc: tucks toward the crest, i.e.
                      positive on this side. Transform, not margin — see .dgv-arc. */
                   <div
@@ -2493,13 +2595,13 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
                   name={myName}
                   logoUrl={mySeatLogo}
                   size={discSize}
-                  live={isCurrentSpeaker}
+                  live={heroLive}
                   primary={
-                    isCurrentSpeaker ? t('delegate_floor_now')
-                      : inQueue ? `${myQueueIndex + 1}${ordinalSuffixFor(myQueueIndex + 1)}`
+                    heroLive ? t('delegate_floor_now')
+                      : heroInQueue ? `${heroIndex + 1}${ordinalSuffixFor(heroIndex + 1)}`
                         : ''
                   }
-                  caption={inQueue || isCurrentSpeaker ? t('delegate_in_the_queue') : t('delegate_not_in_queue')}
+                  caption={heroInQueue || heroLive ? t('delegate_in_the_queue') : t('delegate_not_in_queue')}
                 />
                 <span
                   style={{
@@ -2678,8 +2780,17 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
         <StatisticsTab committee={committee} country={country} />
       </Sheet>
 
-      <Sheet open={sheet === 'queue'} onClose={() => setSheet(null)} title={t('delegate_queue_sheet_title')}>
-        {!committee.currentSpeaker && committee.speakersList.length === 0 ? (
+      <Sheet open={sheet === 'queue'} onClose={() => setSheet(null)} title={modCaucusLive ? t('delegate_caucus_queue_title') : t('delegate_queue_sheet_title')}>
+        {modCaucusLive ? (
+          !caucusFloorName && (committee.caucusQueue ?? []).length === 0 ? (
+            <p style={{ margin: 0, fontFamily: OUTFIT, fontSize: 14, color: DG.faint }}>{t('delegate_no_speakers')}</p>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+              {caucusFloorRow}
+              {caucusQueueRows()}
+            </div>
+          )
+        ) : !committee.currentSpeaker && committee.speakersList.length === 0 ? (
           <p style={{ margin: 0, fontFamily: OUTFIT, fontSize: 14, color: DG.faint }}>{t('delegate_no_speakers')}</p>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>

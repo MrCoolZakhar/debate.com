@@ -226,16 +226,16 @@ export interface LiveCommittee {
   feedback: FeedbackEntry[];
 }
 
-/** Delegates who count toward the voting body — observers excluded, matching
- *  the chair console exactly. */
+/** Delegates who count toward the final substantive vote: observers excluded,
+ *  as on the voting page (`/voting/[code]`). Only the voting views use it. */
 export function votingBody(lc: LiveCommittee): LiveCommittee['delegates'] {
   return lc.delegates.filter((d) => !d.isObserver);
 }
 
-/** `{ present, total }` over the voting body, the chair's own numbers. */
+/** `{ present, total }` over the whole room, observers INCLUDED: the chair's own
+ *  Present count and quorum numbers (AGENTS.md, QuorumRings). */
 export function presence(lc: LiveCommittee): { present: number; total: number } {
-  const body = votingBody(lc);
-  return { present: body.filter((d) => d.status !== 'absent').length, total: body.length };
+  return { present: lc.delegates.filter((d) => d.status !== 'absent').length, total: lc.delegates.length };
 }
 
 /** `not-started` = never opened. `roll-call` = opened, initial roll call underway.

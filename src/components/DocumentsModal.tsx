@@ -21,6 +21,7 @@ import { serverNow, serverNowIso } from '@/lib/serverClock';
 import { anchorBox } from '@/components/voting/anchorPosition';
 import { sponsorLabel } from '@/lib/committeeFlags';
 import { docName, docCount, docLimit, docLimitReached } from '@/lib/docNames';
+import { loadVoteStates } from '@/lib/voteState';
 import { TranslationKey } from '@/lib/translations';
 import { getCountryDisplayName, matchesCountryQuery, startsWithCountryQuery } from '@/lib/countries';
 import SeatName from '@/components/SeatName';
@@ -487,6 +488,16 @@ function DocCard({ doc, committee, onRemove, onStartPresentation, requireApprova
   const t = useT();
   const { language } = useLanguage();
   const [confirmDelete, setConfirmDelete] = useState(false);
+  // Deleting a paper that was voted on takes its vote record and its sponsor / passed
+  // points with it (owner, 23 Oct 2026): the confirm says so. A started ballot lives in
+  // `documents.vote_state`, which the card does not hold, so it is read when the confirm opens.
+  const [ballotStarted, setBallotStarted] = useState(false);
+  const voted = doc.status === 'passed' || doc.status === 'failed' || ballotStarted;
+  const openDelete = () => {
+    setConfirmDelete(true);
+    if (doc.type !== 'draft-resolution' || doc.status === 'passed' || doc.status === 'failed') return;
+    void loadVoteStates(committee.id).then((states) => { if (states?.[doc.id]) setBallotStarted(true); });
+  };
   const [expanded, setExpanded] = useState(false);
   const [showPdf, setShowPdf] = useState(false);
   const [pdfZoom, setPdfZoom] = useState<PdfZoom>('fit');
@@ -541,7 +552,7 @@ function DocCard({ doc, committee, onRemove, onStartPresentation, requireApprova
               </div>
             </div>
             {!isViewOnly && !confirmDelete && (
-              <button onClick={() => setConfirmDelete(true)}
+              <button onClick={openDelete}
                 className="text-[#9A8A78] hover:text-red-500 transition-colors text-sm shrink-0 focus:outline-none mt-0.5"
                 title={t('documents_delete_yes')}>✕</button>
             )}
@@ -550,7 +561,7 @@ function DocCard({ doc, committee, onRemove, onStartPresentation, requireApprova
           {/* Delete asks first: it was a single click with no way back. */}
           {!isViewOnly && confirmDelete && (
             <div className="flex items-center gap-2 rounded-lg px-3 py-2" style={{ backgroundColor: 'rgba(139,32,32,0.08)', border: '1px solid rgba(139,32,32,0.3)' }}>
-              <span className="text-sm font-semibold flex-1 min-w-0" style={{ color: '#8B2020' }}>{t('documents_delete_confirm')}</span>
+              <span className="text-sm font-semibold flex-1 min-w-0" style={{ color: '#8B2020' }}>{voted ? t('documents_delete_confirm_voted') : t('documents_delete_confirm')}</span>
               <button onClick={() => { setConfirmDelete(false); onRemove(doc.id); }}
                 className="px-3 py-1 rounded-lg text-xs font-bold focus:outline-none" style={{ backgroundColor: '#8B2020', color: '#FAF8F3' }}>
                 {t('documents_delete_yes')}

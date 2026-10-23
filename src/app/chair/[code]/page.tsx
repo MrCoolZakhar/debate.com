@@ -31,7 +31,7 @@ import { CaucusState, Committee, Delegate, DelegateStatus } from '@/lib/types';
 import RollCallPanel, { FlagCircle } from '@/components/RollCallPanel';
 import MotionsModal from '@/components/MotionsModal';
 import MotionFlightNotice from '@/components/MotionFlightNotice';
-import { logFloorSpeech, logTimedSpeech, cowTurnKey, floorSpeechSeconds, creditRoomOrderTour, logYield } from '@/lib/floorSpeech';
+import { logFloorSpeech, logTimedSpeech, cowTurnKey, floorSpeechSeconds, creditRoomOrderTour, logYield, cowFloorStartOf, cowHolderSecondsOf, logCowHolder } from '@/lib/floorSpeech';
 import YieldPopover from '@/components/YieldPopover';
 import DocumentsModal from '@/components/DocumentsModal';
 import { getCountryByName, getCountryDisplayName, matchesCountryQuery, startsWithCountryQuery } from '@/lib/countries';
@@ -84,10 +84,14 @@ import GlassToast from '@/components/notifications/GlassToast';
 import GavelDeviceBanner from '@/components/GavelDeviceBanner';
 import ChairDeviceKickModal from '@/components/ChairDeviceKickModal';
 import { useChairDeviceLock } from '@/lib/useChairDeviceLock';
+import { gslNudgeTopic, GSL_NUDGE_EVENT } from '@/lib/gslRequestNudge';
+import { caucusIdentityKey } from '@/lib/caucusIdentity';
+import { withRoomOrderQueue, isRoomOrderCaucus, roomOrderSize } from '@/lib/roomOrderQueue';
 import { getGavelDeviceId, deriveGavelRole, markResumeClaim, clearResumeClaim, resumeClaimIsMine } from '@/lib/gavelDevice';
 import {
   notify,
   dismiss as dismissNotification,
+  hasNotification,
   setNotificationsSuppressed,
   notifyKey,
   NOTIFY_TTL,
@@ -103,6 +107,7 @@ import {
   removeFromSpeakersList as removeFromSpeakersListInDB,
   addToCaucusList as addToCaucusListInDB,
   removeFromCaucusList as removeFromCaucusListInDB,
+  clearCaucusList as clearCaucusListInDB,
   reorderSpeakersList as reorderSpeakersListInDB,
   nextSpeaker as nextSpeakerInDB,
   syncSpeakerTime as syncSpeakerTimeInDB,
@@ -250,7 +255,8 @@ async function fetchCommitteeGuarded(code: string): Promise<{ fresh: Committee |
   // snapshot, which blanked the roster, the lists or the chat. A failed read ('error', or a
   // 'not_found' we cannot act on) is no fresh data: callers fall back as they do on null.
   const r = await getCommitteeByCodeResult(code);
-  const fresh = r.status === 'ok' ? r.committee : null;
+  // A Room Order tour's floor is its caucus JSONB (src/lib/roomOrderQueue.ts).
+  const fresh = r.status === 'ok' ? withRoomOrderQueue(r.committee, { floor: true }) : null;
   return { fresh, stale: localWriteSeq.current !== seqAtStart };
 }
 
@@ -792,48 +798,14 @@ function UnmoderatedCaucusView({ committee, setCommittee, isViewOnly = false, ga
   // only then to this device's mount time.
   const cowSpeakerStartRef = useRef<number | null>(null);
   const [cowMountedAt] = useState(() => serverNow());
-  const cowFloorStart = (): number => {
-    const persisted = caucus.floorSince ? new Date(caucus.floorSince).getTime() : NaN;
-    if (Number.isFinite(persisted)) return persisted;
-    if (cowSpeakerStartRef.current !== null) return cowSpeakerStartRef.current;
-    // Item 11: only speeches of THIS consultation. The topic alone matched an earlier
-    // consultation with the same (often empty) purpose, so the first holder after a reload
-    // could be timed from a speech logged an hour before. The newest consultation that
-    // passed bounds the search from below.
-    let since = -Infinity;
-    let last = NaN;
-    for (const m of committee.messages ?? []) {
-      if (m.sender !== '__system__' || m.recipient !== '__log__') continue;
-      if (!m.content.includes('|cow:') && !m.content.includes('"motion-passed"')) continue;
-      try {
-        const e = JSON.parse(m.content.slice('__log__:'.length)) as { type?: string; context?: string; topic?: string; timestamp?: string; motionType?: string };
-        const at = e.timestamp ? new Date(e.timestamp).getTime() : NaN;
-        if (e.type === 'motion-passed') {
-          if (e.motionType === 'consultation' && Number.isFinite(at) && at > since) since = at;
-          continue;
-        }
-        if (e.type !== 'speech' || e.context !== 'unmoderated-caucus' || e.topic !== (caucus.purpose ?? committee.topic)) continue;
-        if (Number.isFinite(at) && !(at <= last)) last = at;
-      } catch { /* not a log row */ }
-    }
-    return Number.isFinite(last) && last >= since ? last : cowMountedAt;
-  };
-  // Item 11: the seconds a Consultation floor holder is credited with. It used to be the WALL
-  // time since the floor changed hands, so a holder left selected while the clock was paused,
-  // or after the room had moved on, was credited with minutes nobody spoke (e.g. "2m 58s by
-  // USA" logged at End). Now: the CAUCUS CLOCK time that ran since the tap (`floorRemaining`,
-  // the live total stamped with the tap, minus the live total now), never more than the wall
-  // time. A tap from a bundle that did not stamp it falls back to the caucus time elapsed
-  // overall, which still excludes a clock that never ran.
-  const cowHolderSeconds = (since: number, now: number): number => {
-    const wall = Math.max(0, Math.round((now - since) / 1000));
-    const live = caucusRemainingNow(caucus, now);
-    const stamped = caucus.floorRemaining;
-    const ran = typeof stamped === 'number' && Number.isFinite(stamped)
-      ? stamped - live
-      : (caucus.totalTime ?? 0) - live;
-    return Math.max(0, Math.min(wall, Math.round(ran)));
-  };
+  // The rule itself is shared with Suspend / End / a caucus passed over the consultation
+  // (`logCowHolder`, src/lib/floorSpeech.ts), so every trigger builds the SAME turn key.
+  const cowFloorStart = (): number => cowFloorStartOf(committee, cowSpeakerStartRef.current, cowMountedAt);
+  // Item 11: the seconds a Consultation floor holder is credited with: the CAUCUS CLOCK time
+  // that ran since the tap, never more than the wall time (cowHolderSecondsOf). It used to be
+  // the WALL time since the floor changed hands, so a holder left selected while the clock was
+  // paused was credited with minutes nobody spoke.
+  const cowHolderSeconds = (since: number, now: number): number => cowHolderSecondsOf(committee, since, now);
   // A plain unmoderated caucus has NO floor: nothing here may ever run for one. And only the
   // Moderator sets the floor holder (item 11): every chair device used to be able to tap, and
   // each tap wrote the whole caucus object from that device's copy (a Commenter's could rewind
@@ -1248,6 +1220,20 @@ function ModeratedCaucusMain({
   };
 
   const handleCaucusRemoveFromQueue = (delegateId: string) => {
+    // A Room Order placeholder is a turn counter, not a stored row: removing one is one turn
+    // fewer, written as `caucus.roomOrderSize - 1`, and every device derives the shorter
+    // queue from it (src/lib/roomOrderQueue.ts). Placeholders are fungible (the strip numbers
+    // them by position), so the last number is the one that goes.
+    if (isRoomOrderTdT && delegateId.startsWith('room-order-') && committee.caucus) {
+      const size = roomOrderSize(committee.caucus);
+      if (size === null || size <= 0) return;
+      const updated: CaucusState = { ...committee.caucus, roomOrderSize: size - 1 };
+      updateLocal(setCommittee, (c) => (c.caucus && c.phase === 'moderated-caucus'
+        ? withRoomOrderQueue({ ...c, caucus: { ...c.caucus, roomOrderSize: size - 1 } })
+        : c), true);
+      updateCaucusInDB(committee.id, updated, committee.code, committee.dbChairJoinSuffix ?? undefined);
+      return;
+    }
     updateLocal(setCommittee, (c) => ({ ...c, caucusQueue: (c.caucusQueue ?? []).filter((s) => s.delegateId !== delegateId) }), true);
     removeFromCaucusListInDB(committee.id, delegateId, committee.code, committee.dbChairJoinSuffix ?? undefined);
   };
@@ -1387,7 +1373,9 @@ function ModeratedCaucusMain({
               onDeckDelegateId={onDeck?.delegateId ?? null}
               // The floor holder is not a queue row: strip them back out before the write, the
               // same way the GSL does, or the reorder would insert them into `caucusQueue`.
-              onReorder={isViewOnly ? undefined
+              // A Room Order tour's numbered turns have no order to keep (they are derived and
+              // numbered by position), so its strip is not reorderable.
+              onReorder={isViewOnly || isRoomOrderTdT ? undefined
                 : (newList) => handleCaucusReorderQueue(newList.filter((s) => s.delegateId !== caucusFloorEntry?.delegateId))}
               onRemove={isViewOnly ? undefined : handleCaucusRemoveFromQueue}
               onRemoveCurrent={isViewOnly || sessionEnded || !caucusFloorEntry || !onRemoveFloorSpeaker ? undefined : onRemoveFloorSpeaker}
@@ -2044,6 +2032,13 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
   // point", NOT "still on screen" — a card that timed out must not be re-raised by the
   // next render of the same still-pending motion (rule 1: notify() restarts the TTL).
   const raisedGslKeysRef = useRef<Set<string>>(new Set());
+  // What each raised GSL request card was raised FOR (23 Oct 2026): the request's topic (a
+  // phone's "Request again" touches it) and the newest Realtime nudge for it. A card whose x
+  // was pressed is still in `raisedGslKeysRef` (raised once, so a refetch never re-raises it
+  // unasked) but no longer on the stack: it is DISMISSED, and comes back only when the phone
+  // nudges again (a new topic or a new nudge), never on its own.
+  const raisedGslForRef = useRef<Map<string, { topic: string; nudge: number }>>(new Map());
+  const [gslNudges, setGslNudges] = useState<Record<string, number>>({});
   // Broadcast ids this device has already raised a card for, and ids whose action this
   // device has already executed. Both mean "already handled at some point", not "still on
   // screen" — a dismissed card must not be re-raised by the next refetch, and a fired
@@ -2113,7 +2108,9 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
       if (cancelled) return;
       if (result.status === 'error') { setLoadFailed(true); setLoading(false); return; }
       setLoadFailed(false);
-      const found = result.status === 'ok' ? result.committee : null;
+      // A Room Order tour's queue AND floor come from its caucus JSONB: the placeholders can
+      // never be stored in speakers_list or current_speaker (src/lib/roomOrderQueue.ts).
+      const found = result.status === 'ok' ? withRoomOrderQueue(result.committee, { floor: true }) : null;
       if (found) {
         // Set-only on purpose, and both flags start false: a row whose `ended_at` is null
         // (a room restarted within the 24 h window, owner 7 Oct 2026) renders no overlay at
@@ -2223,8 +2220,10 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
           const next = withLists(prev, lists);
           return gslDedupeApplies(prev) ? next : { ...next, speakersList: lists.speakersList };
         };
+        // A Room Order tour's floor is `caucus.currentSpeaker` (the current_speaker row can
+        // never hold a placeholder), so a fetched row never empties it (roomOrderQueue.ts).
         const currentSpeakerApplied = (prev: Committee, cs: Parameters<typeof withCurrentSpeaker>[1], includeRemaining: boolean): Committee => {
-          const next = withCurrentSpeaker(prev, cs, { includeRemaining });
+          const next = withRoomOrderQueue(withCurrentSpeaker(prev, cs, { includeRemaining }), { floor: true });
           return gslDedupeApplies(prev) ? next : { ...next, speakersList: prev.speakersList };
         };
         // Offline resilience (phase 1): while THIS Moderator device has a write for a slice in
@@ -2384,13 +2383,15 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                 // the running chair: while this Moderator's speaker clock runs, keep phase,
                 // caucus and the speaker limit. A Commenter always takes the fresh row.
                 // (The unmoderated countdown needs no pin: its clock IS the persisted anchor.)
+                // A Room Order tour's queue and floor follow the caucus that just landed
+                // (src/lib/roomOrderQueue.ts): its placeholders are never in speakers_list.
                 if (timerRunningRef.current && !isViewOnlyRef.current) {
-                  setCommittee((prev) => prev ? {
+                  setCommittee((prev) => prev ? withRoomOrderQueue({
                     ...prev, ...rowFields(updated),
                     caucus: prev.caucus, phase: prev.phase, speakerTimeLimit: prev.speakerTimeLimit,
-                  } : prev);
+                  }, { floor: true }) : prev);
                 } else {
-                  setCommittee((prev) => prev ? { ...prev, ...rowFields(updated) } : prev);
+                  setCommittee((prev) => prev ? withRoomOrderQueue({ ...prev, ...rowFields(updated) }, { floor: true }) : prev);
                 }
                 return;
               }
@@ -2768,7 +2769,11 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
   // had just reconstructed from current_speaker.started_at. A chair refreshing mid-speech in
   // a moderated caucus therefore watched the clock jump back to the full speaking time.
   // Now the first pass after a load is skipped whenever the load reconstructed a clock.
+  // Also on a NEW caucus in the same phase (23 Oct 2026): a caucus accepted over a running
+  // moderated caucus is a new identity (`caucusIdentityKey`), so it starts from its own
+  // speaking time with no clock running, never from the old caucus's speaker clock.
   const caucusSeedPhaseRef = useRef<string | null>(null);
+  const seedCaucusIdentity = caucusIdentityKey(committee?.phase, committee?.caucus);
   useEffect(() => {
     const phase = committee?.phase ?? null;
     const prev = caucusSeedPhaseRef.current;
@@ -2781,7 +2786,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
     }
     seatSpeakerClock(committee.caucus.speakingTime, null);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [committee?.phase, committee?.caucus?.speakingTime]);
+  }, [committee?.phase, committee?.caucus?.speakingTime, seedCaucusIdentity]);
 
   // ── The TOTAL caucus clock, derived — never decremented ─────────────────────
   // `caucus.remainingTime` is the value AT `caucus.totalStartedAt`, and the two together
@@ -2830,14 +2835,21 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
   // a chair-page atom it cannot reach, so the GSL countdown kept running straight into the
   // caucus and drained the caucus total clock during the 3.5s loading screen. The DB half
   // (clearing the current_speaker row) is done in MotionsModal.
+  // A caucus accepted OVER another caucus (23 Oct 2026) is a new caucus too: its identity
+  // changed while the phase stayed a caucus phase, and the old caucus's speaker clock must not
+  // run on (or knock) into it. Extending a caucus changes no identity, so it stops nothing.
   const prevCaucusPhaseRef = useRef<string | null>(null);
+  const prevCaucusIdentityRef = useRef<string | null>(null);
   useEffect(() => {
     const phase = committee?.phase ?? null;
     const prev = prevCaucusPhaseRef.current;
     prevCaucusPhaseRef.current = phase;
+    const prevIdentity = prevCaucusIdentityRef.current;
+    prevCaucusIdentityRef.current = seedCaucusIdentity;
     const isCaucus = phase === 'moderated-caucus' || phase === 'unmoderated-caucus';
     const wasCaucus = prev === 'moderated-caucus' || prev === 'unmoderated-caucus';
     if (prev !== null && isCaucus && !wasCaucus) setTimerRunning(false);
+    if (prev !== null && isCaucus && wasCaucus && !!prevIdentity && prevIdentity !== seedCaucusIdentity) setTimerRunning(false);
     // Item 6: a moderated caucus just ended (any path: End, expiry, Next past the total,
     // another caucus accepted, a suspension, another chair's device). Re-read the GSL once,
     // so a GSL place any copy of this device hid while its delegation held the caucus floor
@@ -2847,7 +2859,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
       syncRef.current?.mark('lists', COALESCE_MS);
       modCaucusEndedAtRef.current = Date.now();
     }
-  }, [committee?.phase]);
+  }, [committee?.phase, seedCaucusIdentity]);
 
   // ── Moderated-caucus EXPIRY — the one-shot, not a countdown ─────────────────
   // The countdown itself is the derived `caucusSeconds` above; this effect only fires the
@@ -2941,8 +2953,17 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
     // this one, nothing is written (a skip, not reported). A real failure is retried and
     // reported by writeStatus. Either way a non-landing drops the window and refetches, so
     // the local optimistic end is replaced by the truth.
+    // The caucus queue rows go with the caucus (RULE 1: ONLY the caucus queue, never the GSL),
+    // and only once the end LANDED: a skipped end means the caucus is still running elsewhere
+    // (extended, paused, a new caucus) and its queue must stay. A superseded end never lands.
+    const expiredId = committee.id;
+    const expiredCode = committee.code;
+    const expiredSuffix = committee.dbChairJoinSuffix ?? undefined;
     void endModeratedCaucusIfAnchorUnchanged(committee.id, committee.caucus.totalStartedAt, committee.code, committee.dbChairJoinSuffix ?? undefined)
-      .then((landed) => { if (!landed) { localUpdateTime.current = 0; syncRef.current?.catchUp(undefined, { force: true }); } });
+      .then((landed) => {
+        if (landed) { clearCaucusListInDB(expiredId, expiredCode, expiredSuffix); return; }
+        localUpdateTime.current = 0; syncRef.current?.catchUp(undefined, { force: true });
+      });
     updateLocal(setCommittee, (prev) => {
       if (!prev?.caucus || prev.phase !== 'moderated-caucus') return prev;
       // Auto-expiry must mirror the manual End button: clear the caucus and its speaker but
@@ -3534,49 +3555,59 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionSuspended, sessionEnded]);
 
+  // The caucus loading screens (moderated / Tour de Table 3.5 s, unmoderated / Consultation
+  // 3 s) show once per caucus INSTANCE, keyed on its identity (who raised it, what it is, when
+  // it passed: `caucusIdentityKey`), never on its clock (owner, 23 Oct 2026: extending "should
+  // not be a loading screen, but simply add the timer"). Keyed on totalTime, an extension
+  // replayed the splash and unmounted the floor, losing the Consultation's own timer. A RELOAD
+  // mid-caucus never replays it either: the first committee this page holds records the caucus
+  // it is already in as seen, so only a caucus that becomes current afterwards shows it.
   const caucusLoadingFiredRef = useRef(false);
   const prevCaucusKeyRef = useRef<string | null>(null);
+  const unmodLoadingFiredRef = useRef(false);
+  const prevUnmodKeyRef = useRef<string | null>(null);
+  const caucusSplashSeenRef = useRef<string | null>(null);   // committee id whose load was recorded
+  const caucusIdentity = caucusIdentityKey(committee?.phase, committee?.caucus);
   useEffect(() => {
-    if (committee?.phase === 'moderated-caucus' && committee.caucus) {
-      const caucusKey = `${committee.phase}-${committee.caucus.proposedBy}-${committee.caucus.totalTime}`;
-      if (prevCaucusKeyRef.current !== caucusKey) {
-        prevCaucusKeyRef.current = caucusKey;
-        caucusLoadingFiredRef.current = false;
-      }
-      if (!caucusLoadingFiredRef.current) {
-        caucusLoadingFiredRef.current = true;
-        setCaucusPanelLocked(true);
-        setCaucusLoading(true);
-        const t = setTimeout(() => setCaucusLoading(false), 3500);
-        return () => clearTimeout(t);
-      }
-    } else {
+    if (!committee) return;
+    // The first committee this page holds (a load or a reload): whatever caucus it is in
+    // already started before this page existed, so it is recorded as seen.
+    const firstLook = caucusSplashSeenRef.current !== committee.id;
+    if (firstLook) caucusSplashSeenRef.current = committee.id;
+    const mod = committee.phase === 'moderated-caucus' && !!caucusIdentity;
+    const unmod = committee.phase === 'unmoderated-caucus' && !!caucusIdentity;
+    if (!mod) {
       prevCaucusKeyRef.current = null;
       caucusLoadingFiredRef.current = false;
       setCaucusPanelLocked(false);
     }
-  }, [committee?.phase, committee?.caucus?.proposedBy, committee?.caucus?.totalTime]);
-
-  const unmodLoadingFiredRef = useRef(false);
-  const prevUnmodKeyRef = useRef<string | null>(null);
-  useEffect(() => {
-    if (committee?.phase === 'unmoderated-caucus' && committee.caucus) {
-      const unmodKey = `${committee.phase}-${committee.caucus.proposedBy}-${committee.caucus.totalTime}`;
-      if (prevUnmodKeyRef.current !== unmodKey) {
-        prevUnmodKeyRef.current = unmodKey;
-        unmodLoadingFiredRef.current = false;
-      }
-      if (!unmodLoadingFiredRef.current) {
-        unmodLoadingFiredRef.current = true;
-        setUnmodLoading(true);
-        const t = setTimeout(() => setUnmodLoading(false), 3000);
-        return () => clearTimeout(t);
-      }
-    } else {
+    if (!unmod) {
       prevUnmodKeyRef.current = null;
       unmodLoadingFiredRef.current = false;
     }
-  }, [committee?.phase, committee?.caucus?.proposedBy, committee?.caucus?.totalTime]);
+    if (!mod && !unmod) return;
+    const keyRef = mod ? prevCaucusKeyRef : prevUnmodKeyRef;
+    const firedRef = mod ? caucusLoadingFiredRef : unmodLoadingFiredRef;
+    const setLoadingFlag = mod ? setCaucusLoading : setUnmodLoading;
+    if (keyRef.current !== caucusIdentity) {
+      keyRef.current = caucusIdentity;
+      firedRef.current = firstLook;
+    }
+    if (mod) setCaucusPanelLocked(true);
+    if (firedRef.current) return;
+    firedRef.current = true;
+    setLoadingFlag(true);
+    let done = false;
+    const t = setTimeout(() => { done = true; setLoadingFlag(false); }, mod ? 3500 : 3000);
+    return () => {
+      clearTimeout(t);
+      // Cut short (the caucus changed or left): never leave the splash up, and let the same
+      // caucus show it again only if it never finished (a remount).
+      if (!done) { setLoadingFlag(false); firedRef.current = false; }
+    };
+  // Only the room and the caucus identity decide; never the clock or any other field.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [committee?.id, committee?.phase, caucusIdentity]);
 
   // ── A room stuck in `voting` with no ballot (src/lib/votingPhaseUnload.ts) ────
   // /voting/[code] puts the room into `voting`; a Moderator who closed that tab without
@@ -3853,7 +3884,14 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
       if (m.id.startsWith('temp-')) continue;
       const key = notifyKey.gsl(m.id);
       liveKeys.add(key);
-      if (raisedGslKeysRef.current.has(key)) continue;
+      const nudge = gslNudges[m.id] ?? 0;
+      const raisedFor = raisedGslForRef.current.get(key);
+      if (raisedGslKeysRef.current.has(key)) {
+        // Raised before. Still on the stack: nothing to do. Dismissed (its x): only a NEW
+        // nudge from the phone brings it back (a touched topic or a Realtime nudge).
+        if (hasNotification(key)) continue;
+        if (raisedFor && raisedFor.topic === (m.topic ?? '') && raisedFor.nudge === nudge) continue;
+      }
 
       let delegateId = '';
       try { delegateId = JSON.parse(m.topic).delegateId; } catch {}
@@ -3863,6 +3901,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
       const country = m.proposedBy;
       const found = getCountryByName(country);
       raisedGslKeysRef.current.add(key);
+      raisedGslForRef.current.set(key, { topic: m.topic ?? '', nudge });
       notify({
         key,
         kind: 'gsl-request',
@@ -3871,12 +3910,10 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
         body: t('notif_gsl_requests_addition'),
         // STICKY, and it has to be. This card is now the ONLY chair-side affordance for a
         // GSL request: the full-width banner below the header is gone, and MotionsModal
-        // filters `gsl-request` out of every list it draws. A re-request from the delegate
-        // cannot resurrect an expired card either — `requestGslSpot` is idempotent
-        // (committeeService.ts:844), so it writes nothing, emits no realtime event, and
-        // reuses the motion id this device has already marked as raised. A 60s TTL would
-        // therefore strand the delegate waiting on an answer nobody can still give.
-        // The chair clears it deliberately instead: Accept, Reject, or the card's x.
+        // filters `gsl-request` out of every list it draws. The chair clears it deliberately:
+        // Accept, Reject, or the card's x. The x does not decide: a phone's "Request again"
+        // nudges the same request (`requestGslSpot`, src/lib/gslRequestNudge.ts) and the
+        // dismissed card comes back (above).
         ttlMs: null,
         actions: [
           {
@@ -3906,9 +3943,26 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
     for (const key of Array.from(raisedGslKeysRef.current)) {
       if (liveKeys.has(key)) continue;
       raisedGslKeysRef.current.delete(key);
+      raisedGslForRef.current.delete(key);
       dismissNotification(key);
     }
-  }, [pendingMotions, language, t]);
+  }, [pendingMotions, language, t, gslNudges]);
+
+  // The phone's Realtime nudge for a request already waiting (src/lib/gslRequestNudge.ts).
+  // It only re-raises a DISMISSED card for a request that is still pending (the effect above
+  // checks both); it decides nothing and writes nothing.
+  const gslNudgeCommitteeId = committee?.id ?? null;
+  useEffect(() => {
+    if (!gslNudgeCommitteeId) return;
+    const ch = supabase.channel(gslNudgeTopic(gslNudgeCommitteeId));
+    ch.on('broadcast', { event: GSL_NUDGE_EVENT }, ({ payload }) => {
+      const id = (payload as { id?: unknown } | undefined)?.id;
+      if (typeof id !== 'string' || !id) return;
+      setGslNudges((prev) => ({ ...prev, [id]: (prev[id] ?? 0) + 1 }));
+    });
+    ch.subscribe();
+    return () => { void supabase.removeChannel(ch); };
+  }, [gslNudgeCommitteeId]);
 
   // Chat → CO-CHAIR ONLY, and never with message content. (`chatMessages` = committee?.messages,
   // declared with the chat icon's unread memo above.)
@@ -4009,6 +4063,9 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
     // An organiser END finishes a Room Order Tour de Table for good (a pause only freezes it),
     // and logs every held GSL part once.
     if (b.action !== 'pause') { void creditRoomOrderTour(committee); settleHeldFloors(committee, 'all'); }
+    // A Consultation of the Whole floor holder spoke up to now (pause or end): logged once with
+    // the flag tap's turn key, before the break freezes the caucus and drops the holder.
+    void logCowHolder(committee);
     // ...and then LEAVES the floor, exactly like the Suspend / End motion path. Without this
     // the current_speaker row kept them through the break, and the first Next after a resume
     // logged the same turn again (hours later, so no duplicate window could catch it).
@@ -4505,7 +4562,9 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
         ? [...prevSpoken, caucusCountry] : prevSpoken;
       const anchored: CaucusState = { ...anchorCaucusClock(c.caucus, totalLeft, false), currentSpeaker: null, spokenCountries };
       seatSpeakerClock(capSpeakerSlot(c.caucus.speakingTime, totalLeft), null);
-      updateLocal(setCommittee, (x) => ({
+      // A Room Order placeholder taken off the floor before it spoke goes back to the queue,
+      // as every device derives it from the caucus (src/lib/roomOrderQueue.ts).
+      updateLocal(setCommittee, (x) => withRoomOrderQueue({
         ...x,
         caucus: x.caucus && x.phase === 'moderated-caucus' ? anchored : x.caucus,
         currentSpeaker: null,
@@ -4766,8 +4825,12 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
     const newRemaining = moderatedCaucusRemainingNow(committee.caucus, anchorBase, anchorStarted);
     // The next speaker gets the motion's speaking time, or what is left if that is less.
     const speakTime = capSpeakerSlot(committee.caucus.speakingTime, newRemaining);
-    const newSpoken = prevCountry && !(committee.caucus.spokenCountries ?? []).includes(prevCountry)
-      ? [...(committee.caucus.spokenCountries ?? []), prevCountry]
+    // A Room Order turn is named by the caucus itself (its placeholder can never be the
+    // current_speaker row), so the turn on the floor counts as called even when local state
+    // lost the floor entry: the derived queue (src/lib/roomOrderQueue.ts) must not offer it again.
+    const prevFloor = prevCountry ?? (isRoomOrderCaucus(committee.caucus) ? (committee.caucus.currentSpeaker ?? null) : null);
+    const newSpoken = prevFloor && !(committee.caucus.spokenCountries ?? []).includes(prevFloor)
+      ? [...(committee.caucus.spokenCountries ?? []), prevFloor]
       : (committee.caucus.spokenCountries ?? []);
 
     // Room-Order Tour de Table speakers are anonymous "Speaker N" placeholders, not real
@@ -4782,7 +4845,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
     extraTimeAddedSecsRef.current = 0;
     // A Room Order tour ends here when Next runs past the total or past the last placeholder:
     // one speech per delegation on its roster snapshot (idempotent, no-op for other caucuses).
-    if (newRemaining <= 0 || (!next && !!prevCountry)) void creditRoomOrderTour(committee);
+    if (newRemaining <= 0 || (!next && !!prevFloor)) void creditRoomOrderTour(committee);
 
     // S7: one seat nonce for local state and the row. Also the clock anchor when auto start
     // is on (Oct 2026): the next speaker is seated with BOTH clocks running from this stamp,
@@ -4809,6 +4872,8 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
         speakerTimeRemaining: speakTime,
       }), true);
       setPhaseAndCaucusInDB(committee.id, 'speakers-list', null, committee.code, committee.dbChairJoinSuffix ?? undefined);   // one update (R-7)
+      // The caucus queue rows go with the caucus (RULE 1: only the caucus queue, never the GSL).
+      clearCaucusListInDB(committee.id, committee.code, committee.dbChairJoinSuffix ?? undefined);
       await nextSpeakerInDB(committee.id, speakTime, null, null, null, committee.code, committee.dbChairJoinSuffix ?? undefined);
       localUpdateTime.current = Date.now();
       return;
@@ -4925,6 +4990,9 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
       stopSpeakerTimerInDB(committeeIdRef.current, committeeCodeRef.current, chairSuffixRef.current);
     }
     setPhaseAndCaucusInDB(committee.id, 'speakers-list', null, committee.code, committee.dbChairJoinSuffix ?? undefined);   // one update (R-7)
+    // The caucus queue rows go with the caucus, as Begin Session does (RULE 1: only the caucus
+    // queue, never the GSL). Never re-run from the toast (clearCaucusList is rerunnable: false).
+    clearCaucusListInDB(committee.id, committee.code, committee.dbChairJoinSuffix ?? undefined);
     updateLocal(setCommittee, (c) => ({
       ...c,
       caucus: null,

@@ -22,6 +22,8 @@ import { creatorCountryWithin } from './creatorCountry';
 // expires_at and the reopen window must stay the same number.
 import { ENDED_KEEP_HOURS, REOPEN_WINDOW_HOURS } from './roomRetention';
 import { fetchAllRows } from './fetchAllRows';
+import { withRoomOrderQueue } from './roomOrderQueue';
+import { sendGslNudge } from './gslRequestNudge';
 import {
   Committee,
   type HeldGslFloor,
@@ -567,10 +569,12 @@ async function loadCommitteeByCode(code: string, strict: boolean): Promise<Commi
 
   return {
     status: 'ok',
-    committee: {
+    // A Room Order Tour de Table's queue is derived from the caucus (its placeholders can
+    // never be stored in speakers_list), so a reload or a second device sees it too.
+    committee: withRoomOrderQueue({
       ...rowToCommittee(committeeRow, delegates, gslDeduped, caucusQueue, currentSpeaker, speakerTimeRemaining, pendingMotions, documents, messages, speakerStartedAt),
       speakerSeatedAt: currentSpeaker ? speakerSeatedAt : null,
-    },
+    }),
   };
 }
 
@@ -1032,8 +1036,11 @@ export async function batchAddToCaucusList(
   code: string,
   chairSuffix?: string,
 ): Promise<void> {
-  if (delegates.length === 0) return;
-  const rows = delegates.map((d, i) => ({
+  // Room Order placeholders ("room-order-3") are not delegations and cannot be stored (uuid
+  // column): the batch used to fail whole on them. Their queue is derived from the caucus.
+  const stored = delegates.filter((d) => UUID_RE.test(d.delegateId));
+  if (stored.length === 0) return;
+  const rows = stored.map((d, i) => ({
     committee_id: committeeId,
     delegate_id: d.delegateId,
     country: d.country,
@@ -2032,12 +2039,26 @@ export async function denyJoinRequest(motionId: string, code: string, chairSuffi
 // ============================================================
 
 export async function requestGslSpot(committeeId: string, delegateId: string, country: string, code: string): Promise<void> {
-  // Idempotent — ignore if already pending
+  // Never a second request: one already pending is NUDGED instead (23 Oct 2026). The phone's
+  // "Request again" used to write nothing here, so a chair who had closed the card (its x does
+  // not decide) never saw it again and the delegation was stranded. Now the row is touched
+  // (a fresh `at` in its topic JSON: a motions UPDATE event, where the policy lets a phone
+  // write it; zero rows when it does not) and a Realtime nudge is sent either way
+  // (src/lib/gslRequestNudge.ts). The chair page re-raises a dismissed card on either.
+  // The cooldowns stay on the phone (60 s no answer, 15 min after a denial).
   const { data: existing } = await supabase
     .from('motions').select('id')
     .eq('committee_id', committeeId).eq('type', 'gsl-request')
     .eq('proposed_by', country).eq('status', 'pending').maybeSingle();
-  if (existing) return;
+  if (existing) {
+    const motionId = (existing as { id: string }).id;
+    const { error: touchErr } = await sessionClient(code).from('motions')
+      .update({ topic: JSON.stringify({ delegateId, at: serverNowIso() }) })
+      .eq('id', motionId).eq('status', 'pending').select('id');
+    if (touchErr) console.warn('Could not touch the pending GSL request (the nudge still goes):', touchErr.message);
+    await sendGslNudge(committeeId, motionId);
+    return;
+  }
   const { error } = await sessionClient(code).from('motions').insert({
     committee_id: committeeId,
     type: 'gsl-request',

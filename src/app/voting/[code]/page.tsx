@@ -1224,7 +1224,8 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
   const withRightsAll = votes
     .filter((v) => v.choice === 'for-rights' || v.choice === 'against-rights')
     .sort((a, b) => compareCountryNames(a.country, b.country, language));
-  const withRights = withRightsAll.slice(0, 10);
+  // Every rights speaker, however many (owner, 23 Oct 2026: no cap of 10).
+  const withRights = withRightsAll;
 
   // Unanimous mode looks at every present delegate (P and PV). Both of these are
   // frozen with the ballot: they are the unanimity/quorum numerator and the
@@ -1424,21 +1425,15 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
     const keys = Object.keys(patch) as (keyof CommitteeSettings)[];
     if (keys.length === 0) return;
     for (const key of keys) updateSetting(committee.code, key, patch[key] as CommitteeSettings[typeof key]);
-    const next: CommitteeSettings = { ...settings, ...patch };
     // ONLY the changed keys, in ONE patch, so two keys that belong together (a veto
     // mode and its list) land together and the verdict below sees both.
     // chairJoinSuffix, headChair, headChairDevice and agendaTopicIndex can never ride
     // along (rules 12 and 13).
     saveCommitteeSettings(committee.id, patch, committee.code, suffix);
-    // Result already on screen: the verdict can flip, so the DR's stored status
-    // has to follow it rather than keeping the value from the first evaluation.
-    if (phase === 'result' && selectedDoc) {
-      const v = verdictOf(next, votes);
-      if (v.result !== (passed ? 'passed' : 'failed') || v.vetoed !== !!vote?.vetoed) {
-        persistResult(selectedDoc.id, v.result);
-        updateVote(() => v);
-      }
-    }
+    // A FINISHED ballot is never re-judged (owner, 23 Oct 2026): its recorded result and
+    // veto stand, and a rule changed afterwards applies to the next ballot. Only a new
+    // ballot (startNewVote) or Back from the result changes a recorded result. A ballot
+    // still open is judged live, so the verdict it reaches follows the rules in force.
   };
 
   /** Veto seats a chair can pick: every non-observer delegation on the roster. */
@@ -1484,6 +1479,13 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
       // Frozen with the ballot: changing the setting later never changes a vote in progress.
       method: settings.votingMethod === 'device' ? 'device' : 'rollcall',
     }));
+    // A re-vote has started: the old verdict no longer stands, so the paper goes back to
+    // `introduced`, written once this ballot's vote state has landed (flushBackStatus,
+    // exactly as Back from the result does). A paper never voted on is already there.
+    const docStatus = committee.documents.find((d) => d.id === docId)?.status;
+    if ((docStatus === 'passed' || docStatus === 'failed') && pendingSeqRef.current[docId] != null) {
+      backStatusSeqRef.current[docId] = pendingSeqRef.current[docId];
+    }
   };
 
   /** Re-open an unfinished vote after a reload, exactly where it stopped. */
@@ -1527,7 +1529,6 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
       ? step.votes
         .filter((v) => v.choice === 'for-rights' || v.choice === 'against-rights')
         .sort((a, b) => compareCountryNames(a.country, b.country, language))
-        .slice(0, 10)
       : [];
     if (rights.length > 0) {
       updateVote(() => ({ ...step, status: 'rights-speakers', rightsOrder: rights, rightsIndex: 0 }));
@@ -1706,8 +1707,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
       .map((v) => (allowRights ? v : v.choice === 'for-rights' ? { ...v, choice: 'for' as const } : v.choice === 'against-rights' ? { ...v, choice: 'against' as const } : v));
     const rights = (allowRights ? list : [])
       .filter((v) => v.choice === 'for-rights' || v.choice === 'against-rights')
-      .sort((a, b) => compareCountryNames(a.country, b.country, language))
-      .slice(0, 10);
+      .sort((a, b) => compareCountryNames(a.country, b.country, language));
     const base = { votes: list, passedIds: [] as string[], currentVoterIndex: cur.order.length };
     if (rights.length > 0) {
       updateVote(() => ({ ...base, status: 'rights-speakers', rightsOrder: rights, rightsIndex: 0 }));
@@ -2624,9 +2624,20 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
         // do NOT break unanimity: an abstaining delegation chose not to oppose, which is what the
         // word means in a committee record. Derived from the votes on screen, never stored:
         // `documents.status` stays `passed` and `vote_state` gains nothing.
-        const unanimous = passed && againstCount === 0 && forCount > 0
+        //
+        // THE RECORDED VERDICT IS DRAWN (owner, 23 Oct 2026): a finished ballot shows its stored
+        // `result` / `vetoed`, never a re-evaluation against today's settings, so a rule changed
+        // after the count cannot repaint it. Only a ballot stored without a result (older data)
+        // falls back to the live evaluation. The lines that explain the verdict from the rules
+        // are shown only while today's rules still reach the same verdict.
+        const storedPassed = vote?.result ? vote.result === 'passed' : passed;
+        const storedVetoed = vote?.result ? (vote.result === 'failed' && !!vote.vetoed) : p5Veto;
+        const rulesAgree = storedPassed === passed && storedVetoed === p5Veto;
+        const showVeto = storedVetoed;
+        const showUnanFail = rulesAgree && unanimousFail;
+        const unanimous = storedPassed && againstCount === 0 && forCount > 0
           && presentDelegates.every((d) => votes.some((v) => v.delegateId === d.id));
-        const kind: 'passed' | 'failed' | 'vetoed' | 'unanimous' = unanimous ? 'unanimous' : passed ? 'passed' : p5Veto ? 'vetoed' : 'failed';
+        const kind: 'passed' | 'failed' | 'vetoed' | 'unanimous' = unanimous ? 'unanimous' : storedPassed ? 'passed' : storedVetoed ? 'vetoed' : 'failed';
         const look = {
           passed: { bg: '#1B3828', chipBg: '#EED98A', chipFg: '#1B3828', title: '#EED98A', soft: 'rgba(238,217,138,0.78)', shadow: '0 2px 4px rgba(27,56,40,0.2), 0 24px 64px rgba(27,56,40,0.30)' },
           failed: { bg: '#8B2020', chipBg: '#FFE1D6', chipFg: '#8B2020', title: '#FFFFFF', soft: 'rgba(255,222,210,0.82)', shadow: '0 2px 4px rgba(90,20,20,0.2), 0 24px 64px rgba(139,32,32,0.30)' },
@@ -2683,26 +2694,26 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
                 ))}
               </div>
               <div className="mt-6 space-y-1.5 text-[13.5px] font-medium tabular-nums" style={{ color: '#FFFFFF' }}>
-                {p5Veto && (
+                {showVeto && (
                   <p className="flex items-center gap-1.5 justify-center"><ShieldAlert size={16} strokeWidth={2.5} aria-hidden /> {settings.vetoMode === 'custom' ? t('voting_veto_exercised') : t('voting_p5_veto')}</p>
                 )}
-                {unanimousFail && <p>{t('voting_unanimous_fail')}</p>}
+                {showUnanFail && <p>{t('voting_unanimous_fail')}</p>}
                 {kind === 'unanimous' && (
                   <p style={{ color: '#EED98A' }}>{abstainCount > 0 ? t('voting_result_unanimous_note_abst', { n: abstainCount }) : t('voting_result_unanimous_note')}</p>
                 )}
-                {!p5Veto && !unanimousFail && settings.substantiveThreshold === 'supermajority-2-3' && (
+                {rulesAgree && !p5Veto && !unanimousFail && settings.substantiveThreshold === 'supermajority-2-3' && (
                   <p style={{ color: soft }}>{t('voting_supermajority', { for: forCount, total: totalDecisive, pct: totalDecisive > 0 ? Math.round(forCount / totalDecisive * 100) : 0 })}</p>
                 )}
-                {!p5Veto && !unanimousFail && settings.substantiveThreshold === 'consensus' && (
+                {rulesAgree && !p5Veto && !unanimousFail && settings.substantiveThreshold === 'consensus' && (
                   <p style={{ color: soft }}>{t('voting_consensus', { against: againstCount })}</p>
                 )}
-                {!p5Veto && !unanimousFail && settings.substantiveThreshold === 'simple' && (
+                {rulesAgree && !p5Veto && !unanimousFail && settings.substantiveThreshold === 'simple' && (
                   <p style={{ color: soft }}>{t('voting_result_simple', { for: forCount, total: totalDecisive, needed: outcome.needed })}</p>
                 )}
-                {!outcome.quorumMet && (
+                {rulesAgree && !outcome.quorumMet && (
                   <p>{t('voting_result_quorum_not_met', { present: presentAndPvDelegates.length, needed: outcome.quorumNeeded })}</p>
                 )}
-                {outcome.countsAbstentions && abstainCount > 0 && (
+                {rulesAgree && outcome.countsAbstentions && abstainCount > 0 && (
                   <p className="text-[13px]" style={{ color: soft }}>{t('voting_result_abst_counted')}</p>
                 )}
               </div>

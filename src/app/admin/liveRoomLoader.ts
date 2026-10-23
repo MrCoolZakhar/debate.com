@@ -71,7 +71,7 @@ export async function loadAdminRoom(sessionId: string, conferenceId: string | nu
       .eq('committee_id', sessionId)
       .order('position', { ascending: true }),
     anonSupabase.from('documents')
-      .select('committee_id, type, status, doc_code, title, sponsors, file_url, file_name, content, created_at')
+      .select('committee_id, type, status, doc_code, title, sponsors, approval, file_url, file_name, content, created_at')
       .eq('committee_id', sessionId),
     // Paged: one request stops at 1,000 rows.
     fetchAllRows((from, to) => anonSupabase.from('messages')
