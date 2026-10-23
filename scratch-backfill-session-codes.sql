@@ -1,3 +1,4 @@
+-- APPLIED 23 Oct 2026 from Claude Code at Peter's request (backfill: 312 rooms, 3,849 seats, group crests resolved).
 -- Backfill: give every existing committee its session code (owner, 23 Oct 2026).
 --
 -- New committees now get their room when they are created (the committee editor, and the

@@ -1,3 +1,4 @@
+-- APPLIED 23 Oct 2026 from Claude Code at Peter's request (backfill: 312 rooms, 3,849 seats, group crests resolved).
 -- Sessions launch audit, items 6 and 17 (owner approved 23 Oct 2026). NOT APPLIED:
 -- for the chat's Supabase work. Read-only checks behind each change are noted.
 
