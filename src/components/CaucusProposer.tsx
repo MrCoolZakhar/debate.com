@@ -74,8 +74,7 @@ export default function CaucusProposer({
       )}
       {/* A long seat is two rows, short form over the full name (src/components/SeatName.tsx). */}
       {!hideName && (
-        {/* shrink-0: the name never squeezes, so a one-word name like "Ethiopia" is never split mid-word (23 Oct 2026). */}
-        <span aria-hidden className="shrink-0 inline-flex">
+        <span aria-hidden className="shrink-0 inline-flex" /* never squeezes: a one-word name is never split mid-word (23 Oct 2026) */>
           <SeatName name={name} max={22} className="font-extrabold" style={{ color: ink }} />
         </span>
       )}
