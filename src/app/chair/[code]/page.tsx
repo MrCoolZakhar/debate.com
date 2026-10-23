@@ -46,6 +46,7 @@ import SeatName from '@/components/SeatName';
 import { useSettingsStore, stripNonHydratedSettings } from '@/lib/settingsStore';
 import { useAuth } from '@/components/AuthProvider';
 import { useSessionAccess } from '@/lib/useSessionAccess';
+import { SECRETARIAT_VIEW_PARAM } from '@/lib/secretariatView';
 import type { ConferenceAccess } from '@/lib/conferenceAccess';
 import { useChairAwards } from '@/lib/sessionAwardsLink';
 import { supabase } from '@/lib/supabase';
@@ -76,6 +77,7 @@ import { useAgendaPicker } from '@/components/AgendaPicker';
 import { useSettingsSync } from '@/lib/useSettingsSync';
 import { loadVoteStates, isVoteOpen, setVotingPhase } from '@/lib/voteState';
 import { roomKeptUntil, formatKeptUntil, canReopenEndedRoom, ENDED_KEEP_HOURS } from '@/lib/roomRetention';
+import { useConferenceRoomEndsAt } from '@/lib/conferenceRoomWindow';
 import { votingTabAliveRecently } from '@/lib/votingPhaseUnload';
 import { VotingInProgressCard } from '@/components/VotingInProgressCard';
 import { useGavelCue, type GavelCue } from '@/lib/useGavelCue';
@@ -175,7 +177,7 @@ function GavelLoader() {
   const t = useT();
   return (
     <div className="min-h-screen flex flex-col items-center justify-center gap-4" style={{ backgroundColor: '#EDE7D8' }}>
-      <Loader size={72} label="Loading" />
+      <Loader size={72} label={t('session_loading_label')} />
       <p className="text-[#9A8A78] text-sm font-mono tracking-widest">{t('session_loading')}</p>
     </div>
   );
@@ -239,6 +241,26 @@ const LIST_SWAP_GUARD_MS = 1500;
 // Inside this window we do fire, so a chair who loads the page moments after the deadline
 // still gets the effect the organiser scheduled.
 const BROADCAST_LATE_FIRE_GRACE_MS = 5 * 60 * 1000;
+// Broadcast actions this DEVICE has already carried out, kept per room code across reloads
+// (owner, 23 Oct 2026). The in-memory set alone forgot them on a reload, so a Moderator who
+// reloaded inside the grace window paused or ended the room a second time, after a chair
+// had already resumed it. Ids only, capped, every read and write guarded.
+const FIRED_BROADCASTS_PREFIX = 'gavelling-broadcast-fired:';
+const FIRED_BROADCASTS_MAX = 50;
+function loadFiredBroadcasts(code: string): Set<string> {
+  try {
+    const raw = localStorage.getItem(FIRED_BROADCASTS_PREFIX + code.toUpperCase());
+    const ids = raw ? (JSON.parse(raw) as unknown) : [];
+    return new Set(Array.isArray(ids) ? ids.filter((x): x is string => typeof x === 'string') : []);
+  } catch { return new Set(); }
+}
+function saveFiredBroadcast(code: string, id: string, fired: boolean): void {
+  try {
+    const ids = [...loadFiredBroadcasts(code)].filter((x) => x !== id);
+    if (fired) ids.push(id);
+    localStorage.setItem(FIRED_BROADCASTS_PREFIX + code.toUpperCase(), JSON.stringify(ids.slice(-FIRED_BROADCASTS_MAX)));
+  } catch { /* storage blocked: the in-memory set still dedupes this page load */ }
+}
 // setTimeout clamps anything past 2^31-1 ms to fire immediately. A broadcast scheduled
 // further out than ~24 days is simply not armed on this mount; a later reload will arm it.
 const MAX_TIMEOUT_MS = 2_147_483_647;
@@ -1733,9 +1755,18 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
   // Fall back to the rejoin blob we wrote for THIS committee before defaulting to ''.
   // Read in an effect, never during render — localStorage does not exist on the server.
   const urlChairName = searchParams.get('chairName') ?? '';
+  // The secretariat's silent view (owner, 23 Oct 2026): an organiser opens any chair room
+  // of their conference from the live wall (`secretariatRoomHref`, src/lib/secretariatView.ts)
+  // with no password, no warning and no trace. It has NO chair name, so it never joins
+  // chair_names, the presence channel or the chat's chair list; it is forced to a
+  // Commenter below (never the gavel, never a claim), takes no device lock, writes no rejoin
+  // blob and draws no write affordance a Commenter would get (chat is read only, no resume,
+  // no waiting-room answers, no restart). Access is the ordinary 'organizer' verdict of
+  // useSessionAccess; an open dais needs nothing. A UI gate like isViewOnly (rule 15).
+  const silentViewer = searchParams.get(SECRETARIAT_VIEW_PARAM) === '1';
   const [rejoinChairName, setRejoinChairName] = useState('');
   useEffect(() => {
-    if (urlChairName) { setRejoinChairName(''); return; }
+    if (urlChairName || silentViewer) { setRejoinChairName(''); return; }
     try {
       const raw = localStorage.getItem('gavelling-rejoin');
       if (!raw) return;
@@ -1744,8 +1775,8 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
       if ((parsed.code ?? '').toUpperCase() !== code.toUpperCase()) return;
       setRejoinChairName(parsed.chairName);
     } catch { /* malformed blob — stay anonymous */ }
-  }, [urlChairName, code]);
-  const myChairName = urlChairName || rejoinChairName;
+  }, [urlChairName, code, silentViewer]);
+  const myChairName = silentViewer ? '' : (urlChairName || rejoinChairName);
   const { user, session, loading: authLoading } = useAuth();
   const [committee, setCommittee] = useState<Committee | null>(null);
   const [loading, setLoading] = useState(true);
@@ -1957,10 +1988,13 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
     committeeId: committee?.id,
     userId: user?.id,
     accessToken: session?.access_token,
-    enabled: accessState === 'allowed' && !!committee?.id && !committee?.endedAt,
+    enabled: accessState === 'allowed' && !!committee?.id && !committee?.endedAt && !silentViewer,
   });
   const gavelRoleOf = (c: Committee | null | undefined) => {
     const role = deriveGavelRole(c, myChairName, gavelDeviceId, gavelPinNow());
+    // The secretariat's silent view is always a Commenter: with no chair name and no device
+    // recorded, deriveGavelRole would otherwise make it the Moderator of an empty dais.
+    if (silentViewer) return { ...role, nameHolds: false, heldElsewhere: false, isModerator: false };
     return deviceLock.kicked ? { ...role, heldElsewhere: false, isModerator: false } : role;
   };
   // Gavel chip: live presence dots + the transient handover toast.
@@ -2126,7 +2160,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
         const staleMotions = (found.pendingMotions ?? []).filter(
           (m) => m.type === 'suspend-debate' || m.type === 'end-debate'
         );
-        if (staleMotions.length > 0) {
+        if (staleMotions.length > 0 && !silentViewer) {
           staleMotions.forEach((m) => removePendingMotionInDB(m.id, found.code, found.dbChairJoinSuffix ?? undefined));
           found.pendingMotions = (found.pendingMotions ?? []).filter(
             (m) => m.type !== 'suspend-debate' && m.type !== 'end-debate'
@@ -2182,7 +2216,10 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
         // Written while the room is live AND while an ended room can still be restarted
         // (owner, 7 Oct 2026): the blob is what brings a chair who ended the committee by
         // accident back to it. Past the window the canRestart effect forgets it.
-        if (!found.endedAt || canReopenEndedRoom(found, serverNow())) {
+        // A conference room's window is read after load (useConferenceRoomEndsAt), so its
+        // blob is kept here and the canRestart effect forgets it once that window has passed.
+        // A silent secretariat viewer never writes it: it would name another chair.
+        if (!silentViewer && (!found.endedAt || found.sessionOrigin === 'conference' || canReopenEndedRoom(found, serverNow()))) {
           const foundSettings = getSettings(found.code);
           localStorage.setItem('gavelling-rejoin', JSON.stringify({
             code: found.code,
@@ -3445,6 +3482,36 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [floorAbsentId, catchUpTick, floorRemovalAllowed]);
 
+  // No ghost speaker (owner, 23 Oct 2026). The organiser removed the seat holding the floor
+  // (Manage → Committees deletes its `delegates` row; `current_speaker.delegate_id` is then
+  // SET NULL with the country left behind, and the Moderator never reads current_speaker
+  // events, RULE 6). The floor holder is no longer on the roster, so the floor is empty: it
+  // is cleared ONCE, on the Moderator's device, through the same handler as the strip X
+  // (pause, log the speech, conditional clear). Keyed on who it was, so a re-render never
+  // repeats it. Never a Room Order placeholder (not a delegation), never in a roll call or
+  // a break, never from a stale snapshot. Pressing nothing; writing nothing per second.
+  const floorGoneKey = (() => {
+    if (!committee || isRoomOrderCaucus(committee.caucus)) return '';
+    const byName = (name: string) => committee.delegates.some((d) => d.country.toLowerCase() === name.toLowerCase());
+    const floor = committee.currentSpeaker;
+    if (floor?.country) {
+      const known = floor.delegateId ? committee.delegates.some((d) => d.id === floor.delegateId) : byName(floor.country);
+      return known ? '' : `${floor.delegateId || ''}:${floor.country}`;
+    }
+    const caucusFloor = committee.phase === 'moderated-caucus' ? committee.caucus?.currentSpeaker : null;
+    return caucusFloor && !byName(caucusFloor) ? `caucus:${caucusFloor}` : '';
+  })();
+  const floorGoneDoneRef = useRef('');
+  useEffect(() => {
+    if (!floorGoneKey) { floorGoneDoneRef.current = ''; return; }
+    if (!committee || !floorRemovalAllowed || floorGoneDoneRef.current === floorGoneKey) return;
+    if (committee.phase === 'pre-session' || committee.phase === 'adjourned' || (committee.phase as string) === 'roll-call') return;
+    if (syncRef.current && !syncRef.current.isFresh()) return;
+    floorGoneDoneRef.current = floorGoneKey;
+    removeCurrentSpeakerRef.current?.();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [floorGoneKey, catchUpTick, floorRemovalAllowed]);
+
   // Roll Call (RollCallPanel's status slider) made an absent delegation with a waiting-room
   // request present: drop that country's request from local state. The panel deletes the
   // motion row itself, after the status write lands. Functional updater, so no stale
@@ -3672,20 +3739,25 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
    * passed (`gavelling-rejoin`, read by LiveRoomsGate on /sessions).
    */
   const committeeEndedAt = committee?.endedAt ?? null;
+  const committeeOrigin = committee?.sessionOrigin;
+  // A conference room stays restartable until its conference's last day is over (owner,
+  // 23 Oct 2026; src/lib/conferenceRoomWindow.ts). Null until read, or for a standalone room:
+  // the 24-hour window then applies.
+  const conferenceEndsAt = useConferenceRoomEndsAt(committee?.id, committeeOrigin === 'conference');
   useEffect(() => {
     if (!committeeEndedAt) { setCanRestart(false); setRestartError(null); return; }
-    // `canReopenEndedRoom` reads only `endedAt`, so the stamp is all this needs; keying the
-    // effect on the stamp rather than the committee object keeps it off every refetch.
-    const row = { endedAt: committeeEndedAt } as Committee;
+    // `canReopenEndedRoom` reads only `endedAt` and the origin, so those are all this needs;
+    // keying the effect on them rather than the committee object keeps it off every refetch.
+    const row = { endedAt: committeeEndedAt, sessionOrigin: committeeOrigin } as Committee;
     function check() {
-      const ok = canReopenEndedRoom(row, serverNow());
+      const ok = canReopenEndedRoom(row, serverNow(), conferenceEndsAt);
       setCanRestart(ok);
       if (!ok) { try { localStorage.removeItem('gavelling-rejoin'); } catch { /* ignore */ } }
     }
     check();
     const id = setInterval(check, 60_000);
     return () => clearInterval(id);
-  }, [committeeEndedAt]);
+  }, [committeeEndedAt, committeeOrigin, conferenceEndsAt]);
 
   /**
    * Undo an End Debate (owner, 7 Oct 2026: "when someone ends debate, going onto the same
@@ -3726,7 +3798,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
     }), true);
     setSessionEnded(false);
     setSessionSuspended(false);
-    void reopenEndedSession(id, committee.code, suffix).then((ok) => {
+    void reopenEndedSession(id, committee.code, suffix, conferenceEndsAt).then((ok) => {
       if (!ok) {
         updateLocal(setCommittee, (c) => (c.id === id ? { ...c, ...before } : c), true);
         setSessionEnded(!!before.endedAt);
@@ -3737,7 +3809,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
       if (takeGavel) claimGavelForThisDevice(forGavel, myChairName);
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [committee?.id, committee?.code, committee?.dbChairJoinSuffix, committee?.endedAt, committee?.expiresAt, committee?.suspendedAt, committee?.resumingChair, committee?.phase, committee?.dbHeadChair, myChairName, claimGavelForThisDevice, t]);
+  }, [committee?.id, committee?.code, committee?.dbChairJoinSuffix, committee?.endedAt, committee?.expiresAt, committee?.suspendedAt, committee?.resumingChair, committee?.phase, committee?.dbHeadChair, myChairName, claimGavelForThisDevice, t, conferenceEndsAt]);
 
   // Read-state (per conversation) is owned here and mutated by ChatPanel via
   // onReadCountsChange while the panel is open; the header badge below reads the same
@@ -4046,13 +4118,20 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
     if (firedBroadcastsRef.current.has(b.id)) return;     // this device, already done
     if (isViewOnlyRef.current) return;                    // a Commenter only watches
     if (!committee) return;
+    // Done on this device before a reload (persisted per room code, see loadFiredBroadcasts).
+    if (loadFiredBroadcasts(committee.code).has(b.id)) { firedBroadcastsRef.current.add(b.id); return; }
     // Expired between arming and firing — the organiser's window has closed.
     if (b.expiresAt && new Date(b.expiresAt).getTime() <= serverNow()) return;
+    // Too late, checked HERE and not only when arming: a timer armed on a laptop that then
+    // slept fires on wake, possibly long after `action_at`, and must not pause or end a room
+    // that has carried on since (the same grace the arming pass applies).
+    if (b.actionAt && serverNow() - new Date(b.actionAt).getTime() > BROADCAST_LATE_FIRE_GRACE_MS) return;
     // AGENTS.md FEATURE: END DEBATE — `ended_at` is permanent and starts the 1h deletion
     // clock. Never re-write it, and never suspend a committee that has already ended.
     if (committee.endedAt) return;
     if (b.action === 'pause' && committee.suspendedAt) return;   // already suspended
     firedBroadcastsRef.current.add(b.id);
+    saveFiredBroadcast(committee.code, b.id, true);
 
     const code = committee.code;
     const suffix = committee.dbChairJoinSuffix ?? undefined;
@@ -4099,6 +4178,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
       setSessionEnded(!!before.endedAt);
       setSessionSuspended(!!before.suspendedAt && !before.endedAt);
       firedBroadcastsRef.current.delete(b.id);
+      saveFiredBroadcast(code, b.id, false);
     };
     if (b.action === 'pause') {
       // S4: the caucus keeps its queue but nobody is on its floor (the speaker just left it).
@@ -5095,7 +5175,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
   };
 
   const handleResumeClick = async () => {
-    if (!committee || resumeBusy) return;
+    if (!committee || resumeBusy || silentViewer) return;
     setResumeBusy(true);
     setResumeError(null);
     try {
@@ -5636,7 +5716,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
             but a view-only device always gets it, including the organiser's ?chairName=Secretariat
             deep link, whose name may not be in chair_names yet. In the top bar now (`inline`),
             so it no longer floats over the floor view. */}
-        {!sessionEnded && ((committee.chairNames?.length ?? 0) > 1 || isViewOnly) && (
+        {!sessionEnded && !silentViewer && ((committee.chairNames?.length ?? 0) > 1 || isViewOnly) && (
           <GavelChip
             inline
             chairNames={committee.chairNames ?? []}
@@ -5765,7 +5845,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
       {/* Waiting Room — delegates awaiting chair admission (chair-approval gate) */}
       {(() => {
         const joinReqs = (committee.pendingMotions ?? []).filter((m) => m.type === ('join-request' as string));
-        if (joinReqs.length === 0) return null;
+        if (joinReqs.length === 0 || silentViewer) return null;
         const wrLabel = language === 'ar' ? 'غرفة الانتظار' : language === 'fr' ? "Salle d'attente" : language === 'pt' ? 'Sala de Espera' : language === 'es' ? 'Sala de Espera' : 'Waiting Room';
         return (
           <div className="shrink-0 border-b border-[#1B3828]/40 px-4 py-2 flex flex-wrap items-center gap-3" style={{ backgroundColor: '#F3EEE2' }}>
@@ -5807,7 +5887,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
         <SessionEndedContent
           committee={committee}
           hoursRemaining={hoursRemaining}
-          canRestart={canRestart}
+          canRestart={canRestart && !silentViewer}
           onRestart={handleRestartSession}
           restartError={restartError}
         />
@@ -5831,7 +5911,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                     {t('session_suspended_kept_until', { when: formatKeptUntil(suspendKeptUntil, language) })}
                   </p>
                 )}
-                {anotherChairResuming ? (
+                {silentViewer ? null : anotherChairResuming ? (
                   <>
                     <button disabled className="px-12 py-5 rounded-2xl cursor-not-allowed font-black text-xl gv-lift-dark" style={{ backgroundColor: '#DDD4C0', color: '#9A8A78' }}>
                       {t('session_resume_btn')}
@@ -5897,8 +5977,9 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                 committee={committee}
                 senderName={myChairName || 'Chair'}
                 isChair={true}
-                /* No onClose: ChatDialog draws the close button outside the panel's corner. */
-                readOnly={sessionEnded}
+                /* No onClose: ChatDialog draws the close button outside the panel's corner.
+                   The secretariat's silent view reads only: it has no name to send under. */
+                readOnly={sessionEnded || silentViewer}
                 readCounts={chatReadCounts}
                 onReadCountsChange={setChatReadCounts}
                 broadcasts={broadcastHistory}

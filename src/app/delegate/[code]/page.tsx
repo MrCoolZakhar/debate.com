@@ -4,7 +4,7 @@ import Loader from '@/components/Loader';
 import { openAuth } from '@/lib/authModal';
 import React, { use, useEffect, useState, useRef, useCallback, useMemo, Suspense } from 'react';
 import SessionsHeaderLogo from '@/components/SessionsHeaderLogo';
-import { Mic, FileText, MessageCircle, MessageSquare, Clock, Mic2, Languages, LogOut, Check, FolderOpen, Hand } from 'lucide-react';
+import { Mic, FileText, MessageCircle, MessageSquare, Clock, Mic2, Languages, LogOut, Check, FolderOpen, Hand, Paperclip } from 'lucide-react';
 import { OUTFIT, Emoji3D } from '@/components/neu';
 import {
   DelegateStyles, DG, LIFT, Panel, SectionLabel, FlagDisc, FlagOrdinalDisc, StatRow,
@@ -51,6 +51,7 @@ import { serverNow } from '@/lib/serverClock';
 import { useAuth } from '@/components/AuthProvider';
 import { claimDelegateSeat, leaveDelegateSeat, seatKey } from '@/lib/seatClaims';
 import { seatKickTopic } from '@/lib/sessionParticipants';
+import { readDelegateAllowance, recordDelegateAllowance, type DelegateAllowance, type AllowanceKind } from '@/lib/delegateAllowance';
 import { useDelegateIdleLogout, markDelegateActivity } from '@/lib/delegateIdle';
 import DelegateIdleWarning from '@/components/delegate/DelegateIdleWarning';
 import DeviceBallotScreen from '@/components/delegate/DeviceBallotScreen';
@@ -85,7 +86,7 @@ function GavelLoader() {
   const t = useT();
   return (
     <div className="min-h-screen bg-[#EDE7D8] flex flex-col items-center justify-center gap-4">
-      <Loader size={72} label="Loading" />
+      <Loader size={72} label={t('session_loading_label')} />
       <p className="text-[#9A8A78] text-sm font-mono tracking-widest">{t('session_loading')}</p>
     </div>
   );
@@ -378,7 +379,7 @@ function InlinePdfViewer({ fileUrl, fileName }: { fileUrl: string; fileName: str
           className="min-h-[44px] min-w-0 flex-1 text-start text-xs transition-colors focus:outline-none [overflow-wrap:anywhere]"
           style={{ color: '#1B3828' }}
         >
-          📎 {fileName} {show ? '▲' : '▼'}
+          <Paperclip size={13} strokeWidth={1.75} aria-hidden="true" className="inline-block align-[-2px] me-1" />{fileName} {show ? '▲' : '▼'}
         </button>
         <a
           href={fileUrl}
@@ -623,7 +624,7 @@ function DelegateDocumentsTab({ committee, country }: { committee: Committee; co
               <span className="text-sm text-[#1C1410] flex-1 min-w-0 truncate flex items-center gap-2" title={fileName || undefined}>
                 {uploading
                   ? <><span className="w-3.5 h-3.5 border-2 border-[#1B3828] border-t-transparent rounded-full animate-spin shrink-0" /> {fileName}</>
-                  : <>📎 {fileName}</>}
+                  : <><Paperclip size={14} strokeWidth={1.75} aria-hidden="true" className="shrink-0" />{fileName}</>}
               </span>
               {!uploading && (
                 <button type="button" onClick={clearFile} aria-label={t('delegate_doc_remove')} title={t('delegate_doc_remove')}
@@ -646,7 +647,7 @@ function DelegateDocumentsTab({ committee, country }: { committee: Committee; co
                   : 'bg-[#FAF8F3] border-[#DDD4C0] hover:border-[#1B3828] text-[#9A8A78] hover:text-[#6A5A4A]'
               }`}
             >
-              <span className="block text-xl mb-1">📎</span>
+              <Paperclip size={22} strokeWidth={1.5} aria-hidden="true" className="mx-auto mb-1 block" />
               {/* The shared key is prefixed "+ " for a text button in all four
                   locales; the dropzone has its own glyph, so drop the prefix. */}
               <span className="font-semibold">{t('documents_upload_pdf').replace(/^\+\s*/, '')}</span>
@@ -1005,6 +1006,21 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
      list before it fires — see the denial-detection effect. */
   const pendingDenialTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [gslNow, setGslNow] = useState<number>(() => Date.now());
+  // The DELEGATION's shared allowance (src/lib/delegateAllowance.ts): every phone of a double
+  // delegation reads the same status-change count and request-to-speak clocks from the
+  // database. Null until read, and for good once the RPCs answer missing (the SQL is not
+  // applied): the per-phone localStorage limits above then stay in charge, as before.
+  const [sharedAllowance, setSharedAllowance] = useState<DelegateAllowance | null>(null);
+  const sharedAllowanceRef = useRef<DelegateAllowance | null>(null);
+  const allowanceMissingRef = useRef(false);
+  const gslCooldownRef = useRef<GslCooldown>({});
+  const gslClearSentAtRef = useRef(0);
+  // Issue order of allowance reads and records: an answer is applied only when nothing issued
+  // after it has been applied already, so a slow read never undoes a newer record's count.
+  const allowanceIssuedRef = useRef(0);
+  const allowanceAppliedRef = useRef(0);
+  // The latest countAllowance (defined further down), for the denial effect above it.
+  const countAllowanceRef = useRef<((kind: AllowanceKind) => Promise<'ok' | 'limit' | 'local'>) | null>(null);
 
   // Transient "N status changes remaining" reminder — shown when the delegate
   // actually moves the switch, then faded out. See the footnote block below.
@@ -1469,6 +1485,16 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
         pendingDenialTimer.current = null;
       }
       setGslDenied(false);
+      // Shared clocks too: tell the database this delegation reached the list, so the other
+      // phone's lockout ends with this one's. Only when a clock is actually running, and at
+      // most every 5 s, so it is not a write per committee event.
+      const cd = gslCooldownRef.current;
+      const sh = sharedAllowanceRef.current;
+      if (!allowanceMissingRef.current && Date.now() - gslClearSentAtRef.current > 5000
+        && (cd.requestedAt || cd.deniedAt || (sh && (sh.gslRetryLeftMs > 0 || sh.gslDeniedLeftMs > 0)))) {
+        gslClearSentAtRef.current = Date.now();
+        void countAllowanceRef.current?.('gsl_clear');
+      }
       // On the list: both clocks are moot. Guarded so this does not hand back a
       // fresh object (and a fresh render) on every unrelated committee event.
       setGslCooldown((prev) => {
@@ -1559,6 +1585,71 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
     }, 1000);
     return () => clearInterval(id);
   }, [gslCooldown]);
+  useEffect(() => { gslCooldownRef.current = gslCooldown; }, [gslCooldown]);
+
+  // ── Shared allowance (per delegation, src/lib/delegateAllowance.ts) ──
+  // Applying an answer: the status count is the server's; the request-to-speak clocks are
+  // laid over this phone's own as the LATER of the two stamps, so neither phone can be
+  // looser than the other. Skipped while this delegation is on the list or the floor (both
+  // clocks are moot there, and the on-list branch above clears them).
+  const applyAllowance = useCallback((a: DelegateAllowance) => {
+    sharedAllowanceRef.current = a;
+    setSharedAllowance(a);
+    const c = committeeRef.current;
+    if (c && (c.speakersList.some((s) => sameSeat(s.country, country)) || sameSeat(c.currentSpeaker?.country, country))) return;
+    const req = a.gslRetryLeftMs > 0 ? a.readAt - (GSL_RETRY_MS - a.gslRetryLeftMs) : undefined;
+    const den = a.gslDeniedLeftMs > 0 ? a.readAt - (GSL_DENIED_MS - a.gslDeniedLeftMs) : undefined;
+    if (req === undefined && den === undefined) return;
+    setGslCooldown((prev) => {
+      const later = (x?: number, y?: number) => (x === undefined ? y : y === undefined ? x : Math.max(x, y));
+      const next: GslCooldown = { requestedAt: later(prev.requestedAt, req), deniedAt: later(prev.deniedAt, den) };
+      if (next.requestedAt === prev.requestedAt && next.deniedAt === prev.deniedAt) return prev;
+      if (committeeRef.current) writeGslCooldown(committeeRef.current.id, country, next);
+      return next;
+    });
+  }, [country]);
+  const refreshAllowance = useCallback(async () => {
+    if (allowanceMissingRef.current || !country) return;
+    const seq = ++allowanceIssuedRef.current;
+    const res = await readDelegateAllowance(code, country);
+    if (res === 'missing') { allowanceMissingRef.current = true; sharedAllowanceRef.current = null; setSharedAllowance(null); return; }
+    if (res && seq > allowanceAppliedRef.current) { allowanceAppliedRef.current = seq; applyAllowance(res); }
+  }, [code, country, applyAllowance]);
+  // Count one event. Answers what the server said, or 'local' when the page must fall back
+  // to its own per-phone limit for this press (the SQL is missing, or no answer came back).
+  const countAllowance = useCallback(async (kind: AllowanceKind): Promise<'ok' | 'limit' | 'local'> => {
+    if (allowanceMissingRef.current || !country) return 'local';
+    const seq = ++allowanceIssuedRef.current;
+    const res = await recordDelegateAllowance(code, country, kind);
+    if (res === 'missing') { allowanceMissingRef.current = true; sharedAllowanceRef.current = null; setSharedAllowance(null); return 'local'; }
+    if (!res) return 'local';
+    if (seq > allowanceAppliedRef.current) { allowanceAppliedRef.current = seq; applyAllowance(res.state); }
+    return res.ok ? 'ok' : 'limit';
+  }, [code, country, applyAllowance]);
+  useEffect(() => { countAllowanceRef.current = countAllowance; }, [countAllowance]);
+  // Read again whenever something another phone of this delegation did would show: its
+  // status changed, its request to speak appeared or went, or this tab came back. Coalesced
+  // (one read ~400 ms after a burst of events), never per second.
+  const myStatusNow = committee?.delegates.find((d) => sameSeat(d.country, country))?.status ?? null;
+  const myGslPendingNow = !!committee && (committee.pendingMotions ?? []).some((m) => (m.type as string) === 'gsl-request' && sameSeat(m.proposedBy, country));
+  const myOnListNow = !!committee && (committee.speakersList.some((s) => sameSeat(s.country, country)) || sameSeat(committee.currentSpeaker?.country, country));
+  useEffect(() => {
+    if (!committee?.id || !country) return;
+    const id = window.setTimeout(() => { void refreshAllowance(); }, 400);
+    return () => window.clearTimeout(id);
+  }, [committee?.id, country, myStatusNow, myGslPendingNow, myOnListNow, refreshAllowance]);
+  useEffect(() => {
+    const onVisible = () => { if (document.visibilityState === 'visible') void refreshAllowance(); };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, [refreshAllowance]);
+  // A used status slot frees itself after 3 hours: read again then, so the count comes back.
+  useEffect(() => {
+    if (!sharedAllowance || sharedAllowance.statusLeft >= 3 || sharedAllowance.statusNextMs <= 0) return;
+    const wait = Math.max(1000, sharedAllowance.readAt + sharedAllowance.statusNextMs - Date.now() + 1000);
+    const id = window.setTimeout(() => { void refreshAllowance(); }, Math.min(wait, 3 * 60 * 60 * 1000));
+    return () => window.clearTimeout(id);
+  }, [sharedAllowance, refreshAllowance]);
 
   // ── Live caucus clock ─────────────────────────────────────────────────────
   // The per-second tick lives in <LiveCaucusClock> (below this component), so only the
@@ -1747,7 +1838,10 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
   const myQueueIndex = committee.speakersList.findIndex((s) => sameSeat(s.country, country));
   const isOnSpeakersList = myQueueIndex !== -1;
   const isCurrentSpeaker = sameSeat(committee.currentSpeaker?.country, country);
-  const changesLeft = myDelegate ? statusChangesRemaining(committee.id, country) : 0;
+  // The delegation's shared count when the database answers; this phone's own otherwise.
+  const changesLeft = myDelegate
+    ? (sharedAllowance ? sharedAllowance.statusLeft : statusChangesRemaining(committee.id, country))
+    : 0;
   // An observer delegation is Absent or Present, never Present and Voting, exactly like the
   // chair's picker (A / P for an observer): the phone never offers or writes PV for it.
   const isObserverSeat = !!myDelegate?.isObserver;
@@ -1798,11 +1892,30 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
     // Recorded up front, NOT after the await: a delegate double-tapping the switch would
     // otherwise spend two writes against one slot. A write that fails refunds it below.
     recordStatusChange(committee.id, country);
+    // The delegation's shared count (every phone of a double delegation): counted on the
+    // server BEFORE the write, so the other phone's changes count against this one. Refused
+    // (`limit`: the other phone used the last change) = no write, the switch goes back.
+    // No answer, or the SQL is not applied = this phone's own count decides, as before.
+    if (sharedAllowanceRef.current) {
+      const a = sharedAllowanceRef.current;
+      setSharedAllowance({ ...a, statusLeft: Math.max(0, a.statusLeft - 1) });
+    }
+    const counted = await countAllowance('status');
+    if (counted === 'limit') {
+      refundStatusChange(committee.id, country);
+      delete pendingStatusWrites.current[delegateId];
+      setCommittee((prev) => prev ? {
+        ...prev,
+        delegates: prev.delegates.map((d) => d.id === delegateId ? { ...d, status: previousStatus } : d),
+      } : prev);
+      return;
+    }
     setDelegateStatusInDB(delegateId, newStatus, committee.code).then((ok) => {
       if (ok) return;
       // The write never landed: give the slot back, drop the pin, and put the switch back
       // where it was so the delegate is not looking at a status the committee never saw.
       refundStatusChange(committee.id, country);
+      if (counted === 'ok') void countAllowance('status_refund');
       delete pendingStatusWrites.current[delegateId];
       setCommittee((prev) => prev ? {
         ...prev,
@@ -1871,6 +1984,8 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
     setGslCooldown(next);
     writeGslCooldown(committee.id, country, next);
     requestGslSpot(committee.id, myDelegate.id, myDelegate.country, committee.code);
+    // Shared with every phone of this delegation: the other one shows the same wait.
+    void countAllowance('gsl_request');
   };
 
   // ── Derived presentation data ─────────────────────────────────────────────
@@ -1960,7 +2075,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
   const header = (
     <header
       className="dgv-hdr sticky top-0 z-30 flex items-center gap-2 px-3 sm:px-5"
-      style={{ minHeight: 56, paddingBlock: 4, background: DG.cream, borderBottom: `1px solid ${DG.hairline}` }}
+      style={{ minHeight: 'calc(56px + env(safe-area-inset-top, 0px))', paddingTop: 'calc(4px + env(safe-area-inset-top, 0px))', paddingBottom: 4, background: DG.cream, borderBottom: `1px solid ${DG.hairline}` }}
     >
       <SessionsHeaderLogo height={24} />
       <div className="min-w-0 flex-1 text-start">
@@ -2375,7 +2490,8 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
               className="dgv-focus"
               style={{
                 flexShrink: 0, marginTop: 4, border: 'none', background: 'transparent',
-                cursor: 'pointer', textAlign: 'start', padding: '4px 6px',
+                cursor: 'pointer', textAlign: 'start', padding: '4px 6px', minHeight: 40,
+                display: 'inline-flex', alignItems: 'center', alignSelf: 'flex-start',
                 fontFamily: OUTFIT, fontSize: 12, fontWeight: 700, color: DG.body,
               }}
             >
@@ -2423,7 +2539,8 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
             className="dgv-focus"
             style={{
               flexShrink: 0, marginTop: 4, border: 'none', background: 'transparent',
-              cursor: 'pointer', textAlign: 'start', padding: '4px 6px',
+              cursor: 'pointer', textAlign: 'start', padding: '4px 6px', minHeight: 40,
+              display: 'inline-flex', alignItems: 'center', alignSelf: 'flex-start',
               fontFamily: OUTFIT, fontSize: 12, fontWeight: 700, color: DG.body,
             }}
           >
@@ -2479,12 +2596,13 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
   );
 
   return (
-    /* One screen, no page scroll. Fixed dvh + overflow hidden, and every band
-       inside is flex with min-height:0 so the bottom row absorbs the slack. */
+    /* One screen where it fits: fixed dvh, and every band inside is flex with
+       min-height:0 so the bottom row absorbs the slack. Where it cannot fit, the
+       page scrolls instead of clipping (.dgv-root in DelegateUI). */
     <SeatArtProvider delegates={committee.delegates}>
     <div
-      className="flex flex-col"
-      style={{ height: '100dvh', overflow: 'hidden', background: DG.ivory }}
+      className="dgv-root flex flex-col"
+      style={{ background: DG.ivory }}
     >
       <DelegateStyles />
       <ConnectionPill state={connection} />
@@ -2824,7 +2942,10 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
         ) : (
           // Full-bleed inside the sheet. ChatPanel measures its own width: one pane (list, then
           // thread with a back button) on a phone, two panes when the sheet is wide.
-          <div className="flex overflow-hidden" style={{ height: '62vh', minHeight: 320, margin: '0 -16px -24px', borderRadius: 0 }}>
+          // Sized to what the keyboard leaves (--dgv-kb, written by Sheet): the panel's cap
+          // minus its own handle, title row and padding (about 120px), so the thread's header
+          // and the composer both stay on screen while typing.
+          <div className="flex overflow-hidden" style={{ height: 'min(62dvh, calc(86dvh - var(--dgv-kb, 0px) - 120px))', minHeight: 200, margin: '0 -16px calc(-24px - env(safe-area-inset-bottom, 0px))', paddingBottom: 'env(safe-area-inset-bottom, 0px)', borderRadius: 0 }}>
             <ChatPanel
               committee={committee}
               senderName={country}

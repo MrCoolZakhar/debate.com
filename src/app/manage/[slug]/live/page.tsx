@@ -24,8 +24,8 @@ import {
 import { fetchPendingChairInvites, pendingInviteName } from '@/lib/chairInvites';
 import {
   BroadcastComposer, RecentBroadcasts, broadcastTargets, groupBroadcasts,
-  mapBroadcastRow, deleteBroadcastGroup,
-  type BroadcastRow, type BroadcastGroup,
+  mapBroadcastRow, deleteBroadcastGroup, applyDueBroadcast,
+  type BroadcastRow, type BroadcastGroup, type BroadcastRoomState,
 } from './BroadcastComposer';
 import { CommitteeCard, GridFootnote } from './CommitteeCard';
 import { FloorDetail, useNowTick } from './PhaseVariants';
@@ -135,11 +135,10 @@ export default function LiveStatusPage() {
       }
       const { data: confCommittees, error: confErr } = await authed
         .from('conference_committees')
-        // `released_to_chairs_at` and `delegation_size` are new here and are both
-        // read-only: the first lets a never-opened room say whether its dais has
-        // actually been invited (the not-started nudge on the card), the second
-        // is the double-delegation flag. Neither is ever written by this page.
-        .select('id, name, abbreviation, logo_url, topics, difficulty, committee_type, total_slots, session_id, session_code, chair_user_ids, display_chairs, released_to_chairs_at, delegation_size')
+        // `delegation_size` is the double-delegation flag, read only. The chairs'
+        // release stamp is no longer read: there is no organiser release date
+        // any more (owner, 23 Oct 2026).
+        .select('id, name, abbreviation, logo_url, topics, difficulty, committee_type, total_slots, session_id, session_code, chair_user_ids, display_chairs, delegation_size')
         .eq('conference_id', conference.id)
         .order('name', { ascending: true });
 
@@ -433,7 +432,6 @@ export default function LiveStatusPage() {
             totalSlots: (c.total_slots as number) ?? 0,
             sessionId: sid,
             sessionCode: (c.session_code as string | null) ?? null,
-            releasedToChairsAt: (c.released_to_chairs_at as string | null) ?? null,
             // NOT NULL DEFAULT 1 in the schema; the coalesce is for the type.
             delegationSize: (c.delegation_size as number | null) ?? 1,
             chairUserIds,
@@ -730,6 +728,31 @@ export default function LiveStatusPage() {
   );
   const broadcastGroups = useMemo(() => groupBroadcasts(broadcasts).slice(0, 5), [broadcasts]);
 
+  // Each room by session id, so a due Pause / End can say whether it took (owner,
+  // 23 Oct 2026: it only happens on the Moderator's device if one is open).
+  const broadcastRooms = useMemo(() => {
+    const map = new Map<string, BroadcastRoomState>();
+    for (const r of rows ?? []) {
+      if (!r.session) continue;
+      map.set(r.session.id, {
+        label: r.conf.abbreviation?.trim() || r.conf.name,
+        suspendedAt: r.session.suspendedAt,
+        endedAt: r.session.endedAt,
+        updatedAt: r.session.updatedAt,
+      });
+    }
+    return map;
+  }, [rows]);
+
+  async function handleApplyNow(g: BroadcastGroup, ids: string[]) {
+    setBroadcastBusyKey(g.key);
+    clearErr('live');
+    const err = await applyDueBroadcast(ids);
+    setBroadcastBusyKey(null);
+    if (err) { notifyErr(err, 'live'); return; }
+    await loadAll();
+  }
+
   async function handleWithdraw(g: BroadcastGroup) {
     setBroadcastBusyKey(g.key);
     clearErr('live');
@@ -884,6 +907,8 @@ export default function LiveStatusPage() {
       {/* What the secretariat has already sent to the floor */}
       <RecentBroadcasts
         groups={broadcastGroups}
+        rooms={broadcastRooms}
+        onApplyNow={(g, ids) => { void handleApplyNow(g, ids); }}
         onDelete={(g) => { void handleWithdraw(g); }}
         busyKey={broadcastBusyKey}
       />

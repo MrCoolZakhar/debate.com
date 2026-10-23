@@ -4,7 +4,7 @@
 // so the organiser committees tab and the public conference page can share it.
 // Exposes: CommitteeEditorModal (create + edit, with built-in type picker for the
 // create flow), MonogramMedallion (fallback emblem), ModalOverlay (house modal
-// backdrop) and mintConferenceSession (session minting for conference committees).
+// backdrop) and sessionCommitteeClient (the header client a live room's RLS accepts).
 
 import { useState, useEffect, useCallback } from 'react';
 import { X, UserPlus, Mail, Send } from 'lucide-react';
@@ -56,6 +56,8 @@ import type { ChairTitle } from '@/lib/chairTitles';
 import { queueEventEmail } from '@/lib/emailEvents';
 import { friendlyError } from '@/lib/friendlyError';
 import { normaliseCommitteeLanguage, DEFAULT_COMMITTEE_LANGUAGE } from '@/lib/committeeLanguage';
+import { readLiveSeatUse, liveSeatUseLines, clearFloorOfSeats, type LiveSeatUse } from '@/lib/liveSeatRemoval';
+import { notifyErr } from '@/lib/appNotify';
 
 // ── Design constants ──────────────────────────────────────────────────────────
 
@@ -205,120 +207,9 @@ export async function sessionCommitteeClient(
   return { client: sessionClient(data.code as string, suffix, { timeout: false }), settings, topic: (data.topic as string | null) ?? null };
 }
 
-// One seat handed to the minter. `name` is what `delegates.country` stores, the
-// same string the roster and `committee_country_slots.country_name` carry.
-//
-// `logoUrl` is the seat's ALREADY RESOLVED art (its own flag, else its group's),
-// resolved by the caller because only the caller has the groups in hand. It is
-// resolved at WRITE time on purpose: the session client is anonymous and cannot
-// read `committee_country_slots` (or `conference_committees.groups`) for a
-// private conference, so the live session can never work out "own flag, else
-// the party flag" for itself. `delegates.logo_url` carries the answer.
-export interface MintSeat {
-  name: string;
-  logoUrl?: string | null;
-}
-
-// Mint a real, joinable session for a conference committee and link it back.
-// Generates a unique 6-char code, retrying on a code-uniqueness collision.
-// Returns the code, or null if the session row itself could not be created.
-//
-// CLIENTS: `committees.sess_insert` is WITH CHECK `true`, so the organiser's
-// authed client mints the row. Everything after that — the current_speaker row
-// and the delegate seats — is a session-header write and goes through
-// `sessionClient(code, chairJoinSuffix)`. See the block comment above; the
-// previous code used the authed client for both and both were silently dropped.
-//
-// `onProblem` reports a session that was created but not fully furnished. The
-// code is still returned in that case (the row exists and is linked, so
-// swallowing it would strand it), but the caller MUST surface the message.
-export async function mintConferenceSession(
-  supabase: ReturnType<typeof getAuthedClient>,
-  confCommitteeId: string,
-  name: string,
-  topic: string,
-  // Empty is normal and supported: the "generate code" button on the committees
-  // page mints a bare session and seats nobody.
-  seats: MintSeat[],
-  // Names (countries or characters) flagged as observers. Mirrors the standalone
-  // session flow: delegates.is_observer carries the flag on the live session, so
-  // the chair/roll-call/voting views treat these rows as observers identically.
-  observers: string[] = [],
-  onProblem?: (message: string) => void,
-): Promise<string | null> {
-  for (let attempt = 0; attempt < 5; attempt++) {
-    const code = Math.random().toString(36).substring(2, 8).toUpperCase();
-    const chairJoinSuffix = Math.floor(1000 + Math.random() * 9000).toString();
-    const { data: sessionRow, error: sErr } = await supabase
-      .from('committees')
-      .insert({
-        code,
-        name,
-        topic: topic || 'TBD',
-        chair_names: [],
-        phase: 'pre-session',
-        speaker_time_limit: 90,
-        settings: { chairJoinSuffix, separateChairCode: true },
-        session_origin: 'conference',
-      })
-      .select('id')
-      .single();
-    if (sErr) {
-      if (sErr.code === '23505') continue; // code collision, try a new code
-      console.error('Error minting conference session:', sErr);
-      return null;
-    }
-    // SESSION-HEADER CLIENT from here on — the two writes below are gated on
-    // is_session_chair / has_session_code, not on the organiser's token.
-    const sessDb = sessionClient(code, chairJoinSuffix, { timeout: false });
-    const { error: csErr } = await sessDb.from('current_speaker').insert({
-      committee_id: sessionRow.id,
-      delegate_id: null,
-      country: null,
-      time_remaining: 90,
-    });
-    if (csErr) {
-      console.error('[committee-editor] Error creating current_speaker for minted session:', csErr);
-      onProblem?.('the speaker slot could not be created');
-    }
-    if (seats.length > 0) {
-      const observerSet = new Set(observers.map((o) => o.toLowerCase()));
-      const { error: dErr } = await sessDb.from('delegates').insert(
-        seats.map((s) => ({
-          committee_id: sessionRow.id,
-          country: s.name,
-          status: 'absent',
-          is_observer: observerSet.has(s.name.toLowerCase()),
-          logo_url: s.logoUrl ?? null,
-        }))
-      );
-      if (dErr) {
-        console.error('[committee-editor] Error seating delegates on minted session:', dErr);
-        onProblem?.(`the ${seats.length} seats could not be added to the live session`);
-      }
-    }
-    // THE LINK IS THE WHOLE POINT OF THE MINT. Without `session_id` the live
-    // wall, the cross-committee scoreboard and awards can never find this room:
-    // they all join through conference_committees.session_id, not through the
-    // code. An unchecked update here hands the organiser a join code for a room
-    // nothing on the conference side is attached to — a session that is orphaned
-    // from birth. `.select('id')` because an RLS mismatch on an UPDATE reports
-    // zero rows changed, not an error.
-    const { data: linked, error: linkErr } = await supabase
-      .from('conference_committees')
-      .update({ session_id: sessionRow.id, session_code: code })
-      .eq('id', confCommitteeId)
-      .select('id');
-    if (linkErr || !linked || linked.length === 0) {
-      console.error('[committee-editor] Error linking minted session to conference committee:', linkErr);
-      onProblem?.(
-        'the session was created but not linked to the committee, so the live wall, the scoreboard and awards cannot see it',
-      );
-    }
-    return code;
-  }
-  return null;
-}
+// The client-side mint (`mintConferenceSession`) is gone (owner, 23 Oct 2026). A new
+// committee's live room comes from `start_my_chair_session` in `doCreate` below: one
+// transaction, so a room can never exist unlinked.
 
 // ── ChairsDock (side popover, docked outside the main editor modal) ───────────
 // A small distinct panel showing the committee's seated chairs (avatars), plus
@@ -764,6 +655,9 @@ function CommitteeEditor({ conferenceId, committeeType, existing, initialRoster,
   // Turning double delegation OFF is destructive when second seats are
   // occupied — count of affected delegates, shown in the danger confirm modal.
   const [pendingDoubleOffCount, setPendingDoubleOffCount] = useState<number | null>(null);
+  // Removed seats that are in use in the live room: the sentences shown in place above
+  // Save, and whether double delegation was already confirmed off on the way here.
+  const [liveRemoval, setLiveRemoval] = useState<{ lines: string[]; forceDoubleOff: boolean } | null>(null);
   const [logoUrl, setLogoUrl] = useState<string | null>(existing?.logo_url ?? draftInitial?.logoUrl ?? null);
   const [logoUploading, setLogoUploading] = useState(false);
   // Once the organiser uploads, clears, or picks an emblem, we stop auto-filling
@@ -901,7 +795,9 @@ function CommitteeEditor({ conferenceId, committeeType, existing, initialRoster,
       working_language: normaliseCommitteeLanguage(workingLanguage) ?? DEFAULT_COMMITTEE_LANGUAGE,
     }).select('id').single();
     if (err || !created) { setError(friendlyError(err, "Couldn't create the committee. Please try again.")); return false; }
-    await supabase.from('committee_country_slots').insert(
+    // The seats go in FIRST: `start_my_chair_session` seats the room from these rows.
+    // Checked, because a refused insert used to pass silently and the room came up empty.
+    const { error: slotErr } = await supabase.from('committee_country_slots').insert(
       roster.map((r) => ({
         conference_committee_id: created.id,
         country_code: getCountryByName(r.name)?.code ?? r.name,
@@ -913,27 +809,66 @@ function CommitteeEditor({ conferenceId, committeeType, existing, initialRoster,
         group_id: isCustom ? validGroupId(r.groupId) : null,
       }))
     );
-    // A session that mints but cannot be seated is the exact failure this whole
-    // file's session-client note is about: chairs would open an empty room and
-    // nobody would be told. Surface it and stop, rather than closing on a lie.
-    const mintProblems: string[] = [];
-    await mintConferenceSession(
-      supabase, created.id, name.trim(), topics[0] ?? '',
-      roster.map((r) => ({ name: r.name, logoUrl: resolvedSeatArt(r, groups) })),
-      roster.filter((r) => r.isObserver).map((r) => r.name),
-      (msg) => { mintProblems.push(msg); },
-    );
-    if (mintProblems.length > 0) {
-      // The committee itself exists, so saving again would duplicate it — the
-      // only sane next action is Close, then delete and re-add the committee.
+    if (slotErr) console.error('[committee-editor] seats', slotErr);
+
+    // THE LIVE ROOM, through the database (owner, 23 Oct 2026). `start_my_chair_session`
+    // mints the room, its current_speaker row and its seats and links it back to this
+    // committee in ONE transaction under the committee's own lock, so a room can never
+    // exist unlinked (the client mint this replaced was four separate writes, its result
+    // was never checked, and about a hundred unlinked open rooms were the cost). Idempotent:
+    // a second call hands back the same room. Called after the seats, never from an effect.
+    const halt = (why: string) => {
+      // The committee itself exists, so saving again would duplicate it: the only sane
+      // next action is Close. Its chair can start the room from their page.
       setCreateHalted(true);
-      setError(`"${name.trim()}" was created, but its live session was not set up: ${mintProblems.join('; ')}. Chairs would open an empty room. Close this dialog, then delete and re-add the committee.`);
+      setError(`"${name.trim()}" was created, but ${why}. Close this dialog. Its chair can start the room from their page with "Start your committee room", or delete and re-add the committee.`);
       return false;
+    };
+    if (slotErr) return halt('its seats were not saved, so its live room was not started');
+    type StartAnswer = { ok?: boolean; code?: string; session_id?: string; message?: string };
+    const started: StartAnswer | null = await (async () => {
+      try {
+        const { data, error: rpcErr } = await supabase.rpc('start_my_chair_session', { p_committee: created.id });
+        if (rpcErr) console.error('[committee-editor] start_my_chair_session', rpcErr);
+        return (data ?? null) as StartAnswer | null;
+      } catch (e) {
+        console.error('[committee-editor] start_my_chair_session', e);
+        return null;
+      }
+    })();
+    if (!started?.ok || !started.code || !started.session_id) {
+      return halt(started?.message ? `its live room was not started (${started.message.replace(/\.$/, '')})` : 'its live room was not started');
+    }
+
+    // Seat art: the room is seated with each slot's OWN flag. A custom committee's seat
+    // that shows its GROUP's flag (resolveSeatArt) is fixed up here, through the session
+    // client, until the database resolves group art itself (scratch-conference-rooms.sql,
+    // section C8; after that this finds nothing to write).
+    const inherited = roster.filter((r) => resolvedSeatArt(r, groups) !== (r.logoUrl ?? null));
+    if (inherited.length > 0) {
+      const res = await sessionCommitteeClient(supabase, started.session_id);
+      let artOk = !('error' in res);
+      if (!('error' in res)) {
+        const byArt = new Map<string | null, string[]>();
+        for (const r of inherited) {
+          const url = resolvedSeatArt(r, groups);
+          byArt.set(url, [...(byArt.get(url) ?? []), r.name]);
+        }
+        for (const [url, names] of byArt) {
+          const { error: artErr } = await res.client.from('delegates')
+            .update({ logo_url: url })
+            .eq('committee_id', started.session_id)
+            .in('country', names);
+          if (artErr) { artOk = false; console.error('[committee-editor] seat art', artErr); }
+        }
+      }
+      // The committee and its room are fine; only some flags are missing on the floor.
+      if (!artOk) notifyErr(`"${name.trim()}" was added, but some group flags did not reach its live room.`);
     }
     return true;
   }
 
-  async function doEdit(supabase: ReturnType<typeof getAuthedClient>, forceRemoval: boolean, forceDoubleOff = false): Promise<'ok' | 'needs_confirm_removal' | 'needs_confirm_double_off' | 'fail'> {
+  async function doEdit(supabase: ReturnType<typeof getAuthedClient>, forceRemoval: boolean, forceDoubleOff = false, forceLive = false): Promise<'ok' | 'needs_confirm_removal' | 'needs_confirm_double_off' | 'needs_confirm_live' | 'fail'> {
     const ex = existing!;
     const baseNames = baselineRoster.map(r => r.name);
     const nextNames = roster.map(r => r.name);
@@ -984,6 +919,20 @@ function CommitteeEditor({ conferenceId, committeeType, existing, initialRoster,
       }
     }
 
+    // A removed seat that is IN USE in the live room (speaking, waiting on a list, in an
+    // open vote) is asked about first, in place above Save (owner, 23 Oct 2026: no ghost
+    // speaker). Read before any write; a room that cannot be read is not a reason to block
+    // the organiser, and the chair page clears a vanished floor holder on its own.
+    let removedLive: LiveSeatUse | null = null;
+    if (removed.length > 0 && ex.session_id) {
+      removedLive = await readLiveSeatUse(ex.session_id, removed);
+      const lines = removedLive ? liveSeatUseLines(removedLive) : [];
+      if (!forceLive && lines.length > 0) {
+        setLiveRemoval({ lines, forceDoubleOff });
+        return 'needs_confirm_live';
+      }
+    }
+
     // ── The live-session mirror ───────────────────────────────────────────────
     // Everything this function writes to `delegates` and `committees` needs the
     // session headers, not the organiser's token (see the block comment at the
@@ -1012,6 +961,14 @@ function CommitteeEditor({ conferenceId, committeeType, existing, initialRoster,
       await supabase.from('conference_allocations').delete().eq('conference_committee_id', ex.id).in('country_name', removed);
       await supabase.from('committee_country_slots').delete().eq('conference_committee_id', ex.id).in('country_name', removed);
       if (sessDb) {
+        // A removed seat holding the floor leaves it FIRST, delegate_id and country together,
+        // so the delete below never leaves a country on the floor with nobody behind it.
+        if (removedLive && removedLive.speaking.length > 0) {
+          const cleared = await clearFloorOfSeats(sessDb, ex.session_id!, removedLive.speaking.map((n) => ({
+            name: n, delegateId: removedLive!.delegateIds[n] ?? null,
+          })));
+          if (!cleared) console.error('[committee-editor] the floor could not be cleared before removing its seat; the chair page clears it');
+        }
         const { error: e } = await sessDb.from('delegates').delete().eq('committee_id', ex.session_id!).in('country', removed);
         if (e) noteSess(`${removed.length} removed ${removed.length === 1 ? 'seat is' : 'seats are'} still in the live room`, e.message);
       }
@@ -1031,14 +988,19 @@ function CommitteeEditor({ conferenceId, committeeType, existing, initialRoster,
         }))
       );
       if (sessDb) {
-        const { error: e } = await sessDb.from('delegates').insert(
+        // A seat the room already has (a chair added it on the floor, or an earlier save
+        // half landed) is SKIPPED, not a failure: `delegates` is UNIQUE (committee_id,
+        // country), and one duplicate used to fail the whole batch, so every other new
+        // seat was lost with it. Only a real refusal is reported.
+        const { error: e } = await sessDb.from('delegates').upsert(
           added.map((r) => ({
             committee_id: ex.session_id,
             country: r.name,
             status: 'absent',
             is_observer: !!r.isObserver,
             logo_url: resolvedSeatArt(r, groups),
-          }))
+          })),
+          { onConflict: 'committee_id,country', ignoreDuplicates: true },
         );
         if (e) noteSess(`${added.length} new ${added.length === 1 ? 'seat was' : 'seats were'} not added to the live room`, e.message);
       }
@@ -1207,7 +1169,8 @@ function CommitteeEditor({ conferenceId, committeeType, existing, initialRoster,
     //   2. `committees.settings.agendaTopicIndex`, the chair's 0-based pick, if
     //      it still fits (covers the organiser rewording the chosen topic);
     //   3. topics[0].
-    // Settings are only READ here; the chair page owns that key.
+    // Settings are only READ here; the chair page owns that key, and the only settings
+    // write is `set_committee_agenda`'s one-key merge below.
     //
     // `.select('id')` because an RLS-rejected update resolves with error null
     // and zero rows, which would otherwise pass for success.
@@ -1219,19 +1182,30 @@ function CommitteeEditor({ conferenceId, committeeType, existing, initialRoster,
       const textIdx = sessTopic ? topics.indexOf(sessTopic) : -1;
       const resolvedIdx = textIdx >= 0 ? textIdx : agendaIdx;
       const sessionTopic = topics[resolvedIdx] ?? 'TBD';
-      // When the chair has chosen, keep their stored index pointing at the topic the
-      // room actually shows, or a later reword would follow a stale index to the wrong
-      // topic. Merged into the blob read moments ago (chairJoinSuffix / headChair ride
-      // along untouched). Never ADDED when absent: that would suppress the chair's picker.
+      // NEVER THE SETTINGS BLOB (owner, 23 Oct 2026; AGENTS.md MUST NEVER HAPPEN #12). This
+      // used to write `settings = { ...blob read moments ago, agendaTopicIndex }`, a stale
+      // copy of the live room's settings: a gavel handover, a chair's setting or a held GSL
+      // turn that landed between the read and this write was reverted. Now:
+      //   • the chair has chosen (`agendaTopicIndex` set): `set_committee_agenda`, which
+      //     writes the topic AND merges only `agendaTopicIndex` in one statement, so the
+      //     stored index keeps pointing at the topic the room shows;
+      //   • the chair has not chosen: a plain update of the `topic` column. The index is
+      //     never ADDED here: that would suppress the chair's agenda picker.
+      // The name is a plain column update either way.
       const chairChose = typeof rawIdx === 'number' && Number.isInteger(rawIdx);
-      const sessPatch: Record<string, unknown> = { name: name.trim(), topic: sessionTopic };
-      if (chairChose && rawIdx !== resolvedIdx) sessPatch.settings = { ...sessSettings, agendaTopicIndex: resolvedIdx };
+      const sessFail = 'the live session kept its old name and topic';
       const { data: sessUpd, error: e } = await sessDb.from('committees')
-        .update(sessPatch)
+        .update(chairChose ? { name: name.trim() } : { name: name.trim(), topic: sessionTopic })
         .eq('id', ex.session_id!)
         .select('id');
-      if (e) noteSess('the live session kept its old name and topic', e.message);
-      else if (!sessUpd || sessUpd.length === 0) noteSess('the live session kept its old name and topic', 'the update was not accepted');
+      if (e) noteSess(sessFail, e.message);
+      else if (!sessUpd || sessUpd.length === 0) noteSess(sessFail, 'the update was not accepted');
+      else if (chairChose && (rawIdx !== resolvedIdx || sessTopic !== sessionTopic)) {
+        const { data: agendaOk, error: agendaErr } = await sessDb.rpc('set_committee_agenda', {
+          p_committee: ex.session_id!, p_index: resolvedIdx, p_topic: sessionTopic,
+        });
+        if (agendaErr || agendaOk !== true) noteSess('the live session kept its old topic', agendaErr?.message ?? 'the update was not accepted');
+      }
     }
 
     if (sessErrors.length > 0) {
@@ -1241,7 +1215,7 @@ function CommitteeEditor({ conferenceId, committeeType, existing, initialRoster,
     return 'ok';
   }
 
-  async function handleSave(forceRemoval = false, forceDoubleOff = false) {
+  async function handleSave(forceRemoval = false, forceDoubleOff = false, forceLive = false) {
     // The committee is already in the database; saving again would duplicate it.
     if (createHalted) return;
     if (!name.trim()) { setError('Committee name is required.'); return; }
@@ -1258,9 +1232,9 @@ function CommitteeEditor({ conferenceId, committeeType, existing, initialRoster,
     setSaving(true); setError('');
     const supabase = getAuthedClient(session.access_token);
     if (isEdit) {
-      const res = await doEdit(supabase, forceRemoval, forceDoubleOff);
+      const res = await doEdit(supabase, forceRemoval, forceDoubleOff, forceLive);
       setSaving(false);
-      if (res === 'needs_confirm_removal' || res === 'needs_confirm_double_off') return;
+      if (res === 'needs_confirm_removal' || res === 'needs_confirm_double_off' || res === 'needs_confirm_live') return;
       if (res !== 'ok') return;
     } else {
       const ok = await doCreate(supabase);
@@ -1461,6 +1435,27 @@ function CommitteeEditor({ conferenceId, committeeType, existing, initialRoster,
 
           <div className="mt-auto flex-shrink-0 pt-4">
             {error && <p role="alert" className="mb-2.5" style={{ color: '#8B2020', fontFamily: OUTFIT, fontSize: 12.5, lineHeight: 1.5, margin: '0 0 10px' }}>{error}</p>}
+            {liveRemoval ? (
+              /* Asked IN PLACE (a pop-up never opens another pop-up): the seats being removed
+                 are in use in the live room right now. */
+              <div role="alertdialog" aria-labelledby="ced-live-removal" style={{ borderRadius: 16, padding: '14px 16px', boxShadow: 'inset 0 0 0 1.5px rgba(139,32,32,0.35)', backgroundColor: 'rgba(139,32,32,0.04)' }}>
+                <p id="ced-live-removal" style={{ fontFamily: OUTFIT, fontSize: 14.5, fontWeight: 800, color: '#1C1410', margin: '0 0 6px' }}>Remove Seats in Use?</p>
+                {liveRemoval.lines.map((line) => (
+                  <p key={line} style={{ fontFamily: OUTFIT, fontSize: 13, lineHeight: 1.5, color: '#4A3E33', margin: '0 0 4px' }}>{line}</p>
+                ))}
+                <div className="grid gap-2.5 mt-3" style={{ gridTemplateColumns: 'minmax(0,1fr) minmax(0,1fr)' }}>
+                  <SetupGhostButton label="Go back" onClick={() => setLiveRemoval(null)} />
+                  <button
+                    type="button"
+                    onClick={() => { const f = liveRemoval.forceDoubleOff; setLiveRemoval(null); void handleSave(true, f, true); }}
+                    className="rounded-2xl focus:outline-none focus-visible:shadow-[0_0_0_2px_#8B2020]"
+                    style={{ minHeight: 52, border: 'none', backgroundColor: '#8B2020', color: '#FFFFFF', fontFamily: OUTFIT, fontSize: 14.5, fontWeight: 800, cursor: 'pointer' }}
+                  >
+                    Remove anyway
+                  </button>
+                </div>
+              </div>
+            ) : (
             <div className="grid gap-2.5" style={{ gridTemplateColumns: 'minmax(0,1fr) minmax(0,1.6fr)' }}>
               <SetupGhostButton label="Cancel" onClick={requestClose} />
               <SetupPrimaryButton
@@ -1470,6 +1465,7 @@ function CommitteeEditor({ conferenceId, committeeType, existing, initialRoster,
                 onClick={onPrimary}
               />
             </div>
+            )}
           </div>
         </div>
 

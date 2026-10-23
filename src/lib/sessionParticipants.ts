@@ -15,6 +15,12 @@
 //     tombstone (`delegate_seat_kicks`, RLS on, no policies). For 10 minutes
 //     claim_delegate_seat answers `kicked` to those holders (and their devices) for that
 //     seat; anyone else may take it.
+//   • `kick_delegate_seat_claim(p_code, p_claim_id)` (scratch-seat-kick-and-allowance.sql)
+//     removes ONE claim (a double delegation's other phone stays) with the same tombstone and
+//     reserved-seat exception. `session_participants` then also returns, per claim, an opaque
+//     `claim_id` (the claim row's uuid), `name` (only for the seat's allocated account) and
+//     `ordinal` (claim order on the seat). Before that SQL the fields are absent and People
+//     keeps one Kick per seat.
 //   • `remove_session_chair(p_code, p_name)` removes a Commenter's name from chair_names.
 //     Never the gavel holder (`moderator`); a name no longer listed is `not_found`.
 //     (migration `session_people_review_fixes`)
@@ -35,6 +41,13 @@ export interface ParticipantSeat {
   active: boolean;
   /** The holder is this reserved seat's allocated account: a chair cannot remove it. */
   reserved: boolean;
+  /** Opaque id of this one claim, for kick_delegate_seat_claim (scratch-seat-kick-and-allowance.sql).
+   *  Null before that SQL is applied: the seat then keeps one Kick for everyone on it. */
+  claimId: string | null;
+  /** The person's display name, only when the claim is the seat's allocated conference account. */
+  name: string | null;
+  /** 1, 2, ... per seat in claim order ("Device 1", "Device 2"). Null before the SQL. */
+  ordinal: number | null;
 }
 export interface ParticipantChairDevice {
   key: string;
@@ -82,6 +95,9 @@ export async function getSessionParticipants(code: string, chairSuffix?: string 
         lastSeenAt: str(s.last_seen_at),
         active: s.active === true,
         reserved: s.reserved === true,
+        claimId: typeof s.claim_id === 'string' && s.claim_id ? s.claim_id : null,
+        name: typeof s.name === 'string' && s.name.trim() ? s.name.trim() : null,
+        ordinal: typeof s.ordinal === 'number' && Number.isFinite(s.ordinal) ? s.ordinal : null,
       })),
       chairDevices: arr(d.chair_devices).map((c) => ({
         key: str(c.key),
@@ -107,6 +123,8 @@ async function rpcOk(code: string, suffix: string | null | undefined, fn: string
   if (!suffix) return { ok: false, reason: 'denied' };
   try {
     const { data, error } = await sessionClient(code.toUpperCase(), suffix).rpc(fn, args);
+    // A function this database does not have yet (the SQL is not applied): the caller falls back.
+    if (error && (error.code === 'PGRST202' || error.code === '42883')) return { ok: false, reason: 'missing' };
     if (error || !data) return { ok: false, reason: 'error' };
     const d = data as Raw;
     return { ok: d.ok === true, reason: typeof d.reason === 'string' ? d.reason : undefined, released: typeof d.released === 'number' ? d.released : undefined };
@@ -129,6 +147,19 @@ export async function kickDelegateSeat(code: string, suffix: string | null | und
   const res = await rpcOk(code, suffix, 'kick_delegate_seat', { p_code: code.toUpperCase(), p_country: country });
   // `reserved` can still have removed a stale non-allocated claim beside the allocated one.
   if (res.ok || (res.released ?? 0) > 0) void nudgeSeat(committeeId, country);
+  return { ok: res.ok, reason: res.reason };
+}
+
+/**
+ * Remove ONE person from a seat (a double delegation keeps the other phone in). The server
+ * tombstones only that claim's holder and device, so claim_delegate_seat answers `kicked` to
+ * the removed phone alone; the nudge below goes to the seat and every other phone on it
+ * re-verifies as `mine`. Reasons: `reserved` (the seat's allocated account, never removed),
+ * `gone` (that claim already left), `missing` (the SQL is not applied: use kickDelegateSeat).
+ */
+export async function kickDelegateSeatClaim(code: string, suffix: string | null | undefined, committeeId: string, country: string, claimId: string): Promise<{ ok: boolean; reason?: string }> {
+  const res = await rpcOk(code, suffix, 'kick_delegate_seat_claim', { p_code: code.toUpperCase(), p_claim_id: claimId });
+  if (res.ok) void nudgeSeat(committeeId, country);
   return { ok: res.ok, reason: res.reason };
 }
 

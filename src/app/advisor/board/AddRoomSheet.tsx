@@ -1,11 +1,12 @@
 'use client';
 
 // "Add a room": a 6-character session code, then "Which delegations are yours?" with an
-// optional first name for each. Also edits a room already on the board, and removes it.
+// optional first name for each, and a second one for a double delegation (two students,
+// one country: both shown on ONE board row). Also edits a room already on the board, and removes it.
 // Names stay on this device (store.ts). Nothing here writes to the server.
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowRight, Check, Loader2, Megaphone, Search, Trash2 } from 'lucide-react';
+import { ArrowRight, Check, Loader2, Megaphone, Search, Trash2, UserPlus } from 'lucide-react';
 import { CircleFlag } from '@/components/CircleFlag';
 import { useLanguage, useT } from '@/contexts/LanguageContext';
 import { getCountryDisplayName, compareCountryNames } from '@/lib/countries';
@@ -94,14 +95,27 @@ export default function AddRoomSheet({
       const next = new Map(prev);
       const k = lc(country);
       const cur = next.get(k);
-      if (cur) next.set(k, { country: cur.country, ...(name ? { name } : {}) });
+      if (cur) next.set(k, { country: cur.country, ...(name ? { name } : {}), ...(cur.name2 ? { name2: cur.name2 } : {}) });
+      return next;
+    });
+  };
+  const setName2 = (country: string, name2: string) => {
+    setPicks((prev) => {
+      const next = new Map(prev);
+      const k = lc(country);
+      const cur = next.get(k);
+      if (cur) next.set(k, { country: cur.country, ...(cur.name ? { name: cur.name } : {}), ...(name2 ? { name2 } : {}) });
       return next;
     });
   };
 
   const save = () => {
     if (!room) return;
-    const follows = [...picks.values()].map((f) => ({ country: f.country, ...(f.name?.trim() ? { name: f.name.trim().slice(0, 40) } : {}) }));
+    const follows = [...picks.values()].map((f) => ({
+      country: f.country,
+      ...(f.name?.trim() ? { name: f.name.trim().slice(0, 40) } : {}),
+      ...(f.name2?.trim() ? { name2: f.name2.trim().slice(0, 40) } : {}),
+    }));
     saveRoom(room.code, follows);
     onSaved(room.code);
   };
@@ -220,14 +234,14 @@ export default function AddRoomSheet({
             )}
             <ul className="flex flex-col gap-1.5">
               {orphans.map((p) => (
-                <PickRow key={`o-${p.country}`} country={p.country} logoUrl={null} observer={false} picked name={p.name ?? ''}
-                  note={t('adv_state_not_on_roster')} onToggle={() => toggle(p.country)} onName={(v) => setName(p.country, v)} />
+                <PickRow key={`o-${p.country}`} country={p.country} logoUrl={null} observer={false} picked name={p.name ?? ''} name2={p.name2 ?? ''}
+                  note={t('adv_state_not_on_roster')} onToggle={() => toggle(p.country)} onName={(v) => setName(p.country, v)} onName2={(v) => setName2(p.country, v)} />
               ))}
               {shown.map((d) => {
                 const pick = picks.get(lc(d.country));
                 return (
-                  <PickRow key={d.id} country={d.country} logoUrl={d.logoUrl} observer={d.isObserver} picked={!!pick} name={pick?.name ?? ''}
-                    note={null} onToggle={() => toggle(d.country)} onName={(v) => setName(d.country, v)} />
+                  <PickRow key={d.id} country={d.country} logoUrl={d.logoUrl} observer={d.isObserver} picked={!!pick} name={pick?.name ?? ''} name2={pick?.name2 ?? ''}
+                    note={null} onToggle={() => toggle(d.country)} onName={(v) => setName(d.country, v)} onName2={(v) => setName2(d.country, v)} />
                 );
               })}
             </ul>
@@ -240,14 +254,17 @@ export default function AddRoomSheet({
 }
 
 function PickRow({
-  country, logoUrl, observer, picked, name, note, onToggle, onName,
+  country, logoUrl, observer, picked, name, name2, note, onToggle, onName, onName2,
 }: {
-  country: string; logoUrl: string | null; observer: boolean; picked: boolean; name: string; note: string | null;
-  onToggle: () => void; onName: (v: string) => void;
+  country: string; logoUrl: string | null; observer: boolean; picked: boolean; name: string; name2: string; note: string | null;
+  onToggle: () => void; onName: (v: string) => void; onName2: (v: string) => void;
 }) {
   const t = useT();
   const { language } = useLanguage();
   const display = getCountryDisplayName(country, language);
+  // A double delegation: the second name field opens on request, or when one is saved.
+  const [second, setSecond] = useState(() => !!name2);
+  const showSecond = second || !!name2;
   return (
     <li className="rounded-2xl" style={{ backgroundColor: picked ? '#fff' : 'transparent', boxShadow: picked ? `inset 0 0 0 1.5px ${C.forest}` : `inset 0 0 0 1px ${C.hairline}` }}>
       <button
@@ -282,6 +299,22 @@ function PickRow({
             className="adv-input h-11 w-full rounded-xl px-3"
             style={{ fontSize: 16, backgroundColor: C.cream, color: C.ink, fontFamily: FONT }}
           />
+          {showSecond ? (
+            <input
+              value={name2}
+              onChange={(e) => onName2(e.target.value.slice(0, 40))}
+              placeholder={t('adv_second_name_placeholder')}
+              aria-label={t('adv_second_name_for', { country: display })}
+              autoComplete="off"
+              autoFocus={second && !name2}
+              className="adv-input mt-2 h-11 w-full rounded-xl px-3"
+              style={{ fontSize: 16, backgroundColor: C.cream, color: C.ink, fontFamily: FONT }}
+            />
+          ) : (
+            <button type="button" onClick={() => setSecond(true)} className="adv-focus mt-1.5 flex h-9 items-center gap-1.5 rounded-xl px-1" style={{ fontSize: 13.5, fontWeight: 700, color: C.forest }}>
+              <UserPlus size={15} strokeWidth={1.8} aria-hidden /> {t('adv_second_name_add')}
+            </button>
+          )}
         </div>
       )}
     </li>

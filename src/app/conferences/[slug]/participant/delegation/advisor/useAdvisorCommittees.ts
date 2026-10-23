@@ -10,8 +10,9 @@
 //                            with nobody in them included, plus the live room code
 //   the committees           conference_committees (anon: id, name, abbreviation,
 //                            logo_url, topics), as the conference page reads them
-//   when advisors get codes  conferences.session_release_advisors_at (anon), the
-//                            rule CommitteesSessionsCard uses
+//   when the live room opens the conference's first day (my_advisor_delegation's
+//                            startDate / endDate / timezone, conferenceWindow.ts);
+//                            the old advisor release date is not read (owner, 23 Oct 2026)
 //   the people's photos      my_delegation_roster(p_society) (avatar_url), matched
 //                            to a seat by committee, country and name
 //
@@ -23,6 +24,7 @@ import { supabase as anonSupabase } from '@/lib/supabase';
 import { getFreshAuthedClient } from '@/lib/supabase-auth';
 import { committeeDisplayName } from '@/lib/presetNames';
 import { useMyAdvisorDelegation } from '@/lib/advisorDelegation';
+import type { ConferenceDates } from '@/lib/advisorBoard/conferenceWindow';
 
 export interface AdvisorSeatPerson {
   name: string | null;
@@ -55,10 +57,10 @@ export interface AdvisorCommittee {
 
 export type AdvisorCommitteesState =
   | { kind: 'loading' }
-  | { kind: 'error' }
+  | { kind: 'error'; retry: () => void }
   /** my_advisor_delegation has no delegation for this conference: the old all-committees card. */
   | { kind: 'no-delegation' }
-  | { kind: 'ready'; committees: AdvisorCommittee[]; releaseAt: string | null };
+  | { kind: 'ready'; committees: AdvisorCommittee[]; dates: ConferenceDates };
 
 interface CommitteeMeta {
   id: string;
@@ -77,31 +79,21 @@ const lc = (v: string | null | undefined) => (v ?? '').trim().toLowerCase();
 
 export function useAdvisorCommittees(conferenceId: string, societyId: string): AdvisorCommitteesState {
   const delegation = useMyAdvisorDelegation();
-  const [meta, setMeta] = useState<{ key: string; committees: CommitteeMeta[]; releaseAt: string | null } | null>(null);
+  const [meta, setMeta] = useState<{ key: string; committees: CommitteeMeta[] } | null>(null);
   const [photos, setPhotos] = useState<{ key: string; list: RosterPhoto[] } | null>(null);
 
   useEffect(() => {
     let alive = true;
     void (async () => {
       try {
-        const [{ data: ccData }, { data: confData }] = await Promise.all([
-          anonSupabase.from('conference_committees')
-            .select('id, name, abbreviation, logo_url, topics')
-            .eq('conference_id', conferenceId),
-          anonSupabase.from('conferences')
-            .select('session_release_advisors_at')
-            .eq('id', conferenceId)
-            .maybeSingle(),
-        ]);
+        const { data: ccData } = await anonSupabase.from('conference_committees')
+          .select('id, name, abbreviation, logo_url, topics')
+          .eq('conference_id', conferenceId);
         if (!alive) return;
-        setMeta({
-          key: conferenceId,
-          committees: (ccData ?? []) as CommitteeMeta[],
-          releaseAt: (confData as { session_release_advisors_at?: string | null } | null)?.session_release_advisors_at ?? null,
-        });
+        setMeta({ key: conferenceId, committees: (ccData ?? []) as CommitteeMeta[] });
       } catch {
         // The seats still render from my_advisor_delegation, with the emblem chain's fallbacks.
-        if (alive) setMeta({ key: conferenceId, committees: [], releaseAt: null });
+        if (alive) setMeta({ key: conferenceId, committees: [] });
       }
     })();
     return () => { alive = false; };
@@ -191,9 +183,13 @@ export function useAdvisorCommittees(conferenceId: string, societyId: string): A
   // Once anything was read it stays on screen through a re-read (no loader).
   if (conference && committees && metaHere) {
     if (!conference.societyName && conference.seats.length === 0) return { kind: 'no-delegation' };
-    return { kind: 'ready', committees, releaseAt: metaHere.releaseAt };
+    return {
+      kind: 'ready',
+      committees,
+      dates: { startDate: conference.startDate, endDate: conference.endDate, timezone: conference.timezone, datesTbd: conference.datesTbd },
+    };
   }
   if (delegation.status === 'loading' || !metaHere) return { kind: 'loading' };
-  if (delegation.status === 'error') return { kind: 'error' };
+  if (delegation.status === 'error') return { kind: 'error', retry: delegation.reload };
   return { kind: 'no-delegation' };
 }

@@ -11,7 +11,7 @@ import { useLanguage, useT } from '@/contexts/LanguageContext';
 import { describeMotion, type MotionFields } from '@/lib/motionLog';
 import { serverNow } from '@/lib/serverClock';
 import {
-  countsFor, cuesFor, papersFor, roomAverage, timelineFor,
+  countsFor, cuesFor, foldMotions, localMidnight, papersFor, roomAverage, timelineFor,
   type MotionItem, type SeatState, type TimelineItem,
 } from '@/lib/advisorBoard/derive';
 import type { FollowedSeat, RoomData } from '@/lib/advisorBoard/types';
@@ -67,9 +67,12 @@ export default function StudentSheet({
 
   const data = useMemo(() => {
     if (!room) return null;
+    // "Today" is today on the advisor's device, from midnight, for the student and the
+    // room average alike (a three-day conference must not add up every day).
+    const since = localMidnight(serverNow());
     return {
-      counts: countsFor(room, country),
-      average: roomAverage(room),
+      counts: countsFor(room, country, foldMotions(room.events), since),
+      average: roomAverage(room, since),
       timeline: timelineFor(room, country),
       papers: papersFor(room, country),
     };
@@ -119,7 +122,7 @@ export default function StudentSheet({
               <p style={{ fontSize: 14, color: C.inkSoft }}>{t('adv_timeline_empty')}</p>
             ) : (
               <ol className="flex flex-col">
-                {data.timeline.map((item, i) => <TimelineRow key={i} item={item} />)}
+                {data.timeline.map((item, i) => <TimelineRow key={i} item={item} motionNames={room?.motionNames ?? null} />)}
               </ol>
             )}
 
@@ -173,7 +176,7 @@ function Stat({ label, value, average }: { label: string; value: string; average
   );
 }
 
-function TimelineRow({ item }: { item: TimelineItem }) {
+function TimelineRow({ item, motionNames }: { item: TimelineItem; motionNames: Record<string, unknown> | null }) {
   const t = useT();
   const { language } = useLanguage();
   let icon: React.ReactNode;
@@ -193,7 +196,8 @@ function TimelineRow({ item }: { item: TimelineItem }) {
       motionType: m.motionType as MotionFields['motionType'],
       topic: m.topic, totalTime: m.totalTime, speakingTime: m.speakingTime,
     };
-    title = describeMotion(null, fields, language) ?? t('adv_motion');
+    // The room's own motion names (settings.motionNames), through the shared helper.
+    title = describeMotion(motionNames ? { dbSettings: { motionNames } } : null, fields, language) ?? t('adv_motion');
     detail = m.outcome ? t(OUTCOME_KEY[m.outcome]) : null;
   }
   return (

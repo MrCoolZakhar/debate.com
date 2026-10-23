@@ -1,6 +1,7 @@
 // Shapes the Faculty Advisor board works with (24 Sep 2026). Everything here is read
-// anonymously from the live session tables. `committees.settings` is NEVER read: it
-// holds the chair code. Only the scoring LEDGER is read out of `messages`
+// anonymously from the live session tables. `committees.settings` is NEVER read whole:
+// it holds the chair code. Only its `motionNames` key is selected (a JSON path), so the
+// board names motions the way the room does. Only the scoring LEDGER is read out of `messages`
 // (recipient '__log__'), never chat, which includes private conversations.
 
 import type { CaucusState } from '../types';
@@ -69,6 +70,9 @@ export interface RoomData {
   delegates: RoomDelegate[];
   events: BoardLogEvent[];
   documents: RoomDocument[];
+  /** The room's own motion names (`committees.settings->motionNames`), or null. Read
+   *  through motionNames() like every other surface. */
+  motionNames: Record<string, unknown> | null;
   /** serverNow() when this room's data was read. */
   fetchedAt: number;
 }
@@ -79,8 +83,10 @@ export interface FollowedSeat {
   code: string | null;
   country: string;
   countryCode: string | null;
-  /** First name: typed on this device, or the student's name from the conference. */
-  name: string | null;
+  /** The students in this delegation seat: typed on this device, or the names from the
+   *  conference. Two for a double delegation (both people on ONE row), empty when no
+   *  name is known. */
+  names: string[];
   /** From the advisor's conference delegation (verified), not typed by code. */
   verified: boolean;
   conferenceId: string | null;

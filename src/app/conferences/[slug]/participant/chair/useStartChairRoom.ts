@@ -27,9 +27,13 @@
 // `start_my_chair_session(p_committee)` (SECURITY DEFINER, authenticated
 // only, applied 7 Oct 2026) checks `auth.uid() = any(chair_user_ids)` or the
 // organising team, takes the committee's own advisory lock, and writes the
-// same four things as `mintConferenceSession`, so a room can never exist
-// unlinked and two chairs pressing at the same instant get ONE room. It is
-// idempotent: a second press returns the code that already exists.
+// room, its current_speaker row, the seats and the link back, so a room can
+// never exist unlinked and two chairs pressing at the same instant get ONE
+// room. It is idempotent: a second press returns the code that already exists.
+// It is also how a RETIRED room (ended, past its reopen window) is replaced:
+// with section C1 of scratch-conference-rooms.sql applied it mints a fresh
+// room and relinks; before that it hands the ended room back (`created:
+// false`), and this hook says so instead of pretending.
 //
 // Every chair of the committee can press it; there is no organiser gate any
 // more. The server decides, and `message` is written for the chair to read.
@@ -45,14 +49,13 @@ export interface ChairRoomStart {
   start: () => void;
 }
 
-export function useStartChairRoom(committeeId: string, hasCode: boolean, onCreated: () => void): ChairRoomStart {
+export function useStartChairRoom(committeeId: string, hasCode: boolean, onCreated: () => void, retired = false): ChairRoomStart {
   const { session } = useAuth();
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState('');
-  // ONE PRESS, ONE ROOM. `mintConferenceSession`'s retry handles a code
-  // collision between two DIFFERENT mints; it does nothing about two
-  // concurrent mints of the SAME committee. A ref, not the `creating` state,
-  // because state is a render behind a fast double-click.
+  // ONE PRESS, ONE ROOM. The RPC's lock handles two concurrent mints of the
+  // SAME committee; this ref stops one device sending two. A ref, not the
+  // `creating` state, because state is a render behind a fast double-click.
   const mintingRef = useRef(false);
 
   function start() {
@@ -64,7 +67,7 @@ export function useStartChairRoom(committeeId: string, hasCode: boolean, onCreat
       try {
         const { data, error: rpcError } = await getAuthedClient(session.access_token)
           .rpc('start_my_chair_session', { p_committee: committeeId });
-        const answer = (data ?? null) as { ok?: boolean; code?: string; message?: string } | null;
+        const answer = (data ?? null) as { ok?: boolean; code?: string; message?: string; created?: boolean } | null;
         if (rpcError || !answer?.ok || !answer.code) {
           // The RPC writes a plain sentence for every refusal it knows about;
           // anything else goes through friendlyError (never a raw error).
@@ -74,6 +77,10 @@ export function useStartChairRoom(committeeId: string, hasCode: boolean, onCreat
               ? `Your session couldn't be started: ${friendlyError(rpcError, 'the request was rejected')}`
               : "Your session couldn't be started. Please try again, or ask the organizing team."),
           );
+          return;
+        }
+        if (retired && answer.created === false) {
+          setError('Your last room has ended and cannot be restarted. Ask the organizing team for a new room.');
           return;
         }
         onCreated();

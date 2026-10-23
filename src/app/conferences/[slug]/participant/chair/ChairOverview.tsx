@@ -36,6 +36,7 @@ import DocTile, { TileAction } from '../delegation/overview/DocTile';
 import { DAY, MONTHS, dayOf, dayWords, rangeWords, relativeWords, todayStart } from '../delegation/overview/overviewDates';
 import { guideState, useCommitteeGuides, useOpenStudyGuide, type CommitteeGuides } from '../delegation/committee/useCommitteeGuides';
 import type { ChairRoomStart } from './useStartChairRoom';
+import { chairRoomOpensAt } from '../shared';
 
 export interface ChairOverviewCommittee {
   id: string;
@@ -45,7 +46,6 @@ export interface ChairOverviewCommittee {
   committee_type: string;
   logo_url: string | null;
   session_code: string | null;
-  released_to_chairs_at: string | null;
   position_paper_deadline: string | null;
   pp_submissions_enabled?: boolean | null;
   awards_submitted_at: string | null;
@@ -282,7 +282,7 @@ function RoomBlock({ committee, room, released, chairHref, hideEnter }: {
         <div className="flex-1 min-w-0 flex flex-col gap-0.5">
           <span style={{ fontFamily: FONT, fontSize: 15, fontWeight: 600, color: INK }}>Your room</span>
           <span style={{ fontFamily: FONT, fontSize: 13.5, color: INK_SOFT, lineHeight: 1.45 }}>
-            Your committee&apos;s session will be shared by the organizing team.
+            Your room code shows here a week before the conference starts.
           </span>
         </div>
       </div>
@@ -412,7 +412,9 @@ function UpNextCard({ committee, conference, roster, guideReleaseAt, awardsTabOp
   if (ppDue !== null && ppDue >= today) rows.push({ key: 'pp', day: ppDue, what: 'Position papers due' });
   const guideOut = dayOf(guideReleaseAt);
   if (guideOut !== null && guideOut >= today) rows.push({ key: 'sg', day: guideOut, what: 'Study guide out' });
-  const roomOut = dayOf(committee.released_to_chairs_at);
+  // The room code shows a week before the start (owner, 23 Oct 2026; no organiser release date).
+  const roomOpensMs = chairRoomOpensAt(conference.start_date);
+  const roomOut = roomOpensMs === null ? null : dayOf(new Date(roomOpensMs).toISOString());
   if (roomOut !== null && roomOut > today) rows.push({ key: 'room', day: roomOut, what: 'Your room opens' });
   const awardsDue = deadline && editable ? dayOf(deadline.toISOString()) : null;
   if (awardsDue !== null && awardsDue >= today) rows.push({ key: 'aw', day: awardsDue, what: 'Awards due' });

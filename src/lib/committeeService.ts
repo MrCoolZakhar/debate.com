@@ -2514,7 +2514,8 @@ export async function endDebate(committeeId: string, code: string, chairSuffix?:
 }
 
 /**
- * Reopen a committee that ended, up to REOPEN_WINDOW_HOURS (24 h) after the gavel.
+ * Reopen a committee that ended, up to REOPEN_WINDOW_HOURS (24 h) after the gavel, or, for a
+ * conference room, until its conference's last day is over (`conferenceEndsAtMs`).
  *
  * Owner, 7 Oct 2026: "when someone ends debate, going onto the same session within 24
  * hours, it still allows them back in to restart it. This happened in some committees
@@ -2555,11 +2556,17 @@ export async function reopenEndedSession(
   committeeId: string,
   code: string,
   chairSuffix?: string,
+  /** A CONFERENCE room's reopen limit (src/lib/conferenceRoomWindow.ts): when given and still
+   *  ahead on the database clock, the room may be reopened however long ago it ended (owner,
+   *  23 Oct 2026: restartable until the conference's last day). Omitted = the 24-hour window. */
+  conferenceEndsAtMs?: number | null,
 ): Promise<boolean> {
   let open = false;
+  const conferenceOpen = typeof conferenceEndsAtMs === 'number' && Number.isFinite(conferenceEndsAtMs)
+    && serverNow() < conferenceEndsAtMs;
   const cutoffIso = new Date(serverNow() - REOPEN_WINDOW_HOURS * 60 * 60 * 1000).toISOString();
   const r = await runWrite(lifecycleKey(committeeId), async () => {
-    const { data, error } = await sessionClient(code, chairSuffix).from('committees')
+    let q = sessionClient(code, chairSuffix).from('committees')
       .update({
         ended_at: null,
         expires_at: null,
@@ -2568,9 +2575,11 @@ export async function reopenEndedSession(
         phase: 'pre-session',
       })
       .eq('id', committeeId)
-      .not('ended_at', 'is', null)
-      .gte('ended_at', cutoffIso)
-      .select('id');
+      .not('ended_at', 'is', null);
+    // A conference room inside its conference's window has no lower bound on `ended_at`;
+    // every other room keeps the 24-hour filter.
+    if (!conferenceOpen) q = q.gte('ended_at', cutoffIso);
+    const { data, error } = await q.select('id');
     if (error) { return failedFrom(error, 'Error reopening the session:'); }
     if (rowsOf(data) === 0) {
       // Either the window has passed, or it is already open. Read the row back rather

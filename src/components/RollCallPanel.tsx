@@ -15,6 +15,7 @@ import { liveCaucus } from '@/components/FeedbackLogPanel';
 import { GripVertical, Megaphone, Mic } from 'lucide-react';
 import { useLanguage, useT } from '@/contexts/LanguageContext';
 import { notifyDelegationAbsent } from '@/lib/absentNotice';
+import { fitScaleNow } from '@/lib/fitScale';
 
 // ── FlagCircle ────────────────────────────────────────────────────────────────
 export function FlagCircle({ country, size = 'md' }: { country: string; size?: 'xs' | 'sm' | 'md' | 'lg' | 'xl' | 'hero' }) {
@@ -35,7 +36,7 @@ export const QUEUE_ROW_SCALE = 1.1;
 export const QUEUE_ROW_SCALE_SHORT_SCREEN = 1.155;
 function queueRowScaleNow(): number {
   if (typeof window === 'undefined') return QUEUE_ROW_SCALE;
-  const fit = window.innerHeight / 820; // FitToScreen BASE_H
+  const fit = fitScaleNow(); // FitToScreen's own scale, browser zoom included (src/lib/fitScale.ts)
   return fit > 0 && fit < 0.95 ? QUEUE_ROW_SCALE_SHORT_SCREEN : QUEUE_ROW_SCALE;
 }
 function useQueueRowScale(): number {

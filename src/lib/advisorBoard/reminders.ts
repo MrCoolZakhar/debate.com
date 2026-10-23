@@ -101,6 +101,8 @@ export interface ActiveReminder {
   kind: 'speaking' | 'soon';
   ahead: number;
   label: string;
+  /** The label names two people (a double delegation): the copy takes the plural verb. */
+  plural: boolean;
 }
 
 interface Candidate { key: string; kind: 'speaking' | 'soon'; view: BoardSeatView }
@@ -173,7 +175,7 @@ export function useAdvisorReminders(opts: {
           fired[c.key] = Date.now();
           firedChanged = true;
           if (baseline || !enabled) continue;
-          fresh.push({ key: c.key, seatKey: v.seat.key, kind: c.kind, ahead: v.state.ahead, label: labelRef.current(v) });
+          fresh.push({ key: c.key, seatKey: v.seat.key, kind: c.kind, ahead: v.state.ahead, label: labelRef.current(v), plural: v.seat.names.length > 1 });
         }
       }
     }

@@ -42,6 +42,8 @@
  * MAX is DEFAULT x 1.2 ("only about 20% larger"), rounded to a whole pixel.
  */
 
+import { fitLayoutWidthNow } from '@/lib/fitScale';
+
 export const SIDEBAR_DEFAULT_WIDTH = 352; // the historical w-[22rem]
 export const SIDEBAR_MIN_WIDTH = 288;
 export const SIDEBAR_MAX_WIDTH = Math.round(SIDEBAR_DEFAULT_WIDTH * 1.2); // 422
@@ -61,7 +63,6 @@ export const SIDEBAR_MAX_WIDTH = Math.round(SIDEBAR_DEFAULT_WIDTH * 1.2); // 422
  */
 export const SIDEBAR_DEFAULT_FRACTION = 0.24;
 export const SIDEBAR_MAX_FRACTION = 0.29;
-const FIT_BASE_H = 820; // FitToScreen's BASE_H
 
 export interface SidebarBounds { def: number; max: number }
 
@@ -77,7 +78,9 @@ export function sidebarBoundsFor(layoutWidth: number): SidebarBounds {
 /** The console's layout width (FitToScreen space) for the current window. */
 export function consoleLayoutWidth(): number {
   if (typeof window === 'undefined' || !window.innerHeight) return SIDEBAR_DEFAULT_WIDTH / SIDEBAR_DEFAULT_FRACTION;
-  return window.innerWidth * FIT_BASE_H / window.innerHeight;
+  // innerWidth x 820 / innerHeight at 100%; divided by the browser zoom when zoomed, because
+  // FitToScreen's scale includes it. fitLayoutWidthNow is FitToScreen's own formula.
+  return fitLayoutWidthNow();
 }
 
 /** The width actually drawn: the stored preference (or the proportional default), capped for this screen. */

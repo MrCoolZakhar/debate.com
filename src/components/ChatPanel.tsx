@@ -609,7 +609,8 @@ export default function ChatPanel({
             width: onePane ? '100%' : 'clamp(280px, 34%, 360px)',
             flexShrink: 0,
             backgroundColor: 'var(--gv-surface, #FAF8F3)',
-            boxShadow: onePane ? 'none' : `inset -1px 0 0 ${CHAT.hairline}`,
+            // The hairline sits on the list's inline-end edge: the left edge in Arabic.
+            boxShadow: onePane ? 'none' : `inset ${language === 'ar' ? '1px' : '-1px'} 0 0 ${CHAT.hairline}`,
           }}
         >
           <ChatConversationList

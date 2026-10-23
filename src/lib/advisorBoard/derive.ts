@@ -9,7 +9,8 @@
 // is an objective count or duration, with the room average for context.
 // ============================================================
 
-import { speakerRemainingNow, moderatedCaucusRemainingNow, caucusRemainingNow } from '../committeeService';
+import { speakerRemainingNow, moderatedCaucusRemainingNow, caucusRemainingNow, gslDedupeApplies } from '../committeeService';
+import type { SessionPhase } from '../types';
 import type { CaucusState } from '../types';
 import { isRoomOrderCaucus, roomOrderNumber, roomOrderQueue } from '../roomOrderQueue';
 import type { BoardLogEvent, RoomData, RoomDelegate, RoomQueueRow } from './types';
@@ -98,7 +99,13 @@ export function clockSeconds(spec: ClockSpec | null, now: number): number {
   return Math.max(0, Math.round(s));
 }
 
-/** Is the room debating right now (the only time presence and queues mean anything)? */
+/** The room has held a session before (a ledger row, a speakers list or a stored
+ *  caucus): a pre-session room is then a resumed or restarted roll call. */
+function heldBefore(room: RoomData): boolean {
+  return room.events.length > 0 || room.gsl.length > 0 || room.caucusQueue.length > 0 || !!room.caucus;
+}
+
+/** What the room is doing. */
 export function roomMode(room: RoomData | null, codeKnown = true, loading = false): RoomMode {
   if (!codeKnown) return 'not-open';
   if (!room) return loading ? 'loading' : 'missing';
@@ -106,7 +113,9 @@ export function roomMode(room: RoomData | null, codeKnown = true, loading = fals
   if (room.suspendedAt || room.phase === 'adjourned') return 'break';
   if (room.phase === 'voting') return 'voting';
   if (room.phase === 'pre-session') {
-    return room.delegates.some((d) => d.status !== 'absent') ? 'roll-call' : 'not-started';
+    // Roll call is in session once the room has started at least once, or once the dais
+    // is taking it (someone is marked present). A room that never started stays not started.
+    return heldBefore(room) || room.delegates.some((d) => d.status !== 'absent') ? 'roll-call' : 'not-started';
   }
   if (room.phase === 'moderated-caucus') {
     const tour = (room.caucus?.purpose ?? '').startsWith('Tour de Table');
@@ -117,8 +126,15 @@ export function roomMode(room: RoomData | null, codeKnown = true, loading = fals
   return 'not-started';
 }
 
-export function inSession(mode: RoomMode): boolean {
+/** Debate on the floor: the only time a queue and a floor speaker mean anything. */
+export function debating(mode: RoomMode): boolean {
   return mode === 'gsl' || mode === 'moderated' || mode === 'tour' || mode === 'unmoderated' || mode === 'consultation';
+}
+
+/** The room is in session: debating, taking roll call, or voting on a resolution
+ *  (owner, 23 Oct 2026: roll call and voting are never filed under "not in session"). */
+export function inSession(mode: RoomMode): boolean {
+  return debating(mode) || mode === 'roll-call' || mode === 'voting';
 }
 
 function epoch(iso: string | null | undefined): string {
@@ -136,6 +152,14 @@ export function deriveSeat(room: RoomData | null, country: string, countryCode: 
   };
   if (!room || !inSession(mode)) {
     if (room) base.delegate = findDelegate(room, country, countryCode);
+    return base;
+  }
+  if (!debating(mode)) {
+    // Roll call or voting: no queue, only whether the delegation is in the room.
+    const d = findDelegate(room, country, countryCode);
+    base.delegate = d;
+    if (!d) { base.kind = 'absent'; base.notOnRoster = true; }
+    else base.kind = d.status === 'absent' ? 'absent' : 'in-room';
     return base;
   }
   const caucus = room.caucus;
@@ -169,7 +193,13 @@ export function deriveSeat(room: RoomData | null, country: string, countryCode: 
   if (delegate.status === 'absent') { base.kind = 'absent'; return base; }
 
   const caucusQ = moderated ? caucusQueueOf(room) : null;
-  const queue: RoomQueueRow[] = mode === 'gsl' ? room.gsl : caucusQ ? caucusQ.queue : [];
+  // The floor holder is dropped from the GSL outside a moderated caucus, exactly like the
+  // chair's `gslDedupeApplies`: between Next and the list's own echo they are briefly in
+  // both, which put everyone one place too far back.
+  const gsl = mode === 'gsl' && cs?.country && gslDedupeApplies({ phase: room.phase as SessionPhase, caucus: room.caucus })
+    ? room.gsl.filter((q) => !sameSeat(q.country, cs.country))
+    : room.gsl;
+  const queue: RoomQueueRow[] = mode === 'gsl' ? gsl : caucusQ ? caucusQ.queue : [];
   const idx = queue.findIndex((q) => sameSeat(q.country, name));
   if (idx >= 0) {
     const floorBusy = !!floor;
@@ -236,7 +266,7 @@ export function groupOf(s: SeatState): BoardGroup {
  *  ("Speaker N"), which is not a delegation: draw it with no flag. */
 export function roomFloor(room: RoomData | null): { country: string; clock: ClockSpec | null; placeholder: number | null } | null {
   const mode = roomMode(room);
-  if (!room || !inSession(mode)) return null;
+  if (!room || !debating(mode)) return null;
   const cs = room.current;
   let floor: string | null = null;
   if (mode === 'gsl') floor = cs?.country ?? null;
@@ -320,15 +350,26 @@ export function foldMotions(events: BoardLogEvent[]): MotionItem[] {
   return out;
 }
 
-export function countsFor(room: RoomData, country: string, motions = foldMotions(room.events)): StudentCounts {
+/** 00:00 today on this device, as an instant (`now` is serverNow()). "Today" on the
+ *  advisor's sheet counts from here, for the student and the room average alike. */
+export function localMidnight(now: number): number {
+  const d = new Date(now);
+  d.setHours(0, 0, 0, 0);
+  return d.getTime();
+}
+
+/** Counts from `since` (epoch ms; 0 = the whole record). A motion counts by when it was raised. */
+export function countsFor(room: RoomData, country: string, motions = foldMotions(room.events), since = 0): StudentCounts {
   const c: StudentCounts = { speeches: 0, seconds: 0, motionsRaised: 0, motionsPassed: 0, rightsOfReply: 0 };
   for (const e of room.events) {
     if (!sameSeat(e.country, country)) continue;
+    if (since && atMs(e) < since) continue;
     if (e.type === 'speech' && (e.seconds ?? 0) > 0) { c.speeches++; c.seconds += Math.round(e.seconds ?? 0); }
     if (e.type === 'right-of-reply') c.rightsOfReply++;
   }
   for (const m of motions) {
     if (!sameSeat(m.country, country)) continue;
+    if (since && atMs(m) < since) continue;
     c.motionsRaised++;
     if (m.outcome === 'passed') c.motionsPassed++;
   }
@@ -336,13 +377,13 @@ export function countsFor(room: RoomData, country: string, motions = foldMotions
 }
 
 /** The average per present, non-observer delegation. Null when nobody counts. */
-export function roomAverage(room: RoomData): StudentCounts | null {
+export function roomAverage(room: RoomData, since = 0): StudentCounts | null {
   const members = room.delegates.filter((d) => !d.isObserver && d.status !== 'absent');
   if (members.length === 0) return null;
   const motions = foldMotions(room.events);
   const sum: StudentCounts = { speeches: 0, seconds: 0, motionsRaised: 0, motionsPassed: 0, rightsOfReply: 0 };
   for (const d of members) {
-    const c = countsFor(room, d.country, motions);
+    const c = countsFor(room, d.country, motions, since);
     sum.speeches += c.speeches; sum.seconds += c.seconds;
     sum.motionsRaised += c.motionsRaised; sum.motionsPassed += c.motionsPassed;
     sum.rightsOfReply += c.rightsOfReply;
@@ -388,7 +429,7 @@ export function cuesFor(room: RoomData | null, state: SeatState, country: string
   const cues: Cues = { notOnList: false, quiet: false };
   if (!room || state.kind === 'absent' || state.kind === 'not-in-session') return cues;
   cues.notOnList = state.mode === 'gsl' && state.kind === 'in-room';
-  if (state.kind === 'speaking') return cues;
+  if (state.kind === 'speaking' || !debating(state.mode)) return cues;
   let last = 0;
   for (const e of room.events) {
     if (e.type === 'speech' && sameSeat(e.country, country)) last = Math.max(last, atMs(e));

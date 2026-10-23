@@ -16,22 +16,30 @@
 // Rooms come from two places: codes typed on this device (store.ts, names stay here),
 // and a signed-in advisor's conference delegation (useMyAdvisorDelegation, verified).
 // Everything is read anonymously; nothing here writes to a session.
+//
+// 23 Oct 2026 (owner): a conference's rooms are on the board only from its first day
+// until its last day (conferenceWindow.ts); before that one plain line says when the
+// board opens, and no code is printed. A delegation seat with nobody in it is never
+// followed; two students in one country and room are ONE row naming both.
 // ============================================================
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { Bell, BellOff, Plus, Sun, SunDim, Pencil, Mic, X, DoorOpen, ListOrdered, Rows3 } from 'lucide-react';
+import { Bell, BellOff, Plus, Sun, SunDim, Pencil, Mic, X, DoorOpen, ListOrdered, Rows3, CalendarClock, LogIn, RotateCw } from 'lucide-react';
+import { openAuth } from '@/lib/authModal';
 import SessionLanguageMenu from '@/components/SessionLanguageMenu';
 import { useLanguage, useT } from '@/contexts/LanguageContext';
-import { useMyAdvisorDelegation } from '@/lib/advisorDelegation';
+import { useMyAdvisorDelegation, type AdvisorConference } from '@/lib/advisorDelegation';
 import { CircleFlag } from '@/components/CircleFlag';
 import { getCountryDisplayName } from '@/lib/countries';
 import { getCommitteeDisplayName, committeeDisplayName } from '@/lib/presetNames';
 import { serverNow } from '@/lib/serverClock';
 import { useBoardData } from '@/lib/advisorBoard/data';
+import { conferenceWindow, formatStartDay, type ConferenceWindowState } from '@/lib/advisorBoard/conferenceWindow';
 import { deriveSeat, groupOf, inSession, queueRank, roomFloor, roomMode, type BoardGroup } from '@/lib/advisorBoard/derive';
 import { useAdvisorReminders, type ActiveReminder, type BoardSeatView } from '@/lib/advisorBoard/reminders';
+import PushAlerts from './PushAlerts';
 import { markRoomsEnded, markSeen, normaliseCode, setBoardPref, useBoardPrefs, useBoardState, type BoardRoom, type BoardView } from '@/lib/advisorBoard/store';
 import type { FollowedSeat, RoomData } from '@/lib/advisorBoard/types';
 import { useWakeLock, useWakeLockSupported } from '@/lib/advisorBoard/wakeLock';
@@ -44,6 +52,26 @@ import { replaceUrlInPlace } from '@/lib/replaceUrlInPlace';
 
 const STALE_AFTER_MS = 30_000;
 const lc = (s: string | null | undefined) => (s ?? '').trim().toLowerCase();
+
+/** serverNow(), refreshed every minute: enough to open a conference at midnight. */
+function useMinuteNow(): number {
+  const [now, setNow] = useState(() => serverNow());
+  useEffect(() => {
+    const iv = window.setInterval(() => setNow(serverNow()), 60_000);
+    const onVis = () => { if (document.visibilityState === 'visible') setNow(serverNow()); };
+    document.addEventListener('visibilitychange', onVis);
+    return () => { window.clearInterval(iv); document.removeEventListener('visibilitychange', onVis); };
+  }, []);
+  return now;
+}
+
+/** Every session code a conference gives this advisor (their seats, or every room). */
+function conferenceCodesOf(c: AdvisorConference): string[] {
+  const out: string[] = [];
+  for (const s of c.seats) if (s.sessionCode) out.push(normaliseCode(s.sessionCode));
+  for (const r of c.rooms) out.push(normaliseCode(r.sessionCode));
+  return out;
+}
 
 /** The bands of the "Up next" list after the queue itself, each under a quiet divider. */
 const GROUP_KEY: Record<Exclude<BoardGroup, 'queue'>, TranslationKey> = {
@@ -89,62 +117,109 @@ export default function AdvisorBoard() {
   const addParam = normaliseCode(params.get('add') ?? '');
   const [addOpen, setAddOpen] = useState<{ code: string | null; editing: BoardRoom | null } | null>(null);
   const [handledAdd, setHandledAdd] = useState<string | null>(null);
-  if (addParam.length === 6 && handledAdd !== addParam) {
+  // A room the advisor's conference already gives them is never added again by code (it
+  // would sit on the board twice): wait for the delegation, then open the add flow only
+  // for a room it does not cover.
+  const delegationKnown = delegation.status !== 'loading';
+  if (addParam.length === 6 && handledAdd !== addParam && delegationKnown) {
     setHandledAdd(addParam);
+    const fromConference = delegation.conferences.some((c) => conferenceCodesOf(c).includes(addParam));
     // `editing` is resolved at render (addEditing below), not here: on the first render
     // the device store still reads its server snapshot (no rooms), so a room already on
     // the board would open as a NEW room and Save would drop its picks and names.
-    setAddOpen({ code: addParam, editing: null });
+    if (!fromConference) setAddOpen({ code: addParam, editing: null });
   }
   const addEditing = addOpen
     ? addOpen.editing ?? (addOpen.code ? board.rooms.find((r) => r.code === addOpen.code) ?? null : null)
     : null;
   useEffect(() => {
-    if (addParam.length === 6) replaceUrlInPlace('/advisor');
-  }, [addParam]);
+    if (addParam.length === 6 && delegationKnown) replaceUrlInPlace('/advisor');
+  }, [addParam, delegationKnown]);
+
+  // ── Which conferences are live today ────────────────────────────────────
+  const now = useMinuteNow();
+  const windows = useMemo(() => {
+    const m = new Map<string, ConferenceWindowState>();
+    for (const c of delegation.conferences) m.set(c.conferenceId, conferenceWindow(c, now));
+    return m;
+  }, [delegation.conferences, now]);
+  // Only open conferences reach the board; later ones get a line, finished ones nothing.
+  const liveConferences = useMemo(
+    () => delegation.conferences.filter((c) => windows.get(c.conferenceId)?.state === 'open'),
+    [delegation.conferences, windows],
+  );
+  const waitingConferences = delegation.conferences.filter((c) => {
+    const w = windows.get(c.conferenceId)?.state;
+    return w === 'before' || w === 'tbd';
+  });
+  // Rooms of a conference that is not open (before its first day, or after its last) are
+  // never read or listed, even when this device once added them by code.
+  const closedCodes = useMemo(() => {
+    const set = new Set<string>();
+    for (const c of delegation.conferences) {
+      if (windows.get(c.conferenceId)?.state === 'open') continue;
+      for (const code of conferenceCodesOf(c)) set.add(code);
+    }
+    return set;
+  }, [delegation.conferences, windows]);
+  const deviceRooms = useMemo(() => board.rooms.filter((r) => !closedCodes.has(r.code)), [board.rooms, closedCodes]);
 
   // ── Everything the board follows ────────────────────────────────────────
   const conferenceCodes = useMemo(() => {
     const set = new Set<string>();
-    for (const c of delegation.conferences) {
-      for (const s of c.seats) if (s.sessionCode) set.add(normaliseCode(s.sessionCode));
+    for (const c of liveConferences) {
+      for (const s of c.seats) if (s.sessionCode && (s.studentName || s.role)) set.add(normaliseCode(s.sessionCode));
       if (c.seats.length === 0) for (const r of c.rooms) set.add(normaliseCode(r.sessionCode));
     }
     return [...set];
-  }, [delegation.conferences]);
-  const codes = useMemo(() => [...new Set([...board.rooms.map((r) => r.code), ...conferenceCodes])], [board.rooms, conferenceCodes]);
+  }, [liveConferences]);
+  const codes = useMemo(() => [...new Set([...deviceRooms.map((r) => r.code), ...conferenceCodes])], [deviceRooms, conferenceCodes]);
   const data = useBoardData(codes);
 
   useEffect(() => { if (conferenceCodes.length) markSeen(conferenceCodes); }, [conferenceCodes]);
   useEffect(() => {
-    const ended = board.rooms.filter((r) => data.rooms[r.code]?.endedAt).map((r) => r.code);
+    const ended = deviceRooms.filter((r) => data.rooms[r.code]?.endedAt).map((r) => r.code);
     if (ended.length) markRoomsEnded(ended);
-  }, [board.rooms, data.rooms]);
+  }, [deviceRooms, data.rooms]);
 
   const seats: FollowedSeat[] = useMemo(() => {
     const out: FollowedSeat[] = [];
     const covered = new Set<string>();
-    for (const c of delegation.conferences) {
+    for (const c of liveConferences) {
       const label = c.conferenceAcronym || c.conferenceName;
+      // One row per delegation in a room: the seats of a double delegation (same room,
+      // same country) merge into one row naming both students, with one reminder.
+      const byDelegation = new Map<string, FollowedSeat>();
       for (const s of c.seats) {
+        // A delegation block seat nobody fills (no student, no role) is not a student:
+        // never followed, never a reminder.
+        if (!s.studentName && !s.role) continue;
         const code = s.sessionCode ? normaliseCode(s.sessionCode) : null;
         if (code) covered.add(`${code}|${lc(s.countryName)}`);
-        out.push({
-          key: `conf|${c.conferenceId}|${code ?? s.committeeName}|${lc(s.countryName)}|${s.seat}`,
+        const k = `conf|${c.conferenceId}|${code ?? lc(s.committeeName)}|${lc(s.countryName)}`;
+        const existing = byDelegation.get(k);
+        if (existing) {
+          if (s.studentName && !existing.names.includes(s.studentName)) existing.names.push(s.studentName);
+          continue;
+        }
+        const seat: FollowedSeat = {
+          key: k,
           code,
           country: s.countryName,
           countryCode: s.countryCode,
-          name: s.studentName,
+          names: s.studentName ? [s.studentName] : [],
           verified: true,
           conferenceId: c.conferenceId,
           conferenceLabel: label,
           committeeName: s.committeeName,
           committeeAbbreviation: s.committeeAbbreviation,
           followingSince: (code && board.seen[code]) || 0,
-        });
+        };
+        byDelegation.set(k, seat);
+        out.push(seat);
       }
     }
-    for (const r of board.rooms) {
+    for (const r of deviceRooms) {
       for (const f of r.follows) {
         if (covered.has(`${r.code}|${lc(f.country)}`)) continue;
         out.push({
@@ -152,7 +227,7 @@ export default function AdvisorBoard() {
           code: r.code,
           country: f.country,
           countryCode: null,
-          name: f.name ?? null,
+          names: [f.name, f.name2].map((n) => n?.trim() ?? '').filter(Boolean),
           verified: false,
           conferenceId: null,
           conferenceLabel: null,
@@ -163,7 +238,7 @@ export default function AdvisorBoard() {
       }
     }
     return out;
-  }, [delegation.conferences, board.rooms, board.seen]);
+  }, [liveConferences, deviceRooms, board.seen]);
 
   const views: BoardSeatView[] = useMemo(() => seats.map((seat) => {
     const room = seat.code ? data.rooms[seat.code] ?? null : null;
@@ -175,14 +250,15 @@ export default function AdvisorBoard() {
   // ── Reminders ───────────────────────────────────────────────────────────
   const labelOf = useCallback((v: BoardSeatView) => seatTitle(v.seat, language), [language]);
   const titleOf = useCallback((r: ActiveReminder) => (r.kind === 'speaking'
-    ? t('adv_title_speaking', { name: r.label })
-    : r.ahead <= 1 ? t('adv_title_next', { name: r.label }) : t('adv_title_soon', { name: r.label, n: r.ahead })), [t]);
+    ? t(r.plural ? 'adv_title_speaking_many' : 'adv_title_speaking', { name: r.label })
+    : r.ahead <= 1 ? t(r.plural ? 'adv_title_next_many' : 'adv_title_next', { name: r.label }) : t('adv_title_soon', { name: r.label, n: r.ahead })), [t]);
   const reminders = useAdvisorReminders({ views, enabled: prefs.reminders, subscribed: data.subscribed, labelOf, titleOf });
   const topReminder = reminders.active[0] ?? null;
 
   // ── Sheets ──────────────────────────────────────────────────────────────
   const [openSeat, setOpenSeat] = useState<string | null>(null);
-  const onOpen = useCallback((key: string) => setOpenSeat(key), []);
+  // A state setter is stable: the memoised rows never re-render for it.
+  const onOpen: (key: string) => void = setOpenSeat;
   const openView = openSeat ? views.find((v) => v.seat.key === openSeat) ?? null : null;
 
   // ── The two views ──────────────────────────────────────────────────────
@@ -218,8 +294,11 @@ export default function AdvisorBoard() {
       || a.name.localeCompare(b.name, language));
   }, [ordered, data.rooms, language]);
 
-  const observerConferences = delegation.conferences.filter((c) => c.seats.length === 0 && c.rooms.length > 0);
-  const empty = seats.length === 0 && board.rooms.length === 0 && observerConferences.length === 0;
+  const observerConferences = liveConferences.filter((c) => c.seats.length === 0 && c.rooms.length > 0);
+  // Never the empty state while the conference delegation is still being read (a grey
+  // skeleton instead), and never when a conference is about to open.
+  const firstRead = delegation.status === 'loading' && delegation.conferences.length === 0;
+  const empty = !firstRead && delegation.status !== 'error' && seats.length === 0 && deviceRooms.length === 0 && observerConferences.length === 0 && waitingConferences.length === 0;
 
   return (
     <div className="min-h-dvh" style={{ backgroundColor: C.ivory, fontFamily: FONT, color: C.ink }}>
@@ -255,11 +334,43 @@ export default function AdvisorBoard() {
           )}
           <span className="ms-auto"><SessionLanguageMenu /></span>
         </div>
+        {(seats.length > 0 || deviceRooms.length > 0 || waitingConferences.length > 0) && (
+          // Every room added by code, open or not: the server applies the conference window itself.
+          <PushAlerts rooms={board.rooms} remindersOn={prefs.reminders} />
+        )}
         {data.failed && codes.length > 0 && (
           <p role="status" className="mb-3 rounded-xl px-3 py-2" style={{ backgroundColor: C.dangerTint, color: C.danger, fontSize: 13.5, fontWeight: 600 }}>{t('adv_read_failed')}</p>
         )}
 
-        {empty && <EmptyState onAdd={() => setAddOpen({ code: null, editing: null })} />}
+        {delegation.status === 'error' && (
+          <div role="alert" className="mb-3 flex items-center gap-3 rounded-xl px-3 py-2" style={{ backgroundColor: C.dangerTint, color: C.danger }}>
+            <span className="min-w-0 flex-1" style={{ fontSize: 13.5, fontWeight: 600 }}>{t('adv_delegation_failed')}</span>
+            <button type="button" onClick={delegation.reload} className="adv-focus flex h-10 shrink-0 items-center gap-1.5 rounded-xl px-3" style={{ fontSize: 13.5, fontWeight: 800, color: C.danger, backgroundColor: 'rgba(139,32,32,0.08)' }}>
+              <RotateCw size={15} strokeWidth={2} aria-hidden /> {t('adv_try_again')}
+            </button>
+          </div>
+        )}
+
+        {delegation.status === 'signed-out' && !empty && <SignInRow />}
+
+        {waitingConferences.map((c) => {
+          const w = windows.get(c.conferenceId);
+          const name = c.conferenceAcronym || c.conferenceName;
+          return (
+            <p key={c.conferenceId} className="mb-3 flex items-start gap-2.5 rounded-2xl px-4 py-3" style={{ backgroundColor: C.cream, boxShadow: SHADOW.card, fontSize: 14.5, fontWeight: 600, color: C.ink, lineHeight: 1.4 }}>
+              <CalendarClock size={18} strokeWidth={1.6} aria-hidden className="mt-0.5 shrink-0" style={{ color: C.forest }} />
+              <span className="min-w-0 [overflow-wrap:anywhere]">
+                {w?.state === 'before'
+                  ? t('adv_opens_on', { conference: name, date: formatStartDay(w.startDate, language) })
+                  : t('adv_opens_tbd', { conference: name })}
+              </span>
+            </p>
+          );
+        })}
+
+        {firstRead && seats.length === 0 && <BoardSkeleton />}
+
+        {empty && <EmptyState onAdd={() => setAddOpen({ code: null, editing: null })} signedOut={delegation.status === 'signed-out'} />}
 
         {seats.length > 0 && (
           <ViewSwitch view={prefs.view} onChange={(v) => setBoardPref('view', v)} />
@@ -325,11 +436,11 @@ export default function AdvisorBoard() {
           </section>
         ))}
 
-        {board.rooms.length > 0 && (
+        {deviceRooms.length > 0 && (
           <section className="mt-8" aria-labelledby="adv-sec-rooms">
             <h2 id="adv-sec-rooms" className="mb-2 px-1" style={{ fontSize: 13, fontWeight: 800, letterSpacing: '0.08em', textTransform: 'uppercase', color: C.forestSoft }}>{t('adv_section_rooms')}</h2>
             <ul className="flex flex-col gap-2">
-              {board.rooms.map((r) => {
+              {deviceRooms.map((r) => {
                 const room = data.rooms[r.code] ?? null;
                 const gone = data.loaded && data.missing.has(r.code);
                 return (
@@ -434,9 +545,12 @@ function Freshness({ lastOkAt, subscribed, active }: { lastOkAt: number; subscri
 
 function ReminderBanner({ reminder, more, onOpen, onDismiss }: { reminder: ActiveReminder; more: number; onOpen: () => void; onDismiss: () => void }) {
   const t = useT();
+  const many = reminder.plural;
   const text = reminder.kind === 'speaking'
-    ? t('adv_banner_speaking', { name: reminder.label })
-    : reminder.ahead <= 1 ? t('adv_banner_next', { name: reminder.label }) : t('adv_banner_soon', { name: reminder.label, n: reminder.ahead });
+    ? t(many ? 'adv_banner_speaking_many' : 'adv_banner_speaking', { name: reminder.label })
+    : reminder.ahead <= 1
+      ? t(many ? 'adv_banner_next_many' : 'adv_banner_next', { name: reminder.label })
+      : t(many ? 'adv_banner_soon_many' : 'adv_banner_soon', { name: reminder.label, n: reminder.ahead });
   return (
     <div className="adv-banner mx-auto max-w-3xl px-4 pb-2.5">
       <div role="alert" className="flex items-center gap-2 rounded-2xl ps-2 pe-1" style={{ backgroundColor: C.forest, color: C.cream, boxShadow: SHADOW.lift }}>
@@ -484,7 +598,47 @@ function RoomRow({ code, name, room, gone, following, onEdit }: {
   );
 }
 
-function EmptyState({ onAdd }: { onAdd: () => void }) {
+/** Signed out: one line and the sign-in pop-up (a conference delegation fills itself). */
+function SignInRow() {
+  const t = useT();
+  return (
+    <div className="mb-3 flex items-center gap-3 rounded-2xl px-4 py-2.5" style={{ backgroundColor: C.cream, boxShadow: SHADOW.card }}>
+      <span className="min-w-0 flex-1" style={{ fontSize: 14, fontWeight: 600, color: C.inkSoft, lineHeight: 1.35 }}>{t('adv_signin_note')}</span>
+      <SignInButton />
+    </div>
+  );
+}
+
+function SignInButton({ big = false }: { big?: boolean }) {
+  const t = useT();
+  return (
+    <button type="button" onClick={() => openAuth({ next: '/advisor' })}
+      className={`adv-focus flex shrink-0 items-center justify-center gap-2 rounded-2xl ${big ? 'mx-auto mt-3 h-12 px-5' : 'h-10 px-3.5'}`}
+      style={{ backgroundColor: 'rgba(27,56,40,0.08)', color: C.forest, fontSize: big ? 16 : 14, fontWeight: 800 }}>
+      <LogIn size={big ? 18 : 16} strokeWidth={2} aria-hidden /> {t('adv_signin_btn')}
+    </button>
+  );
+}
+
+/** Grey rows while the conference delegation is first read: never the empty state. */
+function BoardSkeleton() {
+  return (
+    <div aria-hidden className="overflow-hidden rounded-2xl" style={{ backgroundColor: C.cream, boxShadow: SHADOW.card }}>
+      {[0, 1, 2].map((i) => (
+        <div key={i} className="flex items-center gap-3 px-3 py-3" style={i > 0 ? { boxShadow: `inset 0 1px 0 ${C.hairline}` } : undefined}>
+          <span className="h-6 w-6 rounded-full" style={{ backgroundColor: 'rgba(27,56,40,0.08)' }} />
+          <span className="h-[38px] w-[38px] rounded-full" style={{ backgroundColor: 'rgba(27,56,40,0.08)' }} />
+          <span className="flex flex-1 flex-col gap-1.5">
+            <span className="h-3.5 w-2/5 rounded" style={{ backgroundColor: 'rgba(27,56,40,0.08)' }} />
+            <span className="h-3 w-3/5 rounded" style={{ backgroundColor: 'rgba(27,56,40,0.06)' }} />
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function EmptyState({ onAdd, signedOut }: { onAdd: () => void; signedOut: boolean }) {
   const t = useT();
   return (
     <div className="mx-auto mt-6 max-w-md rounded-3xl px-6 py-8 text-center" style={{ backgroundColor: C.cream, boxShadow: SHADOW.card }}>
@@ -497,6 +651,7 @@ function EmptyState({ onAdd }: { onAdd: () => void }) {
         <Plus size={18} strokeWidth={2.6} aria-hidden /> {t('adv_add_room')}
       </button>
       <p className="mt-5" style={{ fontSize: 13, color: C.inkSoft, lineHeight: 1.45 }}>{t('adv_empty_conference')}</p>
+      {signedOut && <SignInButton big />}
     </div>
   );
 }

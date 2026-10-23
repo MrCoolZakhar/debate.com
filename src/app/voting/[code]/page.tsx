@@ -355,7 +355,7 @@ function GavelLoader() {
   const t = useT();
   return (
     <div className="min-h-screen flex flex-col items-center justify-center gap-4" style={{ backgroundColor: '#EDE7D8' }}>
-      <Loader size={72} label="Loading" />
+      <Loader size={72} label={t('session_loading_label')} />
       <span className="sr-only" role="status">{t('session_loading')}</span>
     </div>
   );
@@ -2311,7 +2311,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
           <div className="h-9 shrink-0 flex items-center gap-2">
             {isSecondAsk ? (
               <span className="inline-flex items-center gap-2 h-9 ps-3 pe-4 rounded-full text-[13.5px] font-semibold" style={{ backgroundColor: 'rgba(182,135,31,0.16)', color: '#6A4A0A' }}>
-                <SkipForward size={15} strokeWidth={2.5} aria-hidden />
+                <SkipForward size={15} strokeWidth={2.5} aria-hidden style={{ transform: language === 'ar' ? 'scaleX(-1)' : undefined }} />
                 {t('voting_again_title')}
                 <span className="font-medium tabular-nums">· {t('voting_pass_round_sub', { current: currentVoterIndex - mainCount + 1, total: passedIds.length })}</span>
               </span>
@@ -2322,7 +2322,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
                 </span>
                 {passedWaiting > 0 && (
                   <span className="inline-flex items-center gap-1.5 h-7 ps-2.5 pe-3 rounded-full text-[12.5px] font-semibold" style={{ backgroundColor: 'rgba(182,135,31,0.14)', color: '#6A4A0A' }}>
-                    <SkipForward size={13} strokeWidth={2.5} aria-hidden />
+                    <SkipForward size={13} strokeWidth={2.5} aria-hidden style={{ transform: language === 'ar' ? 'scaleX(-1)' : undefined }} />
                     {t('voting_passed_waiting', { n: passedWaiting })}
                   </span>
                 )}
@@ -2514,92 +2514,98 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
         const presets = [30, 45, 60, 90, 120];
         const lastRights = rightsIndex + 1 >= orderedRights.length;
         return (
+          // The queue column shrinks with the console (iPad portrait, a narrow window) instead
+          // of a fixed 400px squeezing the speaker to nothing, and the speaker column scrolls
+          // inside the 820px-tall FitToScreen frame if a two-row name and wrapped controls
+          // make it taller (my-auto centres it while it fits, never cuts the top off).
           <div className="flex-1 min-h-0 flex gap-8 px-10 py-6">
-            <div className="flex-1 min-w-0 flex flex-col items-center justify-center">
-              <p className="text-[15px] font-medium mb-6 tabular-nums" style={{ color: '#6A5A4A' }}>
-                {t('voting_rights_header', { current: rightsIndex + 1, total: orderedRights.length })}
-              </p>
-              <span key={speaker.delegateId} className="gv-name-in rounded-full" style={{ boxShadow: '0 0 0 9px #F6F1E9, 0 0 0 15px #D9B44A, 0 24px 56px rgba(27,56,40,0.28)' }}>
-                <SeatCircleFlag seat={rightsSeat} size={220} decorative />
-              </span>
-              <h1 key={`n-${speaker.delegateId}`} className="gv-name-in text-[46px] font-bold text-[#1C1410] text-center mt-8 leading-[1.05] tracking-[-0.018em] [text-wrap:balance]">
-                <SeatName name={getCountryDisplayName(speaker.country, language)} max={26} block align="center" subScale={0.46} subStyle={{ fontWeight: 500, marginTop: 6 }} />
-              </h1>
-              <p className="text-[17px] font-medium mt-2" style={{ color: '#6A5A4A' }}>
-                {hideVotes
-                  ? t('voting_with_rights_label')
-                  : speaker.choice === 'for-rights' ? t('voting_rights_for') : t('voting_rights_against')}
-              </p>
-              {/* The rights clock runs on the driving device only (nothing per-second is ever
-                  written), so a Commenter does not get a clock that would sit still. */}
-              {!isViewOnly && (
-                <>
-                  <div
-                    className="text-[88px] font-bold mt-4 tabular-nums leading-none tracking-[-0.025em]"
-                    style={{ color: rightsSpeakerTime <= 10 ? '#8B2020' : rightsSpeakerTime <= 20 ? '#8A6414' : '#1C1410' }}
-                  >
-                    {clock(rightsSpeakerTime)}
-                  </div>
-                  {/* The controls in the GSL's manner (owner, 17 Sep 2026: "next speaker and
-                      back next to the Start button"): Back, Restart, Start / Pause, Next. */}
-                  <div className="flex gap-2 mt-5 items-center flex-wrap justify-center">
-                    {backButton(t('voting_step_back'))}
-                    <button
-                      type="button"
-                      onClick={() => { setRightsRunning(false); setRightsSpeakerTime(rightsTimerLimit); }}
-                      aria-label={t('voting_rights_restart')}
-                      title={t('voting_rights_restart')}
-                      className="h-12 w-12 rounded-full flex items-center justify-center focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] transition-transform duration-150 active:scale-[0.96] hover:bg-[rgba(27,56,40,0.13)]"
-                      style={{ backgroundColor: 'rgba(27,56,40,0.07)', color: '#1B3828' }}
+            <div className="flex-1 min-w-0 min-h-0 flex flex-col overflow-y-auto overflow-x-hidden [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              <div className="my-auto w-full flex flex-col items-center">
+                <p className="text-[15px] font-medium mb-6 tabular-nums" style={{ color: '#6A5A4A' }}>
+                  {t('voting_rights_header', { current: rightsIndex + 1, total: orderedRights.length })}
+                </p>
+                <span key={speaker.delegateId} className="gv-name-in rounded-full" style={{ boxShadow: '0 0 0 9px #F6F1E9, 0 0 0 15px #D9B44A, 0 24px 56px rgba(27,56,40,0.28)' }}>
+                  <SeatCircleFlag seat={rightsSeat} size={220} decorative />
+                </span>
+                <h1 key={`n-${speaker.delegateId}`} className="gv-name-in text-[46px] font-bold text-[#1C1410] text-center mt-8 leading-[1.05] tracking-[-0.018em] [text-wrap:balance]">
+                  <SeatName name={getCountryDisplayName(speaker.country, language)} max={26} block align="center" subScale={0.46} subStyle={{ fontWeight: 500, marginTop: 6 }} />
+                </h1>
+                <p className="text-[17px] font-medium mt-2" style={{ color: '#6A5A4A' }}>
+                  {hideVotes
+                    ? t('voting_with_rights_label')
+                    : speaker.choice === 'for-rights' ? t('voting_rights_for') : t('voting_rights_against')}
+                </p>
+                {/* The rights clock runs on the driving device only (nothing per-second is ever
+                    written), so a Commenter does not get a clock that would sit still. */}
+                {!isViewOnly && (
+                  <>
+                    <div
+                      className="text-[88px] font-bold mt-4 tabular-nums leading-none tracking-[-0.025em]"
+                      style={{ color: rightsSpeakerTime <= 10 ? '#8B2020' : rightsSpeakerTime <= 20 ? '#8A6414' : '#1C1410' }}
                     >
-                      <RotateCcw size={19} strokeWidth={2.4} aria-hidden />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => { if (!rightsRunning) setRightsStarted(true); setRightsRunning((r) => !r); }}
-                      className="h-12 px-8 rounded-full font-semibold text-[15px] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] transition-transform duration-150 active:scale-[0.96]"
-                      style={{ backgroundColor: rightsRunning ? '#8A6414' : '#2F6B45', color: '#FFFFFF' }}
-                    >
-                      {rightsRunning ? t('voting_pause') : t('voting_start')}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => { setRightsRunning(false); handleNextRightsSpeaker(); }}
-                      className="inline-flex items-center gap-2 h-12 ps-5 pe-6 rounded-full font-semibold text-[15px] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] transition-transform duration-150 active:scale-[0.96] motion-reduce:transition-none"
-                      style={{ backgroundColor: '#1B3828', color: '#EED98A', boxShadow: '0 2px 4px rgba(27,56,40,0.2), 0 8px 18px rgba(27,56,40,0.2)' }}
-                    >
-                      {lastRights ? t('voting_see_result') : t('voting_next_rights')}
-                      <SkipForward size={17} strokeWidth={2.5} aria-hidden style={{ transform: language === 'ar' ? 'scaleX(-1)' : undefined }} />
-                    </button>
-                  </div>
-                  {/* ONE speaking time for the whole rights round, the GSL's presets plus a
-                      typed field. No per-speaker override any more. */}
-                  <div className="mt-5 flex items-center gap-2 flex-wrap justify-center">
-                    <span className="text-[13px] font-semibold" style={{ color: '#6A5A4A' }}>{t('voting_rights_default_time')}</span>
-                    {presets.map((p) => (
+                      {clock(rightsSpeakerTime)}
+                    </div>
+                    {/* The controls in the GSL's manner (owner, 17 Sep 2026: "next speaker and
+                        back next to the Start button"): Back, Restart, Start / Pause, Next. */}
+                    <div className="flex gap-2 mt-5 items-center flex-wrap justify-center">
+                      {backButton(t('voting_step_back'))}
                       <button
-                        key={p}
                         type="button"
-                        onClick={() => setRightsTimerLimit(p)}
-                        aria-pressed={rightsTimerLimit === p}
-                        className="h-9 min-w-10 px-3 rounded-full font-medium text-[13px] tabular-nums focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] transition-[background-color,transform] duration-150 active:scale-[0.96]"
-                        style={{ backgroundColor: rightsTimerLimit === p ? '#1B3828' : 'rgba(27,56,40,0.07)', color: rightsTimerLimit === p ? '#EED98A' : '#4A3F33' }}
+                        onClick={() => { setRightsRunning(false); setRightsSpeakerTime(rightsTimerLimit); }}
+                        aria-label={t('voting_rights_restart')}
+                        title={t('voting_rights_restart')}
+                        className="h-12 w-12 rounded-full flex items-center justify-center focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] transition-transform duration-150 active:scale-[0.96] hover:bg-[rgba(27,56,40,0.13)]"
+                        style={{ backgroundColor: 'rgba(27,56,40,0.07)', color: '#1B3828' }}
                       >
-                        {p}s
+                        <RotateCcw size={19} strokeWidth={2.4} aria-hidden />
                       </button>
-                    ))}
-                    <RightsTimeField
-                      seconds={rightsTimerLimit}
-                      custom={!presets.includes(rightsTimerLimit)}
-                      label={t('voting_rights_default_time')}
-                      onCommit={(secs) => { if (secs != null) setRightsTimerLimit(secs); }}
-                    />
-                  </div>
-                </>
-              )}
+                      <button
+                        type="button"
+                        onClick={() => { if (!rightsRunning) setRightsStarted(true); setRightsRunning((r) => !r); }}
+                        className="h-12 px-8 rounded-full font-semibold text-[15px] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] transition-transform duration-150 active:scale-[0.96]"
+                        style={{ backgroundColor: rightsRunning ? '#8A6414' : '#2F6B45', color: '#FFFFFF' }}
+                      >
+                        {rightsRunning ? t('voting_pause') : t('voting_start')}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { setRightsRunning(false); handleNextRightsSpeaker(); }}
+                        className="inline-flex items-center gap-2 h-12 ps-5 pe-6 rounded-full font-semibold text-[15px] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] transition-transform duration-150 active:scale-[0.96] motion-reduce:transition-none"
+                        style={{ backgroundColor: '#1B3828', color: '#EED98A', boxShadow: '0 2px 4px rgba(27,56,40,0.2), 0 8px 18px rgba(27,56,40,0.2)' }}
+                      >
+                        {lastRights ? t('voting_see_result') : t('voting_next_rights')}
+                        <SkipForward size={17} strokeWidth={2.5} aria-hidden style={{ transform: language === 'ar' ? 'scaleX(-1)' : undefined }} />
+                      </button>
+                    </div>
+                    {/* ONE speaking time for the whole rights round, the GSL's presets plus a
+                        typed field. No per-speaker override any more. */}
+                    <div className="mt-5 flex items-center gap-2 flex-wrap justify-center">
+                      <span className="text-[13px] font-semibold" style={{ color: '#6A5A4A' }}>{t('voting_rights_default_time')}</span>
+                      {presets.map((p) => (
+                        <button
+                          key={p}
+                          type="button"
+                          onClick={() => setRightsTimerLimit(p)}
+                          aria-pressed={rightsTimerLimit === p}
+                          className="h-9 min-w-10 px-3 rounded-full font-medium text-[13px] tabular-nums focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] transition-[background-color,transform] duration-150 active:scale-[0.96]"
+                          style={{ backgroundColor: rightsTimerLimit === p ? '#1B3828' : 'rgba(27,56,40,0.07)', color: rightsTimerLimit === p ? '#EED98A' : '#4A3F33' }}
+                        >
+                          {p}s
+                        </button>
+                      ))}
+                      <RightsTimeField
+                        seconds={rightsTimerLimit}
+                        custom={!presets.includes(rightsTimerLimit)}
+                        label={t('voting_rights_default_time')}
+                        onCommit={(secs) => { if (secs != null) setRightsTimerLimit(secs); }}
+                      />
+                    </div>
+                  </>
+                )}
+              </div>
             </div>
 
-            <div className="w-[400px] shrink-0 flex flex-col justify-center min-h-0">
+            <div className="w-[clamp(240px,32%,400px)] shrink-0 flex flex-col justify-center min-h-0">
               <RightsQueue
                 speakers={orderedRights}
                 currentIndex={rightsIndex}

@@ -1,0 +1,15 @@
+{
+  "id": "/advisor",
+  "name": "Gavelling: My delegates",
+  "short_name": "My delegates",
+  "description": "Follow your delegates across every committee room and be there when they speak.",
+  "start_url": "/advisor",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#EDE7D8",
+  "theme_color": "#1B3828",
+  "icons": [
+    { "src": "/android-chrome-192x192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/android-chrome-512x512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}

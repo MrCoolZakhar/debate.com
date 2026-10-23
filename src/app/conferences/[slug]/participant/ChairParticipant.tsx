@@ -19,7 +19,10 @@ import AwardsCard, { type AwardsCardConference } from './AwardsCard';
 import { awardsOfferedFor, getAwardsConfig } from '@/lib/awards';
 import { dayInZone } from '@/lib/applicationWindow';
 import Loader from '@/components/Loader';
-import { SectionCard, OUTFIT, capitalize, effectiveReleaseTime } from './shared';
+import { SectionCard, OUTFIT, capitalize, chairRoomOpensAt } from './shared';
+import { REOPEN_WINDOW_HOURS } from '@/lib/roomRetention';
+import { conferenceLastDayEndsAtMs } from '@/lib/conferenceRoomWindow';
+import { serverNow } from '@/lib/serverClock';
 import { DashCard, CardHeading, ForestLink, Pane, committeeShort, useDashStacked, useReportNextStep, type NextStep, FOREST, FOREST_GRADIENT, INK, INK_SOFT } from './dashboardKit';
 import ChairOverview, { type ChairRosterSummary } from './chair/ChairOverview';
 import { useStartChairRoom, type ChairRoomStart } from './chair/useStartChairRoom';
@@ -41,7 +44,6 @@ interface ChairCommittee {
   committee_type: string;
   logo_url: string | null;
   session_code: string | null;
-  released_to_chairs_at: string | null;
   position_paper_deadline: string | null;
   /** Papers closed: no due date and no "Late" (prompt 141). */
   pp_submissions_enabled?: boolean | null;
@@ -50,6 +52,11 @@ interface ChairCommittee {
   awards_approved_at: string | null;
   awards_return_note: string | null;
   chair_user_ids: string[] | null;
+  /** The linked room ended and can no longer be restarted (its conference's last day is
+   *  over, src/lib/roomRetention.ts). Read here, never stored: the cards then offer
+   *  "Start your committee room", and `start_my_chair_session` mints a fresh room
+   *  (scratch-conference-rooms.sql, section C1). */
+  room_retired?: boolean;
 }
 
 /** The conference fields the chair's blocks need beyond the id: the session
@@ -152,12 +159,36 @@ function CommitteeHeaderCard({ committee }: { committee: ChairCommittee }) {
 
 // ── Session card (item 2) ───────────────────────────────────────────────────
 
-function sessionReleased(committee: ChairCommittee, conferenceStartDate: string | null): boolean {
-  // "Released" means the timestamp is non-null and in the past, OR it's null
-  // and the conference's start_date has arrived (the default release moment)
-  // — not just "a stamp exists at all", since a future stamp is a schedule.
-  const releaseMs = effectiveReleaseTime(committee.released_to_chairs_at, conferenceStartDate);
-  return releaseMs !== null && releaseMs <= Date.now();
+function sessionReleased(_committee: ChairCommittee, conferenceStartDate: string | null): boolean {
+  // No organiser release date any more (owner, 23 Oct 2026): a chair sees the room code
+  // from a week before the conference starts, the day the first chair email goes out
+  // (`chairRoomOpensAt`). `released_to_chairs_at` is no longer read. No dates yet: shown.
+  const opensMs = chairRoomOpensAt(conferenceStartDate);
+  return opensMs === null || opensMs <= Date.now();
+}
+
+/** Ended for good: past its reopen window (a conference room: the end of the conference's
+ *  last day, and never less than 24 hours after the end). Same rule as the chair page. */
+function roomRetired(endedAt: string | null | undefined, conf: { start_date: string | null; end_date: string | null; timezone?: string | null }): boolean {
+  if (!endedAt) return false;
+  const ended = Date.parse(endedAt);
+  if (!Number.isFinite(ended)) return false;
+  const until = Math.max(ended + REOPEN_WINDOW_HOURS * 3_600_000, conferenceLastDayEndsAtMs(conf) ?? 0);
+  return serverNow() >= until;
+}
+
+/** `room_retired` for each committee, from one read of its rooms' `ended_at`. A failed read keeps every room as it is. */
+async function withRetiredRooms(
+  supabase: ReturnType<typeof getAuthedClient>,
+  rows: ChairCommittee[],
+  conf: { start_date: string | null; end_date: string | null; timezone?: string | null },
+): Promise<ChairCommittee[]> {
+  const ids = rows.map((c) => c.session_id).filter((id): id is string => !!id);
+  if (ids.length === 0) return rows;
+  const { data, error } = await supabase.from('committees').select('id, ended_at').in('id', ids);
+  if (error) return rows;
+  const ended = new Map(((data ?? []) as { id: string; ended_at: string | null }[]).map((r) => [r.id, r.ended_at]));
+  return rows.map((c) => ({ ...c, room_retired: !!c.session_id && roomRetired(ended.get(c.session_id), conf) }));
 }
 
 function chairHref(committee: ChairCommittee, chairDisplayName: string): string {
@@ -192,7 +223,7 @@ function SessionCard({ committee, chairDisplayName, conferenceStartDate, showCom
       <CardHeading label={showCommittee ? committeeShort(committee.name, committee.abbreviation) : undefined} title="Your session" stackedHide />
       {!released ? (
         <p className="text-sm" style={{ color: INK_SOFT, fontFamily: OUTFIT, margin: 0 }}>
-          Your committee&apos;s session will be shared by the organizing team.
+          Your room code shows here a week before the conference starts.
         </p>
       ) : !committee.session_code ? (
         /* This used to dead-end on "Your session hasn't been created yet.
@@ -345,8 +376,10 @@ function ChairCommitteeBlock({ conferenceId, conferenceSlug, committee, chairDis
   const submittedPapers = papers.length;
 
   // The Start press, ONE per committee block, shared by the Overview card and
-  // the Session section (one in-flight guard for both buttons).
-  const room = useStartChairRoom(committee.id, !!committee.session_code, onSessionCreated);
+  // the Session section (one in-flight guard for both buttons). A retired room
+  // (ended, past its reopen window) shows as no room, so both cards offer Start.
+  const room = useStartChairRoom(committee.id, !!committee.session_code && !committee.room_retired, onSessionCreated, !!committee.room_retired);
+  const shownCommittee = committee.room_retired ? { ...committee, session_code: null } : committee;
 
   // The roster numbers the Overview shows, from the reads above: one
   // delegation per country, seated when a person holds an allocation of it.
@@ -388,12 +421,12 @@ function ChairCommitteeBlock({ conferenceId, conferenceSlug, committee, chairDis
           `you-session-<id>` anchor the phone page's next step scrolls to. */}
       <Pane show={section === 'overview'} title={showCommittee ? heading('Overview') : undefined} icon={Landmark}>
         <ChairOverview
-          committee={committee}
+          committee={shownCommittee}
           conference={conference}
           roster={roster}
           room={room}
           released={sessionReleased(committee, conferenceStartDate)}
-          chairHref={committee.session_code ? chairHref(committee, chairDisplayName) : ''}
+          chairHref={shownCommittee.session_code ? chairHref(shownCommittee, chairDisplayName) : ''}
           joinInNextStep={joinInNextStep}
           stacked={stacked}
           awardsTabOpen={awardsTab.open}
@@ -408,7 +441,7 @@ function ChairCommitteeBlock({ conferenceId, conferenceSlug, committee, chairDis
       </Pane>
 
       <Pane show={section === 'session'} phone={false}>
-        <SessionCard committee={committee} chairDisplayName={chairDisplayName} conferenceStartDate={conferenceStartDate} showCommittee={showCommittee} room={room} />
+        <SessionCard committee={shownCommittee} chairDisplayName={chairDisplayName} conferenceStartDate={conferenceStartDate} showCommittee={showCommittee} room={room} />
       </Pane>
 
       <Pane show={section === 'committee'} title={heading('Delegates and Papers')} icon={Users} anchor={`you-papers-${committee.id}`}>
@@ -500,7 +533,7 @@ export default function ChairParticipant({ conferenceId, conferenceSlug, section
     const [{ data }, { data: confData }] = await Promise.all([
       supabase
         .from('conference_committees')
-        .select('id, name, abbreviation, topics, difficulty, committee_type, logo_url, session_code, released_to_chairs_at, position_paper_deadline, pp_submissions_enabled, session_id, awards_submitted_at, awards_approved_at, awards_return_note, chair_user_ids')
+        .select('id, name, abbreviation, topics, difficulty, committee_type, logo_url, session_code, position_paper_deadline, pp_submissions_enabled, session_id, awards_submitted_at, awards_approved_at, awards_return_note, chair_user_ids')
         .eq('conference_id', conferenceId)
         .contains('chair_user_ids', [user.id])
         .order('name', { ascending: true }),
@@ -510,8 +543,10 @@ export default function ChairParticipant({ conferenceId, conferenceSlug, section
         .eq('id', conferenceId)
         .maybeSingle(),
     ]);
-    setCommittees((data ?? []) as ChairCommittee[]);
     const conf = (confData ?? null) as Partial<ChairConference> | null;
+    setCommittees(await withRetiredRooms(supabase, (data ?? []) as ChairCommittee[], {
+      start_date: conf?.start_date ?? null, end_date: conf?.end_date ?? null, timezone: conf?.timezone ?? null,
+    }));
     setConference({
       start_date: conf?.start_date ?? null,
       end_date: conf?.end_date ?? null,
@@ -539,18 +574,21 @@ export default function ChairParticipant({ conferenceId, conferenceSlug, section
       .maybeSingle();
     const row = (data ?? null) as { session_id: string | null; session_code: string | null } | null;
     if (!row) return;
+    // The room handed back may still be the retired one (before section C1 of
+    // scratch-conference-rooms.sql is applied): re-read whether it is.
+    const [fresh] = await withRetiredRooms(supabase, [{ session_id: row.session_id } as ChairCommittee], conference);
     setCommittees(prev => prev.map(c => (
-      c.id === committeeId ? { ...c, session_id: row.session_id, session_code: row.session_code } : c
+      c.id === committeeId ? { ...c, session_id: row.session_id, session_code: row.session_code, room_retired: !!fresh?.room_retired } : c
     )));
-  }, [session]);
+  }, [session, conference]);
 
   // The phone page's next step: the first room that can be joined, else the
   // first that can be started, else what happens next.
   const stacked = useDashStacked();
   const chairName = profile?.display_name ?? 'Chair';
   const multi = committees.length > 1;
-  const joinable = committees.find(c => sessionReleased(c, conference.start_date) && !!c.session_code) ?? null;
-  const startable = joinable ? null : committees.find(c => sessionReleased(c, conference.start_date) && !c.session_code) ?? null;
+  const joinable = committees.find(c => sessionReleased(c, conference.start_date) && !!c.session_code && !c.room_retired) ?? null;
+  const startable = joinable ? null : committees.find(c => sessionReleased(c, conference.start_date) && (!c.session_code || !!c.room_retired)) ?? null;
   let step: NextStep | null = null;
   if (!loading) {
     if (committees.length === 0) {
@@ -570,7 +608,7 @@ export default function ChairParticipant({ conferenceId, conferenceSlug, section
         action: { label: 'Go to your room', scrollTo: `you-session-${startable.id}` },
       };
     } else {
-      step = { kind: 'done', line: 'Read your delegates’ position papers before the conference. Your room opens on the day.' };
+      step = { kind: 'done', line: 'Read your delegates’ position papers before the conference. Your room code shows here a week before it starts.' };
     }
   }
   useReportNextStep(stacked ? step : null);

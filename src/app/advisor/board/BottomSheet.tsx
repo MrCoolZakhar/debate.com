@@ -6,6 +6,7 @@
 import { useEffect, useId, useRef, type ReactNode } from 'react';
 import { X } from 'lucide-react';
 import Portal from '@/components/Portal';
+import { useScrollLock } from '@/hooks/useScrollLock';
 import { C, FONT, SHADOW } from './tokens';
 
 const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), textarea:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
@@ -33,6 +34,9 @@ export default function BottomSheet({
   const closeRef = useRef(onClose);
   const focusRef = useRef(initialFocus);
   useEffect(() => { closeRef.current = onClose; focusRef.current = initialFocus; }, [onClose, initialFocus]);
+  // The shared, reference-counted lock (iOS-safe, no layout shift). Declared before the focus
+  // effect so its release (which restores the scroll position) runs before focus goes back.
+  useScrollLock(open);
 
   useEffect(() => {
     if (!open) return;
@@ -60,12 +64,9 @@ export default function BottomSheet({
       else if (!e.shiftKey && (active === last || !panel.contains(active))) { e.preventDefault(); first.focus(); }
     };
     document.addEventListener('keydown', onKey, true);
-    const prevOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
     return () => {
       window.clearTimeout(t);
       document.removeEventListener('keydown', onKey, true);
-      document.body.style.overflow = prevOverflow;
       if (opener && typeof opener.focus === 'function' && document.contains(opener)) opener.focus({ preventScroll: true });
     };
   }, [open]);

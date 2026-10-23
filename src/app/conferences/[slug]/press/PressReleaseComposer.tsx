@@ -12,6 +12,8 @@ import { ImagePlus, Loader2, Newspaper, Send, X } from 'lucide-react';
 import { OUTFIT } from '@/components/neu';
 import { PRESS_RELEASE_MAX, PRESS_RELEASES_PER_DAY, sendPressRelease, uploadPressImage } from '@/lib/press';
 import { CARD_SHADOW, FOREST, INK, INK_SOFT } from './pressKit';
+import { startOfDayIso, endOfDayIso } from '@/lib/applicationWindow';
+import { useNow } from '@/lib/useNow';
 
 const PRIMARY: React.CSSProperties = {
   minHeight: 44, padding: '0 18px', borderRadius: 10, border: 'none',
@@ -24,13 +26,51 @@ const SECOND: React.CSSProperties = {
   display: 'inline-flex', alignItems: 'center', gap: 8,
 };
 
+// ── Only during the conference (owner, 23 Oct 2026) ─────────────────────────
+// `send_press_release` refuses outside the conference's days: from 00:00 on the
+// start day to 23:59 on the last day, conference time; dates to be decided:
+// refused (scratch-conference-rooms.sql, section C6). The form mirrors it so
+// nobody writes a release that cannot go. With no timezone stored the window is
+// widened to the earliest and latest zones on earth: the form never hides when
+// the server would accept, and the server's own sentence covers the rest.
+
+export interface PressDates {
+  start_date: string | null;
+  end_date: string | null;
+  dates_tbd: boolean | null;
+  timezone: string | null;
+}
+
+function validZone(tz: string | null): string | null {
+  if (!tz) return null;
+  try { new Intl.DateTimeFormat('en-US', { timeZone: tz }); return tz; } catch { return null; }
+}
+
+/** null = open now; otherwise the one plain line that says why not. */
+function pressClosedLine(d: PressDates, now: number): string | null {
+  const start = (d.start_date ?? '').slice(0, 10);
+  const last = (d.end_date || d.start_date || '').slice(0, 10);
+  if (d.dates_tbd || !/^\d{4}-\d{2}-\d{2}$/.test(start)) return 'Press releases open once the conference has dates';
+  const tz = validZone(d.timezone);
+  const opens = Date.parse(startOfDayIso(start, tz ?? 'Etc/GMT-14'));
+  const closes = Date.parse(endOfDayIso(last, tz ?? 'Etc/GMT+12')) + 59_999;
+  if (now < opens) {
+    const [y, m, day] = start.split('-').map(Number);
+    const when = new Date(y, m - 1, day).toLocaleDateString(undefined, { day: 'numeric', month: 'long' });
+    return `Press releases open when the conference starts on ${when}`;
+  }
+  if (now > closes) return 'The conference has ended, so press releases are closed';
+  return null;
+}
+
 function timeOf(iso: string | null): string {
   if (!iso) return '';
   try { return new Date(iso).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' }); } catch { return ''; }
 }
 
-export default function PressReleaseComposer({ conferenceId, label, releasesLeft, nextReleaseAt, onSent }: {
+export default function PressReleaseComposer({ conferenceId, dates, label, releasesLeft, nextReleaseAt, onSent }: {
   conferenceId: string;
+  dates: PressDates;
   /** What the release is signed with ("BBC"). */
   label: string | null;
   releasesLeft: number;
@@ -48,8 +88,10 @@ export default function PressReleaseComposer({ conferenceId, label, releasesLeft
   const fileRef = useRef<HTMLInputElement>(null);
 
   const trimmed = text.trim();
+  const now = useNow(60_000);
+  const closedLine = pressClosedLine(dates, now);
   const out = releasesLeft <= 0;
-  const canSend = !!trimmed && trimmed.length <= PRESS_RELEASE_MAX && !uploading && !sending && !out;
+  const canSend = !!trimmed && trimmed.length <= PRESS_RELEASE_MAX && !uploading && !sending && !out && !closedLine;
 
   async function pick(file: File | undefined) {
     if (!file) return;
@@ -88,6 +130,9 @@ export default function PressReleaseComposer({ conferenceId, label, releasesLeft
         </div>
       </div>
 
+      {closedLine ? (
+        <p style={{ fontFamily: OUTFIT, fontSize: 14.5, fontWeight: 600, color: INK, margin: '16px 0 0 0' }}>{closedLine}</p>
+      ) : (<>
       <label htmlFor="press-release-text" className="sr-only">Press release</label>
       <textarea
         id="press-release-text"
@@ -151,6 +196,8 @@ export default function PressReleaseComposer({ conferenceId, label, releasesLeft
             : <><strong style={{ color: INK, fontSize: 15 }}>{releasesLeft}</strong> of {PRESS_RELEASES_PER_DAY} left today</>}
         </span>
       </div>
+
+      </>)}
 
       {error && <p role="alert" style={{ fontFamily: OUTFIT, fontSize: 13.5, color: '#8E3A33', margin: '10px 0 0 0' }}>{error}</p>}
       <p role="status" style={{ fontFamily: OUTFIT, fontSize: 13.5, color: FOREST, fontWeight: 600, margin: done ? '10px 0 0 0' : 0 }}>{done}</p>

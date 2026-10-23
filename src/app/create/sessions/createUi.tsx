@@ -281,7 +281,8 @@ export function StartSessionButton({ label, sub, state, onClick }: {
             {label}
           </span>
           {sub && (
-            <span className="max-w-full truncate" style={{ fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 600, lineHeight: 1.3, marginTop: 2, color: blocked ? C.inkSoft : 'rgba(237,231,216,0.72)' }}>
+            // Wraps, never cut: it names what is missing (a chair name or a delegation).
+            <span className="max-w-full text-center [overflow-wrap:anywhere] [text-wrap:balance]" style={{ fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 600, lineHeight: 1.3, marginTop: 2, color: blocked ? C.inkSoft : 'rgba(237,231,216,0.72)' }}>
               {sub}
             </span>
           )}

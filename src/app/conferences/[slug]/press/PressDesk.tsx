@@ -10,7 +10,7 @@ import Loader from '@/components/Loader';
 import type { PressDocument, PressRoom } from '@/lib/press';
 import PressRoomCard from './PressRoomCard';
 import PressDocViewer from './PressDocViewer';
-import PressReleaseComposer from './PressReleaseComposer';
+import PressReleaseComposer, { type PressDates } from './PressReleaseComposer';
 import { CARD_SHADOW, INK, INK_SOFT, usePressDesk } from './pressKit';
 
 function Note({ title, line, action }: { title: string; line?: string; action?: React.ReactNode }) {
@@ -23,7 +23,7 @@ function Note({ title, line, action }: { title: string; line?: string; action?: 
   );
 }
 
-export default function PressDesk({ conferenceId }: { conferenceId: string }) {
+export default function PressDesk({ conferenceId, dates }: { conferenceId: string; dates: PressDates }) {
   const { state, reload, patchDesk } = usePressDesk(conferenceId);
   const [reading, setReading] = useState<{ room: PressRoom; doc: PressDocument } | null>(null);
   // Stable, so the reader's focus / scroll-lock effect does not re-run on every 10 s poll.
@@ -56,6 +56,7 @@ export default function PressDesk({ conferenceId }: { conferenceId: string }) {
       {desk.canRelease && (
         <PressReleaseComposer
           conferenceId={conferenceId}
+          dates={dates}
           label={desk.label}
           releasesLeft={desk.releasesLeft}
           nextReleaseAt={desk.nextReleaseAt}
