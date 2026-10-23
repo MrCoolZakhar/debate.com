@@ -2,7 +2,12 @@ import Link from 'next/link';
 import type { Metadata } from 'next';
 import { pageMetadata, JSONLD_PUBLISHER } from '@/lib/seo';
 import ArticleLayout from '@/components/blog/ArticleLayout';
+import TutorialVideo, { TutorialVideoJsonLd } from '@/components/blog/TutorialVideo';
 import { H2, H3, Callout } from '@/components/blog/prose';
+
+// Tutorial videos appear on release (src/lib/tutorialVideos.ts); the hourly
+// revalidation brings the server HTML and the VideoObject JSON-LD up to date.
+export const revalidate = 3600;
 
 export const metadata: Metadata = pageMetadata({
   title: 'MUN Technology Guide: Software, Apps, and Tools for Modern Committees',
@@ -43,6 +48,7 @@ export default function Article() {
     <>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(articleSchema) }} />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbSchema) }} />
+      <TutorialVideoJsonLd ids={['Itr-yHCyDto']} />
       <ArticleLayout
         slug="mun-technology-guide"
         pitch="Replace your paper list and phone timer with Gavelling, the purpose-built MUN committee platform."
@@ -67,6 +73,10 @@ export default function Article() {
         <H2>Communication During Committee</H2>
         <p>Chairs frequently need to communicate with the secretariat, co-chairs in other rooms, or crisis staff during committee. A dedicated committee communication channel (a WhatsApp group or a Slack workspace per committee) is more reliable than walking between rooms. Set this up before conference day.</p>
         <p>Gavelling&apos;s built-in chat lets chairs send messages directly to individual delegates and to all delegates, which is useful for distributing document links, announcing unmod times, or privately flagging procedure issues without interrupting formal debate.</p>
+
+        <TutorialVideo id="Itr-yHCyDto">
+          The chair&apos;s screen adds a few tools of its own, such as the session code as a full-screen QR code for the projector and announcements from the secretariat pinned as cards.
+        </TutorialVideo>
 
         <H2>Projection and Display</H2>
         <p>In large committee rooms, projecting the current speakers list and timer is a significant quality-of-life improvement for delegates. Gavelling&apos;s chair view can be mirrored to a projector, so delegates at the back of a 100-person room can see exactly who is speaking and how much time remains. This reduces the number of times delegates ask the chair &quot;who is next?&quot;</p>

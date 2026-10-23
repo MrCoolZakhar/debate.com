@@ -2,8 +2,13 @@ import Link from 'next/link';
 import type { Metadata } from 'next';
 import { pageMetadata, JSONLD_PUBLISHER } from '@/lib/seo';
 import ArticleLayout from '@/components/blog/ArticleLayout';
+import TutorialVideo, { TutorialVideoJsonLd } from '@/components/blog/TutorialVideo';
 import { H2, H3, Callout, ChairScript, FactCard, TableWrap } from '@/components/blog/prose';
 import Faq, { type FaqItem } from '@/components/blog/Faq';
+
+// Tutorial videos appear on release (src/lib/tutorialVideos.ts); the hourly
+// revalidation brings the server HTML and the VideoObject JSON-LD up to date.
+export const revalidate = 3600;
 
 const TITLE = 'SSL in MUN: Secondary and Special Speakers Lists Explained';
 const DESCRIPTION =
@@ -83,6 +88,7 @@ export default function MunSpeakersListTypes() {
     <>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(articleSchema) }} />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbSchema) }} />
+      <TutorialVideoJsonLd ids={['uHzB4DfkfrA']} />
       <ArticleLayout
         slug="mun-speakers-list-types"
         pitch="Gavelling keeps the speakers list and the caucus queue as two separate lists, so a caucus never costs a delegate their place."
@@ -181,6 +187,10 @@ export default function MunSpeakersListTypes() {
         <p>
           Keep the lists physically apart. A caucus queue written on the same sheet as the speakers list is how a delegate loses their place when the caucus ends. In a <Link href="/create/sessions">Gavelling session</Link> the General Speakers List and the moderated caucus queue are two separate lists: accepting a caucus never touches the speakers list, delegates request a place from their phones, and the chair approves it. A delegation marked absent is never added to either. Our <Link href="/blog/mun-timer">MUN timer guide</Link> covers the clocks that go with each list.
         </p>
+
+        <TutorialVideo id="uHzB4DfkfrA">
+          Running the General Speakers List on Gavelling takes one tap per speaker.
+        </TutorialVideo>
 
         <H2>Frequently Asked Questions</H2>
         <Faq items={FAQ} />

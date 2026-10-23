@@ -2,7 +2,12 @@ import Link from 'next/link';
 import type { Metadata } from 'next';
 import { pageMetadata, JSONLD_PUBLISHER } from '@/lib/seo';
 import ArticleLayout from '@/components/blog/ArticleLayout';
+import TutorialVideo, { TutorialVideoJsonLd } from '@/components/blog/TutorialVideo';
 import { H2, Callout, ChairScript } from '@/components/blog/prose';
+
+// Tutorial videos appear on release (src/lib/tutorialVideos.ts); the hourly
+// revalidation brings the server HTML and the VideoObject JSON-LD up to date.
+export const revalidate = 3600;
 
 export const metadata: Metadata = pageMetadata({
   title: 'MUN Chair Script: Exact Phrases for Every Situation',
@@ -43,6 +48,7 @@ export default function Article() {
     <>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(articleSchema) }} />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbSchema) }} />
+      <TutorialVideoJsonLd ids={['H3KBZVen978']} />
       <ArticleLayout
         slug="mun-chair-script"
         pitch="Gavelling automates the logistics so you can focus on the chair role, not the paperwork."
@@ -58,6 +64,10 @@ export default function Article() {
         <p>If a delegation does not respond: &quot;The delegation of [Country] will be marked absent.&quot;</p>
         <p>After completing the roll:</p>
         <ChairScript>&quot;The chair notes that [X] delegations are present, constituting a quorum / not constituting a quorum. [If quorum] The committee will proceed to formal debate.&quot;</ChairScript>
+
+        <TutorialVideo id="H3KBZVen978">
+          On Gavelling the whole roll call is a few taps: mark every delegation at once or one by one, and the quorum figures update as you go.
+        </TutorialVideo>
 
         <H2>Opening the General Speakers List</H2>
         <ChairScript>&quot;The chair will now open the General Speakers List. Delegates wishing to be added to the list, please raise your placard. The default speaker time is [X] seconds. Delegates are reminded that they may yield remaining time to another delegate, to questions, or to the chair.&quot;</ChairScript>

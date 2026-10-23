@@ -2,8 +2,13 @@ import Link from 'next/link';
 import type { Metadata } from 'next';
 import { pageMetadata, JSONLD_PUBLISHER } from '@/lib/seo';
 import ArticleLayout from '@/components/blog/ArticleLayout';
+import TutorialVideo, { TutorialVideoJsonLd } from '@/components/blog/TutorialVideo';
 import { PhotoFigure } from '@/components/blog/BlogPhoto';
 import { H2, Callout } from '@/components/blog/prose';
+
+// Tutorial videos appear on release (src/lib/tutorialVideos.ts); the hourly
+// revalidation brings the server HTML and the VideoObject JSON-LD up to date.
+export const revalidate = 3600;
 
 export const metadata: Metadata = pageMetadata({
   title: 'MUN Awards Guide: How Best Delegate Is Chosen',
@@ -44,6 +49,7 @@ export default function Article() {
     <>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(articleSchema) }} />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbSchema) }} />
+      <TutorialVideoJsonLd ids={['Dxkui5yPPXQ']} />
       <ArticleLayout
         slug="mun-awards-guide"
         pitch="Chairs: track delegate participation and speaking stats with Gavelling throughout your session."
@@ -92,6 +98,10 @@ export default function Article() {
 
         <H2>Awards as a Chair</H2>
         <p>For chairs: track delegates throughout the conference, not just at the end. Note specific moments: a standout speech, a key amendment proposal, a bloc merger they brokered. When you sit down to make award decisions, concrete examples beat vague impressions every time. Gavelling&apos;s delegate stats panel tracks speaking time and participation metrics that can support your qualitative notes.</p>
+
+        <TutorialVideo id="Dxkui5yPPXQ">
+          Gavelling&apos;s scoreboard ranks the delegations, shows where every point came from and keeps the committee&apos;s full history, and the dais can adjust points by hand.
+        </TutorialVideo>
       </ArticleLayout>
     </>
   );

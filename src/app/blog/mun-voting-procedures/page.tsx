@@ -1,10 +1,15 @@
 import type { Metadata } from 'next';
 import { pageMetadata, JSONLD_PUBLISHER } from '@/lib/seo';
 import ArticleLayout from '@/components/blog/ArticleLayout';
+import TutorialVideo, { TutorialVideoJsonLd } from '@/components/blog/TutorialVideo';
 import { PhotoFigure } from '@/components/blog/BlogPhoto';
 import { H2, H3, Callout } from '@/components/blog/prose';
 import Link from 'next/link';
 import { ReferenceSheet } from '@/components/blog/ReferenceSheet';
+
+// Tutorial videos appear on release (src/lib/tutorialVideos.ts); the hourly
+// revalidation brings the server HTML and the VideoObject JSON-LD up to date.
+export const revalidate = 3600;
 
 export const metadata: Metadata = pageMetadata({
   title: 'MUN Voting Procedures Explained: In Favour, Against, Abstain',
@@ -45,6 +50,7 @@ export default function Article() {
     <>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(articleSchema) }} />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbSchema) }} />
+      <TutorialVideoJsonLd ids={['LhT8mic1ffQ']} />
       <ArticleLayout
         slug="mun-voting-procedures"
         pitch="Run roll call votes and track results with Gavelling's built-in voting screen."
@@ -97,6 +103,10 @@ export default function Article() {
         <p>The chair must announce the voting procedure clearly before it begins, manage any rights of explanation, call the roll in order, announce the final tally, and declare the result. The declaration is formal:</p>
         <p>&quot;With X votes in favour, Y against, and Z abstentions, Resolution [number] is adopted / fails to pass.&quot;</p>
         <p>Software like Gavelling handles roll call voting with an interactive per-delegate voting interface, tallies the result automatically, and supports custom thresholds, including veto mode for Security Council simulations.</p>
+
+        <TutorialVideo id="LhT8mic1ffQ">
+          This is what happens on that screen when a P5 member votes Against.
+        </TutorialVideo>
       </ArticleLayout>
     </>
   );

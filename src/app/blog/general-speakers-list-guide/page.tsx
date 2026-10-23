@@ -2,9 +2,14 @@ import Link from 'next/link';
 import type { Metadata } from 'next';
 import { pageMetadata, JSONLD_PUBLISHER } from '@/lib/seo';
 import ArticleLayout from '@/components/blog/ArticleLayout';
+import TutorialVideo, { TutorialVideoJsonLd } from '@/components/blog/TutorialVideo';
 import { PhotoFigure } from '@/components/blog/BlogPhoto';
 import { H2, H3 } from '@/components/blog/prose';
 import Faq, { type FaqItem } from '@/components/blog/Faq';
+
+// Tutorial videos appear on release (src/lib/tutorialVideos.ts); the hourly
+// revalidation brings the server HTML and the VideoObject JSON-LD up to date.
+export const revalidate = 3600;
 
 const TITLE = 'GSL in MUN: What the General Speakers List Means';
 const DESCRIPTION =
@@ -74,6 +79,7 @@ export default function Article3() {
     <>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(articleSchema) }} />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbSchema) }} />
+      <TutorialVideoJsonLd ids={['uHzB4DfkfrA']} />
       <ArticleLayout
         slug="general-speakers-list-guide"
         pitch="Gavelling manages the GSL automatically (queue, timer, and speaker advancement) so you can focus on the debate."
@@ -180,6 +186,10 @@ export default function Article3() {
         <p>
           <strong>Gavelling</strong> automates the hardest parts of GSL management: the timer runs automatically, the queue is visible to all delegates in real time, and speaker advancement is a single button tap. Chairs who use it report significantly shorter inter-speaker gaps and fewer procedural interruptions.
         </p>
+
+        <TutorialVideo id="uHzB4DfkfrA">
+          Adding a delegation, starting the clock and moving to the next speaker are each one tap.
+        </TutorialVideo>
 
         <H2>7. GSL vs Caucuses: When to Use Each</H2>
         <p>

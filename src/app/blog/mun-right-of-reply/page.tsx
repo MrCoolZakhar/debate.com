@@ -1,8 +1,13 @@
 import type { Metadata } from 'next';
 import { pageMetadata, JSONLD_PUBLISHER } from '@/lib/seo';
 import ArticleLayout from '@/components/blog/ArticleLayout';
+import TutorialVideo, { TutorialVideoJsonLd } from '@/components/blog/TutorialVideo';
 import { H2, Callout, ChairScript } from '@/components/blog/prose';
 import Link from 'next/link';
+
+// Tutorial videos appear on release (src/lib/tutorialVideos.ts); the hourly
+// revalidation brings the server HTML and the VideoObject JSON-LD up to date.
+export const revalidate = 3600;
 
 export const metadata: Metadata = pageMetadata({
   title: 'Right of Reply in MUN: When and How to Use It',
@@ -43,6 +48,7 @@ export default function Article() {
     <>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(articleSchema) }} />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbSchema) }} />
+      <TutorialVideoJsonLd ids={['-_DeJkfr43I']} />
       <ArticleLayout
         slug="mun-right-of-reply"
         pitch="Gavelling lets chairs grant a timed right of reply instantly, without touching the speakers list."
@@ -84,6 +90,10 @@ export default function Article() {
 
         <H2>Chair&apos;s Discretion</H2>
         <p>Chairs have significant discretion over whether to grant a right of reply and how much time to allow. In Gavelling, chairs grant a right of reply as a separate timed reply, usually shorter than a standard speech, which never touches the speakers list. This keeps the process clean without derailing the committee&apos;s rhythm.</p>
+
+        <TutorialVideo id="-_DeJkfr43I">
+          Rights of reply, yields and extra time each take a press or two on the chair&apos;s screen.
+        </TutorialVideo>
         <p>Good chairs use the right of reply sparingly. When it is granted for genuinely inappropriate statements, it carries weight. When it is granted for every policy disagreement, it becomes noise.</p>
 
         <H2>The Reply to the Reply</H2>

@@ -1,9 +1,14 @@
 import type { Metadata } from 'next';
 import { pageMetadata, JSONLD_PUBLISHER } from '@/lib/seo';
 import ArticleLayout from '@/components/blog/ArticleLayout';
+import TutorialVideo, { TutorialVideoJsonLd } from '@/components/blog/TutorialVideo';
 import { PhotoFigure } from '@/components/blog/BlogPhoto';
 import { H2, H3, Callout, ChairScript } from '@/components/blog/prose';
 import Link from 'next/link';
+
+// Tutorial videos appear on release (src/lib/tutorialVideos.ts); the hourly
+// revalidation brings the server HTML and the VideoObject JSON-LD up to date.
+export const revalidate = 3600;
 
 export const metadata: Metadata = pageMetadata({
   title: 'How to Run a Moderated Caucus in MUN: Chair Guide',
@@ -44,6 +49,7 @@ export default function Article() {
     <>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(articleSchema) }} />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbSchema) }} />
+      <TutorialVideoJsonLd ids={['Sw4KzPPyYxE']} />
       <ArticleLayout
         slug="how-to-run-moderated-caucus"
         pitch="Run your next moderated caucus without the paper chaos."
@@ -65,7 +71,7 @@ export default function Article() {
         <ChairScript>&quot;The motion passes. The committee will now enter a moderated caucus of fifteen minutes, with ninety seconds per speaker, on the topic of climate finance mechanisms. I will now open the speakers list for this caucus.&quot;</ChairScript>
 
         <H2>Step 2: Building the Caucus Speakers List</H2>
-        <p>Ask delegates to raise their placards if they wish to speak during the caucus. Call on them in the order they raised, recording each name. In a large committee this happens fast, so have your co-chair or assistant director capture names while you manage the room. Software like Gavelling handles this automatically, letting co-chairs add speakers to the caucus queue without interrupting the chair.</p>
+        <p>Ask delegates to raise their placards if they wish to speak during the caucus. Call on them in the order they raised, recording each name. In a large committee this happens fast, so have your co-chair or assistant director capture names while you manage the room. Software like Gavelling keeps the caucus queue on screen as the chair adds each name, and tells you how many speakers still fit in the time left.</p>
         <p>You do not need to fill every available speaking slot before starting. Call the first speaker as soon as you have a few names, and continue accepting additions from the floor as the caucus runs.</p>
 
         <H2>Step 3: Running the Caucus</H2>
@@ -98,6 +104,10 @@ export default function Article() {
 
         <H2>Using Software to Run Moderated Caucuses</H2>
         <p>Manual timers and paper lists work, but they introduce errors, especially when you have multiple co-chairs, large committees, or tight per-speaker times. Gavelling automates the caucus queue, tracks total and per-speaker time simultaneously, and keeps the General Speakers List intact so you can return to it instantly when the caucus ends. It runs on any device and does not require installation.</p>
+
+        <TutorialVideo id="Sw4KzPPyYxE">
+          Enter the topic, the total time and the speaking time, and Gavelling shows how many delegates fit before you open the queue.
+        </TutorialVideo>
       </ArticleLayout>
     </>
   );

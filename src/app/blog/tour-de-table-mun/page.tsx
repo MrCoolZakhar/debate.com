@@ -1,8 +1,13 @@
 import type { Metadata } from 'next';
 import { pageMetadata, JSONLD_PUBLISHER } from '@/lib/seo';
 import ArticleLayout from '@/components/blog/ArticleLayout';
+import TutorialVideo, { TutorialVideoJsonLd } from '@/components/blog/TutorialVideo';
 import { H2, H3, Callout, ChairScript } from '@/components/blog/prose';
 import Link from 'next/link';
+
+// Tutorial videos appear on release (src/lib/tutorialVideos.ts); the hourly
+// revalidation brings the server HTML and the VideoObject JSON-LD up to date.
+export const revalidate = 3600;
 
 export const metadata: Metadata = pageMetadata({
   title: 'Tour de Table in MUN: What It Is and How Chairs Run It',
@@ -43,6 +48,7 @@ export default function Article() {
     <>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(articleSchema) }} />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbSchema) }} />
+      <TutorialVideoJsonLd ids={['9hvQhvp5rzA']} />
       <ArticleLayout
         slug="tour-de-table-mun"
         pitch="Gavelling manages tour de table automatically: pre-filled queue, individual timers, total time tracking."
@@ -72,6 +78,10 @@ export default function Article() {
 
         <H3>Using Software for Tour de Table</H3>
         <p>Managing tour de table manually with a paper list and phone timer is feasible but error-prone, especially with large committees. Gavelling handles tour de table natively: it pre-populates the caucus queue with all present delegates in alphabetical order, runs the individual speaker timer, and tracks the total caucus time simultaneously. The chair simply calls each name and clicks Next Speaker.</p>
+
+        <TutorialVideo id="9hvQhvp5rzA">
+          Gavelling runs a Consultation of the Whole the same way: one countdown for the room, and the chair taps whoever holds the floor.
+        </TutorialVideo>
 
         <H2>What Delegates Should Do During Tour de Table</H2>
         <p>Tour de table speeches should be tight <Link href="/blog/mun-opening-speech">opening statements</Link>. With thirty or sixty seconds, you have room for exactly one thing: your country&apos;s core position. Do not try to cover multiple points. State your stance, and perhaps the one policy your country will advocate for most strongly.</p>
