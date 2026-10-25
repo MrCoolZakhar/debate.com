@@ -1,0 +1,147 @@
+'use client';
+// "Try it as": one click into the crisis as any person in it, or into the live room as a chair,
+// a delegate's room view or the faculty advisor board. For directors and organisers (through
+// their own account). "View as" adds a token for this device only; "Back to my account" in the
+// top bar removes it. Used on /crisis and on the Command page.
+
+import { useEffect, useMemo, useState } from 'react';
+import { Eye, Gavel, GraduationCap, Presentation, UserRound, UsersRound } from 'lucide-react';
+import { notifyErr } from '@/lib/appNotify';
+import { getCrisisClient } from '@/lib/crisis/client';
+import { crisisError, viewAs, type CrisisRef } from '@/lib/crisis/api';
+import { MEMBER_COLUMNS, ROLE_LABEL, type Cabinet, type Character, type Member } from '@/lib/crisis/types';
+import { CK, Card, CardTitle, Skeleton } from '../../crisisKit';
+
+interface Loaded {
+  members: Member[];
+  characters: Character[];
+  cabinets: Cabinet[];
+  rooms: Map<string, { code: string; chairPassword: string | null }>; // cabinet id -> live room
+}
+
+async function loadTryAs(crisisId: string): Promise<Loaded> {
+  const client = await getCrisisClient('', ''); // always the account, never a stored token
+  const [m, ch, cb] = await Promise.all([
+    client.from('crisis_members').select(MEMBER_COLUMNS).eq('crisis_id', crisisId).order('display_name'),
+    client.from('crisis_characters').select('*').eq('crisis_id', crisisId),
+    client.from('crisis_cabinets').select('*').eq('crisis_id', crisisId).order('sort'),
+  ]);
+  if (m.error || ch.error || cb.error) throw m.error || ch.error || cb.error;
+  const cabinets = (cb.data ?? []) as Cabinet[];
+  const rooms = new Map<string, { code: string; chairPassword: string | null }>();
+  const ccIds = cabinets.map((c) => c.conference_committee_id).filter((x): x is string => !!x);
+  if (ccIds.length) {
+    const cc = await client.from('conference_committees').select('id, session_id, session_code').in('id', ccIds);
+    const rows = (cc.data ?? []) as Array<{ id: string; session_id: string | null; session_code: string | null }>;
+    const sids = rows.map((r) => r.session_id).filter((x): x is string => !!x);
+    const cm = sids.length ? await client.from('committees').select('id, code, settings').in('id', sids) : { data: [] };
+    const bySid = new Map(((cm.data ?? []) as Array<{ id: string; code: string; settings: { chairJoinSuffix?: string } | null }>).map((r) => [r.id, r]));
+    for (const cab of cabinets) {
+      const row = rows.find((r) => r.id === cab.conference_committee_id);
+      const room = row?.session_id ? bySid.get(row.session_id) : undefined;
+      const code = room?.code ?? row?.session_code ?? null;
+      if (code) rooms.set(cab.id, { code, chairPassword: room?.settings?.chairJoinSuffix || null });
+    }
+  }
+  return { members: (m.data ?? []) as unknown as Member[], characters: (ch.data ?? []) as Character[], cabinets, rooms };
+}
+
+function Chip({ onClick, href, icon, children, tone = 'plain', busy }: {
+  onClick?: () => void; href?: string; icon: React.ReactNode; children: React.ReactNode; tone?: 'plain' | 'red'; busy?: boolean;
+}) {
+  const style: React.CSSProperties = {
+    display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 10px', borderRadius: 10, fontSize: 12.5, fontWeight: 700,
+    background: tone === 'red' ? 'rgba(142,36,36,0.08)' : CK.well, color: tone === 'red' ? CK.red2 : CK.ink, border: 0, cursor: 'pointer',
+    textDecoration: 'none', fontFamily: CK.font, opacity: busy ? 0.6 : 1, overflowWrap: 'anywhere', textAlign: 'left',
+  };
+  const cls = 'focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] active:scale-[0.97] transition-transform';
+  if (href) return <a href={href} target="_blank" rel="noopener noreferrer" className={cls} style={style}>{icon}{children}</a>;
+  return <button type="button" onClick={onClick} disabled={busy} className={cls} style={style}>{icon}{children}</button>;
+}
+
+export default function TryAsPanel({ cref, compact }: { cref: CrisisRef; compact?: boolean }) {
+  const [data, setData] = useState<Loaded | null>(null);
+  const [failed, setFailed] = useState(false);
+  const [busy, setBusy] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    loadTryAs(cref.id).then((d) => { if (!cancelled) setData(d); }).catch(() => { if (!cancelled) setFailed(true); });
+    return () => { cancelled = true; };
+  }, [cref.id]);
+
+  const charName = useMemo(() => new Map((data?.characters ?? []).map((c) => [c.id, c.name])), [data]);
+
+  const enter = async (m: Member) => {
+    if (busy) return;
+    setBusy(m.id);
+    try {
+      await viewAs(cref, m.id);
+      // A full load so every part of the page re-reads as the new person.
+      window.location.assign(`/crisis/${cref.conf}/${cref.crisis}`);
+    } catch (e) {
+      notifyErr(crisisError(e, 'Could not open the crisis as this person.'));
+      setBusy(null);
+    }
+  };
+
+  const staff = (data?.members ?? []).filter((m) => m.role === 'backroomer' || m.role === 'assistant_director' || m.role === 'press');
+  const chairs = (data?.members ?? []).filter((m) => m.role === 'chair');
+  const delegates = (data?.members ?? []).filter((m) => m.role === 'delegate');
+
+  return (
+    <Card>
+      <CardTitle icon={<Eye size={17} strokeWidth={1.5} />} sub="Open the crisis as someone else on this device. Use Back to my account at the top to return.">
+        Try It As
+      </CardTitle>
+      {failed && <p style={{ margin: 0, fontSize: 13, color: CK.danger }}>Could not load the people in this crisis.</p>}
+      {!data && !failed && <div className="grid" style={{ gap: 8 }}><Skeleton h={30} /><Skeleton h={30} /></div>}
+      {data && (
+        <div className="grid" style={{ gap: compact ? 10 : 14 }}>
+          {staff.length > 0 && (
+            <div>
+              <p style={{ margin: '0 0 6px', fontSize: 11.5, fontWeight: 800, color: CK.muted }}>Crisis team</p>
+              <div className="flex flex-wrap" style={{ gap: 6 }}>
+                {staff.map((m) => (
+                  <Chip key={m.id} busy={busy === m.id} onClick={() => enter(m)} icon={<UsersRound size={14} strokeWidth={1.5} />}>
+                    {ROLE_LABEL[m.role]} · {m.display_name}
+                  </Chip>
+                ))}
+              </div>
+            </div>
+          )}
+          {data.cabinets.map((cab) => {
+            const dels = delegates.filter((m) => m.cabinet_id === cab.id);
+            const room = data.rooms.get(cab.id);
+            const cabChairs = chairs.filter((m) => m.cabinet_id === cab.id);
+            return (
+              <div key={cab.id}>
+                <p style={{ margin: '0 0 6px', fontSize: 11.5, fontWeight: 800, color: cab.color, overflowWrap: 'anywhere' }}>{cab.name}</p>
+                <div className="flex flex-wrap" style={{ gap: 6 }}>
+                  {dels.map((m) => (
+                    <Chip key={m.id} busy={busy === m.id} onClick={() => enter(m)} icon={<UserRound size={14} strokeWidth={1.5} />}>
+                      Delegate · {m.character_id ? charName.get(m.character_id) ?? m.display_name : m.display_name}
+                    </Chip>
+                  ))}
+                  {cabChairs.map((m) => (
+                    <Chip key={m.id} busy={busy === m.id} onClick={() => enter(m)} icon={<Presentation size={14} strokeWidth={1.5} />}>
+                      Chair · {m.display_name}
+                    </Chip>
+                  ))}
+                  {room && (
+                    <>
+                      <Chip tone="red" href={`/join?code=${encodeURIComponent(room.chairPassword ? `${room.code}-${room.chairPassword}` : room.code)}&mode=chair`} icon={<Gavel size={14} strokeWidth={1.5} />}>Live room as chair</Chip>
+                      <Chip tone="red" href={`/chair/${room.code}?secretariat=1`} icon={<Eye size={14} strokeWidth={1.5} />}>Watch the room</Chip>
+                      <Chip tone="red" href={`/advisor?add=${encodeURIComponent(room.code)}`} icon={<GraduationCap size={14} strokeWidth={1.5} />}>Faculty advisor board</Chip>
+                    </>
+                  )}
+                  {!dels.length && !cabChairs.length && !room && <span style={{ fontSize: 12.5, color: CK.inkSoft }}>No one here yet.</span>}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </Card>
+  );
+}

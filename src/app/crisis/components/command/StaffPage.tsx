@@ -390,6 +390,7 @@ function PersonPanel({ m, isMe, issued, onIssued, onClearIssued, onClose }: {
             <Btn tone="ghost" size="sm" icon={copied ? <Check size={14} strokeWidth={1.5} /> : <Copy size={14} strokeWidth={1.5} />} onClick={copyBoth}>{copied ? 'Copied' : 'Copy both'}</Btn>
           </div>
           <p style={{ margin: '8px 0 0', fontSize: 13, fontWeight: 700, color: CK.red }}>Write this down now. The password will not be shown again.</p>
+          <p style={{ margin: '4px 0 0', fontSize: 12.5, color: CK.inkSoft }}>They can also enter with their committee&apos;s room code and this password, at gavelling.com/crisis or through /join.</p>
         </div>
       )}
 

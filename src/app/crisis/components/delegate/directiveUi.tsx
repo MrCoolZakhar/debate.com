@@ -1,7 +1,10 @@
 'use client';
 // Gavelling Crisis: how a directive's state is said in words. Shared by the delegate and chair pages.
 
-import { CheckCircle2, Clock, HelpCircle, Hourglass, Undo2, UserRoundCog, XCircle, CircleDot } from 'lucide-react';
+import {
+  CheckCircle2, Clock, HelpCircle, Hourglass, Undo2, UserRoundCog, XCircle, CircleDot,
+  Swords, Eye, Handshake, Coins, Newspaper, User, Landmark, VenetianMask, type LucideIcon,
+} from 'lucide-react';
 import type { ReactNode } from 'react';
 import { OUTCOME_LABEL, type Directive, type DirectiveOutcome, type DirectiveStatus } from '@/lib/crisis/types';
 import { CK } from '../../crisisKit';
@@ -69,4 +72,14 @@ export function StatusLine({ s }: { s: DirectiveStatus }) {
 export function whenLabel(iso: string | null | undefined): string {
   if (!iso) return '';
   try { return new Date(iso).toLocaleString(undefined, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }); } catch { return ''; }
+}
+
+const THEME_ICONS: Record<string, LucideIcon> = {
+  Military: Swords, Intelligence: Eye, Diplomatic: Handshake, Economic: Coins, Press: Newspaper, Personal: User, Political: Landmark, Covert: VenetianMask,
+};
+
+/** The line icon for a theme (fine line, bare ink). */
+export function themeIcon(theme: string, size = 16): ReactNode {
+  const I = THEME_ICONS[theme] ?? CircleDot;
+  return <I size={size} strokeWidth={1.5} aria-hidden />;
 }

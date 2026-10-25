@@ -15,6 +15,7 @@ import { crisisBase, useCrisis } from '../../[conference]/[crisis]/CrisisContext
 import { loadLastChanges } from './commandData';
 import { ApprovalCard, CommandHeader, LinkBtn, NewsCard, ResourcesCard } from './commandParts';
 import { DirectiveDrawer, WaitingCard } from './commandQueue';
+import TryAsPanel from './TryAsPanel';
 import { BackroomCard, FrontRoomsCard } from './commandRooms';
 
 const WarMap = dynamic(() => import('../map/WarMap'), {
@@ -140,6 +141,10 @@ export default function CommandPage() {
           <ResourcesCard cabinets={core.cabinets} types={res?.types ?? []} resources={res?.resources ?? []} changes={changes} loaded={res !== null} />
           <NewsCard news={news} cabinets={core.cabinets} members={core.members} base={base} now={now} />
         </section>
+      </div>
+
+      <div style={{ marginTop: 14 }}>
+        <TryAsPanel cref={ref} compact />
       </div>
 
       {openDirective && <DirectiveDrawer directive={openDirective} onClose={closeDrawer} />}

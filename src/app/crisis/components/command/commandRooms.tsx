@@ -2,7 +2,7 @@
 // Gavelling Crisis: "Front Rooms" (each cabinet's live room, re-read every 15 s) and "Backroom" (who has what).
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Eye, Lightbulb, Presentation, Siren, UsersRound } from 'lucide-react';
+import { Eye, Gavel, Lightbulb, Presentation, Siren, UsersRound } from 'lucide-react';
 import { notifyErr, notifyOk } from '@/lib/appNotify';
 import { assignDirective, crisisError, type CrisisRef } from '@/lib/crisis/api';
 import { ROLE_LABEL, type Cabinet, type Directive, type Member } from '@/lib/crisis/types';
@@ -60,9 +60,19 @@ export function FrontRoomsCard({ cref, cabinets, base }: { cref: CrisisRef; cabi
             <div className="flex items-center justify-between" style={{ gap: 8 }}>
               <b style={{ fontSize: 14, color: cab.color, overflowWrap: 'anywhere', minWidth: 0 }}>{cab.name}</b>
               {r?.code && (
-                <LinkBtn href={`/chair/${r.code}?secretariat=1`} newTab icon={<Eye size={13} strokeWidth={1.5} />}>Watch</LinkBtn>
+                <span className="flex flex-wrap justify-end" style={{ gap: 6 }}>
+                  {/* The silent secretariat view is read only on purpose; Join as chair is the full console. */}
+                  <LinkBtn href={`/chair/${r.code}?secretariat=1`} newTab icon={<Eye size={13} strokeWidth={1.5} />}>Watch</LinkBtn>
+                  <LinkBtn href={`/join?code=${encodeURIComponent(r.chairPassword ? `${r.code}-${r.chairPassword}` : r.code)}&mode=chair`} newTab icon={<Gavel size={13} strokeWidth={1.5} />}>Join as chair</LinkBtn>
+                </span>
               )}
             </div>
+            {r?.code && (
+              <p style={{ margin: '4px 0 0', fontSize: 12, color: CK.inkSoft, fontVariantNumeric: 'tabular-nums' }}>
+                Room code <b style={{ color: CK.ink, letterSpacing: '0.06em' }}>{r.code}</b>
+                {r.chairPassword && <> · Chair password <b style={{ color: CK.ink, letterSpacing: '0.06em' }}>{r.chairPassword}</b></>}
+              </p>
+            )}
             <div className="flex items-center flex-wrap" style={{ gap: '2px 6px', marginTop: 3, fontSize: 12.5, color: CK.inkSoft }}>
               {rooms === null && !failed ? <Skeleton h={14} w="55%" /> : r?.phaseLabel ? (
                 <>

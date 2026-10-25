@@ -17,6 +17,8 @@ export interface RoomState {
   phaseLabel: string | null;
   tone: RoomTone;
   speaker: string | null;
+  /** The room's chair password (committees.settings.chairJoinSuffix; anon-readable, shown to directors to join as chair). */
+  chairPassword: string | null;
 }
 
 interface CommitteeRow {
@@ -53,7 +55,7 @@ export async function loadRoomStates(ref: CrisisRef, cabinets: Cabinet[]): Promi
   const speakers = new Map<string, string>();
   if (sessionIds.length) {
     const [cm, sp] = await Promise.all([
-      client.from('committees').select('id, code, phase, caucus, suspended_at, ended_at').in('id', sessionIds),
+      client.from('committees').select('id, code, phase, caucus, suspended_at, ended_at, settings').in('id', sessionIds),
       client.from('current_speaker').select('committee_id, country').in('committee_id', sessionIds),
     ]);
     if (cm.error) throw cm.error;
@@ -63,10 +65,11 @@ export async function loadRoomStates(ref: CrisisRef, cabinets: Cabinet[]): Promi
   return cabinets.map((c) => {
     const link = c.conference_committee_id ? links.get(c.conference_committee_id) : undefined;
     const room = link?.session_id ? rooms.get(link.session_id) : undefined;
-    if (!room) return { cabinetId: c.id, code: null, phaseLabel: null, tone: 'quiet' as RoomTone, speaker: null };
+    if (!room) return { cabinetId: c.id, code: null, phaseLabel: null, tone: 'quiet' as RoomTone, speaker: null, chairPassword: null };
     const { label, tone } = phaseWords(room);
     const floor = room.phase === 'speakers-list' || room.phase === 'moderated-caucus';
-    return { cabinetId: c.id, code: room.code ?? link?.session_code ?? null, phaseLabel: label, tone, speaker: floor && tone === 'live' ? speakers.get(room.id) ?? null : null };
+    const pw = (room as CommitteeRow & { settings?: { chairJoinSuffix?: unknown } }).settings?.chairJoinSuffix;
+    return { cabinetId: c.id, code: room.code ?? link?.session_code ?? null, phaseLabel: label, tone, speaker: floor && tone === 'live' ? speakers.get(room.id) ?? null : null, chairPassword: typeof pw === 'string' && pw ? pw : null };
   });
 }
 

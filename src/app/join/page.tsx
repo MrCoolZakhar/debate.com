@@ -66,6 +66,7 @@ import {
 import { getReservedSeatHint, setClaimMarker, takeClaimMarker, type ReservedSeatHint } from './reservedSeatHint';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { useMyAdvisorDelegation } from '@/lib/advisorDelegation';
+import { crisisForRoom } from '@/lib/crisis/api';
 
 type JoinMode = 'delegate' | 'chair' | 'advisor';
 
@@ -121,6 +122,8 @@ function JoinPageInner() {
   const [lookupFailed, setLookupFailed] = useState(false);
   const [lookingUp, setLookingUp] = useState(false);
   const [foundCommittee, setFoundCommittee] = useState<Committee | null>(null);
+  // Gavelling Crisis: a crisis room's delegates use /crisis (room code + their own password), not a seat here.
+  const [crisisRoom, setCrisisRoom] = useState<{ conference_slug: string; crisis_slug: string; name: string } | null>(null);
   // Chair name selection — after committee found in chair mode
   const [chairName, setChairName] = useState('');
   const [chairNameMode, setChairNameMode] = useState<'select' | 'new'>('select');
@@ -337,6 +340,7 @@ function JoinPageInner() {
     setError('');
     setLookupFailed(false);
     setFoundCommittee(null);
+    setCrisisRoom(null);
     setChairName('');
     setChairNameMode('select');
     setNewChairName('');
@@ -384,6 +388,7 @@ function JoinPageInner() {
     getCommitteeRosterByCode(upper).then(async (remote) => {
       if (remote) {
         setFoundCommittee(remote);
+        void crisisForRoom(upper).then(setCrisisRoom);
         await checkConferenceSession(remote);
       } else {
         setFoundCommittee(null);
@@ -1047,8 +1052,24 @@ function JoinPageInner() {
                     );
                   })()}
 
+                  {/* Gavelling Crisis room: delegates enter through /crisis with their own password. */}
+                  {crisisRoom && mode === 'delegate' && (
+                    <div className="mt-3" style={{ borderRadius: 14, padding: '12px 14px', background: 'linear-gradient(165deg, #9A2A2A 0%, #6A1919 52%, #3A0E0F 100%)', color: '#FFF4E6' }}>
+                      <p style={{ fontFamily: OUTFIT, fontSize: 14, fontWeight: 700, margin: 0 }}>This committee runs on Gavelling Crisis</p>
+                      <p style={{ fontFamily: OUTFIT, fontSize: 12.5, lineHeight: 1.5, margin: '4px 0 10px', color: 'rgba(255,232,214,0.85)' }}>Enter with this room code and the password your Crisis Director gave you.</p>
+                      <button
+                        type="button"
+                        onClick={() => router.push(`/crisis?code=${encodeURIComponent(lookupCode.toUpperCase())}`)}
+                        className="focus:outline-none focus-visible:ring-2 focus-visible:ring-[#EED98A]"
+                        style={{ fontFamily: OUTFIT, fontSize: 13.5, fontWeight: 700, borderRadius: 11, padding: '8px 14px', background: '#F8EFE5', color: '#6E1A1A', border: 0, cursor: 'pointer' }}
+                      >
+                        Enter Gavelling Crisis
+                      </button>
+                    </div>
+                  )}
+
                   {/* Delegate: the flag-led seat list */}
-                  {((showRoleFlow && mode === 'delegate') || (canPointReserved && !openPath)) && (() => {
+                  {!(crisisRoom && mode === 'delegate') && ((showRoleFlow && mode === 'delegate') || (canPointReserved && !openPath)) && (() => {
                     const seats: JoinSeatRow[] = foundCommittee.delegates.map((d) => {
                       const st = seatState(d.country);
                       const reserved = isReservedSeat(d.country);

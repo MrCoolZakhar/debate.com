@@ -140,11 +140,15 @@ function TopBar({ v, items }: { v: CrisisContextValue; items: NavItem[] }) {
     window.addEventListener('scroll', on, { passive: true });
     return () => window.removeEventListener('scroll', on);
   }, []);
+  const { user } = useAuth();
   const codeUser = !v.memberId ? false : !!readCrisisToken(v.ref.conf, v.ref.crisis);
+  // A token on a device that is also signed in to an account is a director's "View as".
+  const viewingAs = codeUser && !!user;
   const signOutCode = async () => {
     try { await codeLogout(v.ref); } catch { /* the token is cleared below anyway */ }
     clearCrisisToken(v.ref.conf, v.ref.crisis);
-    router.replace('/crisis');
+    if (viewingAs) window.location.assign(`/crisis/${v.ref.conf}/${v.ref.crisis}`);
+    else router.replace('/crisis');
   };
   return (
     <header className="sticky z-30 flex items-center" style={{ top: 'env(safe-area-inset-top, 0px)', height: 56, gap: 14, padding: '0 18px', fontFamily: CK.font, background: scrolled ? 'rgba(239,227,218,0.86)' : 'transparent', backdropFilter: scrolled ? 'blur(12px) saturate(1.2)' : 'none', boxShadow: scrolled ? '0 1px 0 rgba(110,30,30,0.10)' : 'none', transition: 'background 160ms ease' }}>
@@ -158,7 +162,9 @@ function TopBar({ v, items }: { v: CrisisContextValue; items: NavItem[] }) {
       <span className="hidden sm:inline" style={{ fontSize: 12.5, fontWeight: 600, color: CK.inkSoft }}>
         {v.displayName ? `${v.displayName} · ` : ''}{ROLE_LABEL[v.role]}
       </span>
-      {codeUser ? (
+      {viewingAs ? (
+        <Btn tone="red" size="sm" onClick={signOutCode} icon={<LogOut size={14} strokeWidth={1.6} />}>Back to my account</Btn>
+      ) : codeUser ? (
         <Btn tone="ghost" size="sm" onClick={signOutCode} icon={<LogOut size={14} strokeWidth={1.6} />}>Sign out</Btn>
       ) : (
         <ProfileAvatarMenu size={36} tone="light" panelStyle={{ zIndex: 60 }} />

@@ -13,10 +13,11 @@ import { codeLogin, listMyCrises, type MyCrisis } from '@/lib/crisis/api';
 import { ROLE_LABEL, type CrisisRole } from '@/lib/crisis/types';
 import { CK, Btn, Card, Eyebrow, fieldStyle, FieldLabel, Skeleton } from './crisisKit';
 import { Suspense } from 'react';
+import TryAsPanel from './components/command/TryAsPanel';
 
-function CodeEntry({ next }: { next: string | null }) {
+function CodeEntry({ next, initialCode }: { next: string | null; initialCode: string }) {
   const router = useRouter();
-  const [code, setCode] = useState('');
+  const [code, setCode] = useState(initialCode);
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -43,12 +44,12 @@ function CodeEntry({ next }: { next: string | null }) {
       <h2 className="flex items-center gap-2" style={{ margin: '0 0 4px', fontSize: 17, fontWeight: 800 }}>
         <KeyRound size={18} strokeWidth={1.6} color={CK.red} />Enter With a Personal Code
       </h2>
-      <p style={{ margin: '0 0 14px', fontSize: 13.5, color: CK.inkSoft }}>Your Crisis Director gives you a code and a password.</p>
+      <p style={{ margin: '0 0 14px', fontSize: 13.5, color: CK.inkSoft }}>Use your committee&apos;s room code, or the personal code from your Crisis Director, with your own password.</p>
       <form onSubmit={submit} className="grid" style={{ gap: 12 }}>
         <div>
           <FieldLabel htmlFor="crisis-code">Code</FieldLabel>
           <input id="crisis-code" value={code} onChange={(e) => setCode(e.target.value.toUpperCase())} autoComplete="username" autoCapitalize="characters"
-            placeholder="For example K7Q2MZ4P" style={{ ...fieldStyle, letterSpacing: '0.12em', fontWeight: 700 }} required />
+            placeholder="For example 03FAAB" style={{ ...fieldStyle, letterSpacing: '0.12em', fontWeight: 700 }} required />
         </div>
         <div>
           <FieldLabel htmlFor="crisis-password">Password</FieldLabel>
@@ -121,8 +122,14 @@ function CrisisHome() {
               </div>
             )}
           </Card>
-          <CodeEntry next={next} />
+          <CodeEntry next={next} initialCode={(search?.get('code') ?? '').toUpperCase()} />
         </div>
+        {user && list && list.filter((c) => ['director', 'assistant_director', 'organiser'].includes(c.role)).map((c) => (
+          <div key={c.crisis_id} style={{ marginTop: 16 }}>
+            <p style={{ margin: '0 0 8px', fontSize: 13, fontWeight: 700, color: CK.inkSoft, overflowWrap: 'anywhere' }}>{c.crisis_name} · {c.conference_acronym}</p>
+            <TryAsPanel cref={{ conf: c.conference_slug, crisis: c.crisis_slug, id: c.crisis_id }} />
+          </div>
+        ))}
       </main>
     </div>
   );
