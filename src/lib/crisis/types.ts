@@ -109,6 +109,8 @@ export interface Character {
   owner_member_id: string | null;   // responsible backroomer
   slot_id: string | null;
   sort: number;
+  guide_url: string | null;    // the character guide the CD attaches (docs/crisis/sql/008)
+  guide_name: string | null;
 }
 
 export interface CharacterSecret {

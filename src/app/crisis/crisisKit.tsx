@@ -5,6 +5,10 @@
 // docs/crisis/design/crisis-dashboard.src.html. Use these pieces on every /crisis page.
 
 import type { CSSProperties, ReactNode, ButtonHTMLAttributes } from 'react';
+import {
+  Swords, Eye, Handshake, Coins, Newspaper, User, Landmark, VenetianMask, CircleDot,
+  Ship, Plane, Rocket, Shield, Fuel, ThumbsUp, Users, Package, Banknote, Radio, Wheat, Factory, Flame,
+} from 'lucide-react';
 
 export const CK = {
   page: '#EFE3DA',
@@ -178,4 +182,111 @@ export function scenarioLabel(iso: string | null | undefined): string {
 
 export function Skeleton({ h = 18, w = '100%', r = 10 }: { h?: number; w?: number | string; r?: number }) {
   return <span className="animate-pulse" style={{ display: 'block', height: h, width: w, borderRadius: r, background: 'rgba(110,30,30,0.08)' }} />;
+}
+
+// ─────────── Signature detail: the overlapping avatar ───────────
+// Owner (CLAUDE.md §8 rule 19, repeated 25 Oct 2026): a character's picture, a logo or a crest may sit
+// half outside its card's border or corner, never clipped. Use it for the focus element of a card.
+
+export function initialsOf(name: string): string {
+  const parts = name.replace(/[^\p{L}\p{N} ]/gu, ' ').trim().split(/\s+/).filter(Boolean);
+  if (!parts.length) return '?';
+  return (parts.length === 1 ? parts[0].slice(0, 2) : parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+
+/** A round picture (or initials) with a white ring and a cabinet-coloured outer ring. */
+export function Avatar({ name, src, size = 44, color = CK.red, style }: { name: string; src?: string | null; size?: number; color?: string; style?: CSSProperties }) {
+  return (
+    <span
+      aria-hidden
+      style={{
+        width: size, height: size, borderRadius: '50%', flex: 'none', display: 'grid', placeItems: 'center', overflow: 'hidden',
+        background: src ? '#fff' : CK.redGrad, color: '#FFF4E6', fontWeight: 800, fontSize: Math.round(size * 0.36), letterSpacing: '0.02em',
+        boxShadow: `0 0 0 ${Math.max(2, Math.round(size / 22))}px #fff, 0 0 0 ${Math.max(3, Math.round(size / 13))}px ${color}, 0 6px 16px rgba(58,14,15,0.25)`,
+        fontFamily: CK.font, ...style,
+      }}
+    >
+      {src ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={src} alt="" width={size} height={size} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+      ) : initialsOf(name)}
+    </span>
+  );
+}
+
+/**
+ * A card whose avatar overhangs its top-left corner (or top centre). The card leaves room for it;
+ * nothing is clipped (the card never sets overflow hidden).
+ */
+export function OverhangCard({ name, src, color, size = 46, place = 'corner', children, style, onClick, warm }: {
+  name: string; src?: string | null; color?: string; size?: number; place?: 'corner' | 'top';
+  children: ReactNode; style?: CSSProperties; onClick?: () => void; warm?: boolean;
+}) {
+  const half = Math.round(size / 2);
+  const body = (
+    <>
+      <span style={{ position: 'absolute', ...(place === 'top' ? { top: -half, left: '50%', transform: 'translateX(-50%)' } : { top: -Math.round(size * 0.32), left: -Math.round(size * 0.22) }) }}>
+        <Avatar name={name} src={src} size={size} color={color} />
+      </span>
+      {children}
+    </>
+  );
+  const common: CSSProperties = {
+    position: 'relative', background: warm ? CK.redWash : CK.card, borderRadius: 18, boxShadow: CK.shadow, minWidth: 0,
+    padding: place === 'top' ? `${half + 10}px 14px 14px` : `12px 14px 12px ${Math.round(size * 0.78) + 12}px`,
+    marginTop: place === 'top' ? half : Math.round(size * 0.32), marginLeft: place === 'corner' ? Math.round(size * 0.22) : 0, ...style,
+  };
+  if (onClick) {
+    return (
+      <button type="button" onClick={onClick} className="focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] text-left w-full transition-transform active:scale-[0.99]" style={{ ...common, border: 0, cursor: 'pointer', fontFamily: CK.font, color: CK.ink }}>
+        {body}
+      </button>
+    );
+  }
+  return <div style={common}>{body}</div>;
+}
+
+// ─────────── Theme and resource icons (with colours) ───────────
+
+export const THEME_STYLE: Record<string, { Icon: typeof CircleDot; color: string }> = {
+  Military: { Icon: Swords, color: '#A3412F' },
+  Intelligence: { Icon: Eye, color: '#5B4A8A' },
+  Diplomatic: { Icon: Handshake, color: '#2F6B5A' },
+  Economic: { Icon: Coins, color: '#9A6E14' },
+  Press: { Icon: Newspaper, color: '#3E6A9A' },
+  Personal: { Icon: User, color: '#7A5C3E' },
+  Political: { Icon: Landmark, color: '#1B3828' },
+  Covert: { Icon: VenetianMask, color: '#3A0E0F' },
+};
+
+/** A theme as a small coloured chip: icon + word (not a status pill; it labels content). */
+export function ThemeTag({ theme, size = 'sm' }: { theme: string; size?: 'sm' | 'md' }) {
+  const t = THEME_STYLE[theme] ?? { Icon: CircleDot, color: CK.muted };
+  const I = t.Icon;
+  return (
+    <span className="inline-flex items-center" style={{ gap: 4, fontSize: size === 'sm' ? 11.5 : 12.5, fontWeight: 700, color: t.color, background: cabinetTint(t.color, 0.1), borderRadius: 8, padding: size === 'sm' ? '2px 7px' : '3px 9px' }}>
+      <I size={size === 'sm' ? 12 : 14} strokeWidth={1.6} aria-hidden />{theme}
+    </span>
+  );
+}
+
+/** A Lucide icon chosen from a resource's name (ships, aircraft, missiles, money, standing, oil...). */
+export function resourceIcon(name: string, size = 18): ReactNode {
+  const n = name.toLowerCase();
+  const I = /ship|fleet|navy|vessel|boat/.test(n) ? Ship
+    : /air|plane|jet|bomber/.test(n) ? Plane
+    : /missile|rocket|nuclear|warhead/.test(n) ? Rocket
+    : /troop|army|soldier|division|force/.test(n) ? Shield
+    : /oil|fuel|gas|petrol/.test(n) ? Fuel
+    : /standing|approval|support|morale|popular/.test(n) ? ThumbsUp
+    : /people|population|citizens/.test(n) ? Users
+    : /money|budget|fund|dollar|rouble|ruble|treasury/.test(n) ? Banknote
+    : /gold|coin|cash/.test(n) ? Coins
+    : /intel|spy|agent/.test(n) ? Eye
+    : /radio|media|press|broadcast/.test(n) ? Radio
+    : /food|grain|wheat/.test(n) ? Wheat
+    : /industry|factory|steel/.test(n) ? Factory
+    : /unrest|riot|tension/.test(n) ? Flame
+    : Package;
+  return <I size={size} strokeWidth={1.5} aria-hidden />;
 }
