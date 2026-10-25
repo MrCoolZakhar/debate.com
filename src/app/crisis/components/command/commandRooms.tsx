@@ -135,7 +135,7 @@ export function BackroomCard({ cref, members, directives, base, onChanged }: {
                 const n = l.open.length;
                 const heavy = n >= 4;
                 return (
-                  <OverhangCard key={l.member.id} name={l.member.display_name} color={heavy ? CK.red : CK.forest2} size={36} style={{ boxShadow: CK.shadowSm, padding: '8px 12px 8px 40px' }}>
+                  <OverhangCard key={l.member.id} name={l.member.display_name} color={heavy ? CK.red : CK.forest2} size={36} style={{ boxShadow: CK.shadowSm }}>
                     <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) 84px', gap: 9, alignItems: 'center' }}>
                       <span style={{ minWidth: 0 }}>
                         <b style={{ display: 'block', fontSize: 13, color: CK.ink, overflowWrap: 'anywhere' }}>{l.member.display_name}</b>

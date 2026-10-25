@@ -302,7 +302,7 @@ function CharacterCard({ c, color, members, onOpen }: { c: Character; color: str
       size={60}
       place="top"
       onClick={onOpen}
-      style={{ background: gone ? CK.well : CK.card, boxShadow: `${CK.shadowSm}, inset 0 3px 0 ${color}`, padding: '40px 14px 14px', textAlign: 'center', filter: gone ? 'grayscale(0.6)' : undefined }}
+      style={{ background: gone ? CK.well : CK.card, boxShadow: `${CK.shadowSm}, inset 0 3px 0 ${color}`, textAlign: 'center', filter: gone ? 'grayscale(0.6)' : undefined }}
     >
       <span style={{ display: 'block', minWidth: 0 }}>
         <b style={{ display: 'block', fontSize: 15.5, fontWeight: 800, color: CK.ink, overflowWrap: 'anywhere' }}>{c.name}</b>
@@ -445,7 +445,7 @@ function CharacterDrawer({ char, newCabinetId, secrets, onClose }: {
         )}
 
         <div className="flex items-center gap-3">
-          <Avatar name={d.name || '?'} src={d.picture_url.trim() || null} color={cab?.color ?? CK.muted} size={64} style={{ margin: 4, filter: d.status === 'dead' || d.status === 'arrested' ? 'grayscale(1)' : undefined }} />
+          <Avatar name={d.name || '?'} src={d.picture_url.trim() || null} color={cab?.color ?? CK.muted} size={64} style={{ filter: d.status === 'dead' || d.status === 'arrested' ? 'grayscale(1)' : undefined }} />
           <Labelled label="Name" style={{ flex: 1 }}>
             <input value={d.name} onChange={(e) => set('name', e.target.value)} style={fieldStyle} maxLength={120} aria-label="Name" />
           </Labelled>

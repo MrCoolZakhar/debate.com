@@ -21,7 +21,7 @@ export default function StatusStrip({ crisis, me, color }: { crisis: Crisis; me:
     >
       <div className="flex items-center flex-wrap" style={{ gap: '8px 22px' }}>
         <div className="flex items-center min-w-0" style={{ gap: 10, flex: '1 1 220px' }}>
-          {me && <Avatar name={me.name} src={me.picture_url} size={34} color={color} style={{ boxShadow: `0 0 0 2px rgba(255,255,255,0.9), 0 0 0 4px ${color}` }} />}
+          {me && <Avatar name={me.name} src={me.picture_url} size={34} color={color} />}
           <div className="min-w-0">
             <b style={{ display: 'block', fontSize: 16, lineHeight: 1.2, fontWeight: 800, overflowWrap: 'anywhere' }}>{me?.name ?? crisis.name}</b>
             {me?.title && <span style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: 'rgba(255,232,214,0.78)', overflowWrap: 'anywhere' }}>{me.title}</span>}

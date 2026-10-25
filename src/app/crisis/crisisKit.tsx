@@ -185,8 +185,11 @@ export function Skeleton({ h = 18, w = '100%', r = 10 }: { h?: number; w?: numbe
 }
 
 // ─────────── Signature detail: the overlapping avatar ───────────
-// Owner (CLAUDE.md §8 rule 19, repeated 25 Oct 2026): a character's picture, a logo or a crest may sit
-// half outside its card's border or corner, never clipped. Use it for the focus element of a card.
+// Same treatment as the organiser Live Status card's committee emblem (manage/[slug]/live/CommitteeCard.tsx:
+// LOGO_SIZE 66, LOGO_OVERHANG 22, inset 22, drawn by components/LogoDisc.tsx): a near-white disc with a
+// hairline rim and one soft forest shadow, no coloured ring, sitting ONE THIRD outside the card's top edge
+// ("slightly going out", never clipped, the card keeps overflow visible). The card reserves room above it,
+// the text starts to the right of it (inset + size + 12).
 
 export function initialsOf(name: string): string {
   const parts = name.replace(/[^\p{L}\p{N} ]/gu, ' ').trim().split(/\s+/).filter(Boolean);
@@ -194,51 +197,56 @@ export function initialsOf(name: string): string {
   return (parts.length === 1 ? parts[0].slice(0, 2) : parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 
-/** A round picture (or initials) with a white ring and a cabinet-coloured outer ring. */
+/** Live Status disc: near-white backdrop (#FDFCF9), 0.5px rim, soft forest shadow. Initials sit on the cabinet colour. */
 export function Avatar({ name, src, size = 44, color = CK.red, style }: { name: string; src?: string | null; size?: number; color?: string; style?: CSSProperties }) {
   return (
     <span
       aria-hidden
       style={{
         width: size, height: size, borderRadius: '50%', flex: 'none', display: 'grid', placeItems: 'center', overflow: 'hidden',
-        background: src ? '#fff' : CK.redGrad, color: '#FFF4E6', fontWeight: 800, fontSize: Math.round(size * 0.36), letterSpacing: '0.02em',
-        boxShadow: `0 0 0 ${Math.max(2, Math.round(size / 22))}px #fff, 0 0 0 ${Math.max(3, Math.round(size / 13))}px ${color}, 0 6px 16px rgba(58,14,15,0.25)`,
+        background: src ? '#FDFCF9' : `linear-gradient(135deg, ${color}, color-mix(in srgb, ${color} 68%, #000))`,
+        border: '0.5px solid rgba(221,212,192,0.5)', color: '#FFF4E6', fontWeight: 800, fontSize: Math.max(9, Math.round(size * 0.34)), letterSpacing: '0.04em',
+        boxShadow: size < 30 ? '0 1px 4px rgba(27,56,40,0.18)' : '0 4px 12px rgba(27,56,40,0.15)',
         fontFamily: CK.font, ...style,
       }}
     >
       {src ? (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={src} alt="" width={size} height={size} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+        <img src={src} alt="" width={size} height={size} draggable={false} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
       ) : initialsOf(name)}
     </span>
   );
 }
 
 /**
- * A card whose avatar overhangs its top-left corner (or top centre). The card leaves room for it;
- * nothing is clipped (the card never sets overflow hidden).
+ * A card whose avatar straddles its top edge, as the Live Status committee card does: `size / 3` of the disc
+ * sits outside the card (Live: 22 of 66), inset `size / 3` from the corner (Live: 22) or centred (`place="top"`).
+ * The card reserves that room above itself, pads its text past the disc (inset + size + 12), and never clips.
  */
-export function OverhangCard({ name, src, color, size = 46, place = 'corner', children, style, onClick, warm }: {
+export function OverhangCard({ name, src, color, size = 56, place = 'corner', children, style, onClick, warm }: {
   name: string; src?: string | null; color?: string; size?: number; place?: 'corner' | 'top';
   children: ReactNode; style?: CSSProperties; onClick?: () => void; warm?: boolean;
 }) {
-  const half = Math.round(size / 2);
+  const overhang = Math.round(size / 3);
+  const inset = Math.round(size / 3);
   const body = (
     <>
-      <span style={{ position: 'absolute', ...(place === 'top' ? { top: -half, left: '50%', transform: 'translateX(-50%)' } : { top: -Math.round(size * 0.32), left: -Math.round(size * 0.22) }) }}>
+      <span style={{ position: 'absolute', zIndex: 2, top: -overhang, ...(place === 'top' ? { left: '50%', transform: 'translateX(-50%)' } : { left: inset }) }}>
         <Avatar name={name} src={src} size={size} color={color} />
       </span>
       {children}
     </>
   );
   const common: CSSProperties = {
-    position: 'relative', background: warm ? CK.redWash : CK.card, borderRadius: 18, boxShadow: CK.shadow, minWidth: 0,
-    padding: place === 'top' ? `${half + 10}px 14px 14px` : `12px 14px 12px ${Math.round(size * 0.78) + 12}px`,
-    marginTop: place === 'top' ? half : Math.round(size * 0.32), marginLeft: place === 'corner' ? Math.round(size * 0.22) : 0, ...style,
+    position: 'relative', overflow: 'visible', background: warm ? CK.redWash : CK.card, borderRadius: size >= 56 ? 24 : 18,
+    border: '1px solid rgba(27,56,40,0.14)', boxShadow: CK.shadow, minWidth: 0,
+    padding: place === 'top' ? `${size - overhang + 12}px 16px 14px` : `10px 14px 12px ${inset + size + 12}px`,
+    minHeight: place === 'top' ? undefined : size - overhang + 14,
+    marginTop: overhang + 6, ...style,
   };
   if (onClick) {
     return (
-      <button type="button" onClick={onClick} className="focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] text-left w-full transition-transform active:scale-[0.99]" style={{ ...common, border: 0, cursor: 'pointer', fontFamily: CK.font, color: CK.ink }}>
+      <button type="button" onClick={onClick} className="focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] text-left w-full transition-transform active:scale-[0.99]" style={{ ...common, cursor: 'pointer', fontFamily: CK.font, color: CK.ink }}>
         {body}
       </button>
     );

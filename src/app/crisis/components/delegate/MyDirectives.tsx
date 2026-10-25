@@ -25,9 +25,9 @@ function DirectiveCard({ d, author, onOpen }: { d: Directive; author: PersonRef;
       name={author.name}
       src={author.picture_url}
       color={author.color}
-      size={48}
+      size={52}
       onClick={onOpen}
-      style={{ boxShadow: `${CK.shadow}, inset 4px 0 0 ${accent}${ask ? ', 0 0 0 2px rgba(47,95,143,0.35)' : ''}`, padding: '14px 16px 14px 62px' }}
+      style={{ boxShadow: `${CK.shadow}, inset 4px 0 0 ${accent}${ask ? ', 0 0 0 2px rgba(47,95,143,0.35)' : ''}` }}
     >
       <span className="flex items-baseline justify-between gap-3 flex-wrap" style={{ fontSize: 12, fontWeight: 700, color: CK.muted }}>
         <span className="inline-flex items-center gap-1.5">

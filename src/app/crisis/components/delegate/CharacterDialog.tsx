@@ -6,7 +6,7 @@
 import { useState } from 'react';
 import { BookOpenText, Eye, EyeOff, ExternalLink, Lock, MapPin, ScrollText, Zap } from 'lucide-react';
 import type { Character } from '@/lib/crisis/types';
-import { Avatar, Btn, CK, Skeleton } from '../../crisisKit';
+import { Btn, CK, OverhangCard, Skeleton } from '../../crisisKit';
 import CrisisDialog from './CrisisDialog';
 import { STATUS_WORD } from './ProfileCard';
 
@@ -31,8 +31,7 @@ export default function CharacterDialog({ me, color, goals, goalsLoaded, onClose
   return (
     <CrisisDialog title="My Character" onClose={onClose} width={720}>
       <div className="grid gap-3.5">
-        <div className="flex items-center gap-4 flex-wrap" style={{ background: CK.redWash, borderRadius: 20, boxShadow: CK.shadowSm, padding: '16px 18px' }}>
-          <Avatar name={me.name} src={me.picture_url} size={92} color={color} />
+        <OverhangCard name={me.name} src={me.picture_url} color={color} size={84} warm>
           <div className="min-w-0">
             <b style={{ display: 'block', fontSize: 22, lineHeight: 1.2, fontWeight: 800, color: CK.ink, overflowWrap: 'anywhere' }}>{me.name}</b>
             <span style={{ display: 'block', marginTop: 2, fontSize: 14.5, fontWeight: 600, color: CK.inkSoft, overflowWrap: 'anywhere' }}>{me.title || 'No title yet'}</span>
@@ -40,7 +39,7 @@ export default function CharacterDialog({ me, color, goals, goalsLoaded, onClose
               {STATUS_WORD[me.status]}{me.status_note ? `. ${me.status_note}` : ''}
             </span>
           </div>
-        </div>
+        </OverhangCard>
 
         {guide ? (
           <a

@@ -33,10 +33,10 @@ export default function QueueRow({ d, names, whenLabel, sev, selected, delegateN
       name={who}
       src={ch?.picture_url}
       color={color}
-      size={40}
+      size={44}
       onClick={onOpen}
       style={{
-        borderRadius: 16, padding: '9px 12px 9px 46px',
+        borderRadius: 16,
         boxShadow: selected ? `${CK.shadowSm}, 0 0 0 2px ${color}` : sev === 'very' ? `${CK.shadowSm}, 0 0 0 1px rgba(163,65,47,0.45)` : CK.shadowSm,
       }}
     >

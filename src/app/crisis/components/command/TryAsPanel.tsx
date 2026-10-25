@@ -72,7 +72,7 @@ export default function TryAsPanel({ cref, compact }: { cref: CrisisRef; compact
 
   const charName = useMemo(() => new Map((data?.characters ?? []).map((c) => [c.id, c.name])), [data]);
   const charPicture = useMemo(() => new Map((data?.characters ?? []).map((c) => [c.id, c.picture_url])), [data]);
-  const face = (m: Member, color: string) => <Avatar name={m.display_name} src={m.character_id ? charPicture.get(m.character_id) ?? null : null} size={22} color={color} style={{ margin: 2 }} />;
+  const face = (m: Member, color: string) => <Avatar name={m.display_name} src={m.character_id ? charPicture.get(m.character_id) ?? null : null} size={22} color={color} />;
 
   const enter = async (m: Member) => {
     if (busy) return;

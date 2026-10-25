@@ -266,7 +266,7 @@ function PersonRow({ m, delegates, now, isMe, cabinetName, characterName, pictur
     <div style={{ borderTop: `1px solid ${CK.hair}`, padding: '10px 0' }}>
       <div className={`stf-row${delegates ? ' stf-del' : ''}`}>
         <div className="stf-cell stf-name flex items-center" data-label="" style={{ gap: 12 }}>
-          <Avatar name={m.display_name} src={delegates ? picture : null} size={38} color={color ?? CK.forest2} style={{ margin: 3 }} />
+          <Avatar name={m.display_name} src={delegates ? picture : null} size={38} color={color ?? CK.forest2} />
           <span style={{ minWidth: 0 }}>
             <b style={{ fontSize: 14.5, fontWeight: 800 }}>{m.display_name}</b>
             {m.role === 'assistant_director' && <span style={{ color: CK.inkSoft, fontSize: 12.5 }}> · Assistant</span>}
