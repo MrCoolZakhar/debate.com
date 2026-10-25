@@ -1,0 +1,521 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Gavelling Crisis Plan</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Playfair+Display:ital,wght@1,600&display=swap">
+<style>
+/* Layout: a long planning document in Gavelling's ivory and forest. Sticky contents rail on the left, reading column on the right, wide tables scroll inside their own box. */
+:root {
+  --page: #EDE7D8; --card: #FFFFFF; --surface: #F0EBDD; --forest: #1B3828; --forest-2: #2C5440; --gold: #EED98A; --gold-deep: #9A6E14; --gold-mid: #B6871F;
+  --ink: #1C1410; --ink-soft: #4E463C; --muted: #7A6E5E; --hair: rgba(27,56,40,0.12); --well: rgba(27,56,40,0.05);
+  --yes: #3D7A52; --part: #B6871F; --no: #A3412F;
+  --shadow: inset 0 1px 0 rgba(255,255,255,0.75), 0 0 0 1px rgba(27,56,40,0.07), 6px 7px 18px rgba(27,56,40,0.12), 0 1px 2px rgba(27,56,40,0.05);
+  --font: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif; --accent-font: 'Playfair Display', Georgia, serif;
+  color-scheme: light;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body { margin: 0; background: var(--page); color: var(--ink); font-family: var(--font); font-size: 15px; line-height: 1.6; -webkit-font-smoothing: antialiased; }
+a { color: var(--forest); font-weight: 700; text-decoration: underline; text-underline-offset: 2px; }
+.wrap { display: grid; grid-template-columns: 240px minmax(0, 1fr); gap: 32px; max-width: 1240px; margin: 0 auto;
+  padding-left: max(20px, env(safe-area-inset-left, 0px)); padding-right: max(20px, env(safe-area-inset-right, 0px)); padding-block: 28px 80px; }
+.toc { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 20px); align-self: start; background: var(--surface); border-radius: 22px; box-shadow: var(--shadow); padding: 16px 12px; }
+.toc p { margin: 0 8px 6px; font-size: 11px; font-weight: 800; letter-spacing: 0.12em; color: var(--gold-deep); }
+.toc a { display: block; padding: 6px 10px; border-radius: 10px; font-size: 13.5px; font-weight: 600; color: var(--muted); text-decoration: none; line-height: 1.35; }
+.toc a:hover { background: rgba(27,56,40,0.07); color: var(--ink); }
+.toc a.q { background: var(--forest); color: var(--gold); margin-top: 6px; }
+main { min-width: 0; }
+header.hero { margin-bottom: 26px; }
+.eyebrow { font-size: 11px; font-weight: 800; letter-spacing: 0.16em; color: var(--gold-deep); margin: 0; }
+h1 { font-size: clamp(30px, 3.4vw, 44px); line-height: 1.1; margin: 6px 0 10px; font-weight: 800; text-wrap: balance; letter-spacing: -0.01em; }
+h1 em { font-family: var(--accent-font); font-weight: 600; color: var(--gold-mid); }
+.lead { font-size: 17px; color: var(--ink-soft); max-width: 68ch; margin: 0; }
+.cta { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 16px; }
+.btn { display: inline-flex; align-items: center; gap: 8px; padding: 9px 15px; border-radius: 12px; font-weight: 700; font-size: 14px; text-decoration: none; color: #FFF; background: linear-gradient(180deg, var(--forest-2), var(--forest)); box-shadow: 0 3px 10px rgba(27,56,40,0.22); }
+.btn.ghost { background: var(--card); color: var(--forest); box-shadow: inset 0 0 0 1px var(--hair); }
+section { background: var(--card); border-radius: 24px; box-shadow: var(--shadow); padding: clamp(20px, 3vw, 34px); margin-bottom: 22px; scroll-margin-top: 20px; }
+h2 { font-size: clamp(22px, 2.2vw, 28px); margin: 0 0 4px; line-height: 1.2; font-weight: 800; text-wrap: balance; }
+h3 { font-size: 17px; margin: 22px 0 6px; font-weight: 800; }
+h4 { font-size: 15px; margin: 14px 0 4px; font-weight: 800; }
+p { margin: 8px 0; max-width: 72ch; }
+.sub { color: var(--ink-soft); margin-top: 2px; }
+ul, ol { padding-left: 22px; margin: 8px 0; max-width: 74ch; }
+li { margin: 4px 0; }
+li::marker { color: var(--gold-mid); }
+.short { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 12px; margin-top: 14px; }
+.short div { background: var(--well); border-radius: 16px; padding: 14px 16px; }
+.short b { display: block; font-size: 15px; margin-bottom: 4px; }
+.short span { font-size: 14px; color: var(--ink-soft); }
+.tbl { overflow-x: auto; margin: 12px 0; border-radius: 14px; box-shadow: inset 0 0 0 1px var(--hair); }
+table { border-collapse: collapse; width: 100%; font-size: 13.5px; min-width: 640px; }
+th, td { text-align: left; vertical-align: top; padding: 9px 12px; border-bottom: 1px solid var(--hair); }
+th { background: var(--surface); font-weight: 800; font-size: 12.5px; color: var(--ink-soft); position: sticky; top: 0; }
+tr:last-child td { border-bottom: 0; }
+td b { font-weight: 700; }
+.y, .p, .n { font-weight: 700; white-space: nowrap; }
+.y { color: var(--yes); } .p { color: var(--part); } .n { color: var(--no); }
+.two { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 12px; }
+.three { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 12px; }
+.box { background: var(--well); border-radius: 16px; padding: 14px 16px; min-width: 0; }
+.box h4 { margin-top: 0; }
+.box.good { background: color-mix(in srgb, var(--yes) 9%, #FFF); }
+.box.bad { background: color-mix(in srgb, var(--no) 8%, #FFF); }
+.box.gold { background: color-mix(in srgb, var(--gold) 26%, #FFF); }
+.box ul { padding-left: 18px; font-size: 14px; }
+.flow { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 12px 0; }
+.flow span { background: var(--surface); border-radius: 10px; padding: 6px 10px; font-size: 13px; font-weight: 700; box-shadow: inset 0 0 0 1px var(--hair); }
+.flow span.end { background: var(--forest); color: var(--gold); box-shadow: none; }
+.flow i { color: var(--gold-mid); font-style: normal; font-weight: 800; }
+.map-legend { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 10px; margin-top: 12px; }
+.map-legend div { border-radius: 14px; padding: 12px 14px; font-size: 14px; }
+.map-legend b { display: block; }
+.c-purple { background: #F6E6F7; } .c-blue { background: #E7E6FB; } .c-green { background: #E5EEE3; } .c-red { background: #F7E2DF; }
+.note { border-radius: 14px; padding: 12px 16px; background: color-mix(in srgb, var(--gold) 22%, #FFF); font-size: 14px; margin: 12px 0; max-width: 74ch; }
+.note b { color: var(--ink); }
+.qgroup { margin-top: 18px; }
+.qgroup h3 { margin-top: 0; }
+.qs { list-style: none; padding: 0; margin: 0; counter-reset: none; max-width: none; }
+.qs li { display: grid; grid-template-columns: 44px minmax(0, 1fr); gap: 4px 10px; padding: 12px 0; border-top: 1px solid var(--hair); margin: 0; }
+.qs li:first-child { border-top: 0; }
+.qs .qn { font-weight: 800; color: var(--gold-deep); font-variant-numeric: tabular-nums; font-size: 14px; padding-top: 1px; }
+.qs .qt { font-weight: 700; }
+.qs .rec { grid-column: 2; font-size: 13.5px; color: var(--ink-soft); }
+.qs .rec b { color: var(--forest); }
+.phases { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin-top: 12px; }
+.phase { background: var(--well); border-radius: 16px; padding: 14px 16px; }
+.phase .pn { font-size: 11px; font-weight: 800; letter-spacing: 0.12em; color: var(--gold-deep); }
+.phase b { display: block; font-size: 15px; margin: 2px 0 6px; }
+.phase ul { font-size: 13.5px; padding-left: 18px; }
+.src { font-size: 13px; color: var(--ink-soft); }
+.src li { margin: 2px 0; }
+@media (max-width: 960px) {
+  .wrap { grid-template-columns: minmax(0, 1fr); padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+  .toc { position: static; display: flex; flex-wrap: wrap; gap: 4px; padding: 10px; }
+  .toc p { width: 100%; }
+  .toc a { padding: 5px 9px; background: var(--card); }
+  .two, .three { grid-template-columns: 1fr; }
+}
+</style>
+
+<div class="wrap">
+  <nav class="toc" aria-label="Contents">
+    <p>CONTENTS</p>
+    <a href="#short">The short version</a>
+    <a href="#how">How a crisis committee works</a>
+    <a href="#mindmap">Your mind map, read back</a>
+    <a href="#competitors">The competition</a>
+    <a href="#have">What Gavelling already has</a>
+    <a href="#pages">Pages by role</a>
+    <a href="#directive">The directive</a>
+    <a href="#map">The war map</a>
+    <a href="#settings">Settings</a>
+    <a href="#testing">Testing in a real room</a>
+    <a href="#build">Build order</a>
+    <a href="#questions" class="q">Questions for you</a>
+  </nav>
+
+  <main>
+    <header class="hero">
+      <p class="eyebrow">GAVELLING · CRISIS · PLAN 1 · 25 OCTOBER 2026</p>
+      <h1>Gavelling <em>Crisis</em></h1>
+      <p class="lead">A full crisis committee tool, built on the live rooms Gavelling already runs: a Crisis Director dashboard, a backroom queue, the front room chair console, the delegate phone and a war map. This report covers how crisis really works, what the two competitors do, what we build, and the questions I need you to answer before the build starts.</p>
+      <div class="cta">
+        <a class="btn" href="https://claude.ai/artifact/5mAWUeBBtEHRcACyVguWVr" target="_blank" rel="noopener">Open the dashboard design</a>
+        <a class="btn ghost" href="#questions">Go to the questions</a>
+      </div>
+    </header>
+
+    <section id="short">
+      <h2>The Short Version</h2>
+      <div class="short">
+        <div><b>The market is thin</b><span>Master of Disaster is the European default, from one developer, built in 2016-era PHP. Maximun is new and polished but has no voting, no speakers list and characters with no depth. Neither has a real war map.</span></div>
+        <div><b>We start with the front room done</b><span>Gavelling's chair console already runs speakers lists, motions, documents and voting. Cabinet directives can be our existing documents and voting page with a crisis label. No competitor has this.</span></div>
+        <div><b>The backroom is where we win daily use</b><span>Both competitors make staff claim from a list with no waiting times. We build a fair queue: oldest first, who heard back least recently, per-staffer load, and replies that change the world (map, resources, news) in one press.</span></div>
+        <div><b>The map is the headline</b><span>No crisis source documents a shared map, so this is new for MUN. Real borders, historical presets, your own image maps, units, fog of war per side, and every change replayable.</span></div>
+        <div><b>Maximun has an AI backroomer</b><span>Its reviewer list includes "AI Backroomer (beta)" and its library is "AI-readable". We should decide our answer now (my suggestion: an AI that drafts, a human always sends).</span></div>
+        <div><b>Two owner rules collide with this project</b><span>Database objects are changed only through the chat's Supabase work, and runs are tested without a browser. A crisis tool needs new tables and real-room tests. Questions 37 and 38.</span></div>
+      </div>
+    </section>
+
+    <section id="how">
+      <h2>How a Crisis Committee Works</h2>
+      <p class="sub">From six real crisis procedure documents (NAIMUN, VMUN 2026, King's MUN, MiddMUNC, IAC, IASAS) and the main guides (Best Delegate, MUNUC, Illinois, WiseMee, SAMUN). Sources are listed at the end of this section.</p>
+
+      <h3>Committee types</h3>
+      <ul>
+        <li><b>Single crisis or cabinet:</b> one room, one storyline all weekend. Delegates play people (ministers, generals), not countries. In a cabinet the chair often plays the head of state.</li>
+        <li><b>Joint crisis committee (JCC):</b> two or more cabinets, usually enemies, in separate rooms. They never meet directly; the backroom carries consequences between them. Some add a third neutral room.</li>
+        <li><b>Historical, fictional, futuristic:</b> same mechanics with a different world. Fictional maps matter here.</li>
+        <li><b>Ad hoc:</b> the topic and characters are revealed at the first session.</li>
+      </ul>
+
+      <h3>Who does what, minute to minute</h3>
+      <div class="tbl"><table>
+        <tr><th>Role</th><th>What they actually do</th><th>Where they live in Gavelling</th></tr>
+        <tr><td><b>Crisis Director (CD)</b></td><td>Writes the storyline and crisis breaks, tracks every delegate's arc, approves big outcomes, keeps both rooms in step in a JCC. Usually does not answer notes.</td><td>Crisis Command (the dashboard)</td></tr>
+        <tr><td><b>Backroom staff</b></td><td>Answer personal directives in character, play outside contacts (one staffer per contact for consistency), act out updates, report back to the CD. Larger crises add a director per cabinet who approves small things and escalates big ones.</td><td>Backroom queue</td></tr>
+        <tr><td><b>Front room chair</b></td><td>Runs debate (mostly moderated caucuses), rules on motions, gates which committee directives reach the floor, sometimes plays a character, writes notes for awards.</td><td>The existing chair console, plus a crisis panel</td></tr>
+        <tr><td><b>Delegates</b></td><td>Two jobs at once: debate and write committee directives in the front room, and run a private plot through personal directives.</td><td>The delegate phone, plus a crisis tab</td></tr>
+        <tr><td><b>Runners</b></td><td>Carry paper between delegates, dais and backroom. The bottleneck and the confidentiality risk. Software replaces them.</td><td>Gone</td></tr>
+        <tr><td><b>Press (some conferences)</b></td><td>Publish in-world news; can be used to talk to another cabinet.</td><td>The existing Press Desk</td></tr>
+      </table></div>
+
+      <h3>The loop</h3>
+      <div class="flow"><span>Crisis break</span><i>→</i><span>Moderated caucuses</span><i>→</i><span>Unmod to write and merge</span><i>→</i><span>Directives presented and voted</span><i>→</i><span>Backroom works out consequences</span><i>→</i><span class="end">Next crisis break</span></div>
+      <p>Personal directives run all the time underneath this loop. Updates arrive as slides, news segments, video, guest speakers or secret notes. In-world time is controlled by the backroom: a few real hours can be days or weeks.</p>
+
+      <h3>Directive types</h3>
+      <div class="tbl"><table>
+        <tr><th>Type</th><th>Who writes it</th><th>Who decides</th><th>Who sees it</th></tr>
+        <tr><td><b>Personal directive</b> (crisis note, portfolio request)</td><td>One delegate, addressed to a named character or body</td><td>Backroom</td><td>Only the author, unless the outcome is made public</td></tr>
+        <tr><td><b>Joint personal directive</b></td><td>Two or more delegates</td><td>Backroom</td><td>The authors</td></tr>
+        <tr><td><b>Committee or cabinet directive</b></td><td>A group with sponsors and signatories</td><td>Committee vote (usually simple majority), sometimes with chair approval first or a chair veto after</td><td>The whole room</td></tr>
+        <tr><td><b>Press release</b></td><td>One delegate or the committee</td><td>Backroom, or a vote when it speaks for the committee</td><td>Public in-world</td></tr>
+        <tr><td><b>Communiqué</b></td><td>The committee, to a foreign body or the other cabinet</td><td>Vote, then the backroom answers in character</td><td>The two parties</td></tr>
+        <tr><td><b>Covert or overt</b> (a flag, not a type)</td><td colspan="3">Covert: secret, nobody else learns of it. Overt: the author stays hidden but the effects are announced to the room.</td></tr>
+      </table></div>
+
+      <h3>Where conferences disagree (each one becomes a setting)</h3>
+      <div class="tbl"><table>
+        <tr><th>Question</th><th>What we found</th><th>Setting we need</th></tr>
+        <tr><td>Sponsors and signatories to reach the floor</td><td>3 signatures plus 2 sponsors (VMUN), 2 sponsors (IAC), one third of the room (IASAS), dais decides (NAIMUN)</td><td>Sponsors needed, signatories needed</td></tr>
+        <tr><td>Chair approval</td><td>Before introduction (IASAS), a veto after (VMUN), neither (IAC)</td><td>Chair approves first: on / off</td></tr>
+        <tr><td>Pass threshold</td><td>Simple majority almost everywhere; consensus for nuclear weapons or ultimatums (VMUN)</td><td>Majority; optional higher bar for flagged directives</td></tr>
+        <tr><td>Speakers list</td><td>None (VMUN, NAIMUN), kept (IAC)</td><td>Already a choice in our chair console</td></tr>
+        <tr><td>Directive cap</td><td>The dais may accept only 2 or 3 at once and force merges</td><td>Max committee directives on the floor</td></tr>
+        <tr><td>Debate on a directive</td><td>2 for and 2 against (NAIMUN, Illinois), 1 and 1 at 30 s (IAC)</td><td>For and against speeches, speaking time</td></tr>
+      </table></div>
+
+      <h3>Numbers that recur</h3>
+      <ul>
+        <li>Moderated caucus speeches 30 to 60 seconds; caucuses rarely over 10 to 12 minutes; unmods about 10 minutes.</li>
+        <li>Directives are 2 or 3 clauses, up to half a page. Personal notes "a few lines to several sentences".</li>
+        <li>A passed directive's consequence comes back in 2 to 10 minutes (IAC). No primary source gives a reply time for personal notes.</li>
+        <li>Arcs have three phases: build resources, build logistics, execute. Delegates write dozens of notes over a weekend.</li>
+        <li>No published staff ratio. Maximun's own guide suggests one backroomer per 3 to 5 delegates.</li>
+      </ul>
+
+      <h3>The pain points we are solving</h3>
+      <ul>
+        <li>Overloaded backroom: notes go unanswered and updates stall. Delegates cannot see that they are waiting in a queue at all.</li>
+        <li>Different staffers give inconsistent answers; the note log contradicts itself; notes are lost.</li>
+        <li>Replies that do not match the effort (one line back for a full war plan), and railroading.</li>
+        <li>In a JCC, one room gets news before the other.</li>
+        <li>Rules depend on the chair, so delegates cannot predict them.</li>
+      </ul>
+      <p class="src">Gaps to be honest about: no Reddit complaints were retrievable, no conference publishes award weightings, and no source describes how maps, fog of war or troop movement are adjudicated. Military action in MUN is text today.</p>
+      <ul class="src">
+        <li>NAIMUN Crisis Procedures: naimun.modelun.org/s/Crisis-Procedures-Document.pdf</li>
+        <li>VMUN 2026 Crisis RoP: vmun.com/wp-content/uploads/VMUN-2026-Crisis-ROP-Guide.pdf</li>
+        <li>King's MUN 2025 crisis guide, MiddMUNC sample note and directive, IAC Regional crisis rules, IASAS 2024 Historical Crisis Manual</li>
+        <li>Best Delegate (crisis rooms, pitfalls, assassinations), MUNUC backroom pages, Illinois MUNI, WiseMee, SAMUN</li>
+      </ul>
+    </section>
+
+    <section id="mindmap">
+      <h2>Your Mind Map, Read Back</h2>
+      <p class="sub">The four colours in your plan map cleanly onto four surfaces. Everything in it is kept; the notes say where each part lands.</p>
+      <div class="map-legend">
+        <div class="c-red"><b>Red: Crisis Dashboard</b>Set-up (choose or import a map, historical presets with border control, delegate list with powers, arc, map position and resources), edit settings, send log-ins, then live: unanswered directives, cabinet directives, approve news, live map, meetings, resources, current motions and speakers.</div>
+        <div class="c-purple"><b>Purple: Backroom</b>Queue of directives sorted by last engaged, length, time waiting and owner; respond or send into someone else's queue; character view (goals, previous directives, resources, map position, messages); write crisis news for one cabinet or the full crisis; approve meetings.</div>
+        <div class="c-blue"><b>Blue: Delegate</b>Email log-in, see resources, message other delegates, request meetings (names, intention, duration, when), send directives (summary, receiver, type, themes, goal, resources used, impact), then forward to a cabinet, change resources, update the map.</div>
+        <div class="c-green"><b>Green: Front room</b>Speakers list, upcoming meetings, cabinet resources, read directive summaries, manage cabinet directives: upload on Gavelling, motion, vote. This is the chair console we already have.</div>
+      </div>
+      <h3>What the mind map gets right that competitors miss</h3>
+      <ul>
+        <li><b>Directive fields that help the backroom:</b> goal, resources used and "impact on other cabinet or delegate" are not in either competitor's form. They make replies faster and consistent.</li>
+        <li><b>Queue order by fairness:</b> "last engaged with delegate" and "time elapsed" are exactly what is missing from both competitors.</li>
+        <li><b>A directive can change the world:</b> add or remove resources and update the map straight from the reply.</li>
+        <li><b>Meetings as a first-class object:</b> neither competitor has them.</li>
+        <li><b>Front room voting through Gavelling:</b> "Upload on Gavelling, Motion, Vote" means cabinet directives reuse the documents and voting page.</li>
+      </ul>
+      <h3>Things in the mind map I need you to confirm</h3>
+      <ul>
+        <li>"Automatic time flow per time or per directives sent": the in-world clock moving on its own after N directives is new. Questions 31 and 32.</li>
+        <li>"Pay when all is set up, payment due 2 days before the conference, price per feature added": this charges the organiser, which today's rules forbid. Question 35.</li>
+        <li>"Backroomer privileges: see all directives or just the queue": per staffer or per crisis. Question 9.</li>
+      </ul>
+    </section>
+
+    <section id="competitors">
+      <h2>The Competition</h2>
+      <p class="sub">Master of Disaster was explored hands-on through its public demo, Maximun through your signed-in test committee in Chrome (looking only, nothing saved), and both through their public sites.</p>
+
+      <h3>Master of Disaster</h3>
+      <p>masterofdisaster.co.uk, by one developer (Jonas Bokelmann). Five separate apps (USG, Director, Backroom, Chair, Delegate), server-rendered, every action reloads the page. Licensed per conference with participant quotas. The European default since Deus (UNA-York) shut down.</p>
+      <div class="two">
+        <div class="box good"><h4>Does well</h4><ul>
+          <li>Directive timer (210 s between directives per delegate) and hourly message credits ("carrier pigeons")</li>
+          <li>Chair approves cabinet directives; chair's notes feed awards</li>
+          <li>Characters have location, resources and military units set by the backroom; alive or dead, kill with a cause, a Cemetery page</li>
+          <li>Visibility switch for other cabinets' characters: hidden, names only, full</li>
+          <li>"Make into news release" in one press; live news ticker</li>
+          <li>Battles: two commanders, co-belligerents, secret unit types, both plans revealed together</li>
+          <li>Backroom stats: replies and word counts per staffer</li>
+        </ul></div>
+        <div class="box bad"><h4>Does badly</h4><ul>
+          <li>Looks like 2016 Bootstrap, pure blue buttons, joke themes</li>
+          <li>The queue is not a queue: no waiting time, no oldest first, 15 big cards per page across 16 pages</li>
+          <li>A reply is just the first comment in a thread: no outcome, no templates, no internal notes</li>
+          <li>Replies cannot change the world; the director edits resources on another page</li>
+          <li>Message approval is a dropdown per message across 446 pages</li>
+          <li>Passwords made by hand and shown in plain text</li>
+          <li>No map, no voting, no phone-first delegate view</li>
+        </ul></div>
+      </div>
+
+      <h3>Maximun</h3>
+      <p>maximun.app. One polished single-page app with Google sign-in, a teal sidebar, serif headings and 18 colour themes. Makers, pricing and customers are not public.</p>
+      <div class="two">
+        <div class="box good"><h4>Does well</h4><ul>
+          <li>Round, "submissions open or paused" and the in-world clock in the top bar for every role</li>
+          <li>Crisis clock that advances itself (every 30 real minutes = 1 crisis month)</li>
+          <li>Directive pipeline: unclaimed, claimed, waiting for delegate, delegate overdue, "result not published" so results can be held and released together</li>
+          <li>Clarification follow-up: the chair is prompted to remind slow delegates</li>
+          <li>Resource Index: a global price chart (oil) plus each delegate's holdings, every change needs a reason</li>
+          <li>"AI Backroomer (beta)" reviewer and an AI-readable library of crisis guides</li>
+          <li>"Nothing is published until you confirm" on every form</li>
+        </ul></div>
+        <div class="box bad"><h4>Does badly</h4><ul>
+          <li>No voting, speakers list, motions or meetings: the front room is missing</li>
+          <li>Characters are a free-text name: no bio, powers, goals or picture</li>
+          <li>10 staff and 30 delegate slots, each edited one at a time; no import</li>
+          <li>Two 32-character join codes for everyone; no per-person invite, no QR</li>
+          <li>One URL for the whole app: no links to a directive, back button does nothing</li>
+          <li>Map: real world only, fictional "coming later"; no sign of units or fog of war</li>
+          <li>Messages are one-to-one only; audit log has no dates; exports are TXT only</li>
+        </ul></div>
+      </div>
+      <p class="note"><b>Not seen in Maximun:</b> a filled directive, the reply form, the delegate and chair views, and the map editor. The agent stopped before "Open map editor" because the audit log shows it writes your test committee's map settings. Question 39 asks if I may press it.</p>
+
+      <h3>Other ways conferences run crisis today</h3>
+      <p>Paper notepads with runners (most), plain conference email (McMUN 2018), Gchat and Google Docs (NYUMUNC). Deus (UNA-York) is gone. General MUN tools (MyMUN, MUNify, MUN Command and others) have no crisis features.</p>
+
+      <h3>Side by side</h3>
+      <div class="tbl"><table>
+        <tr><th>Feature</th><th>Master of Disaster</th><th>Maximun</th><th>Gavelling plan</th></tr>
+        <tr><td>Front room: speakers list, motions, voting</td><td class="n">No</td><td class="n">No</td><td class="y">Yes, already built</td></tr>
+        <tr><td>Personal directives with a lifecycle</td><td class="y">Yes</td><td class="y">Yes</td><td class="y">Yes</td></tr>
+        <tr><td>Fair queue with waiting times</td><td class="n">No</td><td class="p">Overdue only</td><td class="y">Yes</td></tr>
+        <tr><td>Structured outcomes and held results</td><td class="n">No</td><td class="y">Yes</td><td class="y">Yes</td></tr>
+        <tr><td>Reply changes map, resources, news</td><td class="p">News only</td><td class="n">No</td><td class="y">Yes</td></tr>
+        <tr><td>Cabinet directives voted in the room</td><td class="p">Chair approves</td><td class="n">No</td><td class="y">Yes, our voting page</td></tr>
+        <tr><td>Characters with bio, powers, goals</td><td class="p">Bio, resources</td><td class="n">Name only</td><td class="y">Yes</td></tr>
+        <tr><td>Delegate to delegate messages</td><td class="y">With approval</td><td class="p">One-to-one</td><td class="y">With optional approval</td></tr>
+        <tr><td>Meetings</td><td class="n">No</td><td class="n">No</td><td class="y">Yes</td></tr>
+        <tr><td>War map with units and fog of war</td><td class="n">No</td><td class="p">Basic map</td><td class="y">Yes</td></tr>
+        <tr><td>Crisis clock</td><td class="p">Free text</td><td class="y">Auto-advance</td><td class="y">Auto-advance by time or by directives</td></tr>
+        <tr><td>Rate limits</td><td class="y">Timer and credits</td><td class="p">Open or paused</td><td class="y">Both</td></tr>
+        <tr><td>AI help</td><td class="n">No</td><td class="y">AI backroomer (beta)</td><td class="p">To decide</td></tr>
+        <tr><td>Phone-first delegate view</td><td class="n">No</td><td class="n">Untested</td><td class="y">Yes, our delegate phone</td></tr>
+        <tr><td>Applications, allocation, payments, emails</td><td class="n">No</td><td class="n">No</td><td class="y">Yes, the conference layer</td></tr>
+      </table></div>
+    </section>
+
+    <section id="have">
+      <h2>What Gavelling Already Has</h2>
+      <p class="sub">The reason this is fully compatible with live rooms: most of the front room and the plumbing exist.</p>
+      <div class="three">
+        <div class="box"><h4>Live room runtime</h4><ul><li>Chair console: GSL, caucuses, motions, roll call</li><li>Documents with introduction and voting (cabinet directives)</li><li>Delegate phone, seat claims, chat, Secretariat broadcasts</li><li>Realtime sync, offline-safe writes, database clock</li></ul></div>
+        <div class="box"><h4>Conference layer</h4><ul><li>A "Crisis Staff" application role already exists</li><li>Committee seats can be characters, not countries</li><li>Applications, allocation, imports, payments, emails</li><li>Every committee gets its live room on creation</li></ul></div>
+        <div class="box"><h4>Around the room</h4><ul><li>Organiser live wall with broadcasts (pause, end)</li><li>Press Desk with press releases into rooms</li><li>Scoreboard, history and awards</li><li>Custom committees with party colours and crests</li></ul></div>
+      </div>
+      <p class="note"><b>The rule this keeps:</b> a crisis committee is still one conference committee with one live room, minted by the same single path. The crisis layer adds tables and pages around it. It never writes the room's settings blob, phase or clocks behind the chair's back, so nothing in AGENTS.md changes.</p>
+    </section>
+
+    <section id="pages">
+      <h2>Pages by Role</h2>
+      <h3>Crisis Director: Crisis Command</h3>
+      <p>Its own workspace with the organiser rail (Command, War map / Run: Directives, News, Meetings, Messages / World: Characters, Cabinets and resources, Arcs and timeline / Set up: Crisis set-up, Staff and access, Settings). The first design shows the Command page:</p>
+      <ul>
+        <li><b>Header strip:</b> crisis clock with pause, round, directives open or paused, people online.</li>
+        <li><b>Waiting for a Reply:</b> the fair queue with a waiting-time stripe and each delegate's backroomer. Opening one shows the full directive, the character's secret goals, an outcome, the reply, and "also move these ships on the map / take 2 ships from resources / tell the other room".</li>
+        <li><b>Needs Your Approval:</b> news drafts, meeting requests, passed cabinet directives to apply.</li>
+        <li><b>War Map:</b> see it as the crisis team or as each side (fog of war), borders tool, units, lines, replay.</li>
+        <li><b>Front Rooms:</b> each room's phase, clock, speaker, motions and directives in vote, read live from the session; send a crisis break to one or all rooms.</li>
+        <li><b>Backroom:</b> open directives and average reply per staffer, with a one-press rebalance suggestion.</li>
+        <li><b>Cabinet Resources</b> and <b>News and Meetings</b>.</li>
+      </ul>
+      <h3>Backroom</h3>
+      <p>A two-pane inbox: queue on the left, directive and reply on the right, no page loads. Lanes: Mine, Unclaimed, Waiting for delegate, Held for the round. Character panel beside every directive (goals, past directives, resources, position, messages). Reply templates, internal notes the delegate never sees, hand to another backroomer, escalate to the CD with a reason, turn into news.</p>
+      <h3>Front room chair</h3>
+      <p>The existing console. Adds a crisis panel: committee directives waiting for chair approval, the round and crisis clock, meetings starting soon, cabinet resources, and a big-screen view to show a crisis break to the room.</p>
+      <h3>Delegate phone</h3>
+      <p>The existing delegate board plus a Crisis tab: my character (bio, powers, resources, units), send a directive (with a visible cooldown and queue position), my directives with outcomes, messages to other characters, request a meeting, news feed, my side's view of the map.</p>
+      <h3>Organiser</h3>
+      <p>The live wall shows crisis committees with their queue health. Applications for Crisis Staff flow into Staff and access.</p>
+    </section>
+
+    <section id="directive">
+      <h2>The Directive</h2>
+      <h3>Fields</h3>
+      <div class="tbl"><table>
+        <tr><th>Field</th><th>From</th><th>Default</th></tr>
+        <tr><td>Title</td><td>Every RoP</td><td>Required</td></tr>
+        <tr><td>Type: personal, joint, committee, press release, communiqué</td><td>Research</td><td>Personal</td></tr>
+        <tr><td>To (a named character, body or contact)</td><td>Your map ("Receiver"), MiddMUNC</td><td>Required</td></tr>
+        <tr><td>Themes (several): military, intelligence, diplomatic, economic, press, personal</td><td>Your map, MoD categories</td><td>Optional</td></tr>
+        <tr><td>Action text, numbered clauses</td><td>Every RoP</td><td>Required, word limit setting</td></tr>
+        <tr><td>Resources used</td><td>Your map, WiseMee</td><td>Optional, picks from the character's resources</td></tr>
+        <tr><td>Goal it serves</td><td>Your map</td><td>Optional, staff-only</td></tr>
+        <tr><td>Affects (another cabinet or character)</td><td>Your map</td><td>Optional</td></tr>
+        <tr><td>Covert or overt</td><td>IASAS</td><td>Covert</td></tr>
+        <tr><td>Co-authors, sponsors, signatories</td><td>Every RoP</td><td>By type</td></tr>
+      </table></div>
+      <h3>Life of a personal directive</h3>
+      <div class="flow"><span>Draft</span><i>→</i><span>Sent</span><i>→</i><span>With a backroomer</span><i>→</i><span>Asked for detail</span><i>→</i><span>Answered</span><i>→</i><span>Held for the round</span><i>→</i><span class="end">Released</span></div>
+      <p>Outcomes: approved, partly works, denied, ask for more detail, answer later. The delegate sees the reply and, if you want, the outcome label (question 14).</p>
+      <h3>Life of a committee directive</h3>
+      <div class="flow"><span>Drafted with sponsors</span><i>→</i><span>Chair approves (setting)</span><i>→</i><span>Introduced on the floor</span><i>→</i><span>Voted on the voting page</span><i>→</i><span>CD applies it</span><i>→</i><span class="end">Consequences in the next break</span></div>
+      <h3>The fair queue</h3>
+      <p>Default order: longest waiting first, ties broken by who heard back least recently. Each row also shows length (reading time) and whose delegate it is, so nobody takes another backroomer's arc by mistake. A delegate never sees other people's directives, but can see "3rd in line" (question 15).</p>
+    </section>
+
+    <section id="map">
+      <h2>The War Map</h2>
+      <p class="sub">The plan is "as good as a war game" without becoming one. The backroom stays the referee: the map shows the world, it does not resolve battles on its own (unless you want dice, question 30).</p>
+      <h3>Building blocks</h3>
+      <ul>
+        <li><b>Regions, not freehand lines.</b> A map is made of regions (countries, or provinces when we need finer borders). Each region has an owner. A border is just where owners change, so "click a country and expand the border" is one press per region, and borders are always clean. The design shows this with the Borders tool.</li>
+        <li><b>Three ways to start a map:</b> the real world today (Natural Earth data, free), a historical preset (Europe 1914, 1939, the Cold War, borders set for that year), or your own image (a fantasy map or a scanned historical map) cut into regions in the editor.</li>
+        <li><b>Units:</b> preset types (army, navy, air, missile, base, spy, submarine) and custom ones with a name and icon. Strength, owner and notes per unit.</li>
+        <li><b>Fog of war per side:</b> a side sees its own regions, its own units and a radius around them, plus anything the backroom reveals or marks as "suspected". The CD can view the map as any side.</li>
+        <li><b>Lines and areas:</b> blockades, fronts, supply routes, no-fly zones.</li>
+        <li><b>Replay:</b> every change is stored with who and when, so the CD can scrub back and the conference gets a timelapse at the end.</li>
+        <li><b>Linked to directives:</b> a reply can move units, change owners or reveal something, and the change is logged against that directive.</li>
+      </ul>
+      <h3>How it would be built</h3>
+      <ul>
+        <li>MapLibre GL (open source, fast on phones) for the real-world and historical maps, a flat picture mode for image maps.</li>
+        <li>Regions and units in the database with row-level security, so a delegate's phone only ever receives what their side may see. Fog of war enforced in the database, not just hidden in the browser.</li>
+        <li>Realtime updates through the same Supabase channel pattern as the live rooms.</li>
+      </ul>
+    </section>
+
+    <section id="settings">
+      <h2>Settings</h2>
+      <p class="sub">Your mind map's list, plus what the research and the competitors show. Defaults are my suggestion.</p>
+      <div class="tbl"><table>
+        <tr><th>Setting</th><th>Choices</th><th>Default</th><th>From</th></tr>
+        <tr><td>Directives open</td><td>Open, paused (with a reason shown to delegates)</td><td>Open</td><td>Your map, both competitors</td></tr>
+        <tr><td>Time between directives per delegate</td><td>Off, 1 to 15 minutes</td><td>3 minutes</td><td>MoD (210 s)</td></tr>
+        <tr><td>Directive limit</td><td>Per round or per hour, or none</td><td>None</td><td>Your map</td></tr>
+        <tr><td>Word limit</td><td>50 to 500</td><td>200</td><td>Research</td></tr>
+        <tr><td>Messages between delegates</td><td>Off, free, need backroom approval</td><td>Free, backroom can read</td><td>Your map, MoD</td></tr>
+        <tr><td>Messages per hour</td><td>Off, 5 to 100</td><td>Off</td><td>MoD</td></tr>
+        <tr><td>Other cabinets' characters</td><td>Hidden, names only, full</td><td>Names only</td><td>MoD</td></tr>
+        <tr><td>Crisis clock</td><td>Manual, every X real minutes, every N directives</td><td>Manual</td><td>Your map, Maximun</td></tr>
+        <tr><td>Results released</td><td>As soon as answered, held until the round ends</td><td>As answered</td><td>Maximun</td></tr>
+        <tr><td>Backroom assignment</td><td>Assigned per delegate, shared queue, both</td><td>Assigned, others can help</td><td>Your map</td></tr>
+        <tr><td>Backroomer powers</td><td>Edit map, resources, fog of war, units; see all directives or only their queue; publish news</td><td>All but publish news</td><td>Your map</td></tr>
+        <tr><td>News needs CD approval</td><td>On, off</td><td>On</td><td>Your map</td></tr>
+        <tr><td>Meetings need approval</td><td>On, off</td><td>On</td><td>Your map</td></tr>
+        <tr><td>Committee directives</td><td>Sponsors, signatories, chair approves first, max on the floor, threshold</td><td>2, 3, on, 3, majority</td><td>Research</td></tr>
+      </table></div>
+    </section>
+
+    <section id="testing">
+      <h2>Testing in a Real Room</h2>
+      <p>You asked that every update is checked in a real room so nothing overlaps and every directive arrives. The plan:</p>
+      <ul>
+        <li><b>A permanent test crisis</b> on a test conference: one JCC with two rooms, a CD, two backroomers, two chairs and six delegates.</li>
+        <li><b>A scripted run after every change</b> with real browsers side by side (CD, backroomer, chair, two delegate phones): send a directive from each phone, check it lands in the right queue within seconds, answer it, check the reply and any map or resource change reaches only the right side, pass a cabinet directive through the voting page, send a crisis break, pause directives, kill and replace a character.</li>
+        <li><b>The existing room must still work:</b> the same run checks GSL, caucus, motions and voting on the chair console, so crisis work never breaks Sessions.</li>
+        <li><b>Layout:</b> every page at 1280, 1440 and 1920 wide and on a phone, checked for overlaps and clipped text.</li>
+        <li><b>Short report per run:</b> what passed, what failed, what I could not check.</li>
+      </ul>
+      <p class="note"><b>Needs your sign-off:</b> CLAUDE.md says runs are tested with a build and lint only, no browser and no test data, and that database objects are changed only through the chat's Supabase work. This plan needs both rules relaxed for crisis work. Questions 37 and 38.</p>
+    </section>
+
+    <section id="build">
+      <h2>Build Order</h2>
+      <div class="phases">
+        <div class="phase"><span class="pn">PHASE 1</span><b>Directives end to end</b><ul><li>Crisis committee type, characters, staff</li><li>Delegate sends, backroom answers, delegate reads</li><li>CD Command page and settings</li><li>Real-room test harness</li></ul></div>
+        <div class="phase"><span class="pn">PHASE 2</span><b>The front room and the world</b><ul><li>Cabinet directives through documents and voting</li><li>News, crisis breaks, crisis clock, rounds</li><li>Resources and character states</li><li>Messages and meetings</li></ul></div>
+        <div class="phase"><span class="pn">PHASE 3</span><b>The war map</b><ul><li>Real-world map, regions and owners</li><li>Units, fog of war, lines</li><li>Replies that move units</li><li>Historical presets and image maps</li></ul></div>
+        <div class="phase"><span class="pn">PHASE 4</span><b>Scale and polish</b><ul><li>JCC with several rooms</li><li>Stats, export, replay timelapse</li><li>AI drafting (if wanted)</li><li>Pricing and launch</li></ul></div>
+      </div>
+    </section>
+
+    <section id="questions">
+      <h2>Questions for You</h2>
+      <p class="sub">Answer as many as you like, in any order, by number. Each has my suggestion so a "yes" is enough.</p>
+
+      <div class="qgroup"><h3>Scope</h3><ol class="qs">
+        <li><span class="qn">1</span><span class="qt">Is crisis for conference committees only, or also free standalone Sessions (code and password, no accounts)?</span><span class="rec">Suggestion: <b>conferences first</b>. A standalone version later as a funnel.</span></li>
+        <li><span class="qn">2</span><span class="qt">Which committee types must work in version one: single cabinet, JCC with two rooms, three or more rooms, ad hoc?</span><span class="rec">Suggestion: <b>single cabinet and a two-room JCC</b>.</span></li>
+        <li><span class="qn">3</span><span class="qt">Is there a first conference and date this must be ready for?</span><span class="rec">This sets how much of the map lands in the first release.</span></li>
+        <li><span class="qn">4</span><span class="qt">What is the product called on screen: Crisis, Gavelling Crisis, Crisis Command, something else?</span><span class="rec">Suggestion: <b>Crisis</b> in the menus, <b>Crisis Command</b> for the CD page.</span></li>
+        <li><span class="qn">5</span><span class="qt">Where does the CD dashboard live: inside the organiser dashboard as a new section, or its own workspace opened from the committee?</span><span class="rec">Suggestion: <b>its own workspace</b> with the same rail, because CDs and backroomers are often not organisers.</span></li>
+      </ol></div>
+
+      <div class="qgroup"><h3>People and access</h3><ol class="qs">
+        <li><span class="qn">6</span><span class="qt">Do delegates sign in with accounts (your map says email log-in), or join with the room code and their seat like today?</span><span class="rec">Suggestion: <b>accounts</b> for conference crisis, because private directives and fog of war must be tied to one person.</span></li>
+        <li><span class="qn">7</span><span class="qt">Which staff roles exist: CD, assistant CD, backroomer, cabinet director (JCC), chair, press?</span><span class="rec">Suggestion: <b>CD, assistant CD, backroomer, chair</b>; press through the existing Press Desk.</span></li>
+        <li><span class="qn">8</span><span class="qt">Do backroomers own specific delegates, pick from a shared queue, or both?</span><span class="rec">Suggestion: <b>both</b>. Each delegate has a responsible backroomer, anyone can help, and "send into someone else's queue" moves it.</span></li>
+        <li><span class="qn">9</span><span class="qt">Backroomer powers (edit map, resources, fog of war, units, see all directives): set per person or once for all backroomers?</span><span class="rec">Suggestion: <b>per person</b>, with a sensible default.</span></li>
+        <li><span class="qn">10</span><span class="qt">Can the front room chair read personal directives?</span><span class="rec">Suggestion: <b>no by default</b>, a setting to allow it.</span></li>
+        <li><span class="qn">11</span><span class="qt">Should Crisis Staff applications (already a role) place people straight into Staff and access when accepted?</span><span class="rec">Suggestion: <b>yes</b>.</span></li>
+      </ol></div>
+
+      <div class="qgroup"><h3>Directives</h3><ol class="qs">
+        <li><span class="qn">12</span><span class="qt">Which types ship first: personal, joint personal, committee, press release, communiqué?</span><span class="rec">Suggestion: <b>personal, joint and committee</b> first.</span></li>
+        <li><span class="qn">13</span><span class="qt">Which of your fields are required: summary, receiver, type, themes, goal, resources used, impact?</span><span class="rec">Suggestion: <b>title, receiver, text required</b>; the rest optional and quick to tap.</span></li>
+        <li><span class="qn">14</span><span class="qt">Does the delegate see the outcome label (approved, partly, denied) or only the reply text?</span><span class="rec">Suggestion: <b>reply text only</b>; the label is for staff and stats. More in character.</span></li>
+        <li><span class="qn">15</span><span class="qt">Should delegates see their place in the queue ("3rd in line, about 6 minutes")?</span><span class="rec">Suggestion: <b>yes</b>. It removes the "nobody answers me" feeling.</span></li>
+        <li><span class="qn">16</span><span class="qt">Queue order: automatic fair order (longest wait, then least recently answered), or plain oldest first with those facts shown?</span><span class="rec">Suggestion: <b>fair order by default</b>, a toggle for oldest first.</span></li>
+        <li><span class="qn">17</span><span class="qt">Do you want results held and released together at the end of a round (Maximun), as an option?</span><span class="rec">Suggestion: <b>yes, as a setting</b>, off by default.</span></li>
+        <li><span class="qn">18</span><span class="qt">Committee directives: go through our existing documents and voting page with a crisis label?</span><span class="rec">Suggestion: <b>yes</b>. It is your "Upload on Gavelling, Motion, Vote".</span></li>
+        <li><span class="qn">19</span><span class="qt">Should a reply be able to change resources, the map and news in the same press?</span><span class="rec">Suggestion: <b>yes</b>, each change shown before sending.</span></li>
+      </ol></div>
+
+      <div class="qgroup"><h3>Communication</h3><ol class="qs">
+        <li><span class="qn">20</span><span class="qt">Messages between delegates: free, or need backroom approval? Can the backroom always read them?</span><span class="rec">Suggestion: <b>free, backroom can read</b>; approval as a setting.</span></li>
+        <li><span class="qn">21</span><span class="qt">Meetings: do they happen in person (the app schedules and approves) or as a private chat in the app?</span><span class="rec">Suggestion: <b>in person</b>, with the app holding the request, approval, time and a short note of what was agreed.</span></li>
+        <li><span class="qn">22</span><span class="qt">Who approves meetings: the CD, the delegate's backroomer, or the chair?</span><span class="rec">Suggestion: <b>the backroomer</b>, the CD can see all.</span></li>
+        <li><span class="qn">23</span><span class="qt">Crisis news: written by backroom, approved by the CD, sent to one room or all. Should it also show inside the live room like Secretariat broadcasts do today?</span><span class="rec">Suggestion: <b>yes</b>, so chairs and phones get it with no extra work.</span></li>
+      </ol></div>
+
+      <div class="qgroup"><h3>Characters and resources</h3><ol class="qs">
+        <li><span class="qn">24</span><span class="qt">What does a character hold: bio, picture, powers, secret goals, resources, units, map position?</span><span class="rec">Suggestion: <b>all of these</b>. Delegates see their own goals; other people's only if the CD shares them.</span></li>
+        <li><span class="qn">25</span><span class="qt">Resources: a free list per character, or typed counters (money, troops, influence, custom) that replies add to and take from?</span><span class="rec">Suggestion: <b>typed counters</b> per character and per cabinet, with a reason on every change.</span></li>
+        <li><span class="qn">26</span><span class="qt">When a character dies or is arrested, does the delegate get a new character, and who picks it?</span><span class="rec">Suggestion: <b>the CD picks from spare characters</b>, history kept.</span></li>
+      </ol></div>
+
+      <div class="qgroup"><h3>The map</h3><ol class="qs">
+        <li><span class="qn">27</span><span class="qt">Which map starts matter most: real world today, historical presets, your own image map?</span><span class="rec">Suggestion: <b>real world first</b>, then image maps, then historical presets.</span></li>
+        <li><span class="qn">28</span><span class="qt">Borders by regions (click a region to change its owner) rather than freehand drawing. Agree?</span><span class="rec">Suggestion: <b>yes</b>, with provinces for finer borders.</span></li>
+        <li><span class="qn">29</span><span class="qt">Fog of war per cabinet (a side) or per character?</span><span class="rec">Suggestion: <b>per cabinet</b>, with things revealed to one character as an extra.</span></li>
+        <li><span class="qn">30</span><span class="qt">Do delegates move units themselves (orders the backroom approves) or only staff move them? Any dice or automatic battles?</span><span class="rec">Suggestion: <b>delegates draw an order on the map that becomes a directive</b>; staff move units; no dice.</span></li>
+      </ol></div>
+
+      <div class="qgroup"><h3>Time</h3><ol class="qs">
+        <li><span class="qn">31</span><span class="qt">Crisis clock: manual, every X real minutes, every N directives, or all three?</span><span class="rec">Suggestion: <b>all three as choices</b>, manual by default.</span></li>
+        <li><span class="qn">32</span><span class="qt">"Per directives sent": does that mean the world moves forward after N directives in the whole crisis, or per delegate?</span><span class="rec">Need your meaning.</span></li>
+      </ol></div>
+
+      <div class="qgroup"><h3>AI</h3><ol class="qs">
+        <li><span class="qn">33</span><span class="qt">Do we build an AI helper that reads the crisis guide and drafts replies for backroomers?</span><span class="rec">Suggestion: <b>yes, drafts only</b>. A human always reads and sends.</span></li>
+        <li><span class="qn">34</span><span class="qt">Should AI ever answer a delegate without a human (for example when the backroom is overloaded)?</span><span class="rec">Suggestion: <b>no</b>.</span></li>
+      </ol></div>
+
+      <div class="qgroup"><h3>Money</h3><ol class="qs">
+        <li><span class="qn">35</span><span class="qt">Your plan says pay when set up, due 2 days before the conference, priced per feature. That charges the organiser, which CLAUDE.md forbids ("Organisers are never charged"). Who pays for crisis, and how?</span><span class="rec">Options: <b>credits per crisis delegate per day</b> paid by the conference; or a crisis fee added to the delegate's ticket; or free for now. Needs an owner decision (you or Christian).</span></li>
+        <li><span class="qn">36</span><span class="qt">Is the map an add-on with its own price, or included?</span><span class="rec">Suggestion: <b>included</b> at first, to win conferences from Master of Disaster.</span></li>
+      </ol></div>
+
+      <div class="qgroup"><h3>How I work on this</h3><ol class="qs">
+        <li><span class="qn">37</span><span class="qt">For crisis work, may I test in real browsers on a test conference with test accounts and test data, instead of the build-and-lint-only rule?</span><span class="rec">You asked for real-room testing; I need it confirmed as an exception, and which test conference and accounts to use.</span></li>
+        <li><span class="qn">38</span><span class="qt">Crisis needs new database tables. May this chat apply them with your approval each time, or should every SQL change go to the Supabase chat (or Christian's chat)?</span><span class="rec">Suggestion: <b>I write each change as a scratch SQL file and apply it only after your yes</b>, like delegations sections 15 and 16. Nothing touching money goes anywhere but Christian's chat.</span></li>
+        <li><span class="qn">39</span><span class="qt">May I press "Open map editor" in your Maximun test committee? It may rewrite that committee's saved map settings.</span><span class="rec">It is the only way to see their map tools. Screenshots from you work too.</span></li>
+        <li><span class="qn">40</span><span class="qt">Do you have a crisis director or backroomer I can learn from (a Discord, a past crisis guide, a note log)?</span><span class="rec">Real directives would make the queue and reply design much sharper.</span></li>
+      </ol></div>
+
+      <div class="qgroup"><h3>The design</h3><ol class="qs">
+        <li><span class="qn">41</span><span class="qt">On the dashboard design: right amount of information, too much, or missing something?</span><span class="rec">Open it, press a directive, switch the map between Crisis team, ExComm and Presidium, try Borders.</span></li>
+        <li><span class="qn">42</span><span class="qt">Gavelling's ivory and forest everywhere, or a darker "war room" look for the crisis workspace?</span><span class="rec">Suggestion: <b>Gavelling's look</b> for staff pages; the conference's own colours on delegate pages, as the rules already say.</span></li>
+      </ol></div>
+    </section>
+  </main>
+</div>

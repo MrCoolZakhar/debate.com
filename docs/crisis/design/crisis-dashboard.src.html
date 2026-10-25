@@ -1,0 +1,662 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Crisis Command</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Playfair+Display:ital,wght@1,600&display=swap">
+<style>
+/* Layout: Gavelling organiser shell. Floating ivory rail on the left, one header row, a one-screen bento grid with the war map in the middle. */
+:root {
+  --page: #EFE3DA; --surface: #F5EAE2;
+  --red: #8E2424; --red-2: #6E1A1A; --red-deep: #3A0E0F; --red-grad: linear-gradient(165deg, #9A2A2A 0%, #6A1919 52%, #3A0E0F 100%);
+  --red-btn: linear-gradient(180deg, #A83030, #741C1C); --red-wash: linear-gradient(180deg, #FBEDE7 0%, #FFFFFF 150px); --card: #FFFFFF; --forest: #1B3828; --forest-2: #2C5440;
+  --gold: #EED98A; --gold-deep: #9A6E14; --gold-mid: #B6871F; --ink: #1C1410; --ink-soft: #4E463C; --muted: #7A6E5E;
+  --hair: rgba(110,30,30,0.12); --well: rgba(142,36,36,0.055);
+  --us: #3E6A9A; --us-tint: #C9D6E4; --su: #A3412F; --su-tint: #ECCFC6; --land: #F5F0E4; --land-line: #CBBE9F; --sea: #DCE4DA;
+  --danger: #A3412F; --warn: #B6871F; --ok: #3D7A52;
+  --shadow: inset 0 1px 0 rgba(255,255,255,0.75), 0 0 0 1px rgba(27,56,40,0.07), 6px 7px 18px rgba(27,56,40,0.13), 0 1px 2px rgba(27,56,40,0.05);
+  --shadow-sm: inset 0 1px 0 rgba(255,255,255,0.5), 0 1px 2px rgba(27,56,40,0.10), 0 3px 7px -2px rgba(27,56,40,0.15);
+  --font: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --accent-font: 'Playfair Display', Georgia, serif;
+  color-scheme: light;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { height: 100%; }
+body { margin: 0; background: radial-gradient(1100px 620px at 100% -10%, rgba(142,36,36,0.13), transparent 62%), radial-gradient(900px 520px at -10% 110%, rgba(142,36,36,0.08), transparent 60%), var(--page); background-attachment: fixed; color: var(--ink); font-family: var(--font); font-size: 14px; -webkit-font-smoothing: antialiased; }
+button { font-family: inherit; cursor: pointer; }
+button:focus { outline: none; }
+button:focus-visible, a:focus-visible { outline: 2px solid var(--forest); outline-offset: 2px; }
+.num { font-variant-numeric: tabular-nums; }
+svg.lucide { stroke-width: 1.5; }
+
+/* top bar */
+.topbar { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 30; height: 56px; display: flex; align-items: center; gap: 14px;
+  padding-left: max(18px, env(safe-area-inset-left, 0px)); padding-right: max(18px, env(safe-area-inset-right, 0px)); }
+.topbar img { height: 26px; width: auto; display: block; }
+.topbar .crumb { color: var(--muted); font-weight: 600; font-size: 13px; display: flex; align-items: center; gap: 6px; }
+.topbar .crumb b { color: var(--ink); font-weight: 700; }
+.topbar .spacer { flex: 1; }
+.avatar { width: 34px; height: 34px; border-radius: 50%; background: var(--red-grad); color: var(--gold); display: grid; place-items: center; font-weight: 700; font-size: 13px; box-shadow: var(--shadow-sm); }
+
+/* rail */
+.rail { position: fixed; left: 14px; top: 66px; bottom: 14px; width: 68px; z-index: 25; background: var(--red-grad); border-radius: 26px; box-shadow: inset 0 1px 0 rgba(255,255,255,0.14), 0 14px 32px rgba(58,14,15,0.32), 0 2px 6px rgba(58,14,15,0.2);
+  overflow: hidden; transition: width 280ms cubic-bezier(0.22,1,0.36,1); display: flex; flex-direction: column; }
+.rail:hover, .rail:focus-within { width: 256px; }
+.rail-id { display: flex; align-items: center; gap: 12px; padding: 14px; border-bottom: 1px solid rgba(255,255,255,0.12); }
+.rail-id .crest { border-radius: 50%; box-shadow: 0 0 0 2px rgba(238,217,138,0.55); line-height: 0; }
+.rail-id .lbl b { color: #FFF4E6; }
+.rail-id .crest { width: 40px; height: 40px; flex: none; }
+.rail .lbl { white-space: nowrap; opacity: 0; transition: opacity 200ms ease 60ms; }
+.rail:hover .lbl, .rail:focus-within .lbl { opacity: 1; }
+.rail-id .lbl b { display: block; font-size: 15px; font-weight: 800; }
+.rail-id .lbl span { display: block; font-size: 12px; color: rgba(255,232,214,0.7); font-weight: 600; }
+.rail nav { flex: 1; overflow-y: auto; scrollbar-width: none; padding: 8px 12px; }
+.rail h6 { margin: 0; height: 24px; padding: 5px 10px 3px; font-size: 11px; font-weight: 800; letter-spacing: 0.12em; color: var(--gold); }
+.rail .sec + .sec { border-top: 1px solid rgba(255,255,255,0.1); margin-top: 7px; padding-top: 5px; }
+.rail a { display: flex; align-items: center; gap: 12px; height: 42px; padding: 0 11px; margin: 2px 0; border-radius: 12px; color: rgba(255,232,214,0.74); text-decoration: none; font-weight: 600; font-size: 14.5px; }
+.rail a:hover { background: rgba(255,255,255,0.09); color: #FFFFFF; }
+.rail a.on { background: #F8EFE5; color: var(--red-2); box-shadow: 0 4px 14px rgba(20,4,4,0.3); }
+.rail a .ico { position: relative; flex: none; line-height: 0; }
+.rail a .dot { position: absolute; top: -3px; right: -4px; width: 8px; height: 8px; border-radius: 50%; background: var(--gold); border: 1.5px solid #6E1A1A; }
+.rail a .cnt { margin-left: auto; font-size: 12px; font-weight: 700; color: var(--gold); }
+.rail a.on .cnt { color: var(--red); }
+.rail-foot { padding: 10px 12px 14px; border-top: 1px solid rgba(255,255,255,0.1); }
+
+/* main */
+main { padding-left: max(98px, env(safe-area-inset-left, 0px)); padding-right: max(18px, env(safe-area-inset-right, 0px)); padding-block: 4px 18px; }
+.head { display: flex; align-items: center; flex-wrap: wrap; gap: 12px 18px; margin-bottom: 14px; }
+.ident { display: flex; align-items: center; gap: 12px; flex: 1 1 280px; min-width: 0; }
+.ident .crest { width: 40px; height: 40px; flex: none; }
+.eyebrow { font-size: 10px; font-weight: 800; letter-spacing: 0.16em; color: var(--red); margin: 0; }
+h1 { margin: 2px 0 0; font-size: 21px; font-weight: 800; line-height: 1.15; text-wrap: balance; }
+h1 em { font-family: var(--accent-font); font-style: italic; font-weight: 600; color: var(--gold-mid); }
+.strip { display: flex; align-items: stretch; background: var(--red-grad); color: #FFF4E6; border-radius: 18px; box-shadow: inset 0 1px 0 rgba(255,255,255,0.14), 0 10px 24px rgba(58,14,15,0.25); flex-wrap: wrap; }
+.strip .btn.ghost { background: rgba(255,255,255,0.12); color: #FFF4E6; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.24); }
+.strip .live.off { background: var(--gold); box-shadow: 0 0 0 3px rgba(238,217,138,0.25); }
+.strip .live { background: #6BCB8B; box-shadow: 0 0 0 3px rgba(107,203,139,0.25); }
+.strip .cell { padding: 9px 16px; display: flex; flex-direction: column; justify-content: center; gap: 2px; min-width: 0; }
+.strip .cell + .cell { border-left: 1px solid rgba(255,255,255,0.14); }
+.strip .k { font-size: 11px; font-weight: 700; color: rgba(255,232,214,0.78); display: flex; align-items: center; gap: 5px; }
+.strip .v { font-size: 15px; font-weight: 800; display: flex; align-items: center; gap: 8px; white-space: nowrap; }
+.live { width: 7px; height: 7px; border-radius: 50%; background: var(--ok); box-shadow: 0 0 0 3px rgba(61,122,82,0.18); }
+.live.off { background: var(--danger); box-shadow: 0 0 0 3px rgba(163,65,47,0.16); }
+
+.btn { display: inline-flex; align-items: center; gap: 6px; border: 0; border-radius: 10px; padding: 7px 12px; font-weight: 700; font-size: 13px; color: #FFF;
+  background: linear-gradient(180deg, var(--forest-2), var(--forest)); box-shadow: var(--shadow-sm); transition: transform 120ms ease; white-space: nowrap; }
+.btn:active { transform: scale(0.97); }
+.btn.ghost { background: var(--card); color: var(--forest); box-shadow: inset 0 0 0 1px var(--hair); }
+.btn.red { background: var(--red-btn); color: #FFF4E6; }
+.btn.gold { background: linear-gradient(180deg, var(--gold), #E2C766); color: var(--forest); }
+.btn.sm { padding: 5px 9px; font-size: 12px; border-radius: 9px; }
+.btn.danger { background: var(--card); color: var(--danger); box-shadow: inset 0 0 0 1px rgba(163,65,47,0.3); }
+
+/* grid */
+.grid { display: grid; gap: 14px; grid-template-columns: minmax(300px, 340px) minmax(0, 1fr) minmax(280px, 320px); grid-template-areas: "needs map side" "needs res side"; }
+.card { background: var(--card); border-radius: 22px; box-shadow: var(--shadow); padding: 14px 16px; min-width: 0; }
+.card h2 { margin: 0; font-size: 15px; font-weight: 800; display: flex; align-items: center; gap: 8px; }
+.card h2 svg { color: var(--red); }
+.card.warm { background: var(--red-wash); }
+.card .sub { font-size: 12px; color: var(--ink-soft); margin: 2px 0 0; }
+.card-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; flex-wrap: wrap; }
+.needs { grid-area: needs; display: flex; flex-direction: column; gap: 14px; }
+.mapcard { grid-area: map; display: flex; flex-direction: column; }
+.side { grid-area: side; display: flex; flex-direction: column; gap: 14px; }
+.res { grid-area: res; display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+
+/* big number + word */
+.bigcount { display: flex; align-items: baseline; gap: 8px; }
+.bigcount b { font-size: 30px; font-weight: 800; line-height: 1; font-variant-numeric: tabular-nums; }
+.bigcount span { font-size: 13px; font-weight: 600; color: var(--ink-soft); }
+
+/* directive queue */
+.queue { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
+.drow { display: grid; grid-template-columns: 4px 1fr auto; gap: 10px; align-items: stretch; padding: 9px 10px 9px 0; border-radius: 14px; background: var(--well);
+  border: 0; text-align: left; color: inherit; width: 100%; transition: background 120ms ease; }
+.drow:hover { background: rgba(142,36,36,0.1); }
+.drow .stripe { border-radius: 0 3px 3px 0; background: var(--ok); }
+.drow.late .stripe { background: var(--warn); }
+.drow.very .stripe { background: var(--danger); }
+.drow .who { font-size: 12px; font-weight: 700; color: var(--ink-soft); display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.drow .who .side-us { color: var(--us); } .drow .who .side-su { color: var(--su); }
+.drow .t { font-size: 13.5px; font-weight: 600; margin-top: 2px; line-height: 1.3; overflow-wrap: anywhere; }
+.drow .meta { display: flex; flex-direction: column; align-items: flex-end; justify-content: space-between; gap: 4px; font-size: 12px; color: var(--ink-soft); }
+.drow .wait { font-weight: 800; font-size: 13px; color: var(--ink); }
+.drow.late .wait { color: var(--gold-deep); } .drow.very .wait { color: var(--danger); }
+.flag { display: inline-flex; align-items: center; gap: 3px; font-size: 11.5px; font-weight: 600; color: var(--muted); }
+
+.task { display: flex; gap: 10px; align-items: flex-start; padding: 10px 0; border-top: 1px solid var(--hair); }
+.task:first-of-type { border-top: 0; }
+.task .ti { width: 30px; height: 30px; flex: none; display: grid; place-items: center; color: var(--red); }
+.task .tx { flex: 1; min-width: 0; }
+.task .tx b { display: block; font-size: 13.5px; }
+.task .tx span { display: block; font-size: 12px; color: var(--ink-soft); margin-top: 1px; }
+.task .ta { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+
+/* map */
+.seg { display: inline-flex; background: var(--well); border-radius: 11px; padding: 3px; gap: 2px; }
+.seg button { border: 0; background: transparent; padding: 5px 10px; border-radius: 8px; font-size: 12.5px; font-weight: 700; color: var(--ink-soft); }
+.seg button.on { background: var(--card); color: var(--forest); box-shadow: var(--shadow-sm); }
+.tools { display: flex; gap: 6px; flex-wrap: wrap; }
+.tool { display: inline-flex; flex-direction: column; align-items: center; gap: 2px; border: 0; background: transparent; color: var(--ink-soft); padding: 4px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; min-width: 56px; }
+.tool:hover { background: var(--well); color: var(--ink); }
+.tool.on { background: var(--forest); color: var(--gold); }
+.mapwrap { position: relative; border-radius: 16px; overflow: hidden; background: var(--sea); flex: 1; min-height: 380px; }
+.mapwrap svg.map { display: block; width: 100%; height: 100%; }
+.country { fill: var(--land); stroke: var(--land-line); stroke-width: 0.7; transition: fill 200ms ease; }
+.country.us { fill: var(--us-tint); stroke: #8FA8C3; }
+.country.su { fill: var(--su-tint); stroke: #C99A8D; }
+.borders .country:hover { stroke: var(--forest); stroke-width: 2; cursor: pointer; }
+.clabel { font-size: 11px; font-weight: 700; letter-spacing: 0.08em; fill: #8C806C; pointer-events: none; text-transform: uppercase; }
+.clabel.big { font-size: 15px; letter-spacing: 0.14em; fill: #7E7260; }
+.unit { cursor: pointer; }
+.unit text { font-size: 10.5px; font-weight: 800; pointer-events: none; }
+.unit.suspected circle.ring { stroke-dasharray: 3 2.5; }
+.maphint { position: absolute; left: 12px; bottom: 12px; right: 12px; display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; pointer-events: none; }
+.maphint > * { pointer-events: auto; background: rgba(255,255,255,0.92); border-radius: 12px; padding: 7px 10px; font-size: 12px; box-shadow: var(--shadow-sm); color: var(--ink-soft); }
+.legend { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+.legend i { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 5px; vertical-align: -1px; }
+.unitinfo { position: absolute; top: 12px; right: 12px; width: 230px; background: rgba(255,255,255,0.96); border-radius: 14px; box-shadow: var(--shadow); padding: 11px 12px; font-size: 12.5px; }
+.unitinfo b { display: block; font-size: 13.5px; }
+.unitinfo .row { display: flex; justify-content: space-between; margin-top: 5px; color: var(--ink-soft); }
+.borderbar { position: absolute; top: 12px; left: 12px; background: rgba(255,255,255,0.96); border-radius: 14px; box-shadow: var(--shadow); padding: 9px 10px; font-size: 12px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; max-width: calc(100% - 24px); }
+
+/* side */
+.room { padding: 10px 0; border-top: 1px solid var(--hair); }
+.room:first-of-type { border-top: 0; padding-top: 2px; }
+.room .rt { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.room .rt b { font-size: 14px; }
+.room .phase { font-size: 12.5px; color: var(--ink-soft); margin-top: 3px; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.room .facts { display: flex; gap: 14px; margin-top: 7px; font-size: 12px; color: var(--ink-soft); flex-wrap: wrap; }
+.room .facts b { color: var(--ink); font-size: 14px; margin-right: 3px; }
+.staff { display: grid; grid-template-columns: 28px 1fr auto; gap: 9px; align-items: center; padding: 7px 0; }
+.staff .av { width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; font-size: 11px; font-weight: 800; color: #FFF; background: var(--forest-2); }
+.staff .nm { font-size: 13px; font-weight: 700; }
+.staff .nm span { display: block; font-size: 11.5px; color: var(--ink-soft); font-weight: 500; }
+.bar { height: 5px; border-radius: 3px; background: var(--well); margin-top: 4px; overflow: hidden; }
+.bar i { display: block; height: 100%; background: var(--forest-2); border-radius: 3px; }
+.bar i.hot { background: var(--danger); }
+.staff .open { text-align: right; font-size: 12px; color: var(--ink-soft); }
+.staff .open b { display: block; font-size: 16px; color: var(--ink); }
+.tip { margin-top: 8px; padding: 9px 10px; border-radius: 12px; background: color-mix(in srgb, var(--gold) 24%, #FFF); font-size: 12.5px; color: var(--ink); display: flex; gap: 8px; align-items: flex-start; }
+.tip .btn { margin-top: 6px; }
+
+/* resources */
+.cab h3 { margin: 0 0 8px; font-size: 13px; font-weight: 800; display: flex; align-items: center; gap: 6px; }
+.cab h3 i.sw { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+.resgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 8px; }
+.resitem { background: var(--well); border-radius: 12px; padding: 8px 10px; }
+.resitem span { display: block; font-size: 11.5px; color: var(--ink-soft); font-weight: 600; }
+.resitem b { display: block; font-size: 18px; font-weight: 800; margin-top: 2px; font-variant-numeric: tabular-nums; }
+.resitem small { font-size: 11px; font-weight: 700; }
+.up { color: var(--ok); } .down { color: var(--danger); }
+.news { display: flex; flex-direction: column; gap: 8px; }
+.newsitem { display: flex; gap: 10px; align-items: flex-start; }
+.newsitem .nt { font-size: 11px; font-weight: 700; color: var(--muted); width: 42px; flex: none; padding-top: 2px; }
+.newsitem b { font-size: 13px; display: block; }
+.newsitem span { font-size: 12px; color: var(--ink-soft); }
+
+/* drawer */
+.scrim { position: fixed; inset: 0; background: rgba(28,20,16,0.28); backdrop-filter: blur(2px); z-index: 50; opacity: 0; pointer-events: none; transition: opacity 200ms ease; }
+.scrim.open { opacity: 1; pointer-events: auto; }
+.drawer { position: fixed; top: 0; right: 0; bottom: 0; width: min(560px, 100%); background: var(--surface); z-index: 51; transform: translateX(102%); transition: transform 280ms cubic-bezier(0.22,1,0.36,1);
+  display: flex; flex-direction: column; box-shadow: -12px 0 40px rgba(27,56,40,0.18); padding-top: env(safe-area-inset-top, 0px); padding-right: env(safe-area-inset-right, 0px); }
+.drawer.open { transform: translateX(0); }
+.dhead { padding: 18px 20px 12px; display: flex; gap: 12px; align-items: flex-start; }
+.dhead .x { margin-left: auto; border: 0; background: var(--card); width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; box-shadow: var(--shadow-sm); color: var(--ink); flex: none; }
+.dbody { flex: 1; overflow-y: auto; padding: 0 20px 20px; display: flex; flex-direction: column; gap: 12px; }
+.fields { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.field { background: var(--card); border-radius: 12px; padding: 8px 10px; box-shadow: inset 0 0 0 1px var(--hair); min-width: 0; }
+.field span { display: block; font-size: 11px; font-weight: 700; color: var(--muted); }
+.field b { display: block; font-size: 13px; margin-top: 2px; overflow-wrap: anywhere; }
+.field.wide { grid-column: 1 / -1; }
+.dtext { background: var(--card); border-radius: 14px; padding: 12px 14px; line-height: 1.55; font-size: 13.5px; box-shadow: inset 0 0 0 1px var(--hair); }
+.dtext ol { margin: 6px 0 0; padding-left: 20px; }
+.ctx { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+.outcomes { display: flex; gap: 6px; flex-wrap: wrap; }
+.outcomes button { border: 0; border-radius: 10px; padding: 7px 11px; font-weight: 700; font-size: 12.5px; background: var(--card); color: var(--ink-soft); box-shadow: inset 0 0 0 1px var(--hair); }
+.outcomes button.on { background: var(--forest); color: var(--gold); box-shadow: none; }
+textarea { width: 100%; min-height: 110px; border: 0; border-radius: 14px; padding: 12px 14px; font: inherit; font-size: 13.5px; line-height: 1.5; background: var(--card); color: var(--ink); box-shadow: inset 0 0 0 1px var(--hair); resize: vertical; }
+textarea:focus { outline: 2px solid var(--forest); }
+.dfoot { padding: 12px 20px max(16px, env(safe-area-inset-bottom, 0px)); display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; border-top: 1px solid var(--hair); }
+.mini { font-size: 12px; color: var(--ink-soft); }
+.toast { position: fixed; left: 50%; bottom: max(22px, env(safe-area-inset-bottom, 0px)); transform: translate(-50%, 40px); opacity: 0; z-index: 60; background: rgba(255,255,255,0.78); backdrop-filter: blur(14px) saturate(1.4);
+  border-radius: 999px; padding: 10px 18px; font-weight: 700; font-size: 13px; box-shadow: var(--shadow); transition: all 260ms cubic-bezier(0.22,1,0.36,1); color: var(--forest); }
+.toast.show { transform: translate(-50%, 0); opacity: 1; }
+
+/* responsive */
+@media (max-width: 1240px) {
+  .grid { grid-template-columns: minmax(0, 1fr) minmax(280px, 320px); grid-template-areas: "map side" "needs side" "res res"; }
+}
+@media (max-width: 900px) {
+  .rail { display: none; }
+  main { padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+  .topbar { padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+  .topbar .crumb { display: none; }
+  .grid { grid-template-columns: minmax(0, 1fr); grid-template-areas: "map" "needs" "side" "res"; }
+  .res { grid-template-columns: 1fr; }
+  .mapwrap { min-height: 0; flex: none; }
+  .mapwrap svg.map { height: auto; aspect-ratio: 720 / 450; }
+  .maphint { position: static; padding: 8px 0 0; }
+  .maphint > * { box-shadow: none; padding: 4px 2px; background: transparent; }
+  .strip { width: 100%; }
+  .strip .cell { flex: 1 1 45%; }
+  .strip .cell:first-child { flex-basis: 100%; border-bottom: 1px solid rgba(255,255,255,0.14); }
+  .strip .cell + .cell { border-left: 0; }
+  .unitinfo { position: static; width: auto; margin-top: 10px; }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<header class="topbar">
+  <img src="__LOCKUP__" alt="Gavelling">
+  <div class="crumb"><span>WMUN 2027</span><i data-lucide="chevron-right" width="14" height="14"></i><b>Crisis</b></div>
+  <div class="spacer"></div>
+  <button class="btn ghost sm" id="btnFront"><i data-lucide="presentation" width="15" height="15"></i>Open front room</button>
+  <div class="avatar" title="Peter Zakhar, Crisis Director">PZ</div>
+</header>
+
+<aside class="rail" aria-label="Crisis navigation">
+  <div class="rail-id">
+    <span class="crest">__EMBLEM__</span>
+    <div class="lbl"><b>Cuban Missile Crisis</b><span>Joint crisis · 2 cabinets</span></div>
+  </div>
+  <nav>
+    <div class="sec">
+      <a href="#" class="on"><span class="ico"><i data-lucide="layout-dashboard"></i></span><span class="lbl">Command</span></a>
+      <a href="#"><span class="ico"><i data-lucide="map"></i></span><span class="lbl">War map</span></a>
+    </div>
+    <div class="sec">
+      <h6 class="lbl">RUN</h6>
+      <a href="#"><span class="ico"><i data-lucide="scroll-text"></i><span class="dot"></span></span><span class="lbl">Directives</span><span class="cnt lbl num">7</span></a>
+      <a href="#"><span class="ico"><i data-lucide="newspaper"></i><span class="dot"></span></span><span class="lbl">News</span><span class="cnt lbl num">2</span></a>
+      <a href="#"><span class="ico"><i data-lucide="calendar-clock"></i><span class="dot"></span></span><span class="lbl">Meetings</span><span class="cnt lbl num">1</span></a>
+      <a href="#"><span class="ico"><i data-lucide="messages-square"></i></span><span class="lbl">Messages</span></a>
+    </div>
+    <div class="sec">
+      <h6 class="lbl">WORLD</h6>
+      <a href="#"><span class="ico"><i data-lucide="contact-round"></i></span><span class="lbl">Characters</span></a>
+      <a href="#"><span class="ico"><i data-lucide="landmark"></i></span><span class="lbl">Cabinets and resources</span></a>
+      <a href="#"><span class="ico"><i data-lucide="git-branch"></i></span><span class="lbl">Arcs and timeline</span></a>
+    </div>
+    <div class="sec">
+      <h6 class="lbl">SET UP</h6>
+      <a href="#"><span class="ico"><i data-lucide="wand-sparkles"></i></span><span class="lbl">Crisis set-up</span></a>
+      <a href="#"><span class="ico"><i data-lucide="users-round"></i></span><span class="lbl">Staff and access</span></a>
+      <a href="#"><span class="ico"><i data-lucide="settings"></i></span><span class="lbl">Settings</span></a>
+    </div>
+  </nav>
+  <div class="rail-foot">
+    <a href="#"><span class="ico"><i data-lucide="circle-help"></i></span><span class="lbl">Crisis guide</span></a>
+  </div>
+</aside>
+
+<main>
+  <div class="head">
+    <div class="ident">
+      <span class="crest">__EMBLEM__</span>
+      <div style="min-width:0">
+        <p class="eyebrow">WMUN 2027 · JOINT CRISIS · COMMAND</p>
+        <h1>Cuban Missile <em>Crisis</em></h1>
+      </div>
+    </div>
+    <div class="strip" role="group" aria-label="Crisis status">
+      <div class="cell">
+        <span class="k"><i data-lucide="hourglass" width="13" height="13"></i>Crisis clock</span>
+        <span class="v num"><span id="clock">Tue 23 Oct 1962, 19:40</span><button class="btn ghost sm" id="clockBtn" aria-label="Pause the crisis clock"><i data-lucide="pause" width="13" height="13"></i></button></span>
+      </div>
+      <div class="cell">
+        <span class="k"><i data-lucide="repeat" width="13" height="13"></i>Round</span>
+        <span class="v num">3 of 8</span>
+      </div>
+      <div class="cell">
+        <span class="k"><span class="live" id="subDot"></span>Directives</span>
+        <span class="v"><span id="subState">Open</span><button class="btn ghost sm" id="subBtn">Pause</button></span>
+      </div>
+      <div class="cell">
+        <span class="k"><i data-lucide="users" width="13" height="13"></i>Online</span>
+        <span class="v num">22 of 24</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="grid">
+    <!-- Needs you -->
+    <section class="needs">
+      <div class="card warm">
+        <div class="card-head">
+          <div><h2>Waiting for a Reply</h2><p class="sub">Fairest first: longest wait, then who heard back least recently</p></div>
+        </div>
+        <div class="bigcount"><b>7</b><span>directives open</span><span style="margin-left:auto" class="mini">Oldest <b class="num" style="color:var(--danger)">14 min</b></span></div>
+        <div class="queue" id="queue"></div>
+        <button class="btn ghost sm" style="margin-top:10px;width:100%;justify-content:center">See all 7 in Directives</button>
+      </div>
+      <div class="card">
+        <h2>Needs Your Approval</h2>
+        <div style="margin-top:6px">
+          <div class="task">
+            <span class="ti"><i data-lucide="newspaper"></i></span>
+            <div class="tx"><b>Radio Moscow: "Soviet ships hold course"</b><span>Drafted by Sofía for the Presidium room · 2 min ago</span>
+              <div class="ta"><button class="btn sm" data-toast="Published to the Presidium room">Publish</button><button class="btn ghost sm">Edit</button></div></div>
+          </div>
+          <div class="task">
+            <span class="ti"><i data-lucide="calendar-clock"></i></span>
+            <div class="tx"><b>Meeting: Dobrynin and Robert Kennedy</b><span>Asked by Dobrynin · 15 min, at the next unmoderated caucus · "back-channel offer on Turkey"</span>
+              <div class="ta"><button class="btn sm" data-toast="Meeting approved, both delegates told">Approve</button><button class="btn danger sm" data-toast="Meeting declined">Decline</button></div></div>
+          </div>
+          <div class="task">
+            <span class="ti"><i data-lucide="gavel"></i></span>
+            <div class="tx"><b>ExComm passed Directive 3/2: Naval quarantine</b><span>12 for, 3 against · Apply it to the world</span>
+              <div class="ta"><button class="btn gold sm" id="applyQ">Show on the map</button><button class="btn ghost sm">Write the news</button></div></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Map -->
+    <section class="card mapcard">
+      <div class="card-head">
+        <div><h2><i data-lucide="map" width="17" height="17"></i>War Map</h2><p class="sub" id="viewSub">You see everything. Delegates see only what their side knows.</p></div>
+        <div class="seg" role="tablist" aria-label="See the map as">
+          <button class="on" data-view="all">Crisis team</button>
+          <button data-view="us">ExComm</button>
+          <button data-view="su">Presidium</button>
+        </div>
+      </div>
+      <div class="tools" style="margin-bottom:10px" role="toolbar" aria-label="Map tools">
+        <button class="tool on" data-tool="select"><i data-lucide="mouse-pointer-2" width="17" height="17"></i>Select</button>
+        <button class="tool" data-tool="borders"><i data-lucide="pentagon" width="17" height="17"></i>Borders</button>
+        <button class="tool" data-tool="units"><i data-lucide="ship" width="17" height="17"></i>Add unit</button>
+        <button class="tool on" data-tool="fog" data-toggle="1"><i data-lucide="cloud-fog" width="17" height="17"></i>Fog of war</button>
+        <button class="tool on" data-tool="lines" data-toggle="1"><i data-lucide="route" width="17" height="17"></i>Lines</button>
+        <button class="tool" data-tool="history"><i data-lucide="history" width="17" height="17"></i>Replay</button>
+      </div>
+      <div class="mapwrap" id="mapwrap">
+        <svg class="map" id="map" viewBox="180 100 720 450" preserveAspectRatio="xMidYMid slice" role="img" aria-label="Map of the Caribbean, October 1962"></svg>
+        <div class="borderbar" id="borderbar" hidden>
+          <span>Click a country to give it to</span>
+          <div class="seg" id="ownerSeg"><button class="on" data-owner="us">United States</button><button data-owner="su">Soviet bloc</button><button data-owner="none">Nobody</button></div>
+        </div>
+        <div class="unitinfo" id="unitinfo" hidden></div>
+        <div class="maphint">
+          <div class="legend"><span><i style="background:var(--us)"></i>United States</span><span><i style="background:var(--su)"></i>Soviet bloc</span><span><i style="border:1.5px dashed var(--ink-soft);background:transparent"></i>Suspected</span></div>
+          <div id="lastChange">Last change 19:32 · Lena moved 2 destroyer groups</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Side -->
+    <section class="side">
+      <div class="card warm">
+        <div class="card-head"><h2><i data-lucide="presentation" width="17" height="17"></i>Front Rooms</h2></div>
+        <div class="room">
+          <div class="rt"><b>ExComm</b><button class="btn ghost sm">Watch</button></div>
+          <div class="phase"><span class="live"></span>Moderated caucus · <b class="num" id="t1">4:12</b> left · Dean Rusk speaking</div>
+          <div class="facts"><span><b class="num">2</b>motions</span><span><b class="num">1</b>directive in vote</span><span><b class="num">14</b>present</span></div>
+        </div>
+        <div class="room">
+          <div class="rt"><b>Presidium</b><button class="btn ghost sm">Watch</button></div>
+          <div class="phase"><span class="live"></span>Unmoderated caucus · <b class="num" id="t2">8:40</b> left</div>
+          <div class="facts"><span><b class="num">0</b>motions</span><span><b class="num">2</b>directives drafting</span><span><b class="num">8</b>present</span></div>
+        </div>
+        <button class="btn red sm" style="margin-top:8px" data-toast="Crisis break sent to both rooms"><i data-lucide="siren" width="14" height="14"></i>Send a crisis break</button>
+      </div>
+      <div class="card">
+        <div class="card-head"><div><h2><i data-lucide="users-round" width="17" height="17"></i>Backroom</h2><p class="sub">Open directives per person and their average reply</p></div></div>
+        <div id="staff"></div>
+        <div class="tip" id="tip"><i data-lucide="lightbulb" width="16" height="16" style="flex:none;margin-top:1px"></i><div>Marco has 4 open and replies slowest. Move Khrushchev's 2 oldest to Lena?<br><button class="btn sm" id="rebalance">Move 2 to Lena</button></div></div>
+      </div>
+    </section>
+
+    <!-- Resources and news -->
+    <section class="res">
+      <div class="card cab">
+        <div class="card-head"><h2><i data-lucide="landmark" width="17" height="17"></i>Cabinet Resources</h2><button class="btn ghost sm">Edit</button></div>
+        <h3><i class="sw" style="background:var(--us)"></i>ExComm (United States)</h3>
+        <div class="resgrid">
+          <div class="resitem"><span>Ships on the line</span><b>183 <small class="up">+16</small></b></div>
+          <div class="resitem"><span>Aircraft ready</span><b>1,190</b></div>
+          <div class="resitem"><span>Public approval</span><b>61% <small class="down">-4</small></b></div>
+        </div>
+        <h3 style="margin-top:12px"><i class="sw" style="background:var(--su)"></i>Presidium (Soviet Union)</h3>
+        <div class="resgrid">
+          <div class="resitem"><span>Missiles in Cuba</span><b>42</b></div>
+          <div class="resitem"><span>Ships en route</span><b>18 <small class="down">-4</small></b></div>
+          <div class="resitem"><span>Party standing</span><b>74%</b></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-head"><h2><i data-lucide="radio-tower" width="17" height="17"></i>News and Meetings</h2><button class="btn ghost sm">Write news</button></div>
+        <div class="news">
+          <div class="newsitem"><span class="nt num">19:38</span><div><b>Kennedy addresses the nation</b><span>Both rooms · published by Peter</span></div></div>
+          <div class="newsitem"><span class="nt num">19:21</span><div><b>U-2 photos show missile sites near San Cristóbal</b><span>ExComm only · published by Lena</span></div></div>
+          <div class="newsitem"><span class="nt num">Now</span><div><b>Meeting: Gromyko and Rusk, UN lobby</b><span>Happening · 6 of 10 min used</span></div></div>
+          <div class="newsitem"><span class="nt num">19:55</span><div><b>Meeting: Castro and Mikoyan</b><span>Approved · next unmoderated caucus</span></div></div>
+        </div>
+      </div>
+    </section>
+  </div>
+</main>
+
+<div class="scrim" id="scrim"></div>
+<aside class="drawer" id="drawer" aria-label="Directive" aria-hidden="true">
+  <div class="dhead">
+    <div style="min-width:0">
+      <p class="eyebrow" id="dEyebrow">PERSONAL DIRECTIVE · NO. 41</p>
+      <h2 style="margin:3px 0 0;font-size:18px;font-weight:800" id="dTitle"></h2>
+      <p class="mini" id="dWho" style="margin:4px 0 0"></p>
+    </div>
+    <button class="x" id="dClose" aria-label="Close"><i data-lucide="x" width="17" height="17"></i></button>
+  </div>
+  <div class="dbody">
+    <div class="fields" id="dFields"></div>
+    <div class="dtext" id="dText"></div>
+    <div class="ctx">
+      <div class="field"><span>Last heard back</span><b id="dLast"></b></div>
+      <div class="field"><span>Length</span><b id="dLen"></b></div>
+      <div class="field"><span>Their backroomer</span><b id="dOwner"></b></div>
+    </div>
+    <div class="field wide" style="background:color-mix(in srgb, var(--gold) 18%, #FFF)"><span>Their goals (only staff see this)</span><b id="dGoal"></b></div>
+    <div>
+      <p class="eyebrow" style="margin-bottom:6px">OUTCOME</p>
+      <div class="outcomes" id="outcomes">
+        <button data-o="Approved">Approved</button><button data-o="Partly" class="on">Partly works</button><button data-o="Denied">Denied</button><button data-o="Clarify">Ask for more detail</button><button data-o="Later">Answer later</button>
+      </div>
+    </div>
+    <textarea id="dReply" aria-label="Reply to the delegate">The Kremlin approves two of the four ships. The Kimovsk and the Yuri Gagarin turn back at dawn; the Aleksandrovsk and its escort hold course. American destroyers will reach them in about six hours.</textarea>
+    <div class="mini">Also: <label><input type="checkbox" checked> move these ships on the map</label> · <label><input type="checkbox"> tell the ExComm room</label> · <label><input type="checkbox" checked> take 2 ships from Soviet resources</label></div>
+  </div>
+  <div class="dfoot">
+    <button class="btn ghost" data-toast="Sent to Lena's queue">Hand to another backroomer</button>
+    <button class="btn ghost" data-toast="Saved. Released with the round">Hold for the round</button>
+    <button class="btn" id="dSend">Send reply</button>
+  </div>
+</aside>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/lucide@0.453.0/dist/umd/lucide.min.js"></script>
+<script>
+const MAP = __MAP__;
+const NS = 'http://www.w3.org/2000/svg';
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+function el(tag, attrs = {}, parent) { const n = document.createElementNS(NS, tag); for (const k in attrs) n.setAttribute(k, attrs[k]); if (parent) parent.appendChild(n); return n; }
+function toast(t) { const n = $('#toast'); n.textContent = t; n.classList.add('show'); clearTimeout(toast.h); toast.h = setTimeout(() => n.classList.remove('show'), 2200); }
+
+/* directives (example data) */
+const DIRECTIVES = [
+  { id: 41, side: 'su', who: 'Nikita Khrushchev', cab: 'Presidium', title: 'Turn back four freighters before the quarantine line', wait: 14, type: 'Personal', receiver: 'Soviet Navy, Northern Fleet', themes: 'Military, Diplomatic', res: '4 freighters, 1 submarine escort', impact: 'ExComm, the quarantine', goal: 'Remove the missiles from Cuba without looking weak. Win the Jupiter missiles out of Turkey.', last: '41 min ago', len: '96 words', owner: 'Marco', text: 'To Admiral Fokin. Order the <b>Kimovsk</b>, <b>Yuri Gagarin</b>, <b>Aleksandrovsk</b> and <b>Poltava</b> to stop 50 miles short of the American line and wait for orders. The escort submarine stays submerged and does not engage.<ol><li>Signal by radio, not by cable.</li><li>If boarded, do not resist.</li></ol>' },
+  { id: 39, side: 'us', who: 'Robert McNamara', cab: 'ExComm', title: 'Move two destroyer groups to the eastern edge of the line', wait: 11, type: 'Personal', receiver: 'Admiral Anderson, Second Fleet', themes: 'Military', res: '2 destroyer groups', impact: 'Presidium ships en route', goal: 'Keep the president from being pushed into an air strike. Keep the Navy under civilian control.', last: '18 min ago', len: '74 words', owner: 'Lena', text: 'Move destroyer groups <b>Essex</b> and <b>Gearing</b> 120 miles east along the quarantine line. No shots across the bow without my direct order.' },
+  { id: 38, side: 'su', who: 'Anatoly Dobrynin', cab: 'Presidium', title: 'Leak to a Washington columnist that Moscow will talk', wait: 7, type: 'Personal', receiver: 'Walter Lippmann (contact)', themes: 'Press, Diplomatic', res: 'Embassy press office', impact: 'ExComm, public approval', goal: 'Open a private channel to Robert Kennedy.', last: '25 min ago', len: '61 words', owner: 'Sofía', text: 'Over lunch, let Lippmann understand that a trade involving the Turkish missiles would be heard in Moscow.' },
+  { id: 37, side: 'us', who: 'Curtis LeMay', cab: 'ExComm', title: 'Prepare a low-level reconnaissance flight over Sagua la Grande', wait: 3, type: 'Personal', receiver: 'Strategic Air Command', themes: 'Military, Intelligence', res: '6 RF-101 aircraft', impact: 'Reveals Soviet sites', goal: 'Get the air strike approved.', last: '9 min ago', len: '52 words', owner: 'Lena', text: 'Ready six RF-101s at Key West for a low-level pass over Sagua la Grande at first light.' },
+];
+function renderQueue() {
+  const q = $('#queue'); q.innerHTML = '';
+  for (const d of DIRECTIVES) {
+    const cls = d.wait >= 12 ? 'very' : d.wait >= 8 ? 'late' : '';
+    const b = document.createElement('button');
+    b.className = 'drow ' + cls;
+    b.innerHTML = `<span class="stripe"></span><span style="min-width:0"><span class="who"><span class="side-${d.side}">${d.cab}</span><span>${d.who}</span></span><span class="t">${d.title}</span></span>
+      <span class="meta"><span class="wait num">${d.wait} min</span><span class="flag"><i data-lucide="user-round" width="12" height="12"></i>${d.owner}</span></span>`;
+    b.addEventListener('click', () => openDirective(d));
+    q.appendChild(b);
+  }
+}
+function openDirective(d) {
+  $('#dEyebrow').textContent = `${d.type.toUpperCase()} DIRECTIVE · NO. ${d.id}`;
+  $('#dTitle').textContent = d.title;
+  $('#dWho').textContent = `${d.who} · ${d.cab} · waiting ${d.wait} min`;
+  $('#dFields').innerHTML = [['To', d.receiver], ['Themes', d.themes], ['Resources used', d.res], ['Affects', d.impact]].map(([k, v]) => `<div class="field"><span>${k}</span><b>${v}</b></div>`).join('');
+  $('#dText').innerHTML = d.text;
+  $('#dLast').textContent = d.last; $('#dLen').textContent = d.len; $('#dOwner').textContent = d.owner; $('#dGoal').textContent = d.goal;
+  $('#drawer').classList.add('open'); $('#scrim').classList.add('open'); $('#drawer').setAttribute('aria-hidden', 'false');
+  setTimeout(() => $('#dClose').focus(), 50);
+  openDirective.cur = d;
+}
+function closeDrawer() { $('#drawer').classList.remove('open'); $('#scrim').classList.remove('open'); $('#drawer').setAttribute('aria-hidden', 'true'); }
+$('#dClose').onclick = closeDrawer; $('#scrim').onclick = closeDrawer;
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeDrawer(); });
+$$('#outcomes button').forEach(b => b.onclick = () => { $$('#outcomes button').forEach(x => x.classList.remove('on')); b.classList.add('on'); });
+$('#dSend').onclick = () => {
+  const d = openDirective.cur; closeDrawer();
+  const i = DIRECTIVES.indexOf(d); if (i >= 0) DIRECTIVES.splice(i, 1);
+  renderQueue(); lucide.createIcons();
+  $('.needs .bigcount b').textContent = String(3 + DIRECTIVES.length);
+  toast(`Reply sent to ${d.who}`);
+};
+
+/* backroom staff */
+const STAFF = [
+  { n: 'Lena', i: 'LH', who: '8 ExComm delegates', open: 1, avg: '3.1 min', load: 20 },
+  { n: 'Marco', i: 'MR', who: '4 Presidium delegates', open: 4, avg: '9.4 min', load: 90, hot: true },
+  { n: 'Sofía', i: 'SG', who: '4 Presidium delegates', open: 2, avg: '5.0 min', load: 45 },
+];
+function renderStaff() {
+  $('#staff').innerHTML = STAFF.map(s => `<div class="staff"><span class="av">${s.i}</span><div class="nm">${s.n}<span>${s.who} · avg ${s.avg}</span><div class="bar"><i class="${s.hot ? 'hot' : ''}" style="width:${s.load}%"></i></div></div><div class="open"><b class="num">${s.open}</b>open</div></div>`).join('');
+}
+$('#rebalance').onclick = () => { STAFF[0].open += 2; STAFF[0].load = 45; STAFF[1].open -= 2; STAFF[1].load = 50; STAFF[1].hot = false; renderStaff(); $('#tip').hidden = true; toast("2 of Khrushchev's directives moved to Lena"); };
+
+/* status strip */
+let clockOn = true, sub = true, mins = 19 * 60 + 40;
+const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+function drawClock() { const day = 23 + Math.floor(mins / 1440), m = mins % 1440; const dow = days[(2 + (day - 23)) % 7]; $('#clock').textContent = `${dow} ${day} Oct 1962, ${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`; }
+setInterval(() => { if (clockOn) { mins += 1; drawClock(); } }, 6000);
+$('#clockBtn').onclick = () => { clockOn = !clockOn; $('#clockBtn').innerHTML = `<i data-lucide="${clockOn ? 'pause' : 'play'}" width="13" height="13"></i>`; $('#clockBtn').setAttribute('aria-label', clockOn ? 'Pause the crisis clock' : 'Start the crisis clock'); lucide.createIcons(); toast(clockOn ? 'Crisis clock running: 1 hour every 10 minutes' : 'Crisis clock paused'); };
+$('#subBtn').onclick = () => { sub = !sub; $('#subState').textContent = sub ? 'Open' : 'Paused'; $('#subBtn').textContent = sub ? 'Pause' : 'Open'; $('#subDot').classList.toggle('off', !sub); toast(sub ? 'Delegates can send directives again' : 'Directives paused for every delegate'); };
+let t1 = 252, t2 = 520; const mmss = s => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+setInterval(() => { t1 = Math.max(0, t1 - 1); t2 = Math.max(0, t2 - 1); $('#t1').textContent = mmss(t1); $('#t2').textContent = mmss(t2); }, 1000);
+$$('[data-toast]').forEach(b => b.addEventListener('click', () => toast(b.dataset.toast)));
+$('#btnFront').onclick = () => toast('Opens the ExComm chair console');
+
+/* map */
+const svg = $('#map');
+const owner = { 'United States of America': 'us', 'Cuba': 'su', 'Puerto Rico': 'us' };
+const LABELS = { 'United States of America': ['United States', 'big'], Cuba: ['Cuba', 'big'], Bahamas: ['Bahamas'], Jamaica: ['Jamaica'], Haiti: ['Haiti'], 'Dominican Rep.': ['Dominican Rep.'], Mexico: ['Mexico', 'big'], 'Puerto Rico': ['Puerto Rico'], Honduras: ['Honduras'], Nicaragua: ['Nicaragua'], Guatemala: ['Guatemala'], Belize: ['Belize'] };
+const P = MAP.points;
+const UNITS = [
+  { id: 'q1', side: 'us', kind: 'ship', name: 'Destroyer group Essex', at: [612, 285], n: 6, seen: { su: true } },
+  { id: 'q2', side: 'us', kind: 'ship', name: 'Destroyer group Gearing', at: [575, 196], n: 5, seen: { su: true } },
+  { id: 'q3', side: 'us', kind: 'ship', name: 'Carrier group Enterprise', at: [596, 402], n: 9, seen: { su: true } },
+  { id: 'g1', side: 'us', kind: 'base', name: 'Guantánamo Bay garrison', at: P.guantanamo, n: 2, seen: { su: true } },
+  { id: 'a1', side: 'us', kind: 'air', name: 'Strategic Air Command, Key West', at: [370, 262], n: 24, seen: {} },
+  { id: 'a2', side: 'us', kind: 'air', name: 'Tactical air, Miami', at: [404, 228], n: 18, seen: {} },
+  { id: 'm1', side: 'su', kind: 'missile', name: 'R-12 site, San Cristóbal', at: [329, 322], n: 8, seen: { us: 'suspected' } },
+  { id: 'm2', side: 'su', kind: 'missile', name: 'R-12 site, Sagua la Grande', at: [401, 319], n: 8, seen: {} },
+  { id: 'm3', side: 'su', kind: 'missile', name: 'R-14 site, Remedios', at: [425, 338], n: 4, seen: {} },
+  { id: 's1', side: 'su', kind: 'ship', name: 'Freighters Kimovsk and Poltava', at: P.soviet2, n: 4, seen: { us: true } },
+  { id: 's2', side: 'su', kind: 'ship', name: 'Freighters Aleksandrovsk group', at: P.soviet1, n: 6, seen: {} },
+  { id: 'b1', side: 'su', kind: 'sub', name: 'Submarine B-59', at: P.atlanticSub, n: 1, seen: {} },
+];
+const GLYPH = {
+  ship: 'M-6 1.5h12l-2 3.5h-8z M-1 1.5v-5h4l1.5 2.5h-5.5',
+  air: 'M0 -6l1.2 4.2 5 2.3v1.4l-5-1.2-.6 3.3 1.8 1.2v1h-4.8v-1l1.8-1.2-.6-3.3-5 1.2v-1.4l5-2.3z',
+  missile: 'M0 -7c1.6 1.6 2 4 2 6.5v4.5l1.8 1.5v1h-7.6v-1l1.8-1.5v-4.5c0-2.5.4-4.9 2-6.5z',
+  base: 'M-5 5v-6l5-4 5 4v6z M-1.5 5v-3h3v3',
+  sub: 'M-7 1.5c0-2 2-3 4-3h6c2 0 4 1 4 3s-2 2.5-4 2.5h-6c-2 0-4-.5-4-2.5z M0 -1.5v-3h2.5v3',
+};
+let view = 'all', tool = 'select', fogOn = true, linesOn = true, curOwner = 'us', quarantineShown = true;
+
+function drawMap() {
+  svg.innerHTML = '';
+  const defs = el('defs', {}, svg);
+  const pat = el('pattern', { id: 'hatch', width: 7, height: 7, patternUnits: 'userSpaceOnUse', patternTransform: 'rotate(45)' }, defs);
+  el('rect', { width: 7, height: 7, fill: '#E6E0D2' }, pat);
+  el('line', { x1: 0, y1: 0, x2: 0, y2: 7, stroke: '#D3CBB8', 'stroke-width': 2.4 }, pat);
+  el('rect', { x: 0, y: 0, width: 1000, height: 620, fill: 'var(--sea)' }, svg);
+  // graticule
+  const g0 = el('g', { opacity: 0.35 }, svg);
+  for (let x = 0; x <= 1000; x += 100) el('line', { x1: x, y1: 0, x2: x, y2: 620, stroke: '#B9C7B8', 'stroke-width': 0.6 }, g0);
+  for (let y = 0; y <= 620; y += 100) el('line', { x1: 0, y1: y, x2: 1000, y2: y, stroke: '#B9C7B8', 'stroke-width': 0.6 }, g0);
+  const land = el('g', { class: tool === 'borders' ? 'borders' : '' }, svg);
+  for (const c of MAP.countries) {
+    const o = owner[c.name];
+    const p = el('path', { d: c.d, class: 'country' + (o ? ' ' + o : '') }, land);
+    const t = document.createElementNS(NS, 'title'); t.textContent = c.name; p.appendChild(t);
+    p.addEventListener('click', () => {
+      if (tool !== 'borders') return;
+      if (curOwner === 'none') delete owner[c.name]; else owner[c.name] = curOwner;
+      $('#lastChange').textContent = `Just now · You gave ${c.name} to ${curOwner === 'us' ? 'the United States' : curOwner === 'su' ? 'the Soviet bloc' : 'nobody'}`;
+      drawMap();
+    });
+  }
+  for (const c of MAP.countries) {
+    const L = LABELS[c.name]; if (!L) continue;
+    let [x, y] = c.c; if (c.name === 'United States of America') { x = 250; y = 150; } if (c.name === "Mexico") { x = 228; y = 445; }
+    const tx = el('text', { x, y, class: 'clabel' + (L[1] ? ' big' : ''), 'text-anchor': 'middle' }, svg); tx.textContent = L[0];
+  }
+  if (linesOn && quarantineShown && (view !== 'su' || true)) {
+    el('path', { d: MAP.quarantine, fill: 'none', stroke: 'var(--us)', 'stroke-width': 2, 'stroke-dasharray': '7 6', opacity: 0.85 }, svg);
+    const lt = el("text", { x: 600, y: 150, fill: 'var(--us)', 'font-size': 12, 'font-weight': 800 }, svg); lt.textContent = 'Quarantine line, 500 nm';
+  }
+  // fog
+  if (fogOn && view !== 'all') {
+    const mask = el('mask', { id: 'fogmask' }, defs);
+    el('rect', { x: 0, y: 0, width: 1000, height: 620, fill: 'white' }, mask);
+    for (const u of UNITS) if (u.side === view) el('circle', { cx: u.at[0], cy: u.at[1], r: u.kind === 'air' ? 170 : 110, fill: 'black' }, mask);
+    for (const c of MAP.countries) if (owner[c.name] === view) el('path', { d: c.d, fill: 'black', stroke: 'black', 'stroke-width': 30 }, mask);
+    el('rect', { x: 0, y: 0, width: 1000, height: 620, fill: 'url(#hatch)', mask: 'url(#fogmask)', opacity: 0.82 }, svg);
+  }
+  // units
+  for (const u of UNITS) {
+    let vis = view === 'all' || u.side === view ? true : (fogOn ? u.seen[view] : true);
+    if (!vis) continue;
+    const suspected = vis === 'suspected';
+    const g = el('g', { class: 'unit' + (suspected ? ' suspected' : ''), transform: `translate(${u.at[0]},${u.at[1]})`, tabindex: 0, role: 'button', 'aria-label': suspected ? 'Suspected site' : u.name }, svg);
+    const col = u.side === 'us' ? 'var(--us)' : 'var(--su)';
+    el('circle', { r: 14, fill: suspected ? '#FFFFFF' : col, opacity: suspected ? 0.9 : 1 }, g);
+    el('circle', { class: 'ring', r: 14, fill: 'none', stroke: suspected ? 'var(--ink-soft)' : '#FFFFFF', 'stroke-width': suspected ? 1.6 : 2 }, g);
+    if (suspected) { const q = el('text', { 'text-anchor': 'middle', y: 4.5, fill: 'var(--ink-soft)', 'font-size': 13 }, g); q.textContent = '?'; }
+    else el('path', { d: GLYPH[u.kind], fill: '#FFFFFF', transform: 'scale(1.15)' }, g);
+    if (!suspected) {
+      const bx = el('g', { transform: 'translate(11,-14)' }, g);
+      el('rect', { x: 0, y: -1, width: String(u.n).length * 7 + 9, height: 15, rx: 7.5, fill: '#FFFFFF', stroke: col, 'stroke-width': 1.2 }, bx);
+      const nt = el('text', { x: (String(u.n).length * 7 + 9) / 2, y: 10.5, 'text-anchor': 'middle', fill: col }, bx); nt.textContent = u.n;
+    }
+    const show = () => showUnit(u, suspected);
+    g.addEventListener('click', show); g.addEventListener('keydown', e => { if (e.key === 'Enter') show(); });
+  }
+}
+function showUnit(u, suspected) {
+  const box = $('#unitinfo'); box.hidden = false;
+  if (suspected) { box.innerHTML = `<b>Suspected site</b><div class="row"><span>Seen by</span><span>U-2 flight, 14 Oct</span></div><div class="row"><span>Confidence</span><span>Medium</span></div><p class="mini" style="margin:8px 0 0">ExComm sees this as a guess. The crisis team decides when it becomes certain.</p>`; return; }
+  box.innerHTML = `<b>${u.name}</b><div class="row"><span>Side</span><span>${u.side === 'us' ? 'United States' : 'Soviet bloc'}</span></div><div class="row"><span>Strength</span><span class="num">${u.n}</span></div><div class="row"><span>Known to the other side</span><span>${u.seen[u.side === 'us' ? 'su' : 'us'] ? 'Yes' : 'No'}</span></div><div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap"><button class="btn sm" onclick="toast('Drag the unit to move it')">Move</button><button class="btn ghost sm" onclick="toast('Now visible to the other side')">Reveal</button><button class="btn ghost sm" onclick="document.getElementById('unitinfo').hidden=true">Close</button></div>`;
+}
+$$('.seg [data-view]').forEach(b => b.onclick = () => {
+  $$('.seg [data-view]').forEach(x => x.classList.remove('on')); b.classList.add('on'); view = b.dataset.view; $('#unitinfo').hidden = true;
+  $('#viewSub').textContent = view === 'all' ? 'You see everything. Delegates see only what their side knows.' : view === 'us' ? 'What ExComm delegates see: their own forces, and what they have spotted.' : 'What Presidium delegates see: their own forces, and what they have spotted.';
+  drawMap();
+});
+$$('.tool').forEach(b => b.onclick = () => {
+  const t = b.dataset.tool;
+  if (b.dataset.toggle) { b.classList.toggle('on'); if (t === 'fog') fogOn = b.classList.contains('on'); if (t === 'lines') linesOn = b.classList.contains('on'); drawMap(); return; }
+  if (t === 'units') { toast('Pick a type, then click the map'); return; }
+  if (t === 'history') { toast('Replays every map change since the start'); return; }
+  $$('.tool:not([data-toggle])').forEach(x => x.classList.remove('on')); b.classList.add('on'); tool = t;
+  $('#borderbar').hidden = tool !== 'borders'; drawMap();
+});
+$$('#ownerSeg button').forEach(b => b.onclick = () => { $$('#ownerSeg button').forEach(x => x.classList.remove('on')); b.classList.add('on'); curOwner = b.dataset.owner; });
+$('#applyQ').onclick = () => { quarantineShown = true; linesOn = true; $('[data-tool="lines"]').classList.add('on'); drawMap(); document.getElementById('mapwrap').scrollIntoView({ behavior: 'smooth', block: 'center' }); toast('Quarantine line drawn for both rooms'); };
+
+renderQueue(); renderStaff(); drawMap(); drawClock();
+lucide.createIcons();
+</script>
