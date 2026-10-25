@@ -30,6 +30,8 @@ const NOINDEX_ROUTES = [
   '/conferences/:slug/role/:path*',
   '/conferences/:slug/papers', '/conferences/:slug/papers/:path*',
   '/conferences/:slug/press',
+  // Gavelling Crisis: private workspaces (docs/crisis).
+  '/crisis', '/crisis/:path*',
 ];
 
 // ── Memory caps for local machines only (21 Oct 2026) ────────────────────────

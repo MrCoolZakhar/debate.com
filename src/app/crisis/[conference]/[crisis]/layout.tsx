@@ -2,7 +2,7 @@
 // Gavelling Crisis shell: resolves the viewer, then draws the dark red rail and the top bar
 // around every page of one crisis. Pages read the shared state with useCrisis().
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useParams, usePathname, useRouter } from 'next/navigation';
 import {
@@ -130,6 +130,14 @@ function Rail({ v, items }: { v: CrisisContextValue; items: NavItem[] }) {
 function TopBar({ v, items }: { v: CrisisContextValue; items: NavItem[] }) {
   const router = useRouter();
   const pathname = usePathname();
+  // No background at rest (house rule); a soft one once the page scrolls under the bar.
+  const [scrolled, setScrolled] = useState(false);
+  useEffect(() => {
+    const on = () => setScrolled(window.scrollY > 4);
+    on();
+    window.addEventListener('scroll', on, { passive: true });
+    return () => window.removeEventListener('scroll', on);
+  }, []);
   const codeUser = !v.memberId ? false : !!readCrisisToken(v.ref.conf, v.ref.crisis);
   const signOutCode = async () => {
     try { await codeLogout(v.ref); } catch { /* the token is cleared below anyway */ }
@@ -137,7 +145,7 @@ function TopBar({ v, items }: { v: CrisisContextValue; items: NavItem[] }) {
     router.replace('/crisis');
   };
   return (
-    <header className="sticky z-30 flex items-center" style={{ top: 'env(safe-area-inset-top, 0px)', height: 56, gap: 14, padding: '0 18px', fontFamily: CK.font }}>
+    <header className="sticky z-30 flex items-center" style={{ top: 'env(safe-area-inset-top, 0px)', height: 56, gap: 14, padding: '0 18px', fontFamily: CK.font, background: scrolled ? 'rgba(239,227,218,0.86)' : 'transparent', backdropFilter: scrolled ? 'blur(12px) saturate(1.2)' : 'none', boxShadow: scrolled ? '0 1px 0 rgba(110,30,30,0.10)' : 'none', transition: 'background 160ms ease' }}>
       <BrandLogo height={22} priority />
       <div className="hidden sm:flex items-center min-w-0" style={{ gap: 6, fontSize: 13, fontWeight: 600, color: CK.muted }}>
         <span>{v.conference.acronym}</span>

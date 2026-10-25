@@ -1,7 +1,13 @@
 'use client';
-// Placeholder: replaced by the page build. Keep the export name: the role switch imports it.
-import { Card } from '../../crisisKit';
+// Gavelling Crisis: the War Map page. The map fills the window under the top bar; on a phone it
+// takes a tall block and the page scrolls to the legend and the panels underneath.
+import WarMap from './WarMap';
 
 export default function MapPage() {
-  return <Card style={{ marginTop: 8 }}><h2 style={{ margin: 0, fontSize: 18, fontWeight: 800 }}>War Map</h2><p style={{ margin: '6px 0 0', fontSize: 14 }}>This page is being built.</p></Card>;
+  return (
+    <div className="crisis-map-page" style={{ marginTop: 4 }}>
+      <style>{'@media (min-width: 768px) { .crisis-map-page { height: calc(100dvh - 82px); min-height: 520px; } }'}</style>
+      <WarMap />
+    </div>
+  );
 }

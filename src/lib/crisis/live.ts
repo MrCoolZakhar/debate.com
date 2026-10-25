@@ -5,6 +5,9 @@
 // re-reads only the slices whose tables changed, through RLS, ~250 ms after the first ping.
 // Safety nets: a poll every 20 s while visible, a full re-read when the tab comes back or the
 // socket re-subscribes. Works the same for account users and personal-code users.
+//
+// One channel per crisis is shared by every hook on the page (realtime-js hands back the same
+// channel for the same topic), so it is reference-counted here and removed only by the last user.
 
 import { useEffect, useRef, useState } from 'react';
 import type { RealtimeChannel } from '@supabase/supabase-js';
@@ -19,6 +22,46 @@ export interface CrisisPing { t: CrisisTable; op: 'insert' | 'update' | 'delete'
 
 const COALESCE_MS = 250;
 const POLL_MS = 20_000;
+
+interface Listener { onPing: (p: CrisisPing) => void; onResubscribe: () => void; onStatus: (live: boolean) => void }
+interface Shared { channel: RealtimeChannel; listeners: Set<Listener>; live: boolean }
+const shared = new Map<string, Shared>();
+
+function join(crisisId: string, l: Listener): () => void {
+  let s = shared.get(crisisId);
+  if (!s) {
+    const listeners = new Set<Listener>();
+    const channel = anonClient
+      .channel(`crisis:${crisisId}`, { config: { broadcast: { self: false } } })
+      .on('broadcast', { event: 'change' }, (msg) => {
+        const ping = (msg as { payload?: CrisisPing }).payload;
+        if (!ping || !ping.t) return;
+        for (const x of listeners) x.onPing(ping);
+      });
+    const entry: Shared = { channel, listeners, live: false };
+    let wasSubscribed = false;
+    channel.subscribe((status) => {
+      const ok = status === 'SUBSCRIBED';
+      entry.live = ok;
+      for (const x of listeners) x.onStatus(ok);
+      if (ok && wasSubscribed) for (const x of listeners) x.onResubscribe();
+      if (ok) wasSubscribed = true;
+    });
+    s = entry;
+    shared.set(crisisId, s);
+  }
+  s.listeners.add(l);
+  l.onStatus(s.live);
+  return () => {
+    const cur = shared.get(crisisId);
+    if (!cur) return;
+    cur.listeners.delete(l);
+    if (cur.listeners.size === 0) {
+      shared.delete(crisisId);
+      void anonClient.removeChannel(cur.channel);
+    }
+  };
+}
 
 /**
  * Call `onChange(tables, pings)` when any of `tables` changed. `tables` = null listens to all.
@@ -47,22 +90,15 @@ export function useCrisisLive(
       pending = new Set(); pings = [];
       if (t.size) cb.current(t, p);
     };
-    const channel: RealtimeChannel = anonClient
-      .channel(`crisis:${crisisId}`, { config: { broadcast: { self: false } } })
-      .on('broadcast', { event: 'change' }, (msg) => {
-        const ping = (msg as { payload?: CrisisPing }).payload;
-        if (!ping || !ping.t) return;
+    const leave = join(crisisId, {
+      onPing: (ping) => {
         if (want && !want.has(ping.t)) return;
         pending.add(ping.t);
         pings.push(ping);
         if (timer === null) timer = window.setTimeout(flush, COALESCE_MS);
-      });
-    let wasSubscribed = false;
-    channel.subscribe((status) => {
-      const ok = status === 'SUBSCRIBED';
-      setLive(ok);
-      if (ok && wasSubscribed) cb.current(null, []);
-      if (ok) wasSubscribed = true;
+      },
+      onResubscribe: () => cb.current(null, []),
+      onStatus: (ok) => setLive(ok),
     });
     const poll = window.setInterval(() => { if (document.visibilityState === 'visible') cb.current(null, []); }, POLL_MS);
     const onVisible = () => { if (document.visibilityState === 'visible') cb.current(null, []); };
@@ -73,7 +109,7 @@ export function useCrisisLive(
       window.clearInterval(poll);
       document.removeEventListener('visibilitychange', onVisible);
       window.removeEventListener('online', onVisible);
-      void anonClient.removeChannel(channel);
+      leave();
       setLive(false);
     };
   }, [crisisId, tablesKey]);

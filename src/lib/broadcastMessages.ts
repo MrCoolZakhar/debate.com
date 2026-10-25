@@ -116,12 +116,16 @@ export function broadcastAuthor(
   t: (key: TranslationKey, vars?: Record<string, string | number>) => string,
 ): string {
   if (isPressBroadcast(info)) return t('bc_press_from', { name: info?.authorLabel || t('bc_press') });
+  // Gavelling Crisis news carries its in-world outlet ("CBS News"), typed by the crisis staff.
+  if (info?.source === 'crisis' && info.authorLabel) return info.authorLabel;
   return t('bc_secretariat');
 }
 
 /** The run key: consecutive broadcasts group only while they come from the same author. */
 export function broadcastAuthorKey(info: ChatBroadcastInfo | null | undefined): string {
-  return isPressBroadcast(info) ? `press:${info?.authorLabel ?? ''}` : 'secretariat';
+  if (isPressBroadcast(info)) return `press:${info?.authorLabel ?? ''}`;
+  if (info?.source === 'crisis') return `crisis:${info.authorLabel ?? ''}`;
+  return 'secretariat';
 }
 
 /** Unread Secretariat messages while chat is off (the chair's chat icon count). */

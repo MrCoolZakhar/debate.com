@@ -26,6 +26,7 @@ import { GoldWord } from '@/components/BrandHeading';
 import ProfileLink from '@/components/ProfileLink';
 import Portal from '@/components/Portal';
 import { ChairCodeChip, loadOpenDaisChairCodes } from './ChairCodeChip';
+import CrisisEnableButton from '@/app/crisis/components/manage/CrisisEnableButton';
 import { ChairTitleChips } from '@/components/conferences/ChairTitlePicker';
 import { chairTitleLabel, type ChairTitle } from '@/lib/chairTitles';
 import { friendlyError, UserFacingError } from '@/lib/friendlyError';
@@ -1577,6 +1578,7 @@ export default function CommitteesPage() {
                       </button>
                     )}
                     <ChairCodeChip layout="row" code={chairCodeFor(c)} copiedCode={copiedCode} onCopy={handleCopyCode} />
+                    {isCrisis && <CrisisEnableButton conferenceSlug={conference.slug} conferenceCommitteeId={c.id} committeeName={c.name} />}
 
                     {/* No send here: there is no organiser release any more
                         (owner, 23 Oct 2026). Chairs get their codes by email a
@@ -1885,6 +1887,7 @@ export default function CommitteesPage() {
                     </div>
                   </div>
 
+                  {isCrisis && <CrisisEnableButton layout="tile" conferenceSlug={conference.slug} conferenceCommitteeId={c.id} committeeName={c.name} />}
                   {/* Actions */}
                   <div className="px-3.5 pb-3.5 pt-3 flex gap-2">
                     <button
