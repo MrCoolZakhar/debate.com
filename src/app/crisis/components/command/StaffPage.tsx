@@ -5,12 +5,12 @@
 // whole cabinet at once.
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { Check, Copy, KeyRound, Pencil, Plus, UserRoundPlus, UsersRound, X } from 'lucide-react';
+import { Check, Copy, Gavel, Inbox, KeyRound, Landmark, Newspaper, Pencil, Plus, UserRoundPlus, UsersRound, X } from 'lucide-react';
 import GSelect, { type GSelectOption } from '@/components/GSelect';
 import { notifyErr, notifyOk } from '@/lib/appNotify';
 import { addMember, crisisError, issueCode, removeMember, saveCharacter, saveMember } from '@/lib/crisis/api';
 import { ROLE_LABEL, type Cabinet, type Character, type Member } from '@/lib/crisis/types';
-import { Btn, Card, CardTitle, CK, fieldStyle, waitLabel } from '../../crisisKit';
+import { Avatar, Btn, Card, CardTitle, CK, fieldStyle, waitLabel } from '../../crisisKit';
 import { useCrisis } from '../../[conference]/[crisis]/CrisisContext';
 import { ConfirmInline, copyText, DirectorOnlyCard, Labelled, PageHeading, responsibleMembers } from './setupKit';
 
@@ -25,6 +25,14 @@ const GROUPS: Array<{ title: string; roles: MemberRole[]; empty: string }> = [
   { title: 'Press', roles: ['press'], empty: 'No press yet.' },
   { title: 'Delegates', roles: ['delegate'], empty: 'No delegates yet. Bring them in from Characters, or add them here.' },
 ];
+
+const GROUP_ICON: Record<string, ReactNode> = {
+  Directors: <Landmark size={16} strokeWidth={1.5} />,
+  Backroomers: <Inbox size={16} strokeWidth={1.5} />,
+  Chairs: <Gavel size={16} strokeWidth={1.5} />,
+  Press: <Newspaper size={16} strokeWidth={1.5} />,
+  Delegates: <UsersRound size={16} strokeWidth={1.5} />,
+};
 
 const CSS = `
 .stf-head, .stf-row { display: grid; gap: 6px 14px; align-items: center; grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -57,6 +65,8 @@ function StaffBody() {
   useEffect(() => { const t = window.setInterval(() => setNow(Date.now()), 30_000); return () => window.clearInterval(t); }, []);
 
   const cabinetName = useMemo(() => new Map(core.cabinets.map((c) => [c.id, c.name])), [core.cabinets]);
+  const cabinetColor = useMemo(() => new Map(core.cabinets.map((c) => [c.id, c.color])), [core.cabinets]);
+  const charPicture = useMemo(() => new Map(core.characters.map((c) => [c.id, c.picture_url])), [core.characters]);
   const charName = useMemo(() => new Map(core.characters.map((c) => [c.id, c.name])), [core.characters]);
 
   return (
@@ -76,7 +86,7 @@ function StaffBody() {
           const delegates = g.roles[0] === 'delegate';
           return (
             <Card key={g.title}>
-              <CardTitle icon={<UsersRound size={16} strokeWidth={1.5} />} right={<b style={{ fontSize: 13, color: CK.inkSoft }}>{people.length}</b>}>{g.title}</CardTitle>
+              <CardTitle icon={GROUP_ICON[g.title] ?? <UsersRound size={16} strokeWidth={1.5} />} right={<b style={{ fontSize: 13, color: CK.inkSoft }}>{people.length}</b>}>{g.title}</CardTitle>
               {delegates && people.length > 0 && <AssignBackroomers cabinets={core.cabinets} characters={core.characters} members={core.members} />}
               {people.length === 0 ? (
                 <p style={{ margin: 0, fontSize: 13.5, color: CK.inkSoft }}>{g.empty}</p>
@@ -94,6 +104,8 @@ function StaffBody() {
                       isMe={m.id === memberId}
                       cabinetName={m.cabinet_id ? cabinetName.get(m.cabinet_id) ?? '' : ''}
                       characterName={m.character_id ? charName.get(m.character_id) ?? '' : ''}
+                      picture={m.character_id ? charPicture.get(m.character_id) ?? null : null}
+                      color={m.cabinet_id ? cabinetColor.get(m.cabinet_id) : undefined}
                       issued={issued[m.id]}
                       onIssued={(i) => setIssued((p) => ({ ...p, [m.id]: i }))}
                       onClearIssued={() => setIssued((p) => { const n = { ...p }; delete n[m.id]; return n; })}
@@ -241,8 +253,8 @@ function accessText(m: Member): ReactNode {
   return <span style={{ color: CK.red, fontWeight: 700 }}>No way in yet</span>;
 }
 
-function PersonRow({ m, delegates, now, isMe, cabinetName, characterName, issued, onIssued, onClearIssued }: {
-  m: Member; delegates: boolean; now: number; isMe: boolean; cabinetName: string; characterName: string;
+function PersonRow({ m, delegates, now, isMe, cabinetName, characterName, picture, color, issued, onIssued, onClearIssued }: {
+  m: Member; delegates: boolean; now: number; isMe: boolean; cabinetName: string; characterName: string; picture: string | null; color?: string;
   issued?: Issued; onIssued: (i: Issued) => void; onClearIssued: () => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -253,11 +265,14 @@ function PersonRow({ m, delegates, now, isMe, cabinetName, characterName, issued
   return (
     <div style={{ borderTop: `1px solid ${CK.hair}`, padding: '10px 0' }}>
       <div className={`stf-row${delegates ? ' stf-del' : ''}`}>
-        <div className="stf-cell stf-name" data-label="">
-          <b style={{ fontSize: 14.5, fontWeight: 800 }}>{m.display_name}</b>
-          {m.role === 'assistant_director' && <span style={{ color: CK.inkSoft, fontSize: 12.5 }}> · Assistant</span>}
-          {isMe && <span style={{ color: CK.inkSoft, fontSize: 12.5 }}> · You</span>}
-          {m.email && <span style={{ display: 'block', fontSize: 12.5, color: CK.inkSoft }}>{m.email}</span>}
+        <div className="stf-cell stf-name flex items-center" data-label="" style={{ gap: 12 }}>
+          <Avatar name={m.display_name} src={delegates ? picture : null} size={38} color={color ?? CK.forest2} style={{ margin: 3 }} />
+          <span style={{ minWidth: 0 }}>
+            <b style={{ fontSize: 14.5, fontWeight: 800 }}>{m.display_name}</b>
+            {m.role === 'assistant_director' && <span style={{ color: CK.inkSoft, fontSize: 12.5 }}> · Assistant</span>}
+            {isMe && <span style={{ color: CK.inkSoft, fontSize: 12.5 }}> · You</span>}
+            {m.email && <span style={{ display: 'block', fontSize: 12.5, color: CK.inkSoft }}>{m.email}</span>}
+          </span>
         </div>
         <div className="stf-cell" data-label="Cabinet">{cabinetName || <span style={{ color: CK.muted }}>None</span>}</div>
         {delegates && <div className="stf-cell" data-label="Character">{characterName || <span style={{ color: CK.muted }}>None</span>}</div>}

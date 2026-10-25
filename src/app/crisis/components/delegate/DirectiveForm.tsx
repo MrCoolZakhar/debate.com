@@ -11,7 +11,7 @@ import { Btn, Card, CardTitle, CK, FieldLabel, fieldStyle, Segmented } from '../
 import MultiSelect, { type MultiOption } from './MultiSelect';
 import { themeIcon } from './directiveUi';
 
-export type WorldCharacter = Pick<Character, 'id' | 'cabinet_id' | 'name' | 'status' | 'title'>;
+export type WorldCharacter = Pick<Character, 'id' | 'cabinet_id' | 'name' | 'status' | 'title'> & { picture_url?: string | null };
 
 type FormKind = 'personal' | 'joint' | 'committee';
 interface Draft {

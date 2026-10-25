@@ -28,11 +28,13 @@ Peter's answers to the 42 plan questions (25 Oct 2026), plus the follow-ups the 
 - A reply can change resources, the map and the news in the same press.
 
 ## Communication
-- Messages between delegates are free by default; backroomers can read them; backroom approval is a setting.
+- Delegates chat with the EXISTING live-room chat (src/components/ChatPanel.tsx), exactly as in a normal committee room (Peter, 25 Oct 2026: reuse what exists, do not rebuild). The separate crisis chat was removed; the crisis_messages table (SQL part 6) stays unused.
+- Crisis delegates have no working papers or draft resolutions (no Submit a document).
 - Meetings happen in person; the app holds the request and approval. The backroomer and the CD can both approve; the chair only sees them.
 - News reaches the live room as a pop-up, and everyone can see the history of all news.
 
 ## World
+- Each character can carry a character guide (a file the CD attaches); the delegate opens it from My Character.
 - Characters hold bio, picture, powers, secret goals, resources, units and map position.
 - Resources are typed counters (per character and per cabinet) with a reason on every change.
 - A dead or arrested character's delegate gets a spare character picked by the CD.

@@ -1,5 +1,34 @@
 // Gavelling Crisis: the backroom inbox rules in one place (lanes, filters, queue order, names).
-import type { Cabinet, Character, Directive, DirectiveKind, Member } from '@/lib/crisis/types';
+import { CircleCheck, CircleDashed, CircleHelp, CircleX, Clock, Landmark, Lock, Megaphone, Newspaper, Users, type LucideIcon } from 'lucide-react';
+import { getCrisisClient } from '@/lib/crisis/client';
+import type { CrisisRef } from '@/lib/crisis/api';
+import type { Cabinet, Character, Directive, DirectiveKind, DirectiveOutcome, Member } from '@/lib/crisis/types';
+
+/** A kind with its icon (owner, 25 Oct 2026: personal Lock, joint Users, cabinet Landmark). */
+export const KIND_ICON: Record<DirectiveKind, LucideIcon> = {
+  personal: Lock,
+  joint: Users,
+  committee: Landmark,
+  press_release: Newspaper,
+  communique: Megaphone,
+};
+
+/** An outcome with its icon and colour: approved green, partly gold, denied red, more detail blue, later grey. */
+export const OUTCOME_STYLE: Record<DirectiveOutcome, { Icon: LucideIcon; color: string }> = {
+  approved: { Icon: CircleCheck, color: '#3D7A52' },
+  partial: { Icon: CircleDashed, color: '#9A6E14' },
+  denied: { Icon: CircleX, color: '#A3412F' },
+  clarify: { Icon: CircleHelp, color: '#3E6A9A' },
+  later: { Icon: Clock, color: '#7A6E5E' },
+};
+
+/** The character ids that co-signed a joint directive (staff read every row). */
+export async function listDirectiveCoauthors(ref: CrisisRef, directiveId: string): Promise<string[]> {
+  const client = await getCrisisClient(ref.conf, ref.crisis);
+  const res = await client.from('crisis_directive_coauthors').select('character_id').eq('directive_id', directiveId);
+  if (res.error) throw res.error;
+  return ((res.data ?? []) as Array<{ character_id: string }>).map((r) => r.character_id);
+}
 
 export type Lane = 'mine' | 'unclaimed' | 'open' | 'waiting' | 'answered';
 export type QueueOrder = 'fair' | 'oldest' | 'newest';

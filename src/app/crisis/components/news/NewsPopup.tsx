@@ -5,7 +5,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { Newspaper, X } from 'lucide-react';
+import { Newspaper, Radio, X } from 'lucide-react';
 import type { News } from '@/lib/crisis/types';
 import { crisisBase, useCrisis } from '../../[conference]/[crisis]/CrisisContext';
 import { CK } from '../../crisisKit';
@@ -60,9 +60,13 @@ export default function NewsPopup() {
           <X size={15} strokeWidth={1.5} />
         </button>
         <div className="flex items-center gap-2" style={{ fontSize: 11.5, fontWeight: 800, letterSpacing: '0.1em', color: CK.gold, paddingRight: 32, overflowWrap: 'anywhere' }}>
-          <Newspaper size={14} strokeWidth={1.5} aria-hidden />
+          {card.source_label ? <Radio size={14} strokeWidth={1.5} aria-hidden /> : <Newspaper size={14} strokeWidth={1.5} aria-hidden />}
           {card.source_label || 'Crisis update'}
         </div>
+        {card.banner_url && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={card.banner_url} alt="" style={{ display: 'block', width: '100%', aspectRatio: '16 / 6', objectFit: 'cover', borderRadius: 12, marginTop: 8, boxShadow: '0 0 0 1px rgba(255,255,255,0.18)' }} />
+        )}
         <b style={{ display: 'block', margin: '5px 0 3px', fontSize: 16, lineHeight: 1.3, overflowWrap: 'anywhere' }}>{card.title}</b>
         <p style={{ margin: 0, fontSize: 13.5, lineHeight: 1.45, color: 'rgba(255,240,226,0.88)', whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
           {card.body}

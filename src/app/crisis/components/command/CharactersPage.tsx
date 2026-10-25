@@ -4,18 +4,18 @@
 // picture, status, responsible backroomer, secret goals and staff notes, and the spare-character swap.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { CircleQuestionMark, Lock, Plus, RefreshCw, Skull, Trash2, UserCheck, UserRoundPlus } from 'lucide-react';
+import { BookOpen, CircleQuestionMark, ExternalLink, FileText, ImagePlus, Lock, Plus, RefreshCw, Skull, Trash2, Upload, UserCheck, UserRound, UserRoundPlus, UsersRound } from 'lucide-react';
 import GSelect, { type GSelectOption } from '@/components/GSelect';
 import Portal from '@/components/Portal';
 import { notifyErr, notifyOk } from '@/lib/appNotify';
 import {
-  crisisError, deleteCharacter, loadSecrets, saveCabinet, saveCharacter, saveMember, saveSecret, syncRoster,
+  crisisError, deleteCharacter, loadSecrets, saveCabinet, saveCharacter, saveMember, saveSecret, syncRoster, uploadCrisisFile,
 } from '@/lib/crisis/api';
 import { useCrisisLive } from '@/lib/crisis/live';
 import type { Cabinet, Character, CharacterSecret, CharacterStatus, Member } from '@/lib/crisis/types';
-import { Btn, Card, CK, fieldStyle, Skeleton, cabinetTint } from '../../crisisKit';
+import { Avatar, Btn, Card, CK, fieldStyle, OverhangCard, Skeleton, cabinetTint } from '../../crisisKit';
 import { useCrisis } from '../../[conference]/[crisis]/CrisisContext';
-import { ConfirmInline, DirectorOnlyCard, Drawer, initialsOf, Labelled, PageHeading, responsibleMembers } from './setupKit';
+import { ConfirmInline, DirectorOnlyCard, Drawer, Labelled, PageHeading, responsibleMembers } from './setupKit';
 
 const SWATCHES = ['#8E2424', '#C26A2A', '#B6871F', '#3D7A52', '#2F7F86', '#3E6A9A', '#6B4E9A', '#5C5348'];
 
@@ -135,22 +135,6 @@ function SwatchPicker({ value, onPick }: { value: string; onPick: (hex: string) 
         </Portal>
       )}
     </>
-  );
-}
-
-function Disc({ c, color, size = 46 }: { c: Pick<Character, 'name' | 'picture_url' | 'status'>; color: string; size?: number }) {
-  const gone = c.status === 'dead' || c.status === 'arrested';
-  return (
-    <span
-      aria-hidden
-      className="flex-shrink-0 grid place-items-center"
-      style={{ width: size, height: size, borderRadius: '50%', background: cabinetTint(color, 0.2), color, fontWeight: 800, fontSize: size * 0.34, overflow: 'hidden', boxShadow: `0 0 0 2px ${cabinetTint(color, 0.5)}` }}
-    >
-      {c.picture_url
-        // eslint-disable-next-line @next/next/no-img-element
-        ? <img src={c.picture_url} alt="" width={size} height={size} style={{ width: size, height: size, objectFit: 'cover', filter: gone ? 'grayscale(1)' : undefined }} />
-        : initialsOf(c.name)}
-    </span>
   );
 }
 
@@ -276,10 +260,10 @@ function CabinetSection({ cab, characters, members, onOpen, onAdd }: {
   };
 
   return (
-    <Card style={{ padding: 0, overflow: 'hidden' }}>
+    <Card style={{ padding: 0 }}>
       <div
         className="flex items-center flex-wrap"
-        style={{ gap: '8px 12px', padding: '12px 16px', background: cabinetTint(color, 0.14), borderBottom: `3px solid ${color}` }}
+        style={{ gap: '8px 12px', padding: '12px 16px', background: cabinetTint(color, 0.14), borderBottom: `3px solid ${color}`, borderRadius: '22px 22px 0 0' }}
       >
         {cab ? (
           <>
@@ -297,7 +281,7 @@ function CabinetSection({ cab, characters, members, onOpen, onAdd }: {
         {characters.length === 0 ? (
           <p style={{ margin: 0, fontSize: 13.5, color: CK.inkSoft }}>No characters yet. Add one, or bring in the seats and delegates.</p>
         ) : (
-          <div style={{ display: 'grid', gap: 10, gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))' }}>
+          <div style={{ display: 'grid', gap: 10, gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', columnGap: 12 }}>
             {characters.map((c) => <CharacterCard key={c.id} c={c} color={color} members={members} onOpen={() => onOpen(c.id)} />)}
           </div>
         )}
@@ -311,36 +295,41 @@ function CharacterCard({ c, color, members, onOpen }: { c: Character; color: str
   const delegates = members.filter((m) => m.character_id === c.id);
   const gone = c.status === 'dead' || c.status === 'arrested';
   return (
-    <button
-      type="button"
+    <OverhangCard
+      name={c.name}
+      src={c.picture_url}
+      color={color}
+      size={60}
+      place="top"
       onClick={onOpen}
-      className="text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] active:scale-[0.99] transition-transform"
-      style={{
-        display: 'flex', flexDirection: 'column', gap: 8, padding: 12, borderRadius: 18, border: 0, cursor: 'pointer', fontFamily: CK.font,
-        background: gone ? CK.well : CK.card, boxShadow: CK.shadowSm, minWidth: 0, borderLeft: `4px solid ${color}`,
-      }}
+      style={{ background: gone ? CK.well : CK.card, boxShadow: `${CK.shadowSm}, inset 0 3px 0 ${color}`, padding: '40px 14px 14px', textAlign: 'center', filter: gone ? 'grayscale(0.6)' : undefined }}
     >
-      <span className="flex items-center gap-3" style={{ minWidth: 0 }}>
-        <Disc c={c} color={color} />
-        <span style={{ minWidth: 0 }}>
-          <b style={{ display: 'block', fontSize: 15, fontWeight: 800, color: CK.ink, overflowWrap: 'anywhere' }}>{c.name}</b>
-          {c.title && <span style={{ display: 'block', fontSize: 12.5, color: CK.inkSoft, overflowWrap: 'anywhere' }}>{c.title}</span>}
-        </span>
+      <span style={{ display: 'block', minWidth: 0 }}>
+        <b style={{ display: 'block', fontSize: 15.5, fontWeight: 800, color: CK.ink, overflowWrap: 'anywhere' }}>{c.name}</b>
+        {c.title && <span style={{ display: 'block', fontSize: 12.5, color: CK.inkSoft, overflowWrap: 'anywhere' }}>{c.title}</span>}
       </span>
-      <span className="flex items-center gap-1.5" style={{ fontSize: 12.5, fontWeight: 700, color: statusColor(c.status) }}>
-        <StatusIcon status={c.status} />
+      <span className="flex items-center justify-center gap-1.5" style={{ marginTop: 6, fontSize: 12.5, fontWeight: 700, color: statusColor(c.status), flexWrap: 'wrap' }}>
+        <StatusIcon status={c.status} size={15} />
         {STATUS_WORD[c.status]}
         {c.status_note && <span style={{ fontWeight: 500, color: CK.inkSoft, overflowWrap: 'anywhere' }}>{`· ${c.status_note}`}</span>}
       </span>
-      <span style={{ fontSize: 12.5, color: CK.inkSoft, lineHeight: 1.45 }}>
-        <span style={{ display: 'block', overflowWrap: 'anywhere' }}>
-          Backroomer: {owner ? <b style={{ color: CK.ink }}>{owner.display_name}</b> : <b style={{ color: CK.red }}>Not set</b>}
+      <span className="flex flex-col" style={{ marginTop: 8, gap: 3, fontSize: 12.5, color: CK.inkSoft, lineHeight: 1.45, textAlign: 'left' }}>
+        <span className="flex items-start gap-1.5" style={{ overflowWrap: 'anywhere' }}>
+          <UserRound size={14} strokeWidth={1.5} aria-hidden style={{ flex: 'none', marginTop: 2, color: CK.red }} />
+          <span>Backroomer: {owner ? <b style={{ color: CK.ink }}>{owner.display_name}</b> : <b style={{ color: CK.red }}>Not set</b>}</span>
         </span>
-        <span style={{ display: 'block', overflowWrap: 'anywhere' }}>
-          Delegate: {delegates.length ? <b style={{ color: CK.ink }}>{delegates.map((d) => d.display_name).join(', ')}</b> : <span style={{ color: CK.muted }}>None</span>}
+        <span className="flex items-start gap-1.5" style={{ overflowWrap: 'anywhere' }}>
+          <UsersRound size={14} strokeWidth={1.5} aria-hidden style={{ flex: 'none', marginTop: 2, color: CK.forest2 }} />
+          <span>Delegate: {delegates.length ? <b style={{ color: CK.ink }}>{delegates.map((d) => d.display_name).join(', ')}</b> : <span style={{ color: CK.muted }}>None</span>}</span>
         </span>
+        {c.guide_url && (
+          <span className="flex items-start gap-1.5" style={{ overflowWrap: 'anywhere' }}>
+            <BookOpen size={14} strokeWidth={1.5} aria-hidden style={{ flex: 'none', marginTop: 2, color: CK.goldDeep }} />
+            <span>Guide: <b style={{ color: CK.ink }}>{c.guide_name || 'Attached'}</b></span>
+          </span>
+        )}
       </span>
-    </button>
+    </OverhangCard>
   );
 }
 
@@ -361,6 +350,10 @@ function CharacterDrawer({ char, newCabinetId, secrets, onClose }: {
   const [goals, setGoals] = useState<string | null>(null);
   const [notes, setNotes] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [uploading, setUploading] = useState<'picture' | 'guide' | null>(null);
+  const [guide, setGuide] = useState<{ url: string | null; name: string | null }>({ url: char?.guide_url ?? null, name: char?.guide_name ?? null });
+  const picInput = useRef<HTMLInputElement>(null);
+  const guideInput = useRef<HTMLInputElement>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const set = <K extends keyof typeof d>(k: K, val: (typeof d)[K]) => setD((p) => ({ ...p, [k]: val }));
 
@@ -370,6 +363,18 @@ function CharacterDrawer({ char, newCabinetId, secrets, onClose }: {
     { value: '', label: 'Not set' },
     ...responsibleMembers(core.members).map((m) => ({ value: m.id, label: m.display_name, hint: m.role === 'backroomer' ? 'Backroomer' : 'Crisis Director' })),
   ];
+
+  const upload = async (kind: 'picture' | 'guide', file: File | undefined) => {
+    if (!file || uploading) return;
+    setUploading(kind);
+    try {
+      const r = await uploadCrisisFile(ref, file);
+      if (kind === 'picture') set('picture_url', r.url);
+      else setGuide({ url: r.url, name: r.name });
+      notifyOk(kind === 'picture' ? 'Picture added. Save to keep it' : 'Guide added. Save to keep it', 'crisis-characters');
+    } catch (e) { notifyErr(crisisError(e, 'Could not upload the file. Try again.'), 'crisis-characters'); }
+    finally { setUploading(null); }
+  };
 
   const save = async () => {
     if (busy) return;
@@ -384,6 +389,7 @@ function CharacterDrawer({ char, newCabinetId, secrets, onClose }: {
         name, title: nul(d.title), bio: nul(d.bio), powers: nul(d.powers), location: nul(d.location), picture_url: nul(pic),
         status: d.status, status_note: nul(d.status_note), cabinet_id: d.cabinet || null, owner_member_id: d.owner || null,
       };
+      if (guide.url !== (char?.guide_url ?? null)) { row.guide_url = guide.url; row.guide_name = guide.url ? guide.name : null; }
       if (isNew) row.sort = siblings.reduce((m, c) => Math.max(m, c.sort), 0) + 1;
       const id = await saveCharacter(ref, isNew ? row : { ...row, id: char.id });
       const patch: Partial<Pick<CharacterSecret, 'goals' | 'staff_notes'>> = {};
@@ -439,7 +445,7 @@ function CharacterDrawer({ char, newCabinetId, secrets, onClose }: {
         )}
 
         <div className="flex items-center gap-3">
-          <Disc c={{ name: d.name || '?', picture_url: d.picture_url.trim() || null, status: d.status }} color={cab?.color ?? CK.muted} size={56} />
+          <Avatar name={d.name || '?'} src={d.picture_url.trim() || null} color={cab?.color ?? CK.muted} size={64} style={{ margin: 4, filter: d.status === 'dead' || d.status === 'arrested' ? 'grayscale(1)' : undefined }} />
           <Labelled label="Name" style={{ flex: 1 }}>
             <input value={d.name} onChange={(e) => set('name', e.target.value)} style={fieldStyle} maxLength={120} aria-label="Name" />
           </Labelled>
@@ -458,9 +464,45 @@ function CharacterDrawer({ char, newCabinetId, secrets, onClose }: {
           <Labelled label="Location">
             <input value={d.location} onChange={(e) => set('location', e.target.value)} style={fieldStyle} aria-label="Location" />
           </Labelled>
-          <Labelled label="Picture link">
-            <input value={d.picture_url} onChange={(e) => set('picture_url', e.target.value)} placeholder="https://" style={fieldStyle} aria-label="Picture link" />
+          <Labelled label="Picture">
+            <div className="flex items-center gap-2 flex-wrap">
+              <input ref={picInput} type="file" accept="image/jpeg,image/png,image/webp,image/gif" className="hidden" aria-label="Upload a picture"
+                onChange={(e) => { void upload('picture', e.target.files?.[0]); e.target.value = ''; }} />
+              <Btn tone="ghost" size="sm" icon={<ImagePlus size={14} strokeWidth={1.5} />} onClick={() => picInput.current?.click()} disabled={uploading !== null}>
+                {uploading === 'picture' ? 'Uploading' : d.picture_url ? 'Change picture' : 'Upload a picture'}
+              </Btn>
+              {d.picture_url && <Btn tone="danger" size="sm" icon={<Trash2 size={13} strokeWidth={1.5} />} onClick={() => set('picture_url', '')}>Remove</Btn>}
+            </div>
           </Labelled>
+        </div>
+
+        <div style={{ background: cabinetTint(CK.gold, 0.22), borderRadius: 16, padding: 12 }} className="flex flex-col gap-2">
+          <p className="flex items-center gap-2" style={{ margin: 0, fontSize: 13.5, fontWeight: 800, color: CK.ink }}>
+            <BookOpen size={16} strokeWidth={1.5} aria-hidden style={{ color: CK.goldDeep }} />Character Guide
+          </p>
+          <input ref={guideInput} type="file" accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" className="hidden" aria-label="Upload the character guide"
+            onChange={(e) => { void upload('guide', e.target.files?.[0]); e.target.value = ''; }} />
+          {guide.url ? (
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="inline-flex items-center gap-1.5" style={{ fontSize: 13.5, fontWeight: 700, color: CK.ink, overflowWrap: 'anywhere', minWidth: 0 }}>
+                <FileText size={16} strokeWidth={1.5} aria-hidden style={{ color: CK.goldDeep, flex: 'none' }} />{guide.name || 'Character guide'}
+              </span>
+              <span className="flex-1" />
+              <a href={guide.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]"
+                style={{ borderRadius: 9, padding: '5px 10px', fontSize: 12, fontWeight: 700, background: CK.card, color: CK.forest, boxShadow: `inset 0 0 0 1px ${CK.hair}`, textDecoration: 'none' }}>
+                <ExternalLink size={13} strokeWidth={1.5} aria-hidden />Open
+              </a>
+              <Btn tone="ghost" size="sm" icon={<Upload size={13} strokeWidth={1.5} />} onClick={() => guideInput.current?.click()} disabled={uploading !== null}>Replace</Btn>
+              <Btn tone="danger" size="sm" icon={<Trash2 size={13} strokeWidth={1.5} />} onClick={() => setGuide({ url: null, name: null })}>Remove</Btn>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2 flex-wrap">
+              <Btn tone="ghost" size="sm" icon={<Upload size={14} strokeWidth={1.5} />} onClick={() => guideInput.current?.click()} disabled={uploading !== null}>
+                {uploading === 'guide' ? 'Uploading' : 'Upload a guide'}
+              </Btn>
+              <span style={{ fontSize: 12.5, color: CK.inkSoft }}>PDF or Word, up to 20 MB</span>
+            </div>
+          )}
         </div>
 
         <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))' }}>

@@ -3,21 +3,55 @@
 // (one pane with a back button on phones). Used at /directives and as the backroomer's home.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { MessageSquare, Search } from 'lucide-react';
+import { CircleCheck, Hourglass, Inbox, Landmark, ListChecks, Palette, Search, Tag, UserRound, UsersRound, type LucideIcon } from 'lucide-react';
 import GSelect from '@/components/GSelect';
 import { notifyErr } from '@/lib/appNotify';
 import { crisisError, listDirectives } from '@/lib/crisis/api';
 import { useCrisisLive } from '@/lib/crisis/live';
 import { KIND_LABEL, THEMES, type Directive, type DirectiveKind } from '@/lib/crisis/types';
 import { Btn, Card, CK, Segmented, Skeleton, fieldStyle, waitLabel, waitSeverity } from '../../crisisKit';
+import QueueRow from './QueueRow';
 import { useCrisis } from '../../[conference]/[crisis]/CrisisContext';
 import DirectiveDetail from './DirectiveDetail';
 import {
-  NO_FILTERS, authorName, buildNames, inLane, lastAnsweredByAuthor, matchesFilters, memberName, sortDirectives,
+  NO_FILTERS, buildNames, inLane, lastAnsweredByAuthor, matchesFilters, sortDirectives,
   type Filters, type Lane, type QueueOrder,
 } from './directiveKit';
 
-const STRIPE = { ok: CK.ok, late: CK.warn, very: CK.red } as const;
+const LANE_ICON: Record<Lane, LucideIcon> = { mine: UserRound, unclaimed: Inbox, open: ListChecks, waiting: Hourglass, answered: CircleCheck };
+
+/** The lanes as icon tabs: the word, then its count as a bold number. */
+function LaneTabs({ value, options, onChange }: { value: Lane; options: Array<{ value: Lane; label: string; count: number }>; onChange: (l: Lane) => void }) {
+  return (
+    <div role="tablist" aria-label="Directive lanes" className="inline-flex" style={{ background: CK.well, borderRadius: 13, padding: 3, gap: 2 }}>
+      {options.map((o) => {
+        const on = o.value === value;
+        const I = LANE_ICON[o.value];
+        return (
+          <button key={o.value} role="tab" aria-selected={on} onClick={() => onChange(o.value)}
+            className="inline-flex items-center focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]"
+            style={{ border: 0, gap: 6, padding: '6px 11px', borderRadius: 10, fontSize: 12.5, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap', fontFamily: CK.font,
+              background: on ? CK.card : 'transparent', color: on ? CK.forest : CK.inkSoft, boxShadow: on ? CK.shadowSm : 'none' }}>
+            <I size={15} strokeWidth={1.5} aria-hidden style={{ color: on ? CK.red : CK.muted }} />
+            {o.label}
+            <b style={{ fontVariantNumeric: 'tabular-nums', fontSize: 13.5, color: on ? CK.red : CK.ink }}>{o.count}</b>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+/** A filter dropdown with its icon in front. */
+function FilterBox({ icon, width, children }: { icon: LucideIcon; width: number; children: React.ReactNode }) {
+  const I = icon;
+  return (
+    <div className="flex items-center" style={{ width, gap: 6 }}>
+      <I size={16} strokeWidth={1.5} aria-hidden style={{ color: CK.red, flex: 'none' }} />
+      <div style={{ flex: 1, minWidth: 0 }}>{children}</div>
+    </div>
+  );
+}
 
 export default function BackroomInbox() {
   const { ref, staff, director, memberId, core, settings } = useCrisis();
@@ -111,12 +145,12 @@ export default function BackroomInbox() {
     return <Card style={{ marginTop: 8 }}><h2 style={{ margin: 0, fontSize: 17, fontWeight: 800 }}>Only crisis staff can see the backroom</h2></Card>;
   }
 
-  const laneOptions: Array<{ value: Lane; label: string }> = [
-    { value: 'mine', label: `Mine ${counts.mine}` },
-    { value: 'unclaimed', label: `Unclaimed ${counts.unclaimed}` },
-    { value: 'open', label: `All open ${counts.open}` },
-    { value: 'waiting', label: `Waiting for delegate ${counts.waiting}` },
-    { value: 'answered', label: `Answered ${counts.answered}` },
+  const laneOptions: Array<{ value: Lane; label: string; count: number }> = [
+    { value: 'mine', label: 'Mine', count: counts.mine },
+    { value: 'unclaimed', label: 'Unclaimed', count: counts.unclaimed },
+    { value: 'open', label: 'All open', count: counts.open },
+    { value: 'waiting', label: 'Waiting for delegate', count: counts.waiting },
+    { value: 'answered', label: 'Answered', count: counts.answered },
   ];
 
   const emptyText: Record<Lane, string> = {
@@ -129,17 +163,17 @@ export default function BackroomInbox() {
   return (
     <div className="flex flex-col" style={{ gap: 10, marginTop: 6, width: '100%' }}>
       <div className="flex items-center justify-between flex-wrap" style={{ gap: 10 }}>
-        <h1 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: CK.ink }}>Directives</h1>
+        <h1 className="flex items-center" style={{ margin: 0, gap: 8, fontSize: 22, fontWeight: 800, color: CK.ink }}><ListChecks size={22} strokeWidth={1.5} aria-hidden style={{ color: CK.red }} />Directives</h1>
         <div style={{ maxWidth: '100%', overflowX: 'auto' }}>
-          <Segmented ariaLabel="Directive lanes" value={lane} options={laneOptions} onChange={setLane} />
+          <LaneTabs value={lane} options={laneOptions} onChange={setLane} />
         </div>
       </div>
 
       <div className="flex items-center flex-wrap" style={{ gap: 8 }}>
-        <div style={{ width: 160 }}><GSelect size="sm" aria-label="Cabinet" value={filters.cabinet} options={cabinetOptions} onChange={(v) => setF({ cabinet: v })} /></div>
-        <div style={{ width: 170 }}><GSelect size="sm" aria-label="Backroomer" value={filters.backroomer} options={backroomerOptions} onChange={(v) => setF({ backroomer: v })} /></div>
-        <div style={{ width: 150 }}><GSelect size="sm" aria-label="Theme" value={filters.theme} options={themeOptions} onChange={(v) => setF({ theme: v })} /></div>
-        <div style={{ width: 170 }}><GSelect size="sm" aria-label="Kind" value={filters.kind} options={kindOptions} onChange={(v) => setF({ kind: v })} /></div>
+        <FilterBox icon={Landmark} width={185}><GSelect size="sm" aria-label="Cabinet" value={filters.cabinet} options={cabinetOptions} onChange={(v) => setF({ cabinet: v })} /></FilterBox>
+        <FilterBox icon={UsersRound} width={195}><GSelect size="sm" aria-label="Backroomer" value={filters.backroomer} options={backroomerOptions} onChange={(v) => setF({ backroomer: v })} /></FilterBox>
+        <FilterBox icon={Palette} width={175}><GSelect size="sm" aria-label="Theme" value={filters.theme} options={themeOptions} onChange={(v) => setF({ theme: v })} /></FilterBox>
+        <FilterBox icon={Tag} width={195}><GSelect size="sm" aria-label="Kind" value={filters.kind} options={kindOptions} onChange={(v) => setF({ kind: v })} /></FilterBox>
         <label className="relative" style={{ flex: '1 1 200px', maxWidth: 360 }}>
           <Search size={15} strokeWidth={1.5} aria-hidden style={{ position: 'absolute', left: 10, top: 9, color: CK.muted }} />
           <input value={filters.search} onChange={(e) => setF({ search: e.target.value })} aria-label="Search directives"
@@ -166,40 +200,16 @@ export default function BackroomInbox() {
           {directives !== null && queue.length === 0 && (
             <p style={{ margin: 0, padding: 16, fontSize: 14, color: CK.muted }}>{emptyText[lane]}</p>
           )}
-          <ul style={{ listStyle: 'none', margin: 0, padding: 0 }} className="flex flex-col">
+          <ul style={{ listStyle: 'none', margin: 0, padding: '0 0 6px' }} className="flex flex-col">
             {queue.map((d) => {
               const waiting = lane !== 'answered' && lane !== 'waiting';
               const sev = waiting ? waitSeverity(d.waiting_since, now) : null;
-              const cab = d.cabinet_id ? names.cabinets.get(d.cabinet_id) : undefined;
-              const isSel = d.id === selectedId;
-              const delegateNote = d.status === 'queued' && d.outcome === 'clarify';
               const when = lane === 'answered' ? `Answered ${waitLabel(d.answered_at, now)} ago`
                 : lane === 'waiting' ? `Asked ${waitLabel(d.answered_at, now)} ago` : waitLabel(d.waiting_since, now);
               return (
-                <li key={d.id} style={{ margin: '2px 0' }}>
-                  <button onClick={() => pick(d.id)} aria-current={isSel} className="w-full text-left flex focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]"
-                    style={{ border: 0, borderRadius: 12, padding: 0, cursor: 'pointer', overflow: 'hidden', fontFamily: CK.font, color: CK.ink,
-                      background: isSel ? CK.well : 'transparent', boxShadow: isSel ? `inset 0 0 0 1px ${CK.hair}` : 'none' }}>
-                    <span aria-hidden style={{ width: 4, flex: 'none', background: sev ? STRIPE[sev] : CK.hair }} />
-                    <span className="flex items-start justify-between" style={{ gap: 10, padding: '9px 10px', flex: 1, minWidth: 0 }}>
-                      <span style={{ minWidth: 0 }}>
-                        <span style={{ display: 'block', fontSize: 12, fontWeight: 700, overflowWrap: 'anywhere' }}>
-                          <span style={{ color: cab?.color ?? CK.inkSoft }}>{cab?.name ?? 'No cabinet'}</span>
-                          <span style={{ color: CK.inkSoft, fontWeight: 600 }}> · {authorName(d, names)}</span>
-                        </span>
-                        <span style={{ display: 'block', fontSize: 13.5, fontWeight: 700, marginTop: 2, overflowWrap: 'anywhere' }}>
-                          <span style={{ color: CK.muted, fontWeight: 600 }}>No. {d.no} </span>{d.title}
-                        </span>
-                      </span>
-                      <span className="flex flex-col items-end" style={{ gap: 3, flex: 'none', maxWidth: 110, textAlign: 'right' }}>
-                        <span style={{ fontSize: 12.5, fontWeight: 800, fontVariantNumeric: 'tabular-nums', color: sev === 'very' ? CK.red : CK.ink }}>{when}</span>
-                        <span className="inline-flex items-center" style={{ gap: 4, fontSize: 11.5, fontWeight: 600, color: CK.inkSoft, overflowWrap: 'anywhere' }}>
-                          {delegateNote && <MessageSquare size={12} strokeWidth={1.5} aria-label="The delegate sent a note" />}
-                          {memberName(d.assigned_member_id, names, 'Unclaimed')}
-                        </span>
-                      </span>
-                    </span>
-                  </button>
+                <li key={d.id} style={{ margin: '2px 4px 4px' }}>
+                  <QueueRow d={d} names={names} whenLabel={when} sev={sev} selected={d.id === selectedId}
+                    delegateNote={d.status === 'queued' && d.outcome === 'clarify'} onOpen={() => pick(d.id)} />
                 </li>
               );
             })}

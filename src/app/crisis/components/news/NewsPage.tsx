@@ -3,7 +3,7 @@
 // Staff write news, save drafts and publish. Everyone reads the published history (RLS decides what they see).
 
 import { useEffect, useRef, useState } from 'react';
-import { ImagePlus, Newspaper, Paperclip, Pencil, Send, Save, X } from 'lucide-react';
+import { FileText, ImagePlus, Newspaper, Paperclip, Pencil, Radio, Send, Save, X } from 'lucide-react';
 import GSelect from '@/components/GSelect';
 import { notifyErr, notifyOk } from '@/lib/appNotify';
 import { crisisError, publishNews, saveNews, uploadCrisisBanner, uploadCrisisFile } from '@/lib/crisis/api';
@@ -233,7 +233,7 @@ export default function NewsPage() {
 
   const draftList = drafts.length > 0 && (
     <Card>
-      <CardTitle sub="Not published yet. Only staff see these.">Drafts</CardTitle>
+      <CardTitle icon={<FileText size={17} strokeWidth={1.5} />} sub="Not published yet. Only staff see these.">Drafts</CardTitle>
       <div className="grid gap-2">
         {drafts.map((n) => (
           <div key={n.id} style={{ background: CK.well, borderRadius: 14, padding: '10px 12px' }}>
@@ -263,7 +263,7 @@ export default function NewsPage() {
 
   const history = (
     <section aria-label="Published news">
-      <h2 style={{ margin: '0 0 8px', fontSize: 15, fontWeight: 800, color: CK.ink }}>Published News</h2>
+      <h2 className="flex items-center gap-2" style={{ margin: '0 0 8px', fontSize: 15, fontWeight: 800, color: CK.ink }}><Radio size={17} strokeWidth={1.5} aria-hidden style={{ color: CK.red }} />Published News</h2>
       {error && items === null
         ? <Card><p style={{ margin: 0, fontSize: 14, color: CK.danger }}>{error}</p></Card>
         : <NewsHistory items={items} cabinets={cabinets} columns={!v.staff} />}
@@ -272,7 +272,7 @@ export default function NewsPage() {
 
   return (
     <div style={{ paddingTop: 8 }}>
-      <h1 style={{ margin: '0 0 12px', fontSize: 24, fontWeight: 800, color: CK.ink }}>News</h1>
+      <h1 className="flex items-center gap-2" style={{ margin: '0 0 12px', fontSize: 24, fontWeight: 800, color: CK.ink }}><Newspaper size={24} strokeWidth={1.5} aria-hidden style={{ color: CK.red }} />News</h1>
       {v.staff ? (
         <div className="grid gap-4 lg:grid-cols-2 items-start">
           <div className="grid gap-4">{composer}{draftList}</div>

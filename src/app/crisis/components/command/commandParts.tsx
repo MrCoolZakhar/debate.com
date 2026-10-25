@@ -3,12 +3,12 @@
 
 import { useMemo, useState, type CSSProperties, type ReactNode } from 'react';
 import Link from 'next/link';
-import { CalendarClock, Landmark, Newspaper, Pause, Play, RadioTower, Users } from 'lucide-react';
+import { CalendarClock, ClipboardCheck, Landmark, Newspaper, Pause, Play, RadioTower, Users } from 'lucide-react';
 import { DatePicker } from '@/components/DatePicker';
 import { notifyErr, notifyOk } from '@/lib/appNotify';
 import { crisisError, patchCrisis, publishNews, type CrisisRef } from '@/lib/crisis/api';
 import type { Cabinet, Crisis, Member, News, Resource, ResourceType } from '@/lib/crisis/types';
-import { Btn, Card, CardTitle, CK, Eyebrow, fieldStyle, scenarioLabel, Skeleton, waitLabel } from '../../crisisKit';
+import { Btn, Card, CardTitle, CK, cabinetTint, Eyebrow, fieldStyle, resourceIcon, scenarioLabel, Skeleton, waitLabel } from '../../crisisKit';
 import { formatAmount, groupResourcesByCabinet } from './commandData';
 
 // ─────────── Shared bits ───────────
@@ -212,7 +212,7 @@ export function ApprovalCard({ news, cabinets, members, cref, base, now, onChang
 
   return (
     <Card>
-      <CardTitle>Needs Your Approval</CardTitle>
+      <CardTitle icon={<ClipboardCheck size={17} strokeWidth={1.5} />}>Needs Your Approval</CardTitle>
       {news === null ? <div className="flex flex-col" style={{ gap: 8 }}><Skeleton h={44} /><Skeleton h={44} /></div>
         : drafts.length === 0 ? <EmptyLine>Nothing is waiting for you.</EmptyLine>
         : drafts.map((n, i) => {
@@ -220,7 +220,7 @@ export function ApprovalCard({ news, cabinets, members, cref, base, now, onChang
           const by = authorOf(n.author_member_id);
           return (
             <div key={n.id} className="flex" style={{ gap: 10, padding: '10px 0', borderTop: i === 0 ? 0 : `1px solid ${CK.hair}`, alignItems: 'flex-start' }}>
-              <span style={{ width: 30, height: 30, flex: 'none', display: 'grid', placeItems: 'center', color: CK.red }}><Newspaper size={19} strokeWidth={1.5} /></span>
+              <span aria-hidden style={{ width: 34, height: 34, flex: 'none', display: 'grid', placeItems: 'center', color: CK.red, background: cabinetTint(CK.red, 0.1), borderRadius: 12 }}><Newspaper size={19} strokeWidth={1.5} /></span>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <b style={{ display: 'block', fontSize: 13.5, color: CK.ink, overflowWrap: 'anywhere' }}>{n.title}</b>
                 <span style={{ display: 'block', fontSize: 12, color: CK.inkSoft, marginTop: 1, overflowWrap: 'anywhere' }}>
@@ -266,7 +266,9 @@ export function ResourcesCard({ cabinets, types, resources, changes, loaded }: {
                   const ch = changes.get(r.id);
                   return (
                     <div key={r.id} style={{ background: CK.well, borderRadius: 12, padding: '8px 10px', minWidth: 0 }}>
-                      <span style={{ display: 'block', fontSize: 11.5, fontWeight: 600, color: CK.inkSoft, overflowWrap: 'anywhere' }}>{t?.name ?? 'Resource'}</span>
+                      <span className="flex items-center" style={{ gap: 5, fontSize: 11.5, fontWeight: 600, color: CK.inkSoft, overflowWrap: 'anywhere' }}>
+                        <span aria-hidden style={{ color: cab.color, lineHeight: 0, flex: 'none' }}>{resourceIcon(t?.name ?? '', 15)}</span>{t?.name ?? 'Resource'}
+                      </span>
                       <b style={{ display: 'block', fontSize: 17, fontWeight: 800, fontVariantNumeric: 'tabular-nums', color: CK.ink, overflowWrap: 'anywhere' }}>
                         {formatAmount(r.amount)}{t?.unit ? <small style={{ fontSize: 11.5, fontWeight: 600, color: CK.inkSoft }}> {t.unit}</small> : null}
                         {ch ? <small style={{ marginLeft: 6, fontSize: 11.5, fontWeight: 700, color: ch > 0 ? CK.ok : CK.danger }}>{ch > 0 ? '+' : ''}{formatAmount(ch)}</small> : null}

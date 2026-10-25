@@ -2,17 +2,15 @@
 // Gavelling Crisis: "Waiting for a Reply" on Crisis Command, and the right-side drawer that opens a directive.
 
 import { useEffect, useMemo, useRef } from 'react';
-import { X } from 'lucide-react';
+import { Hourglass, X } from 'lucide-react';
 import Portal from '@/components/Portal';
 import type { Directive } from '@/lib/crisis/types';
 import { Card, CardTitle, CK, Skeleton, cabinetTint, waitLabel, waitSeverity } from '../../crisisKit';
 import { useCrisis } from '../../[conference]/[crisis]/CrisisContext';
 import DirectiveDetail from '../directives/DirectiveDetail';
-import { authorName, buildNames, isOpenStatus, lastAnsweredByAuthor, memberName, sortDirectives } from '../directives/directiveKit';
+import { buildNames, isOpenStatus, lastAnsweredByAuthor, sortDirectives } from '../directives/directiveKit';
+import QueueRow, { WAIT_COLOR } from '../directives/QueueRow';
 import { EmptyLine, LinkBtn } from './commandParts';
-
-const STRIPE = { ok: CK.ok, late: CK.warn, very: CK.danger } as const;
-const WAIT_COLOR = { ok: CK.ink, late: CK.goldDeep, very: CK.danger } as const;
 
 export function WaitingCard({ directives, base, now, onOpen }: {
   directives: Directive[] | null; base: string; now: number; onOpen: (d: Directive) => void;
@@ -33,7 +31,7 @@ export function WaitingCard({ directives, base, now, onOpen }: {
 
   return (
     <Card warm>
-      <CardTitle sub="Fairest first: longest wait, then who heard back least recently">Waiting for a Reply</CardTitle>
+      <CardTitle icon={<Hourglass size={17} strokeWidth={1.5} />} sub="Fairest first: longest wait, then who heard back least recently">Waiting for a Reply</CardTitle>
       {directives === null ? (
         <div className="flex flex-col" style={{ gap: 8 }}><Skeleton h={30} w="60%" /><Skeleton h={58} /><Skeleton h={58} /><Skeleton h={58} /></div>
       ) : (
@@ -53,36 +51,10 @@ export function WaitingCard({ directives, base, now, onOpen }: {
             </p>
           )}
           {top.length === 0 ? <EmptyLine>Every directive has an answer.</EmptyLine> : (
-            <div className="flex flex-col" style={{ gap: 6, marginTop: 10 }}>
-              {top.map((d) => {
-                const sev = waitSeverity(d.waiting_since, now);
-                const cab = d.cabinet_id ? names.cabinets.get(d.cabinet_id) : undefined;
-                return (
-                  <button
-                    key={d.id}
-                    type="button"
-                    onClick={() => onOpen(d)}
-                    className="focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] text-left"
-                    style={{
-                      display: 'grid', gridTemplateColumns: '4px minmax(0,1fr) auto', gap: 10, alignItems: 'stretch', padding: '9px 10px 9px 0',
-                      borderRadius: 14, background: CK.well, border: 0, width: '100%', color: 'inherit', cursor: 'pointer', fontFamily: CK.font,
-                    }}
-                  >
-                    <span aria-hidden style={{ borderRadius: '0 3px 3px 0', background: STRIPE[sev] }} />
-                    <span style={{ minWidth: 0 }}>
-                      <span style={{ display: 'flex', flexWrap: 'wrap', gap: '0 6px', alignItems: 'center', fontSize: 12, fontWeight: 700, color: CK.inkSoft }}>
-                        {cab && <span style={{ color: cab.color, overflowWrap: 'anywhere' }}>{cab.name}</span>}
-                        <span style={{ overflowWrap: 'anywhere' }}>{authorName(d, names)}</span>
-                      </span>
-                      <span style={{ display: 'block', marginTop: 2, fontSize: 13.5, fontWeight: 600, lineHeight: 1.3, color: CK.ink, overflowWrap: 'anywhere' }}>{d.title}</span>
-                    </span>
-                    <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', justifyContent: 'space-between', gap: 4, fontSize: 12, color: CK.inkSoft, maxWidth: 96 }}>
-                      <b style={{ fontSize: 13, fontWeight: 800, color: WAIT_COLOR[sev], whiteSpace: 'nowrap' }}>{waitLabel(d.waiting_since, now)}</b>
-                      <span style={{ textAlign: 'right', overflowWrap: 'anywhere' }}>{memberName(d.assigned_member_id, names, 'Unassigned')}</span>
-                    </span>
-                  </button>
-                );
-              })}
+            <div className="flex flex-col" style={{ gap: 4, marginTop: 6 }}>
+              {top.map((d) => (
+                <QueueRow key={d.id} d={d} names={names} sev={waitSeverity(d.waiting_since, now)} whenLabel={waitLabel(d.waiting_since, now)} onOpen={() => onOpen(d)} />
+              ))}
             </div>
           )}
           <div style={{ marginTop: 10 }}>

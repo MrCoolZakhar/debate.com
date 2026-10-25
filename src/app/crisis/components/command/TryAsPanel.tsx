@@ -5,12 +5,12 @@
 // top bar removes it. Used on /crisis and on the Command page.
 
 import { useEffect, useMemo, useState } from 'react';
-import { Eye, Gavel, GraduationCap, Presentation, UserRound, UsersRound } from 'lucide-react';
+import { Eye, Gavel, GraduationCap } from 'lucide-react';
 import { notifyErr } from '@/lib/appNotify';
 import { getCrisisClient } from '@/lib/crisis/client';
 import { crisisError, viewAs, type CrisisRef } from '@/lib/crisis/api';
 import { MEMBER_COLUMNS, ROLE_LABEL, type Cabinet, type Character, type Member } from '@/lib/crisis/types';
-import { CK, Card, CardTitle, Skeleton } from '../../crisisKit';
+import { Avatar, CK, Card, CardTitle, Skeleton } from '../../crisisKit';
 
 interface Loaded {
   members: Member[];
@@ -50,7 +50,7 @@ function Chip({ onClick, href, icon, children, tone = 'plain', busy }: {
   onClick?: () => void; href?: string; icon: React.ReactNode; children: React.ReactNode; tone?: 'plain' | 'red'; busy?: boolean;
 }) {
   const style: React.CSSProperties = {
-    display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 10px', borderRadius: 10, fontSize: 12.5, fontWeight: 700,
+    display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 12px 6px 8px', borderRadius: 999, fontSize: 12.5, fontWeight: 700,
     background: tone === 'red' ? 'rgba(142,36,36,0.08)' : CK.well, color: tone === 'red' ? CK.red2 : CK.ink, border: 0, cursor: 'pointer',
     textDecoration: 'none', fontFamily: CK.font, opacity: busy ? 0.6 : 1, overflowWrap: 'anywhere', textAlign: 'left',
   };
@@ -71,6 +71,8 @@ export default function TryAsPanel({ cref, compact }: { cref: CrisisRef; compact
   }, [cref.id]);
 
   const charName = useMemo(() => new Map((data?.characters ?? []).map((c) => [c.id, c.name])), [data]);
+  const charPicture = useMemo(() => new Map((data?.characters ?? []).map((c) => [c.id, c.picture_url])), [data]);
+  const face = (m: Member, color: string) => <Avatar name={m.display_name} src={m.character_id ? charPicture.get(m.character_id) ?? null : null} size={22} color={color} style={{ margin: 2 }} />;
 
   const enter = async (m: Member) => {
     if (busy) return;
@@ -103,7 +105,7 @@ export default function TryAsPanel({ cref, compact }: { cref: CrisisRef; compact
               <p style={{ margin: '0 0 6px', fontSize: 11.5, fontWeight: 800, color: CK.muted }}>Crisis team</p>
               <div className="flex flex-wrap" style={{ gap: 6 }}>
                 {staff.map((m) => (
-                  <Chip key={m.id} busy={busy === m.id} onClick={() => enter(m)} icon={<UsersRound size={14} strokeWidth={1.5} />}>
+                  <Chip key={m.id} busy={busy === m.id} onClick={() => enter(m)} icon={face(m, CK.forest2)}>
                     {ROLE_LABEL[m.role]} · {m.display_name}
                   </Chip>
                 ))}
@@ -119,12 +121,12 @@ export default function TryAsPanel({ cref, compact }: { cref: CrisisRef; compact
                 <p style={{ margin: '0 0 6px', fontSize: 11.5, fontWeight: 800, color: cab.color, overflowWrap: 'anywhere' }}>{cab.name}</p>
                 <div className="flex flex-wrap" style={{ gap: 6 }}>
                   {dels.map((m) => (
-                    <Chip key={m.id} busy={busy === m.id} onClick={() => enter(m)} icon={<UserRound size={14} strokeWidth={1.5} />}>
+                    <Chip key={m.id} busy={busy === m.id} onClick={() => enter(m)} icon={face(m, cab.color)}>
                       Delegate · {m.character_id ? charName.get(m.character_id) ?? m.display_name : m.display_name}
                     </Chip>
                   ))}
                   {cabChairs.map((m) => (
-                    <Chip key={m.id} busy={busy === m.id} onClick={() => enter(m)} icon={<Presentation size={14} strokeWidth={1.5} />}>
+                    <Chip key={m.id} busy={busy === m.id} onClick={() => enter(m)} icon={face(m, cab.color)}>
                       Chair · {m.display_name}
                     </Chip>
                   ))}

@@ -1,13 +1,13 @@
 'use client';
-// Gavelling Crisis: how a directive's state is said in words. Shared by the delegate and chair pages.
+// Gavelling Crisis: how a directive's state is said in words, colour and icon. Shared by the delegate
+// and chair pages (the chair page uses StatusLine and whenLabel).
 
 import {
-  CheckCircle2, Clock, HelpCircle, Hourglass, Undo2, UserRoundCog, XCircle, CircleDot,
-  Swords, Eye, Handshake, Coins, Newspaper, User, Landmark, VenetianMask, type LucideIcon,
+  CheckCircle2, CircleDot, CircleHelp, Clock, Contrast, Hourglass, Landmark, Lock, Megaphone, ScrollText, Undo2, UserRoundCog, Users, XCircle,
 } from 'lucide-react';
 import type { ReactNode } from 'react';
-import { OUTCOME_LABEL, type Directive, type DirectiveOutcome, type DirectiveStatus } from '@/lib/crisis/types';
-import { CK } from '../../crisisKit';
+import { OUTCOME_LABEL, type Directive, type DirectiveKind, type DirectiveOutcome, type DirectiveStatus } from '@/lib/crisis/types';
+import { CK, THEME_STYLE } from '../../crisisKit';
 
 export const STATUS_WORDS: Record<DirectiveStatus, string> = {
   queued: 'Waiting for the backroom',
@@ -17,36 +17,53 @@ export const STATUS_WORDS: Record<DirectiveStatus, string> = {
   withdrawn: 'Withdrawn',
 };
 
-export function statusIcon(s: DirectiveStatus): ReactNode {
-  const p = { size: 15, strokeWidth: 1.5, 'aria-hidden': true } as const;
+export function statusIcon(s: DirectiveStatus, size = 15): ReactNode {
+  const p = { size, strokeWidth: 1.5, 'aria-hidden': true } as const;
   if (s === 'queued') return <Hourglass {...p} />;
   if (s === 'claimed') return <UserRoundCog {...p} />;
-  if (s === 'clarify') return <HelpCircle {...p} />;
+  if (s === 'clarify') return <CircleHelp {...p} />;
   if (s === 'answered') return <CheckCircle2 {...p} />;
   return <Undo2 {...p} />;
 }
 
 export function statusColor(s: DirectiveStatus): string {
   if (s === 'answered') return CK.ok;
-  if (s === 'clarify') return CK.red;
+  if (s === 'clarify') return BLUE;
   if (s === 'withdrawn') return CK.muted;
   return CK.goldDeep;
 }
 
+const BLUE = '#2F5F8F';
+
+/** approved green, partly works gold, denied red, more detail needed blue, answer later grey. */
 export function outcomeColor(o: DirectiveOutcome): string {
   if (o === 'approved') return CK.ok;
   if (o === 'partial') return CK.goldDeep;
   if (o === 'denied') return CK.danger;
-  return CK.red;
+  if (o === 'clarify') return BLUE;
+  return CK.muted;
 }
 
-export function outcomeIcon(o: DirectiveOutcome): ReactNode {
-  const p = { size: 15, strokeWidth: 1.5, 'aria-hidden': true } as const;
+export function outcomeIcon(o: DirectiveOutcome, size = 15): ReactNode {
+  const p = { size, strokeWidth: 1.5, 'aria-hidden': true } as const;
   if (o === 'approved') return <CheckCircle2 {...p} />;
   if (o === 'denied') return <XCircle {...p} />;
   if (o === 'later') return <Clock {...p} />;
-  if (o === 'clarify') return <HelpCircle {...p} />;
-  return <CircleDot {...p} />;
+  if (o === 'clarify') return <CircleHelp {...p} />;
+  return <Contrast {...p} />;
+}
+
+export const KIND_WORD: Record<DirectiveKind, string> = {
+  personal: 'Personal', joint: 'Joint', committee: 'Cabinet', press_release: 'Press release', communique: 'Communiqué',
+};
+
+export function kindIcon(k: DirectiveKind, size = 15): ReactNode {
+  const p = { size, strokeWidth: 1.5, 'aria-hidden': true } as const;
+  if (k === 'personal') return <Lock {...p} />;
+  if (k === 'joint') return <Users {...p} />;
+  if (k === 'committee') return <Landmark {...p} />;
+  if (k === 'press_release') return <Megaphone {...p} />;
+  return <ScrollText {...p} />;
 }
 
 /** "Approved" etc., or nothing while there is no outcome. */
@@ -74,12 +91,9 @@ export function whenLabel(iso: string | null | undefined): string {
   try { return new Date(iso).toLocaleString(undefined, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }); } catch { return ''; }
 }
 
-const THEME_ICONS: Record<string, LucideIcon> = {
-  Military: Swords, Intelligence: Eye, Diplomatic: Handshake, Economic: Coins, Press: Newspaper, Personal: User, Political: Landmark, Covert: VenetianMask,
-};
-
-/** The line icon for a theme (fine line, bare ink). */
+/** The line icon for a theme, in the theme's own colour. */
 export function themeIcon(theme: string, size = 16): ReactNode {
-  const I = THEME_ICONS[theme] ?? CircleDot;
-  return <I size={size} strokeWidth={1.5} aria-hidden />;
+  const t = THEME_STYLE[theme];
+  const I = t?.Icon ?? CircleDot;
+  return <span style={{ color: t?.color ?? CK.muted, lineHeight: 0 }}><I size={size} strokeWidth={1.5} aria-hidden /></span>;
 }
