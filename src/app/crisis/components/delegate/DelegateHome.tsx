@@ -1,28 +1,26 @@
 'use client';
-// Gavelling Crisis: the delegate's home. Header (in-world date, directives open or paused), my character,
-// my secret goals, my cabinet's resources, the directive form and my directives. Phone first, three columns at 1440.
+// Gavelling Crisis: the delegate's home. Three columns at 1440: the profile with the actions, facts and
+// resources on the left, "Send a Directive" in the middle, "My Directives" on the right. On a phone one
+// column: profile, actions, send, my directives. Character, news and chat open as dialogs.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { CalendarClock, Lock, MapPin, PauseCircle, PlayCircle, Boxes, UserRound } from 'lucide-react';
+import { CalendarClock, MessagesSquare, Newspaper, PauseCircle, PlayCircle } from 'lucide-react';
 import {
   crisisError, listDirectives, loadResources, loadSecrets, loadWorld, type CrisisRef,
 } from '@/lib/crisis/api';
 import { useCrisisLive } from '@/lib/crisis/live';
-import type { CharacterSecret, CharacterStatus, Directive, DirectiveNote, Resource, ResourceType } from '@/lib/crisis/types';
+import type { CharacterSecret, Directive, DirectiveNote, Resource, ResourceType } from '@/lib/crisis/types';
 import { useCrisis } from '../../[conference]/[crisis]/CrisisContext';
-import { BigCount, Card, CardTitle, CK, scenarioLabel, Skeleton } from '../../crisisKit';
+import { Btn, Card, CK, scenarioLabel, Skeleton } from '../../crisisKit';
+import CrisisChatDialog from '../chat/CrisisChatDialog';
+import { useChatUnread } from '../chat/useChatUnread';
 import DirectiveForm, { type WorldCharacter } from './DirectiveForm';
 import MyDirectives from './MyDirectives';
+import RoomActions from './RoomActions';
+import CharacterDialog from './CharacterDialog';
+import NewsDialog from './NewsDialog';
+import { CharacterPicture } from './characterBits';
 import { listAllNotes, listCoauthors } from './delegateData';
-
-const STATUS_WORD: Record<CharacterStatus, string> = {
-  active: 'Active', spare: 'Not in play', dead: 'Dead', arrested: 'Arrested', missing: 'Missing',
-};
-
-function initials(name: string): string {
-  const parts = name.trim().split(/\s+/).filter(Boolean);
-  return ((parts[0]?.[0] ?? '') + (parts.length > 1 ? parts[parts.length - 1][0] : '')).toUpperCase();
-}
 
 function Hint({ children }: { children: React.ReactNode }) {
   return <p style={{ margin: 0, fontSize: 13.5, color: CK.inkSoft }}>{children}</p>;
@@ -32,6 +30,7 @@ export default function DelegateHome() {
   const v = useCrisis();
   const { ref, characterId, cabinetId, memberId, core, settings } = v;
   const crisis = core.crisis;
+  const unreadChat = useChatUnread();
 
   const me = useMemo(() => core.characters.find((c) => c.id === characterId) ?? null, [core.characters, characterId]);
   const cabinetNames = useMemo(() => Object.fromEntries(core.cabinets.map((c) => [c.id, c.name])), [core.cabinets]);
@@ -43,6 +42,7 @@ export default function DelegateHome() {
   const [secrets, setSecrets] = useState<CharacterSecret[] | null>(null);
   const [world, setWorld] = useState<WorldCharacter[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [dialog, setDialog] = useState<'character' | 'news' | 'chat' | null>(null);
   const seq = useRef<Record<string, number>>({});
 
   // Each slice keeps only the newest answer, and a failed re-read keeps what is on screen.
@@ -87,106 +87,95 @@ export default function DelegateHome() {
     return world.find((c) => c.id === id)?.name ?? core.characters.find((c) => c.id === id)?.name ?? null;
   }, [world, core.characters]);
 
+  // Everyone a joint directive can be signed with: my cabinet in full, the others as the crisis shows them.
+  const everyone = useMemo<WorldCharacter[]>(() => {
+    const byId = new Map<string, WorldCharacter>();
+    for (const c of world) byId.set(c.id, c);
+    for (const c of core.characters) byId.set(c.id, c);
+    return [...byId.values()];
+  }, [world, core.characters]);
+
   const goals = secrets?.find((s) => s.character_id === characterId)?.goals?.trim() || '';
   const typeById = useMemo(() => new Map((res?.types ?? []).map((t) => [t.id, t])), [res]);
   const myResources = (res?.resources ?? []).filter((r) => (cabinetId && r.cabinet_id === cabinetId) || (characterId && r.character_id === characterId));
 
   const open = crisis.directives_open;
 
+  const bigBtn = { width: '100%', justifyContent: 'flex-start', padding: '14px 16px', fontSize: 15, borderRadius: 14 } as const;
+
   return (
     <div style={{ paddingTop: 8 }}>
-      <header style={{ marginBottom: 14 }}>
-        <h1 style={{ margin: 0, fontSize: 24, fontWeight: 800, color: CK.ink, overflowWrap: 'anywhere' }}>{crisis.name}</h1>
-        <div className="flex flex-wrap items-center gap-x-5 gap-y-1" style={{ marginTop: 6 }}>
-          <span className="inline-flex items-center gap-1.5" style={{ fontSize: 14, fontWeight: 700, color: CK.inkSoft }}>
-            <CalendarClock size={16} strokeWidth={1.5} aria-hidden />
-            {scenarioLabel(crisis.scenario_at)}
-          </span>
-          <span className="inline-flex items-center gap-1.5" style={{ fontSize: 14, fontWeight: 800, color: open ? CK.ok : CK.red }}>
-            {open ? <PlayCircle size={16} strokeWidth={1.5} aria-hidden /> : <PauseCircle size={16} strokeWidth={1.5} aria-hidden />}
-            {open ? 'Directives are open' : 'Directives are paused'}
-          </span>
-        </div>
-        {!open && crisis.directives_paused_note && (
-          <p style={{ margin: '6px 0 0', fontSize: 14, color: CK.red2, fontWeight: 600, overflowWrap: 'anywhere' }}>{crisis.directives_paused_note}</p>
-        )}
-        {loadError && <p role="status" style={{ margin: '6px 0 0', fontSize: 13, color: CK.danger }}>{loadError}</p>}
-      </header>
+      <h1 style={{ margin: '0 0 14px', fontSize: 24, fontWeight: 800, color: CK.ink, overflowWrap: 'anywhere' }}>{crisis.name}</h1>
+      {loadError && <p role="status" style={{ margin: '-6px 0 12px', fontSize: 13, color: CK.danger }}>{loadError}</p>}
 
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,340px)_minmax(0,1fr)] xl:grid-cols-[minmax(0,340px)_minmax(0,1fr)_minmax(0,1fr)] items-start">
+      <div className="grid gap-5 lg:grid-cols-[minmax(0,320px)_minmax(0,1fr)] xl:grid-cols-[minmax(0,320px)_minmax(0,1fr)_minmax(0,1fr)] items-start">
         <div className="grid gap-4 lg:col-start-1 lg:row-start-1 lg:row-span-2">
-          <Card>
-            <CardTitle icon={<UserRound size={18} strokeWidth={1.5} />}>My Character</CardTitle>
+          <section aria-label="My profile">
             {me ? (
-              <>
-                <div className="flex items-center gap-3">
-                  <span className="flex-shrink-0 grid place-items-center" style={{ width: 64, height: 64, borderRadius: '50%', background: CK.redGrad, color: '#FFF4E6', fontWeight: 800, fontSize: 22, overflow: 'hidden', boxShadow: `0 0 0 2px ${CK.gold}` }}>
-                    {me.picture_url
-                      // eslint-disable-next-line @next/next/no-img-element
-                      ? <img src={me.picture_url} alt="" width={64} height={64} style={{ width: 64, height: 64, objectFit: 'cover' }} />
-                      : initials(me.name)}
-                  </span>
-                  <div className="min-w-0">
-                    <b style={{ display: 'block', fontSize: 18, lineHeight: 1.2, color: CK.ink, overflowWrap: 'anywhere' }}>{me.name}</b>
-                    {me.title && <span style={{ display: 'block', fontSize: 13.5, color: CK.inkSoft, overflowWrap: 'anywhere' }}>{me.title}</span>}
-                  </div>
-                </div>
-                <dl className="grid gap-2" style={{ margin: '12px 0 0', fontSize: 13.5 }}>
-                  <div>
-                    <dt style={{ fontSize: 12, fontWeight: 700, color: CK.muted }}>Status</dt>
-                    <dd style={{ margin: 0, fontWeight: 700, color: me.status === 'active' ? CK.ok : CK.danger }}>
-                      {STATUS_WORD[me.status]}{me.status_note ? `. ${me.status_note}` : ''}
-                    </dd>
-                  </div>
-                  {me.location && (
-                    <div>
-                      <dt style={{ fontSize: 12, fontWeight: 700, color: CK.muted }}>Location</dt>
-                      <dd className="flex items-center gap-1.5" style={{ margin: 0, color: CK.ink, overflowWrap: 'anywhere' }}>
-                        <MapPin size={14} strokeWidth={1.5} aria-hidden />{me.location}
-                      </dd>
-                    </div>
-                  )}
-                  {me.powers && (
-                    <div>
-                      <dt style={{ fontSize: 12, fontWeight: 700, color: CK.muted }}>Powers</dt>
-                      <dd style={{ margin: 0, color: CK.ink, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{me.powers}</dd>
-                    </div>
-                  )}
-                </dl>
-              </>
+              <button
+                type="button"
+                onClick={() => setDialog('character')}
+                aria-label={`Open my character, ${me.name}`}
+                className="block w-full focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]"
+                style={{ border: 0, background: CK.redGrad, borderRadius: 26, boxShadow: CK.redShadow, padding: '28px 18px 24px', cursor: 'pointer', textAlign: 'center', fontFamily: CK.font }}
+              >
+                <span className="flex justify-center">
+                  <CharacterPicture name={me.name} url={me.picture_url} size={168} />
+                </span>
+                <b style={{ display: 'block', marginTop: 16, fontSize: 22, lineHeight: 1.2, fontWeight: 800, color: '#FFF4E6', overflowWrap: 'anywhere' }}>{me.name}</b>
+                {me.title && <span style={{ display: 'block', marginTop: 4, fontSize: 14.5, fontWeight: 600, color: 'rgba(255,232,214,0.78)', overflowWrap: 'anywhere' }}>{me.title}</span>}
+              </button>
             ) : (
-              <Hint>You have no character yet. Ask your Crisis Director to give you one.</Hint>
+              <Card><Hint>You have no character yet. Ask your Crisis Director to give you one.</Hint></Card>
             )}
+          </section>
+
+          <section aria-label="Actions" className="grid gap-2.5">
+            <RoomActions />
+            <Btn tone="ghost" icon={<Newspaper size={18} strokeWidth={1.5} />} onClick={() => setDialog('news')} style={bigBtn}>News</Btn>
+            <Btn tone="green" icon={<MessagesSquare size={18} strokeWidth={1.5} />} onClick={() => setDialog('chat')} style={bigBtn}>
+              Chat with delegates
+              {unreadChat > 0 && <span aria-label={`${unreadChat} unread`} style={{ marginLeft: 'auto', width: 9, height: 9, borderRadius: '50%', background: CK.gold, boxShadow: '0 0 0 2px rgba(255,255,255,0.5)' }} />}
+            </Btn>
+          </section>
+
+          <Card style={{ padding: '12px 16px' }}>
+            <div className="grid gap-2">
+              <span className="inline-flex items-center gap-2" style={{ fontSize: 14, fontWeight: 700, color: CK.inkSoft }}>
+                <CalendarClock size={16} strokeWidth={1.5} aria-hidden style={{ flexShrink: 0 }} />
+                {scenarioLabel(crisis.scenario_at)}
+              </span>
+              <span className="inline-flex items-center gap-2" style={{ fontSize: 14, fontWeight: 800, color: open ? CK.ok : CK.red }}>
+                {open ? <PlayCircle size={16} strokeWidth={1.5} aria-hidden /> : <PauseCircle size={16} strokeWidth={1.5} aria-hidden />}
+                {open ? 'Directives are open' : 'Directives are paused'}
+              </span>
+              {!open && crisis.directives_paused_note && (
+                <p style={{ margin: 0, fontSize: 13.5, color: CK.red2, fontWeight: 600, overflowWrap: 'anywhere' }}>{crisis.directives_paused_note}</p>
+              )}
+            </div>
           </Card>
 
-          {me && (
-            <Card warm>
-              <CardTitle icon={<Lock size={17} strokeWidth={1.5} />} sub="Only you can see these.">My Secret Goals</CardTitle>
-              {secrets === null ? <Skeleton h={48} r={12} /> : goals ? (
-                <p style={{ margin: 0, fontSize: 14, lineHeight: 1.55, color: CK.ink, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{goals}</p>
-              ) : <Hint>No secret goals were given to you.</Hint>}
-            </Card>
-          )}
-
-          <Card>
-            <CardTitle icon={<Boxes size={18} strokeWidth={1.5} />}>My Cabinet&apos;s Resources</CardTitle>
+          <Card style={{ padding: '12px 16px' }}>
+            <h2 style={{ margin: '0 0 8px', fontSize: 14, fontWeight: 800, color: CK.ink }}>Resources</h2>
             {res === null ? (
-              <div className="grid gap-2"><Skeleton h={30} /><Skeleton h={30} /></div>
+              <div className="grid gap-2"><Skeleton h={22} /><Skeleton h={22} /></div>
             ) : myResources.length === 0 ? (
               <Hint>No resources yet.</Hint>
             ) : (
-              <div className="grid gap-3">
+              <ul className="grid gap-1.5" style={{ margin: 0, padding: 0, listStyle: 'none' }}>
                 {myResources.map((r) => {
                   const t = typeById.get(r.type_id);
                   const own = !!characterId && r.character_id === characterId;
                   return (
-                    <div key={r.id}>
-                      <BigCount n={Number(r.amount).toLocaleString()} word={`${t?.name ?? 'Resource'}${t?.unit ? ` (${t.unit})` : ''}`} />
-                      {own && <span style={{ display: 'block', fontSize: 12, color: CK.muted, marginTop: 2 }}>Just for you</span>}
-                    </div>
+                    <li key={r.id} className="flex items-baseline gap-2 flex-wrap">
+                      <b style={{ fontSize: 19, fontWeight: 800, fontVariantNumeric: 'tabular-nums', color: CK.ink }}>{Number(r.amount).toLocaleString()}</b>
+                      <span style={{ fontSize: 13.5, fontWeight: 600, color: CK.inkSoft, overflowWrap: 'anywhere' }}>
+                        {t?.name ?? 'Resource'}{t?.unit ? ` (${t.unit})` : ''}{own ? ', just for you' : ''}
+                      </span>
+                    </li>
                   );
                 })}
-              </div>
+              </ul>
             )}
           </Card>
         </div>
@@ -196,7 +185,7 @@ export default function DelegateHome() {
             cref={ref}
             memberId={memberId}
             characterId={characterId}
-            world={world.length ? world : core.characters}
+            world={everyone}
             ownCabinetId={cabinetId}
             cabinetNames={cabinetNames}
             wordLimit={settings.wordLimit}
@@ -218,6 +207,12 @@ export default function DelegateHome() {
           />
         </div>
       </div>
+
+      {dialog === 'character' && me && (
+        <CharacterDialog me={me} goals={goals} goalsLoaded={secrets !== null} onClose={() => setDialog(null)} />
+      )}
+      {dialog === 'news' && <NewsDialog onClose={() => setDialog(null)} />}
+      <CrisisChatDialog open={dialog === 'chat'} onClose={() => setDialog(null)} />
     </div>
   );
 }

@@ -2,7 +2,7 @@
 // Gavelling Crisis: a multi-select dropdown. The trigger shows the chosen items (icon and word);
 // the list is a Portal popover at fixed coordinates, flipped upward near the bottom, never clipped.
 
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Check, ChevronDown, Search } from 'lucide-react';
 import Portal from '@/components/Portal';
 import { CK, fieldStyle } from '../../crisisKit';
@@ -41,11 +41,6 @@ export default function MultiSelect({ id, ariaLabel, options, value, onChange, p
       : { left, width, top: r.bottom + 6, maxHeight: Math.min(360, below - 6) });
   }, []);
 
-  useLayoutEffect(() => {
-    if (!open) return;
-    place();
-  }, [open, place, value.length]);
-
   useEffect(() => {
     if (!open) return;
     const onScroll = () => place();
@@ -57,11 +52,14 @@ export default function MultiSelect({ id, ariaLabel, options, value, onChange, p
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') { e.preventDefault(); setOpen(false); trigger.current?.focus(); }
     };
+    const ro = typeof ResizeObserver !== 'undefined' && trigger.current ? new ResizeObserver(onScroll) : null;
+    if (ro && trigger.current) ro.observe(trigger.current);
     window.addEventListener('scroll', onScroll, true);
     window.addEventListener('resize', onScroll);
     document.addEventListener('mousedown', onDown);
     document.addEventListener('keydown', onKey);
     return () => {
+      ro?.disconnect();
       window.removeEventListener('scroll', onScroll, true);
       window.removeEventListener('resize', onScroll);
       document.removeEventListener('mousedown', onDown);
@@ -87,7 +85,7 @@ export default function MultiSelect({ id, ariaLabel, options, value, onChange, p
         aria-haspopup="listbox"
         aria-expanded={open}
         aria-label={ariaLabel}
-        onClick={() => { setQ(''); setOpen((o) => !o); }}
+        onClick={() => { setQ(''); if (!open) place(); setOpen((o) => !o); }}
         className="focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] flex items-center justify-between gap-2"
         style={{ ...fieldStyle, cursor: 'pointer', textAlign: 'left', minHeight: 44 }}
       >

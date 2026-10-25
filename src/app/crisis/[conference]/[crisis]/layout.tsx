@@ -151,6 +151,7 @@ function TopBar({ v, items }: { v: CrisisContextValue; items: NavItem[] }) {
     else router.replace('/crisis');
   };
   return (
+    <>
     <header className="sticky z-30 flex items-center" style={{ top: 'env(safe-area-inset-top, 0px)', height: 56, gap: 14, padding: '0 18px', fontFamily: CK.font, background: scrolled ? 'rgba(239,227,218,0.86)' : 'transparent', backdropFilter: scrolled ? 'blur(12px) saturate(1.2)' : 'none', boxShadow: scrolled ? '0 1px 0 rgba(110,30,30,0.10)' : 'none', transition: 'background 160ms ease' }}>
       <BrandLogo height={22} priority />
       <div className="hidden sm:flex items-center min-w-0" style={{ gap: 6, fontSize: 13, fontWeight: 600, color: CK.muted }}>
@@ -169,7 +170,8 @@ function TopBar({ v, items }: { v: CrisisContextValue; items: NavItem[] }) {
       ) : (
         <ProfileAvatarMenu size={36} tone="light" panelStyle={{ zIndex: 60 }} />
       )}
-      {/* Phone navigation: the rail is hidden under 768px. */}
+    </header>
+    {/* Phone navigation: the rail is hidden under 768px. */}
       <nav aria-label="Crisis pages" className="md:hidden fixed left-0 right-0 bottom-0 flex justify-around" style={{ background: CK.redGrad, padding: '6px 8px calc(6px + env(safe-area-inset-bottom, 0px))', zIndex: 40 }}>
         {items.slice(0, 5).map((it) => {
           const active = it.href === pathname;
@@ -181,7 +183,7 @@ function TopBar({ v, items }: { v: CrisisContextValue; items: NavItem[] }) {
           );
         })}
       </nav>
-    </header>
+    </>
   );
 }
 

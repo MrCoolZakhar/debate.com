@@ -165,11 +165,11 @@ export function useChatData(): ChatData {
 
   useEffect(() => {
     let cancelled = false;
-    setError(null);
     listMessages(ref).then((rows) => {
       if (cancelled) return;
       loadedOnce.current = true;
       setMessages(rows);
+      setError(null);
     }).catch((e) => { if (!cancelled && !loadedOnce.current) setError(crisisError(e, 'Could not load the messages.')); });
     return () => { cancelled = true; };
   }, [ref, attempt]);

@@ -74,7 +74,12 @@ export default function DirectiveForm({
   const [problem, setProblem] = useState<string | null>(null);
   const sendingRef = useRef(false);
 
-  useEffect(() => { setD(readDraft(draftKey)); setLoaded(true); }, [draftKey]);
+  useEffect(() => {
+    const saved = readDraft(draftKey);
+    // A saved cabinet directive makes no sense for someone without a cabinet.
+    setD(saved.kind === 'committee' && !ownCabinetId ? { ...saved, kind: 'personal' } : saved);
+    setLoaded(true);
+  }, [draftKey, ownCabinetId]);
   useEffect(() => {
     if (!loaded) return;
     try {
