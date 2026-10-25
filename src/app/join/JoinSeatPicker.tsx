@@ -154,6 +154,24 @@ export default function JoinSeatPicker({
   // scroller (it grows with the page), so while the keyboard cursor is in use the
   // PAGE follows instead, keeping the row clear of the sticky Join bar.
   const searchRef = useRef<HTMLInputElement>(null);
+
+  // A seat is picked only by a press that STARTED on that row and ended on it without
+  // the row moving under the finger. On a phone, tapping the search field opens the
+  // keyboard and the page scrolls (the stage scroll, the browser bringing the field into
+  // view), so the click that follows can land on whatever row slid under the tap: that
+  // once picked Russia and moved focus off the field, so the typed text went nowhere.
+  const pressRef = useRef<{ country: string; top: number; x: number; y: number } | null>(null);
+  const onRowPointerDown = (e: React.PointerEvent<HTMLDivElement>, country: string) => {
+    pressRef.current = { country, top: e.currentTarget.getBoundingClientRect().top, x: e.clientX, y: e.clientY };
+  };
+  const pressLanded = (e: React.MouseEvent<HTMLDivElement>, country: string) => {
+    const press = pressRef.current;
+    pressRef.current = null;
+    if (!press || press.country !== country) return false;
+    const moved = Math.abs(e.currentTarget.getBoundingClientRect().top - press.top);
+    const dragged = Math.hypot(e.clientX - press.x, e.clientY - press.y);
+    return moved <= 8 && dragged <= 12;
+  };
   useEffect(() => {
     if (!current || !listRef.current) return;
     const list = listRef.current;
@@ -251,6 +269,7 @@ export default function JoinSeatPicker({
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={onKeyDown}
+            onPointerDown={() => { pressRef.current = null; }}
             placeholder={labels.search}
             className="w-full focus:outline-none"
             style={{
@@ -330,7 +349,9 @@ export default function JoinSeatPicker({
                 aria-selected={picked}
                 aria-disabled={!point}
                 tabIndex={-1}
-                onClick={() => { if (point) { setActive(seat.country); pick(seat); } }}
+                onPointerDown={(e) => onRowPointerDown(e, seat.country)}
+                onPointerCancel={() => { pressRef.current = null; }}
+                onClick={(e) => { if (point && pressLanded(e, seat.country)) { setActive(seat.country); pick(seat); } }}
                 className="gv-seat-row flex items-center gap-3"
                 data-point={point ? '' : undefined}
                 style={{

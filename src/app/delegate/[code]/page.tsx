@@ -2188,10 +2188,15 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
   );
 
   // ── Absent banner (blocks active interaction)
-  const AbsentBanner = () => !myDelegate ? (
-    <Panel className="dgv-rise" style={{ marginBottom: 16 }}>{notInRoom}</Panel>
+  // A plain element, never an inline component: `const X = () => ...` rendered as `<X />`
+  // is a NEW component type on every render, so React remounted it on each re-render and its
+  // entrance animation restarted from opacity 0 every time (the banner looked faded or showed
+  // as an empty band). It also carries no entrance animation and sits OUTSIDE the dimmed
+  // board, fully opaque, so the one thing an absent delegate should press reads as pressable.
+  const absentBanner = !myDelegate ? (
+    <Panel style={{ marginBottom: 16, opacity: 1, position: 'relative', zIndex: 1 }}>{notInRoom}</Panel>
   ) : (
-    <Panel className="dgv-rise" style={{ marginBottom: 16 }}>
+    <Panel style={{ marginBottom: 16, opacity: 1, position: 'relative', zIndex: 1 }}>
       <div style={{ fontFamily: OUTFIT, fontSize: 14, fontWeight: 900, color: DG.forest }}>{t('delegate_absent_title')}</div>
       {/* "Change own status" off (with joining open): the chair marks attendance, so there is
           nothing to press here. One plain line instead of buttons that would write. */}
@@ -2647,7 +2652,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
             </div>
           )}
 
-          {isAbsent && !sessionEnded && <AbsentBanner />}
+          {isAbsent && !sessionEnded && absentBanner}
 
           <div className={`dgv-board ${isAbsent ? 'opacity-60 pointer-events-none select-none' : ''}`}>
             {/* ── HERO BAND: tools | flag+ordinal | stats ───────────────── */}

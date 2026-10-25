@@ -122,6 +122,18 @@ async function fetchBytes(url: string, listing = false): Promise<Buffer | null> 
  * smaller. Quality 68 is deliberately low — under the scrim it is invisible,
  * and this single choice is most of what keeps the finished card under 200KB.
  */
+/**
+ * The address a banner is FETCHED from. A preset banner is stored as the
+ * relative `/banners/preset-N.jpg`, which the remote loader (absolute https
+ * only) rejects, so the cards drew no banner for every preset conference;
+ * it is fetched from our own site instead. Anything else is returned as is.
+ */
+export function bannerFetchUrl(url: string | null | undefined): string | null {
+  if (!url) return null;
+  if (/^\/banners\/[a-z0-9-]+\.(jpe?g|png|webp)$/i.test(url)) return `https://gavelling.com${url}`;
+  return url;
+}
+
 export async function loadBannerDataUri(
   url: string | null | undefined,
   width: number,

@@ -38,7 +38,7 @@ import {
   fallbackCard,
   renderCard,
 } from '../../../_shared/card';
-import { loadBannerDataUri, loadFlagDataUri, loadLogo } from '../../../_shared/remoteImage';
+import { bannerFetchUrl, loadBannerDataUri, loadFlagDataUri, loadLogo } from '../../../_shared/remoteImage';
 
 export const runtime = 'nodejs';
 
@@ -149,7 +149,8 @@ export async function GET(
   const place = [conf.city?.trim(), conf.country?.trim()].filter(Boolean).join(', ');
   const isListing = conf.listed_by === 'gavelling';
   const [backdrop, logo, flagUri] = await Promise.all([
-    withinBudget(loadBannerDataUri(conf.banner_url, CARD_WIDTH, CARD_HEIGHT, isListing), markLate),
+    // A preset banner is a relative path: fetched from our own site (bannerFetchUrl).
+    withinBudget(loadBannerDataUri(bannerFetchUrl(conf.banner_url), CARD_WIDTH, CARD_HEIGHT, isListing), markLate),
     withinBudget(loadLogo(conf.logo_url, 176, isListing), markLate),
     // Resolved from our own country table, so an unrecognisable "country" (a
     // crisis committee's invented state, a typo) simply yields no flag.

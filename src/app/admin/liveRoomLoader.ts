@@ -29,6 +29,7 @@ import { getScoringConfig, everPresentFromHistory } from '@/lib/scoring';
 import type { ScoringConfig } from '@/lib/settingsStore';
 import { sessionHeadlineScores } from '@/lib/conferenceScoreboard';
 import { readStatusHistory } from '@/lib/attendanceHistory';
+import { seatGroupFromRow } from '@/lib/committeeService';
 import { fetchPendingChairInvites, pendingInviteName } from '@/lib/chairInvites';
 import type {
   LiveCommittee, ChairPerson, PendingChairPerson, CaucusJson,
@@ -65,7 +66,7 @@ export async function loadAdminRoom(sessionId: string, conferenceId: string | nu
       .select('committee_id, country, time_remaining, started_at')
       .eq('committee_id', sessionId),
     anonSupabase.from('delegates')
-      .select('committee_id, country, status, is_observer, logo_url')
+      .select('committee_id, country, status, is_observer, logo_url, group_color, group_short')
       .eq('committee_id', sessionId),
     anonSupabase.from('speakers_list')
       .select('committee_id, country, position, list_type')
@@ -262,6 +263,8 @@ export async function loadAdminRoom(sessionId: string, conferenceId: string | nu
       status: d.status as string,
       isObserver: (d.is_observer as boolean | null) ?? false,
       logoUrl: (d.logo_url as string | null) ?? null,
+      // A custom committee seat's party, drawn as the chair draws it.
+      ...seatGroupFromRow(d),
     })),
     gslQueue: queues.filter((q) => q.list_type === 'gsl').map((q) => q.country as string),
     caucusQueue: queues.filter((q) => q.list_type === 'caucus').map((q) => q.country as string),

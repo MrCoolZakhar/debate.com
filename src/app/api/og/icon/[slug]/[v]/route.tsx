@@ -24,7 +24,7 @@ import { iconSizeFromSegment, themeMain } from '@/lib/conferenceIcon';
 import { versionToken } from '@/lib/ogVersion';
 import { CARD_FONTS, FONT_FAMILY } from '../../../_shared/fonts';
 import { FOREST, FOREST_DEEP, MARK_DATA_URI } from '../../../_shared/card';
-import { loadBannerDataUri, loadLogo } from '../../../_shared/remoteImage';
+import { bannerFetchUrl, loadBannerDataUri, loadLogo } from '../../../_shared/remoteImage';
 import { mix } from '@/lib/theme';
 
 export const runtime = 'nodejs';
@@ -69,13 +69,6 @@ function withinBudget<T>(p: Promise<T | null>, onLate: () => void): Promise<T | 
     }, ASSET_BUDGET_MS);
   });
   return Promise.race([p.catch(() => null), late]).finally(() => clearTimeout(timer));
-}
-
-/** A preset banner is stored as `/banners/preset-N.jpg`; fetch it from our own site. */
-function bannerSource(url: string | null): string | null {
-  if (!url) return null;
-  if (/^\/banners\/[a-z0-9-]+\.(jpe?g|png|webp)$/i.test(url)) return `https://gavelling.com${url}`;
-  return url;
 }
 
 /** One short label for the disc when there is no logo: the acronym, else initials. */
@@ -202,7 +195,7 @@ export async function GET(
   const isListing = conf?.listed_by === 'gavelling';
   const main = themeMain(conf?.theme) ?? FOREST;
   const disc = Math.round(size * 0.64);
-  const banner = bannerSource(conf?.banner_url ?? null);
+  const banner = bannerFetchUrl(conf?.banner_url ?? null);
   const [backdrop, logo] = conf
     ? await Promise.all([
         banner ? withinBudget(loadBannerDataUri(banner, size, size, isListing), markLate) : Promise.resolve(null),

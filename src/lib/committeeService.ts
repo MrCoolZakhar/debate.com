@@ -327,7 +327,9 @@ export async function createCommittee(
     // Where the room was created from (owner, 21 Oct 2026): our own /api/geo,
     // country code only, prefetched by /create/sessions; at most 1.5 s, and the
     // room is created without it when it is not there (src/lib/creatorCountry.ts).
-    const creatorCountry = await creatorCountryWithin();
+    // 600 ms, not the 1.5 s default (25 Oct 2026): the prefetch started when the page opened,
+    // so it has almost always answered; when it has not, the room opens without it.
+    const creatorCountry = await creatorCountryWithin(600);
     const client = sessionClient(code, chairJoinSuffix, { timeout: false });   // D6: creation + whole roster, never timed out
 
     const { data: committeeRow, error: committeeError } = await client
@@ -345,24 +347,28 @@ export async function createCommittee(
       return null;
     }
 
+    // The roster batches and the empty current_speaker row depend only on the committee id,
+    // so they go out TOGETHER (25 Oct 2026): they used to be one awaited round trip after
+    // another, each paying the full latency of venue Wi-Fi.
+    const speakerRowWrite = client.from('current_speaker').insert({
+      committee_id: committeeRow.id, delegate_id: null, country: null, time_remaining: 90,
+    });
+    const rosterWrites: PromiseLike<{ error: unknown }>[] = [];
     if (delegateNames.length > 0) {
       const obs = new Set(observerCountries.map((c) => c.toLowerCase()));
       const delegateRows = delegateNames.map((country) => ({ committee_id: committeeRow.id, country, status: 'absent', is_observer: obs.has(country.toLowerCase()) }));
       const BATCH_SIZE = 50;
       for (let i = 0; i < delegateRows.length; i += BATCH_SIZE) {
-        const batch = delegateRows.slice(i, i + BATCH_SIZE);
-        const { error: delegateError } = await client.from('delegates').insert(batch);
-        if (delegateError) {
-          console.error('Error inserting delegates batch:', delegateError);
-          rosterFailed = true;
-          return null;
-        }
+        rosterWrites.push(client.from('delegates').insert(delegateRows.slice(i, i + BATCH_SIZE)));
       }
     }
-
-    await client.from('current_speaker').insert({
-      committee_id: committeeRow.id, delegate_id: null, country: null, time_remaining: 90,
-    });
+    const [rosterResults] = await Promise.all([Promise.all(rosterWrites), speakerRowWrite]);
+    const delegateError = rosterResults.find((r) => r.error)?.error;
+    if (delegateError) {
+      console.error('Error inserting delegates batch:', delegateError);
+      rosterFailed = true;
+      return null;
+    }
     return { code, chairJoinSuffix };
   };
   const waitFor = async <T>(p: Promise<T>, ms: number): Promise<T | 'timeout'> => {
@@ -729,24 +735,38 @@ export async function setPhaseAndCaucus(
  *    - 'failed'  a transport error, or zero rows while the row still matches (RLS refused
  *                it). Retried, then reported to the "Not saved" toast (resolves false).
  *  The one fallback when the caller has no anchor is `setPhaseAndCaucus`, never both. */
+/** Seconds below which a PAUSED moderated-caucus total counts as used up (it shows 0:00). */
+export const CAUCUS_PAUSED_SPENT_BELOW = 1;
+
+/** `expectedTotalStartedAt` null = the total is PAUSED and spent (25 Oct 2026): a Pause pressed
+ *  as the last speaker hit zero, or the floor holder removed with the total at zero, stored the
+ *  total paused at 0:00, and nothing ever ended it. The write then matches only a row that is
+ *  still paused (no anchor) with less than CAUCUS_PAUSED_SPENT_BELOW seconds stored, so an
+ *  Extend or a new caucus from another device is never ended by it. */
 export async function endModeratedCaucusIfAnchorUnchanged(
-  committeeId: string, expectedTotalStartedAt: string, code: string, chairSuffix?: string,
+  committeeId: string, expectedTotalStartedAt: string | null, code: string, chairSuffix?: string,
 ): Promise<boolean> {
   const r = await runWrite([phaseKey(committeeId), caucusKey(committeeId)], async () => {
-    const { data, error } = await sessionClient(code, chairSuffix).from('committees')
+    let q = sessionClient(code, chairSuffix).from('committees')
       .update({ phase: 'speakers-list', caucus: null })
       .eq('id', committeeId)
-      .eq('phase', 'moderated-caucus')
-      .eq('caucus->>totalStartedAt', expectedTotalStartedAt)
-      .select('id');
+      .eq('phase', 'moderated-caucus');
+    q = expectedTotalStartedAt === null
+      ? q.is('caucus->>totalStartedAt', null).lt('caucus->remainingTime', CAUCUS_PAUSED_SPENT_BELOW)
+      : q.eq('caucus->>totalStartedAt', expectedTotalStartedAt);
+    const { data, error } = await q.select('id');
     if (error) { return failedFrom(error, 'Error ending caucus (conditional):'); }
     if (rowsOf(data) > 0) return 'ok';
     // Zero rows: moved on (skip) or refused (fail)? SELECT is public, so look.
     const { data: row, error: readErr } = await readDb().from('committees')
       .select('phase, caucus').eq('id', committeeId).maybeSingle();
     if (readErr) return failedFrom(readErr);
-    const stillMatches = row?.phase === 'moderated-caucus'
-      && (row.caucus as CaucusState | null)?.totalStartedAt === expectedTotalStartedAt;
+    const stored = (row?.caucus as CaucusState | null) ?? null;
+    const stillMatches = row?.phase === 'moderated-caucus' && !!stored && (
+      expectedTotalStartedAt === null
+        ? !stored.totalStartedAt && Number(stored.remainingTime) < CAUCUS_PAUSED_SPENT_BELOW
+        : stored.totalStartedAt === expectedTotalStartedAt
+    );
     return stillMatches ? 'failed' : 'skipped';
   }, { retry: true });
   return r === 'ok';

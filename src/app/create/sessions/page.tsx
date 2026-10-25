@@ -260,6 +260,16 @@ function CreatePageInner() {
   const [showLangMenu, setShowLangMenu] = useState(false);
   const [requestLangOpen, setRequestLangOpen] = useState(false);
   const router = useRouter();
+  // Warm the chair page (25 Oct 2026): "Opening the room" stayed up until the chair route's
+  // code had downloaded AFTER the room was created, the largest page in the app. A full
+  // prefetch of any /chair/<code> URL loads the same route code, so it is fetched while the
+  // chair is still filling the form. Reads nothing and writes nothing (the chair page is a
+  // client page: its server render is only the shell). A no-op in development.
+  useEffect(() => {
+    try {
+      router.prefetch('/chair/PREVIEW', { kind: 'full' } as unknown as Parameters<typeof router.prefetch>[1]);
+    } catch { /* a prefetch is only a speed-up */ }
+  }, [router]);
   const { updateSetting } = useSettingsStore();
   // Chairs: committed chips plus the text still in the field. `chairNames` keeps the
   // exact shape handleCreate always used (the draft last), so one typed name and no

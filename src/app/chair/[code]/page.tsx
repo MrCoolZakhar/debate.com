@@ -62,7 +62,7 @@ import { withBroadcastMessages, secretariatUnread, BROADCAST_MESSAGE_PREFIX, SEC
 import ChairSidebarShell from '@/components/ChairSidebarShell';
 import SidebarFlagRail from '@/components/SidebarFlagRail';
 import FloorBarExtent from '@/components/FloorBarExtent';
-import { loadSidebarWidth, saveSidebarWidth, loadSidebarCollapsed, saveSidebarCollapsed } from '@/lib/sidebarWidth';
+import { loadSidebarWidth, saveSidebarWidth, loadSidebarCollapsed, saveSidebarCollapsed, consoleLayoutWidth } from '@/lib/sidebarWidth';
 import { startSessionSync, rowFields, withCurrentSpeaker, withLists, ALL_SYNC_SLICES, COALESCE_MS, type ConnectionState, type SessionSync, type FetchMeta } from '@/lib/sessionSync';
 import { OFFLINE_RESILIENCE, createPendingSliceGuard, PENDING_RECHECK_MS } from '@/lib/offlineResilience';
 import { dropParkedWrites } from '@/lib/writeStatus';
@@ -123,6 +123,7 @@ import {
   speakerRemainingNow,
   anchorCaucusClock,
   moderatedCaucusRemainingNow,
+  CAUCUS_PAUSED_SPENT_BELOW,
   caucusQueueCapacity,
   capSpeakerSlot,
   approveJoinRequest,
@@ -157,6 +158,9 @@ import { serverNow, serverNowIso } from '@/lib/serverClock';
 import SaveStatusToast from '@/components/notifications/SaveStatusToast';
 import ClockSkewHint from '@/components/ClockSkewHint';
 import { UnknownSeatIcon } from '@/components/UnknownSeatIcon';
+
+/** Below this console layout width (innerWidth x 820 / innerHeight) the sidebar starts folded. */
+const SIDEBAR_AUTO_COLLAPSE_BELOW = 800;
 
 /** Who holds the floor, as a stable key (delegate id, or the country for a Room-Order
  *  placeholder). Two different keys = the floor changed hands. */
@@ -1022,7 +1026,7 @@ function UnmoderatedCaucusView({ committee, setCommittee, isViewOnly = false, ga
       </div>}
       {/* CoW standalone timer overlay — fixed, independent of the caucus countdown, no DB writes */}
       {cowEnabled && cowOpen && !isViewOnly && (
-        <div className="fixed z-50" style={{ top: '50%', right: '2rem', transform: 'translateY(-50%)' }}>
+        <div className="fixed z-50" style={{ top: '50%', insetInlineEnd: '2rem', transform: 'translateY(-50%)' }}>
           <div className="bg-[#EDE7D8] border border-[#B8844A]/30 rounded-xl p-4 w-72 shadow-2xl">
             <div className="flex items-center justify-between mb-3">
               <span className="text-xs font-black uppercase tracking-wide" style={{ color: '#B8844A' }}>{t('cow_timer')}</span>
@@ -1168,10 +1172,54 @@ function ModeratedCaucusMain({
   const [extendMinsMod, setExtendMinsMod] = useState<number>(1);
   const extendRef = useRef<HTMLDivElement>(null);
 
+  // The Extend popover renders through Portal at fixed coordinates (UI RULE: never clipped).
+  // The old `absolute bottom-full right-0` box ran off the left edge in Arabic and FitToScreen
+  // cut it off. Above the button, its logical END on the button's end (right in LTR, left in
+  // RTL), flipped below when there is no room above, clamped inside #fit-root (`anchorBox`
+  // converts into its scaled space). Measured on open, resize and scroll only; state is set
+  // only when the answer changes.
+  const extendPopRef = useRef<HTMLDivElement>(null);
+  const [extendPos, setExtendPos] = useState<{ left: number; top: number } | null>(null);
+  useEffect(() => {
+    if (!showExtendMod) return;
+    let raf = 0;
+    const measure = () => {
+      raf = 0;
+      const anchor = extendRef.current;
+      if (!anchor) return;
+      const box = anchorBox(anchor);
+      const pop = extendPopRef.current;
+      // The Portal mounts a tick after the open: measure again once it is there.
+      if (!pop) { raf = requestAnimationFrame(measure); return; }
+      const w = pop.offsetWidth || 200;
+      const h = pop.offsetHeight || 140;
+      const M = 8;
+      const rtl = getComputedStyle(anchor).direction === 'rtl';
+      const rawLeft = rtl ? box.left : box.right - w;
+      const left = Math.min(Math.max(M, rawLeft), Math.max(M, box.viewW - w - M));
+      const above = box.top - 8 - h;
+      const top = above >= M ? above : Math.min(box.bottom + 8, Math.max(M, box.viewH - h - M));
+      setExtendPos((p) => (p && p.left === left && p.top === top ? p : { left, top }));
+    };
+    const schedule = () => { if (!raf) raf = requestAnimationFrame(measure); };
+    measure();
+    window.addEventListener('resize', schedule);
+    window.addEventListener('scroll', schedule, true);
+    return () => {
+      if (raf) cancelAnimationFrame(raf);
+      window.removeEventListener('resize', schedule);
+      window.removeEventListener('scroll', schedule, true);
+      // Closed: the next open is measured afresh (hidden until then).
+      setExtendPos(null);
+    };
+  }, [showExtendMod]);
+
   useEffect(() => {
     if (!showExtendMod) return;
     const handler = (e: MouseEvent) => {
-      if (extendRef.current && !extendRef.current.contains(e.target as Node)) setShowExtendMod(false);
+      const target = e.target as Node;
+      if (extendRef.current?.contains(target) || extendPopRef.current?.contains(target)) return;
+      setShowExtendMod(false);
     };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
@@ -1489,7 +1537,13 @@ function ModeratedCaucusMain({
                   {t('caucus_extend')}
                 </button>
                 {showExtendMod && (
-                  <div className="absolute bottom-full right-0 mb-2 bg-[#FAF8F3] border border-[#DDD4C0] rounded-xl px-4 py-3 shadow-xl z-20" style={{ minWidth: '180px' }}>
+                  <Portal>
+                  <div
+                    ref={extendPopRef}
+                    className="fixed bg-[#FAF8F3] border border-[#DDD4C0] rounded-xl px-4 py-3 shadow-xl"
+                    // z 48: over the floor panels (40 / 41), under every dialog (50+).
+                    style={{ minWidth: '180px', zIndex: 48, left: extendPos?.left ?? 0, top: extendPos?.top ?? 0, visibility: extendPos ? 'visible' : 'hidden' }}
+                  >
                     <div className="flex gap-1.5 mb-2 justify-center">
                       {(() => {
                         const halfMins = caucus.totalTime / 120;
@@ -1517,6 +1571,7 @@ function ModeratedCaucusMain({
                       {t('gsl_add_time_extended')}
                     </button>
                   </div>
+                  </Portal>
                 )}
               </div>}
               {!isViewOnly && <button onClick={handleEndCaucus}
@@ -2957,10 +3012,17 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
     const amCommenter = !gavelRoleOf(committee).isModerator;   // name AND device
     if (amCommenter || caucusExpiredRef.current) return;
     if (committee?.phase !== 'moderated-caucus' || !committee.caucus) return;
-    if (!committee.caucus.totalStartedAt) return;   // paused — a paused clock never expires
+    // A PAUSED total with time left never expires. A paused total that is SPENT (a Pause
+    // pressed as the last speaker hit zero, or the floor holder removed at 0:00) used to sit
+    // at 0:00 forever: nothing re-armed this effect and Start on deck stood down for it. It
+    // now ends through the same conditional write, matched on "still paused and spent"
+    // (25 Oct 2026).
+    const pausedAnchor = !committee.caucus.totalStartedAt;
+    if (pausedAnchor) {
+      if (!(Number(committee.caucus.remainingTime) < CAUCUS_PAUSED_SPENT_BELOW)) return;
     // Capped at the speaker clock's zero: a laptop that slept past BOTH the speaker's end
     // and the uncapped total must not end a caucus that really stopped with time left.
-    if (moderatedCaucusRemainingNow(committee.caucus, speakerAnchorRef.current.base, speakerAnchorRef.current.startedAt) > 0) return;
+    } else if (moderatedCaucusRemainingNow(committee.caucus, speakerAnchorRef.current.base, speakerAnchorRef.current.startedAt) > 0) return;
     // R-6: a laptop that just woke (or is mid catch-up) holds a row that may be minutes
     // old. Refetch first; this effect runs again on `catchUpTick` against the fresh row.
     if (syncRef.current && !syncRef.current.isFresh()) return;
@@ -2996,7 +3058,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
     const expiredId = committee.id;
     const expiredCode = committee.code;
     const expiredSuffix = committee.dbChairJoinSuffix ?? undefined;
-    void endModeratedCaucusIfAnchorUnchanged(committee.id, committee.caucus.totalStartedAt, committee.code, committee.dbChairJoinSuffix ?? undefined)
+    void endModeratedCaucusIfAnchorUnchanged(committee.id, committee.caucus.totalStartedAt ?? null, committee.code, committee.dbChairJoinSuffix ?? undefined)
       .then((landed) => {
         if (landed) {
           // A late landing (parked offline) may arrive after a NEW caucus started: its
@@ -3007,6 +3069,10 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
           }
           return;
         }
+        // Not landed: re-arm, so the effect judges the refetched row again (a total paused
+        // at 0:00 has no `caucusSeconds > 0` moment to re-arm it). A caucus that really has
+        // time left stops at the guards above; one still spent is ended from the fresh row.
+        caucusExpiredRef.current = false;
         localUpdateTime.current = 0; syncRef.current?.catchUp(undefined, { force: true });
       });
     updateLocal(setCommittee, (prev) => {
@@ -3016,8 +3082,10 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
       // into the permanent GSL. The GSL is returned exactly as it was before the caucus.
       return { ...prev, caucus: null, phase: 'speakers-list' as const, caucusQueue: [], currentSpeaker: null, speakersList: prev.speakersList };
     }, false);
+  // The anchor and the stored remaining time are deps too, so a total paused at 0:00
+  // (whose `caucusSeconds` never moves again) is seen the moment it is stored.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [caucusSeconds, committee?.phase, isViewOnly, catchUpTick]);
+  }, [caucusSeconds, committee?.phase, isViewOnly, catchUpTick, committee?.caucus?.totalStartedAt, committee?.caucus?.remainingTime]);
 
   // ── A speaker's clock ran out → the moderated-caucus TOTAL stops with it ─────
   // The total is time spent speaking. Before this, the speaker tick stopped only its own
@@ -3907,6 +3975,11 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
   useEffect(() => {
     const stored = loadSidebarCollapsed({ role: 'chair', identity: myChairName });
     if (stored !== null) setSidebarCollapsed(stored);
+    // A narrow console (an iPad in portrait: layout width under 800) starts folded to the
+    // flag rail, because the sidebar at its minimum left the floor cramped (25 Oct 2026).
+    // Only when this chair has no stored choice, and nothing is written: a stored choice
+    // always wins, and the chair's first toggle stores one.
+    else if (consoleLayoutWidth() < SIDEBAR_AUTO_COLLAPSE_BELOW) setSidebarCollapsed(true);
   }, [myChairName]);
   const toggleSidebarCollapsed = useCallback((next?: boolean) => {
     setSidebarCollapsed((prev) => {
@@ -5799,7 +5872,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
           // its measured height as `--dgn-stack-shift` on <html> (0 / absent when the
           // stack is empty or suppressed). The toast and the GavelChip both add it, so
           // they slide down out of the way together and keep their spacing.
-          style={{ top: 'calc(6.6rem + var(--dgn-stack-shift, 0px))', right: '0.85rem' }}
+          style={{ top: 'calc(6.6rem + var(--dgn-stack-shift, 0px))', insetInlineEnd: '0.85rem' }}
         />
       )}
       {/* Ended tab bar */}

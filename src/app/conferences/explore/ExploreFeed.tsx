@@ -10,7 +10,7 @@
 // Names are never cut: the short form large, the full name beneath, wrapping.
 
 import { useState } from 'react';
-import Link from 'next/link';
+import IntentLink from '../IntentLink';
 import { DoorOpen, CalendarDays, MapPin, Monitor, Globe, School, GraduationCap, Check, CircleSlash } from 'lucide-react';
 import { LogoDisc } from '@/components/LogoDisc';
 import { CircleFlag } from '@/components/CircleFlag';
@@ -212,7 +212,7 @@ function SpotlightCard({
   const [p0, p1] = paleFor(conf.acronym);
   const countryCode = getCountryByName(conf.country)?.code;
   return (
-    <Link
+    <IntentLink
       href={`/conferences/${conf.slug}`}
       onClick={onOpen}
       onMouseEnter={onHover}
@@ -294,7 +294,7 @@ function SpotlightCard({
           {creditSponsored && <CreditSponsoredMark size="xs" style={{ marginTop: 6 }} />}
         </div>
       </article>
-    </Link>
+    </IntentLink>
   );
 }
 
@@ -462,7 +462,7 @@ function FeedRow({
   const listing = isGavellingListing(conf);
   const showHiring = hiring && !listing;
   return (
-    <Link href={`/conferences/${conf.slug}`} className="gv-row focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#1B3828]" style={{ fontFamily: FONT }}>
+    <IntentLink href={`/conferences/${conf.slug}`} className="gv-row focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#1B3828]" style={{ fontFamily: FONT }}>
       <DateBlock start={conf.start_date} />
       <RowThumb conf={conf} />
       <div style={{ minWidth: 0 }}>
@@ -510,7 +510,7 @@ function FeedRow({
         {showHiring && <HiringMark conferenceId={conf.id} />}
         <ViewerState applied={applied} member={member} />
       </div>
-    </Link>
+    </IntentLink>
   );
 }
 

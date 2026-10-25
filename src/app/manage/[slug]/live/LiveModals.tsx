@@ -180,7 +180,11 @@ export interface LiveCommittee {
    *  (`chair/[code]/page.tsx:2620, 2627-2628`). */
   /** `logoUrl` is the seat's own crest (`delegates.logo_url`), flattened from
    *  the conference side at seed time. Null on a standalone session. */
-  delegates: { country: string; status: string; isObserver: boolean; logoUrl?: string | null }[];
+  delegates: {
+    country: string; status: string; isObserver: boolean; logoUrl?: string | null;
+    /** A custom committee seat's party (`delegates.group_color` / `group_short`). */
+    groupColor?: string | null; groupShort?: string | null;
+  }[];
   gslQueue: string[];
   caucusQueue: string[];
   // The `motions` table is DELIBERATELY not read by this page. The cards report

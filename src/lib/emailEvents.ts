@@ -21,10 +21,14 @@ import { formatConferenceDates } from '@/lib/conferenceDates';
 // (queueEventEmail) and the UI (communications page, DraftNotice).
 
 /** The database half of 'delegation_allocations' (societies.allocations_*_at,
- *  the trigger and the cron in scratch-delegation-allocation-email.sql). Until
- *  it is applied the email cannot send, so Communications does not list it.
- *  Flip to true in the same change that confirms the SQL is live. */
-export const DELEGATION_ALLOCATION_EMAIL_DB = false;
+ *  the trigger and the cron in scratch-delegation-allocation-email.sql). LIVE
+ *  since 23 Oct 2026, so Communications lists the email. It is OPT-IN per
+ *  conference: the server sends only for a conference with an ENABLED
+ *  delegation_allocations template row (WorldMUN's is on). A missing row is
+ *  OFF (the event is deliberately not in ESSENTIAL_DEFAULT_ON_EVENTS), so this
+ *  flag only shows the switch; turning it on writes the enabled row
+ *  (turnOnDefaultEmail), which is how a conference opts in. */
+export const DELEGATION_ALLOCATION_EMAIL_DB = true;
 
 export interface EventDef {
   key: string;
@@ -59,7 +63,8 @@ export const EVENT_REGISTRY = [
   // queue_delegation_allocation_notices (scratch-delegation-allocation-email.sql)
   // emails a delegation's leaders once its block seats stop changing for 15
   // minutes, listing every seat. Nothing on the client queues it; the row exists
-  // so Communications lists it once DELEGATION_ALLOCATION_EMAIL_DB is true.
+  // so Communications lists it (DELEGATION_ALLOCATION_EMAIL_DB). Opt-in: off
+  // until the organiser switches it on.
   { key: 'delegation_allocations', label: 'Delegation allocations', description: "Sent to a delegation's head delegates and faculty advisors 15 minutes after its seats stop changing, listing every committee and country the delegation holds. Any change in those 15 minutes restarts the wait, so one email covers a whole round of seat giving.", defaultDelivery: 'immediate' },
   { key: 'co_delegate_assigned', label: 'Co-delegate assigned', description: "Double delegations only. Sent to a delegate who was already told their seat when their co-delegate's allocation is announced later, naming the co-delegate and their email address so the two can prepare together. Once per pair. If both are announced together, each allocation email already names the other and this does not send.", defaultDelivery: 'immediate' },
   { key: 'allocation_changed', label: 'Allocation Changed', description: "Sent when a delegate's allocation changes.", defaultDelivery: 'immediate' },
@@ -309,8 +314,9 @@ export const ESSENTIAL_DEFAULT_ON_EVENTS = new Set<string>([
   'press_allocation_assigned',
   // The double-delegation partner notice (see queueCoDelegateAssigned).
   'co_delegate_assigned',
-  // The delegation seats notice, sent only by the server (owner, 21 Oct 2026).
-  'delegation_allocations',
+  // NOT 'delegation_allocations': the delegation seats notice is opt-in per
+  // conference (the server sends only with an enabled template row, 23 Oct
+  // 2026), so a missing row reads OFF and the switch writes the enabled row.
   // Money answers (owner, 7 Oct 2026).
   'aid_approved', 'aid_denied', 'fee_waived', 'spot_received', 'spot_lost',
   // Document Uploads (owner, 12 Oct 2026): sent by the server only; a missing row means on.

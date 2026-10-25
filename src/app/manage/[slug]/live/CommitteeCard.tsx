@@ -37,7 +37,8 @@ import { LogoDisc } from '@/components/LogoDisc';
 import { secretariatRoomHref } from '@/lib/secretariatView';
 import { artFromIndex, slotArtKey, type SlotArtIndex } from '@/lib/slotGroups';
 import { type SessionSeat } from '@/lib/sessionFlags';
-import { SeatArtProvider } from '@/components/SeatFlag';
+import { SeatArtProvider, useSeatGroup } from '@/components/SeatFlag';
+import SeatGroupTag from '@/components/SeatGroupTag';
 import { SeatCircleFlag } from '@/components/CircleFlag';
 import { getCountryByCode } from '@/lib/countries';
 import Avatar from '@/components/Avatar';
@@ -234,7 +235,7 @@ function slotLogoFor(index: SlotArtIndex | null | undefined, ccId: string, count
  *  its crest already flattened to one URL — the same shape `delegates` has in a
  *  live session, so `<SeatFlag>` resolves identically on both sides. */
 export function mergedSeatRoster(
-  delegates: readonly { country: string; logoUrl?: string | null }[],
+  delegates: readonly { country: string; logoUrl?: string | null; groupColor?: string | null; groupShort?: string | null }[],
   index: SlotArtIndex | null | undefined,
   ccId: string,
 ): SessionSeat[] {
@@ -242,7 +243,9 @@ export function mergedSeatRoster(
   const seen = new Set<string>();
   for (const d of delegates) {
     if (!d?.country) continue;
-    out.push({ country: d.country, logoUrl: d.logoUrl ?? slotLogoFor(index, ccId, d.country) });
+    // The seat's party rides along, so a party member with no crest draws the
+    // party-colour disc exactly as the chair's sidebar does.
+    out.push({ country: d.country, logoUrl: d.logoUrl ?? slotLogoFor(index, ccId, d.country), groupColor: d.groupColor ?? null, groupShort: d.groupShort ?? null });
     seen.add(d.country.trim().toLowerCase());
   }
   // Slot rows for seats the session has no delegate row for. Named by country
@@ -285,6 +288,15 @@ function DelegationMark({ country, size }: { country: string; size: number }) {
       fallback={<UserRound size={Math.round(size * 0.6)} strokeWidth={2} style={{ color: NEU.forest }} />}
     />
   );
+}
+
+/** The floor speaker's party (custom committees): the colour dot and short
+ *  name, as the chair's sidebar shows it beside the seat. Nothing for a seat
+ *  without a party. Reads the card's SeatArtProvider roster. */
+function SpeakerParty({ country }: { country: string }) {
+  const group = useSeatGroup(country);
+  if (!group?.short) return null;
+  return <SeatGroupTag short={group.short} color={group.color} size={12} style={{ marginTop: 4 }} />;
 }
 
 /** One delegation in the up-next strip: a flag that grows under the pointer and
@@ -830,6 +842,7 @@ function NowPlayingPanel({
           >
             {np.headline}
           </p>
+          {np.flag && <SpeakerParty country={np.flag} />}
         </div>
       </div>
 

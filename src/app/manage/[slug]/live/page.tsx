@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import Link from 'next/link';
-import { RefreshCw, Radio, PauseCircle, Megaphone } from 'lucide-react';
+import { RefreshCw, Radio, PauseCircle, Megaphone, Newspaper } from 'lucide-react';
 import { useManage } from '@/app/manage/[slug]/layout';
 import { useAuth } from '@/components/AuthProvider';
 import { getFreshAuthedClient, refreshSessionNow } from '@/lib/supabase-auth';
@@ -43,6 +43,7 @@ import { SOFT, AMBER_INK, RED } from './tokens';
 import { GoldWord } from '@/components/BrandHeading';
 import { friendlyError } from '@/lib/friendlyError';
 import { notifyErr, clearErr } from '@/lib/appNotify';
+import { seatGroupFromRow } from '@/lib/committeeService';
 
 /** Deadline on the in-flight load guard. Longer than any healthy load (the
  *  batch is eight indexed `in` queries) but short enough that a hung request
@@ -111,6 +112,11 @@ export default function LiveStatusPage() {
   // (`src/lib/slotGroups.ts`). Loaded beside the committee list on each pass
   // and handed to every card; a failed read keeps the last index.
   const [seatArt, setSeatArt] = useState<SlotArtIndex>(() => new Map());
+  // True when the conference has a press committee: the header then offers
+  // the Press Desk (/conferences/<slug>/press), the same read-only desk the
+  // press seats use. Read from the committee list this page already loads.
+  const [hasPress, setHasPress] = useState(false);
+  const [pressHover, setPressHover] = useState(false);
   const loadingRef = useRef(false);
   const loadStartedRef = useRef(0);
 
@@ -151,6 +157,7 @@ export default function LiveStatusPage() {
       }
 
       const confRows = confCommittees ?? [];
+      setHasPress(confRows.some((c) => c.committee_type === 'press'));
       void loadSlotArtIndex(authed, confRows.map((c) => c.id)).then(setSeatArt).catch(() => {});
       const sessionIds = confRows.map((c) => c.session_id).filter((id): id is string => !!id);
 
@@ -231,7 +238,9 @@ export default function LiveStatusPage() {
             // side at seed time — see `src/lib/sessionFlags.ts`. It lets a card
             // draw a delegation's real mark without the slot index having to
             // resolve it by name.
-            .select('committee_id, country, status, is_observer, logo_url')
+            // group_color / group_short: a custom committee seat's party
+            // (live since 23 Oct 2026), drawn as the chair draws it.
+            .select('committee_id, country, status, is_observer, logo_url, group_color, group_short')
             .in('committee_id', sessionIds),
           anonSupabase.from('speakers_list')
             .select('committee_id, country, position, list_type')
@@ -474,6 +483,7 @@ export default function LiveStatusPage() {
                 status: d.status as string,
                 isObserver: (d.is_observer as boolean | null) ?? false,
                 logoUrl: (d.logo_url as string | null) ?? null,
+                ...seatGroupFromRow(d),
               }))
             : [],
           gslQueue: sid ? bySession(queues, sid).filter((q) => q.list_type === 'gsl').map((q) => q.country as string) : [],
@@ -803,6 +813,27 @@ export default function LiveStatusPage() {
             <RefreshCw size={17} className={refreshing ? 'animate-spin' : ''} />
             Refresh
           </button>
+          {hasPress && conference && (
+            <a
+              href={`/conferences/${conference.slug}/press`}
+              target="_blank"
+              rel="noopener noreferrer"
+              onMouseEnter={() => setPressHover(true)}
+              onMouseLeave={() => setPressHover(false)}
+              className="inline-flex items-center gap-2 rounded-full px-5 text-[15px] font-bold focus:outline-none"
+              style={{
+                minHeight: 46,
+                color: NEU.forest, backgroundColor: NEU.surface, textDecoration: 'none',
+                fontFamily: OUTFIT,
+                boxShadow: pressHover ? NEU.outSmHover : NEU.outSm,
+                transition: `box-shadow 200ms ${EASE}`,
+              }}
+              title="Open the Press Desk in a new tab"
+            >
+              <Newspaper size={17} strokeWidth={1.75} aria-hidden />
+              Press Desk
+            </a>
+          )}
           {/* Broadcast — writes session_broadcasts rows, one per targeted
               committee. Nothing here suspends or ends a session itself. */}
           <button

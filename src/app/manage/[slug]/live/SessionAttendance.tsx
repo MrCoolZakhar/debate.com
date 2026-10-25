@@ -17,6 +17,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Megaphone, RefreshCw, History as HistoryIcon } from 'lucide-react';
 import { NEU, OUTFIT } from '@/components/neu';
 import { SeatCircleFlag } from '@/components/CircleFlag';
+import SeatGroupTag from '@/components/SeatGroupTag';
 import { getCountryDisplayName } from '@/lib/countries';
 import { useAuth } from '@/components/AuthProvider';
 import { getFreshAuthedClient } from '@/lib/supabase-auth';
@@ -38,6 +39,9 @@ export interface AttendanceSeat {
   status: string;
   isObserver: boolean;
   logoUrl?: string | null;
+  /** A custom committee seat's party, drawn as the chair draws it. */
+  groupColor?: string | null;
+  groupShort?: string | null;
 }
 
 const RECORDED_FROM = '23 Sep 2026';
@@ -175,7 +179,7 @@ export function SessionAttendance({ sessionId, seats, endedAt = null }: {
       : 'Not in the room since recording began';
     return (
       <li key={s.country} className="flex items-center gap-3 py-2.5" style={{ borderBottom: '1px solid rgba(27,56,40,0.07)' }}>
-        <SeatCircleFlag country={s.country} logoUrl={s.logoUrl ?? null} size={30} decorative fallback="initials" />
+        <SeatCircleFlag seat={{ country: s.country, logoUrl: s.logoUrl ?? null, groupColor: s.groupColor ?? null, groupShort: s.groupShort ?? null }} size={30} decorative fallback="initials" />
         <div className="min-w-0 flex-1">
           <p className="text-[15px] font-semibold leading-tight [overflow-wrap:anywhere]" style={{ color: NEU.ink }}>
             {getCountryDisplayName(s.country, 'en')}
@@ -186,6 +190,7 @@ export function SessionAttendance({ sessionId, seats, endedAt = null }: {
             )}
             {st === 'present-voting' && !s.isObserver && <span className="ms-1.5 text-[12px] font-semibold" style={{ color: '#8A6414' }}>voting</span>}
           </p>
+          {s.groupShort && <SeatGroupTag short={s.groupShort} color={s.groupColor} size={12} style={{ marginTop: 2 }} />}
           {/* When they were in the room, as a bar over the recorded span. */}
           {log && spanStart > 0 && (
             <div className="relative mt-1.5 h-[6px] rounded-full" style={{ backgroundColor: 'rgba(27,56,40,0.08)' }} title={tip} aria-label={`In the room: ${tip}`} role="img">
