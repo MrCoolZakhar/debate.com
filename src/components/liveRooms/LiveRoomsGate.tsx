@@ -47,7 +47,7 @@ import { serverNow } from '@/lib/serverClock';
 import LiveRoomsDialog, { PROMPT_ATTR, itemHref, type PromptItem, type StandaloneItem } from './LiveRoomsDialog';
 
 const EXCLUDED_PREFIXES = [
-  '/chair', '/delegate', '/voting', '/advisor', '/join',
+  '/chair', '/delegate', '/voting', '/advisor', '/join', '/crisis',
   '/auth', '/unsubscribe', '/drafts', '/invites', '/api', '/files', '/i/',
 ];
 const EXCLUDED_SEGMENTS = ['/apply', '/pay'];
