@@ -10,7 +10,7 @@ import {
   MEMBER_COLUMNS,
   type Cabinet, type Character, type CharacterSecret, type Crisis, type Directive, type DirectiveNote,
   type MapRegion, type MapShape, type MapUnit, type Member, type News, type Resource, type ResourceType,
-  type ResolvedCrisis, type DirectiveOutcome, type DirectiveKind,
+  type ResolvedCrisis, type DirectiveOutcome, type DirectiveKind, type CrisisMessage,
 } from './types';
 
 export interface CrisisRef { conf: string; crisis: string; id: string }
@@ -283,7 +283,7 @@ export async function listNews(ref: CrisisRef): Promise<News[]> {
   return must(res, 'Could not load the news.') as News[];
 }
 
-export async function saveNews(ref: CrisisRef, id: string | null, n: { title: string; body: string; source_label?: string | null; image_url?: string | null; audience_cabinet_id?: string | null }): Promise<string> {
+export async function saveNews(ref: CrisisRef, id: string | null, n: { title: string; body: string; source_label?: string | null; image_url?: string | null; banner_url?: string | null; attachment_url?: string | null; attachment_name?: string | null; audience_cabinet_id?: string | null }): Promise<string> {
   const client = await c(ref);
   const res = await client.rpc('crisis_save_news', { p_crisis: ref.id, p_id: id, p: n });
   return must(res, 'Could not save the news.') as string;
@@ -380,4 +380,76 @@ export async function deleteShape(ref: CrisisRef, id: string): Promise<void> {
   const client = await c(ref);
   const res = await client.from('crisis_shapes').delete().eq('id', id).select('id');
   if (res.error || !res.data?.length) throw new UserFacingError(crisisError(res.error, 'Could not remove the shape.'));
+}
+
+// ─────────── Media (bucket crisis-media, public; see docs/crisis/sql/006) ───────────
+
+const BANNER_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+const FILE_TYPES = [...BANNER_TYPES, 'application/pdf', 'text/plain',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'];
+const MAX_MEDIA_BYTES = 20 * 1024 * 1024;
+
+async function upload(ref: CrisisRef, path: string, file: File): Promise<string> {
+  const client = await c(ref);
+  const res = await client.storage.from('crisis-media').upload(path, file, { contentType: file.type, upsert: false });
+  if (res.error) throw new UserFacingError(crisisError(res.error, 'Could not upload the file. Try again.'));
+  return client.storage.from('crisis-media').getPublicUrl(path).data.publicUrl;
+}
+
+/** A news banner: JPG, PNG, WebP or GIF up to 20 MB. The path shape is trusted by the live room
+ *  (CRISIS_BANNER_PATH in src/lib/chatAttachments.ts): change both together. */
+export async function uploadCrisisBanner(ref: CrisisRef, file: File): Promise<string> {
+  if (!BANNER_TYPES.includes(file.type)) throw new UserFacingError('Use a JPG, PNG, WebP or GIF image.');
+  if (file.size > MAX_MEDIA_BYTES) throw new UserFacingError('The image is over 20 MB.');
+  const ext = file.type === 'image/jpeg' ? 'jpg' : file.type.split('/')[1];
+  return upload(ref, `${ref.id}/news/${Date.now()}-banner.${ext}`, file);
+}
+
+/** Any attached file: PDF, Word, PowerPoint, Excel, text or an image, up to 20 MB. */
+export async function uploadCrisisFile(ref: CrisisRef, file: File): Promise<{ url: string; name: string }> {
+  if (!FILE_TYPES.includes(file.type)) throw new UserFacingError('Use a PDF, Word, PowerPoint, Excel, text or image file.');
+  if (file.size > MAX_MEDIA_BYTES) throw new UserFacingError('The file is over 20 MB.');
+  const safe = file.name.normalize('NFKD').replace(/[^A-Za-z0-9._-]+/g, '-').replace(/^-+|-+$/g, '').slice(-80) || 'file';
+  const url = await upload(ref, `${ref.id}/files/${Date.now()}-${safe}`, file);
+  return { url, name: file.name };
+}
+
+// ─────────── Chat between characters ───────────
+
+export async function listMessages(ref: CrisisRef): Promise<CrisisMessage[]> {
+  const client = await c(ref);
+  const res = await client.from('crisis_messages').select('*').eq('crisis_id', ref.id).order('created_at').limit(5000);
+  return must(res, 'Could not load the messages.') as CrisisMessage[];
+}
+
+export type SendMessageResult = { ok: true; id: string; status: 'sent' | 'pending' } | { ok: false; reason: 'off' };
+export async function sendMessage(ref: CrisisRef, toCharacterId: string, body: string): Promise<SendMessageResult> {
+  const client = await c(ref);
+  const res = await client.rpc('crisis_send_message', { p_crisis: ref.id, p_to_character: toCharacterId, p_body: body });
+  return must(res, 'Could not send the message. It is kept, try again.') as SendMessageResult;
+}
+
+export async function decideMessage(ref: CrisisRef, messageId: string, approve: boolean): Promise<void> {
+  const client = await c(ref);
+  const res = await client.rpc('crisis_decide_message', { p_message: messageId, p_approve: approve });
+  must(res, 'Could not save that decision.');
+}
+
+// ─────────── View as, room codes ───────────
+
+/** Directors (through their own account) open the crisis as another person on this device. */
+export async function viewAs(ref: CrisisRef, memberId: string): Promise<void> {
+  const client = await getCrisisClient('', ''); // the account, never a stored token
+  const res = await client.rpc('crisis_view_as', { p_member: memberId });
+  const r = must(res, 'Could not open the crisis as this person.') as { token: string; conference_slug: string; crisis_slug: string };
+  saveCrisisToken(r.conference_slug, r.crisis_slug, r.token);
+}
+
+/** Public: the crisis behind a live room code, or null. */
+export async function crisisForRoom(code: string): Promise<{ conference_slug: string; crisis_slug: string; name: string } | null> {
+  const res = await anonClient.rpc('crisis_for_room', { p_code: code });
+  if (res.error) return null;
+  return (res.data as { conference_slug: string; crisis_slug: string; name: string } | null) ?? null;
 }

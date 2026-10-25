@@ -7,7 +7,7 @@ import Link from 'next/link';
 import { useParams, usePathname, useRouter } from 'next/navigation';
 import {
   LayoutDashboard, ScrollText, Map as MapIcon, Newspaper, ContactRound, UsersRound, Settings, Presentation,
-  Home, LogOut, KeyRound,
+  Home, LogOut, KeyRound, MessagesSquare,
 } from 'lucide-react';
 import BrandLogo from '@/components/BrandLogo';
 import ProfileAvatarMenu from '@/components/ProfileAvatar';
@@ -33,6 +33,7 @@ function navFor(role: CrisisRole, base: string): NavItem[] {
       ...staffWorld,
       { href: `${base}/directives`, label: 'Directives', icon: ic(ScrollText), section: 'RUN' },
       { href: `${base}/news`, label: 'News', icon: ic(Newspaper), section: 'RUN' },
+      { href: `${base}/messages`, label: 'Messages', icon: ic(MessagesSquare), section: 'RUN' },
       { href: `${base}/characters`, label: 'Characters', icon: ic(ContactRound), section: 'WORLD' },
       { href: `${base}/staff`, label: 'Staff and access', icon: ic(UsersRound), section: 'SET UP' },
       { href: `${base}/settings`, label: 'Settings', icon: ic(Settings), section: 'SET UP' },
@@ -43,6 +44,7 @@ function navFor(role: CrisisRole, base: string): NavItem[] {
       { href: base, label: 'Directives', icon: ic(ScrollText) },
       ...staffWorld,
       { href: `${base}/news`, label: 'News', icon: ic(Newspaper), section: 'RUN' },
+      { href: `${base}/messages`, label: 'Messages', icon: ic(MessagesSquare), section: 'RUN' },
       { href: `${base}/characters`, label: 'Characters', icon: ic(ContactRound), section: 'WORLD' },
     ];
   }

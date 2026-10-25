@@ -125,7 +125,7 @@ export type DirectiveOutcome = 'approved' | 'partial' | 'denied' | 'clarify' | '
 export const KIND_LABEL: Record<DirectiveKind, string> = {
   personal: 'Personal directive',
   joint: 'Joint directive',
-  committee: 'Committee directive',
+  committee: 'Cabinet directive',
   press_release: 'Press release',
   communique: 'Communiqué',
 };
@@ -190,6 +190,22 @@ export interface News {
   published_by: string | null;
   published_at: string | null;
   directive_id: string | null;
+  banner_url: string | null;        // a wide image above the story (and the live-room pop-up image)
+  attachment_url: string | null;    // one file to download
+  attachment_name: string | null;
+  created_at: string;
+}
+
+/** Chat between characters (docs/crisis/sql/006). Staff read everything; approval is a setting. */
+export interface CrisisMessage {
+  id: string;
+  crisis_id: string;
+  from_member_id: string | null;
+  from_character_id: string | null;
+  to_character_id: string;
+  body: string;
+  status: 'sent' | 'pending' | 'rejected';
+  decided_by: string | null;
   created_at: string;
 }
 

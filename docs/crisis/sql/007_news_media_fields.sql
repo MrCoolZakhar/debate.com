@@ -1,0 +1,4 @@
+-- Gavelling Crisis, part 7 (applied as crisis_part7_news_media_fields): news save/publish carry the banner
+-- and the file; the live-room pop-up shows the banner as its image, and a story over 1,500 characters is
+-- cut in the room with a pointer to read the rest in Gavelling Crisis. Full text: see the applied migration
+-- (crisis_save_news and crisis_publish_news, replacing the part 1 versions).

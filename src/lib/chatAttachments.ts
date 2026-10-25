@@ -89,8 +89,11 @@ export function trustedBroadcastImageUrl(u: string | null | undefined): string |
   try { parsed = new URL(u); } catch { return null; }
   if (parsed.protocol !== 'https:' || parsed.origin !== PROJECT_ORIGIN || parsed.username || parsed.password) return null;
   if (u !== PROJECT_ORIGIN + parsed.pathname) return null;
-  return BROADCAST_IMAGE_PATH.test(parsed.pathname) ? u : null;
+  return BROADCAST_IMAGE_PATH.test(parsed.pathname) || CRISIS_BANNER_PATH.test(parsed.pathname) ? u : null;
 }
+/** Gavelling Crisis news banners (uploadCrisisBanner in src/lib/crisis/api.ts): the public
+ *  `crisis-media` bucket, `<crisis uuid>/news/<epoch ms>-banner.<image ext>`, nothing else. */
+const CRISIS_BANNER_PATH = /^\/storage\/v1\/object\/public\/crisis-media\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/news\/\d{10,16}-banner\.(jpe?g|png|webp|gif)$/i;
 
 function oneLine(s: string, max = 120): string {
   return s.replace(/[\r\n]+/g, ' ').trim().slice(0, max) || 'file';
