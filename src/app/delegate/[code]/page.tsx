@@ -4,7 +4,7 @@ import Loader from '@/components/Loader';
 import { openAuth } from '@/lib/authModal';
 import React, { use, useEffect, useState, useRef, useCallback, useMemo, Suspense } from 'react';
 import SessionsHeaderLogo from '@/components/SessionsHeaderLogo';
-import { Mic, FileText, MessageCircle, MessageSquare, Clock, Mic2, Languages, LogOut, Check, FolderOpen, Hand, Paperclip } from 'lucide-react';
+import { Mic, FileText, MessageCircle, MessageSquare, Clock, Mic2, Languages, LogOut, Check, FolderOpen, Hand, Link as LinkIcon, Paperclip } from 'lucide-react';
 import { OUTFIT, Emoji3D } from '@/components/neu';
 import {
   DelegateStyles, DG, LIFT, Panel, SectionLabel, FlagDisc, FlagOrdinalDisc, StatRow,
@@ -19,7 +19,8 @@ import ChatPanel from '@/components/ChatPanel';
 import { getScoringConfig } from '@/lib/scoring';
 import { selectDelegateTips } from '@/lib/delegateTips';
 import { getCountryByName, getCountryDisplayName, matchesCountryQuery } from '@/lib/countries';
-import { SeatFlag, SeatArtProvider } from '@/components/SeatFlag';
+import { SeatArtProvider } from '@/components/SeatFlag';
+import { SeatCircleFlag } from '@/components/CircleFlag';
 import { getCommitteeDisplayName } from '@/lib/presetNames';
 import { supabase } from '@/lib/supabase';
 import CowDelegationBoard from '@/components/CowDelegationBoard';
@@ -59,7 +60,6 @@ import DelegateIdleWarning from '@/components/delegate/DelegateIdleWarning';
 import DeviceBallotScreen from '@/components/delegate/DeviceBallotScreen';
 import { safeStorageKey } from '@/lib/storageKey';
 import { initialAdmission, writeAdmission, clearAdmission, newRequestId, type AdmissionRecord } from '@/lib/seatAdmission';
-import { UnknownSeatIcon } from '@/components/UnknownSeatIcon';
 import { replaceUrlInPlace } from '@/lib/replaceUrlInPlace';
 import PdfViewer, { type PdfZoom } from '@/components/documents/PdfViewer';
 
@@ -130,12 +130,7 @@ function SeatGateScreen({ title, body, primaryLabel, onPrimary, backLabel, onBac
  *  `flagFor()` call so it can read the seat's crest off <SeatArtProvider>. */
 function SeatMark({ country }: { country: string }) {
   return (
-    <SeatFlag
-      country={country}
-      className="inline-block object-contain"
-      style={{ width: '1em', height: '1em' }}
-      fallback={<UnknownSeatIcon size={16} style={{ width: '1em', height: '1em' }} />}
-    />
+    <SeatCircleFlag country={country} size={16} decorative className="inline-block align-[-0.15em]" />
   );
 }
 
@@ -422,7 +417,7 @@ function DocLinkRow({ href, label }: { href: string; label: string }) {
         fontFamily: OUTFIT, fontSize: 12, fontWeight: 700, color: DG.forest, textDecoration: 'underline',
       }}
     >
-      🔗 {label}
+      <LinkIcon size={14} strokeWidth={1.5} aria-hidden style={{ flexShrink: 0 }} /> {label}
     </a>
   );
 }
@@ -2277,7 +2272,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
     // the chair's Approve changes nothing about attendance.
     const presentStatus: 'present' | 'present-voting' | null = !isAbsent && myDelegate
       ? (myDelegate.status === 'present-voting' && !isObserverSeat ? 'present-voting' : 'present') : null;
-    const waitingHeading = language === 'ar' ? 'غرفة الانتظار' : language === 'fr' ? "Salle d'attente" : language === 'pt' ? 'Sala de Espera' : language === 'es' ? 'Sala de Espera' : 'Waiting Room';
+    const waitingHeading = t('delegate_waiting_room_title');
     return (
       <div className="min-h-dvh flex flex-col items-center justify-center text-center px-6 py-10" style={{ background: DG.ivory }}>
         <DelegateStyles />
@@ -2309,7 +2304,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
             </>
           ) : joinStatus ? (
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12, padding: '8px 0' }}>
-              <span className="animate-spin" style={{ width: 24, height: 24, borderRadius: '50%', border: `3px solid ${DG.forest}`, borderTopColor: 'transparent' }} />
+              <Loader size={28} label={t('delegate_join_waiting')} />
               <p style={{ margin: 0, fontFamily: OUTFIT, fontSize: 14, color: DG.body }}>{t('delegate_join_waiting')}</p>
             </div>
           ) : (

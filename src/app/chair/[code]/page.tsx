@@ -10,7 +10,7 @@ import GavelChip from '@/components/GavelChip';
 import CommitteeIdentityBadge, { emblemMonogram } from '@/components/CommitteeIdentityBadge';
 import SeatAddField from '@/components/SeatAddField';
 import { TopBarTab, TopBarIconButton, TOP_BAR_ROW_PX, useTopBarTwoRows } from '@/components/ChairTopBar';
-import SpeakerControls, { FloorProgress, SpeakerClock, POPOVER_TONES, type ControlLock } from '@/components/SpeakerControls';
+import SpeakerControls, { FloorProgress, SpeakerClock, FloorControlButton, POPOVER_TONES, SPEAKER_TONES, type ControlLock } from '@/components/SpeakerControls';
 import { moderatorNameOf, notifyCommenterOnly } from '@/lib/commenterNotice';
 import { notifyDelegationAbsent } from '@/lib/absentNotice';
 import DraggablePopover from '@/components/DraggablePopover';
@@ -24,7 +24,7 @@ import SessionCodePresenter from '@/components/SessionCodePresenter';
 import { RollCallWithJoin } from '@/components/RollCallJoinPanel';
 import FloorEmblemBackdrop from '@/components/FloorEmblemBackdrop';
 import ConferencePromoDialog from '@/components/ConferencePromoDialog';
-import { Ban, ClockPlus, FileSpreadsheet, ListOrdered, Maximize2, MessageCircle, MessageSquareReply, RotateCcw, Settings, Trophy, Users } from 'lucide-react';
+import { AlertTriangle, Ban, Check, ClockPlus, DoorOpen, FileSpreadsheet, ListOrdered, Maximize2, MessageCircle, MessageSquareReply, Pause, Play, RotateCcw, Settings, Square, Timer, Trophy, Users } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { CaucusState, Committee, Delegate, DelegateStatus } from '@/lib/types';
@@ -35,7 +35,8 @@ import { logFloorSpeech, logTimedSpeech, cowTurnKey, floorSpeechSeconds, creditR
 import YieldPopover from '@/components/YieldPopover';
 import DocumentsModal from '@/components/DocumentsModal';
 import { getCountryByName, getCountryDisplayName, matchesCountryQuery, startsWithCountryQuery } from '@/lib/countries';
-import { SeatFlag, SeatArtProvider } from '@/components/SeatFlag';
+import { SeatArtProvider } from '@/components/SeatFlag';
+import { NEU } from '@/components/neu';
 import { SeatCircleFlag } from '@/components/CircleFlag';
 import { getCommitteeDisplayName, committeeDisplayName, deriveCommitteeAcronym, matchPresetEmblem } from '@/lib/presetNames';
 import { SettingsPanel } from '@/components/SettingsPanel';
@@ -157,7 +158,6 @@ import { overlayPendingRollCall } from '@/lib/pendingRollCall';
 import { serverNow, serverNowIso } from '@/lib/serverClock';
 import SaveStatusToast from '@/components/notifications/SaveStatusToast';
 import ClockSkewHint from '@/components/ClockSkewHint';
-import { UnknownSeatIcon } from '@/components/UnknownSeatIcon';
 
 /** Below this console layout width (innerWidth x 820 / innerHeight) the sidebar starts folded. */
 const SIDEBAR_AUTO_COLLAPSE_BELOW = 800;
@@ -182,7 +182,7 @@ function GavelLoader() {
   return (
     <div className="min-h-screen flex flex-col items-center justify-center gap-4" style={{ backgroundColor: '#EDE7D8' }}>
       <Loader size={72} label={t('session_loading_label')} />
-      <p className="text-[#9A8A78] text-sm font-mono tracking-widest">{t('session_loading')}</p>
+      <p className="text-[color:color-mix(in_srgb,var(--gv-on-surface)_72%,var(--gv-surface))] text-sm font-medium" style={{ fontFamily: "var(--font-brand), sans-serif" }}>{t('session_loading')}</p>
     </div>
   );
 }
@@ -351,7 +351,7 @@ function AddSpeakerInput({ committee, onAdd, showAbsent = false }: { committee: 
           onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); commit(topNotOnList); } if (e.key === 'Escape') setQuery(''); }}
           placeholder={t('gsl_add_to_list')} autoFocus
           className="flex-1 min-w-[7rem] bg-transparent px-4 py-2.5 text-[#1C1410] placeholder-[#9A8A78] focus:outline-none text-sm" />
-        {topNotOnList && query && <span className="text-xs text-[#9A8A78] px-2 max-w-[140px] leading-tight [overflow-wrap:anywhere] inline-flex items-start gap-1"><span aria-hidden>↵</span><SeatName name={getCountryDisplayName(topNotOnList.country, language)} max={16} /></span>}
+        {topNotOnList && query && <span className="text-xs text-[color:color-mix(in_srgb,var(--gv-on-surface)_72%,var(--gv-surface))] px-2 max-w-[140px] leading-tight [overflow-wrap:anywhere] inline-flex items-start gap-1"><span aria-hidden>↵</span><SeatName name={getCountryDisplayName(topNotOnList.country, language)} max={16} /></span>}
       </div>
       {query && matches.length > 0 && (
         <div data-tutorial="speakers-autocomplete" className="absolute bottom-full left-0 right-0 mb-1 bg-[#FAF8F3] border border-[#DDD4C0] rounded-xl overflow-hidden shadow-xl z-10 max-h-48 overflow-y-auto">
@@ -361,7 +361,7 @@ function AddSpeakerInput({ committee, onAdd, showAbsent = false }: { committee: 
               return (
                 <div key={d.id} className="w-full flex items-center gap-3 px-4 py-2.5 opacity-40">
                   <span className="shrink-0 w-6 h-6 inline-flex items-center justify-center">
-                  <SeatFlag country={d.country} size={20} className="object-contain" fallback={<UnknownSeatIcon size={20} />} />
+                  <SeatCircleFlag country={d.country} size={20} decorative fallback="initials" />
                 </span>
                   <SeatName name={getCountryDisplayName(d.country, language)} max={26} className="text-sm flex-1 text-[#9A8A78]" />
                   <span className="text-xs text-[#9A8A78]">{t('gsl_already_on_list')}</span>
@@ -373,11 +373,11 @@ function AddSpeakerInput({ committee, onAdd, showAbsent = false }: { committee: 
               <button key={d.id} onMouseDown={(e) => { e.preventDefault(); commit(d); }}
                 className={`w-full flex items-center gap-3 px-4 py-2.5 text-start transition-colors ${isFirst ? 'bg-[#1B3828]/20 text-[#1C1410]' : 'text-[#1C1410] hover:bg-[#DDD4C0]'}`}>
                 <span className="shrink-0 w-6 h-6 inline-flex items-center justify-center">
-                  <SeatFlag country={d.country} size={20} className="object-contain" fallback={<UnknownSeatIcon size={20} />} />
+                  <SeatCircleFlag country={d.country} size={20} decorative fallback="initials" />
                 </span>
                 <SeatName name={getCountryDisplayName(d.country, language)} max={26} className="text-sm" />
                 {d.status === 'absent' && <span className="text-[10px] text-[#B6871F] shrink-0">{t('rollcall_absent')}</span>}
-                {isFirst && <span className="ms-auto text-xs text-[#9A8A78]">{t('gsl_enter_hint')}</span>}
+                {isFirst && <span className="ms-auto text-xs text-[color:color-mix(in_srgb,var(--gv-on-surface)_72%,var(--gv-surface))]">{t('gsl_enter_hint')}</span>}
               </button>
             );
           })}
@@ -460,7 +460,7 @@ function RtrCountryInput({
           className="flex-1 bg-transparent px-3 py-1.5 text-[#1C1410] text-xs placeholder-[#9A8A78] focus:outline-none"
         />
         {topMatch && query && !value && query.toLowerCase() !== topMatch.country.toLowerCase() && (
-          <span className="text-[10px] text-[#9A8A78] px-2 max-w-[110px] leading-tight [overflow-wrap:anywhere] inline-flex items-start gap-1"><span aria-hidden>↵</span><SeatName name={getCountryDisplayName(topMatch.country, language)} max={14} /></span>
+          <span className="text-[10px] text-[color:color-mix(in_srgb,var(--gv-on-surface)_72%,var(--gv-surface))] px-2 max-w-[110px] leading-tight [overflow-wrap:anywhere] inline-flex items-start gap-1"><span aria-hidden>↵</span><SeatName name={getCountryDisplayName(topMatch.country, language)} max={14} /></span>
         )}
       </div>
       {listShown && (
@@ -479,10 +479,10 @@ function RtrCountryInput({
                   className={`w-full flex items-center gap-2 px-3 py-2 text-start text-xs transition-colors focus:outline-none ${i === 0 ? 'bg-[#1B3828]/20 text-[#1C1410]' : 'text-[#1C1410] hover:bg-[#DDD4C0]'}`}
                 >
                   <span className="shrink-0 w-5 h-5 inline-flex items-center justify-center">
-                    <SeatFlag country={d.country} size={16} className="object-contain" fallback={<UnknownSeatIcon size={16} />} />
+                    <SeatCircleFlag country={d.country} size={16} decorative fallback="initials" />
                   </span>
                   <SeatName name={getCountryDisplayName(d.country, language)} max={26} className="flex-1" />
-                  {i === 0 && <span className="text-[#9A8A78] shrink-0">{t('gsl_enter_hint')}</span>}
+                  {i === 0 && <span className="text-[color:color-mix(in_srgb,var(--gv-on-surface)_72%,var(--gv-surface))] shrink-0">{t('gsl_enter_hint')}</span>}
                 </button>
               );
             })}
@@ -567,11 +567,11 @@ function CaucusQueueSidebar({ committee, onRemove, onReorder, lastSpeakerDelegat
     <div className="flex flex-col h-full overflow-hidden">
       <div className="px-4 pt-4 pb-3 border-b border-[#DDD4C0] shrink-0">
         <span className="text-sm font-bold text-[#1C1410]">{t('gsl_speaker_queue')}</span>
-        <span className="text-xs text-[#9A8A78] ms-2 font-mono">{queue.length} speakers</span>
+        <span className="text-xs text-[color:color-mix(in_srgb,var(--gv-on-surface)_72%,var(--gv-surface))] ms-2 font-mono">{queue.length} speakers</span>
       </div>
       <div className="flex-1 overflow-y-auto px-2 py-2 space-y-0.5">
         {queue.length === 0 ? (
-          <div className="px-4 py-8 text-center text-[#9A8A78] text-sm">{t('gsl_no_speakers_queued')}</div>
+          <div className="px-4 py-8 text-center text-[color:color-mix(in_srgb,var(--gv-on-surface)_72%,var(--gv-surface))] text-sm">{t('gsl_no_speakers_queued')}</div>
         ) : (
           queue.map((s, i) => {
             return (
@@ -591,13 +591,13 @@ function CaucusQueueSidebar({ committee, onRemove, onReorder, lastSpeakerDelegat
                 }}
                 className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl transition-all bg-[#FAF8F3] border border-[#DDD4C0] hover:border-[#1B3828]/40 cursor-grab group"
               >
-                <span className="text-xs text-[#9A8A78] font-mono w-5 text-end shrink-0">{i + 1}</span>
+                <span className="text-xs text-[color:color-mix(in_srgb,var(--gv-on-surface)_72%,var(--gv-surface))] font-mono w-5 text-end shrink-0">{i + 1}</span>
                 <span className="shrink-0 w-6 h-6 inline-flex items-center justify-center">
-                  <SeatFlag country={s.country} size={20} className="object-contain" fallback={<UnknownSeatIcon size={20} />} />
+                  <SeatCircleFlag country={s.country} size={20} decorative fallback="initials" />
               </span>
                 <SeatName name={getCountryDisplayName(s.country, language)} max={20} className="flex-1 text-sm text-[#1C1410] whitespace-normal leading-tight" />
                 {lastSpeakerDelegateId && s.delegateId === lastSpeakerDelegateId && (
-                  <span className="text-xs font-bold text-[#9A8A78] bg-[#DDD4C0] px-1.5 py-0.5 rounded shrink-0">Last</span>
+                  <span className="text-xs font-bold text-[color:color-mix(in_srgb,var(--gv-on-surface)_72%,var(--gv-surface))] bg-[#DDD4C0] px-1.5 py-0.5 rounded shrink-0">Last</span>
                 )}
                 <button
                   onClick={() => onRemove(s.delegateId)}
@@ -689,13 +689,13 @@ function CaucusAddSpeakerInput({ committee, spokenCountries, onAdd, onAddFirst, 
           className="flex-1 min-w-0 bg-transparent px-4 py-3 text-[#1C1410] placeholder-[#9A8A78] focus:outline-none text-sm disabled:cursor-not-allowed" />
         {isFull && (
           <span id="caucus-queue-full-note" role="status"
-            className="shrink-0 me-2 inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide"
+            className="shrink-0 me-2 inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-bold"
             style={{ background: 'rgba(139,32,32,0.08)', color: '#8B2020', boxShadow: 'inset 0 0 0 1px rgba(139,32,32,0.18)' }}>
             <Ban size={12} strokeWidth={2.6} aria-hidden />
             {t('caucus_queue_full_title')}
           </span>
         )}
-        {!isFull && topNotOnList && query && <span className="text-xs text-[#9A8A78] px-3 max-w-[140px] leading-tight [overflow-wrap:anywhere] inline-flex items-start gap-1"><span aria-hidden>↵</span><SeatName name={getCountryDisplayName(topNotOnList.country, language)} max={16} /></span>}
+        {!isFull && topNotOnList && query && <span className="text-xs text-[color:color-mix(in_srgb,var(--gv-on-surface)_72%,var(--gv-surface))] px-3 max-w-[140px] leading-tight [overflow-wrap:anywhere] inline-flex items-start gap-1"><span aria-hidden>↵</span><SeatName name={getCountryDisplayName(topNotOnList.country, language)} max={16} /></span>}
       </div>
       {!isFull && query && matches.length > 0 && (
         <div className="absolute bottom-full left-0 right-0 mb-1 bg-[#FAF8F3] border border-[#DDD4C0] rounded-xl overflow-hidden shadow-xl z-10 max-h-48 overflow-y-auto">
@@ -707,7 +707,7 @@ function CaucusAddSpeakerInput({ committee, spokenCountries, onAdd, onAddFirst, 
               return (
                 <div key={d.id} className="w-full flex items-center gap-3 px-4 py-2.5 opacity-40">
                   <span className="shrink-0 w-6 h-6 inline-flex items-center justify-center">
-                    <SeatFlag country={d.country} size={20} className="object-contain" fallback={<UnknownSeatIcon size={20} />} />
+                    <SeatCircleFlag country={d.country} size={20} decorative fallback="initials" />
                 </span>
                   <SeatName name={getCountryDisplayName(d.country, language)} max={26} className="text-sm flex-1 text-[#9A8A78]" />
                   <span className="text-xs text-[#9A8A78]">{isCurrent ? t('caucus_currently_speaking') : t('gsl_already_on_list')}</span>
@@ -721,7 +721,7 @@ function CaucusAddSpeakerInput({ committee, spokenCountries, onAdd, onAddFirst, 
               <div key={d.id} role="option" aria-selected={isFirst} onMouseDown={(e) => { e.preventDefault(); commit(d); }}
                 className={`w-full flex items-center gap-3 px-4 py-2.5 text-start transition-colors cursor-pointer ${isFirst ? 'bg-[#1B3828]/20 text-[#1C1410]' : 'text-[#1C1410] hover:bg-[#DDD4C0]'}`}>
                 <span className="shrink-0 w-6 h-6 inline-flex items-center justify-center">
-                  <SeatFlag country={d.country} size={20} className="object-contain" fallback={<UnknownSeatIcon size={20} />} />
+                  <SeatCircleFlag country={d.country} size={20} decorative fallback="initials" />
                 </span>
                 <SeatName name={getCountryDisplayName(d.country, language)} max={26} className="text-sm flex-1" />
                 {d.status === 'absent' && <span className="text-[10px] text-[#B6871F] shrink-0">{t('rollcall_absent')}</span>}
@@ -740,7 +740,7 @@ function CaucusAddSpeakerInput({ committee, spokenCountries, onAdd, onAddFirst, 
                         {t('caucus_add_last')}
                       </button>
                     )}
-                    <span className="text-xs text-[#9A8A78]">{t('gsl_enter_hint')}</span>
+                    <span className="text-xs text-[color:color-mix(in_srgb,var(--gv-on-surface)_72%,var(--gv-surface))]">{t('gsl_enter_hint')}</span>
                   </div>
                 )}
               </div>
@@ -969,6 +969,13 @@ function UnmoderatedCaucusView({ committee, setCommittee, isViewOnly = false, ga
     }, true);
   };
 
+  // Shared by the Consultation timer's presets, the custom field and its ✓ press: the same
+  // three state writes the inline handlers made before (no DB write, RULES 3 to 5).
+  const setCowTo = (s: number) => { setCowActive(false); setCowRemaining(s); setCowSetSecs(s); };
+  const commitCowCustom = () => { const s = parseInt(cowCustom, 10); if (s > 0) { setCowTo(s); setCowCustom(''); } };
+  const cowTone = POPOVER_TONES.consult;
+  const plainLabel = (label: string) => label.replace(/[▶►⏸→←‖]/g, '').replace(/\s+/g, ' ').trim();
+
   return (
     <div className="relative flex-1 flex flex-col items-center px-8 pb-12">
       {/* The motion's name, who raised it and the topic: the SAME header, in the same place,
@@ -987,10 +994,17 @@ function UnmoderatedCaucusView({ committee, setCommittee, isViewOnly = false, ga
       {/* A Commenter's gavel cue (Oct 2026): below the committee's gavel mark the running
           countdown pulses gently (no pulse under reduced motion). No audio on this device. */}
       <style>{`@keyframes uc-gavel-pulse{0%,100%{opacity:1}50%{opacity:.6}}.uc-pulse{animation:uc-gavel-pulse 1s ease-in-out infinite}@media (prefers-reduced-motion: reduce){.uc-pulse{animation:none}}`}</style>
-      <div className={`floor-emblem-anchor text-9xl font-black font-mono tabular-nums mb-8 ${liveTotal <= 30 ? 'text-red-500' : 'text-[#1C1410]'} ${
-        isViewOnly && !!unmodAnchor && liveTotal > 0 && liveTotal <= clampGavelSeconds(committee.dbSettings?.gavelSoundAtSeconds) ? 'uc-pulse' : ''}`}>
+      {/* The same clock as the GSL and the moderated caucus (SpeakerClock, brand font, the
+          floor clock size, palette red under 30 s). No onToggle: it stays plain text here, so
+          nothing about who can start or pause the caucus changes (25 Oct 2026). */}
+      <SpeakerClock
+        running={running}
+        className={`floor-emblem-anchor font-black font-mono tabular-nums mb-6 ${
+          isViewOnly && !!unmodAnchor && liveTotal > 0 && liveTotal <= clampGavelSeconds(committee.dbSettings?.gavelSoundAtSeconds) ? 'uc-pulse' : ''}`}
+        style={{ fontSize: FLOOR_CLOCK_FONT, lineHeight: 1.15, color: liveTotal <= 30 ? '#8B2020' : '#1C1410' }}
+      >
         {formatTime(liveTotal)}
-      </div>
+      </SpeakerClock>
       <div className="w-full max-w-sm h-2 bg-[#DDD4C0] rounded-full overflow-hidden mb-8">
         <div className="h-full bg-[#B6871F] rounded-full transition-all" style={{ width: `${caucus.totalTime > 0 ? (liveTotal / caucus.totalTime) * 100 : 0}%` }} />
       </div>
@@ -1000,91 +1014,129 @@ function UnmoderatedCaucusView({ committee, setCommittee, isViewOnly = false, ga
           <CowDelegationBoard committee={committee} onTap={cowCanTap ? handleCowTap : undefined} />
         </div>
       )}
-      {!isViewOnly && <div className="flex gap-3 flex-wrap justify-center">
-        <button onClick={handleToggleUnmodClock} className={`gv-lift flex-1 py-3 px-6 rounded-xl font-bold text-base transition-colors focus:outline-none ${running ? 'bg-[#B6871F] hover:bg-[#B6871F]/80 text-white' : 'bg-[#2A5A3C] hover:bg-[#3D7A52] text-white'}`}>
-          {running ? (
-            <span className="flex items-center justify-center gap-2">
-              <span className="flex gap-[3px] items-center">
-                <span className="w-[3px] h-[13px] rounded-sm bg-current inline-block" />
-                <span className="w-[3px] h-[13px] rounded-sm bg-current inline-block" />
-              </span>
-              <span>{t('gsl_pause')}</span>
-            </span>
-          ) : t('gsl_start')}
-        </button>
-        <button onClick={() => setShowExtendUnmod((v) => !v)} className="px-4 py-3 rounded-xl font-bold bg-[#1B3828] hover:bg-[#2A5A3C] text-[#EDE7D8] transition-colors focus:outline-none gv-lift">
-          {t('caucus_extend')}
-        </button>
+      {/* The floor's button row, in SpeakerControls' pieces (25 Oct 2026): Start / Pause as the
+          primary, Extend and the Consultation timer as icon tiles with their word beneath, End
+          caucus in the palette red. Same handlers as before. */}
+      {!isViewOnly && <div className="relative z-[1] shrink-0 flex flex-nowrap items-center justify-center gap-2 w-full max-w-3xl px-4 pb-3 pt-1 mx-auto">
+        <FloorControlButton
+          tone={running ? SPEAKER_TONES.pause : SPEAKER_TONES.start}
+          label={plainLabel(running ? t('gsl_pause') : t('gsl_start'))}
+          onClick={handleToggleUnmodClock}
+          variant="grow"
+        >
+          {running ? <Pause size={18} strokeWidth={2.6} aria-hidden className="shrink-0" /> : <Play size={18} strokeWidth={2.6} aria-hidden className="shrink-0" />}
+        </FloorControlButton>
+        <FloorControlButton
+          tone={SPEAKER_TONES.time}
+          label={t('caucus_extend')}
+          onClick={() => setShowExtendUnmod((v) => !v)}
+          active={showExtendUnmod}
+          variant="tile"
+          stacked={t('caucus_extend')}
+        >
+          <ClockPlus size={18} strokeWidth={2.4} aria-hidden />
+        </FloorControlButton>
         {cowEnabled && (
-          <button onClick={() => { setCowOpen((v) => !v); }} className="px-4 py-3 rounded-xl font-bold bg-[#B8844A]/15 hover:bg-[#B8844A]/25 border border-[#B8844A]/30 text-[#B8844A] transition-colors focus:outline-none gv-lift">
-            {t('cow_timer')}
-          </button>
+          <FloorControlButton
+            tone={SPEAKER_TONES.consult}
+            label={t('cow_timer')}
+            onClick={() => { setCowOpen((v) => !v); }}
+            active={cowOpen}
+            variant="tile"
+            stacked={t('cow_timer')}
+            anchor="cow-timer"
+          >
+            <Timer size={18} strokeWidth={2.4} aria-hidden />
+          </FloorControlButton>
         )}
-        <button onClick={handleEndCaucus} className="px-8 py-3 rounded-xl font-black bg-[#8B2020] hover:bg-[#7A1C1C] text-white transition-colors focus:outline-none gv-lift">
-          {t('caucus_end')}
-        </button>
+        <FloorControlButton
+          tone={SPEAKER_TONES.end}
+          label={plainLabel(t('caucus_end'))}
+          onClick={handleEndCaucus}
+        >
+          <Square size={15} strokeWidth={2.6} aria-hidden className="shrink-0" />
+        </FloorControlButton>
       </div>}
-      {/* CoW standalone timer overlay — fixed, independent of the caucus countdown, no DB writes */}
+      {/* CoW standalone timer: a movable floor panel like Add time and Right of Reply
+          (DraggablePopover: Portal, fixed, below every dialog), independent of the caucus
+          countdown, no DB writes. */}
       {cowEnabled && cowOpen && !isViewOnly && (
-        <div className="fixed z-50" style={{ top: '50%', insetInlineEnd: '2rem', transform: 'translateY(-50%)' }}>
-          <div className="bg-[#EDE7D8] border border-[#B8844A]/30 rounded-xl p-4 w-72 shadow-2xl">
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-xs font-black uppercase tracking-wide" style={{ color: '#B8844A' }}>{t('cow_timer')}</span>
-              <button onClick={() => { setCowOpen(false); setCowActive(false); }} className="text-[#1C1410] hover:text-[#8B2020] text-sm font-bold">✕</button>
-            </div>
-            <div className="flex gap-2 mb-3">
-              {[30, 60, 90].map((s) => (
-                <button key={s} onClick={() => { setCowActive(false); setCowRemaining(s); setCowSetSecs(s); }}
-                  className={`gv-lift flex-1 py-1.5 rounded-lg text-xs font-black uppercase tracking-wide transition-colors border ${
-                    cowRemaining === s && !cowActive ? 'bg-[#B8844A] border-[#B8844A] text-[#1C1410]' : 'bg-[#EDE7D8] border-[#DDD4C0] text-[#6A5A4A] hover:border-[#B8844A]/50'
-                  }`}>
+        <DraggablePopover
+          id="cow-timer"
+          slot="upper"
+          anchor="cow-timer"
+          accent={cowTone.accent}
+          tone={cowTone}
+          className="w-72"
+          handleLabel={t('popover_drag_handle')}
+          closeLabel={t('popover_close')}
+          onClose={() => { setCowOpen(false); setCowActive(false); }}
+          title={
+            <span className="inline-flex items-center gap-2 text-sm font-bold">
+              <Timer size={16} strokeWidth={2.6} aria-hidden className="shrink-0" />
+              {t('cow_timer')}
+            </span>
+          }
+        >
+          <div className="flex gap-2 mb-2">
+            {[30, 60, 90].map((s) => {
+              const on = cowRemaining === s && !cowActive;
+              return (
+                <button key={s} onClick={() => setCowTo(s)} aria-pressed={on}
+                  style={on ? { backgroundColor: cowTone.chipOn, color: cowTone.headerFg } : { backgroundColor: cowTone.chip, color: cowTone.ink }}
+                  className="gv-lift flex-1 py-2 rounded-lg text-xs font-black tabular-nums transition-transform active:scale-[0.97] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]">
                   {s}s
                 </button>
-              ))}
-            </div>
-            {/* Custom seconds — set the CoW timer to any value, alongside the presets */}
-            <div className="flex gap-2 mb-3">
-              <input
-                type="number" min={1}
-                value={cowCustom}
-                onChange={(e) => setCowCustom(e.target.value)}
-                onKeyDown={(e) => { if (e.key === 'Enter') { const s = parseInt(cowCustom, 10); if (s > 0) { setCowActive(false); setCowRemaining(s); setCowSetSecs(s); setCowCustom(''); } } }}
-                placeholder={String(cowDefaultSecs)}
-                className="flex-1 min-w-0 bg-[#EDE7D8] border border-[#DDD4C0] rounded-lg px-2 py-1.5 text-xs text-center text-[#1C1410] focus:outline-none focus:border-[#B8844A]"
-              />
-              <span className="text-xs font-black self-center shrink-0" style={{ color: '#6A5A4A' }}>s</span>
-              <button
-                onClick={() => { const s = parseInt(cowCustom, 10); if (s > 0) { setCowActive(false); setCowRemaining(s); setCowSetSecs(s); setCowCustom(''); } }}
-                className="px-3 py-1.5 rounded-lg text-xs font-black uppercase tracking-wide bg-[#B8844A] hover:bg-[#B8844A]/80 text-[#1C1410] transition-colors focus:outline-none shrink-0 gv-lift"
-                aria-label={t('cow_timer_set_custom')}
-              >
-                ✓
-              </button>
-            </div>
-            <div className={`text-5xl font-black font-mono text-center mb-3 tabular-nums ${
-              cowRemaining <= 5 ? 'text-red-500' : cowRemaining <= 10 ? 'text-[#B6871F]' : 'text-[#B8844A]'
-            }`}>
-              {Math.floor(cowRemaining / 60)}:{String(cowRemaining % 60).padStart(2, '0')}
-            </div>
-            <div className="w-full h-1.5 bg-[#DDD4C0] rounded-full overflow-hidden mb-3">
-              <div className={`h-full rounded-full transition-all ${cowRemaining / cowSetSecs > 0.5 ? 'bg-[#B8844A]' : cowRemaining / cowSetSecs > 0.2 ? 'bg-[#B6871F]' : 'bg-red-500'}`}
-                style={{ width: `${Math.min(100, (cowRemaining / cowSetSecs) * 100)}%` }} />
-            </div>
-            <div className="flex gap-2">
-              <button onClick={() => setCowActive((r) => !r)}
-                className={`gv-lift flex-1 py-2 rounded-lg font-bold text-xs transition-colors ${cowActive ? 'bg-[#B6871F] hover:bg-[#B6871F]/80 text-white' : 'bg-[#2A5A3C] hover:bg-[#3D7A52] text-white'}`}>
-                {cowActive ? t('rtr_pause') : t('rtr_start')}
-              </button>
-              <button onClick={() => { setCowActive(false); setCowRemaining(cowDefaultSecs); setCowSetSecs(cowDefaultSecs); setCowCustom(''); }}
-                className="px-3 py-2 rounded-lg font-bold text-xs bg-[#DDD4C0] hover:bg-[#C8BAA8] text-[#6A5A4A] transition-colors gv-lift">
-                ↺
-              </button>
-            </div>
+              );
+            })}
           </div>
-        </div>
+          {/* Custom seconds — set the CoW timer to any value, alongside the presets */}
+          <div className="flex gap-2 items-center mb-3">
+            <input
+              type="number" min={1}
+              value={cowCustom}
+              onChange={(e) => setCowCustom(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') commitCowCustom(); }}
+              placeholder={String(cowDefaultSecs)}
+              style={{ MozAppearance: 'textfield', color: cowTone.ink } as React.CSSProperties}
+              className="flex-1 min-w-0 bg-white/70 border border-[#1B3828]/25 rounded-lg px-2 py-2 text-xs font-semibold text-center focus:outline-none focus:border-[#1B3828] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+            />
+            <span className="text-xs font-bold shrink-0" style={{ color: cowTone.ink }}>s</span>
+            <button
+              onClick={commitCowCustom}
+              style={{ backgroundColor: cowTone.btn, color: cowTone.btnFg }}
+              className="shrink-0 inline-flex items-center justify-center w-9 h-9 rounded-lg transition-transform gv-lift hover:brightness-110 active:scale-[0.97] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] focus-visible:ring-offset-2"
+              aria-label={t('cow_timer_set_custom')}
+              title={t('cow_timer_set_custom')}
+            >
+              <Check size={16} strokeWidth={1.5} aria-hidden />
+            </button>
+          </div>
+          <div className="font-black font-mono text-center mb-3 tabular-nums" style={{ fontSize: '3rem', lineHeight: 1.1, color: cowRemaining <= 5 ? '#8B2020' : cowRemaining <= 10 ? '#8A6A1F' : cowTone.ink }}>
+            {Math.floor(cowRemaining / 60)}:{String(cowRemaining % 60).padStart(2, '0')}
+          </div>
+          <div className="w-full h-1.5 bg-[#DDD4C0] rounded-full overflow-hidden mb-3">
+            <div className={`h-full rounded-full transition-all ${cowRemaining / cowSetSecs > 0.5 ? 'bg-[#1B3828]' : cowRemaining / cowSetSecs > 0.2 ? 'bg-[#B6871F]' : 'bg-[#8B2020]'}`}
+              style={{ width: `${Math.min(100, (cowRemaining / cowSetSecs) * 100)}%` }} />
+          </div>
+          <div className="flex gap-2">
+            <button onClick={() => setCowActive((r) => !r)}
+              style={{ backgroundColor: cowActive ? SPEAKER_TONES.pause.bg : SPEAKER_TONES.start.bg, color: cowActive ? SPEAKER_TONES.pause.fg : SPEAKER_TONES.start.fg }}
+              className="gv-lift flex-1 inline-flex items-center justify-center gap-1.5 py-2 rounded-lg font-black text-xs transition-transform hover:brightness-95 active:scale-[0.97] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] focus-visible:ring-offset-2">
+              {cowActive ? <Pause size={14} strokeWidth={2.6} aria-hidden className="shrink-0" /> : <Play size={14} strokeWidth={2.6} aria-hidden className="shrink-0" />}
+              {plainLabel(cowActive ? t('rtr_pause') : t('rtr_start'))}
+            </button>
+            <button onClick={() => { setCowTo(cowDefaultSecs); setCowCustom(''); }}
+              aria-label={t('speaker_ctl_restart')} title={t('speaker_ctl_restart')}
+              style={{ backgroundColor: SPEAKER_TONES.neutral.bg, color: SPEAKER_TONES.neutral.fg }}
+              className="gv-lift inline-flex items-center justify-center w-9 rounded-lg transition-transform hover:brightness-95 active:scale-[0.97] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] focus-visible:ring-offset-2">
+              <RotateCcw size={15} strokeWidth={2.4} aria-hidden className="rtl:-scale-x-100" />
+            </button>
+          </div>
+        </DraggablePopover>
       )}
       {showExtendUnmod && (
-        <div className="mt-4 bg-[#FAF8F3] border border-[#DDD4C0] rounded-xl px-4 py-3 shadow-xl" style={{ minWidth: '180px' }}>
+        <div className="mt-4 rounded-xl px-4 py-3" style={{ minWidth: '180px', backgroundColor: POPOVER_TONES.time.surface, boxShadow: `0 0 0 1px ${POPOVER_TONES.time.accent}, 0 2px 6px rgba(27,56,40,0.10), 0 14px 34px rgba(27,56,40,0.22)` }}>
           <div className="flex gap-1.5 mb-2 justify-center">
             {(() => {
               const halfMins = caucus.totalTime / 120;
@@ -1096,7 +1148,8 @@ function UnmoderatedCaucusView({ committee, setCommittee, isViewOnly = false, ga
               )].sort((a, b) => a - b);
               return suggestions.map((m) => (
                 <button key={m} onClick={() => handleExtendUnmod(m * 60)}
-                  className="flex-1 px-2.5 py-1.5 rounded-lg text-xs font-bold bg-transparent border border-[#DDD4C0] text-[#1B3828] hover:border-[#1B3828] transition-colors focus:outline-none">
+                  style={{ backgroundColor: POPOVER_TONES.time.chip, color: POPOVER_TONES.time.ink }}
+                  className="gv-lift flex-1 px-2.5 py-2 rounded-lg text-xs font-black tabular-nums transition-transform hover:brightness-95 active:scale-[0.97] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0E3A57]">
                   {m % 1 === 0 ? `${m}m` : `${m}m`}
                 </button>
               ));
@@ -1104,12 +1157,15 @@ function UnmoderatedCaucusView({ committee, setCommittee, isViewOnly = false, ga
           </div>
           <div className="flex items-center gap-2 mb-2">
             <input type="number" min={1} value={extendMinsUnmod === 0 ? '' : extendMinsUnmod} onChange={(e) => setExtendMinsUnmod(e.target.value === '' ? 0 : parseInt(e.target.value) || 0)}
-              className="flex-1 bg-[#FAF8F3] border border-[#DDD4C0] rounded-lg px-2 py-1.5 text-[#1C1410] text-xs text-center focus:outline-none focus:border-[#1B3828]" />
-            <span className="text-xs text-[#9A8A78] shrink-0">m</span>
+              style={{ MozAppearance: 'textfield', color: POPOVER_TONES.time.ink } as React.CSSProperties}
+              className="flex-1 min-w-0 bg-white/70 border border-[#0E3A57]/25 rounded-lg px-2 py-2 text-xs font-semibold text-center focus:outline-none focus:border-[#0E3A57] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none" />
+            <span className="text-xs font-bold shrink-0" style={{ color: POPOVER_TONES.time.ink }}>m</span>
           </div>
           <button onClick={() => handleExtendUnmod(extendMinsUnmod * 60)}
-            className="w-full py-1.5 rounded-lg text-xs font-black bg-[#1B3828] hover:bg-[#2A5A3C] text-[#EDE7D8] transition-colors focus:outline-none gv-lift">
-            {t('gsl_add_time_extended')}
+            style={{ backgroundColor: POPOVER_TONES.time.btn, color: POPOVER_TONES.time.btnFg }}
+            className="w-full inline-flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-black transition-transform gv-lift hover:brightness-110 active:scale-[0.97] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0E3A57] focus-visible:ring-offset-2">
+            <ClockPlus size={15} strokeWidth={2.6} aria-hidden className="shrink-0" />
+            {plainLabel(t('gsl_add_time_extended')).replace(/^\+\s*/, '')}
           </button>
         </div>
       )}
@@ -1411,7 +1467,7 @@ function ModeratedCaucusMain({
           // How much of the caucus is left, nothing else: Extend, End and the add bar are the
           // Moderator's and a disabled copy of each only takes room from the comment dock.
           <div className="shrink-0 border-t border-[#DDD4C0] px-6 py-2 flex items-center gap-3" style={{ backgroundColor: '#F6F1E9' }}>
-            <span className="text-xs text-[#9A8A78] font-mono shrink-0">{t('gsl_total')}</span>
+            <span className="text-xs text-[color:color-mix(in_srgb,var(--gv-on-surface)_72%,var(--gv-surface))] font-mono shrink-0">{t('gsl_total')}</span>
             <p className={`text-lg font-black font-mono shrink-0 ${liveRemaining <= 30 ? 'text-red-500' : 'text-[#1C1410]'}`}>{formatTime(liveRemaining)}</p>
             <div className="flex-1 h-2 bg-[#DDD4C0] rounded-full overflow-hidden">
               <div className="h-full bg-[#B6871F]/60 rounded-full transition-all" style={{ width: `${totalProgress}%` }} />
@@ -1478,7 +1534,7 @@ function ModeratedCaucusMain({
               <FloorSeatName name={getCountryDisplayName(floorCountry, language)} />
             </h1>
             {onDeck && (
-              <p className="text-center text-xs font-bold uppercase tracking-wide" style={{ color: '#8A6A1F', marginTop: -4 }}>{t('gsl_on_deck')}</p>
+              <p className="text-center text-sm font-semibold" style={{ color: '#8A6A1F', marginTop: -4 }}>{t('gsl_on_deck')}</p>
             )}
             <SpeakerClock
               running={caucusHasSpeaker && timerRunning}
@@ -1526,7 +1582,7 @@ function ModeratedCaucusMain({
           {/* Total timer bar — hidden for Tour de Table */}
           {!isTdT && (
             <div className="flex items-center gap-3 mb-2">
-              <span className="text-xs text-[#9A8A78] font-mono shrink-0">{t('gsl_total')}</span>
+              <span className="text-xs text-[color:color-mix(in_srgb,var(--gv-on-surface)_72%,var(--gv-surface))] font-mono shrink-0">{t('gsl_total')}</span>
               <p className={`text-lg font-black font-mono shrink-0 ${liveRemaining <= 30 ? 'text-red-500' : 'text-[#1C1410]'}`}>{formatTime(liveRemaining)}</p>
               <div className="flex-1 h-2 bg-[#DDD4C0] rounded-full overflow-hidden">
                 <div className="h-full bg-[#B6871F]/60 rounded-full transition-all" style={{ width: `${totalProgress}%` }} />
@@ -1564,7 +1620,7 @@ function ModeratedCaucusMain({
                     <div className="flex items-center gap-2 mb-2">
                       <input type="number" min={1} value={extendMinsMod === 0 ? '' : extendMinsMod} onChange={(e) => setExtendMinsMod(e.target.value === '' ? 0 : parseInt(e.target.value) || 0)}
                         className="flex-1 bg-[#FAF8F3] border border-[#DDD4C0] rounded-lg px-2 py-1.5 text-[#1C1410] text-xs text-center focus:outline-none focus:border-[#1B3828]" />
-                      <span className="text-xs text-[#9A8A78] shrink-0">m</span>
+                      <span className="text-xs text-[color:color-mix(in_srgb,var(--gv-on-surface)_72%,var(--gv-surface))] shrink-0">m</span>
                     </div>
                     <button onClick={() => handleExtendMod(extendMinsMod * 60)}
                       className="w-full py-1.5 rounded-lg text-xs font-black bg-[#1B3828] hover:bg-[#2A5A3C] text-[#EDE7D8] transition-colors focus:outline-none gv-lift">
@@ -1754,7 +1810,7 @@ function SessionEndedContent({ committee, hoursRemaining, canRestart, onRestart,
     <div className="flex-1 flex flex-col items-center justify-center text-center px-8">
       <h1 className="text-5xl font-black mb-4" style={{ color: '#1B3828' }}>{t('session_ended_title')}</h1>
       <p className="text-xl mb-2" style={{ color: '#1C1410' }}>{getCommitteeDisplayName(committee.name, language)}</p>
-      <p className="text-lg mb-8" style={{ color: '#9A8A78' }}>{committee.topic}</p>
+      <p className="text-lg mb-8" style={{ color: NEU.inkSoft }}>{committee.topic}</p>
       {/* The record, before the room is deleted (src/lib/sessionRecordExport.ts). */}
       <DownloadRecordButton committee={committee} />
       {/* Within REOPEN_WINDOW_HOURS of the gavel, the end can be undone. Past the window
@@ -1765,7 +1821,7 @@ function SessionEndedContent({ committee, hoursRemaining, canRestart, onRestart,
         <p className="text-base mt-5" style={{ color: '#6A5A4A' }}>
           {t('session_kept_until', { when: formatKeptUntil(keptUntil, language) })}
           {hoursRemaining !== null && (
-            <span style={{ color: '#9A8A78' }}> · {t('session_hours_until_delete', { n: hoursRemaining ?? 0, s: hoursRemaining !== 1 ? 's' : '' })}</span>
+            <span style={{ color: NEU.inkSoft }}> · {t('session_hours_until_delete', { n: hoursRemaining ?? 0, s: hoursRemaining !== 1 ? 's' : '' })}</span>
           )}
         </p>
       )}
@@ -1780,7 +1836,7 @@ function SessionEndedContent({ committee, hoursRemaining, canRestart, onRestart,
               <path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/>
               <path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/>
             </svg>
-            <span className="text-sm font-black tracking-wide" style={{ color: '#1B3828', fontFamily: "var(--font-brand), sans-serif" }}>{t('chair_ended_awards_title')}</span>
+            <span className="text-sm font-black" style={{ color: '#1B3828', fontFamily: "var(--font-brand), sans-serif" }}>{t('chair_ended_awards_title')}</span>
           </div>
           <p className="text-sm leading-relaxed mb-4" style={{ color: '#6A5A4A' }}>{t('chair_ended_awards_body')}</p>
           <ChairAwardsCta
@@ -1791,7 +1847,7 @@ function SessionEndedContent({ committee, hoursRemaining, canRestart, onRestart,
           />
         </div>
       )}
-      <p className="text-xs mt-8" style={{ color: '#9A8A78' }}>{t('session_adjourned_hint')}</p>
+      <p className="text-xs mt-8" style={{ color: NEU.inkSoft }}>{t('session_adjourned_hint')}</p>
     </div>
   );
 }
@@ -5879,13 +5935,13 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
       {sessionEnded && (
         <div className="flex border-b border-[#DDD4C0] bg-[#FAF8F3] shrink-0">
           <button onClick={() => setEndedTab('ended')}
-            className="flex-1 py-2.5 text-sm font-black transition-colors border-b-2 focus:outline-none tracking-wide"
-            style={{ color: endedTab === 'ended' ? '#1B3828' : '#9A8A78', borderBottomColor: endedTab === 'ended' ? '#1B3828' : 'transparent', fontFamily: "var(--font-brand), sans-serif" }}>
+            className="flex-1 py-2.5 text-sm font-black transition-colors border-b-2 focus:outline-none"
+            style={{ color: endedTab === 'ended' ? '#1B3828' : NEU.inkSoft, borderBottomColor: endedTab === 'ended' ? '#1B3828' : 'transparent', fontFamily: "var(--font-brand), sans-serif" }}>
             {t('session_end_view')}
           </button>
           <button onClick={() => setEndedTab('session')}
-            className="flex-1 py-2.5 text-sm font-black transition-colors border-b-2 focus:outline-none tracking-wide"
-            style={{ color: endedTab === 'session' ? '#1B3828' : '#9A8A78', borderBottomColor: endedTab === 'session' ? '#1B3828' : 'transparent', fontFamily: "var(--font-brand), sans-serif" }}>
+            className="flex-1 py-2.5 text-sm font-black transition-colors border-b-2 focus:outline-none"
+            style={{ color: endedTab === 'session' ? '#1B3828' : NEU.inkSoft, borderBottomColor: endedTab === 'session' ? '#1B3828' : 'transparent', fontFamily: "var(--font-brand), sans-serif" }}>
             {t('session_view')}
           </button>
         </div>
@@ -5894,13 +5950,13 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
       {!sessionEnded && sessionSuspended && (
         <div className="flex border-b border-[#DDD4C0] bg-[#FAF8F3] shrink-0">
           <button onClick={() => setSuspendTab('suspend')}
-            className={`flex-1 py-2.5 text-sm font-black transition-colors border-b-2 focus:outline-none tracking-wide`}
-            style={{ color: suspendTab === 'suspend' ? '#1B3828' : '#9A8A78', borderBottomColor: suspendTab === 'suspend' ? '#1B3828' : 'transparent', fontFamily: "var(--font-brand), sans-serif" }}>
+            className={`flex-1 py-2.5 text-sm font-black transition-colors border-b-2 focus:outline-none`}
+            style={{ color: suspendTab === 'suspend' ? '#1B3828' : NEU.inkSoft, borderBottomColor: suspendTab === 'suspend' ? '#1B3828' : 'transparent', fontFamily: "var(--font-brand), sans-serif" }}>
             {t('session_suspend_view')}
           </button>
           <button onClick={() => setSuspendTab('session')}
-            className={`flex-1 py-2.5 text-sm font-black transition-colors border-b-2 focus:outline-none tracking-wide`}
-            style={{ color: suspendTab === 'session' ? '#1B3828' : '#9A8A78', borderBottomColor: suspendTab === 'session' ? '#1B3828' : 'transparent', fontFamily: "var(--font-brand), sans-serif" }}>
+            className={`flex-1 py-2.5 text-sm font-black transition-colors border-b-2 focus:outline-none`}
+            style={{ color: suspendTab === 'session' ? '#1B3828' : NEU.inkSoft, borderBottomColor: suspendTab === 'session' ? '#1B3828' : 'transparent', fontFamily: "var(--font-brand), sans-serif" }}>
             {t('session_session_view')}
           </button>
         </div>
@@ -5919,20 +5975,23 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
       {(() => {
         const joinReqs = (committee.pendingMotions ?? []).filter((m) => m.type === ('join-request' as string));
         if (joinReqs.length === 0 || silentViewer) return null;
-        const wrLabel = language === 'ar' ? 'غرفة الانتظار' : language === 'fr' ? "Salle d'attente" : language === 'pt' ? 'Sala de Espera' : language === 'es' ? 'Sala de Espera' : 'Waiting Room';
         return (
           <div className="shrink-0 border-b border-[#1B3828]/40 px-4 py-2 flex flex-wrap items-center gap-3" style={{ backgroundColor: '#F3EEE2' }}>
-            <span className="shrink-0 inline-flex items-center gap-1.5 text-xs font-black uppercase tracking-wide px-2.5 py-1 rounded-full" style={{ backgroundColor: '#1B3828', color: '#EED98A' }}>
-              🚪 {wrLabel} · {joinReqs.length}
+            {/* Style A: a fine-line door, then the count as a number with the word beside it
+                (CLAUDE.md §8 rules 8 and 9). */}
+            <span className="shrink-0 inline-flex items-center gap-2" style={{ color: '#1B3828' }}>
+              <DoorOpen size={20} strokeWidth={1.5} aria-hidden className="shrink-0" />
+              <span className="tabular-nums leading-none" style={{ fontSize: 20, fontWeight: 800, color: '#1C1410' }}>{joinReqs.length}</span>
+              <span className="text-sm font-semibold leading-none" style={{ color: '#5C4A36' }}>{t('waiting_room_word')}</span>
             </span>
             {joinReqs.map((m) => {
               let delegateId = '';
               let desiredStatus: 'present' | 'present-voting' = 'present';
               try { const parsed = JSON.parse(m.topic); delegateId = parsed.delegateId; desiredStatus = parsed.desiredStatus; } catch {}
-              const flagEl = <SeatFlag country={m.proposedBy} size={20} className="object-contain inline-block" fallback={<UnknownSeatIcon size={20} />} />;
+              const flagEl = <SeatCircleFlag country={m.proposedBy} size={20} decorative fallback="initials" />;
               return (
                 <div key={m.id} className="flex items-center gap-2.5 text-sm rounded-xl px-2.5 py-1" style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0' }}>
-                  <span className="font-mono text-lg">{flagEl}</span>
+                  <span className="inline-flex">{flagEl}</span>
                   <SeatName name={getCountryDisplayName(m.proposedBy, language)} max={24} className="text-[#1C1410] font-semibold" />
                   <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${desiredStatus === 'present-voting' ? 'bg-[#1B3828] text-[#EED98A]' : 'bg-[#1B3828]/15 text-[#1B3828]'}`}>
                     {desiredStatus === 'present-voting' ? 'P+V' : 'P'}
@@ -5976,11 +6035,11 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
               && resumeClaimIsMine(committee.code, committee.suspendedAt));
             return (
               <>
-                <h1 className="text-6xl font-black mb-4 tracking-wide" style={{ color: '#1B3828', fontFamily: "var(--font-brand), sans-serif" }}>{t('session_suspended_title')}</h1>
+                <h1 className="text-6xl font-black mb-4" style={{ color: '#1B3828', fontFamily: "var(--font-brand), sans-serif" }}>{t('session_suspended_title')}</h1>
                 <p className={`text-xl ${suspendKeptUntil ? 'mb-3' : 'mb-12'}`} style={{ color: '#6A5A4A' }}>{t('session_suspended_desc')}</p>
                 {/* A standalone room nobody resumes is deleted (src/lib/roomRetention.ts). */}
                 {suspendKeptUntil && (
-                  <p className="text-base mb-12 max-w-lg" style={{ color: '#9A8A78' }}>
+                  <p className="text-base mb-12 max-w-lg" style={{ color: NEU.inkSoft }}>
                     {t('session_suspended_kept_until', { when: formatKeptUntil(suspendKeptUntil, language) })}
                   </p>
                 )}
@@ -6016,7 +6075,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                 {resumeError && (
                   <p className="text-sm mt-5 max-w-md" role="alert" style={{ color: '#8B2020' }}>{resumeError}</p>
                 )}
-                <p className="text-xs mt-8" style={{ color: '#9A8A78' }}>{t('session_adjourned_hint')}</p>
+                <p className="text-xs mt-8" style={{ color: NEU.inkSoft }}>{t('session_adjourned_hint')}</p>
               </>
             );
           })()}
@@ -6102,7 +6161,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                     <div className="bg-[#EDE7D8] border border-[#1B3828]/40 rounded-3xl px-12 py-10 max-w-lg w-full shadow-2xl">
                       {isTdTParent ? (
                         <>
-                          <p className="text-xs font-mono tracking-widest mb-3 font-bold" style={{ color: '#1B3828' }}>{t('caucus_starting_tdt')}</p>
+                          <p className="text-sm mb-3 font-bold" style={{ color: '#1B3828' }}>{t('caucus_starting_tdt')}</p>
                           <h1 className="text-5xl font-black mb-2" style={{ color: '#1B3828' }}>{t('caucus_tdt_title')}</h1>
                           <p className={`text-[#6A5A4A] text-sm ${committee.caucus.proposedBy ? 'mb-3' : 'mb-6'}`}>
                             {committee.caucus.purpose?.includes('Room Order')
@@ -6117,27 +6176,27 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                               <div className="text-2xl font-black text-[#1C1410]">
                                 {committee.caucusQueue?.length ?? caucusQueueCapacity(committee.caucus.totalTime, committee.caucus.speakingTime, 0, 0)}
                               </div>
-                              <div className="text-xs text-[#9A8A78] mt-1">{t('caucus_delegates')}</div>
+                              <div className="text-xs text-[color:color-mix(in_srgb,var(--gv-on-surface)_72%,var(--gv-surface))] mt-1">{t('caucus_delegates')}</div>
                             </div>
                             <div className="w-px bg-[#DDD4C0]" />
                             <div className="text-center">
                               <div className="text-2xl font-black text-[#1C1410]">{committee.caucus.speakingTime}s</div>
-                              <div className="text-xs text-[#9A8A78] mt-1">{t('caucus_per_speaker')}</div>
+                              <div className="text-xs text-[color:color-mix(in_srgb,var(--gv-on-surface)_72%,var(--gv-surface))] mt-1">{t('caucus_per_speaker')}</div>
                             </div>
                             <div className="w-px bg-[#DDD4C0]" />
                             <div className="text-center">
                               <div className="text-2xl font-black text-[#1C1410]">{formatTime(committee.caucus.totalTime)}</div>
-                              <div className="text-xs text-[#9A8A78] mt-1">{t('caucus_total_time')}</div>
+                              <div className="text-xs text-[color:color-mix(in_srgb,var(--gv-on-surface)_72%,var(--gv-surface))] mt-1">{t('caucus_total_time')}</div>
                             </div>
                           </div>
-                          <div className="flex items-center justify-center gap-2 text-[#9A8A78] text-sm">
+                          <div className="flex items-center justify-center gap-2 text-[color:color-mix(in_srgb,var(--gv-on-surface)_72%,var(--gv-surface))] text-sm">
                             <div className="w-4 h-4 border-2 border-[#1B3828] border-t-transparent rounded-full animate-spin" />
                             <span>{t('caucus_setting_up')}</span>
                           </div>
                         </>
                       ) : (
                         <>
-                          <p className="text-xs font-mono tracking-widest mb-3 font-bold" style={{ color: '#1B3828' }}>{t('caucus_starting_moderated')}</p>
+                          <p className="text-sm mb-3 font-bold" style={{ color: '#1B3828' }}>{t('caucus_starting_moderated')}</p>
                           <h1 className="text-5xl font-black mb-2" style={{ color: '#1B3828' }}>{committee.caucus.purpose || t('caucus_moderated_title')}</h1>
                           <p className={`text-[#6A5A4A] text-sm ${committee.caucus.proposedBy ? 'mb-3' : 'mb-6'}`}>{committee.topic}</p>
                           {committee.caucus.proposedBy && (
@@ -6146,20 +6205,20 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                           <div className="flex justify-center gap-8 mb-8">
                             <div className="text-center">
                               <div className="text-2xl font-black text-[#1C1410]">{formatTime(committee.caucus.totalTime)}</div>
-                              <div className="text-xs text-[#9A8A78] mt-1">{t('caucus_total_time')}</div>
+                              <div className="text-xs text-[color:color-mix(in_srgb,var(--gv-on-surface)_72%,var(--gv-surface))] mt-1">{t('caucus_total_time')}</div>
                             </div>
                             <div className="w-px bg-[#DDD4C0]" />
                             <div className="text-center">
                               <div className="text-2xl font-black text-[#1C1410]">{committee.caucus.speakingTime}s</div>
-                              <div className="text-xs text-[#9A8A78] mt-1">{t('caucus_per_speaker')}</div>
+                              <div className="text-xs text-[color:color-mix(in_srgb,var(--gv-on-surface)_72%,var(--gv-surface))] mt-1">{t('caucus_per_speaker')}</div>
                             </div>
                             <div className="w-px bg-[#DDD4C0]" />
                             <div className="text-center">
                               <div className="text-2xl font-black text-[#1C1410]">{caucusQueueCapacity(committee.caucus.totalTime, committee.caucus.speakingTime, 0, 0)}</div>
-                              <div className="text-xs text-[#9A8A78] mt-1">{t('caucus_max_speakers')}</div>
+                              <div className="text-xs text-[color:color-mix(in_srgb,var(--gv-on-surface)_72%,var(--gv-surface))] mt-1">{t('caucus_max_speakers')}</div>
                             </div>
                           </div>
-                          <div className="flex items-center justify-center gap-2 text-[#9A8A78] text-sm">
+                          <div className="flex items-center justify-center gap-2 text-[color:color-mix(in_srgb,var(--gv-on-surface)_72%,var(--gv-surface))] text-sm">
                             <div className="w-4 h-4 border-2 border-[#1B3828] border-t-transparent rounded-full animate-spin" />
                             <span>{t('caucus_loading_caucus')}</span>
                           </div>
@@ -6196,8 +6255,8 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                 unmodLoading ? (
                   <div className="flex-1 flex flex-col items-center justify-center text-center px-8">
                     <div className="bg-[#EDE7D8] border border-[#DDD4C0]/40 rounded-3xl px-12 py-10 max-w-lg w-full shadow-2xl">
-                      <p className="text-xs font-mono tracking-widest mb-3 font-bold" style={{ color: '#1B3828' }}>
-                        {t('caucus_unmod_starting').replace('{name}', (committee.caucus.motionLabel ?? (language === 'ar' ? 'حوار حر' : language === 'fr' ? 'CAUCUS NON MODÉRÉ' : language === 'pt' ? 'DEBATE NÃO MODERADO' : language === 'es' ? 'CÁUCUS NO MODERADO' : 'UNMODERATED CAUCUS')).toUpperCase())}
+                      <p className="text-sm mb-3 font-bold" style={{ color: '#1B3828' }}>
+                        {t('caucus_unmod_starting').replace('{name}', committee.caucus.motionLabel ?? (language === 'ar' ? 'حوار حر' : language === 'fr' ? 'Caucus non modéré' : language === 'pt' ? 'Debate não moderado' : language === 'es' ? 'Cáucus no moderado' : 'Unmoderated caucus'))}
                       </p>
                       <h1 className="text-5xl font-black mb-2" style={{ color: '#1B3828' }}>
                         {committee.caucus.motionLabel ?? (language === 'ar' ? 'حوار حر' : language === 'fr' ? 'Caucus non modéré' : language === 'pt' ? 'Debate Não Moderado' : language === 'es' ? 'Cáucus No Moderado' : 'Unmoderated Caucus')}
@@ -6208,7 +6267,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                       <div className="flex justify-center gap-8 mb-8">
                         <div className="text-center">
                           <div className="text-2xl font-black text-[#1C1410]">{formatTime(committee.caucus.totalTime)}</div>
-                          <div className="text-xs text-[#9A8A78] mt-1">{t('caucus_total_time')}</div>
+                          <div className="text-xs text-[color:color-mix(in_srgb,var(--gv-on-surface)_72%,var(--gv-surface))] mt-1">{t('caucus_total_time')}</div>
                         </div>
                         <div className="w-px bg-[#DDD4C0]" />
                         <div className="text-center">
@@ -6218,10 +6277,10 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                               ? <CaucusProposer proposedBy={committee.caucus.proposedBy} size={28} fontSize={20} hideLabel />
                               : <span className="text-2xl font-black text-[#1C1410]">-</span>}
                           </div>
-                          <div className="text-xs text-[#9A8A78] mt-1">{t('caucus_proposed_by')}</div>
+                          <div className="text-xs text-[color:color-mix(in_srgb,var(--gv-on-surface)_72%,var(--gv-surface))] mt-1">{t('caucus_proposed_by')}</div>
                         </div>
                       </div>
-                      <div className="flex items-center justify-center gap-2 text-[#9A8A78] text-sm">
+                      <div className="flex items-center justify-center gap-2 text-[color:color-mix(in_srgb,var(--gv-on-surface)_72%,var(--gv-surface))] text-sm">
                         <div className="w-4 h-4 border-2 border-[#1B3828] border-t-transparent rounded-full animate-spin" />
                         <span>{t('caucus_loading')}</span>
                       </div>
@@ -6345,8 +6404,9 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                 // continues its ground under itself so the bar runs the full page width.
                 <FloorBarExtent className="border-t border-[#DDD4C0] px-6 py-2.5 shrink-0" style={{ backgroundColor: '#F6F1E9' }}>
                   {belowQuorum && (
-                    <p className="text-xs text-[#8B2020] text-center pb-2">
-                      ⚠️ Below quorum: speakers cannot be added until {Math.ceil(quorumFraction * totalCount)} delegates are present.
+                    <p className="text-xs text-[#8B2020] text-center pb-2 inline-flex w-full items-center justify-center gap-1.5">
+                      <AlertTriangle size={14} strokeWidth={1.5} aria-hidden className="shrink-0" />
+                      <span>{t('gsl_below_quorum_line', { n: Math.ceil(quorumFraction * totalCount) })}</span>
                     </p>
                   )}
                   {/* ONE row under the Start / Next controls (owner, 16 Sep 2026): the add
@@ -6358,7 +6418,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                       <AddSpeakerInput committee={committee} onAdd={belowQuorum ? () => {} : handleAddToSpeakersList} showAbsent={!belowQuorum} />
                     </div>
                     <div className="shrink-0 flex items-center gap-1.5">
-                      <span className="text-[10px] font-black uppercase tracking-widest text-[#9A8A78] shrink-0 me-0.5">{t('gsl_time')}</span>
+                      <span className="text-xs font-semibold text-[color:color-mix(in_srgb,var(--gv-on-surface)_72%,var(--gv-surface))] shrink-0 me-0.5">{t('gsl_time')}</span>
                       {[45, 60, 75, 90].map((preset) => (
                         <button key={preset} onClick={() => handleSetSpeakerTimeLimit(preset)} title={t('gsl_time_preset_title').replace('{n}', String(preset))}
                           className={`gv-lift h-9 min-w-[2.9rem] px-2 rounded-lg text-xs font-black tabular-nums transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] ${speakerTimeLimit === preset ? 'bg-[#1B3828] text-[#EED98A]' : 'bg-[#E4DCC8] text-[#5A4E3E] hover:bg-[#D8CDB4] hover:text-[#1B3828]'}`}>
@@ -6481,7 +6541,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
           closeLabel={t('popover_close')}
           onClose={() => setPopover('extraTime', false)}
           title={
-            <span className="inline-flex items-center gap-2 text-xs font-black uppercase tracking-wide">
+            <span className="inline-flex items-center gap-2 text-sm font-bold">
               <ClockPlus size={16} strokeWidth={2.6} aria-hidden className="shrink-0" />
               {t('gsl_add_time_title')}
             </span>
@@ -6491,7 +6551,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
               {[15, 30, 60].map((s) => (
                 <button key={s} onClick={() => { handleAddExtraTime(s); }} disabled={!addTimeHasTarget}
                   style={{ backgroundColor: POPOVER_TONES.time.chip, color: POPOVER_TONES.time.ink }}
-                  className="flex-1 py-2 text-xs rounded-lg font-black uppercase tracking-wide transition-transform gv-lift disabled:opacity-40 disabled:cursor-not-allowed hover:brightness-95 active:scale-[0.97] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0E3A57]">
+                  className="flex-1 py-2 text-xs rounded-lg font-black transition-transform gv-lift disabled:opacity-40 disabled:cursor-not-allowed hover:brightness-95 active:scale-[0.97] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0E3A57]">
                   +{s}s
                 </button>
               ))}
@@ -6581,7 +6641,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
             setRtrTimeRemaining(rtrSeconds);
           }}
           title={
-            <span className="inline-flex items-center gap-2 text-xs font-black uppercase tracking-wide">
+            <span className="inline-flex items-center gap-2 text-sm font-bold">
               <MessageSquareReply size={16} strokeWidth={2.6} aria-hidden className="shrink-0" />
               {t('gsl_right_to_reply_popover')}
             </span>
@@ -6604,7 +6664,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                       style={rtrSeconds === s
                         ? { backgroundColor: POPOVER_TONES.reply.chipOn, color: POPOVER_TONES.reply.headerFg }
                         : { backgroundColor: POPOVER_TONES.reply.chip, color: POPOVER_TONES.reply.ink }}
-                      className="gv-lift flex-1 py-2 rounded-lg text-xs font-black uppercase tracking-wide tabular-nums transition-transform active:scale-[0.97] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#AD4F18]"
+                      className="gv-lift flex-1 py-2 rounded-lg text-xs font-black tabular-nums transition-transform active:scale-[0.97] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#AD4F18]"
                     >
                       {s}s
                     </button>
@@ -6620,7 +6680,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                   }}
                   disabled={!rtrCountry}
                   style={{ backgroundColor: POPOVER_TONES.reply.btn, color: POPOVER_TONES.reply.btnFg }}
-                  className="w-full inline-flex items-center justify-center gap-2 py-2.5 disabled:opacity-40 disabled:cursor-not-allowed text-xs rounded-lg font-black uppercase tracking-wide transition-transform gv-lift hover:brightness-95 active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#AD4F18] focus-visible:ring-offset-2"
+                  className="w-full inline-flex items-center justify-center gap-2 py-2.5 disabled:opacity-40 disabled:cursor-not-allowed text-xs rounded-lg font-black transition-transform gv-lift hover:brightness-95 active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#AD4F18] focus-visible:ring-offset-2"
                 >
                   <MessageSquareReply size={15} strokeWidth={2.6} aria-hidden className="shrink-0" />
                   {t('gsl_grant')}
@@ -6630,7 +6690,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
               // ── Active timer view ──────────────────────────────
               <>
                 <div className="flex items-center gap-2 mb-3 px-1">
-                  <SeatFlag country={rtrCountry} size={24} className="object-contain inline-block" fallback={<UnknownSeatIcon size={24} />} />
+                  <SeatCircleFlag country={rtrCountry} size={24} decorative fallback="initials" />
                   <SeatName name={getCountryDisplayName(rtrCountry, language)} max={22} className="text-sm font-bold flex-1" style={{ color: POPOVER_TONES.reply.ink }} />
                 </div>
                 <div className={`text-5xl font-black font-mono text-center mb-3 tabular-nums ${

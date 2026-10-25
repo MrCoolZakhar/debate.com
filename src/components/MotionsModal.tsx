@@ -9,7 +9,7 @@ import { useT, useLanguage } from '@/contexts/LanguageContext';
 import { Committee, PendingMotion, PendingMotionType } from '@/lib/types';
 import { getCountryDisplayName, compareCountryNames, matchesCountryQuery, startsWithCountryQuery } from '@/lib/countries';
 import SeatName from '@/components/SeatName';
-import { Emoji } from '@/components/Emoji';
+import { AlertTriangle, Info, ListChecks, X } from 'lucide-react';
 import { useSettingsStore, DEFAULT_MOTION_NAMES, MotionNames } from '@/lib/settingsStore';
 import { logFloorSpeech, creditRoomOrderTour, logCowHolder, type FloorClock } from '@/lib/floorSpeech';
 import { interruptedGslSpeaker, returnSpeakerToGslFront, holdInterruptedGslSpeaker, settleHeldFloors } from '@/lib/gslFloorReturn';
@@ -31,31 +31,21 @@ import {
 import { logMotionRaised, logMotionPassed, logMotionFailed, logMotionEdited } from '@/lib/motionLog';
 import { OFFLINE_RESILIENCE } from '@/lib/offlineResilience';
 import { serverNow, serverNowIso } from '@/lib/serverClock';
-import { MotionSummary, MotionRankBadge, MOTION_SOFT } from '@/components/motions/MotionCard';
+import { MotionSummary, MotionRankBadge, MotionProposerFlag, MOTION_SOFT } from '@/components/motions/MotionCard';
 import { SeatCircleFlag } from '@/components/CircleFlag';
 
 type ModalView = 'list' | 'raise' | 'vote';
-type TypeMeta = Record<PendingMotionType, { icon: string; label: string; sub: string }>;
-
-const TYPE_STATIC: Record<PendingMotionType, { icon: string; sub: string }> = {
-  'end-debate':     { icon: '🏁', sub: 'Formally close the session' },
-  'suspend-debate': { icon: '⏸️', sub: 'Suspend the session temporarily' },
-  consultation:     { icon: '🤝', sub: 'Informal session, all together' },
-  tour:             { icon: '🔄', sub: 'Everyone speaks once, alphabetical order' },
-  unmoderated:      { icon: '💬', sub: 'Free time for delegates to talk' },
-  moderated:        { icon: '🎙️', sub: 'Structured speeches, blank slate to fill' },
-  custom:           { icon: '📝', sub: 'Handled in the room, the session carries on unchanged' },
-};
+type TypeMeta = Record<PendingMotionType, { label: string }>;
 
 function buildTypeMeta(motionNames: MotionNames): TypeMeta {
   return {
-    'end-debate':     { ...TYPE_STATIC['end-debate'],     label: motionNames.endDebate },
-    'suspend-debate': { ...TYPE_STATIC['suspend-debate'], label: motionNames.suspendDebate },
-    consultation:     { ...TYPE_STATIC.consultation,      label: motionNames.consultation },
-    tour:             { ...TYPE_STATIC.tour,              label: motionNames.tour },
-    unmoderated:      { ...TYPE_STATIC.unmoderated,       label: motionNames.unmoderated },
-    moderated:        { ...TYPE_STATIC.moderated,         label: motionNames.moderated },
-    custom:           { ...TYPE_STATIC.custom,            label: motionNames.custom },
+    'end-debate':     { label: motionNames.endDebate },
+    'suspend-debate': { label: motionNames.suspendDebate },
+    consultation:     { label: motionNames.consultation },
+    tour:             { label: motionNames.tour },
+    unmoderated:      { label: motionNames.unmoderated },
+    moderated:        { label: motionNames.moderated },
+    custom:           { label: motionNames.custom },
   };
 }
 
@@ -202,10 +192,10 @@ function InfoHint({ label, text }: { label: string; text: string }) {
         ref={btnRef} type="button" tabIndex={0} aria-label={label} aria-describedby={open ? tipId : undefined}
         onMouseEnter={show} onMouseLeave={hide} onFocus={show} onBlur={hide}
         onClick={(e) => e.preventDefault()}
-        className="shrink-0 w-[18px] h-[18px] rounded-full inline-flex items-center justify-center text-[11px] font-black leading-none transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#EED98A] gv-lift"
-        style={{ border: '1px solid #C5B9A8', color: '#6A5A4A', backgroundColor: '#FAF8F3', fontFamily: 'Georgia, serif' }}
+        className="shrink-0 w-[20px] h-[20px] rounded-full inline-flex items-center justify-center transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#EED98A] hover:text-[#1C1410]"
+        style={{ color: '#5A4A3C' }}
       >
-        i
+        <Info size={16} strokeWidth={1.5} aria-hidden />
       </button>
       {open && pos && (
         <Portal>
@@ -312,7 +302,7 @@ function ProposerInput({ candidates, value, onChange, blockedCountries, optional
       {value && !open ? (
         <div className="flex items-center gap-3 bg-[#1B3828]/10 border-2 border-[#3D7A52]/40 rounded-xl px-4 py-3">
           {value === CHAIR_KEY
-            ? <span className="text-lg leading-none">🪑</span>
+            ? <MotionProposerFlag proposedBy={CHAIR_KEY} size={28} />
             : <SeatCircleFlag country={value} size={28} decorative fallback="initials" />}
           <SeatName name={dName(value)} max={26} className="text-sm text-[#1C1410] flex-1 font-semibold" />
           <button onClick={() => { setOpen(true); setQuery(''); onChange(''); inputRef.current?.focus(); }} className="text-xs font-bold transition-colors focus:outline-none" style={{ color: '#2A5A3C' }}>{t('motions_change')}</button>
@@ -350,7 +340,7 @@ function ProposerInput({ candidates, value, onChange, blockedCountries, optional
                     i === 0 ? 'bg-[#1B3828]/20 text-[#1C1410]' : 'text-[#1C1410] hover:bg-[#DDD4C0]'
                   }`}>
                   {isChair
-                    ? <span className="text-base leading-none">🪑</span>
+                    ? <MotionProposerFlag proposedBy={CHAIR_KEY} size={24} />
                     : <SeatCircleFlag country={country} size={24} decorative fallback="initials" />}
                   <SeatName name={dName(country)} max={26} className="text-sm flex-1" />
                   {isBlocked
@@ -712,9 +702,10 @@ function RaiseMotionForm({ committee, typeMeta, onBack, onRaised, editingMotion,
         // hairline: `border-white/10` on ivory drew nothing, and the fields ran into the button.
         <div className="px-7 pb-7 pt-3 shrink-0 bg-[#FAF8F3]" style={{ boxShadow: '0 -1px 0 #DDD4C0, 0 -10px 16px -12px rgba(27,56,40,0.30)' }}>
           {belowQuorum && (
-            <div className="mb-4 p-3 bg-[#8B2020]/20 border border-[#8B2020]/40 rounded-xl text-xs text-[#8B2020]">
-              ⚠️ {t('motions_quorum_warning')}
-            </div>
+            <p role="status" className="mb-4 p-3 rounded-xl text-sm font-semibold flex items-start gap-2" style={{ color: '#8B2020', backgroundColor: 'rgba(139,32,32,0.08)', border: '1px solid rgba(139,32,32,0.25)' }}>
+              <AlertTriangle size={18} strokeWidth={1.5} aria-hidden className="shrink-0 mt-px" />
+              <span>{t('motions_quorum_warning')}</span>
+            </p>
           )}
           {raiseBlocked && (
             <p role="status" className="mb-3 p-3 rounded-xl text-sm font-semibold" style={{ color: '#8B2020', backgroundColor: 'rgba(139,32,32,0.08)', border: '1px solid rgba(139,32,32,0.25)' }}>
@@ -1615,7 +1606,7 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
     >
       {(requestClose) => (<>
         <div className="flex items-center justify-end px-7 pt-6 pb-0 shrink-0">
-          <button onClick={requestClose} aria-label={t('sb_close')} className="text-[#5A4A3C] hover:text-[#1C1410] transition-colors text-xl leading-none focus:outline-none">✕</button>
+          <button onClick={requestClose} aria-label={t('sb_close')} className="text-[#5A4A3C] hover:text-[#1C1410] transition-colors leading-none focus:outline-none"><X size={22} strokeWidth={1.5} aria-hidden /></button>
         </div>
         <div className="flex-1 min-h-0 pt-2 flex flex-col">
           {view === 'raise' && (
@@ -1650,7 +1641,7 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
               <h2 className="text-3xl font-black text-[#1C1410]">{t('motions_title')}</h2>
               {pending.length === 0 ? (
                 <div className="text-center py-8">
-                  <div className="mb-3"><Emoji size="2.5rem">📋</Emoji></div>
+                  <div className="mb-3 flex justify-center" style={{ color: '#5A4A3C' }}><ListChecks size={40} strokeWidth={1.5} aria-hidden /></div>
                   <p className="text-[#6A5A4A]">{t('motions_no_raised')}</p>
                   <p className="text-sm mt-1" style={{ color: MOTION_SOFT }}>{t('motions_floor_open')}</p>
                 </div>
@@ -1665,10 +1656,8 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
                       <div key={m.id} className="relative rounded-xl ps-4 pe-3 py-4" style={rowIsCustom
                         ? { backgroundColor: '#F3EFE4', border: '1px dashed #9A8A78' }
                         : { backgroundColor: '#EDE7D8', border: '1px solid #C5B9A8' }}>
+                        <MotionRankBadge n={i + 1} />
                         <div className="flex items-start gap-3">
-                          <span aria-label={t('motion_card_rank', { n: i + 1 })}
-                            className="shrink-0 w-8 h-8 rounded-full flex items-center justify-center tabular-nums text-[15px] font-black"
-                            style={{ backgroundColor: '#1B3828', color: '#EED98A' }}>{i + 1}</span>
                           <div className="flex-1 min-w-0 space-y-2">
                             <DisruptivenessBadge type={m.type} />
                             <MotionSummary motion={m} label={motionDisplayLabel(m, typeMeta, language)} size="list" language={language} />
@@ -1677,7 +1666,7 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
                             disabled={isTempMotionId(m.id)}
                             title={isTempMotionId(m.id) ? t('motions_saving') : t('motions_reject_btn')}
                             aria-label={t('motions_reject_btn')}
-                            className="shrink-0 w-9 h-9 rounded-full inline-flex items-center justify-center text-[#5A4A3C] hover:text-[#8B2020] hover:bg-[#8B2020]/10 disabled:opacity-40 disabled:cursor-not-allowed text-base transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]">✕</button>
+                            className="shrink-0 w-9 h-9 rounded-full inline-flex items-center justify-center text-[#5A4A3C] hover:text-[#8B2020] hover:bg-[#8B2020]/10 disabled:opacity-40 disabled:cursor-not-allowed transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828]"><X size={18} strokeWidth={1.5} aria-hidden /></button>
                         </div>
                       </div>
                     );

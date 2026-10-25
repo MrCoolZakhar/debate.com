@@ -417,9 +417,9 @@ const getServerSnapshot = () => null;
 export function useLiveRooms(
   userId: string | null,
   accessToken: string | null,
-  opts: { enabled?: boolean; maxAgeMs?: number } = {},
+  opts: { enabled?: boolean; maxAgeMs?: number; recheckMs?: number } = {},
 ): { entries: LiveEntry[] | null } {
-  const { enabled = true, maxAgeMs = Infinity } = opts;
+  const { enabled = true, maxAgeMs = Infinity, recheckMs = 0 } = opts;
   const snap = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
   // The token is read at fetch time only, so an hourly refresh never re-reads.
   const tokenRef = useRef<string | null>(accessToken);
@@ -431,6 +431,21 @@ export function useLiveRooms(
     const fresh = cache && cache.uid === userId && Date.now() - cache.at < maxAgeMs;
     if (!fresh) void load(userId, token);
   }, [enabled, userId, maxAgeMs, hasToken]);
+  // Re-check while the person stays on the site (owner, 25 Oct 2026: someone already
+  // browsing when their conference day starts must still get the prompt): every
+  // `recheckMs` while the tab is visible, and whenever the tab comes back into view.
+  useEffect(() => {
+    if (!enabled || !userId || !recheckMs) return;
+    const recheck = () => {
+      const token = tokenRef.current;
+      if (!token || document.visibilityState !== 'visible') return;
+      if (cache && cache.uid === userId && Date.now() - cache.at < recheckMs) return;
+      void load(userId, token);
+    };
+    const id = window.setInterval(recheck, recheckMs);
+    document.addEventListener('visibilitychange', recheck);
+    return () => { window.clearInterval(id); document.removeEventListener('visibilitychange', recheck); };
+  }, [enabled, userId, recheckMs]);
   if (!userId || !snap || snap.uid !== userId) return { entries: null };
   return { entries: snap.entries };
 }

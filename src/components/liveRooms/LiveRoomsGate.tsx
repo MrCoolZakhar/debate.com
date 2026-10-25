@@ -168,10 +168,12 @@ export default function LiveRoomsGate() {
   const onSessions = pathname === '/sessions';
 
   const userId = authLoading ? null : user?.id ?? null;
-  const { entries } = useLiveRooms(userId, session?.access_token ?? null);
+  // Re-checked every 3 minutes while the tab is visible and when it comes back into view.
+  const { entries } = useLiveRooms(userId, session?.access_token ?? null, { recheckMs: 3 * 60 * 1000 });
 
-  // "Not now" for this page visit (the gate stays mounted across client-side navigation).
-  const [dismissed, setDismissed] = useState(false);
+  // "Not now" for this page visit (the gate stays mounted across client-side navigation),
+  // remembered per room: a room that goes live LATER in the visit still prompts once.
+  const [dismissedKeys, setDismissedKeys] = useState<Set<string>>(() => new Set());
   // Assume something else is on screen until the first check has looked.
   const [otherModal, setOtherModal] = useState(true);
 
@@ -206,17 +208,17 @@ export default function LiveRoomsGate() {
   }, [onSessions, standalone]);
 
   const items = useMemo<PromptItem[]>(() => {
-    const live: PromptItem[] = (entries ?? []).filter((e) => itemHref(e) !== pathname);
-    if (!onSessions || !standalone) return live;
+    const live: PromptItem[] = (entries ?? []).filter((e) => itemHref(e) !== pathname && !dismissedKeys.has(e.key));
+    if (!onSessions || !standalone || dismissedKeys.has(standalone.key)) return live;
     const codes = new Set((entries ?? []).flatMap(entrySessionCodes));
     return codes.has(standalone.code.toUpperCase()) ? live : [...live, standalone];
-  }, [entries, onSessions, standalone, pathname]);
+  }, [entries, onSessions, standalone, pathname, dismissedKeys]);
 
   // Open only once every source has answered, so an entry never "appears" into an
   // already open card and a list never collapses under the pointer.
   const liveSettled = !authLoading && (!user || entries !== null);
   const standaloneSettled = !onSessions || standalone !== undefined;
-  const wanted = !excluded && !dismissed && liveSettled && standaloneSettled && items.length > 0;
+  const wanted = !excluded && liveSettled && standaloneSettled && items.length > 0;
 
   useEffect(() => {
     if (!wanted) return;
@@ -226,7 +228,14 @@ export default function LiveRoomsGate() {
     return () => { window.clearTimeout(first); window.clearInterval(id); };
   }, [wanted]);
 
-  const close = useCallback(() => setDismissed(true), []);
+  // "Not now" closes the prompt for the rooms on it; a room that goes live later prompts once.
+  const close = useCallback(() => {
+    setDismissedKeys((prev) => {
+      const next = new Set(prev);
+      for (const it of items) next.add(it.key);
+      return next;
+    });
+  }, [items]);
   // A chair walks straight in: `resolveEntryHref` calls `enter_live_chair_room`,
   // which decides at PRESS TIME whether this press starts the session or joins an
   // open dais, and lands on the chair page with the profile name as the chair

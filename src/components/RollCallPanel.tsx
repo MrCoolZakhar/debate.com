@@ -160,68 +160,6 @@ function StatusPicker({ status, onPick, country, isObserver = false, large = fal
 // its picker were replaced by a small type box beside the quorum tabs (SeatAddField, mounted
 // by the chair page in CommitteeIdentityBadge), in the sidebar and the pre-session roll call.
 
-// ── Full speakers list popup ──────────────────────────────────────────────────
-function FullListPopup({
-  list,
-  title,
-  onClose,
-  onRemove,
-}: {
-  list: { delegateId: string; country: string }[];
-  title: string;
-  onClose: () => void;
-  onRemove?: (delegateId: string) => void;
-}) {
-  const { language } = useLanguage();
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center"
-      style={{ background: 'rgba(5, 8, 20, 0.80)', backdropFilter: 'blur(4px)' }}
-      onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}
-    >
-      {/* #fit-root scaling trap: FitToScreen wraps this page in a `transform: scale()`d
-          box of FIXED height (820px). A transformed ancestor is the containing block for
-          `position: fixed` descendants, so the overlay above is 820px tall — but `vh`
-          still resolves against the REAL viewport. On any window taller than 820px a
-          `max-h-[..vh]` card is sized LARGER than the box it lives in and, being a centred
-          flex item, overflows equally top and bottom — pushing the header and close button
-          off the top of the screen. Always size against the containing block with a
-          PERCENTAGE here, never vh (matches DocumentsModal / ScoreboardPanel). */}
-      <div className="bg-[#EDE7D8] border-2 border-[#C8BAA8] rounded-2xl w-full max-w-sm shadow-2xl overflow-hidden max-h-[92%] flex flex-col">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-[#DDD4C0] shrink-0">
-          <h3 className="font-black text-[#1C1410] text-base">{title}</h3>
-          <div className="flex items-center gap-3">
-            <span className="text-xs text-[#9A8A78] font-mono">{list.length} speakers</span>
-            <button onClick={onClose} className="text-[#9A8A78] hover:text-[#1C1410] text-xl leading-none">✕</button>
-          </div>
-        </div>
-        <div className="overflow-y-auto flex-1 min-h-0">
-          {list.length === 0 ? (
-            <div className="px-5 py-8 text-center text-[#9A8A78] text-sm">No speakers queued</div>
-          ) : (
-            list.map((s, i) => (
-              <div key={s.delegateId} className="flex items-center gap-3 px-4 py-2.5 border-b border-[#DDD4C0]/40 group hover:bg-[#DDD4C0]/30 transition-colors">
-                <span className="w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-black shrink-0"
-                  style={{ backgroundColor: 'rgba(238,217,138,0.15)', color: '#EED98A', border: '1px solid rgba(238,217,138,0.25)' }}>
-                  {i + 1}
-                </span>
-                <FlagCircle country={s.country} size="xs" />
-                <SeatName name={getCountryDisplayName(s.country, language)} max={24} className="text-sm text-[#1C1410] flex-1 min-w-0 leading-tight" />
-                {onRemove && (
-                  <button
-                    onClick={() => onRemove(s.delegateId)}
-                    className="text-[#9A8A78] hover:text-[#8B2020] transition-colors text-xs opacity-0 group-hover:opacity-100 shrink-0"
-                  >✕</button>
-                )}
-              </div>
-            ))
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
 // ── MajorityPie ───────────────────────────────────────────────────────────────
 // arcFill: fixed fraction 0–1 for the arc shape (never changes per chart).
 // label:   live-computed number shown next to the arc.
@@ -376,7 +314,6 @@ function RollCallPanelInner({
   const { language } = useLanguage();
   const t = useT();
   const queueRowScale = useQueueRowScale();
-  const [showFullList, setShowFullList] = useState(false);
   const [localStatuses, setLocalStatuses] = useState<Record<string, DelegateStatus>>({});
   const [localObservers, setLocalObservers] = useState<Record<string, boolean>>({});
   // Every optimistic observer placard: the value, the tap that set it (a newer tap on the same
@@ -1166,12 +1103,12 @@ function RollCallPanelInner({
                     <SeatGroupTag short={d.groupShort} color={d.groupColor} onDark size={sliderMode ? 11.5 : qr(11.5)} />
                   )}
                   {isSpeakingRow && !sliderMode && (
-                    <span className="truncate uppercase" style={{ fontSize: qr(11), fontWeight: 800, letterSpacing: '0.08em', lineHeight: 1.3, color: '#EED98A' }}>
+                    <span className="[overflow-wrap:anywhere]" style={{ fontSize: qr(12), fontWeight: 700, lineHeight: 1.3, color: '#EED98A' }}>
                       {t('rollcall_speaking')}
                     </span>
                   )}
                   {isReadyRow && !sliderMode && (
-                    <span className="truncate uppercase" style={{ fontSize: qr(10.5), fontWeight: 700, letterSpacing: '0.08em', lineHeight: 1.3, color: 'rgba(238,217,138,0.72)' }}>
+                    <span className="[overflow-wrap:anywhere]" style={{ fontSize: qr(11.5), fontWeight: 600, lineHeight: 1.3, color: 'rgba(238,217,138,0.72)' }}>
                       {t('gsl_on_deck')}
                     </span>
                   )}
@@ -1291,14 +1228,6 @@ function RollCallPanelInner({
       </div>
       )}
 
-      {showFullList && (
-        <FullListPopup
-          list={committee.speakersList}
-          title="General Speakers List"
-          onClose={() => setShowFullList(false)}
-          onRemove={onRemoveFromList ? (id) => { onRemoveFromList(id); } : undefined}
-        />
-      )}
     </div>
   );
 }

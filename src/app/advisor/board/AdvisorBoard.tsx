@@ -386,7 +386,7 @@ export default function AdvisorBoard() {
                 return [
                   group !== 'queue' && group !== prev ? (
                     <li key={`sep-${group}`} aria-hidden className="flex items-baseline gap-2 px-4 pb-1.5 pt-3" style={{ backgroundColor: C.surface }}>
-                      <span style={{ fontSize: 11.5, fontWeight: 800, letterSpacing: '0.08em', textTransform: 'uppercase', color: group === 'look' ? C.danger : C.forestSoft }}>{t(GROUP_KEY[group])}</span>
+                      <span style={{ fontSize: 13, fontWeight: 700, color: group === 'look' ? C.danger : C.ink }}>{t(GROUP_KEY[group])}</span>
                       <span style={{ fontSize: 12, fontWeight: 600, color: C.inkSoft }}>{count}</span>
                     </li>
                   ) : null,
@@ -419,7 +419,7 @@ export default function AdvisorBoard() {
 
         {observerConferences.map((c) => (
           <section key={c.conferenceId} className="mb-6">
-            <h2 className="mb-2 px-1" style={{ fontSize: 13, fontWeight: 800, letterSpacing: '0.08em', textTransform: 'uppercase', color: C.forestSoft }}>
+            <h2 className="mb-2 px-1" style={{ fontSize: 16, fontWeight: 700, color: C.ink }}>
               {t('adv_conference_rooms', { conference: c.conferenceAcronym || c.conferenceName })}
             </h2>
             <ul className="flex flex-col gap-2">
@@ -438,7 +438,7 @@ export default function AdvisorBoard() {
 
         {deviceRooms.length > 0 && (
           <section className="mt-8" aria-labelledby="adv-sec-rooms">
-            <h2 id="adv-sec-rooms" className="mb-2 px-1" style={{ fontSize: 13, fontWeight: 800, letterSpacing: '0.08em', textTransform: 'uppercase', color: C.forestSoft }}>{t('adv_section_rooms')}</h2>
+            <h2 id="adv-sec-rooms" className="mb-2 px-1" style={{ fontSize: 16, fontWeight: 700, color: C.ink }}>{t('adv_section_rooms')}</h2>
             <ul className="flex flex-col gap-2">
               {deviceRooms.map((r) => {
                 const room = data.rooms[r.code] ?? null;
@@ -486,14 +486,14 @@ function HeaderButton({ icon, label, onClick, pressed, primary, title }: {
       onClick={onClick}
       aria-pressed={pressed}
       title={title ?? label}
-      className="adv-focus flex h-12 min-w-[48px] shrink-0 flex-col items-center justify-center gap-0.5 rounded-xl px-1.5 transition-transform active:scale-[0.95]"
+      className="adv-focus flex min-h-12 py-1 min-w-[48px] shrink-0 flex-col items-center justify-center gap-0.5 rounded-xl px-1.5 transition-transform active:scale-[0.95]"
       style={{
         backgroundColor: primary ? C.forest : pressed ? 'rgba(27,56,40,0.08)' : 'transparent',
         color: primary ? C.gold : pressed === false ? C.inkSoft : C.forest,
       }}
     >
       {icon}
-      <span className="max-w-[64px] truncate" style={{ fontSize: 10, fontWeight: 700, lineHeight: 1.1 }}>{label}</span>
+      <span className="max-w-[72px] text-center [overflow-wrap:anywhere]" style={{ fontSize: 10, fontWeight: 700, lineHeight: 1.1 }}>{label}</span>
     </button>
   );
 }

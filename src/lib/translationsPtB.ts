@@ -131,7 +131,7 @@ export const ptTranslationsB = {
   motions_more_on_floor: "Mais {count} em pauta",
   motions_drag_hint_label: "Como as moções são ordenadas",
   motions_saving: "Salvando…",
-  gsl_yield: "CONCLUIR",
+  gsl_yield: "Concluir",
   gsl_yield_title: "Encerra este discurso e o registra. A lista está vazia, então ninguém é chamado em seguida.",
   settings_documents_heading: "Documentos",
   settings_require_doc_approval: "Aprovar documentos antes",

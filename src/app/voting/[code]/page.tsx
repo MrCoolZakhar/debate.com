@@ -14,8 +14,7 @@ import { getCountryDisplayName, compareCountryNames } from '@/lib/countries';
 import SeatName from '@/components/SeatName';
 import { SeatArtProvider } from '@/components/SeatFlag';
 import { SeatCircleFlag } from '@/components/CircleFlag';
-import { Emoji } from '@/components/Emoji';
-import { Check, CornerDownRight, Crown, Eye, EyeOff, Flag, Minus, RotateCcw, ShieldAlert, ShieldCheck, SkipForward, Undo2, X } from 'lucide-react';
+import { Armchair, Check, CornerDownRight, Crown, Eye, EyeOff, Flag, Minus, RotateCcw, SearchX, ShieldAlert, ShieldCheck, SkipForward, Undo2, UserPlus, X } from 'lucide-react';
 import { VotingRollCall } from '@/components/voting/VotingRollCall';
 import { DeviceVoteGate, DeviceVotingPanel } from '@/components/voting/DeviceVotingPanel';
 import { VotingHeader, type VotingHeaderProps } from '@/components/voting/VotingHeader';
@@ -196,7 +195,7 @@ function RosterNotice({ names, notInVote, onOpenRollCall, onDismiss }: {
         className="w-full max-w-3xl rounded-xl px-4 py-2.5 flex items-center gap-3"
         style={{ backgroundColor: 'rgba(182,135,31,0.14)', border: '1px solid rgba(182,135,31,0.40)' }}
       >
-        <Emoji size="1.1rem">🪧</Emoji>
+        <UserPlus size={18} strokeWidth={1.5} aria-hidden className="shrink-0" style={{ color: '#1C1410' }} />
         <div className="flex-1 min-w-0">
           <p className="text-sm font-bold text-[#1C1410]">{t('voting_roster_joined', { names: names.join(', ') })}</p>
           <p className="text-xs text-[#6A5A4A]">
@@ -213,9 +212,9 @@ function RosterNotice({ names, notInVote, onOpenRollCall, onDismiss }: {
         <button
           onClick={onDismiss}
           aria-label={t('voting_dismiss')}
-          className="shrink-0 text-[#9A8A78] hover:text-[#1C1410] transition-colors focus:outline-none"
+          className="shrink-0 text-[#9A8A78] hover:text-[#1C1410] transition-colors focus:outline-none inline-flex"
         >
-          ✕
+          <X size={18} strokeWidth={1.5} aria-hidden />
         </button>
       </div>
     </div>
@@ -255,7 +254,7 @@ function VotingBanner({ tone, text, actionLabel, onAction, onDismiss }: {
           </button>
         )}
         {onDismiss && (
-          <button onClick={onDismiss} aria-label={t('voting_dismiss')} className="shrink-0 text-[#9A8A78] hover:text-[#1C1410] focus:outline-none">✕</button>
+          <button onClick={onDismiss} aria-label={t('voting_dismiss')} className="shrink-0 text-[#9A8A78] hover:text-[#1C1410] focus:outline-none inline-flex"><X size={18} strokeWidth={1.5} aria-hidden /></button>
         )}
       </div>
     </div>
@@ -274,7 +273,7 @@ function ObserverWriteFailedBanner({ onDismiss }: { onDismiss: () => void }) {
         role="alert"
       >
         <span className="flex-1 text-sm font-semibold leading-snug">{t('voting_observer_write_failed')}</span>
-        <button onClick={onDismiss} aria-label={t('voting_dismiss')} className="shrink-0 opacity-80 hover:opacity-100 focus:outline-none">✕</button>
+        <button onClick={onDismiss} aria-label={t('voting_dismiss')} className="shrink-0 opacity-80 hover:opacity-100 focus:outline-none inline-flex"><X size={18} strokeWidth={1.5} aria-hidden /></button>
       </div>
     </Portal>
   );
@@ -1077,10 +1076,11 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
     return (
       <div className="min-h-screen bg-[#F6F1E9] flex items-center justify-center">
         <div className="text-center">
-          <div className="mb-4"><Emoji size="2.5rem">🔍</Emoji></div>
+          <div className="mb-4 flex justify-center" style={{ color: '#1C1410' }}><SearchX size={40} strokeWidth={1.5} aria-hidden /></div>
           <h1 className="text-2xl font-bold text-[#1C1410] mb-2">{t('voting_not_found_title')}</h1>
           <p className="text-[#6A5A4A] mb-6">{t('voting_not_found_body', { code })}</p>
-          <Link href="/sessions" className="bg-[#1B3828] hover:bg-[#2A5A3C] text-white px-6 py-3 rounded-lg font-semibold transition-colors">
+          <Link href="/sessions" className="inline-flex items-center justify-center px-6 text-white font-semibold focus:outline-none focus-visible:shadow-[0_0_0_3px_#EDE7D8,0_0_0_5px_#1B3828] active:scale-[0.96] transition-transform"
+            style={{ minHeight: 52, borderRadius: 16, backgroundColor: '#1B3828', backgroundImage: 'linear-gradient(135deg, #2E6446 0%, #1F4230 42%, #1B3828 62%, #122A1D 100%)', boxShadow: 'inset 0 1px 0 rgba(238,217,138,0.22), inset 0 0 0 1px rgba(238,217,138,0.14), 0 2px 4px rgba(27,56,40,0.16), 0 12px 28px rgba(27,56,40,0.26)' }}>
             {t('session_back_home')}
           </Link>
         </div>
@@ -1117,7 +1117,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
     return (
       <div className="min-h-screen bg-[#EDE7D8] flex items-center justify-center px-6">
         <div className="w-full max-w-sm text-center">
-          <div className="mb-3"><Emoji size="2.25rem">🪑</Emoji></div>
+          <div className="mb-3 flex justify-center" style={{ color: '#1B3828' }}><Armchair size={36} strokeWidth={1.5} aria-hidden /></div>
           <h1 className="text-2xl font-bold mb-2" style={{ color: '#1B3828' }}>{t('voting_chair_gate_title')}</h1>
           <p className="mb-6 text-sm leading-relaxed" style={{ color: '#6A5A4A' }}>
             {t('voting_chair_gate_body', { code: committee.code })}
@@ -2668,7 +2668,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
               )}
               <div className="relative">
               {kind === 'unanimous' && (
-                <p className="mb-3 text-[12px] font-bold uppercase tracking-[0.18em]" style={{ color: '#D9B44A' }}>{t('voting_result_unanimous_eyebrow')}</p>
+                <p className="mb-3 text-[14px] font-semibold" style={{ color: '#D9B44A' }}>{t('voting_result_unanimous_eyebrow')}</p>
               )}
               <div className="flex items-center justify-center gap-3">
                 <span className="w-10 h-10 rounded-full flex items-center justify-center" style={{ backgroundColor: look.chipBg, color: look.chipFg }} aria-hidden>

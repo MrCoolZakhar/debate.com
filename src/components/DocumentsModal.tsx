@@ -7,7 +7,7 @@ import { portalFrame } from '@/components/chat/chatTokens';
 import { useT, useLanguage } from '@/contexts/LanguageContext';
 import { useRouter } from 'next/navigation';
 import {
-  Ban, BadgeCheck, Check, CheckCheck, CircleDot, FileText, Minus, NotebookPen, Plus, Presentation, Timer, Vote, X, type LucideIcon,
+  Ban, BadgeCheck, Check, CheckCheck, CircleDot, FileText, Minus, NotebookPen, Paperclip, Plus, Presentation, Timer, Vote, X, type LucideIcon,
 } from 'lucide-react';
 import PdfViewer, { PdfThumb, PDF_ZOOM_STEPS, stepPdfZoom, type PdfZoom } from '@/components/documents/PdfViewer';
 import StageTimerDevice from '@/components/documents/StageTimerDevice';
@@ -25,10 +25,10 @@ import { loadVoteStates } from '@/lib/voteState';
 import { TranslationKey } from '@/lib/translations';
 import { getCountryDisplayName, matchesCountryQuery, startsWithCountryQuery } from '@/lib/countries';
 import SeatName from '@/components/SeatName';
-import { SeatFlag } from '@/components/SeatFlag';
+import { SeatCircleFlag } from '@/components/CircleFlag';
+import Loader from '@/components/Loader';
 import { supabase } from '@/lib/supabase';
 import { safeStorageKey } from '@/lib/storageKey';
-import { UnknownSeatIcon } from '@/components/UnknownSeatIcon';
 import {
   addDocument as addDocumentInDB,
   updateDocumentApproval as updateDocumentApprovalInDB,
@@ -94,8 +94,8 @@ function CountryChip({ country, onRemove }: { country: string; onRemove: () => v
   const { language } = useLanguage();
   return (
     <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-[#DDD4C0] border border-[#DDD4C0] rounded-full text-xs text-[#1C1410]">
-      <SeatFlag country={country} size={16} className="object-contain inline-block me-1" fallback={<UnknownSeatIcon size={16} className="me-1" />} />{getCountryDisplayName(country, language)}
-      <button onClick={onRemove} className="text-[#9A8A78] hover:text-red-500 ms-0.5 leading-none">✕</button>
+      <SeatCircleFlag country={country} size={16} decorative className="me-1" />{getCountryDisplayName(country, language)}
+      <button onClick={onRemove} className="text-[#9A8A78] hover:text-red-500 ms-0.5 leading-none inline-flex focus:outline-none"><X size={12} strokeWidth={1.5} aria-hidden /></button>
     </span>
   );
 }
@@ -191,7 +191,7 @@ function SponsorSelect({ candidates, selected, onChange, committee }: {
                 return (
                   <button key={c} onMouseDown={(e) => { e.preventDefault(); add(c); }}
                     className={`w-full flex items-center gap-2 px-3 py-2 text-start transition-colors ${i === 0 ? 'bg-[#1B3828]/20 text-[#1C1410]' : 'text-[#1C1410] hover:bg-[#DDD4C0]'}`}>
-                    <SeatFlag country={c} size={20} className="object-contain inline-block" fallback={<UnknownSeatIcon size={20} />} />
+                    <SeatCircleFlag country={c} size={20} decorative />
                     <SeatName name={getCountryDisplayName(c, language)} max={26} className="text-sm" />
                   </button>
                 );
@@ -208,14 +208,9 @@ function SponsorSelect({ candidates, selected, onChange, committee }: {
               <button key={c} onClick={() => onChange(selected.filter((s) => s !== c))}
                 title={t('documents_sponsor_remove', { country: c })}
                 className="relative group focus:outline-none">
-                <SeatFlag
-                  country={c}
-                  className="rounded"
-                  style={{ width: 40, height: 28, objectFit: 'cover', border: '1.5px solid rgba(28,20,16,0.15)' }}
-                  fallback={<UnknownSeatIcon size={28} />}
-                />
-                <span className="absolute inset-0 flex items-center justify-center rounded opacity-0 group-hover:opacity-100 transition-opacity text-xs font-bold text-white"
-                  style={{ backgroundColor: 'rgba(139,32,32,0.7)' }}>✕</span>
+                <SeatCircleFlag country={c} size={32} decorative style={{ boxShadow: '0 1px 3px rgba(28,20,16,0.18)' }} />
+                <span className="absolute inset-0 flex items-center justify-center rounded-full opacity-0 group-hover:opacity-100 transition-opacity text-white"
+                  style={{ backgroundColor: 'rgba(139,32,32,0.7)' }}><X size={16} strokeWidth={1.5} aria-hidden /></span>
               </button>
             );
           })}
@@ -415,12 +410,12 @@ function SubmitForm({ committee, type, onDone, onDocumentAdded }: {
           <div className="flex items-center gap-2 bg-[#FAF8F3] border border-[#DDD4C0] rounded-xl px-4 py-3">
             <span className="text-sm text-[#1C1410] flex-1 min-w-0 truncate flex items-center gap-2" title={fileName ?? undefined}>
               {isUploading
-                ? <><div className="w-3.5 h-3.5 border-2 border-[#1B3828] border-t-transparent rounded-full animate-spin shrink-0" /> {t('documents_uploading')}</>
-                : <>📎 {fileName}</>
+                ? <><Loader size={18} label={t('documents_uploading')} className="shrink-0" /> {t('documents_uploading')}</>
+                : <><Paperclip size={15} strokeWidth={1.5} aria-hidden className="shrink-0" /> {fileName}</>
               }
             </span>
             <button onClick={() => { setFileName(null); setFileUrl(null); if (fileInputRef.current) fileInputRef.current.value = ''; }}
-              className="text-[#9A8A78] hover:text-red-500 transition-colors text-sm">✕</button>
+              className="text-[#9A8A78] hover:text-red-500 transition-colors inline-flex focus:outline-none"><X size={16} strokeWidth={1.5} aria-hidden /></button>
           </div>
         ) : (
           <div
@@ -435,7 +430,7 @@ function SubmitForm({ committee, type, onDone, onDocumentAdded }: {
                 : 'bg-[#FAF8F3] border-[#DDD4C0] hover:border-[#1B3828] text-[#9A8A78] hover:text-[#6A5A4A]'
             }`}
           >
-            <span className="block text-xl mb-1">📎</span>
+            <span className="flex justify-center mb-1"><Paperclip size={20} strokeWidth={1.5} aria-hidden /></span>
             {isDragging ? t('documents_drop_pdf') : t('documents_upload_hint')}
           </div>
         )}
@@ -527,7 +522,7 @@ function DocCard({ doc, committee, onRemove, onStartPresentation, requireApprova
               <PdfThumb url={doc.fileUrl} width={72} height={110}
                 fallback={<FileText size={34} strokeWidth={1.8} aria-hidden style={{ color: '#1B3828', opacity: 0.6 }} />} />
             ) : (
-              <span style={{ fontSize: '5.5rem', lineHeight: 1, userSelect: 'none' }}>📋</span>
+              <FileText size={34} strokeWidth={1.8} aria-hidden style={{ color: '#1B3828', opacity: 0.6 }} />
             )}
           </div>
 
@@ -553,8 +548,8 @@ function DocCard({ doc, committee, onRemove, onStartPresentation, requireApprova
             </div>
             {!isViewOnly && !confirmDelete && (
               <button onClick={openDelete}
-                className="text-[#9A8A78] hover:text-red-500 transition-colors text-sm shrink-0 focus:outline-none mt-0.5"
-                title={t('documents_delete_yes')}>✕</button>
+                className="text-[#9A8A78] hover:text-red-500 transition-colors shrink-0 focus:outline-none mt-0.5 inline-flex"
+                title={t('documents_delete_yes')} aria-label={t('documents_delete_yes')}><X size={16} strokeWidth={1.5} aria-hidden /></button>
             )}
           </div>
 
@@ -580,12 +575,7 @@ function DocCard({ doc, committee, onRemove, onStartPresentation, requireApprova
               {doc.sponsors.map((s) => {
                 return (
                   <span key={s} className="inline-flex items-center gap-1">
-                    <SeatFlag
-                      country={s}
-                      className="rounded-sm"
-                      style={{ width: 24, height: 16, objectFit: 'cover', border: '1px solid rgba(28,20,16,0.12)' }}
-                      fallback={null}
-                    />
+                    <SeatCircleFlag country={s} size={18} decorative />
                     <span className="text-xs text-[#6A5A4A]">{getCountryDisplayName(s, language)}</span>
                   </span>
                 );
@@ -597,10 +587,10 @@ function DocCard({ doc, committee, onRemove, onStartPresentation, requireApprova
           {doc.fileUrl && doc.fileName && (
             <div className="text-xs space-y-2">
               <button onClick={() => setShowPdf((v) => !v)}
-                className="transition-colors focus:outline-none" style={{ color: '#1B3828' }}
+                className="transition-colors focus:outline-none inline-flex items-center gap-1.5 text-start" style={{ color: '#1B3828' }}
                 onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = '#2A5A3C'; }}
                 onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = '#1B3828'; }}>
-                📎 {doc.fileName} {showPdf ? '▲' : '▼'}
+                <Paperclip size={14} strokeWidth={1.5} aria-hidden className="shrink-0" /> {doc.fileName} {showPdf ? '▲' : '▼'}
               </button>
               {showPdf && (
                 <PdfViewer url={doc.fileUrl} title={doc.fileName} fileName={doc.fileName}
@@ -1173,20 +1163,22 @@ export default function DocumentsModal({ committee, onClose, onCommitteeUpdate, 
       {(requestClose) => (<>
         <div className="flex items-center justify-between px-7 pt-6 pb-4 shrink-0 border-b border-[#DDD4C0]">
           <h2 className="text-2xl font-black text-[#1C1410]">{t('documents_title')}</h2>
-          <button onClick={requestClose} aria-label={t('sb_close')} className="text-[#9A8A78] hover:text-[#1C1410] transition-colors text-xl leading-none focus:outline-none">✕</button>
+          <button onClick={requestClose} aria-label={t('sb_close')} className="text-[#5A4A3C] hover:text-[#1C1410] transition-colors leading-none focus:outline-none"><X size={22} strokeWidth={1.5} aria-hidden /></button>
         </div>
 
         {!showForm && (
-          <div className="flex gap-2 px-7 pt-4 shrink-0">
+          <div role="tablist" className="flex gap-1 mx-7 mt-4 p-1 rounded-2xl shrink-0" style={{ backgroundColor: 'rgba(27,56,40,0.07)' }}>
             {(['working-paper', 'draft-resolution'] as const).map((tabItem) => {
               const count = (committee.documents ?? []).filter((d) => d.type === tabItem && (d.status === 'submitted' || d.status === 'on-floor')).length;
+              const on = tab === tabItem;
               return (
-                <button key={tabItem} onClick={() => setTab(tabItem)}
-                  className={`gv-lift flex-1 py-2.5 rounded-xl font-bold text-sm transition-colors relative ${tab === tabItem ? 'bg-[#1B3828] text-white' : 'bg-[#EDE7D8] border border-[#DDD4C0] text-[#6A5A4A] hover:border-[#1B3828]'}`}>
-                  {docName(committee, tabItem, 'plural', tabItem === 'working-paper' ? t('documents_working_papers_tab') : t('documents_draft_resolutions_tab'))}
-                  {count > 0 && (
-                    <span className={`ms-1.5 inline-flex items-center justify-center w-4 h-4 rounded-full text-[10px] font-black ${tab === tabItem ? 'bg-white/30 text-white' : 'bg-[#1B3828] text-white'}`}>{count}</span>
-                  )}
+                <button key={tabItem} type="button" role="tab" aria-selected={on} onClick={() => setTab(tabItem)}
+                  className="flex-1 py-2.5 px-2 rounded-xl text-sm transition-colors relative focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B3828] inline-flex items-center justify-center gap-1.5"
+                  style={on
+                    ? { backgroundColor: '#FFFFFF', color: '#1C1410', fontWeight: 700, boxShadow: '0 1px 2px rgba(27,56,40,0.10), 0 4px 10px -4px rgba(27,56,40,0.22)' }
+                    : { backgroundColor: 'transparent', color: '#5A4A3C', fontWeight: 600 }}>
+                  {count > 0 && <span className="tabular-nums" style={{ fontWeight: 800, color: on ? '#1B3828' : '#1C1410' }}>{count}</span>}
+                  <span>{docName(committee, tabItem, 'plural', tabItem === 'working-paper' ? t('documents_working_papers_tab') : t('documents_draft_resolutions_tab'))}</span>
                 </button>
               );
             })}
