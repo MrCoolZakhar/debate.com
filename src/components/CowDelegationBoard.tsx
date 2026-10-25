@@ -2,32 +2,25 @@
 
 import { Committee } from '@/lib/types';
 import { getCountryDisplayName, compareCountryNames } from '@/lib/countries';
-import { SeatFlag, useSeatArt } from '@/components/SeatFlag';
+import { SeatCircleFlag } from '@/components/CircleFlag';
 import { useLanguage } from '@/contexts/LanguageContext';
-import { UnknownSeatIcon } from '@/components/UnknownSeatIcon';
 import SeatName from '@/components/SeatName';
 
-// A flag tile with a VISIBLE globe fallback (not display:none).
-function FlagTile({ country, active, spoken }: { country: string; active: boolean; spoken: boolean }) {
+// A round flag tile (CLAUDE.md §8 rule 10: a circle is always SeatCircleFlag, crest then
+// flag then the seat's initials; never a rectangular flag in a rounded box).
+function FlagTile({ seat, active, spoken }: { seat: Committee['delegates'][number]; active: boolean; spoken: boolean }) {
   const { language } = useLanguage();
-  // Seat crest first, national flag second — same tile, same ring, same globe
-  // fallback. `hasArt` replaces the old `code` truthiness check.
-  const art = useSeatArt(country);
-  const hasArt = art.kind !== 'none';
+  const country = seat.country;
   return (
     <div className="relative flex flex-col items-center gap-1" style={{ width: 64 }}>
-      <div className="relative rounded-xl overflow-hidden flex items-center justify-center"
+      <div className="relative rounded-full flex items-center justify-center"
         style={{
-          width: 52, height: 38,
+          width: 44, height: 44,
           boxShadow: active ? '0 0 0 3px #EED98A, 0 0 12px 2px rgba(184,132,74,0.5)' : '0 0 0 1px rgba(28,20,16,0.12)',
-          backgroundColor: '#DDD4C0',
         }}>
-        {hasArt ? (
-          <SeatFlag country={country} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-        ) : null}
-        <span style={{ display: hasArt ? 'none' : 'flex', position: 'absolute', inset: 0, alignItems: 'center', justifyContent: 'center' }}><UnknownSeatIcon size={30} bare /></span>
+        <SeatCircleFlag seat={seat} size={44} decorative fallback="initials" />
         {spoken && !active && (
-          <span style={{ position: 'absolute', top: 3, right: 3, width: 7, height: 7, borderRadius: '50%', backgroundColor: '#3D7A52', boxShadow: '0 0 0 1.5px #FAF8F3' }} />
+          <span style={{ position: 'absolute', top: 0, right: 0, width: 9, height: 9, borderRadius: '50%', backgroundColor: '#3D7A52', boxShadow: '0 0 0 1.5px #FAF8F3' }} />
         )}
       </div>
       {/* A long seat (a crisis character) is two rows: the short form, the full name smaller
@@ -69,7 +62,7 @@ export default function CowDelegationBoard({ committee, onTap }: {
       )}
       <div className="flex flex-wrap justify-center gap-2 max-h-[280px] overflow-y-auto">
         {delegates.map((d) => {
-          const tile = <FlagTile country={d.country} active={d.country === current} spoken={spoken.has(d.country)} />;
+          const tile = <FlagTile seat={d} active={d.country === current} spoken={spoken.has(d.country)} />;
           return onTap ? (
             <button key={d.id} onClick={() => onTap(d.country)} className="transition-transform active:scale-90 focus:outline-none">
               {tile}
